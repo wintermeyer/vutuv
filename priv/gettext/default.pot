@@ -6566,6 +6566,11 @@ msgstr ""
 msgid "an address works again"
 msgstr ""
 
+#: lib/vutuv_web/live/admin/deliverability_live.ex:294
+#, elixir-autogen, elixir-format
+msgid "bounce was misclassified (quota/blocked, not a dead mailbox)"
+msgstr ""
+
 #: lib/vutuv_web/live/admin/deliverability_live.ex:289
 #, elixir-autogen, elixir-format
 msgid "dead past the grace period"

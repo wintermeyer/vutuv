@@ -289,6 +289,10 @@ defmodule VutuvWeb.Admin.DeliverabilityLive do
   defp reason_label(%{"reason" => "grace_period"}), do: gettext("dead past the grace period")
   defp reason_label(%{"reason" => "address_recovered"}), do: gettext("an address works again")
   defp reason_label(%{"reason" => "admin"}), do: gettext("admin action")
+
+  defp reason_label(%{"reason" => "misclassified_bounce"}),
+    do: gettext("bounce was misclassified (quota/blocked, not a dead mailbox)")
+
   defp reason_label(%{"dsn" => dsn}) when is_binary(dsn), do: dsn
   defp reason_label(_detail), do: nil
 

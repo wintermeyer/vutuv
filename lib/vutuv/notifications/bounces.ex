@@ -9,13 +9,15 @@ defmodule Vutuv.Notifications.Bounces do
   lands here.
 
   A failure DSN (`Action: failed`) records an `EmailBounce`, but only a
-  **recipient-failure** status code (`5.0.x` / `5.1.x` / `5.5.x`: no such
-  user, mailbox unavailable, bad address — `Vutuv.Deliverability.MailLog.recipient_failure?/1`)
-  marks the address undeliverable (`emails.undeliverable_at`). A policy
-  failure (`5.7.x`, e.g. a DMARC/authentication rejection, often the sender's
-  own transient config problem) or a transient one (`4.x`) is logged and left
-  alone, so the webhook agrees with the production log watcher's single
-  classification rather than deactivating a live address on every DSN.
+  **confirmed recipient failure** (`Vutuv.Deliverability.MailLog.recipient_failure?/2`:
+  the `5.1.x` / `5.5.x` families, or generic `5.0.x` whose `Diagnostic-Code:`
+  text itself confirms a dead recipient) marks the address undeliverable
+  (`emails.undeliverable_at`). A policy failure (`5.7.x`, e.g. a
+  DMARC/authentication rejection, often the sender's own transient config
+  problem), a transient one (`4.x`), or an unvetted generic `5.0.x` (full
+  mailbox, recipient-side block) is logged and left alone, so the webhook
+  agrees with the production log watcher's single classification rather than
+  deactivating a live address on every DSN.
   `Emailer.deliver/1` drops *automatic* mail to a suppressed address. User-
   initiated PIN mail keeps sending — one full mailbox must never lock its
   owner out for good — and a successful login PIN through the address proves
@@ -43,7 +45,7 @@ defmodule Vutuv.Notifications.Bounces do
   def record(raw) when is_binary(raw) do
     case parse(raw) do
       {recipients, "failed", status} when is_binary(status) ->
-        if MailLog.recipient_failure?(status) do
+        if MailLog.recipient_failure?(status, diagnostic_text(raw)) do
           record_hard_bounces(recipients, status, raw)
           {:ok, :failed}
         else
@@ -106,6 +108,17 @@ defmodule Vutuv.Notifications.Bounces do
 
     if count > 0, do: Logger.info("Email bounce: cleared undeliverable mark for #{address}")
     :ok
+  end
+
+  # The `Diagnostic-Code:` field carries the remote server's own reply text -
+  # the evidence `recipient_failure?/2` vets a generic 5.0.x status against.
+  # Absent (or unreadable), the empty string keeps 5.0.x conservatively
+  # unconfirmed.
+  defp diagnostic_text(raw) do
+    case Regex.run(~r/^Diagnostic-Code:\s*(.+)$/im, raw, capture: :all_but_first) do
+      [text] -> text
+      nil -> ""
+    end
   end
 
   # Pulls the per-recipient report fields out of the message/delivery-status

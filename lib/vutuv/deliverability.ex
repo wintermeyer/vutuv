@@ -162,9 +162,16 @@ defmodule Vutuv.Deliverability do
   defp hard_bounces_for(emails) do
     addresses = Enum.map(emails, & &1.value)
 
-    from(b in EmailBounce, where: b.email_value in ^addresses, select: b.status)
+    from(b in EmailBounce, where: b.email_value in ^addresses, select: {b.status, b.raw})
     |> Repo.all()
-    |> Enum.count(&MailLog.recipient_failure?(&1 || ""))
+    |> Enum.count(&confirmed_recipient_failure?/1)
+  end
+
+  # A ledger row proves a dead recipient only under the text-vetted classifier
+  # (a generic 5.0.0 quota/blocked row recorded before the vetting existed must
+  # not count toward a freeze).
+  defp confirmed_recipient_failure?({status, raw}) do
+    MailLog.recipient_failure?(status || "", raw || "")
   end
 
   defp dead_past_grace?(emails) do
@@ -206,6 +213,59 @@ defmodule Vutuv.Deliverability do
     else
       {:ok, :noop}
     end
+  end
+
+  @doc """
+  Data repair (run by the `RepairMisclassifiedBounceFreezes` migration, kept
+  callable for ops): re-evaluates every address currently marked undeliverable
+  against the text-vetted classifier and clears the mark when none of its
+  ledger rows is a confirmed recipient failure - the generic-5.0.0
+  misclassification, where full mailboxes (552 quota) and recipient-side
+  blocks counted as dead recipients. Each owner is then re-assessed, so a
+  freeze that rested only on misclassified bounces lifts, with the audit
+  trail naming the repair. Idempotent. Returns `%{cleared: n, thawed: n}`.
+  """
+  def repair_misclassified_bounces do
+    cleared =
+      Repo.all(from(e in Email, where: not is_nil(e.undeliverable_at)))
+      |> Enum.filter(&only_misclassified_bounces?/1)
+
+    Enum.each(cleared, fn email ->
+      Bounces.clear(email.value)
+
+      log("address_recovered",
+        user_id: email.user_id,
+        email: email.value,
+        detail: %{"reason" => "misclassified_bounce"}
+      )
+    end)
+
+    owners = cleared |> Enum.map(& &1.user_id) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    thawed =
+      Enum.count(owners, fn user_id ->
+        frozen_before? = frozen_now?(user_id)
+        reassess_user(user_id)
+        frozen_before? and not frozen_now?(user_id)
+      end)
+
+    %{cleared: length(cleared), thawed: thawed}
+  end
+
+  # An address qualifies for the repair only when there is ledger evidence and
+  # none of it survives the vetted classifier. No evidence at all means the
+  # mark came from elsewhere - leave it alone.
+  defp only_misclassified_bounces?(%Email{value: value}) do
+    case Repo.all(
+           from(b in EmailBounce, where: b.email_value == ^value, select: {b.status, b.raw})
+         ) do
+      [] -> false
+      rows -> not Enum.any?(rows, &confirmed_recipient_failure?/1)
+    end
+  end
+
+  defp frozen_now?(user_id) do
+    Repo.exists?(from(u in User, where: u.id == ^user_id and not is_nil(u.unreachable_at)))
   end
 
   @doc """

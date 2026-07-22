@@ -199,14 +199,23 @@ Anything else (animina, mehr-schulferien, system cron mail) is ignored.
 
 | dsn / status | Example seen in prod | Meaning | Action |
 |---|---|---|---|
-| `5.1.1` `5.1.2` `5.1.3` `5.5.0` `5.0.0` + `bounced` | "No such mailbox", "User unknown", "mailbox unavailable", "not a valid RFC 5321 address" | **Recipient is dead.** | Deactivate the address (§4.1); count toward freeze (§4.2). |
+| `5.1.1` `5.1.2` `5.1.3` `5.5.0` + `bounced` | "No such mailbox", "User unknown", "mailbox unavailable", "not a valid RFC 5321 address" | **Recipient is dead.** | Deactivate the address (§4.1); count toward freeze (§4.2). |
+| `5.0.0` + `bounced`, text confirms a dead recipient | "550 Requested action not taken: mailbox unavailable", "552 … mailbox not found" | **Recipient is dead** (bare 550/552 reply, no enhanced code). | Same as above — but only with confirming text. |
+| `5.0.0` + `bounced`, quota or block text | "552 … exceeded storage allocation … Quota exceeded", "550 … (user@host:blocked)" | **Mailbox is full, or the recipient's filter blocked this message.** The mailbox lives. | **Do NOT deactivate.** Quota → ignore; block → treated like a policy bounce. |
 | `5.7.x` + `bounced` | `5.7.26 … unauthenticated … DMARC` | **Sender/policy problem, not the recipient.** (Our SPF/DKIM, or the remote's policy.) | **Do NOT deactivate.** Alert ops instead — this means *our* sending is broken for a whole class of recipients. |
 | `4.x.x` + `deferred` | `4.0.0 … receiving mail too quickly`, mailbox full | **Transient.** Postfix keeps retrying. | Never deactivate. Only repeated/aging deferrals feed freeze scoring (§4.2). |
 
 Treating `5.7.x` as a dead recipient is the most dangerous false positive: a
 single DKIM misconfiguration would otherwise "kill" every Gmail recipient at
-once. Always gate on the `5.1.x / 5.5.x / 5.0.x` recipient classes for
-deactivation.
+once. Deactivation gates on the `5.1.x / 5.5.x` recipient families — and on
+`5.0.x` **only when the reply text itself confirms a dead recipient**
+(`Vutuv.Deliverability.MailLog`). `5.0.0` is not an enhanced code from the
+remote: Postfix maps any bare `550`/`552` reply to it, so the bucket mixes
+dead mailboxes with full mailboxes and recipient-side spam/IP blocks. The
+July 2026 newsletters proved the hazard: 19 members with full (gmx/web.de
+quota) or filter-blocked mailboxes were deactivated and then frozen; the
+`RepairMisclassifiedBounceFreezes` migration thawed them and the classifier
+has vetted `5.0.x` by text ever since.
 
 ### 3.4 Granting the detector log access (pick one)
 
