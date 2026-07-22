@@ -580,6 +580,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
                 <p class="text-sm text-slate-600 dark:text-slate-400">
                   {role.dates.label}<%= if role.length do %> · {role.length}<% end %>
                 </p>
+                <.qualification_line user={@user} job={role.job} />
                 <.markdown_prose
                   :if={@show_description? and role.job.description}
                   text={role.job.description}
@@ -607,6 +608,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
             <p class="text-sm text-slate-600 dark:text-slate-400">
               <.employer_name organization={@block.organization_page} text={role.job.organization} /><%= if role.length do %> · {role.length}<% end %>
             </p>
+            <.qualification_line user={@user} job={role.job} />
             <.markdown_prose
               :if={@show_description? and role.job.description}
               text={role.job.description}
@@ -622,6 +624,33 @@ defmodule VutuvWeb.WorkExperienceHTML do
         <% end %>
       </div>
     </div>
+    """
+  end
+
+  @doc """
+  The "With qualification: Gesellenbrief Metallbauer" line under a role (issue
+  #858), naming and linking the credential the member earned the job with.
+  Renders nothing for the common unlinked job (or an unloaded association), so
+  it drops in unconditionally wherever a role shows — the profile Experience
+  card, the section page and the entry show page share this one rendering.
+  """
+  attr(:user, :any, required: true)
+  attr(:job, :any, required: true)
+  attr(:class, :string, default: nil)
+
+  def qualification_line(assigns) do
+    assigns = assign(assigns, :qualification, WorkExperience.cited_qualification(assigns.job))
+
+    ~H"""
+    <p :if={@qualification} class={["text-sm text-slate-600 dark:text-slate-400", @class]}>
+      {gettext("With qualification:")}
+      <.link
+        href={~p"/#{@user}/qualifications/#{@qualification}"}
+        class="font-medium text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {@qualification.name}
+      </.link>
+    </p>
     """
   end
 

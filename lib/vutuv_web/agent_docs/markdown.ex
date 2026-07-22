@@ -539,17 +539,29 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     kind_note = work_kind_note(work)
     description = Map.get(work, :description)
     page = Map.get(work, :organization_page)
+    qualification_note = work_qualification_note(work)
 
     ["- ", Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")]
     |> Kernel.++(if page, do: [" ([#{page.name}](#{page.url}))"], else: [])
     |> Kernel.++(if kind_note, do: [" [#{kind_note}]"], else: [])
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
+    |> Kernel.++(if qualification_note, do: [" [#{qualification_note}]"], else: [])
     # The description is authored Markdown (#905), so it is emitted raw like the
     # title/organization above and a post's body — never md_text-escaped, which
     # would backslash a member's own `[label](url)` link into literal text (#927).
     |> Kernel.++(if description, do: [": #{description}"], else: [])
     |> Enum.join()
     |> indent_item_body()
+  end
+
+  # The credential the job was earned with (issue #858), mirroring the HTML
+  # page's "With qualification: …" line. Shared with the text renderer.
+  @doc false
+  def work_qualification_note(work) do
+    case Map.get(work, :qualification) do
+      %{name: name} -> gettext("With qualification: %{name}", name: name)
+      _none -> nil
+    end
   end
 
   # The non-default CV categories (issue #840) are called out on the entry

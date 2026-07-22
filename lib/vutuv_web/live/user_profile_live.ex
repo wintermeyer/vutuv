@@ -870,9 +870,10 @@ defmodule VutuvWeb.UserProfileLive do
       # Deliberately unlimited: the header-job pick must see every role (a
       # pinned one can sit outside the newest three; see load_profile). The
       # Experience card takes its top 3 in memory; rows per member are few.
-      # :organization rides along so a linked role shows the verified page's logo +
-      # canonical name (issue #931).
-      work_experiences: {WorkExperience.order_by_date(WorkExperience), [:organization_page]},
+      # display_preloads: the verified organization page (issue #931) and the
+      # cited credential (issue #858) ride along for the Experience card.
+      work_experiences:
+        {WorkExperience.order_by_date(WorkExperience), WorkExperience.display_preloads()},
       educations:
         from(e in Education, limit: 3)
         |> Education.order_by_date(),

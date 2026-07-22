@@ -36,7 +36,7 @@ defmodule Vutuv.ExportTest do
 
     data = Export.build(user)
 
-    assert data.schema_version == 3
+    assert data.schema_version == 4
     assert Enum.any?(data.blocked_members, &(&1.member == blocked.username))
     assert Enum.any?(data.saved_members.bookmarked, &(&1.member == saved_member.username))
     # The keys exist even when empty, so the export shape stays stable.
@@ -67,6 +67,16 @@ defmodule Vutuv.ExportTest do
 
     data = Export.build(user)
 
-    assert [%{title: "Chair", kind: "volunteer"}] = data.work_experiences
+    assert [%{title: "Chair", kind: "volunteer", qualification: nil}] = data.work_experiences
+  end
+
+  test "a work experience names the credential it cites (issue #858, schema v4)" do
+    user = insert(:activated_user)
+    qualification = insert(:qualification, user: user, name: "Gesellenbrief Metallbauer")
+    insert(:work_experience, user: user, qualification: qualification)
+
+    data = Export.build(user)
+
+    assert [%{qualification: "Gesellenbrief Metallbauer"}] = data.work_experiences
   end
 end

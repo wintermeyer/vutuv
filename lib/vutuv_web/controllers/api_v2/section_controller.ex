@@ -72,6 +72,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
         # one added through the form (issue #980). Only here, never in update/2:
         # the flag is a create-time decision the changeset refuses to re-cast.
         CvUpdates.announce(user, record)
+        record = preload_for_doc(record, conn.assigns.section)
         ApiV2.send_json(conn, SectionDocs.build_show(user, conn.assigns.section, record), 201)
 
       {:error, changeset} ->
@@ -86,6 +87,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     with %{} = record <- ControllerHelpers.get_owned(user, assoc, id),
          {:ok, record} <- record |> schema.changeset(params) |> Repo.update() do
       after_write(conn.assigns.section, record)
+      record = preload_for_doc(record, conn.assigns.section)
       ApiV2.send_json(conn, SectionDocs.build_show(user, conn.assigns.section, record))
     else
       nil -> Problem.not_found(conn)
@@ -116,8 +118,10 @@ defmodule VutuvWeb.ApiV2.SectionController do
 
   # Work experiences carry no `position` (they sort by date elsewhere); keep
   # their existing order so only the position-bearing sections get reordered.
+  # The organization link (issue #931) and cited credential (issue #858) ride
+  # along so the API entries carry the same facts as the public .json sibling.
   defp entries(user, :work_experiences, _viewer) do
-    Repo.all(assoc(user, :work_experiences))
+    user |> assoc(:work_experiences) |> Repo.all() |> preload_for_doc(:work_experiences)
   end
 
   # The position-ordered sections (links, social, addresses, phone numbers)
@@ -132,4 +136,12 @@ defmodule VutuvWeb.ApiV2.SectionController do
   defp after_write(:links, url), do: Vutuv.PageScreenshot.generate_async(url)
 
   defp after_write(_section, _record), do: :ok
+
+  # The associations a section's doc map renders (SectionDocs.work_entry/1
+  # falls back to nil on an unloaded association, which would silently drop
+  # the fact from the API response).
+  defp preload_for_doc(record_or_records, :work_experiences),
+    do: Repo.preload(record_or_records, WorkExperience.display_preloads())
+
+  defp preload_for_doc(record_or_records, _section), do: record_or_records
 end

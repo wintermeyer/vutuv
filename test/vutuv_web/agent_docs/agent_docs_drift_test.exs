@@ -41,7 +41,29 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       email_type: "Work"
     )
 
-    insert(:work_experience, user: user, title: "Bridge Engineer", organization: "Span AG")
+    # A certificate (issue #859): its name, issuer and verification URL appear
+    # in every format — asserted below. The Bridge Engineer job cites it
+    # (issue #858), so the "With qualification" line is drift-checked too.
+    qualification =
+      insert(:qualification,
+        user: user,
+        name: "Chartered Structural Engineer",
+        kind: "certification",
+        # A single-token issuer: the 80-column plain-text renderer hard-wraps on
+        # word boundaries, so a long multi-word value would straddle a line break
+        # and stop being a contiguous substring (true of any long value in txt).
+        issuer: "IStructE",
+        awarded_year: 2016,
+        credential_id: "MIStructE-42",
+        url: "http://istructe.example.org/verify/42"
+      )
+
+    insert(:work_experience,
+      user: user,
+      title: "Bridge Engineer",
+      organization: "Span AG",
+      qualification: qualification
+    )
 
     # A volunteer entry (issue #840): the HTML pages show its category heading,
     # the docs carry the kind — the "volunteer" fact below keeps them in sync.
@@ -80,21 +102,6 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     )
 
     insert(:language, user: user, language_code: "fr", proficiency: "native")
-
-    # A certificate (issue #859): its name, issuer and verification URL appear
-    # in every format — asserted below.
-    insert(:qualification,
-      user: user,
-      name: "Chartered Structural Engineer",
-      kind: "certification",
-      # A single-token issuer: the 80-column plain-text renderer hard-wraps on
-      # word boundaries, so a long multi-word value would straddle a line break
-      # and stop being a contiguous substring (true of any long value in txt).
-      issuer: "IStructE",
-      awarded_year: 2016,
-      credential_id: "MIStructE-42",
-      url: "http://istructe.example.org/verify/42"
-    )
 
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
     insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "Cell")
@@ -197,6 +204,21 @@ defmodule VutuvWeb.AgentDocsDriftTest do
            )
 
     assert rendered.xml =~ "<kind>apprenticeship</kind>"
+
+    # The cited credential on a job (issue #858): the HTML page shows the
+    # "With qualification" line, md/txt the bracketed note (asserted without
+    # the name — the 80-column plain-text renderer may wrap it onto the next
+    # line), JSON/XML the nested reference on the work entry.
+    assert rendered.html =~ "With qualification"
+    assert rendered.md =~ "[With qualification: Chartered Structural Engineer]"
+    assert rendered.txt =~ "With qualification:"
+
+    assert Enum.any?(
+             Jason.decode!(rendered.json)["work_experiences"],
+             &(&1["qualification"]["name"] == "Chartered Structural Engineer")
+           )
+
+    assert rendered.xml =~ "<qualification>"
 
     # The employment status (issue #870): the HTML badge and the md/txt fact
     # line show the human label, JSON/XML carry the raw machine value.

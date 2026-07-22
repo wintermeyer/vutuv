@@ -5,11 +5,13 @@ defmodule VutuvWeb.WorkExperienceController do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Profiles.CvUpdates
+  alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Social
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.QualificationHTML
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "work_experience" when action in [:create, :update])
@@ -103,6 +105,7 @@ defmodule VutuvWeb.WorkExperienceController do
       changeset: changeset,
       current_year: current_year(),
       linked_organization: linked_organization_payload(changeset),
+      qualification_options: qualification_options(conn.assigns[:user]),
       followers: Social.follower_count(conn.assigns[:user])
     )
   end
@@ -125,6 +128,7 @@ defmodule VutuvWeb.WorkExperienceController do
       assigns: [
         current_year: current_year(),
         linked_organization: linked_organization_payload(changeset),
+        qualification_options: qualification_options(user),
         followers: Social.follower_count(user)
       ]
     )
@@ -132,7 +136,7 @@ defmodule VutuvWeb.WorkExperienceController do
 
   def show(conn, _params) do
     # ResolveOwnedSlug scopes :job to conn.assigns[:user], so no ownership re-check.
-    job = Repo.preload(conn.assigns[:job], :organization_page)
+    job = Repo.preload(conn.assigns[:job], WorkExperience.display_preloads())
 
     AgentDocs.respond(conn,
       html:
@@ -157,7 +161,8 @@ defmodule VutuvWeb.WorkExperienceController do
       work_experience: work_experience,
       changeset: changeset,
       current_year: current_year(),
-      linked_organization: linked_organization_payload(changeset)
+      linked_organization: linked_organization_payload(changeset),
+      qualification_options: qualification_options(conn.assigns[:user])
     )
   end
 
@@ -172,7 +177,8 @@ defmodule VutuvWeb.WorkExperienceController do
       assigns: [
         work_experience: work_experience,
         current_year: current_year(),
-        linked_organization: linked_organization_payload(changeset)
+        linked_organization: linked_organization_payload(changeset),
+        qualification_options: qualification_options(conn.assigns[:user])
       ]
     )
   end
@@ -212,6 +218,17 @@ defmodule VutuvWeb.WorkExperienceController do
 
   defp current_year, do: Vutuv.BerlinTime.today().year
 
+  # The member's own credentials for the form's optional "earned this job with"
+  # select (issue #858). `[]` for the common member with no credentials, which
+  # hides the field entirely — zero added form weight.
+  defp qualification_options(user) do
+    user
+    |> Ecto.assoc(:qualifications)
+    |> Qualification.ordered()
+    |> Repo.all()
+    |> QualificationHTML.grouped_options()
+  end
+
   def delete(conn, _params) do
     ControllerHelpers.delete(conn, conn.assigns[:job],
       flash: gettext("Work experience deleted successfully."),
@@ -223,7 +240,7 @@ defmodule VutuvWeb.WorkExperienceController do
     Repo.preload(conn.assigns[:user],
       work_experiences:
         {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(),
-         [:organization_page]}
+         WorkExperience.display_preloads()}
     )
   end
 end
