@@ -1007,8 +1007,8 @@ defmodule VutuvWeb.UI do
 
   @doc """
   The **endorsement line** for one of a member's tags (issue #895): the
-  endorsers' overlapping faces plus a sentence naming the newest of them, the
-  whole line linking to that tag's full endorser list
+  endorsers' faces (an `<.avatar_stack>`) plus a sentence naming the newest of
+  them, which links to that tag's full endorser list
   (`/:slug/tags/:tag/endorsers`).
 
   It is the readable twin of `<.tag_vote>`'s hover roster — a popover a touch
@@ -1031,7 +1031,8 @@ defmodule VutuvWeb.UI do
   attr(:class, :any, default: nil)
 
   # How many endorser faces the line shows before the rest fold into the stack's
-  # `+N` chip. Five keeps the row to one tidy line even on a phone.
+  # `+N` chip. Five spaced 20px faces still leave the sentence most of the row
+  # on a laptop, and fit on their own line on a phone.
   @endorser_stack_cap 5
 
   def endorsed_by(assigns) do
