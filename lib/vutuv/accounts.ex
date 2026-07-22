@@ -612,6 +612,19 @@ defmodule Vutuv.Accounts do
         )
       )
 
+    # The user's review covers (book/film review sidecars): the post_reviews
+    # rows cascade with the posts, but their fetched cover files (keyed by the
+    # review id) would be orphaned otherwise.
+    review_ids =
+      Repo.all(
+        from(r in Vutuv.Posts.PostReview,
+          join: p in Vutuv.Posts.Post,
+          on: p.id == r.post_id,
+          where: p.user_id == ^user.id,
+          select: %{id: r.id}
+        )
+      )
+
     # Captured before the delete: once the account is gone so are its follow
     # edges, so the recipients of the "post gone" broadcasts can't be looked up
     # afterwards. See Vutuv.Posts.deletion_targets_for_user/1.
@@ -642,6 +655,7 @@ defmodule Vutuv.Accounts do
     Enum.each(job_image_tokens, &Vutuv.JobPostingImageStore.delete/1)
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
     Enum.each(screenshot_ids, &Vutuv.Screenshot.delete/1)
+    Enum.each(review_ids, &Vutuv.ReviewCover.delete_files/1)
     Moderation.EvidenceScreenshot.delete_for_cases(evidence_case_ids)
     Vutuv.Avatar.delete(user)
     Vutuv.Cover.delete(user)

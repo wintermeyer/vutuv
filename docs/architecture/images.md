@@ -64,8 +64,10 @@ window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 
 **Every** image that could become visible to anyone but its owner passes
 through one gate before release: member uploads (avatar, cover, post /
-job-posting / organization images) **and** the machine-generated link
-screenshots (a screenshot of an NSFW page must not bypass the upload gate).
+job-posting / organization images) **and** the machine-fetched ones — link
+screenshots (a screenshot of an NSFW page must not bypass the upload gate)
+and the book covers on post reviews (`review_cover`, fetched from Open
+Library by ISBN).
 The moderation-evidence screenshots are deliberately exempt — they are
 admin-only records of reported content and never public.
 

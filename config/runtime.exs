@@ -136,6 +136,24 @@ if config_env() == :prod do
     config :vutuv, :fediverse_enabled, false
   end
 
+  # Book metadata + covers for post reviews come keyless from Open Library.
+  # FETCH_BOOK_METADATA=false turns every such fetch off (intranets); the
+  # review panel then has no lookup button and covers stay empty.
+  if System.get_env("FETCH_BOOK_METADATA") == "false" do
+    config :vutuv, :fetch_book_metadata, false
+  end
+
+  # The shop link on book review cards. AMAZON_DOMAIN picks the store
+  # ("www.amazon.com", …); an explicitly empty AMAZON_DOMAIN="" removes the
+  # link. AMAZON_AFFILIATE_TAG rides along as ?tag= when set.
+  if amazon_domain = System.get_env("AMAZON_DOMAIN") do
+    config :vutuv, :amazon_domain, amazon_domain
+  end
+
+  if amazon_tag = System.get_env("AMAZON_AFFILIATE_TAG") do
+    config :vutuv, :amazon_affiliate_tag, amazon_tag
+  end
+
   # AI image moderation via an Ollama vision model. Fail-closed while
   # enabled: with Ollama unreachable, new images wait in owner-only limbo and
   # are scanned automatically once it is back. IMAGE_MODERATION_ENABLED=false

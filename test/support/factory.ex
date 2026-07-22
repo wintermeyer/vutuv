@@ -304,6 +304,18 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def post_review_factory do
+    %Vutuv.Posts.PostReview{
+      post: build(:post),
+      kind: "book",
+      identifier: "9783161484100",
+      title: sequence(:review_title, &"Reviewed Book #{&1}"),
+      creator: "Erika Mustermann",
+      year: 2021,
+      cover_status: "none"
+    }
+  end
+
   def post_image_factory do
     %Vutuv.Posts.PostImage{
       token: PostImage.gen_token(),

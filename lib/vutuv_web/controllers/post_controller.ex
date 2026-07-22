@@ -263,7 +263,7 @@ defmodule VutuvWeb.PostController do
 
   # The ActivityPub rendering of a public post (see Vutuv.Fediverse).
   defp send_note(conn, author, post) do
-    post = Repo.preload(post, [:images, reply_ref: [:parent_author]])
+    post = Repo.preload(post, [:images, :review, reply_ref: [:parent_author]])
 
     note =
       post

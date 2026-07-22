@@ -33,6 +33,12 @@ defmodule Vutuv.Posts.Post do
     # URL and no image at save time (see Vutuv.Posts.Screenshots). Rendered
     # beside the body once `status: "ready"`.
     has_one(:screenshot, Vutuv.Posts.PostScreenshot)
+
+    # The structured book/film review riding on this post (see PostReview);
+    # nil for ordinary posts. Replaced wholesale on edit, deleted when the
+    # author clears the review kind.
+    has_one(:review, Vutuv.Posts.PostReview, on_replace: :delete)
+
     has_many(:post_tags, Vutuv.Posts.PostTag, on_replace: :delete)
     has_many(:tags, through: [:post_tags, :tag])
 

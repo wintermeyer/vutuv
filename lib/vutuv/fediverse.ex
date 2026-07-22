@@ -235,7 +235,7 @@ defmodule Vutuv.Fediverse do
          true <- federated?(user),
          false <- Vutuv.Posts.restricted?(post),
          [_ | _] = inboxes <- delivery_inboxes(user) do
-      post = Repo.preload(post, [:images, reply_ref: [:parent_author]])
+      post = Repo.preload(post, [:images, :review, reply_ref: [:parent_author]])
       enqueue(user, inboxes, builder.(post, user))
     else
       _ -> :skip

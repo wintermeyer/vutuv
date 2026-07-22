@@ -1,0 +1,198 @@
+defmodule Vutuv.Posts.PostReviewsTest do
+  @moduledoc """
+  The review sidecar through the Posts context: create/update/delete a post
+  with review attrs, the partial-update semantics (no :review key = leave it
+  alone), and the cover fetch pipeline with stubbed HTTP.
+  """
+
+  use Vutuv.DataCase, async: true
+
+  import Vutuv.Factory
+
+  alias Vutuv.Posts
+  alias Vutuv.Posts.PostReview
+  alias Vutuv.Posts.ReviewCovers
+  alias Vutuv.Repo
+
+  @book_review %{
+    "kind" => "book",
+    "identifier" => "978-3-16-148410-0",
+    "title" => "Refactoring",
+    "creator" => "Martin Fowler",
+    "year" => "2018"
+  }
+
+  describe "create_post/2 with a review" do
+    test "persists the review beside the post" do
+      author = insert(:user)
+
+      assert {:ok, post} =
+               Posts.create_post(author, %{body: "Lesenswert!", review: @book_review})
+
+      assert %PostReview{} = post.review
+      assert post.review.kind == "book"
+      assert post.review.identifier == "9783161484100"
+      assert post.review.title == "Refactoring"
+      assert post.review.year == 2018
+      assert post.review.cover_status == "pending"
+    end
+
+    test "a movie review stores the IMDb id and fetches no cover" do
+      author = insert(:user)
+
+      assert {:ok, post} =
+               Posts.create_post(author, %{
+                 body: "Starker Film.",
+                 review: %{
+                   "kind" => "movie",
+                   "identifier" => "https://www.imdb.com/title/tt0111161/",
+                   "title" => "Die Verurteilten",
+                   "creator" => "Frank Darabont",
+                   "year" => "1994"
+                 }
+               })
+
+      assert post.review.kind == "movie"
+      assert post.review.identifier == "tt0111161"
+      assert post.review.cover_status == "none"
+    end
+
+    test "a blank kind or a missing review key creates no review" do
+      author = insert(:user)
+
+      assert {:ok, post} = Posts.create_post(author, %{body: "Ohne Review"})
+      assert post.review == nil
+
+      assert {:ok, post} =
+               Posts.create_post(author, %{body: "Auch ohne", review: %{"kind" => ""}})
+
+      assert post.review == nil
+    end
+
+    test "an invalid review rejects the whole post" do
+      author = insert(:user)
+
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Posts.create_post(author, %{
+                 body: "Kaputt",
+                 review: %{"kind" => "book", "identifier" => "not-an-isbn", "title" => "X"}
+               })
+
+      assert %{review: %{identifier: [_message]}} = errors_on(changeset)
+    end
+  end
+
+  describe "update_post/2 and the review" do
+    test "adds a review to an existing post" do
+      post = insert(:post)
+
+      assert {:ok, updated} = Posts.update_post(post, %{body: post.body, review: @book_review})
+      assert updated.review.title == "Refactoring"
+    end
+
+    test "a blank kind removes the review" do
+      review = insert(:post_review)
+
+      assert {:ok, updated} =
+               Posts.update_post(review.post, %{body: "bleibt", review: %{"kind" => ""}})
+
+      assert updated.review == nil
+      assert Repo.get(PostReview, review.id) == nil
+    end
+
+    test "attrs without a :review key leave the review untouched (partial update)" do
+      review = insert(:post_review)
+
+      assert {:ok, updated} = Posts.update_post(review.post, %{body: "nur der Text"})
+
+      assert updated.review.id == review.id
+      assert updated.review.title == review.title
+    end
+
+    test "a changed ISBN resets the cover to pending" do
+      review =
+        insert(:post_review,
+          cover: "abcdef123456.jpg",
+          cover_status: "ready",
+          cover_moderation: "approved"
+        )
+
+      assert {:ok, updated} =
+               Posts.update_post(review.post, %{
+                 body: "neues Buch",
+                 review: %{"kind" => "book", "identifier" => "9780306406157", "title" => "Anders"}
+               })
+
+      assert updated.review.id == review.id
+      assert updated.review.identifier == "9780306406157"
+      assert updated.review.cover == nil
+      assert updated.review.cover_status == "pending"
+    end
+  end
+
+  test "delete_post/1 removes the review row" do
+    review = insert(:post_review)
+
+    assert {:ok, _} = Posts.delete_post(review.post)
+    assert Repo.get(PostReview, review.id) == nil
+  end
+
+  describe "ReviewCovers.fetch/1" do
+    # Real JPEG bytes (synthesized via libvips), so the decode succeeds.
+    defp jpeg_bytes do
+      path =
+        Path.join(System.tmp_dir!(), "review_cover_src_#{System.unique_integer([:positive])}.jpg")
+
+      {:ok, img} = Image.new(120, 180, color: [10, 120, 200])
+      {:ok, _} = Image.write(img, path)
+      bytes = File.read!(path)
+      File.rm(path)
+      bytes
+    end
+
+    defp fetch_with_status(review, status, body \\ "") do
+      Application.put_env(:vutuv, :book_covers_req_options,
+        plug: fn conn ->
+          conn
+          |> Plug.Conn.put_resp_content_type("image/jpeg")
+          |> Plug.Conn.resp(status, body)
+        end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :book_covers_req_options) end)
+
+      ReviewCovers.fetch(review)
+    end
+
+    test "stores the cover and marks the review ready" do
+      review = insert(:post_review, cover_status: "pending")
+
+      assert :ok = fetch_with_status(review, 200, jpeg_bytes())
+
+      stored = Repo.get(PostReview, review.id)
+      assert stored.cover_status == "ready"
+      assert is_binary(stored.cover)
+      # :moderate_images is off in tests, so the cover is born released.
+      assert PostReview.cover_ready?(stored)
+
+      assert Vutuv.ReviewCover.version_path(stored, Vutuv.ReviewCover.version_name(stored))
+      Vutuv.ReviewCover.delete_files(stored)
+    end
+
+    test "a 404 (no cover known) marks the fetch failed" do
+      review = insert(:post_review, cover_status: "pending")
+
+      fetch_with_status(review, 404)
+
+      assert Repo.get(PostReview, review.id).cover_status == "failed"
+    end
+
+    test "undecodable bytes mark the fetch failed" do
+      review = insert(:post_review, cover_status: "pending")
+
+      fetch_with_status(review, 200, "definitely not a jpeg")
+
+      assert Repo.get(PostReview, review.id).cover_status == "failed"
+    end
+  end
+end

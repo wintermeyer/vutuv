@@ -31,6 +31,7 @@ defmodule VutuvWeb.JsonLd do
   alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReview
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
@@ -240,7 +241,10 @@ defmodule VutuvWeb.JsonLd do
 
     compact(%{
       "@context" => "https://schema.org",
-      "@type" => "BlogPosting",
+      # A post carrying a review sidecar is also a schema.org Review of the
+      # book/movie it names (rich results pick the Review type up).
+      "@type" => if(review_of(post), do: ["BlogPosting", "Review"], else: "BlogPosting"),
+      "itemReviewed" => item_reviewed(review_of(post)),
       "@id" => permalink,
       "headline" => "#{UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}",
       "datePublished" => Date.to_iso8601(post.published_on),
@@ -442,4 +446,39 @@ defmodule VutuvWeb.JsonLd do
     |> Enum.reject(fn {_key, value} -> value in [nil, [], ""] end)
     |> Map.new()
   end
+
+  defp review_of(%{review: %PostReview{} = review}), do: review
+  defp review_of(_post), do: nil
+
+  # The reviewed work as a schema.org Book/Movie. The medium maps onto
+  # bookFormat where schema.org has a value for it (print stays unset — we
+  # don't know hardcover vs. paperback).
+  defp item_reviewed(nil), do: nil
+
+  defp item_reviewed(%PostReview{kind: "book"} = review) do
+    compact(%{
+      "@type" => "Book",
+      "name" => review.title,
+      "author" => review.creator,
+      "isbn" => review.identifier,
+      "datePublished" => review.year && Integer.to_string(review.year),
+      "bookFormat" => book_format(review.medium)
+    })
+  end
+
+  defp item_reviewed(%PostReview{kind: "movie"} = review) do
+    compact(%{
+      "@type" => "Movie",
+      "name" => review.title,
+      "director" => review.creator,
+      "sameAs" => PostReview.imdb_url(review),
+      "datePublished" => review.year && Integer.to_string(review.year)
+    })
+  end
+
+  defp item_reviewed(%PostReview{}), do: nil
+
+  defp book_format("ebook"), do: "https://schema.org/EBook"
+  defp book_format("audiobook"), do: "https://schema.org/AudiobookFormat"
+  defp book_format(_other), do: nil
 end

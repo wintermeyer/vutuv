@@ -21,6 +21,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
@@ -106,6 +107,18 @@ defmodule Vutuv.Moderation.ImageSubjects do
     with %Url{} = url <- Repo.get(Url, scan.subject_id),
          true <- url.screenshot != nil and url.screenshot == scan.fingerprint do
       screenshot_source(url.id)
+    else
+      _ -> :gone
+    end
+  end
+
+  def source(%ImageScan{kind: "review_cover"} = scan) do
+    with %PostReview{} = review <- Repo.get(PostReview, scan.subject_id),
+         true <- review.cover != nil and review.cover == scan.fingerprint do
+      first_existing([
+        Originals.path("review_covers/#{review.id}"),
+        largest_served_file("review_covers/#{review.id}")
+      ])
     else
       _ -> :gone
     end
@@ -256,6 +269,29 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  def apply_approved(%ImageScan{kind: "review_cover"} = scan) do
+    flipped =
+      from(r in PostReview,
+        where:
+          r.id == ^scan.subject_id and r.cover == ^scan.fingerprint and
+            r.cover_moderation == "pending"
+      )
+      |> Repo.update_all(set: [cover_moderation: "approved"])
+
+    case flipped do
+      {1, _} ->
+        review = Repo.get!(PostReview, scan.subject_id)
+        # The card upgrade was held back at fetch time; the cover is only
+        # announced once it is released (no quarantine move — covers are
+        # served through the authorizing proxy, which checks this state).
+        Vutuv.Posts.broadcast_review_cover_ready(review.post_id)
+        :ok
+
+      _ ->
+        :stale
+    end
+  end
+
   @doc """
   Deletes the rejected image on the spot: files (served, quarantined and the
   private original — nothing unsafe stays at rest) and the asset's
@@ -336,6 +372,21 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  def apply_rejected(%ImageScan{kind: "review_cover"} = scan) do
+    cleared =
+      from(r in PostReview, where: r.id == ^scan.subject_id and r.cover == ^scan.fingerprint)
+      |> Repo.update_all(set: [cover: nil, cover_status: "failed", cover_moderation: nil])
+
+    case cleared do
+      {1, _} ->
+        Vutuv.ReviewCover.delete_files(%PostReview{id: scan.subject_id})
+        :ok
+
+      _ ->
+        :stale
+    end
+  end
+
   # An organization's `logo` column points at its image token; a rejected logo
   # must not leave a dangling pointer behind.
   defp clear_gallery_references("organization_image", image) do
@@ -393,7 +444,8 @@ defmodule Vutuv.Moderation.ImageSubjects do
       gallery_stranded("job_posting_image") ++
       gallery_stranded("organization_image") ++
       url_screenshot_stranded() ++
-      post_screenshot_stranded()
+      post_screenshot_stranded() ++
+      review_cover_stranded()
   end
 
   defp open_scan_exists(kind) do
@@ -454,6 +506,20 @@ defmodule Vutuv.Moderation.ImageSubjects do
     |> Repo.all()
     |> Enum.map(fn {id, owner_id, fingerprint} ->
       {"post_screenshot", id, owner_id, fingerprint}
+    end)
+  end
+
+  defp review_cover_stranded do
+    from(r in PostReview,
+      as: :subject,
+      join: p in assoc(r, :post),
+      where: r.cover_moderation == "pending",
+      where: not exists(open_scan_exists("review_cover")),
+      select: {r.id, p.user_id, r.cover}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, owner_id, fingerprint} ->
+      {"review_cover", id, owner_id, fingerprint}
     end)
   end
 

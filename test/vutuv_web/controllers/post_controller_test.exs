@@ -22,6 +22,53 @@ defmodule VutuvWeb.PostControllerTest do
 
   defp pad(int), do: String.pad_leading(Integer.to_string(int), 2, "0")
 
+  describe "the review card on the permalink" do
+    defp reviewed_post!(user) do
+      create_post!(user, %{
+        body: "Sehr lesenswert.",
+        review: %{
+          "kind" => "book",
+          "identifier" => "978-3-16-148410-0",
+          "title" => "Refactoring",
+          "creator" => "Martin Fowler",
+          "year" => "2018",
+          "medium" => "audiobook"
+        }
+      })
+    end
+
+    test "shows card, medium, shop link and Review JSON-LD", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      assert html =~ "data-review-card"
+      assert html =~ "Book review"
+      assert html =~ "Refactoring"
+      assert html =~ "Martin Fowler"
+      assert html =~ "Audiobook"
+      assert html =~ "https://www.amazon.de/dp/316148410X"
+      # The structured data marks the post as a Review of the Book.
+      assert html =~ "itemReviewed"
+      assert html =~ ~s("isbn": "9783161484100")
+    end
+
+    test "renders in German for German visitors (locale dimension)", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(Posts.path(post))
+        |> html_response(200)
+
+      assert html =~ "Buchbesprechung"
+      assert html =~ "Hörbuch"
+    end
+  end
+
   describe "GET the permalink" do
     test "renders a public post to anonymous visitors, indexable", %{conn: conn} do
       user = insert_activated_user()

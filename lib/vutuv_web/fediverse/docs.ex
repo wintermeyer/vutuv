@@ -20,6 +20,9 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReview
+  alias Vutuv.ReviewCover
+  alias VutuvWeb.PostComponents
   alias VutuvWeb.UserHelpers
 
   @public "https://www.w3.org/ns/activitystreams#Public"
@@ -129,11 +132,17 @@ defmodule VutuvWeb.Fediverse.Docs do
   end
 
   # The same rendering members see, with every relative link/image made
-  # absolute (remote servers render this HTML on their own domain).
+  # absolute (remote servers render this HTML on their own domain). A review
+  # sidecar is rendered INTO the content: the Note is one more rendering of
+  # the post (like the agent docs), so a Mastodon reader gets the reviewed
+  # work's facts even though remote software knows nothing of review cards.
   defp content_html(post) do
-    post.body
-    |> VutuvWeb.Markdown.render_post(images(post))
-    |> Phoenix.HTML.safe_to_string()
+    body_html =
+      post.body
+      |> VutuvWeb.Markdown.render_post(images(post))
+      |> Phoenix.HTML.safe_to_string()
+
+    (body_html <> PostComponents.review_content_html(post))
     |> absolutize()
   end
 
@@ -175,25 +184,40 @@ defmodule VutuvWeb.Fediverse.Docs do
 
   # Public posts only federate, and a public post's images are publicly
   # servable through the authorizing proxy — so their URLs can ride along.
+  # A released review cover rides along as an attachment too — a public
+  # post's cover is publicly servable through the authorizing proxy.
   defp put_attachments(note, post) do
-    case images(post) do
-      [] ->
-        note
+    attachments =
+      Enum.map(images(post), fn image ->
+        %{
+          "type" => "Document",
+          "mediaType" => "image/avif",
+          "url" => base() <> PostImage.url(image, "large")
+        }
+      end) ++ cover_attachments(post)
 
-      images ->
-        Map.put(
-          note,
-          "attachment",
-          Enum.map(images, fn image ->
-            %{
-              "type" => "Document",
-              "mediaType" => "image/avif",
-              "url" => base() <> PostImage.url(image, "large")
-            }
-          end)
-        )
+    case attachments do
+      [] -> note
+      attachments -> Map.put(note, "attachment", attachments)
     end
   end
+
+  defp cover_attachments(%Post{review: %PostReview{} = review}) do
+    if PostReview.cover_ready?(review) do
+      [
+        %{
+          "type" => "Document",
+          "mediaType" => "image/avif",
+          "name" => review.title,
+          "url" => base() <> ReviewCover.url(review)
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  defp cover_attachments(%Post{}), do: []
 
   defp summary(user) do
     case user.headline do

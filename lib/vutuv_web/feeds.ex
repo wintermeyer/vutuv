@@ -12,6 +12,7 @@ defmodule VutuvWeb.Feeds do
 
   alias Vutuv.Posts
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.PostComponents
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.Xml
 
@@ -88,11 +89,16 @@ defmodule VutuvWeb.Feeds do
   end
 
   defp rendered_body(post) do
-    post.body
-    # An RSS reader is an anonymous viewer: only AI-released images may
-    # render inline (the unreleased rest simply stays absent).
-    |> VutuvWeb.Markdown.render_post(Posts.released_images(post))
-    |> Phoenix.HTML.safe_to_string()
+    body_html =
+      post.body
+      # An RSS reader is an anonymous viewer: only AI-released images may
+      # render inline (the unreleased rest simply stays absent).
+      |> VutuvWeb.Markdown.render_post(Posts.released_images(post))
+      |> Phoenix.HTML.safe_to_string()
+
+    # A review sidecar rides inside the item content (same as the federated
+    # Note): RSS readers know nothing of review cards.
+    (body_html <> PostComponents.review_content_html(post))
     |> absolutize_urls()
   end
 

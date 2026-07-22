@@ -57,6 +57,11 @@ defmodule Vutuv.Uploads.Spec do
       # 2x the 400x264 on-page display size; crop :high keeps the page top.
       %{name: :thumb, fit: {:crop, 800, 528, :high}, quality: 58}
     ],
+    review_cover: [
+      # A book cover fetched by ISBN (Vutuv.ReviewCover): portrait aspect
+      # preserved, ~4x the review card's 80-96px display width for HiDPI.
+      %{name: :cover, fit: {:box_down, 640}, quality: 58}
+    ],
     post_image: [
       # thumb: square feed-grid cell; feed: single-image feed width;
       # large: permalink/lightbox.

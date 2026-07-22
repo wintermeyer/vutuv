@@ -14,6 +14,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReview
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UserHelpers
 
@@ -45,6 +46,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       author: AgentDocs.person_ref(author),
       published_on: post.published_on,
       body_markdown: post.body,
+      # The structured book/film review riding on the post (nil for ordinary
+      # posts) — what the HTML review card shows.
+      review: review_entry(post.review),
       tags: Enum.map(post.tags, & &1.name),
       # Anonymous public view: images still in (or deleted by) AI moderation
       # never appear here.
@@ -118,6 +122,20 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       body_markdown: reply.body
     }
   end
+
+  defp review_entry(%PostReview{} = review) do
+    %{
+      kind: review.kind,
+      identifier: review.identifier,
+      title: review.title,
+      creator: review.creator,
+      year: review.year,
+      medium: review.medium,
+      link: PostReview.amazon_url(review) || PostReview.imdb_url(review)
+    }
+  end
+
+  defp review_entry(_other), do: nil
 
   defp image_entry(%PostImage{} = image) do
     %{

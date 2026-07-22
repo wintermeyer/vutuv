@@ -340,6 +340,33 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.txt =~ "Likes: 1"
   end
 
+  test "post permalink: a book review's facts reach every format", %{user: user} do
+    reviewed =
+      create_post!(user, %{
+        "body" => "A classic worth rereading.",
+        "review" => %{
+          "kind" => "book",
+          "identifier" => "978-3-16-148410-0",
+          "title" => "Refactoring",
+          "creator" => "Martin Fowler",
+          "year" => "2018",
+          "medium" => "audiobook"
+        }
+      })
+
+    rendered = formats_for("/drift_tester/posts/#{reviewed.id}")
+
+    for fact <- ["Refactoring", "Martin Fowler", "9783161484100", "Audiobook"],
+        do: assert_fact_everywhere(rendered, fact)
+
+    doc = Jason.decode!(rendered.json)
+    assert doc["review"]["kind"] == "book"
+    assert doc["review"]["identifier"] == "9783161484100"
+    assert doc["review"]["year"] == 2018
+    assert doc["review"]["medium"] == "audiobook"
+    assert doc["review"]["link"] == "https://www.amazon.de/dp/316148410X"
+  end
+
   test "post archive: entries and total in every format", %{post: post} do
     rendered = formats_for("/drift_tester/posts")
 
