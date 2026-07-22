@@ -89,6 +89,29 @@ defmodule Vutuv.DashboardTest do
     assert NaiveDateTime.compare(snapshot.last_message_at, ctx.today_start) == :eq
   end
 
+  describe "registrations_today/0" do
+    test "counts only today's confirmed sign-ups", ctx do
+      insert(:activated_user, at(ctx.today_start))
+      insert(:activated_user, at(ctx.today_start))
+      insert(:user, [email_confirmed?: false] ++ at(ctx.today_start))
+      insert(:activated_user, at(ctx.yesterday_start))
+
+      assert Dashboard.registrations_today() == 2
+    end
+
+    test "is zero on a day nobody joined", ctx do
+      insert(:activated_user, at(ctx.yesterday_start))
+
+      assert Dashboard.registrations_today() == 0
+    end
+
+    test "agrees with the dashboard tile", ctx do
+      insert(:activated_user, at(ctx.today_start))
+
+      assert Dashboard.registrations_today() == Dashboard.activity_snapshot().registrations_today
+    end
+  end
+
   describe "newest_members/1" do
     test "lists confirmed members newest first, skipping unconfirmed ones" do
       _oldest = insert(:activated_user)

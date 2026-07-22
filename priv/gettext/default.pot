@@ -14109,3 +14109,15 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "endorsed you for %{tags}."
 msgstr ""
+
+#: lib/vutuv_web/components/post_components.ex:1552
+#, elixir-autogen, elixir-format
+msgid "by:"
+msgstr ""
+
+#: lib/vutuv_web/live/shell_live.ex:306
+#, elixir-autogen, elixir-format
+msgid "%{formatted} new member today"
+msgid_plural "%{formatted} new members today"
+msgstr[0] ""
+msgstr[1] ""

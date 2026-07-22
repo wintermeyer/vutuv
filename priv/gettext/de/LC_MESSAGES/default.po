@@ -14838,3 +14838,15 @@ msgstr "folgen Ihnen jetzt."
 #, elixir-autogen, elixir-format
 msgid "endorsed you for %{tags}."
 msgstr "hat Sie für %{tags} empfohlen."
+
+#: lib/vutuv_web/components/post_components.ex:1552
+#, elixir-autogen, elixir-format
+msgid "by:"
+msgstr "von:"
+
+#: lib/vutuv_web/live/shell_live.ex:306
+#, elixir-autogen, elixir-format
+msgid "%{formatted} new member today"
+msgid_plural "%{formatted} new members today"
+msgstr[0] "%{formatted} neues Mitglied heute"
+msgstr[1] "%{formatted} neue Mitglieder heute"

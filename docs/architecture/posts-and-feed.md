@@ -367,19 +367,29 @@ review on save, while attrs without a `:review` key (the API's partial PATCH)
 leave it untouched.
 
 Every surface that renders the post adds the **review card**
-(`VutuvWeb.PostComponents.review_card/1`): cover (or a kind-glyph tile), kind
-label, title, the creator on one line with year · medium on the line below it,
-the publisher, the book's page count and — for an audiobook — its running
-time, and a dot-separated line
-of outbound links — the Open Library book page first (when a cover is shown,
-see below), then the store link labelled with just the store name ("Amazon" /
-"IMDb") — Amazon for books (built offline from the ISBN: ISBN-10 `/dp/` link,
-search fallback for 979 ISBNs; domain + optional affiliate tag are config, an
-empty `AMAZON_DOMAIN` removes the link), IMDb for films. When the medium is an **audiobook** the
-"Hörbuch"/"Audiobook" word on the details line is itself a link to Audible
+(`VutuvWeb.PostComponents.review_card/1`). It reads top to bottom the way a
+book jacket does: the cover (or a kind-glyph tile) with the page count under it,
+and beside it the title, the author on the line **directly** below it
+("von: …" / "by: …", labelled because between a title above and a publisher
+below a bare name is the one line that doesn't say what it is), then
+year · medium, the publisher, and the ISBN one size down (`text-xs`) closing
+the block. An audiobook's **running time rides the medium in parentheses**
+("Hörbuch (ca. 1 Std. 15 Min.)") instead of costing a line of its own. Under
+all of it, full width, the dot-separated **links** row — the Open Library book
+page first (when a cover is shown, see below), then the store link labelled
+with just the store name ("Amazon" / "IMDb") — Amazon for books (built offline
+from the ISBN: ISBN-10 `/dp/` link, search fallback for 979 ISBNs; domain +
+optional affiliate tag are config, an empty `AMAZON_DOMAIN` removes the link),
+IMDb for films. Every line of the identity block is a span of **one** paragraph
+and the title carries `mb-0`, because the legacy `components.css` `p` rule
+(`margin-bottom: 15px`) would otherwise open a blank line between each fact.
+When the medium is an **audiobook** the
+"Hörbuch"/"Audiobook" word is itself a link to Audible
 (`PostReview.audible_url/1` — a title + author search, since Audible keys its
 audiobooks by their own ASIN, not the print ISBN we store; `AUDIBLE_DOMAIN`
-config, an empty value keeps the word plain). The permalink's JSON-LD becomes
+config, an empty value keeps the word plain); the parenthetical running time
+stays outside that link and is `whitespace-nowrap`, so a narrow card wraps it
+whole instead of splitting it mid-figure. The permalink's JSON-LD becomes
 `["BlogPosting", "Review"]` with `itemReviewed` (Book/Movie), and the agent
 formats carry a `review` entry / fact line (drift-tested).
 
