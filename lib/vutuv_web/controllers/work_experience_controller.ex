@@ -4,7 +4,9 @@ defmodule VutuvWeb.WorkExperienceController do
   alias Vutuv.Accounts
   alias Vutuv.Organizations
   alias Vutuv.Organizations.OrganizationImage
+  alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.Social
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
@@ -91,28 +93,39 @@ defmodule VutuvWeb.WorkExperienceController do
   end
 
   def new(conn, _params) do
-    changeset = WorkExperience.changeset(%WorkExperience{})
+    # The "tell my followers" box starts ticked (issue #980): a member who
+    # bothers to add a role usually wants their network to know, and it is one
+    # click to opt out. The data default stays false, so every path that does
+    # not render this form (the import, the API) still announces nothing.
+    changeset = WorkExperience.changeset(%WorkExperience{announce_to_followers?: true})
 
     render(conn, "new.html",
       changeset: changeset,
       current_year: current_year(),
-      linked_organization: linked_organization_payload(changeset)
+      linked_organization: linked_organization_payload(changeset),
+      followers: Social.follower_count(conn.assigns[:user])
     )
   end
 
   def create(conn, %{"work_experience" => work_experience_params}) do
+    user = conn.assigns[:user]
+
     changeset =
-      conn.assigns[:user]
+      user
       |> build_assoc(:work_experiences)
       |> WorkExperience.changeset(work_experience_params)
 
-    ControllerHelpers.save(conn, Repo.insert(changeset),
+    result = Repo.insert(changeset)
+    with {:ok, work_experience} <- result, do: CvUpdates.announce(user, work_experience)
+
+    ControllerHelpers.save(conn, result,
       flash: gettext("Work experience created successfully."),
       redirect_to: ~p"/settings/work_experiences",
       render: "new.html",
       assigns: [
         current_year: current_year(),
-        linked_organization: linked_organization_payload(changeset)
+        linked_organization: linked_organization_payload(changeset),
+        followers: Social.follower_count(user)
       ]
     )
   end

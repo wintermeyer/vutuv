@@ -261,7 +261,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # Event kinds that share the brand badge colour (follower/reply/connection/
   # the report-protection notice), so the class string lives in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-  @brand_kinds ~w(follower reply connection report_protection organization_role handle_change)
+  @brand_kinds ~w(follower reply connection report_protection organization_role handle_change cv_update)
 
   defp kind_classes("endorsement"),
     do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -290,6 +290,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("report_protection"), do: "🛡"
   defp kind_glyph("organization_role"), do: "🏢"
   defp kind_glyph("handle_change"), do: "@"
+  defp kind_glyph("cv_update"), do: "📄"
   defp kind_glyph(_), do: "•"
 
   # The small uppercase tag under the event text. Translated like the text
@@ -304,6 +305,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("report_protection"), do: gettext("Report protection")
   defp kind_label("organization_role"), do: gettext("Organization role")
   defp kind_label("handle_change"), do: gettext("Handle change")
+  defp kind_label("cv_update"), do: gettext("CV update")
   defp kind_label(_), do: gettext("Activity")
 
   # Where clicking the event text leads. Events about one of the viewer's
@@ -324,6 +326,23 @@ defmodule VutuvWeb.NotificationLive.Index do
   # other rejected images have no page left to open.
   defp notification_target(%{kind: "image_rejected"} = n, viewer) do
     if n[:image_kind] in ["avatar", "cover"] and viewer != nil, do: ~p"/settings/profile"
+  end
+
+  # A new CV entry (issue #980) opens that entry's own page on the author's
+  # profile; the actor line beside it links to the profile itself. A payload
+  # missing either half falls through to the profile link.
+  defp notification_target(%{kind: "cv_update"} = n, _viewer) do
+    with slug when is_binary(slug) <- n[:actor_param],
+         param when is_binary(param) <- n[:entry_param] do
+      case n[:section] do
+        "work_experiences" -> ~p"/#{slug}/work_experiences/#{param}"
+        "educations" -> ~p"/#{slug}/educations/#{param}"
+        "qualifications" -> ~p"/#{slug}/qualifications/#{param}"
+        _ -> ~p"/#{slug}"
+      end
+    else
+      _ -> nil
+    end
   end
 
   defp notification_target(n, viewer) do
@@ -423,7 +442,31 @@ defmodule VutuvWeb.NotificationLive.Index do
     )
   end
 
+  # A new CV entry the author chose to announce (issue #980). The wording names
+  # the section, so a reader can tell a job from a degree without opening it.
+  defp notification_text(%{kind: "cv_update"} = n) do
+    case n[:section] do
+      "educations" ->
+        gettext("added a new education entry to their CV: %{entry}", entry: cv_entry_label(n))
+
+      "qualifications" ->
+        gettext("added a new certificate to their CV: %{entry}", entry: cv_entry_label(n))
+
+      _ ->
+        gettext("added a new position to their CV: %{entry}", entry: cv_entry_label(n))
+    end
+  end
+
   defp notification_text(n), do: n[:text]
+
+  # "Head of Bridges · Span AG": what the entry is, then where. Either half can
+  # be missing (an education entry with no degree, a certificate with no
+  # issuer), so the separator only appears when both are there.
+  defp cv_entry_label(n) do
+    [n[:entry_title], n[:entry_subtitle]]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" · ")
+  end
 
   # Reply and like notifications carry post ids the row can quote: a like the
   # liked post (`:post_id`), a reply both the recipient's own post that was

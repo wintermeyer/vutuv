@@ -14492,3 +14492,55 @@ msgstr "Messenger von %{name}"
 #, elixir-autogen, elixir-format
 msgid "Select a messenger"
 msgstr "Messenger auswählen"
+
+#: lib/vutuv_web/components/ui.ex:2494
+#, elixir-autogen, elixir-format
+msgid "Tell my follower about this"
+msgid_plural "Tell my %{formatted} followers about this"
+msgstr[0] "Meinen Follower darüber informieren"
+msgstr[1] "Meine %{formatted} Follower darüber informieren"
+
+#: lib/vutuv_web/components/ui.ex:2503
+#, elixir-autogen, elixir-format
+msgid "They see one notification linking to this entry. No email is sent, and it only ever happens for a new entry."
+msgstr "Die Benachrichtigung enthält einen Link zu diesem Eintrag. Es wird keine E-Mail verschickt, und das passiert nur bei neuen Einträgen."
+
+#: lib/vutuv_web/live/notification_live/index.ex:311
+#, elixir-autogen, elixir-format
+msgid "CV update"
+msgstr "Lebenslauf-Update"
+
+#: lib/vutuv_web/live/notification_live/index.ex:449
+#, elixir-autogen, elixir-format
+msgid "added a new position to their CV: %{entry}"
+msgstr "hat eine neue Station im Lebenslauf: %{entry}"
+
+#: lib/vutuv_web/live/notification_live/index.ex:443
+#, elixir-autogen, elixir-format
+msgid "added a new education entry to their CV: %{entry}"
+msgstr "hat eine neue Ausbildung im Lebenslauf: %{entry}"
+
+#: lib/vutuv_web/live/notification_live/index.ex:446
+#, elixir-autogen, elixir-format
+msgid "added a new certificate to their CV: %{entry}"
+msgstr "hat ein neues Zertifikat im Lebenslauf: %{entry}"
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:74
+#, elixir-autogen, elixir-format
+msgid "CV updates"
+msgstr "Lebenslauf-Updates"
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:77
+#, elixir-autogen, elixir-format
+msgid "When someone you follow adds a new entry to their CV, they can let their followers know. It shows up under the bell, never by email."
+msgstr "Wenn jemand, dem Sie folgen, einen neuen Eintrag im Lebenslauf ergänzt, kann diese Person ihre Follower darüber informieren. Das erscheint unter der Glocke, nie per E-Mail."
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:82
+#, elixir-autogen, elixir-format
+msgid "Tell me about new CV entries of people I follow"
+msgstr "Über neue Lebenslauf-Einträge von Personen informieren, denen ich folge"
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:83
+#, elixir-autogen, elixir-format
+msgid "When off, you never see this kind of notification, whoever sends it."
+msgstr "Wenn aus, erscheint diese Art von Benachrichtigung nie, von wem auch immer."

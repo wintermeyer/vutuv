@@ -23,6 +23,10 @@ defmodule Vutuv.Profiles.WorkExperience do
     field(:end_month, :integer)
     field(:end_year, :integer)
     field(:slug, :string)
+    # The author's "tell my followers about this" choice (issue #980), taken
+    # once when the entry is created — `CvSection.cast_announcement/2` ignores
+    # the param on an update. Deliberately NOT in @cast_fields.
+    field(:announce_to_followers?, :boolean, default: false)
 
     belongs_to(:user, Vutuv.Accounts.User)
     # Optional link to a verified organization page (issue #931). nil = free-text
@@ -51,6 +55,7 @@ defmodule Vutuv.Profiles.WorkExperience do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @cast_fields)
+    |> CvSection.cast_announcement(params)
     |> validate_required([:title, :organization, :kind])
     |> validate_inclusion(:kind, @kinds)
     # Match the varchar(255) columns (and cap the text description sanely) so

@@ -19,7 +19,9 @@ We use the [MIT License](LICENSE).
   follow relationships, posts, likes/reposts/replies and
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
   Members can also **follow a tag** to pull its posts into their feed and get
-  matching people suggested. Developer profiles can show cached public stats of
+  matching people suggested. Adding a new CV entry (job, education,
+  certificate) can optionally notify your followers — your call per entry,
+  in-app only, and switchable off by whoever receives it. Developer profiles can show cached public stats of
   their GitHub, GitLab and Codeberg accounts (stars, repositories, languages,
   activity).
 - Verified organization pages at `/organizations` (a company, a Verein, a public

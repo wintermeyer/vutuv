@@ -8,7 +8,7 @@ defmodule Vutuv.Profiles.CvSection do
   """
 
   import Ecto.Query
-  import Ecto.Changeset, only: [get_change: 2, get_field: 2, put_change: 3]
+  import Ecto.Changeset, only: [cast: 3, get_change: 2, get_field: 2, put_change: 3]
 
   @doc """
   Splits an already-ordered `entries` list into `{kind, entries}` pairs in
@@ -34,6 +34,22 @@ defmodule Vutuv.Profiles.CvSection do
       desc: x.start_month
     )
   end
+
+  @doc """
+  Casts the author's "tell my followers about this" choice (issue #980) — but
+  only while the entry is being **created**. On an update the param is ignored,
+  so the decision belongs to the new-entry form alone: editing a role from 2011
+  can never fire a fresh round of notifications, and the flag a follower's feed
+  reads always describes the moment the entry appeared.
+
+  Shared by all three CV sections (`Vutuv.Profiles.WorkExperience`,
+  `Education`, `Qualification`), so none of them can drift from that rule.
+  The notification side lives in `Vutuv.Profiles.CvUpdates`.
+  """
+  def cast_announcement(%{data: %{id: nil}} = changeset, params),
+    do: cast(changeset, params, [:announce_to_followers?])
+
+  def cast_announcement(changeset, _params), do: changeset
 
   @doc """
   Builds the `slug` from `fields` (via each schema's `String.Chars`) when any of

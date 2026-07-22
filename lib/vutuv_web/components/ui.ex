@@ -21,6 +21,10 @@ defmodule VutuvWeb.UI do
     statics: ~w(assets fonts images favicon.ico)
 
   import PhoenixHTMLHelpers.Link, only: [button: 2]
+  # `<.announce_to_followers_field>` is shared by the three CV section forms
+  # (different view modules), so it lives here and needs the form helper the
+  # legacy templates get from `use PhoenixHTMLHelpers`.
+  import PhoenixHTMLHelpers.Form, only: [checkbox: 3]
 
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
@@ -2453,6 +2457,44 @@ defmodule VutuvWeb.UI do
         <span class="block font-normal">{render_slot(@inner_block)}</span>
       </span>
     </label>
+    """
+  end
+
+  @doc """
+  The new-CV-entry form's "tell my followers about this" checkbox (issue #980),
+  shared verbatim by the three CV sections (work experience, education,
+  certificates & licenses) so the author reads the same promise everywhere.
+
+  Renders **nothing** when the member has no followers yet — there is nobody to
+  tell, and a dead switch on a form is noise. It is deliberately absent from the
+  edit forms too: only a brand-new entry announces itself
+  (`Vutuv.Profiles.CvSection.cast_announcement/2` enforces that server-side).
+
+  Sits inside a legacy `.editform` page, so it wraps the shared
+  `<.setting_toggle>` row in an `.editform__field`.
+  """
+  attr(:form, :any, required: true, doc: "the section form (`:let={f}`)")
+  attr(:followers, :integer, required: true, doc: "how many people follow the author")
+
+  def announce_to_followers_field(assigns) do
+    ~H"""
+    <div :if={@followers > 0} class="editform__field">
+      <.setting_toggle label={
+        ngettext(
+          "Tell my follower about this",
+          "Tell my %{formatted} followers about this",
+          @followers,
+          formatted: compact_count(@followers)
+        )
+      }>
+        <:checkbox>
+          {checkbox(@form, :announce_to_followers?, class: checkbox_class())}
+        </:checkbox>
+        {gettext(
+          "They see one notification linking to this entry. No email is sent, and it only ever happens for a new entry."
+        )}
+      </.setting_toggle>
+    </div>
     """
   end
 

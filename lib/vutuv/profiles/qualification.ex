@@ -15,6 +15,7 @@ defmodule Vutuv.Profiles.Qualification do
   import Vutuv.ChangesetHelpers, only: [validate_url: 2]
 
   alias Vutuv.BerlinTime
+  alias Vutuv.Profiles.CvSection
 
   # The two kinds a member picks between. A LinkedIn import lands everything as
   # a certification (LinkedIn has no signal separating a licence from a cert).
@@ -30,6 +31,10 @@ defmodule Vutuv.Profiles.Qualification do
     field(:expires_year, :integer)
     field(:credential_id, :string)
     field(:url, :string)
+    # The author's "tell my followers about this" choice (issue #980), taken
+    # once when the entry is created — `CvSection.cast_announcement/2` ignores
+    # the param on an update. Deliberately NOT in @cast_fields.
+    field(:announce_to_followers?, :boolean, default: false)
 
     belongs_to(:user, Vutuv.Accounts.User)
     # Reserved for issue #857; always nil now, so it is not cast.
@@ -52,6 +57,7 @@ defmodule Vutuv.Profiles.Qualification do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @cast_fields)
+    |> CvSection.cast_announcement(params)
     |> validate_required([:name, :kind])
     |> validate_inclusion(:kind, @kinds)
     # Match the varchar(255) columns so an oversized value (a long LinkedIn

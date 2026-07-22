@@ -99,15 +99,17 @@ defmodule VutuvWeb.SettingsHTML do
   end
 
   @doc """
-  A privacy-settings card wrapping one boolean toggle in its own save form:
-  section title + intro paragraph, a `<.setting_toggle>` checkbox bound to
-  `field` on `changeset`, and a Save button. The three positive-flag privacy
-  switches (online status, social-media posts, code statistics) share it, so
-  they can never drift apart.
+  A settings card wrapping one boolean toggle in its own save form: section
+  title + intro paragraph, a `<.setting_toggle>` checkbox bound to `field` on
+  `changeset`, and a Save button. The three positive-flag privacy switches
+  (online status, social-media posts, code statistics) and the notifications
+  page's CV-update switch share it, so they can never drift apart. `action` is
+  the settings form the card posts to.
   """
   attr(:changeset, :any, required: true)
   attr(:field, :atom, required: true)
   attr(:form_id, :string, required: true)
+  attr(:action, :string, required: true)
   attr(:title, :string, required: true)
   attr(:intro, :string, required: true)
   attr(:label, :string, required: true)
@@ -119,13 +121,7 @@ defmodule VutuvWeb.SettingsHTML do
       <.section_title>{@title}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{@intro}</p>
 
-      <.form
-        :let={f}
-        for={@changeset}
-        action={~p"/settings/privacy"}
-        id={@form_id}
-        class="mt-5 space-y-5"
-      >
+      <.form :let={f} for={@changeset} action={@action} id={@form_id} class="mt-5 space-y-5">
         <.setting_toggle label={@label}>
           <:checkbox><%= checkbox f, @field, class: checkbox_class() %></:checkbox>
           {@hint}

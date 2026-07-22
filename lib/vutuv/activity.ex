@@ -12,7 +12,8 @@ defmodule Vutuv.Activity do
   The feed is **derived at read time** from the event tables that already exist
   (`follows` — a one-way follow is a "follower" event, a mutual follow a
   "connection"/vernetzt one —, `user_tag_endorsements`, `post_replies`,
-  `post_likes`) instead of being
+  `post_likes`, and the announced CV rows behind
+  `Vutuv.Profiles.CvUpdates`) instead of being
   persisted per notification — which makes it automatically retroactive. The only stored
   state is `users.notifications_read_at`, the read marker behind the unread
   badge; `mark_notifications_read/1` bumps it and broadcasts. Older events are
@@ -30,6 +31,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
+  alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.UserTagEndorsement
@@ -137,6 +139,13 @@ defmodule Vutuv.Activity do
         select: %{ts: max(n.inserted_at)}
       )
 
+    # New CV entries of the people this member follows (issue #980). Without
+    # this arm the marker ignores them, so their unread badge never clears.
+    cv_update_max =
+      user_id
+      |> CvUpdates.feed_query()
+      |> select([e], %{ts: max(e.inserted_at)})
+
     union =
       follower_max
       |> union_all(^endorsement_max)
@@ -149,6 +158,7 @@ defmodule Vutuv.Activity do
       |> union_all(^severance_restore_max)
       |> union_all(^organization_role_max)
       |> union_all(^handle_change_max)
+      |> union_all(^cv_update_max)
 
     from(t in subquery(union), select: max(t.ts))
     |> Repo.one()
@@ -226,6 +236,17 @@ defmodule Vutuv.Activity do
         at: notification.inserted_at
       })
     )
+  end
+
+  @doc """
+  Live push for a new CV entry one of the recipient's followees just added and
+  chose to announce (issue #980). `payload` is `Vutuv.Profiles.CvUpdates.payload/1`
+  — the section, the entry's route param and the two lines that name it, exactly
+  the columns the derived feed selects, so the pushed row and the reloaded page
+  render the same. In-app only: this kind never mails.
+  """
+  def notify_cv_update(recipient_id, %User{} = author, %{} = payload) do
+    notify(recipient_id, Map.merge(actor_fields(author), Map.put(payload, :kind, "cv_update")))
   end
 
   @doc ~S(Convenience: an "endorsed you for <tag>" notification for the tag's owner.)
@@ -404,7 +425,8 @@ defmodule Vutuv.Activity do
         &moderation_items(user_id, &1, &2),
         &image_rejected_items(user_id, &1, &2),
         &report_protection_items(user_id, &1, &2),
-        &handle_change_items(user_id, &1, &2)
+        &handle_change_items(user_id, &1, &2),
+        &cv_update_items(user_id, &1, &2)
       ],
       limit,
       cursor
@@ -445,6 +467,7 @@ defmodule Vutuv.Activity do
             subquery(count_replies(user_id, read_at)) +
             subquery(count_likes(user_id, read_at)) +
             subquery(count_organization_roles(user_id, read_at)) +
+            subquery(count_cv_updates(user_id, read_at)) +
             subquery(count_moderation(user_id, read_at)) +
             subquery(count_image_rejections(user_id, read_at)) +
             subquery(count_severances(user_id, read_at)) +
@@ -704,6 +727,40 @@ defmodule Vutuv.Activity do
     end)
   end
 
+  # "Added a new position to their CV" entries (issue #980): the announced CV
+  # rows of the people this member follows. Derived straight from the CV
+  # tables through the one rule in `Vutuv.Profiles.CvUpdates.feed_query/1`, so
+  # deleting the entry removes the notification and renaming the job renames
+  # it. The actor is the author, and the entry's own page (under their
+  # profile) is what the row links to.
+  defp cv_update_items(user_id, limit, cursor) do
+    user_id
+    |> CvUpdates.feed_query()
+    |> order_by([e], desc: e.inserted_at, desc: e.id)
+    |> limit(^limit)
+    |> at_or_before(cursor)
+    |> select([e, _follow, author], %{
+      id: e.id,
+      at: e.inserted_at,
+      author: struct(author, ^User.listing_fields()),
+      section: e.section,
+      title: e.title,
+      subtitle: e.subtitle,
+      param: e.param
+    })
+    |> Repo.all()
+    |> Enum.map(fn row ->
+      "cv-update-#{row.id}"
+      |> actor_item("cv_update", row.at, row.author)
+      |> Map.merge(%{
+        section: row.section,
+        entry_param: row.param,
+        entry_title: row.title,
+        entry_subtitle: row.subtitle
+      })
+    end)
+  end
+
   defp protection_item(id, status, at, reported) do
     id
     |> actor_item("report_protection", at, reported)
@@ -800,6 +857,13 @@ defmodule Vutuv.Activity do
       where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
       select: %{count: count()}
     )
+    |> since(read_at)
+  end
+
+  defp count_cv_updates(user_id, read_at) do
+    user_id
+    |> CvUpdates.feed_query()
+    |> select([e], %{count: count()})
     |> since(read_at)
   end
 

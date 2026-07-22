@@ -56,5 +56,9 @@
     <%= error_tag f, :end_month %>
   </.editform_field>
 
+  <%!-- The author's "tell my followers" choice (issue #980). Only the new-entry
+        form passes :followers, so an edit never re-announces an old entry. --%>
+  <.announce_to_followers_field :if={assigns[:followers]} form={f} followers={@followers} />
+
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>

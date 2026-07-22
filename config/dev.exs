@@ -56,7 +56,9 @@ config :vutuv, Vutuv.Repo,
   adapter: Ecto.Adapters.Postgres,
   username: "postgres",
   password: "postgres",
-  database: "vutuv1_dev",
+  # Overridable so two checkouts (a git worktree working on a schema change,
+  # say) can each keep their own dev database instead of migrating one another's.
+  database: System.get_env("DEV_DATABASE", "vutuv1_dev"),
   hostname: "localhost",
   pool_size: 10,
   # Keep the dev log readable: don't echo every SQL query.

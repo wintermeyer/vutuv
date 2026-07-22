@@ -117,6 +117,11 @@ auth -X PATCH $API/me/work_experiences/0190abcd-… \
 auth -X DELETE $API/me/work_experiences/0190abcd-…
 ```
 
+A **CV** section (`work_experiences`, `qualifications`) also accepts
+`"announce_to_followers?": true` on **create**, which notifies the people
+who already follow you about the new entry (in-app only, never email).
+It is ignored on `PATCH`: only a brand-new entry can announce itself.
+
 Field names per section: work_experiences (`title`, `organization`,
 `description`, `kind` = `employment`/`internship`/`volunteer` (default
 `employment`), `start_year`, `start_month`, `end_year`, `end_month`),

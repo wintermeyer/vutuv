@@ -205,6 +205,7 @@ defmodule Vutuv.Export do
       notification_emails: user.notification_emails?,
       email_on_endorsement: user.email_on_endorsement?,
       email_on_follower: user.email_on_follower?,
+      cv_update_notifications: user.cv_update_notifications?,
       identity_verified: user.identity_verified?,
       avatar_file: user.avatar,
       cover_photo_file: user.cover_photo,

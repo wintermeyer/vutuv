@@ -13763,3 +13763,55 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Select a messenger"
 msgstr ""
+
+#: lib/vutuv_web/components/ui.ex:2494
+#, elixir-autogen, elixir-format
+msgid "Tell my follower about this"
+msgid_plural "Tell my %{formatted} followers about this"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/components/ui.ex:2503
+#, elixir-autogen, elixir-format
+msgid "They see one notification linking to this entry. No email is sent, and it only ever happens for a new entry."
+msgstr ""
+
+#: lib/vutuv_web/live/notification_live/index.ex:311
+#, elixir-autogen, elixir-format
+msgid "CV update"
+msgstr ""
+
+#: lib/vutuv_web/live/notification_live/index.ex:449
+#, elixir-autogen, elixir-format
+msgid "added a new position to their CV: %{entry}"
+msgstr ""
+
+#: lib/vutuv_web/live/notification_live/index.ex:443
+#, elixir-autogen, elixir-format
+msgid "added a new education entry to their CV: %{entry}"
+msgstr ""
+
+#: lib/vutuv_web/live/notification_live/index.ex:446
+#, elixir-autogen, elixir-format
+msgid "added a new certificate to their CV: %{entry}"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:74
+#, elixir-autogen, elixir-format
+msgid "CV updates"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:77
+#, elixir-autogen, elixir-format
+msgid "When someone you follow adds a new entry to their CV, they can let their followers know. It shows up under the bell, never by email."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:82
+#, elixir-autogen, elixir-format
+msgid "Tell me about new CV entries of people I follow"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:83
+#, elixir-autogen, elixir-format
+msgid "When off, you never see this kind of notification, whoever sends it."
+msgstr ""

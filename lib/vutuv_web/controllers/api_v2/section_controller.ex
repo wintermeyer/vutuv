@@ -30,6 +30,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     WorkExperience
   }
 
+  alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ApiV2
@@ -67,6 +68,10 @@ defmodule VutuvWeb.ApiV2.SectionController do
     case Repo.insert(changeset) do
       {:ok, record} ->
         after_write(conn.assigns.section, record)
+        # A CV entry created with "announce_to_followers?": true announces like
+        # one added through the form (issue #980). Only here, never in update/2:
+        # the flag is a create-time decision the changeset refuses to re-cast.
+        CvUpdates.announce(user, record)
         ApiV2.send_json(conn, SectionDocs.build_show(user, conn.assigns.section, record), 201)
 
       {:error, changeset} ->
