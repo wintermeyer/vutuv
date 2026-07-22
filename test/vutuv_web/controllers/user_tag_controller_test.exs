@@ -75,10 +75,10 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
   end
 
-  # The public tag list (issue #895): one row per tag, each naming the members
-  # who endorse it. The profile chip only reveals its roster on hover, which a
-  # touch device can never do, so this page is where the endorsements are
-  # readable outright.
+  # The public tag list (issue #895): one row per tag — the profile's own tag
+  # chip on the left, the faces of the members who endorse it on the right. The
+  # profile chip only reveals its roster on hover, which a touch device can never
+  # do, so this page is where the endorsements are readable outright.
   describe "index" do
     setup do
       owner = insert_activated_user(username: "tag_lister")
@@ -87,7 +87,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       {:ok, owner: owner, tag: tag, user_tag: user_tag}
     end
 
-    test "names the endorser beside the tag and links to the full list", %{
+    test "shows the endorsers' faces as one link to the full list", %{
       conn: conn,
       owner: owner,
       tag: tag,
@@ -101,15 +101,92 @@ defmodule VutuvWeb.UserTagControllerTest do
       html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
 
       assert html =~ tag.name
-      assert html =~ "Endorsed by Rick Sanchez"
       assert html =~ ~p"/#{owner}/tags/#{tag.slug}/endorsers"
+      # The sentence is the strip's accessible name and tooltip, not a line of
+      # prose per row: the faces say "these people vouch for this" on their own.
+      assert html =~ ~s(aria-label="Endorsed by Rick Sanchez")
+      refute html =~ ~r/>\s*Endorsed by/
       # A one-column table right-aligned its own cells (the reported alignment
       # bug); the page is a row list now.
       assert html =~ "data-tag-row"
       refute html =~ "<table"
     end
 
-    test "counts the rest of the endorsers into the line", %{
+    # The chip is the profile's `<.tag_vote>`, so the count reads the same on
+    # both pages and a visitor endorses right here, from the count pill.
+    test "a logged-in visitor gets the endorse pill on the chip", %{
+      conn: conn,
+      owner: owner,
+      tag: tag
+    } do
+      {conn, _visitor} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+
+      assert html =~ "data-tag-vote"
+      assert html =~ "data-tag-vote-count"
+      assert html =~ ~p"/#{owner}/user_tag_endorsements?#{[id: tag.slug]}"
+      # The hover roster stays on the profile: here the row shows the faces.
+      refute html =~ "data-roster"
+    end
+
+    test "the owner and logged-out visitors get a read-only count", %{
+      conn: conn,
+      owner: owner,
+      user_tag: user_tag
+    } do
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert_activated_user(first_name: "Rick", last_name: "Sanchez")
+      )
+
+      anonymous = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+      refute anonymous =~ "data-tag-vote"
+
+      # Nobody endorses themselves, so the owner's own page keeps the plain count.
+      {owner_conn, self_owner} = create_and_login_user(conn)
+      own_tag = insert(:user_tag, user: self_owner, tag: insert(:tag))
+      insert(:user_tag_endorsement, user_tag: own_tag, user: insert_activated_user())
+
+      as_owner = owner_conn |> get(~p"/#{self_owner}/tags") |> html_response(200)
+
+      assert as_owner =~ "data-tag-row"
+      refute as_owner =~ "data-tag-vote"
+    end
+
+    # The strips are a bar chart: the best-endorsed tag fills the bar and every
+    # other row is drawn against it, so the page ranks the tags by strip length
+    # without anyone reading a number.
+    test "the strip length scales with the endorsement count", %{
+      conn: conn,
+      owner: owner,
+      user_tag: user_tag
+    } do
+      for _ <- 1..10,
+          do: insert(:user_tag_endorsement, user_tag: user_tag, user: insert_activated_user())
+
+      small = insert(:user_tag, user: owner, tag: insert(:tag))
+      insert(:user_tag_endorsement, user_tag: small, user: insert_activated_user())
+
+      html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+
+      # One chunk per row (the markup after each row marker), so the faces can
+      # be counted per row without a DOM parser.
+      faces =
+        html
+        |> String.split("data-tag-row")
+        |> Enum.drop(1)
+        |> Enum.map(&(length(String.split(&1, "data-stack-face")) - 1))
+
+      # Rows come best-endorsed first: the top tag fills the bar and the
+      # one-endorser tag keeps a single face (a bar that rounded away to nothing
+      # would read as "nobody").
+      assert faces == [7, 1]
+      # Past the bar's end, how many endorsers it leaves out (10 - 7).
+      assert html =~ "+3"
+    end
+
+    test "counts the rest of the endorsers into the strip's label", %{
       conn: conn,
       owner: owner,
       user_tag: user_tag

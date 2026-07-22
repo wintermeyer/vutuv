@@ -892,6 +892,12 @@ defmodule VutuvWeb.UI do
       "on the profile LiveView, toggle the endorsement with a `phx-click` \"endorse\"/\"unendorse\" (the LiveView re-renders the pill + roster, no fetch); otherwise the CSRF form the `TagVote` enhancement drives"
   )
 
+  attr(:roster?, :boolean,
+    default: true,
+    doc:
+      "raise the named voter roster on hover; pass false where the page already shows the endorsers next to the chip (the tag list page's avatar strip), so the chip doesn't duplicate them behind a popover the legacy card would clip anyway"
+  )
+
   def tag_vote(assigns) do
     user_tag = assigns.user_tag
     # An honor tag is an authoritative, admin-granted badge, not a peer vouch:
@@ -968,7 +974,7 @@ defmodule VutuvWeb.UI do
         class="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-100 px-1 text-[11px] font-bold tabular-nums text-brand-700 dark:bg-brand-800 dark:text-brand-100"
       >{@count}</span>
       <.voter_popover
-        :if={(@total > 0 || @can_vote?) && !@honor?}
+        :if={@roster? && (@total > 0 || @can_vote?) && !@honor?}
         user={@user}
         user_tag={@user_tag}
         others={@others}
@@ -1006,15 +1012,36 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The **endorsement line** for one of a member's tags (issue #895): the
-  endorsers' faces (an `<.avatar_stack>`) plus a sentence naming the newest of
-  them, which links to that tag's full endorser list
+  The **endorsers' faces** for one of a member's tags (issue #895): a stacked
+  `<.avatar_stack>` that is one link to that tag's full endorser list
   (`/:slug/tags/:tag/endorsers`).
 
-  It is the readable twin of `<.tag_vote>`'s hover roster — a popover a touch
-  device can never open — and carries the tag list page (`/:slug/tags`), where
-  the endorsements are the point of the page rather than a detail behind a
-  chip. Viewer-independent, like every public section page.
+  It carries the tag list page (`/:slug/tags`), where each row is the tag chip
+  on the left and this strip on the right. The strip shows **no sentence**: a
+  row of faces reads as "these people vouch for this" at a glance, and the
+  names beside it made every row a wall of prose that drowned out the tags
+  themselves. The sentence lives on as the strip's `title` / `aria-label`, so
+  hover and assistive tech still name the newest endorser and count the rest,
+  and one tap on the strip opens the page that names them all — the reason
+  this page exists, since `<.tag_vote>`'s hover roster is a popover no touch
+  device can open.
+
+  **The strip is a bar chart.** Its *length* carries the tally: `scale_to` (the
+  largest endorsement count among the member's tags) fills the bar, and every
+  other row shows proportionally fewer faces, so a glance down the page ranks
+  the tags without reading a single number. The bars grow **leftwards from a
+  common right baseline**: each strip is padded to the full bar width and its
+  faces are right-aligned inside it, and the `+N` value label past the bar's
+  end sits in its own fixed-width column, so a two-digit remainder can't shove
+  one row's bar out of line with the next. The faces are real endorsers (newest
+  first), never repeated filler, and a tag with any endorsement keeps at least
+  one — a bar that rounded away to nothing would read as "nobody".
+
+  The **`+N` past the bar's end is how many endorsers the bar leaves out**
+  (`total - faces`), the one number this strip states outright; the tally
+  itself is the chip's count pill in the same row, and the two add up. It is a
+  quiet muted label, not a chip, so it reads as the bar's value rather than as
+  one more face.
 
   Renders **nothing** when nobody endorses the tag (an unendorsed row stays
   quiet instead of repeating an empty state down the whole list) and nothing
@@ -1028,53 +1055,93 @@ defmodule VutuvWeb.UI do
     doc: "a UserTag with `endorsements` (and their `:user`) preloaded"
   )
 
+  attr(:scale_to, :integer,
+    required: true,
+    doc:
+      "the largest visible-endorsement count among the member's tags — the count that fills the bar"
+  )
+
   attr(:class, :any, default: nil)
 
-  # How many endorser faces the line shows before the rest fold into the stack's
-  # `+N` chip. Five spaced 20px faces still leave the sentence most of the row
-  # on a laptop, and fit on their own line on a phone.
-  @endorser_stack_cap 5
+  # A full bar. Seven `xs` faces are 188px, which leaves room for the value
+  # label beside the tag chip on a laptop and still fits on its own wrapped line
+  # on the narrowest phone; seven steps is enough resolution to rank a member's
+  # tags (they cap at 15).
+  @bar_max_faces 7
+
+  # One `xs` face is 32px and each following one is shingled 6px over the last.
+  @face_px 32
+  @face_step_px 26
 
   def endorsed_by(assigns) do
-    {shown, total} = roster_for(assigns.user_tag, nil, @endorser_stack_cap)
+    endorsers = endorsers_of(assigns.user_tag, nil)
+    total = length(endorsers)
+    faces = bar_faces(total, assigns.scale_to)
 
     assigns =
       assigns
-      |> assign(:shown, shown)
-      |> assign(:primary, List.first(shown))
+      |> assign(:shown, endorsers |> Enum.take(faces) |> Enum.with_index())
+      |> assign(:hidden, total - faces)
+      |> assign(:bar_width, bar_width(min(@bar_max_faces, assigns.scale_to)))
+      |> assign(:primary, List.first(endorsers))
       # Everyone besides the named (newest) endorser: the "and N others" tail.
       |> assign(:others, max(total - 1, 0))
 
     ~H"""
-    <div
+    <.link
       :if={@primary && !UserTag.tag(@user_tag).honor?}
-      class={["flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1", @class]}
+      navigate={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
+      title={endorsed_by_label(@primary, @others)}
+      aria-label={endorsed_by_label(@primary, @others)}
+      class={["flex shrink-0 items-center", @class]}
+      style={"--endorser-bar: #{@bar_width}"}
     >
-      <.avatar_stack users={@shown} overlap={false} />
-      <%!-- On a phone the sentence takes a line of its own under the faces
-      (`basis-full`) and wraps; from `sm` up it shares the row with them and
-      truncates instead, so a long name can't push the tag name around. Sharing
-      the narrow line with the faces would squeeze it into three ragged lines,
-      and an ellipsis two words in would cut off the very name it exists to
-      show. --%>
-      <.link
-        navigate={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
-        class="min-w-0 basis-full text-xs text-slate-600 hover:text-brand-700 sm:basis-auto sm:truncate dark:text-slate-400 dark:hover:text-brand-300"
-      >
-        <%= if @others == 0 do %>
-          {gettext("Endorsed by %{name}", name: endorser_name(@primary))}
-        <% else %>
-          {ngettext(
-            "Endorsed by %{name} and %{formatted} other",
-            "Endorsed by %{name} and %{formatted} others",
-            @others,
-            name: endorser_name(@primary),
-            formatted: compact_count(@others)
-          )}
+      <span class="flex w-[var(--endorser-bar)] max-w-full items-center justify-end">
+        <.stack_faces shown={@shown} size="xs" pull="-ml-1.5" />
+      </span>
+      <%!-- Always rendered, even at 0, so every row's bar ends at the same x. --%>
+      <span class="w-10 shrink-0 pl-1.5 text-xs font-medium tabular-nums text-slate-600 dark:text-slate-400">
+        <%= if @hidden > 0 do %>
+          +{compact_count(@hidden)}
         <% end %>
-      </.link>
-    </div>
+      </span>
+    </.link>
     """
+  end
+
+  # How many faces stand for `count` endorsements when `scale_to` fills the bar.
+  # Rounded, floored at one face for any endorsed tag, and never more faces than
+  # there are endorsers to show (a short list simply makes for a short bar).
+  defp bar_faces(0, _scale_to), do: 0
+  defp bar_faces(_count, scale_to) when scale_to <= 0, do: 0
+
+  defp bar_faces(count, scale_to) do
+    (count / scale_to * @bar_max_faces)
+    |> round()
+    |> max(1)
+    |> min(@bar_max_faces)
+    |> min(count)
+  end
+
+  # The width of a bar of `n` shingled faces — the strip is padded to this even
+  # when it shows fewer, so every row's bar ends at the same x.
+  defp bar_width(n) when n > 0, do: "#{@face_px + (n - 1) * @face_step_px}px"
+  defp bar_width(_), do: "#{@face_px}px"
+
+  # The sentence the faces stand in for, kept as the strip's accessible name and
+  # hover tooltip: who endorses this tag, newest first, and how many more.
+  defp endorsed_by_label(primary, 0) do
+    gettext("Endorsed by %{name}", name: endorser_name(primary))
+  end
+
+  defp endorsed_by_label(primary, others) do
+    ngettext(
+      "Endorsed by %{name} and %{formatted} other",
+      "Endorsed by %{name} and %{formatted} others",
+      others,
+      name: endorser_name(primary),
+      formatted: compact_count(others)
+    )
   end
 
   @doc """
@@ -1082,8 +1149,9 @@ defmodule VutuvWeb.UI do
   carrying their name as its tooltip, with the rest collapsing into a trailing
   `+N` chip once the list runs past `cap`. The compact way to show "these people
   did this" beside a sentence that names them, so the stack itself is
-  `aria-hidden` decoration. Shared by the post card's "Reposted by" banner and
-  the tag list page's `<.endorsed_by>` line.
+  `aria-hidden` decoration. Used by the post card's "Reposted by" banner; the
+  tag list page's bar (`<.endorsed_by>`) shares only the faces, since it is one
+  link and needs its own geometry.
   """
   attr(:users, :list, required: true)
   attr(:cap, :integer, default: 5)
@@ -1108,14 +1176,7 @@ defmodule VutuvWeb.UI do
 
     ~H"""
     <div class={["flex shrink-0 items-center", !@overlap && "gap-1", @class]} aria-hidden="true">
-      <.link
-        :for={{user, i} <- @shown}
-        href={~p"/#{user}"}
-        title={VutuvWeb.UserHelpers.full_name(user)}
-        class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && @pull]}
-      >
-        <.avatar user={user} size={@size} />
-      </.link>
+      <.stack_faces shown={@shown} size={@size} pull={@pull} link? />
       <span
         :if={@overflow > 0}
         class={[
@@ -1126,6 +1187,38 @@ defmodule VutuvWeb.UI do
         +{compact_count(@overflow)}
       </span>
     </div>
+    """
+  end
+
+  # The shingled faces, shared by `<.avatar_stack>` and the tag page's bar: a
+  # profile link per face where the strip is decoration beside a sentence, plain
+  # spans where the strip is itself one link (an <a> inside an <a> is invalid).
+  attr(:shown, :list, required: true, doc: "{user, index} pairs")
+  attr(:size, :string, required: true)
+  attr(:pull, :any, required: true)
+  attr(:link?, :boolean, default: false)
+
+  defp stack_faces(assigns) do
+    ~H"""
+    <%= for {user, i} <- @shown do %>
+      <.link
+        :if={@link?}
+        href={~p"/#{user}"}
+        title={VutuvWeb.UserHelpers.full_name(user)}
+        class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && @pull]}
+        data-stack-face
+      >
+        <.avatar user={user} size={@size} />
+      </.link>
+      <span
+        :if={!@link?}
+        title={VutuvWeb.UserHelpers.full_name(user)}
+        class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && @pull]}
+        data-stack-face
+      >
+        <.avatar user={user} size={@size} />
+      </span>
+    <% end %>
     """
   end
 
@@ -1146,13 +1239,18 @@ defmodule VutuvWeb.UI do
   # `{capped_rows, total_rows}` so the caller can compute the "and N more" count.
   # In-memory off the profile's `visible_with_endorser` preload (no per-tag query).
   defp roster_for(user_tag, exclude_id, limit) do
-    rows =
-      user_tag.endorsements
-      |> Enum.reject(&(exclude_id && &1.user_id == exclude_id))
-      |> Enum.sort_by(& &1.id, :desc)
-      |> Enum.map(& &1.user)
+    rows = endorsers_of(user_tag, exclude_id)
 
     {Enum.take(rows, limit), length(rows)}
+  end
+
+  # The same roster uncapped, for a caller that caps it itself (the avatar strip,
+  # which needs the full list to fold the tail into its `+N` chip).
+  defp endorsers_of(user_tag, exclude_id) do
+    user_tag.endorsements
+    |> Enum.reject(&(exclude_id && &1.user_id == exclude_id))
+    |> Enum.sort_by(& &1.id, :desc)
+    |> Enum.map(& &1.user)
   end
 
   # First + last name joined, "" when nameless. Excludes honorifics (unlike

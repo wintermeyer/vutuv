@@ -35,6 +35,7 @@ defmodule VutuvWeb.UserTagController do
           as_owner?: false,
           user: user,
           user_tags: user.user_tags,
+          endorsement_scale: max_endorsement_count(user.user_tags),
           page_title: UserHelpers.member_page_title(user, gettext("Tags"))
         )
       end,
@@ -123,6 +124,15 @@ defmodule VutuvWeb.UserTagController do
   # entries name them without a query per tag.
   defp with_endorsers(query) do
     Ecto.Query.preload(query, endorsements: ^UserTagEndorsement.visible_with_endorser())
+  end
+
+  # The best-endorsed tag's tally, which is what fills the row's avatar bar
+  # (`<.endorsed_by>`): every other row's strip is drawn against it, so the page
+  # ranks the tags by the length of their faces. In memory, off the preload.
+  defp max_endorsement_count(user_tags) do
+    user_tags
+    |> Enum.map(&length(&1.endorsements))
+    |> Enum.max(fn -> 0 end)
   end
 
   def delete(conn, %{"id" => _id}) do
