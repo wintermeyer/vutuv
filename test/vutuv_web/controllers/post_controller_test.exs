@@ -9,6 +9,8 @@ defmodule VutuvWeb.PostControllerTest do
   import Vutuv.PostsHelpers
 
   alias Vutuv.Posts
+  alias Vutuv.Repo
+  alias Vutuv.ReviewCover
 
   @other_login_attrs %{
     "emails" => %{"0" => %{"value" => "other@example.com"}},
@@ -23,6 +25,33 @@ defmodule VutuvWeb.PostControllerTest do
   defp pad(int), do: String.pad_leading(Integer.to_string(int), 2, "0")
 
   describe "the review card on the permalink" do
+    # Stores a served cover version for `review` under a throwaway uploads
+    # tree, so the card renders the <img> (and its source credit) instead of
+    # the kind-glyph placeholder.
+    defp store_cover!(review) do
+      tmp = Path.join(System.tmp_dir!(), "vutuv_card_cover_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(tmp)
+      previous = Application.get_env(:vutuv, :uploads_dir_prefix)
+      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
+      on_exit(fn ->
+        File.rm_rf(tmp)
+
+        if previous,
+          do: Application.put_env(:vutuv, :uploads_dir_prefix, previous),
+          else: Application.delete_env(:vutuv, :uploads_dir_prefix)
+      end)
+
+      src = Path.join(tmp, "cover.jpg")
+      {:ok, image} = Image.new(120, 180, color: [10, 120, 200])
+      {:ok, _} = Image.write(image, src)
+      {:ok, file} = ReviewCover.store_binary(File.read!(src), review)
+
+      review
+      |> Ecto.Changeset.change(%{cover: file, cover_status: "ready"})
+      |> Repo.update!()
+    end
+
     defp reviewed_post!(user) do
       create_post!(user, %{
         body: "Sehr lesenswert.",
@@ -65,6 +94,30 @@ defmodule VutuvWeb.PostControllerTest do
       # the split form.
       assert html =~ "978-3-16-148410-0"
       refute html =~ "ISBN 9783161484100"
+    end
+
+    test "credits Open Library under a cover it fetched", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+      store_cover!(post.review)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # § 63 UrhG wants the source named on a quoted image, and Open Library
+      # asks for a courtesy link back — one line does both, pointing at the
+      # book's own Open Library page.
+      assert html =~ "/review_covers/#{post.review.id}/"
+      assert html =~ "Open Library"
+      assert html =~ "https://openlibrary.org/isbn/9783161484100"
+    end
+
+    test "names no source when there is no cover to credit", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      refute html =~ "Open Library"
     end
 
     test "lays the card out beside the prose on a wide screen", %{conn: conn} do

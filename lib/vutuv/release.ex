@@ -6,6 +6,7 @@ defmodule Vutuv.Release do
 
       bin/vutuv eval "Vutuv.Release.migrate()"
   """
+  alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Uploads.LegacyRelabel
   alias Vutuv.Uploads.LegacySweeper
   alias Vutuv.Uploads.Regenerator
@@ -75,6 +76,30 @@ defmodule Vutuv.Release do
 
     {:ok, summary, _apps} =
       Ecto.Migrator.with_repo(repo, fn _repo -> Regenerator.run(opts) end)
+
+    summary
+  end
+
+  @doc """
+  Re-fetches every book review's cover from Open Library at the current
+  `Vutuv.Uploads.Spec` size and purges the private originals kept before
+  v7.122.4. Covers are the one image kind with no local original to re-derive
+  from (`Vutuv.ReviewCover`), so this is their `regenerate_images/1`. It
+  paces itself (3s between fetches by default) to stay inside Open Library's
+  rate limit; needs outbound network and `:fetch_book_metadata` on:
+
+      bin/vutuv eval "Vutuv.Release.refresh_review_covers()"
+      bin/vutuv eval "Vutuv.Release.refresh_review_covers(delay: 5_000)"
+  """
+  def refresh_review_covers(opts \\ []) do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(:image)
+    {:ok, _} = Application.ensure_all_started(:req)
+
+    [repo] = repos()
+
+    {:ok, summary, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo -> ReviewCovers.refresh_all(opts) end)
 
     summary
   end

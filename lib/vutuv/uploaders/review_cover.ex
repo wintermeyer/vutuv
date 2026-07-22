@@ -1,11 +1,19 @@
 defmodule Vutuv.ReviewCover do
   @moduledoc """
   Book-cover storage for post reviews (`Vutuv.Posts.PostReview`): the cover
-  bytes fetched from Open Library land here as one served AVIF version plus
-  the private original.
+  bytes fetched from Open Library land here as exactly one served AVIF
+  version.
 
       <uploads_dir_prefix>/review_covers/<review.id>/cover-<hash>.avif
-      <uploads_dir_prefix>/originals/review_covers/<review.id>/original.jpg
+
+  **No private original is kept** — the deliberate exception to the
+  `Vutuv.Uploads.Originals` rule that every uploader keeps one. A cover is
+  not our picture: it is somebody else's, quoted at thumbnail size beside a
+  review, so we hold the one derived version we actually show and nothing
+  beyond it. That costs the `Vutuv.Uploads.Regenerator` path (there is
+  nothing to re-derive from); after a `Vutuv.Uploads.Spec` change the covers
+  are re-fetched by ISBN instead — `Vutuv.Posts.ReviewCovers.refresh_all/1`,
+  which also purges the originals stored before v7.122.4.
 
   Like the screenshots, the served filename is **content-fingerprinted**
   (`<hash>` = first 12 hex chars of the SHA-256 of the fetched bytes), so the
@@ -23,9 +31,9 @@ defmodule Vutuv.ReviewCover do
   alias Vutuv.Uploads.Spec
 
   @doc """
-  Stores the fetched cover `bytes` for `review`: derives the served AVIF
-  (replacing any prior cover) and keeps the original bytes privately.
-  Returns `{:ok, "<hash><ext>"}` (for the `cover` column) or
+  Stores the fetched cover `bytes` for `review`: derives the served AVIF,
+  replacing any prior cover — and any original a pre-v7.122.4 fetch left
+  behind. Returns `{:ok, "<hash><ext>"}` (for the `cover` column) or
   `{:error, reason}` when the bytes don't decode as an image.
   """
   def store_binary(bytes, review, ext \\ ".jpg") when is_binary(bytes) do
@@ -40,7 +48,7 @@ defmodule Vutuv.ReviewCover do
       spec = Spec.version(:review_cover, :cover)
 
       with :ok <- Spec.write_derived(spec, rotated, Path.join(dir, filename(hash))) do
-        store_original(review, bytes, ext)
+        purge_original(review)
         {:ok, "#{hash}#{ext}"}
       end
     end
@@ -85,23 +93,22 @@ defmodule Vutuv.ReviewCover do
   end
 
   @doc """
-  Removes every stored file of a review's cover (served + original). A no-op
-  when none. The row is the caller's business — post deletion cascades it,
-  a moderation rejection clears its columns.
+  Removes every stored file of a review's cover. A no-op when none. The row
+  is the caller's business — post deletion cascades it, a moderation
+  rejection clears its columns.
   """
   def delete_files(review) do
     File.rm_rf(disk_dir(review))
-    Originals.delete(storage_dir(review))
+    purge_original(review)
     :ok
   end
 
-  defp store_original(review, bytes, ext) do
-    tmp = Path.join(System.tmp_dir!(), "review-cover-#{review.id}")
-    File.write!(tmp, bytes)
-    :ok = Originals.store(storage_dir(review), tmp, ext)
-    File.rm(tmp)
-    :ok
-  end
+  @doc """
+  Deletes the private original a pre-v7.122.4 fetch kept for this cover (see
+  the module doc). A no-op once none is left, so it is safe to call on every
+  store and from `Vutuv.Posts.ReviewCovers.refresh_all/1`.
+  """
+  def purge_original(review), do: Originals.delete(storage_dir(review))
 
   defp clear_versions(dir) do
     for file <- Path.wildcard(Path.join(dir, "cover-*")), do: File.rm(file)

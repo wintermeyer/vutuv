@@ -2101,6 +2101,11 @@ msgstr "Titelbild ändern"
 msgid "Change cover photo"
 msgstr "Titelbild ändern"
 
+#: lib/vutuv_web/components/post_components.ex:1536
+#, elixir-autogen, elixir-format
+msgid "Cover: Open Library"
+msgstr "Cover: Open Library"
+
 #: lib/vutuv_web/templates/user/edit.html.heex:71
 #, elixir-autogen, elixir-format
 msgid "Cover photo"

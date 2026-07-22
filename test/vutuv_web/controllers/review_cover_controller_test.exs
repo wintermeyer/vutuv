@@ -81,6 +81,9 @@ defmodule VutuvWeb.ReviewCoverControllerTest do
     assert response(conn, 200)
     assert get_resp_header(conn, "content-type") |> hd() =~ "image/avif"
     assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
+    # Somebody else's book cover, quoted here at thumbnail size — it has no
+    # business in an image search under our domain.
+    assert get_resp_header(conn, "x-robots-tag") == ["noindex, noimageindex"]
   end
 
   test "an outdated or foreign filename never resolves", %{conn: conn} do

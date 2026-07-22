@@ -328,12 +328,44 @@ Run on the server, against the release:
 - `bin/vutuv eval "Vutuv.Release.regenerate_images()"` — re-derives every
   served image version (AVIF) from the kept originals per the current
   `Vutuv.Uploads.Spec`. Idempotent; safe while the app serves traffic.
+- `bin/vutuv eval "Vutuv.Release.refresh_review_covers()"` — re-fetches every
+  book-review cover from Open Library. Book covers are the one image kind
+  vutuv keeps no original of (see "Book covers" below), so `regenerate_images`
+  cannot re-derive them; this is their equivalent after an upgrade that
+  changes the cover size. Needs outbound network and `FETCH_BOOK_METADATA=true`,
+  and paces itself (3s per cover) to stay inside Open Library's rate limit.
 - `bin/vutuv eval 'Vutuv.Release.promote_admin("handle-or-email")'` — grants
   admin rights.
 
 (In a source checkout the same exist as `mix vutuv.images.regenerate` /
-`mix vutuv.admin.promote`; URL screenshots can be re-rendered with
-`mix urls.create_screenshots`.)
+`mix vutuv.review_covers.refresh` / `mix vutuv.admin.promote`; URL screenshots
+can be re-rendered with `mix urls.create_screenshots`.)
+
+## Book covers on review posts
+
+With `FETCH_BOOK_METADATA=true` (the default) a book review's cover is
+downloaded once from Open Library by ISBN and stored on your server, then
+served from there — never hotlinked, so no reader's IP reaches a third party.
+Worth knowing as an operator:
+
+- **The image rights do not come with it.** Open Library passes the covers
+  through and states plainly that it asserts no rights over them and that
+  "there may be existing rights issues"; the artwork belongs to publishers.
+  vutuv treats a cover as a **quotation** beside a review (§ 51 UrhG in
+  Germany, comparable rules elsewhere) and is built accordingly: it stores
+  only the one small derived version it displays (max 320px, no
+  full-resolution original), shows it only attached to a review post, credits
+  the source under the cover with a link to the book's Open Library page, and
+  serves every cover with `X-Robots-Tag: noindex, noimageindex` so it stays
+  out of image search.
+- **Removal is instant.** An admin rejecting the image in
+  `/admin/moderation` deletes the stored files; deleting the post does too.
+  Keep a contact address reachable (`OPERATOR_EMAIL`, your imprint) so a
+  rights holder can ask.
+- **Your call, your risk.** Whether that quotation argument holds in your
+  jurisdiction is your decision as the operator, not vutuv's. If you would
+  rather not host third-party covers at all, set `FETCH_BOOK_METADATA=false`:
+  reviews keep working and the card renders a neutral 📖/🎬 tile instead.
 
 Note: `bin/vutuv eval` is the supported console entry point; `rpc`/`remote`
 need distribution, which the reference setup disables.

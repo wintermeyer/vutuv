@@ -59,8 +59,12 @@ defmodule Vutuv.Uploads.Spec do
     ],
     review_cover: [
       # A book cover fetched by ISBN (Vutuv.ReviewCover): portrait aspect
-      # preserved, ~4x the review card's 80-96px display width for HiDPI.
-      %{name: :cover, fit: {:box_down, 640}, quality: 58}
+      # preserved. Deliberately the smallest size that still looks sharp —
+      # ~3x the review card's 64-96px display width, enough for HiDPI and no
+      # more. This is somebody else's cover quoted beside a review (§ 51
+      # UrhG), and a quote stays as short as its purpose needs; a copy larger
+      # than we display would be one we cannot justify.
+      %{name: :cover, fit: {:box_down, 320}, quality: 58}
     ],
     post_image: [
       # thumb: square feed-grid cell; feed: single-image feed width;
