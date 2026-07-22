@@ -12927,12 +12927,12 @@ msgid "A vutuv message to me"
 msgstr "Eine vutuv-Nachricht an mich"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:530
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "A website"
 msgstr "Eine Website"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:531
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "An e-mail address"
 msgstr "Eine E-Mail-Adresse"
 
@@ -12942,22 +12942,22 @@ msgid "Applicants must be located in"
 msgstr "Bewerber:innen müssen ansässig sein in"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:536
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Application URL"
 msgstr "Bewerbungs-URL"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:542
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Application e-mail"
 msgstr "Bewerbungs-E-Mail"
 
 #: lib/vutuv_web/controllers/job_posting_controller.ex:106
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Application: %{title}"
 msgstr "Bewerbung: %{title}"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:528
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Applications go to"
 msgstr "Bewerbungen gehen an"
 
@@ -12979,12 +12979,12 @@ msgstr "Ausbildung"
 #: lib/vutuv_web/live/admin/job_live.ex:163
 #: lib/vutuv_web/live/admin/job_live.ex:183
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:184
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Closed"
 msgstr "Geschlossen"
 
 #: lib/vutuv/jobs/job_posting.ex:151
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Contract"
 msgstr "Freie Mitarbeit"
 
@@ -12994,12 +12994,12 @@ msgid "Describe the role. Markdown is supported."
 msgstr "Beschreiben Sie die Stelle. Markdown wird unterstützt."
 
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:182
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Drafts"
 msgstr "Entwürfe"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:84
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Edit posting"
 msgstr "Anzeige bearbeiten"
 
@@ -13008,12 +13008,12 @@ msgstr "Anzeige bearbeiten"
 #: lib/vutuv_web/agent_docs/text.ex:211
 #: lib/vutuv_web/agent_docs/text.ex:378
 #: lib/vutuv_web/live/admin/job_live.ex:344
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Employer"
 msgstr "Arbeitgeber"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:330
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Employer name (optional)"
 msgstr "Name des Arbeitgebers (optional)"
 
@@ -13023,7 +13023,7 @@ msgstr "Name des Arbeitgebers (optional)"
 #: lib/vutuv_web/agent_docs/text.ex:379
 #: lib/vutuv_web/live/job_board_live.ex:281
 #: lib/vutuv_web/live/job_posting_live/form.ex:345
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Employment type"
 msgstr "Anstellungsart"
 
@@ -13033,7 +13033,7 @@ msgid "Everyone (public)"
 msgstr "Alle (öffentlich)"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:452
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "From"
 msgstr "Von"
 
@@ -13068,12 +13068,12 @@ msgid "I'm interested in your posting: %{url}"
 msgstr "Ich interessiere mich für Ihre Anzeige: %{url}"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:486
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Job description"
 msgstr "Stellenbeschreibung"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:297
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Job title"
 msgstr "Stellenbezeichnung"
 
@@ -13089,7 +13089,7 @@ msgid "Jobs"
 msgstr "Jobs"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:564
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Let search engines index this posting."
 msgstr "Suchmaschinen dürfen diese Anzeige indexieren."
 
@@ -13100,7 +13100,7 @@ msgstr "Suchmaschinen dürfen diese Anzeige indexieren."
 #: lib/vutuv_web/agent_docs/text.ex:364
 #: lib/vutuv_web/agent_docs/text.ex:366
 #: lib/vutuv_web/live/job_posting_live/form.ex:386
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Location"
 msgstr "Standort"
 
@@ -13115,7 +13115,7 @@ msgid "Mark this posting as filled and close it?"
 msgstr "Diese Anzeige als besetzt markieren und schließen?"
 
 #: lib/vutuv_web/live/job_posting_live/show.ex:272
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Message the poster"
 msgstr "Anbieter:in anschreiben"
 
@@ -13132,7 +13132,7 @@ msgstr "Irreführende Stellenanzeige"
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:25
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:101
 #: lib/vutuv_web/live/job_posting_live/show.ex:181
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "My postings"
 msgstr "Meine Anzeigen"
 
@@ -13143,7 +13143,7 @@ msgstr "Neue Konten können nach einigen Tagen veröffentlichen."
 
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:103
 #: lib/vutuv_web/live/job_posting_live/form.ex:84
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "New posting"
 msgstr "Neue Anzeige"
 
@@ -13156,22 +13156,22 @@ msgid "Nice to have"
 msgstr "Wünschenswert"
 
 #: lib/vutuv_web/live/post_live/saved.ex:607
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "No saved jobs match your search."
 msgstr "Keine gespeicherten Jobs passen zu Ihrer Suche."
 
 #: lib/vutuv_web/live/post_live/saved.ex:605
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Nothing here yet. Jobs you bookmark show up here."
 msgstr "Hier ist noch nichts. Jobs mit Lesezeichen erscheinen hier."
 
 #: lib/vutuv_web/live/post_live/saved.ex:602
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Nothing here yet. Jobs you like show up here."
 msgstr "Hier ist noch nichts. Jobs, die Ihnen gefallen, erscheinen hier."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:570
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Offer the machine-readable formats (.md/.txt/.json/.xml) to AI agents."
 msgstr "Die maschinenlesbaren Formate (.md/.txt/.json/.xml) für KI-Agenten anbieten."
 
@@ -13181,7 +13181,7 @@ msgid "On-site"
 msgstr "Vor Ort"
 
 #: lib/vutuv_web/live/job_posting_live/show.ex:88
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Only you can see this posting while a report about it is handled."
 msgstr "Nur Sie sehen diese Anzeige, während eine Meldung dazu bearbeitet wird."
 
@@ -13196,14 +13196,14 @@ msgid "Pay"
 msgstr "Bezahlung"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:272
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Please confirm your e-mail address first."
 msgstr "Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse."
 "Bitte bestätigen Sie Ihre E-Mail-Adresse, bevor Sie eine Organisationsseite "
 "beanspruchen."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:41
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Please confirm your email address before posting a job."
 msgstr "Bitte bestätigen Sie Ihre E-Mail-Adresse, bevor Sie eine Stelle ausschreiben."
 
@@ -13223,7 +13223,7 @@ msgid "Please log in to see your postings."
 msgstr "Bitte melden Sie sich an, um Ihre Anzeigen zu sehen."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:318
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Post as"
 msgstr "Veröffentlichen als"
 
@@ -13237,7 +13237,7 @@ msgstr "Postleitzahl"
 #: lib/vutuv_web/agent_docs/text.ex:216
 #: lib/vutuv_web/agent_docs/text.ex:383
 #: lib/vutuv_web/live/job_posting_live/show.ex:133
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Posted"
 msgstr "Veröffentlicht"
 
@@ -13253,7 +13253,7 @@ msgid "Posting not found."
 msgstr "Anzeige nicht gefunden."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:587
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Publish"
 msgstr "Veröffentlichen"
 
@@ -13270,7 +13270,7 @@ msgid "Remote"
 msgstr "Remote"
 
 #: lib/vutuv_web/live/job_posting_live/show.ex:169
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Report this posting"
 msgstr "Diese Anzeige melden"
 
@@ -13286,7 +13286,7 @@ msgstr "Erforderlich"
 #: lib/vutuv_web/agent_docs/markdown.ex:349
 #: lib/vutuv_web/agent_docs/text.ex:215
 #: lib/vutuv_web/agent_docs/text.ex:382
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Salary"
 msgstr "Gehalt"
 
@@ -13296,9 +13296,9 @@ msgid "Salary on request"
 msgstr "Gehalt auf Anfrage"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:231
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Saved."
-msgstr "Speichern"
+msgstr "Gespeichert."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:339
 #, elixir-autogen, elixir-format
@@ -13306,12 +13306,12 @@ msgid "Shown as an unverified employer name."
 msgstr "Wird als nicht verifizierter Arbeitgebername angezeigt."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:261
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Something went wrong. Please try again."
 msgstr "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:391
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Street (optional)"
 msgstr "Straße (optional)"
 
@@ -13326,7 +13326,7 @@ msgid "Temporary"
 msgstr "Befristet"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:153
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "That image could not be uploaded."
 msgstr "Dieses Bild konnte nicht hochgeladen werden."
 
@@ -13352,23 +13352,23 @@ msgstr "Tipp: Ein Geschlechtszusatz wie (m/w/d) hilft Ihrer Anzeige, dem AGG zu 
 
 #: lib/vutuv_web/components/job_components.ex:108
 #: lib/vutuv_web/live/job_posting_live/show.ex:209
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Verified organization"
 msgstr "Verifizierte Organisation"
 
 #: lib/vutuv_web/agent_docs/job_posting_doc.ex:126
 #: lib/vutuv_web/components/job_components.ex:153
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Voluntary"
 msgstr "Ehrenamtlich"
 
 #: lib/vutuv/jobs/job_posting.ex:157
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Volunteer"
 msgstr "Ehrenamt"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:552
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Who can see it"
 msgstr "Wer kann sie sehen"
 
@@ -13382,7 +13382,7 @@ msgstr "Werkstudent:in"
 #: lib/vutuv_web/agent_docs/text.ex:213
 #: lib/vutuv_web/agent_docs/text.ex:380
 #: lib/vutuv_web/live/job_posting_live/form.ex:360
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Workplace"
 msgstr "Arbeitsort"
 
@@ -13397,13 +13397,13 @@ msgid "Your job posting on vutuv expires soon"
 msgstr "Ihre Stellenanzeige auf vutuv läuft bald ab"
 
 #: lib/vutuv_web/live/job_posting_live/show.ex:176
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Your posting"
 msgstr "Ihre Anzeige"
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:211
 #: lib/vutuv_web/live/job_posting_live/form.ex:254
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Your posting is live."
 msgstr "Ihre Anzeige ist online."
 
