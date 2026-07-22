@@ -240,6 +240,43 @@ defmodule Vutuv.Posts.PostReviewsTest do
       assert stored.pages == 190
     end
 
+    test "an audiobook review borrows the runtime of the work's audio edition" do
+      # The member entered the PRINT ISBN (the common case) and marked the
+      # review as an audiobook: the by-ISBN lookup is empty, the title search
+      # finds one audio edition that states a length, and its ISBN is stored
+      # alongside so the card can mark the number as approximate.
+      review = insert(:post_review, cover_status: "pending", medium: "audiobook")
+      stub_details(%{"number_of_pages" => 190})
+
+      Application.put_env(:vutuv, :dnb_req_options,
+        plug: fn conn ->
+          conn = Plug.Conn.fetch_query_params(conn)
+
+          body =
+            if String.starts_with?(conn.query_params["query"] || "", "num=") do
+              "<searchRetrieveResponse><numberOfRecords>0</numberOfRecords></searchRetrieveResponse>"
+            else
+              """
+              <searchRetrieveResponse><records><record><record>
+                <datafield tag="020"><subfield code="a">9783837170825</subfield></datafield>
+                <datafield tag="245"><subfield code="a">#{review.title}</subfield></datafield>
+                <datafield tag="336"><subfield code="b">spw</subfield></datafield>
+                <datafield tag="300"><subfield code="a">Online-Ressource 75 Min.</subfield></datafield>
+              </record></record></records></searchRetrieveResponse>
+              """
+            end
+
+          Plug.Conn.resp(conn, 200, body)
+        end
+      )
+
+      assert :ok = fetch_with_status(review, 404)
+
+      stored = Repo.get(PostReview, review.id)
+      assert stored.duration_minutes == 75
+      assert stored.duration_isbn == "9783837170825"
+    end
+
     test "a print review asks no catalogue for a running time" do
       review = insert(:post_review, cover_status: "pending", medium: "print")
       stub_details(%{"number_of_pages" => 190})

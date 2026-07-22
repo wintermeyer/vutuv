@@ -426,9 +426,19 @@ the composer's ISBN → title/author/year prefill. Three sources feed the card:
   136 Min.))"). Open Library records no durations, so this is a second,
   German-leaning source — the DNB by default, `:dnb_sru_url` per
   installation, blank to switch it off. Only a review whose `medium` is
-  `audiobook` asks, and only an ISBN the catalogue holds *as* an audiobook
-  edition answers: a print ISBN carries no duration, so such a review shows
-  pages and no running time.
+  `audiobook` asks. It looks up the review's own ISBN first (exact), and
+  when that is the print edition — the usual case — searches the work's
+  *spoken-word* editions by title + author and uses the answer **only if
+  they agree**. They frequently do not: "Russendisko" has a 73-minute
+  reading, an 81-minute radio play and a 125-minute near-namesake;
+  "Der Herr der Ringe" spans a radio play and a 59-hour Komplettlesung.
+  Records are filtered to RDA content type `spw`, an exactly matching title
+  (catalogue non-sorting markers stripped) and no "Hörspiel", must state a
+  length, and all surviving lengths must be equal — otherwise the card shows
+  none, because guessing which recording was reviewed would print a wrong
+  number as fact. A borrowed time stores the ISBN it came from
+  (`duration_isbn`), which makes the card render it as "approx." and keeps
+  it out of the JSON-LD, where nothing can express approximation.
 
 All three are best-effort — an edition nobody knows details for simply keeps
 the card it has, and a failed detail lookup never costs the review its

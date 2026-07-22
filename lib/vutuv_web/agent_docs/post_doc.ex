@@ -134,6 +134,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       pages: review.pages,
       publisher: review.publisher,
       duration_minutes: review.duration_minutes,
+      # nil = the review's own edition; an ISBN = the audio edition the time
+      # was read from, so a machine reader can tell exact from approximate.
+      duration_isbn: review.duration_isbn,
       link: PostReview.amazon_url(review) || PostReview.imdb_url(review)
     }
   end
