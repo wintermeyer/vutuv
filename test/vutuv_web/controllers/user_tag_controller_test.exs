@@ -75,6 +75,106 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
   end
 
+  # The public tag list (issue #895): one row per tag, each naming the members
+  # who endorse it. The profile chip only reveals its roster on hover, which a
+  # touch device can never do, so this page is where the endorsements are
+  # readable outright.
+  describe "index" do
+    setup do
+      owner = insert_activated_user(username: "tag_lister")
+      tag = insert(:tag)
+      user_tag = insert(:user_tag, user: owner, tag: tag)
+      {:ok, owner: owner, tag: tag, user_tag: user_tag}
+    end
+
+    test "names the endorser beside the tag and links to the full list", %{
+      conn: conn,
+      owner: owner,
+      tag: tag,
+      user_tag: user_tag
+    } do
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert_activated_user(first_name: "Rick", last_name: "Sanchez")
+      )
+
+      html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+
+      assert html =~ tag.name
+      assert html =~ "Endorsed by Rick Sanchez"
+      assert html =~ ~p"/#{owner}/tags/#{tag.slug}/endorsers"
+      # A one-column table right-aligned its own cells (the reported alignment
+      # bug); the page is a row list now.
+      assert html =~ "data-tag-row"
+      refute html =~ "<table"
+    end
+
+    test "counts the rest of the endorsers into the line", %{
+      conn: conn,
+      owner: owner,
+      user_tag: user_tag
+    } do
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert_activated_user(first_name: "Rick", last_name: "Sanchez")
+      )
+
+      # Endorsements list newest first (UUID v7 ids sort by creation), so Beth
+      # is the named one and Rick the "other".
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert_activated_user(first_name: "Beth", last_name: "Smith")
+      )
+
+      html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+
+      assert html =~ "Endorsed by Beth Smith and 1 other"
+    end
+
+    test "drops hidden / unconfirmed endorsers (issue #783)", %{
+      conn: conn,
+      owner: owner,
+      user_tag: user_tag
+    } do
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert_activated_user(first_name: "Vee", last_name: "Visible")
+      )
+
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert(:user, first_name: "Han", last_name: "Hidden")
+      )
+
+      html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+
+      assert html =~ "Endorsed by Vee Visible"
+      refute html =~ "Han Hidden"
+      refute html =~ "1 other"
+    end
+
+    test "a tag nobody endorsed yet stays a plain row", %{conn: conn, owner: owner, tag: tag} do
+      html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+
+      assert html =~ tag.name
+      refute html =~ "Endorsed by"
+    end
+
+    test "an honor tag is marked as one and carries no endorsement line", %{
+      conn: conn,
+      owner: owner
+    } do
+      honor = insert(:tag, honor?: true)
+      {:ok, _} = Vutuv.Tags.admin_assign_tag(honor, owner)
+
+      html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+
+      assert html =~ honor.name
+      assert html =~ "Honor tag"
+      refute html =~ "Endorsed by"
+    end
+  end
+
   # The public endorser list behind the profile Tags popover's "and N more"
   # link: everyone who currently endorses this member for this tag.
   describe "endorsers" do

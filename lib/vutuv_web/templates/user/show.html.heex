@@ -471,13 +471,17 @@ the resulting ~200px rail width. --%>
         />
       </div>
 
-      <.manage_footer
-        href={~p"/#{@user}/tags"}
-        manage_href={~p"/settings/tags"}
-        total={@totals.user_tags}
-        preview={30}
-        owner={@as_owner?}
-      />
+      <%!-- Tags are the one section whose page shows more than its card rather
+      than just more of it: /:slug/tags names every endorser in the row, while
+      the chips here hide that roster behind a hover no phone can perform. So a
+      visitor always gets the link, not only once the card is truncated (which,
+      with the 15-tag cap, it never is); the owner keeps the editor bridge. --%>
+      <.card_footer_link
+        :if={@totals.user_tags >= 1}
+        href={if(@as_owner?, do: ~p"/settings/tags", else: ~p"/#{@user}/tags")}
+      >
+        {if(@as_owner?, do: gettext("Manage"), else: gettext("All tags"))}
+      </.card_footer_link>
     </.card>
 
     <%!-- Experience --%>
