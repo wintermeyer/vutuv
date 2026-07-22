@@ -1486,57 +1486,173 @@ defmodule Vutuv.Posts do
 
   @discover_limit 5
   @discover_pool 100
+  # The rail's quality bar: how many members other than the author must have
+  # liked a post before it is worth suggesting, and how far back the draw
+  # looks for those posts first.
+  @discover_min_likes 2
+  @discover_window_days 14
 
   @doc """
-  A random handful of recent public posts for the feed's discovery rail:
-  posts by members who share `viewer`'s language but whom the viewer does
-  not follow — the post-shaped sibling of the "Who to follow" suggestions.
+  A random handful of well-received public posts for the feed's rail: posts
+  in `viewer`'s language that other members liked, from someone other than
+  the viewer.
 
-  One post per author (their newest eligible one), drawn at random from the
-  `@discover_pool` newest such posts, so the rail surfaces different voices
-  on every draw while staying "new". Language matches on `users.locale` with
-  the empty value counting as English, mirroring `VutuvWeb.LiveLocale`'s
-  fallback. Replies (confusing without their thread) and image-only posts
-  (nothing to excerpt in a compact row) are skipped; a *muted* follow is
-  still a follow, so those authors stay excluded too. Preloaded like every
-  rendered post.
+  Suggestions are picked for **reception**, not just recency: a post needs
+  likes from at least `#{@discover_min_likes}` members other than its author
+  (liking your own post is not a recommendation). Each author contributes one
+  post, their best-liked eligible one, and the handful is drawn at random
+  from the `@discover_pool` best-liked of those, so the card varies between
+  reloads while everything in it cleared the bar.
+
+  The draw walks three tiers and stops as soon as it has a full card, so a
+  quiet fortnight or a viewer who already follows everyone active still gets
+  a full one:
+
+    1. strangers (nobody `viewer` follows) from the last
+       #{@discover_window_days} days — the post-shaped sibling of the "Who to
+       follow" suggestions, and the tier that normally fills the card;
+    2. strangers of any age — the installation's lasting favourites;
+    3. anyone (bar the viewer themselves) from the last
+       #{@discover_window_days} days — the fortnight's best posts, even from
+       an author `viewer` already follows.
+
+  A *muted* follow is never suggested, in any tier: muting means "keep this
+  person's posts away from me". Only when nothing at all cleared the bar —
+  a brand-new installation where nobody has liked anything yet — does the
+  rail fall back to the newest eligible posts, so it is never permanently
+  empty.
+
+  Language matches on `users.locale` with the empty value counting as
+  English, mirroring `VutuvWeb.LiveLocale`'s fallback. Replies (confusing
+  without their thread) and image-only posts (nothing to excerpt in a
+  compact row) are skipped. Preloaded like every rendered post.
   """
   def discover_posts(%User{} = viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @discover_limit)
+    window = discover_window_start()
+
+    rows =
+      Enum.reduce_while(
+        [{:strangers, window}, {:strangers, nil}, {:everyone, window}],
+        [],
+        fn {audience, since}, rows ->
+          drawn = discover_liked_draw(discover_candidates(viewer, audience), since, limit)
+          # Tiers overlap, and one author must not fill two rows of the card.
+          rows = Enum.uniq_by(rows ++ drawn, & &1.user_id)
+          if length(rows) >= limit, do: {:halt, rows}, else: {:cont, rows}
+        end
+      )
+
+    rows =
+      if rows == [],
+        do: discover_recent_draw(discover_candidates(viewer, :strangers), limit),
+        else: rows
+
+    rows
+    |> Enum.take(limit)
+    |> Enum.map(& &1.id)
+    |> load_discover_posts()
+  end
+
+  # Everything the rail requires of a post regardless of how well it did: a
+  # same-language member's own readable, publicly visible top-level post,
+  # from someone the viewer has neither blocked nor muted. `:strangers`
+  # additionally drops everyone the viewer already follows.
+  defp discover_candidates(%User{} = viewer, audience) do
     locale = locale_or_english(viewer.locale)
 
+    excluded =
+      case audience do
+        :strangers -> all_followees_of(viewer.id)
+        :everyone -> muted_followees_of(viewer.id)
+      end
+
+    from(p in Post,
+      as: :post,
+      join: u in assoc(p, :user),
+      left_join: r in assoc(p, :reply_ref),
+      where: is_nil(r.id),
+      where: fragment("COALESCE(NULLIF(?, ''), 'en')", u.locale) == ^locale,
+      where: p.user_id != ^viewer.id,
+      where: p.user_id not in subquery(excluded),
+      where: p.user_id not in subquery(blocked_either_way(viewer.id)),
+      where: account_confirmed_row(u),
+      where: p.body != ""
+    )
+    |> scope_visible(nil)
+  end
+
+  # The like counts the rail ranks on: likes by anyone but the author, rolled
+  # up once for the whole table (likes are far rarer than posts, so this beats
+  # a correlated count per candidate row).
+  defp discover_like_counts do
+    from(l in PostLike,
+      join: p in Post,
+      on: p.id == l.post_id,
+      where: l.user_id != p.user_id,
+      group_by: l.post_id,
+      select: %{post_id: l.post_id, likes: count(l.id)}
+    )
+  end
+
+  # The main draw: each author's best-liked post that cleared the bar, from
+  # `since` onwards (or from all time when `since` is nil).
+  defp discover_liked_draw(candidates, since, limit) do
+    best_per_author =
+      candidates
+      |> join(:inner, [post: p], lc in subquery(discover_like_counts()),
+        on: lc.post_id == p.id,
+        as: :like_count
+      )
+      |> where([like_count: lc], lc.likes >= @discover_min_likes)
+      |> discover_since(since)
+      |> distinct([post: p], p.user_id)
+      |> order_by([post: p, like_count: lc], asc: p.user_id, desc: lc.likes, desc: p.id)
+      |> select([post: p, like_count: lc], %{id: p.id, user_id: p.user_id, likes: lc.likes})
+
+    discover_draw(best_per_author, [desc: :likes, desc: :id], limit)
+  end
+
+  # The empty-installation fallback: the old recency draw, one newest post per
+  # author. Only reached while nothing at all has been liked.
+  defp discover_recent_draw(candidates, limit) do
     newest_per_author =
-      from(p in Post,
-        join: u in assoc(p, :user),
-        left_join: r in assoc(p, :reply_ref),
-        where: is_nil(r.id),
-        where: fragment("COALESCE(NULLIF(?, ''), 'en')", u.locale) == ^locale,
-        where: p.user_id != ^viewer.id,
-        where: p.user_id not in subquery(all_followees_of(viewer.id)),
-        where: p.user_id not in subquery(blocked_either_way(viewer.id)),
-        where: account_confirmed_row(u),
-        where: p.body != "",
-        distinct: p.user_id,
-        order_by: [asc: p.user_id, desc: p.id],
-        select: %{id: p.id}
-      )
-      |> scope_visible(nil)
+      candidates
+      |> distinct([post: p], p.user_id)
+      |> order_by([post: p], asc: p.user_id, desc: p.id)
+      |> select([post: p], %{id: p.id, user_id: p.user_id})
 
+    discover_draw(newest_per_author, [desc: :id], limit)
+  end
+
+  defp discover_since(query, nil), do: query
+  defp discover_since(query, since), do: where(query, [post: p], p.inserted_at >= ^since)
+
+  defp discover_window_start do
+    NaiveDateTime.utc_now(:second) |> NaiveDateTime.add(-@discover_window_days, :day)
+  end
+
+  # Rank the one-post-per-author set, keep the best `@discover_pool` of them
+  # and pick the handful at random, so the card stays varied between reloads.
+  defp discover_draw(per_author, pool_order, limit) do
     pool =
-      from(s in subquery(newest_per_author),
-        order_by: [desc: s.id],
+      from(s in subquery(per_author),
+        order_by: ^pool_order,
         limit: @discover_pool,
-        select: %{id: s.id}
+        select: %{id: s.id, user_id: s.user_id}
       )
 
-    ids =
-      from(s in subquery(pool),
-        order_by: fragment("random()"),
-        limit: ^limit,
-        select: s.id
-      )
-      |> Repo.all()
+    from(s in subquery(pool),
+      order_by: fragment("random()"),
+      limit: ^limit,
+      select: %{id: s.id, user_id: s.user_id}
+    )
+    |> Repo.all()
+  end
 
+  defp load_discover_posts([]), do: []
+
+  defp load_discover_posts(ids) do
     from(p in Post, where: p.id in ^ids)
     |> Repo.all()
     |> Repo.preload(post_preloads())
@@ -1552,6 +1668,12 @@ defmodule Vutuv.Posts do
   # worth suggesting.
   defp all_followees_of(viewer_id) do
     from(c in Follow, where: c.follower_id == ^viewer_id, select: c.followee_id)
+  end
+
+  # The people the viewer told us to keep quiet — excluded from every
+  # discovery tier, including the one that may otherwise suggest a followee.
+  defp muted_followees_of(viewer_id) do
+    from(c in Follow, where: c.follower_id == ^viewer_id and c.muted, select: c.followee_id)
   end
 
   @doc """

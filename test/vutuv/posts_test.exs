@@ -22,6 +22,18 @@ defmodule Vutuv.PostsTest do
     %{post | inserted_at: at}
   end
 
+  # The discovery rail only suggests posts that cleared its like bar, so its
+  # tests hand each post enough likes (from distinct strangers) to qualify —
+  # otherwise a filter test would silently assert the like-less fallback.
+  defp liked!(post, likers \\ 2) do
+    for _ <- 1..likers//1, do: :ok = Posts.like_post(user(), post)
+    post
+  end
+
+  defp liked_post!(author, attrs, likers \\ 2) do
+    author |> create_post!(attrs) |> liked!(likers)
+  end
+
   # Repost order ties at second precision too; shift `reposter`'s repost of
   # `post` into the past so "newest reposter" assertions stay deterministic.
   defp backdate_repost!(reposter, post, seconds) do
@@ -883,35 +895,48 @@ defmodule Vutuv.PostsTest do
   end
 
   describe "discover_posts/2" do
-    test "returns a same-language stranger's public post with the author preloaded" do
+    test "returns a same-language stranger's well-liked post with the author preloaded" do
       viewer = user(locale: "de")
       author = user(locale: "de")
-      post = create_post!(author, %{body: "entdecke mich"})
+      post = liked_post!(author, %{body: "entdecke mich"})
 
       assert [found] = Posts.discover_posts(viewer)
       assert found.id == post.id
       assert found.user.id == author.id
     end
 
-    test "excludes authors the viewer follows, including muted follows" do
+    test "fills the card with strangers before it reaches for a followed author" do
       viewer = user()
       followed = user()
-      muted = user()
       follow!(viewer, followed)
+
+      insider = liked_post!(followed, %{body: "already following"}, 6)
+      fresh = liked_post!(user(), %{body: "new voice"}, 2)
+
+      # One slot: the less-liked stranger still wins it.
+      assert Enum.map(Posts.discover_posts(viewer, limit: 1), & &1.id) == [fresh.id]
+
+      # More slots than strangers: the followed author's well-liked post fills
+      # the rest rather than leaving the card short.
+      ids = Posts.discover_posts(viewer, limit: 5) |> Enum.map(& &1.id) |> Enum.sort()
+      assert ids == Enum.sort([fresh.id, insider.id])
+    end
+
+    test "never suggests a muted author, in any tier" do
+      viewer = user()
+      muted = user()
       follow!(viewer, muted)
       fid = Vutuv.Social.follow_id(viewer.id, muted.id)
       Vutuv.Social.toggle_follow_mute!(viewer.id, fid)
 
-      create_post!(followed, %{body: "already following"})
-      create_post!(muted, %{body: "muted but still followed"})
-      fresh = create_post!(user(), %{body: "new voice"})
+      liked_post!(muted, %{body: "muted but still followed"}, 6)
 
-      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [fresh.id]
+      assert Posts.discover_posts(viewer) == []
     end
 
     test "excludes the viewer's own posts" do
       viewer = user()
-      create_post!(viewer, %{body: "mine"})
+      liked_post!(viewer, %{body: "mine"})
 
       assert Posts.discover_posts(viewer) == []
     end
@@ -920,9 +945,9 @@ defmodule Vutuv.PostsTest do
       german_viewer = user(locale: "de")
       unset_viewer = user(locale: nil)
 
-      german_post = create_post!(user(locale: "de"), %{body: "auf Deutsch"})
-      english_post = create_post!(user(locale: "en"), %{body: "in English"})
-      unset_post = create_post!(user(locale: nil), %{body: "no locale set"})
+      german_post = liked_post!(user(locale: "de"), %{body: "auf Deutsch"})
+      english_post = liked_post!(user(locale: "en"), %{body: "in English"})
+      unset_post = liked_post!(user(locale: nil), %{body: "no locale set"})
 
       german_ids = Posts.discover_posts(german_viewer) |> Enum.map(& &1.id)
       assert german_ids == [german_post.id]
@@ -935,11 +960,23 @@ defmodule Vutuv.PostsTest do
       viewer = user()
       author = user()
 
-      create_post!(author, %{body: "circle only", denials: [%{"wildcard" => "non_followers"}]})
-      parent = create_post!(author, %{body: "parent"})
-      {:ok, _reply} = Posts.create_reply(user(), parent, %{body: "an answer"})
+      restricted =
+        create_post!(author, %{body: "circle only", denials: [%{"wildcard" => "non_followers"}]})
+
+      # A restricted post is only likeable by the circle it is shared with, so
+      # its likes have to come from followers — it stays out of the rail all
+      # the same, because the rail shows the anonymous public view.
+      for _ <- 1..2 do
+        insider = user()
+        follow!(insider, author)
+        :ok = Posts.like_post(insider, restricted)
+      end
+
+      parent = liked_post!(author, %{body: "parent"})
+      {:ok, reply} = Posts.create_reply(user(), parent, %{body: "an answer"})
+      liked!(reply)
       image = insert(:post_image, user: author, post: nil)
-      create_post!(author, %{body: "", image_ids: [image.id]})
+      liked_post!(author, %{body: "", image_ids: [image.id]})
 
       assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [parent.id]
     end
@@ -951,20 +988,80 @@ defmodule Vutuv.PostsTest do
       {:ok, _} = Vutuv.Social.block_user(viewer, blocked)
       {:ok, _} = Vutuv.Social.block_user(blocker, viewer)
 
-      create_post!(blocked, %{body: "blocked by viewer"})
-      create_post!(blocker, %{body: "blocked the viewer"})
+      liked_post!(blocked, %{body: "blocked by viewer"})
+      liked_post!(blocker, %{body: "blocked the viewer"})
 
       assert Posts.discover_posts(viewer) == []
     end
 
     test "excludes unconfirmed authors" do
       viewer = user()
-      create_post!(user(email_confirmed?: false), %{body: "ghost"})
+      liked_post!(user(email_confirmed?: false), %{body: "ghost"})
 
       assert Posts.discover_posts(viewer) == []
     end
 
-    test "picks one post per author: their newest eligible one" do
+    test "only suggests posts that reached the like bar" do
+      viewer = user()
+
+      liked_post!(user(), %{body: "nobody liked this"}, 0)
+      liked_post!(user(), %{body: "one lonely like"}, 1)
+      well_liked = liked_post!(user(), %{body: "well received"}, 2)
+
+      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [well_liked.id]
+    end
+
+    test "does not count the author's own like towards the bar" do
+      viewer = user()
+      author = user()
+
+      self_promoted = create_post!(author, %{body: "I like me"})
+      :ok = Posts.like_post(author, self_promoted)
+      :ok = Posts.like_post(user(), self_promoted)
+
+      earned = liked_post!(user(), %{body: "liked by others"})
+
+      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [earned.id]
+    end
+
+    test "prefers well-liked posts from the last two weeks over older favourites" do
+      viewer = user()
+
+      old_favourite = liked_post!(user(), %{body: "the classic"}, 6)
+      backdate_post!(old_favourite, 20 * 24 * 60 * 60)
+      recent = liked_post!(user(), %{body: "this fortnight"}, 2)
+
+      assert Enum.map(Posts.discover_posts(viewer, limit: 1), & &1.id) == [recent.id]
+    end
+
+    test "falls back to older favourites when the fortnight has too few" do
+      viewer = user()
+
+      old_favourite = liked_post!(user(), %{body: "the classic"}, 3)
+      backdate_post!(old_favourite, 20 * 24 * 60 * 60)
+
+      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [old_favourite.id]
+    end
+
+    test "falls back to recent posts when nothing has been liked yet" do
+      viewer = user()
+      post = create_post!(user(), %{body: "a brand-new installation"})
+
+      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [post.id]
+    end
+
+    test "picks one post per author: their best-liked eligible one" do
+      viewer = user()
+      prolific = user()
+
+      best = liked_post!(prolific, %{body: "the good one"}, 4)
+      backdate_post!(best, 60)
+      liked_post!(prolific, %{body: "newer but weaker"}, 2)
+
+      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [best.id]
+    end
+
+    test "picks the newest post per author on the like-less fallback" do
       viewer = user()
       prolific = user()
 
@@ -977,7 +1074,13 @@ defmodule Vutuv.PostsTest do
 
     test "returns at most limit posts and randomizes which authors it draws" do
       viewer = user()
-      for n <- 1..8, do: create_post!(user(), %{body: "voice #{n}"})
+      # Two likers are enough for every post to clear the bar.
+      likers = [user(), user()]
+
+      for n <- 1..8 do
+        post = create_post!(user(), %{body: "voice #{n}"})
+        for liker <- likers, do: :ok = Posts.like_post(liker, post)
+      end
 
       found = Posts.discover_posts(viewer, limit: 5)
       assert length(found) == 5
