@@ -55,6 +55,19 @@ defmodule Vutuv.Dashboard do
     }
   end
 
+  @doc """
+  How many members confirmed their sign-up so far on the current German
+  calendar day (from Berlin 00:00 until now). The single figure behind the
+  admin-only "new members today" pill in the app shell
+  (`VutuvWeb.ShellLive`), which reads it on its own rather than pulling the
+  whole `activity_snapshot/0` for one number. Counts exactly what the
+  dashboard's "New members" tile does, so the two can never disagree.
+  """
+  def registrations_today do
+    {day_start, day_end} = BerlinTime.day_bounds_utc(BerlinTime.today())
+    Reports.count_confirmed_registrations(day_start, day_end)
+  end
+
   # The newest row's `inserted_at`, or nil for an empty table. Ordered by the
   # UUID v7 primary key, whose embedded creation time makes "highest id" mean
   # "newest" - an index lookup, no `inserted_at` scan.

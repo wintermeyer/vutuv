@@ -21,9 +21,20 @@ defmodule VutuvWeb.ShellLive do
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  import VutuvWeb.UI, only: [count_badge: 1, icon_bookmark: 1, name_initials: 1, presence_dot: 1]
+  import VutuvWeb.UI,
+    only: [
+      compact_count: 1,
+      count_badge: 1,
+      delimited_count: 1,
+      icon_bookmark: 1,
+      name_initials: 1,
+      presence_dot: 1
+    ]
 
+  alias Vutuv.Accounts.MemberCounter
   alias Vutuv.Activity
+  alias Vutuv.Dashboard
+  alias Vutuv.DayClock
   alias Vutuv.Social
   alias VutuvWeb.Presence
 
@@ -77,7 +88,11 @@ defmodule VutuvWeb.ShellLive do
       # mount; every nav destination is reached by a full-reload `href`, so the
       # shell remounts with a fresh path on each of those.
       |> assign(:path, path)
+      # Admins get one more figure: how many sign-ups confirmed so far today.
+      # Zero renders nothing, so it is also the starting value for everyone else.
+      |> assign(:new_members_today, 0)
       |> maybe_start_counts(user_id, path)
+      |> maybe_start_new_members()
       |> maybe_start_presence(user_id, session["show_online"] == true)
       |> push_badge()
 
@@ -106,6 +121,22 @@ defmodule VutuvWeb.ShellLive do
         :notifications_count,
         initial_count(path, "/notifications", user_id, &Activity.unread_notification_count/1)
       )
+    else
+      socket
+    end
+  end
+
+  # The admin-only sign-up pulse in the top bar: how many members confirmed
+  # their registration since Berlin midnight. Only an admin socket subscribes,
+  # so nobody else pays for the query or the messages. Two feeds keep it true:
+  # `Vutuv.Accounts.MemberCounter` (the member total moves the moment a sign-up
+  # confirms — it coalesces a burst into at most one message per second) and
+  # `Vutuv.DayClock` (Berlin midnight, when the tally starts over).
+  defp maybe_start_new_members(socket) do
+    if connected?(socket) and socket.assigns.user_admin? do
+      MemberCounter.subscribe()
+      DayClock.subscribe()
+      recount_new_members(socket)
     else
       socket
     end
@@ -230,6 +261,16 @@ defmodule VutuvWeb.ShellLive do
     {:noreply, socket |> assign(:self_online?, show_online?) |> push_online()}
   end
 
+  # The live member total moved — a sign-up just confirmed, or the counter
+  # reconciled itself against the database. Either way today's figure may have
+  # changed, so re-read it (only admin sockets are subscribed).
+  def handle_info({:member_count, _total}, socket),
+    do: {:noreply, recount_new_members(socket)}
+
+  # Berlin midnight: yesterday's sign-ups stop counting, so the pill empties out
+  # until the first member of the new day confirms.
+  def handle_info(:day_changed, socket), do: {:noreply, recount_new_members(socket)}
+
   # A block changed for this member (either direction): refresh their block
   # filter so a newly blocked member's dot disappears (and an unblocked one's
   # can reappear) without waiting for the next full page load.
@@ -252,6 +293,22 @@ defmodule VutuvWeb.ShellLive do
     socket
     |> assign(:notifications_count, Activity.unread_notification_count(socket.assigns.user_id))
     |> push_badge()
+  end
+
+  defp recount_new_members(socket),
+    do: assign(socket, :new_members_today, Dashboard.registrations_today())
+
+  # The pill's accessible name and hover title. It spells out the exact figure,
+  # so a compacted "1K" in the pill still names its precise count, and it is
+  # what says "today" and "members" — the pill itself is a glyph and a number.
+  # `ngettext/4` binds the raw integer to %{count}, hence the %{formatted} one.
+  defp new_members_label(count) do
+    ngettext(
+      "%{formatted} new member today",
+      "%{formatted} new members today",
+      count,
+      formatted: delimited_count(count)
+    )
   end
 
   # Push the current attention total (unread messages + notifications) to the
@@ -341,6 +398,23 @@ defmodule VutuvWeb.ShellLive do
           </nav>
 
           <div class="ml-auto flex items-center gap-1">
+            <%!-- Admins only: today's confirmed sign-ups (German calendar day),
+            live from MemberCounter and reset by the DayClock at Berlin
+            midnight. Rendered only when there is something to report, so a
+            quiet day adds no chrome. Links into /admin, where the dashboard
+            tile shows the same figure next to yesterday's. --%>
+            <.link
+              :if={@user_admin? and @new_members_today > 0}
+              id="new-members-today"
+              href={~p"/admin"}
+              title={new_members_label(@new_members_today)}
+              aria-label={new_members_label(@new_members_today)}
+              class="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
+            >
+              <.icon_user_plus />
+              <span class="tabular-nums">{compact_count(@new_members_today)}</span>
+            </.link>
+
             <.link
               href={~p"/search"}
               title={gettext("Search")}
@@ -585,6 +659,15 @@ defmodule VutuvWeb.ShellLive do
     ~H"""
     <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+    </svg>
+    """
+  end
+
+  # A person with a plus: the "new member" glyph on the admin sign-up pill.
+  defp icon_user_plus(assigns) do
+    ~H"""
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
     </svg>
     """
   end
