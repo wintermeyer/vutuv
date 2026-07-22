@@ -618,9 +618,7 @@ defmodule VutuvWeb.ShellLiveTest do
       assert has_element?(view, ~s(#{@pill}[title="1 new member today"]))
 
       {:ok, german, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive,
-          session: Map.put(session, "locale", "de")
-        )
+        live_isolated(conn, VutuvWeb.ShellLive, session: Map.put(session, "locale", "de"))
 
       assert has_element?(german, ~s(#{@pill}[title="1 neues Mitglied heute"]))
     end
