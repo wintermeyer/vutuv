@@ -1517,10 +1517,10 @@ defmodule Vutuv.Posts do
        an author `viewer` already follows.
 
   A *muted* follow is never suggested, in any tier: muting means "keep this
-  person's posts away from me". Only when nothing at all cleared the bar —
-  a brand-new installation where nobody has liked anything yet — does the
-  rail fall back to the newest eligible posts, so it is never permanently
-  empty.
+  person's posts away from me". Only when no tier turned up anything at all
+  — a brand-new installation where nobody has liked yet, or a language
+  nobody has liked in yet — does the rail fall back to the newest eligible
+  posts, so it is never permanently empty.
 
   Language matches on `users.locale` with the empty value counting as
   English, mirroring `VutuvWeb.LiveLocale`'s fallback. Replies (confusing
