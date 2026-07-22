@@ -168,7 +168,7 @@ defmodule VutuvWeb.PostControllerTest do
       assert LazyHTML.attribute(publisher, "class") == ["block"]
     end
 
-    test "the edition facts and links form their own full-width row", %{conn: conn} do
+    test "the outbound links form their own full-width row", %{conn: conn} do
       user = insert_activated_user()
       post = reviewed_post!(user)
       store_cover!(post.review)
@@ -179,23 +179,79 @@ defmodule VutuvWeb.PostControllerTest do
 
       doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
 
-      # A direct child of the card, below the cover + identity row: one column
-      # running the card's full width, listing the ISBN, an audiobook's running
-      # time and then the two outbound links.
-      details = LazyHTML.query(doc, "[data-review-card] > [data-review-details]")
-      text = LazyHTML.text(details)
+      # A direct child of the card, below the cover + identity row: where to go
+      # next, on one line running the card's full width. The facts themselves
+      # (ISBN, running time) now read beside the cover, so this row is links only.
+      links = LazyHTML.query(doc, "[data-review-card] > [data-review-links]")
+      text = LazyHTML.text(links)
 
-      assert text =~ "978-3-16-148410-0"
-      assert text =~ "7 h 20 min"
       assert text =~ "Open Library"
       assert text =~ "Amazon"
-      # In that order.
-      assert text =~ ~r/978-3-16-148410-0.*7 h 20 min.*Open Library.*Amazon/s
+      refute text =~ "978-3-16-148410-0"
+      refute text =~ "7 h 20 min"
 
-      # And nothing of it is left behind beside the cover.
+      # And the links stay out of the identity column beside the cover.
       identity = LazyHTML.text(LazyHTML.query(doc, "[data-review-card] [data-review-identity]"))
-      refute identity =~ "978-3-16-148410-0"
       refute identity =~ "Open Library"
+    end
+
+    test "the author reads directly under the title, named as the author", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
+
+      # Nothing between the two lines: the title paragraph drops the legacy
+      # 15px paragraph margin (`mb-0`), so the author sits right under the work
+      # it belongs to instead of across a blank line.
+      title = LazyHTML.query(doc, "[data-review-card] [data-review-title]")
+
+      assert LazyHTML.attribute(title, "class") == [
+               "mb-0 line-clamp-2 font-semibold text-slate-900 dark:text-slate-100"
+             ]
+
+      # And the name is labelled, so a line that is neither the title nor the
+      # publisher cannot be mistaken for either.
+      creator = LazyHTML.query(doc, "[data-review-card] [data-review-creator]")
+      assert LazyHTML.text(creator) =~ "by: Martin Fowler"
+    end
+
+    test "an audiobook's running time rides the medium word", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      post.review
+      |> Ecto.Changeset.change(%{duration_minutes: 440})
+      |> Repo.update!()
+
+      doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
+
+      meta =
+        doc
+        |> LazyHTML.query("[data-review-card] [data-review-meta]")
+        |> LazyHTML.text()
+        |> String.replace(~r/\s+/, " ")
+        |> String.trim()
+
+      # How long the recording runs answers the medium, so it reads in
+      # parentheses right behind it — not as a line of its own further down.
+      assert meta == "2018 · Audiobook (7 h 20 min)"
+
+      # The parenthetical is not part of the Audible link — only the word is.
+      assert LazyHTML.text(LazyHTML.query(doc, "[data-review-meta] a")) == "Audiobook"
+    end
+
+    test "the ISBN reads in small type beside the cover", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
+      isbn = LazyHTML.query(doc, "[data-review-card] [data-review-identity] [data-review-isbn]")
+
+      # A catalogue number nobody reads at a glance: it belongs with the other
+      # facts about the edition, one size down from them.
+      assert LazyHTML.text(isbn) =~ "ISBN 978-3-16-148410-0"
+      assert hd(LazyHTML.attribute(isbn, "class")) =~ "text-xs"
     end
 
     test "a very long title and creator are cut to two lines, in full on hover", %{conn: conn} do
@@ -216,7 +272,7 @@ defmodule VutuvWeb.PostControllerTest do
       # Two lines is the ceiling for both; the whole string stays reachable on
       # hover (and in the agent formats), so nothing is lost by cutting it.
       assert LazyHTML.attribute(title, "class") == [
-               "line-clamp-2 font-semibold text-slate-900 dark:text-slate-100"
+               "mb-0 line-clamp-2 font-semibold text-slate-900 dark:text-slate-100"
              ]
 
       assert LazyHTML.attribute(title, "title") == [long]
@@ -433,7 +489,7 @@ defmodule VutuvWeb.PostControllerTest do
       post = reviewed_post!(user)
 
       post.review
-      |> Ecto.Changeset.change(%{publisher: "Addison-Wesley", pages: 448})
+      |> Ecto.Changeset.change(%{publisher: "Addison-Wesley", pages: 448, duration_minutes: 440})
       |> Repo.update!()
 
       html =
@@ -443,6 +499,8 @@ defmodule VutuvWeb.PostControllerTest do
         |> html_response(200)
 
       assert html =~ "Hörbuch"
+      assert html =~ "von: Martin Fowler"
+      assert html =~ "(7 Std. 20 Min.)"
       assert html =~ "Verlag: Addison-Wesley"
       assert html =~ "448 Seiten"
     end
