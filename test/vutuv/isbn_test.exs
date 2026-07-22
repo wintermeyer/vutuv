@@ -59,4 +59,31 @@ defmodule Vutuv.IsbnTest do
       assert :error = Isbn.isbn10("junk")
     end
   end
+
+  describe "format/1" do
+    test "hyphenates a German ISBN into its five elements" do
+      # Goldmann (registrant 442) — the form printed on the book itself.
+      assert Isbn.format("9783442541683") == "978-3-442-54168-3"
+      assert Isbn.format("9783161484100") == "978-3-16-148410-0"
+    end
+
+    test "hyphenates other registration groups" do
+      # English language (group 0), and a two-digit group (94, Netherlands).
+      assert Isbn.format("9780306406157") == "978-0-306-40615-7"
+      assert Isbn.format("9789401799232") == "978-94-017-9923-2"
+    end
+
+    test "returns the input unchanged when the ranges do not resolve it" do
+      # 978-6-70… is an unassigned EAN range: no split is knowable, so the
+      # caller renders the bare digits rather than a made-up hyphenation.
+      assert Isbn.format("9786700000004") == "9786700000004"
+    end
+
+    test "returns anything that is not a bare ISBN-13 unchanged" do
+      assert Isbn.format("978-3-442-54168-3") == "978-3-442-54168-3"
+      assert Isbn.format("316148410X") == "316148410X"
+      assert Isbn.format("") == ""
+      assert Isbn.format(nil) == nil
+    end
+  end
 end
