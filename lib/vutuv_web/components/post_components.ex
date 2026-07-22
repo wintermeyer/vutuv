@@ -1522,96 +1522,108 @@ defmodule VutuvWeb.PostComponents do
           than the cover beside it. The full title stays in the hover title and
           in every agent-format sibling. --%>
           <p
-            class="line-clamp-2 font-semibold text-slate-900 dark:text-slate-100"
+            class="mb-0 line-clamp-2 font-semibold text-slate-900 dark:text-slate-100"
             title={@review.title}
             data-review-title
           >{@review.title}</p>
-          <%!-- Creator on its own line, year · medium on the line below it, the
-          publisher on the line below that — at every width, not only in the
-          narrow aside. That reading was the aside's, and it is what the card
-          shows everywhere now: one card, one layout, so a phone and a wide
-          screen never disagree about what a review looks like. All three are
-          lines of ONE paragraph, so they read as one tight identity block
-          instead of drifting apart on the legacy paragraph margin. The creator
-          is cut at two lines like the title (a catalogue "creator" can be a
-          whole list of authors, editors and translators); `line-clamp-2` sets
-          its own `display`, so it needs no `block` beside it — and must not
-          get one, or the two display utilities would fight. --%>
+          <%!-- Creator on the line DIRECTLY under the title (`mb-0` up there
+          kills the legacy 15px paragraph margin, which used to open a blank
+          line between a work and who wrote it), year · medium below it, the
+          publisher below that — at every width, not only in the narrow aside.
+          That reading was the aside's, and it is what the card shows
+          everywhere now: one card, one layout, so a phone and a wide screen
+          never disagree about what a review looks like. All three are lines of
+          ONE paragraph, so they read as one tight identity block instead of
+          drifting apart on that same margin. The creator is named ("by: …"):
+          between a title above and a publisher below, a bare name is the one
+          line that doesn't say what it is. It is cut at two lines like the
+          title (a catalogue "creator" can be a whole list of authors, editors
+          and translators); `line-clamp-2` sets its own `display`, so it needs
+          no `block` beside it — and must not get one, or the two display
+          utilities would fight. --%>
           <p
             :if={@review.creator || @review.year || @review.medium || @review.publisher}
-            class="text-sm text-slate-600 dark:text-slate-400"
+            class="mb-0 text-sm text-slate-600 dark:text-slate-400"
           ><span
               :if={@review.creator}
               class="line-clamp-2"
               title={@review.creator}
               data-review-creator
-            >{@review.creator}</span><span
-              :if={review_year_medium(@review) != ""}
+            >{gettext("by:")} {@review.creator}</span><span
+              :if={review_year_medium(@review) != "" || @duration}
               class={@review.creator && "block"}
               data-review-meta
-            >{@review.year}{if @review.year && review_medium_label(@review.medium), do: " · "}<.review_medium review={@review} /></span><span
+            >{@review.year}{if @review.year && (review_medium_label(@review.medium) || @duration),
+              do: " · "}<.review_medium review={@review} /></span><span
               :if={@review.publisher}
               class="block"
               data-review-publisher
             >{gettext("Publisher:")} {@review.publisher}</span></p>
+          <%!-- The ISBN closes the identity block, one size down: it names this
+          exact edition, but it is a catalogue number nobody reads at a glance,
+          so it belongs with the facts about the work rather than on a line of
+          its own weight further down. `whitespace-nowrap` keeps the number
+          whole — its hyphens are line-break opportunities, so it would
+          otherwise split mid-number; the space after "ISBN" stays a break
+          opportunity, so a narrow aside wraps the label instead of overflowing
+          the column. --%>
+          <p
+            :if={@isbn}
+            class="mb-0 mt-1 text-xs text-slate-600 dark:text-slate-400"
+            data-review-isbn
+          >
+            ISBN <span class="whitespace-nowrap">{@isbn}</span>
+          </p>
         </div>
       </div>
 
-      <%!-- Row two, one full-width column under the cover: the catalogue facts
-      and where to go next — ISBN, an audiobook's running time, then the
-      outbound links. Full width because these lines are longer than the column
-      beside the cover and each part may be missing, so they would otherwise
-      wrap into a ragged stack. --%>
-      <div
-        :if={@isbn || @duration || @external_url || @cover_url}
-        class="mt-2 text-sm text-slate-600 dark:text-slate-400"
-        data-review-details
+      <%!-- Row two, one full-width line under the cover: where to go next. The
+      facts about the edition all read beside the cover now, so this row is the
+      outbound links alone — the book's own Open Library page first, then the
+      store link (Amazon / IMDb), dot-separated, both plain brand links. Full
+      width because the line is longer than the column beside the cover and
+      either half may be missing. The Open Library link shows only when a cover
+      is actually rendered, because it also credits the source of that quoted
+      image (§ 63 UrhG) — the courtesy link back Open Library asks for. --%>
+      <p
+        :if={@external_url || @cover_url}
+        class="mb-0 mt-2 text-sm text-slate-600 dark:text-slate-400"
+        data-review-links
       >
-        <%!-- The ISBN in its printed, hyphenated form (Vutuv.Isbn.format/1) —
-        the stored value is the bare 13 digits, which reads as a barcode
-        number rather than an ISBN. `whitespace-nowrap` keeps it on one line
-        in the narrow aside: its hyphens are line-break opportunities, so it
-        would otherwise split mid-number. --%>
-        <p :if={@isbn} class="mb-0">
-          ISBN <span class="whitespace-nowrap">{@isbn}</span>
-        </p>
-        <p :if={@duration} class="mb-0">{@duration}</p>
-        <%!-- The outbound links on one dot-separated line: the book's own Open
-        Library page first, then the store link (Amazon / IMDb). Both are plain
-        brand links. The Open Library link shows only when a cover is actually
-        rendered, because it also credits the source of that quoted image
-        (§ 63 UrhG) — the courtesy link back Open Library asks for. --%>
-        <p :if={@external_url || @cover_url} class="mb-0 mt-1.5">
-          <.link
-            :if={@cover_url}
-            href={@cover_source_url}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            class={review_link_class()}
-          >Open Library</.link><span :if={@cover_url && @external_url}> · </span><a
-            :if={@external_url}
-            href={@external_url}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            class={review_link_class()}
-          >{review_link_label(@review.kind)}</a>
-        </p>
-      </div>
+        <.link
+          :if={@cover_url}
+          href={@cover_source_url}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          class={review_link_class()}
+        >Open Library</.link><span :if={@cover_url && @external_url}> · </span><a
+          :if={@external_url}
+          href={@external_url}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          class={review_link_class()}
+        >{review_link_label(@review.kind)}</a>
+      </p>
     </div>
     """
   end
 
-  # The medium word on the details line. An audiobook links the word to Audible
+  # The medium word on the identity block's year · medium line, with an
+  # audiobook's running time in parentheses right behind it ("Audiobook (7 h
+  # 20 min)") — the length answers the medium, so it reads there instead of
+  # costing the card a line of its own. An audiobook links the WORD to Audible
   # (PostReview.audible_url/1 — a title search, since Audible keys by its own
-  # ASIN, not our print ISBN); every other medium stays plain text. Rendered as
-  # the medium's own inline piece so only the word is the link, not the whole
-  # year · medium line. Nothing at all for a review with no medium set.
+  # ASIN, not our print ISBN); every other medium stays plain text, and the
+  # parenthetical stays outside the link either way. Rendered as the medium's
+  # own inline piece so only the word is the link, not the whole year · medium
+  # line. Nothing at all for a review with neither medium nor running time.
   attr(:review, PostReview, required: true)
 
   defp review_medium(assigns) do
     assigns =
       assigns
       |> assign(:label, review_medium_label(assigns.review.medium))
+      |> assign(:duration, review_duration_label(assigns.review))
       |> assign(:audible_url, PostReview.audible_url(assigns.review))
 
     ~H"""
@@ -1622,9 +1634,11 @@ defmodule VutuvWeb.PostComponents do
           target="_blank"
           rel="nofollow noopener noreferrer"
           class={review_link_class()}
-        >{@label}</.link>
+        >{@label}</.link> <span :if={@duration} class="whitespace-nowrap">({@duration})</span>
       <% @label -> %>
-        {@label}
+        {@label} <span :if={@duration} class="whitespace-nowrap">({@duration})</span>
+      <% @duration -> %>
+        {@duration}
       <% true -> %>
     <% end %>
     """
