@@ -203,4 +203,28 @@ defmodule Vutuv.Posts.PostReview do
   end
 
   def imdb_url(%__MODULE__{}), do: nil
+
+  @doc """
+  An Audible link for an **audiobook** review — a search for the book by its
+  title (and author). Audible keys its audiobooks by their own ASIN, not the
+  print ISBN we store, so a search is the closest reliable link to "the book
+  on Audible". `nil` for anything but an audiobook, and when `AUDIBLE_DOMAIN`
+  is blanked (the store switched off, like the Amazon link).
+  """
+  def audible_url(%__MODULE__{kind: "book", medium: "audiobook", title: title} = review)
+      when is_binary(title) do
+    case Application.get_env(:vutuv, :audible_domain, "www.audible.de") do
+      blank when blank in [nil, ""] -> nil
+      domain -> "https://#{domain}/search?keywords=#{audible_keywords(review)}"
+    end
+  end
+
+  def audible_url(%__MODULE__{}), do: nil
+
+  defp audible_keywords(%__MODULE__{title: title, creator: creator}) do
+    [title, creator]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" ")
+    |> URI.encode_www_form()
+  end
 end

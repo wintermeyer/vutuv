@@ -83,6 +83,65 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ ~s("isbn": "9783161484100")
     end
 
+    test "the shop link is labelled with just the store name", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # Just "Amazon" (the store), not a verbose "View on Amazon ↗".
+      assert html =~ ">Amazon</a>"
+      refute html =~ "View on Amazon"
+    end
+
+    test "in the aside the author gets its own line above year and medium", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # The creator keeps the first line; the year · medium wrapper drops onto
+      # the line below it from `md` up (the narrow right-hand aside), so a long
+      # author name no longer crowds the small facts.
+      assert html =~ "Martin Fowler"
+      assert html =~ ~s(class="md:block" data-review-meta)
+      assert html =~ "2018"
+      assert html =~ "Audiobook"
+    end
+
+    test "an audiobook links the medium word to Audible", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # Only the "Audiobook" word is the link (a search for the book on
+      # Audible), not the whole year · medium line.
+      assert html =~
+               ~r{href="https://www\.audible\.de/search\?keywords=Refactoring\+Martin\+Fowler"[^>]*>\s*Audiobook\s*</a>}
+    end
+
+    test "every outbound link on a review card shares one style", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+      # A fetched cover brings the Open Library link out too, so all three
+      # (medium → Audible, Open Library, store) render together.
+      store_cover!(post.review)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      classes =
+        Regex.scan(
+          ~r/<a [^>]*href="[^"]*(?:audible\.de|openlibrary\.org|amazon\.de)[^"]*"[^>]*class="([^"]*)"/,
+          html
+        )
+        |> Enum.map(&List.last/1)
+
+      assert length(classes) == 3
+      # No odd-one-out underline: one identical class across all three links.
+      assert classes |> Enum.uniq() |> length() == 1
+    end
+
     test "shows the ISBN hyphenated the way it is printed on the book", %{conn: conn} do
       user = insert_activated_user()
       post = reviewed_post!(user)
@@ -96,19 +155,24 @@ defmodule VutuvWeb.PostControllerTest do
       refute html =~ "ISBN 9783161484100"
     end
 
-    test "credits Open Library under a cover it fetched", %{conn: conn} do
+    test "links to the book on Open Library under a cover it fetched", %{conn: conn} do
       user = insert_activated_user()
       post = reviewed_post!(user)
       store_cover!(post.review)
 
       html = conn |> get(Posts.path(post)) |> html_response(200)
 
-      # § 63 UrhG wants the source named on a quoted image, and Open Library
-      # asks for a courtesy link back — one line does both, pointing at the
-      # book's own Open Library page.
+      # The link reads as the book link it is ("Open Library", the twin of the
+      # Amazon link) and points at the book's own Open Library page; it still
+      # credits the source of the quoted cover (§ 63 UrhG), just without the
+      # old "Cover:" caption.
       assert html =~ "/review_covers/#{post.review.id}/"
-      assert html =~ "Open Library"
+      assert html =~ ">Open Library</a>"
       assert html =~ "https://openlibrary.org/isbn/9783161484100"
+      refute html =~ "Cover: Open Library"
+
+      # Both links sit on one dot-separated line, Open Library first.
+      assert html =~ ~r/>Open Library<\/a>.{0,200}\x{00B7}.{0,200}>Amazon<\/a>/s
     end
 
     test "names no source when there is no cover to credit", %{conn: conn} do
@@ -127,8 +191,9 @@ defmodule VutuvWeb.PostControllerTest do
       html = conn |> get(Posts.path(post)) |> html_response(200)
 
       # One column on a phone (the card follows the prose in the DOM), a
-      # narrow right-hand aside from `lg` up.
-      assert html =~ "lg:flex lg:items-start lg:gap-4"
+      # narrow right-hand aside from `md` up (portrait tablets and small
+      # laptop windows included, not just wide desktops).
+      assert html =~ "md:flex md:items-start md:gap-4"
       assert html =~ ~s(data-review-aside="true")
     end
 

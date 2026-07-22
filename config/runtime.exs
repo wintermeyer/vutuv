@@ -154,6 +154,13 @@ if config_env() == :prod do
     config :vutuv, :amazon_affiliate_tag, amazon_tag
   end
 
+  # The audiobook link on book review cards. AUDIBLE_DOMAIN picks the store
+  # ("www.audible.com", …); an explicitly empty AUDIBLE_DOMAIN="" removes the
+  # link (the "Hörbuch" word stays plain text).
+  if audible_domain = System.get_env("AUDIBLE_DOMAIN") do
+    config :vutuv, :audible_domain, audible_domain
+  end
+
   # AI image moderation via an Ollama vision model. Fail-closed while
   # enabled: with Ollama unreachable, new images wait in owner-only limbo and
   # are scanned automatically once it is back. IMAGE_MODERATION_ENABLED=false

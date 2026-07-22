@@ -189,5 +189,33 @@ defmodule Vutuv.Posts.PostReviewTest do
       assert PostReview.imdb_url(%PostReview{kind: "movie", identifier: nil}) == nil
       assert PostReview.imdb_url(%PostReview{kind: "book", identifier: "9783161484100"}) == nil
     end
+
+    test "audible_url/1 searches Audible for an audiobook by title and author" do
+      review = %PostReview{
+        kind: "book",
+        medium: "audiobook",
+        title: "Refactoring",
+        creator: "Martin Fowler"
+      }
+
+      # A title (+ author) search, because Audible keys by its own ASIN, not the
+      # print ISBN we store.
+      assert PostReview.audible_url(review) ==
+               "https://www.audible.de/search?keywords=Refactoring+Martin+Fowler"
+    end
+
+    test "audible_url/1 is nil for anything but an audiobook, or with Audible off" do
+      # A printed book or e-book keeps only the Amazon link; a film never links Audible.
+      assert PostReview.audible_url(%PostReview{kind: "book", medium: "print", title: "X"}) == nil
+
+      assert PostReview.audible_url(%PostReview{kind: "movie", medium: "streaming", title: "X"}) ==
+               nil
+
+      Application.put_env(:vutuv, :audible_domain, "")
+      on_exit(fn -> Application.delete_env(:vutuv, :audible_domain) end)
+
+      assert PostReview.audible_url(%PostReview{kind: "book", medium: "audiobook", title: "X"}) ==
+               nil
+    end
   end
 end

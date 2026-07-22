@@ -364,18 +364,27 @@ leave it untouched.
 
 Every surface that renders the post adds the **review card**
 (`VutuvWeb.PostComponents.review_card/1`): cover (or a kind-glyph tile), kind
-label, title, creator · year · medium, and an outbound link — Amazon for books
-(built offline from the ISBN: ISBN-10 `/dp/` link, search fallback for 979
-ISBNs; domain + optional affiliate tag are config, an empty `AMAZON_DOMAIN`
-removes the link), IMDb for films. The permalink's JSON-LD becomes
+label, title, creator · year · medium (in the narrow aside the creator keeps
+the first line and the year · medium drop below it), and a dot-separated line
+of outbound links — the Open Library book page first (when a cover is shown,
+see below), then the store link labelled with just the store name ("Amazon" /
+"IMDb") — Amazon for books (built offline from the ISBN: ISBN-10 `/dp/` link,
+search fallback for 979 ISBNs; domain + optional affiliate tag are config, an
+empty `AMAZON_DOMAIN` removes the link), IMDb for films. When the medium is an **audiobook** the
+"Hörbuch"/"Audiobook" word on the details line is itself a link to Audible
+(`PostReview.audible_url/1` — a title + author search, since Audible keys its
+audiobooks by their own ASIN, not the print ISBN we store; `AUDIBLE_DOMAIN`
+config, an empty value keeps the word plain). The permalink's JSON-LD becomes
 `["BlogPosting", "Review"]` with `itemReviewed` (Book/Movie), and the agent
 formats carry a `review` entry / fact line (drift-tested).
 
 Where the card sits depends on the width: below the prose on a phone, and from
-`lg` up a narrow right-hand **aside** beside it (prose left, card right, both
-in one flex row — feed, profile and permalink alike). The card is the row's
-second child, so the stacked order below `lg` is the old one and no markup is
-duplicated per breakpoint; a review post without prose (a photo-only post)
+`md` up a narrow right-hand **aside** beside it (prose left, card right, both
+in one flex row — feed, profile and permalink alike). `md` (not `lg`) so
+portrait tablets and small laptop windows get the side-by-side reading too, not
+just wide desktops. The card is the row's second child, so the stacked order
+below `md` is the old one and no markup is duplicated per breakpoint; a review
+post without prose (a photo-only post)
 keeps the full-width card, since there is nothing to sit beside. The reader's
 line clamp then applies to the narrower prose column, so "Weiterlesen" shows on
 posts that used to fit — the clamp mechanics themselves are unchanged.
@@ -417,9 +426,10 @@ one without the others:
   `Vutuv.Posts.ReviewCovers.refresh_all/1` (`mix vutuv.review_covers.refresh`
   / `Vutuv.Release.refresh_review_covers()`), which re-fetches by ISBN, paced
   to Open Library's rate limit, and purges pre-v7.122.4 originals;
-- **source credited**: the card renders a "Cover: Open Library" line under the
-  cover linking to `openlibrary.org/isbn/<isbn>` (§ 63 UrhG's attribution, and
-  the courtesy backlink Open Library asks for), shown only when a cover is;
+- **source credited**: the card renders an "Open Library" link (the twin of the
+  Amazon link, reading as a book link) to `openlibrary.org/isbn/<isbn>` — first
+  on the dot-separated links line (§ 63 UrhG's attribution, and the courtesy
+  backlink Open Library asks for), shown only when a cover is;
 - **not indexable**: every proxy response carries
   `X-Robots-Tag: noindex, noimageindex`;
 - **removable**: a moderation rejection deletes the files, as does deleting
