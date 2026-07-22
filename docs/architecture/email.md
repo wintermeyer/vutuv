@@ -14,8 +14,10 @@ from `Vutuv.Notifications.Emailer.base_email/0` and sent through the single
 `Vutuv.Mailer.deliver/1`.
 
 `deliver/1` also stamps the bounce envelope sender: the `Sender` header (the
-`BOUNCE_ADDRESS` variable, `bounces@vutuv.de` on vutuv.de) becomes the SMTP MAIL
-FROM.
+`BOUNCE_ADDRESS` variable, `sw@vutuv.de` on vutuv.de) becomes the SMTP MAIL
+FROM. It doubles as the marker that tells vutuv's own mail apart from the other
+tenants' in the shared Postfix log, so it must be a mailbox that really accepts
+mail — see `docs/production-email-and-bounces.md` §1.6.
 
 ## Multipart bodies
 
