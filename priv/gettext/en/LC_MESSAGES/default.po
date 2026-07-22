@@ -14059,6 +14059,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Endorsed by %{name} and %{formatted} other"
 msgid_plural "Endorsed by %{name} and %{formatted} others"
+msgstr[0] ""
+msgstr[1] ""
 
 #: lib/vutuv_web/live/shell_live.ex:306
 #, elixir-autogen, elixir-format
