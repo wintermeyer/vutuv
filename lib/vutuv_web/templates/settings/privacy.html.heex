@@ -74,6 +74,7 @@ which would otherwise render the hint heavier than its own heading. --%>
       changeset={@changeset}
       field={:show_online_status?}
       form_id="online-status-form"
+      action={~p"/settings/privacy"}
       title={gettext("Online status")}
       intro={gettext("A green dot on your avatar tells other members you are online right now.")}
       label={gettext("Show when I'm online")}
@@ -89,6 +90,7 @@ which would otherwise render the hint heavier than its own heading. --%>
       changeset={@changeset}
       field={:show_mastodon_feed?}
       form_id="social-feed-form"
+      action={~p"/settings/privacy"}
       title={gettext("Social media posts")}
       intro={
         gettext(
@@ -107,6 +109,7 @@ which would otherwise render the hint heavier than its own heading. --%>
       changeset={@changeset}
       field={:show_code_stats?}
       form_id="code-stats-form"
+      action={~p"/settings/privacy"}
       title={gettext("Code statistics")}
       intro={
         gettext(

@@ -38,6 +38,17 @@ desktop and mobile independently — 0/empty means no truncation; posted to
 `/settings/post_display`, read back by `Vutuv.Accounts.User.post_prefs/1`, see
 `docs/architecture/posts-and-feed.md`).
 
+### Notifications (`/settings/notifications`)
+
+Three cards. **Email notifications**: one positive flag per type (unread
+messages plus its frequency/delay pair, endorsements, new followers, the
+newsletter), each with a one-click unsubscribe in the mail itself — see
+[email.md](email.md). **CV updates**: the one in-app notification kind a member
+can switch off (`cv_update_notifications?`, default on), because it is the only
+one triggered by someone else's housekeeping rather than by something done to
+them — see the CV updates section in [realtime.md](realtime.md). **In-app
+notifications**: a read-only explainer of the rest, which are always on.
+
 ### Member preferences with installation defaults (`Vutuv.Prefs`)
 
 The map and post-display settings are the first citizens of the generic

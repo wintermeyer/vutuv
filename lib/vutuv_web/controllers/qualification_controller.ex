@@ -1,7 +1,9 @@
 defmodule VutuvWeb.QualificationController do
   use VutuvWeb, :controller
 
+  alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Profiles.Qualification
+  alias Vutuv.Social
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
@@ -51,20 +53,32 @@ defmodule VutuvWeb.QualificationController do
   end
 
   def new(conn, _params) do
-    changeset = Qualification.changeset(%Qualification{})
-    render(conn, "new.html", changeset: changeset)
+    # The "tell my followers" box starts ticked (issue #980) — see
+    # WorkExperienceController.new/2 for why. The data default stays false.
+    changeset = Qualification.changeset(%Qualification{announce_to_followers?: true})
+
+    render(conn, "new.html",
+      changeset: changeset,
+      followers: Social.follower_count(conn.assigns[:user])
+    )
   end
 
   def create(conn, %{"qualification" => qualification_params}) do
+    user = conn.assigns[:user]
+
     changeset =
-      conn.assigns[:user]
+      user
       |> build_assoc(:qualifications)
       |> Qualification.changeset(qualification_params)
 
-    ControllerHelpers.save(conn, Repo.insert(changeset),
+    result = Repo.insert(changeset)
+    with {:ok, qualification} <- result, do: CvUpdates.announce(user, qualification)
+
+    ControllerHelpers.save(conn, result,
       flash: gettext("Certificate or license added successfully."),
       redirect_to: ~p"/settings/qualifications",
-      render: "new.html"
+      render: "new.html",
+      assigns: [followers: Social.follower_count(user)]
     )
   end
 

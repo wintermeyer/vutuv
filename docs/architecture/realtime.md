@@ -73,6 +73,37 @@ visibility so a restricted one never leaks).
 The only stored state is the `users.notifications_read_at` read marker behind
 the unread badge.
 
+### CV updates (issue #980)
+
+One notification kind is not about something that happened *to* the reader:
+"@greta added a new position to their CV". A member who adds a new **CV** entry
+— a work experience, an education entry or a certificate / license — can tell
+the people who follow them, with one checkbox on the new-entry form (ticked by
+default, hidden while they have no followers). Only those three sections
+announce; the rest of the profile stays quiet.
+
+It is derived like every other kind, from the CV rows themselves
+(`Vutuv.Profiles.CvUpdates.feed_query/1` is the single rule behind the items,
+the count and the read marker): so deleting the entry removes the notification,
+renaming the job renames it, and nothing is duplicated into a notifications
+table. Who is told: everyone who followed the author **before** the entry
+appeared (no backfill for a new follower), minus muted follows, minus readers
+who switched the kind off.
+
+Two flags carry it, one per side:
+
+* `announce_to_followers?` on `work_experiences` / `educations` /
+  `qualifications` is the **author's** choice, cast **only on insert**
+  (`Vutuv.Profiles.CvSection.cast_announcement/2`), so editing an old entry can
+  never fire a second round and the LinkedIn import — which never sets it —
+  stays silent.
+* `users.cv_update_notifications?` is the **reader's** opt-out (default on), the
+  one in-app kind that is switchable, on the notification settings page.
+
+It never sends email. `CvUpdates.announce/2` (called from the three create
+actions and the API create) only adds the live push to the same set of
+followers, so an open session's bell lights up at save time.
+
 ## Live member counter
 
 The logged-out landing page shows the **exact** number of members and ticks it

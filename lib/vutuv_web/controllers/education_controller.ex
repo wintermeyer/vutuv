@@ -3,7 +3,9 @@ defmodule VutuvWeb.EducationController do
 
   import Ecto.Query
 
+  alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Profiles.Education
+  alias Vutuv.Social
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
@@ -53,21 +55,33 @@ defmodule VutuvWeb.EducationController do
   end
 
   def new(conn, _params) do
-    changeset = Education.changeset(%Education{})
-    render(conn, "new.html", changeset: changeset, current_year: current_year())
+    # The "tell my followers" box starts ticked (issue #980) — see
+    # WorkExperienceController.new/2 for why. The data default stays false.
+    changeset = Education.changeset(%Education{announce_to_followers?: true})
+
+    render(conn, "new.html",
+      changeset: changeset,
+      current_year: current_year(),
+      followers: Social.follower_count(conn.assigns[:user])
+    )
   end
 
   def create(conn, %{"education" => education_params}) do
+    user = conn.assigns[:user]
+
     changeset =
-      conn.assigns[:user]
+      user
       |> build_assoc(:educations)
       |> Education.changeset(education_params)
 
-    ControllerHelpers.save(conn, Repo.insert(changeset),
+    result = Repo.insert(changeset)
+    with {:ok, education} <- result, do: CvUpdates.announce(user, education)
+
+    ControllerHelpers.save(conn, result,
       flash: gettext("Education created successfully."),
       redirect_to: ~p"/settings/educations",
       render: "new.html",
-      assigns: [current_year: current_year()]
+      assigns: [current_year: current_year(), followers: Social.follower_count(user)]
     )
   end
 

@@ -268,6 +268,20 @@ work-study program (duales Studium) or an apprenticeship's Berufsschule is
 deliberately **not** a linked entity — members file an entry in each section;
 revisit linking only if members ask.
 
+## Telling followers about a new CV entry (issue #980)
+
+The three CV sections — work experiences, education, certificates & licenses —
+are the only parts of the profile that can announce themselves. Their
+**new-entry** forms carry one checkbox ("Tell my N followers about this",
+ticked by default, hidden while the member has no followers) which sets
+`announce_to_followers?` on the row; the people who already follow them then see
+one in-app notification linking to that entry. Edit forms deliberately do not
+offer it, and the flag is cast **only on insert**
+(`Vutuv.Profiles.CvSection.cast_announcement/2`), so an edit can never
+re-announce. No email is ever sent, and readers can switch the whole kind off in
+their notification settings. The mechanics live in
+[realtime.md](realtime.md#cv-updates-issue-980).
+
 ## Formatted descriptions (Markdown, issue #905)
 
 A work-experience and an education `description` are **Markdown**, not a single

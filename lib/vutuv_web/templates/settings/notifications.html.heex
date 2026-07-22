@@ -1,8 +1,9 @@
-<%!-- Notification settings. Two cards: which emails vutuv may send (one positive
-flag per type, all default off except messages, checked submits "true"), and an
-honest read-only explainer of the always-on in-app notifications. Each helper
-line is forced font-normal because the surrounding <label> defaults to bold
-(components.css), which would otherwise render the hint heavier than its
+<%!-- Notification settings. Three cards: which emails vutuv may send (one positive
+flag per type, all default off except messages, checked submits "true"), the one
+in-app notification kind a member can switch off (CV updates from people they
+follow, issue #980), and an honest read-only explainer of the always-on rest.
+Each helper line is forced font-normal because the surrounding <label> defaults
+to bold (components.css), which would otherwise render the hint heavier than its
 heading. --%>
 <.settings_shell user={@user} active={:notifications} title={gettext("Notifications")}>
 
@@ -68,8 +69,26 @@ heading. --%>
       </.form>
     </.card>
 
-    <%!-- In-app notifications are not configurable (they are the product), so
-          this card just explains them and links to the bell. Read-only. --%>
+    <%!-- CV updates (issue #980): the one in-app kind a member can switch off,
+          because it is the only one triggered by somebody else's housekeeping
+          rather than by something they did to you. Never emailed. --%>
+    <.toggle_form_card
+      changeset={@changeset}
+      field={:cv_update_notifications?}
+      form_id="cv-updates-form"
+      action={~p"/settings/notifications"}
+      title={gettext("CV updates")}
+      intro={
+        gettext(
+          "When someone you follow adds a new entry to their CV, they can let their followers know. It shows up under the bell, never by email."
+        )
+      }
+      label={gettext("Tell me about new CV entries of people I follow")}
+      hint={gettext("When off, you never see this kind of notification, whoever sends it.")}
+    />
+
+    <%!-- The remaining in-app notifications are not configurable (they are the
+          product), so this card just explains them and links to the bell. --%>
     <.card>
       <.section_title>{gettext("In-app notifications")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
