@@ -1026,6 +1026,17 @@ defmodule VutuvWeb.UI do
   this page exists, since `<.tag_vote>`'s hover roster is a popover no touch
   device can open.
 
+  **The strip is a bar chart.** Its *length* carries the tally: `scale_to` (the
+  largest endorsement count among the member's tags) fills the bar, and every
+  other row shows proportionally fewer faces, so a glance down the page ranks
+  the tags without reading a single number. Each strip is padded to the full
+  bar width, so all of them start at the same x and the bars share a left
+  baseline. The faces are real endorsers (newest first), never repeated
+  filler, and a tag with any endorsement keeps at least one — a bar that
+  rounded away to nothing would read as "nobody". There is deliberately **no**
+  trailing `+N` chip: the exact tally is already the chip's count pill in the
+  same row, and a chip on the end would falsify the bar's length.
+
   Renders **nothing** when nobody endorses the tag (an unendorsed row stays
   quiet instead of repeating an empty state down the whole list) and nothing
   for an honor tag, which is an admin-granted badge, not a peer vouch. Reads
@@ -1038,36 +1049,67 @@ defmodule VutuvWeb.UI do
     doc: "a UserTag with `endorsements` (and their `:user`) preloaded"
   )
 
+  attr(:scale_to, :integer,
+    required: true,
+    doc:
+      "the largest visible-endorsement count among the member's tags — the count that fills the bar"
+  )
+
   attr(:class, :any, default: nil)
 
-  # How many endorser faces the strip shows before the rest fold into the stack's
-  # `+N` chip. Five shingled faces stay compact enough to sit on one row beside
-  # the tag chip, on a phone too.
-  @endorser_stack_cap 5
+  # A full bar. Eight `xs` faces are 214px, which still fits beside the chip on
+  # a laptop and on its own wrapped line on the narrowest phone, and eight steps
+  # is enough resolution to rank a member's tags (they cap at 15).
+  @bar_max_faces 8
+
+  # One `xs` face is 32px and each following one is shingled 6px over the last.
+  @face_px 32
+  @face_step_px 26
 
   def endorsed_by(assigns) do
     endorsers = endorsers_of(assigns.user_tag, nil)
+    total = length(endorsers)
 
     assigns =
       assigns
-      |> assign(:endorsers, endorsers)
-      |> assign(:cap, @endorser_stack_cap)
+      |> assign(:faces, Enum.take(endorsers, bar_faces(total, assigns.scale_to)))
+      |> assign(:bar_width, bar_width(min(@bar_max_faces, assigns.scale_to)))
       |> assign(:primary, List.first(endorsers))
       # Everyone besides the named (newest) endorser: the "and N others" tail.
-      |> assign(:others, max(length(endorsers) - 1, 0))
+      |> assign(:others, max(total - 1, 0))
 
     ~H"""
     <.avatar_stack
       :if={@primary && !UserTag.tag(@user_tag).honor?}
-      users={@endorsers}
-      cap={@cap}
+      users={@faces}
+      cap={length(@faces)}
       size="xs"
       href={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
       label={endorsed_by_label(@primary, @others)}
-      class={@class}
+      class={["w-[var(--endorser-bar)] max-w-full", @class]}
+      style={"--endorser-bar: #{@bar_width}"}
     />
     """
   end
+
+  # How many faces stand for `count` endorsements when `scale_to` fills the bar.
+  # Rounded, floored at one face for any endorsed tag, and never more faces than
+  # there are endorsers to show (a short list simply makes for a short bar).
+  defp bar_faces(0, _scale_to), do: 0
+  defp bar_faces(_count, scale_to) when scale_to <= 0, do: 0
+
+  defp bar_faces(count, scale_to) do
+    (count / scale_to * @bar_max_faces)
+    |> round()
+    |> max(1)
+    |> min(@bar_max_faces)
+    |> min(count)
+  end
+
+  # The width of a bar of `n` shingled faces — the strip is padded to this even
+  # when it shows fewer, so every row's bar starts at the same x.
+  defp bar_width(n) when n > 0, do: "#{@face_px + (n - 1) * @face_step_px}px"
+  defp bar_width(_), do: "#{@face_px}px"
 
   # The sentence the faces stand in for, kept as the strip's accessible name and
   # hover tooltip: who endorses this tag, newest first, and how many more.
@@ -1124,6 +1166,7 @@ defmodule VutuvWeb.UI do
   )
 
   attr(:class, :any, default: nil)
+  attr(:rest, :global)
 
   def avatar_stack(assigns) do
     shown = Enum.take(assigns.users, assigns.cap)
@@ -1140,10 +1183,17 @@ defmodule VutuvWeb.UI do
       ])
 
     ~H"""
-    <.link :if={@href} navigate={@href} title={@label} aria-label={@label} class={@wrapper_class}>
+    <.link
+      :if={@href}
+      navigate={@href}
+      title={@label}
+      aria-label={@label}
+      class={@wrapper_class}
+      {@rest}
+    >
       <.stack_faces shown={@shown} overflow={@overflow} size={@size} pull={@pull} />
     </.link>
-    <div :if={!@href} class={@wrapper_class} aria-hidden="true">
+    <div :if={!@href} class={@wrapper_class} aria-hidden="true" {@rest}>
       <.stack_faces shown={@shown} overflow={@overflow} size={@size} pull={@pull} link? />
     </div>
     """
@@ -1166,6 +1216,7 @@ defmodule VutuvWeb.UI do
         href={~p"/#{user}"}
         title={VutuvWeb.UserHelpers.full_name(user)}
         class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && @pull]}
+        data-stack-face
       >
         <.avatar user={user} size={@size} />
       </.link>
@@ -1173,6 +1224,7 @@ defmodule VutuvWeb.UI do
         :if={!@link?}
         title={VutuvWeb.UserHelpers.full_name(user)}
         class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && @pull]}
+        data-stack-face
       >
         <.avatar user={user} size={@size} />
       </span>

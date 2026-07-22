@@ -154,6 +154,39 @@ defmodule VutuvWeb.UserTagControllerTest do
       refute as_owner =~ "data-tag-vote"
     end
 
+    # The strips are a bar chart: the best-endorsed tag fills the bar and every
+    # other row is drawn against it, so the page ranks the tags by strip length
+    # without anyone reading a number.
+    test "the strip length scales with the endorsement count", %{
+      conn: conn,
+      owner: owner,
+      user_tag: user_tag
+    } do
+      for _ <- 1..8,
+          do: insert(:user_tag_endorsement, user_tag: user_tag, user: insert_activated_user())
+
+      small = insert(:user_tag, user: owner, tag: insert(:tag))
+      insert(:user_tag_endorsement, user_tag: small, user: insert_activated_user())
+
+      html = conn |> get(~p"/#{owner}/tags") |> html_response(200)
+
+      # One chunk per row (the markup after each row marker), so the faces can
+      # be counted per row without a DOM parser.
+      faces =
+        html
+        |> String.split("data-tag-row")
+        |> Enum.drop(1)
+        |> Enum.map(&(length(String.split(&1, "data-stack-face")) - 1))
+
+      # Rows come best-endorsed first: the top tag fills the bar and the
+      # one-endorser tag keeps a single face (a bar that rounded away to nothing
+      # would read as "nobody").
+      assert faces == [8, 1]
+      # No trailing `+N` chip — it would falsify the bar's length, and the exact
+      # tally is already the chip's count pill in the same row.
+      refute html =~ ~r/>\s*\+\d/
+    end
+
     test "counts the rest of the endorsers into the strip's label", %{
       conn: conn,
       owner: owner,

@@ -11,7 +11,12 @@ enhancement in app.js). Its hover roster is switched off here: the row already
 shows the endorsers' faces, and a popover no touch device can open is what this
 page exists to replace (issue #895). The faces are one link to the tag's full
 endorser list, with the "Endorsed by …" sentence kept as their tooltip and
-accessible name — a row of prose per tag drowned out the tags themselves. --%>
+accessible name — a row of prose per tag drowned out the tags themselves.
+
+The strips are a bar chart: `endorsement_scale` (the best-endorsed tag's tally)
+fills the bar, so each row shows proportionally many faces and the page ranks
+the tags at a glance. Every strip is padded to the full bar width, which is what
+lines their left edges up into a common baseline. --%>
 <.page_header
   title={gettext("Tags of %{name}", name: full_name(@user))}
   manage_to={same_user?(@user, @current_user) && ~p"/settings/tags"}
@@ -33,7 +38,7 @@ accessible name — a row of prose per tag drowned out the tags themselves. --%>
       data-tag-row
     >
       <.tag_vote user={@user} user_tag={user_tag} viewer={@current_user} roster?={false} />
-      <.endorsed_by user={@user} user_tag={user_tag} />
+      <.endorsed_by user={@user} user_tag={user_tag} scale_to={@endorsement_scale} />
     </li>
   </ul>
 </.card_section>
