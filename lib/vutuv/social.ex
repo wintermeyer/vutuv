@@ -271,6 +271,37 @@ defmodule Vutuv.Social do
   end
 
   @doc """
+  The newest followers of `user_id` that they do not follow back, newest
+  first - the /notifications rail's "Follow back" suggestions. Blocks (either
+  direction) are filtered out belt-and-braces: a block severs the follow
+  edges, so such a row should not exist in the first place.
+  """
+  def followers_to_follow_back(user_id, limit) do
+    blocked = blocked_user_ids(user_id)
+
+    from(f in Follow,
+      as: :follow,
+      join: u in User,
+      on: u.id == f.follower_id,
+      where: f.followee_id == ^user_id,
+      where:
+        not exists(
+          from(b in Follow,
+            where:
+              b.follower_id == ^user_id and
+                b.followee_id == parent_as(:follow).follower_id
+          )
+        ),
+      order_by: [desc: f.inserted_at, desc: f.id],
+      limit: ^(limit + 20),
+      select: struct(u, ^User.listing_fields())
+    )
+    |> Repo.all()
+    |> Enum.reject(&MapSet.member?(blocked, &1.id))
+    |> Enum.take(limit)
+  end
+
+  @doc """
   The uncached ranking behind `most_followed_users/1` — one GROUP BY over
   `follows`. Called by `Vutuv.Social.PopularUsers` on its refresh timer and
   as the direct fallback while no snapshot exists; don't call it from

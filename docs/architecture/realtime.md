@@ -73,6 +73,39 @@ visibility so a restricted one never leaks).
 The only stored state is the `users.notifications_read_at` read marker behind
 the unread badge.
 
+### The notifications page (2026-07 redesign)
+
+`VutuvWeb.NotificationLive.Index` renders the derived feed as **grouped rows
+under Berlin-day sections** (`VutuvWeb.NotificationLive.Groups`, a pure
+function over the item list). What reads as one piece of news merges into one
+row, keyed within a Berlin calendar day: same-day likes of one post, the day's
+new followers ("Anna, Ben and 111 more are now following you.", the overflow
+linking to the member's followers list), the day's new connections, and one
+endorser's endorsements ("endorsed you for Elixir and Phoenix."). Replies and
+the rarer kinds (moderation, CV updates, handle changes, ...) stay one row per
+event. Because grouping is pure, every change — load more, a live push, the
+DayClock midnight rollover — recomputes the sections wholesale; there is no
+LiveView stream to patch, and a live-pushed like merges into the derived row
+for its post/day.
+
+Around the list:
+
+* **Unread highlighting**: events newer than the previous visit's read marker
+  get a tint + coral dot and a "N new notifications" header line; the visit
+  itself still advances `users.notifications_read_at` and clears the bell.
+* **Filter tabs** (all / posts / people / more) restrict the feed server-side
+  via `Activity.notifications_page/2`'s `kinds:` option (only the matching
+  source queries run, so pagination stays exact) and live in the URL
+  (`?filter=`), patched without a reload.
+* **The rail** (right column on md+, below the list on phones), loaded on the
+  connected mount only: **Follow back** — `Social.followers_to_follow_back/2`,
+  recent followers not yet followed back, followed reload-free via the shared
+  `<.user_row live?>` — and **Last 30 days**, a per-kind count card from
+  `Activity.activity_summary/2` (one round trip of scalar subqueries).
+
+Row times are the Berlin wall clock (the site's canonical clock, like post
+stamps), server-rendered final with an ISO-8601 UTC `datetime` for machines.
+
 ### CV updates (issue #980)
 
 One notification kind is not about something that happened *to* the reader:
