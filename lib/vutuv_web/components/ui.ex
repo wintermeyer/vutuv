@@ -1029,13 +1029,19 @@ defmodule VutuvWeb.UI do
   **The strip is a bar chart.** Its *length* carries the tally: `scale_to` (the
   largest endorsement count among the member's tags) fills the bar, and every
   other row shows proportionally fewer faces, so a glance down the page ranks
-  the tags without reading a single number. Each strip is padded to the full
-  bar width, so all of them start at the same x and the bars share a left
-  baseline. The faces are real endorsers (newest first), never repeated
-  filler, and a tag with any endorsement keeps at least one — a bar that
-  rounded away to nothing would read as "nobody". There is deliberately **no**
-  trailing `+N` chip: the exact tally is already the chip's count pill in the
-  same row, and a chip on the end would falsify the bar's length.
+  the tags without reading a single number. The bars grow **leftwards from a
+  common right baseline**: each strip is padded to the full bar width and its
+  faces are right-aligned inside it, and the `+N` value label past the bar's
+  end sits in its own fixed-width column, so a two-digit remainder can't shove
+  one row's bar out of line with the next. The faces are real endorsers (newest
+  first), never repeated filler, and a tag with any endorsement keeps at least
+  one — a bar that rounded away to nothing would read as "nobody".
+
+  The **`+N` past the bar's end is how many endorsers the bar leaves out**
+  (`total - faces`), the one number this strip states outright; the tally
+  itself is the chip's count pill in the same row, and the two add up. It is a
+  quiet muted label, not a chip, so it reads as the bar's value rather than as
+  one more face.
 
   Renders **nothing** when nobody endorses the tag (an unendorsed row stays
   quiet instead of repeating an empty state down the whole list) and nothing
@@ -1057,10 +1063,11 @@ defmodule VutuvWeb.UI do
 
   attr(:class, :any, default: nil)
 
-  # A full bar. Eight `xs` faces are 214px, which still fits beside the chip on
-  # a laptop and on its own wrapped line on the narrowest phone, and eight steps
-  # is enough resolution to rank a member's tags (they cap at 15).
-  @bar_max_faces 8
+  # A full bar. Seven `xs` faces are 188px, which leaves room for the value
+  # label beside the tag chip on a laptop and still fits on its own wrapped line
+  # on the narrowest phone; seven steps is enough resolution to rank a member's
+  # tags (they cap at 15).
+  @bar_max_faces 7
 
   # One `xs` face is 32px and each following one is shingled 6px over the last.
   @face_px 32
@@ -1069,26 +1076,36 @@ defmodule VutuvWeb.UI do
   def endorsed_by(assigns) do
     endorsers = endorsers_of(assigns.user_tag, nil)
     total = length(endorsers)
+    faces = bar_faces(total, assigns.scale_to)
 
     assigns =
       assigns
-      |> assign(:faces, Enum.take(endorsers, bar_faces(total, assigns.scale_to)))
+      |> assign(:shown, endorsers |> Enum.take(faces) |> Enum.with_index())
+      |> assign(:hidden, total - faces)
       |> assign(:bar_width, bar_width(min(@bar_max_faces, assigns.scale_to)))
       |> assign(:primary, List.first(endorsers))
       # Everyone besides the named (newest) endorser: the "and N others" tail.
       |> assign(:others, max(total - 1, 0))
 
     ~H"""
-    <.avatar_stack
+    <.link
       :if={@primary && !UserTag.tag(@user_tag).honor?}
-      users={@faces}
-      cap={length(@faces)}
-      size="xs"
-      href={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
-      label={endorsed_by_label(@primary, @others)}
-      class={["w-[var(--endorser-bar)] max-w-full", @class]}
+      navigate={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
+      title={endorsed_by_label(@primary, @others)}
+      aria-label={endorsed_by_label(@primary, @others)}
+      class={["flex shrink-0 items-center", @class]}
       style={"--endorser-bar: #{@bar_width}"}
-    />
+    >
+      <span class="flex w-[var(--endorser-bar)] max-w-full items-center justify-end">
+        <.stack_faces shown={@shown} size="xs" pull="-ml-1.5" />
+      </span>
+      <%!-- Always rendered, even at 0, so every row's bar ends at the same x. --%>
+      <span class="w-10 shrink-0 pl-1.5 text-xs font-medium tabular-nums text-slate-600 dark:text-slate-400">
+        <%= if @hidden > 0 do %>
+          +{compact_count(@hidden)}
+        <% end %>
+      </span>
+    </.link>
     """
   end
 
@@ -1107,7 +1124,7 @@ defmodule VutuvWeb.UI do
   end
 
   # The width of a bar of `n` shingled faces — the strip is padded to this even
-  # when it shows fewer, so every row's bar starts at the same x.
+  # when it shows fewer, so every row's bar ends at the same x.
   defp bar_width(n) when n > 0, do: "#{@face_px + (n - 1) * @face_step_px}px"
   defp bar_width(_), do: "#{@face_px}px"
 
@@ -1128,22 +1145,13 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  A **stack of overlapping avatars**, each carrying its member's name as a
-  tooltip, with the rest collapsing into a trailing `+N` chip once the list runs
-  past `cap`. The compact way to show "these people did this".
-
-  Two shapes, picked by `href`:
-
-    * **beside a sentence that names them** (the post card's "Reposted by"
-      banner): no `href` — each face is its own link to that profile and the
-      whole strip is `aria-hidden` decoration, because the sentence next to it
-      already carries the meaning.
-    * **on its own** (the tag list page's `<.endorsed_by>`): pass `href` and
-      `label`, and the strip becomes **one** link to the page listing everyone
-      (nested links are not allowed, so the faces render as plain spans). The
-      whole strip is then one comfortable tap target instead of a row of 20px
-      ones, and `label` is its accessible name and tooltip — the sentence the
-      strip replaces visually.
+  A **stack of overlapping avatars**, each linking to that member's profile and
+  carrying their name as its tooltip, with the rest collapsing into a trailing
+  `+N` chip once the list runs past `cap`. The compact way to show "these people
+  did this" beside a sentence that names them, so the stack itself is
+  `aria-hidden` decoration. Used by the post card's "Reposted by" banner; the
+  tag list page's bar (`<.endorsed_by>`) shares only the faces, since it is one
+  link and needs its own geometry.
   """
   attr(:users, :list, required: true)
   attr(:cap, :integer, default: 5)
@@ -1155,18 +1163,7 @@ defmodule VutuvWeb.UI do
       "shingle the faces (the dense default); pass false for a spaced row, which keeps the initials of a picture-less member readable instead of hiding half of them under the next face"
   )
 
-  attr(:href, :string,
-    default: nil,
-    doc: "make the whole strip one link (to the full list) instead of linking each face"
-  )
-
-  attr(:label, :string,
-    default: nil,
-    doc: "the strip's accessible name and tooltip; required with `href`, ignored without it"
-  )
-
   attr(:class, :any, default: nil)
-  attr(:rest, :global)
 
   def avatar_stack(assigns) do
     shown = Enum.take(assigns.users, assigns.cap)
@@ -1176,34 +1173,27 @@ defmodule VutuvWeb.UI do
       |> assign(:shown, Enum.with_index(shown))
       |> assign(:overflow, length(assigns.users) - length(shown))
       |> assign(:pull, assigns.overlap && "-ml-1.5")
-      |> assign(:wrapper_class, [
-        "flex shrink-0 items-center",
-        !assigns.overlap && "gap-1",
-        assigns.class
-      ])
 
     ~H"""
-    <.link
-      :if={@href}
-      navigate={@href}
-      title={@label}
-      aria-label={@label}
-      class={@wrapper_class}
-      {@rest}
-    >
-      <.stack_faces shown={@shown} overflow={@overflow} size={@size} pull={@pull} />
-    </.link>
-    <div :if={!@href} class={@wrapper_class} aria-hidden="true" {@rest}>
-      <.stack_faces shown={@shown} overflow={@overflow} size={@size} pull={@pull} link? />
+    <div class={["flex shrink-0 items-center", !@overlap && "gap-1", @class]} aria-hidden="true">
+      <.stack_faces shown={@shown} size={@size} pull={@pull} link? />
+      <span
+        :if={@overflow > 0}
+        class={[
+          "inline-flex h-5 items-center rounded-full bg-slate-100 px-1.5 text-[10px] font-bold text-slate-600 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900",
+          @pull
+        ]}
+      >
+        +{compact_count(@overflow)}
+      </span>
     </div>
     """
   end
 
-  # The faces themselves, shared by both `<.avatar_stack>` shapes: a profile link
-  # per face when the strip is decoration beside a sentence, plain spans when the
-  # strip is itself one link (an <a> inside an <a> is invalid HTML).
+  # The shingled faces, shared by `<.avatar_stack>` and the tag page's bar: a
+  # profile link per face where the strip is decoration beside a sentence, plain
+  # spans where the strip is itself one link (an <a> inside an <a> is invalid).
   attr(:shown, :list, required: true, doc: "{user, index} pairs")
-  attr(:overflow, :integer, required: true)
   attr(:size, :string, required: true)
   attr(:pull, :any, required: true)
   attr(:link?, :boolean, default: false)
@@ -1229,23 +1219,8 @@ defmodule VutuvWeb.UI do
         <.avatar user={user} size={@size} />
       </span>
     <% end %>
-    <span
-      :if={@overflow > 0}
-      class={[
-        "inline-flex items-center justify-center rounded-full bg-slate-100 px-1.5 font-bold text-slate-600 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900",
-        overflow_chip_size(@size),
-        @pull
-      ]}
-    >
-      +{compact_count(@overflow)}
-    </span>
     """
   end
-
-  # The `+N` chip wears the height of the faces it closes out, so it reads as the
-  # last link in the chain rather than a stray label beside it.
-  defp overflow_chip_size("2xs"), do: "h-5 text-[10px]"
-  defp overflow_chip_size(_), do: "h-8 min-w-8 text-[11px]"
 
   # The endorse/undo pill's look, shared by the phx-click (live) and CSRF-form
   # renderings so they stay identical: a calm brand-tint pill that fills in

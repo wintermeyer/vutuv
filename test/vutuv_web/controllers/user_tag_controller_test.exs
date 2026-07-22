@@ -162,7 +162,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       owner: owner,
       user_tag: user_tag
     } do
-      for _ <- 1..8,
+      for _ <- 1..10,
           do: insert(:user_tag_endorsement, user_tag: user_tag, user: insert_activated_user())
 
       small = insert(:user_tag, user: owner, tag: insert(:tag))
@@ -181,10 +181,9 @@ defmodule VutuvWeb.UserTagControllerTest do
       # Rows come best-endorsed first: the top tag fills the bar and the
       # one-endorser tag keeps a single face (a bar that rounded away to nothing
       # would read as "nobody").
-      assert faces == [8, 1]
-      # No trailing `+N` chip — it would falsify the bar's length, and the exact
-      # tally is already the chip's count pill in the same row.
-      refute html =~ ~r/>\s*\+\d/
+      assert faces == [7, 1]
+      # Past the bar's end, how many endorsers it leaves out (10 - 7).
+      assert html =~ "+3"
     end
 
     test "counts the rest of the endorsers into the strip's label", %{
