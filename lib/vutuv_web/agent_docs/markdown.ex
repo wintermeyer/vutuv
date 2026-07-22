@@ -636,8 +636,16 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         do: "- #{md_text(qualification.name)}",
         else: "- #{md_text(qualification.name)}: #{md_text(facts)}"
 
-    if qualification.url, do: base <> " <#{md_url(qualification.url)}>", else: base
+    base
+    |> append_if(qualification.url, &(&1 <> " <#{md_url(qualification.url)}>"))
+    |> append_if(
+      qualification.document,
+      &(&1 <> " [#{gettext("proof document")}](#{md_url(qualification.document.url)})")
+    )
   end
+
+  defp append_if(line, nil, _fun), do: line
+  defp append_if(line, _present, fun), do: fun.(line)
 
   # The credential's facts joined with middots — shared with the plain-text
   # renderer (like work_period/1) so the wording stays in one place. Returns

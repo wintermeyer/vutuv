@@ -948,6 +948,14 @@ defmodule VutuvWeb.Router do
       as: :settings_qualification
     )
 
+    # Removes only the uploaded proof document, keeping the entry.
+    delete(
+      "/qualifications/:id/document",
+      QualificationController,
+      :delete_document,
+      as: :settings_qualification_document
+    )
+
     get("/addresses", AddressController, :manage)
 
     resources("/addresses", AddressController,
@@ -1019,6 +1027,17 @@ defmodule VutuvWeb.Router do
       resources("/educations", EducationController, only: [:index, :show])
       resources("/languages", LanguageController, only: [:index, :show])
       resources("/qualifications", QualificationController, only: [:index, :show])
+
+      # The authorizing proxy for a qualification's proof document (thumbnail
+      # + the downloadable public copy): a pending document is owner-only, and
+      # the fingerprint in the filename makes the URLs immutable.
+      get(
+        "/qualifications/:id/document/:file",
+        QualificationDocumentController,
+        :show,
+        as: :qualification_document
+      )
+
       resources("/addresses", AddressController, only: [:index, :show])
       resources("/tags", UserTagController, only: [:index, :show], as: :tag)
 

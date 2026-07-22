@@ -523,12 +523,15 @@ defmodule VutuvWeb.AgentDocs.Text do
   end
 
   defp qualification_line(qualification) do
+    document = qualification.document
+
     facts = Markdown.qualification_facts(qualification)
 
     "* " <>
       qualification.name <>
       if(facts == "", do: "", else: ": #{facts}") <>
-      if(qualification.url, do: " #{qualification.url}", else: "")
+      if(qualification.url, do: " #{qualification.url}", else: "") <>
+      if(document, do: " #{gettext("proof document")}: #{document.url}", else: "")
   end
 
   defp link_line(%{description: nil, url: url} = link), do: "* #{url}" <> verified_suffix(link)

@@ -5,5 +5,5 @@
 ]} />
 
 <.card_section>
-  <%= render "form_content.html", backlink: ~p"/settings/qualifications", changeset: @changeset, action: ~p"/settings/qualifications/#{@qualification}", delete_to: ~p"/settings/qualifications/#{@qualification}" %>
+  <%= render "form_content.html", backlink: ~p"/settings/qualifications", changeset: @changeset, action: ~p"/settings/qualifications/#{@qualification}", delete_to: ~p"/settings/qualifications/#{@qualification}", qualification: @qualification, user: @user %>
 </.card_section>

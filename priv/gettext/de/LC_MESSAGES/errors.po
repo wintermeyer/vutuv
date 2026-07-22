@@ -181,3 +181,23 @@ msgstr "ist kein gültiger IMDb-Link"
 
 msgid "the review is missing the title of the work"
 msgstr "der Besprechung fehlt der Titel des Werks"
+
+#: lib/vutuv_web/views/error_helpers.ex:55
+#, elixir-autogen, elixir-format
+msgid "PDF uploads are not available on this installation. Please upload an image instead."
+msgstr "PDF-Uploads sind auf dieser Installation nicht verfügbar. Bitte laden Sie stattdessen ein Bild hoch."
+
+#: lib/vutuv_web/views/error_helpers.ex:50
+#, elixir-autogen, elixir-format
+msgid "Please confirm that the file may be shown publicly. Without your consent nothing is uploaded."
+msgstr "Bitte bestätigen Sie, dass die Datei öffentlich angezeigt werden darf. Ohne Ihre Einwilligung wird nichts hochgeladen."
+
+#: lib/vutuv_web/views/error_helpers.ex:59
+#, elixir-autogen, elixir-format
+msgid "could not be read. Please upload a PDF, JPG, PNG or WebP file."
+msgstr "konnte nicht gelesen werden. Bitte laden Sie eine PDF-, JPG-, PNG- oder WebP-Datei hoch."
+
+#: lib/vutuv_web/views/error_helpers.ex:54
+#, elixir-autogen, elixir-format
+msgid "is larger than 10 MB. Please upload a smaller file."
+msgstr "ist größer als 10 MB. Bitte laden Sie eine kleinere Datei hoch."

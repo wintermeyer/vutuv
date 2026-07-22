@@ -295,6 +295,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
                :job_posting_images,
                :orphan_originals,
                :post_images,
+               :qualification_documents,
                :screenshots
              ]
   end

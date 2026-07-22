@@ -15,8 +15,11 @@ defmodule Vutuv.Profiles.Qualification do
   import Vutuv.ChangesetHelpers, only: [validate_url: 2]
 
   alias Vutuv.BerlinTime
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Profiles.CvSection
   alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.QualificationDocument
+  alias Vutuv.Uploads
 
   # The two kinds a member picks between. A LinkedIn import lands everything as
   # a certification (LinkedIn has no signal separating a licence from a cert).
@@ -36,6 +39,19 @@ defmodule Vutuv.Profiles.Qualification do
     # once when the entry is created — `CvSection.cast_announcement/2` ignores
     # the param on an update. Deliberately NOT in @cast_fields.
     field(:announce_to_followers?, :boolean, default: false)
+
+    # The uploaded proof document (PDF or image of the credential; see
+    # Vutuv.QualificationDocument). None of these are in @cast_fields — they
+    # are set only through cast_document/2, which requires the explicit
+    # public-display consent (the virtual checkbox below) before it touches
+    # anything.
+    field(:document, :string)
+    field(:document_fingerprint, :string)
+    field(:document_content_type, :string)
+    field(:document_size, :integer)
+    field(:document_moderation, :string)
+    field(:document_consented_at, :utc_datetime)
+    field(:document_consent, :boolean, virtual: true)
 
     belongs_to(:user, Vutuv.Accounts.User)
     # Reserved for issue #857; always nil now, so it is not cast.
@@ -75,6 +91,97 @@ defmodule Vutuv.Profiles.Qualification do
     # Only http(s), so the display-only link can never smuggle a javascript:
     # href onto the public profile (validate_url skips a nil/blank value).
     |> validate_url(:url)
+    |> cast_document(params)
+  end
+
+  # The proof-document upload: only a real `%Plug.Upload{}` counts (so the
+  # JSON API can never smuggle document columns in), and it is refused without
+  # the explicit public-display consent — the member must actively confirm
+  # that the file becomes publicly visible and downloadable. On consent the
+  # file's metadata lands on the changeset (fingerprint of the original
+  # bytes, the served content type/size, moderation start state and the
+  # consent timestamp); the controller writes the files only after the row
+  # committed (`Vutuv.QualificationDocument.store/2`).
+  defp cast_document(changeset, params) do
+    case params["document"] || params[:document] do
+      %Plug.Upload{} = upload -> cast_document_upload(changeset, upload, params)
+      _none -> changeset
+    end
+  end
+
+  defp cast_document_upload(changeset, upload, params) do
+    consented? = (params["document_consent"] || params[:document_consent]) in [true, "true"]
+
+    if consented? do
+      case QualificationDocument.validate(upload) do
+        :ok -> put_document_meta(changeset, upload)
+        {:error, reason} -> add_error(changeset, :document, document_error(reason))
+      end
+    else
+      add_error(
+        changeset,
+        :document_consent,
+        "Please confirm that the file may be shown publicly. Without your consent nothing is uploaded."
+      )
+    end
+  end
+
+  defp put_document_meta(changeset, upload) do
+    # content_type/size describe the public copy the download will serve;
+    # they are recomputed from the stored files after store/2 only for HEIC
+    # (served as JPEG) — for every other type this MIME/stat pair matches.
+    changeset
+    |> put_change(:document, upload.filename)
+    |> put_change(:document_fingerprint, Uploads.content_hash(upload.path))
+    |> put_change(:document_content_type, document_content_type(upload))
+    |> put_change(:document_size, File.stat!(upload.path).size)
+    |> put_change(:document_moderation, ImageScans.initial_state())
+    |> put_change(:document_consented_at, DateTime.utc_now(:second))
+    |> validate_length(:document, max: 255)
+  end
+
+  defp document_content_type(upload) do
+    case upload.filename |> Path.extname() |> String.downcase() do
+      heic when heic in [".heic", ".heif"] -> "image/jpeg"
+      _other -> MIME.from_path(upload.filename)
+    end
+  end
+
+  defp document_error(:too_large),
+    do: "is larger than 10 MB. Please upload a smaller file."
+
+  defp document_error(:pdf_unsupported),
+    do: "PDF uploads are not available on this installation. Please upload an image instead."
+
+  defp document_error(:invalid_file),
+    do: "could not be read. Please upload a PDF, JPG, PNG or WebP file."
+
+  @doc """
+  The nil-out keyword for every document column — one list shared by the
+  owner's "remove file" action, the store-failure fallback and the moderation
+  rejection (`Vutuv.Moderation.ImageSubjects`), so no path can forget a
+  column. The consent timestamp resets too: it consented to *this* file.
+  """
+  def document_reset_fields,
+    do: [
+      document: nil,
+      document_fingerprint: nil,
+      document_content_type: nil,
+      document_size: nil,
+      document_moderation: nil,
+      document_consented_at: nil
+    ]
+
+  @doc "Whether a proof document is stored on this credential."
+  def document?(%__MODULE__{document: document}), do: is_binary(document)
+
+  @doc """
+  Whether the stored document has been released by the AI image scan
+  (`Vutuv.Moderation.ImageScans.released?/1`); until then only the owner sees
+  it (the proxy enforces the same rule for the bytes).
+  """
+  def document_released?(%__MODULE__{} = qualification) do
+    document?(qualification) and ImageScans.released?(qualification.document_moderation)
   end
 
   # The awarded date can't be in the future; the expiry can (a cert valid until

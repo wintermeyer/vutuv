@@ -48,4 +48,43 @@
     <h2 class="card__label"><%= gettext("Verification link") %></h2>
     <p><a href={@qualification.url} target="_blank" rel="nofollow noopener noreferrer"><%= @qualification.url %></a></p>
   <% end %>
+
+  <%!-- The uploaded proof document (owner sees it during moderation limbo,
+  everyone once released): a larger preview plus the explicit download. --%>
+  <%= if show_document?(@qualification, same_user?(@user, @current_user)) do %>
+    <h2 class="card__label"><%= gettext("Uploaded proof") %></h2>
+    <div class="mt-2" data-document-thumb>
+      <a
+        href={document_url(@user, @qualification)}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-block overflow-hidden rounded-lg ring-1 ring-slate-200 hover:ring-brand-400 dark:ring-slate-700"
+      >
+        <img
+          src={document_thumb_url(@user, @qualification)}
+          alt={gettext("Uploaded proof for %{name}", name: @qualification.name)}
+          class="max-h-64 w-auto"
+        />
+      </a>
+      <p class="mt-2">
+        <a
+          href={document_url(@user, @qualification, dl: true)}
+          class="font-semibold text-brand-600 hover:text-brand-700"
+          data-document-download
+        >
+          <%= gettext("Download original (%{label})", label: document_label(@qualification)) %>
+        </a>
+      </p>
+      <%= if same_user?(@user, @current_user) and not Qualification.document_released?(@qualification) do %>
+        <p>
+          <span
+            class="inline-flex items-center rounded-lg bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+            data-document-pending
+          >
+            <%= gettext("Being reviewed") %>
+          </span>
+        </p>
+      <% end %>
+    </div>
+  <% end %>
 </.card_section>

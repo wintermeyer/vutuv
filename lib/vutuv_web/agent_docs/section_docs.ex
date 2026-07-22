@@ -27,6 +27,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.QualificationDocument
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.CV
@@ -57,7 +58,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   def build_index(user, section, entries) when is_map_key(@sections, section) do
     segment = Atom.to_string(section)
     title = index_title(section, UserHelpers.full_name(user))
-    entries = index_entries(section, entries)
+    entries = index_entries(section, entries, user)
 
     AgentDocs.doc_meta(segment, "/#{user.username}/#{segment}", noindex: true, noai: true)
     |> Map.merge(%{
@@ -74,7 +75,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   def build_show(user, section, record) when is_map_key(@sections, section) do
     segment = Atom.to_string(section)
     path = "/#{user.username}/#{segment}/#{Phoenix.Param.to_param(record)}"
-    entry = entry(section, record)
+    entry = entry(section, record, user)
 
     AgentDocs.doc_meta(@sections[section], path, noindex: true, noai: true)
     |> Map.merge(%{
@@ -124,7 +125,6 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   defp entry(:work_experiences, record), do: work_entry(record)
   defp entry(:educations, record), do: education_entry(record)
-  defp entry(:qualifications, record), do: qualification_entry(record)
   defp entry(:languages, record), do: language_entry(record)
   defp entry(:links, record), do: link_entry(record)
   defp entry(:social_media_accounts, record), do: social_entry(record)
@@ -136,15 +136,21 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   # An index's whole entry list. Languages need the list (not per-record `entry/2`)
   # to flag the preferred head, so they route through `language_entries/1`.
-  defp index_entries(:languages, records), do: language_entries(records)
+  defp index_entries(:languages, records, _user), do: language_entries(records)
 
   # The tags index names who endorses each tag (the HTML rows do), so its
   # entries carry the same capped, newest-first roster the page shows. The
   # profile doc's tag list keeps the plain count, hence the index-only merge.
-  defp index_entries(:tags, records),
+  defp index_entries(:tags, records, _user),
     do: Enum.map(records, &Map.put(tag_entry(&1), :endorsers, endorsers(&1)))
 
-  defp index_entries(section, records), do: Enum.map(records, &entry(section, &1))
+  defp index_entries(section, records, user),
+    do: Enum.map(records, &entry(section, &1, user))
+
+  # Only the qualification entry needs the user (its document URL lives under
+  # the member's slug); every other section's vocabulary stays user-less.
+  defp entry(:qualifications, record, user), do: qualification_entry(record, user)
+  defp entry(section, record, _user), do: entry(section, record)
 
   # As many endorsers as the page's avatar stack shows, newest first (a UUID v7
   # endorsement id sorts by creation). `[]` when the association was not
@@ -225,7 +231,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   end
 
   @doc false
-  def qualification_entry(qualification) do
+  def qualification_entry(qualification, user \\ nil) do
     %{
       id: qualification.id,
       name: qualification.name,
@@ -239,9 +245,30 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       # The jobs earned with this credential (issue #1005), mirroring the HTML
       # usage badges. nil when no job cites it — and, like qualification_ref/1
       # on the work entry, when the citing jobs were not preloaded.
-      jobs: job_usage_ref(qualification)
+      jobs: job_usage_ref(qualification),
+      # The uploaded, member-consented proof document — only once the AI scan
+      # released it (the docs are the anonymous public view), and only when
+      # the caller supplied the user its URL lives under.
+      document: document_ref(qualification, user)
     }
   end
+
+  defp document_ref(qualification, %{username: username}) do
+    if Qualification.document_released?(qualification) do
+      file =
+        qualification.document_fingerprint <>
+          QualificationDocument.public_ext(qualification.document_content_type)
+
+      %{
+        url:
+          AgentDocs.abs_url("/#{username}/qualifications/#{qualification.id}/document/#{file}"),
+        content_type: qualification.document_content_type,
+        size: qualification.document_size
+      }
+    end
+  end
+
+  defp document_ref(_qualification, _user), do: nil
 
   defp job_usage_ref(qualification) do
     case Qualification.job_usage(qualification) do

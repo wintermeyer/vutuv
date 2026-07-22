@@ -64,10 +64,13 @@ window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 
 **Every** image that could become visible to anyone but its owner passes
 through one gate before release: member uploads (avatar, cover, post /
-job-posting / organization images) **and** the machine-fetched ones — link
-screenshots (a screenshot of an NSFW page must not bypass the upload gate)
-and the book covers on post reviews (`review_cover`, fetched from Open
-Library by ISBN).
+job-posting / organization images, qualification proof documents) **and**
+the machine-fetched ones — link screenshots (a screenshot of an NSFW page
+must not bypass the upload gate) and the book covers on post reviews
+(`review_cover`, fetched from Open Library by ISBN). A PDF proof document is
+judged by its upload-time rendered first page (`scan_page.jpg` beside the
+original — the vision model cannot decode a PDF); later pages are covered by
+the report/moderation-case path like any other content.
 The moderation-evidence screenshots are deliberately exempt — they are
 admin-only records of reported content and never public.
 

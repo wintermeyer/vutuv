@@ -446,6 +446,48 @@ agent formats carry a `jobs: {count, in_use, last_used}` map per entry
 currently in use" to the facts line), kept honest by the drift test; `/api/2.0`
 qualification entries include the same map.
 
+## Qualification proof documents (the uploaded Nachweis)
+
+A member may attach **one proof document** per certificate/license — a PDF or
+an image of the credential — shown as a thumbnail on every qualification list
+row and on the entry page, with a "Download original" link. Columns live on
+`qualifications` (`document` = original client filename, `document_fingerprint`
+= sha256[0..11] of the bytes, `document_content_type`, `document_size`,
+`document_moderation`, `document_consented_at`).
+
+**Consent is the gate.** The upload form carries an unticked "Show this file
+publicly" checkbox spelling out that the file becomes publicly visible and
+downloadable by anyone; `Qualification.changeset/2` (`cast_document/2`)
+refuses the upload without it and records the consent timestamp. The document
+columns are never mass-assignable — only a real `%Plug.Upload{}` plus consent
+sets them, so the JSON API cannot smuggle them in.
+
+**Storage** (`Vutuv.QualificationDocument`, proxy-served like post images — no
+nginx changes): `qualification_documents/<id>/thumb.avif` + `document.<ext>`
+(the public copy: PDFs verbatim, images re-encoded metadata-stripped so EXIF/
+GPS never leaks), verbatim original + (for PDFs) the rendered first page
+`scan_page.jpg` in the private `originals/` tree. PDF rendering shells out to
+`pdftoppm`, capability-detected: without poppler-utils, `.pdf` leaves the
+whitelist and the form says "please upload an image instead" (docs/ADMINS.md).
+Files are written **after** the row commits (issue #776 ordering) and purged
+on entry delete, document removal, moderation rejection and account deletion
+(`Accounts.delete_user/1`); the regenerator covers the thumbs.
+
+**Moderation**: kind `qualification_document` in the AI image scan (the
+review-cover pattern — no quarantine tree, the authorizing proxy
+`VutuvWeb.QualificationDocumentController` checks `document_moderation`).
+Pending documents are owner-only (amber "Wird geprüft" pill); the scan source
+is the rendered PDF page or the original image, fingerprint-guarded. The proxy
+URLs carry the fingerprint (`document/thumb-<fp>.avif`, `document/<fp>.<ext>`)
+so they are immutable and cacheable; a re-upload changes them. `?dl=1`
+switches to an attachment download named after the member's original filename.
+
+**Docs**: `SectionDocs.qualification_entry/2` carries a released document as
+`document: {url, content_type, size}` (nil while pending — the agent docs are
+the anonymous public view); md/txt append a "proof document" link,
+drift-checked. The external `url` "Proof" link (a verification URL) stays a
+separate, complementary field.
+
 ## Online messengers profile section
 
 Members list the online messengers they can be reached on (`Vutuv.Profiles.Messenger`,

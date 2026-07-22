@@ -179,3 +179,23 @@ msgstr ""
 
 msgid "the review is missing the title of the work"
 msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:55
+#, elixir-autogen, elixir-format
+msgid "PDF uploads are not available on this installation. Please upload an image instead."
+msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:50
+#, elixir-autogen, elixir-format
+msgid "Please confirm that the file may be shown publicly. Without your consent nothing is uploaded."
+msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:59
+#, elixir-autogen, elixir-format
+msgid "could not be read. Please upload a PDF, JPG, PNG or WebP file."
+msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:54
+#, elixir-autogen, elixir-format
+msgid "is larger than 10 MB. Please upload a smaller file."
+msgstr ""

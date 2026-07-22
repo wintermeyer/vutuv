@@ -31,6 +31,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
   }
 
   alias Vutuv.Profiles.CvUpdates
+  alias Vutuv.QualificationDocument
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ApiV2
@@ -104,9 +105,15 @@ defmodule VutuvWeb.ApiV2.SectionController do
 
       record ->
         Repo.delete!(record)
+        after_delete(conn.assigns.section, record)
         send_resp(conn, 204, "")
     end
   end
+
+  # A deleted qualification's on-disk proof document must not stay orphaned
+  # (the HTML controller's delete purges the same way).
+  defp after_delete(:qualifications, record), do: QualificationDocument.delete(record.id)
+  defp after_delete(_section, _record), do: :ok
 
   # The email list is the one viewer-dependent section (see moduledoc).
   defp entries(user, :emails, viewer), do: UserHelpers.emails_for_display(user, viewer)

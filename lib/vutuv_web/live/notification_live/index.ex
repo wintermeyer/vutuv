@@ -748,10 +748,16 @@ defmodule VutuvWeb.NotificationLive.Index do
     if is_binary(n[:organization_slug]), do: ~p"/organizations/#{n.organization_slug}"
   end
 
-  # A removed avatar/cover leads to the photos form (upload a new one);
-  # other rejected images have no page left to open.
+  # A removed avatar/cover leads to the photos form (upload a new one), a
+  # removed qualification proof to the credentials editor; other rejected
+  # images have no page left to open.
   defp notification_target(%{kind: "image_rejected"} = n, viewer) do
-    if n[:image_kind] in ["avatar", "cover"] and viewer != nil, do: ~p"/settings/profile"
+    cond do
+      viewer == nil -> nil
+      n[:image_kind] in ["avatar", "cover"] -> ~p"/settings/profile"
+      n[:image_kind] == "qualification_document" -> ~p"/settings/qualifications"
+      true -> nil
+    end
   end
 
   # A CV update (issue #980) opens the entry itself when the group holds

@@ -58,6 +58,33 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         url: "http://istructe.example.org/verify/42"
       )
 
+    # A stored proof document on the credential: the thumbnail + download
+    # appear in HTML, the structured `document` map in the machine formats.
+    # Moderation is off in tests, so it is released immediately.
+    doc_src = Path.join(System.tmp_dir!(), "drift_doc_#{System.unique_integer([:positive])}.jpg")
+    {:ok, doc_img} = Image.new(300, 200, color: [10, 120, 200])
+    {:ok, _} = Image.write(doc_img, doc_src)
+    doc_upload = %Plug.Upload{filename: "proof.jpg", path: doc_src, content_type: "image/jpeg"}
+
+    {:ok, doc_meta} = Vutuv.QualificationDocument.store(doc_upload, qualification.id)
+
+    qualification =
+      qualification
+      |> Ecto.Changeset.change(
+        document: "proof.jpg",
+        document_fingerprint: doc_meta.fingerprint,
+        document_content_type: doc_meta.content_type,
+        document_size: doc_meta.size,
+        document_moderation: "approved",
+        document_consented_at: DateTime.utc_now(:second)
+      )
+      |> Vutuv.Repo.update!()
+
+    on_exit(fn ->
+      File.rm(doc_src)
+      Vutuv.QualificationDocument.delete(qualification.id)
+    end)
+
     insert(:work_experience,
       user: user,
       title: "Bridge Engineer",
@@ -237,6 +264,15 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert qualification_json["jobs"]["count"] == 1
     assert qualification_json["jobs"]["in_use"] == true
     assert rendered.xml =~ "<in_use>true</in_use>"
+
+    # The uploaded proof document: the HTML shows the thumbnail, the machine
+    # formats the structured document map, md/txt its absolute URL.
+    assert rendered.html =~ "data-document-thumb"
+    assert qualification_json["document"]["content_type"] == "image/jpeg"
+    assert qualification_json["document"]["url"] =~ "/document/"
+    assert rendered.xml =~ "<document>"
+    assert rendered.md =~ "/document/"
+    assert rendered.txt =~ "/document/"
 
     # The employment status (issue #870): the HTML badge and the md/txt fact
     # line show the human label, JSON/XML carry the raw machine value.

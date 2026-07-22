@@ -78,6 +78,12 @@ defmodule Vutuv.Uploads.Spec do
       %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
       %{name: :feed, fit: {:box_down, 1200}, quality: 58},
       %{name: :large, fit: {:box_down, 1600}, quality: 58}
+    ],
+    # The proof document on a certificate/license (Vutuv.QualificationDocument):
+    # one aspect-preserving thumbnail (typically a portrait A4 scan), displayed
+    # up to ~256px wide — the full document is a click away.
+    qualification_document: [
+      %{name: :thumb, fit: {:box_down, 640}, quality: 58}
     ]
   }
 
