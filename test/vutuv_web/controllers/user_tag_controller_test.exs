@@ -105,6 +105,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       assert html =~ ~p"/#{owner}/tags/#{tag.slug}/endorsers"
       # A one-column table right-aligned its own cells (the reported alignment
       # bug); the page is a row list now.
+      assert html =~ "data-tag-row"
       refute html =~ "<table"
     end
 
