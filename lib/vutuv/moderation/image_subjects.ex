@@ -23,7 +23,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
+  alias Vutuv.QualificationDocument
   alias Vutuv.Repo
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Originals
@@ -119,6 +121,21 @@ defmodule Vutuv.Moderation.ImageSubjects do
         Originals.path("review_covers/#{review.id}"),
         largest_served_file("review_covers/#{review.id}")
       ])
+    else
+      _ -> :gone
+    end
+  end
+
+  # The qualification proof document: the upload-time rendered PDF page when
+  # one exists (the vision model cannot decode a PDF), else the verbatim
+  # original image. Fingerprint-guarded like the other in-place assets.
+  def source(%ImageScan{kind: "qualification_document"} = scan) do
+    with %Qualification{} = qualification <- Repo.get(Qualification, scan.subject_id),
+         true <-
+           qualification.document_fingerprint != nil and
+             qualification.document_fingerprint == scan.fingerprint,
+         path when is_binary(path) <- QualificationDocument.scan_source_path(qualification.id) do
+      {:ok, path}
     else
       _ -> :gone
     end
@@ -269,6 +286,27 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  def apply_approved(%ImageScan{kind: "qualification_document"} = scan) do
+    flipped =
+      from(q in Qualification,
+        where:
+          q.id == ^scan.subject_id and q.document_fingerprint == ^scan.fingerprint and
+            q.document_moderation == "pending"
+      )
+      |> Repo.update_all(set: [document_moderation: "approved"])
+
+    case flipped do
+      {1, _} ->
+        # No quarantine move: the files are served through the authorizing
+        # proxy, which checks this state (the review-cover pattern).
+        broadcast(scan, :approved)
+        :ok
+
+      _ ->
+        :stale
+    end
+  end
+
   def apply_approved(%ImageScan{kind: "review_cover"} = scan) do
     flipped =
       from(r in PostReview,
@@ -372,6 +410,24 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  def apply_rejected(%ImageScan{kind: "qualification_document"} = scan) do
+    cleared =
+      from(q in Qualification,
+        where: q.id == ^scan.subject_id and q.document_fingerprint == ^scan.fingerprint
+      )
+      |> Repo.update_all(set: clear_document_columns())
+
+    case cleared do
+      {1, _} ->
+        QualificationDocument.delete(scan.subject_id)
+        broadcast(scan, :rejected)
+        :ok
+
+      _ ->
+        :stale
+    end
+  end
+
   def apply_rejected(%ImageScan{kind: "review_cover"} = scan) do
     cleared =
       from(r in PostReview, where: r.id == ^scan.subject_id and r.cover == ^scan.fingerprint)
@@ -430,6 +486,10 @@ defmodule Vutuv.Moderation.ImageSubjects do
       {config.moderation, nil}
     ]
 
+  # Every document column resets when a scan rejects the proof document; the
+  # list lives on the schema so no clearing path can miss a column.
+  defp clear_document_columns, do: Qualification.document_reset_fields()
+
   ## Drift repair source
 
   @doc """
@@ -445,7 +505,8 @@ defmodule Vutuv.Moderation.ImageSubjects do
       gallery_stranded("organization_image") ++
       url_screenshot_stranded() ++
       post_screenshot_stranded() ++
-      review_cover_stranded()
+      review_cover_stranded() ++
+      qualification_document_stranded()
   end
 
   defp open_scan_exists(kind) do
@@ -520,6 +581,19 @@ defmodule Vutuv.Moderation.ImageSubjects do
     |> Repo.all()
     |> Enum.map(fn {id, owner_id, fingerprint} ->
       {"review_cover", id, owner_id, fingerprint}
+    end)
+  end
+
+  defp qualification_document_stranded do
+    from(q in Qualification,
+      as: :subject,
+      where: q.document_moderation == "pending",
+      where: not exists(open_scan_exists("qualification_document")),
+      select: {q.id, q.user_id, q.document_fingerprint}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, owner_id, fingerprint} ->
+      {"qualification_document", id, owner_id, fingerprint}
     end)
   end
 

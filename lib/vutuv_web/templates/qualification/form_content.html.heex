@@ -1,4 +1,4 @@
-<.form :let={f} for={@changeset} action={@action} class="editform">
+<.form :let={f} for={@changeset} action={@action} class="editform" multipart>
   <.form_error changeset={@changeset} />
 
   <.editform_field form={f} field={:name}>
@@ -56,6 +56,62 @@
     <%= text_input f, :url, type: "url", placeholder: "https://" %>
     <%= error_tag f, :url %>
   </.editform_field>
+
+  <%!-- The uploaded proof document: a PDF or image of the credential. The
+  public-display consent below is hard-required by the changeset whenever a
+  file is chosen — without the tick, nothing is uploaded. --%>
+  <%= if assigns[:qualification] && Qualification.document?(@qualification) do %>
+    <div class="editform__field" data-document-current>
+      <label><%= gettext("Uploaded proof") %></label>
+      <div class="flex items-center gap-3">
+        <img
+          src={document_thumb_url(@user, @qualification)}
+          alt=""
+          class="h-16 w-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
+        />
+        <div class="min-w-0 text-sm">
+          <span class="block truncate font-medium text-slate-900 dark:text-white">
+            <%= @qualification.document %>
+          </span>
+          <span class="block text-xs text-slate-600 dark:text-slate-400">
+            <%= document_label(@qualification) %>
+          </span>
+          <.link
+            href={~p"/settings/qualifications/#{@qualification}/document"}
+            method="delete"
+            data-confirm={gettext("Remove the uploaded file? The entry itself stays.")}
+            class="text-xs font-semibold text-red-600 hover:text-red-700"
+          >
+            <%= gettext("Remove file") %>
+          </.link>
+        </div>
+      </div>
+      <span class="editform__hint">
+        <%= gettext("Choosing a new file below replaces this one.") %>
+      </span>
+    </div>
+  <% end %>
+
+  <.editform_field form={f} field={:document}>
+    <%= label f, :document, gettext("Proof document (PDF or image)") %>
+    <%= file_input f, :document, accept: Enum.join(QualificationDocument.extension_whitelist(), ",") %>
+    <span class="editform__hint">
+      <%= gettext("Optional. A scan or photo of the certificate, up to 10 MB.") %>
+    </span>
+    <%= error_tag f, :document %>
+  </.editform_field>
+
+  <div class="editform__field">
+    <.setting_toggle label={gettext("Show this file publicly")}>
+      <:checkbox>
+        {checkbox(f, :document_consent, class: checkbox_class())}
+      </:checkbox>
+      {gettext(
+        "I agree that the uploaded file is shown publicly on my profile and can be viewed and downloaded by anyone. Only upload documents you are allowed and willing to publish; consider redacting sensitive details (like your address or ID numbers) first."
+      )}
+    </.setting_toggle>
+    <%= error_tag f, :document_consent %>
+  </div>
 
   <%!-- The author's "tell my followers" choice (issue #980). Only the new-entry
         form passes :followers, so an edit never re-announces an old entry. --%>

@@ -1,8 +1,12 @@
 defmodule VutuvWeb.QualificationController do
   use VutuvWeb, :controller
 
+  require Logger
+
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Profiles.Qualification
+  alias Vutuv.QualificationDocument
   alias Vutuv.Social
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
@@ -13,7 +17,10 @@ defmodule VutuvWeb.QualificationController do
   # Certificates & licenses are keyed by their UUID, not a slug (a credential
   # name is neither unique nor URL-safe), so ResolveOwnedSlug's slug matching
   # doesn't apply — this owner-scoped resolver safely casts the id instead.
-  plug(:resolve_qualification when action in [:show, :edit, :update, :delete])
+  plug(
+    :resolve_qualification
+    when action in [:show, :edit, :update, :delete, :delete_document]
+  )
 
   # Index and show are also served as Markdown / text / JSON / XML via
   # VutuvWeb.AgentDocs.SectionDocs (keep the templates and the doc builder in
@@ -79,7 +86,11 @@ defmodule VutuvWeb.QualificationController do
       |> Qualification.changeset(qualification_params)
 
     result = Repo.insert(changeset)
-    with {:ok, qualification} <- result, do: CvUpdates.announce(user, qualification)
+
+    with {:ok, qualification} <- result do
+      store_document(qualification, qualification_params)
+      CvUpdates.announce(user, qualification)
+    end
 
     ControllerHelpers.save(conn, result,
       flash: gettext("Certificate or license added successfully."),
@@ -126,7 +137,10 @@ defmodule VutuvWeb.QualificationController do
     qualification = conn.assigns[:qualification]
     changeset = Qualification.changeset(qualification, qualification_params)
 
-    ControllerHelpers.save(conn, Repo.update(changeset),
+    result = Repo.update(changeset)
+    with {:ok, updated} <- result, do: store_document(updated, qualification_params)
+
+    ControllerHelpers.save(conn, result,
       flash: gettext("Certificate or license updated successfully."),
       redirect_to: ~p"/settings/qualifications",
       render: "edit.html",
@@ -135,11 +149,66 @@ defmodule VutuvWeb.QualificationController do
   end
 
   def delete(conn, _params) do
-    ControllerHelpers.delete(conn, conn.assigns[:qualification],
-      flash: gettext("Certificate or license deleted successfully."),
-      redirect_to: ~p"/settings/qualifications"
-    )
+    qualification = conn.assigns[:qualification]
+
+    conn =
+      ControllerHelpers.delete(conn, qualification,
+        flash: gettext("Certificate or license deleted successfully."),
+        redirect_to: ~p"/settings/qualifications"
+      )
+
+    # The row is gone; its on-disk proof document must not stay orphaned.
+    QualificationDocument.delete(qualification.id)
+    conn
   end
+
+  # Removes only the uploaded proof document; the credential entry stays.
+  def delete_document(conn, _params) do
+    qualification = conn.assigns[:qualification]
+
+    qualification
+    |> Ecto.Changeset.change(Qualification.document_reset_fields())
+    |> Repo.update!()
+
+    QualificationDocument.delete(qualification.id)
+
+    conn
+    |> put_flash(:info, gettext("The uploaded file was removed."))
+    |> redirect(to: ~p"/settings/qualifications")
+  end
+
+  # Writes the proof-document files only after the row committed (the #776
+  # rule: validate pre-commit, write post-commit, so a rolled-back save never
+  # orphans files) and queues the AI scan, binding the verdict to exactly
+  # these bytes. A row without document metadata means no (new) upload came.
+  defp store_document(%Qualification{document: nil}, _params), do: :ok
+
+  defp store_document(qualification, %{"document" => %Plug.Upload{} = upload}) do
+    case QualificationDocument.store(upload, qualification.id) do
+      {:ok, _meta} ->
+        ImageScans.enqueue(
+          "qualification_document",
+          qualification.id,
+          qualification.user_id,
+          qualification.document_fingerprint
+        )
+
+        :ok
+
+      {:error, reason} ->
+        # validate/1 already passed pre-commit, so this is an environment
+        # failure (disk). Keep the entry, drop the dangling reference.
+        Logger.warning("qualification document store failed: #{inspect(reason)}")
+
+        qualification
+        |> Ecto.Changeset.change(Qualification.document_reset_fields())
+        |> Repo.update!()
+
+        :ok
+    end
+  end
+
+  defp store_document(_qualification, _params), do: :ok
 
   # Owner-scoped lookup by UUID: a bad or foreign id renders a clean 404 instead
   # of raising a cast error. Scopes through conn.assigns[:user] — the profile

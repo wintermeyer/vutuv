@@ -4,6 +4,7 @@ defmodule VutuvWeb.ErrorHelpers do
   """
 
   use PhoenixHTMLHelpers
+  use Gettext, backend: VutuvWeb.Gettext
 
   @doc """
   Generates tag for inlined form input errors.
@@ -35,5 +36,27 @@ defmodule VutuvWeb.ErrorHelpers do
 
   def translate_error(msg) do
     Gettext.dgettext(VutuvWeb.Gettext, "errors", msg)
+  end
+
+  # Extraction anchors: custom `add_error/3` messages live as literal strings
+  # inside schema modules, where `mix gettext.extract` cannot see them.
+  # Declaring them here with `dgettext_noop` puts the msgids into errors.pot,
+  # so `translate_error/1` finds a German msgstr at render time. Keep each
+  # string byte-identical to its `add_error` twin.
+  @doc false
+  def __error_message_extraction_anchors__ do
+    [
+      # Vutuv.Profiles.Qualification, the proof-document upload (consent gate).
+      dgettext_noop(
+        "errors",
+        "Please confirm that the file may be shown publicly. Without your consent nothing is uploaded."
+      ),
+      dgettext_noop("errors", "is larger than 10 MB. Please upload a smaller file."),
+      dgettext_noop(
+        "errors",
+        "PDF uploads are not available on this installation. Please upload an image instead."
+      ),
+      dgettext_noop("errors", "could not be read. Please upload a PDF, JPG, PNG or WebP file.")
+    ]
   end
 end

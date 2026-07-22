@@ -122,7 +122,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       tags: Enum.map(user.user_tags, &SectionDocs.tag_entry/1),
       work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
       educations: Enum.map(user.educations, &SectionDocs.education_entry/1),
-      qualifications: Enum.map(user.qualifications, &SectionDocs.qualification_entry/1),
+      qualifications: Enum.map(user.qualifications, &SectionDocs.qualification_entry(&1, user)),
       languages: SectionDocs.language_entries(user.languages),
       links: Enum.map(user.urls, &SectionDocs.link_entry/1),
       emails: Enum.map(emails, &SectionDocs.email_entry/1),

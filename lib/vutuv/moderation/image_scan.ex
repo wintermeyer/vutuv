@@ -22,7 +22,7 @@ defmodule Vutuv.Moderation.ImageScan do
   use VutuvWeb, :model
 
   @kinds ~w(avatar cover post_image job_posting_image organization_image
-            url_screenshot post_screenshot review_cover)
+            url_screenshot post_screenshot review_cover qualification_document)
   @statuses ~w(pending scanning approved rejected canceled)
   @open_statuses ~w(pending scanning)
 

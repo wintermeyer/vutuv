@@ -25,6 +25,11 @@ Related documents: [README](../README.md) (overview) ·
 - **libvips** for image processing (`apt-get install libvips-dev`).
 - **Chromium** (optional) — only for URL screenshots and moderation evidence
   screenshots. Without it those features quietly do nothing.
+- **poppler-utils** (optional, `apt-get install poppler-utils`) — renders the
+  first page of PDF proof documents that members can attach to their
+  certificates & licenses. Without `pdftoppm` on `$PATH`, PDF uploads are
+  refused with a clear message ("please upload an image instead"); image
+  proofs keep working.
 - An **SMTP relay** vutuv can send email through. Email is not optional:
   login works via emailed PINs (vutuv is passwordless).
 - **nginx** (or another reverse proxy) in front of the app. Optional for a

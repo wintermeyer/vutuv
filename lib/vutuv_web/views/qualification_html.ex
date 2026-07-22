@@ -5,6 +5,7 @@ defmodule VutuvWeb.QualificationHTML do
 
   alias Vutuv.BerlinTime
   alias Vutuv.Profiles.Qualification
+  alias Vutuv.QualificationDocument
 
   @doc "The singular name of a kind, for the form picker and the row badge."
   def kind_name("certification"), do: gettext("Certificate")
@@ -156,6 +157,101 @@ defmodule VutuvWeb.QualificationHTML do
   defp end_text({year, month}), do: "#{month}/#{year}"
 
   @doc """
+  Whether this viewer gets the document block: everyone once the AI scan
+  released it, the owner already during the limbo (with the pending pill).
+  """
+  def show_document?(qualification, as_owner?) do
+    Qualification.document?(qualification) and
+      (Qualification.document_released?(qualification) or as_owner?)
+  end
+
+  @doc "The thumbnail URL of the stored proof document (immutable, fingerprinted)."
+  def document_thumb_url(user, qualification) do
+    file = "thumb-#{qualification.document_fingerprint}.avif"
+    ~p"/#{user}/qualifications/#{qualification}/document/#{file}"
+  end
+
+  @doc "The proof document itself (inline view); pass `dl: true` for the attachment download."
+  def document_url(user, qualification, opts \\ []) do
+    file =
+      qualification.document_fingerprint <>
+        QualificationDocument.public_ext(qualification.document_content_type)
+
+    url = ~p"/#{user}/qualifications/#{qualification}/document/#{file}"
+    if opts[:dl], do: url <> "?dl=1", else: url
+  end
+
+  @doc ~S(The document's short fact label: "PDF · 1.2 MB" / German "1,2 MB".)
+  def document_label(qualification) do
+    [document_type_word(qualification), file_size_label(qualification.document_size)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
+  end
+
+  defp document_type_word(%{document_content_type: "application/pdf"}), do: "PDF"
+  defp document_type_word(_qualification), do: gettext("Image")
+
+  # KB below 1 MB, else MB with one decimal — decimal comma under German, the
+  # `delimited_count/1` locale convention.
+  defp file_size_label(nil), do: nil
+
+  defp file_size_label(bytes) when bytes < 1_000_000, do: "#{max(div(bytes, 1000), 1)} KB"
+
+  defp file_size_label(bytes) do
+    tenths = div(bytes, 100_000)
+    separator = if Gettext.get_locale(VutuvWeb.Gettext) == "de", do: ",", else: "."
+    "#{div(tenths, 10)}#{separator}#{rem(tenths, 10)} MB"
+  end
+
+  @doc """
+  The proof-document block on a list row: the thumbnail (linking to the
+  document itself) plus, for the owner while the AI scan still checks it, the
+  amber limbo pill. Render behind `show_document?/2`.
+  """
+  attr(:user, :any, required: true)
+  attr(:qualification, :any, required: true)
+  attr(:as_owner?, :boolean, default: false)
+
+  def document_block(assigns) do
+    ~H"""
+    <div class="mt-2 flex items-start gap-3" data-document-thumb>
+      <a
+        href={document_url(@user, @qualification)}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={gettext("View the uploaded proof (%{label})", label: document_label(@qualification))}
+        class="block shrink-0 overflow-hidden rounded-lg ring-1 ring-slate-200 hover:ring-brand-400 dark:ring-slate-700"
+      >
+        <img
+          src={document_thumb_url(@user, @qualification)}
+          alt={gettext("Uploaded proof for %{name}", name: @qualification.name)}
+          loading="lazy"
+          class="h-20 w-auto max-w-[8rem] object-cover"
+        />
+      </a>
+      <div class="min-w-0 text-sm">
+        <a
+          href={document_url(@user, @qualification, dl: true)}
+          class="font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("Download")}
+        </a>
+        <span class="block text-xs text-slate-600 dark:text-slate-400">
+          {document_label(@qualification)}
+        </span>
+        <span
+          :if={@as_owner? and not Qualification.document_released?(@qualification)}
+          class="mt-1 inline-flex items-center rounded-lg bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+          data-document-pending
+        >
+          {gettext("Being reviewed")}
+        </span>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   One credential's row body (glyph + name link + owner "Expired" badge + the
   issuer/date meta line + the verification "Proof" link), shared by the profile
   card and the section `card_list` so both read the same. The caller supplies
@@ -223,6 +319,12 @@ defmodule VutuvWeb.QualificationHTML do
         {gettext("Proof")}
         <span aria-hidden="true">↗</span>
       </a>
+      <.document_block
+        :if={show_document?(@qualification, @as_owner?)}
+        user={@user}
+        qualification={@qualification}
+        as_owner?={@as_owner?}
+      />
     </div>
     """
   end

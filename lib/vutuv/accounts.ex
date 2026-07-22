@@ -630,6 +630,16 @@ defmodule Vutuv.Accounts do
     # afterwards. See Vutuv.Posts.deletion_targets_for_user/1.
     post_targets = Vutuv.Posts.deletion_targets_for_user(user.id)
 
+    # The qualification proof documents: the rows cascade with the account,
+    # but their on-disk files (keyed by qualification id) would be orphaned.
+    qualification_document_ids =
+      Repo.all(
+        from(q in Vutuv.Profiles.Qualification,
+          where: q.user_id == ^user.id and not is_nil(q.document),
+          select: q.id
+        )
+      )
+
     # The moderation cases cascade with the account; their on-disk evidence
     # screenshots would be orphaned otherwise.
     evidence_case_ids =
@@ -656,6 +666,7 @@ defmodule Vutuv.Accounts do
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
     Enum.each(screenshot_ids, &Vutuv.Screenshot.delete/1)
     Enum.each(review_ids, &Vutuv.ReviewCover.delete_files/1)
+    Enum.each(qualification_document_ids, &Vutuv.QualificationDocument.delete/1)
     Moderation.EvidenceScreenshot.delete_for_cases(evidence_case_ids)
     Vutuv.Avatar.delete(user)
     Vutuv.Cover.delete(user)

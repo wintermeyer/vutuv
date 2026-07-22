@@ -148,6 +148,74 @@ defmodule Vutuv.Profiles.QualificationTest do
     end
   end
 
+  describe "proof document upload (consent gate)" do
+    defp jpeg_upload do
+      src = Path.join(System.tmp_dir!(), "qcs_#{System.unique_integer([:positive])}.jpg")
+      {:ok, img} = Image.new(300, 200, color: [10, 120, 200])
+      {:ok, _} = Image.write(img, src)
+      on_exit(fn -> File.rm(src) end)
+      %Plug.Upload{filename: "Zertifikat Kopie.jpg", path: src, content_type: "image/jpeg"}
+    end
+
+    defp document_params(extra) do
+      Map.merge(%{"name" => "Meisterbrief", "kind" => "certification"}, extra)
+    end
+
+    test "an upload without the public-display consent is refused" do
+      cs = changeset(document_params(%{"document" => jpeg_upload()}))
+
+      refute cs.valid?
+      assert %{document_consent: [_]} = errors_on(cs)
+      # Nothing of the file reaches the row without consent.
+      assert Ecto.Changeset.get_field(cs, :document) == nil
+    end
+
+    test "with consent the document metadata lands on the changeset" do
+      cs =
+        changeset(document_params(%{"document" => jpeg_upload(), "document_consent" => "true"}))
+
+      assert cs.valid?
+      assert Ecto.Changeset.get_field(cs, :document) == "Zertifikat Kopie.jpg"
+      assert Ecto.Changeset.get_field(cs, :document_fingerprint) =~ ~r/^[0-9a-f]{12}$/
+      assert Ecto.Changeset.get_field(cs, :document_content_type) == "image/jpeg"
+      assert Ecto.Changeset.get_field(cs, :document_size) > 0
+      assert %DateTime{} = Ecto.Changeset.get_field(cs, :document_consented_at)
+      # Moderation is off in tests, so a fresh document starts released.
+      assert Ecto.Changeset.get_field(cs, :document_moderation) == "approved"
+    end
+
+    test "a bad file is a changeset error, not a crash" do
+      src = Path.join(System.tmp_dir!(), "bad_#{System.unique_integer([:positive])}.jpg")
+      File.write!(src, "not an image")
+      on_exit(fn -> File.rm(src) end)
+      upload = %Plug.Upload{filename: "bad.jpg", path: src}
+
+      cs =
+        changeset(document_params(%{"document" => upload, "document_consent" => "true"}))
+
+      refute cs.valid?
+      assert %{document: [_]} = errors_on(cs)
+    end
+
+    test "the document columns are never mass-assignable" do
+      cs =
+        changeset(
+          document_params(%{
+            "document" => "sneaky.pdf",
+            "document_fingerprint" => "abcabcabcabc",
+            "document_moderation" => "approved"
+          })
+        )
+
+      assert Ecto.Changeset.get_field(cs, :document) == nil
+      assert Ecto.Changeset.get_field(cs, :document_fingerprint) == nil
+    end
+
+    test "a plain update without a new file needs no consent" do
+      assert changeset(document_params(%{})).valid?
+    end
+  end
+
   describe "job_usage/1 (issue #1005)" do
     alias Vutuv.Profiles.WorkExperience
 
