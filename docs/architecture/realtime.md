@@ -139,3 +139,13 @@ at most one PubSub message per tick instead of a fan-out storm.
 
 The pill is the embedded `VutuvWeb.MemberCountLive` (rendered via `live_render`,
 like the shell).
+
+The same broadcast drives a second, **admin-only** reader: the top bar's "new
+members today" pill (`#new-members-today` in `ShellLive`), which shows how many
+sign-ups confirmed since Berlin midnight and links into `/admin`. Only an admin
+socket subscribes, so nobody else pays for it, and the pill is rendered only
+above zero — a quiet day adds no chrome. Each `{:member_count, n}` message makes
+it re-read `Vutuv.Dashboard.registrations_today/0` (the figure the admin
+dashboard's "New members" tile shows) rather than adjusting a running tally, so
+it cannot drift; `Vutuv.DayClock`'s midnight tick empties it out for the new
+day.

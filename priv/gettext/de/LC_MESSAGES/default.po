@@ -14789,3 +14789,10 @@ msgstr "Verlag:"
 #, elixir-autogen, elixir-format
 msgid "by:"
 msgstr "von:"
+
+#: lib/vutuv_web/live/shell_live.ex:306
+#, elixir-autogen, elixir-format
+msgid "%{formatted} new member today"
+msgid_plural "%{formatted} new members today"
+msgstr[0] "%{formatted} neues Mitglied heute"
+msgstr[1] "%{formatted} neue Mitglieder heute"

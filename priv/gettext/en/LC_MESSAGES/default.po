@@ -14049,3 +14049,10 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "With qualification: %{name}"
 msgstr ""
+
+#: lib/vutuv_web/live/shell_live.ex:306
+#, elixir-autogen, elixir-format
+msgid "%{formatted} new member today"
+msgid_plural "%{formatted} new members today"
+msgstr[0] ""
+msgstr[1] ""

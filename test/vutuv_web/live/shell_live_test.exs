@@ -549,4 +549,96 @@ defmodule VutuvWeb.ShellLiveTest do
       refute_push_event(view, "tab:new_post", %{})
     end
   end
+
+  # The admin-only sign-up pulse: how many members confirmed their registration
+  # so far on the current German calendar day. It shows only for an admin, only
+  # when the figure is above zero, and follows along live.
+  describe "new members today" do
+    @pill "#new-members-today"
+
+    defp admin_session(user), do: session_for(user, %{"user_admin?" => true})
+
+    defp joined_today(count) do
+      {day_start, _} = Vutuv.BerlinTime.day_bounds_utc(Vutuv.BerlinTime.today())
+
+      for _ <- 1..count,
+          do: insert(:activated_user, inserted_at: day_start, updated_at: day_start)
+    end
+
+    test "shows today's confirmed sign-ups to an admin", %{conn: conn} do
+      joined_today(2)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(insert(:user)))
+
+      assert has_element?(view, @pill, "2")
+    end
+
+    test "stays hidden for a member who is not an admin", %{conn: conn} do
+      joined_today(2)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(insert(:user)))
+
+      refute has_element?(view, @pill)
+    end
+
+    test "stays hidden when nobody joined today", %{conn: conn} do
+      {day_start, _} = Vutuv.BerlinTime.day_bounds_utc(Date.add(Vutuv.BerlinTime.today(), -1))
+      insert(:activated_user, inserted_at: day_start, updated_at: day_start)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(insert(:user)))
+
+      refute has_element?(view, @pill)
+    end
+
+    test "appears and counts up when a registration confirms", %{conn: conn} do
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(insert(:user)))
+
+      refute has_element?(view, @pill)
+
+      # Vutuv.Accounts.MemberCounter broadcasts the new member total the moment
+      # a sign-up confirms; the shell recomputes today's figure from it.
+      joined_today(1)
+      send(view.pid, {:member_count, 1})
+      assert has_element?(view, @pill, "1")
+
+      joined_today(1)
+      send(view.pid, {:member_count, 2})
+      assert has_element?(view, @pill, "2")
+    end
+
+    test "names the exact figure in the viewer's language", %{conn: conn} do
+      joined_today(1)
+      session = admin_session(insert(:user))
+
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
+      assert has_element?(view, ~s(#{@pill}[title="1 new member today"]))
+
+      {:ok, german, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: Map.put(session, "locale", "de")
+        )
+
+      assert has_element?(german, ~s(#{@pill}[title="1 neues Mitglied heute"]))
+    end
+
+    test "re-reads the figure at the Berlin day boundary", %{conn: conn} do
+      joined_today(1)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(insert(:user)))
+
+      assert has_element?(view, @pill, "1")
+
+      # Vutuv.DayClock ticks at Berlin midnight, when yesterday's sign-ups stop
+      # counting: the shell asks the (day-bounded) query again rather than
+      # keeping the stale tally. Same fresh read, so a new member shows up too.
+      joined_today(1)
+      send(view.pid, :day_changed)
+      assert has_element?(view, @pill, "2")
+    end
+  end
 end
