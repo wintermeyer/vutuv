@@ -37,8 +37,9 @@ defmodule Vutuv.Prefs do
   # ── The registry ──
   #
   # Grouped in display order. The post-display values mirror the CSS fallbacks
-  # in assets/css/components.css (.post-clamp / .markdown--post) — see
-  # Vutuv.Accounts.User.post_prefs_defaults/0; the map defaults reproduce
+  # in assets/css/components.css (.post-clamp / .markdown--post / .notif-clamp)
+  # — see Vutuv.Accounts.User.post_prefs_defaults/0 and
+  # notification_post_lines_default/0; the map defaults reproduce
   # "all services on, Google first" (Vutuv.Maps).
   @registry [
     %Pref{
@@ -59,6 +60,17 @@ defmodule Vutuv.Prefs do
     },
     %Pref{key: :post_hyphenate_desktop, type: :boolean, default: false, group: :post_display},
     %Pref{key: :post_hyphenate_mobile, type: :boolean, default: true, group: :post_display},
+    # The quoted post body on /notifications. A quote there is context beside a
+    # link to the post, not the post itself, so the minimum is 1 line rather
+    # than the "0 = never shorten" the two counts above allow.
+    %Pref{
+      key: :notification_post_lines,
+      type: :integer,
+      default: 5,
+      min: 1,
+      max: 50,
+      group: :post_display
+    },
     %Pref{key: :map_google?, type: :boolean, default: true, group: :maps},
     %Pref{key: :map_openstreetmap?, type: :boolean, default: true, group: :maps},
     %Pref{key: :map_apple?, type: :boolean, default: true, group: :maps},
@@ -101,6 +113,10 @@ defmodule Vutuv.Prefs do
     do: Gettext.gettext(VutuvWeb.Gettext, "Hyphenate on desktop")
 
   def label(:post_hyphenate_mobile), do: Gettext.gettext(VutuvWeb.Gettext, "Hyphenate on mobile")
+
+  def label(:notification_post_lines),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Lines in notifications")
+
   def label(:map_google?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Google Maps")
   def label(:map_openstreetmap?), do: Gettext.gettext(VutuvWeb.Gettext, "Show OpenStreetMap")
   def label(:map_apple?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Apple Maps")
@@ -109,6 +125,13 @@ defmodule Vutuv.Prefs do
   @doc "A short muted helper line under the control, or nil."
   def hint(key) when key in [:post_lines_desktop, :post_lines_mobile],
     do: Gettext.gettext(VutuvWeb.Gettext, "0 means posts are never shortened.")
+
+  def hint(:notification_post_lines),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "How much of a post a notification quotes before it is cut off."
+      )
 
   def hint(:default_map_service),
     do:

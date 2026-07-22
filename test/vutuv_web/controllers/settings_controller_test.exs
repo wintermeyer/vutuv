@@ -419,6 +419,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert html =~ "post_lines_mobile"
       assert html =~ "post_hyphenate_desktop"
       assert html =~ "post_hyphenate_mobile"
+      assert html =~ "notification_post_lines"
     end
   end
 
@@ -459,6 +460,36 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, _user} = create_and_login_user(conn)
 
       conn = put(conn, ~p"/settings/post_display", user: %{"post_lines_desktop" => "999"})
+
+      assert html_response(conn, 422) =~ ~s(action="#{~p"/settings/post_display"}")
+    end
+
+    test "the notification line count saves on the same form", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = put(conn, ~p"/settings/post_display", user: %{"notification_post_lines" => "3"})
+
+      assert redirected_to(conn) == ~p"/settings/preferences"
+      assert Repo.get(User, user.id).notification_post_lines == 3
+    end
+
+    test "a blank notification line field goes back to inheriting the site default", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      conn = put(conn, ~p"/settings/post_display", user: %{"notification_post_lines" => "3"})
+
+      conn =
+        put(recycle(conn), ~p"/settings/post_display", user: %{"notification_post_lines" => ""})
+
+      assert redirected_to(conn) == ~p"/settings/preferences"
+      # nil, not 0: a notification quote is always cut, so there is no
+      # "never shorten" value to fall back on.
+      assert Repo.get(User, user.id).notification_post_lines == nil
+    end
+
+    test "a notification line count below the floor re-renders with an error", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      conn = put(conn, ~p"/settings/post_display", user: %{"notification_post_lines" => "0"})
 
       assert html_response(conn, 422) =~ ~s(action="#{~p"/settings/post_display"}")
     end

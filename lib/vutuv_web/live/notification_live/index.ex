@@ -20,14 +20,25 @@ defmodule VutuvWeb.NotificationLive.Index do
       back** suggestions (recent followers, reload-free follow via
       `Vutuv.Social`) and a **Last 30 days** summary
       (`Vutuv.Activity.activity_summary/2`).
+    * A post a row quotes (the liked post, the reply) is cut to the reader's
+      own line budget - `Vutuv.Accounts.User.notification_post_lines/1`, the
+      `:notification_post_lines` preference: server-side to that many source
+      lines, and visually by the `.notif-clamp` CSS clamp fed through the
+      inline `--notif-clamp` custom property.
 
-  The first page renders on the **static** mount too (issue #919), so the
-  list is in the first HTTP paint. Older pages load via "Load more" (cursor
-  pagination); live events arrive over `Vutuv.Activity` (PubSub `"user:<id>"`)
-  and merge into their group. Because grouping is a pure function over the
-  retained item list, every change (load more, live push, the DayClock's
-  midnight rollover) simply recomputes the sections - there is no stream to
-  patch in place.
+  The page is **numbered** (`?page=`), not an endless list: both the page and
+  the filter live in the URL, so a page can be linked to and the back button
+  works, and both are patched without a reload. `Vutuv.Activity` walks the
+  merged feed by offset for it (`page:`), and `notifications_count/2` gives the
+  pager its total under the same filter. The first page renders on the
+  **static** mount too (issue #919), so the list is in the first HTTP paint.
+
+  Live events arrive over `Vutuv.Activity` (PubSub `"user:<id>"`) and merge into
+  their group, but only while the reader is on page 1 - an older page is a
+  fixed window into the past and must not shift under them. Because grouping is
+  a pure function over the retained item list, every change (paging, live push,
+  the DayClock's midnight rollover) simply recomputes the sections - there is no
+  stream to patch in place.
   """
   use VutuvWeb, :live_view
 
@@ -37,8 +48,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   # redirect to /login instead of rendering an empty 200.
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.BerlinTime
+  alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
@@ -82,42 +95,29 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:read_marker, read_marker)
      |> assign(:new_count, new_count)
      |> assign(:today, BerlinTime.today())
+     |> assign(:quote_lines, User.notification_post_lines(user))
      |> assign_rail(connected?(socket))}
   end
 
-  # The filter lives in the URL (?filter=posts), so tabs are patch links and
-  # the back button works; an unknown value falls back to "all". Runs on both
-  # the static and the connected mount, so the first page is in the first
-  # HTTP paint (issue #919).
+  # Both the filter (?filter=posts) and the page (?page=3) live in the URL, so
+  # the tabs and the pager are patch links and the back button works; an
+  # unknown filter falls back to "all", an unparseable page to 1. Runs on both
+  # the static and the connected mount, so the page is in the first HTTP paint
+  # (issue #919).
   @impl true
   def handle_params(params, _uri, socket) do
     filter = if Map.has_key?(@filters, params["filter"]), do: params["filter"], else: "all"
 
-    {:noreply, socket |> assign(:filter, filter) |> load_first_page()}
-  end
-
-  @impl true
-  def handle_event("load-more", _params, socket) do
-    page =
-      Activity.notifications_page(socket.assigns.current_user.id,
-        limit: @page_size,
-        kinds: @filters[socket.assigns.filter],
-        cursor: socket.assigns.cursor
-      )
-
-    items = with_post_previews(page.entries, socket.assigns.current_user)
-
     {:noreply,
      socket
-     |> assign(:more?, page.more?)
-     |> assign(:cursor, page.next_cursor)
-     |> assign(:remaining, max(socket.assigns.remaining - length(page.entries), 0))
-     |> update(:items, &(&1 ++ items))
-     |> assign_sections()}
+     |> assign(:filter, filter)
+     |> assign(:page, Pages.page_param(params))
+     |> load_page()}
   end
 
   # The rail's "Follow back" pill (user_row live?): follow with no reload,
   # then recompute the rail so the new followee drops out.
+  @impl true
   def handle_event("follow", %{"followee" => followee_id}, socket) do
     case Social.follow(socket.assigns.current_user, followee_id) do
       {:ok, _} -> {:noreply, assign_rail(socket, true)}
@@ -149,15 +149,29 @@ defmodule VutuvWeb.NotificationLive.Index do
       # open page already shows instead of stacking another.
       |> Map.put_new(:id, "live-#{System.unique_integer([:positive, :monotonic])}")
 
-    if filtered_out?(item, socket.assigns.filter) do
-      {:noreply, socket}
-    else
-      [item] = with_post_previews([item], socket.assigns.current_user)
+    cond do
+      # Not part of what this tab shows: it belongs to neither the list nor
+      # the tab's total.
+      filtered_out?(item, socket.assigns.filter) ->
+        {:noreply, socket}
 
-      {:noreply,
-       socket
-       |> update(:items, fn items -> [item | Enum.reject(items, &(&1.id == item.id))] end)
-       |> assign_sections()}
+      # An older page is a fixed window into the past: merging a brand-new
+      # event into it would show it out of order and push everything below it
+      # down by one. Only the total grows, so the event is on page 1 the next
+      # time the reader loads it.
+      socket.assigns.page > 1 ->
+        {:noreply, update(socket, :total, &(&1 + 1))}
+
+      true ->
+        [item] = with_post_previews([item], socket.assigns.current_user)
+
+        {:noreply,
+         socket
+         |> update(:items, fn items ->
+           [item | Enum.reject(items, &(&1.id == item.id))] |> Enum.take(@page_size)
+         end)
+         |> update(:total, &(&1 + 1))
+         |> assign_sections()}
     end
   end
 
@@ -169,26 +183,26 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  defp load_first_page(socket) do
+  # One numbered page of the feed under the active filter, plus the filtered
+  # total the pager windows over. Both are one query per source / one query in
+  # total, and both run on the static mount as well: the pager is part of the
+  # page, so a no-JS visitor and the first paint must carry it.
+  defp load_page(socket) do
     user = socket.assigns.current_user
     kinds = @filters[socket.assigns.filter]
 
-    page = Activity.notifications_page(user.id, limit: @page_size, kinds: kinds)
+    # The total comes first: a ?page= past the end falls back to page 1 (the
+    # same fallback Vutuv.Pages gives every browse page), so the rows shown and
+    # the page the pager marks current can never disagree.
+    total = Activity.notifications_count(user.id, kinds)
+    page = Pages.effective_page(%{"page" => socket.assigns.page}, total, @page_size)
 
-    # The exact feed size backs the "Load N of M more" countdown, but a full
-    # count across every source is the heaviest query on this page: compute it
-    # only on the connected, unfiltered mount (the static first paint and the
-    # filter tabs fall back to a plain "Load more" label).
-    remaining =
-      if connected?(socket) and kinds == nil,
-        do: max(Activity.notifications_count(user.id) - length(page.entries), 0),
-        else: 0
+    feed = Activity.notifications_page(user.id, limit: @page_size, kinds: kinds, page: page)
 
     socket
-    |> assign(:items, with_post_previews(page.entries, user))
-    |> assign(:more?, page.more?)
-    |> assign(:cursor, page.next_cursor)
-    |> assign(:remaining, remaining)
+    |> assign(:page, page)
+    |> assign(:total, total)
+    |> assign(:items, with_post_previews(feed.entries, user))
     |> assign_sections()
   end
 
@@ -269,7 +283,12 @@ defmodule VutuvWeb.NotificationLive.Index do
               {day_label(section.day, @today)}
             </h2>
             <div class="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-slate-900 dark:ring-slate-800">
-              <.notification_row :for={group <- section.groups} group={group} current_user={@current_user} />
+              <.notification_row
+                :for={group <- section.groups}
+                group={group}
+                current_user={@current_user}
+                quote_lines={@quote_lines}
+              />
             </div>
           </section>
 
@@ -277,7 +296,15 @@ defmodule VutuvWeb.NotificationLive.Index do
             {gettext("Nothing new yet.")}
           </p>
 
-          <.load_more :if={@more?} class="mt-6">{load_more_label(@remaining)}</.load_more>
+          <%!-- Numbered pages, patched over the socket: the page rides the URL
+          beside the filter, so it survives a reload and the back button. --%>
+          <.pager
+            params={%{"page" => @page}}
+            total={@total}
+            per_page={page_size()}
+            path={~p"/notifications"}
+            query={pager_query(@filter)}
+          />
         </div>
 
         <aside class="min-w-0 space-y-6">
@@ -324,10 +351,20 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
+  # The page size, as a function: inside ~H a bare `@page_size` would read the
+  # assigns, not the module attribute.
+  defp page_size, do: @page_size
+
+  # The pager carries the active tab onto every page link, so paging inside a
+  # filtered feed stays in that filter. "all" is the default and needs no param.
+  defp pager_query("all"), do: %{}
+  defp pager_query(filter), do: %{"filter" => filter}
+
   # ── One grouped row ──
 
   attr(:group, :map, required: true)
   attr(:current_user, :any, required: true)
+  attr(:quote_lines, :integer, required: true)
 
   defp notification_row(assigns) do
     assigns = assign(assigns, :n, assigns.group.item)
@@ -357,14 +394,15 @@ defmodule VutuvWeb.NotificationLive.Index do
           <% end %>
         </p>
 
-        <%!-- A like quotes the liked post once, one small excerpt linking to it. --%>
+        <%!-- A like quotes the liked post once, one small excerpt linking to it,
+        cut to the reader's line budget (:notification_post_lines). --%>
         <.link
           :if={@group.kind == "like" and @n[:post_preview]}
           data-post-preview="true"
           href={~p"/#{@current_user}/posts/#{@n.post_id}"}
           class="mt-1.5 block border-l-2 border-slate-200 pl-2.5 text-sm text-slate-600 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-brand-300"
         >
-          <span class="line-clamp-2 whitespace-pre-line">{@n.post_preview.text}</span>
+          <span class="notif-clamp whitespace-pre-line" {clamp_attrs(@quote_lines)}>{@n.post_preview.text}</span>
         </.link>
 
         <%!-- A reply quotes the recipient's own post (context) and the reply
@@ -388,7 +426,7 @@ defmodule VutuvWeb.NotificationLive.Index do
             href={~p"/#{@n.reply_preview.post.user}/posts/#{@n.reply_preview.post.id}"}
             class="block border-l-2 border-slate-200 pl-2.5 text-sm text-slate-600 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-brand-300"
           >
-            <span class="line-clamp-2 whitespace-pre-line">{@n.reply_preview.text}</span>
+            <span class="notif-clamp whitespace-pre-line" {clamp_attrs(@quote_lines)}>{@n.reply_preview.text}</span>
           </.link>
         </div>
 
@@ -616,18 +654,6 @@ defmodule VutuvWeb.NotificationLive.Index do
       {@clock}
     </time>
     """
-  end
-
-  # "Load 50 of 80 more": the next batch size, then everything still unloaded.
-  # `remaining` is a mount-time snapshot of the (unfiltered) feed size, so a
-  # filtered tab and a run-dry snapshot both fall back to the plain label.
-  defp load_more_label(remaining) when remaining <= 0, do: gettext("Load more")
-
-  defp load_more_label(remaining) do
-    gettext("Load %{count} of %{remaining} more",
-      count: compact_count(min(@page_size, remaining)),
-      remaining: compact_count(remaining)
-    )
   end
 
   # ── The 30-day summary card ──
@@ -926,11 +952,13 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> Enum.flat_map(&[&1[:post_id], &1[:reply_post_id] | List.wrap(&1[:post_ids])])
       |> then(&Posts.visible_posts_by_ids(viewer, &1))
 
+    lines = User.notification_post_lines(viewer)
+
     Enum.map(entries, fn entry ->
       entry
-      |> put_preview(:post_preview, entry[:post_id], posts)
-      |> put_preview(:reply_preview, entry[:reply_post_id], posts)
-      |> put_change_previews(posts)
+      |> put_preview(:post_preview, entry[:post_id], posts, lines)
+      |> put_preview(:reply_preview, entry[:reply_post_id], posts, lines)
+      |> put_change_previews(posts, lines)
     end)
   end
 
@@ -939,7 +967,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # rest. `post_ids` are UUID v7, so a descending sort is newest-first.
   @change_preview_limit 5
 
-  defp put_change_previews(%{kind: "handle_change", post_ids: post_ids} = entry, posts)
+  defp put_change_previews(%{kind: "handle_change", post_ids: post_ids} = entry, posts, lines)
        when is_list(post_ids) do
     previews =
       post_ids
@@ -947,15 +975,15 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> Enum.take(@change_preview_limit)
       |> Enum.map(&Map.get(posts, &1))
       |> Enum.filter(&match?(%Post{}, &1))
-      |> Enum.map(&change_preview/1)
+      |> Enum.map(&change_preview(&1, lines))
 
     Map.put(entry, :change_posts, previews)
   end
 
-  defp put_change_previews(entry, _posts), do: entry
+  defp put_change_previews(entry, _posts, _lines), do: entry
 
-  defp change_preview(post) do
-    case preview_excerpt(post.body) do
+  defp change_preview(post, lines) do
+    case preview_excerpt(post.body, lines) do
       %{} = excerpt -> Map.put(excerpt, :post, post)
       _ -> %{post: post, text: "", truncated?: false}
     end
@@ -967,40 +995,53 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp handle_change_more(_), do: 0
 
-  defp put_preview(entry, key, post_id, posts) do
+  defp put_preview(entry, key, post_id, posts, lines) do
     with true <- is_binary(post_id),
          %Post{} = post <- Map.get(posts, post_id),
-         %{} = excerpt <- preview_excerpt(post.body) do
+         %{} = excerpt <- preview_excerpt(post.body, lines) do
       Map.put(entry, key, Map.put(excerpt, :post, post))
     else
       _ -> entry
     end
   end
 
-  # How many source lines and characters the notification quote keeps.
-  @preview_line_count 3
-  @preview_char_limit 280
+  # How many characters one kept line may contribute. A source line wraps to
+  # several rendered ones, so the character budget scales with the reader's
+  # line count and keeps one very long line from shipping a whole essay into
+  # the row.
+  @preview_chars_per_line 100
 
   # The plain-text excerpt shown under a reply/like notification: the post's
-  # first three non-empty lines, capped so one very long line can't blow the
-  # row up. Kept server-side (not only a CSS clamp) so a hidden reply's body
-  # never reaches the DOM.
-  defp preview_excerpt(body) do
-    lines =
+  # first `lines` non-empty lines (the reader's `:notification_post_lines`
+  # preference), character-capped as above. Kept server-side (not only a CSS
+  # clamp) so the rest of a quoted body never reaches the DOM.
+  defp preview_excerpt(body, lines) do
+    limit = lines * @preview_chars_per_line
+
+    source =
       body
       |> String.split("\n")
       |> Enum.map(&String.trim/1)
       |> Enum.reject(&(&1 == ""))
 
-    {shown, rest} = Enum.split(lines, @preview_line_count)
+    {shown, rest} = Enum.split(source, lines)
     text = Enum.join(shown, "\n")
 
     cond do
       text == "" -> nil
-      String.length(text) > @preview_char_limit -> %{text: clamp(text), truncated?: true}
+      String.length(text) > limit -> %{text: clamp(text, limit), truncated?: true}
       true -> %{text: text, truncated?: rest != []}
     end
   end
 
-  defp clamp(text), do: text |> String.slice(0, @preview_char_limit) |> String.trim_trailing()
+  defp clamp(text, limit), do: text |> String.slice(0, limit) |> String.trim_trailing()
+
+  # The reader's line budget as an inline CSS custom property for `.notif-clamp`
+  # — splatted, so a reader on the shipped default (what the stylesheet's own
+  # fallback says) adds no attribute at all and the DOM stays clean.
+  defp clamp_attrs(lines) do
+    if lines == User.notification_post_lines_default(),
+      do: [],
+      else: [style: "--notif-clamp:#{lines}"]
+  end
 end

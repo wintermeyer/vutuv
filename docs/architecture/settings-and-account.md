@@ -36,7 +36,11 @@ preferences**: interface language, map services, and **post display** (how many
 lines a post is clamped to before "Read more" and whether the body hyphenates,
 desktop and mobile independently — 0/empty means no truncation; posted to
 `/settings/post_display`, read back by `Vutuv.Accounts.User.post_prefs/1`, see
-`docs/architecture/posts-and-feed.md`).
+`docs/architecture/posts-and-feed.md`). The same card sets how many lines of a
+post a **notification quotes** (`:notification_post_lines`, shipped default 5,
+read back by `Vutuv.Accounts.User.notification_post_lines/1`, see
+[realtime.md](realtime.md)); that one has no 0 mode — a quote is always cut —
+so an empty field means "inherit the site default" rather than "never shorten".
 
 ### Notifications (`/settings/notifications`)
 

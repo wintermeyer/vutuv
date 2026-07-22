@@ -345,15 +345,24 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
-  # A blank line field means "no truncation" (0). Ecto's cast reads "" as "no
-  # value given" and would keep the previous count, so map a blank to "0" — the
-  # other way a reader expresses no-truncation — before the changeset sees it.
-  # (Going back to the installation default is the explicit reset link, not a
-  # blank field.)
+  # A blank feed/profile line field means "no truncation" (0). Ecto's cast reads
+  # "" as "no value given" and would keep the previous count, so map a blank to
+  # "0" — the other way a reader expresses no-truncation — before the changeset
+  # sees it. (Going back to the installation default is the explicit reset link,
+  # not a blank field.)
+  #
+  # The notification quote has no 0 mode (it is always cut), so there a blank
+  # means "inherit the installation default": an explicit nil, since a blank
+  # string would silently keep the old value.
   defp normalize_post_lines(params) do
-    Enum.reduce(~w(post_lines_desktop post_lines_mobile), params, fn field, acc ->
-      if Map.get(acc, field) == "", do: Map.put(acc, field, "0"), else: acc
-    end)
+    params =
+      Enum.reduce(~w(post_lines_desktop post_lines_mobile), params, fn field, acc ->
+        if Map.get(acc, field) == "", do: Map.put(acc, field, "0"), else: acc
+      end)
+
+    if Map.get(params, "notification_post_lines") == "",
+      do: Map.put(params, "notification_post_lines", nil),
+      else: params
   end
 
   # The per-group reset links: clear every pref of the group back to nil =

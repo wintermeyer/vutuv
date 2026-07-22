@@ -68,7 +68,16 @@ post, the actor's profile), and a reply or like entry **quotes the post it is
 about** so the feed is scannable at a glance: a like quotes the liked post, a
 reply quotes **both** the member's own post and the reply itself (each truncated
 to its first lines and linked to its own permalink, the reply respecting post
-visibility so a restricted one never leaks).
+visibility so a restricted one never leaks). **How long a quote is, is the
+reader's own setting**: `:notification_post_lines` (`Vutuv.Prefs`, shipped
+default 5 lines, an installation default an admin can change at
+`/admin/preferences`, a member's own value on `/settings/preferences`). It cuts
+the quote twice over — server-side to that many source lines, so the rest of a
+body never reaches the DOM, and visually through the `.notif-clamp` CSS clamp
+fed by the inline `--notif-clamp` custom property (nothing inline while the
+reader is on the shipped default, exactly like `.post-clamp`). The one-line
+context excerpts (the "Your post:" breadcrumb above a reply, the handle-change
+list) stay one line whatever the setting: they are index lines, not the quote.
 
 The only stored state is the `users.notifications_read_at` read marker behind
 the unread badge.
@@ -83,12 +92,27 @@ new followers ("Anna, Ben and 111 more are now following you.", the overflow
 linking to the member's followers list), the day's new connections, and one
 endorser's endorsements ("endorsed you for Elixir and Phoenix."). Replies and
 the rarer kinds (moderation, CV updates, handle changes, ...) stay one row per
-event. Because grouping is pure, every change — load more, a live push, the
+event. Because grouping is pure, every change — a page, a live push, the
 DayClock midnight rollover — recomputes the sections wholesale; there is no
 LiveView stream to patch, and a live-pushed like merges into the derived row
 for its post/day.
 
 Around the list:
+
+* **Numbered pages** (`?page=`, the shared `<.pager>`), not an endless list:
+  the page rides the URL beside the filter, so a page can be linked to, the
+  back button works, and both are patched over the socket (`path=` makes the
+  pager's links `patch` navigation). `Activity.notifications_page/2`'s `page:`
+  option walks the merged feed by offset (`Vutuv.FeedPage.paginate_offset/3` —
+  every source fetched from the top, so the cost grows with the depth) and
+  `notifications_count/2` gives the pager its total **under the same filter**.
+  A `?page=` past the end falls back to page 1, like every browse page. The
+  endless "Load more" cursor stays the newsfeed's and the API's way of walking
+  the same sources.
+* **Live events only reach page 1.** An older page is a fixed window into the
+  past, so a pushed event that arrives while the reader is on page 3 only
+  bumps the pager's total; page 1 merges it into its group as before and drops
+  its own overflow item so the page stays one page long.
 
 * **Unread highlighting**: events newer than the previous visit's read marker
   get a tint + coral dot and a "N new notifications" header line; the visit
