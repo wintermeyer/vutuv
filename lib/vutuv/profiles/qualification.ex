@@ -16,6 +16,7 @@ defmodule Vutuv.Profiles.Qualification do
 
   alias Vutuv.BerlinTime
   alias Vutuv.Profiles.CvSection
+  alias Vutuv.Profiles.WorkExperience
 
   # The two kinds a member picks between. A LinkedIn import lands everything as
   # a certification (LinkedIn has no signal separating a licence from a cert).
@@ -39,6 +40,9 @@ defmodule Vutuv.Profiles.Qualification do
     belongs_to(:user, Vutuv.Accounts.User)
     # Reserved for issue #857; always nil now, so it is not cast.
     belongs_to(:education, Vutuv.Profiles.Education)
+    # The jobs earned with this credential (issue #858's `qualification_id`,
+    # read back here for the usage badges of issue #1005).
+    has_many(:work_experiences, WorkExperience)
 
     timestamps()
   end
@@ -171,6 +175,46 @@ defmodule Vutuv.Profiles.Qualification do
           (q.expires_year == ^year and
              (is_nil(q.expires_month) or q.expires_month >= ^month))
     )
+  end
+
+  @doc """
+  The preload that lets `job_usage/1` see the jobs citing each credential
+  (issue #1005), in the standard CV order (ongoing roles first). Splice it
+  into any `Repo.preload` whose rendering shows the usage badges:
+  `qualifications: {query, Qualification.citing_jobs_preload()}`.
+  """
+  def citing_jobs_preload do
+    [work_experiences: WorkExperience.order_by_date(WorkExperience)]
+  end
+
+  @doc """
+  How the member's jobs use this credential (issue #1005), read from the
+  preloaded `work_experiences` (see `citing_jobs_preload/0`): `%{count:,
+  current?:, last_end:}`. `current?` is true while any citing job is ongoing —
+  no end year, the same "no end date = ongoing" convention
+  `CvSection.order_by_date/1` sorts by — and `last_end` is the newest citing
+  job's `{year, month | nil}` end (a year-only end counts as the whole year).
+
+  Returns nil when nothing cites the credential and, like
+  `WorkExperience.cited_qualification/1`, when the association was not
+  preloaded — a surface that doesn't load the jobs quietly shows no usage
+  instead of crashing.
+  """
+  def job_usage(%__MODULE__{work_experiences: [_ | _] = jobs}) do
+    %{
+      count: length(jobs),
+      current?: Enum.any?(jobs, &is_nil(&1.end_year)),
+      last_end: last_end(jobs)
+    }
+  end
+
+  def job_usage(_qualification), do: nil
+
+  defp last_end(jobs) do
+    jobs
+    |> Enum.reject(&is_nil(&1.end_year))
+    |> Enum.map(&{&1.end_year, &1.end_month})
+    |> Enum.max_by(fn {year, month} -> {year, month || 13} end, fn -> nil end)
   end
 
   # Imported and hand-entered entries alike are addressed by their UUID: unlike

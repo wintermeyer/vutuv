@@ -24,6 +24,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Phone
   alias Vutuv.Profiles.Messenger
+  alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Tags.UserTag
@@ -234,9 +235,30 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       credential_id: qualification.credential_id,
       url: qualification.url,
       awarded: CV.year_month(qualification.awarded_year, qualification.awarded_month),
-      expires: CV.year_month(qualification.expires_year, qualification.expires_month)
+      expires: CV.year_month(qualification.expires_year, qualification.expires_month),
+      # The jobs earned with this credential (issue #1005), mirroring the HTML
+      # usage badges. nil when no job cites it — and, like qualification_ref/1
+      # on the work entry, when the citing jobs were not preloaded.
+      jobs: job_usage_ref(qualification)
     }
   end
+
+  defp job_usage_ref(qualification) do
+    case Qualification.job_usage(qualification) do
+      nil ->
+        nil
+
+      usage ->
+        %{
+          count: usage.count,
+          in_use: usage.current?,
+          last_used: last_used(usage.last_end)
+        }
+    end
+  end
+
+  defp last_used(nil), do: nil
+  defp last_used({year, month}), do: CV.year_month(year, month)
 
   @doc """
   A member's language entries, mapped to doc maps and — once there is a choice

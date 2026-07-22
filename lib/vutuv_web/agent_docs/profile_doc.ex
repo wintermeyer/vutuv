@@ -179,8 +179,11 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       work_experiences:
         {WorkExperience.order_by_date(WorkExperience), WorkExperience.display_preloads()},
       educations: Education.order_by_date(Education),
-      # The anonymous public view hides expired credentials (issue #859).
-      qualifications: Qualification.visible_to(false) |> Qualification.ordered(),
+      # The anonymous public view hides expired credentials (issue #859); the
+      # citing jobs ride along for the usage facts (issue #1005).
+      qualifications:
+        {Qualification.visible_to(false) |> Qualification.ordered(),
+         Qualification.citing_jobs_preload()},
       languages: Language.ordered(),
       # The owner's chosen order (see Vutuv.Ordering), so the profile's agent
       # documents list these contact sections the same way the HTML pages do.

@@ -121,6 +121,41 @@ defmodule VutuvWeb.QualificationHTML do
   defdelegate expired?(qualification), to: Qualification
 
   @doc """
+  The usage facts of a credential as one " · "-joined sentence (issue #1005),
+  for the entry show page: "Used for 2 jobs · Currently in use". nil when no
+  job cites it (or the citing jobs were not preloaded), so the caller can drop
+  the whole block.
+  """
+  def usage_line(qualification) do
+    case Qualification.job_usage(qualification) do
+      nil ->
+        nil
+
+      usage ->
+        [usage_count_text(usage), usage_status_text(usage)]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.join(" · ")
+    end
+  end
+
+  defp usage_count_text(usage) do
+    ngettext("Used for %{formatted} job", "Used for %{formatted} jobs", usage.count,
+      formatted: compact_count(usage.count)
+    )
+  end
+
+  defp usage_status_text(%{current?: true}), do: gettext("Currently in use")
+
+  defp usage_status_text(%{last_end: {_year, _month} = last_end}),
+    do: gettext("Last used: %{date}", date: end_text(last_end))
+
+  defp usage_status_text(_usage), do: nil
+
+  # The badge's month/year form, matching the meta line's "3/2026" style.
+  defp end_text({year, nil}), do: Integer.to_string(year)
+  defp end_text({year, month}), do: "#{month}/#{year}"
+
+  @doc """
   One credential's row body (glyph + name link + owner "Expired" badge + the
   issuer/date meta line + the verification "Proof" link), shared by the profile
   card and the section `card_list` so both read the same. The caller supplies
@@ -131,7 +166,10 @@ defmodule VutuvWeb.QualificationHTML do
   attr(:as_owner?, :boolean, default: false)
 
   def qualification_row(assigns) do
-    assigns = assign(assigns, :meta, meta_line(assigns.qualification))
+    assigns =
+      assigns
+      |> assign(:meta, meta_line(assigns.qualification))
+      |> assign(:usage, Qualification.job_usage(assigns.qualification))
 
     ~H"""
     <.qualification_glyph class="mt-0.5 h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
@@ -149,6 +187,32 @@ defmodule VutuvWeb.QualificationHTML do
         {gettext("Expired")}
       </span>
       <p :if={@meta != ""} class="text-sm text-slate-600 dark:text-slate-400">{@meta}</p>
+      <p
+        :if={@usage}
+        class="mt-1 flex flex-wrap items-center gap-1.5"
+        data-qualification-usage
+      >
+        <span
+          class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+          data-usage-jobs
+        >
+          {usage_count_text(@usage)}
+        </span>
+        <span
+          :if={@usage.current?}
+          class="inline-flex items-center rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+          data-usage-current
+        >
+          {gettext("Currently in use")}
+        </span>
+        <span
+          :if={not @usage.current? and @usage.last_end != nil}
+          class="inline-flex items-center rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+          data-usage-last
+        >
+          {gettext("Last used: %{date}", date: end_text(@usage.last_end))}
+        </span>
+      </p>
       <a
         :if={@qualification.url}
         href={@qualification.url}

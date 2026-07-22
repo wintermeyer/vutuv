@@ -148,6 +148,57 @@ defmodule Vutuv.Profiles.QualificationTest do
     end
   end
 
+  describe "job_usage/1 (issue #1005)" do
+    alias Vutuv.Profiles.WorkExperience
+
+    test "nil when the citing jobs were not preloaded" do
+      assert Qualification.job_usage(%Qualification{}) == nil
+    end
+
+    test "nil when no job cites the credential" do
+      assert Qualification.job_usage(%Qualification{work_experiences: []}) == nil
+    end
+
+    test "counts the citing jobs and marks an ongoing one as current" do
+      qual = %Qualification{
+        work_experiences: [
+          %WorkExperience{end_year: nil},
+          %WorkExperience{end_year: 2019, end_month: 9}
+        ]
+      }
+
+      assert %{count: 2, current?: true} = Qualification.job_usage(qual)
+    end
+
+    test "a credential only past jobs cite reports the newest end date" do
+      qual = %Qualification{
+        work_experiences: [
+          %WorkExperience{end_year: 2016, end_month: 12},
+          %WorkExperience{end_year: 2019, end_month: 9}
+        ]
+      }
+
+      assert %{count: 2, current?: false, last_end: {2019, 9}} = Qualification.job_usage(qual)
+    end
+
+    test "a year-only end date counts as the whole year (beats earlier months)" do
+      qual = %Qualification{
+        work_experiences: [
+          %WorkExperience{end_year: 2019, end_month: 3},
+          %WorkExperience{end_year: 2019, end_month: nil}
+        ]
+      }
+
+      assert %{last_end: {2019, nil}} = Qualification.job_usage(qual)
+    end
+
+    test "a job with no dates at all reads as ongoing (no known end)" do
+      qual = %Qualification{work_experiences: [%WorkExperience{}]}
+
+      assert %{count: 1, current?: true} = Qualification.job_usage(qual)
+    end
+  end
+
   describe "ordered/1" do
     test "sorts most recently awarded first, undated last, then by name" do
       user = insert(:user)
