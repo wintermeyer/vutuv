@@ -164,6 +164,13 @@ config :vutuv, :fetch_book_metadata, true
 config :vutuv, :amazon_domain, "www.amazon.de"
 config :vutuv, :amazon_affiliate_tag, nil
 
+# The audiobook link on a book review card: an Audible search for the book by
+# title + author (Audible keys its audiobooks by their own ASIN, not the print
+# ISBN we store, so a direct product link isn't derivable). An empty
+# AUDIBLE_DOMAIN removes the link (config/runtime.exs overrides it), so every
+# installation points at its own Audible store — or none.
+config :vutuv, :audible_domain, "www.audible.de"
+
 # Post images: larger than avatars (6 MB), capped per post. Derived versions
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10

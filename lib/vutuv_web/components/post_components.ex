@@ -841,16 +841,18 @@ defmodule VutuvWeb.PostComponents do
           </div>
 
           <%!-- Prose + review card. A review post lays the two out side by
-          side from `lg` up — the prose keeps the column, the card becomes a
+          side from `md` up — the prose keeps the column, the card becomes a
           narrow right-hand aside, the way a book page prints its metadata
-          beside the text. Below `lg` (and for every post without a review)
-          this is one plain column and the card sits under the prose as
-          before: the card is the row's SECOND child, so the stacked order
-          never changes and no markup is duplicated per breakpoint. The
-          images/gallery ride in the prose column too, so a photo lands beside
-          the card rather than under it in a half-empty row. --%>
-          <div class={@review_aside? && "lg:flex lg:items-start lg:gap-4"}>
-            <div class={@review_aside? && "min-w-0 lg:flex-1"}>
+          beside the text. `md` (not `lg`) so portrait tablets and small
+          laptop windows get the side-by-side reading too, not just wide
+          desktops. Below `md` (and for every post without a review) this is
+          one plain column and the card sits under the prose as before: the
+          card is the row's SECOND child, so the stacked order never changes
+          and no markup is duplicated per breakpoint. The images/gallery ride
+          in the prose column too, so a photo lands beside the card rather
+          than under it in a half-empty row. --%>
+          <div class={@review_aside? && "md:flex md:items-start md:gap-4"}>
+            <div class={@review_aside? && "min-w-0 md:flex-1"}>
               <%!-- Full mode: the whole body, no clamp. The reader's hyphenation
               preference still rides along via @body_style (the clamp vars in it are
               simply unused here). The tags live INSIDE the body flow so they follow
@@ -1434,10 +1436,11 @@ defmodule VutuvWeb.PostComponents do
   # own cover while it waits in AI-moderation limbo (the proxy enforces the
   # same rule per request).
   #
-  # `aside` is the wide-screen layout (see the prose+card row in post_card):
-  # from `lg` up the card is a narrow right-hand column, so it turns itself
-  # from a cover-beside-text row into a cover-above-text stack — at ~2/5 of a
-  # post column the side-by-side halves would each be too narrow to read.
+  # `aside` is the beside-the-prose layout (see the prose+card row in
+  # post_card): from `md` up the card is a narrow right-hand column, so it
+  # turns itself from a cover-beside-text row into a cover-above-text stack —
+  # at ~2/5 of a post column the side-by-side halves would each be too narrow
+  # to read.
   attr(:review, PostReview, required: true)
   attr(:author?, :boolean, default: false)
   attr(:aside, :boolean, default: false)
@@ -1461,7 +1464,7 @@ defmodule VutuvWeb.PostComponents do
     <div
       class={[
         "mt-3 flex gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
-        @aside && "lg:mt-0 lg:w-2/5 lg:shrink-0"
+        @aside && "md:mt-0 md:w-2/5 md:shrink-0"
       ]}
       data-review-card
       data-review-kind={@review.kind}
@@ -1474,7 +1477,7 @@ defmodule VutuvWeb.PostComponents do
         loading="lazy"
         class={[
           "w-16 self-start rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 sm:w-20",
-          @aside && "lg:w-16"
+          @aside && "md:w-16"
         ]}
       />
       <span
@@ -1482,7 +1485,7 @@ defmodule VutuvWeb.PostComponents do
         aria-hidden="true"
         class={[
           "flex aspect-[2/3] w-16 shrink-0 items-center justify-center self-start rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40 sm:w-20",
-          @aside && "lg:w-16"
+          @aside && "md:w-16"
         ]}
       >
         {if @review.kind == "movie", do: "🎬", else: "📖"}
@@ -1493,14 +1496,22 @@ defmodule VutuvWeb.PostComponents do
           {review_kind_label(@review.kind)}
         </p>
         <p class="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{@review.title}</p>
+        <%!-- Creator · year · medium. In the narrow right-hand aside (`md` up)
+        the creator keeps the first line and the year · medium drop onto the
+        line below it, so a long author name no longer crowds the small facts;
+        below `md` (and in the full-width non-aside card) it stays one line —
+        the ` · ` separator shows and the meta stays inline. --%>
         <p
           :if={@review.creator || @review.year || @review.medium}
           class="text-sm text-slate-600 dark:text-slate-400"
-        >
-          {[@review.creator, @review.year, review_medium_label(@review.medium)]
-          |> Enum.reject(&is_nil/1)
-          |> Enum.join(" · ")}
-        </p>
+        >{@review.creator}<span
+            :if={@review.creator && review_year_medium(@review) != ""}
+            class={@aside && "md:hidden"}
+          > · </span><span
+            :if={review_year_medium(@review) != ""}
+            class={@aside && @review.creator && "md:block"}
+            data-review-meta
+          >{@review.year}{if @review.year && review_medium_label(@review.medium), do: " · "}<.review_medium review={@review} /></span></p>
         <%!-- The ISBN in its printed, hyphenated form (Vutuv.Isbn.format/1) —
         the stored value is the bare 13 digits, which reads as a barcode
         number rather than an ISBN. `whitespace-nowrap` keeps it on one line
@@ -1512,34 +1523,65 @@ defmodule VutuvWeb.PostComponents do
         >
           ISBN <span class="whitespace-nowrap">{Isbn.format(@review.identifier)}</span>
         </p>
-        <p :if={@external_url} class="mt-1.5">
-          <a
-            href={@external_url}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-          >
-            {review_link_label(@review.kind)} ↗
-          </a>
-        </p>
-        <%!-- Where the cover came from. Shown only when one is actually
-        rendered: naming the source is what a quoted image owes its author
-        (§ 63 UrhG), and Open Library asks for exactly this courtesy link
-        back, per book where we can. --%>
-        <p :if={@cover_url} class="mt-1.5 text-xs text-slate-500">
+        <%!-- The outbound links on one dot-separated line: the book's own Open
+        Library page first, then the store link (Amazon / IMDb). Both are plain
+        brand links. The Open Library link shows only when a cover is actually
+        rendered, because it also credits the source of that quoted image
+        (§ 63 UrhG) — the courtesy link back Open Library asks for. --%>
+        <p :if={@external_url || @cover_url} class="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
           <.link
+            :if={@cover_url}
             href={@cover_source_url}
             target="_blank"
             rel="nofollow noopener noreferrer"
-            class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            {gettext("Cover: Open Library")}
-          </.link>
+            class={review_link_class()}
+          >Open Library</.link><span :if={@cover_url && @external_url}> · </span><a
+            :if={@external_url}
+            href={@external_url}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            class={review_link_class()}
+          >{review_link_label(@review.kind)}</a>
         </p>
       </div>
     </div>
     """
   end
+
+  # The medium word on the details line. An audiobook links the word to Audible
+  # (PostReview.audible_url/1 — a title search, since Audible keys by its own
+  # ASIN, not our print ISBN); every other medium stays plain text. Rendered as
+  # the medium's own inline piece so only the word is the link, not the whole
+  # year · medium line. Nothing at all for a review with no medium set.
+  attr(:review, PostReview, required: true)
+
+  defp review_medium(assigns) do
+    assigns =
+      assigns
+      |> assign(:label, review_medium_label(assigns.review.medium))
+      |> assign(:audible_url, PostReview.audible_url(assigns.review))
+
+    ~H"""
+    <%= cond do %>
+      <% @label && @audible_url -> %>
+        <.link
+          href={@audible_url}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          class={review_link_class()}
+        >{@label}</.link>
+      <% @label -> %>
+        {@label}
+      <% true -> %>
+    <% end %>
+    """
+  end
+
+  # One style for every outbound link on a review card — the medium word, the
+  # Open Library page, the store link — so they read as one consistent link
+  # (brand blue, no underline) instead of a mix.
+  defp review_link_class,
+    do: "text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-200"
 
   # The credited source of a fetched cover: the book's own Open Library page
   # when we have the ISBN it was fetched by, else the site itself.
@@ -1608,8 +1650,19 @@ defmodule VutuvWeb.PostComponents do
   def review_medium_label("disc"), do: gettext("DVD/Blu-ray")
   def review_medium_label(_other), do: nil
 
-  defp review_link_label("movie"), do: gettext("View on IMDb")
-  defp review_link_label(_kind), do: gettext("View on Amazon")
+  # The outbound link reads as the bare store/database name — a proper noun,
+  # identical in every locale, so no gettext.
+  defp review_link_label("movie"), do: "IMDb"
+  defp review_link_label(_kind), do: "Amazon"
+
+  # The year · medium half of the details line (everything but the creator),
+  # so the card can drop it onto its own line in the narrow aside. "" when the
+  # review carries neither.
+  defp review_year_medium(%PostReview{} = review) do
+    [review.year, review_medium_label(review.medium)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
+  end
 
   # The link screenshot image, shared by the preview and full layouts — both
   # float it beside the body. A decorative duplicate of the body's autolinked

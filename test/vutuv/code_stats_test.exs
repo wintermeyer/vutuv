@@ -24,7 +24,12 @@ defmodule Vutuv.CodeStatsTest do
       insert(:social_media_account, provider: "LinkedIn", value: "octo", user: user)
       gitlab = insert(:social_media_account, provider: "GitLab", value: "octo", user: user)
 
-      user = Repo.preload(user, :social_media_accounts)
+      # Preloaded the way the profile does it (SocialMediaAccount.ordered/1 —
+      # position, then id). accounts_of/1 only filters the loaded list, so the
+      # order it returns is the preload's: a bare Repo.preload/2 has no ORDER
+      # BY and lets Postgres pick the row order, which made this assertion
+      # flake.
+      user = Repo.preload(user, social_media_accounts: SocialMediaAccount.ordered())
 
       assert Enum.map(CodeStats.accounts_of(user), & &1.id) == [github.id, gitlab.id]
     end
