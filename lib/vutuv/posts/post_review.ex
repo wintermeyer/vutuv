@@ -13,9 +13,11 @@ defmodule Vutuv.Posts.PostReview do
   `none` → `pending` → `ready`/`failed`, with `cover` holding the
   content-fingerprinted filename and `cover_moderation` the AI-scan state
   (`Vutuv.Moderation.ImageScans` — an external image shown publicly is gated
-  like any upload). A changed ISBN resets the cover to `pending`, so an edit
-  re-fetches; the fields are set here in the changeset, never cast from
-  params.
+  like any upload). The same background pass fills the **edition details**
+  `pages`, `publisher` and — for an audiobook, from a library catalogue —
+  `duration_minutes`. A changed ISBN resets the cover to `pending` and
+  clears those details, so an edit re-fetches; the fields are set here in the
+  changeset, never cast from params.
   """
 
   use VutuvWeb, :model
@@ -42,6 +44,13 @@ defmodule Vutuv.Posts.PostReview do
     field(:creator, :string)
     field(:year, :integer)
     field(:medium, :string)
+
+    # Edition facts fetched with the cover, never cast from params: how many
+    # pages the book has, who published this edition, and — for an audiobook
+    # — how long it runs, in whole minutes.
+    field(:pages, :integer)
+    field(:publisher, :string)
+    field(:duration_minutes, :integer)
 
     field(:cover, :string)
     field(:cover_status, :string, default: "none")
@@ -134,8 +143,10 @@ defmodule Vutuv.Posts.PostReview do
     end
   end
 
-  # Only a book with an ISBN has a fetchable cover. A new/changed ISBN queues
-  # a (re-)fetch; dropping the ISBN or switching kinds clears the cover.
+  # Only a book with an ISBN has a fetchable cover (and fetchable edition
+  # details). A new/changed ISBN queues a (re-)fetch; dropping the ISBN or
+  # switching kinds clears cover and details alike, so nothing from the
+  # previous edition lingers on the card.
   defp reconcile_cover_state(changeset) do
     identifier_changed? = Map.has_key?(changeset.changes, :identifier)
     book? = get_field(changeset, :kind) == "book"
@@ -146,10 +157,24 @@ defmodule Vutuv.Posts.PostReview do
         changeset
 
       isbn? and (identifier_changed? or get_field(changeset, :cover_status) == "none") ->
-        change(changeset, cover: nil, cover_status: "pending", cover_moderation: nil)
+        change(changeset,
+          cover: nil,
+          cover_status: "pending",
+          cover_moderation: nil,
+          pages: nil,
+          publisher: nil,
+          duration_minutes: nil
+        )
 
       not isbn? and get_field(changeset, :cover_status) != "none" ->
-        change(changeset, cover: nil, cover_status: "none", cover_moderation: nil)
+        change(changeset,
+          cover: nil,
+          cover_status: "none",
+          cover_moderation: nil,
+          pages: nil,
+          publisher: nil,
+          duration_minutes: nil
+        )
 
       true ->
         changeset

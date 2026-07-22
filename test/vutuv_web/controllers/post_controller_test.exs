@@ -83,6 +83,68 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ ~s("isbn": "9783161484100")
     end
 
+    test "shows the publisher, the page count and an audiobook's running time", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      post.review
+      |> Ecto.Changeset.change(%{pages: 448, publisher: "Addison-Wesley", duration_minutes: 440})
+      |> Repo.update!()
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      assert html =~ "Addison-Wesley"
+      # The review is of the audiobook (medium "audiobook"), so the page
+      # count is named for what it is — the print edition's — instead of
+      # claiming the recording has pages.
+      assert html =~ "448 pages (print edition)"
+      assert html =~ "7 h 20 min"
+    end
+
+    test "a printed book's page count carries no edition marker", %{conn: conn} do
+      user = insert_activated_user()
+
+      post =
+        create_post!(user, %{
+          body: "Sehr lesenswert.",
+          review: %{
+            "kind" => "book",
+            "identifier" => "978-3-16-148410-0",
+            "title" => "Refactoring",
+            "medium" => "print"
+          }
+        })
+
+      post.review |> Ecto.Changeset.change(%{pages: 448}) |> Repo.update!()
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      assert html =~ "448 pages"
+      refute html =~ "print edition"
+    end
+
+    test "the card renders the same at every resolution", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # Where the card SITS is responsive (an aside from `md` up); what it
+      # SHOWS is not — no element inside it may change size, split a line or
+      # drop out at a breakpoint, so a phone and a desktop read the identical
+      # card.
+      responsive =
+        html
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("[data-review-card] [class]")
+        |> LazyHTML.attribute("class")
+        |> Enum.flat_map(&String.split/1)
+        |> Enum.filter(&(&1 =~ ~r/^(sm|md|lg|xl|2xl|max-\w+):/))
+
+      assert responsive == [],
+             "the review card's content varies by breakpoint: #{inspect(responsive)}"
+    end
+
     test "the shop link is labelled with just the store name", %{conn: conn} do
       user = insert_activated_user()
       post = reviewed_post!(user)
@@ -94,17 +156,17 @@ defmodule VutuvWeb.PostControllerTest do
       refute html =~ "View on Amazon"
     end
 
-    test "in the aside the author gets its own line above year and medium", %{conn: conn} do
+    test "the author gets its own line above year and medium, at every width", %{conn: conn} do
       user = insert_activated_user()
       post = reviewed_post!(user)
 
       html = conn |> get(Posts.path(post)) |> html_response(200)
 
-      # The creator keeps the first line; the year · medium wrapper drops onto
-      # the line below it from `md` up (the narrow right-hand aside), so a long
-      # author name no longer crowds the small facts.
+      # The creator keeps the first line and the year · medium wrapper sits on
+      # the line below it — the aside reading, now the only one, so a long
+      # author name never crowds the small facts at any width.
       assert html =~ "Martin Fowler"
-      assert html =~ ~s(class="md:block" data-review-meta)
+      assert html =~ ~s(class="block" data-review-meta)
       assert html =~ "2018"
       assert html =~ "Audiobook"
     end

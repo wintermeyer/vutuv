@@ -14734,3 +14734,30 @@ msgstr "Mit ISBN zeigt der Beitrag automatisch das Buchcover und einen Shop-Link
 #, elixir-autogen, elixir-format
 msgid "Year"
 msgstr "Jahr"
+
+#: lib/vutuv_web/components/post_components.ex:1637
+#, elixir-autogen, elixir-format
+msgid "%{formatted} page"
+msgid_plural "%{formatted} pages"
+msgstr[0] "%{formatted} Seite"
+msgstr[1] "%{formatted} Seiten"
+
+#: lib/vutuv_web/components/post_components.ex:1693
+#, elixir-autogen, elixir-format
+msgid "(print edition)"
+msgstr "(Druckausgabe)"
+
+#: lib/vutuv_web/components/post_components.ex:1707
+#, elixir-autogen, elixir-format
+msgid "%{minutes} min"
+msgstr "%{minutes} Min."
+
+#: lib/vutuv_web/components/post_components.ex:1708
+#, elixir-autogen, elixir-format
+msgid "%{hours} h"
+msgstr "%{hours} Std."
+
+#: lib/vutuv_web/components/post_components.ex:1709
+#, elixir-autogen, elixir-format
+msgid "%{hours} h %{minutes} min"
+msgstr "%{hours} Std. %{minutes} Min."

@@ -798,6 +798,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         review.creator,
         review.year,
         PostComponents.review_medium_label(review.medium),
+        review.publisher,
+        PostComponents.review_pages_label(review),
+        PostComponents.review_duration_label(review),
         isbn,
         review.link
       ]

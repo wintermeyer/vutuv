@@ -143,6 +143,13 @@ if config_env() == :prod do
     config :vutuv, :fetch_book_metadata, false
   end
 
+  # Where an audiobook's running time is looked up (an SRU endpoint answering
+  # MARC21-xml, default the Deutsche Nationalbibliothek). An explicitly empty
+  # DNB_SRU_URL="" switches that one lookup off without touching the rest.
+  if dnb_url = System.get_env("DNB_SRU_URL") do
+    config :vutuv, :dnb_sru_url, dnb_url
+  end
+
   # The shop link on book review cards. AMAZON_DOMAIN picks the store
   # ("www.amazon.com", …); an explicitly empty AMAZON_DOMAIN="" removes the
   # link. AMAZON_AFFILIATE_TAG rides along as ?tag= when set.

@@ -1470,23 +1470,21 @@ defmodule VutuvWeb.PostComponents do
       data-review-kind={@review.kind}
       data-review-aside={@aside && "true"}
     >
+      <%!-- The cover keeps ONE size at every width (the desktop/aside one):
+      the card carries the same facts on a phone as on a wide screen, so it
+      should read the same there too — a breakpoint-dependent cover made the
+      identical card look like two different components. --%>
       <img
         :if={@cover_url}
         src={@cover_url}
         alt=""
         loading="lazy"
-        class={[
-          "w-16 self-start rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 sm:w-20",
-          @aside && "md:w-16"
-        ]}
+        class="w-16 self-start rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
       />
       <span
         :if={!@cover_url}
         aria-hidden="true"
-        class={[
-          "flex aspect-[2/3] w-16 shrink-0 items-center justify-center self-start rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40 sm:w-20",
-          @aside && "md:w-16"
-        ]}
+        class="flex aspect-[2/3] w-16 shrink-0 items-center justify-center self-start rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40"
       >
         {if @review.kind == "movie", do: "🎬", else: "📖"}
       </span>
@@ -1496,22 +1494,35 @@ defmodule VutuvWeb.PostComponents do
           {review_kind_label(@review.kind)}
         </p>
         <p class="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{@review.title}</p>
-        <%!-- Creator · year · medium. In the narrow right-hand aside (`md` up)
-        the creator keeps the first line and the year · medium drop onto the
-        line below it, so a long author name no longer crowds the small facts;
-        below `md` (and in the full-width non-aside card) it stays one line —
-        the ` · ` separator shows and the meta stays inline. --%>
+        <%!-- Creator on its own line, year · medium on the line below it — at
+        every width, not only in the narrow aside. That two-line reading was
+        the aside's, and it is what the card shows everywhere now: one card,
+        one layout, so a phone and a wide screen never disagree about what a
+        review looks like. A long author name therefore never crowds the small
+        facts, whatever the width. --%>
         <p
           :if={@review.creator || @review.year || @review.medium}
           class="text-sm text-slate-600 dark:text-slate-400"
         >{@review.creator}<span
-            :if={@review.creator && review_year_medium(@review) != ""}
-            class={@aside && "md:hidden"}
-          > · </span><span
             :if={review_year_medium(@review) != ""}
-            class={@aside && @review.creator && "md:block"}
+            class={@review.creator && "block"}
             data-review-meta
           >{@review.year}{if @review.year && review_medium_label(@review.medium), do: " · "}<.review_medium review={@review} /></span></p>
+        <%!-- The fetched edition facts the composer never asks for: the
+        publisher on one line, the book's measurements (pages, and an
+        audiobook's running time) on the next, so neither pushes the other
+        into a third. Each part may be missing. --%>
+        <p :if={@review.publisher} class="text-sm text-slate-600 dark:text-slate-400">
+          {@review.publisher}
+        </p>
+        <p
+          :if={review_pages_label(@review) || review_duration_label(@review)}
+          class="text-sm text-slate-600 dark:text-slate-400"
+        >
+          {[review_pages_label(@review), review_duration_label(@review)]
+          |> Enum.reject(&is_nil/1)
+          |> Enum.join(" · ")}
+        </p>
         <%!-- The ISBN in its printed, hyphenated form (Vutuv.Isbn.format/1) —
         the stored value is the bare 13 digits, which reads as a barcode
         number rather than an ISBN. `whitespace-nowrap` keeps it on one line
@@ -1617,7 +1628,15 @@ defmodule VutuvWeb.PostComponents do
         do: "ISBN #{Isbn.format(review.identifier)}"
 
     details =
-      [review.creator, review.year, review_medium_label(review.medium), isbn]
+      [
+        review.creator,
+        review.year,
+        review_medium_label(review.medium),
+        review.publisher,
+        review_pages_label(review),
+        review_duration_label(review),
+        isbn
+      ]
       |> Enum.reject(&is_nil/1)
       |> Enum.map_join("", &" · #{esc(&1)}")
 
@@ -1650,14 +1669,58 @@ defmodule VutuvWeb.PostComponents do
   def review_medium_label("disc"), do: gettext("DVD/Blu-ray")
   def review_medium_label(_other), do: nil
 
+  @doc """
+  The page count of the reviewed book as a reader-facing label ("384 pages"),
+  nil when no catalogue reported one — shared by the review card, the agent
+  docs and the federated/RSS rendering. The number goes through
+  `delimited_count/1` like every other figure, so it needs its own
+  placeholder: `ngettext/4` binds `%{count}` to the raw integer.
+
+  On an **audiobook** the count is marked as the print edition's ("190 pages
+  (print edition)"): the audiobook has no pages, and the number answers the
+  question a reader is really asking — how long is this book — but it must
+  not read as a fact about the recording.
+
+  Takes the review struct **or** the agent-doc entry that mirrors it (same
+  keys), so card and machine formats cannot word this differently.
+  """
+  def review_pages_label(%{pages: pages, medium: medium})
+      when is_integer(pages) and pages > 0 do
+    label =
+      ngettext("%{formatted} page", "%{formatted} pages", pages,
+        formatted: delimited_count(pages)
+      )
+
+    if medium == "audiobook",
+      do: label <> " " <> gettext("(print edition)"),
+      else: label
+  end
+
+  def review_pages_label(_other), do: nil
+
+  @doc """
+  An audiobook's running time as a reader-facing label ("7 h 20 min",
+  German "7 Std. 20 Min."), nil when no catalogue stated one. Whole minutes
+  in, hours and minutes out — the form every audiobook shop prints.
+  """
+  def review_duration_label(%{duration_minutes: total})
+      when is_integer(total) and total > 0 do
+    case {div(total, 60), rem(total, 60)} do
+      {0, minutes} -> gettext("%{minutes} min", minutes: minutes)
+      {hours, 0} -> gettext("%{hours} h", hours: hours)
+      {hours, minutes} -> gettext("%{hours} h %{minutes} min", hours: hours, minutes: minutes)
+    end
+  end
+
+  def review_duration_label(_other), do: nil
+
   # The outbound link reads as the bare store/database name — a proper noun,
   # identical in every locale, so no gettext.
   defp review_link_label("movie"), do: "IMDb"
   defp review_link_label(_kind), do: "Amazon"
 
   # The year · medium half of the details line (everything but the creator),
-  # so the card can drop it onto its own line in the narrow aside. "" when the
-  # review carries neither.
+  # so the card can drop it onto its own line below the author's.
   defp review_year_medium(%PostReview{} = review) do
     [review.year, review_medium_label(review.medium)]
     |> Enum.reject(&is_nil/1)

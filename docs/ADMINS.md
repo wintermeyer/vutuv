@@ -109,7 +109,8 @@ Everything else has a default (the vutuv.de production value):
 | `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = bounce handling off |
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |
 | `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
-| `FETCH_BOOK_METADATA` | `true` | `false` turns the Open Library lookups behind post **book reviews** off (the composer's ISBN → title/author/year prefill and the automatic cover image on the review card). The review feature itself keeps working — members type the fields by hand and the card renders without a cover. Set it on installations that must not call out (intranets) |
+| `FETCH_BOOK_METADATA` | `true` | `false` turns the catalogue lookups behind post **book reviews** off (the composer's ISBN → title/author/year prefill, the cover image, page count and publisher from Open Library, and an audiobook's running time). The review feature itself keeps working — members type the fields by hand and the card renders without a cover or those details. Set it on installations that must not call out (intranets) |
+| `DNB_SRU_URL` | `https://services.dnb.de/sru/dnb` | Where an **audiobook's running time** is looked up by ISBN: an SRU endpoint answering MARC21-xml (the Deutsche Nationalbibliothek by default — Open Library records no durations). Point it at another catalogue's SRU endpoint, or set it **empty** (`DNB_SRU_URL=`) to switch that one lookup off while the rest of the book metadata keeps working |
 | `AMAZON_DOMAIN` | `www.amazon.de` | The store a book review card's shop link points at (`https://<domain>/dp/<isbn10>`). Set your regional store (`www.amazon.com`, …) — or an **empty** value (`AMAZON_DOMAIN=`) to remove the shop link entirely |
 | `AMAZON_AFFILIATE_TAG` | – | Optional Amazon affiliate tag appended to book review shop links as `?tag=` |
 | `AUDIBLE_DOMAIN` | `www.audible.de` | The Audible store an **audiobook** review card links the "Hörbuch"/"Audiobook" word to (a title search, since Audible keys by its own ASIN, not the print ISBN). Set your regional store (`www.audible.com`, …) — or an **empty** value (`AUDIBLE_DOMAIN=`) to keep the word plain text |
@@ -276,9 +277,11 @@ vutuv runs fine without internet access:
   `:generate_screenshots` (profile link-preview screenshots **and** the
   auto-screenshot for single-link posts — these fetch the linked page and run
   headless Chromium).
-- Set `FETCH_BOOK_METADATA=false`: the book-review ISBN lookup and cover
-  fetch call Open Library. Book and film reviews keep working — the fields
-  are typed by hand and the card renders without a cover.
+- Set `FETCH_BOOK_METADATA=false`: the book-review ISBN lookup, the cover
+  fetch and the page-count/publisher lookup call Open Library, and an
+  audiobook's running time is read from a library catalogue (`DNB_SRU_URL`).
+  Book and film reviews keep working — the fields are typed by hand and the
+  card renders without a cover and without those details.
 - AI image moderation works **fully offline** — Ollama is local inference, no
   cloud involved. Install Ollama on the server, pull the vision model once
   while you still have internet access (`ollama pull qwen3-vl:8b`), and keep
@@ -330,7 +333,9 @@ Run on the server, against the release:
   served image version (AVIF) from the kept originals per the current
   `Vutuv.Uploads.Spec`. Idempotent; safe while the app serves traffic.
 - `bin/vutuv eval "Vutuv.Release.refresh_review_covers()"` — re-fetches every
-  book-review cover from Open Library. Book covers are the one image kind
+  book-review cover from Open Library, and with it the page count, publisher
+  and audiobook running time (the backfill for reviews written before those
+  were shown). Book covers are the one image kind
   vutuv keeps no original of (see "Book covers" below), so `regenerate_images`
   cannot re-derive them; this is their equivalent after an upgrade that
   changes the cover size. Needs outbound network and `FETCH_BOOK_METADATA=true`,
