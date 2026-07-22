@@ -11,7 +11,8 @@ defmodule Vutuv.Fediverse do
     * actors — the member's RSA keypair (`Vutuv.Fediverse.Actor`), created
       lazily on opt-in; `VutuvWeb.Fediverse.Docs` renders the documents.
     * followers — remote actors following a member
-      (`Vutuv.Fediverse.Follower`), written by the inbox on Follow/Undo.
+      (`Vutuv.Fediverse.Follower`), written by the inbox on Follow/Undo and
+      kept in step with the remote's own Update/Delete.
     * deliveries — a DB-backed outbound queue (`Vutuv.Fediverse.Delivery`)
       drained by `Vutuv.Fediverse.Deliverer` with signed POSTs
       (`Vutuv.Fediverse.HttpSignature`), mirroring the webhooks queue.
@@ -83,14 +84,33 @@ defmodule Vutuv.Fediverse do
 
   ## Remote followers
 
-  @doc "Records a remote follower (idempotent per remote actor)."
+  @doc """
+  Records a remote follower (idempotent per remote actor). A repeat Follow
+  re-syncs every cached field from the actor document, the display ones
+  included — a remote who renamed must not stay listed under the old handle.
+  """
   def add_follower(%User{} = user, attrs) do
     %Follower{user_id: user.id}
     |> Follower.changeset(attrs)
     |> Repo.insert(
-      on_conflict: {:replace, [:inbox_uri, :shared_inbox_uri, :updated_at]},
+      on_conflict: {:replace, [:inbox_uri, :shared_inbox_uri, :handle, :name, :updated_at]},
       conflict_target: [:user_id, :actor_uri]
     )
+  end
+
+  @doc """
+  Re-syncs an existing follower row from the remote actor document (the
+  inbox's `Update` handler). A no-op when that actor follows nobody here: an
+  `Update` is a broadcast, not a follow request, so it must never mint a row.
+  Like `add_follower/2` it swallows a rejected changeset — a hostile actor
+  document must not crash the inbox.
+  """
+  def refresh_follower(%User{id: user_id}, %{actor_uri: actor_uri} = attrs) do
+    if follower = Repo.get_by(Follower, user_id: user_id, actor_uri: actor_uri) do
+      follower |> Follower.changeset(attrs) |> Repo.update()
+    end
+
+    :ok
   end
 
   def remove_follower(%User{id: user_id}, actor_uri) do

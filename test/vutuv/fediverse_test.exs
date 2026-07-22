@@ -97,6 +97,64 @@ defmodule Vutuv.FediverseTest do
                "https://social.example/inbox"
              ]
     end
+
+    test "a repeat Follow re-syncs the cached handle and display name" do
+      user = federated_user()
+
+      for handle <- ~w(alice alice_renamed) do
+        {:ok, _} =
+          Fediverse.add_follower(user, %{
+            actor_uri: "https://social.example/users/alice",
+            inbox_uri: "https://social.example/users/alice/inbox",
+            handle: handle,
+            name: "Alice #{handle}"
+          })
+      end
+
+      # Read back from the database: the insert's own return value carries the
+      # attrs we sent whether or not the upsert stored them.
+      assert [follower] = Fediverse.list_followers(user)
+      assert follower.handle == "alice_renamed"
+      assert follower.name == "Alice alice_renamed"
+    end
+
+    test "refresh_follower/2 re-syncs an existing row and never creates one" do
+      user = federated_user()
+      alice = "https://social.example/users/alice"
+
+      {:ok, _} =
+        Fediverse.add_follower(user, %{
+          actor_uri: alice,
+          inbox_uri: "https://social.example/users/alice/inbox",
+          handle: "alice",
+          name: "Alice Example"
+        })
+
+      :ok =
+        Fediverse.refresh_follower(user, %{
+          actor_uri: alice,
+          inbox_uri: "https://social.example/users/alice/inbox2",
+          shared_inbox_uri: "https://social.example/inbox",
+          handle: "alice_renamed",
+          name: "Alice Renamed"
+        })
+
+      assert [follower] = Fediverse.list_followers(user)
+      assert follower.handle == "alice_renamed"
+      assert follower.name == "Alice Renamed"
+      assert follower.inbox_uri == "https://social.example/users/alice/inbox2"
+      assert follower.shared_inbox_uri == "https://social.example/inbox"
+
+      # An Update is a broadcast, not a follow request: a stranger's must not
+      # turn into a follower row.
+      :ok =
+        Fediverse.refresh_follower(user, %{
+          actor_uri: "https://social.example/users/mallory",
+          inbox_uri: "https://social.example/users/mallory/inbox"
+        })
+
+      assert Fediverse.follower_count(user) == 1
+    end
   end
 
   describe "federate_new_post/1" do

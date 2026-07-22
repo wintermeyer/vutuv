@@ -6,8 +6,10 @@ defmodule VutuvWeb.FediverseController do
       `@handle@host` into an actor URL,
     * `GET /:slug/actor` (+ `/followers`, `/outbox`) — the member's
       machine-readable identity,
-    * `POST /:slug/actor/inbox` — receives signed `Follow`/`Undo` activities;
-      everything else is acknowledged and dropped (outbound-only by design).
+    * `POST /:slug/actor/inbox` — receives signed `Follow`/`Undo` activities
+      plus the remote actor's own lifecycle (`Update` re-syncs the stored
+      follower, `Delete` of the actor removes it); everything else is
+      acknowledged and dropped (outbound-only by design).
 
   Deliberately outside the `:browser` pipeline: no session, no CSRF — remote
   servers authenticate with HTTP signatures instead, verified against the
@@ -118,13 +120,7 @@ defmodule VutuvWeb.FediverseController do
     if activity["object"] == Docs.actor_url(user) do
       # A remote actor doc with an over-long / malformed inbox or id yields an
       # invalid changeset; accept only a successful insert, never crash the inbox.
-      case Fediverse.add_follower(user, %{
-             actor_uri: remote.id,
-             inbox_uri: remote.inbox,
-             shared_inbox_uri: remote.shared_inbox,
-             handle: remote.preferred_username,
-             name: remote.name
-           }) do
+      case Fediverse.add_follower(user, follower_attrs(remote)) do
         {:ok, _} -> Fediverse.accept_follow(user, activity, remote.inbox)
         {:error, _} -> :ok
       end
@@ -138,9 +134,54 @@ defmodule VutuvWeb.FediverseController do
     send_resp(conn, 202, "")
   end
 
+  # A remote actor that renamed or moved its inbox broadcasts an `Update` of
+  # itself to everyone following it. Re-sync from the actor document we just
+  # fetched: the row is both a delivery target and what the member sees on
+  # their Fediverse settings page, so a stale copy shows the wrong handle and
+  # can deliver to the wrong inbox. An `Update` of anything else (a remote
+  # note) falls through to the catch-all.
+  defp perform(conn, user, %{"type" => "Update"} = activity, remote) do
+    if object_id(activity["object"]) == remote.id do
+      Fediverse.refresh_follower(user, follower_attrs(remote))
+    end
+
+    send_resp(conn, 202, "")
+  end
+
+  # A remote account deleting itself tells every server that follows it, so
+  # drop the row instead of keeping a gone account as a follower (and as a
+  # delivery target). Only a `Delete` of the *actor* counts — deleting one of
+  # its notes must leave the follow intact. Best effort by construction: a
+  # server that already purged the account answers our actor fetch with 410,
+  # so the signature can no longer be verified and `verify_and_perform/2`
+  # rejects it; this catches the window where the account is suspended but
+  # still served, which is when most servers send the Delete.
+  defp perform(conn, user, %{"type" => "Delete"} = activity, remote) do
+    if object_id(activity["object"]) == remote.id do
+      Fediverse.remove_follower(user, remote.id)
+    end
+
+    send_resp(conn, 202, "")
+  end
+
   # Outbound-only federation: likes, replies, announces etc. are acknowledged
   # (so well-behaved servers stop retrying) and dropped.
   defp perform(conn, _user, _activity, _remote), do: send_resp(conn, 202, "")
+
+  defp follower_attrs(remote) do
+    %{
+      actor_uri: remote.id,
+      inbox_uri: remote.inbox,
+      shared_inbox_uri: remote.shared_inbox,
+      handle: remote.preferred_username,
+      name: remote.name
+    }
+  end
+
+  # An activity's object is either an embedded document or a bare id URI.
+  defp object_id(%{"id" => id}) when is_binary(id), do: id
+  defp object_id(id) when is_binary(id), do: id
+  defp object_id(_), do: nil
 
   defp signature_key_id(conn) do
     conn |> get_req_header("signature") |> List.first() |> HttpSignature.key_id()

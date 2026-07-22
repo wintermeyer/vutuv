@@ -3,7 +3,10 @@ defmodule Vutuv.Fediverse.Follower do
   A remote (Fediverse) follower of a member: the remote actor's id URI and
   where to deliver (its inbox, plus the server-wide sharedInbox when the
   remote declares one, so a server with many followers gets each post once).
-  Rows are written by the inbox on `Follow` and removed on `Undo`.
+  Rows are written by the inbox on `Follow` and removed on `Undo`; the remote
+  actor's own `Update` re-syncs them and its `Delete` removes them, so a
+  renamed remote stops showing under its old handle and a deleted one stops
+  counting as a follower.
   """
 
   use VutuvWeb, :model
