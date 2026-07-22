@@ -21,15 +21,24 @@ defmodule Vutuv.Deliverability.MailLog do
   ## Classification (see the DSN-code table in the ops doc)
 
     * `:hard_bounce` - `status=bounced` with a recipient-failure code
-      (`5.0.x` / `5.1.x` / `5.5.x`: no such user, mailbox unavailable, invalid
-      address). The address is dead; deactivate it.
-    * `:policy` - `status=bounced` with `5.7.x` (authentication / DMARC). A
-      sender- or policy-side problem, **not** the recipient. Never deactivate;
-      it means our own sending is broken for a whole class of recipients.
+      (`5.1.x` / `5.5.x`: no such user, mailbox unavailable, invalid address),
+      or generic `5.0.x` whose reply text itself confirms a dead recipient.
+      The address is dead; deactivate it.
+    * `:policy` - `status=bounced` with `5.7.x` (authentication / DMARC), or
+      `5.0.x` whose text names a recipient-side block. A sender- or
+      policy-side problem, **not** the recipient. Never deactivate; it can
+      mean our own sending is broken for a whole class of recipients.
     * `:transient` - `status=deferred`, or any `4.x.x`. Postfix keeps retrying.
     * `:delivered` - `status=sent`.
     * `:other` - any other `5.x.x` bounce (e.g. `5.2.x` full/disabled mailbox,
-      `5.4.x` routing). Left alone, conservatively, to avoid false positives.
+      `5.4.x` routing), a `5.0.x` quota reply, or a `5.0.x` with unrecognized
+      text. Left alone, conservatively, to avoid false positives.
+
+  `5.0.x` needs the text vetting because it is not an enhanced code from the
+  remote server: Postfix maps any bare `550`/`552` reply to it, so the bucket
+  mixes dead mailboxes with full mailboxes (`552 Quota exceeded`) and
+  recipient-side spam/IP blocks. Treating the whole bucket as dead recipients
+  froze 19 live accounts after the July 2026 newsletters.
   """
 
   @max_tracked 2000
@@ -52,6 +61,15 @@ defmodule Vutuv.Deliverability.MailLog do
   @envelope_re ~r/postfix\/[a-z]+\[\d+\]: ([0-9A-Za-z]{6,}): from=<([^>]*)>/
   # `postfix/smtp[948]: 70EE...: to=<x@y>, relay=..., dsn=5.1.2, status=bounced (...)`
   @delivery_re ~r/postfix\/[a-z]+\[\d+\]: ([0-9A-Za-z]{6,}): to=<([^>]*)>.*?dsn=([0-9.]+), status=(\w+)/
+
+  # Reply-text evidence for the generic `5.0.x` bucket (all shapes seen in the
+  # production log). Contra-indications are checked first: they name a working
+  # mailbox that refused this one message (or a problem with *our* sending),
+  # so they must win over a dead-recipient phrase in the same multi-cause
+  # reply ("Recipient address rejected: Access denied").
+  @full_mailbox_text ~r/quota|storage allocation|mailbox (?:is )?full|insufficient storage/i
+  @blocked_text ~r/blocked|blacklist|denylist|spam|banned|denied|reputation|sender (?:address )?(?:rejected|verify failed)/i
+  @dead_recipient_text ~r/user unknown|unknown (?:user|recipient|address)|address unknown|mailbox \S+ unknown|no such (?:user|recipient|mailbox|address)|does not exist|not found|no mailbox|mailbox unavailable|invalid (?:recipient|mailbox)|no longer (?:available|on system)|address rejected|unroutable|unrouteable/i
 
   @doc "A fresh, empty fold state."
   @spec new() :: t()
@@ -77,7 +95,7 @@ defmodule Vutuv.Deliverability.MailLog do
               to: String.downcase(to),
               dsn: dsn,
               status: status,
-              class: classify(status, dsn),
+              class: classify(status, dsn, line),
               ours?: Map.get(state.senders, queue_id) == our_sender(),
               line: line
             }
@@ -112,27 +130,76 @@ defmodule Vutuv.Deliverability.MailLog do
     end
   end
 
-  @doc "Classifies a delivery result. See the moduledoc."
-  @spec classify(String.t(), String.t()) :: atom()
-  def classify("sent", _dsn), do: :delivered
-  def classify("deferred", _dsn), do: :transient
-  def classify("bounced", dsn), do: bounce_class(dsn)
-  def classify(_status, _dsn), do: :other
+  @doc """
+  Classifies a delivery result. `text` is the raw reply/log text, consulted
+  only for the generic `5.0.x` bucket (see the moduledoc); without it a
+  `5.0.x` bounce conservatively classifies as `:other`.
+  """
+  @spec classify(String.t(), String.t(), String.t()) :: atom()
+  def classify(status, dsn, text \\ "")
+  def classify("sent", _dsn, _text), do: :delivered
+  def classify("deferred", _dsn, _text), do: :transient
+  def classify("bounced", dsn, text), do: bounce_class(dsn, text)
+  def classify(_status, _dsn, _text), do: :other
 
   @doc """
-  Whether a DSN code names a dead recipient (vs a policy or transient problem).
-  Recipient-failure families only: `5.0.x` (generic permanent), `5.1.x`
-  (addressing / no such user), `5.5.x` (mailbox unavailable).
+  Whether a bounce is a confirmed dead recipient (vs a policy, mailbox-state
+  or transient problem). The enhanced-code families `5.1.x` (addressing / no
+  such user) and `5.5.x` (mailbox unavailable) count on their own; the generic
+  `5.0.x` bucket counts only when `text` (the raw reply) itself confirms a
+  dead recipient - it also carries full-mailbox and recipient-side-block
+  replies, which are not.
   """
-  @spec recipient_failure?(String.t()) :: boolean()
-  def recipient_failure?(dsn), do: Regex.match?(~r/^5\.(0|1|5)\./, dsn)
+  @spec recipient_failure?(String.t(), String.t()) :: boolean()
+  def recipient_failure?(dsn, text \\ "") do
+    cond do
+      Regex.match?(~r/^5\.(1|5)\./, dsn) -> true
+      String.starts_with?(dsn, "5.0.") -> generic_bounce_class(text) == :hard_bounce
+      true -> false
+    end
+  end
 
-  defp bounce_class(dsn) do
+  defp bounce_class(dsn, text) do
     cond do
       String.starts_with?(dsn, "4.") -> :transient
+      String.starts_with?(dsn, "5.0.") -> generic_bounce_class(text)
       recipient_failure?(dsn) -> :hard_bounce
       String.starts_with?(dsn, "5.7.") -> :policy
       true -> :other
+    end
+  end
+
+  # A `5.0.x` code carries no evidence of its own, so the reply text decides:
+  # contra-indications first (full mailbox -> :other, recipient-side block ->
+  # :policy), then a confirming dead-recipient phrase (-> :hard_bounce),
+  # otherwise leave it alone.
+  defp generic_bounce_class(text) do
+    text = reply_text(text)
+
+    cond do
+      Regex.match?(@full_mailbox_text, text) -> :other
+      Regex.match?(@blocked_text, text) -> :policy
+      Regex.match?(@dead_recipient_text, text) -> :hard_bounce
+      true -> :other
+    end
+  end
+
+  # The evidence is the remote server's own words. A full log line also
+  # carries relay hostnames (a real trap: relay=mx10.mailspamprotection.com
+  # made a dead-recipient reply match the "spam" contra-indication), so cut
+  # down to the reply: the part after `said: `, else after `status=xxx (`
+  # (replies with no `said:`, e.g. local errors), else the text as given
+  # (webhook Diagnostic-Code lines).
+  defp reply_text(text) do
+    case Regex.run(~r/said: (.*)/s, text, capture: :all_but_first) do
+      [reply] ->
+        reply
+
+      nil ->
+        case Regex.run(~r/status=\w+ \((.*)/s, text, capture: :all_but_first) do
+          [reply] -> reply
+          nil -> text
+        end
     end
   end
 

@@ -90,6 +90,40 @@ defmodule Vutuv.Notifications.BouncesTest do
   --X--
   """
 
+  # Generic 5.0.0 (bare 552 reply, no enhanced code) whose diagnostic text is a
+  # full mailbox: the recipient lives, so this must NOT deactivate.
+  @quota_failed_dsn """
+  From: MAILER-DAEMON@mail.example.com (Mail Delivery System)
+  Content-Type: multipart/report; report-type=delivery-status; boundary="ABC"
+
+  --ABC
+  Content-Type: message/delivery-status
+
+  Final-Recipient: rfc822; dead@example.com
+  Action: failed
+  Status: 5.0.0
+  Diagnostic-Code: smtp; 552-Requested mail action aborted: exceeded storage allocation 552-Quota exceeded
+
+  --ABC--
+  """
+
+  # Generic 5.0.0 whose diagnostic text does confirm a dead recipient: this
+  # one deactivates, same verdict as the log watcher.
+  @generic_dead_dsn """
+  From: MAILER-DAEMON@mail.example.com (Mail Delivery System)
+  Content-Type: multipart/report; report-type=delivery-status; boundary="ABC"
+
+  --ABC
+  Content-Type: message/delivery-status
+
+  Final-Recipient: rfc822; dead@example.com
+  Action: failed
+  Status: 5.0.0
+  Diagnostic-Code: smtp; 550-Requested action not taken: mailbox unavailable
+
+  --ABC--
+  """
+
   setup do
     Vutuv.RateLimiter.reset()
     :ok
@@ -132,6 +166,25 @@ defmodule Vutuv.Notifications.BouncesTest do
       # address stays deliverable, matching the log watcher's classification.
       assert reload(email).undeliverable_at == nil
       assert Repo.all(EmailBounce) == []
+    end
+
+    test "a generic 5.0.0 with quota text is ignored, not deactivated" do
+      {_user, email} = user_with_email("dead@example.com")
+
+      assert {:ok, :ignored} = Bounces.record(@quota_failed_dsn)
+
+      # A full mailbox is not a dead mailbox: the address stays deliverable.
+      assert reload(email).undeliverable_at == nil
+      assert Repo.all(EmailBounce) == []
+    end
+
+    test "a generic 5.0.0 whose text confirms a dead recipient deactivates" do
+      {_user, email} = user_with_email("dead@example.com")
+
+      assert {:ok, :failed} = Bounces.record(@generic_dead_dsn)
+
+      assert reload(email).undeliverable_at
+      assert [%EmailBounce{status: "5.0.0"}] = Repo.all(EmailBounce)
     end
 
     test "a transient failure (4.x) is ignored, not deactivated" do

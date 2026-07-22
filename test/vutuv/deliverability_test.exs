@@ -36,6 +36,23 @@ defmodule Vutuv.DeliverabilityTest do
     Deliverability.events_for_user(id) |> Enum.map(& &1.action)
   end
 
+  # Real reply-text shapes from the production mail.log (all arrive as the
+  # generic dsn=5.0.0, so only the text tells them apart).
+  @quota_raw "host mx.gmx.net said: 552-Requested mail action aborted: exceeded storage allocation 552-Quota exceeded"
+  @blocked_raw "host bar.example said: 550 permanent failure for one or more recipients (x@y:blocked)"
+  @dead_raw "host mx.ionos.de said: 550-Requested action not taken: mailbox unavailable"
+
+  # Reproduces the misclassification's end state: the address was marked
+  # undeliverable (as the old classifier did), and the grace-period sweep froze
+  # the owner.
+  defp frozen_user_with_bounce(address, raw) do
+    user = confirmed_user_with_emails([address])
+    mark_dead(address, Deliverability.grace_days() + 1)
+    insert(:email_bounce, email_value: address, status: "5.0.0", raw: raw)
+    Deliverability.reassess_user(user)
+    user
+  end
+
   describe "record_hard_bounce/3" do
     test "marks the address undeliverable, ledgers the bounce, logs deactivation" do
       user = confirmed_user_with_emails(["dead@example.com"])
@@ -116,6 +133,34 @@ defmodule Vutuv.DeliverabilityTest do
       Deliverability.reassess_user(user)
       refute reload(user).unreachable_at
     end
+
+    test "generic 5.0.0 ledger rows count only when their text confirms a dead recipient" do
+      quota_raw = "host mx.gmx.net said: 552-Quota exceeded 552 storage allocation"
+      user = confirmed_user_with_emails(["full@example.com"])
+      mark_dead("full@example.com")
+
+      for _ <- 1..2,
+          do:
+            insert(:email_bounce,
+              email_value: "full@example.com",
+              status: "5.0.0",
+              raw: quota_raw
+            )
+
+      Deliverability.reassess_user(user)
+      refute reload(user).unreachable_at
+
+      dead_raw = "host mx00.ionos.de said: 550-Requested action not taken: mailbox unavailable"
+      other = confirmed_user_with_emails(["gone@example.com"])
+      mark_dead("gone@example.com")
+
+      for _ <- 1..2,
+          do:
+            insert(:email_bounce, email_value: "gone@example.com", status: "5.0.0", raw: dead_raw)
+
+      Deliverability.reassess_user(other)
+      assert reload(other).unreachable_at
+    end
   end
 
   describe "thawing" do
@@ -181,6 +226,70 @@ defmodule Vutuv.DeliverabilityTest do
 
       assert reload(stale).unreachable_at
       refute reload(recent).unreachable_at
+    end
+  end
+
+  describe "repair_misclassified_bounces/0" do
+    test "clears quota/blocked-only addresses and thaws their owners" do
+      quota_user = frozen_user_with_bounce("full@example.com", @quota_raw)
+      blocked_user = frozen_user_with_bounce("filterblocked@example.com", @blocked_raw)
+      assert reload(quota_user).unreachable_at
+      assert reload(blocked_user).unreachable_at
+
+      assert %{cleared: 2, thawed: 2} = Deliverability.repair_misclassified_bounces()
+
+      refute reload_email("full@example.com").undeliverable_at
+      refute reload(quota_user).unreachable_at
+      refute reload_email("filterblocked@example.com").undeliverable_at
+      refute reload(blocked_user).unreachable_at
+
+      # The audit trail names the repair on the recovery, and the thaw follows.
+      assert [%Event{detail: %{"reason" => "misclassified_bounce"}} | _] =
+               Deliverability.events_for_user(quota_user.id)
+               |> Enum.filter(&(&1.action == "address_recovered"))
+
+      assert "account_thawed" in actions_for(quota_user)
+    end
+
+    test "a genuinely dead address and its frozen owner are untouched" do
+      dead_user = frozen_user_with_bounce("gone@example.com", @dead_raw)
+
+      assert %{cleared: 0, thawed: 0} = Deliverability.repair_misclassified_bounces()
+
+      assert reload_email("gone@example.com").undeliverable_at
+      assert reload(dead_user).unreachable_at
+    end
+
+    test "an address with any confirmed hard bounce is untouched, even beside a quota row" do
+      user = confirmed_user_with_emails(["mixed@example.com"])
+      mark_dead("mixed@example.com", Deliverability.grace_days() + 1)
+      insert(:email_bounce, email_value: "mixed@example.com", status: "5.0.0", raw: @quota_raw)
+
+      insert(:email_bounce,
+        email_value: "mixed@example.com",
+        status: "5.1.1",
+        raw: "550 5.1.1 User unknown"
+      )
+
+      Deliverability.reassess_user(user)
+
+      assert %{cleared: 0, thawed: 0} = Deliverability.repair_misclassified_bounces()
+      assert reload(user).unreachable_at
+    end
+
+    test "an undeliverable address without ledger evidence is untouched" do
+      confirmed_user_with_emails(["noledger@example.com"])
+      mark_dead("noledger@example.com")
+
+      assert %{cleared: 0, thawed: 0} = Deliverability.repair_misclassified_bounces()
+      assert reload_email("noledger@example.com").undeliverable_at
+    end
+
+    test "running the repair twice is a no-op the second time" do
+      frozen_user_with_bounce("full2@example.com", @quota_raw)
+
+      assert %{cleared: 1, thawed: 1} = Deliverability.repair_misclassified_bounces()
+      assert %{cleared: 0, thawed: 0} = Deliverability.repair_misclassified_bounces()
     end
   end
 

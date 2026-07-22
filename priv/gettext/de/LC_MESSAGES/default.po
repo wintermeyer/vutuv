@@ -6853,6 +6853,11 @@ msgstr "Admin-Aktion"
 msgid "an address works again"
 msgstr "eine Adresse funktioniert wieder"
 
+#: lib/vutuv_web/live/admin/deliverability_live.ex:294
+#, elixir-autogen, elixir-format
+msgid "bounce was misclassified (quota/blocked, not a dead mailbox)"
+msgstr "Bounce war fehlklassifiziert (Quota/Block, kein totes Postfach)"
+
 #: lib/vutuv_web/live/admin/deliverability_live.ex:289
 #, elixir-autogen, elixir-format
 msgid "dead past the grace period"
