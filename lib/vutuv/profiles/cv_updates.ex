@@ -16,11 +16,14 @@ defmodule Vutuv.Profiles.CvUpdates do
     * **In-app only.** No email, ever. The reader's single opt-out is
       `users.cv_update_notifications?` on the notification settings page.
 
-  **One notification per author per three hours, not one per entry.** Somebody
-  filling in five roles in one sitting is one piece of news, so the feed groups
-  an author's announced entries into three-hour buckets (`bucket_seconds/0`) and
-  shows a single row that names them ("added 5 new entries to their CV"). The
-  grouping is what the unread badge counts too, so a burst can never inflate it.
+  **One notification per sitting, not one per entry.** Somebody filling in five
+  roles in one go is one piece of news, so the feed groups an author's announced
+  entries into *sittings*: entries less than `gap_seconds/0` (three hours) apart
+  belong together, and a longer quiet stretch starts a new one. It is the
+  gap-and-islands pattern, deliberately **not** a fixed three-hour raster — a
+  raster would split 08:59 and 09:01 into two notifications while merging 09:01
+  and 11:59 into one. A sitting is what the unread badge counts too, so a burst
+  can never inflate it.
 
   Like every other kind in `Vutuv.Activity`, the feed is **derived at read
   time** — from the CV rows themselves, so nothing is duplicated: deleting the
@@ -48,31 +51,56 @@ defmodule Vutuv.Profiles.CvUpdates do
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
 
-  # How long one "batch of CV news" lasts. Entries an author announces inside
-  # the same three-hour wall-clock bucket share a single notification row.
-  # Fixed buckets, not a sliding window: a bucket is a plain GROUP BY key, so
-  # the items, the unread count and the read marker all derive from the same
-  # cheap expression instead of needing per-reader state.
-  @bucket_seconds 3 * 60 * 60
+  # The quiet stretch that ends a sitting. Two announced entries closer together
+  # than this belong to the same notification; a longer gap starts a new one.
+  # Chosen at three hours: long enough to cover "I sat down and updated my CV"
+  # including interruptions, short enough that yesterday's news never merges
+  # into today's.
+  @gap_seconds 3 * 60 * 60
 
   # How many of a group's entries the notification names before it says
   # "and N more".
   @preview_entries 5
 
-  @doc "The grouping window in seconds (three hours)."
-  def bucket_seconds, do: @bucket_seconds
+  @doc "The quiet gap that ends a sitting, in seconds (three hours)."
+  def gap_seconds, do: @gap_seconds
 
-  # The bucket a timestamp falls into, as SQL. The window is baked into the
-  # fragment **as a literal** rather than a query parameter on purpose:
-  # Postgres matches a GROUP BY expression against the SELECT list
-  # syntactically, and two placeholders ($1 here, $7 there) are not the same
-  # expression — grouping by it then fails with "must appear in the GROUP BY
-  # clause". A macro keeps the constant single-sourced anyway.
-  defmacrop bucket_of_sql(field) do
+  # 1 when this entry starts a new sitting (no earlier entry by the same author,
+  # or the previous one is more than the gap away), 0 when it continues the
+  # current one. Running-summed below into a per-author sitting number.
+  #
+  # The gap is baked into the SQL **as a literal** rather than a query
+  # parameter: a window expression repeated in an outer GROUP BY is matched
+  # syntactically by Postgres, and two placeholders ($1 here, $7 there) are not
+  # the same expression. The macro keeps the constant single-sourced anyway.
+  defmacrop starts_sitting_sql do
+    sql =
+      "CASE WHEN ? - lag(?) OVER (PARTITION BY ? ORDER BY ?, ?) " <>
+        "< interval '#{@gap_seconds} seconds' THEN 0 ELSE 1 END"
+
     quote do
       fragment(
-        unquote("floor(extract(epoch from ?) / #{@bucket_seconds})::bigint"),
-        unquote(field)
+        unquote(sql),
+        e.inserted_at,
+        e.inserted_at,
+        e.user_id,
+        e.inserted_at,
+        e.id
+      )
+    end
+  end
+
+  # The running sitting number: how many sittings of this author have started
+  # up to and including this entry. Every entry of one sitting shares it, which
+  # makes it the GROUP BY key.
+  defmacrop sitting_number_sql do
+    quote do
+      fragment(
+        "sum(?) OVER (PARTITION BY ? ORDER BY ?, ? ROWS UNBOUNDED PRECEDING)",
+        e.starts_sitting,
+        e.user_id,
+        e.inserted_at,
+        e.id
       )
     end
   end
@@ -123,54 +151,57 @@ defmodule Vutuv.Profiles.CvUpdates do
   end
 
   @doc """
-  One notification group as the feed renders it: the group id, its newest
-  timestamp, how many entries it holds and the newest few, named.
+  The sitting the just-saved `entry` belongs to, shaped exactly like a feed row
+  — group id, newest timestamp, size and the newest few entries, named.
 
-  Built for the live push (`announce/2`), where the just-saved `entry` fixes
-  which bucket we are in; the reader-side twin is `page/3`, and both go through
-  `group_item/4` so a pushed row and a reloaded page are the same row.
+  Built for the live push (`announce/2`) from the **author's** own announced
+  entries, through the same SQL the reader side uses (`sittings/1`), so a pushed
+  row and a reloaded page are the same row. The one case they can differ: a
+  reader who started following in the middle of an open sitting sees it cut
+  short, so their derived row starts later than this one — they get a second row
+  until the next load, which the reload then folds back into one.
   """
-  def group_payload(author_id, entry) do
-    bucket = bucket_of(entry.inserted_at)
+  def group_payload(author_id, _entry) do
+    author_entries =
+      from(e in subquery(announced_entries()), where: e.user_id == ^author_id)
 
-    rows =
-      Repo.all(
-        from(e in subquery(announced_entries()),
-          where: e.user_id == ^author_id,
-          where: bucket_of_sql(e.inserted_at) == ^bucket,
-          order_by: [desc: e.inserted_at, desc: e.id],
-          select: %{
-            at: e.inserted_at,
-            section: e.section,
-            title: e.title,
-            subtitle: e.subtitle,
-            param: e.param
-          }
-        )
-      )
-
-    entries = Enum.map(rows, &Map.delete(&1, :at))
-    group_item(author_id, bucket, latest_at(rows, entry.inserted_at), entries)
+    author_entries
+    |> sittings()
+    |> select([e], %{
+      user_id: e.user_id,
+      started_at: min(e.inserted_at),
+      at: max(e.inserted_at),
+      count: count(),
+      sections: fragment("array_agg(? ORDER BY ? DESC, ? DESC)", e.section, e.inserted_at, e.id),
+      titles: fragment("array_agg(? ORDER BY ? DESC, ? DESC)", e.title, e.inserted_at, e.id),
+      subtitles:
+        fragment("array_agg(? ORDER BY ? DESC, ? DESC)", e.subtitle, e.inserted_at, e.id),
+      params: fragment("array_agg(? ORDER BY ? DESC, ? DESC)", e.param, e.inserted_at, e.id)
+    })
+    |> order_by([e], desc: max(e.inserted_at))
+    |> limit(1)
+    |> Repo.one()
+    |> to_group_item()
   end
 
-  defp latest_at([%{at: at} | _], _fallback), do: at
-  defp latest_at([], fallback), do: fallback
-
   @doc """
-  One page of `recipient_id`'s CV update groups, newest first — the feed source
-  `Vutuv.Activity` plugs into its cursor pagination.
+  One page of `recipient_id`'s CV update sittings, newest first — the feed
+  source `Vutuv.Activity` plugs into its cursor pagination.
 
-  One query: the announced entries this reader may see, folded into
-  `(author, three-hour bucket)` groups, each carrying its size and its entries'
-  names as parallel arrays (same ORDER BY, so they zip). `cursor` filters on the
-  group's newest entry, which is also what the row is timestamped and sorted by.
+  One query: the announced entries this reader may see, folded into sittings,
+  each carrying its size and its entries' names as parallel arrays (same ORDER
+  BY, so they zip). `cursor` filters on the sitting's newest entry, which is
+  also what the row is timestamped and sorted by.
   """
   def page(recipient_id, limit, cursor) do
     recipient_id
-    |> grouped_query(nil)
-    |> select([e, _follow, author], %{
+    |> visible_entries()
+    |> sittings()
+    |> join(:inner, [e], author in User, on: author.id == e.user_id)
+    |> group_by([_e, author], author.id)
+    |> select([e, author], %{
       user_id: e.user_id,
-      bucket: bucket_of_sql(e.inserted_at),
+      started_at: min(e.inserted_at),
       at: max(e.inserted_at),
       count: count(),
       author: struct(author, ^User.listing_fields()),
@@ -186,69 +217,104 @@ defmodule Vutuv.Profiles.CvUpdates do
     |> limit(^limit)
     |> before_cursor(cursor)
     |> Repo.all()
-    |> Enum.map(fn row ->
-      entries =
-        [row.sections, row.titles, row.subtitles, row.params]
-        |> Enum.zip_with(fn [section, title, subtitle, param] ->
-          %{section: section, title: title, subtitle: subtitle, param: param}
-        end)
-
-      row.user_id
-      |> group_item(row.bucket, row.at, entries, row.count)
-      |> Map.put(:author, row.author)
-    end)
+    |> Enum.map(fn row -> row |> to_group_item() |> Map.put(:author, row.author) end)
   end
 
   @doc """
-  The reader's CV update **groups**, as a query `Vutuv.Activity` can count.
-  `read_at` (nil = everything) keeps a group out unless its newest entry is
+  The reader's CV update **sittings**, as a query `Vutuv.Activity` can count.
+  `read_at` (nil = everything) keeps a sitting out unless its newest entry is
   newer than the read marker, so a burst counts as the single unread item it
   renders as.
   """
   def count_query(recipient_id, read_at) do
-    recipient_id
-    |> grouped_query(read_at)
-    |> select([e], %{entries: count()})
-  end
-
-  # The shared grouped shape: the visible entries (feed_query/1), folded into
-  # (author, bucket) groups. `read_at` filters on the group's newest entry —
-  # a HAVING, not a WHERE, so an older entry never drags a fresh group out of
-  # the unread count.
-  defp grouped_query(recipient_id, read_at) do
     query =
       recipient_id
-      |> feed_query()
-      |> group_by([e, _follow, author], [
-        e.user_id,
-        author.id,
-        bucket_of_sql(e.inserted_at)
-      ])
+      |> visible_entries()
+      |> sittings()
+      |> select([e], %{entries: count()})
 
     if read_at, do: having(query, [e], max(e.inserted_at) > ^read_at), else: query
+  end
+
+  # The reader's visible announced entries as plain columns — `feed_query/1`
+  # minus its joins, the input the sitting window functions run over.
+  defp visible_entries(recipient_id) do
+    recipient_id
+    |> feed_query()
+    |> select([e], %{
+      id: e.id,
+      user_id: e.user_id,
+      inserted_at: e.inserted_at,
+      section: e.section,
+      title: e.title,
+      subtitle: e.subtitle,
+      param: e.param
+    })
+  end
+
+  # Gap and islands: number each author's entries by sitting (a running sum of
+  # "this entry starts a new one"), then group by that number. Two nested
+  # subqueries because a window function cannot be referenced in the same
+  # SELECT that defines it, nor grouped by directly.
+  defp sittings(entries) do
+    numbered =
+      from(e in subquery(entries),
+        select: %{
+          id: e.id,
+          user_id: e.user_id,
+          inserted_at: e.inserted_at,
+          section: e.section,
+          title: e.title,
+          subtitle: e.subtitle,
+          param: e.param,
+          starts_sitting: starts_sitting_sql()
+        }
+      )
+
+    sat =
+      from(e in subquery(numbered),
+        select: %{
+          id: e.id,
+          user_id: e.user_id,
+          inserted_at: e.inserted_at,
+          section: e.section,
+          title: e.title,
+          subtitle: e.subtitle,
+          param: e.param,
+          sitting: sitting_number_sql()
+        }
+      )
+
+    from(e in subquery(sat), group_by: [e.user_id, e.sitting])
   end
 
   defp before_cursor(query, nil), do: query
   defp before_cursor(query, %{at: at}), do: having(query, [e], max(e.inserted_at) <= ^at)
 
-  # The one shape a CV update row has, wherever it comes from: a stable id
-  # (author + bucket, so the live push updates the row the feed derives rather
-  # than doubling it), the group's newest timestamp, the entries it names and
-  # how many there are in total.
-  defp group_item(author_id, bucket, at, entries, count \\ nil) do
-    %{
-      id: "cv-update-#{author_id}-#{bucket}",
-      at: at,
-      entry_count: count || length(entries),
-      entries: Enum.take(entries, @preview_entries)
-    }
+  # One aggregated row -> the shape a CV update notification has everywhere.
+  defp to_group_item(nil), do: nil
+
+  defp to_group_item(row) do
+    entries =
+      [row.sections, row.titles, row.subtitles, row.params]
+      |> Enum.zip_with(fn [section, title, subtitle, param] ->
+        %{section: section, title: title, subtitle: subtitle, param: param}
+      end)
+
+    group_item(row.user_id, row.started_at, row.at, entries, row.count)
   end
 
-  defp bucket_of(%NaiveDateTime{} = at) do
-    at
-    |> DateTime.from_naive!("Etc/UTC")
-    |> DateTime.to_unix()
-    |> div(@bucket_seconds)
+  # The one shape a CV update row has, wherever it comes from. The id is the
+  # author plus the sitting's **start**, so it stays the same while the sitting
+  # grows: the live push then updates the row the feed derives instead of
+  # doubling it (the start is what does not move; the newest timestamp does).
+  defp group_item(author_id, started_at, at, entries, count) do
+    %{
+      id: "cv-update-#{author_id}-#{NaiveDateTime.diff(started_at, ~N[1970-01-01 00:00:00])}",
+      at: at,
+      entry_count: count,
+      entries: Enum.take(entries, @preview_entries)
+    }
   end
 
   @doc """

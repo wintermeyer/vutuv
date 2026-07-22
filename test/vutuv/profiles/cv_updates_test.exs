@@ -80,7 +80,7 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
 
       CvUpdates.announce(author, qualification)
 
-      # Same author, same three-hour window: one grouped notification naming both.
+      # Same author, same sitting: one grouped notification naming both.
       assert [item] = Activity.notifications_page(follower.id).entries
       assert item.entry_count == 2
 
@@ -171,7 +171,7 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
     end
   end
 
-  describe "grouping (one notification per author per three hours)" do
+  describe "grouping (one notification per sitting)" do
     test "a burst of entries is one notification, not one each" do
       author = insert_activated_user()
       follower = insert_activated_user()
@@ -195,13 +195,13 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
       assert Activity.notifications_count(follower.id) == 1
     end
 
-    test "entries in different windows stay separate notifications" do
+    test "entries more than the gap apart stay separate notifications" do
       author = insert_activated_user()
       follower = insert_activated_user()
       follow!(follower, author)
 
       now = NaiveDateTime.utc_now(:second)
-      long_ago = NaiveDateTime.add(now, -2 * CvUpdates.bucket_seconds(), :second)
+      long_ago = NaiveDateTime.add(now, -2 * CvUpdates.gap_seconds(), :second)
       # The follow predates both entries — a notification is only for entries
       # added after you followed.
       Repo.update_all(from(f in Follow, where: f.follower_id == ^follower.id),
@@ -221,6 +221,46 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
       assert length(items) == 2
       assert Enum.all?(items, &(&1.entry_count == 1))
       assert Activity.unread_notification_count(follower.id) == 2
+    end
+
+    test "a sitting that straddles a clock boundary stays one notification" do
+      # The reason this is gap-based and not a fixed three-hour raster: 08:59
+      # and 09:01 are two minutes apart and must read as one sitting, while
+      # 09:01 and 12:30 are three and a half hours apart and must not.
+      author = insert_activated_user()
+      follower = insert_activated_user()
+      follow!(follower, author)
+
+      day = Vutuv.BerlinTime.today()
+      at = fn h, m -> NaiveDateTime.new!(day, Time.new!(h, m, 0)) end
+
+      Repo.update_all(from(f in Follow, where: f.follower_id == ^follower.id),
+        set: [inserted_at: at.(0, 0)]
+      )
+
+      for {h, m, title} <- [{8, 59, "Before the hour"}, {9, 1, "After the hour"}] do
+        insert(:work_experience,
+          user: author,
+          title: title,
+          announce_to_followers?: true,
+          inserted_at: at.(h, m)
+        )
+      end
+
+      assert [item] = Activity.notifications_page(follower.id).entries
+      assert item.entry_count == 2
+
+      # A quiet stretch longer than the gap does start a new one.
+      insert(:work_experience,
+        user: author,
+        title: "After lunch",
+        announce_to_followers?: true,
+        inserted_at: at.(12, 30)
+      )
+
+      assert [newest, older] = Activity.notifications_page(follower.id).entries
+      assert newest.entry_count == 1
+      assert older.entry_count == 2
     end
 
     test "a group beyond the preview cap counts everything but names a few" do

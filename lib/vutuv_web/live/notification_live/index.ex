@@ -215,7 +215,7 @@ defmodule VutuvWeb.NotificationLive.Index do
               data-reply-preview="true"
             />
             <%!-- A CV update that covers several entries (issue #980: one
-            notification per author per three hours) names them below the line,
+            notification per sitting) names them below the line,
             each linking to its own page, plus a count of any beyond the shown
             few. A single-entry group says it in the line itself. --%>
             <div
