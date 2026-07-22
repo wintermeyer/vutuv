@@ -313,6 +313,81 @@ defmodule Vutuv.ActivityTest do
       refute page.more?
       assert page.next_cursor == nil
     end
+
+    test "kinds: restricts the feed to the named event kinds" do
+      me = insert(:user)
+
+      # One follower event and one like event.
+      insert(:follow, follower: insert(:user), followee: me)
+      post = insert(:post, user: me)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      all = Activity.notifications_page(me.id)
+      assert Enum.map(all.entries, & &1.kind) |> Enum.sort() == ["follower", "like"]
+
+      posts_only = Activity.notifications_page(me.id, kinds: ["like", "reply"])
+      assert Enum.map(posts_only.entries, & &1.kind) == ["like"]
+
+      people_only = Activity.notifications_page(me.id, kinds: ["follower", "connection"])
+      assert Enum.map(people_only.entries, & &1.kind) == ["follower"]
+    end
+
+    test "kinds: keeps its own pagination consistent" do
+      me = insert(:user)
+      # Interleave: likes are the filtered kind, follows are noise between them.
+      for i <- 1..3 do
+        post = insert(:post, user: me)
+        :ok = Vutuv.Posts.like_post(insert(:user), post)
+        backdate_like(post, NaiveDateTime.add(~N[2024-01-01 12:00:00], i * 60))
+        c = insert(:follow, follower: insert(:user), followee: me)
+        backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:30], i * 60))
+      end
+
+      page1 = Activity.notifications_page(me.id, limit: 2, kinds: ["like"])
+      assert Enum.map(page1.entries, & &1.kind) == ["like", "like"]
+      assert page1.more?
+
+      page2 =
+        Activity.notifications_page(me.id, limit: 2, kinds: ["like"], cursor: page1.next_cursor)
+
+      assert Enum.map(page2.entries, & &1.kind) == ["like"]
+      refute page2.more?
+    end
+  end
+
+  describe "activity_summary/2" do
+    test "counts recent events per kind in one map" do
+      me = insert(:user)
+
+      # Two followers, one of them mutual (also a connection), one like, one
+      # endorsement — all now, so they land inside the window.
+      insert(:follow, follower: insert(:user), followee: me)
+      connect!(me, insert(:user))
+
+      post = insert(:post, user: me)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      user_tag = insert(:user_tag, user: me, tag: insert(:tag))
+      insert(:user_tag_endorsement, user: insert(:user), user_tag: user_tag)
+
+      since = NaiveDateTime.add(NaiveDateTime.utc_now(), -30, :day)
+      summary = Activity.activity_summary(me.id, since)
+
+      assert summary.followers == 2
+      assert summary.connections == 1
+      assert summary.likes == 1
+      assert summary.endorsements == 1
+      assert summary.replies == 0
+    end
+
+    test "events older than the window are not counted" do
+      me = insert(:user)
+      c = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(c, ~N[2016-11-24 12:00:00])
+
+      since = NaiveDateTime.add(NaiveDateTime.utc_now(), -30, :day)
+      assert Activity.activity_summary(me.id, since).followers == 0
+    end
   end
 
   describe "unread_notification_count/1" do
@@ -506,5 +581,12 @@ defmodule Vutuv.ActivityTest do
 
   defp backdate_reply(%PostReply{id: id}, at) do
     Repo.update_all(from(r in PostReply, where: r.id == ^id), set: [inserted_at: at])
+  end
+
+  defp backdate_like(post, at) do
+    Repo.update_all(
+      from(l in Vutuv.Posts.PostLike, where: l.post_id == ^post.id),
+      set: [inserted_at: at]
+    )
   end
 end

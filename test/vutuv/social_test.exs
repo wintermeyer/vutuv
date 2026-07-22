@@ -197,6 +197,50 @@ defmodule Vutuv.SocialTest do
     end
   end
 
+  describe "followers_to_follow_back/2" do
+    test "lists recent followers the user does not follow back, newest first" do
+      me = insert(:user)
+      older = insert(:user)
+      newer = insert(:user)
+      mutual = insert(:user)
+
+      {:ok, first} = Social.follow(older.id, me.id)
+      backdate_follow(first, ~N[2024-01-01 12:00:00])
+      {:ok, _} = Social.follow(newer.id, me.id)
+      # A mutual follow needs no follow-back suggestion.
+      {:ok, _} = Social.follow(mutual.id, me.id)
+      {:ok, _} = Social.follow(me.id, mutual.id)
+
+      assert Enum.map(Social.followers_to_follow_back(me.id, 5), & &1.id) ==
+               [newer.id, older.id]
+    end
+
+    test "respects the limit" do
+      me = insert(:user)
+      for _ <- 1..3, do: Social.follow(insert(:user).id, me.id)
+
+      assert length(Social.followers_to_follow_back(me.id, 2)) == 2
+    end
+
+    test "never suggests a blocked member" do
+      me = insert(:user)
+      blocked = insert(:user)
+      {:ok, _} = Social.follow(blocked.id, me.id)
+      {:ok, _} = Social.block_user(me, blocked)
+
+      assert Social.followers_to_follow_back(me.id, 5) == []
+    end
+
+    # Follow inserted_at has second precision; backdating makes newest-first
+    # deterministic.
+    defp backdate_follow(%Social.Follow{id: id}, at) do
+      Vutuv.Repo.update_all(
+        Ecto.Query.from(f in Social.Follow, where: f.id == ^id),
+        set: [inserted_at: at]
+      )
+    end
+  end
+
   describe "most_followed_users/1" do
     test "hides unactivated and moderation-hidden accounts despite their followers" do
       # Every other public surface (search, follower counts) gates on

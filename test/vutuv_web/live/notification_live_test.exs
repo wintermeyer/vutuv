@@ -9,26 +9,24 @@ defmodule VutuvWeb.NotificationLiveTest do
     } do
       {conn, user} = create_and_login_user(conn)
       follower = insert(:user, first_name: "Grace", last_name: "Hopper")
-      connection = insert(:follow, follower: follower, followee: user)
+      insert(:follow, follower: follower, followee: user)
 
       # A plain HTTP GET is what the browser paints *before* the LiveView socket
       # connects. The notifications must already be in that first render, not
-      # arrive a websocket round trip later (issue #919: the page felt sluggish
-      # because the whole list only appeared after the socket handshake, unlike
-      # the newsfeed which renders its first page on the static mount).
+      # arrive a websocket round trip later (issue #919).
       conn = get(conn, ~p"/notifications")
       body = html_response(conn, 200)
 
       assert body =~ "Grace Hopper"
       assert body =~ "started following you"
-      assert body =~ "notification-follower-#{connection.id}"
+      assert body =~ ~s(data-notification-row)
     end
 
     test "lists real events derived from the database", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       follower = insert(:user, first_name: "Grace", last_name: "Hopper")
-      connection = insert(:follow, follower: follower, followee: user)
+      insert(:follow, follower: follower, followee: user)
 
       endorser = insert(:user, first_name: "Ada", last_name: "Lovelace")
       tag = insert(:tag, name: "Phoenix")
@@ -37,28 +35,29 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, html} = live(conn, ~p"/notifications")
 
-      # Disconnected (dead) render goes through the :browser pipeline + root layout.
       assert html =~ "Notifications"
       assert html =~ "Grace Hopper"
       assert html =~ "started following you"
 
-      # Connected render goes through the /live socket + InitAssigns on_mount.
       assert render(live) =~ "endorsed you for Phoenix"
-      assert has_element?(live, "#notification-follower-#{connection.id}")
+      assert has_element?(live, ~s([data-notification-row][data-kind="follower"]))
 
       # The actor's name links to their profile.
       assert render(live) =~ ~s(href="/#{follower.username}")
     end
 
-    test "renders the row timestamp as a viewer-localizable UTC time", %{conn: conn} do
+    test "the row timestamp is a machine-readable UTC <time> showing Berlin clock time", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
       insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      # Not a raw server-UTC <time>: it must carry the LocalTime marker and an
-      # ISO-8601 datetime with a trailing Z so the viewer sees their own date.
-      assert render(live) =~ ~r/<time[^>]*data-localtime[^>]*datetime="\d{4}-\d{2}-\d{2}T[^"]*Z"/
+      # Sections are Berlin calendar days (the site's canonical clock, like
+      # post times), so the row shows a server-rendered Berlin HH:MM while the
+      # <time> keeps an unambiguous ISO-8601 UTC datetime for machines.
+      assert render(live) =~ ~r/<time[^>]*datetime="\d{4}-\d{2}-\d{2}T[^"]*Z"/
     end
 
     test "a derived row shows the actor's real avatar when they have one", %{conn: conn} do
@@ -85,50 +84,53 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      # The shell's Presence hook toggles the dot by this id, so the actor's
-      # avatar must carry it (actor_id flows through Activity.actor_fields/1).
       assert has_element?(live, ~s([data-presence-user-id="#{follower.id}"]))
     end
 
     test "a picture-less actor still gets the presence dot on the kind glyph", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      # No avatar -> the colored kind glyph stands in for the actor, so the dot
-      # must ride the glyph too, not only the <.avatar> branch.
       follower = insert(:user, first_name: "Ada", last_name: "Lovelace")
       insert(:follow, follower: follower, followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       assert has_element?(live, ~s([data-presence-user-id="#{follower.id}"]))
-      # It really is the glyph, not a photo avatar.
       refute render(live) =~ ~s(/avatars/#{follower.id}/)
     end
 
-    test "shows a mutual follow as a connection event", %{conn: conn} do
+    test "shows a mutual follow as a connection event with the handshake glyph", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      # A mutual follow makes them vernetzt; the viewer's feed carries the
-      # derived "is now connected with you" event.
       other = insert(:user, first_name: "Wojtek", last_name: "Mach")
       connect!(user, other)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       assert render(live) =~ "is now connected with you"
+      assert render(live) =~ "🤝"
     end
 
-    test "a connection event shows the handshake kind glyph", %{conn: conn} do
+    test "a same-day mutual follow shows only the connection row, not a follower double", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
 
-      # A picture-less actor renders the colored kind glyph instead of an
-      # avatar; for a connection (vernetzt) event that glyph is the handshake.
-      other = insert(:user, first_name: "Wojtek", last_name: "Mach")
-      connect!(user, other)
+      # The mutual follow derives both a follower and a connection event with
+      # the same actor on the same day; "is now connected" implies "follows
+      # you", so the follower row would be redundant noise.
+      connect!(user, insert(:user, first_name: "Wojtek", last_name: "Mach"))
+      # An unrelated one-way follower on the same day still shows.
+      insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
 
-      assert render(live) =~ "🤝"
+      assert length(row_ids(html, "connection")) == 1
+      assert [_] = row_ids(html, "follower")
+      # The follower row names Grace, not the already-connected Wojtek.
+      assert has_element?(live, ~s([data-notification-row][data-kind="follower"]), "Grace")
+      refute has_element?(live, ~s([data-notification-row][data-kind="follower"]), "Wojtek")
     end
 
     test "a reply notification links to the parent post's thread", %{conn: conn} do
@@ -164,13 +166,121 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      # The quote is shown and, like the event text, links to the post.
       assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
 
       assert has_element?(
                live,
                ~s([data-post-preview][href="/#{user.username}/posts/#{post.id}"])
              )
+    end
+
+    test "two likes of the same post on the same day merge into one row", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post = insert(:post, user: user, body: "Grouped post body")
+      :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Anna", last_name: "Arnold"), post)
+      :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Ben", last_name: "Otto"), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      # One row names both likers; the post is quoted once, not per like.
+      assert length(row_ids(html, "like")) == 1
+      assert html =~ "Anna Arnold"
+      assert html =~ "Ben Otto"
+      assert length(String.split(html, "Grouped post body")) - 1 == 1
+    end
+
+    test "likes of different posts stay separate rows", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      :ok = Vutuv.Posts.like_post(insert(:user), insert(:post, user: user, body: "First post"))
+      :ok = Vutuv.Posts.like_post(insert(:user), insert(:post, user: user, body: "Second post"))
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert length(row_ids(render(live), "like")) == 2
+    end
+
+    test "several followers on one day merge into one row with an overflow link", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      insert(:follow,
+        follower: insert(:user, first_name: "Anna", last_name: "Arnold"),
+        followee: user
+      )
+
+      insert(:follow,
+        follower: insert(:user, first_name: "Ben", last_name: "Otto"),
+        followee: user
+      )
+
+      insert(:follow,
+        follower: insert(:user, first_name: "Cara", last_name: "Prima"),
+        followee: user
+      )
+
+      insert(:follow,
+        follower: insert(:user, first_name: "Dora", last_name: "Quarta"),
+        followee: user
+      )
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      # One grouped row: two names spelled out, the rest counted, plural verb.
+      assert length(row_ids(html, "follower")) == 1
+      assert html =~ "and 2 more"
+      assert html =~ "are now following you."
+      # The overflow leads to the member's own followers list.
+      assert has_element?(live, ~s(a[href="/#{user.username}/followers"]), "and 2 more")
+    end
+
+    test "one endorser's same-day endorsements merge into one row naming every tag", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+
+      endorser = insert(:user, first_name: "Ada", last_name: "Lovelace")
+
+      for tag_name <- ["Elixir", "Phoenix"] do
+        user_tag = insert(:user_tag, user: user, tag: insert(:tag, name: tag_name))
+        insert(:user_tag_endorsement, user: endorser, user_tag: user_tag)
+      end
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert length(row_ids(html, "endorsement")) == 1
+      assert html =~ "endorsed you for Elixir and Phoenix."
+    end
+
+    test "different endorsers stay separate rows", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      for _ <- 1..2 do
+        user_tag = insert(:user_tag, user: user, tag: insert(:tag))
+        insert(:user_tag_endorsement, user: insert(:user), user_tag: user_tag)
+      end
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert length(row_ids(render(live), "endorsement")) == 2
+    end
+
+    test "rows sit under Berlin-day section headings", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # One event today, one on a fixed historic day.
+      insert(:follow, follower: insert(:user), followee: user)
+      old = insert(:follow, follower: insert(:user), followee: user)
+      backdate_follow(old, ~N[2016-11-24 12:00:00])
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert html =~ "Today"
+      assert html =~ "November 24, 2016"
     end
 
     test "a reply notification previews both the parent post and the reply", %{conn: conn} do
@@ -184,14 +294,12 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      # The recipient's own post is quoted and links to its thread ...
       assert has_element?(
                live,
                ~s([data-post-preview][href="/#{user.username}/posts/#{parent.id}"]),
                "Which editor do you swear by?"
              )
 
-      # ... and the reply is quoted and links to the reply's own permalink.
       assert has_element?(
                live,
                ~s([data-reply-preview][href="/#{replier.username}/posts/#{reply.id}"]),
@@ -205,7 +313,6 @@ defmodule VutuvWeb.NotificationLiveTest do
       replier = insert(:user)
       parent = insert(:post, user: user, body: "Public question")
       reply = insert(:post, user: replier, body: "Secret answer")
-      # The replier denies the recipient, so its body must not leak into the row.
       Vutuv.Repo.insert!(%Vutuv.Posts.PostDenial{post_id: reply.id, denied_user_id: user.id})
 
       insert(:post_reply, post: reply, parent_post: parent, parent_author: user)
@@ -267,6 +374,26 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert has_element?(live, ~s([data-post-preview]), "Live-quoted post body")
     end
 
+    test "a live like merges into the derived same-day row for the same post", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post = insert(:post, user: user, body: "Merged live post")
+      :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Anna", last_name: "Arnold"), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      assert length(row_ids(render(live), "like")) == 1
+
+      fan = insert(:user, first_name: "Fanny", last_name: "First")
+      Vutuv.Activity.notify_like(user.id, fan, post.id)
+      _ = :sys.get_state(live.pid)
+
+      html = render(live)
+      # Still one row for the post - now naming both likers.
+      assert length(row_ids(html, "like")) == 1
+      assert html =~ "Anna Arnold"
+      assert html =~ "Fanny First"
+    end
+
     test "kind labels render as human text, not raw kind strings", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
@@ -274,7 +401,6 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      # The raw kind string must not leak as a label.
       refute render(live) =~ ">connection<"
       assert render(live) =~ "Connection"
     end
@@ -285,12 +411,11 @@ defmodule VutuvWeb.NotificationLiveTest do
       replier = insert(:user, first_name: "Joe", last_name: "Armstrong")
       parent = insert(:post, user: user)
 
-      ref =
-        insert(:post_reply,
-          post: insert(:post, user: replier),
-          parent_post: parent,
-          parent_author: user
-        )
+      insert(:post_reply,
+        post: insert(:post, user: replier),
+        parent_post: parent,
+        parent_author: user
+      )
 
       insert(:post_reply,
         post: insert(:post, user: user),
@@ -302,9 +427,8 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       assert render(live) =~ "replied to your post"
       assert render(live) =~ "Joe Armstrong"
-      assert has_element?(live, "#notification-reply-#{ref.id}")
       # The self-reply derives no row.
-      assert row_count(render(live), "reply") == 1
+      assert length(row_ids(render(live), "reply")) == 1
     end
 
     test "shows the empty state when nothing happened yet", %{conn: conn} do
@@ -313,15 +437,13 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       assert render(live) =~ "Nothing new yet."
-      refute has_element?(live, "#notification-list li")
+      refute has_element?(live, ~s([data-notification-row]))
     end
 
     test "visiting the page persists the read marker (badge stays cleared)", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       insert(:follow, follower: insert(:user), followee: user)
 
-      # The events predate the visit (timestamps are second-precision, so an
-      # event in the same second as the read marker would not count anyway).
       assert Vutuv.Activity.unread_notification_count(user.id) == 1
 
       {:ok, _live, _html} = live(conn, ~p"/notifications")
@@ -329,8 +451,50 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert Vutuv.Activity.unread_notification_count(user.id) == 0
     end
 
+    test "events newer than the last visit are marked unread this visit", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      old = insert(:follow, follower: insert(:user), followee: user)
+      backdate_follow(old, ~N[2016-11-24 12:00:00])
+      # Reading back then leaves today's like unseen.
+      set_read_marker(user, ~N[2016-11-25 00:00:00])
+
+      post = insert(:post, user: user)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      # The fresh like is highlighted, the long-seen follower row is not.
+      assert has_element?(live, ~s([data-notification-row][data-kind="like"][data-unread]))
+      refute has_element?(live, ~s([data-notification-row][data-kind="follower"][data-unread]))
+      # The header counts what is new since the last visit.
+      assert html =~ "1 new notification"
+      # And the visit still clears the badge for next time.
+      assert Vutuv.Activity.unread_notification_count(user.id) == 0
+    end
+
     test "redirects a logged-out visitor to the login", %{conn: conn} do
       assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/notifications")
+    end
+
+    test "renders in German for a German browser (locale is a test dimension)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      for _ <- 1..3, do: insert(:follow, follower: insert(:user), followee: user)
+
+      body =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/notifications")
+        |> html_response(200)
+
+      assert body =~ "Mitteilungen"
+      assert body =~ "Heute"
+      # The grouped plural sentence and the folded overflow, both German.
+      assert body =~ "folgen Ihnen jetzt."
+      assert body =~ "und 1 weitere"
     end
 
     test "a new follower appears live without a reload", %{conn: conn} do
@@ -338,7 +502,6 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       Vutuv.Activity.notify_new_follower(user.id, %{first_name: "Ada", last_name: "Lovelace"})
-      # The broadcast is async; force the LiveView to process it before asserting.
       _ = :sys.get_state(live.pid)
 
       html = render(live)
@@ -350,93 +513,61 @@ defmodule VutuvWeb.NotificationLiveTest do
       {conn, user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      # The shell listens on the user topic and zeroes the bell badge whenever
-      # notifications are marked read. Subscribe after mount (the mount-time
-      # mark already fired) so we only see the read triggered by the new event.
       Vutuv.Activity.subscribe(user.id)
 
-      # A real follow lands while the user is watching: the row makes it unread,
-      # and the live broadcast renders it on the open page.
       follower = insert(:user, first_name: "Ada", last_name: "Lovelace")
       insert(:follow, follower: follower, followee: user)
       Vutuv.Activity.notify_new_follower(user.id, follower)
       _ = :sys.get_state(live.pid)
 
-      # Showing the event live must advance the read marker, which broadcasts
-      # :notifications_read and keeps the bell badge at zero rather than +1.
       assert_receive :notifications_read
       assert Vutuv.Activity.unread_notification_count(user.id) == 0
-    end
-
-    test "live notifications get dom ids outside the derived id namespace", %{conn: conn} do
-      # Live ids carry a "live-" prefix while derived rows use "<kind>-<row id>",
-      # so a live event can never update a derived row in place by id collision.
-      {conn, user} = create_and_login_user(conn)
-      follower = insert(:user, first_name: "Grace", last_name: "Hopper")
-      insert(:follow, follower: follower, followee: user)
-
-      {:ok, live, _html} = live(conn, ~p"/notifications")
-
-      Vutuv.Activity.notify_new_follower(user.id, %{first_name: "Ada", last_name: "Lovelace"})
-      _ = :sys.get_state(live.pid)
-
-      html = render(live)
-      assert html =~ ~s(id="notification-live-)
-      # the derived row survives the insert
-      assert html =~ "Grace Hopper"
     end
 
     test "a long feed offers a numbered Load more, which appends the older events", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
-      # Two more than two page sizes; they all share the same insert second,
-      # so this also exercises the tie-handling of the cursor. 52 remaining
-      # after page one makes the batch size and the remainder differ, which
-      # pins the order of the two numbers in the button label.
+      # Two more than two page sizes, all in the same second - the grouped
+      # follower row swallows them, so count raw actors via the overflow label.
       for _ <- 1..102, do: insert(:follow, follower: insert(:user), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       # The label says what the next click loads and how much is left in total.
       assert live |> element("#load-more") |> render() =~ "Load 50 of 52 more"
-      assert row_count(render(live)) == 50
+      # 50 raw events in one grouped row: 2 named + 48 counted.
+      assert render(live) =~ "and 48 more"
 
       live |> element("#load-more") |> render_click()
 
-      assert row_count(render(live)) == 100
+      assert render(live) =~ "and 98 more"
       assert live |> element("#load-more") |> render() =~ "Load 2 of 2 more"
 
       live |> element("#load-more") |> render_click()
 
-      assert row_count(render(live)) == 102
+      assert render(live) =~ "and 100 more"
       refute has_element?(live, "#load-more")
     end
 
     test "the Load more label falls back to plain text when the snapshot runs out", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      # `remaining` is a mount-time count snapshot, while more?/cursor track the
-      # live database. Seed 51 events so the snapshot is 51 (page one shows 50,
-      # one remaining) ...
       for i <- 1..51 do
         c = insert(:follow, follower: insert(:user), followee: user)
-        backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -i))
+        backdate_follow(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -i))
       end
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
       assert live |> element("#load-more") |> render() =~ "Load 1 of 1 more"
 
-      # ... then slip many older events in behind the snapshot. The next page
-      # pulls 50 of them, driving `remaining` to zero while more? is still true.
       for i <- 1..60 do
         c = insert(:follow, follower: insert(:user), followee: user)
-        backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -100 - i))
+        backdate_follow(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -100 - i))
       end
 
       live |> element("#load-more") |> render_click()
 
-      # The button still loads more, so it must not advertise "Load 0 of 0 more".
       assert has_element?(live, "#load-more")
       label = live |> element("#load-more") |> render()
       refute label =~ "0 of 0"
@@ -456,8 +587,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       {conn, user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      follower =
-        insert(:user, first_name: "Grace", last_name: "Hopper")
+      follower = insert(:user, first_name: "Grace", last_name: "Hopper")
 
       Vutuv.Activity.notify_new_follower(user.id, follower)
       _ = :sys.get_state(live.pid)
@@ -468,8 +598,113 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
   end
 
+  describe "filter tabs" do
+    test "?filter=posts keeps replies and likes, drops people events", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
+      post = insert(:post, user: user, body: "Filterable post")
+      :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Fanny"), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+
+      html = render(live)
+      assert html =~ "liked your post"
+      refute html =~ "started following you"
+    end
+
+    test "?filter=people keeps follower events, drops post events", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
+      post = insert(:post, user: user, body: "Filterable post")
+      :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Fanny"), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=people")
+
+      html = render(live)
+      assert html =~ "started following you"
+      refute html =~ "liked your post"
+    end
+
+    test "the tabs patch the filter without a reload", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      assert has_element?(live, ~s([data-notif-filter-tab="all"][aria-current="page"]))
+
+      live
+      |> element(~s([data-notif-filter-tab="posts"]))
+      |> render_click()
+
+      assert_patch(live, ~p"/notifications?filter=posts")
+      refute render(live) =~ "started following you"
+    end
+
+    test "a live event outside the active filter is not shown", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = insert(:post, user: user, body: "Filtered live post")
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=people")
+
+      Vutuv.Activity.notify_like(user.id, insert(:user, first_name: "Fanny"), post.id)
+      _ = :sys.get_state(live.pid)
+
+      refute render(live) =~ "liked your post"
+    end
+  end
+
+  describe "the desktop rail" do
+    test "suggests following back a recent follower and follows on click", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      follower = insert(:user, first_name: "Grace", last_name: "Hopper")
+      insert(:follow, follower: follower, followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(live, "#follow-back", "Grace Hopper")
+
+      live
+      |> element(~s(#follow-back button[phx-value-followee="#{follower.id}"]))
+      |> render_click()
+
+      # The follow is real and the suggestion disappears.
+      assert Vutuv.Social.user_follows_user?(user.id, follower.id)
+      refute has_element?(live, "#follow-back", "Grace Hopper")
+    end
+
+    test "shows no follow-back card when every follower is followed back", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      connect!(user, insert(:user))
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      refute has_element?(live, "#follow-back")
+    end
+
+    test "summarizes the last 30 days of activity", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:follow, follower: insert(:user), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(live, "#activity-summary", "Follower")
+    end
+
+    test "shows no summary card when the window is empty", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      old = insert(:follow, follower: insert(:user), followee: user)
+      backdate_follow(old, ~N[2016-11-24 12:00:00])
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      refute has_element?(live, "#activity-summary")
+    end
+  end
+
   describe "midnight day-change refresh" do
-    test "a :day_changed tick re-renders the quoted posts without dropping them", %{conn: conn} do
+    test "a :day_changed tick re-renders the sections without dropping them", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = insert(:post, user: user, body: "Ship the redesign on Friday")
       :ok = Vutuv.Posts.like_post(insert(:user), post)
@@ -477,26 +712,32 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
 
-      # The DayClock fires this at Berlin midnight; the page re-streams its
-      # retained items in place so each quoted-post stamp refreshes.
       send(live.pid, :day_changed)
       _ = :sys.get_state(live.pid)
       assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
     end
   end
 
-  # Derived rows carry an `id="notification-<kind>-<row id>"`.
-  defp row_count(html, kind \\ "follower"),
-    do: length(String.split(html, ~s(id="notification-#{kind}-))) - 1
+  # Grouped rows carry `id="notification-<kind>-..."` plus a data-kind marker.
+  defp row_ids(html, kind) do
+    Regex.scan(~r/data-kind="#{kind}"/, html)
+  end
 
-  # Connection inserted_at has second precision; backdating to distinct seconds
-  # gives the feed a deterministic newest-first order to paginate through.
-  defp backdate_connection(%Vutuv.Social.Follow{id: id}, at) do
+  defp backdate_follow(%Vutuv.Social.Follow{id: id}, at) do
     import Ecto.Query
 
     Vutuv.Repo.update_all(
       from(c in Vutuv.Social.Follow, where: c.id == ^id),
       set: [inserted_at: at]
+    )
+  end
+
+  defp set_read_marker(user, at) do
+    import Ecto.Query
+
+    Vutuv.Repo.update_all(
+      from(u in Vutuv.Accounts.User, where: u.id == ^user.id),
+      set: [notifications_read_at: at]
     )
   end
 end

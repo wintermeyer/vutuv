@@ -412,27 +412,60 @@ defmodule Vutuv.Activity do
 
   The cursor (and the merge across the sources) is the shared
   `Vutuv.FeedPage` scheme. Treat it as opaque.
+
+  `kinds:` (a list of kind strings) restricts the feed to those event kinds -
+  only the matching source queries run, so a filtered page paginates exactly
+  like the full feed. Backs the filter tabs on /notifications; omitting it
+  keeps the whole feed (the API and the shell badge pass no kinds).
   """
   def notifications_page(user_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_limit)
     cursor = Keyword.get(opts, :cursor)
+    kinds = Keyword.get(opts, :kinds)
 
-    Vutuv.FeedPage.paginate(
-      [
-        &follower_items(user_id, &1, &2),
-        &endorsement_items(user_id, &1, &2),
-        &connection_items(user_id, &1, &2),
-        &reply_items(user_id, &1, &2),
-        &like_items(user_id, &1, &2),
-        &organization_role_items(user_id, &1, &2),
-        &moderation_items(user_id, &1, &2),
-        &image_rejected_items(user_id, &1, &2),
-        &report_protection_items(user_id, &1, &2),
-        &handle_change_items(user_id, &1, &2),
-        &cv_update_items(user_id, &1, &2)
-      ],
-      limit,
-      cursor
+    sources =
+      for {kind, source} <- kind_sources(user_id), kinds == nil or kind in kinds, do: source
+
+    Vutuv.FeedPage.paginate(sources, limit, cursor)
+  end
+
+  # Every feed source keyed by the kind string its items carry, so `kinds:`
+  # can pick the subset to query. `report_protection` covers both the severed
+  # and the restored entry (one source emits them together).
+  defp kind_sources(user_id) do
+    [
+      {"follower", &follower_items(user_id, &1, &2)},
+      {"endorsement", &endorsement_items(user_id, &1, &2)},
+      {"connection", &connection_items(user_id, &1, &2)},
+      {"reply", &reply_items(user_id, &1, &2)},
+      {"like", &like_items(user_id, &1, &2)},
+      {"organization_role", &organization_role_items(user_id, &1, &2)},
+      {"moderation", &moderation_items(user_id, &1, &2)},
+      {"image_rejected", &image_rejected_items(user_id, &1, &2)},
+      {"report_protection", &report_protection_items(user_id, &1, &2)},
+      {"handle_change", &handle_change_items(user_id, &1, &2)},
+      {"cv_update", &cv_update_items(user_id, &1, &2)}
+    ]
+  end
+
+  @doc """
+  How much happened per social kind since `since`, in one round trip:
+  `%{followers:, connections:, likes:, replies:, endorsements:}`. Backs the
+  "Last 30 days" card on /notifications; the rare operational kinds
+  (moderation, handle changes, ...) are deliberately not in the glanceable
+  summary.
+  """
+  def activity_summary(user_id, since) do
+    Repo.one(
+      from(s in subquery(count_followers(user_id, since)),
+        select: %{
+          followers: s.count,
+          connections: subquery(count_connections(user_id, since)),
+          likes: subquery(count_likes(user_id, since)),
+          replies: subquery(count_replies(user_id, since)),
+          endorsements: subquery(count_endorsements(user_id, since))
+        }
+      )
     )
   end
 
