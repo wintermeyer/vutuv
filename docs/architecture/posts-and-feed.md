@@ -401,5 +401,30 @@ shown publicly, so it enters the AI-moderation gate like any upload
 through the authorizing proxy `VutuvWeb.ReviewCoverController`
 (`/review_covers/:id/cover-<hash>.avif` — post audience + moderation verdict
 checked per request, content-fingerprinted filename, so an outdated cover URL
-stops resolving). Files live under `review_covers/<review.id>/` with a private
-original (`Vutuv.ReviewCover`); post deletion and account deletion purge them.
+stops resolving). Files live under `review_covers/<review.id>/`
+(`Vutuv.ReviewCover`); post deletion and account deletion purge them.
+
+A cover is the one image vutuv holds that is **not ours**: publisher artwork,
+quoted at thumbnail size beside a review (§ 51 UrhG). Open Library passes the
+images through and grants no rights to them, so the pipeline is built to keep
+that quotation defensible, and the pieces below belong together — don't change
+one without the others:
+
+- **only what we show**: one derived version, `box_down 320` in
+  `Vutuv.Uploads.Spec`, and — the deliberate exception to the
+  `Vutuv.Uploads.Originals` rule — **no private original**. That costs the
+  `Vutuv.Uploads.Regenerator` path, so a Spec change is followed by
+  `Vutuv.Posts.ReviewCovers.refresh_all/1` (`mix vutuv.review_covers.refresh`
+  / `Vutuv.Release.refresh_review_covers()`), which re-fetches by ISBN, paced
+  to Open Library's rate limit, and purges pre-v7.122.4 originals;
+- **source credited**: the card renders a "Cover: Open Library" line under the
+  cover linking to `openlibrary.org/isbn/<isbn>` (§ 63 UrhG's attribution, and
+  the courtesy backlink Open Library asks for), shown only when a cover is;
+- **not indexable**: every proxy response carries
+  `X-Robots-Tag: noindex, noimageindex`;
+- **removable**: a moderation rejection deletes the files, as does deleting
+  the post.
+
+Operators who would rather not host third-party covers set
+`FETCH_BOOK_METADATA=false` — see the "Book covers on review posts" section in
+`docs/ADMINS.md`, which spells the position out for them.

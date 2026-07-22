@@ -13,6 +13,7 @@ defmodule Vutuv.Posts.PostReviewsTest do
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Repo
+  alias Vutuv.Uploads.Originals
 
   @book_review %{
     "kind" => "book",
@@ -177,6 +178,60 @@ defmodule Vutuv.Posts.PostReviewsTest do
 
       assert Vutuv.ReviewCover.version_path(stored, Vutuv.ReviewCover.version_name(stored))
       Vutuv.ReviewCover.delete_files(stored)
+    end
+
+    test "keeps no private original of the fetched cover" do
+      review = insert(:post_review, cover_status: "pending")
+
+      assert :ok = fetch_with_status(review, 200, jpeg_bytes())
+
+      stored = Repo.get(PostReview, review.id)
+      # A cover is somebody else's picture quoted at thumbnail size: we keep
+      # the one derived version we show and nothing beyond it. Re-deriving
+      # after a Spec change re-fetches by ISBN instead (refresh_all/1).
+      assert Originals.path("review_covers/#{review.id}") == nil
+
+      Vutuv.ReviewCover.delete_files(stored)
+    end
+
+    test "refresh_all/1 re-fetches every stored cover and purges legacy originals" do
+      review = insert(:post_review, cover_status: "pending")
+      assert :ok = fetch_with_status(review, 200, jpeg_bytes())
+
+      # A cover stored before v7.122.4 left a full-resolution original behind.
+      legacy = Path.join(System.tmp_dir!(), "legacy_original_#{review.id}.jpg")
+      File.write!(legacy, jpeg_bytes())
+      :ok = Originals.store("review_covers/#{review.id}", legacy, ".jpg")
+      File.rm(legacy)
+      assert Originals.path("review_covers/#{review.id}")
+
+      stored = Repo.get(PostReview, review.id)
+      previous = stored.cover
+
+      # refresh_all/1 honours the fetch flag (an air-gapped install stays
+      # air-gapped), which the test env keeps off.
+      Application.put_env(:vutuv, :fetch_book_metadata, true)
+      on_exit(fn -> Application.put_env(:vutuv, :fetch_book_metadata, false) end)
+
+      Application.put_env(:vutuv, :book_covers_req_options,
+        plug: fn conn ->
+          conn
+          |> Plug.Conn.put_resp_content_type("image/jpeg")
+          |> Plug.Conn.resp(200, jpeg_bytes())
+        end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :book_covers_req_options) end)
+
+      assert %{refetched: 1} = ReviewCovers.refresh_all(delay: 0)
+
+      refreshed = Repo.get(PostReview, review.id)
+      assert refreshed.cover_status == "ready"
+      assert is_binary(refreshed.cover)
+      assert previous != nil
+      assert Originals.path("review_covers/#{review.id}") == nil
+
+      Vutuv.ReviewCover.delete_files(refreshed)
     end
 
     test "a 404 (no cover known) marks the fetch failed" do

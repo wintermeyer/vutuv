@@ -7,6 +7,12 @@ defmodule VutuvWeb.ReviewCoverController do
   URL's version segment is the content-fingerprinted filename
   (`cover-<hash>.avif`), so only the currently stored cover ever resolves;
   denied and unknown are both 404 (`VutuvWeb.ImageProxy`).
+
+  Every response carries `X-Robots-Tag: noindex, noimageindex`: unlike the
+  other image proxies this one serves a **publisher's** cover, quoted at
+  thumbnail size beside a review, so it must not turn up as our picture in an
+  image search. A header, not a robots.txt rule — a `Disallow` only stops the
+  fetch, it cannot un-index what a crawler already has.
   """
 
   use VutuvWeb, :controller
@@ -22,7 +28,9 @@ defmodule VutuvWeb.ReviewCoverController do
     with review when not is_nil(review) <- Posts.get_review(id),
          version when not is_nil(version) <- parse_version(version_file, review),
          true <- cover_visible?(review, viewer) do
-      ImageProxy.serve(conn, version,
+      conn
+      |> put_resp_header("x-robots-tag", "noindex, noimageindex")
+      |> ImageProxy.serve(version,
         accel_path: &ReviewCover.accel_path(review, &1),
         version_path: &ReviewCover.version_path(review, &1)
       )

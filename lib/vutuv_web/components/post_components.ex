@@ -1454,6 +1454,7 @@ defmodule VutuvWeb.PostComponents do
     assigns =
       assigns
       |> assign(:cover_url, cover_url)
+      |> assign(:cover_source_url, cover_source_url(review))
       |> assign(:external_url, review_external_url(review))
 
     ~H"""
@@ -1521,10 +1522,31 @@ defmodule VutuvWeb.PostComponents do
             {review_link_label(@review.kind)} ↗
           </a>
         </p>
+        <%!-- Where the cover came from. Shown only when one is actually
+        rendered: naming the source is what a quoted image owes its author
+        (§ 63 UrhG), and Open Library asks for exactly this courtesy link
+        back, per book where we can. --%>
+        <p :if={@cover_url} class="mt-1.5 text-xs text-slate-500">
+          <.link
+            href={@cover_source_url}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            {gettext("Cover: Open Library")}
+          </.link>
+        </p>
       </div>
     </div>
     """
   end
+
+  # The credited source of a fetched cover: the book's own Open Library page
+  # when we have the ISBN it was fetched by, else the site itself.
+  defp cover_source_url(%PostReview{kind: "book", identifier: isbn}) when is_binary(isbn),
+    do: "https://openlibrary.org/isbn/#{isbn}"
+
+  defp cover_source_url(%PostReview{}), do: "https://openlibrary.org"
 
   defp review_external_url(%PostReview{kind: "book"} = review), do: PostReview.amazon_url(review)
   defp review_external_url(%PostReview{kind: "movie"} = review), do: PostReview.imdb_url(review)

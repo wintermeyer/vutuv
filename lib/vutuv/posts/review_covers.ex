@@ -74,6 +74,52 @@ defmodule Vutuv.Posts.ReviewCovers do
       mark(review, cover_status: "failed")
   end
 
+  @doc """
+  Re-fetches every stored book cover and purges the private originals that
+  fetches before v7.122.4 kept (see `Vutuv.ReviewCover`) — the maintenance
+  path that replaces the `Vutuv.Uploads.Regenerator` for covers, since there
+  is deliberately nothing left to re-derive from locally. Run it once after
+  a `Vutuv.Uploads.Spec` change to the `:review_cover` version:
+
+      mix vutuv.review_covers.refresh
+      bin/vutuv eval "Vutuv.Release.refresh_review_covers()"
+
+  Open Library asks callers not to crawl its cover API (100 requests per IP
+  per 5 minutes), so this waits `:delay` ms between fetches — 3s by default,
+  comfortably inside that budget. Returns a `%{refetched: n, skipped: n}`
+  summary; a review whose fetch fails keeps its current cover status and is
+  simply retried on the next run.
+  """
+  def refresh_all(opts \\ []) do
+    delay = Keyword.get(opts, :delay, 3_000)
+
+    reviews =
+      Repo.all(
+        from(r in PostReview,
+          where: r.kind == "book" and not is_nil(r.identifier) and r.cover_status != "none",
+          order_by: [asc: r.id]
+        )
+      )
+
+    Logger.info("review covers: refreshing #{length(reviews)} cover(s)")
+
+    Enum.reduce(reviews, %{refetched: 0, skipped: 0}, &refresh_one(&1, &2, delay))
+  end
+
+  defp refresh_one(review, summary, delay) do
+    ReviewCover.purge_original(review)
+
+    if enabled?() do
+      fetch(review)
+      # Courtesy pacing, not correctness: Open Library asks callers not to
+      # crawl the cover API (100 requests per IP per 5 minutes).
+      delay > 0 and Process.sleep(delay)
+      %{summary | refetched: summary.refetched + 1}
+    else
+      %{summary | skipped: summary.skipped + 1}
+    end
+  end
+
   defp get_cover(isbn) do
     # default=false turns Open Library's 1x1 placeholder into a plain 404.
     [
