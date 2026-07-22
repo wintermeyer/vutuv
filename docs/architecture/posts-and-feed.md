@@ -306,19 +306,37 @@ re-deploy loses nothing and a missing screenshot is re-created. Transient
 failures retry with exponential backoff up to a cap, then `failed`; an
 SSRF-refused internal host fails permanently (like a profile link's `broken?`).
 
+Chromium is bounded twice, because a page can hang the capture in two different
+places. `--timeout` (`Vutuv.PageScreenshot`, 20s) stops a page whose network
+never goes quiet — GitHub's issue search is one — and shoots what has rendered;
+without it headless Chromium waits for the load event forever and stores
+nothing, and `--virtual-time-budget` does **not** bound this under
+`--headless=new`. The OS `timeout` wrapper (30s) then force-kills a Chromium
+that took its shot but hung on shutdown. Either way `capture_outcome/2` lets the
+**file on disk decide**: a killed run that already wrote the screenshot counts
+as a capture, so a finished image is never thrown away (a truncated one simply
+fails to frame and retries).
+
 Capture is **DRY** with the profile-link previews: `Vutuv.PageScreenshot`
 (`capture_framed/2`, the shared Chromium + browser-frame + SSRF pipeline) and
 `Vutuv.Screenshot` storage (the row is the scope, so it is the same 400×264 AVIF
 thumb with the `/images/screenshot.png` fallback). Everything is gated by the
 `:generate_screenshots` flag (air-gapped installs queue nothing).
 
-`VutuvWeb.PostComponents` renders a ready screenshot beside the body — **3/4
-text, 1/4 screenshot** at `md+` (iPad/desktop), stacked below on phones (preview
-mode), or below the body in full mode. On capture the worker broadcasts
+`VutuvWeb.PostComponents` **floats** a ready screenshot to the body's top right
+(`float-right w-2/5 sm:w-1/3`) and the text wraps around it — the same reading in
+the feed/profile preview and on the permalink, so a single-link post looks like
+itself everywhere. The preview additionally needs the float-wrap body clamp
+(`link_screenshot_layout?/2` → `.post-clamp--wrap`, since `-webkit-line-clamp`
+cannot wrap around a float); full mode has no clamp and simply renders the
+screenshot as the body div's first child. On capture the worker broadcasts
 `{:post_screenshot_ready, …}` to the author's + followers' activity topics, so an
 open feed/profile upgrades the card with no reload. Admins watch the queue and
 browse the gallery (each shot linked to its post, paginated) at
-`/admin/screenshots` (`VutuvWeb.Admin.ScreenshotLive`).
+`/admin/screenshots` (`VutuvWeb.Admin.ScreenshotLive`), and hand a `failed` job
+back to the worker there ("Retry" → `Screenshots.requeue/1` + a worker nudge).
+That button is the only way past the retry cap: a job that burned its attempts
+while capture itself was broken is never picked up again on its own.
 
 The author can **remove a bad screenshot** (a cookie-banner-covered capture,
 say) from the post edit page (`VutuvWeb.PostLive.Edit`): the "Remove screenshot"

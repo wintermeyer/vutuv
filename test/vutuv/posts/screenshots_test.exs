@@ -342,6 +342,41 @@ defmodule Vutuv.Posts.ScreenshotsTest do
     end
   end
 
+  describe "requeue/1 (an admin hands a dead job back)" do
+    test "a failed job returns to pending with a clean slate and is due at once" do
+      post = url_post(user())
+      {:ok, job} = Screenshots.reconcile(post)
+
+      failed =
+        Repo.update!(
+          Ecto.Changeset.change(job,
+            status: "failed",
+            attempts: Screenshots.max_attempts(),
+            last_error: ":timeout",
+            next_attempt_at: DateTime.utc_now(:second)
+          )
+        )
+
+      assert {:ok, requeued} = Screenshots.requeue(failed)
+      assert requeued.status == "pending"
+      assert requeued.attempts == 0
+      refute requeued.last_error
+      refute requeued.next_attempt_at
+
+      # Nothing else brings a `failed` row back: without this the job stays dead
+      # even after the capture bug that killed it is fixed.
+      assert Enum.map(Screenshots.list_due(), & &1.id) == [requeued.id]
+    end
+
+    test "an author-dismissed tombstone is never handed back" do
+      {_post, ready} = ready_post(user())
+      {:ok, dismissed} = Screenshots.dismiss(ready)
+
+      assert {:error, :not_requeueable} = Screenshots.requeue(dismissed)
+      assert Repo.get!(PostScreenshot, dismissed.id).status == "dismissed"
+    end
+  end
+
   describe "list_due/1" do
     test "excludes jobs whose backoff has not elapsed" do
       post = url_post(user())

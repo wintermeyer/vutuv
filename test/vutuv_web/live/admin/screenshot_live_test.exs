@@ -72,6 +72,31 @@ defmodule VutuvWeb.Admin.ScreenshotLiveTest do
 
       refute has_element?(view, "#job-#{ready.id}")
     end
+
+    test "a failed job can be handed back to the worker", %{conn: conn} do
+      job =
+        screenshot(
+          status: "failed",
+          attempts: Screenshots.max_attempts(),
+          last_error: ":timeout"
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots")
+
+      view |> element("#job-#{job.id} button[phx-click=requeue]") |> render_click()
+
+      requeued = Repo.get!(PostScreenshot, job.id)
+      assert requeued.status == "pending"
+      assert requeued.attempts == 0
+    end
+
+    test "a job still being worked on offers no retry button", %{conn: conn} do
+      job = screenshot(status: "pending", attempts: 1)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots")
+
+      refute has_element?(view, "#job-#{job.id} button[phx-click=requeue]")
+    end
   end
 
   describe "gallery tab" do

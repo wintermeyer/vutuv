@@ -33,6 +33,52 @@ defmodule Vutuv.PageScreenshotTest do
     Application.put_env(:vutuv, :page_screenshot_probe_req_options, plug: fun)
   end
 
+  test "the command line bounds the page load, so a hanging page still yields a shot" do
+    args = Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png")
+
+    page_timeout_ms =
+      Enum.find_value(args, fn
+        "--timeout=" <> ms -> String.to_integer(ms)
+        _other -> nil
+      end)
+
+    # Headless Chromium shoots when the page finishes loading; a page whose
+    # network never goes quiet (GitHub's issue search) never gets there and
+    # `--screenshot` blocks forever, so the job dies on the OS kill with **no**
+    # image at all. `--virtual-time-budget` does not bound this under
+    # `--headless=new` — only `--timeout` does.
+    assert page_timeout_ms, "without --timeout a hanging page produces nothing"
+
+    # And it has to fire before the OS force-kill, or Chromium never gets to
+    # write the file it rendered.
+    assert page_timeout_ms < Vutuv.PageScreenshot.capture_seconds() * 1000
+  end
+
+  describe "capture_outcome/2 (the file on disk decides)" do
+    setup do
+      path = Path.join(System.tmp_dir!(), "ps_#{System.unique_integer([:positive])}.png")
+      on_exit(fn -> File.rm(path) end)
+      %{path: path}
+    end
+
+    test "a run that hung *after* writing the shot is still a capture", %{path: path} do
+      File.write!(path, "captured bytes")
+
+      # Chromium's --timeout shoots the hanging page and then sometimes fails to
+      # exit, so it gets killed; throwing the finished image away is what left
+      # the post with no screenshot at all.
+      assert :ok = Vutuv.PageScreenshot.capture_outcome({:error, :timeout}, path)
+    end
+
+    test "a run that produced nothing keeps the failure it reported", %{path: path} do
+      assert {:error, :timeout} = Vutuv.PageScreenshot.capture_outcome({:error, :timeout}, path)
+    end
+
+    test "a clean exit that wrote no file is a failure", %{path: path} do
+      assert {:error, :no_output_file} = Vutuv.PageScreenshot.capture_outcome(:ok, path)
+    end
+  end
+
   test "returns an error tuple (never raises) when the configured binary is missing" do
     Application.put_env(:vutuv, :chromium_path, "/nonexistent/definitely-not-chromium")
     out = Path.join(System.tmp_dir!(), "ps_#{System.unique_integer([:positive])}.png")

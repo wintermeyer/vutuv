@@ -10977,9 +10977,29 @@ msgstr ""
 msgid "Ready"
 msgstr ""
 
+#: lib/vutuv_web/live/admin/screenshot_live.ex:180
+#, elixir-autogen, elixir-format
+msgid "Retry"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:178
+#, elixir-autogen, elixir-format
+msgid "Retrying…"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:57
+#, elixir-autogen, elixir-format
+msgid "Screenshot job queued again."
+msgstr ""
+
 #: lib/vutuv_web/live/admin/screenshot_live.ex:113
 #, elixir-autogen, elixir-format
 msgid "The queue is empty."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:60
+#, elixir-autogen, elixir-format
+msgid "This job cannot be queued again."
 msgstr ""
 
 #: lib/vutuv_web/live/admin/screenshot_live.ex:122
