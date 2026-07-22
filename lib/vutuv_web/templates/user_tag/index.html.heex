@@ -1,13 +1,17 @@
-<%!-- The public showcase view of this member's tags — identical for every
-viewer, and exactly what the agent-format docs render. The owner edits at
-/settings/tags; the header carries a quiet "Manage" bridge there.
+<%!-- The public showcase view of this member's tags — what the agent-format docs
+render, and the same for every viewer except the one control a logged-in visitor
+gets (see below). The owner edits at /settings/tags; the header carries a quiet
+"Manage" bridge there.
 
-One row per tag: the name on the left, the members who endorse it on the right
-(their faces plus a line naming the newest of them, linking to the tag's full
-endorser list). The profile chip keeps that roster behind a hover popover no
-touch device can open, so this is the page where the endorsements are readable
-outright (issue #895). It used to be a one-column table, which the shared
-`td:last-child` rule right-aligned into the middle of nowhere. --%>
+One row per tag: the profile's own tag chip on the left, the members who endorse
+it on the right. The chip is `<.tag_vote>`, the very component the profile Tags
+card uses, so the endorsement count reads the same here and a logged-in visitor
+endorses by clicking the count pill (over fetch, no reload — the `TagVote`
+enhancement in app.js). Its hover roster is switched off here: the row already
+shows the endorsers' faces, and a popover no touch device can open is what this
+page exists to replace (issue #895). The faces are one link to the tag's full
+endorser list, with the "Endorsed by …" sentence kept as their tooltip and
+accessible name — a row of prose per tag drowned out the tags themselves. --%>
 <.page_header
   title={gettext("Tags of %{name}", name: full_name(@user))}
   manage_to={same_user?(@user, @current_user) && ~p"/settings/tags"}
@@ -20,21 +24,15 @@ outright (issue #895). It used to be a one-column table, which the shared
 
 <.card_section empty={Enum.empty?(@user_tags)}>
   <ul class="divide-y divide-slate-100 dark:divide-slate-800">
-    <%!-- Stacked on a phone (name, then who endorses it), one row from `sm` up
-    with the endorsers pushed to the right edge. --%>
+    <%!-- The chip keeps its own size, the faces sit at the right edge; on a narrow
+    phone a long tag name wraps the strip onto the next line rather than squeezing
+    the chip. --%>
     <li
       :for={user_tag <- @user_tags}
-      class="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+      class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0"
       data-tag-row
     >
-      <.link
-        navigate={~p"/#{@user}/tags/#{user_tag}"}
-        class="breakwrap inline-flex items-center gap-1 self-start font-semibold text-brand-700 hover:underline dark:text-brand-300"
-      >
-        {Vutuv.Tags.UserTag.name(user_tag)}
-        <.honor_tag_badge :if={Vutuv.Tags.UserTag.tag(user_tag).honor?} />
-      </.link>
-
+      <.tag_vote user={@user} user_tag={user_tag} viewer={@current_user} roster?={false} />
       <.endorsed_by user={@user} user_tag={user_tag} />
     </li>
   </ul>
