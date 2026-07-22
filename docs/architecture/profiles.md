@@ -276,8 +276,8 @@ are the only parts of the profile that can announce themselves. Their
 ticked by default, hidden while the member has no followers) which sets
 `announce_to_followers?` on the row; the people who already follow them then see
 one in-app notification linking to that entry. Adding several entries in one
-sitting stays **one** notification: they are grouped per author per three hours,
-so a CV overhaul never floods anyone's bell. Edit forms deliberately do not
+sitting stays **one** notification: entries less than three hours apart are
+grouped, so a CV overhaul never floods anyone's bell. Edit forms deliberately do not
 offer it, and the flag is cast **only on insert**
 (`Vutuv.Profiles.CvSection.cast_announcement/2`), so an edit can never
 re-announce. No email is ever sent, and readers can switch the whole kind off in

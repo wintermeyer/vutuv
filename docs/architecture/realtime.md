@@ -82,16 +82,20 @@ the people who follow them, with one checkbox on the new-entry form (ticked by
 default, hidden while they have no followers). Only those three sections
 announce; the rest of the profile stays quiet.
 
-**One notification per author per three hours, not one per entry.** Somebody
-filling in five roles in one sitting is one piece of news, so the feed folds an
-author's announced entries into fixed three-hour buckets
-(`CvUpdates.bucket_seconds/0`) and renders one row that names them ("added 5 new
+**One notification per sitting, not one per entry.** Somebody filling in five
+roles in one go is one piece of news, so the feed folds an author's announced
+entries into *sittings* and renders one row that names them ("added 5 new
 entries to their CV", each entry listed and linked, capped at five plus "and N
-more"). The grouping is a plain `GROUP BY (author, bucket)` on the derived rows,
-so the unread badge counts groups too and a burst can never inflate it. The
-bucket window is baked into the SQL as a literal, not a query parameter: Postgres
-compares a GROUP BY expression with the SELECT list syntactically, and two
-placeholders are not the same expression.
+more"). A sitting is a **gap-and-islands** group: entries less than
+`CvUpdates.gap_seconds/0` (three hours) apart belong together, and a longer
+quiet stretch starts a new one. Deliberately not a fixed three-hour raster —
+that would split 08:59 and 09:01 into two notifications while merging 09:01 and
+11:59 into one. In SQL it is `lag()` over the author's entries → a
+"starts a new sitting" flag → a running `sum()` → `GROUP BY (author, sitting)`,
+all over the derived rows, so the unread badge counts sittings too and a burst
+can never inflate it. The gap is baked into the SQL as a literal, not a query
+parameter: a window expression repeated in an outer GROUP BY is matched
+syntactically by Postgres, and two placeholders are not the same expression.
 
 It is derived like every other kind, from the CV rows themselves
 (`Vutuv.Profiles.CvUpdates.feed_query/1` is the single rule behind the items,
@@ -114,9 +118,10 @@ Two flags carry it, one per side:
 It never sends email. `CvUpdates.announce/2` (called from the three create
 actions and the API create) only adds the live push to the same set of
 followers, so an open session's bell lights up at save time. The push carries
-the **whole group under its derived id** (the one exception to the "live-"
-id namespace in `NotificationLive`), so a second entry within the window
-updates that row in place instead of stacking another one.
+the **whole sitting under its derived id** — author plus the sitting's *start*,
+the part that does not move as it grows (the one exception to the "live-" id
+namespace in `NotificationLive`) — so a second entry updates that row in place
+instead of stacking another one.
 
 ## Live member counter
 

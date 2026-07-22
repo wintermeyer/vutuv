@@ -242,9 +242,10 @@ defmodule Vutuv.Activity do
   Live push for a new CV entry one of the recipient's followees just added and
   chose to announce (issue #980). `payload` is
   `Vutuv.Profiles.CvUpdates.group_payload/2` — the author's whole current
-  three-hour group, under that group's own id, exactly what the derived feed
-  renders. Because the id is the derived one, a second entry within the window
-  **updates** the row an open page already shows instead of stacking another.
+  sitting, under that sitting's own id, exactly what the derived feed renders.
+  Because the id is the derived one, a second entry less than the grouping gap
+  later **updates** the row an open page already shows instead of stacking
+  another.
   In-app only: this kind never mails.
   """
   def notify_cv_update(recipient_id, %User{} = author, %{} = payload) do
@@ -730,9 +731,9 @@ defmodule Vutuv.Activity do
   end
 
   # "Added a new position to their CV" entries (issue #980): the announced CV
-  # rows of the people this member follows, **grouped per author per three
-  # hours** — somebody filling in five roles in one sitting is one piece of
-  # news, not five. Derived straight from the CV tables through the one rule in
+  # rows of the people this member follows, **grouped per sitting** (entries
+  # less than three hours apart) — somebody filling in five roles in one go is
+  # one piece of news, not five. Derived straight from the CV tables through the one rule in
   # `Vutuv.Profiles.CvUpdates`, so deleting an entry drops it from its group
   # and renaming the job renames it. The actor is the author; a single-entry
   # group links to that entry's page, a bigger one to the profile.
@@ -846,10 +847,10 @@ defmodule Vutuv.Activity do
     |> since(read_at)
   end
 
-  # Counts CV update **groups**, not rows: the badge must match what the page
-  # renders, so a five-entry burst inside one three-hour bucket is one unread
-  # item. The read-marker filter lives inside the grouped query (a HAVING on
-  # the group's newest entry), hence no `since/2` here.
+  # Counts CV update **sittings**, not rows: the badge must match what the page
+  # renders, so a five-entry burst in one sitting is one unread item. The
+  # read-marker filter lives inside the grouped query (a HAVING on the
+  # sitting's newest entry), hence no `since/2` here.
   defp count_cv_updates(user_id, read_at) do
     from(group in subquery(CvUpdates.count_query(user_id, read_at)), select: %{count: count()})
   end
