@@ -401,7 +401,7 @@ defmodule VutuvWeb.FediverseControllerTest do
       assert content =~ "Book review"
       assert content =~ "Refactoring"
       assert content =~ "Martin Fowler"
-      assert content =~ "ISBN 9783161484100"
+      assert content =~ "ISBN 978-3-16-148410-0"
       assert content =~ "https://www.amazon.de/dp/316148410X"
     end
 

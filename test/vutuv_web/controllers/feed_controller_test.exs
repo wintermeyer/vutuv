@@ -62,7 +62,7 @@ defmodule VutuvWeb.FeedControllerTest do
       assert body =~ "Book review"
       assert body =~ "Refactoring"
       assert body =~ "Martin Fowler"
-      assert body =~ "ISBN 9783161484100"
+      assert body =~ "ISBN 978-3-16-148410-0"
     end
 
     test "links and guids are absolute permalinks", %{author: author} do

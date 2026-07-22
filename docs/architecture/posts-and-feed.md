@@ -362,7 +362,7 @@ the hidden `kind` field always submits, so closing the panel deletes a stored
 review on save, while attrs without a `:review` key (the API's partial PATCH)
 leave it untouched.
 
-Every surface that renders the post adds the **review card** below the prose
+Every surface that renders the post adds the **review card**
 (`VutuvWeb.PostComponents.review_card/1`): cover (or a kind-glyph tile), kind
 label, title, creator · year · medium, and an outbound link — Amazon for books
 (built offline from the ISBN: ISBN-10 `/dp/` link, search fallback for 979
@@ -370,6 +370,24 @@ ISBNs; domain + optional affiliate tag are config, an empty `AMAZON_DOMAIN`
 removes the link), IMDb for films. The permalink's JSON-LD becomes
 `["BlogPosting", "Review"]` with `itemReviewed` (Book/Movie), and the agent
 formats carry a `review` entry / fact line (drift-tested).
+
+Where the card sits depends on the width: below the prose on a phone, and from
+`lg` up a narrow right-hand **aside** beside it (prose left, card right, both
+in one flex row — feed, profile and permalink alike). The card is the row's
+second child, so the stacked order below `lg` is the old one and no markup is
+duplicated per breakpoint; a review post without prose (a photo-only post)
+keeps the full-width card, since there is nothing to sit beside. The reader's
+line clamp then applies to the narrower prose column, so "Weiterlesen" shows on
+posts that used to fit — the clamp mechanics themselves are unchanged.
+
+The stored ISBN is the bare 13 digits; every **human-facing** rendering (the
+card, the agent-doc fact line, the federated Note and the RSS item) prints it
+hyphenated through `Vutuv.Isbn.format/1`, which splits it into EAN prefix,
+registration group, registrant, publication element and check digit using
+`priv/isbn_ranges.txt` (the International ISBN Agency RangeMessage, refreshed
+with `mix run scripts/update_isbn_ranges.exs`). An ISBN whose ranges are not in
+the table renders unhyphenated rather than wrongly split. The machine formats
+(JSON/XML doc, JSON-LD `isbn`) keep the bare digits.
 
 **Book covers** are fetched from Open Library by ISBN
 (`Vutuv.Posts.ReviewCovers`), off the request path, gated by

@@ -27,6 +27,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Isbn
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
@@ -179,6 +180,10 @@ defmodule VutuvWeb.PostComponents do
       # The book/film review sidecar; nil for ordinary posts (and for nested
       # renderings whose preload chain didn't carry it).
       |> assign(:review, review_of(post))
+      # Whether that card becomes a right-hand aside beside the prose on a
+      # wide screen (see the body block below). A review post with no body has
+      # nothing to sit beside, so its card stays the full width of the card.
+      |> assign(:review_aside?, review_of(post) != nil and post.body != "")
       |> assign(:actions_id, "post-actions-#{entry_key}")
       # The action bar's acting viewer id (nil = logged-out / public preview).
       # On a LiveView host the inline component is handed this directly; on a
@@ -835,31 +840,42 @@ defmodule VutuvWeb.PostComponents do
             </div>
           </div>
 
-          <%!-- Full mode: the whole body, no clamp. The reader's hyphenation
-          preference still rides along via @body_style (the clamp vars in it are
-          simply unused here). The tags live INSIDE the body flow so they follow
-          the end of the text — beside a tall floated inline image (a flex row
-          establishes its own formatting context, so the float narrows it
-          instead of overlapping) rather than pushed below the whole picture;
-          the container's clearfix (`.markdown--post::after`) keeps everything
-          after this div below the float. The link screenshot floats here too,
-          ahead of the prose (a float only wraps what follows it) — the same
-          beside-the-text reading as the preview, at the same width. --%>
-          <div
-            :if={@mode == :full and @post.body != ""}
-            class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
-            {style_attrs(@body_style)}
-          >
-            <.link_screenshot_image
-              :if={@link_screenshot}
-              screenshot={@link_screenshot}
-              class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
-            />
-            {@body_html}
-            <.post_tags tags={@post.tags} />
-          </div>
+          <%!-- Prose + review card. A review post lays the two out side by
+          side from `lg` up — the prose keeps the column, the card becomes a
+          narrow right-hand aside, the way a book page prints its metadata
+          beside the text. Below `lg` (and for every post without a review)
+          this is one plain column and the card sits under the prose as
+          before: the card is the row's SECOND child, so the stacked order
+          never changes and no markup is duplicated per breakpoint. The
+          images/gallery ride in the prose column too, so a photo lands beside
+          the card rather than under it in a half-empty row. --%>
+          <div class={@review_aside? && "lg:flex lg:items-start lg:gap-4"}>
+            <div class={@review_aside? && "min-w-0 lg:flex-1"}>
+              <%!-- Full mode: the whole body, no clamp. The reader's hyphenation
+              preference still rides along via @body_style (the clamp vars in it are
+              simply unused here). The tags live INSIDE the body flow so they follow
+              the end of the text — beside a tall floated inline image (a flex row
+              establishes its own formatting context, so the float narrows it
+              instead of overlapping) rather than pushed below the whole picture;
+              the container's clearfix (`.markdown--post::after`) keeps everything
+              after this div below the float. The link screenshot floats here too,
+              ahead of the prose (a float only wraps what follows it) — the same
+              beside-the-text reading as the preview, at the same width. --%>
+              <div
+                :if={@mode == :full and @post.body != ""}
+                class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
+                {style_attrs(@body_style)}
+              >
+                <.link_screenshot_image
+                  :if={@link_screenshot}
+                  screenshot={@link_screenshot}
+                  class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
+                />
+                {@body_html}
+                <.post_tags tags={@post.tags} />
+              </div>
 
-          <%= cond do %>
+              <%= cond do %>
             <% @square_layout? -> %>
               <%!-- A single roughly-square image (see @square_ratio_*) FLOATS to
               the top-right and the body text wraps around it and reclaims the full
@@ -957,7 +973,20 @@ defmodule VutuvWeb.PostComponents do
                 mode={:full}
                 permalink={@permalink}
               />
-          <% end %>
+              <% end %>
+            </div>
+
+            <%!-- The book/film review card (the post's structured sidecar,
+            Vutuv.Posts.PostReview): cover or kind glyph, title, creator, year
+            and the shop/IMDb link. Rendered in both modes, outside the clamp,
+            so the reviewed work is always visible with the prose. --%>
+            <.review_card
+              :if={@review}
+              review={@review}
+              author?={@author?}
+              aside={@review_aside?}
+            />
+          </div>
 
           <%!-- AI-moderation limbo. For every viewer but the author/admin a
           pending image renders as this neutral placecard tile; the author
@@ -999,11 +1028,6 @@ defmodule VutuvWeb.PostComponents do
             {gettext("Image awaiting review, visible only to you")}
           </p>
 
-          <%!-- The book/film review card (the post's structured sidecar,
-          Vutuv.Posts.PostReview): cover or kind glyph, title, creator, year
-          and the shop/IMDb link. Rendered in both modes, outside the clamp,
-          so the reviewed work is always visible under the prose. --%>
-          <.review_card :if={@review} review={@review} author?={@author?} />
 
           <%!-- The remaining layouts put the tags in their own full-width row
           below the body/images: plain (line-clamp) previews — no float there,
@@ -1404,13 +1428,19 @@ defmodule VutuvWeb.PostComponents do
   defp review_of(%{review: %PostReview{} = review}), do: review
   defp review_of(_post), do: nil
 
-  # The review card under the prose: cover (or a kind glyph tile), the kind
+  # The review card beside the prose: cover (or a kind glyph tile), the kind
   # label, title, creator · year, and the outbound shop/IMDb link. The cover
   # renders for everyone once released; the author additionally sees their
   # own cover while it waits in AI-moderation limbo (the proxy enforces the
   # same rule per request).
+  #
+  # `aside` is the wide-screen layout (see the prose+card row in post_card):
+  # from `lg` up the card is a narrow right-hand column, so it turns itself
+  # from a cover-beside-text row into a cover-above-text stack — at ~2/5 of a
+  # post column the side-by-side halves would each be too narrow to read.
   attr(:review, PostReview, required: true)
   attr(:author?, :boolean, default: false)
+  attr(:aside, :boolean, default: false)
 
   defp review_card(assigns) do
     review = assigns.review
@@ -1428,21 +1458,31 @@ defmodule VutuvWeb.PostComponents do
 
     ~H"""
     <div
-      class="mt-3 flex gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
+      class={[
+        "mt-3 flex gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
+        @aside && "lg:mt-0 lg:w-2/5 lg:shrink-0"
+      ]}
       data-review-card
       data-review-kind={@review.kind}
+      data-review-aside={@aside && "true"}
     >
       <img
         :if={@cover_url}
         src={@cover_url}
         alt=""
         loading="lazy"
-        class="w-16 self-start rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 sm:w-20"
+        class={[
+          "w-16 self-start rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 sm:w-20",
+          @aside && "lg:w-16"
+        ]}
       />
       <span
         :if={!@cover_url}
         aria-hidden="true"
-        class="flex aspect-[2/3] w-16 shrink-0 items-center justify-center self-start rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40 sm:w-20"
+        class={[
+          "flex aspect-[2/3] w-16 shrink-0 items-center justify-center self-start rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40 sm:w-20",
+          @aside && "lg:w-16"
+        ]}
       >
         {if @review.kind == "movie", do: "🎬", else: "📖"}
       </span>
@@ -1460,8 +1500,16 @@ defmodule VutuvWeb.PostComponents do
           |> Enum.reject(&is_nil/1)
           |> Enum.join(" · ")}
         </p>
-        <p :if={@review.kind == "book" and @review.identifier} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-          ISBN {@review.identifier}
+        <%!-- The ISBN in its printed, hyphenated form (Vutuv.Isbn.format/1) —
+        the stored value is the bare 13 digits, which reads as a barcode
+        number rather than an ISBN. `whitespace-nowrap` keeps it on one line
+        in the narrow aside: its hyphens are line-break opportunities, so it
+        would otherwise split mid-number. --%>
+        <p
+          :if={@review.kind == "book" and @review.identifier}
+          class="mt-1 text-xs text-slate-600 dark:text-slate-400"
+        >
+          ISBN <span class="whitespace-nowrap">{Isbn.format(@review.identifier)}</span>
         </p>
         <p :if={@external_url} class="mt-1.5">
           <a
@@ -1500,7 +1548,9 @@ defmodule VutuvWeb.PostComponents do
         _book -> {"📖", gettext("Book review")}
       end
 
-    isbn = if review.kind == "book" and review.identifier, do: "ISBN #{review.identifier}"
+    isbn =
+      if review.kind == "book" and review.identifier,
+        do: "ISBN #{Isbn.format(review.identifier)}"
 
     details =
       [review.creator, review.year, review_medium_label(review.medium), isbn]

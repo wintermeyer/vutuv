@@ -15,6 +15,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
+  alias Vutuv.Isbn
   alias VutuvWeb.PostComponents
 
   # The per-user people lists (followers/following/connections) share one
@@ -787,7 +788,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     label =
       if review.kind == "movie", do: gettext("Film review"), else: gettext("Book review")
 
-    isbn = if review.kind == "book" and review.identifier, do: "ISBN #{review.identifier}"
+    isbn =
+      if review.kind == "book" and review.identifier,
+        do: "ISBN #{Isbn.format(review.identifier)}"
 
     details =
       [

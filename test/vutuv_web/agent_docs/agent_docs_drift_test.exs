@@ -356,8 +356,17 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     rendered = formats_for("/drift_tester/posts/#{reviewed.id}")
 
-    for fact <- ["Refactoring", "Martin Fowler", "9783161484100", "Audiobook"],
+    for fact <- ["Refactoring", "Martin Fowler", "Audiobook"],
         do: assert_fact_everywhere(rendered, fact)
+
+    # The ISBN is the one fact that renders per audience: readers get it
+    # hyphenated the way it is printed on the book (Vutuv.Isbn.format/1),
+    # machines the bare canonical digits.
+    for {format, body} <- Map.take(rendered, [:html, :md, :txt]),
+        do: assert(body =~ "978-3-16-148410-0", "the #{format} version lost the printed ISBN")
+
+    for {format, body} <- Map.take(rendered, [:json, :xml]),
+        do: assert(body =~ "9783161484100", "the #{format} version lost the stored ISBN")
 
     doc = Jason.decode!(rendered.json)
     assert doc["review"]["kind"] == "book"

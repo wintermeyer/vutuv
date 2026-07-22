@@ -54,6 +54,52 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ ~s("isbn": "9783161484100")
     end
 
+    test "shows the ISBN hyphenated the way it is printed on the book", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # The stored value is the bare 13 digits (and stays that way in the
+      # machine formats — the JSON-LD assertion above); only the reader sees
+      # the split form.
+      assert html =~ "978-3-16-148410-0"
+      refute html =~ "ISBN 9783161484100"
+    end
+
+    test "lays the card out beside the prose on a wide screen", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # One column on a phone (the card follows the prose in the DOM), a
+      # narrow right-hand aside from `lg` up.
+      assert html =~ "lg:flex lg:items-start lg:gap-4"
+      assert html =~ ~s(data-review-aside="true")
+    end
+
+    test "a review post with no prose keeps the card full width", %{conn: conn} do
+      user = insert_activated_user()
+      image = insert(:post_image, user: user, post: nil, token: "reviewtok")
+
+      # A photo-only post is the one way a review can arrive without prose
+      # (a post needs a body or an image).
+      post =
+        create_post!(user, %{
+          body: "",
+          image_ids: [image.id],
+          review: %{"kind" => "book", "title" => "Nur der Kasten"}
+        })
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # Nothing to sit beside, so no aside — a 2/5 card in an empty row
+      # would just look broken.
+      assert html =~ "data-review-card"
+      refute html =~ ~s(data-review-aside="true")
+    end
+
     test "renders in German for German visitors (locale dimension)", %{conn: conn} do
       user = insert_activated_user()
       post = reviewed_post!(user)

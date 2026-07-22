@@ -43,7 +43,7 @@ defmodule VutuvWeb.PostReviewComposerTest do
       assert feed_html =~ "data-review-card"
       assert feed_html =~ "Refactoring"
       assert feed_html =~ "Martin Fowler"
-      assert feed_html =~ "ISBN 9783161484100"
+      assert feed_html =~ "978-3-16-148410-0"
       assert feed_html =~ "https://www.amazon.de/dp/316148410X"
 
       # The composer reset also closes the panel for the next post.
