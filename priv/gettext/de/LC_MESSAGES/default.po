@@ -14766,3 +14766,8 @@ msgstr "%{hours} Std. %{minutes} Min."
 #, elixir-autogen, elixir-format
 msgid "approx. %{duration}"
 msgstr "ca. %{duration}"
+
+#: lib/vutuv_web/components/post_components.ex:1518
+#, elixir-autogen, elixir-format
+msgid "Publisher:"
+msgstr "Verlag:"
