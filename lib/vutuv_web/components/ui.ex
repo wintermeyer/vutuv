@@ -1384,6 +1384,26 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  Splits a translated string on a `{marker}` placeholder into `{before, after}`,
+  so a sentence can carry a link exactly where the placeholder sits — in the
+  place German and English each want it. Split twice for two links (the
+  landing-page consent line and the notifications welcome note both do).
+
+  Deliberately **total**: `parts: 2` collapses a doubled placeholder (a botched
+  translation) to one split, and a missing placeholder returns `{text, ""}`, so
+  a malformed translation renders slightly wrong text and never raises. A hard
+  `[a, b] = String.split(...)` here 500ed vutuv.de for every German visitor when
+  a `.po` merge duplicated the German consent sentence (two placeholders where
+  the code expected one); `page_locale_render_test.exs` guards against it.
+  """
+  def split_marker(text, marker) do
+    case String.split(text, marker, parts: 2) do
+      [before, rest] -> {before, rest}
+      [whole] -> {whole, ""}
+    end
+  end
+
+  @doc """
   Button. Renders a `<.link>` when given `navigate`/`patch`/`href` (with optional
   `method` for POST/DELETE actions), otherwise a `<button>` (set `type`). Variants:
   `primary` (default), `secondary`, `ghost`, `danger`.

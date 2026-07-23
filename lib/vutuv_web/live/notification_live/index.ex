@@ -394,12 +394,16 @@ defmodule VutuvWeb.NotificationLive.Index do
         <p class="mb-0 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
           <.actor_links group={@group} current_user={@current_user} />
           <% target = notification_target(@n, @current_user) %>
-          <%= if target do %>
-            <.link href={target} class="hover:text-brand-700 hover:underline dark:hover:text-brand-300">
+          <%= cond do %>
+            <%!-- The one row that is not a single link: see username_line/1. --%>
+            <% @group.kind == "username" -> %>
+              <.username_line handle={@n.username} />
+            <% target -> %>
+              <.link href={target} class="hover:text-brand-700 hover:underline dark:hover:text-brand-300">
+                {group_text(@group)}
+              </.link>
+            <% true -> %>
               {group_text(@group)}
-            </.link>
-          <% else %>
-            {group_text(@group)}
           <% end %>
         </p>
 
@@ -616,6 +620,43 @@ defmodule VutuvWeb.NotificationLive.Index do
     <% end %>
     """
   end
+
+  # The welcome note is the one row that is NOT one big link: the handle points
+  # at the member's own profile, the URL at the page that changes it, so both
+  # destinations are reachable and the rest of the sentence stays plain text.
+  # The two `{markers}` are split out of the translation (split_marker/2, total
+  # by design, so a botched .po can never raise here) and each half rendered in
+  # its own place — which is also how German and English each get their natural
+  # word order.
+  attr(:handle, :string, required: true)
+
+  defp username_line(assigns) do
+    {before_handle, rest} =
+      split_marker(
+        gettext(
+          "Your automatically assigned vutuv username is {handle}. You can change it any time at {url}."
+        ),
+        "{handle}"
+      )
+
+    {between, tail} = split_marker(rest, "{url}")
+
+    assigns =
+      assign(assigns,
+        before_handle: before_handle,
+        between: between,
+        tail: tail,
+        settings_url: url(~p"/settings/security")
+      )
+
+    ~H"""
+    {@before_handle}<.link href={~p"/#{@handle}"} class={inline_link_class()}>@{@handle}</.link>{@between}<.link href={@settings_url} class={inline_link_class()}>{@settings_url}</.link>{@tail}
+    """
+  end
+
+  defp inline_link_class,
+    do:
+      "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
 
   # "A and B liked" / "A, B and 3 more liked": the separator *before* the
   # name at `index`. The joining word only appears when B is the last named
@@ -834,8 +875,9 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # The username note opens the page that can change it.
-  defp notification_target(%{kind: "username"}, _viewer), do: ~p"/settings/security"
+  # The username note carries its own two links inside the sentence
+  # (username_line/1), so the row itself must not be one.
+  defp notification_target(%{kind: "username"}, _viewer), do: nil
 
   # A CV update (issue #980) opens the entry itself when the group holds
   # exactly one; a bigger group leads to the author's profile, where all of
@@ -924,21 +966,6 @@ defmodule VutuvWeb.NotificationLive.Index do
           "Your report paused the connection between you two - no contact in either direction for now. If our admins find the report unfounded, this is undone."
         )
     end
-  end
-
-  # The welcome note naming the member's own handle. No actor (nobody did this
-  # to them). It spells out the **full URL** rather than a page name: the note
-  # is the one place a member is told a handle they never chose, so it should
-  # still work when the sentence is read outside the row that links there (a
-  # screenshot, a copy-paste). `url/1` builds it from the endpoint, so every
-  # installation prints its own host, and it stays plain text - the row is
-  # already the link, and an anchor inside an anchor is invalid HTML.
-  defp notification_text(%{kind: "username"} = n) do
-    gettext(
-      "Your automatically assigned vutuv username is @%{handle}. You can change it any time at %{url}.",
-      handle: n.username,
-      url: url(~p"/settings/security")
-    )
   end
 
   # A handle change: show the old and new handle so the reader sees exactly

@@ -45,10 +45,10 @@ defmodule VutuvWeb.PageLocaleRenderTest do
 
   test "split_marker/2 is total, so a botched translation can never 500 the page" do
     # Correct: one split into before/after.
-    assert VutuvWeb.PageHTML.split_marker("a {x} b", "{x}") == {"a ", " b"}
+    assert VutuvWeb.UI.split_marker("a {x} b", "{x}") == {"a ", " b"}
     # Doubled placeholder (the corruption that shipped): still exactly two parts.
-    assert VutuvWeb.PageHTML.split_marker("a {x} b {x} c", "{x}") == {"a ", " b {x} c"}
+    assert VutuvWeb.UI.split_marker("a {x} b {x} c", "{x}") == {"a ", " b {x} c"}
     # Missing placeholder: no raise, the whole string is the "before".
-    assert VutuvWeb.PageHTML.split_marker("no marker here", "{x}") == {"no marker here", ""}
+    assert VutuvWeb.UI.split_marker("no marker here", "{x}") == {"no marker here", ""}
   end
 end
