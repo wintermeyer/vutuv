@@ -602,6 +602,60 @@ defmodule VutuvWeb.PostControllerTest do
       assert author_html =~ "/post_images/pendtok/feed.avif"
     end
 
+    test "a mid-thread reply's permalink renders the whole conversation (issue #1006)", %{
+      conn: conn
+    } do
+      author = insert_activated_user()
+      replier = insert_activated_user()
+      root = create_post!(author, %{body: "the conversation root"})
+      {:ok, focus} = Posts.create_reply(replier, root, %{body: "the focused answer"})
+      {:ok, _nested} = Posts.create_reply(author, focus, %{body: "a deeper answer"})
+      {:ok, _sibling} = Posts.create_reply(author, root, %{body: "a sibling branch"})
+
+      html = html_response(get(conn, Posts.path(focus)), 200)
+
+      # The whole thread is on the page: the root above, the deeper answer and
+      # the sibling branch below.
+      assert html =~ "the conversation root"
+      assert html =~ "the focused answer"
+      assert html =~ "a deeper answer"
+      assert html =~ "a sibling branch"
+
+      # The permalinked post is the highlighted anchor and, having context
+      # above it, marked for the arrival auto-scroll.
+      assert html =~ ~s(id="thread-focus")
+      assert html =~ "data-thread-scroll"
+
+      # The sibling branch answers the root, not the card right above it, so
+      # its own "Replying to" banner names the real parent.
+      assert html =~ "Replying to"
+    end
+
+    test "the root's permalink shows its thread without the auto-scroll marker", %{conn: conn} do
+      author = insert_activated_user()
+      root = create_post!(author, %{body: "root of it all"})
+
+      {:ok, _reply} =
+        Posts.create_reply(insert_activated_user(), root, %{body: "an answer below"})
+
+      html = html_response(get(conn, Posts.path(root)), 200)
+
+      assert html =~ "an answer below"
+      assert html =~ ~s(id="thread-focus")
+      # Nothing above the root, so no scroll jump on arrival.
+      refute html =~ "data-thread-scroll"
+    end
+
+    test "a post without replies renders standalone, no thread frame", %{conn: conn} do
+      post = create_post!(insert_activated_user(), %{body: "all alone here"})
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      assert html =~ "all alone here"
+      refute html =~ ~s(id="post-thread")
+      refute html =~ "thread-focus"
+    end
+
     test "redirects non-canonical URLs to the canonical form", %{conn: conn} do
       user = insert_activated_user()
       post = create_post!(user, %{body: "x"})
@@ -989,17 +1043,21 @@ defmodule VutuvWeb.PostControllerTest do
   end
 
   describe "the reply banner and thread" do
-    test "a reply's page shows the banner with the @handle, linking the parent", %{conn: conn} do
+    test "a reply's page shows the parent post itself above it, no redundant banner", %{
+      conn: conn
+    } do
       parent_author = insert_activated_user(first_name: "Petra", last_name: "Parent")
       parent = create_post!(parent_author, %{body: "original question"})
       {:ok, reply} = Posts.create_reply(insert_activated_user(), parent, %{body: "an answer"})
 
       html = conn |> get(Posts.path(reply)) |> html_response(200)
 
-      # The banner names the account handle, not the clear name.
-      assert html =~ "Replying to @#{parent_author.username}"
-      refute html =~ "Replying to Petra Parent"
+      # The conversation view (issue #1006) renders the parent post right
+      # above the reply, so the "Replying to" banner would state the obvious
+      # twice and stays off for a reply whose parent card sits directly above.
+      assert html =~ "original question"
       assert html =~ Posts.path(parent)
+      refute html =~ "Replying to @#{parent_author.username}"
     end
 
     test "after parent deletion the banner names the author's @handle and profile", %{conn: conn} do

@@ -1925,6 +1925,73 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "list_thread/3" do
+    # The permalink page renders the whole conversation (issue #1006): the
+    # thread's root plus every visible reply, oldest first, from ANY post in it.
+    test "returns the whole conversation oldest-first from any post in it" do
+      root = create_post!(user(), %{body: "thread root"})
+      {:ok, mid} = Posts.create_reply(user(), root, %{body: "mid"})
+      {:ok, branch_a} = Posts.create_reply(user(), mid, %{body: "branch a"})
+      {:ok, branch_b} = Posts.create_reply(user(), mid, %{body: "branch b"})
+      {:ok, leaf} = Posts.create_reply(user(), branch_a, %{body: "leaf"})
+
+      expected = [root.id, mid.id, branch_a.id, branch_b.id, leaf.id]
+
+      for post <- [root, branch_b, leaf] do
+        assert %{posts: posts, truncated?: false} = Posts.list_thread(post, nil)
+        assert Enum.map(posts, & &1.id) == expected
+      end
+    end
+
+    test "a post with no replies is a one-post thread" do
+      post = create_post!(user(), %{body: "alone"})
+
+      assert %{posts: [%Post{id: id}], truncated?: false} = Posts.list_thread(post, nil)
+      assert id == post.id
+    end
+
+    test "excludes a moderation-frozen post mid-thread" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, frozen} = Posts.create_reply(user(), root, %{body: "to be frozen"})
+      {:ok, leaf} = Posts.create_reply(user(), frozen, %{body: "answer under the frozen one"})
+
+      Repo.update_all(from(p in Post, where: p.id == ^frozen.id),
+        set: [frozen_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      assert %{posts: posts} = Posts.list_thread(leaf, user())
+      assert Enum.map(posts, & &1.id) == [root.id, leaf.id]
+    end
+
+    test "a deleted root degrades to the surviving chain plus direct replies" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, a} = Posts.create_reply(user(), root, %{body: "a"})
+      {:ok, b} = Posts.create_reply(user(), a, %{body: "b"})
+      {:ok, c} = Posts.create_reply(user(), b, %{body: "c"})
+
+      {:ok, _} = Posts.delete_post(root)
+
+      # Root deletion nilifies every root_post_id in the thread, so the whole
+      # conversation can no longer be fetched by root — but the permalink must
+      # still show at least the surviving ancestor chain and the direct replies.
+      assert %{posts: posts} = Posts.list_thread(Repo.preload(b, :reply_ref, force: true), nil)
+      assert Enum.map(posts, & &1.id) == [a.id, b.id, c.id]
+    end
+
+    test "caps the conversation but always keeps the permalinked post" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, r1} = Posts.create_reply(user(), root, %{body: "r1"})
+      {:ok, _r2} = Posts.create_reply(user(), root, %{body: "r2"})
+      {:ok, r3} = Posts.create_reply(user(), root, %{body: "r3"})
+
+      assert %{posts: posts, truncated?: true} = Posts.list_thread(r3, nil, limit: 2)
+
+      # The cap keeps the oldest posts; the permalinked post itself is always
+      # unioned back in so the page never loses its own subject.
+      assert Enum.map(posts, & &1.id) == [root.id, r1.id, r3.id]
+    end
+  end
+
   describe "visibility lock" do
     test "update_post/2 refuses audience changes while reposts exist" do
       author = user()

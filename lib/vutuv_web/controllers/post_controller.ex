@@ -221,11 +221,21 @@ defmodule VutuvWeb.PostController do
     restricted? = Posts.restricted?(post)
     {noindex?, noai?} = PostDoc.robots_axes(author, restricted?)
 
-    # The viewer's follow edge to the author drives the card's mute toggle —
-    # only when the viewer follows them and is not the author themselves.
-    viewer_follow =
-      if viewer && not Posts.author?(post, viewer),
-        do: Social.follow_edge(viewer.id, author.id)
+    # The whole conversation this post belongs to (issue #1006), root first.
+    %{posts: thread, truncated?: thread_truncated?} = Posts.list_thread(post, viewer)
+
+    # The viewer's follow edges to every author on the page drive the cards'
+    # mute toggles — batched, the way the feed does it.
+    viewer_follows =
+      if viewer do
+        thread
+        |> Enum.map(& &1.user_id)
+        |> Enum.uniq()
+        |> Enum.reject(&(&1 == viewer.id))
+        |> then(&Social.follow_edges(viewer.id, &1))
+      else
+        %{}
+      end
 
     conn
     |> VutuvWeb.ContentPolicy.put_robots_header(noindex?, noai?)
@@ -234,8 +244,9 @@ defmodule VutuvWeb.PostController do
       author: author,
       owner?: Posts.author?(post, viewer),
       restricted?: restricted?,
-      viewer_follow: viewer_follow,
-      replies: Posts.list_replies(post, viewer),
+      viewer_follows: viewer_follows,
+      thread: thread,
+      thread_truncated?: thread_truncated?,
       # The "Other formats" card links to the post's agent siblings — shown only
       # when the anonymous .md/.txt/.json/.xml would actually resolve (the same
       # gate as maybe_put_alternates/2 advertising them in the head).

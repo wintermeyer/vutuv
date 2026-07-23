@@ -31,6 +31,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.ReviewCover
@@ -587,7 +588,19 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <%= case @chain do %>
       <% [item | rest] -> %>
-        <div class="relative">
+        <div
+          id={Map.get(item, :focus?) && "thread-focus"}
+          data-thread-scroll={Map.get(item, :scroll?)}
+          class={[
+            "relative",
+            # The permalink's highlighted subject (issue #1006): the tint is an
+            # absolutely positioned ::before so the chain's connector geometry
+            # (avatar columns, elbows) is untouched; z-0 opens a stacking
+            # context so -z-10 stays in front of the page card's background.
+            Map.get(item, :focus?) &&
+              "z-0 scroll-mt-24 before:absolute before:-inset-x-3 before:-inset-y-2 before:-z-10 before:rounded-xl before:bg-brand-50/70 before:ring-1 before:ring-brand-200 before:content-[''] dark:before:bg-brand-900/20 dark:before:ring-brand-800"
+          ]}
+        >
           <%!-- Drops from this avatar's bottom (top-9) to the card's bottom; the
           elbow below continues it into the reply's avatar. Only when a reply
           follows this card. Height is an explicit `calc(100% - top)`, not
@@ -611,7 +624,8 @@ defmodule VutuvWeb.PostComponents do
             entry_id={item.entry_id}
             surface={@surface}
             conn_or_socket={@conn_or_socket}
-            show_reply_banner={false}
+            mode={Map.get(item, :mode, :preview)}
+            show_reply_banner={Map.get(item, :show_reply_banner, false)}
           />
         </div>
         <div :if={rest != []} class={["relative pt-3", @indent? && "pl-7"]}>
@@ -644,6 +658,64 @@ defmodule VutuvWeb.PostComponents do
     <% end %>
     """
   end
+
+  @doc """
+  The permalink page's whole-conversation rendering (issue #1006): every post
+  of `posts` (the thread oldest first, `Vutuv.Posts.list_thread/3`) as one
+  connected chain — the same look as a feed thread row. The permalinked
+  `focus_id` post renders in `:full` mode, tinted as the page's subject and,
+  when it has context above it, marked for the arrival auto-scroll
+  (`data-thread-scroll`, wired in app.js). The chain is chronological, not a
+  tree, so a reply that does not answer the card right above it keeps its own
+  "Replying to @handle" banner — that is how a branch point stays readable.
+  """
+  attr(:posts, :list, required: true, doc: "the whole conversation, oldest first")
+  attr(:focus_id, :string, required: true, doc: "the permalinked post's id")
+  attr(:viewer, :any, default: nil)
+
+  attr(:viewer_follows, :map,
+    default: %{},
+    doc:
+      "the viewer's follow edges by author id (Vutuv.Social.follow_edges/2), " <>
+        "batched for the cards' mute menu items like the feed does"
+  )
+
+  attr(:conn_or_socket, :any, required: true)
+
+  def thread_conversation(assigns) do
+    assigns = assign(assigns, :chain, conversation_chain(assigns))
+
+    ~H"""
+    <.thread_chain chain={@chain} viewer={@viewer} surface={:flat} conn_or_socket={@conn_or_socket} />
+    """
+  end
+
+  defp conversation_chain(%{posts: posts} = assigns) do
+    [nil | posts]
+    |> Enum.zip(posts)
+    |> Enum.map(fn {prev, post} ->
+      focus? = post.id == assigns.focus_id
+
+      %{
+        post: post,
+        engagement: nil,
+        viewer_follow: assigns.viewer_follows[post.user_id],
+        reposted_by: nil,
+        reposters: nil,
+        entry_id: nil,
+        mode: if(focus?, do: :full, else: :preview),
+        focus?: focus?,
+        scroll?: focus? and prev != nil,
+        # A branch point: this reply does not answer the card right above it,
+        # so its own banner must name the real parent. The first card keeps
+        # its banner too — a degraded chain top is itself a reply.
+        show_reply_banner: prev == nil or thread_parent_id(post) != prev.id
+      }
+    end)
+  end
+
+  defp thread_parent_id(%{reply_ref: %PostReply{parent_post_id: id}}), do: id
+  defp thread_parent_id(_post), do: nil
 
   # Fallback when a caller does not compute the full visible chain: the single
   # preloaded `reply_ref` parent (one level), or none when nesting is off (the

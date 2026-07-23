@@ -106,7 +106,14 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       tags_line(doc.tags),
       engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
-      section("#{gettext("Replies")} (#{doc.reply_count})", Enum.map(doc.replies, &reply_block/1))
+      # The whole conversation (issue #1006), like the HTML permalink: every
+      # other thread post oldest first (the page's own post already reads in
+      # full above), each naming its parent when it is one of them.
+      section(
+        "#{gettext("Conversation")} (#{length(doc.thread)})",
+        doc.thread |> Enum.reject(&(&1.id == doc.id)) |> Enum.map(&thread_block/1)
+      ),
+      if(doc.thread_truncated, do: gettext("Only part of this long conversation is shown."))
     ]
     |> join_blocks()
   end
@@ -896,8 +903,18 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   @doc false
   def image_url(image), do: image.urls[:feed] || image.urls |> Map.values() |> List.first()
 
-  defp reply_block(reply) do
-    "### [#{md_text(reply.author)}](#{reply.url}) · #{reply.published_on}\n\n#{reply.body_markdown}"
+  defp thread_block(entry) do
+    reply_to =
+      entry.in_reply_to_author &&
+        "> " <> gettext("In reply to a post by %{name}.", name: entry.in_reply_to_author)
+
+    [
+      "### [#{md_text(entry.author)}](#{entry.url}) · #{entry.published_on}",
+      reply_to,
+      entry.body_markdown
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n\n")
   end
 
   defp section(_title, []), do: nil
