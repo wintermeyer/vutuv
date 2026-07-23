@@ -97,6 +97,13 @@ config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 config :vutuv, :image_scan_votes, 3
 config :vutuv, :image_scan_reject_votes, 3
 
+# How many minutes a post stays editable after publishing (issue #1023). An
+# edit rewrites what readers already liked or reposted, so editing closes with
+# the first like, repost or reply anyway (Vutuv.Posts.editable?/1); this is the
+# grace period for the typo you spot right after posting. Runtime override:
+# POST_EDIT_WINDOW_MINUTES (config/runtime.exs).
+config :vutuv, :post_edit_window_minutes, 30
+
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
 # Off for now: no banner serves, the public /ads flow and the admin review
 # dashboard 404. "ads" stays a reserved username slug either way, so the

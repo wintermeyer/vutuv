@@ -284,9 +284,10 @@ website.
 
 ### PATCH /posts/:id · DELETE /posts/:id
 
-Scope: `posts:write`, own posts only. While reposts or replies exist the
-audience cannot be restricted (`409`, `reason: visibility_locked`);
-deleting is always possible (`204`).
+Scope: `posts:write`, own posts only. A post is editable for 30 minutes
+after publishing and only until someone likes, reposts or answers it —
+past that, `PATCH` answers `409` (`reason: edit_window_closed` /
+`edit_engaged`). Deleting is always possible (`204`).
 
 ### POST /posts/:id/replies
 

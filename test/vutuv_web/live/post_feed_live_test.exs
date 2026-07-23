@@ -888,6 +888,27 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "#post-menu-post-#{mine.id} a[data-method='delete']")
       refute has_element?(live, "#post-menu-post-#{theirs.id}")
     end
+
+    test "Edit drops out of the menu once the edit window has run out", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "old words"})
+
+      at =
+        NaiveDateTime.add(
+          NaiveDateTime.utc_now(:second),
+          -(Posts.edit_window_minutes() + 1) * 60
+        )
+
+      Repo.update_all(from(p in Vutuv.Posts.Post, where: p.id == ^post.id),
+        set: [inserted_at: at]
+      )
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Delete stays: only the edit closes (issue #1023).
+      refute has_element?(live, "#post-menu-post-#{post.id} a[href='/posts/#{post.id}/edit']")
+      assert has_element?(live, "#post-menu-post-#{post.id} a[data-method='delete']")
+    end
   end
 
   describe "mute from the feed" do

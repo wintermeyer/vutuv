@@ -202,12 +202,17 @@ defmodule Vutuv.Posts do
   by what `attrs` carries (same keys as `create_post/2`). Detached images are
   deleted, rows and files. The publication date (the archive coordinate)
   never changes.
+
+  Editing closes with the edit window (`editable?/1`): `{:error,
+  :edit_window_closed}` once the post is older than `edit_window_minutes/0`,
+  `{:error, :edit_engaged}` once someone liked, reposted or answered it.
   """
   def update_post(%Post{} = post, attrs) do
     post = Repo.preload(post, [:denials, :post_tags, :images, :review])
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
 
-    with {:ok, denials} <- normalize_denials(post.user_id, fetch(attrs, :denials) || []),
+    with :ok <- check_edit_open(post),
+         {:ok, denials} <- normalize_denials(post.user_id, fetch(attrs, :denials) || []),
          :ok <- check_visibility_lock(post, denials),
          :ok <- check_image_count(image_ids),
          {:ok, changeset} <- build_changeset(post, attrs, denials, image_ids) do
@@ -736,6 +741,60 @@ defmodule Vutuv.Posts do
   def has_replies?(post_id) when is_binary(post_id) do
     Repo.exists?(from(r in PostReply, where: r.parent_post_id == ^post_id))
   end
+
+  @doc "Whether any likes of this post exist (the edit lock, like reposts)."
+  def has_likes?(%Post{id: id}), do: has_likes?(id)
+
+  def has_likes?(post_id) when is_binary(post_id) do
+    Repo.exists?(from(l in PostLike, where: l.post_id == ^post_id))
+  end
+
+  @doc """
+  How many minutes after publishing a post stays editable (issue #1023).
+
+  Installation-wide, `:post_edit_window_minutes` in the config (env var
+  `POST_EDIT_WINDOW_MINUTES` in production), 30 by default.
+  """
+  def edit_window_minutes, do: Application.get_env(:vutuv, :post_edit_window_minutes, 30)
+
+  @doc """
+  Whether the post is still inside its edit window — the cheap half of
+  `editable?/1`: no query, so the post card can gate its "Edit" menu item on it
+  without costing the feed a round trip per card. A **frozen** post reopens the
+  window: editing is one of the three ways out of the moderation freezer, and
+  nobody but the owner can see it meanwhile.
+  """
+  def edit_window_open?(%Post{frozen_at: frozen_at, inserted_at: inserted_at}) do
+    frozen_at != nil or
+      NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at) < edit_window_minutes() * 60
+  end
+
+  @doc """
+  Whether the author may still edit this post: inside the edit window and not
+  yet liked, reposted or answered by anyone (issue #1023). Costs one query; the
+  post card gates on `edit_window_open?/1` instead and lets the edit page
+  explain the rest.
+  """
+  def editable?(%Post{} = post), do: check_edit_open(post) == :ok
+
+  # An edit rewrites what somebody else already put their name to: a like on
+  # "I love kittens" reads as a like on "I hate kittens" after the edit, and
+  # nobody is told. A repost carries the words onto someone else's timeline, a
+  # reply answers them in public — all three leave a person standing behind
+  # text they no longer chose. So a post is only editable while it is young and
+  # untouched — long enough to fix the typo you spot right after posting.
+  # Deleting stays possible, and a frozen post keeps its moderation round.
+  defp check_edit_open(%Post{} = post) do
+    cond do
+      post.frozen_at != nil -> :ok
+      not edit_window_open?(post) -> {:error, :edit_window_closed}
+      engaged?(post) -> {:error, :edit_engaged}
+      true -> :ok
+    end
+  end
+
+  defp engaged?(%Post{} = post),
+    do: has_likes?(post) or has_reposts?(post) or has_replies?(post)
 
   # A repost or reply pins the audience open: someone else now carries or
   # answers the post, so narrowing it would silently break their share or

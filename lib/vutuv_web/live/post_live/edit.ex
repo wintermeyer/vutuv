@@ -6,6 +6,11 @@ defmodule VutuvWeb.PostLive.Edit do
   Edit/Delete wherever the post renders; this page keeps its own delete
   button so the destructive action also sits on the edit surface.
 
+  Editing is time- and engagement-limited (issue #1023, `Vutuv.Posts.editable?/1`):
+  once the post is older than `Posts.edit_window_minutes/0`, or somebody has
+  liked, reposted or answered it, this page redirects to the post and says why. Deleting
+  stays possible at any time.
+
   A single-URL, image-less post also gets an auto-captured link screenshot
   (`Vutuv.Posts.Screenshots`). When that capture is bad (a cookie banner
   covering the page, say) the author can remove it here — a "Remove screenshot"
@@ -24,17 +29,39 @@ defmodule VutuvWeb.PostLive.Edit do
     user = socket.assigns[:current_user]
     post = Posts.get_post(id)
 
-    if post && Posts.author?(post, user) do
-      {:ok,
-       socket
-       |> assign(:page_title, gettext("Edit post"))
-       |> assign(:post, post)
-       |> assign(:screenshot, ready_screenshot(post))}
+    cond do
+      is_nil(post) or not Posts.author?(post, user) ->
+        {:ok,
+         socket
+         |> put_flash(:error, gettext("Sorry, that page could not be found."))
+         |> redirect(to: ~p"/")}
+
+      not Posts.editable?(post) ->
+        {:ok,
+         socket
+         |> put_flash(:error, edit_closed_message(post))
+         |> redirect(to: Posts.path(post))}
+
+      true ->
+        {:ok,
+         socket
+         |> assign(:page_title, gettext("Edit post"))
+         |> assign(:post, post)
+         |> assign(:screenshot, ready_screenshot(post))}
+    end
+  end
+
+  # Why the door is shut, in the author's words. `Posts.edit_window_open?/1` is
+  # the no-query half of the check, so it tells the two cases apart without a
+  # second round trip.
+  defp edit_closed_message(post) do
+    if Posts.edit_window_open?(post) do
+      gettext("This post can no longer be edited: someone has liked, reposted or answered it.")
     else
-      {:ok,
-       socket
-       |> put_flash(:error, gettext("Sorry, that page could not be found."))
-       |> redirect(to: ~p"/")}
+      gettext(
+        "This post can no longer be edited. Posts stay editable for %{minutes} minutes after publishing.",
+        minutes: Posts.edit_window_minutes()
+      )
     end
   end
 
@@ -66,6 +93,15 @@ defmodule VutuvWeb.PostLive.Edit do
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
           {gettext("Edit post")}
         </h1>
+
+        <%!-- The rules of the edit window, said once and up front, so a closed
+        door later is no surprise (issue #1023). --%>
+        <p id="edit-window-hint" class="text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "A post stays editable for %{minutes} minutes, and only until someone likes, reposts or answers it. You can delete it at any time.",
+            minutes: Posts.edit_window_minutes()
+          )}
+        </p>
 
         <.live_component
           module={VutuvWeb.PostLive.Composer}

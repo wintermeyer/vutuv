@@ -1259,8 +1259,11 @@ defmodule Vutuv.PostsTest do
       post = create_post!(author, %{body: "was public"})
       :ok = Posts.like_post(reader, post)
 
-      {:ok, _} =
-        Posts.update_post(post, %{body: "was public", denials: [%{"wildcard" => "everyone"}]})
+      # Straight to the row: a liked post can no longer be restricted through
+      # update_post/2 (the edit window closes with the first like, issue #1023),
+      # but a post restricted earlier, or by a moderation round, still has to
+      # drop out of the reader's likes list.
+      Repo.insert!(%PostDenial{post_id: post.id, wildcard: "everyone"})
 
       assert %{entries: []} = Posts.liked_posts_page(reader)
     end
@@ -2049,20 +2052,20 @@ defmodule Vutuv.PostsTest do
   end
 
   describe "visibility lock" do
-    test "update_post/2 refuses audience changes while reposts exist" do
+    test "a repost closes the whole edit, not just the audience" do
       author = user()
       post = create_post!(author, %{body: "public"})
       :ok = Posts.repost_post(user(), post)
 
-      assert {:error, :visibility_locked} =
+      # The edit window (issue #1023) is the stronger gate and answers first:
+      # a reposted post cannot be narrowed *or* rewritten. Deleting still works.
+      assert {:error, :edit_engaged} =
                Posts.update_post(post, %{
                  body: "public",
                  denials: [%{"wildcard" => "everyone"}]
                })
 
-      # Body edits that keep the post public still work, and so does delete.
-      assert {:ok, updated} = Posts.update_post(post, %{body: "edited", denials: []})
-      assert updated.body == "edited"
+      assert {:error, :edit_engaged} = Posts.update_post(post, %{body: "edited", denials: []})
       assert {:ok, _} = Posts.delete_post(post)
     end
 
@@ -2083,18 +2086,17 @@ defmodule Vutuv.PostsTest do
       assert [%PostDenial{wildcard: "everyone"}] = updated.denials
     end
 
-    test "update_post/2 refuses audience changes while replies exist" do
+    test "a reply closes the whole edit too, and deleting it reopens the post" do
       author = user()
       post = create_post!(author, %{body: "public"})
       {:ok, reply} = Posts.create_reply(user(), post, %{body: "answer"})
 
-      assert {:error, :visibility_locked} =
+      assert {:error, :edit_engaged} =
                Posts.update_post(post, %{
                  body: "public",
                  denials: [%{"wildcard" => "everyone"}]
                })
 
-      # Deleting the reply lifts the lock.
       {:ok, _} = Posts.delete_post(reply)
 
       assert {:ok, updated} =
@@ -2104,6 +2106,101 @@ defmodule Vutuv.PostsTest do
                })
 
       assert [%PostDenial{wildcard: "everyone"}] = updated.denials
+    end
+
+    test "the audience lock still guards a frozen post's moderation round" do
+      author = user()
+      post = create_post!(author, %{body: "public"})
+      {:ok, _reply} = Posts.create_reply(user(), post, %{body: "answer"})
+
+      # The freezer reopens editing on an engaged post — but narrowing the
+      # audience would still strand the reply's context, so that stays refused.
+      Repo.update_all(from(p in Post, where: p.id == ^post.id),
+        set: [frozen_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      frozen = Repo.get!(Post, post.id)
+
+      assert {:error, :visibility_locked} =
+               Posts.update_post(frozen, %{
+                 body: "public",
+                 denials: [%{"wildcard" => "everyone"}]
+               })
+
+      assert {:ok, updated} = Posts.update_post(frozen, %{body: "fixed", denials: []})
+      assert updated.body == "fixed"
+    end
+  end
+
+  describe "edit window (issue #1023)" do
+    test "a fresh, untouched post is editable" do
+      post = create_post!(user(), %{body: "I love kittens"})
+
+      assert Posts.editable?(post)
+      assert {:ok, updated} = Posts.update_post(post, %{body: "I love all kittens"})
+      assert updated.body == "I love all kittens"
+    end
+
+    test "the window closes once the post is older than the configured minutes" do
+      post = create_post!(user(), %{body: "I love kittens"})
+      old = backdate_post!(post, (Posts.edit_window_minutes() + 1) * 60)
+
+      refute Posts.editable?(old)
+      assert {:error, :edit_window_closed} = Posts.update_post(old, %{body: "I hate kittens"})
+
+      # A minute inside the window is still fine — the gate has two sides.
+      fresh = backdate_post!(post, (Posts.edit_window_minutes() - 1) * 60)
+      assert Posts.editable?(fresh)
+      assert {:ok, _} = Posts.update_post(fresh, %{body: "I love kittens a lot"})
+    end
+
+    test "a like closes editing, even inside the window" do
+      author = user()
+      post = create_post!(author, %{body: "I love kittens"})
+      :ok = Posts.like_post(user(), post)
+
+      refute Posts.editable?(post)
+      assert {:error, :edit_engaged} = Posts.update_post(post, %{body: "I hate kittens"})
+      # Deleting stays possible, like under the audience lock.
+      assert {:ok, _} = Posts.delete_post(post)
+    end
+
+    test "a repost closes editing, even inside the window" do
+      post = create_post!(user(), %{body: "I love kittens"})
+      :ok = Posts.repost_post(user(), post)
+
+      refute Posts.editable?(post)
+      assert {:error, :edit_engaged} = Posts.update_post(post, %{body: "I hate kittens"})
+    end
+
+    test "a reply closes editing, even inside the window" do
+      post = create_post!(user(), %{body: "I love kittens"})
+      {:ok, reply} = Posts.create_reply(user(), post, %{body: "me too"})
+
+      refute Posts.editable?(post)
+      assert {:error, :edit_engaged} = Posts.update_post(post, %{body: "I hate kittens"})
+
+      # The reply itself is a post like any other: nobody has touched it, so
+      # its own author may still fix it.
+      assert Posts.editable?(reply)
+      assert {:ok, _} = Posts.update_post(reply, %{body: "me too, very much"})
+    end
+
+    test "a frozen post keeps its moderation edit round whatever its age or reach" do
+      author = user()
+      post = create_post!(author, %{body: "reported words"})
+      :ok = Posts.like_post(user(), post)
+
+      old = backdate_post!(post, (Posts.edit_window_minutes() + 60) * 60)
+      frozen = %{old | frozen_at: NaiveDateTime.utc_now(:second)}
+
+      Repo.update_all(from(p in Post, where: p.id == ^post.id),
+        set: [frozen_at: frozen.frozen_at]
+      )
+
+      assert Posts.editable?(frozen)
+      assert {:ok, updated} = Posts.update_post(frozen, %{body: "fixed words"})
+      assert updated.body == "fixed words"
     end
   end
 

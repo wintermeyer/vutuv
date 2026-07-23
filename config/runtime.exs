@@ -97,6 +97,12 @@ if config_env() == :prod do
     config :vutuv, :newsletter_send_timeout_ms, String.to_integer(seconds) * 1000
   end
 
+  # How long a post stays editable after publishing (default 30 minutes; see
+  # config/config.exs). A closed community may want a longer grace period.
+  if minutes = System.get_env("POST_EDIT_WINDOW_MINUTES") do
+    config :vutuv, :post_edit_window_minutes, String.to_integer(minutes)
+  end
+
   # Operator identity overrides (defaults in config/config.exs are the
   # vutuv.de values; see the "Operator identity" block there).
   if from_address = System.get_env("MAILER_FROM_ADDRESS") do
