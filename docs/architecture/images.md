@@ -60,6 +60,16 @@ window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on
 `$PATH`)
 
+The capture browser sends vutuv's own `User-Agent`
+(`Vutuv.SocialFeed.Http.user_agent/0`), the same string the HTTP preflight
+probe uses, so a site sees one agent for both requests. It also lets our own
+pages recognise a capture: `--screenshot` renders the document **from the
+top**, so a page that scrolls itself on arrival is shot before those tiles are
+painted and stores a blank image — which is why the post permalink drops its
+thread auto-scroll for that agent (issue #1033,
+`Vutuv.SocialFeed.Http.own_agent?/1`). Keep new on-arrival scroll/focus
+behaviour off the capture path for the same reason.
+
 ## AI image moderation (the Ollama scan)
 
 **Every** image that could become visible to anyone but its owner passes

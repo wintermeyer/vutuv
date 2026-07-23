@@ -276,6 +276,14 @@ defmodule Vutuv.PageScreenshot do
   `--virtual-time-budget` does *not* bound that under `--headless=new`, so it is
   no substitute; with `--timeout` the load is stopped and whatever has rendered
   is captured, which is what a member sees in their own browser anyway.
+
+  `--user-agent` names the installation the same way the HTTP preflight probe
+  does, so a site sees one agent for both requests instead of a nameless Chrome
+  for the shot — and our own pages can recognise the capture
+  (`Vutuv.SocialFeed.Http.own_agent?/1`) and skip on-arrival behaviour that
+  would spoil it: `--screenshot` renders the document **from the top**, so a
+  page that scrolls itself on arrival is captured before those tiles are
+  painted and stores a blank image (issue #1033).
   """
   def capture_args(url, out_path, opts \\ []) do
     {width, height} = Keyword.get(opts, :window, window_size())
@@ -295,6 +303,7 @@ defmodule Vutuv.PageScreenshot do
       "--force-device-scale-factor=1",
       "--virtual-time-budget=8000",
       "--timeout=#{@page_timeout_seconds * 1000}",
+      "--user-agent=#{Http.user_agent()}",
       "--window-size=#{width},#{height}",
       "--screenshot=#{out_path}",
       url

@@ -11,6 +11,8 @@ defmodule Vutuv.PageScreenshotTest do
 
   import ExUnit.CaptureLog
 
+  alias Vutuv.SocialFeed.Http
+
   setup do
     prev = Application.get_env(:vutuv, :chromium_path)
     prev_resolver = Application.get_env(:vutuv, :ssrf_resolver)
@@ -52,6 +54,18 @@ defmodule Vutuv.PageScreenshotTest do
     # And it has to fire before the OS force-kill, or Chromium never gets to
     # write the file it rendered.
     assert page_timeout_ms < Vutuv.PageScreenshot.capture_seconds() * 1000
+  end
+
+  test "the capture browser identifies itself with vutuv's own user agent" do
+    args = Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png")
+
+    # Same string the HTTP preflight probes with, so a site sees one agent for
+    # both requests instead of a nameless Chrome for the shot. Our own pages
+    # read it too: the post permalink drops its arrival auto-scroll for it,
+    # because `--screenshot` renders the document from the top and a page that
+    # scrolls itself is captured before those tiles are painted — the empty
+    # preview image of issue #1033.
+    assert "--user-agent=#{Http.user_agent()}" in args
   end
 
   describe "capture_outcome/2 (the file on disk decides)" do

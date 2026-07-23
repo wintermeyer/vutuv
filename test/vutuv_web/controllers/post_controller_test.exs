@@ -11,6 +11,7 @@ defmodule VutuvWeb.PostControllerTest do
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.ReviewCover
+  alias Vutuv.SocialFeed.Http
 
   @other_login_attrs %{
     "emails" => %{"0" => %{"value" => "other@example.com"}},
@@ -710,6 +711,33 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ ~s(id="thread-focus")
       # Nothing above the root, so no scroll jump on arrival.
       refute html =~ "data-thread-scroll"
+    end
+
+    # Issue #1033: the link-preview screenshot of a vutuv post permalink came
+    # out as an empty page. Headless Chromium's `--screenshot` renders the
+    # document from the top, but the arrival auto-scroll moves the compositor
+    # away before those tiles are painted, so the shot is blank. Our capture
+    # browser sends vutuv's own user agent, and for it the page must not jump.
+    test "a page capture gets the thread without the arrival auto-scroll", %{conn: conn} do
+      author = insert_activated_user()
+      root = create_post!(author, %{body: "the conversation root"})
+
+      {:ok, focus} =
+        Posts.create_reply(insert_activated_user(), root, %{body: "the focused answer"})
+
+      html =
+        conn
+        |> put_req_header("user-agent", Http.user_agent())
+        |> get(Posts.path(focus))
+        |> html_response(200)
+
+      # The whole conversation still renders, the subject is still tinted.
+      assert html =~ "the conversation root"
+      assert html =~ ~s(id="thread-focus")
+      refute html =~ "data-thread-scroll"
+
+      # A normal browser still jumps to the permalinked post.
+      assert html_response(get(conn, Posts.path(focus)), 200) =~ "data-thread-scroll"
     end
 
     test "a post without replies renders standalone, no thread frame", %{conn: conn} do

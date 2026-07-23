@@ -269,7 +269,9 @@ once a deleted root has nilified the thread's root links), returns them in
 renders it as one feed-style conversation. The permalinked post is the tinted
 `:full`-mode card (`#thread-focus`; an absolutely positioned `::before` so the
 connector geometry is untouched) and, when it has context above, app.js scrolls
-it into view on arrival (`data-thread-scroll`). A post with no thread renders
+it into view on arrival (`data-thread-scroll`) — for a person, not for the link
+screenshot browser, whose capture that jump left blank (issue #1033; see the
+URL-screenshot section of [images.md](images.md)). A post with no thread renders
 standalone exactly as before. The action bar carries a live reply counter, and
 the parent's author gets a derived "replied to your post" notification
 (self-replies excluded). The agent-format siblings mirror the page: `PostDoc`
