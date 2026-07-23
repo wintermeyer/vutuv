@@ -157,6 +157,22 @@ defmodule Vutuv.AccountsTest do
       refute Repo.get_by(User, first_name: "Test")
     end
 
+    test "rejects a registration whose tag list holds a web address" do
+      # register_user/3 materializes the tags after the insert and ignores
+      # per-tag failures, so the form has to catch this up front — otherwise
+      # the account is created with the tag silently missing.
+      conn = build_conn()
+      attrs = Map.put(@valid_registration, "tag_list", "Elixir Cooking www.example-shop.com")
+
+      assert {:error, changeset} = Accounts.register_user(conn, attrs)
+
+      assert "\"www.example-shop.com\" is a web address, not a tag. Please describe yourself with words." in errors_on(
+               changeset
+             ).tag_list
+
+      refute Repo.get_by(User, first_name: "Test")
+    end
+
     test "accepts a registration exactly at the tag ceiling" do
       conn = build_conn()
       max = Vutuv.Tags.max_user_tags()
@@ -215,6 +231,35 @@ defmodule Vutuv.AccountsTest do
 
       terms = Repo.all(from(s in SearchTerm, where: s.user_id == ^user.id))
       refute terms == []
+    end
+
+    # The tagline is the line under a member's name, so it must say something
+    # about them: a bare URL there is a billboard (the "SBASF FC" sign-up), and
+    # the profile is a member page, not a link farm.
+    test "refuses a tagline that is nothing but a link" do
+      user = insert(:user)
+
+      for headline <- [
+            "https://www.example-shop.com/",
+            "www.example-shop.com",
+            "example-shop.com",
+            "[Cheap Slots](https://example-shop.com)",
+            "kontakt@example-shop.com"
+          ] do
+        assert {:error, changeset} = Accounts.update_user(user, %{"headline" => headline})
+
+        assert "can't be only a link. Please describe yourself in a few words." in errors_on(
+                 changeset
+               ).headline
+      end
+    end
+
+    test "accepts a tagline that mentions a link inside a sentence" do
+      user = insert(:user)
+      headline = "Co-Founder of Example (www.example-shop.com)"
+
+      assert {:ok, updated} = Accounts.update_user(user, %{"headline" => headline})
+      assert updated.headline == headline
     end
   end
 

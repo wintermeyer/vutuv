@@ -201,3 +201,18 @@ msgstr "konnte nicht gelesen werden. Bitte laden Sie eine PDF-, JPG-, PNG- oder 
 #, elixir-autogen, elixir-format
 msgid "is larger than 10 MB. Please upload a smaller file."
 msgstr "ist größer als 10 MB. Bitte laden Sie eine kleinere Datei hoch."
+
+#: lib/vutuv_web/views/error_helpers.ex:62
+#, elixir-autogen, elixir-format
+msgid "must not be a web or email address"
+msgstr "darf keine Web- oder E-Mail-Adresse sein"
+
+#: lib/vutuv_web/views/error_helpers.ex:63
+#, elixir-autogen, elixir-format
+msgid "can't be only a link. Please describe yourself in a few words."
+msgstr "darf nicht nur ein Link sein. Bitte beschreiben Sie sich in ein paar Worten."
+
+#: lib/vutuv_web/views/error_helpers.ex:67
+#, elixir-autogen, elixir-format
+msgid "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
+msgstr "„%{tag}“ ist eine Web-Adresse, kein Tag. Bitte beschreiben Sie sich mit Worten."

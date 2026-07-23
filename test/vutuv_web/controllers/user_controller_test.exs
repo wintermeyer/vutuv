@@ -88,6 +88,18 @@ defmodule VutuvWeb.UserControllerTest do
     end
   end
 
+  describe "a tagline that is nothing but a link" do
+    test "re-renders the Basics form with the error instead of saving it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        put(conn, ~p"/settings/profile", user: %{"headline" => "https://www.example-shop.com/"})
+
+      assert html_response(conn, 422) =~ "can&#39;t be only a link"
+      assert is_nil(Repo.get!(User, user.id).headline)
+    end
+  end
+
   describe "birthday visibility on the Basics form" do
     test "the edit form renders the visibility select with every granularity option", %{
       conn: conn

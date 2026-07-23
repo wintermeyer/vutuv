@@ -546,6 +546,39 @@ profile's Tags card always offers a visitor the "All tags" footer link — not
 only once the card is truncated, which with the 15-tag cap it never is. The
 owner's footer stays the "Manage" bridge into `/settings/tags`.
 
+## No field is a billboard: the tagline and tags refuse a bare link
+
+A profile field has to say something about the member. `Vutuv.WebAddress.link_only?/1`
+recognizes text that is **nothing but** a web address — a URL with any scheme, a
+`www.` host, a bare domain under a curated list of website TLDs, a dotted host
+with a path, an email address, or any of those wrapped in Markdown / BBCode /
+`<a>` link markup, label and all. Three places refuse such a value:
+
+- the **tagline** (`Vutuv.Accounts.User.changeset/2`, so the Basics form, the
+  LinkedIn import and `PATCH /api/2.0/me` alike),
+- a **tag name** (`Vutuv.Tags.Tag`: the changeset head blocks minting one, and
+  `create_or_link_tag/2` blocks *linking* one of the URL tags minted before this
+  rule, since the lookup would otherwise never build a changeset), and
+- the **sign-up tag list** (`registration_changeset/2` — `register_user/3`
+  materializes tags after the insert and ignores per-tag failures, so without
+  this the account would be created with the tag quietly missing).
+
+The rule is about the **whole** value, never about addresses as such: "Co-Founder
+of Taxdoo (www.taxdoo.com)" is an ordinary tagline and stays valid, and a tag
+whose name merely looks domain-shaped (`node.js`, `asp.net`, `socket.io`,
+`stud.ip`) stays valid too — which is why the TLD list is curated rather than the
+whole registry. Text with no words in it at all (`"-"`, `"???"`) is **not** a
+link: junk, but nothing this rule may claim is a web address.
+
+Two knock-on places keep the promise honest: the add-tag form's live preview
+(`Vutuv.Tags.preview_tag_names/1`) drops such a name instead of promising a tag
+the submit refuses, and the LinkedIn import drops a link-only `Headline` while
+parsing (it is applied in the same update as the names, so it would otherwise
+take the name fill down with it). Post tags (`Vutuv.Posts`) drop it as well, so
+the composer is not a back door into the shared tag namespace.
+
+Existing rows are left alone — the validations bite when a value changes.
+
 ## Ordered profile sections
 
 Members arrange their links, phone numbers, addresses, social media accounts,

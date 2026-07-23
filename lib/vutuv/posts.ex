@@ -66,6 +66,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
+  alias Vutuv.WebAddress
 
   @default_feed_limit 20
   @default_profile_limit 3
@@ -2150,10 +2151,15 @@ defmodule Vutuv.Posts do
 
   # Tag.normalize_value strips a leading `#` (the hashtag form), so "#Elixir"
   # becomes "Elixir" and dedupes/links against the bare tag; a bare "#" drops.
+  # A value that is nothing but a web or email address drops too: post tags
+  # share the global tag namespace with profile tags, where that is refused
+  # (`Vutuv.WebAddress`), so the composer must not be the back door. Dropping
+  # it silently matches how this function treats every other odd value — the
+  # post itself still publishes.
   defp parse_tag_values(values) when is_list(values) do
     values
     |> Enum.map(&Tag.normalize_value/1)
-    |> Enum.reject(&(&1 == ""))
+    |> Enum.reject(&(&1 == "" or WebAddress.link_only?(&1)))
     |> Enum.uniq_by(&String.downcase/1)
     |> Enum.take(@max_tags)
   end

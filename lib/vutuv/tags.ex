@@ -18,6 +18,7 @@ defmodule Vutuv.Tags do
   alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
+  alias Vutuv.WebAddress
 
   # The endorsers list: which columns it can be sorted by, and a denser page
   # size than the site-wide default so a popular tag's list actually paginates.
@@ -83,10 +84,15 @@ defmodule Vutuv.Tags do
   while an unmatched name becomes a fresh tag displaying exactly as typed.
   Case-insensitive duplicates collapse to the first spelling, mirroring the
   single row the profile would end up with (the form's save path dedupes the
-  same way, so preview and outcome always agree).
+  same way, so preview and outcome always agree). A name that is nothing but a
+  web or email address drops out for the same reason: `add_user_tag/2` refuses
+  it, so promising it here would be a lie the submit then takes back.
   """
   def preview_tag_names(value) do
-    case value |> parse_tag_names() |> Enum.uniq_by(&String.downcase/1) do
+    case value
+         |> parse_tag_names()
+         |> Enum.reject(&WebAddress.link_only?/1)
+         |> Enum.uniq_by(&String.downcase/1) do
       [] ->
         []
 

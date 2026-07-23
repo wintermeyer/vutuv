@@ -137,6 +137,54 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "a tag may not be a web or email address" do
+    # A tag names a skill, a topic or an interest. Members occasionally paste
+    # their homepage or email address into the field instead ("SBASF FC" signed
+    # up with the tag https://www.sbasf.com/), which advertises rather than
+    # describes and mints a public tag page nobody else can ever share.
+    test "adding a URL as a tag is refused, and mints no tag" do
+      user = insert(:user)
+
+      for value <- ["https://www.example-shop.com/", "www.example-shop.com", "example-shop.com"] do
+        assert {:error, %Ecto.Changeset{} = changeset} = Tags.add_user_tag(user, value)
+        assert "must not be a web or email address" in errors_on(changeset).tag_id
+      end
+
+      assert Repo.aggregate(Tag, :count) == 0
+    end
+
+    test "adding an email address as a tag is refused" do
+      assert {:error, changeset} = Tags.add_user_tag(insert(:user), "spammer@example.com")
+      assert "must not be a web or email address" in errors_on(changeset).tag_id
+    end
+
+    test "a URL tag minted before the rule can't be linked either" do
+      # The lookup in create_or_link_tag/2 would otherwise attach one of the
+      # legacy URL tags in production without ever building a changeset.
+      name = "www.legacy-#{System.unique_integer([:positive])}.com"
+      legacy = insert(:tag, name: name, slug: String.replace(name, ".", "_"))
+
+      assert {:error, changeset} = Tags.add_user_tag(insert(:user), name)
+      assert "must not be a web or email address" in errors_on(changeset).tag_id
+      refute Repo.exists?(from(ut in UserTag, where: ut.tag_id == ^legacy.id))
+    end
+
+    test "a technology tag that merely looks domain-shaped still works" do
+      user = insert(:user)
+
+      for name <- ["node.js", "asp.net", "socket.io"] do
+        assert {:ok, _} = Tags.add_user_tag(user, name)
+      end
+    end
+
+    test "the tag changeset refuses the name on every other path too" do
+      changeset = Tag.changeset(%Tag{}, %{"value" => "https://www.example-shop.com/"})
+
+      refute changeset.valid?
+      assert "must not be a web or email address" in errors_on(changeset).name
+    end
+  end
+
   describe "a profile is capped at max_user_tags/0 tags" do
     # A few members overdid the tag count, so a profile may hold at most
     # `max_user_tags/0` tags. The cap bites only when tags *change*: an existing

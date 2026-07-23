@@ -8,6 +8,7 @@ defmodule Vutuv.Accounts.User do
   alias Vutuv.Handles
   alias Vutuv.Mentions
   alias Vutuv.Prefs
+  alias Vutuv.WebAddress
   @derive {Phoenix.Param, key: :username}
 
   schema "users" do
@@ -436,6 +437,7 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:headline, max: 255)
     # The tagline may only mention handles that exist (relaxed for the import).
     |> Mentions.validate_mentions_exist(:headline)
+    |> validate_headline_not_link_only()
     # locale is user-writable (profile form + PATCH /api/2.0/me) over a
     # varchar(255) column, so cap it or an oversized value raises Postgres 22001.
     |> validate_length(:locale, max: 255)
@@ -480,6 +482,20 @@ defmodule Vutuv.Accounts.User do
     |> validate_birthdate()
     |> validate_inclusion(:birthdate_visibility, @birthdate_visibilities)
     |> revoke_verification_on_identity_change()
+  end
+
+  # The tagline is the one line under a member's name, so it has to say
+  # something about them: a value that is nothing but a URL, a domain, an email
+  # address or a wrapped-up link (`Vutuv.WebAddress`) is a billboard, and it is
+  # what a spam sign-up puts there. A tagline that *mentions* an address inside
+  # a sentence ("Co-Founder of Taxdoo (www.taxdoo.com)") is ordinary and stays
+  # valid — members have the Links section for the address itself.
+  defp validate_headline_not_link_only(changeset) do
+    validate_change(changeset, :headline, fn :headline, headline ->
+      if WebAddress.link_only?(headline),
+        do: [headline: "can't be only a link. Please describe yourself in a few words."],
+        else: []
+    end)
   end
 
   # Every identity detail the verified badge vouches for: the legal name parts,
@@ -538,6 +554,7 @@ defmodule Vutuv.Accounts.User do
     |> changeset(params)
     |> validate_minimum_tags()
     |> validate_maximum_tags()
+    |> validate_no_web_address_tags()
     |> cast_assoc(:emails)
   end
 
@@ -578,6 +595,26 @@ defmodule Vutuv.Accounts.User do
       changeset
     else
       add_error(changeset, :tag_list, "Please enter at most %{max} different tags.", max: max)
+    end
+  end
+
+  # `Vutuv.Tags.Tag` refuses a tag that is only a web or email address, but
+  # `Accounts.register_user/3` materializes the sign-up tags *after* the insert
+  # and ignores per-tag failures, so without this the account would be created
+  # with that tag quietly missing. Naming the offending token here lets the
+  # sign-up form say what to fix instead.
+  defp validate_no_web_address_tags(changeset) do
+    case Enum.find(distinct_tag_names(changeset), &WebAddress.link_only?/1) do
+      nil ->
+        changeset
+
+      address ->
+        add_error(
+          changeset,
+          :tag_list,
+          "\"%{tag}\" is a web address, not a tag. Please describe yourself with words.",
+          tag: address
+        )
     end
   end
 

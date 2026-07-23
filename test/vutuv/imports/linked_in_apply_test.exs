@@ -220,6 +220,27 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     assert Repo.reload(set).headline == "My own headline"
   end
 
+  test "a LinkedIn headline that is only a link is dropped, the names still land" do
+    # The profile changeset refuses a link-only tagline, and the names ride in
+    # the SAME update — so the import must not offer it at all, or a member
+    # whose LinkedIn headline is their homepage would lose the name fill too.
+    user = insert(:user, first_name: nil, last_name: nil, headline: nil)
+
+    profile_csv =
+      "First Name,Last Name,Maiden Name,Address,Birth Date,Headline,Summary,Industry,Zip Code,Geo Location,Twitter Handles,Websites,Instant Messengers\n" <>
+        "Stefan,Wintermeyer,,,,https://www.example-shop.com/,,,,,,,\n"
+
+    {:ok, parsed} = LinkedIn.parse(zip([{"Profile.csv", profile_csv}]))
+    refute Map.has_key?(parsed.profile, :headline)
+
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert Enum.sort(summary.created.profile) == [:first_name, :last_name]
+    reloaded = Repo.reload(user)
+    assert reloaded.first_name == "Stefan"
+    assert is_nil(reloaded.headline)
+  end
+
   test "selection_from_payload drops an unknown/tampered profile key instead of raising" do
     # The payload is client-controlled; a tampered key must be dropped, not
     # crash String.to_existing_atom/1 with an ArgumentError (a 500 on confirm).

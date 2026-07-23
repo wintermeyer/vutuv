@@ -192,6 +192,26 @@ defmodule VutuvWeb.TagNewLiveTest do
       assert tag_count(user) == base + 2
     end
 
+    test "previews no chip for a web address the save would refuse", %{live: live} do
+      # The preview's promise is "these tags will be created", so it must not
+      # offer one add_user_tag/2 turns down a moment later.
+      assert preview(live, "https://www.example-shop.com/ Elixir") == ["Elixir"]
+    end
+
+    test "shows the web-address error inline instead of attaching a URL tag", %{
+      live: live,
+      user: user,
+      base: base
+    } do
+      html =
+        live
+        |> form("#tag-form", tag_param: %{value: "https://www.example-shop.com/"})
+        |> render_submit()
+
+      assert html =~ "must not be a web or email address"
+      assert tag_count(user) == base
+    end
+
     test "refuses a new tag once the profile is at the tag limit", %{
       live: live,
       user: user

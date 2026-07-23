@@ -6,6 +6,15 @@ defmodule Vutuv.Tags.Tag do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
+  alias Vutuv.WebAddress
+
+  # A tag names a skill, a topic or an interest. A member who pastes their
+  # homepage or their email address into the field is advertising, not tagging
+  # themselves — and the tag becomes a public page nobody else will ever share.
+  # Kept as one string so the name validation below and the link guard in
+  # `create_or_link_tag/2` (which also covers *linking* a URL tag minted before
+  # this rule) report the same thing.
+  @web_address_message "must not be a web or email address"
 
   schema "tags" do
     field(:slug, :string)
@@ -55,9 +64,22 @@ defmodule Vutuv.Tags.Tag do
     # entry point, so this only backstops the raw name/slug head (the admin
     # edit form) against a stray line break or tab sneaking in.
     |> validate_format(:name, ~r/^[^\r\n\t]+$/, message: "must be a single line")
+    |> validate_web_address()
     |> validate_length(:slug, max: 60)
     |> validate_length(:name, max: 255)
     |> unique_constraint(:slug)
+  end
+
+  # A name that is nothing but a URL, a domain or an email address is refused
+  # here, so no entry point can mint such a tag: the member paths reach this
+  # through `create_or_link_tag/2`, the admin edit form and the post-hashtag
+  # path (`Vutuv.Posts`) through the changeset heads directly. A name that only
+  # *mentions* an address stays valid ("Frontend for shop.example"), the same
+  # whole-value rule the profile tagline uses.
+  defp validate_web_address(changeset) do
+    validate_change(changeset, :name, fn :name, name ->
+      if WebAddress.link_only?(name), do: [name: @web_address_message], else: []
+    end)
   end
 
   defp maybe_gen_slug(changeset) do
@@ -91,6 +113,11 @@ defmodule Vutuv.Tags.Tag do
   (sign-up, the tags page, the post composer) tokenize their input first with
   `Vutuv.Tags.parse_tag_names/1`, which honours quotes; the JSON API reaches
   here with a single already-whole name.
+
+  A value that is nothing but a web or email address is refused outright
+  (`Vutuv.WebAddress`), before the lookup: the changeset head already keeps a
+  new one from being minted, and this also blocks *linking* one of the URL tags
+  a few profiles created before the rule existed.
   """
   def create_or_link_tag(changeset, %{"value" => value} = params) do
     # Strip the hashtag form before both the existing-tag lookup and the build,
@@ -98,7 +125,14 @@ defmodule Vutuv.Tags.Tag do
     # the bare name. The rewritten params carry the normalized value downstream.
     value = normalize_value(value)
     params = Map.put(params, "value", value)
-    link_or_build_tag(changeset, value, params)
+
+    if WebAddress.link_only?(value) do
+      # The error lands on :tag_id, where the tags editor renders the other
+      # refusals (at the ceiling, reserved honor tag) too.
+      add_error(changeset, :tag_id, @web_address_message)
+    else
+      link_or_build_tag(changeset, value, params)
+    end
   end
 
   @leading_hash ~r/^#+\s*/
