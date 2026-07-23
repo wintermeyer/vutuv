@@ -99,7 +99,7 @@ config :vutuv, :image_scan_reject_votes, 3
 
 # How many minutes a post stays editable after publishing (issue #1023). An
 # edit rewrites what readers already liked or reposted, so editing closes with
-# the first like or repost anyway (Vutuv.Posts.editable?/1); this window is the
+# the first like, repost or reply anyway (Vutuv.Posts.editable?/1); this is the
 # grace period for the typo you spot right after posting. Runtime override:
 # POST_EDIT_WINDOW_MINUTES (config/runtime.exs).
 config :vutuv, :post_edit_window_minutes, 30

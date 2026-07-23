@@ -139,9 +139,9 @@ enforces it (web composer and API alike):
   `Posts.edit_window_minutes/0` — 30 minutes by default, configurable per
   installation (`:post_edit_window_minutes`, env `POST_EDIT_WINDOW_MINUTES`).
   The window exists for the typo you spot right after posting.
-- `{:error, :edit_engaged}` once **anyone has liked or reposted** the post,
-  even inside those minutes. Replies deliberately do not close it — they carry
-  their own words, not the author's.
+- `{:error, :edit_engaged}` once **anyone has liked, reposted or answered** the
+  post, even inside those minutes: each of the three leaves a person standing
+  behind text they no longer chose.
 - A **frozen** post (a moderation case in the owner's court) is the one
   exception: "Fix it" is one of the three ways out of the freezer, and nobody
   but the owner can see the post meanwhile, so age and reach are ignored.
@@ -154,9 +154,9 @@ card. A post liked inside the window therefore still shows the menu item, and
 The API answers both cases `409` (`reason: edit_window_closed` /
 `edit_engaged`).
 
-This makes the old audience lock (below) unreachable for reposts — a reposted
-post cannot be edited at all any more — but it still governs posts with replies
-and the moderation round.
+This subsumes the old audience lock (below): a reposted or answered post cannot
+be edited at all any more, so the lock only still fires inside a moderation
+round, where the freezer exception reopens editing on such a post.
 
 Audiences are **deny-based** (`Vutuv.Posts`): a post with no denials is public;
 denials exclude groups of the author's followees, single users, or wildcards

@@ -215,7 +215,7 @@ defmodule VutuvWeb.ApiV2.PostController do
   defp post_error(conn, :edit_engaged) do
     Problem.send_problem(conn, 409, "Post already engaged",
       detail:
-        "Someone has liked or reposted this post, so it can no longer be edited. Deleting is still possible.",
+        "Someone has liked, reposted or answered this post, so it can no longer be edited. Deleting is still possible.",
       extra: %{reason: :edit_engaged}
     )
   end

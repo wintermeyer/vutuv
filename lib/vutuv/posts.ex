@@ -205,7 +205,7 @@ defmodule Vutuv.Posts do
 
   Editing closes with the edit window (`editable?/1`): `{:error,
   :edit_window_closed}` once the post is older than `edit_window_minutes/0`,
-  `{:error, :edit_engaged}` once someone liked or reposted it.
+  `{:error, :edit_engaged}` once someone liked, reposted or answered it.
   """
   def update_post(%Post{} = post, attrs) do
     post = Repo.preload(post, [:denials, :post_tags, :images, :review])
@@ -771,24 +771,30 @@ defmodule Vutuv.Posts do
 
   @doc """
   Whether the author may still edit this post: inside the edit window and not
-  yet liked or reposted by anyone (issue #1023). Costs one query; the post card
-  gates on `edit_window_open?/1` instead and lets the edit page explain the rest.
+  yet liked, reposted or answered by anyone (issue #1023). Costs one query; the
+  post card gates on `edit_window_open?/1` instead and lets the edit page
+  explain the rest.
   """
   def editable?(%Post{} = post), do: check_edit_open(post) == :ok
 
   # An edit rewrites what somebody else already put their name to: a like on
   # "I love kittens" reads as a like on "I hate kittens" after the edit, and
-  # nobody is told. So a post is only editable while it is young and untouched
-  # — long enough to fix the typo you spot right after posting. Deleting stays
-  # possible, and a frozen post keeps its moderation round (see above).
+  # nobody is told. A repost carries the words onto someone else's timeline, a
+  # reply answers them in public — all three leave a person standing behind
+  # text they no longer chose. So a post is only editable while it is young and
+  # untouched — long enough to fix the typo you spot right after posting.
+  # Deleting stays possible, and a frozen post keeps its moderation round.
   defp check_edit_open(%Post{} = post) do
     cond do
       post.frozen_at != nil -> :ok
       not edit_window_open?(post) -> {:error, :edit_window_closed}
-      has_likes?(post) or has_reposts?(post) -> {:error, :edit_engaged}
+      engaged?(post) -> {:error, :edit_engaged}
       true -> :ok
     end
   end
+
+  defp engaged?(%Post{} = post),
+    do: has_likes?(post) or has_reposts?(post) or has_replies?(post)
 
   # A repost or reply pins the audience open: someone else now carries or
   # answers the post, so narrowing it would silently break their share or

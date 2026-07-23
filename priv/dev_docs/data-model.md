@@ -131,9 +131,10 @@ restricted (`409`, `reason: visibility_locked`) — people who interacted
 with a public post must not lose the context. Deleting is always possible.
 
 A post's **body is editable for 30 minutes** after publishing, and only
-until somebody likes or reposts it (`409`, `reason: edit_window_closed` /
-`edit_engaged`): an edit would otherwise silently rewrite the words a
-reader already liked or carried on their own timeline.
+until somebody likes, reposts or answers it (`409`,
+`reason: edit_window_closed` / `edit_engaged`): an edit would otherwise
+silently rewrite the words a reader already liked, carried on their own
+timeline, or replied to.
 
 ### Replies, likes, bookmarks, reposts
 

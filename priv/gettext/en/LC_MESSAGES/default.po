@@ -14385,7 +14385,7 @@ msgstr ""
 #: lib/vutuv_web/live/post_live/composer.ex:357
 #: lib/vutuv_web/live/post_live/edit.ex:59
 #, elixir-autogen, elixir-format
-msgid "This post can no longer be edited: someone has liked or reposted it."
+msgid "This post can no longer be edited: someone has liked, reposted or answered it."
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/composer.ex:361
@@ -14396,5 +14396,5 @@ msgstr ""
 
 #: lib/vutuv_web/live/post_live/edit.ex:100
 #, elixir-autogen, elixir-format
-msgid "A post stays editable for %{minutes} minutes, and only until someone likes or reposts it. You can delete it at any time."
+msgid "A post stays editable for %{minutes} minutes, and only until someone likes, reposts or answers it. You can delete it at any time."
 msgstr ""

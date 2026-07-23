@@ -8,7 +8,7 @@ defmodule VutuvWeb.PostLive.Edit do
 
   Editing is time- and engagement-limited (issue #1023, `Vutuv.Posts.editable?/1`):
   once the post is older than `Posts.edit_window_minutes/0`, or somebody has
-  liked or reposted it, this page redirects to the post and says why. Deleting
+  liked, reposted or answered it, this page redirects to the post and says why. Deleting
   stays possible at any time.
 
   A single-URL, image-less post also gets an auto-captured link screenshot
@@ -56,7 +56,7 @@ defmodule VutuvWeb.PostLive.Edit do
   # second round trip.
   defp edit_closed_message(post) do
     if Posts.edit_window_open?(post) do
-      gettext("This post can no longer be edited: someone has liked or reposted it.")
+      gettext("This post can no longer be edited: someone has liked, reposted or answered it.")
     else
       gettext(
         "This post can no longer be edited. Posts stay editable for %{minutes} minutes after publishing.",
@@ -98,7 +98,7 @@ defmodule VutuvWeb.PostLive.Edit do
         door later is no surprise (issue #1023). --%>
         <p id="edit-window-hint" class="text-sm text-slate-600 dark:text-slate-400">
           {gettext(
-            "A post stays editable for %{minutes} minutes, and only until someone likes or reposts it. You can delete it at any time.",
+            "A post stays editable for %{minutes} minutes, and only until someone likes, reposts or answers it. You can delete it at any time.",
             minutes: Posts.edit_window_minutes()
           )}
         </p>

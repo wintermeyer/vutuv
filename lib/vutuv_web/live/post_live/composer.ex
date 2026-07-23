@@ -354,7 +354,7 @@ defmodule VutuvWeb.PostLive.Composer do
   # The edit window can close while the form sits open — a like arrives, or the
   # 30 minutes run out mid-edit (issue #1023).
   defp save_error_message(:edit_engaged),
-    do: gettext("This post can no longer be edited: someone has liked or reposted it.")
+    do: gettext("This post can no longer be edited: someone has liked, reposted or answered it.")
 
   defp save_error_message(:edit_window_closed) do
     gettext(

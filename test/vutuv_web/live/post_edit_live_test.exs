@@ -178,18 +178,18 @@ defmodule VutuvWeb.PostEditLiveTest do
       assert Posts.get_post(post.id).body == "carried by others"
     end
 
-    test "locks the audience while replies exist", %{conn: conn} do
+    test "an answered post cannot be opened for editing either", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {:ok, post} = Posts.create_post(user, %{body: "carried by a thread"})
 
       {:ok, _} =
         Posts.create_reply(insert(:user, email_confirmed?: true), post, %{body: "the answer"})
 
-      {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/edit")
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               live(conn, ~p"/posts/#{post.id}/edit")
 
-      refute has_element?(live, "#composer-preset")
-      assert has_element?(live, "#composer-audience-locked")
-      assert html =~ "replies"
+      assert to == Posts.path(post)
+      assert flash["error"] =~ "answered"
     end
 
     test "names the edit window up front", %{conn: conn} do

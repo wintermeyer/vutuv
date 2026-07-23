@@ -2086,18 +2086,17 @@ defmodule Vutuv.PostsTest do
       assert [%PostDenial{wildcard: "everyone"}] = updated.denials
     end
 
-    test "update_post/2 refuses audience changes while replies exist" do
+    test "a reply closes the whole edit too, and deleting it reopens the post" do
       author = user()
       post = create_post!(author, %{body: "public"})
       {:ok, reply} = Posts.create_reply(user(), post, %{body: "answer"})
 
-      assert {:error, :visibility_locked} =
+      assert {:error, :edit_engaged} =
                Posts.update_post(post, %{
                  body: "public",
                  denials: [%{"wildcard" => "everyone"}]
                })
 
-      # Deleting the reply lifts the lock.
       {:ok, _} = Posts.delete_post(reply)
 
       assert {:ok, updated} =
@@ -2107,6 +2106,29 @@ defmodule Vutuv.PostsTest do
                })
 
       assert [%PostDenial{wildcard: "everyone"}] = updated.denials
+    end
+
+    test "the audience lock still guards a frozen post's moderation round" do
+      author = user()
+      post = create_post!(author, %{body: "public"})
+      {:ok, _reply} = Posts.create_reply(user(), post, %{body: "answer"})
+
+      # The freezer reopens editing on an engaged post — but narrowing the
+      # audience would still strand the reply's context, so that stays refused.
+      Repo.update_all(from(p in Post, where: p.id == ^post.id),
+        set: [frozen_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      frozen = Repo.get!(Post, post.id)
+
+      assert {:error, :visibility_locked} =
+               Posts.update_post(frozen, %{
+                 body: "public",
+                 denials: [%{"wildcard" => "everyone"}]
+               })
+
+      assert {:ok, updated} = Posts.update_post(frozen, %{body: "fixed", denials: []})
+      assert updated.body == "fixed"
     end
   end
 
@@ -2149,6 +2171,19 @@ defmodule Vutuv.PostsTest do
 
       refute Posts.editable?(post)
       assert {:error, :edit_engaged} = Posts.update_post(post, %{body: "I hate kittens"})
+    end
+
+    test "a reply closes editing, even inside the window" do
+      post = create_post!(user(), %{body: "I love kittens"})
+      {:ok, reply} = Posts.create_reply(user(), post, %{body: "me too"})
+
+      refute Posts.editable?(post)
+      assert {:error, :edit_engaged} = Posts.update_post(post, %{body: "I hate kittens"})
+
+      # The reply itself is a post like any other: nobody has touched it, so
+      # its own author may still fix it.
+      assert Posts.editable?(reply)
+      assert {:ok, _} = Posts.update_post(reply, %{body: "me too, very much"})
     end
 
     test "a frozen post keeps its moderation edit round whatever its age or reach" do
