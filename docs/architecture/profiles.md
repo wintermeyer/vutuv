@@ -117,23 +117,33 @@ becomes available is a bilateral matter, not something the platform models.
 
 ## Preferred workplace form
 
-`users.desired_workplace_type` is how a job-seeking member wants to work:
-`nil` (no preference), `"onsite"`, `"hybrid"` or `"remote"` — deliberately the
-same vocabulary a job posting's `workplace_type` uses, so a preference maps 1:1
-onto the board's workplace chips. The labels come from
-`User.desired_workplace_label/1` (the same msgids
+`users.desired_workplace_types` is how a job-seeking member wants to work: any
+combination of `"onsite"`, `"hybrid"` and `"remote"` — deliberately the same
+vocabulary a job posting's `workplace_type` uses, so a preference maps straight
+onto the board's workplace chips. A **list**, because the three do not exclude
+each other (plenty of people take hybrid or remote but not a five-day office);
+`[]` = no preference, NOT NULL in the DB so no call site has to tell `nil` and
+`[]` apart. The forms render it as **checkboxes** with a leading hidden blank —
+that blank is what makes unticking everything arrive as an empty list — and
+`User.changeset/2` normalizes what comes back: blanks dropped, duplicates
+dropped, survivors put in the canonical order, so what is stored depends on
+what was ticked and never on the order of the clicks.
+
+The labels come from `User.desired_workplace_label/1` (the same msgids
 `JobPosting.workplace_type_label/1` uses, so a seeker's "Remote" and a
-posting's "Remote" always read alike); the select options from
+posting's "Remote" always read alike), and `User.desired_workplace_line/1` is
+the one rendering of a member's set as a human line ("Hybrid, Remote") that the
+badge and the agent documents share; the checkbox pairs come from
 `UserHelpers.desired_workplace_options/0`, shared by the Basics form and the
 one-time welcome page.
 
 It is **part of the availability signal, not a field of its own**: it appends to
-the same pill ("Sucht aktiv eine Stelle · Remote"), rides
+the same pill ("Sucht aktiv eine Stelle · Hybrid, Remote"), rides
 `employment_status_visibility` rather than carrying a visibility of its own, and
-`User.changeset/2` **clears it whenever the resulting employment status is
+`User.changeset/2` **empties it whenever the resulting employment status is
 nil** — so a member who goes back to "not open to work" cannot leave a stale
 preference behind that the next status change would resurrect. The agent docs
-carry it under the same gate (`Preferred workplace:` in md/txt, the raw value in
+carry it under the same gate (`Preferred workplace:` in md/txt, the raw array in
 JSON/XML).
 
 ## The one-time welcome page (`/system/welcome`)

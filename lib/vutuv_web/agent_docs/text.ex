@@ -418,8 +418,8 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc.verified && gettext("Verified profile: yes"),
       doc.employment_status &&
         "#{gettext("Employment status")}: #{User.employment_status_label(doc.employment_status)}",
-      doc.desired_workplace_type &&
-        "#{gettext("Preferred workplace")}: #{User.desired_workplace_label(doc.desired_workplace_type)}",
+      User.desired_workplace_line(doc.desired_workplace_types) &&
+        "#{gettext("Preferred workplace")}: #{User.desired_workplace_line(doc.desired_workplace_types)}",
       doc.desired_salary && User.desired_salary_agent_line(doc.desired_salary),
       "#{gettext("Member since")}: #{doc.member_since}",
       count_facts(doc.counts),

@@ -268,16 +268,38 @@ lands here). --%>
             it shows beside the badge under that status's visibility, and the
             changeset clears it whenever the status goes back to "not open to
             work", which is why it has no visibility select of its own. --%>
-            <div class="border-t border-slate-200 pt-5 dark:border-slate-700">
-              <%= label f, :desired_workplace_type, gettext("How do you want to work?"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-              <%= select f, :desired_workplace_type, desired_workplace_options(), class: input_class() %>
+            <%!-- Checkboxes, not a select: the three don't exclude each other,
+            and ticking none is the "no preference" answer. The leading hidden
+            field is what makes unticking everything reach the server as an
+            empty list. --%>
+            <fieldset class="border-t border-slate-200 pt-5 dark:border-slate-700">
+              <legend class="block text-sm font-medium text-slate-900 dark:text-white">
+                {gettext("How do you want to work?")}
+              </legend>
+              <% chosen = Phoenix.HTML.Form.input_value(f, :desired_workplace_types) || [] %>
+              <input type="hidden" name="user[desired_workplace_types][]" value="" />
+              <div class="mt-1.5 flex flex-wrap gap-x-5 gap-y-2">
+                <label
+                  :for={{wlabel, wvalue} <- desired_workplace_options()}
+                  class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200"
+                >
+                  <input
+                    type="checkbox"
+                    name="user[desired_workplace_types][]"
+                    value={wvalue}
+                    checked={wvalue in chosen}
+                    class={checkbox_class()}
+                  />
+                  <span>{wlabel}</span>
+                </label>
+              </div>
               <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
                 {gettext(
                   "Shown next to your availability, and used to match you with postings."
                 )}
               </p>
-              <%= error_tag f, :desired_workplace_type %>
-            </div>
+              <%= error_tag f, :desired_workplace_types %>
+            </fieldset>
 
             <%!-- Exclusion list (issue #938): the "hide from your employer"
             escape hatch #928 deferred. It lives on its own editor page (adding

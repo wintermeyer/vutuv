@@ -118,7 +118,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert body =~ ~s(name="user[employment_status]")
       assert body =~ ~s(name="user[employment_status_visibility]")
       assert body =~ ~s(name="user[desired_salary_min]")
-      assert body =~ ~s(name="user[desired_workplace_type]")
+      assert body =~ ~s(name="user[desired_workplace_types][]")
       # The postal code takes the cursor: it is the first field of the first
       # question, and the shortest thing to type. (Attributes render in
       # alphabetical order, so match the tag and then look inside it.)
@@ -242,14 +242,15 @@ defmodule VutuvWeb.WelcomeControllerTest do
           "desired_salary_min" => "60000",
           "desired_salary_period" => "year",
           "desired_salary_currency" => "EUR",
-          "desired_workplace_type" => "remote"
+          "desired_workplace_types" => ["", "remote", "hybrid"]
         }
       })
 
       user = reload(user)
       assert user.employment_status == "looking"
       assert user.desired_salary_min == 60_000
-      assert user.desired_workplace_type == "remote"
+      # Ticked in any order, stored in the canonical one, blanks dropped.
+      assert user.desired_workplace_types == ["hybrid", "remote"]
       # The shipped visibility defaults are untouched: the status shows to
       # signed-in members, the salary to nobody.
       assert user.employment_status_visibility == "members"
@@ -270,10 +271,10 @@ defmodule VutuvWeb.WelcomeControllerTest do
       {conn, user} = register_and_confirm(conn)
 
       post(conn, ~p"/system/welcome", %{
-        "user" => %{"employment_status" => "", "desired_workplace_type" => "remote"}
+        "user" => %{"employment_status" => "", "desired_workplace_types" => ["remote"]}
       })
 
-      assert reload(user).desired_workplace_type == nil
+      assert reload(user).desired_workplace_types == []
     end
 
     test "a rejected field re-renders the whole form and leaves the page open", %{conn: conn} do

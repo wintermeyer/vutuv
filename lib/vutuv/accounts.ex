@@ -1285,7 +1285,7 @@ defmodule Vutuv.Accounts do
       (`Address.location_given?/1` false) inserts nothing rather than failing:
       skipping is a legitimate answer, not an error.
     * `"user"` — the job-search group (`employment_status`,
-      `desired_salary_min` + currency/period, `desired_workplace_type`), cast by
+      `desired_salary_min` + currency/period, `desired_workplace_types`), cast by
       the ordinary `User.changeset/2`, so this page can never store a value the
       profile's Basics form would reject.
 

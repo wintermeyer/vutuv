@@ -63,18 +63,17 @@ defmodule VutuvWeb.UserHelpers do
     do: gettext("A photo and a short tagline make your profile complete.")
 
   @doc """
-  The `{label, value}` options for the workplace-preference select: the three
-  workplace forms from the schema's single source
-  (`User.desired_workplace_types/0` through `User.desired_workplace_label/1`,
-  the same wording a job posting's workplace chip uses), preceded by the
-  form-local blank "no preference" default, whose empty value `cast/3` folds
-  back to nil. Shared by the Basics form and the one-time welcome page.
+  The `{label, value}` pairs for the workplace-preference **checkboxes**: the
+  three workplace forms from the schema's single source
+  (`User.workplace_type_values/0` through `User.desired_workplace_label/1`, the
+  same wording a job posting's workplace chip uses), in the canonical order the
+  values are stored in. They are checkboxes, not a select, because the three do
+  not exclude each other — someone can be open to hybrid *and* remote — and
+  ticking none is the "no preference" answer. Shared by the Basics form and the
+  one-time welcome page.
   """
   def desired_workplace_options do
-    [
-      {gettext("No preference"), ""}
-      | Enum.map(User.desired_workplace_types(), &{User.desired_workplace_label(&1), &1})
-    ]
+    Enum.map(User.workplace_type_values(), &{User.desired_workplace_label(&1), &1})
   end
 
   @doc """

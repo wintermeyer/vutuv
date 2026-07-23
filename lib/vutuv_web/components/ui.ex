@@ -836,20 +836,22 @@ defmodule VutuvWeb.UI do
   schema's single source (`Vutuv.Accounts.User.employment_status_label/1`), so
   the badge, the edit form's select and the agent documents can never disagree.
 
-  `workplace` appends the member's preferred workplace form ("Remote",
-  "Hybrid", "On-site") to the same pill, so "Looking for a job · Remote" reads
-  as one signal instead of two competing badges. It shows only alongside a
-  status (a workplace preference without one is cleared by the changeset) and
+  `workplace` appends the member's preferred workplace forms ("Remote",
+  "Hybrid, Remote", …) to the same pill, so "Looking for a job · Hybrid,
+  Remote" reads as one signal instead of competing badges. It is a **list** —
+  the three do not exclude each other — rendered through
+  `User.desired_workplace_line/1` in the canonical order. It shows only
+  alongside a status (a preference without one is cleared by the changeset) and
   is governed by the very same visibility, so the caller needs no second gate.
   """
   attr(:status, :string, default: nil)
-  attr(:workplace, :string, default: nil)
+  attr(:workplace, :list, default: [])
   attr(:class, :string, default: nil)
   attr(:rest, :global)
 
   def employment_status_badge(assigns) do
     label = User.employment_status_label(assigns.status)
-    workplace_label = User.desired_workplace_label(assigns.workplace)
+    workplace_label = User.desired_workplace_line(assigns.workplace)
 
     assigns =
       assigns
@@ -868,7 +870,7 @@ defmodule VutuvWeb.UI do
         @class
       ]}
       data-employment-status={@status}
-      data-desired-workplace={@workplace_label && @workplace}
+      data-desired-workplace={@workplace_label && Enum.join(@workplace, " ")}
       {@rest}
     >
       {@text}

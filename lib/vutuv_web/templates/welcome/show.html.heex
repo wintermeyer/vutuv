@@ -136,14 +136,34 @@ optional; "Skip" is a second submit button that saves nothing. --%>
           <%= error_tag uf, :desired_salary_min %>
         </div>
 
-        <div>
-          <%= label uf, :desired_workplace_type, gettext("How do you want to work?"), class: label_class %>
-          <%= select uf, :desired_workplace_type, desired_workplace_options(), class: input_class() %>
+        <%!-- Checkboxes, not a select: on-site, hybrid and remote don't exclude
+        each other, and ticking none is the "no preference" answer. The leading
+        hidden field is what makes unticking everything reach the server as an
+        empty list. --%>
+        <fieldset>
+          <legend class={label_class}>{gettext("How do you want to work?")}</legend>
+          <% chosen = Phoenix.HTML.Form.input_value(uf, :desired_workplace_types) || [] %>
+          <input type="hidden" name="user[desired_workplace_types][]" value="" />
+          <div class="mt-1.5 flex flex-wrap gap-x-5 gap-y-2">
+            <label
+              :for={{wlabel, wvalue} <- desired_workplace_options()}
+              class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200"
+            >
+              <input
+                type="checkbox"
+                name="user[desired_workplace_types][]"
+                value={wvalue}
+                checked={wvalue in chosen}
+                class={checkbox_class()}
+              />
+              <span>{wlabel}</span>
+            </label>
+          </div>
           <p class={hint_class}>
             {gettext("Shown next to your availability, and used to match you with postings.")}
           </p>
-          <%= error_tag uf, :desired_workplace_type %>
-        </div>
+          <%= error_tag uf, :desired_workplace_types %>
+        </fieldset>
       </div>
     </section>
 
