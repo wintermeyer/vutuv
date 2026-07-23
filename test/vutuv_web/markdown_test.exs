@@ -191,6 +191,42 @@ defmodule VutuvWeb.MarkdownTest do
     end
   end
 
+  describe "to_plain_text/1" do
+    test "drops the formatting markers instead of showing them" do
+      text = Markdown.to_plain_text("**Ship it** on _Friday_, see `mix test`")
+
+      assert text == "Ship it on Friday, see mix test"
+    end
+
+    test "a link keeps its label, not its target" do
+      assert Markdown.to_plain_text("see [the docs](https://hexdocs.pm/phoenix)") ==
+               "see the docs"
+    end
+
+    test "block structure becomes plain line breaks" do
+      text = Markdown.to_plain_text("Groceries:\n\n- milk\n- bread")
+
+      assert text == "Groceries:\nmilk\nbread"
+    end
+
+    test "escaped characters are decoded back to what was typed" do
+      assert Markdown.to_plain_text("Tom & Jerry <3") == "Tom & Jerry <3"
+    end
+
+    test "an image reference leaves no markup behind" do
+      text = Markdown.to_plain_text("look ![a cat](https://evil.example/x.png) here")
+
+      refute text =~ "!["
+      refute text =~ "evil.example"
+      assert text =~ "look"
+      assert text =~ "here"
+    end
+
+    test "non-binary input is the empty string" do
+      assert Markdown.to_plain_text(nil) == ""
+    end
+  end
+
   test "raw HTML shows as literal text and never executes" do
     html = render(~s|<script>alert("x")</script> **safe**|)
     refute html =~ "<script"

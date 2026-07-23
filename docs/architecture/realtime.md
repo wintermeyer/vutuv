@@ -68,16 +68,31 @@ post, the actor's profile), and a reply or like entry **quotes the post it is
 about** so the feed is scannable at a glance: a like quotes the liked post, a
 reply quotes **both** the member's own post and the reply itself (each truncated
 to its first lines and linked to its own permalink, the reply respecting post
-visibility so a restricted one never leaks). **How long a quote is, is the
-reader's own setting**: `:notification_post_lines` (`Vutuv.Prefs`, shipped
-default 5 lines, an installation default an admin can change at
-`/admin/preferences`, a member's own value on `/settings/preferences`). It cuts
-the quote twice over — server-side to that many source lines, so the rest of a
+visibility so a restricted one never leaks).
+
+A quote is **formatted the way `/feed` formats a post**, not shown as Markdown
+source: it runs through `VutuvWeb.Markdown.render_preview/3` into the
+`.markdown markdown--post` body recipe, so bold, lists, links, `@mentions` and
+`#hashtags` read as themselves and headings flatten to bold. Because the body
+then carries links of its own, the quote is a block with the permalink as a
+**stretched link** underneath it rather than one big `<a>` (an `<a>` inside an
+`<a>` is invalid) — the arrangement the feed's "Suggested posts" rail uses.
+Inline image references are dropped before the quote is cut: the quote is text,
+so a picture must not eat a line of the budget.
+
+**How long a quote is, is the reader's own setting**: `:notification_post_lines`
+(`Vutuv.Prefs`, shipped default 5 lines, an installation default an admin can
+change at `/admin/preferences`, a member's own value on `/settings/preferences`).
+It cuts the quote twice over — server-side to that many source lines (blank
+lines between them kept, so the Markdown blocks still parse), so the rest of a
 body never reaches the DOM, and visually through the `.notif-clamp` CSS clamp
 fed by the inline `--notif-clamp` custom property (nothing inline while the
 reader is on the shipped default, exactly like `.post-clamp`). The one-line
 context excerpts (the "Your post:" breadcrumb above a reply, the handle-change
 list) stay one line whatever the setting: they are index lines, not the quote.
+They sit *inside* the row's own link, so they cannot carry links of their own —
+`VutuvWeb.Markdown.to_plain_text/1` flattens their Markdown to plain text
+instead, so no `**marker**` shows there either.
 
 The only stored state is the `users.notifications_read_at` read marker behind
 the unread badge.
