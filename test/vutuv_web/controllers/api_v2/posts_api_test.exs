@@ -216,14 +216,14 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
       assert conn.status == 409
     end
 
-    test "audience locking: a reposted post refuses restriction", %{
+    test "a reposted post can no longer be edited at all", %{
       conn: conn,
       me: me,
       other: other,
       token: token
     } do
       post = insert(:post, user: me)
-      :ok = Posts.repost_post(other, Vutuv.Posts.get_post(post.id))
+      :ok = Posts.repost_post(other, Posts.get_post(post.id))
 
       conn =
         json_req(conn, :patch, token, "/api/2.0/posts/#{post.id}", %{
@@ -232,7 +232,25 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
         })
 
       assert conn.status == 409
-      assert Jason.decode!(conn.resp_body)["reason"] == "visibility_locked"
+      assert Jason.decode!(conn.resp_body)["reason"] == "edit_engaged"
+    end
+
+    test "the edit window closes on age too", %{conn: conn, me: me, token: token} do
+      post = insert(:post, user: me)
+
+      at =
+        NaiveDateTime.add(NaiveDateTime.utc_now(:second), -(Posts.edit_window_minutes() + 1) * 60)
+
+      Repo.update_all(from(p in Vutuv.Posts.Post, where: p.id == ^post.id),
+        set: [inserted_at: at]
+      )
+
+      conn = json_req(conn, :patch, token, "/api/2.0/posts/#{post.id}", %{body: "rewritten"})
+
+      assert conn.status == 409
+      assert Jason.decode!(conn.resp_body)["reason"] == "edit_window_closed"
+      # Deleting is still possible.
+      assert delete(authed(build_conn(), token), "/api/2.0/posts/#{post.id}").status == 204
     end
 
     test "posts:read suffices for reading but not engaging", %{

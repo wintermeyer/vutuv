@@ -196,6 +196,8 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:time_id, "post-time-#{entry_key}")
       |> assign(:body_id, "post-body-#{entry_key}")
       |> assign(:author?, Posts.author?(post, viewer))
+      # The no-query half of Posts.editable?/1 — the feed renders many cards.
+      |> assign(:editable?, Posts.edit_window_open?(post))
       |> assign(:reporter?, user? and not Posts.author?(post, viewer))
       |> assign(:frozen?, post.frozen_at != nil)
       |> assign(:reply_banner, reply_banner(post, assigns.show_reply_banner))
@@ -935,10 +937,13 @@ defmodule VutuvWeb.PostComponents do
               </span>
             </div>
 
-            <%!-- The author's quiet ⋯ menu, on every rendering of their post. --%>
+            <%!-- The author's quiet ⋯ menu, on every rendering of their post.
+            Edit drops out once the edit window closed (issue #1023); the
+            engagement half of that gate needs a query, so a post liked inside
+            the window still shows the item and the edit page explains. --%>
             <div :if={@author?} class="-mr-1 -mt-1 shrink-0">
               <.card_menu id={@menu_id}>
-                <:item href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
+                <:item :if={@editable?} href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
                 <:item
                   href={~p"/posts/#{@post.id}"}
                   method="delete"

@@ -204,6 +204,22 @@ defmodule VutuvWeb.ApiV2.PostController do
     )
   end
 
+  defp post_error(conn, :edit_window_closed) do
+    Problem.send_problem(conn, 409, "Edit window closed",
+      detail:
+        "A post stays editable for #{Posts.edit_window_minutes()} minutes after publishing. Deleting is still possible.",
+      extra: %{reason: :edit_window_closed}
+    )
+  end
+
+  defp post_error(conn, :edit_engaged) do
+    Problem.send_problem(conn, 409, "Post already engaged",
+      detail:
+        "Someone has liked or reposted this post, so it can no longer be edited. Deleting is still possible.",
+      extra: %{reason: :edit_engaged}
+    )
+  end
+
   defp post_error(conn, :blocked), do: Problem.blocked(conn)
 
   defp post_error(conn, :not_visible), do: Problem.not_found(conn)

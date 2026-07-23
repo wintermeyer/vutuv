@@ -15125,3 +15125,27 @@ msgstr "Erwähnung"
 #, elixir-autogen, elixir-format
 msgid "mentioned you in a post."
 msgstr "hat Sie in einem Beitrag erwähnt."
+
+#: lib/vutuv_web/live/post_live/composer.ex:357
+#: lib/vutuv_web/live/post_live/edit.ex:59
+#, elixir-autogen, elixir-format
+msgid "This post can no longer be edited: someone has liked or reposted it."
+msgstr ""
+"Dieser Beitrag kann nicht mehr bearbeitet werden: Jemand hat ihn bereits mit "
+"Gefällt mir markiert oder repostet."
+
+#: lib/vutuv_web/live/post_live/composer.ex:361
+#: lib/vutuv_web/live/post_live/edit.ex:62
+#, elixir-autogen, elixir-format
+msgid "This post can no longer be edited. Posts stay editable for %{minutes} minutes after publishing."
+msgstr ""
+"Dieser Beitrag kann nicht mehr bearbeitet werden. Beiträge lassen sich "
+"%{minutes} Minuten nach dem Veröffentlichen bearbeiten."
+
+#: lib/vutuv_web/live/post_live/edit.ex:100
+#, elixir-autogen, elixir-format
+msgid "A post stays editable for %{minutes} minutes, and only until someone likes or reposts it. You can delete it at any time."
+msgstr ""
+"Ein Beitrag lässt sich %{minutes} Minuten lang bearbeiten, und nur so lange, "
+"bis jemand ihn mit Gefällt mir markiert oder repostet. Löschen können Sie ihn "
+"jederzeit."

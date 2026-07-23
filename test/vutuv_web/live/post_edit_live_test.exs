@@ -9,6 +9,7 @@ defmodule VutuvWeb.PostEditLiveTest do
   import Phoenix.LiveViewTest
 
   alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Repo
 
@@ -162,26 +163,19 @@ defmodule VutuvWeb.PostEditLiveTest do
       refute has_element?(live, "button[phx-click=undeny-user]")
     end
 
-    test "locks the audience while reposts exist", %{conn: conn} do
+    test "a reposted post cannot be opened for editing at all", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {:ok, post} = Posts.create_post(user, %{body: "carried by others"})
       :ok = Posts.repost_post(insert(:user, email_confirmed?: true), post)
 
-      {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/edit")
+      # Someone else now carries these words: the audience lock used to keep
+      # them public, the edit window (issue #1023) closes the edit outright.
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               live(conn, ~p"/posts/#{post.id}/edit")
 
-      # No audience select; the locked chip and the explanation instead.
-      refute has_element?(live, "#composer-preset")
-      assert has_element?(live, "#composer-audience-locked")
-      assert html =~ "reposted"
-
-      # Body edits still save (and the post stays public).
-      live
-      |> form("#composer-form", %{"post" => %{"body" => "still editable"}})
-      |> render_submit()
-
-      assert_redirect(live, Posts.path(post))
-      assert Posts.get_post(post.id).body == "still editable"
-      assert Posts.get_post(post.id).denials == []
+      assert to == Posts.path(post)
+      assert flash["error"] =~ "reposted"
+      assert Posts.get_post(post.id).body == "carried by others"
     end
 
     test "locks the audience while replies exist", %{conn: conn} do
@@ -196,6 +190,85 @@ defmodule VutuvWeb.PostEditLiveTest do
       refute has_element?(live, "#composer-preset")
       assert has_element?(live, "#composer-audience-locked")
       assert html =~ "replies"
+    end
+
+    test "names the edit window up front", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "fresh"})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      assert live |> element("#edit-window-hint") |> render() =~
+               to_string(Posts.edit_window_minutes())
+    end
+
+    test "sends the author away once the edit window has run out", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "I love kittens"})
+
+      # Inside the window the page still opens; a minute past it, it does not.
+      {:ok, _live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      backdate_post!(post, (Posts.edit_window_minutes() + 1) * 60)
+
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               live(conn, ~p"/posts/#{post.id}/edit")
+
+      assert to == Posts.path(post)
+      assert flash["error"] =~ to_string(Posts.edit_window_minutes())
+    end
+
+    test "sends the author away once someone liked the post", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "I love kittens"})
+      :ok = Posts.like_post(insert(:user, email_confirmed?: true), post)
+
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               live(conn, ~p"/posts/#{post.id}/edit")
+
+      assert to == Posts.path(post)
+      assert flash["error"] =~ "liked"
+    end
+
+    test "a like that lands while the form is open is caught on save", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "I love kittens"})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      # The page opened on an editable post; somebody likes it mid-edit.
+      :ok = Posts.like_post(insert(:user, email_confirmed?: true), post)
+
+      html =
+        live
+        |> form("#composer-form", %{"post" => %{"body" => "I hate kittens"}})
+        |> render_submit()
+
+      assert html =~ "can no longer be edited"
+      assert Posts.get_post(post.id).body == "I love kittens"
+    end
+
+    test "a frozen post keeps its moderation edit round", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "reported words"})
+
+      # Old and liked: both halves of the edit gate are shut. "Fix it" is one
+      # of the three ways out of the moderation freezer, so the round survives
+      # them (nobody but the owner can see the post meanwhile).
+      :ok = Posts.like_post(insert(:user, email_confirmed?: true), post)
+      backdate_post!(post, (Posts.edit_window_minutes() + 60) * 60)
+
+      Repo.update_all(from(p in Post, where: p.id == ^post.id),
+        set: [frozen_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "fixed words"}})
+      |> render_submit()
+
+      assert_redirect(live, Posts.path(post))
+      assert Posts.get_post(post.id).body == "fixed words"
     end
 
     test "sends non-authors away without confirming existence", %{conn: conn} do
@@ -254,6 +327,16 @@ defmodule VutuvWeb.PostEditLiveTest do
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
       refute has_element?(live, "#post-screenshot-editor")
     end
+  end
+
+  # Shifts a post into the past so the edit window (issue #1023) can be tested
+  # from both sides without touching the clock.
+  defp backdate_post!(post, seconds) do
+    at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -seconds)
+
+    Repo.update_all(from(p in Post, where: p.id == ^post.id), set: [inserted_at: at])
+
+    %{post | inserted_at: at}
   end
 
   # A single-URL, image-less post whose auto-screenshot has been captured,

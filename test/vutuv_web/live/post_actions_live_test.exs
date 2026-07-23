@@ -85,7 +85,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
       assert %{bookmarks: 1} = Posts.engagement_counts(post.id)
     end
 
-    test "repost toggles and locks the post's audience", %{conn: conn} do
+    test "repost toggles and closes the post for editing", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
       insert(:follow, follower: user, followee: friend)
@@ -100,7 +100,9 @@ defmodule VutuvWeb.PostActionsLiveTest do
       assert html =~ ~s(data-count="repost")
       assert Posts.has_reposts?(post)
 
-      assert {:error, :visibility_locked} =
+      # Somebody else carries these words now, so the author can no longer
+      # rewrite them (issue #1023) — deleting stays possible.
+      assert {:error, :edit_engaged} =
                Posts.update_post(post, %{body: "spread", denials: [%{"wildcard" => "everyone"}]})
     end
 

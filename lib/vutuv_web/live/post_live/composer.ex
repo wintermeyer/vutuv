@@ -351,6 +351,18 @@ defmodule VutuvWeb.PostLive.Composer do
   defp save_error_message(:visibility_locked),
     do: gettext("The audience cannot be restricted while reposts or replies exist.")
 
+  # The edit window can close while the form sits open — a like arrives, or the
+  # 30 minutes run out mid-edit (issue #1023).
+  defp save_error_message(:edit_engaged),
+    do: gettext("This post can no longer be edited: someone has liked or reposted it.")
+
+  defp save_error_message(:edit_window_closed) do
+    gettext(
+      "This post can no longer be edited. Posts stay editable for %{minutes} minutes after publishing.",
+      minutes: Posts.edit_window_minutes()
+    )
+  end
+
   defp save_error_message(:invalid_images),
     do: gettext("One of the images could not be attached.")
 
