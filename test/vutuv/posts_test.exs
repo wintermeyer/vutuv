@@ -1780,6 +1780,69 @@ defmodule Vutuv.PostsTest do
       {:ok, _} = Posts.create_reply(author, parent, %{body: "my own follow-up"})
       refute_receive {:new_notification, _}
     end
+
+    test "stamps the thread root: the parent for a direct reply, the top post for a nested one" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, reply} = Posts.create_reply(user(), root, %{body: "first"})
+      {:ok, nested} = Posts.create_reply(user(), reply, %{body: "second"})
+      {:ok, deep} = Posts.create_reply(user(), nested, %{body: "third"})
+
+      assert reply.reply_ref.root_post_id == root.id
+      assert nested.reply_ref.root_post_id == root.id
+      assert deep.reply_ref.root_post_id == root.id
+    end
+
+    test "a reply notifies the thread's other participants, not only the answered author" do
+      root_author = user()
+      first_replier = user()
+      second_replier = user()
+      root = create_post!(root_author, %{body: "root"})
+      {:ok, first} = Posts.create_reply(first_replier, root, %{body: "first"})
+
+      Vutuv.Activity.subscribe(root_author.id)
+      Vutuv.Activity.subscribe(first_replier.id)
+
+      # Answering the first reply: its author gets the direct "reply" event,
+      # the root author — in the thread but not directly answered — the
+      # "thread" event. This is the miss the kind exists for: before it, an
+      # answer to a third participant reached nobody else in the thread.
+      {:ok, second} = Posts.create_reply(second_replier, first, %{body: "second"})
+      second_id = second.id
+      root_id = root.id
+
+      assert_receive {:new_notification,
+                      %{kind: "thread", reply_post_id: ^second_id, root_post_id: ^root_id} = n}
+
+      assert n.actor_param == second_replier.username
+      assert_receive {:new_notification, %{kind: "reply"}}
+
+      # The directly answered author must not get the thread event on top.
+      refute_receive {:new_notification, %{kind: "thread"}}, 50
+    end
+
+    test "your own reply deeper in your thread does not notify you" do
+      author = user()
+      root = create_post!(author, %{body: "root"})
+      {:ok, first} = Posts.create_reply(user(), root, %{body: "first"})
+
+      Vutuv.Activity.subscribe(author.id)
+
+      {:ok, _} = Posts.create_reply(author, first, %{body: "back at you"})
+      refute_receive {:new_notification, %{kind: "thread"}}, 50
+    end
+
+    test "a participant with a block either way to the replier is not told" do
+      root_author = user()
+      replier = user()
+      root = create_post!(root_author, %{body: "root"})
+      {:ok, first} = Posts.create_reply(user(), root, %{body: "first"})
+      {:ok, _} = Vutuv.Social.block_user(root_author, replier)
+
+      Vutuv.Activity.subscribe(root_author.id)
+
+      {:ok, _} = Posts.create_reply(replier, first, %{body: "second"})
+      refute_receive {:new_notification, %{kind: "thread"}}, 50
+    end
   end
 
   describe "reply tombstones" do

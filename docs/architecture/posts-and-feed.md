@@ -178,7 +178,12 @@ above), so a widely-reposted post is one entry, not one card per reposter.
 
 A reply is a **normal post** (own permalink, audience, images, tags,
 likes/reposts/bookmarks, shows up in the replier's feed and profile) plus a
-`post_replies` row naming the parent (`Vutuv.Posts.create_reply/3`).
+`post_replies` row naming the parent (`Vutuv.Posts.create_reply/3`) **and the
+thread root** (`root_post_id`, denormalized at creation — threading is
+otherwise only a parent-pointer chain — so "all replies of this thread" is one
+indexed lookup; it feeds the thread-participation notifications, see
+[realtime.md](realtime.md)). The root reference nilifies when the root post is
+deleted.
 
 Replying works on **public** parents only (the reply button on restricted posts
 is disabled, like repost) and pins the parent's audience open like reposts do.

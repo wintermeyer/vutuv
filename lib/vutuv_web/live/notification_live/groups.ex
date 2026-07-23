@@ -12,9 +12,11 @@ defmodule VutuvWeb.NotificationLive.Groups do
     * new **followers** - "Anna, Ben and 111 more are now following you."
     * new **connections** (mutual follows) - same day-bucket rule
     * one endorser's **endorsements** - "endorsed you for Elixir and Phoenix."
+    * **thread** events of the same thread - "Anna and Ben replied in a
+      thread you posted in."
 
-  Replies and every rarer kind (moderation, CV updates, handle changes, ...)
-  stay one row per event - each carries its own content.
+  Direct replies and every rarer kind (moderation, CV updates, handle
+  changes, ...) stay one row per event - each carries its own content.
 
   Everything here is a pure function over the item list, so the LiveView
   recomputes sections wholesale on every change (load more, live push,
@@ -88,6 +90,9 @@ defmodule VutuvWeb.NotificationLive.Groups do
   defp group_key(%{kind: "like", post_id: post_id}) when is_binary(post_id),
     do: {:like, post_id}
 
+  defp group_key(%{kind: "thread", root_post_id: root_id}) when is_binary(root_id),
+    do: {:thread, root_id}
+
   defp group_key(%{kind: "follower"}), do: :follower
   defp group_key(%{kind: "connection"}), do: :connection
   defp group_key(%{kind: "endorsement"} = item), do: {:endorsement, actor_key(item)}
@@ -112,6 +117,7 @@ defmodule VutuvWeb.NotificationLive.Groups do
 
   defp group_id({:single, id}, _day, _newest), do: id
   defp group_id({:like, post_id}, day, _newest), do: "like-#{post_id}-#{day_key(day)}"
+  defp group_id({:thread, root_id}, day, _newest), do: "thread-#{root_id}-#{day_key(day)}"
   defp group_id(:follower, day, _newest), do: "follower-#{day_key(day)}"
   defp group_id(:connection, day, _newest), do: "connection-#{day_key(day)}"
 

@@ -419,6 +419,79 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute html =~ "**Which editor**"
     end
 
+    test "an answer to someone else in my thread renders as a thread row linking the reply", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+
+      first_replier = insert(:user)
+      other = insert(:user, first_name: "Joe", last_name: "Armstrong")
+      root = insert(:post, user: user, body: "The root question")
+      {:ok, first} = Vutuv.Posts.create_reply(first_replier, root, %{body: "First answer"})
+
+      {:ok, missed} =
+        Vutuv.Posts.create_reply(other, first, %{body: "The answer I used to miss"})
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert length(row_ids(html, "thread")) == 1
+      assert html =~ "Joe Armstrong"
+      assert html =~ "replied in a thread you posted in."
+
+      # The row quotes the reply and links to its permalink. The quote is a
+      # formatted block with a stretched link, so the href sits on the inner
+      # <a>, not on the element carrying the marker.
+      assert has_element?(live, ~s([data-reply-preview]), "The answer I used to miss")
+
+      assert has_element?(
+               live,
+               ~s([data-reply-preview] a[href="/#{other.username}/posts/#{missed.id}"])
+             )
+    end
+
+    test "several same-day answers in one thread merge into one thread row", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      root = insert(:post, user: user, body: "The root question")
+      {:ok, first} = Vutuv.Posts.create_reply(insert(:user), root, %{body: "First answer"})
+
+      {:ok, _} =
+        Vutuv.Posts.create_reply(
+          insert(:user, first_name: "Anna", last_name: "Arnold"),
+          first,
+          %{body: "Second answer"}
+        )
+
+      {:ok, _} =
+        Vutuv.Posts.create_reply(
+          insert(:user, first_name: "Ben", last_name: "Otto"),
+          first,
+          %{body: "Third answer"}
+        )
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      # One grouped row names both answerers; the direct reply row stays its own.
+      assert length(row_ids(html, "thread")) == 1
+      assert html =~ "Anna Arnold"
+      assert html =~ "Ben Otto"
+      assert length(row_ids(html, "reply")) == 1
+    end
+
+    test "the posts filter tab keeps thread rows", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      root = insert(:post, user: user, body: "The root question")
+      {:ok, first} = Vutuv.Posts.create_reply(insert(:user), root, %{body: "First answer"})
+      {:ok, _} = Vutuv.Posts.create_reply(insert(:user), first, %{body: "Deeper answer"})
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+
+      assert length(row_ids(render(live), "thread")) == 1
+    end
+
     test "a reply hidden from the recipient is not quoted", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 

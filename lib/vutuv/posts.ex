@@ -356,8 +356,18 @@ defmodule Vutuv.Posts do
     Repo.insert!(%PostReply{
       post_id: post.id,
       parent_post_id: parent.id,
-      parent_author_id: parent.user_id
+      parent_author_id: parent.user_id,
+      root_post_id: thread_root_id(parent)
     })
+  end
+
+  # The thread a reply lands in is its parent's thread; answering a top-level
+  # post starts the thread at that post. A degraded parent (a reply whose own
+  # root was deleted, root_post_id NULL) re-anchors the thread at the parent —
+  # the chain above it is gone anyway.
+  defp thread_root_id(%Post{} = parent) do
+    Repo.one(from(r in PostReply, where: r.post_id == ^parent.id, select: r.root_post_id)) ||
+      parent.id
   end
 
   # Claims each image row for the post (ownership and pending state are
@@ -2285,14 +2295,51 @@ defmodule Vutuv.Posts do
     broadcast_to_followers(repost.user_id, event)
   end
 
-  # A new reply ticks the parent's open action bars and notifies its author
-  # (self-replies are not news).
+  # A new reply ticks the parent's open action bars, notifies its author
+  # (self-replies are not news) and tells the thread's other participants.
   defp broadcast_reply(%Post{} = parent, %Post{} = reply) do
     broadcast_reply_count(parent.id)
 
     if parent.user_id != reply.user_id do
       Vutuv.Activity.notify_reply(parent.user_id, reply.user, parent.id, reply.id)
     end
+
+    notify_thread_participants(parent, reply)
+  end
+
+  # Everyone else who wrote in the thread gets the quieter "replied in a
+  # thread you posted in" push (the feed's "thread" kind): the root author
+  # and every earlier replier — minus the replier themselves, the directly
+  # answered author (notified above) and anyone with a block either way to
+  # the replier. Without this, an answer to a *third* participant was
+  # invisible to the rest of the thread (no badge, no feed entry).
+  defp notify_thread_participants(%Post{} = parent, %Post{} = reply) do
+    root_id = reply.reply_ref && reply.reply_ref.root_post_id
+
+    if root_id do
+      replier_ids =
+        Repo.all(
+          from(r in PostReply,
+            join: p in Post,
+            on: p.id == r.post_id,
+            where: r.root_post_id == ^root_id,
+            distinct: true,
+            select: p.user_id
+          )
+        )
+
+      root_author_id = Repo.one(from(p in Post, where: p.id == ^root_id, select: p.user_id))
+
+      [root_author_id | replier_ids]
+      |> Enum.uniq()
+      |> Enum.reject(
+        &(is_nil(&1) or &1 == reply.user_id or &1 == parent.user_id or
+            Vutuv.Social.blocked_between?(&1, reply.user_id))
+      )
+      |> Enum.each(&Vutuv.Activity.notify_thread_reply(&1, reply.user, root_id, reply.id))
+    end
+
+    :ok
   end
 
   @doc """
