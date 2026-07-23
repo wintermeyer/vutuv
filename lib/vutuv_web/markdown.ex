@@ -30,6 +30,12 @@ defmodule VutuvWeb.Markdown do
   # `…` included: remote (Mastodon) text is length-capped with a trailing
   # ellipsis that must not become part of a link target.
   @trailing_punct ~w(. , ; : ! ? …)
+  # A single `[^\s<>]+` autolink match longer than this is emitted verbatim
+  # instead of being linked. No real URL comes close (browsers cap around 2K),
+  # so this only ever rejects a pathological unbroken run — a hard ceiling on
+  # the work `split_trailing_punct/1` can be asked to do per match, independent
+  # of that function already being linear.
+  @autolink_max 2_000
   @preview_limit 1000
   # When a whole block would overflow the preview, keep a word-cut of it (so a
   # one-line intro above a long block doesn't leave a one-line preview) — but
@@ -253,36 +259,61 @@ defmodule VutuvWeb.Markdown do
   def render_preview(_, _images, _opts), do: {Phoenix.HTML.raw(""), false}
 
   # Bare URLs become `[truncated-display](url)`. The lookbehind skips URLs that
-  # are already the target of a Markdown link (`](http…`).
+  # are already the target of a Markdown link (`](http…`). A match longer than
+  # `@autolink_max` is left as literal text: no genuine URL is that long, and it
+  # caps the work per match so a pathological unbroken run can never drive the
+  # trailing-punctuation walk (findings F1/F9 — a body of `http://a` plus tens
+  # of thousands of `.`/`)` matched as one token).
   defp autolink_bare_urls(text) do
     Regex.replace(~r{(?<!\]\()(?<![\w/])(https?://[^\s<>]+)}, text, fn _, raw ->
-      {url, trailing} = split_trailing_punct(raw)
-      "[#{truncate_url(url)}](#{url})#{trailing}"
+      if byte_size(raw) > @autolink_max do
+        raw
+      else
+        {url, trailing} = split_trailing_punct(raw)
+        "[#{truncate_url(url)}](#{url})#{trailing}"
+      end
     end)
   end
 
   # "…wiki/Elixir_(programming_language)), see!" — sentence punctuation and any
-  # `)` beyond the balanced ones belong to the sentence, not the URL.
+  # `)` beyond the balanced ones belong to the sentence, not the URL. We strip
+  # that trailing run in one right-to-left pass instead of recursing a character
+  # at a time (each old level re-walked the whole remaining string via
+  # `String.last`/`String.slice`/`String.graphemes`, so a long match cost O(n²)
+  # time and allocation — findings F1/F9). The paren balance is computed once:
+  # a `)` is trailing only while the prefix up to and including it still closes
+  # more parens than it opens, so a balanced `(disambiguation)` stays in the
+  # href while an unbalanced `)` is dropped — the exact rule the recursion had.
   defp split_trailing_punct(url) do
-    last = String.last(url)
+    graphemes = String.graphemes(url)
+    opens = Enum.count(graphemes, &(&1 == "("))
+    closes = Enum.count(graphemes, &(&1 == ")"))
 
-    cond do
-      last in @trailing_punct ->
-        {u, t} = url |> String.slice(0..-2//1) |> split_trailing_punct()
-        {u, t <> last}
+    strip =
+      graphemes
+      |> Enum.reverse()
+      |> count_trailing_to_strip(opens, closes)
 
-      last == ")" and closes_more_than_opens?(url) ->
-        {u, t} = url |> String.slice(0..-2//1) |> split_trailing_punct()
-        {u, t <> last}
-
-      true ->
-        {url, ""}
-    end
+    {kept, trailing} = Enum.split(graphemes, length(graphemes) - strip)
+    {Enum.join(kept), Enum.join(trailing)}
   end
 
-  defp closes_more_than_opens?(url) do
-    graphemes = String.graphemes(url)
-    Enum.count(graphemes, &(&1 == ")")) > Enum.count(graphemes, &(&1 == "("))
+  # How many graphemes to peel off the end, walking the reversed list once. A
+  # `.,;:!?…` char always peels; a `)` peels only while the still-kept prefix
+  # (`closes` shrinks as each closing paren is peeled; `opens` never does, since
+  # a `(` is never trailing) holds an unbalanced close. Stops at the first char
+  # that stays, so it never scans past the trailing run.
+  defp count_trailing_to_strip(reversed_graphemes, opens, closes) do
+    {strip, _closes} =
+      Enum.reduce_while(reversed_graphemes, {0, closes}, fn grapheme, {strip, closes} ->
+        cond do
+          grapheme in @trailing_punct -> {:cont, {strip + 1, closes}}
+          grapheme == ")" and closes > opens -> {:cont, {strip + 1, closes - 1}}
+          true -> {:halt, {strip, closes}}
+        end
+      end)
+
+    strip
   end
 
   # Scheme-less, www-less display text for a bare URL, shortened to the host
