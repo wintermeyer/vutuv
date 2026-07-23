@@ -546,6 +546,26 @@ profile's Tags card always offers a visitor the "All tags" footer link — not
 only once the card is truncated, which with the 15-tag cap it never is. The
 owner's footer stays the "Manage" bridge into `/settings/tags`.
 
+## A tag has to name something
+
+Two shapes of tag name are refused, both by `Vutuv.Tags.Tag`: a **web address**
+(see the section below, which the tagline shares) and a **wordless** name —
+`Tag.wordless?/1`, no letter and no number anywhere in it (`"-"`, `"."`, `"???"`).
+A wordless name names no topic, nobody searches for it, and the slug it
+generates — the tag page's URL — carries nothing either; one letter or digit
+anywhere is enough, so `C#`, `C++` and `3D` are ordinary tags. Three such rows
+exist from before the rule (2026-07-23) and stay; no new one is minted.
+
+Both refusals sit in two places, because the two entry shapes differ: the
+`changeset/2` heads (nothing can *mint* such a tag) and `create_or_link_tag/2`
+(nothing can *link* one of the legacy rows — that path resolves an existing tag
+by lookup and would never build a changeset). The error lands on `:tag_id`,
+where the tags editor renders its other refusals, so it shows inline. The
+callers that skip unusable values rather than erroring — the add-tag live
+preview and post tags — filter on the same two predicates, and the sign-up form
+names the offending token (`registration_changeset/2`), since `register_user/3`
+attaches tags after the insert and ignores per-tag failures.
+
 ## No field is a billboard: the tagline and tags refuse a bare link
 
 A profile field has to say something about the member. `Vutuv.WebAddress.link_only?/1`

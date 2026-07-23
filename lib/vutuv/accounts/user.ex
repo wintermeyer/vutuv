@@ -8,6 +8,7 @@ defmodule Vutuv.Accounts.User do
   alias Vutuv.Handles
   alias Vutuv.Mentions
   alias Vutuv.Prefs
+  alias Vutuv.Tags.Tag
   alias Vutuv.WebAddress
   @derive {Phoenix.Param, key: :username}
 
@@ -554,7 +555,7 @@ defmodule Vutuv.Accounts.User do
     |> changeset(params)
     |> validate_minimum_tags()
     |> validate_maximum_tags()
-    |> validate_no_web_address_tags()
+    |> validate_usable_tags()
     |> cast_assoc(:emails)
   end
 
@@ -598,23 +599,34 @@ defmodule Vutuv.Accounts.User do
     end
   end
 
-  # `Vutuv.Tags.Tag` refuses a tag that is only a web or email address, but
+  # `Vutuv.Tags.Tag` refuses a name that names no topic — one that is only a web
+  # or email address, and one with no letter or number in it — but
   # `Accounts.register_user/3` materializes the sign-up tags *after* the insert
   # and ignores per-tag failures, so without this the account would be created
   # with that tag quietly missing. Naming the offending token here lets the
   # sign-up form say what to fix instead.
-  defp validate_no_web_address_tags(changeset) do
-    case Enum.find(distinct_tag_names(changeset), &WebAddress.link_only?/1) do
-      nil ->
-        changeset
+  defp validate_usable_tags(changeset) do
+    names = distinct_tag_names(changeset)
 
-      address ->
+    cond do
+      address = Enum.find(names, &WebAddress.link_only?/1) ->
         add_error(
           changeset,
           :tag_list,
           "\"%{tag}\" is a web address, not a tag. Please describe yourself with words.",
           tag: address
         )
+
+      wordless = Enum.find(names, &Tag.wordless?/1) ->
+        add_error(
+          changeset,
+          :tag_list,
+          "\"%{tag}\" needs at least one letter or number to be a tag.",
+          tag: wordless
+        )
+
+      true ->
+        changeset
     end
   end
 

@@ -192,10 +192,11 @@ defmodule VutuvWeb.TagNewLiveTest do
       assert tag_count(user) == base + 2
     end
 
-    test "previews no chip for a web address the save would refuse", %{live: live} do
+    test "previews no chip for a name the save would refuse", %{live: live} do
       # The preview's promise is "these tags will be created", so it must not
       # offer one add_user_tag/2 turns down a moment later.
       assert preview(live, "https://www.example-shop.com/ Elixir") == ["Elixir"]
+      assert preview(live, "??? Elixir") == ["Elixir"]
     end
 
     test "shows the web-address error inline instead of attaching a URL tag", %{
@@ -209,6 +210,17 @@ defmodule VutuvWeb.TagNewLiveTest do
         |> render_submit()
 
       assert html =~ "must not be a web or email address"
+      assert tag_count(user) == base
+    end
+
+    test "shows the punctuation-only error inline instead of attaching the tag", %{
+      live: live,
+      user: user,
+      base: base
+    } do
+      html = live |> form("#tag-form", tag_param: %{value: "???"}) |> render_submit()
+
+      assert html =~ "must contain at least one letter or number"
       assert tag_count(user) == base
     end
 
