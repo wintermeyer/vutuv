@@ -43,6 +43,20 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The `{label, value}` pairs for the workplace-preference **checkboxes**: the
+  three workplace forms from the schema's single source
+  (`User.workplace_type_values/0` through `User.desired_workplace_label/1`, the
+  same wording a job posting's workplace chip uses), in the canonical order the
+  values are stored in. They are checkboxes, not a select, because the three do
+  not exclude each other — someone can be open to hybrid *and* remote — and
+  ticking none is the "no preference" answer. Shared by the Basics form and the
+  one-time welcome page.
+  """
+  def desired_workplace_options do
+    Enum.map(User.workplace_type_values(), &{User.desired_workplace_label(&1), &1})
+  end
+
+  @doc """
   The `{label, value}` options for a Basics-form *visibility* select (issue
   #928): the three choices (everyone → members → hidden) from the schema's
   single source (`User.visibilities/0` through `User.visibility_label/1`),

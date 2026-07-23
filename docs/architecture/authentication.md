@@ -71,3 +71,19 @@ Each login is a tracked **server-side session** (`Vutuv.Sessions`, table
 revoke a single device or all others, and add / remove passkeys at
 `/:slug/settings`; a noteworthy login (new device, suspicious location) mails a
 security alert
+
+**Where a login lands.** Normally `VutuvWeb.Home.path/1`: the feed, or the
+member's own profile while they follow nobody. The one exception is the PIN
+that confirms a **brand-new registration** — that member is sent to the
+one-time welcome page (`/system/welcome`) first, where they are asked once for
+their location and job search. `SessionController.post_login_path/2` gates it on
+both the PIN form's `"registration"` context and a `nil`
+`users.welcome_completed_at`, so an ordinary login never lands there and a
+member who abandons the page is not asked again. See
+[Profiles](profiles.md#the-one-time-welcome-page-systemwelcome).
+
+A newcomer gets **no welcome toast** on either page: the welcome screen greets
+them in its own hero, and the profile it hands them to already shows the
+completion checklist, so a toast on top would only repeat it. The returning
+member's "Welcome back, …" (plus the unread-conversations nudge) is unchanged.
+

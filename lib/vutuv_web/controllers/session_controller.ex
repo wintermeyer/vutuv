@@ -362,10 +362,13 @@ defmodule VutuvWeb.SessionController do
         # feed, so Home.path/1 sends them to their profile instead. A page that
         # sent them here to log in (the OAuth consent screen) still wins via
         # return_to.
+        path = return_to || post_login_path(context, user)
+
         Accounts.login(conn, user)
         |> Accounts.delete_pin_cookie()
-        |> put_flash(:info, welcome_flash(context, user))
-        |> redirect(to: return_to || Home.path(user))
+        |> maybe_open_welcome(path)
+        |> maybe_welcome_flash(path, context, user)
+        |> redirect(to: path)
 
       {:suspended, until} ->
         conn
@@ -386,6 +389,41 @@ defmodule VutuvWeb.SessionController do
     end
   end
 
+  # Where a successful login lands. Normally home (the feed, or the member's
+  # own profile while they follow nobody — VutuvWeb.Home). The one exception is
+  # the PIN that confirms a brand-new registration: that member goes to the
+  # one-time welcome page first, where they are asked once for their location
+  # and job search. Gated on BOTH the form's "registration" context and the
+  # never-yet-completed flag, so an ordinary login can never be sent there —
+  # and a member who abandons the page is not asked again on their next login.
+  defp post_login_path("registration", user) do
+    if Accounts.needs_welcome?(user), do: ~p"/system/welcome", else: Home.path(user)
+  end
+
+  defp post_login_path(_context, user), do: Home.path(user)
+
+  # The one-time welcome page greets the member in its own hero and its two
+  # questions deserve an uncluttered screen, so no toast rides along to it -
+  # and none follows afterwards either: the profile it hands them to already
+  # shows the completion checklist.
+  # The welcome page is a **one-shot URL**: it opens only for the login that
+  # routes there, and this session marker is the key. Typing /system/welcome
+  # later - or in another session - finds no key and is sent to the profile,
+  # so the page cannot be revisited once it has been left behind. It survives
+  # a reload and a failed submit (both stay in this session), and
+  # VutuvWeb.WelcomeController drops it the moment the page is done.
+  defp maybe_open_welcome(conn, path) do
+    if path == ~p"/system/welcome", do: put_session(conn, :welcome_pending, true), else: conn
+  end
+
+  defp maybe_welcome_flash(conn, path, context, user) do
+    if path == ~p"/system/welcome" do
+      conn
+    else
+      put_flash(conn, :info, welcome_flash(context, user))
+    end
+  end
+
   # The one lockout response, shared by the per-PIN DB counter (real account)
   # and the per-identity counter (any address) so the two are byte-identical
   # — the account-enumeration tell would otherwise reappear here.
@@ -403,30 +441,15 @@ defmodule VutuvWeb.SessionController do
     {ControllerHelpers.safe_return_to(path), delete_session(conn, :login_return_to)}
   end
 
-  # First-time sign-ups get their own greeting; returning members get a
-  # personal one with their name and, when they have any, a nudge about the
-  # conversations waiting for them (the same count the shell's message badge
-  # shows, so the two never disagree).
-  defp welcome_flash("registration", %User{first_name: name})
-       when is_binary(name) and name != "" do
-    gettext("Welcome to vutuv, %{name}!", name: name) <> " " <> registration_note()
-  end
-
-  defp welcome_flash("registration", _user),
-    do: gettext("Welcome to vutuv!") <> " " <> registration_note()
-
+  # A returning member gets a personal greeting with their name and, when they
+  # have any, a nudge about the conversations waiting for them (the same count
+  # the shell's message badge shows, so the two never disagree). A brand-new
+  # member gets none: their PIN routes them to the welcome page, and
+  # maybe_welcome_flash/4 keeps that screen free of toasts.
   defp welcome_flash(_context, %User{} = user) do
     [greeting(user), unread_note(user)]
     |> Enum.reject(&is_nil/1)
     |> Enum.join(" ")
-  end
-
-  # The one gentle pointer after the confirmation PIN: the two steps that make
-  # the fresh profile recognizable. The member lands on their own profile,
-  # where the onboarding checklist repeats both clickably — so the toast only
-  # plants the idea, it doesn't have to carry links.
-  defp registration_note do
-    gettext("A photo and a short tagline make your profile complete.")
   end
 
   defp greeting(%User{first_name: name}) when is_binary(name) and name != "" do

@@ -209,7 +209,12 @@ the resulting ~200px rail width. --%>
         even at "everyone"). The @show_employment_status? assign folds all of
         that together; the row drops out cleanly when it is false. --%>
         <div :if={@show_employment_status?} class="mt-2">
-          <.employment_status_badge status={@user.employment_status} />
+          <%!-- The preferred workplace form rides the same pill and the same
+          visibility ("Sucht aktiv eine Stelle · Remote"). --%>
+          <.employment_status_badge
+            status={@user.employment_status}
+            workplace={@user.desired_workplace_types}
+          />
         </div>
         <%!-- Salary-expectation line (issue #928): a quiet muted line under the
         pill, viewer-scoped by desired_salary_visibility (default "hidden", so
@@ -1162,7 +1167,11 @@ the resulting ~200px rail width. --%>
         <li :for={address <- @user.addresses} class="flex items-start gap-2.5 py-1.5">
           <.detail_icon name="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
           <div class="min-w-0 leading-snug">
-            <p class="mb-0 font-medium text-slate-800 dark:text-slate-100">{address.description}</p>
+            <%!-- The label is optional (a welcome-page location may carry
+            none), so the title line drops out rather than leaving a gap. --%>
+            <p :if={address.description} class="mb-0 font-medium text-slate-800 dark:text-slate-100">
+              {address.description}
+            </p>
             <div class="text-slate-600 dark:text-slate-400">
               {format_address(address, @locale)}
             </div>

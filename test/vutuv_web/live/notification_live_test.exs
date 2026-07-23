@@ -35,6 +35,34 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert body =~ ~s(data-notification-row)
     end
 
+    # A brand-new member never chose their handle - vutuv generated it from
+    # their name - so the feed tells them what it is and where to change it.
+    test "tells a confirmed member their own username", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(live, ~s([data-notification-row][data-kind="username"]))
+      assert render(live) =~ "Your automatically assigned vutuv username is"
+
+      # Two links inside the sentence, and the row itself is not one: the
+      # handle goes to the member's own profile, the spelled-out URL to the
+      # page that changes it.
+      assert has_element?(
+               live,
+               ~s([data-kind="username"] a[href="/#{user.username}"]),
+               "@#{user.username}"
+             )
+
+      settings_url = VutuvWeb.Endpoint.url() <> "/settings/security"
+
+      assert has_element?(
+               live,
+               ~s([data-kind="username"] a[href="#{settings_url}"]),
+               settings_url
+             )
+    end
+
     test "lists real events derived from the database", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
@@ -553,10 +581,13 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert length(row_ids(render(live), "reply")) == 1
     end
 
-    test "shows the empty state when nothing happened yet", %{conn: conn} do
+    # Every confirmed account carries its own username welcome note, so an
+    # utterly empty feed no longer exists; the empty state now belongs to a
+    # filter tab with nothing in it.
+    test "shows the empty state for a filter tab with nothing in it", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 
-      {:ok, live, _html} = live(conn, ~p"/notifications")
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
 
       assert render(live) =~ "Nothing new yet."
       refute has_element?(live, ~s([data-notification-row]))
@@ -566,7 +597,8 @@ defmodule VutuvWeb.NotificationLiveTest do
       {conn, user} = create_and_login_user(conn)
       insert(:follow, follower: insert(:user), followee: user)
 
-      assert Vutuv.Activity.unread_notification_count(user.id) == 1
+      # The follow, plus the account's own username welcome note.
+      assert Vutuv.Activity.unread_notification_count(user.id) == 2
 
       {:ok, _live, _html} = live(conn, ~p"/notifications")
 
@@ -578,6 +610,10 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       old = insert(:follow, follower: insert(:user), followee: user)
       backdate_follow(old, ~N[2016-11-24 12:00:00])
+      # The account's own username welcome note is stamped at its first login,
+      # so backdate that too - this test is about the like being the one new
+      # thing since the marker.
+      backdate_welcome_note(user, ~N[2016-11-24 12:00:00])
       # Reading back then leaves today's like unseen.
       set_read_marker(user, ~N[2016-11-25 00:00:00])
 
@@ -711,8 +747,9 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       body = conn |> get(~p"/notifications?page=2") |> html_response(200)
 
-      # Page 2 holds the 10 oldest events, and marks itself current.
-      assert body =~ "and 8 more"
+      # Page 1 holds the account's username welcome note plus the 49 newest
+      # follows, so page 2 groups the 11 oldest ones: two named, nine folded.
+      assert body =~ "and 9 more"
       assert body =~ ~s(aria-current="page")
       assert body =~ ~s(href="/notifications?page=1")
     end
@@ -898,6 +935,15 @@ defmodule VutuvWeb.NotificationLiveTest do
     Vutuv.Repo.update_all(
       from(c in Vutuv.Social.Follow, where: c.id == ^id),
       set: [inserted_at: at]
+    )
+  end
+
+  defp backdate_welcome_note(%{id: id}, at) do
+    import Ecto.Query
+
+    Vutuv.Repo.update_all(
+      from(u in Vutuv.Accounts.User, where: u.id == ^id),
+      set: [welcome_notified_at: at]
     )
   end
 

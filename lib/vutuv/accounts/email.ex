@@ -25,7 +25,9 @@ defmodule Vutuv.Accounts.Email do
     timestamps()
   end
 
-  @email_types ~w(Work Personal Other)
+  # Private first: most people sign up with their personal address, and the
+  # first radio is the one that is preselected.
+  @email_types ~w(Personal Work Other)
 
   @doc "The allowed `email_type` values, in the order the forms list them."
   def email_types, do: @email_types

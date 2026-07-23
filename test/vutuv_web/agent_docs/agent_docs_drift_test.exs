@@ -31,7 +31,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         desired_salary_min: 60_000,
         desired_salary_currency: "EUR",
         desired_salary_period: "year",
-        desired_salary_visibility: "everyone"
+        desired_salary_visibility: "everyone",
+        desired_workplace_types: ["hybrid", "remote"]
       )
 
     insert(:email,
@@ -282,6 +283,14 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["employment_status"] == "looking"
     assert rendered.xml =~ "<employment_status>looking</employment_status>"
 
+    # The workplace preference rides the same badge ("... \u00b7 Remote") and the
+    # same visibility, and is a fact line / field of its own in the docs.
+    assert rendered.html =~ ~s(data-desired-workplace="hybrid remote")
+    assert rendered.md =~ "Preferred workplace: Hybrid, Remote"
+    assert rendered.txt =~ "Preferred workplace: Hybrid, Remote"
+    assert Jason.decode!(rendered.json)["desired_workplace_types"] == ["hybrid", "remote"]
+    assert rendered.xml =~ "<desired_workplace_types>"
+
     # The salary expectation (issue #928): the HTML profile line and the md/txt
     # fact line show the "… per period" summary, JSON/XML carry the structured
     # {min, currency, period}.
@@ -340,6 +349,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       doc = ProfileDoc.build(user, viewer: excluded)
       assert doc.employment_status == nil
       assert doc.desired_salary == nil
+      assert doc.desired_workplace_types == []
     end
 
     seen = ProfileDoc.build(user, viewer: stranger)

@@ -11,7 +11,9 @@
     <%= for address <- @addresses do %>
     <tr>
       <td>
-      <%= link address.description, to: ~p"/#{@user}/addresses/#{address}" %>
+      <%!-- A description is optional (the welcome page may store a location
+            without one), so fall back to the generic word like the show page. --%>
+      <%= link address.description || gettext("Address"), to: ~p"/#{@user}/addresses/#{address}" %>
       </td>
       <td><%= format_address address, @conn.assigns[:locale] %></td>
       <td class="text-right">

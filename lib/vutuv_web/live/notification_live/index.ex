@@ -77,7 +77,8 @@ defmodule VutuvWeb.NotificationLive.Index do
     "posts" => ~w(reply like),
     "people" => ~w(follower connection endorsement),
     "other" =>
-      ~w(organization_role moderation image_rejected report_protection handle_change cv_update)
+      ~w(organization_role moderation image_rejected report_protection handle_change cv_update
+         username)
   }
 
   @impl true
@@ -393,12 +394,16 @@ defmodule VutuvWeb.NotificationLive.Index do
         <p class="mb-0 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
           <.actor_links group={@group} current_user={@current_user} />
           <% target = notification_target(@n, @current_user) %>
-          <%= if target do %>
-            <.link href={target} class="hover:text-brand-700 hover:underline dark:hover:text-brand-300">
+          <%= cond do %>
+            <%!-- The one row that is not a single link: see username_line/1. --%>
+            <% @group.kind == "username" -> %>
+              <.username_line handle={@n.username} />
+            <% target -> %>
+              <.link href={target} class="hover:text-brand-700 hover:underline dark:hover:text-brand-300">
+                {group_text(@group)}
+              </.link>
+            <% true -> %>
               {group_text(@group)}
-            </.link>
-          <% else %>
-            {group_text(@group)}
           <% end %>
         </p>
 
@@ -616,6 +621,43 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
+  # The welcome note is the one row that is NOT one big link: the handle points
+  # at the member's own profile, the URL at the page that changes it, so both
+  # destinations are reachable and the rest of the sentence stays plain text.
+  # The two `{markers}` are split out of the translation (split_marker/2, total
+  # by design, so a botched .po can never raise here) and each half rendered in
+  # its own place — which is also how German and English each get their natural
+  # word order.
+  attr(:handle, :string, required: true)
+
+  defp username_line(assigns) do
+    {before_handle, rest} =
+      split_marker(
+        gettext(
+          "Your automatically assigned vutuv username is {handle}. You can change it any time at {url}."
+        ),
+        "{handle}"
+      )
+
+    {between, tail} = split_marker(rest, "{url}")
+
+    assigns =
+      assign(assigns,
+        before_handle: before_handle,
+        between: between,
+        tail: tail,
+        settings_url: url(~p"/settings/security")
+      )
+
+    ~H"""
+    {@before_handle}<.link href={~p"/#{@handle}"} class={inline_link_class()}>@{@handle}</.link>{@between}<.link href={@settings_url} class={inline_link_class()}>{@settings_url}</.link>{@tail}
+    """
+  end
+
+  defp inline_link_class,
+    do:
+      "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+
   # "A and B liked" / "A, B and 3 more liked": the separator *before* the
   # name at `index`. The joining word only appears when B is the last named
   # actor and nothing overflows (the overflow chunk brings its own "and").
@@ -754,6 +796,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("organization_role"), do: "🏢"
   defp kind_glyph("handle_change"), do: "@"
   defp kind_glyph("cv_update"), do: "📄"
+  # The welcome note naming the member's own handle.
+  defp kind_glyph("username"), do: "👋"
   defp kind_glyph(_), do: "•"
 
   # The accessible kind name (the badge's title + sr-only text). Translated
@@ -769,6 +813,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("organization_role"), do: gettext("Organization role")
   defp kind_label("handle_change"), do: gettext("Handle change")
   defp kind_label("cv_update"), do: gettext("CV update")
+  defp kind_label("username"), do: gettext("Username")
   defp kind_label(_), do: gettext("Activity")
 
   # ── The sentence ──
@@ -829,6 +874,10 @@ defmodule VutuvWeb.NotificationLive.Index do
       true -> nil
     end
   end
+
+  # The username note carries its own two links inside the sentence
+  # (username_line/1), so the row itself must not be one.
+  defp notification_target(%{kind: "username"}, _viewer), do: nil
 
   # A CV update (issue #980) opens the entry itself when the group holds
   # exactly one; a bigger group leads to the author's profile, where all of

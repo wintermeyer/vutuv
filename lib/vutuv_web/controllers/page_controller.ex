@@ -18,7 +18,8 @@ defmodule VutuvWeb.PageController do
     Vutuv.Invitations.record_visit(prefill["email"])
 
     # Sign-up form defaults: preselect "männlich" (gender), pre-check "show on
-    # profile" (public?: true) and preselect the "Work" email type. These prime
+    # profile" (public?: true) and preselect the "Personal" email type (most
+    # people sign up with their private address). These prime
     # the form's controls only - the User/Email schemas keep their own defaults
     # for every other code path, so an address created without an explicit
     # choice still stays private.
@@ -31,7 +32,7 @@ defmodule VutuvWeb.PageController do
       }
       |> User.changeset()
       |> Ecto.Changeset.put_assoc(:emails, [
-        %Email{public?: true, email_type: "Work", value: presence(prefill["email"])}
+        %Email{public?: true, email_type: "Personal", value: presence(prefill["email"])}
       ])
 
     prefetch = "/listings/most_followed_users"

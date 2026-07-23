@@ -294,14 +294,20 @@ defmodule VutuvWeb.PageControllerTest do
     end
 
     # The email-type chooser is a radio group (clearer for a normal user than
-    # the old dropdown, whose unhelpful "Other" default it replaces) and
-    # preselects "Work".
-    test "email type is a Work-preselected radio group", %{conn: conn} do
+    # the old dropdown, whose unhelpful "Other" default it replaces). It reads
+    # Privat, Arbeit, Andere - the order of Vutuv.Accounts.Email.email_types/0 -
+    # and preselects "Personal", the address most people sign up with.
+    test "email type is a Personal-preselected radio group", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert radio_checked?(body, "user[emails][0][email_type]", "Work")
-      refute radio_checked?(body, "user[emails][0][email_type]", "Personal")
+      assert radio_checked?(body, "user[emails][0][email_type]", "Personal")
+      refute radio_checked?(body, "user[emails][0][email_type]", "Work")
       refute radio_checked?(body, "user[emails][0][email_type]", "Other")
+
+      # Order matters as much as the default: the private option comes first.
+      assert [{"Personal", _}, {"Work", _}, {"Other", _}] =
+               Regex.scan(~r/value="(Personal|Work|Other)"/, body)
+               |> Enum.map(fn [whole, value] -> {value, whole} end)
     end
 
     # Gender is a radio group too (no empty "Choose a gender" prompt) and
@@ -570,9 +576,11 @@ defmodule VutuvWeb.PageControllerTest do
     end
 
     # A brand-new member must not be greeted with the returning-user
-    # "Welcome back!" that the plain login flow uses. The confirmation page
-    # marks its PIN form with a registration context for this.
-    test "the first PIN login after sign-up greets the newcomer", %{conn: conn} do
+    # "Welcome back!" that the plain login flow uses — and gets no toast of
+    # their own either: the PIN routes them to the one-time welcome page, which
+    # greets them in its own hero, and the profile it hands them to already
+    # shows the completion checklist.
+    test "the first PIN login after sign-up raises no toast at all", %{conn: conn} do
       conn = post(conn, ~p"/new_registration", user: valid_attrs())
       body = html_response(conn, 200)
       assert body =~ ~s(name="session[context]")
@@ -583,10 +591,12 @@ defmodule VutuvWeb.PageControllerTest do
           "session" => %{"pin" => pin, "context" => "registration"}
         })
 
-      # Greeted by first name, not the anonymous "Welcome to vutuv!", and
-      # gently pointed at the two profile steps the checklist will show.
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
-               "Welcome to vutuv, Newcomer! A photo and a short tagline make your profile complete."
+      assert redirected_to(conn) == ~p"/system/welcome"
+      refute Phoenix.Flash.get(conn.assigns.flash, :info)
+
+      conn = post(conn, ~p"/system/welcome", %{"skip" => "1"})
+
+      refute Phoenix.Flash.get(conn.assigns.flash, :info)
     end
   end
 

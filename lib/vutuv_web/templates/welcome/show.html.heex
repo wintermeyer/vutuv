@@ -1,0 +1,177 @@
+<%!-- The one-time welcome page (VutuvWeb.WelcomeController), shown right after
+the registration PIN and never again. It reuses <.auth_layout> so the step
+continues the look of the sign-up and PIN screens the member just came from.
+
+Two groups, one form and two changesets: the address group posts as
+address[...] (a real profile address, saved through the lax
+Address.welcome_changeset/2) and the job group as user[...] (the existing
+issue #870 / #928 columns, cast by the ordinary User.changeset/2). Both are
+optional; "Skip" is a second submit button that saves nothing. --%>
+<% radio_class = "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+<% label_class = "block text-sm font-medium text-slate-900 dark:text-white" %>
+<% hint_class = "mt-1 text-sm text-slate-600 dark:text-slate-400" %>
+<% small_label_class = "block text-xs font-medium text-slate-600 dark:text-slate-400" %>
+
+<.auth_layout
+  title={welcome_title(@user)}
+  subtitle={
+    gettext(
+      "Two questions before you start. They decide who finds you and which jobs we show you. Answer as much or as little as you like."
+    )
+  }
+>
+  <.form
+    :let={f}
+    for={@address_changeset}
+    as={:address}
+    action={~p"/system/welcome"}
+    id="welcome-form"
+    class="space-y-8"
+  >
+    <%!-- The job group is a second changeset in the same <form>: its inputs are
+    built from their own form struct, so they post under user[...]. --%>
+    <% uf = to_form(@user_changeset, as: :user) %>
+    <% status_set? = Phoenix.HTML.Form.input_value(uf, :employment_status) not in [nil, ""] %>
+    <.form_error changeset={if @address_changeset.action, do: @address_changeset, else: @user_changeset} />
+
+    <%!-- Group 1: where you are. Deliberately coarse - no street, and any one
+    of the three fields on its own is a complete answer. --%>
+    <section class="space-y-4">
+      <div>
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white">{gettext("Where are you?")}</h2>
+        <p class={hint_class}>
+          {gettext(
+            "A city alone is enough. It appears on your profile and lets people search for members near them."
+          )}
+        </p>
+      </div>
+
+      <fieldset>
+        <legend class="mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+          {gettext("Type of address")}
+        </legend>
+        <% selected_label = selected_address_label(f) %>
+        <div class="flex flex-wrap gap-x-5 gap-y-2">
+          <label
+            :for={choice <- address_label_options()}
+            class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200"
+          >
+            <%= radio_button f, :description, choice, class: radio_class, checked: choice == selected_label %>
+            <span>{choice}</span>
+          </label>
+        </div>
+        <%= error_tag f, :description %>
+      </fieldset>
+
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div>
+          <%= label f, :zip_code, gettext("Postal code"), class: small_label_class %>
+          <%!-- The first field of the first question takes the cursor. --%>
+          <%= text_input f, :zip_code, class: input_class(f, :zip_code), autocomplete: "postal-code", autofocus: true, "aria-invalid": f.errors[:zip_code] && "true" %>
+          <%= error_tag f, :zip_code %>
+        </div>
+        <div class="sm:col-span-2">
+          <%= label f, :city, gettext("City"), class: small_label_class %>
+          <%= text_input f, :city, class: input_class(f, :city), autocomplete: "address-level2", "aria-invalid": f.errors[:city] && "true" %>
+          <%= error_tag f, :city %>
+        </div>
+      </div>
+
+      <div>
+        <%= label f, :country, gettext("Country"), class: small_label_class %>
+        <%!-- Localized label, English value — see AddressHTML.country_options/1. --%>
+        <%= select f, :country, country_options(Phoenix.HTML.Form.input_value(f, :country)), prompt: gettext("Select a Country"), class: input_class() %>
+        <%= error_tag f, :country %>
+      </div>
+    </section>
+
+    <%!-- Group 2: the job search. The salary + workplace panel is revealed only
+    once a status is picked (the EmploymentVisibility enhancement in app.js,
+    the same one the Basics form uses); with JS off the server-rendered state
+    stands, so a member who is not looking never sees the extra fields. --%>
+    <section class="space-y-4 border-t border-slate-200 pt-6 dark:border-slate-800" data-employment-status-field>
+      <h2 class="text-lg font-bold text-slate-900 dark:text-white">
+        {gettext("Are you looking for a job?")}
+      </h2>
+
+      <div>
+        <%= label uf, :employment_status, gettext("Availability"), class: label_class %>
+        <%= select uf, :employment_status, employment_status_options(), class: input_class(), data: [employment_status_select: true] %>
+        <%= error_tag uf, :employment_status %>
+      </div>
+
+      <div data-jobsearch-details class={["space-y-5", !status_set? && "hidden"]}>
+        <%!-- Who may see the availability. On the Basics form this sits behind
+        a longer explanation; here the three options speak for themselves and
+        the default ("Signed-in members only") is already selected. --%>
+        <div>
+          <%= label uf, :employment_status_visibility, gettext("Who can see your availability?"), class: label_class %>
+          <%= select uf, :employment_status_visibility, visibility_options(), class: input_class() %>
+          <%= error_tag uf, :employment_status_visibility %>
+        </div>
+
+        <div>
+          <p class="text-sm font-medium text-slate-900 dark:text-white">
+            {gettext("Minimum salary expectation")}
+          </p>
+          <p class={hint_class}>
+            {gettext(
+              "Optional, and nobody else sees it. It filters postings below it out of your own job search."
+            )}
+          </p>
+          <div class="mt-2 grid gap-3 sm:grid-cols-3">
+            <div>
+              <%= label uf, :desired_salary_min, gettext("Amount"), class: small_label_class %>
+              <%= number_input uf, :desired_salary_min, min: "1", step: "1", placeholder: "60000", class: input_class(uf, :desired_salary_min), "aria-invalid": uf.errors[:desired_salary_min] && "true" %>
+            </div>
+            <div>
+              <%= label uf, :desired_salary_period, gettext("Per"), class: small_label_class %>
+              <%= select uf, :desired_salary_period, desired_salary_period_options(), class: input_class() %>
+            </div>
+            <div>
+              <%= label uf, :desired_salary_currency, gettext("Currency"), class: small_label_class %>
+              <%= select uf, :desired_salary_currency, desired_salary_currency_options(), class: input_class() %>
+            </div>
+          </div>
+          <%= error_tag uf, :desired_salary_min %>
+        </div>
+
+        <%!-- Checkboxes, not a select: on-site, hybrid and remote don't exclude
+        each other, and ticking none is the "no preference" answer. The leading
+        hidden field is what makes unticking everything reach the server as an
+        empty list. --%>
+        <fieldset>
+          <legend class={label_class}>{gettext("How do you want to work?")}</legend>
+          <% chosen = Phoenix.HTML.Form.input_value(uf, :desired_workplace_types) || [] %>
+          <input type="hidden" name="user[desired_workplace_types][]" value="" />
+          <div class="mt-1.5 flex flex-wrap gap-x-5 gap-y-2">
+            <label
+              :for={{wlabel, wvalue} <- desired_workplace_options()}
+              class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200"
+            >
+              <input
+                type="checkbox"
+                name="user[desired_workplace_types][]"
+                value={wvalue}
+                checked={wvalue in chosen}
+                class={checkbox_class()}
+              />
+              <span>{wlabel}</span>
+            </label>
+          </div>
+          <p class={hint_class}>
+            {gettext("Shown next to your availability, and used to match you with postings.")}
+          </p>
+          <%= error_tag uf, :desired_workplace_types %>
+        </fieldset>
+      </div>
+    </section>
+
+    <div class="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-6 dark:border-slate-800">
+      <.button type="submit" id="welcome-save">{gettext("Save and continue")}</.button>
+      <.button type="submit" variant="ghost" name="skip" value="1" id="welcome-skip">
+        {gettext("Skip for now")}
+      </.button>
+    </div>
+  </.form>
+</.auth_layout>
