@@ -15090,3 +15090,12 @@ msgstr "Bevorzugte Arbeitsform"
 #, elixir-autogen, elixir-format
 msgid "Availability"
 msgstr "Verfügbarkeit"
+
+#: lib/vutuv_web/live/notification_live/index.ex
+#, elixir-autogen, elixir-format
+msgid ""
+"Your vutuv username is @%{handle}. You can change it any time under "
+"Sign-in & security."
+msgstr ""
+"Ihr vutuv-Username ist @%{handle}. Sie können ihn jederzeit unter "
+"Anmeldung & Sicherheit ändern."

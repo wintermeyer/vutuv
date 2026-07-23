@@ -151,6 +151,13 @@ registration PIN, on a page that is trivial to skip:
   form with no location at all (`Address.location_given?/1`) simply stores no
   address rather than failing. What is filled in becomes an ordinary profile
   address — public, and answering `ort:`/`city:` searches like every other one.
+  The country select shows **localized** names and stores the canonical
+  **English** one (`VutuvWeb.AddressHTML.country_options/1` over
+  `Vutuv.Countries`, shared with the classic address forms), because
+  `addresses.country` has always held the English name and `Vutuv.Address`
+  branches on it; a stored value the ISO list does not know (older imports
+  spell a few countries differently) stays selectable, so an edit can never
+  silently rewrite it.
 - **Are you looking for a job?** — the availability status and, revealed by the
   same `[data-jobsearch-details]` enhancement the Basics form uses, the minimum
   salary expectation and the preferred workplace form. Cast by the ordinary

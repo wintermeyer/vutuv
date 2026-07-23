@@ -1,6 +1,7 @@
 <.editform_field form={@form} field={:country}>
   <%= label @form, gettext("Country") %>
-  <%!-- The list is VutuvWeb.AddressHTML.country_names/0, shared with the
-        one-time welcome page so the two can never offer different countries. --%>
-  <%= select @form, :country, country_names(), prompt: gettext("Select a Country") %>
+  <%!-- Localized labels, English values (VutuvWeb.AddressHTML.country_options/1,
+        shared with the one-time welcome page): a German visitor picks
+        "Deutschland" and the row still stores "Germany". --%>
+  <%= select @form, :country, country_options(Phoenix.HTML.Form.input_value(@form, :country)), prompt: gettext("Select a Country") %>
 </.editform_field>

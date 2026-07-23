@@ -294,14 +294,20 @@ defmodule VutuvWeb.PageControllerTest do
     end
 
     # The email-type chooser is a radio group (clearer for a normal user than
-    # the old dropdown, whose unhelpful "Other" default it replaces) and
-    # preselects "Work".
-    test "email type is a Work-preselected radio group", %{conn: conn} do
+    # the old dropdown, whose unhelpful "Other" default it replaces). It reads
+    # Privat, Arbeit, Andere - the order of Vutuv.Accounts.Email.email_types/0 -
+    # and preselects "Personal", the address most people sign up with.
+    test "email type is a Personal-preselected radio group", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert radio_checked?(body, "user[emails][0][email_type]", "Work")
-      refute radio_checked?(body, "user[emails][0][email_type]", "Personal")
+      assert radio_checked?(body, "user[emails][0][email_type]", "Personal")
+      refute radio_checked?(body, "user[emails][0][email_type]", "Work")
       refute radio_checked?(body, "user[emails][0][email_type]", "Other")
+
+      # Order matters as much as the default: the private option comes first.
+      assert [{"Personal", _}, {"Work", _}, {"Other", _}] =
+               Regex.scan(~r/value="(Personal|Work|Other)"/, body)
+               |> Enum.map(fn [whole, value] -> {value, whole} end)
     end
 
     # Gender is a radio group too (no empty "Choose a gender" prompt) and

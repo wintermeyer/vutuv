@@ -146,6 +146,15 @@ defmodule Vutuv.Activity do
       |> CvUpdates.feed_query()
       |> select([e], %{ts: max(e.inserted_at)})
 
+    # The "this is your username" welcome note (see username_items/3). Without
+    # this arm the read marker would ignore it, and a kind the marker ignores
+    # never clears its badge — the same bug every other kind once had.
+    username_max =
+      from(u in User,
+        where: u.id == ^user_id,
+        select: %{ts: max(u.welcome_notified_at)}
+      )
+
     union =
       follower_max
       |> union_all(^endorsement_max)
@@ -159,6 +168,7 @@ defmodule Vutuv.Activity do
       |> union_all(^organization_role_max)
       |> union_all(^handle_change_max)
       |> union_all(^cv_update_max)
+      |> union_all(^username_max)
 
     from(t in subquery(union), select: max(t.ts))
     |> Repo.one()
@@ -451,7 +461,8 @@ defmodule Vutuv.Activity do
       {"image_rejected", &image_rejected_items(user_id, &1, &2)},
       {"report_protection", &report_protection_items(user_id, &1, &2)},
       {"handle_change", &handle_change_items(user_id, &1, &2)},
-      {"cv_update", &cv_update_items(user_id, &1, &2)}
+      {"cv_update", &cv_update_items(user_id, &1, &2)},
+      {"username", &username_items(user_id, &1, &2)}
     ]
   end
 
@@ -546,7 +557,8 @@ defmodule Vutuv.Activity do
       {"image_rejected", count_image_rejections(user_id, read_at)},
       {"report_protection", count_severances(user_id, read_at)},
       {"report_protection", count_severance_restores(user_id, read_at)},
-      {"handle_change", count_handle_changes(user_id, read_at)}
+      {"handle_change", count_handle_changes(user_id, read_at)},
+      {"username", count_username(user_id, read_at)}
     ]
   end
 
@@ -827,6 +839,37 @@ defmodule Vutuv.Activity do
   defp restored_at_or_before(query, nil), do: query
   defp restored_at_or_before(query, %{at: at}), do: where(query, [s], s.restored_at <= ^at)
 
+  # "Your username is @handle" — the one welcome note a member gets when their
+  # very first login PIN is accepted. vutuv generates the handle from their
+  # name (Vutuv.Handles), so nothing before that moment ever named it; this
+  # entry does, and links to where they can change it.
+  #
+  # Derived straight from the member's own users row — no notification table,
+  # no push, and deliberately **no email**: it is an in-app note, not another
+  # message on top of the PIN mail they just received. `welcome_notified_at`
+  # (stamped by Accounts.activate_user/1) is both the gate and the timestamp,
+  # so accounts that predate the feature keep a clean feed instead of being
+  # handed a welcome years after the fact.
+  defp username_items(user_id, limit, cursor) do
+    from(u in User,
+      where: u.id == ^user_id and not is_nil(u.welcome_notified_at),
+      limit: ^limit,
+      select: {u.id, u.welcome_notified_at, u.username}
+    )
+    |> at_or_before_welcome(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, username} ->
+      %{id: "username-#{id}", kind: "username", at: at, username: username}
+    end)
+  end
+
+  # The users row is keyed on welcome_notified_at, not inserted_at, so it needs
+  # its own cursor clause (at_or_before/2 filters on inserted_at).
+  defp at_or_before_welcome(query, nil), do: query
+
+  defp at_or_before_welcome(query, %{at: at}),
+    do: where(query, [u], u.welcome_notified_at <= ^at)
+
   defp at_or_before(query, nil), do: query
   defp at_or_before(query, %{at: at}), do: where(query, [event], event.inserted_at <= ^at)
 
@@ -958,6 +1001,16 @@ defmodule Vutuv.Activity do
       select: %{count: count()}
     )
     |> since(read_at)
+  end
+
+  defp count_username(user_id, read_at) do
+    query =
+      from(u in User,
+        where: u.id == ^user_id and not is_nil(u.welcome_notified_at),
+        select: %{count: count()}
+      )
+
+    if read_at, do: where(query, [u], u.welcome_notified_at > ^read_at), else: query
   end
 
   defp since(query, nil), do: query

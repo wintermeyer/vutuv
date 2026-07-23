@@ -98,6 +98,10 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert body =~ "Wo sind Sie?"
       assert body =~ "Suchen Sie eine Stelle?"
       assert body =~ "Erstmal überspringen"
+      # The country list is localized too — but keeps storing the English name
+      # every other address in the table uses.
+      assert body =~ ~s(<option value="Germany">Deutschland</option>)
+      assert body =~ ~s(<option value="Austria">Österreich</option>)
     end
   end
 

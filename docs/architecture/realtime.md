@@ -195,6 +195,24 @@ the part that does not move as it grows (the one exception to the "live-" id
 namespace in `NotificationLive`) — so a second entry updates that row in place
 instead of stacking another one.
 
+### The username welcome note
+
+The very first thing a confirmed account finds in its feed is not about someone
+else: **"Ihr vutuv-Username ist @egon_mueller."** vutuv *generates* the handle
+from the member's name (`Vutuv.Handles`), so nothing in sign-up ever told them
+what it is — this row does, and it opens `/settings/security`, where they can
+change it.
+
+It is derived like every other kind, straight from the member's own `users`
+row: no notification table, no live push and, deliberately, **no email** — the
+PIN mail just landed in their inbox, and this is an in-app note, not a second
+message. `users.welcome_notified_at` is both the gate and the timestamp: it is
+stamped once, by the same `Accounts.activate_user/1` branch that flips
+`email_confirmed?` when the first login PIN is accepted, so the note appears
+exactly at that moment. A NULL means no note, which is what every account
+predating the feature keeps — the derived feed is otherwise retroactive, and a
+welcome years after the fact would be nonsense.
+
 ## Live member counter
 
 The logged-out landing page shows the **exact** number of members and ticks it

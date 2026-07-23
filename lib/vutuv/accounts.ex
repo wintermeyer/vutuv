@@ -375,16 +375,25 @@ defmodule Vutuv.Accounts do
   # count) or an already-activated returning login falls through the second
   # clause and is never re-counted; the cast is a no-op for an already-true row.
   defp activate_user(%User{email_confirmed?: false} = user) do
-    activated = do_activate(user)
+    # Stamped in the same write: it dates the "your username is @handle"
+    # welcome note (Vutuv.Activity), the one thing a fresh member is told
+    # in-app right after their PIN — vutuv generated that handle for them, so
+    # nothing before this moment ever named it.
+    activated =
+      do_activate(user,
+        welcome_notified_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+      )
+
     MemberCounter.increment()
     activated
   end
 
   defp activate_user(user), do: do_activate(user)
 
-  defp do_activate(user) do
+  defp do_activate(user, extra \\ []) do
     user
     |> Ecto.Changeset.cast(%{email_confirmed?: true}, [:email_confirmed?])
+    |> Ecto.Changeset.change(extra)
     |> Repo.update!()
   end
 

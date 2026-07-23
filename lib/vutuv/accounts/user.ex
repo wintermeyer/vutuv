@@ -213,6 +213,12 @@ defmodule Vutuv.Accounts.User do
     # false the account is hidden from search, the feed, follower lists and
     # messaging. Not to be confused with identity_verified? above.
     field(:email_confirmed?, :boolean, default: false)
+    # When that first PIN was confirmed. Stamped once, by the same
+    # Accounts.activate_user/1 branch that flips email_confirmed?, and never
+    # cast from params. It dates the "your username is @handle" welcome note in
+    # the notifications feed; NULL = no note, which is what every account
+    # predating the feature keeps.
+    field(:welcome_notified_at, :naive_datetime)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
     # The owner closed the profile-completion checklist with its × (it also

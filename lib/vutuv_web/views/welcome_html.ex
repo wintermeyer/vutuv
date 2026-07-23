@@ -51,5 +51,5 @@ defmodule VutuvWeb.WelcomeHTML do
   end
 
   @doc "The country choices, shared with the classic address forms."
-  defdelegate country_names, to: AddressHTML
+  defdelegate country_options(current), to: AddressHTML
 end

@@ -79,7 +79,8 @@ optional; "Skip" is a second submit button that saves nothing. --%>
 
       <div>
         <%= label f, :country, gettext("Country"), class: small_label_class %>
-        <%= select f, :country, country_names(), prompt: gettext("Select a Country"), class: input_class() %>
+        <%!-- Localized label, English value — see AddressHTML.country_options/1. --%>
+        <%= select f, :country, country_options(Phoenix.HTML.Form.input_value(f, :country)), prompt: gettext("Select a Country"), class: input_class() %>
         <%= error_tag f, :country %>
       </div>
     </section>

@@ -77,7 +77,8 @@ defmodule VutuvWeb.NotificationLive.Index do
     "posts" => ~w(reply like),
     "people" => ~w(follower connection endorsement),
     "other" =>
-      ~w(organization_role moderation image_rejected report_protection handle_change cv_update)
+      ~w(organization_role moderation image_rejected report_protection handle_change cv_update
+         username)
   }
 
   @impl true
@@ -754,6 +755,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("organization_role"), do: "🏢"
   defp kind_glyph("handle_change"), do: "@"
   defp kind_glyph("cv_update"), do: "📄"
+  # The welcome note naming the member's own handle.
+  defp kind_glyph("username"), do: "👋"
   defp kind_glyph(_), do: "•"
 
   # The accessible kind name (the badge's title + sr-only text). Translated
@@ -769,6 +772,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("organization_role"), do: gettext("Organization role")
   defp kind_label("handle_change"), do: gettext("Handle change")
   defp kind_label("cv_update"), do: gettext("CV update")
+  defp kind_label("username"), do: gettext("Username")
   defp kind_label(_), do: gettext("Activity")
 
   # ── The sentence ──
@@ -829,6 +833,9 @@ defmodule VutuvWeb.NotificationLive.Index do
       true -> nil
     end
   end
+
+  # The username note opens the page that can change it.
+  defp notification_target(%{kind: "username"}, _viewer), do: ~p"/settings/security"
 
   # A CV update (issue #980) opens the entry itself when the group holds
   # exactly one; a bigger group leads to the author's profile, where all of
@@ -917,6 +924,16 @@ defmodule VutuvWeb.NotificationLive.Index do
           "Your report paused the connection between you two - no contact in either direction for now. If our admins find the report unfounded, this is undone."
         )
     end
+  end
+
+  # The welcome note naming the member's own handle. No actor (nobody did
+  # this to them), and the row links to the page that changes it — which the
+  # sentence names in words too, so it still reads on its own.
+  defp notification_text(%{kind: "username"} = n) do
+    gettext(
+      "Your vutuv username is @%{handle}. You can change it any time under Sign-in & security.",
+      handle: n.username
+    )
   end
 
   # A handle change: show the old and new handle so the reader sees exactly

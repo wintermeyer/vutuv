@@ -37,7 +37,10 @@
         bindings keep the repeated radio groups and consent checkboxes
         consistent. --%>
   <% gender_options = [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}] %>
-  <% email_type_options = [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}] %>
+  <%!-- Order and default come from the schema (Vutuv.Accounts.Email.email_types/0),
+        so the form can never offer a value the changeset rejects: Privat, Arbeit,
+        Andere - with Privat preselected by the controller. --%>
+  <% email_type_options = Enum.map(Email.email_types(), &{email_type_label(&1), &1}) %>
   <% radio_class = "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
   <% legend_class = "mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300" %>
   <% radio_label_class = "flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200" %>

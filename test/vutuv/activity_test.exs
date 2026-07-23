@@ -102,6 +102,26 @@ defmodule Vutuv.ActivityTest do
       assert Map.has_key?(n, :actor_avatar)
     end
 
+    test "confirming the first PIN leaves a welcome note naming the own handle" do
+      me = insert(:activated_user, welcome_notified_at: ~N[2026-07-23 09:00:00])
+
+      assert [n] = recent_notifications(me.id)
+      assert n.kind == "username"
+      assert n.username == me.username
+      assert n.id == "username-#{me.id}"
+      assert n.at == ~N[2026-07-23 09:00:00]
+      # Nobody did this to them, so the entry carries no actor at all.
+      refute Map.has_key?(n, :actor_name)
+    end
+
+    # Everyone who signed up before the note existed keeps a clean feed: the
+    # stamp is the gate, not the mere fact of being confirmed.
+    test "an account from before the feature gets no welcome note" do
+      me = insert(:activated_user)
+
+      assert recent_notifications(me.id) == []
+    end
+
     test "a self-endorsement produces no notification" do
       me = insert(:user)
       tag = insert(:tag)
