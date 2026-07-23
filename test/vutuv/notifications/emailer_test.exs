@@ -363,6 +363,78 @@ defmodule Vutuv.Notifications.EmailerTest do
     end
   end
 
+  describe "the image-rejection mail owns up to being a machine" do
+    # A removal reads as a personal judgement unless the mail says otherwise,
+    # and here no person ever looked: a local vision model decided, it has a
+    # false-positive rate, and the member's account takes no damage from it.
+    # Every locale has to say all three, in both body formats.
+
+    defp rejection_email(locale, category \\ "shocking") do
+      user = insert(:user, locale: locale)
+      scan = %Vutuv.Moderation.ImageScan{kind: "avatar", category: category}
+
+      Emailer.image_rejected_email(user, "member@example.com", scan)
+    end
+
+    # Both bodies wrap their prose over several source lines, so a sentence
+    # straddles a newline plus indentation in the rendered output. Matching a
+    # phrase means matching it whitespace-insensitively.
+    defp bodies(email) do
+      for body <- [email.text_body, email.html_body] do
+        String.replace(body, ~r/\s+/, " ")
+      end
+    end
+
+    test "the German copy says no human decided, that the AI errs and that nothing follows" do
+      email = rejection_email("de")
+
+      for body <- bodies(email) do
+        assert body =~ "kein Mensch entschieden"
+        assert body =~ "irrt sich"
+        assert body =~ "nichts Persönliches"
+        assert body =~ "keine Verwarnung"
+        assert body =~ "Antworten Sie"
+      end
+
+      assert email.subject =~ "automatische"
+    end
+
+    test "the English copy says the same three things" do
+      email = rejection_email("en")
+
+      for body <- bodies(email) do
+        assert body =~ "No human decided this"
+        assert body =~ "gets things wrong"
+        assert body =~ "nothing personal"
+        assert body =~ "no warning"
+        assert body =~ "reply to this email"
+      end
+
+      assert email.subject =~ "automated check"
+    end
+
+    test "an unreadable file is not accused of being unsafe" do
+      # "unverifiable" means the scanner could not decode the image at all —
+      # telling that member their picture was not family-friendly would be a
+      # wrong accusation about content nobody ever saw.
+      for {locale, technical, verdict} <- [
+            {"de", "technisch", "familienfreundlich"},
+            {"en", "technical problem", "family-friendly"}
+          ] do
+        email = rejection_email(locale, "unverifiable")
+
+        for body <- bodies(email) do
+          assert body =~ technical
+          refute body =~ verdict
+        end
+      end
+    end
+
+    test "a reply reaches a human (the appeal channel), unlike ordinary mail" do
+      assert rejection_email("de").reply_to == {"", "sw@wintermeyer-consulting.de"}
+    end
+  end
+
   describe "moderation appeal mail routes replies away from the no-reply From" do
     # The From is no-reply@vutuv.de and is not read. The only mail that invites
     # a human reply is the strike-3 deactivation ("appeal by replying to this

@@ -814,8 +814,14 @@ defmodule Vutuv.Notifications.Emailer do
   model can be wrong, and a human should hear about it).
   """
   def image_rejected_email(user, email, scan) do
-    build_email(user, email, "image_rejected", %{kind: scan.kind}, fn ->
-      gettext("An image was removed from your vutuv account")
+    # The category decides which story the mail tells: "unverifiable" means
+    # the scanner could not read the file at all, which says nothing about
+    # what was on it — telling that member their image was not family-friendly
+    # would be a wrong accusation.
+    assigns = %{kind: scan.kind, category: scan.category}
+
+    build_email(user, email, "image_rejected", assigns, fn ->
+      gettext("An automated check removed an image from your vutuv account")
     end)
     |> with_appeal_reply_to()
   end

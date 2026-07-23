@@ -11,6 +11,7 @@ defmodule Vutuv.Moderation.ImageScansTest do
   use Vutuv.DataCase, async: false
 
   import Ecto.Query
+  import ExUnit.CaptureLog
   import Vutuv.PostsHelpers
 
   alias Vutuv.Accounts
@@ -44,6 +45,16 @@ defmodule Vutuv.Moderation.ImageScansTest do
     insert(:email, user: user)
 
     {:ok, tmp: tmp, user: user}
+  end
+
+  # Production raises this module to :info so the verdict feed is readable at
+  # all (`Vutuv.Application` ops-log visibility, global level :error there).
+  # The suite runs at :warning, so a test about one of those lines has to do
+  # the same or it would assert against a level nothing is emitted at.
+  defp capture_verdicts(fun) do
+    Logger.put_module_level(ImageScans, :info)
+    on_exit(fn -> Logger.delete_module_level(ImageScans) end)
+    capture_log(fun)
   end
 
   defp jpeg_upload(color \\ [10, 120, 200]) do
@@ -187,12 +198,108 @@ defmodule Vutuv.Moderation.ImageScansTest do
 
       # The owner is told, with the family-friendly/work-safe reasoning.
       assert [email] = flush_emails()
-      assert email.subject =~ "image was removed"
+      assert email.subject =~ "An automated check removed an image"
       assert email.text_body =~ "family-friendly"
 
       # And the notification feed derives the entry from the audit row.
       %{entries: entries} = Vutuv.Activity.notifications_page(user.id)
       assert Enum.any?(entries, &(&1.kind == "image_rejected" and &1.image_kind == "avatar"))
+    end
+
+    test "the model's own sentence is kept as the record of what was deleted", %{user: user} do
+      # A rejection deletes the files, so this line is all that is left to
+      # answer "why?" when the member says the verdict was wrong.
+      upload_avatar(user)
+      verdict = {:ok, %{safe?: false, category: "shocking", reason: "a severed hand, photoreal"}}
+
+      ImageScans.deliver_due(judge: fn _path -> verdict end)
+
+      scan = Repo.one!(from(s in ImageScan, where: s.subject_id == ^user.id))
+      assert scan.reason == "a severed hand, photoreal"
+    end
+
+    test "a rejection logs one line carrying the whole ballot", %{user: user} do
+      # Logs rotate and a deleted image leaves nothing to look at, so this
+      # line has to stand on its own: who owned it, which model spoke, how the
+      # vote fell and what each voice actually said.
+      upload_avatar(user)
+
+      verdict =
+        {:ok,
+         %{
+           safe?: false,
+           category: "gore",
+           reason: "a bloodied arm",
+           ballot: [
+             %{safe?: false, category: "gore", reason: "a bloodied arm"},
+             %{safe?: false, category: "gore", reason: "blood on a wound"},
+             %{safe?: false, category: "violence", reason: "someone hurt"}
+           ]
+         }}
+
+      log =
+        capture_verdicts(fn ->
+          ImageScans.deliver_due(judge: fn _path -> verdict end)
+        end)
+
+      assert log =~ "image_scan rejected"
+      assert log =~ "kind=avatar"
+      assert log =~ "owner=#{user.id}"
+      assert log =~ "category=gore"
+      assert log =~ "votes=3/3_unsafe"
+      # Every voice, so "three voices on one thing" reads differently from
+      # "three different suspicions".
+      assert log =~ "blood on a wound"
+      assert log =~ "violence: someone hurt"
+    end
+
+    test "a suspicion the vote cleared is logged and kept, image intact", %{user: user} do
+      # The near misses are the material for tuning the prompt, and unlike a
+      # rejection the image is still there to look at.
+      user = upload_avatar(user)
+
+      verdict =
+        {:ok,
+         %{
+           safe?: true,
+           category: "safe",
+           reason: "a cartoon robot behind a door",
+           ballot: [
+             %{safe?: false, category: "shocking", reason: "a metal skull with red eyes"},
+             %{safe?: true, category: "safe", reason: "a cartoon robot behind a door"},
+             %{safe?: true, category: "safe", reason: "comic characters looking scared"}
+           ]
+         }}
+
+      log =
+        capture_verdicts(fn ->
+          ImageScans.deliver_due(judge: fn _path -> verdict end)
+        end)
+
+      assert log =~ "image_scan cleared"
+      assert log =~ "votes=1/3_unsafe"
+      assert log =~ "shocking: a metal skull with red eyes"
+
+      # Released like any safe image, and the ballot stays queryable.
+      assert reload(user).avatar_moderation == "approved"
+      scan = Repo.one!(from(s in ImageScan, where: s.subject_id == ^user.id))
+      assert scan.votes["unsafe"] == 1
+      assert [%{"category" => "shocking"} | _rest] = scan.votes["opinions"]
+
+      assert [^scan] = ImageScans.recent_verdicts()
+    end
+
+    test "an ordinary safe upload stays out of the verdict log and report", %{user: user} do
+      # One line per upload would drown the interesting ones.
+      upload_avatar(user)
+
+      log =
+        capture_verdicts(fn ->
+          ImageScans.deliver_due(judge: fn _path -> @safe end)
+        end)
+
+      refute log =~ "image_scan cleared"
+      assert ImageScans.recent_verdicts() == []
     end
 
     test "a rejected post image loses row and files; the post survives", %{

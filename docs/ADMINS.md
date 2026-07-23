@@ -134,6 +134,8 @@ Everything else has a default (the vutuv.de production value):
 | `IMAGE_MODERATION_ENABLED` | `true` | `false` turns AI image moderation off (images publish immediately, as before the feature). While enabled, **every** image — avatars, covers, post / job-posting / organization images and the automatic link screenshots — waits invisible to everyone but its owner until a local Ollama vision model approves it; an unsafe image is deleted on the spot and the owner notified. Fail-closed: with Ollama unreachable, new images queue up and are scanned automatically once it is back — nothing is ever auto-approved. Set `false` only on installations without Ollama |
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL of the Ollama instance the image scan talks to. May be a **comma-separated priority list** (`http://gpu-box:11434,http://localhost:11434`): every instance but the last is tried with a 30 s budget and skipped on any failure, the last one is the patient fallback (120 s, covers a CPU cold load). Verdicts are identical either way — the list only buys speed |
 | `OLLAMA_VISION_MODEL` | `qwen3-vl:8b` | The vision model used for the safety verdict. Pull it once (`ollama pull qwen3-vl:8b`); any Ollama vision model works (`qwen3-vl:4b` halves the load on CPU-only servers) |
+| `IMAGE_SCAN_VOTES` | `3` | How many opinions the vision model gives on an image it called **unsafe**. The first answer is deterministic and decides alone when it says "safe" (so an ordinary upload costs one inference); a suspicion buys this many opinions in total, sampled so they are genuinely independent. Raising it makes borderline cases slower but steadier |
+| `IMAGE_SCAN_REJECT_VOTES` | `3` | How many of those opinions must call the image unsafe before it is really deleted. The default is unanimous out of three: a model's answer on a harmless-but-dramatic picture (a cartoon skull, a horror-film still, a joke image) flips between runs, and deleting a member's picture on a coin flip is the worse error — a released image is still reportable by every reader. Set both vote variables to `1` for the old "one answer decides" behaviour, or lower this to `2` for a stricter installation |
 | `DEFAULT_COUNTRY` | `DE` | ISO 3166-1 alpha-2 code that preselects country inputs (job postings, organization pages) |
 
 The defaults marked **Set this** are vutuv.de's operator identity — a fresh
@@ -446,3 +448,21 @@ You don't have to catch every spammer by hand: once enough different members
 independently report the same profile as **spam**, it is automatically frozen
 pending your review. The nightly operator report lists the day's spam
 deactivations. A spam mark is never shown publicly.
+
+### When the image scan gets it wrong
+
+A member writes in that their picture was removed for no reason (their mail
+lands in your inbox: the removal notice sets a Reply-To to the operator
+address). Two ways to see what happened, since the image itself is deleted:
+
+    bin/vutuv eval "Vutuv.Release.image_scan_verdicts()"
+    journalctl -u vutuv | grep image_scan
+
+The report prints every recent rejection **and** every suspicion the vote
+outvoted, each with the model's own description of the image and how each of
+the three opinions fell. That is what you tune against: if harmless pictures
+of one kind keep showing up (comics, film stills, Halloween motifs), the
+prompt in `Vutuv.Moderation.Ollama` needs a line naming that kind as safe.
+The quick lever meanwhile is `IMAGE_SCAN_REJECT_VOTES` / `IMAGE_SCAN_VOTES`
+(see the configuration table); a member can always re-upload, since an image
+is judged fresh every time.

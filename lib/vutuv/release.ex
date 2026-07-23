@@ -6,6 +6,7 @@ defmodule Vutuv.Release do
 
       bin/vutuv eval "Vutuv.Release.migrate()"
   """
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Uploads.LegacyRelabel
   alias Vutuv.Uploads.LegacySweeper
@@ -191,6 +192,53 @@ defmodule Vutuv.Release do
     end
 
     result
+  end
+
+  @doc """
+  Prints what the AI image scan actually decided lately: every rejection plus
+  every suspicion the vote outvoted, newest first, each with the model's own
+  description and the full ballot. The report to read when a member says the
+  scan was wrong, and when calibrating the prompt (see
+  `docs/architecture/images.md`):
+
+      bin/vutuv eval "Vutuv.Release.image_scan_verdicts()"
+      bin/vutuv eval "Vutuv.Release.image_scan_verdicts(limit: 50, kind: \\"avatar\\")"
+  """
+  def image_scan_verdicts(opts \\ []) do
+    load_app()
+    [repo] = repos()
+
+    {:ok, scans, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo -> ImageScans.recent_verdicts(opts) end)
+
+    if scans == [] do
+      IO.puts("image_scan_verdicts: nothing rejected or contested yet.")
+    else
+      Enum.each(scans, &print_verdict/1)
+    end
+
+    scans
+  end
+
+  defp print_verdict(scan) do
+    IO.puts("#{scan.scanned_at} #{scan.status} #{scan.kind} (#{scan.category}) #{scan.model}")
+    IO.puts("  subject=#{scan.subject_id} owner=#{scan.owner_user_id}")
+    IO.puts("  reason: #{scan.reason}")
+
+    print_ballot(scan.votes)
+    IO.puts("")
+  end
+
+  defp print_ballot(%{"opinions" => opinions, "unsafe" => unsafe, "total" => total}) do
+    IO.puts("  ballot: #{unsafe}/#{total} unsafe")
+    Enum.each(opinions, &print_opinion/1)
+  end
+
+  defp print_ballot(_no_ballot), do: IO.puts("  ballot: one opinion")
+
+  defp print_opinion(opinion) do
+    verdict = if opinion["safe"], do: "safe", else: "unsafe"
+    IO.puts("    - #{verdict} (#{opinion["category"]}): #{opinion["reason"]}")
   end
 
   defp repos do

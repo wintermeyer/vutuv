@@ -86,6 +86,17 @@ config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
 config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 
+# How a suspicion becomes a deletion. A model's answer on a borderline but
+# harmless picture (a cartoon skull, a horror-film still, a joke image) flips
+# between runs, so an "unsafe" answer is put to a vote of :image_scan_votes
+# independent opinions and the image is deleted only if
+# :image_scan_reject_votes of them agree. Unanimous out of three: deleting a
+# member's picture on a coin flip is the worse error, and a released image is
+# still reportable. A safe first answer decides alone, so the ordinary upload
+# costs one inference. Both at 1 = the old single-opinion behaviour.
+config :vutuv, :image_scan_votes, 3
+config :vutuv, :image_scan_reject_votes, 3
+
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
 # Off for now: no banner serves, the public /ads flow and the admin review
 # dashboard 404. "ads" stays a reserved username slug either way, so the

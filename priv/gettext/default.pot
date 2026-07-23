@@ -14360,3 +14360,16 @@ msgid ""
 "Your automatically assigned vutuv username is {handle}. You can change it "
 "any time at {url}."
 msgstr ""
+
+#: lib/vutuv/notifications/emailer.ex:824
+#, elixir-autogen, elixir-format
+msgid "An automated check removed an image from your vutuv account"
+msgstr ""
+
+#: lib/vutuv_web/live/notification_live/index.ex:901
+#, elixir-autogen, elixir-format
+msgid ""
+"An AI, not a person, removed %{what}: it judged the image not family-"
+"friendly enough for a work environment. It can be wrong, so reply to our "
+"email if you disagree."
+msgstr ""

@@ -4,7 +4,9 @@ defmodule Vutuv.OpsLogVisibilityTest do
   journal quiet - which used to swallow the email-deliverability ops alarms
   entirely: the watcher's policy-bounce warning (our SPF/DKIM may be broken),
   its startup line (the only liveness signal), the DSN webhook's bounce lines
-  and the emailer's dropped-mail warnings. `Vutuv.Application` raises exactly
+  and the emailer's dropped-mail warnings. The AI image scan's verdict log
+  (`image_scan rejected` / `cleared`, the record of a machine deleting a
+  member's image) would go the same way. `Vutuv.Application` raises exactly
   those modules to :info via per-module log levels at boot; this covers the
   override so the alarms can never go silent again.
   """
@@ -13,11 +15,12 @@ defmodule Vutuv.OpsLogVisibilityTest do
   @modules [
     Vutuv.Deliverability.Watcher,
     Vutuv.Deliverability.Sweeper,
+    Vutuv.Moderation.ImageScans,
     Vutuv.Notifications.Bounces,
     Vutuv.Notifications.Emailer
   ]
 
-  test "ensure_ops_logs_visible/0 raises the deliverability modules to :info" do
+  test "ensure_ops_logs_visible/0 raises the ops modules to :info" do
     # The flag is off in test config (the suite wants the quiet :warning
     # default), so app start has not applied the override - apply and clean
     # up here.
