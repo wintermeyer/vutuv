@@ -39,10 +39,7 @@ defmodule Vutuv.Repo.UpgradePathMigrationTest do
     config =
       Vutuv.Repo.config()
       |> Keyword.drop([:pool, :pool_size])
-      |> Keyword.merge(
-        database: "vutuv_upgrade_path_test#{System.get_env("MIX_TEST_PARTITION")}",
-        pool_size: 2
-      )
+      |> Keyword.merge(database: scratch_database(), pool_size: 2)
 
     # A leftover DB from a crashed run would fail storage_up; start clean.
     _ = PostgresAdapter.storage_down(config)
@@ -75,6 +72,20 @@ defmodule Vutuv.Repo.UpgradePathMigrationTest do
     end
 
     :ok
+  end
+
+  # The scratch database's name must be unique to this **run**, not just to the
+  # test partition. `MIX_TEST_PARTITION` separates partitions inside one `mix
+  # test`, but says nothing about a second `mix test` running beside it — and on
+  # a machine with several worktrees checked out, two suites really do run at
+  # once. Both would then `storage_down` + `storage_up` the same fixed name, so
+  # one run drops the database the other is mid-test on, and that run dies with
+  # `3D000 invalid_catalog_name` and a pool that never connects. Keying on the
+  # OS process id keeps the two apart. A crashed run can leave its database
+  # behind, which the `storage_down` above cleans up should the pid come round
+  # again.
+  defp scratch_database do
+    "vutuv_upgrade_path_test#{System.get_env("MIX_TEST_PARTITION")}_#{System.pid()}"
   end
 
   test "pre-conversion post_* migrations build bigint FKs against still-bigint legacy parents" do

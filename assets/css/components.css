@@ -1013,12 +1013,37 @@ ul.thumbs li .text .url a {
    the `--notif-clamp` custom property the quote sets inline, and the fallback
    here is the shipped default, so a reader on that value carries no inline
    style. The server also cuts the quote to the same number of source lines, so
-   a hidden post body never reaches the DOM. */
+   a hidden post body never reaches the DOM.
+
+   Clamped by height, like `.post-clamp--wrap`, not by `-webkit-line-clamp`:
+   the quote is formatted Markdown now, so its content is block children
+   (paragraphs, lists) and a `-webkit-box` clamps those unreliably. */
 .notif-clamp {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
+  display: flow-root;
   overflow: hidden;
-  -webkit-line-clamp: var(--notif-clamp, 5);
+  max-height: calc(var(--notif-clamp, 5) * 1lh);
+}
+
+/* A quote is a compact excerpt, and the budget above is counted in line boxes:
+   the block spacing `.markdown` gives a post body would eat into it, so a
+   reader who asked for 5 lines would be shown 4 and a bit. Spend the height on
+   text instead — the blocks still read apart through the list markers and their
+   indentation. Both selectors name `.markdown` as well, because `.markdown p`
+   is class+element and would otherwise outrank a bare `.notif-clamp > *`. */
+.notif-clamp.markdown > *,
+.notif-clamp.markdown li {
+  margin-block: 0;
+}
+/* For the same reason every line box inside the quote has to be exactly the
+   `1lh` the budget counts in, and a line box is font-size × line-height. The
+   legacy element default `p { font-size: 15px }` is enough to break that on its
+   own: the quote's line-height is Tailwind's unitless `text-sm` ratio, so a
+   paragraph one pixel larger renders a taller line, five of them overflow a
+   five-line box, and the last one gets shaved. Hand the whole excerpt one type
+   size — it is five lines of quoted text, not a document. */
+.notif-clamp.markdown * {
+  font-size: inherit;
+  line-height: inherit;
 }
 
 /* Truncated feed/profile post preview: fade the clamp into the card so the cut
