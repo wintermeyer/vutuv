@@ -71,6 +71,10 @@ defmodule Vutuv.Posts do
   @default_feed_limit 20
   @default_profile_limit 3
   @default_thread_limit 100
+  # The permalink conversation's cap (issue #1006): strictly above the
+  # one-level reply cap plus the post itself, so the whole-thread page can
+  # never show fewer posts than the old post-plus-direct-replies page did.
+  @default_conversation_limit 200
   @pending_max_age_hours 24
   @max_tags 5
   @tag_posts_per_page 20
@@ -1811,6 +1815,77 @@ defmodule Vutuv.Posts do
     |> scope_visible(viewer)
     |> Repo.all()
     |> Repo.preload(post_preloads())
+  end
+
+  @doc """
+  The whole conversation `post` belongs to, as `viewer` sees it: the thread's
+  root plus every visible post of the thread, oldest first — what the
+  permalink page renders (issue #1006). Fetched in one indexed query over the
+  denormalized `post_replies.root_post_id`.
+
+  Returns `%{posts:, truncated?:}`; `truncated?` says the `:limit` cap
+  (default #{@default_conversation_limit}) cut the newest tail. The
+  permalinked post, its surviving ancestor chain and its direct replies are
+  always unioned back in, so the page never loses its own subject — that
+  union is also the degraded floor when a deleted root nilified the thread's
+  `root_post_id` links and the conversation can no longer be found by root.
+  """
+  def list_thread(%Post{} = post, viewer, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @default_conversation_limit)
+    {anchor_id, up} = thread_anchor(post, viewer)
+
+    scoped =
+      from(p in Post,
+        left_join: r in PostReply,
+        on: r.post_id == p.id,
+        where: r.root_post_id == ^anchor_id or p.id == ^anchor_id,
+        order_by: [asc: p.inserted_at, asc: p.id],
+        limit: ^(limit + 1)
+      )
+      |> scope_visible(viewer)
+      |> Repo.all()
+
+    truncated? = length(scoped) > limit
+
+    posts =
+      (Enum.take(scoped, limit) ++ up ++ [post] ++ list_replies(post, viewer))
+      |> Enum.uniq_by(& &1.id)
+      |> Enum.sort_by(&{NaiveDateTime.to_erl(&1.inserted_at), &1.id})
+      |> Repo.preload(post_preloads())
+
+    %{posts: posts, truncated?: truncated?}
+  end
+
+  # Where the conversation is anchored: the denormalized root for a normal
+  # reply, the post itself for a top-level post. A degraded reply (root
+  # deleted, `root_post_id` NULL) anchors at its topmost surviving ancestor
+  # instead and carries that visible chain along, since the nilified links can
+  # no longer reach it by root.
+  defp thread_anchor(%Post{} = post, viewer) do
+    case Repo.one(
+           from(r in PostReply, where: r.post_id == ^post.id, select: {r.id, r.root_post_id})
+         ) do
+      nil -> {post.id, []}
+      {_, root_id} when is_binary(root_id) -> {root_id, []}
+      {_, nil} -> surviving_chain(post, viewer)
+    end
+  end
+
+  # Walks parent links up as far as posts still exist, collecting the ones
+  # `viewer` may see. Parents are strictly older posts, so the walk cannot
+  # cycle. Returns `{topmost_id, chain}` with the chain oldest first.
+  defp surviving_chain(%Post{} = post, viewer, chain \\ []) do
+    parent_id =
+      Repo.one(from(r in PostReply, where: r.post_id == ^post.id, select: r.parent_post_id))
+
+    case parent_id && Repo.one(from(p in Post, where: p.id == ^parent_id)) do
+      nil ->
+        {post.id, chain}
+
+      %Post{} = parent ->
+        chain = if visible_to?(parent, viewer), do: [parent | chain], else: chain
+        surviving_chain(parent, viewer, chain)
+    end
   end
 
   @doc """

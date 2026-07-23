@@ -102,9 +102,10 @@ defmodule VutuvWeb.AgentDocs.Text do
       Markdown.engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
       section(
-        "#{gettext("Replies")} (#{doc.reply_count})",
-        Enum.map(doc.replies, &reply_lines/1)
+        "#{gettext("Conversation")} (#{length(doc.thread)})",
+        doc.thread |> Enum.reject(&(&1.id == doc.id)) |> Enum.map(&thread_lines/1)
       ),
+      if(doc.thread_truncated, do: gettext("Only part of this long conversation is shown.")),
       footer(doc)
     ]
     |> join_blocks()
@@ -596,9 +597,16 @@ defmodule VutuvWeb.AgentDocs.Text do
     "* #{alt}\n  #{Markdown.image_url(image)}"
   end
 
-  defp reply_lines(reply) do
-    "* #{reply.author} · #{reply.published_on} · #{reply.url}\n" <>
-      indent_block(reply.body_markdown)
+  defp thread_lines(entry) do
+    reply_to =
+      if entry.in_reply_to_author,
+        do:
+          "  " <>
+            gettext("In reply to a post by %{name}.", name: entry.in_reply_to_author) <> "\n",
+        else: ""
+
+    "* #{entry.author} · #{entry.published_on} · #{entry.url}\n" <>
+      reply_to <> indent_block(entry.body_markdown)
   end
 
   defp indent_block(text) do

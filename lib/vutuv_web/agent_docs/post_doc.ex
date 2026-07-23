@@ -34,7 +34,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   for the extension URLs, they must stay cache-safe.
   """
   def build(author, %Post{} = post, opts \\ []) do
-    replies = Posts.list_replies(post, Keyword.get(opts, :viewer))
+    viewer = Keyword.get(opts, :viewer)
+    replies = Posts.list_replies(post, viewer)
+    %{posts: thread, truncated?: thread_truncated?} = Posts.list_thread(post, viewer)
     {noindex?, noai?} = robots_axes(author, Posts.restricted?(post))
     engagement = Posts.engagement_counts(post.id)
 
@@ -60,6 +62,12 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # a second query and can never drift from the list.)
       reply_count: length(replies),
       replies: Enum.map(replies, &reply_entry/1),
+      # The whole conversation the HTML permalink renders (issue #1006),
+      # oldest first; every entry carries its parent pointer so the tree is
+      # recoverable. `replies` above stays the one-level list for API
+      # consumers that relied on it.
+      thread: thread_entries(thread),
+      thread_truncated: thread_truncated?,
       # The public engagement counters the HTML action bar shows to everyone.
       like_count: engagement.likes,
       repost_count: engagement.reposts,
@@ -111,6 +119,28 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       reposted_by: entry[:reposted_by] && UserHelpers.full_name(entry[:reposted_by]),
       reposters: Enum.map(reposters, &UserHelpers.full_name/1)
     }
+  end
+
+  # The conversation entries, oldest first. `in_reply_to_author` resolves only
+  # inside the thread (a deleted or invisible parent stays nil), so the
+  # markdown/text renderers can name a branch's parent without another lookup.
+  defp thread_entries(posts) do
+    authors = Map.new(posts, &{&1.id, UserHelpers.full_name(&1.user)})
+
+    Enum.map(posts, fn post ->
+      parent_id = post.reply_ref && post.reply_ref.parent_post_id
+
+      %{
+        id: post.id,
+        url: AgentDocs.abs_url(Posts.path(post)),
+        author: UserHelpers.full_name(post.user),
+        author_username: post.user.username,
+        published_on: post.published_on,
+        body_markdown: post.body,
+        in_reply_to_id: parent_id,
+        in_reply_to_author: parent_id && authors[parent_id]
+      }
+    end)
   end
 
   defp reply_entry(%Post{} = reply) do

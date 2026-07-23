@@ -40,6 +40,14 @@ onReady(() =>
   document.querySelectorAll("time[data-localtime]").forEach(localizeTime)
 )
 
+// The post permalink renders the whole conversation (issue #1006). When the
+// permalinked post has thread context above it, jump it into view on arrival —
+// its wrapper carries data-thread-scroll plus scroll-mt for the sticky bar.
+onReady(() => {
+  const focus = document.querySelector("[data-thread-scroll]")
+  if (focus) focus.scrollIntoView()
+})
+
 // Feed/profile post previews ship the whole body and clamp it to a few lines
 // via CSS. Reveal the "Read more" affordance only when the body is really cut —
 // i.e. the clamped body overflows, which the server can't know since wrapping is

@@ -207,18 +207,31 @@ On the feed and the profile Posts section `Vutuv.Posts.collapse_threads/1` folds
 each visible chain: it drops the ancestors' own standalone rows (so a middle
 post is no longer shown twice) and hands each surviving leaf its ordered
 `:ancestors`, so however many posts or authors a thread spans it renders once;
-the archive, saved lists and permalink fall back to nesting the single direct
-parent.
+the archive and saved lists fall back to nesting the single direct parent.
 
 All read the same (each a single card of flat `divide-y` rows).
 
 The notification page reuses the compact `post_preview/1` for the post a
 like/reply quotes.
 
-The permalink page lists the visible replies oldest-first (nesting off there —
-the parent is the page itself), the action bar carries a live reply counter, and
-the parent's author gets a derived "replied to your post" notification
-(self-replies excluded).
+**The permalink page renders the whole conversation** (issue #1006):
+`Vutuv.Posts.list_thread/3` fetches the thread's root plus every visible post
+of the thread in one `root_post_id` lookup, oldest first (capped at 200 with a
+"conversation is longer" note; the permalinked post, its surviving ancestor
+chain and its direct replies are always unioned back in, which is also the
+degraded floor once a deleted root has nilified the thread's root links), and
+`PostComponents.thread_conversation/1` renders it as one feed-style chain. The
+permalinked post is the tinted `:full`-mode card (`#thread-focus`; an
+absolutely positioned `::before` so the connector geometry is untouched) and,
+when it has context above, app.js scrolls it into view on arrival
+(`data-thread-scroll`). The chain is chronological, not a tree, so a reply
+that does not answer the card directly above it keeps its own "Replying to
+@handle" banner — that is how branch points read. A post with no thread
+renders standalone exactly as before. The action bar carries a live reply
+counter, and the parent's author gets a derived "replied to your post"
+notification (self-replies excluded). The agent-format siblings mirror the
+page: `PostDoc` carries the conversation as `thread` (each entry with its
+parent pointer), the md/txt renderers as a "Conversation" section.
 
 A reply **outlives its parent**: where the parent is gone the card falls back to
 a banner (which names the account as `@handle`, never the clear name) that

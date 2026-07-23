@@ -426,6 +426,31 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.txt =~ "Likes: 1"
   end
 
+  test "post permalink: the whole conversation reaches every format (issue #1006)", %{
+    user: user,
+    post: post
+  } do
+    {:ok, focus} = Vutuv.Posts.create_reply(user, post, %{"body" => "The conversation pivot."})
+    {:ok, nested} = Vutuv.Posts.create_reply(user, focus, %{"body" => "A deeper drift answer."})
+
+    rendered = formats_for("/drift_tester/posts/#{focus.id}")
+
+    # The HTML permalink shows the whole thread now, root above and the nested
+    # answer below — so every agent format must carry both.
+    for fact <- ["Suspension bridges are underrated.", "A deeper drift answer."],
+        do: assert_fact_everywhere(rendered, fact)
+
+    doc = Jason.decode!(rendered.json)
+    assert [root_entry, focus_entry, nested_entry] = doc["thread"]
+    assert root_entry["id"] == post.id
+    assert root_entry["in_reply_to_id"] == nil
+    assert focus_entry["id"] == focus.id
+    assert focus_entry["in_reply_to_id"] == post.id
+    assert nested_entry["id"] == nested.id
+    assert nested_entry["in_reply_to_id"] == focus.id
+    refute doc["thread_truncated"]
+  end
+
   test "post permalink: a book review's facts reach every format", %{user: user} do
     reviewed =
       create_post!(user, %{
