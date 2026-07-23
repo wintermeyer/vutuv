@@ -761,6 +761,19 @@ defmodule VutuvWeb.Router do
     match(:*, "/*path", NotFoundController, :show, assigns: %{api_scope: :none})
   end
 
+  # The one-time welcome page (VutuvWeb.WelcomeController): the location + job
+  # search questions a brand-new member answers right after their registration
+  # PIN, once. It lives under /system/ like the member directory so it burns no
+  # root path word, and rides the :settings_pipe because it is exactly that
+  # kind of page — logged-in, user-agnostic (:user = the signed-in member) and
+  # kept out of search indexes. Must stay ABOVE the /:slug catch-all.
+  scope "/system", VutuvWeb do
+    pipe_through([:browser, :settings_pipe])
+
+    get("/welcome", WelcomeController, :show)
+    post("/welcome", WelcomeController, :create)
+  end
+
   # The member's own editing world, user-agnostic: every /settings/* page
   # operates on the logged-in member (the :settings_pipe pipeline assigns
   # :user = :current_user), so any of these URLs can be handed to any member —

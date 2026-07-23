@@ -43,6 +43,21 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The `{label, value}` options for the workplace-preference select: the three
+  workplace forms from the schema's single source
+  (`User.desired_workplace_types/0` through `User.desired_workplace_label/1`,
+  the same wording a job posting's workplace chip uses), preceded by the
+  form-local blank "no preference" default, whose empty value `cast/3` folds
+  back to nil. Shared by the Basics form and the one-time welcome page.
+  """
+  def desired_workplace_options do
+    [
+      {gettext("No preference"), ""}
+      | Enum.map(User.desired_workplace_types(), &{User.desired_workplace_label(&1), &1})
+    ]
+  end
+
+  @doc """
   The `{label, value}` options for a Basics-form *visibility* select (issue
   #928): the three choices (everyone → members → hidden) from the schema's
   single source (`User.visibilities/0` through `User.visibility_label/1`),

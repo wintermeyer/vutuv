@@ -14275,3 +14275,91 @@ msgid ""
 "Your notifications quote the post someone liked or replied to. Leave the "
 "field empty to follow the site default."
 msgstr ""
+
+#: lib/vutuv_web/controllers/welcome_controller.ex
+#, elixir-autogen, elixir-format
+msgid "Welcome"
+msgstr ""
+
+#: lib/vutuv_web/controllers/welcome_controller.ex
+#, elixir-autogen, elixir-format
+msgid "No problem. You can add all of this later in Settings."
+msgstr ""
+
+#: lib/vutuv_web/controllers/welcome_controller.ex
+#, elixir-autogen, elixir-format
+msgid "Thanks! You can change all of this later in Settings."
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"Two questions before you start. They decide who finds you and which jobs "
+"we show you. Answer as much or as little as you like."
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Where are you?"
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"A city alone is enough. It appears on your profile and lets people search "
+"for members near them."
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Type of address"
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Are you looking for a job?"
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"Your availability shows to signed-in members only. You can change that "
+"any time."
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"Optional, and nobody else sees it. It filters postings below it out of "
+"your own job search."
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "How do you want to work?"
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Shown next to your availability, and used to match you with postings."
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Save and continue"
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Skip for now"
+msgstr ""
+
+#: lib/vutuv_web/views/user_helpers.ex
+#, elixir-autogen, elixir-format
+msgid "No preference"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex
+#, elixir-autogen, elixir-format
+msgid "Preferred workplace"
+msgstr ""

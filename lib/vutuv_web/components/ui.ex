@@ -835,13 +835,30 @@ defmodule VutuvWeb.UI do
   unknown value, so it is safe to drop in unconditionally. The wording is the
   schema's single source (`Vutuv.Accounts.User.employment_status_label/1`), so
   the badge, the edit form's select and the agent documents can never disagree.
+
+  `workplace` appends the member's preferred workplace form ("Remote",
+  "Hybrid", "On-site") to the same pill, so "Looking for a job · Remote" reads
+  as one signal instead of two competing badges. It shows only alongside a
+  status (a workplace preference without one is cleared by the changeset) and
+  is governed by the very same visibility, so the caller needs no second gate.
   """
   attr(:status, :string, default: nil)
+  attr(:workplace, :string, default: nil)
   attr(:class, :string, default: nil)
   attr(:rest, :global)
 
   def employment_status_badge(assigns) do
-    assigns = assign(assigns, :label, User.employment_status_label(assigns.status))
+    label = User.employment_status_label(assigns.status)
+    workplace_label = User.desired_workplace_label(assigns.workplace)
+
+    assigns =
+      assigns
+      |> assign(:label, label)
+      |> assign(:workplace_label, workplace_label)
+      # One text node, joined here rather than in the markup: a separator
+      # interpolated between two tags loses its surrounding whitespace and the
+      # pill renders "Auf Jobsuche· Remote".
+      |> assign(:text, Enum.join(Enum.reject([label, workplace_label], &is_nil/1), " · "))
 
     ~H"""
     <span
@@ -851,9 +868,10 @@ defmodule VutuvWeb.UI do
         @class
       ]}
       data-employment-status={@status}
+      data-desired-workplace={@workplace_label && @workplace}
       {@rest}
     >
-      {@label}
+      {@text}
     </span>
     """
   end

@@ -72,9 +72,12 @@ defmodule VutuvWeb.Plug.AdBanner do
   # /:slug/export corner (issue #841): focused, owner-only pages, not
   # somewhere a visitor is browsing. A deeper "edit" segment on a public
   # page (e.g. /:slug/links/:id/edit no longer exists, but the guard keys
-  # on the first/second segment only) is unaffected.
+  # on the first/second segment only) is unaffected. The one-time welcome
+  # page joins them for the landing page's reason: it is the first screen
+  # after sign-up, and a house ad has no business competing with it.
   defp account_pages?(conn) do
     List.first(conn.path_info) == "settings" or
+      conn.path_info == ["system", "welcome"] or
       Enum.at(conn.path_info, 1) in ["edit", "settings", "export"]
   end
 

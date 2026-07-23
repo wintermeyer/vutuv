@@ -260,6 +260,23 @@ lands here). --%>
               </div>
             </div>
 
+            <%!-- Preferred workplace form: the same vocabulary a job posting
+            uses (on-site / hybrid / remote), so the answer maps straight onto
+            the board's workplace filter. It rides the availability status -
+            it shows beside the badge under that status's visibility, and the
+            changeset clears it whenever the status goes back to "not open to
+            work", which is why it has no visibility select of its own. --%>
+            <div class="border-t border-slate-200 pt-5 dark:border-slate-700">
+              <%= label f, :desired_workplace_type, gettext("How do you want to work?"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+              <%= select f, :desired_workplace_type, desired_workplace_options(), class: input_class() %>
+              <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                {gettext(
+                  "Shown next to your availability, and used to match you with postings."
+                )}
+              </p>
+              <%= error_tag f, :desired_workplace_type %>
+            </div>
+
             <%!-- Exclusion list (issue #938): the "hide from your employer"
             escape hatch #928 deferred. It lives on its own editor page (adding
             and removing rows can't nest forms inside this basics form), linked

@@ -365,7 +365,7 @@ defmodule VutuvWeb.SessionController do
         Accounts.login(conn, user)
         |> Accounts.delete_pin_cookie()
         |> put_flash(:info, welcome_flash(context, user))
-        |> redirect(to: return_to || Home.path(user))
+        |> redirect(to: return_to || post_login_path(context, user))
 
       {:suspended, until} ->
         conn
@@ -385,6 +385,19 @@ defmodule VutuvWeb.SessionController do
         |> redirect(to: ~p"/")
     end
   end
+
+  # Where a successful login lands. Normally home (the feed, or the member's
+  # own profile while they follow nobody — VutuvWeb.Home). The one exception is
+  # the PIN that confirms a brand-new registration: that member goes to the
+  # one-time welcome page first, where they are asked once for their location
+  # and job search. Gated on BOTH the form's "registration" context and the
+  # never-yet-completed flag, so an ordinary login can never be sent there —
+  # and a member who abandons the page is not asked again on their next login.
+  defp post_login_path("registration", user) do
+    if Accounts.needs_welcome?(user), do: ~p"/system/welcome", else: Home.path(user)
+  end
+
+  defp post_login_path(_context, user), do: Home.path(user)
 
   # The one lockout response, shared by the per-PIN DB counter (real account)
   # and the per-identity counter (any address) so the two are byte-identical

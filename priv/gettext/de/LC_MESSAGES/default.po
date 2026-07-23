@@ -11966,8 +11966,6 @@ msgstr "Bitte loggen Sie sich zuerst ein."
 #, elixir-autogen, elixir-format
 msgid "Prove you control %{domain} to publish this page."
 msgstr "Weisen Sie nach, dass Ihnen %{domain} gehört, um diese Seite zu veröffentlichen."
-"Weisen Sie die Kontrolle über %{domain} nach, um diese Seite zu "
-"veröffentlichen."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:246
 #, elixir-autogen, elixir-format
@@ -13241,8 +13239,6 @@ msgstr "Bezahlung"
 #, elixir-autogen, elixir-format
 msgid "Please confirm your e-mail address first."
 msgstr "Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse."
-"Bitte bestätigen Sie Ihre E-Mail-Adresse, bevor Sie eine Organisationsseite "
-"beanspruchen."
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:41
 #, elixir-autogen, elixir-format
@@ -15009,3 +15005,103 @@ msgstr ""
 "Ihre Benachrichtigungen zitieren den Beitrag, der jemandem gefällt oder auf "
 "den geantwortet wurde. Lassen Sie das Feld leer, um die Voreinstellung der "
 "Website zu übernehmen."
+
+#: lib/vutuv_web/controllers/welcome_controller.ex
+#, elixir-autogen, elixir-format
+msgid "Welcome"
+msgstr "Willkommen"
+
+#: lib/vutuv_web/controllers/welcome_controller.ex
+#, elixir-autogen, elixir-format
+msgid "No problem. You can add all of this later in Settings."
+msgstr ""
+"Kein Problem. Sie können das alles später in den Einstellungen nachtragen."
+
+#: lib/vutuv_web/controllers/welcome_controller.ex
+#, elixir-autogen, elixir-format
+msgid "Thanks! You can change all of this later in Settings."
+msgstr "Danke! Sie können das alles später in den Einstellungen ändern."
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"Two questions before you start. They decide who finds you and which jobs "
+"we show you. Answer as much or as little as you like."
+msgstr ""
+"Zwei Fragen vor dem Start. Sie entscheiden, wer Sie findet und welche "
+"Stellen wir Ihnen zeigen. Beantworten Sie so viel oder so wenig davon, "
+"wie Sie möchten."
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Where are you?"
+msgstr "Wo sind Sie?"
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"A city alone is enough. It appears on your profile and lets people search "
+"for members near them."
+msgstr ""
+"Ein Ort allein genügt. Er erscheint auf Ihrem Profil und macht Sie für "
+"Menschen in Ihrer Nähe auffindbar."
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Type of address"
+msgstr "Art der Adresse"
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Are you looking for a job?"
+msgstr "Suchen Sie eine Stelle?"
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"Your availability shows to signed-in members only. You can change that "
+"any time."
+msgstr ""
+"Ihre Verfügbarkeit sehen nur angemeldete Mitglieder. Das können Sie "
+"jederzeit ändern."
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"Optional, and nobody else sees it. It filters postings below it out of "
+"your own job search."
+msgstr ""
+"Optional, und niemand sonst sieht es. Die Angabe filtert Stellen darunter "
+"aus Ihrer eigenen Jobsuche."
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "How do you want to work?"
+msgstr "Wie möchten Sie arbeiten?"
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Shown next to your availability, and used to match you with postings."
+msgstr ""
+"Wird neben Ihrer Verfügbarkeit angezeigt und für passende Stellenangebote "
+"genutzt."
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Save and continue"
+msgstr "Speichern und weiter"
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Skip for now"
+msgstr "Erstmal überspringen"
+
+#: lib/vutuv_web/views/user_helpers.ex
+#, elixir-autogen, elixir-format
+msgid "No preference"
+msgstr "Egal"
+
+#: lib/vutuv_web/agent_docs/markdown.ex
+#, elixir-autogen, elixir-format
+msgid "Preferred workplace"
+msgstr "Bevorzugte Arbeitsform"

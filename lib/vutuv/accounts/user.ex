@@ -54,6 +54,13 @@ defmodule Vutuv.Accounts.User do
     field(:desired_salary_currency, :string, default: "EUR")
     field(:desired_salary_period, :string, default: "year")
     field(:desired_salary_visibility, :string, default: "hidden")
+    # How the member wants to work: "onsite", "hybrid" or "remote" — the same
+    # vocabulary a job posting's workplace_type uses, so a preference maps 1:1
+    # onto the board's workplace chips. nil = no preference (the default). It is
+    # part of the availability signal, not a separate secret: it shows beside
+    # the status badge under employment_status_visibility and is cleared
+    # whenever the status goes back to "not open to work".
+    field(:desired_workplace_type, :string)
     field(:birthdate, :date)
     # How much of the birthday the public profile (and its agent-format
     # siblings + the public CV) reveal: "full" (date + age, the historical
@@ -212,6 +219,13 @@ defmodule Vutuv.Accounts.User do
     # auto-hides an hour after sign-up). Set programmatically by
     # Vutuv.Accounts.dismiss_onboarding/1; never cast from a profile form.
     field(:onboarding_dismissed?, :boolean, default: false)
+    # When the member left the one-time welcome page (/system/welcome) behind —
+    # by saving it or by skipping it. nil means "never seen", and that is the
+    # ONLY gate: the post-registration redirect sends a member there while it is
+    # nil, and the page itself sends anyone else home. Set programmatically by
+    # Vutuv.Accounts.complete_welcome/2, never cast from params; the migration
+    # backfilled every account that predates the page.
+    field(:welcome_completed_at, :naive_datetime)
     # Moderation state, managed by Vutuv.Moderation, never cast from params.
     # frozen_at: profile in the freezer pending review (hidden from everyone
     # but the owner and admins). suspended_until: strike 2, login blocked and
@@ -296,7 +310,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_type first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -307,6 +321,16 @@ defmodule Vutuv.Accounts.User do
   @employment_statuses ~w(open looking)
 
   def employment_statuses, do: @employment_statuses
+
+  # How a job-seeking member wants to work. Deliberately the same three values
+  # `Vutuv.Jobs.JobPosting`'s workplace_type uses (kept as literals here rather
+  # than read from that schema, so the Accounts context does not depend on the
+  # Jobs one), plus nil for "no preference". The single source of truth for the
+  # changeset's validate_inclusion and, via desired_workplace_types/0, the
+  # form's select options.
+  @desired_workplace_types ~w(onsite hybrid remote)
+
+  def desired_workplace_types, do: @desired_workplace_types
 
   # The shared three-way visibility set (issue #928), used by BOTH
   # employment_status_visibility (default "members") and
@@ -479,6 +503,8 @@ defmodule Vutuv.Accounts.User do
     |> validate_inclusion(:desired_salary_currency, Vutuv.Salary.currencies())
     |> validate_inclusion(:desired_salary_period, Vutuv.Salary.periods())
     |> validate_inclusion(:desired_salary_visibility, @visibilities)
+    |> validate_inclusion(:desired_workplace_type, @desired_workplace_types)
+    |> clear_workplace_without_status()
     |> nullify_default_birthdate()
     |> validate_birthdate()
     |> validate_inclusion(:birthdate_visibility, @birthdate_visibilities)
@@ -700,6 +726,18 @@ defmodule Vutuv.Accounts.User do
   def employment_status_label(_), do: nil
 
   @doc """
+  The human, translated label for a workplace preference, or nil when the
+  member has none. The wording deliberately matches a job posting's workplace
+  chip (`Vutuv.Jobs.JobPosting.workplace_type_label/1`) — same msgid, so a
+  seeker's "Remote" and a posting's "Remote" always read alike — while the
+  strings stay here, keeping Accounts free of a dependency on Jobs.
+  """
+  def desired_workplace_label("onsite"), do: gettext("On-site")
+  def desired_workplace_label("hybrid"), do: gettext("Hybrid")
+  def desired_workplace_label("remote"), do: gettext("Remote")
+  def desired_workplace_label(_), do: nil
+
+  @doc """
   The translated label for a visibility choice (issue #928), shared by both
   Basics-form visibility selects (employment status + salary expectation).
   "everyone" / "members" / "hidden" — the "members" copy is deliberately honest
@@ -827,6 +865,18 @@ defmodule Vutuv.Accounts.User do
     case get_field(changeset, :birthdate) do
       ~D[1900-01-01] -> put_change(changeset, :birthdate, nil)
       _ -> changeset
+    end
+  end
+
+  # The workplace preference only makes sense beside an availability status: a
+  # member back at "not open to work" advertises no workplace form either. Clear
+  # it rather than leave a stale value that the next status change would
+  # silently resurrect — and that the hidden form panel would keep resubmitting.
+  defp clear_workplace_without_status(changeset) do
+    if get_field(changeset, :employment_status) in [nil, ""] do
+      put_change(changeset, :desired_workplace_type, nil)
+    else
+      changeset
     end
   end
 

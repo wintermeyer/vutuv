@@ -31,7 +31,9 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Notifications.Emailer
+  alias Vutuv.Ordering
   alias Vutuv.Pages
+  alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Social.Block
@@ -1253,6 +1255,77 @@ defmodule Vutuv.Accounts do
     user
     |> Ecto.Changeset.change(onboarding_dismissed?: true)
     |> Repo.update()
+  end
+
+  @doc """
+  Whether `user` still has the one-time welcome page (`/system/welcome`) ahead
+  of them. The single gate: the post-registration redirect and the page itself
+  both ask this, so a member meets it exactly once.
+  """
+  def needs_welcome?(%User{welcome_completed_at: nil}), do: true
+  def needs_welcome?(%User{}), do: false
+
+  @doc """
+  Saves the one-time welcome page and closes it for good.
+
+  `params` may carry two independent groups, both entirely optional:
+
+    * `"address"` — the coarse location (`description` = the Private/Work
+      label, `zip_code`, `city`, `country`), cast by the lax
+      `Address.welcome_changeset/2`. A group with no location at all
+      (`Address.location_given?/1` false) inserts nothing rather than failing:
+      skipping is a legitimate answer, not an error.
+    * `"user"` — the job-search group (`employment_status`,
+      `desired_salary_min` + currency/period, `desired_workplace_type`), cast by
+      the ordinary `User.changeset/2`, so this page can never store a value the
+      profile's Basics form would reject.
+
+  Both, plus the `welcome_completed_at` stamp, are written in one transaction,
+  so there is no half-saved welcome. Passing no groups at all is how "Skip"
+  works: it just stamps the flag.
+
+  Returns `{:ok, user}` or `{:error, %{user: changeset, address: changeset}}` —
+  a map, because the page renders both forms and needs the errored one back
+  alongside the untouched other.
+  """
+  def complete_welcome(%User{} = user, params \\ %{}) do
+    address_changeset =
+      user
+      # New entries append to the owner's chosen order, like every other
+      # address (position is set on the struct, never cast).
+      |> Ecto.build_assoc(:addresses, position: Ordering.next_position(Address, user.id))
+      |> Address.welcome_changeset(Map.get(params, "address") || %{})
+
+    user_changeset =
+      user
+      |> User.changeset(Map.get(params, "user") || %{})
+      |> Ecto.Changeset.put_change(
+        :welcome_completed_at,
+        NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+      )
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:user, user_changeset)
+    |> maybe_insert_welcome_address(address_changeset)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{user: updated}} ->
+        {:ok, updated}
+
+      {:error, :user, changeset, _changes} ->
+        {:error, %{user: changeset, address: address_changeset}}
+
+      {:error, :address, changeset, _changes} ->
+        {:error, %{user: user_changeset, address: changeset}}
+    end
+  end
+
+  defp maybe_insert_welcome_address(multi, changeset) do
+    if Address.location_given?(changeset) do
+      Ecto.Multi.insert(multi, :address, changeset)
+    else
+      multi
+    end
   end
 
   # ── Viewer-exclusion list (issue #938) ──

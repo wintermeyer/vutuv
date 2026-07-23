@@ -94,6 +94,10 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # appears; the authenticated /api/2.0 read passes its token's member as
       # `viewer`, so a "members" status shows there too. nil when not visible.
       employment_status: if(job_search.employment_status, do: user.employment_status),
+      # The preferred workplace form (nil / "onsite" / "hybrid" / "remote").
+      # Part of the availability signal, so it shares the status's visibility
+      # exactly as the profile pill does — it never appears without one.
+      desired_workplace_type: if(job_search.employment_status, do: user.desired_workplace_type),
       # The salary expectation (issue #928), same viewer-scoping as the status
       # via its own visibility (default "hidden"). A structured map {min,
       # currency, period} so JSON/XML stay machine-readable; the md/txt

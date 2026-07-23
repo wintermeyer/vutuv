@@ -115,6 +115,57 @@ field (validated `> 0`, so an empty value simply stores "no expectation").
 Deliberately no notice-period / Kündigungsfrist field (#893): when someone
 becomes available is a bilateral matter, not something the platform models.
 
+## Preferred workplace form
+
+`users.desired_workplace_type` is how a job-seeking member wants to work:
+`nil` (no preference), `"onsite"`, `"hybrid"` or `"remote"` — deliberately the
+same vocabulary a job posting's `workplace_type` uses, so a preference maps 1:1
+onto the board's workplace chips. The labels come from
+`User.desired_workplace_label/1` (the same msgids
+`JobPosting.workplace_type_label/1` uses, so a seeker's "Remote" and a
+posting's "Remote" always read alike); the select options from
+`UserHelpers.desired_workplace_options/0`, shared by the Basics form and the
+one-time welcome page.
+
+It is **part of the availability signal, not a field of its own**: it appends to
+the same pill ("Sucht aktiv eine Stelle · Remote"), rides
+`employment_status_visibility` rather than carrying a visibility of its own, and
+`User.changeset/2` **clears it whenever the resulting employment status is
+nil** — so a member who goes back to "not open to work" cannot leave a stale
+preference behind that the next status change would resurrect. The agent docs
+carry it under the same gate (`Preferred workplace:` in md/txt, the raw value in
+JSON/XML).
+
+## The one-time welcome page (`/system/welcome`)
+
+A fresh account arrives with a name, three tags and an email. Nothing says
+*where* this person is or *whether they are looking* — the two facts the `ort:`
+people search, the job board and a recruiter's saved search need to be useful to
+them. Asking during sign-up would lengthen the form standing between a visitor
+and an account, so `VutuvWeb.WelcomeController` asks **once**, right after the
+registration PIN, on a page that is trivial to skip:
+
+- **Where are you?** — a Private/Work label plus postal code, city and country
+  (no street). Validation is deliberately lax: `Address.welcome_changeset/2`
+  requires **nothing**, any one of the three fields is a complete answer, and a
+  form with no location at all (`Address.location_given?/1`) simply stores no
+  address rather than failing. What is filled in becomes an ordinary profile
+  address — public, and answering `ort:`/`city:` searches like every other one.
+- **Are you looking for a job?** — the availability status and, revealed by the
+  same `[data-jobsearch-details]` enhancement the Basics form uses, the minimum
+  salary expectation and the preferred workplace form. Cast by the ordinary
+  `User.changeset/2` with the existing visibility defaults, so the page can
+  never store something more public than the Basics form would.
+
+`users.welcome_completed_at` is the single gate. `SessionController` redirects
+there only when the PIN form's `"registration"` context **and** a `nil` stamp
+agree; `show/2` sends anyone else home; both buttons ("Save and continue" and
+"Skip for now") stamp it, and `Accounts.complete_welcome/2` writes the address,
+the user fields and the stamp in one transaction. A member who simply navigates
+away is never asked again — everything on the page lives under /settings, and
+nagging on every login is exactly what this page is designed not to do. The
+migration backfilled the stamp for every account that predates the page.
+
 ## Job-search exclusion list / Ausschlussliste (issue #938)
 
 The three-way visibility above is coarse: `everyone` shows the badge to your
