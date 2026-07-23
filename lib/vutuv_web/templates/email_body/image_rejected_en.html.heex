@@ -1,15 +1,29 @@
-<.email_layout preheader="An image was removed by our automated image review" locale={@locale}>
+<.email_layout
+  preheader="An automated AI check removed an image, not a person"
+  locale={@locale}
+>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    our automated image review (an AI model) removed {image_kind_label(@kind, @locale)}.
+    our automated image review removed {image_kind_label(@kind, @locale)}.
+  </.email_p>
+  <.email_p :if={@category == "unverifiable"}>
+    This one is a technical problem: our review could not open the image file and therefore could
+    not judge it. That says nothing about what was on it. A JPEG or PNG file usually works.
+  </.email_p>
+  <.email_p :if={@category != "unverifiable"}>
+    No human decided this. An AI does it here: it looks at every uploaded image and decides on its
+    own whether it is family-friendly and suitable for a work environment. It runs the same way for
+    every member, so this is nothing personal and nothing against you.
+  </.email_p>
+  <.email_p :if={@category != "unverifiable"}>
+    And that AI gets things wrong. We ask it several times whenever it suspects something, and an
+    image only goes when the answers agree. Even so it can hit a harmless picture, a comic, a film
+    reference or a joke. So if you think your image was fine, you may well be right.
   </.email_p>
   <.email_p>
-    The reason, in short: vutuv only allows images that are family-friendly and suitable for a work
-    environment. This image did not pass that review.
-  </.email_p>
-  <.email_p>
-    You are welcome to upload a different image any time. If you are convinced the decision was
-    wrong, just reply to this email and a human will take a look.
+    In that case just reply to this email, ideally with the image attached, and a human will look
+    at it. The removal has no consequences for your account: no warning, no mark against you. You
+    can upload a different image any time.
   </.email_p>
   <.email_signature locale={@locale} />
 </.email_layout>

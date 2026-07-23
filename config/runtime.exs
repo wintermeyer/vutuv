@@ -186,6 +186,18 @@ if config_env() == :prod do
     config :vutuv, :ollama_vision_model, ollama_model
   end
 
+  # How strict the scan is: an "unsafe" answer is put to a vote of
+  # IMAGE_SCAN_VOTES opinions and the image is only deleted when
+  # IMAGE_SCAN_REJECT_VOTES of them agree (3 of 3 by default). Both at 1 =
+  # one opinion decides, as before the vote existed.
+  if votes = System.get_env("IMAGE_SCAN_VOTES") do
+    config :vutuv, :image_scan_votes, String.to_integer(votes)
+  end
+
+  if reject_votes = System.get_env("IMAGE_SCAN_REJECT_VOTES") do
+    config :vutuv, :image_scan_reject_votes, String.to_integer(reject_votes)
+  end
+
   # Organization-page domain proof. VERIFY_ORGANIZATION_DOMAINS=false disables the DNS TXT
   # and well-known-file methods (and their periodic re-check), so no new organization
   # page can be verified — for installations that must not call out (intranets).

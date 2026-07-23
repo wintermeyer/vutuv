@@ -3,18 +3,27 @@ defmodule Vutuv.Application do
 
   use Application
 
-  # The email-deliverability subsystem carries deliberate ops alarms that
-  # production's quiet global Logger level (:error, config/prod.exs) would
-  # swallow entirely: the watcher's policy-bounce warning (it fires when *our*
-  # SPF/DKIM sending is broken for a whole class of recipients), its startup
-  # line (the only liveness signal), the DSN webhook's bounce lines, the
-  # sweeper's counts and the emailer's dropped-mail warnings. Nobody could
-  # have seen any of them until v7.122.5. Raise exactly these modules to
-  # :info at boot; everything else stays at the global level. Off in tests
-  # (config/test.exs), which want the quiet :warning default.
+  # Some subsystems carry deliberate ops alarms that production's quiet global
+  # Logger level (:error, config/prod.exs) would swallow entirely.
+  #
+  # The email-deliverability ones: the watcher's policy-bounce warning (it
+  # fires when *our* SPF/DKIM sending is broken for a whole class of
+  # recipients), its startup line (the only liveness signal), the DSN
+  # webhook's bounce lines, the sweeper's counts and the emailer's
+  # dropped-mail warnings. Nobody could have seen any of them until v7.122.5.
+  #
+  # And the AI image scan: every `image_scan` line is about a member's image
+  # being deleted (or nearly deleted) by a machine, which is exactly what an
+  # operator has to be able to read back when someone appeals or when the
+  # prompt needs calibrating — at :error the whole feed would be silent.
+  #
+  # Raise exactly these modules to :info at boot; everything else stays at
+  # the global level. Off in tests (config/test.exs), which want the quiet
+  # :warning default.
   @ops_log_modules [
     Vutuv.Deliverability.Watcher,
     Vutuv.Deliverability.Sweeper,
+    Vutuv.Moderation.ImageScans,
     Vutuv.Notifications.Bounces,
     Vutuv.Notifications.Emailer
   ]

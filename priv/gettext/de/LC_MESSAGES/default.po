@@ -15099,3 +15099,19 @@ msgid ""
 msgstr ""
 "Ihr automatisch zugewiesener vutuv-Username ist {handle}. Sie können ihn "
 "jederzeit unter {url} ändern."
+
+#: lib/vutuv/notifications/emailer.ex:824
+#, elixir-autogen, elixir-format
+msgid "An automated check removed an image from your vutuv account"
+msgstr "Eine automatische Prüfung hat ein Bild aus Ihrem vutuv-Konto entfernt"
+
+#: lib/vutuv_web/live/notification_live/index.ex:901
+#, elixir-autogen, elixir-format
+msgid ""
+"An AI, not a person, removed %{what}: it judged the image not family-"
+"friendly enough for a work environment. It can be wrong, so reply to our "
+"email if you disagree."
+msgstr ""
+"Eine KI hat %{what} entfernt, kein Mensch: Sie hielt das Bild für nicht "
+"familienfreundlich genug für ein Arbeitsumfeld. Sie kann sich irren, "
+"antworten Sie in dem Fall einfach auf unsere E-Mail."

@@ -1,15 +1,32 @@
-<.email_layout preheader="Ein Bild wurde von unserer automatischen Bildprüfung entfernt" locale={@locale}>
+<.email_layout
+  preheader="Eine automatische KI-Prüfung hat ein Bild entfernt, kein Mensch"
+  locale={@locale}
+>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    unsere automatische Bildprüfung (ein KI-Modell) hat {image_kind_label(@kind, @locale)} entfernt.
+    unsere automatische Bildprüfung hat {image_kind_label(@kind, @locale)} entfernt.
+  </.email_p>
+  <.email_p :if={@category == "unverifiable"}>
+    Der Grund ist diesmal technisch: Unsere Prüfung konnte die Bilddatei nicht öffnen und deshalb
+    auch nicht beurteilen. Über den Inhalt sagt das nichts. Mit einer JPEG- oder PNG-Datei klappt
+    es meistens.
+  </.email_p>
+  <.email_p :if={@category != "unverifiable"}>
+    Über Ihr Bild hat kein Mensch entschieden. Das macht bei uns eine KI: Sie sieht sich jedes
+    hochgeladene Bild an und entscheidet allein, ob es familienfreundlich und für ein Arbeitsumfeld
+    geeignet ist. Das läuft bei allen Mitgliedern gleich ab, es ist also nichts Persönliches und
+    richtet sich nicht gegen Sie.
+  </.email_p>
+  <.email_p :if={@category != "unverifiable"}>
+    Und diese KI irrt sich. Wir fragen sie bei jedem Verdacht mehrfach, und ein Bild fliegt nur
+    raus, wenn sie sich einig ist. Trotzdem kann es ein harmloses Bild treffen, einen Comic, ein
+    Filmzitat oder ein Scherzbild. Wenn Sie also finden, dass Ihr Bild in Ordnung war, kann das
+    gut sein.
   </.email_p>
   <.email_p>
-    Der Grund, kurz gesagt: Auf vutuv sind nur Bilder zulässig, die familienfreundlich und für ein
-    Arbeitsumfeld geeignet sind. Dieses Bild hat die Prüfung nicht bestanden.
-  </.email_p>
-  <.email_p>
-    Sie können jederzeit ein anderes Bild hochladen. Wenn Sie überzeugt sind, dass die Entscheidung
-    falsch war, antworten Sie einfach auf diese E-Mail, dann schaut ein Mensch darauf.
+    Antworten Sie in dem Fall einfach auf diese E-Mail, am besten mit dem Bild im Anhang. Dann
+    schaut sich ein Mensch die Sache an. Folgen für Ihr Konto hat die Entfernung keine: keine
+    Verwarnung, kein Vermerk. Ein anderes Bild können Sie jederzeit hochladen.
   </.email_p>
   <.email_signature locale={@locale} />
 </.email_layout>

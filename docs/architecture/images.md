@@ -84,9 +84,13 @@ The moving parts (all under `Vutuv.Moderation`):
 - `Ollama` — the vision-model client. The image is downscaled to ≤896 px and
   re-encoded as a stripped JPEG before it is sent; verdicts are forced into a
   JSON schema, and the prompt tells the model to ignore instructions embedded
-  in the image. Two error classes: `{:service, _}` (Ollama down — retry
-  forever, fail-closed) vs `{:image, _}` (this file can't be judged — capped,
-  then rejected; an unverifiable image is never released).
+  in the image. The schema asks for a one-sentence `reason` **first**, so the
+  model describes the image before it labels it (that sentence is kept on the
+  scan row: after a rejection the files are gone, and the bare category never
+  said what the model actually saw). Two error classes: `{:service, _}`
+  (Ollama down — retry forever, fail-closed) vs `{:image, _}` (this file
+  can't be judged — capped, then rejected; an unverifiable image is never
+  released).
 - `ImageScanWorker` — boot-resume + poll + nudge, mirroring
   `Vutuv.Posts.ScreenshotWorker`; hourly `repair_drift/0` re-enqueues any
   asset stranded in `pending`.
@@ -115,11 +119,59 @@ imagery (Mastodon/Bluesky account avatars on the profile social card) runs
 through `Ollama.moderate_binary/1` before entering the feed cache — unsafe or
 unjudgeable means the initials fallback.
 
-Config: `:moderate_images` / `:ollama_url` / `:ollama_vision_model`
-(`IMAGE_MODERATION_ENABLED`, `OLLAMA_URL`, `OLLAMA_VISION_MODEL` in
-`config/runtime.exs`). Off = images release immediately (tests, installations
-without Ollama). `mix vutuv.moderation.backfill` queues the grandfathered
-catalog through the same pipeline without hiding anything while it waits.
+**One unsafe answer does not delete anything.** The model's verdict on a
+borderline but harmless picture (a cartoon skull, a horror-film still, a joke
+image of frightened people) flips between runs even at temperature 0, so a
+suspicion is put to a vote: the first opinion is the deterministic one and
+decides alone when it comes back safe (so the ordinary upload still costs one
+inference), while "unsafe" buys `:image_scan_votes` opinions in total,
+sampled at a real temperature so they are independent draws rather than the
+same answer again. The image is deleted only if `:image_scan_reject_votes` of
+them agree — unanimous out of three by default, in dubio pro reo: deleting a
+member's picture on a coin flip is the worse error, and a released image is
+still reportable by every reader. A cleared suspicion is logged with the
+model's own sentence (the log line to read when tuning the prompt); a service
+failure mid-vote aborts the ballot, so nothing is decided on half a count.
+The prompt itself is calibrated for this: fiction, comics, monsters, skulls,
+horror motifs, memes and exaggerated fear are named as safe, "shocking" is
+narrowed to real distressing imagery, and style ("dark", "in bad taste") is
+explicitly not a reason to reject.
+
+**Reading back what the scanner did.** Every line the queue writes is tagged
+`image_scan`, so `journalctl -u vutuv | grep image_scan` is the whole feed and
+`grep "image_scan rejected"` the deletions. One line per decided image carries
+owner, kind, model, category, how the ballot fell and what each voice said:
+
+```
+image_scan rejected kind=avatar subject=<uuid> owner=<uuid> model=qwen3-vl:8b
+  category=gore votes=3/3_unsafe reason="a bloodied arm"
+  ballot=[gore: a bloodied arm | gore: blood on a wound | violence: someone hurt]
+```
+
+An outvoted suspicion logs the same shape as `image_scan cleared` (info); an
+ordinary safe upload logs nothing, or the feed would be one line per upload.
+Production's global level is `:error`, so `Vutuv.Application` raises
+`Vutuv.Moderation.ImageScans` to `:info` at boot alongside the deliverability
+alarms (`ops_log_visibility`) — without that the whole feed is silent there.
+
+Logs rotate, the row does not: rejections **and** cleared suspicions keep the
+ballot in `image_scans.votes`, readable per
+`Vutuv.Moderation.ImageScans.recent_verdicts/1` or, on a release,
+
+    bin/vutuv eval "Vutuv.Release.image_scan_verdicts()"
+
+which prints each verdict with the model's description and every opinion. The
+cleared ones are the more useful half for calibrating the prompt: unlike a
+rejection, the image they concern is still there to look at.
+
+Config: `:moderate_images` / `:ollama_url` / `:ollama_vision_model` /
+`:image_scan_votes` / `:image_scan_reject_votes` (`IMAGE_MODERATION_ENABLED`,
+`OLLAMA_URL`, `OLLAMA_VISION_MODEL` in `config/runtime.exs`; the two vote
+knobs are `config/config.exs` flags). Off = images release immediately
+(tests, installations without Ollama); both vote knobs at 1 = the old
+single-opinion behaviour. `mix vutuv.moderation.backfill` queues the
+grandfathered catalog through the same pipeline without hiding anything while
+it waits.
 
 `:ollama_url` may be a comma-separated **priority list** of instances: every
 instance but the last is tried with `:ollama_remote_timeout` (30 s — enough

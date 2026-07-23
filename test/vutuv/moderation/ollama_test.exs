@@ -1,10 +1,11 @@
 defmodule Vutuv.Moderation.OllamaTest do
   @moduledoc """
   The Ollama vision client: what it sends (downscaled stripped JPEG, strict
-  JSON schema, temperature 0), how it parses verdicts, and the two error
-  classes the queue depends on (`{:service, _}` retries forever,
-  `{:image, _}` counts toward the fail-closed cap). All against a `plug:`
-  stub via `:image_scan_req_options` — no live Ollama.
+  JSON schema, temperature 0), how it parses verdicts, the vote that stands
+  between a suspicion and a deleted image, and the two error classes the
+  queue depends on (`{:service, _}` retries forever, `{:image, _}` counts
+  toward the fail-closed cap). All against a `plug:` stub via
+  `:image_scan_req_options` — no live Ollama.
   """
   use ExUnit.Case, async: false
 
@@ -13,6 +14,56 @@ defmodule Vutuv.Moderation.OllamaTest do
   setup do
     on_exit(fn -> Application.delete_env(:vutuv, :image_scan_req_options) end)
     {:ok, src: jpeg_fixture()}
+  end
+
+  # Answers the scan's requests from a scripted list, one verdict per call,
+  # and records how often it was asked and at which temperature. A `{:http,
+  # status}` entry plays a service failure instead of a verdict.
+  defp stub_verdicts(script) do
+    {:ok, agent} = Agent.start_link(fn -> %{script: script, asked: 0, temperatures: []} end)
+
+    stub(fn conn ->
+      {:ok, raw, conn} = Plug.Conn.read_body(conn, length: 50_000_000)
+      temperature = Jason.decode!(raw)["options"]["temperature"]
+
+      case next_verdict(agent, temperature) do
+        {:http, status} -> Plug.Conn.send_resp(conn, status, "boom")
+        verdict -> answer(conn, verdict)
+      end
+    end)
+
+    agent
+  end
+
+  defp next_verdict(agent, temperature) do
+    Agent.get_and_update(agent, fn
+      %{script: []} ->
+        raise "the scan asked for more opinions than the test scripted"
+
+      %{script: [next | rest]} = state ->
+        {next,
+         %{
+           state
+           | script: rest,
+             asked: state.asked + 1,
+             temperatures: state.temperatures ++ [temperature]
+         }}
+    end)
+  end
+
+  defp asked(agent), do: Agent.get(agent, & &1.asked)
+  defp temperatures(agent), do: Agent.get(agent, & &1.temperatures)
+
+  defp put_config(key, value) do
+    previous = Application.fetch_env(:vutuv, key)
+    Application.put_env(:vutuv, key, value)
+
+    on_exit(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:vutuv, key, value)
+        :error -> Application.delete_env(:vutuv, key)
+      end
+    end)
   end
 
   defp jpeg_fixture do
@@ -49,7 +100,7 @@ defmodule Vutuv.Moderation.OllamaTest do
     assert request["stream"] == false
     assert request["options"]["temperature"] == 0
     # Structured output: the schema pins the verdict shape.
-    assert request["format"]["required"] == ["safe", "category"]
+    assert request["format"]["required"] == ["reason", "safe", "category"]
 
     [%{"images" => [image_b64], "content" => prompt}] = request["messages"]
 
@@ -141,6 +192,111 @@ defmodule Vutuv.Moderation.OllamaTest do
 
     stub(fn conn -> answer(conn, %{safe: true, category: "safe"}) end)
     assert {:ok, %{safe?: true}} = Ollama.moderate_binary(bytes)
+  end
+
+  describe "one unsafe answer is a suspicion, not a verdict" do
+    # The model's answer on a borderline but harmless picture (a cartoon
+    # skull, a horror-film still, a joke image of frightened people) flips
+    # between runs, so a suspicion is put to a vote and the image is deleted
+    # only when the opinions agree. In dubio pro reo.
+
+    test "a safe answer decides alone: the ordinary upload costs one inference", %{src: src} do
+      agent = stub_verdicts([%{reason: "a photo of a cat", safe: true, category: "safe"}])
+
+      assert {:ok, %{safe?: true, category: "safe", reason: "a photo of a cat"}} =
+               Ollama.moderate_file(src)
+
+      assert asked(agent) == 1
+    end
+
+    test "a suspicion the other opinions contradict clears the image", %{src: src} do
+      agent =
+        stub_verdicts([
+          %{reason: "a metal skull with red eyes", safe: false, category: "shocking"},
+          %{reason: "a cartoon robot behind a door", safe: true, category: "safe"},
+          %{reason: "comic characters looking scared", safe: true, category: "safe"}
+        ])
+
+      assert {:ok, %{safe?: true}} = Ollama.moderate_file(src)
+      assert asked(agent) == 3
+    end
+
+    test "the confirming opinions are sampled, not the first draw repeated", %{src: src} do
+      agent =
+        stub_verdicts([
+          %{reason: "unclear", safe: false, category: "other"},
+          %{reason: "unclear", safe: true, category: "safe"},
+          %{reason: "unclear", safe: true, category: "safe"}
+        ])
+
+      assert {:ok, %{safe?: true}} = Ollama.moderate_file(src)
+      assert [0, first, second] = temperatures(agent)
+      assert first > 0 and second > 0
+    end
+
+    test "opinions that agree reject, carrying the category and the reason", %{src: src} do
+      stub_verdicts(
+        List.duplicate(%{reason: "explicit nudity", safe: false, category: "nudity"}, 3)
+      )
+
+      assert {:ok, %{safe?: false, category: "nudity", reason: "explicit nudity"}} =
+               Ollama.moderate_file(src)
+    end
+
+    test "a service failure mid-vote aborts the ballot, releasing nothing", %{src: src} do
+      # Fail-closed: the queue retries the whole image later rather than
+      # deciding it either way on a half-counted vote.
+      stub_verdicts([%{reason: "blood", safe: false, category: "gore"}, {:http, 503}])
+
+      assert {:error, {:service, {:http, 503}}} = Ollama.moderate_file(src)
+    end
+
+    test "a single-vote installation keeps the old one-opinion behaviour", %{src: src} do
+      put_config(:image_scan_votes, 1)
+      agent = stub_verdicts([%{reason: "gore", safe: false, category: "gore"}])
+
+      assert {:ok, %{safe?: false, category: "gore"}} = Ollama.moderate_file(src)
+      assert asked(agent) == 1
+    end
+
+    test "a reject threshold above the ballot size still rejects (never fails open)", %{src: src} do
+      # A misconfigured threshold no ballot could reach would release every
+      # unsafe image; it is clamped to the number of votes instead.
+      put_config(:image_scan_reject_votes, 9)
+
+      stub_verdicts(
+        List.duplicate(%{reason: "a weapon aimed at me", safe: false, category: "weapons"}, 3)
+      )
+
+      assert {:ok, %{safe?: false, category: "weapons"}} = Ollama.moderate_file(src)
+    end
+  end
+
+  test "the schema asks what the image shows before it asks for a verdict", %{src: src} do
+    # Ollama generates the properties in the order they arrive, so "reason"
+    # must be sent first for the model to describe the image before labelling
+    # it. A plain Elixir map would encode alphabetically ("category" first).
+    parent = self()
+
+    stub(fn conn ->
+      {:ok, raw, conn} = Plug.Conn.read_body(conn, length: 50_000_000)
+      send(parent, {:raw, raw})
+      answer(conn, %{reason: "a diagram", safe: true, category: "safe"})
+    end)
+
+    assert {:ok, _verdict} = Ollama.moderate_file(src)
+    assert_received {:raw, raw}
+
+    assert raw =~ ~s("required":["reason","safe","category"])
+
+    properties = raw |> String.split(~s("properties":)) |> Enum.at(1)
+    assert position(properties, "reason") < position(properties, "safe")
+    assert position(properties, "safe") < position(properties, "category")
+  end
+
+  defp position(string, key) do
+    {index, _length} = :binary.match(string, ~s("#{key}"))
+    index
   end
 
   describe "multi-instance priority list (fast GPU box first, local fallback)" do

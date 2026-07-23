@@ -193,36 +193,46 @@ defmodule Vutuv.Moderation.ImageScans do
 
   defp judge_and_apply(scan, path, judge) do
     case judge.(path) do
-      {:ok, %{safe?: true}} -> approve(scan)
-      {:ok, %{safe?: false, category: category}} -> reject(scan, category)
+      {:ok, %{safe?: true} = verdict} -> approve(scan, verdict)
+      {:ok, %{safe?: false} = verdict} -> reject(scan, verdict)
       {:error, {:service, reason}} -> service_retry(scan, reason)
       {:error, {:image, reason}} -> image_retry(scan, reason)
     end
   end
 
-  defp approve(scan) do
-    case claim(scan, "scanning", "approved", category: "safe") do
+  # The model's sentence about the image, when it gave one (a stubbed judge in
+  # a test, or an older instance answering the pre-`reason` schema, does not).
+  defp described(verdict), do: Map.get(verdict, :reason)
+
+  defp approve(scan, verdict) do
+    case claim(scan, "scanning", "approved", resolution_fields(verdict, "safe")) do
       nil ->
         :ok
 
       resolved ->
+        # A suspicion the vote outvoted: logged because it is the one case
+        # where the image is still there to look at, so it is the material
+        # for the next prompt fix. An uncontested approval stays silent —
+        # that is every upload.
+        if contested?(verdict), do: log_verdict(:info, "cleared", resolved, verdict)
+
         # :stale means the asset changed under the verdict (re-upload during
         # the scan reset the row; its own scan releases or deletes the new
         # bytes) — the fingerprint-guarded flip refused, so nothing leaked.
         case ImageSubjects.apply_approved(resolved) do
           :ok -> :ok
-          :stale -> Logger.info("image scan #{resolved.id}: approve verdict was stale")
+          :stale -> Logger.info("image_scan stale outcome=approved scan=#{resolved.id}")
         end
     end
   end
 
-  defp reject(scan, category) do
-    case claim(scan, "scanning", "rejected", category: category) do
+  defp reject(scan, verdict) do
+    case claim(scan, "scanning", "rejected", resolution_fields(verdict, verdict.category)) do
       nil ->
         :ok
 
       resolved ->
-        Logger.info("image scan: rejected #{resolved.kind} #{resolved.subject_id} (#{category})")
+        log_verdict(:warning, "rejected", resolved, verdict)
 
         case ImageSubjects.apply_rejected(resolved) do
           :ok -> notify_rejection(resolved)
@@ -230,6 +240,87 @@ defmodule Vutuv.Moderation.ImageScans do
         end
     end
   end
+
+  # What a resolved row records about the verdict: the category, the model's
+  # own sentence, and the ballot behind it. A rejection deletes the files, so
+  # this row is the only thing left to answer "why?" when the member appeals
+  # (and logs rotate — the row does not).
+  defp resolution_fields(verdict, category) do
+    [category: category, reason: described(verdict), votes: ballot_record(verdict)]
+  end
+
+  defp ballot_record(%{ballot: ballot}) when is_list(ballot) do
+    %{
+      "total" => length(ballot),
+      "unsafe" => Enum.count(ballot, &(not &1.safe?)),
+      "opinions" =>
+        Enum.map(ballot, fn opinion ->
+          %{
+            "safe" => opinion.safe?,
+            "category" => opinion.category,
+            "reason" => opinion.reason
+          }
+        end)
+    }
+  end
+
+  defp ballot_record(_verdict), do: nil
+
+  defp contested?(verdict), do: ballot_record(verdict) != nil
+
+  # One greppable line per decided image. Everything the queue says is tagged
+  # `image_scan`, so `journalctl -u vutuv | grep image_scan` is the whole feed
+  # and `grep "image_scan rejected"` the deletions. A rejection is a warning
+  # (a member just lost content they chose and may write in about it); an
+  # outvoted suspicion is info.
+  defp log_verdict(level, outcome, scan, verdict) do
+    Logger.log(level, fn ->
+      Enum.join(
+        [
+          "image_scan #{outcome}",
+          "kind=#{scan.kind}",
+          "subject=#{scan.subject_id}",
+          "owner=#{scan.owner_user_id}",
+          "model=#{scan.model}",
+          "category=#{scan.category}",
+          "votes=#{votes_summary(verdict)}",
+          "reason=#{inspect(clip(described(verdict)))}",
+          "ballot=#{ballot_summary(verdict)}"
+        ],
+        " "
+      )
+    end)
+  end
+
+  defp votes_summary(verdict) do
+    case ballot_record(verdict) do
+      nil -> "single"
+      %{"unsafe" => unsafe, "total" => total} -> "#{unsafe}/#{total}_unsafe"
+    end
+  end
+
+  # Every voice, in the order it spoke, so a rejection can be read back: three
+  # voices agreeing on one thing is a different verdict from three different
+  # suspicions that merely all said "unsafe".
+  defp ballot_summary(verdict) do
+    case ballot_record(verdict) do
+      nil ->
+        "-"
+
+      %{"opinions" => opinions} ->
+        summary =
+          Enum.map_join(opinions, " | ", fn opinion ->
+            "#{opinion["category"]}: #{clip(opinion["reason"])}"
+          end)
+
+        "[#{summary}]"
+    end
+  end
+
+  # The full sentences live on the row; a log line only needs enough of each
+  # to recognize the image.
+  defp clip(nil), do: nil
+  defp clip(text), do: String.slice(text, 0, 120)
 
   # Member-chosen images get the deletion notice; machine-generated link
   # screenshots silently show no preview (the failed-capture UX).
@@ -250,8 +341,8 @@ defmodule Vutuv.Moderation.ImageScans do
   # until the operator's Ollama is back.
   defp service_retry(scan, reason) do
     Logger.warning(
-      "image scan service failure (#{scan.kind} #{scan.subject_id}): " <>
-        inspect(reason)
+      "image_scan service_error kind=#{scan.kind} subject=#{scan.subject_id} " <>
+        "error=#{inspect(reason)}"
     )
 
     retry_at = DateTime.add(DateTime.utc_now(:second), @service_retry_seconds)
@@ -272,8 +363,19 @@ defmodule Vutuv.Moderation.ImageScans do
     attempts = scan.attempts + 1
 
     if attempts >= @image_error_cap do
-      reject(%{scan | attempts: attempts}, "unverifiable")
+      reject(%{scan | attempts: attempts}, %{
+        safe?: false,
+        category: "unverifiable",
+        reason:
+          "the scanner could not judge this image after #{attempts} tries " <>
+            "(#{error_string(reason)})"
+      })
     else
+      Logger.info(
+        "image_scan image_error kind=#{scan.kind} subject=#{scan.subject_id} " <>
+          "attempt=#{attempts}/#{@image_error_cap} error=#{inspect(reason)}"
+      )
+
       retry_at =
         DateTime.add(
           DateTime.utc_now(:second),
@@ -353,6 +455,31 @@ defmodule Vutuv.Moderation.ImageScans do
   def rejected_scans_query(user_id) do
     from(s in ImageScan, where: s.owner_user_id == ^user_id and s.status == "rejected")
   end
+
+  @doc """
+  The resolved scans a human would want to re-read, newest first: every
+  rejection plus every suspicion the vote cleared. Logs rotate, this does
+  not, so it is the durable half of the verdict log — the forensic answer to
+  "why was my image removed?" and the material for tuning the prompt (the
+  cleared ones still have their image to look at). `opts`: `limit:`
+  (default 20), `kind:`, `since:` (a `DateTime`).
+  """
+  def recent_verdicts(opts \\ []) do
+    from(s in ImageScan,
+      where: s.status == "rejected" or (s.status == "approved" and not is_nil(s.votes)),
+      order_by: [desc: s.scanned_at],
+      limit: ^Keyword.get(opts, :limit, 20)
+    )
+    |> filter_kind(opts[:kind])
+    |> filter_since(opts[:since])
+    |> Repo.all()
+  end
+
+  defp filter_kind(query, nil), do: query
+  defp filter_kind(query, kind), do: from(s in query, where: s.kind == ^kind)
+
+  defp filter_since(query, nil), do: query
+  defp filter_since(query, since), do: from(s in query, where: s.scanned_at >= ^since)
 
   @doc "Queue totals for the admin dashboard: %{pending: n, rejected_7d: n}."
   def counts do

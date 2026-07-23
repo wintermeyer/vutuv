@@ -37,6 +37,15 @@ defmodule Vutuv.Moderation.ImageScan do
     field(:next_attempt_at, :utc_datetime)
     field(:last_error, :string)
     field(:category, :string)
+    # The model's own one-line description of the image. For a rejection it is
+    # the only surviving record of what was deleted (the files are gone), and
+    # the first thing to look at when a member says the verdict was wrong.
+    field(:reason, :string)
+    # The ballot behind a contested verdict: %{"total", "unsafe", "opinions"}
+    # (nil when one safe answer decided alone, which is nearly every upload).
+    # Set on rejections *and* on suspicions the vote cleared — the near misses
+    # are what the prompt gets tuned against.
+    field(:votes, :map)
     field(:model, :string)
     field(:scanned_at, :utc_datetime)
 

@@ -941,12 +941,14 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   # The AI image scan removed an image. No actor (it was the machine); the
   # what-was-removed wording shares its single source with the email
-  # (VutuvWeb.UserHelpers.image_kind_label/2).
+  # (VutuvWeb.UserHelpers.image_kind_label/2). The line says outright that a
+  # machine decided and can be wrong — a bare "your image was removed" reads
+  # as a person's judgement on the member.
   defp notification_text(%{kind: "image_rejected"} = n) do
     what = UserHelpers.image_kind_label(n[:image_kind], Gettext.get_locale(VutuvWeb.Gettext))
 
     gettext(
-      "Our automated image review removed %{what}. Only family-friendly images suitable for a work environment are allowed.",
+      "An AI, not a person, removed %{what}: it judged the image not family-friendly enough for a work environment. It can be wrong, so reply to our email if you disagree.",
       what: what
     )
   end
