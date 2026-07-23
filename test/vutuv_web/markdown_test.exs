@@ -53,6 +53,41 @@ defmodule VutuvWeb.MarkdownTest do
     refute html =~ "\\"
   end
 
+  # A balanced `(disambiguation)` inside the URL stays in the href while the
+  # trailing sentence punctuation and the extra unbalanced `)` are re-appended
+  # as literal text after the anchor — the exact split the trailing-punctuation
+  # walk must preserve after being made linear (findings F1/F9).
+  test "keeps balanced parens in the href but leaves trailing punctuation and unbalanced ) out" do
+    url = "https://en.wikipedia.org/wiki/Elixir_(programming_language)"
+    html = render("see #{url}), done")
+
+    # the full URL — including the ")" that balances its own "(" — is the href
+    assert html =~ ~s(href="#{url}")
+    # the extra ")" and the "," land after the anchor as plain text
+    assert html =~ "</a>),"
+  end
+
+  # Findings F1/F9: `http://a` followed by a long unbroken run of trailing
+  # punctuation is matched as one token by `[^\s<>]+`. It must be emitted
+  # verbatim (over the length cap → not autolinked) and, either way, render in a
+  # fraction of a second rather than driving a quadratic loop.
+  test "leaves a pathological over-long autolink candidate as literal text, fast" do
+    body = "http://a" <> String.duplicate(".", 20_000)
+
+    {micros, html} = :timer.tc(fn -> render(body) end)
+
+    refute html =~ "<a "
+    assert html =~ "http://a"
+    assert micros < 1_000_000
+  end
+
+  test "still autolinks a normal long-ish URL under the cap" do
+    url = "https://example.com/" <> String.duplicate("a", 300)
+    html = render("read #{url} please")
+
+    assert html =~ ~s(href="#{url}")
+  end
+
   describe "bare URL display" do
     # The visible text of the first autolinked anchor.
     defp link_text(text) do
