@@ -16,6 +16,15 @@ defmodule Vutuv.Tags.Tag do
   # this rule) report the same thing.
   @web_address_message "must not be a web or email address"
 
+  # The other way a value names no topic: it carries no letter and no number at
+  # all ("-", ".", "???"). Nobody searches for it, nobody else can share it, and
+  # the slug it generates — the tag page's URL — is just as empty. Three such
+  # tags exist from before this rule; they stay, but no new one is minted or
+  # linked (see `wordless?/1` and the guard in `create_or_link_tag/2`).
+  @wordless_message "must contain at least one letter or number"
+
+  @word_char ~r/[\p{L}\p{N}]/u
+
   schema "tags" do
     field(:slug, :string)
     field(:name, :string)
@@ -65,6 +74,7 @@ defmodule Vutuv.Tags.Tag do
     # edit form) against a stray line break or tab sneaking in.
     |> validate_format(:name, ~r/^[^\r\n\t]+$/, message: "must be a single line")
     |> validate_web_address()
+    |> validate_wordless()
     |> validate_length(:slug, max: 60)
     |> validate_length(:name, max: 255)
     |> unique_constraint(:slug)
@@ -81,6 +91,27 @@ defmodule Vutuv.Tags.Tag do
       if WebAddress.link_only?(name), do: [name: @web_address_message], else: []
     end)
   end
+
+  defp validate_wordless(changeset) do
+    validate_change(changeset, :name, fn :name, name ->
+      if wordless?(name), do: [name: @wordless_message], else: []
+    end)
+  end
+
+  @doc """
+  Whether `name` carries no letter and no number at all, so it can't be a tag:
+  `"-"`, `"."`, `"???"`, `"!!!"` — punctuation and symbols only. A name with a
+  single letter or digit anywhere in it is fine, so `"C#"`, `"C++"` and
+  `"3D"` stay ordinary tags.
+
+  Both refusal points call this: the `changeset/2` heads (so no path mints such
+  a tag) and `create_or_link_tag/2` (so none of the three legacy ones can be
+  linked either — that path resolves an existing tag by lookup and would never
+  build a changeset). Callers that quietly skip unusable values rather than
+  erroring — the add-tag preview, post tags — filter on it too.
+  """
+  def wordless?(name) when is_binary(name), do: not Regex.match?(@word_char, name)
+  def wordless?(_), do: true
 
   defp maybe_gen_slug(changeset) do
     case {get_field(changeset, :slug), get_field(changeset, :name)} do
@@ -114,10 +145,11 @@ defmodule Vutuv.Tags.Tag do
   `Vutuv.Tags.parse_tag_names/1`, which honours quotes; the JSON API reaches
   here with a single already-whole name.
 
-  A value that is nothing but a web or email address is refused outright
-  (`Vutuv.WebAddress`), before the lookup: the changeset head already keeps a
-  new one from being minted, and this also blocks *linking* one of the URL tags
-  a few profiles created before the rule existed.
+  A value that names no topic is refused outright, before the lookup: one that
+  is nothing but a web or email address (`Vutuv.WebAddress`), and one with no
+  letter or number in it at all (`wordless?/1`). The changeset heads already
+  keep such a tag from being minted; refusing here also blocks *linking* the
+  handful of URL and punctuation tags that exist from before these rules.
   """
   def create_or_link_tag(changeset, %{"value" => value} = params) do
     # Strip the hashtag form before both the existing-tag lookup and the build,
@@ -126,12 +158,12 @@ defmodule Vutuv.Tags.Tag do
     value = normalize_value(value)
     params = Map.put(params, "value", value)
 
-    if WebAddress.link_only?(value) do
-      # The error lands on :tag_id, where the tags editor renders the other
-      # refusals (at the ceiling, reserved honor tag) too.
-      add_error(changeset, :tag_id, @web_address_message)
-    else
-      link_or_build_tag(changeset, value, params)
+    # The errors land on :tag_id, where the tags editor renders the other
+    # refusals (at the ceiling, reserved honor tag) too.
+    cond do
+      WebAddress.link_only?(value) -> add_error(changeset, :tag_id, @web_address_message)
+      wordless?(value) -> add_error(changeset, :tag_id, @wordless_message)
+      true -> link_or_build_tag(changeset, value, params)
     end
   end
 

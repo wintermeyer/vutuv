@@ -185,6 +185,45 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "a tag needs at least one letter or number" do
+    # "-", "." and "????????" are real tags from before this rule. They name no
+    # topic, nobody searches for them, and the slug they generate — the tag
+    # page's URL — is just as empty. The three rows stay; no new one appears.
+    test "punctuation-only names are refused, and mint no tag" do
+      user = insert(:user)
+
+      for value <- ["-", ".", "???", "!!!", "..."] do
+        assert {:error, %Ecto.Changeset{} = changeset} = Tags.add_user_tag(user, value)
+        assert "must contain at least one letter or number" in errors_on(changeset).tag_id
+      end
+
+      assert Repo.aggregate(Tag, :count) == 0
+    end
+
+    test "a punctuation tag minted before the rule can't be linked either" do
+      legacy = insert(:tag, name: "-", slug: "-")
+
+      assert {:error, changeset} = Tags.add_user_tag(insert(:user), "-")
+      assert "must contain at least one letter or number" in errors_on(changeset).tag_id
+      refute Repo.exists?(from(ut in UserTag, where: ut.tag_id == ^legacy.id))
+    end
+
+    test "one letter or digit anywhere is enough" do
+      user = insert(:user)
+
+      for name <- ["C#", "C++", "3D", "F#"] do
+        assert {:ok, _} = Tags.add_user_tag(user, name)
+      end
+    end
+
+    test "the tag changeset refuses the name on every other path too" do
+      changeset = Tag.changeset(%Tag{}, %{"value" => "???"})
+
+      refute changeset.valid?
+      assert "must contain at least one letter or number" in errors_on(changeset).name
+    end
+  end
+
   describe "a profile is capped at max_user_tags/0 tags" do
     # A few members overdid the tag count, so a profile may hold at most
     # `max_user_tags/0` tags. The cap bites only when tags *change*: an existing

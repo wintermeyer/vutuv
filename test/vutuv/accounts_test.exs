@@ -173,6 +173,17 @@ defmodule Vutuv.AccountsTest do
       refute Repo.get_by(User, first_name: "Test")
     end
 
+    test "rejects a registration whose tag list holds a punctuation-only tag" do
+      conn = build_conn()
+      attrs = Map.put(@valid_registration, "tag_list", "Elixir Kochen ???")
+
+      assert {:error, changeset} = Accounts.register_user(conn, attrs)
+
+      assert "\"???\" needs at least one letter or number to be a tag." in errors_on(changeset).tag_list
+
+      refute Repo.get_by(User, first_name: "Test")
+    end
+
     test "accepts a registration exactly at the tag ceiling" do
       conn = build_conn()
       max = Vutuv.Tags.max_user_tags()

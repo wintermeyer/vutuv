@@ -67,7 +67,10 @@ defmodule VutuvWeb.ErrorHelpers do
       dgettext_noop(
         "errors",
         "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
-      )
+      ),
+      # Vutuv.Tags.Tag, a name of punctuation only.
+      dgettext_noop("errors", "must contain at least one letter or number"),
+      dgettext_noop("errors", "\"%{tag}\" needs at least one letter or number to be a tag.")
     ]
   end
 end
