@@ -43,8 +43,13 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       assert has_element?(live, ~s([data-notification-row][data-kind="username"]))
-      assert render(live) =~ "Your vutuv username is @#{user.username}"
-      # The row opens the page that can change it.
+
+      assert render(live) =~
+               "Your automatically assigned vutuv username is @#{user.username}"
+
+      # The full URL is spelled out, so the sentence still works outside the
+      # row (a screenshot, a copy-paste) - and the row links there too.
+      assert render(live) =~ VutuvWeb.Endpoint.url() <> "/settings/security"
       assert render(live) =~ ~s(href="/settings/security")
     end
 

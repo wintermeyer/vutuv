@@ -164,14 +164,24 @@ registration PIN, on a page that is trivial to skip:
   `User.changeset/2` with the existing visibility defaults, so the page can
   never store something more public than the Basics form would.
 
-`users.welcome_completed_at` is the single gate. `SessionController` redirects
-there only when the PIN form's `"registration"` context **and** a `nil` stamp
-agree; `show/2` sends anyone else home; both buttons ("Save and continue" and
-"Skip for now") stamp it, and `Accounts.complete_welcome/2` writes the address,
-the user fields and the stamp in one transaction. A member who simply navigates
-away is never asked again — everything on the page lives under /settings, and
-nagging on every login is exactly what this page is designed not to do. The
-migration backfilled the stamp for every account that predates the page.
+**The URL is one-shot.** Two things must agree for the page to render: the
+account never finished it (`users.welcome_completed_at` is NULL) *and* this
+session was routed here by the confirming PIN (the `:welcome_pending` session
+key, set in `SessionController` next to the redirect). So it opens once,
+survives a reload and a failed submit, and every later visit — a bookmark, a
+typed URL, a second session — redirects to the member's **profile** (not
+`Home.path/1`: someone who already follows people would otherwise land on the
+feed). A logged-out visitor never reaches the controller; the settings
+pipeline's RequireLogin sends them to the start page.
+
+`SessionController` routes there only when the PIN form's `"registration"`
+context and the `nil` stamp agree; both buttons ("Save and continue" and "Skip
+for now") stamp it, `Accounts.complete_welcome/2` writes the address, the user
+fields and the stamp in one transaction, and the controller drops the session
+key. A member who navigates away is never asked again — everything on the page
+lives under /settings, and nagging on every login is exactly what this page is
+designed not to do. The migration backfilled the stamp for every account that
+predates the page.
 
 ## Job-search exclusion list / Ausschlussliste (issue #938)
 

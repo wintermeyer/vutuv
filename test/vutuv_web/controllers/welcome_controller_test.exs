@@ -18,6 +18,29 @@ defmodule VutuvWeb.WelcomeControllerTest do
 
   defp reload(user), do: Repo.get!(User, user.id)
 
+  # The only way onto the page: register, then confirm the PIN the way the
+  # confirmation form does (context "registration"). That login is what opens
+  # the one-shot URL; a plain login never does.
+  defp register_and_confirm(conn) do
+    n = System.unique_integer([:positive])
+
+    attrs = %{
+      "emails" => %{"0" => %{"value" => "welcome#{n}@example.com"}},
+      "first_name" => "Welcome#{n}",
+      "tag_list" => @registration_tags
+    }
+
+    conn = post(conn, ~p"/new_registration", user: attrs)
+    pin = sent_pin()
+
+    conn =
+      submit_with_csrf(conn, ~p"/login", %{
+        "session" => %{"pin" => pin, "context" => "registration"}
+      })
+
+    {conn, Repo.get!(User, Plug.Conn.get_session(conn, :user_id))}
+  end
+
   describe "arriving from the registration PIN" do
     test "the confirming PIN lands on the welcome page", %{conn: conn} do
       attrs = %{
@@ -43,9 +66,32 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert redirected_to(conn) == ~p"/#{user}"
     end
 
-    test "a member who already left the page behind is sent home by it", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+    test "a member who already left the page behind is sent to their profile", %{conn: conn} do
+      {conn, user} = register_and_confirm(conn)
       {:ok, _} = Accounts.complete_welcome(user)
+
+      conn = get(conn, ~p"/system/welcome")
+
+      assert redirected_to(conn) == ~p"/#{user}"
+    end
+
+    # The URL is one-shot: a member who never finished it still cannot open it
+    # again from a bookmark or another session, because only the confirming
+    # PIN opens it.
+    test "a later visit is sent to the profile even with the page unfinished", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = get(conn, ~p"/system/welcome")
+
+      assert redirected_to(conn) == ~p"/#{user}"
+      assert Accounts.needs_welcome?(reload(user))
+    end
+
+    # ... and the profile, not the feed: a member who follows people would
+    # otherwise be bounced to /feed.
+    test "the redirect goes to the profile, not the feed", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:follow, follower: user, followee: insert(:activated_user))
 
       conn = get(conn, ~p"/system/welcome")
 
@@ -61,7 +107,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
 
   describe "the form" do
     test "asks for the location and the job search", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
+      {conn, _user} = register_and_confirm(conn)
 
       body = conn |> get(~p"/system/welcome") |> html_response(200)
 
@@ -86,7 +132,13 @@ defmodule VutuvWeb.WelcomeControllerTest do
     # vutuv is a German site, and a plain English render would hide an
     # untranslated island on the very first page a new member sees.
     test "renders in German for a German browser", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
+      # German from the very first request: the locale plug stores what it
+      # resolved in the session (and sign-up stores it on the account), so a
+      # German visitor has to arrive German rather than switch afterwards.
+      {conn, _user} =
+        conn
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> register_and_confirm()
 
       body =
         conn
@@ -111,7 +163,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     # real (the issue #759 class of bug). This one submits the token the page
     # actually rendered, through the form's own action, with CSRF enforced.
     test "the rendered form survives CSRF enforcement", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
       conn = get(conn, ~p"/system/welcome")
 
       conn =
@@ -124,7 +176,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
 
     test "a city on its own is a complete answer", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       conn =
         post(conn, ~p"/system/welcome", %{
@@ -141,7 +193,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
 
     test "a postal code on its own is enough", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       post(conn, ~p"/system/welcome", %{
         "address" => %{"description" => "Work", "zip_code" => "28195"}
@@ -154,7 +206,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
 
     test "a country on its own is enough", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       post(conn, ~p"/system/welcome", %{"address" => %{"country" => "Germany"}})
 
@@ -162,7 +214,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
 
     test "an empty location stores no address at all and is not an error", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       conn =
         post(conn, ~p"/system/welcome", %{
@@ -182,7 +234,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
 
   describe "saving the job search" do
     test "stores the status, the salary floor and the workplace preference", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       post(conn, ~p"/system/welcome", %{
         "user" => %{
@@ -205,7 +257,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
 
     test "the member can open their availability up to everyone right here", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       post(conn, ~p"/system/welcome", %{
         "user" => %{"employment_status" => "open", "employment_status_visibility" => "everyone"}
@@ -215,7 +267,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
 
     test "a workplace preference without a status is dropped", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       post(conn, ~p"/system/welcome", %{
         "user" => %{"employment_status" => "", "desired_workplace_type" => "remote"}
@@ -225,7 +277,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
 
     test "a rejected field re-renders the whole form and leaves the page open", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       conn =
         post(conn, ~p"/system/welcome", %{
@@ -242,7 +294,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
 
   describe "skipping" do
     test "saves nothing but closes the page for good", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
 
       conn =
         post(conn, ~p"/system/welcome", %{
@@ -264,7 +316,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
 
     test "a second submit cannot reopen the page", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, user} = register_and_confirm(conn)
       {:ok, _} = Accounts.complete_welcome(user)
 
       conn = post(conn, ~p"/system/welcome", %{"address" => %{"city" => "Bremen"}})

@@ -367,6 +367,7 @@ defmodule VutuvWeb.SessionController do
 
         Accounts.login(conn, user)
         |> Accounts.delete_pin_cookie()
+        |> maybe_open_welcome(path)
         |> maybe_welcome_flash(path, context, user)
         |> redirect(to: path)
 
@@ -408,6 +409,16 @@ defmodule VutuvWeb.SessionController do
   # screen, so the toast is skipped here — VutuvWeb.WelcomeController raises the
   # same greeting when it hands them on to their profile, where the onboarding
   # checklist it points at actually lives.
+  # The welcome page is a **one-shot URL**: it opens only for the login that
+  # routes there, and this session marker is the key. Typing /system/welcome
+  # later - or in another session - finds no key and is sent to the profile,
+  # so the page cannot be revisited once it has been left behind. It survives
+  # a reload and a failed submit (both stay in this session), and
+  # VutuvWeb.WelcomeController drops it the moment the page is done.
+  defp maybe_open_welcome(conn, path) do
+    if path == ~p"/system/welcome", do: put_session(conn, :welcome_pending, true), else: conn
+  end
+
   defp maybe_welcome_flash(conn, path, context, user) do
     if path == ~p"/system/welcome" do
       conn

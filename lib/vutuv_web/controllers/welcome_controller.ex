@@ -23,11 +23,16 @@ defmodule VutuvWeb.WelcomeController do
       salary: nobody), so nothing this page stores is more public than what the
       Basics form would store.
 
-  `welcome_completed_at` is the one gate: `show/2` sends anyone who already has
-  it home, and both buttons ("Save" and "Skip") stamp it, so the page is seen at
-  most once. A member who simply navigates away never sees it again either —
-  everything on it is editable under /settings, and nagging on every login is
-  exactly what this page is designed not to do.
+  **The URL is one-shot.** Two things must agree for the page to render: the
+  account has never finished it (`users.welcome_completed_at` is NULL) *and*
+  this session was routed here by the confirming PIN (the `:welcome_pending`
+  session key, set by `VutuvWeb.SessionController`). So it opens once, survives
+  a reload and a failed submit, and every later visit — a bookmark, a typed
+  URL, another session — lands on the member's profile instead. A logged-out
+  visitor never reaches the controller at all: the settings pipeline's
+  RequireLogin sends them to the start page. Everything on the page stays
+  editable under /settings, and nagging on every login is exactly what this
+  page is designed not to do.
   """
   use VutuvWeb, :controller
 
@@ -42,7 +47,7 @@ defmodule VutuvWeb.WelcomeController do
   def show(conn, _params) do
     user = conn.assigns[:user]
 
-    if Accounts.needs_welcome?(user) do
+    if open?(conn, user) do
       render_form(
         conn,
         user,
@@ -50,7 +55,7 @@ defmodule VutuvWeb.WelcomeController do
         User.changeset(user, %{})
       )
     else
-      redirect(conn, to: Home.path(user))
+      redirect(conn, to: ~p"/#{user}")
     end
   end
 
@@ -60,10 +65,15 @@ defmodule VutuvWeb.WelcomeController do
     user = conn.assigns[:user]
 
     cond do
-      not Accounts.needs_welcome?(user) -> redirect(conn, to: Home.path(user))
+      not open?(conn, user) -> redirect(conn, to: ~p"/#{user}")
       params["skip"] -> save(conn, user, %{})
       true -> save(conn, user, Map.take(params, ["address", "user"]))
     end
+  end
+
+  # Never finished, and this session was sent here by the confirming PIN.
+  defp open?(conn, user) do
+    Accounts.needs_welcome?(user) and get_session(conn, :welcome_pending) == true
   end
 
   defp save(conn, user, params) do
@@ -74,6 +84,9 @@ defmodule VutuvWeb.WelcomeController do
         # the profile-completion checklist, which lives on the page this
         # redirect finally lands on.
         conn
+        # The one-shot key is spent: from here the URL redirects like any
+        # other visit.
+        |> delete_session(:welcome_pending)
         |> put_flash(:info, UserHelpers.registration_flash(updated))
         |> redirect(to: Home.path(updated))
 

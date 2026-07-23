@@ -926,13 +926,18 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # The welcome note naming the member's own handle. No actor (nobody did
-  # this to them), and the row links to the page that changes it — which the
-  # sentence names in words too, so it still reads on its own.
+  # The welcome note naming the member's own handle. No actor (nobody did this
+  # to them). It spells out the **full URL** rather than a page name: the note
+  # is the one place a member is told a handle they never chose, so it should
+  # still work when the sentence is read outside the row that links there (a
+  # screenshot, a copy-paste). `url/1` builds it from the endpoint, so every
+  # installation prints its own host, and it stays plain text - the row is
+  # already the link, and an anchor inside an anchor is invalid HTML.
   defp notification_text(%{kind: "username"} = n) do
     gettext(
-      "Your vutuv username is @%{handle}. You can change it any time under Sign-in & security.",
-      handle: n.username
+      "Your automatically assigned vutuv username is @%{handle}. You can change it any time at %{url}.",
+      handle: n.username,
+      url: url(~p"/settings/security")
     )
   end
 

@@ -15094,8 +15094,8 @@ msgstr "Verfügbarkeit"
 #: lib/vutuv_web/live/notification_live/index.ex
 #, elixir-autogen, elixir-format
 msgid ""
-"Your vutuv username is @%{handle}. You can change it any time under "
-"Sign-in & security."
+"Your automatically assigned vutuv username is @%{handle}. You can change "
+"it any time at %{url}."
 msgstr ""
-"Ihr vutuv-Username ist @%{handle}. Sie können ihn jederzeit unter "
-"Anmeldung & Sicherheit ändern."
+"Ihr automatisch zugewiesener vutuv-Username ist @%{handle}. Sie können "
+"ihn jederzeit unter %{url} ändern."
