@@ -449,6 +449,38 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert nested_entry["id"] == nested.id
     assert nested_entry["in_reply_to_id"] == focus.id
     refute doc["thread_truncated"]
+
+    # Each entry also carries how deep it hangs, so a reader gets the tree
+    # without walking the parent pointers itself.
+    assert [0, 1, 2] == Enum.map(doc["thread"], & &1["depth"])
+
+    # And the depth is what the human-readable formats indent by: a heading
+    # level per step in Markdown, two spaces per step in plain text.
+    author = nested_entry["author"]
+    assert rendered.md =~ "##### [#{author}]"
+    assert rendered.txt =~ "\n    * #{author} ·"
+  end
+
+  # A thread branches, and the branch has to survive into the agent formats the
+  # same way it does on the page: depth-first, so a reply follows the post it
+  # answers rather than whatever was written last (issue #1027).
+  test "post permalink: a branching conversation reaches every format in reading order", %{
+    user: user,
+    post: post
+  } do
+    {:ok, alpha} = Vutuv.Posts.create_reply(user, post, %{"body" => "The alpha drift branch."})
+    {:ok, beta} = Vutuv.Posts.create_reply(user, post, %{"body" => "The beta drift branch."})
+    {:ok, late} = Vutuv.Posts.create_reply(user, alpha, %{"body" => "The late drift answer."})
+
+    rendered = formats_for("/drift_tester/posts/#{late.id}")
+
+    for fact <- ["The alpha drift branch.", "The beta drift branch.", "The late drift answer."],
+        do: assert_fact_everywhere(rendered, fact)
+
+    doc = Jason.decode!(rendered.json)
+
+    assert [post.id, alpha.id, late.id, beta.id] == Enum.map(doc["thread"], & &1["id"])
+    assert [0, 1, 2, 1] == Enum.map(doc["thread"], & &1["depth"])
   end
 
   test "post permalink: a book review's facts reach every format", %{user: user} do

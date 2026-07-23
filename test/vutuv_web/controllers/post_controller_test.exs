@@ -24,6 +24,15 @@ defmodule VutuvWeb.PostControllerTest do
 
   defp pad(int), do: String.pad_leading(Integer.to_string(int), 2, "0")
 
+  # Where `text` first shows up in the rendered page — how the thread tests
+  # assert reading order without parsing the whole card tree.
+  defp position(html, text) do
+    case :binary.match(html, text) do
+      {at, _} -> at
+      :nomatch -> flunk("#{inspect(text)} is not on the page")
+    end
+  end
+
   describe "the review card on the permalink" do
     # Stores a served cover version for `review` under a throwaway uploads
     # tree, so the card renders the <img> (and its source credit) instead of
@@ -626,9 +635,66 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ ~s(id="thread-focus")
       assert html =~ "data-thread-scroll"
 
-      # The sibling branch answers the root, not the card right above it, so
-      # its own "Replying to" banner names the real parent.
-      assert html =~ "Replying to"
+      # Every card hangs under the post it answers, so no card needs a
+      # "Replying to" banner to correct the nesting.
+      refute html =~ "Replying to"
+    end
+
+    # The production report behind issue #1027: in a long branching thread the
+    # newest reply was written hours after a busy branch point, so a flat
+    # chronological chain put it under a stranger's post and it read as
+    # answering that one.
+    test "a branching thread nests each reply under the post it answers", %{conn: conn} do
+      author = insert_activated_user()
+      other = insert_activated_user()
+      root = create_post!(author, %{body: "the conversation root"})
+      {:ok, alpha} = Posts.create_reply(other, root, %{body: "alpha branch"})
+      {:ok, beta} = Posts.create_reply(author, root, %{body: "beta branch"})
+      {:ok, _under_beta} = Posts.create_reply(other, beta, %{body: "answer under beta"})
+      {:ok, late} = Posts.create_reply(author, alpha, %{body: "the late answer"})
+
+      # Only the conversation card, so the page's own <meta> excerpt of the
+      # permalinked post cannot pass for its position in the thread.
+      html =
+        conn
+        |> get(Posts.path(late))
+        |> html_response(200)
+        |> String.split(~s(id="post-thread"), parts: 2)
+        |> List.last()
+
+      # Reading order follows the reply tree: the late answer sits right under
+      # the branch it answers, ahead of the whole beta branch it has nothing to
+      # do with — not at the bottom where the clock would have put it.
+      assert position(html, "alpha branch") < position(html, "the late answer")
+      assert position(html, "the late answer") < position(html, "beta branch")
+      assert position(html, "beta branch") < position(html, "answer under beta")
+
+      # The branch point (root answered twice) keeps the spine running past the
+      # first branch's subtree: an earlier sibling draws the full-height line
+      # plus its own tick, only the last one closes with the rounded elbow.
+      assert html =~ "h-full w-0.5 rounded-full bg-slate-200"
+      assert html =~ "rounded-bl-xl"
+    end
+
+    # Past the indent cap every card sits in its parent's column, so nesting
+    # can no longer show who answered whom — the banner takes that job back.
+    test "a branch below the indent cap names the post it answers", %{conn: conn} do
+      author = insert_activated_user()
+      brancher = insert_activated_user(first_name: "Bea", last_name: "Brancher")
+
+      # root(0) → r1(1) → r2(2), both of whose answers render past the cap.
+      root = create_post!(author, %{body: "capped root"})
+      {:ok, r1} = Posts.create_reply(author, root, %{body: "first step"})
+      {:ok, r2} = Posts.create_reply(brancher, r1, %{body: "second step"})
+      {:ok, _first} = Posts.create_reply(author, r2, %{body: "the first answer"})
+      {:ok, second} = Posts.create_reply(author, r2, %{body: "the second answer"})
+
+      html = html_response(get(conn, Posts.path(second)), 200)
+
+      # The first answer follows its parent card directly, so it needs no
+      # banner; the second one follows its sibling instead and names the
+      # author it really answers.
+      assert html =~ "Replying to @#{brancher.username}"
     end
 
     test "the root's permalink shows its thread without the auto-scroll marker", %{conn: conn} do

@@ -597,22 +597,31 @@ defmodule VutuvWeb.AgentDocs.Text do
     "* #{alt}\n  #{Markdown.image_url(image)}"
   end
 
+  # How deep a thread entry still indents. Past this the entries stay in one
+  # column (the plain-text twin of the HTML indent cap), so a long back-and-forth
+  # does not push its bodies off an 80-column terminal.
+  @thread_indent_cap 4
+
   defp thread_lines(entry) do
+    pad = String.duplicate("  ", min(entry.depth, @thread_indent_cap))
+
     reply_to =
       if entry.in_reply_to_author,
         do:
-          "  " <>
+          pad <>
+            "  " <>
             gettext("In reply to a post by %{name}.", name: entry.in_reply_to_author) <> "\n",
         else: ""
 
-    "* #{entry.author} · #{entry.published_on} · #{entry.url}\n" <>
-      reply_to <> indent_block(entry.body_markdown)
+    pad <>
+      "* #{entry.author} · #{entry.published_on} · #{entry.url}\n" <>
+      reply_to <> indent_block(entry.body_markdown, pad <> "  ")
   end
 
-  defp indent_block(text) do
+  defp indent_block(text, pad) do
     text
     |> String.split("\n")
-    |> Enum.map_join("\n", &("  " <> &1))
+    |> Enum.map_join("\n", &(pad <> &1))
   end
 
   defp section(_title, []), do: nil

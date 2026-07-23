@@ -1819,9 +1819,10 @@ defmodule Vutuv.Posts do
 
   @doc """
   The whole conversation `post` belongs to, as `viewer` sees it: the thread's
-  root plus every visible post of the thread, oldest first — what the
-  permalink page renders (issue #1006). Fetched in one indexed query over the
-  denormalized `post_replies.root_post_id`.
+  root plus every visible post of the thread, in reading order (`thread_order/1`
+  — the reply tree walked depth-first, so every reply follows the post it
+  answers) — what the permalink page renders (issue #1006). Fetched in one
+  indexed query over the denormalized `post_replies.root_post_id`.
 
   Returns `%{posts:, truncated?:}`; `truncated?` says the `:limit` cap
   (default #{@default_conversation_limit}) cut the newest tail. The
@@ -1850,11 +1851,64 @@ defmodule Vutuv.Posts do
     posts =
       (Enum.take(scoped, limit) ++ up ++ [post] ++ list_replies(post, viewer))
       |> Enum.uniq_by(& &1.id)
-      |> Enum.sort_by(&{NaiveDateTime.to_erl(&1.inserted_at), &1.id})
       |> Repo.preload(post_preloads())
+      |> thread_order()
 
     %{posts: posts, truncated?: truncated?}
   end
+
+  @doc """
+  The reply tree `entries` really form: a forest of those same maps (anything
+  carrying a `:post`), each gaining a `:children` list of the entries that
+  answer it. Roots — a top-level post, or a reply whose parent is not among the
+  entries — and siblings come oldest first, so a walk reads as the conversation
+  happened.
+
+  A thread **branches**: one post can be answered many times, and an answer
+  written hours later is not an answer to whatever was posted last. Rendering
+  the conversation as a flat chronological list therefore put replies under
+  strangers' posts (issue #1027). The permalink page and the feed both nest
+  from this, so a reply always sits under its own parent.
+  """
+  def thread_forest(entries) do
+    present = MapSet.new(entries, & &1.post.id)
+
+    {roots, answers} =
+      entries
+      |> Enum.sort_by(&{NaiveDateTime.to_erl(&1.post.inserted_at), &1.post.id})
+      |> Enum.split_with(fn %{post: post} ->
+        parent_id = preloaded_parent_id(post)
+        is_nil(parent_id) or not MapSet.member?(present, parent_id)
+      end)
+
+    by_parent = Enum.group_by(answers, &preloaded_parent_id(&1.post))
+
+    Enum.map(roots, &subtree(&1, by_parent))
+  end
+
+  # A reply is always newer than the post it answers, so the parent links form
+  # a forest and can never cycle — the walk terminates.
+  defp subtree(entry, by_parent) do
+    children = by_parent |> Map.get(entry.post.id, []) |> Enum.map(&subtree(&1, by_parent))
+    Map.put(entry, :children, children)
+  end
+
+  @doc """
+  `posts` in reading order: `thread_forest/1` walked depth-first, so every
+  reply directly follows the post it answers and a branch's answers stay
+  together instead of being interleaved by the clock.
+  """
+  def thread_order(posts) do
+    posts |> Enum.map(&%{post: &1}) |> thread_forest() |> flatten_forest()
+  end
+
+  defp flatten_forest(nodes), do: Enum.flat_map(nodes, &[&1.post | flatten_forest(&1.children)])
+
+  # The id of the post a reply answers, straight off the preloaded `reply_ref`
+  # (an un-preloaded one is a truthy %NotLoaded{}, hence the struct match) —
+  # no query, unlike its `reply_parent_id/1` namesake further down.
+  defp preloaded_parent_id(%Post{reply_ref: %PostReply{parent_post_id: id}}), do: id
+  defp preloaded_parent_id(_post), do: nil
 
   # Where the conversation is anchored: the denormalized root for a normal
   # reply, the post itself for a top-level post. A degraded reply (root

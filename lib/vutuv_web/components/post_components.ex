@@ -31,7 +31,6 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.ReviewCover
@@ -491,7 +490,7 @@ defmodule VutuvWeb.PostComponents do
     # not fall back; only a missing (nil) list falls back to the one-level parent.
     ancestors = assigns.ancestors || one_level_ancestors(assigns.post, assigns.nest_parent)
     assigns = assign(assigns, :ancestors, ancestors)
-    assigns = assign(assigns, :chain, thread_chain_items(assigns))
+    assigns = assign(assigns, :roots, thread_entry_roots(assigns))
 
     ~H"""
     <%= if @ancestors == [] do %>
@@ -509,12 +508,12 @@ defmodule VutuvWeb.PostComponents do
       />
     <% else %>
       <%!-- The reply and the posts it answers, as one conversation: each is a
-      full post card (its own like / repost / bookmark bar), oldest-first, and
-      every reply is nested one step further right under the post it answers —
-      a left-rail, left-padded block per level — so the reply depth reads at a
-      glance the way a threaded comment tree does. --%>
+      full post card (its own like / repost / bookmark bar), and every reply is
+      nested one step further right under the post it answers — a left-rail,
+      left-padded block per level — so the reply depth reads at a glance the way
+      a threaded comment tree does. --%>
       <.thread_chain
-        chain={@chain}
+        nodes={@roots}
         viewer={@viewer}
         surface={@surface}
         conn_or_socket={@conn_or_socket}
@@ -523,12 +522,13 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
-  # The ordered card specs for a threaded conversation: the ancestors (oldest
-  # first, banners off, engagement from the batched map) followed by the leaf
-  # (which keeps its own follow edge, repost line and engagement). Each ancestor's
-  # `entry_id` is derived from the leaf entry so DOM ids stay unique even when the
-  # same post is nested under more than one reply on the page.
-  defp thread_chain_items(assigns) do
+  # The card specs for a threaded conversation, nested into the reply tree they
+  # really form (`Vutuv.Posts.thread_forest/1`): the ancestors (engagement from
+  # the batched map) plus the leaf (which keeps its own follow edge, repost line
+  # and engagement). Each ancestor's `entry_id` is derived from the leaf entry so
+  # DOM ids stay unique even when the same post is nested under more than one
+  # reply on the page.
+  defp thread_entry_roots(assigns) do
     leaf_key = assigns.entry_id || assigns.post.id
 
     ancestors =
@@ -543,18 +543,23 @@ defmodule VutuvWeb.PostComponents do
         }
       end)
 
-    ancestors ++
-      [
-        %{
-          post: assigns.post,
-          engagement: assigns.engagement,
-          viewer_follow: assigns.viewer_follow,
-          reposted_by: assigns.reposted_by,
-          reposters: assigns.reposters,
-          entry_id: assigns.entry_id
-        }
-      ]
+    leaf = %{
+      post: assigns.post,
+      engagement: assigns.engagement,
+      viewer_follow: assigns.viewer_follow,
+      reposted_by: assigns.reposted_by,
+      reposters: assigns.reposters,
+      entry_id: assigns.entry_id
+    }
+
+    (ancestors ++ [leaf]) |> Posts.thread_forest() |> banner_on_roots()
   end
+
+  # A card that hangs under the post it answers needs no "Replying to @handle"
+  # banner — the nesting already says it. A forest root is the other case: its
+  # parent is off the page (or gone), so it keeps the banner naming the author
+  # it answers.
+  defp banner_on_roots(roots), do: Enum.map(roots, &Map.put(&1, :show_reply_banner, true))
 
   # How many levels of a thread visibly indent before the indentation is capped.
   # Beyond this, deeper replies keep stacking in the same column (the connector
@@ -564,112 +569,168 @@ defmodule VutuvWeb.PostComponents do
   # on-screen; letting the indent grow unbounded scrolled a deep thread sideways.
   @thread_indent_cap 2
 
-  # Renders a reply chain as a threaded conversation with a **connector line that
-  # runs from each avatar into the reply's avatar** (like a mail/forum thread):
-  # a vertical drop from the head avatar down its card, then — in the indented
-  # block holding the reply — an elbow that curves from that column into the
-  # reply's avatar. Each reply is indented one `pl-7` step under the post it
-  # answers until the indent is capped (see above), past which replies stay in
-  # the same column and the connector is a straight vertical drop. Recursion draws
-  # the same connector at every level, so the line threads avatar-to-avatar all
-  # the way down. The avatar centre is `1.125rem` in from the card's left (the
-  # `sm` avatar), which is why the connectors sit at `left-[1.125rem]`.
-  attr(:chain, :list, required: true)
+  # Renders a conversation **tree** with a **connector line that runs from each
+  # avatar into the avatars of the replies it got** (like a mail/forum thread):
+  # a vertical drop from a card's avatar down past everything that answers it,
+  # then — in the block holding each answer — an elbow curving from that column
+  # into the answer's avatar. Every reply is indented one `pl-7` step under the
+  # post it answers until the indent is capped (see above), past which replies
+  # stay in the same column and the connector is a straight vertical drop.
+  # The avatar centre is `1.125rem` in from the card's left (the `sm` avatar),
+  # which is why the connectors sit at `left-[1.125rem]`.
+  #
+  # `nodes` are siblings — the conversation's roots at depth 0, one post's
+  # answers below that (`Vutuv.Posts.thread_forest/1`), each carrying its own
+  # `:children`. A post answered **twice** therefore branches: the spine keeps
+  # running past the first answer's whole subtree down into the next one, and
+  # only the last sibling closes it with the rounded elbow. Before this the
+  # chain was flat and chronological, so a reply written after a busy branch
+  # point rendered under a post it had nothing to do with (issue #1027).
+  attr(:nodes, :list, required: true)
   attr(:depth, :integer, default: 0)
   attr(:viewer, :any, default: nil)
   attr(:surface, :atom, required: true)
   attr(:conn_or_socket, :any, required: true)
 
+  attr(:connected?, :boolean,
+    default: false,
+    doc: "these nodes answer a card above them, so each draws its connector back into its column"
+  )
+
   defp thread_chain(assigns) do
     # `@thread_indent_cap` is a module attribute, not an assign, so resolve the
     # "still indenting?" flag here — inside ~H, `@name` would mean assigns.name.
-    assigns = assign(assigns, :indent?, assigns.depth < @thread_indent_cap)
+    assigns =
+      assigns
+      |> assign(:indent?, assigns.depth <= @thread_indent_cap)
+      |> assign(:nodes, mark_last(assigns.nodes))
 
     ~H"""
-    <%= case @chain do %>
-      <% [item | rest] -> %>
-        <div
-          id={Map.get(item, :focus?) && "thread-focus"}
-          data-thread-scroll={Map.get(item, :scroll?)}
-          class={[
-            "relative",
-            # The permalink's highlighted subject (issue #1006): the tint is an
-            # absolutely positioned ::before so the chain's connector geometry
-            # (avatar columns, elbows) is untouched; z-0 opens a stacking
-            # context so -z-10 stays in front of the page card's background.
-            Map.get(item, :focus?) &&
-              "z-0 scroll-mt-24 before:absolute before:-inset-x-3 before:-inset-y-2 before:-z-10 before:rounded-xl before:bg-brand-50/70 before:ring-1 before:ring-brand-200 before:content-[''] dark:before:bg-brand-900/20 dark:before:ring-brand-800"
-          ]}
+    <div
+      :for={{node, first?, last?} <- @nodes}
+      class={[
+        @connected? && "relative pt-3",
+        @connected? && @indent? && "pl-7",
+        # Separate roots: unrelated conversations (a thread whose links a
+        # deleted post broke), so they get air instead of a connector.
+        !@connected? && !first? && "mt-4"
+      ]}
+    >
+      <%!-- The connector into this answer's avatar, drawn in the column of the
+      card it answers (left-[1.125rem] of this block, which the pl-7 does not
+      move). The last answer closes the spine with an elbow curving into its
+      avatar's left edge at the avatar's vertical centre (pt-3 + 1.125rem =
+      1.875rem down); an earlier answer instead lets the spine run the full
+      height of its subtree — down to the next sibling — and taps into its own
+      avatar with a short horizontal tick at that same 1.875rem. Capped depth
+      puts the answer in the same column as its parent, so the connector is a
+      straight vertical drop through the padding. --%>
+      <span
+        :if={@connected? && @indent? && last?}
+        class="absolute left-[1.125rem] top-0 h-[1.875rem] w-2.5 rounded-bl-xl border-b-2 border-l-2 border-slate-200 dark:border-slate-700"
+        aria-hidden="true"
+      >
+      </span>
+      <span
+        :if={@connected? && @indent? && !last?}
+        class="absolute left-[1.125rem] top-0 h-full w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
+        aria-hidden="true"
+      >
+      </span>
+      <span
+        :if={@connected? && @indent? && !last?}
+        class="absolute left-[1.125rem] top-[1.875rem] h-0.5 w-2.5 rounded-full bg-slate-200 dark:bg-slate-700"
+        aria-hidden="true"
+      >
+      </span>
+      <span
+        :if={@connected? && !@indent?}
+        class="absolute left-[1.125rem] top-0 h-3 w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
+        aria-hidden="true"
+      >
+      </span>
+      <div
+        id={Map.get(node, :focus?) && "thread-focus"}
+        data-thread-scroll={Map.get(node, :scroll?)}
+        class={[
+          "relative",
+          # The permalink's highlighted subject (issue #1006): the tint is an
+          # absolutely positioned ::before so the chain's connector geometry
+          # (avatar columns, elbows) is untouched; z-0 opens a stacking
+          # context so -z-10 stays in front of the page card's background.
+          Map.get(node, :focus?) &&
+            "z-0 scroll-mt-24 before:absolute before:-inset-x-3 before:-inset-y-2 before:-z-10 before:rounded-xl before:bg-brand-50/70 before:ring-1 before:ring-brand-200 before:content-[''] dark:before:bg-brand-900/20 dark:before:ring-brand-800"
+        ]}
+      >
+        <%!-- Drops from this avatar's bottom (top-9) to the card's bottom; the
+        elbow below continues it into the answer's avatar. Only when this card
+        was answered. Height is an explicit `calc(100% - top)`, not `top-9` +
+        `bottom-0`: an empty absolutely-positioned box sized only by
+        `top`/`bottom` (auto height) collapses to zero on iOS/mobile Safari, so
+        the whole thread line vanished on phones while the explicit-height
+        elbows survived. An explicit height renders identically everywhere. --%>
+        <span
+          :if={node.children != []}
+          class="absolute left-[1.125rem] top-9 h-[calc(100%-2.25rem)] w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
+          aria-hidden="true"
         >
-          <%!-- Drops from this avatar's bottom (top-9) to the card's bottom; the
-          elbow below continues it into the reply's avatar. Only when a reply
-          follows this card. Height is an explicit `calc(100% - top)`, not
-          `top-9` + `bottom-0`: an empty absolutely-positioned box sized only by
-          `top`/`bottom` (auto height) collapses to zero on iOS/mobile Safari, so
-          the whole thread line vanished on phones while the explicit-height
-          elbows survived. An explicit height renders identically everywhere. --%>
-          <span
-            :if={rest != []}
-            class="absolute left-[1.125rem] top-9 h-[calc(100%-2.25rem)] w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
-            aria-hidden="true"
-          >
-          </span>
-          <.post_card
-            post={item.post}
-            viewer={@viewer}
-            viewer_follow={item.viewer_follow}
-            engagement={item.engagement}
-            reposted_by={item.reposted_by}
-            reposters={item.reposters}
-            entry_id={item.entry_id}
-            surface={@surface}
-            conn_or_socket={@conn_or_socket}
-            mode={Map.get(item, :mode, :preview)}
-            show_reply_banner={Map.get(item, :show_reply_banner, false)}
-          />
-        </div>
-        <div :if={rest != []} class={["relative pt-3", @indent? && "pl-7"]}>
-          <%!-- The connector into the reply's avatar. Indented: an elbow curving
-          from the parent column (left-[1.125rem]) right into the reply avatar's
-          left edge, at the reply avatar's vertical centre (pt-3 + 1.125rem =
-          1.875rem down). Capped: the reply is in the same column, so a straight
-          vertical drop to its avatar. --%>
-          <span
-            :if={@indent?}
-            class="absolute left-[1.125rem] top-0 h-[1.875rem] w-2.5 rounded-bl-xl border-b-2 border-l-2 border-slate-200 dark:border-slate-700"
-            aria-hidden="true"
-          >
-          </span>
-          <span
-            :if={!@indent?}
-            class="absolute left-[1.125rem] top-0 h-3 w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
-            aria-hidden="true"
-          >
-          </span>
-          <.thread_chain
-            chain={rest}
-            depth={@depth + 1}
-            viewer={@viewer}
-            surface={@surface}
-            conn_or_socket={@conn_or_socket}
-          />
-        </div>
-      <% [] -> %>
-    <% end %>
+        </span>
+        <.post_card
+          post={node.post}
+          viewer={@viewer}
+          viewer_follow={node.viewer_follow}
+          engagement={node.engagement}
+          reposted_by={node.reposted_by}
+          reposters={node.reposters}
+          entry_id={node.entry_id}
+          surface={@surface}
+          conn_or_socket={@conn_or_socket}
+          mode={Map.get(node, :mode, :preview)}
+          show_reply_banner={reply_banner?(node, @connected?, @indent?, first?)}
+        />
+      </div>
+      <.thread_chain
+        :if={node.children != []}
+        nodes={node.children}
+        depth={@depth + 1}
+        connected?={true}
+        viewer={@viewer}
+        surface={@surface}
+        conn_or_socket={@conn_or_socket}
+      />
+    </div>
     """
+  end
+
+  # A card names the post it answers only when its position alone does not say
+  # it. While the thread still indents, the nesting says it. Past
+  # @thread_indent_cap every card shares its parent's column, so only the
+  # *first* answer — the one rendered directly below its parent — reads
+  # unambiguously and every later sibling (which follows the previous branch's
+  # whole subtree) gets its banner back. A forest root keeps it either way: its
+  # parent is off the page.
+  defp reply_banner?(node, connected?, indent?, first?) do
+    Map.get(node, :show_reply_banner, false) or (connected? and not indent? and not first?)
+  end
+
+  # Each node paired with whether it is the first and the last of its siblings —
+  # what the connector geometry above branches on.
+  defp mark_last(nodes) do
+    last = length(nodes) - 1
+    Enum.with_index(nodes, fn node, i -> {node, i == 0, i == last} end)
   end
 
   @doc """
   The permalink page's whole-conversation rendering (issue #1006): every post
-  of `posts` (the thread oldest first, `Vutuv.Posts.list_thread/3`) as one
-  connected chain — the same look as a feed thread row. The permalinked
+  of `posts` (the thread in reading order, `Vutuv.Posts.list_thread/3`) as one
+  connected conversation — the same look as a feed thread row. The permalinked
   `focus_id` post renders in `:full` mode, tinted as the page's subject and,
   when it has context above it, marked for the arrival auto-scroll
-  (`data-thread-scroll`, wired in app.js). The chain is chronological, not a
-  tree, so a reply that does not answer the card right above it keeps its own
-  "Replying to @handle" banner — that is how a branch point stays readable.
+  (`data-thread-scroll`, wired in app.js). Every reply hangs under the post it
+  actually answers (`Vutuv.Posts.thread_forest/1`), so only a card whose parent
+  is off the page keeps its own "Replying to @handle" banner.
   """
-  attr(:posts, :list, required: true, doc: "the whole conversation, oldest first")
+  attr(:posts, :list, required: true, doc: "the whole conversation, in reading order")
   attr(:focus_id, :string, required: true, doc: "the permalinked post's id")
   attr(:viewer, :any, default: nil)
 
@@ -683,17 +744,21 @@ defmodule VutuvWeb.PostComponents do
   attr(:conn_or_socket, :any, required: true)
 
   def thread_conversation(assigns) do
-    assigns = assign(assigns, :chain, conversation_chain(assigns))
+    assigns = assign(assigns, :roots, conversation_roots(assigns))
 
     ~H"""
-    <.thread_chain chain={@chain} viewer={@viewer} surface={:flat} conn_or_socket={@conn_or_socket} />
+    <.thread_chain nodes={@roots} viewer={@viewer} surface={:flat} conn_or_socket={@conn_or_socket} />
     """
   end
 
-  defp conversation_chain(%{posts: posts} = assigns) do
-    [nil | posts]
-    |> Enum.zip(posts)
-    |> Enum.map(fn {prev, post} ->
+  defp conversation_roots(%{posts: posts} = assigns) do
+    # `posts` is already in reading order, so the head is the card that renders
+    # first — the one case where the focused post has no context above it and
+    # the page must not jump on arrival.
+    top_id = with %{id: id} <- List.first(posts), do: id
+
+    posts
+    |> Enum.map(fn post ->
       focus? = post.id == assigns.focus_id
 
       %{
@@ -705,17 +770,12 @@ defmodule VutuvWeb.PostComponents do
         entry_id: nil,
         mode: if(focus?, do: :full, else: :preview),
         focus?: focus?,
-        scroll?: focus? and prev != nil,
-        # A branch point: this reply does not answer the card right above it,
-        # so its own banner must name the real parent. The first card keeps
-        # its banner too — a degraded chain top is itself a reply.
-        show_reply_banner: prev == nil or thread_parent_id(post) != prev.id
+        scroll?: focus? and post.id != top_id
       }
     end)
+    |> Posts.thread_forest()
+    |> banner_on_roots()
   end
-
-  defp thread_parent_id(%{reply_ref: %PostReply{parent_post_id: id}}), do: id
-  defp thread_parent_id(_post), do: nil
 
   # Fallback when a caller does not compute the full visible chain: the single
   # preloaded `reply_ref` parent (one level), or none when nesting is off (the
