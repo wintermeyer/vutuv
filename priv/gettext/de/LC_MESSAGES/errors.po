@@ -219,10 +219,10 @@ msgstr "„%{tag}“ ist eine Web-Adresse, kein Tag. Bitte beschreiben Sie sich 
 
 #: lib/vutuv_web/views/error_helpers.ex:72
 #, elixir-autogen, elixir-format
-msgid "must contain at least one letter or number"
-msgstr "muss mindestens einen Buchstaben oder eine Zahl enthalten"
+msgid "must not be only punctuation"
+msgstr "darf nicht nur aus Satzzeichen bestehen"
 
 #: lib/vutuv_web/views/error_helpers.ex:73
 #, elixir-autogen, elixir-format
-msgid "\"%{tag}\" needs at least one letter or number to be a tag."
-msgstr "„%{tag}“ braucht mindestens einen Buchstaben oder eine Zahl, um ein Tag zu sein."
+msgid "\"%{tag}\" is only punctuation, not a tag."
+msgstr "„%{tag}“ besteht nur aus Satzzeichen und ist kein Tag."

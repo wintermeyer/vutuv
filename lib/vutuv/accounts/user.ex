@@ -600,7 +600,7 @@ defmodule Vutuv.Accounts.User do
   end
 
   # `Vutuv.Tags.Tag` refuses a name that names no topic — one that is only a web
-  # or email address, and one with no letter or number in it — but
+  # or email address, and one that is only punctuation — but
   # `Accounts.register_user/3` materializes the sign-up tags *after* the insert
   # and ignores per-tag failures, so without this the account would be created
   # with that tag quietly missing. Naming the offending token here lets the
@@ -617,12 +617,12 @@ defmodule Vutuv.Accounts.User do
           tag: address
         )
 
-      wordless = Enum.find(names, &Tag.wordless?/1) ->
+      punctuation = Enum.find(names, &Tag.punctuation_only?/1) ->
         add_error(
           changeset,
           :tag_list,
-          "\"%{tag}\" needs at least one letter or number to be a tag.",
-          tag: wordless
+          "\"%{tag}\" is only punctuation, not a tag.",
+          tag: punctuation
         )
 
       true ->

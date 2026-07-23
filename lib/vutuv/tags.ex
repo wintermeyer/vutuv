@@ -86,13 +86,13 @@ defmodule Vutuv.Tags do
   single row the profile would end up with (the form's save path dedupes the
   same way, so preview and outcome always agree). A name `add_user_tag/2` would
   refuse drops out for the same reason — one that is nothing but a web or email
-  address, or one with no letter or number in it — since promising it here
-  would be a lie the submit then takes back.
+  address, or one that is only punctuation — since promising it here would be a
+  lie the submit then takes back.
   """
   def preview_tag_names(value) do
     case value
          |> parse_tag_names()
-         |> Enum.reject(&(WebAddress.link_only?(&1) or Tag.wordless?(&1)))
+         |> Enum.reject(&(WebAddress.link_only?(&1) or Tag.punctuation_only?(&1)))
          |> Enum.uniq_by(&String.downcase/1) do
       [] ->
         []

@@ -549,12 +549,16 @@ owner's footer stays the "Manage" bridge into `/settings/tags`.
 ## A tag has to name something
 
 Two shapes of tag name are refused, both by `Vutuv.Tags.Tag`: a **web address**
-(see the section below, which the tagline shares) and a **wordless** name —
-`Tag.wordless?/1`, no letter and no number anywhere in it (`"-"`, `"."`, `"???"`).
-A wordless name names no topic, nobody searches for it, and the slug it
-generates — the tag page's URL — carries nothing either; one letter or digit
-anywhere is enough, so `C#`, `C++` and `3D` are ordinary tags. Three such rows
-exist from before the rule (2026-07-23) and stay; no new one is minted.
+(see the section below, which the tagline shares) and a name that is
+**punctuation only** — `Tag.punctuation_only?/1`, nothing in it but `\p{P}`,
+`\p{Z}` and `\p{C}` (`"-"`, `"."`, `"???"`). Such a name names no topic, nobody
+searches for it, and the slug it generates — the tag page's URL — carries
+nothing either. One character of content anywhere is enough, and a **symbol
+counts as content**, so `C#`, `C++`, `3D` and an emoji tag like `☕` are all
+ordinary tags (an emoji is a name people use and search for, unlike a run of
+question marks; it slugifies to nothing, so `Vutuv.SlugHelpers` gives the page a
+short-sha slug). Three punctuation rows exist from before the rule
+(2026-07-23) and stay; no new one is minted.
 
 Both refusals sit in two places, because the two entry shapes differ: the
 `changeset/2` heads (nothing can *mint* such a tag) and `create_or_link_tag/2`

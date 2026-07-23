@@ -217,10 +217,10 @@ msgstr ""
 
 #: lib/vutuv_web/views/error_helpers.ex:72
 #, elixir-autogen, elixir-format
-msgid "must contain at least one letter or number"
+msgid "must not be only punctuation"
 msgstr ""
 
 #: lib/vutuv_web/views/error_helpers.ex:73
 #, elixir-autogen, elixir-format
-msgid "\"%{tag}\" needs at least one letter or number to be a tag."
+msgid "\"%{tag}\" is only punctuation, not a tag."
 msgstr ""
