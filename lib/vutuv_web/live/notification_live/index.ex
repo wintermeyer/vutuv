@@ -74,7 +74,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # `kinds:` option keeps. "all" passes nil (every source).
   @filters %{
     "all" => nil,
-    "posts" => ~w(reply thread like),
+    "posts" => ~w(reply thread mention like),
     "people" => ~w(follower connection endorsement),
     "other" =>
       ~w(organization_role moderation image_rejected report_protection handle_change cv_update
@@ -413,6 +413,17 @@ defmodule VutuvWeb.NotificationLive.Index do
           :if={@group.kind == "like" and @n[:post_preview]}
           data-post-preview="true"
           href={~p"/#{@current_user}/posts/#{@n.post_id}"}
+          html={@n.post_preview.html}
+          quote_lines={@quote_lines}
+          class="mt-1.5"
+        />
+
+        <%!-- A mention quotes the post that named the reader. Its permalink
+        lives under the post's own author, not under the reader. --%>
+        <.quoted_post
+          :if={@group.kind == "mention" and @n[:post_preview]}
+          data-post-preview="true"
+          href={~p"/#{@n.post_preview.post.user}/posts/#{@n.post_preview.post.id}"}
           html={@n.post_preview.html}
           quote_lines={@quote_lines}
           class="mt-1.5"
@@ -767,7 +778,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # Event kinds that share the brand badge colour, so the class string lives
   # in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-  @brand_kinds ~w(follower reply thread connection report_protection organization_role handle_change cv_update)
+  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update)
 
   defp kind_classes("endorsement"),
     do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -790,6 +801,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("reply"), do: "↩"
   # A reply elsewhere in a thread the recipient writes in.
   defp kind_glyph("thread"), do: "⤷"
+  # Being named by @handle. Shares the glyph with the (rare, "More"-tab)
+  # handle-change kind: both are about a handle, and the badge's title/sr-only
+  # label tells them apart where the glyph alone would not.
+  defp kind_glyph("mention"), do: "@"
   defp kind_glyph("like"), do: "♥"
   # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
   defp kind_glyph("connection"), do: "🤝"
@@ -809,6 +824,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("endorsement"), do: gettext("Endorsement")
   defp kind_label("reply"), do: gettext("Reply")
   defp kind_label("thread"), do: gettext("Thread reply")
+  defp kind_label("mention"), do: gettext("Mention")
   defp kind_label("like"), do: gettext("Like")
   defp kind_label("connection"), do: gettext("Connection")
   defp kind_label("moderation"), do: gettext("Moderation")
@@ -906,6 +922,17 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
+  # A mention opens the post that named the reader. That post belongs to the
+  # *actor*, not to the reader, so the permalink is built under the actor's
+  # handle — unlike reply/like, which point at the reader's own post.
+  defp notification_target(%{kind: "mention"} = n, _viewer) do
+    if is_binary(n[:post_id]) and is_binary(n[:actor_param]) do
+      ~p"/#{n.actor_param}/posts/#{n.post_id}"
+    else
+      actor_target(n)
+    end
+  end
+
   # A thread event opens the new reply itself (on the replier's profile) —
   # the thing the recipient has not read yet.
   defp notification_target(%{kind: "thread"} = n, _viewer) do
@@ -937,6 +964,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   # stored) so it translates with the viewer's locale. Unknown kinds fall
   # back to the pushed text.
   defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
+
+  defp notification_text(%{kind: "mention"}), do: gettext("mentioned you in a post.")
 
   # Live-pushed thread events land here (no group context yet): one actor.
   defp notification_text(%{kind: "thread"}), do: thread_text(1)

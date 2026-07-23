@@ -6,10 +6,11 @@ locked down, and what happens to stored mentions when a member renames.
 A mention is **plain text** `@handle` inside a Markdown body — nothing
 structured is stored. `VutuvWeb.Markdown` turns it into a profile link only at
 **render time**, by looking the handle up in the database. So the same text can
-mean different people over time, and three concerns have to agree on *what
-counts as a mention*. They share one definition in **`Vutuv.Mentions`**, which
-owns the entity grammar (`entity_regex/0`, read back by `VutuvWeb.Markdown` so
-the renderer can never drift from it).
+mean different people over time, and four concerns have to agree on *what
+counts as a mention*: rendering, existence validation, rename propagation and
+the notification below. They share one definition in **`Vutuv.Mentions`**,
+which owns the entity grammar (`entity_regex/0`, read back by
+`VutuvWeb.Markdown` so the renderer can never drift from it).
 
 Only the **local** `@handle` form is a vutuv handle. A fediverse `@user@host`
 handle and a `#hashtag` are never touched, and a handle inside a code span/block
@@ -56,6 +57,20 @@ block everyone, forever.
   `Mentions.without_existence_check/1` — otherwise a stray `@token` would
   silently drop the row.
 
+## Being mentioned is a notification
+
+A post that names you is news, wherever it sits. `Vutuv.Posts` resolves a saved
+body through `Mentions.mentioned_users/2` and reconciles one `post_mentions`
+row per named member; `Vutuv.Activity` reads that table as the feed's
+`"mention"` kind. Why the row exists at all, what the write and read sides each
+filter out, and the `reply` > `mention` > `thread` precedence are in
+[realtime.md](realtime.md) — the short version is that an ILIKE over every post
+on every unread count was not an option, so the scan happens once at save time.
+
+Only **members** are resolved. Organizations hold handles in the same namespace
+and the renderer links them, but they have no notification feed, so `@acme_gmbh`
+records nothing.
+
 ## Availability (anti-hijack)
 
 A handle is only claimable if `Mentions.mentioned_in_posts?/1` is false — it is
@@ -95,9 +110,10 @@ is safe.
 
 ## The notification
 
-`handle_change_notifications` is the **one** notification kind with its own
-table. The rest of the [notifications feed](realtime.md) is derived from
-current-state tables at read time, but "@old → @new" is a point-in-time fact the
+`handle_change_notifications` is, with `post_mentions` above, one of **two**
+notification kinds with their own table. The rest of the
+[notifications feed](realtime.md) is derived from current-state tables at read
+time, but "@old → @new" is a point-in-time fact the
 current state can't reconstruct, so it is persisted (recipient, actor, old +
 new handle, the affected `post_ids`). `Vutuv.Activity` reads it like any other
 source (`handle_change_items/3`, `count_handle_changes/2`, a `latest_event_at`
@@ -107,11 +123,16 @@ posts (the newest five, plus an "and N more" count).
 
 ## Key files & tests
 
-- `lib/vutuv/mentions.ex` — the chokepoint (grammar, rewrite, validation, scan).
+- `lib/vutuv/mentions.ex` — the chokepoint (grammar, rewrite, validation, scan,
+  `mentioned_users/2`).
+- `lib/vutuv/posts.ex` — `sync_mentions/1`, the `post_mentions` reconcile.
+- `lib/vutuv/posts/post_mention.ex` — the resolved index row.
+- `lib/vutuv/activity.ex` — `mention_events/1` + the `"mention"` feed source.
 - `lib/vutuv/accounts.ex` — `update_username/2` + notification creation.
 - `lib/vutuv/accounts/handle_change_notification.ex` — the durable row.
-- `lib/vutuv_web/live/notification_live/index.ex` — the `handle_change` rendering.
+- `lib/vutuv_web/live/notification_live/index.ex` — the `mention` and
+  `handle_change` renderings.
 - `test/vutuv/mentions_test.exs`, `mention_existence_test.exs`,
-  `handle_availability_test.exs`,
+  `mention_notifications_test.exs`, `handle_availability_test.exs`,
   `accounts/handle_change_propagation_test.exs`,
   `vutuv_web/live/handle_change_notification_test.exs`.

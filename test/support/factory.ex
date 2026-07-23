@@ -267,6 +267,17 @@ defmodule Vutuv.Factory do
   """
   def unique_tag_name(base \\ "tag"), do: "#{base}-#{System.unique_integer([:positive])}"
 
+  @doc """
+  A per-call unique username a test can write into a body as `@handle`.
+
+  The `user_factory` sequence mints `user-1`, which is **not** a mentionable
+  handle: the mention grammar is `[A-Za-z0-9_]+`, so `@user-1` parses as the
+  handle `user`. A test about mentions therefore has to set the username
+  itself — and, for the same deadlock reason as `unique_tag_name/1`, must not
+  hardcode a literal that another async module also inserts.
+  """
+  def unique_username(base \\ "member"), do: "#{base}_#{System.unique_integer([:positive])}"
+
   def user_tag_factory do
     %Vutuv.Tags.UserTag{}
   end
