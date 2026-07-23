@@ -15,8 +15,8 @@ defmodule VutuvWeb.NotificationLive.Groups do
     * **thread** events of the same thread - "Anna and Ben replied in a
       thread you posted in."
 
-  Direct replies and every rarer kind (moderation, CV updates, handle
-  changes, ...) stay one row per event - each carries its own content.
+  Direct replies, mentions and every rarer kind (moderation, CV updates,
+  handle changes, ...) stay one row per event - each carries its own content.
 
   Everything here is a pure function over the item list, so the LiveView
   recomputes sections wholesale on every change (load more, live push,

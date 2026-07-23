@@ -62,8 +62,8 @@ The layout is split into `root.html.heex` (document shell) and `app.html.heex`
 (chrome), shared by classic controller pages and LiveViews.
 
 Notifications are real data **derived at read time** from the existing event
-tables (followers, endorsements, connections — mutual follows —, replies, likes;
-retroactively, no notifications table); each entry links to what it reports (the
+tables (followers, endorsements, connections — mutual follows —, replies,
+mentions, likes; retroactively); each entry links to what it reports (the
 post, the actor's profile), and a reply or like entry **quotes the post it is
 about** so the feed is scannable at a glance: a like quotes the liked post, a
 reply quotes **both** the member's own post and the reply itself (each truncated
@@ -108,8 +108,38 @@ permalink and quote it; same-day events of one thread merge into one grouped
 row. The write side (`Vutuv.Posts.create_reply/3` via `broadcast_reply/2`)
 pushes the same event live to every participant's badge.
 
-The only stored state is the `users.notifications_read_at` read marker behind
-the unread badge.
+**Being named** is its own kind (`"mention"`): a post whose body says
+`@handle` notifies that member, wherever the post sits. Before it existed a
+mention reached you only by accident — if the post happened to answer one of
+yours ("reply") or to land in a thread you had written in ("thread"); a mention
+in a standalone post, or in a thread you are not part of, notified nobody.
+
+This is the one feed kind that cannot be derived from current state cheaply: a
+mention is plain text in `posts.body`, so deriving it would mean an ILIKE over
+every post on every unread count — and that count runs on every page render for
+the shell badge. So `Vutuv.Posts` resolves the body once at save time (through
+`Vutuv.Mentions.mentioned_users/2`, the same grammar the renderer links with)
+and **reconciles a `post_mentions` row per named member**; the feed reads that
+table like any other source. Create, reply and every edit re-derive the set, so
+adding a name notifies, removing one takes the event away again, and the body
+stays the source of truth — the table is only a resolved index.
+
+Left out at **write** time, because they belong to the post and are re-derived
+on the edit that changes them: the author (naming yourself is not news) and
+anyone the post is not visible to. Left out at **read** time, because they
+change outside the post: a block either way (like thread events), and the
+precedence rule below. Mentions of an **organization** handle notify nobody —
+organizations share the handle namespace but have no feed.
+
+**One post, one row.** The three post kinds are ordered `reply` > `mention` >
+`thread`: an answer to your own post stays a "reply" even when it also names
+you, and a mention supersedes the quieter "thread" event for the same reply. So
+a single post never produces two notifications for the same reader.
+
+The only stored state derived-feed-wise is the `users.notifications_read_at`
+read marker behind the unread badge; `post_mentions` and
+`handle_change_notifications` are the two event tables written for a feed kind
+rather than read from one that already existed.
 
 ### The notifications page (2026-07 redesign)
 

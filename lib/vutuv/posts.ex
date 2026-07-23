@@ -45,6 +45,7 @@ defmodule Vutuv.Posts do
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Mentions
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Pages
   alias Vutuv.PostImageStore
@@ -53,6 +54,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostLike
+  alias Vutuv.Posts.PostMention
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostRepost
   alias Vutuv.Posts.PostReview
@@ -115,6 +117,8 @@ defmodule Vutuv.Posts do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
+          # Everyone the body names by @handle is told they were named.
+          sync_mentions(post)
           # Follow-only federation: a federating author's public post goes
           # out to their remote followers (no-op for everyone else).
           Vutuv.Fediverse.federate_new_post(post)
@@ -162,6 +166,7 @@ defmodule Vutuv.Posts do
           post = preload_post(post)
           broadcast_new_post(post)
           broadcast_reply(parent, post)
+          sync_mentions(post)
           Vutuv.Fediverse.federate_new_post(post)
           reconcile_screenshot(post)
           ReviewCovers.reconcile(post)
@@ -220,6 +225,9 @@ defmodule Vutuv.Posts do
         # (the owner's self-service round; see Vutuv.Moderation).
         Vutuv.Moderation.content_edited(updated)
         updated = preload_post(updated)
+        # The edit can add a name, drop one, or (by changing the audience)
+        # move a named member out of the post's reach: re-derive the set.
+        sync_mentions(updated)
         # Remote copies follow the edit (Update) — or, if the audience just
         # closed, leave public view (Delete, best effort).
         Vutuv.Fediverse.federate_post_update(updated)
@@ -2469,6 +2477,74 @@ defmodule Vutuv.Posts do
     end
 
     :ok
+  end
+
+  # Reconcile the `post_mentions` rows behind the feed's "mention" kind against
+  # what the body says now, and push the live event to everyone newly named.
+  # Runs on create, on reply and on every edit, so adding a name notifies,
+  # removing one takes the event away again, and the set is always what the
+  # current body says — the body stays the source of truth, this table only the
+  # resolved index (see `Vutuv.Mentions`).
+  #
+  # Two members are deliberately left out here rather than in the feed query:
+  # the author (naming yourself is not news) and anyone the post is not visible
+  # to, since an audience the author can change belongs to the post and is
+  # re-derived by this very function on the edit that changes it. Blocks are
+  # the opposite case — they change outside the post — so the feed query filters
+  # those, exactly as thread events do; the live push below has to repeat that
+  # filter because there is no query in its path.
+  defp sync_mentions(%Post{} = post) do
+    wanted =
+      post.body
+      |> Mentions.mentioned_users(post.user_id)
+      |> Enum.filter(&visible_to?(post, &1))
+
+    existing = Repo.all(from(m in PostMention, where: m.post_id == ^post.id, select: m.user_id))
+    added = Enum.reject(wanted, &(&1.id in existing))
+
+    drop_mentions(post, existing -- Enum.map(wanted, & &1.id))
+    insert_mentions(post, added)
+    Enum.each(added, &notify_mentioned(post, &1))
+    :ok
+  end
+
+  defp drop_mentions(_post, []), do: :ok
+
+  defp drop_mentions(%Post{} = post, user_ids) do
+    Repo.delete_all(
+      from(m in PostMention, where: m.post_id == ^post.id and m.user_id in ^user_ids)
+    )
+
+    :ok
+  end
+
+  defp insert_mentions(_post, []), do: :ok
+
+  defp insert_mentions(%Post{} = post, users) do
+    now = NaiveDateTime.utc_now(:second)
+
+    rows =
+      Enum.map(
+        users,
+        &%{
+          id: UUIDv7.generate(),
+          post_id: post.id,
+          user_id: &1.id,
+          inserted_at: now,
+          updated_at: now
+        }
+      )
+
+    # A concurrent save of the same post (a double-submitted edit) must not
+    # raise on the unique index; the row is the same fact either way.
+    Repo.insert_all(PostMention, rows, on_conflict: :nothing)
+    :ok
+  end
+
+  defp notify_mentioned(%Post{} = post, %User{} = mentioned) do
+    unless Vutuv.Social.blocked_between?(mentioned.id, post.user_id) do
+      Vutuv.Activity.notify_mention(mentioned.id, post.user, post.id)
+    end
   end
 
   @doc """

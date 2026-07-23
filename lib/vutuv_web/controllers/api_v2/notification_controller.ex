@@ -3,8 +3,8 @@ defmodule VutuvWeb.ApiV2.NotificationController do
   The member's notification feed (`GET /api/2.0/notifications`, cursor-
   paginated, with the unread count) and the read marker (`POST
   /api/2.0/notifications/read`). The feed is `Vutuv.Activity`'s derived
-  feed: followers, endorsements, connections, replies, thread answers, likes,
-  moderation notices — each entry names its kind and actor.
+  feed: followers, endorsements, connections, replies, thread answers,
+  mentions, likes, moderation notices — each entry names its kind and actor.
 
   Notifications span the social areas, so they ride on the social scopes:
   `social:read` to read, `social:write` to mark read.

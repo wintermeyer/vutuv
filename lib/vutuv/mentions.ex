@@ -4,11 +4,16 @@ defmodule Vutuv.Mentions do
 
   A mention is plain text `@handle` inside a Markdown body — nothing structured
   is stored, it becomes a profile link only at render time
-  (`VutuvWeb.Markdown`). Three concerns therefore have to agree on *what counts
+  (`VutuvWeb.Markdown`). Four concerns therefore have to agree on *what counts
   as a mention*, so they share one definition here:
 
     * **Rendering** — `VutuvWeb.Markdown` links each local `@handle` and calls
       `entity_regex/0` so the grammar can never drift from this module.
+    * **Notification** — being named in a post is news, so `Vutuv.Posts`
+      resolves a saved body through `mentioned_users/2` and reconciles the
+      `post_mentions` rows behind the feed's `"mention"` kind. That table is
+      the one place a mention *is* stored structurally, and only as a resolved
+      index: the body stays the source of truth.
     * **Validation** — a saved body may only mention handles that already exist
       (`validate_mentions_exist/2`). Without this a bad actor could seed
       `@wanted` into a post to *reserve* it: the availability rule below then
@@ -116,6 +121,30 @@ defmodule Vutuv.Mentions do
   end
 
   def mentions?(_, _), do: false
+
+  @doc """
+  The **members** `text` names, as `%User{}` structs, excluding `except_id`.
+
+  The resolution behind the `"mention"` notification kind (`Vutuv.Posts`
+  reconciles `post_mentions` from it). Organizations share the handle
+  namespace but have no notification feed, so only the member table is
+  queried — a `@acme_gmbh` in a body resolves to nobody here, even though the
+  renderer links it.
+  """
+  def mentioned_users(text, except_id \\ nil) do
+    case local_handles(text) do
+      [] ->
+        []
+
+      handles ->
+        from(u in User, where: u.username in ^handles)
+        |> reject_user(except_id)
+        |> Repo.all()
+    end
+  end
+
+  defp reject_user(query, nil), do: query
+  defp reject_user(query, id), do: where(query, [u], u.id != ^id)
 
   ## Rewrite ----------------------------------------------------------------
 

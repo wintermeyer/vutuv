@@ -5,6 +5,7 @@ defmodule VutuvWeb.NotificationLiveTest do
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import Vutuv.PostsHelpers
 
   alias Vutuv.Prefs
   alias Vutuv.Prefs.Cache
@@ -776,6 +777,42 @@ defmodule VutuvWeb.NotificationLiveTest do
       html = render(live)
       assert html =~ "Grace Hopper"
       assert html =~ ~s(href="/#{follower.username}")
+    end
+  end
+
+  describe "mention rows" do
+    test "a post naming the reader renders a mention row linking that post", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      author = insert(:activated_user, first_name: "Joe", last_name: "Armstrong")
+
+      post =
+        create_post!(author, %{body: "Ask @#{user.username} about the schema, they know it."})
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert length(row_ids(html, "mention")) == 1
+      assert html =~ "Joe Armstrong"
+      assert html =~ "mentioned you in a post."
+
+      # The quoted post and the row both open the permalink under the *author*
+      # — it is their post, not the reader's, which is what sets this kind
+      # apart from a reply or a like.
+      assert has_element?(live, ~s([data-post-preview]), "they know it")
+
+      assert has_element?(
+               live,
+               ~s([data-post-preview] a[href="/#{author.username}/posts/#{post.id}"])
+             )
+    end
+
+    test "the posts filter tab keeps mention rows", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      create_post!(insert(:activated_user), %{body: "Hello @#{user.username}."})
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+
+      assert length(row_ids(render(live), "mention")) == 1
     end
   end
 
