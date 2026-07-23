@@ -14,6 +14,10 @@ defmodule Vutuv.PostsTest do
   # the default test user is.
   defp user(attrs \\ []), do: insert(:activated_user, attrs)
 
+  # `thread_forest/1` reads each post's preloaded `reply_ref`; the structs the
+  # create helpers hand back don't carry one.
+  defp reload(%Post{} = post), do: Repo.preload(post, :reply_ref, force: true)
+
   # Timeline ordering ties at second precision; shift a post into the past so
   # order assertions stay deterministic.
   defp backdate_post!(post, seconds) do
@@ -1927,20 +1931,36 @@ defmodule Vutuv.PostsTest do
 
   describe "list_thread/3" do
     # The permalink page renders the whole conversation (issue #1006): the
-    # thread's root plus every visible reply, oldest first, from ANY post in it.
-    test "returns the whole conversation oldest-first from any post in it" do
+    # thread's root plus every visible reply, in reading order (the reply tree
+    # walked depth-first), from ANY post in it.
+    test "returns the whole conversation in reading order from any post in it" do
       root = create_post!(user(), %{body: "thread root"})
       {:ok, mid} = Posts.create_reply(user(), root, %{body: "mid"})
       {:ok, branch_a} = Posts.create_reply(user(), mid, %{body: "branch a"})
       {:ok, branch_b} = Posts.create_reply(user(), mid, %{body: "branch b"})
       {:ok, leaf} = Posts.create_reply(user(), branch_a, %{body: "leaf"})
 
-      expected = [root.id, mid.id, branch_a.id, branch_b.id, leaf.id]
+      # branch_a's own answer follows branch_a, ahead of the older sibling
+      # branch_b — a conversation is a tree, not a timeline.
+      expected = [root.id, mid.id, branch_a.id, leaf.id, branch_b.id]
 
       for post <- [root, branch_b, leaf] do
         assert %{posts: posts, truncated?: false} = Posts.list_thread(post, nil)
         assert Enum.map(posts, & &1.id) == expected
       end
+    end
+
+    # The production bug behind this: a reply written hours after a busy branch
+    # point landed at the bottom of a chronological list, so the card above it
+    # was a stranger's post and it read as answering that one.
+    test "a reply follows the post it answers, not the newest post before it" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, early} = Posts.create_reply(user(), root, %{body: "early branch"})
+      {:ok, other} = Posts.create_reply(user(), root, %{body: "other branch"})
+      {:ok, late} = Posts.create_reply(user(), early, %{body: "the late answer"})
+
+      assert %{posts: posts} = Posts.list_thread(late, nil)
+      assert Enum.map(posts, & &1.id) == [root.id, early.id, late.id, other.id]
     end
 
     test "a post with no replies is a one-post thread" do
@@ -1989,6 +2009,42 @@ defmodule Vutuv.PostsTest do
       # The cap keeps the oldest posts; the permalinked post itself is always
       # unioned back in so the page never loses its own subject.
       assert Enum.map(posts, & &1.id) == [root.id, r1.id, r3.id]
+    end
+  end
+
+  describe "thread_forest/1" do
+    test "nests every entry under the entry it answers, siblings oldest first" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, first} = Posts.create_reply(user(), root, %{body: "first branch"})
+      {:ok, second} = Posts.create_reply(user(), root, %{body: "second branch"})
+      {:ok, deep} = Posts.create_reply(user(), first, %{body: "under the first"})
+
+      entries = for post <- Enum.shuffle([root, first, second, deep]), do: %{post: reload(post)}
+
+      assert [%{post: %Post{id: root_id}, children: children}] = Posts.thread_forest(entries)
+      assert root_id == root.id
+
+      assert [
+               %{
+                 post: %Post{id: first_id},
+                 children: [%{post: %Post{id: deep_id}, children: []}]
+               },
+               %{post: %Post{id: second_id}, children: []}
+             ] = children
+
+      assert [first_id, deep_id, second_id] == [first.id, deep.id, second.id]
+    end
+
+    test "an entry whose parent is not present becomes its own root" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, orphan} = Posts.create_reply(user(), root, %{body: "parent is off the page"})
+
+      # Only the reply is present (the feed page it renders on never loaded the
+      # parent), so it heads its own tree instead of vanishing.
+      assert [%{post: %Post{id: id}, children: []}] =
+               Posts.thread_forest([%{post: reload(orphan)}])
+
+      assert id == orphan.id
     end
   end
 

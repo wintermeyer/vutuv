@@ -192,22 +192,36 @@ Replies to replies are allowed.
 **A post is rendered by one shared component everywhere**
 (`VutuvWeb.PostComponents`): `post_thread_entry/1` shows a reply as a **nested
 conversation** — the posts it answers are stacked **above** it as full cards
-(each keeping its own like/repost/bookmark bar), oldest-first, with a
-**connector line that runs from each avatar into the reply's avatar** (a
-vertical drop down the card, then an elbow curving into the next avatar) and
-every reply **indented one step further right** under the post it answers, so
-the thread of a whole multi-post, multi-author conversation reads at a glance,
-instead of the feed's old flat "Replying to @handle" text banner.
+(each keeping its own like/repost/bookmark bar), with a **connector line that
+runs from each avatar into the avatars of the replies it got** (a vertical drop
+down the card, then an elbow curving into the next avatar) and every reply
+**indented one step further right** under the post it answers, so the thread of
+a whole multi-post, multi-author conversation reads at a glance, instead of the
+feed's old flat "Replying to @handle" text banner.
+
+**A conversation is a tree, not a timeline** (issue #1027).
+`Vutuv.Posts.thread_forest/1` nests the visible posts by their parent pointer
+(roots and siblings oldest first) and `thread_order/1` is its depth-first walk —
+the reading order every surface uses. Rendering a branching thread flat and
+chronologically put a reply written hours after a busy branch point under a
+stranger's post, where it read as answering that one. A post answered twice
+therefore branches: the spine keeps running past the first answer's whole
+subtree down into the next, and only the last sibling closes it with the
+rounded elbow.
 
 Indentation is capped at 2 levels (`@thread_indent_cap`) so a deep thread can't
 scroll a phone sideways; past the cap replies stay in the same column and the
-connector is a straight vertical drop.
+connector is a straight vertical drop. There the nesting can no longer say who
+answered whom, so the "Replying to @handle" banner comes back for every card
+that is *not* the first answer under its parent (`reply_banner?/4`) — a forest
+root, whose parent is off the page, keeps it at any depth.
 
 On the feed and the profile Posts section `Vutuv.Posts.collapse_threads/1` folds
 each visible chain: it drops the ancestors' own standalone rows (so a middle
-post is no longer shown twice) and hands each surviving leaf its ordered
-`:ancestors`, so however many posts or authors a thread spans it renders once;
-the archive and saved lists fall back to nesting the single direct parent.
+post is no longer shown twice) and hands each surviving leaf its
+`:ancestors`, which the component nests into the same tree, so however many
+posts, authors or branches a thread spans it renders once; the archive and saved
+lists fall back to nesting the single direct parent.
 
 All read the same (each a single card of flat `divide-y` rows).
 
@@ -216,22 +230,21 @@ like/reply quotes.
 
 **The permalink page renders the whole conversation** (issue #1006):
 `Vutuv.Posts.list_thread/3` fetches the thread's root plus every visible post
-of the thread in one `root_post_id` lookup, oldest first (capped at 200 with a
-"conversation is longer" note; the permalinked post, its surviving ancestor
-chain and its direct replies are always unioned back in, which is also the
-degraded floor once a deleted root has nilified the thread's root links), and
-`PostComponents.thread_conversation/1` renders it as one feed-style chain. The
-permalinked post is the tinted `:full`-mode card (`#thread-focus`; an
-absolutely positioned `::before` so the connector geometry is untouched) and,
-when it has context above, app.js scrolls it into view on arrival
-(`data-thread-scroll`). The chain is chronological, not a tree, so a reply
-that does not answer the card directly above it keeps its own "Replying to
-@handle" banner — that is how branch points read. A post with no thread
-renders standalone exactly as before. The action bar carries a live reply
-counter, and the parent's author gets a derived "replied to your post"
-notification (self-replies excluded). The agent-format siblings mirror the
-page: `PostDoc` carries the conversation as `thread` (each entry with its
-parent pointer), the md/txt renderers as a "Conversation" section.
+of the thread in one `root_post_id` lookup (capped at 200 with a "conversation
+is longer" note; the permalinked post, its surviving ancestor chain and its
+direct replies are always unioned back in, which is also the degraded floor
+once a deleted root has nilified the thread's root links), returns them in
+`thread_order/1` reading order, and `PostComponents.thread_conversation/1`
+renders it as one feed-style conversation. The permalinked post is the tinted
+`:full`-mode card (`#thread-focus`; an absolutely positioned `::before` so the
+connector geometry is untouched) and, when it has context above, app.js scrolls
+it into view on arrival (`data-thread-scroll`). A post with no thread renders
+standalone exactly as before. The action bar carries a live reply counter, and
+the parent's author gets a derived "replied to your post" notification
+(self-replies excluded). The agent-format siblings mirror the page: `PostDoc`
+carries the conversation as `thread` in the same reading order (each entry with
+its parent pointer **and** its nesting `depth`), which the md renderer turns
+into a heading level per step and the txt renderer into two spaces per step.
 
 A reply **outlives its parent**: where the parent is gone the card falls back to
 a banner (which names the account as `@handle`, never the clear name) that

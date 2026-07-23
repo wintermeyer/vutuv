@@ -13,6 +13,15 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
+  # Where `text` first shows up in the rendered feed — how the thread tests
+  # assert reading order without parsing the whole card tree.
+  defp position(html, text) do
+    case :binary.match(html, text) do
+      {at, _} -> at
+      :nomatch -> flunk("#{inspect(text)} is not on the page")
+    end
+  end
+
   describe "engagement query batching" do
     test "feed engagement queries do not grow with post count", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -170,6 +179,33 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "#post-actions-post-#{leaf.id}-like")
       assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{mid.id}-like")
       assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{root.id}-like")
+    end
+
+    test "a branching thread nests each reply under the post it answers", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      # One root answered twice; the newest reply belongs to the *first* branch.
+      {:ok, root} = Posts.create_post(user, %{body: "the branch root"})
+      {:ok, alpha} = Posts.create_reply(friend, root, %{body: "alpha branch"})
+      {:ok, beta} = Posts.create_reply(friend, root, %{body: "beta branch"})
+      {:ok, _} = Posts.create_reply(user, beta, %{body: "answer under beta"})
+      {:ok, _} = Posts.create_reply(user, alpha, %{body: "the late answer"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      feed_html = live |> element("#feed-posts") |> render()
+
+      # The collapsed thread renders as the tree it is, not as a timeline: the
+      # newest reply hangs under the alpha branch it answers, ahead of the whole
+      # beta branch (issue #1027).
+      assert position(feed_html, "alpha branch") < position(feed_html, "the late answer")
+      assert position(feed_html, "the late answer") < position(feed_html, "beta branch")
+      assert position(feed_html, "beta branch") < position(feed_html, "answer under beta")
+
+      # A card whose parent is nested right above it says so by its position;
+      # the redundant "Replying to @handle" banner stays off.
+      refute feed_html =~ "Replying to"
     end
 
     test "a deep thread caps its indentation so it can't scroll a phone sideways", %{conn: conn} do

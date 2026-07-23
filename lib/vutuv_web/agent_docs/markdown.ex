@@ -903,13 +903,19 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   @doc false
   def image_url(image), do: image.urls[:feed] || image.urls |> Map.values() |> List.first()
 
+  # A reply is a subsection of the post it answers, so the entry's heading level
+  # carries its nesting depth (`###` at the top of the thread, one `#` deeper
+  # per level, floored at Markdown's `######`) — the document form of the
+  # indentation the HTML page draws.
   defp thread_block(entry) do
     reply_to =
       entry.in_reply_to_author &&
         "> " <> gettext("In reply to a post by %{name}.", name: entry.in_reply_to_author)
 
+    heading = String.duplicate("#", min(3 + entry.depth, 6))
+
     [
-      "### [#{md_text(entry.author)}](#{entry.url}) · #{entry.published_on}",
+      "#{heading} [#{md_text(entry.author)}](#{entry.url}) · #{entry.published_on}",
       reply_to,
       entry.body_markdown
     ]

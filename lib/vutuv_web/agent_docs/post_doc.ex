@@ -62,10 +62,11 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # a second query and can never drift from the list.)
       reply_count: length(replies),
       replies: Enum.map(replies, &reply_entry/1),
-      # The whole conversation the HTML permalink renders (issue #1006),
-      # oldest first; every entry carries its parent pointer so the tree is
-      # recoverable. `replies` above stays the one-level list for API
-      # consumers that relied on it.
+      # The whole conversation the HTML permalink renders (issue #1006), in
+      # the same reading order (the reply tree depth-first, issue #1027);
+      # every entry carries its parent pointer and its nesting depth, so the
+      # tree is recoverable without re-deriving it. `replies` above stays the
+      # one-level list for API consumers that relied on it.
       thread: thread_entries(thread),
       thread_truncated: thread_truncated?,
       # The public engagement counters the HTML action bar shows to everyone.
@@ -121,11 +122,15 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     }
   end
 
-  # The conversation entries, oldest first. `in_reply_to_author` resolves only
-  # inside the thread (a deleted or invisible parent stays nil), so the
-  # markdown/text renderers can name a branch's parent without another lookup.
+  # The conversation entries, in `Posts.list_thread/3` reading order.
+  # `in_reply_to_author` resolves only inside the thread (a deleted or
+  # invisible parent stays nil), so the markdown/text renderers can name a
+  # branch's parent without another lookup, and `depth` is how deep the entry
+  # hangs in the thread — the nesting the HTML page draws, as a number the
+  # other formats can indent by.
   defp thread_entries(posts) do
     authors = Map.new(posts, &{&1.id, UserHelpers.full_name(&1.user)})
+    depths = thread_depths(posts)
 
     Enum.map(posts, fn post ->
       parent_id = post.reply_ref && post.reply_ref.parent_post_id
@@ -137,9 +142,20 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
         author_username: post.user.username,
         published_on: post.published_on,
         body_markdown: post.body,
+        depth: depths[post.id],
         in_reply_to_id: parent_id,
         in_reply_to_author: parent_id && authors[parent_id]
       }
+    end)
+  end
+
+  # One pass suffices: reading order puts every post after the one it answers,
+  # so its parent's depth is already known. A post whose parent is not in the
+  # thread (the root, or a chain broken by a deletion) starts at 0.
+  defp thread_depths(posts) do
+    Enum.reduce(posts, %{}, fn post, depths ->
+      parent_id = post.reply_ref && post.reply_ref.parent_post_id
+      Map.put(depths, post.id, (parent_id && depths[parent_id] && depths[parent_id] + 1) || 0)
     end)
   end
 
