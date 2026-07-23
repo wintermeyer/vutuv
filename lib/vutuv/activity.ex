@@ -13,7 +13,8 @@ defmodule Vutuv.Activity do
   (`follows` — a one-way follow is a "follower" event, a mutual follow a
   "connection"/vernetzt one —, `user_tag_endorsements`, `post_replies` — a
   reply answering the user's post is a "reply" event, a reply elsewhere in a
-  thread the user writes in a "thread" one —, `post_likes`, and the announced
+  thread the user writes in a "thread" one —, `post_mentions` — a post naming
+  the user by `@handle` is a "mention" event —, `post_likes`, and the announced
   CV rows behind `Vutuv.Profiles.CvUpdates`) instead of being
   persisted per notification — which makes it automatically retroactive. The only stored
   state is `users.notifications_read_at`, the read marker behind the unread
@@ -32,6 +33,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostLike
+  alias Vutuv.Posts.PostMention
   alias Vutuv.Posts.PostReply
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Repo
@@ -110,6 +112,8 @@ defmodule Vutuv.Activity do
 
     thread_max = select(thread_replies(user_id), [thread_ref: r], %{ts: max(r.inserted_at)})
 
+    mention_max = select(mention_events(user_id), [mention: m], %{ts: max(m.inserted_at)})
+
     like_max =
       from(l in PostLike,
         join: p in assoc(l, :post),
@@ -165,6 +169,7 @@ defmodule Vutuv.Activity do
       |> union_all(^connection_max)
       |> union_all(^reply_max)
       |> union_all(^thread_max)
+      |> union_all(^mention_max)
       |> union_all(^like_max)
       |> union_all(^moderation_max)
       |> union_all(^image_rejected_max)
@@ -334,6 +339,27 @@ defmodule Vutuv.Activity do
     )
   end
 
+  @doc ~S"""
+  Convenience: a "mentioned you in a post" notification for a member the post's
+  body names by `@handle`. `post_id` is that post — written by the actor, not by
+  the recipient, so the row links it under the **author's** profile.
+
+  Pushed by `Vutuv.Posts` only for names it just added, so an edit that leaves a
+  mention untouched never notifies twice. The durable half is the
+  `post_mentions` row written alongside it (`mention_items/3`).
+  """
+  def notify_mention(user_id, author, post_id) do
+    notify(
+      user_id,
+      Map.merge(actor_fields(author), %{
+        kind: "mention",
+        text: "mentioned you in a post.",
+        post_id: post_id,
+        at: DateTime.utc_now()
+      })
+    )
+  end
+
   @doc ~S(Convenience: a "liked your post" notification for the post's author.)
   def notify_like(author_id, liker, post_id) do
     Vutuv.Webhooks.emit(author_id, "post.liked", %{
@@ -482,6 +508,7 @@ defmodule Vutuv.Activity do
       {"connection", &connection_items(user_id, &1, &2)},
       {"reply", &reply_items(user_id, &1, &2)},
       {"thread", &thread_items(user_id, &1, &2)},
+      {"mention", &mention_items(user_id, &1, &2)},
       {"like", &like_items(user_id, &1, &2)},
       {"organization_role", &organization_role_items(user_id, &1, &2)},
       {"moderation", &moderation_items(user_id, &1, &2)},
@@ -578,6 +605,7 @@ defmodule Vutuv.Activity do
       {"connection", count_connections(user_id, read_at)},
       {"reply", count_replies(user_id, read_at)},
       {"thread", count_thread_replies(user_id, read_at)},
+      {"mention", count_mentions(user_id, read_at)},
       {"like", count_likes(user_id, read_at)},
       {"organization_role", count_organization_roles(user_id, read_at)},
       {"cv_update", count_cv_updates(user_id, read_at)},
@@ -719,12 +747,64 @@ defmodule Vutuv.Activity do
     end)
   end
 
+  # Posts that name the user with `@handle` (issue: mention notifications). The
+  # rows come from `post_mentions`, reconciled at save time by `Vutuv.Posts` —
+  # deriving them here would mean an ILIKE over every post on every unread
+  # count. Newest first, actor = the post's author.
+  defp mention_items(user_id, limit, cursor) do
+    mention_events(user_id)
+    |> join(:inner, [mention_post: p], author in User, on: author.id == p.user_id, as: :author)
+    |> order_by([mention: m], desc: m.inserted_at, desc: m.id)
+    |> limit(^limit)
+    |> select(
+      [mention: m, author: author],
+      {m.id, m.inserted_at, struct(author, ^User.listing_fields()), m.post_id}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, author, post_id} ->
+      "mention-#{id}"
+      |> actor_item("mention", at, author)
+      # The post that named them — the author's, not the recipient's.
+      |> Map.put(:post_id, post_id)
+    end)
+  end
+
+  # The base scope behind the "mention" kind, shared by items / count / read
+  # marker. The write side already excludes self-mentions and posts the member
+  # cannot see (both are the post's own business, re-derived on every edit);
+  # what is left here is what can change *after* the post was written:
+  #
+  #   * a **block** either way, filtered like thread events filter it, and
+  #   * the precedence rule — a post that answers the member directly is
+  #     already the stronger "reply" event, so it never also mentions. One
+  #     post, one row; `thread_replies/1` yields to a mention the same way.
+  defp mention_events(user_id) do
+    from(m in PostMention,
+      as: :mention,
+      join: p in Post,
+      on: p.id == m.post_id,
+      as: :mention_post,
+      where: m.user_id == ^user_id,
+      where:
+        not exists(
+          from(r in PostReply,
+            where: r.post_id == parent_as(:mention).post_id and r.parent_author_id == ^user_id,
+            select: 1
+          )
+        ),
+      where: p.user_id not in subquery(blocked_either_way(user_id))
+    )
+  end
+
   # The base scope behind the "thread" kind, shared by items / count / read
   # marker. A qualifying reply: sits in a thread (root known), is not the
-  # user's own, does not answer the user directly, its author has no block
-  # either way with the user, and the user had already written in the thread
-  # when it landed — they authored the root, or an earlier reply (replies from
-  # before they joined were on screen when they replied; not news).
+  # user's own, does not answer the user directly, does not name the user (that
+  # is the louder "mention" event — never both for one post), its author has no
+  # block either way with the user, and the user had already written in the
+  # thread when it landed — they authored the root, or an earlier reply
+  # (replies from before they joined were on screen when they replied; not
+  # news).
   defp thread_replies(user_id) do
     from(r in PostReply,
       as: :thread_ref,
@@ -734,6 +814,13 @@ defmodule Vutuv.Activity do
       where: not is_nil(r.root_post_id),
       where: reply.user_id != ^user_id,
       where: is_nil(r.parent_author_id) or r.parent_author_id != ^user_id,
+      where:
+        not exists(
+          from(m in PostMention,
+            where: m.post_id == parent_as(:thread_ref).post_id and m.user_id == ^user_id,
+            select: 1
+          )
+        ),
       where:
         exists(
           from(root in Post,
@@ -1058,6 +1145,12 @@ defmodule Vutuv.Activity do
   defp count_thread_replies(user_id, read_at) do
     thread_replies(user_id)
     |> select([thread_ref: r], %{count: count()})
+    |> since(read_at)
+  end
+
+  defp count_mentions(user_id, read_at) do
+    mention_events(user_id)
+    |> select([mention: m], %{count: count()})
     |> since(read_at)
   end
 
