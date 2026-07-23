@@ -183,8 +183,60 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       assert has_element?(
                live,
-               ~s([data-post-preview][href="/#{user.username}/posts/#{post.id}"])
+               ~s([data-post-preview] a[href="/#{user.username}/posts/#{post.id}"])
              )
+    end
+
+    test "a quoted post is formatted like a feed post, not shown as Markdown source", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+
+      post =
+        insert(:post,
+          user: user,
+          body: "**Ship it** on Friday\n\n- pack the release\n- write the note"
+        )
+
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert html =~ "<strong>Ship it</strong>"
+      assert html =~ "<li>"
+      refute html =~ "**Ship it**"
+      # The same body recipe the feed uses, so the quote reads like a post.
+      assert has_element?(live, ~s([data-post-preview] .markdown.markdown--post))
+    end
+
+    test "a @mention in a quoted post links to that member", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # The factory's `user-<n>` handle carries a hyphen, which a real handle
+      # never may (`Vutuv.Handles.format/0`) and a mention therefore never
+      # matches, so this needs a handle-shaped one.
+      colleague = insert(:user, username: "quoted_colleague")
+
+      post = insert(:post, user: user, body: "Thanks @#{colleague.username}!")
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The mention keeps its own target, so the quote cannot be one big link:
+      # the permalink is a stretched link underneath the body instead.
+      assert has_element?(live, ~s([data-post-preview] a[href="/#{colleague.username}"]))
+    end
+
+    test "a post that is nothing but an inline image shows no quote", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post = insert(:post, user: user, body: "![a cat](/post_images/cat.jpg)")
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert render(live) =~ "liked your post"
+      refute has_element?(live, ~s([data-post-preview]))
     end
 
     test "two likes of the same post on the same day merge into one row", %{conn: conn} do
@@ -313,11 +365,30 @@ defmodule VutuvWeb.NotificationLiveTest do
                "Which editor do you swear by?"
              )
 
+      assert has_element?(live, ~s([data-reply-preview]), "Neovim, without a doubt.")
+
       assert has_element?(
                live,
-               ~s([data-reply-preview][href="/#{replier.username}/posts/#{reply.id}"]),
-               "Neovim, without a doubt."
+               ~s([data-reply-preview] a[href="/#{replier.username}/posts/#{reply.id}"])
              )
+    end
+
+    test "the one-line context above a reply drops the Markdown markers", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      replier = insert(:user)
+      parent = insert(:post, user: user, body: "**Which editor** do you swear by?")
+      reply = insert(:post, user: replier, body: "Neovim, without a doubt.")
+
+      insert(:post_reply, post: reply, parent_post: parent, parent_author: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      # A breadcrumb stays one plain line (it is inside the row's own link, so
+      # it cannot carry links of its own) — but it must not show the markers.
+      assert has_element?(live, ~s([data-post-preview]), "Which editor do you swear by?")
+      refute html =~ "**Which editor**"
     end
 
     test "a reply hidden from the recipient is not quoted", %{conn: conn} do
@@ -352,7 +423,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute html =~ "Line 6"
       # The shipped default needs no inline override: the .notif-clamp
       # stylesheet fallback already says 5.
-      assert has_element?(live, ~s([data-post-preview] span.notif-clamp))
+      assert has_element?(live, ~s([data-post-preview] .notif-clamp))
       refute html =~ "--notif-clamp"
     end
 

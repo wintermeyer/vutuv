@@ -20,11 +20,18 @@ defmodule VutuvWeb.NotificationLive.Index do
       back** suggestions (recent followers, reload-free follow via
       `Vutuv.Social`) and a **Last 30 days** summary
       (`Vutuv.Activity.activity_summary/2`).
-    * A post a row quotes (the liked post, the reply) is cut to the reader's
-      own line budget - `Vutuv.Accounts.User.notification_post_lines/1`, the
+    * A post a row quotes (the liked post, the reply) is **formatted the way
+      /feed formats a post** - rendered from its Markdown source through
+      `VutuvWeb.Markdown` into the `.markdown markdown--post` body recipe, so
+      bold, lists, links, @mentions and #hashtags read as themselves instead of
+      as source markers. It is cut to the reader's own line budget -
+      `Vutuv.Accounts.User.notification_post_lines/1`, the
       `:notification_post_lines` preference: server-side to that many source
       lines, and visually by the `.notif-clamp` CSS clamp fed through the
-      inline `--notif-clamp` custom property.
+      inline `--notif-clamp` custom property. The compact one-line contexts (a
+      reply's "Your post:" breadcrumb, the handle-change list) sit inside the
+      row's own link, so they cannot carry links of their own: those are
+      flattened to plain text by `VutuvWeb.Markdown.to_plain_text/1` instead.
 
   The page is **numbered** (`?page=`), not an endless list: both the page and
   the filter live in the URL, so a page can be linked to and the back button
@@ -55,6 +62,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
+  alias VutuvWeb.Markdown
   alias VutuvWeb.NotificationLive.Groups
   alias VutuvWeb.UserHelpers
 
@@ -394,19 +402,19 @@ defmodule VutuvWeb.NotificationLive.Index do
           <% end %>
         </p>
 
-        <%!-- A like quotes the liked post once, one small excerpt linking to it,
+        <%!-- A like quotes the liked post once, formatted like a feed post and
         cut to the reader's line budget (:notification_post_lines). --%>
-        <.link
+        <.quoted_post
           :if={@group.kind == "like" and @n[:post_preview]}
           data-post-preview="true"
           href={~p"/#{@current_user}/posts/#{@n.post_id}"}
-          class="mt-1.5 block border-l-2 border-slate-200 pl-2.5 text-sm text-slate-600 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-brand-300"
-        >
-          <span class="notif-clamp whitespace-pre-line" {clamp_attrs(@quote_lines)}>{@n.post_preview.text}</span>
-        </.link>
+          html={@n.post_preview.html}
+          quote_lines={@quote_lines}
+          class="mt-1.5"
+        />
 
-        <%!-- A reply quotes the recipient's own post (context) and the reply
-        itself, each one compact excerpt linking to its permalink. --%>
+        <%!-- A reply quotes the reply itself, under a one-line breadcrumb naming
+        the recipient's own post it answers. --%>
         <div
           :if={@group.kind == "reply" and (@n[:post_preview] || @n[:reply_preview])}
           class="mt-1.5 space-y-1"
@@ -420,14 +428,13 @@ defmodule VutuvWeb.NotificationLive.Index do
             <span class="font-medium">{gettext("Your post")}:</span>
             <span class="line-clamp-1 whitespace-pre-line align-bottom">{@n.post_preview.text}</span>
           </.link>
-          <.link
+          <.quoted_post
             :if={@n[:reply_preview]}
             data-reply-preview="true"
             href={~p"/#{@n.reply_preview.post.user}/posts/#{@n.reply_preview.post.id}"}
-            class="block border-l-2 border-slate-200 pl-2.5 text-sm text-slate-600 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:text-brand-300"
-          >
-            <span class="notif-clamp whitespace-pre-line" {clamp_attrs(@quote_lines)}>{@n.reply_preview.text}</span>
-          </.link>
+            html={@n.reply_preview.html}
+            quote_lines={@quote_lines}
+          />
         </div>
 
         <%!-- A CV update covering several entries names them, each linking to
@@ -474,6 +481,43 @@ defmodule VutuvWeb.NotificationLive.Index do
         </span>
       </div>
     </article>
+    """
+  end
+
+  # The post a row quotes, formatted exactly the way /feed formats a post: the
+  # rendered Markdown in the `.markdown markdown--post` body recipe (headings
+  # flattened to bold, @mentions and #hashtags linked), clipped by `.notif-clamp`
+  # to the reader's line budget.
+  #
+  # It is a block with a *stretched* permalink link rather than one big `<a>`,
+  # because a formatted body carries links of its own and an `<a>` inside an
+  # `<a>` is invalid: the prose falls through to the stretched link, so a click
+  # anywhere still opens the post, while a mention/hashtag/URL keeps its own
+  # target. The feed's "Suggested posts" rail is arranged the same way.
+  attr(:href, :string, required: true)
+  attr(:html, :any, required: true)
+  attr(:quote_lines, :integer, required: true)
+  attr(:class, :string, default: nil)
+  attr(:rest, :global)
+
+  defp quoted_post(assigns) do
+    ~H"""
+    <div
+      class={[
+        "relative border-l-2 border-slate-200 pl-2.5 transition-colors hover:border-brand-400",
+        "dark:border-slate-700 dark:hover:border-brand-500",
+        @class
+      ]}
+      {@rest}
+    >
+      <.link href={@href} aria-label={gettext("View post")} class="absolute inset-0 z-10"></.link>
+      <div
+        class="markdown markdown--post notif-clamp text-sm text-slate-600 dark:text-slate-400 [&_a]:relative [&_a]:z-20"
+        {clamp_attrs(@quote_lines)}
+      >
+        {@html}
+      </div>
+    </div>
     """
   end
 
@@ -942,10 +986,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   # liked post (`:post_id`), a reply both the recipient's own post that was
   # replied to (`:post_id`) and the reply itself (`:reply_post_id`). Look every
   # referenced post up in one batched, visibility-scoped query and attach a
-  # preview map `%{post:, text:, truncated?:}` as `:post_preview` /
-  # `:reply_preview`. Other kinds carry no ids, a photo-only post (empty body)
-  # yields no preview, and a reply hidden from the viewer is absent from
-  # `posts`, so all pass through unchanged.
+  # preview map (`%{post:, html:}` or `%{post:, text:}`, see `render_excerpt/3`)
+  # as `:post_preview` / `:reply_preview`. Other kinds carry no ids, a post with
+  # no text (a photo-only one) yields no preview, and a reply hidden from the
+  # viewer is absent from `posts`, so all pass through unchanged.
   defp with_post_previews(entries, viewer) do
     posts =
       entries
@@ -956,11 +1000,19 @@ defmodule VutuvWeb.NotificationLive.Index do
 
     Enum.map(entries, fn entry ->
       entry
-      |> put_preview(:post_preview, entry[:post_id], posts, lines)
-      |> put_preview(:reply_preview, entry[:reply_post_id], posts, lines)
+      |> put_preview(:post_preview, entry[:post_id], posts, lines, quoted_form(entry))
+      |> put_preview(:reply_preview, entry[:reply_post_id], posts, lines, :html)
       |> put_change_previews(posts, lines)
     end)
   end
+
+  # A reply row shows the recipient's own post only as the one-line breadcrumb
+  # above the reply it quotes in full, so that one is flattened to text. Every
+  # other quoted post is rendered formatted. Deciding here (rather than building
+  # both forms) keeps a page of 50 rows off the Markdown renderer's DB lookups
+  # for bodies nothing will show formatted.
+  defp quoted_form(%{kind: "reply"}), do: :text
+  defp quoted_form(_entry), do: :html
 
   # A handle-change entry links the recipient's own posts that were rewritten:
   # the newest few as excerpt lines, with `handle_change_more/1` counting the
@@ -983,9 +1035,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp put_change_previews(entry, _posts, _lines), do: entry
 
   defp change_preview(post, lines) do
-    case preview_excerpt(post.body, lines) do
+    case preview_excerpt(post.body, lines, :text) do
       %{} = excerpt -> Map.put(excerpt, :post, post)
-      _ -> %{post: post, text: "", truncated?: false}
+      _ -> %{post: post, text: ""}
     end
   end
 
@@ -995,10 +1047,10 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp handle_change_more(_), do: 0
 
-  defp put_preview(entry, key, post_id, posts, lines) do
+  defp put_preview(entry, key, post_id, posts, lines, form) do
     with true <- is_binary(post_id),
          %Post{} = post <- Map.get(posts, post_id),
-         %{} = excerpt <- preview_excerpt(post.body, lines) do
+         %{} = excerpt <- preview_excerpt(post.body, lines, form) do
       Map.put(entry, key, Map.put(excerpt, :post, post))
     else
       _ -> entry
@@ -1011,28 +1063,64 @@ defmodule VutuvWeb.NotificationLive.Index do
   # the row.
   @preview_chars_per_line 100
 
-  # The plain-text excerpt shown under a reply/like notification: the post's
-  # first `lines` non-empty lines (the reader's `:notification_post_lines`
-  # preference), character-capped as above. Kept server-side (not only a CSS
-  # clamp) so the rest of a quoted body never reaches the DOM.
-  defp preview_excerpt(body, lines) do
-    limit = lines * @preview_chars_per_line
+  # An inline image reference (`![alt](url)`) in the Markdown source. The quote
+  # is text-only, so it is dropped before the line budget is spent - otherwise a
+  # picture nobody sees would eat a line of it, and a post that is nothing but a
+  # picture would quote an empty box.
+  @inline_image ~r/!\[[^\]]*\]\([^)]*\)/
 
+  # The excerpt shown under a reply/like notification: the post's first `lines`
+  # non-empty lines (the reader's `:notification_post_lines` preference), cut
+  # server-side (not only by the CSS clamp) so the rest of a quoted body never
+  # reaches the DOM. Returns nil for a body with no text left to show.
+  defp preview_excerpt(body, lines, form) do
     source =
-      body
+      @inline_image
+      |> Regex.replace(body, "")
       |> String.split("\n")
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
+      |> take_source_lines(lines)
 
-    {shown, rest} = Enum.split(source, lines)
-    text = Enum.join(shown, "\n")
-
-    cond do
-      text == "" -> nil
-      String.length(text) > limit -> %{text: clamp(text, limit), truncated?: true}
-      true -> %{text: text, truncated?: rest != []}
+    case String.trim(source) do
+      "" -> nil
+      trimmed -> render_excerpt(trimmed, lines, form)
     end
   end
+
+  # Keeps lines until `budget` non-empty ones are in, carrying the blank lines
+  # between them along: they separate the Markdown blocks, and dropping them
+  # would glue a list onto the paragraph above it.
+  defp take_source_lines(source_lines, budget) do
+    source_lines
+    |> Enum.reduce_while({[], budget}, fn line, {kept, left} ->
+      cond do
+        String.trim(line) == "" -> {:cont, {[line | kept], left}}
+        left > 1 -> {:cont, {[line | kept], left - 1}}
+        true -> {:halt, {[line | kept], 0}}
+      end
+    end)
+    |> then(fn {kept, _left} -> kept |> Enum.reverse() |> Enum.join("\n") end)
+  end
+
+  # The two shapes a quoted post is shown in.
+  #
+  # `:html` is the formatted rendering /feed gives a post, block-cut at the
+  # character budget so one essay-long line still ships a small DOM. Images are
+  # deliberately not passed: a quote is text.
+  #
+  # `:text` is the flattened one-line form the compact contexts use (the "Your
+  # post:" breadcrumb above a reply, the handle-change list), where real HTML
+  # would nest a link inside the row's own link - but the Markdown markers must
+  # not show either, so it goes through the renderer as well.
+  defp render_excerpt(source, lines, :html) do
+    {html, _truncated?} = Markdown.render_preview(source, [], limit: char_budget(lines))
+    %{html: html}
+  end
+
+  defp render_excerpt(source, lines, :text) do
+    %{text: source |> Markdown.to_plain_text() |> clamp(char_budget(lines))}
+  end
+
+  defp char_budget(lines), do: lines * @preview_chars_per_line
 
   defp clamp(text, limit), do: text |> String.slice(0, limit) |> String.trim_trailing()
 

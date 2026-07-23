@@ -127,6 +127,59 @@ defmodule VutuvWeb.Markdown do
 
   def render_remote(_), do: ""
 
+  @doc """
+  Flatten Markdown to **plain text**: the same pipeline a post body runs,
+  then the tags dropped and the escapes decoded.
+
+  For the compact one-line contexts that quote a post as a reference rather
+  than render it — the /notifications "Your post:" breadcrumb above a reply
+  and its handle-change list — where real HTML would nest links inside the
+  row's own link and stack block elements into a `line-clamp-1`. Formatting
+  markers disappear instead of being shown (`**bold**` reads as `bold`), a
+  link keeps its label, and blocks become plain line breaks.
+
+  Entities are **not** linkified, so this costs no DB query.
+  """
+  def to_plain_text(text) when is_binary(text) do
+    text
+    |> render_pipeline()
+    |> String.replace(~r{<br\s*/?>}i, "\n")
+    |> String.replace(~r{</(?:p|li|h[1-6]|blockquote|tr|div)>}i, "\n")
+    # Every `<…>` left is a tag: the pipeline escaped typed HTML to `&lt;` a
+    # step earlier, so this can never eat body text.
+    |> String.replace(~r/<[^>]*>/, "")
+    |> decode_escapes()
+    |> normalize_lines()
+  end
+
+  def to_plain_text(_), do: ""
+
+  # Earmark lays its HTML out with whitespace of its own (a newline after every
+  # opening `<p>`, indented list items, blank lines between tags), which turns
+  # into stray indentation and empty lines once the tags are gone. Trim each
+  # line and drop the empty ones, so what is left is the words in block order.
+  # Long paragraphs are never re-wrapped by Earmark, so no sentence is broken
+  # by this.
+  defp normalize_lines(text) do
+    text
+    |> String.split("\n")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n")
+  end
+
+  # The escapes Earmark and the sanitizer emit. `&amp;` goes last: decoding it
+  # first would turn a literal, typed `&amp;lt;` into `<` instead of `&lt;`.
+  defp decode_escapes(text) do
+    text
+    |> String.replace("&lt;", "<")
+    |> String.replace("&gt;", ">")
+    |> String.replace("&quot;", "\"")
+    |> String.replace(["&#39;", "&#x27;"], "'")
+    |> String.replace("&nbsp;", " ")
+    |> String.replace("&amp;", "&")
+  end
+
   # The shared core every renderer runs: escape raw HTML, autolink bare URLs,
   # render the Markdown, undo the double-escape, sanitize, and drop images.
   # Every `<img>` the Markdown itself produces is untrusted (a hotlinked remote
