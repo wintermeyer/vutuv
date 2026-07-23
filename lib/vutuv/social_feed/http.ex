@@ -109,4 +109,16 @@ defmodule Vutuv.SocialFeed.Http do
 
     "vutuv/#{Application.spec(:vutuv, :vsn)} (+#{String.trim_trailing(public_url, "/")})"
   end
+
+  @doc """
+  True when `user_agent` is a vutuv installation's outbound agent — this one or
+  anybody else's, since only the version and the public URL differ.
+
+  The headless page-capture browser sends it too
+  (`Vutuv.PageScreenshot.capture_args/3`), which is how a page can tell that it
+  is being screenshotted rather than read, and skip on-arrival behaviour that
+  would spoil the shot (the post permalink's scroll jump, issue #1033).
+  """
+  def own_agent?("vutuv/" <> _rest), do: true
+  def own_agent?(_user_agent), do: false
 end

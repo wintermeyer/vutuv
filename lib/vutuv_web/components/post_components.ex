@@ -736,6 +736,14 @@ defmodule VutuvWeb.PostComponents do
   attr(:focus_id, :string, required: true, doc: "the permalinked post's id")
   attr(:viewer, :any, default: nil)
 
+  attr(:auto_scroll?, :boolean,
+    default: true,
+    doc:
+      "false suppresses the arrival scroll jump: the headless page capture " <>
+        "screenshots from the document top, so a page that scrolls itself is " <>
+        "shot before those tiles are painted and comes out blank (issue #1033)"
+  )
+
   attr(:viewer_follows, :map,
     default: %{},
     doc:
@@ -772,7 +780,7 @@ defmodule VutuvWeb.PostComponents do
         entry_id: nil,
         mode: if(focus?, do: :full, else: :preview),
         focus?: focus?,
-        scroll?: focus? and post.id != top_id
+        scroll?: assigns.auto_scroll? and focus? and post.id != top_id
       }
     end)
     |> Posts.thread_forest()
