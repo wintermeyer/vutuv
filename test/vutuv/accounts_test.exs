@@ -179,7 +179,7 @@ defmodule Vutuv.AccountsTest do
 
       assert {:error, changeset} = Accounts.register_user(conn, attrs)
 
-      assert "\"???\" needs at least one letter or number to be a tag." in errors_on(changeset).tag_list
+      assert "\"???\" is only punctuation, not a tag." in errors_on(changeset).tag_list
 
       refute Repo.get_by(User, first_name: "Test")
     end

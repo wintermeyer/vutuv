@@ -185,7 +185,7 @@ defmodule Vutuv.TagsTest do
     end
   end
 
-  describe "a tag needs at least one letter or number" do
+  describe "a tag may not be punctuation only" do
     # "-", "." and "????????" are real tags from before this rule. They name no
     # topic, nobody searches for them, and the slug they generate — the tag
     # page's URL — is just as empty. The three rows stay; no new one appears.
@@ -194,7 +194,7 @@ defmodule Vutuv.TagsTest do
 
       for value <- ["-", ".", "???", "!!!", "..."] do
         assert {:error, %Ecto.Changeset{} = changeset} = Tags.add_user_tag(user, value)
-        assert "must contain at least one letter or number" in errors_on(changeset).tag_id
+        assert "must not be only punctuation" in errors_on(changeset).tag_id
       end
 
       assert Repo.aggregate(Tag, :count) == 0
@@ -204,23 +204,33 @@ defmodule Vutuv.TagsTest do
       legacy = insert(:tag, name: "-", slug: "-")
 
       assert {:error, changeset} = Tags.add_user_tag(insert(:user), "-")
-      assert "must contain at least one letter or number" in errors_on(changeset).tag_id
+      assert "must not be only punctuation" in errors_on(changeset).tag_id
       refute Repo.exists?(from(ut in UserTag, where: ut.tag_id == ^legacy.id))
     end
 
-    test "one letter or digit anywhere is enough" do
+    test "one character of content anywhere is enough, emoji included" do
       user = insert(:user)
 
-      for name <- ["C#", "C++", "3D", "F#"] do
+      for name <- ["C#", "C++", "3D", "F#", "☕", "🎸 Gitarre"] do
         assert {:ok, _} = Tags.add_user_tag(user, name)
       end
+    end
+
+    test "an emoji-only tag gets a usable slug for its public page" do
+      # The name slugifies to nothing, so SlugHelpers falls back to a short sha
+      # rather than putting the raw emoji into the URL.
+      {:ok, user_tag} = Tags.add_user_tag(insert(:user), "☕")
+      tag = Repo.preload(user_tag, :tag).tag
+
+      assert tag.name == "☕"
+      assert tag.slug =~ ~r/^[a-z0-9]+$/
     end
 
     test "the tag changeset refuses the name on every other path too" do
       changeset = Tag.changeset(%Tag{}, %{"value" => "???"})
 
       refute changeset.valid?
-      assert "must contain at least one letter or number" in errors_on(changeset).name
+      assert "must not be only punctuation" in errors_on(changeset).name
     end
   end
 

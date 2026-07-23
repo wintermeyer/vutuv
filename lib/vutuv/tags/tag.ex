@@ -16,14 +16,19 @@ defmodule Vutuv.Tags.Tag do
   # this rule) report the same thing.
   @web_address_message "must not be a web or email address"
 
-  # The other way a value names no topic: it carries no letter and no number at
-  # all ("-", ".", "???"). Nobody searches for it, nobody else can share it, and
-  # the slug it generates — the tag page's URL — is just as empty. Three such
-  # tags exist from before this rule; they stay, but no new one is minted or
-  # linked (see `wordless?/1` and the guard in `create_or_link_tag/2`).
-  @wordless_message "must contain at least one letter or number"
+  # The other way a value names no topic: it is punctuation and nothing else
+  # ("-", ".", "???"). Nobody searches for it, nobody else can share it, and the
+  # slug it generates — the tag page's URL — is just as empty. Three such tags
+  # exist from before this rule; they stay, but no new one is minted or linked
+  # (see `punctuation_only?/1` and the guard in `create_or_link_tag/2`).
+  @punctuation_message "must not be only punctuation"
 
-  @word_char ~r/[\p{L}\p{N}]/u
+  # What counts as content: anything that is not punctuation (`\p{P}`), a
+  # separator/whitespace (`\p{Z}`) or an invisible control character (`\p{C}`).
+  # Letters and digits, of course — and **symbols** (`\p{S}`), which is what
+  # makes an emoji a tag of its own ("☕", "🎸"): an emoji is a name people
+  # actually use and search for, unlike a run of question marks.
+  @content_char ~r/[^\p{P}\p{Z}\p{C}]/u
 
   schema "tags" do
     field(:slug, :string)
@@ -74,7 +79,7 @@ defmodule Vutuv.Tags.Tag do
     # edit form) against a stray line break or tab sneaking in.
     |> validate_format(:name, ~r/^[^\r\n\t]+$/, message: "must be a single line")
     |> validate_web_address()
-    |> validate_wordless()
+    |> validate_punctuation_only()
     |> validate_length(:slug, max: 60)
     |> validate_length(:name, max: 255)
     |> unique_constraint(:slug)
@@ -92,17 +97,17 @@ defmodule Vutuv.Tags.Tag do
     end)
   end
 
-  defp validate_wordless(changeset) do
+  defp validate_punctuation_only(changeset) do
     validate_change(changeset, :name, fn :name, name ->
-      if wordless?(name), do: [name: @wordless_message], else: []
+      if punctuation_only?(name), do: [name: @punctuation_message], else: []
     end)
   end
 
   @doc """
-  Whether `name` carries no letter and no number at all, so it can't be a tag:
-  `"-"`, `"."`, `"???"`, `"!!!"` — punctuation and symbols only. A name with a
-  single letter or digit anywhere in it is fine, so `"C#"`, `"C++"` and
-  `"3D"` stay ordinary tags.
+  Whether `name` is punctuation (and whitespace) and nothing else, so it can't
+  be a tag: `"-"`, `"."`, `"???"`, `"!!!"`. One character of actual content
+  anywhere is enough, and a **symbol counts as content**, so `"C#"`, `"C++"`,
+  `"3D"` and an emoji tag like `"☕"` are all ordinary tags.
 
   Both refusal points call this: the `changeset/2` heads (so no path mints such
   a tag) and `create_or_link_tag/2` (so none of the three legacy ones can be
@@ -110,8 +115,8 @@ defmodule Vutuv.Tags.Tag do
   build a changeset). Callers that quietly skip unusable values rather than
   erroring — the add-tag preview, post tags — filter on it too.
   """
-  def wordless?(name) when is_binary(name), do: not Regex.match?(@word_char, name)
-  def wordless?(_), do: true
+  def punctuation_only?(name) when is_binary(name), do: not Regex.match?(@content_char, name)
+  def punctuation_only?(_), do: true
 
   defp maybe_gen_slug(changeset) do
     case {get_field(changeset, :slug), get_field(changeset, :name)} do
@@ -146,10 +151,10 @@ defmodule Vutuv.Tags.Tag do
   here with a single already-whole name.
 
   A value that names no topic is refused outright, before the lookup: one that
-  is nothing but a web or email address (`Vutuv.WebAddress`), and one with no
-  letter or number in it at all (`wordless?/1`). The changeset heads already
-  keep such a tag from being minted; refusing here also blocks *linking* the
-  handful of URL and punctuation tags that exist from before these rules.
+  is nothing but a web or email address (`Vutuv.WebAddress`), and one that is
+  only punctuation (`punctuation_only?/1`). The changeset heads already keep
+  such a tag from being minted; refusing here also blocks *linking* the handful
+  of URL and punctuation tags that exist from before these rules.
   """
   def create_or_link_tag(changeset, %{"value" => value} = params) do
     # Strip the hashtag form before both the existing-tag lookup and the build,
@@ -162,7 +167,7 @@ defmodule Vutuv.Tags.Tag do
     # refusals (at the ceiling, reserved honor tag) too.
     cond do
       WebAddress.link_only?(value) -> add_error(changeset, :tag_id, @web_address_message)
-      wordless?(value) -> add_error(changeset, :tag_id, @wordless_message)
+      punctuation_only?(value) -> add_error(changeset, :tag_id, @punctuation_message)
       true -> link_or_build_tag(changeset, value, params)
     end
   end

@@ -220,7 +220,7 @@ defmodule VutuvWeb.TagNewLiveTest do
     } do
       html = live |> form("#tag-form", tag_param: %{value: "???"}) |> render_submit()
 
-      assert html =~ "must contain at least one letter or number"
+      assert html =~ "must not be only punctuation"
       assert tag_count(user) == base
     end
 
