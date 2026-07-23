@@ -66,12 +66,13 @@ optional; "Skip" is a second submit button that saves nothing. --%>
       <div class="grid gap-4 sm:grid-cols-3">
         <div>
           <%= label f, :zip_code, gettext("Postal code"), class: small_label_class %>
-          <%= text_input f, :zip_code, class: input_class(f, :zip_code), autocomplete: "postal-code", "aria-invalid": f.errors[:zip_code] && "true" %>
+          <%!-- The first field of the first question takes the cursor. --%>
+          <%= text_input f, :zip_code, class: input_class(f, :zip_code), autocomplete: "postal-code", autofocus: true, "aria-invalid": f.errors[:zip_code] && "true" %>
           <%= error_tag f, :zip_code %>
         </div>
         <div class="sm:col-span-2">
           <%= label f, :city, gettext("City"), class: small_label_class %>
-          <%= text_input f, :city, class: input_class(f, :city), autocomplete: "address-level2", autofocus: true, "aria-invalid": f.errors[:city] && "true" %>
+          <%= text_input f, :city, class: input_class(f, :city), autocomplete: "address-level2", "aria-invalid": f.errors[:city] && "true" %>
           <%= error_tag f, :city %>
         </div>
       </div>
@@ -88,22 +89,26 @@ optional; "Skip" is a second submit button that saves nothing. --%>
     the same one the Basics form uses); with JS off the server-rendered state
     stands, so a member who is not looking never sees the extra fields. --%>
     <section class="space-y-4 border-t border-slate-200 pt-6 dark:border-slate-800" data-employment-status-field>
-      <div>
-        <h2 class="text-lg font-bold text-slate-900 dark:text-white">
-          {gettext("Are you looking for a job?")}
-        </h2>
-        <p class={hint_class}>
-          {gettext("Your availability shows to signed-in members only. You can change that any time.")}
-        </p>
-      </div>
+      <h2 class="text-lg font-bold text-slate-900 dark:text-white">
+        {gettext("Are you looking for a job?")}
+      </h2>
 
       <div>
-        <%= label uf, :employment_status, gettext("Employment status"), class: label_class %>
+        <%= label uf, :employment_status, gettext("Availability"), class: label_class %>
         <%= select uf, :employment_status, employment_status_options(), class: input_class(), data: [employment_status_select: true] %>
         <%= error_tag uf, :employment_status %>
       </div>
 
       <div data-jobsearch-details class={["space-y-5", !status_set? && "hidden"]}>
+        <%!-- Who may see the availability. On the Basics form this sits behind
+        a longer explanation; here the three options speak for themselves and
+        the default ("Signed-in members only") is already selected. --%>
+        <div>
+          <%= label uf, :employment_status_visibility, gettext("Who can see your availability?"), class: label_class %>
+          <%= select uf, :employment_status_visibility, visibility_options(), class: input_class() %>
+          <%= error_tag uf, :employment_status_visibility %>
+        </div>
+
         <div>
           <p class="text-sm font-medium text-slate-900 dark:text-white">
             {gettext("Minimum salary expectation")}

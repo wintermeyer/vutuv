@@ -15011,17 +15011,6 @@ msgstr ""
 msgid "Welcome"
 msgstr "Willkommen"
 
-#: lib/vutuv_web/controllers/welcome_controller.ex
-#, elixir-autogen, elixir-format
-msgid "No problem. You can add all of this later in Settings."
-msgstr ""
-"Kein Problem. Sie können das alles später in den Einstellungen nachtragen."
-
-#: lib/vutuv_web/controllers/welcome_controller.ex
-#, elixir-autogen, elixir-format
-msgid "Thanks! You can change all of this later in Settings."
-msgstr "Danke! Sie können das alles später in den Einstellungen ändern."
-
 #: lib/vutuv_web/templates/welcome/show.html.heex
 #, elixir-autogen, elixir-format
 msgid ""
@@ -15055,15 +15044,6 @@ msgstr "Art der Adresse"
 #, elixir-autogen, elixir-format
 msgid "Are you looking for a job?"
 msgstr "Suchen Sie eine Stelle?"
-
-#: lib/vutuv_web/templates/welcome/show.html.heex
-#, elixir-autogen, elixir-format
-msgid ""
-"Your availability shows to signed-in members only. You can change that "
-"any time."
-msgstr ""
-"Ihre Verfügbarkeit sehen nur angemeldete Mitglieder. Das können Sie "
-"jederzeit ändern."
 
 #: lib/vutuv_web/templates/welcome/show.html.heex
 #, elixir-autogen, elixir-format
@@ -15105,3 +15085,8 @@ msgstr "Egal"
 #, elixir-autogen, elixir-format
 msgid "Preferred workplace"
 msgstr "Bevorzugte Arbeitsform"
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Availability"
+msgstr "Verfügbarkeit"

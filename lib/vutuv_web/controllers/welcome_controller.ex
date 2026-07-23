@@ -35,6 +35,7 @@ defmodule VutuvWeb.WelcomeController do
   alias Vutuv.Accounts.User
   alias Vutuv.Profiles.Address
   alias VutuvWeb.Home
+  alias VutuvWeb.UserHelpers
 
   plug(VutuvWeb.Plug.AuthUser)
 
@@ -59,27 +60,21 @@ defmodule VutuvWeb.WelcomeController do
     user = conn.assigns[:user]
 
     cond do
-      not Accounts.needs_welcome?(user) ->
-        redirect(conn, to: Home.path(user))
-
-      params["skip"] ->
-        save(conn, user, %{}, gettext("No problem. You can add all of this later in Settings."))
-
-      true ->
-        save(
-          conn,
-          user,
-          Map.take(params, ["address", "user"]),
-          gettext("Thanks! You can change all of this later in Settings.")
-        )
+      not Accounts.needs_welcome?(user) -> redirect(conn, to: Home.path(user))
+      params["skip"] -> save(conn, user, %{})
+      true -> save(conn, user, Map.take(params, ["address", "user"]))
     end
   end
 
-  defp save(conn, user, params, message) do
+  defp save(conn, user, params) do
     case Accounts.complete_welcome(user, params) do
       {:ok, updated} ->
+        # The newcomer greeting the login suppressed while this page was in the
+        # way (VutuvWeb.SessionController.maybe_welcome_flash/4): it points at
+        # the profile-completion checklist, which lives on the page this
+        # redirect finally lands on.
         conn
-        |> put_flash(:info, message)
+        |> put_flash(:info, UserHelpers.registration_flash(updated))
         |> redirect(to: Home.path(updated))
 
       {:error, %{address: address_changeset, user: user_changeset}} ->

@@ -9,6 +9,7 @@ defmodule VutuvWeb.SessionController do
   alias VutuvWeb.Home
   alias VutuvWeb.RateLimit
   alias VutuvWeb.UI
+  alias VutuvWeb.UserHelpers
 
   # The login page is logged-out-only, like registration. An already-logged-in
   # visitor is redirected to their home (the feed or, with no follows yet, their
@@ -362,10 +363,12 @@ defmodule VutuvWeb.SessionController do
         # feed, so Home.path/1 sends them to their profile instead. A page that
         # sent them here to log in (the OAuth consent screen) still wins via
         # return_to.
+        path = return_to || post_login_path(context, user)
+
         Accounts.login(conn, user)
         |> Accounts.delete_pin_cookie()
-        |> put_flash(:info, welcome_flash(context, user))
-        |> redirect(to: return_to || post_login_path(context, user))
+        |> maybe_welcome_flash(path, context, user)
+        |> redirect(to: path)
 
       {:suspended, until} ->
         conn
@@ -399,6 +402,20 @@ defmodule VutuvWeb.SessionController do
 
   defp post_login_path(_context, user), do: Home.path(user)
 
+  # The greeting belongs on the page the member ends up *reading*. When the
+  # registration PIN routes them through the one-time welcome page, that page
+  # greets them in its own hero and its questions deserve an uncluttered
+  # screen, so the toast is skipped here — VutuvWeb.WelcomeController raises the
+  # same greeting when it hands them on to their profile, where the onboarding
+  # checklist it points at actually lives.
+  defp maybe_welcome_flash(conn, path, context, user) do
+    if path == ~p"/system/welcome" do
+      conn
+    else
+      put_flash(conn, :info, welcome_flash(context, user))
+    end
+  end
+
   # The one lockout response, shared by the per-PIN DB counter (real account)
   # and the per-identity counter (any address) so the two are byte-identical
   # — the account-enumeration tell would otherwise reappear here.
@@ -419,27 +436,16 @@ defmodule VutuvWeb.SessionController do
   # First-time sign-ups get their own greeting; returning members get a
   # personal one with their name and, when they have any, a nudge about the
   # conversations waiting for them (the same count the shell's message badge
-  # shows, so the two never disagree).
-  defp welcome_flash("registration", %User{first_name: name})
-       when is_binary(name) and name != "" do
-    gettext("Welcome to vutuv, %{name}!", name: name) <> " " <> registration_note()
-  end
-
-  defp welcome_flash("registration", _user),
-    do: gettext("Welcome to vutuv!") <> " " <> registration_note()
+  # shows, so the two never disagree). The newcomer wording lives in
+  # UserHelpers because the welcome page raises the very same greeting when it
+  # is the one that hands the member on to their profile.
+  defp welcome_flash("registration", %User{} = user),
+    do: UserHelpers.registration_flash(user)
 
   defp welcome_flash(_context, %User{} = user) do
     [greeting(user), unread_note(user)]
     |> Enum.reject(&is_nil/1)
     |> Enum.join(" ")
-  end
-
-  # The one gentle pointer after the confirmation PIN: the two steps that make
-  # the fresh profile recognizable. The member lands on their own profile,
-  # where the onboarding checklist repeats both clickably — so the toast only
-  # plants the idea, it doesn't have to carry links.
-  defp registration_note do
-    gettext("A photo and a short tagline make your profile complete.")
   end
 
   defp greeting(%User{first_name: name}) when is_binary(name) and name != "" do

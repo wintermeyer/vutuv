@@ -571,7 +571,11 @@ defmodule VutuvWeb.PageControllerTest do
 
     # A brand-new member must not be greeted with the returning-user
     # "Welcome back!" that the plain login flow uses. The confirmation page
-    # marks its PIN form with a registration context for this.
+    # marks its PIN form with a registration context for this. The greeting
+    # itself now arrives one page later: the PIN routes them through the
+    # one-time welcome page (which greets them in its own hero), and the toast
+    # follows them onto the profile the welcome page hands them to — where the
+    # checklist it points at actually lives.
     test "the first PIN login after sign-up greets the newcomer", %{conn: conn} do
       conn = post(conn, ~p"/new_registration", user: valid_attrs())
       body = html_response(conn, 200)
@@ -582,6 +586,13 @@ defmodule VutuvWeb.PageControllerTest do
         submit_with_csrf(conn, ~p"/login", %{
           "session" => %{"pin" => pin, "context" => "registration"}
         })
+
+      # No toast on the welcome page itself: it would talk about a profile the
+      # member has not reached yet.
+      assert redirected_to(conn) == ~p"/system/welcome"
+      refute Phoenix.Flash.get(conn.assigns.flash, :info)
+
+      conn = post(conn, ~p"/system/welcome", %{"skip" => "1"})
 
       # Greeted by first name, not the anonymous "Welcome to vutuv!", and
       # gently pointed at the two profile steps the checklist will show.

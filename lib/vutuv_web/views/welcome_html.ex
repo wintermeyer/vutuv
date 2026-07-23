@@ -7,7 +7,8 @@ defmodule VutuvWeb.WelcomeHTML do
       employment_status_options: 0,
       desired_salary_currency_options: 0,
       desired_salary_period_options: 0,
-      desired_workplace_options: 0
+      desired_workplace_options: 0,
+      visibility_options: 0
     ]
 
   alias Phoenix.HTML.Form

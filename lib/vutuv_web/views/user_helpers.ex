@@ -43,6 +43,26 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The first-login greeting for a brand-new member: their name, plus the one
+  gentle pointer at the two steps that make a fresh profile recognizable (the
+  onboarding checklist on the profile repeats both clickably, so the toast only
+  has to plant the idea).
+
+  Raised by whichever page finally lands the newcomer on their profile — the
+  session controller when the registration PIN goes straight there, and
+  `VutuvWeb.WelcomeController` when the one-time welcome page sits in between —
+  so it shows exactly once, on the page it is about.
+  """
+  def registration_flash(%User{first_name: name}) when is_binary(name) and name != "",
+    do: gettext("Welcome to vutuv, %{name}!", name: name) <> " " <> registration_note()
+
+  def registration_flash(%User{}),
+    do: gettext("Welcome to vutuv!") <> " " <> registration_note()
+
+  defp registration_note,
+    do: gettext("A photo and a short tagline make your profile complete.")
+
+  @doc """
   The `{label, value}` options for the workplace-preference select: the three
   workplace forms from the schema's single source
   (`User.desired_workplace_types/0` through `User.desired_workplace_label/1`,

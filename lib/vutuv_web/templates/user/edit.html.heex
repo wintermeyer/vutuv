@@ -200,7 +200,9 @@ lands here). --%>
         safe "members"/"hidden" defaults apply until then). --%>
         <% status_set? = Phoenix.HTML.Form.input_value(f, :employment_status) not in [nil, ""] %>
         <div data-employment-status-field>
-          <%= label f, :employment_status, gettext("Employment status"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%!-- "Availability", not "Employment status": the select is about
+          being open to offers, not about being employed at all. --%>
+          <%= label f, :employment_status, gettext("Availability"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
           <%= select f, :employment_status, employment_status_options(), class: input_class(), data: [employment_status_select: true] %>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
             {gettext("Shown as a badge next to your tagline so people can see whether you are open to opportunities.")}

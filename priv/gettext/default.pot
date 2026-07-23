@@ -14283,16 +14283,6 @@ msgstr ""
 msgid "Welcome"
 msgstr ""
 
-#: lib/vutuv_web/controllers/welcome_controller.ex
-#, elixir-autogen, elixir-format
-msgid "No problem. You can add all of this later in Settings."
-msgstr ""
-
-#: lib/vutuv_web/controllers/welcome_controller.ex
-#, elixir-autogen, elixir-format
-msgid "Thanks! You can change all of this later in Settings."
-msgstr ""
-
 #: lib/vutuv_web/templates/welcome/show.html.heex
 #, elixir-autogen, elixir-format
 msgid ""
@@ -14320,13 +14310,6 @@ msgstr ""
 #: lib/vutuv_web/templates/welcome/show.html.heex
 #, elixir-autogen, elixir-format
 msgid "Are you looking for a job?"
-msgstr ""
-
-#: lib/vutuv_web/templates/welcome/show.html.heex
-#, elixir-autogen, elixir-format
-msgid ""
-"Your availability shows to signed-in members only. You can change that "
-"any time."
 msgstr ""
 
 #: lib/vutuv_web/templates/welcome/show.html.heex
@@ -14364,4 +14347,9 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/markdown.ex
 #, elixir-autogen, elixir-format
 msgid "Preferred workplace"
+msgstr ""
+
+#: lib/vutuv_web/templates/welcome/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Availability"
 msgstr ""

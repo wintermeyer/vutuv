@@ -93,12 +93,15 @@ td a + a {
 }
 /* Bare form fields on legacy pages (the .editform recipe below overrides
    inside forms; Tailwind utilities override on hand-written pages). */
-[type="date"], [type="email"], [type="tel"], [type="text"], textarea {
+[type="date"], [type="email"], [type="number"], [type="tel"], [type="text"], textarea {
   border: 1px solid #e2e8f0;
   font-size: 15px;
   padding-left: 10px;
 }
-[type="date"], [type="email"], [type="tel"], [type="text"] {
+/* `select` below fixes the same 44px, so every field in a row lines up. A
+   missing `[type="number"]` here is why the salary amount used to sit lower
+   and shorter than the "Pro" / "Währung" selects beside it. */
+[type="date"], [type="email"], [type="number"], [type="tel"], [type="text"] {
   height: 44px;
 }
 textarea {

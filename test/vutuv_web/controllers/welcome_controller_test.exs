@@ -70,8 +70,14 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert body =~ ~s(name="address[country]")
       assert body =~ ~s(name="address[description]")
       assert body =~ ~s(name="user[employment_status]")
+      assert body =~ ~s(name="user[employment_status_visibility]")
       assert body =~ ~s(name="user[desired_salary_min]")
       assert body =~ ~s(name="user[desired_workplace_type]")
+      # The postal code takes the cursor: it is the first field of the first
+      # question, and the shortest thing to type. (Attributes render in
+      # alphabetical order, so match the tag and then look inside it.)
+      assert [zip_input] = Regex.run(~r/<input[^>]*name="address\[zip_code\]"[^>]*>/, body)
+      assert zip_input =~ "autofocus"
       # The form posts to the URL it is served from, not to a route that only
       # exists in a test's imagination (the /settings form-action lesson).
       assert body =~ ~s(action="/system/welcome")
@@ -194,6 +200,16 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert user.desired_salary_visibility == "hidden"
     end
 
+    test "the member can open their availability up to everyone right here", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post(conn, ~p"/system/welcome", %{
+        "user" => %{"employment_status" => "open", "employment_status_visibility" => "everyone"}
+      })
+
+      assert reload(user).employment_status_visibility == "everyone"
+    end
+
     test "a workplace preference without a status is dropped", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
@@ -233,6 +249,10 @@ defmodule VutuvWeb.WelcomeControllerTest do
 
       assert redirected_to(conn) == ~p"/#{user}"
       assert address_of(user) == nil
+
+      # The newcomer greeting the login held back while this page was in the
+      # way arrives here, on the way to the profile it talks about.
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Welcome to vutuv"
 
       user = reload(user)
       assert user.employment_status == nil
