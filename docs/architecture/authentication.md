@@ -82,3 +82,8 @@ both the PIN form's `"registration"` context and a `nil`
 member who abandons the page is not asked again. See
 [Profiles](profiles.md#the-one-time-welcome-page-systemwelcome).
 
+A newcomer gets **no welcome toast** on either page: the welcome screen greets
+them in its own hero, and the profile it hands them to already shows the
+completion checklist, so a toast on top would only repeat it. The returning
+member's "Welcome back, …" (plus the unread-conversations nudge) is unchanged.
+

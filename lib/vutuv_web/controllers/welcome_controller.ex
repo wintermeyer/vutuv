@@ -40,7 +40,6 @@ defmodule VutuvWeb.WelcomeController do
   alias Vutuv.Accounts.User
   alias Vutuv.Profiles.Address
   alias VutuvWeb.Home
-  alias VutuvWeb.UserHelpers
 
   plug(VutuvWeb.Plug.AuthUser)
 
@@ -79,15 +78,13 @@ defmodule VutuvWeb.WelcomeController do
   defp save(conn, user, params) do
     case Accounts.complete_welcome(user, params) do
       {:ok, updated} ->
-        # The newcomer greeting the login suppressed while this page was in the
-        # way (VutuvWeb.SessionController.maybe_welcome_flash/4): it points at
-        # the profile-completion checklist, which lives on the page this
-        # redirect finally lands on.
+        # No toast: the member just answered two questions and lands on their
+        # own profile, where the completion checklist already says what is
+        # still missing. A greeting on top would be noise.
         conn
         # The one-shot key is spent: from here the URL redirects like any
         # other visit.
         |> delete_session(:welcome_pending)
-        |> put_flash(:info, UserHelpers.registration_flash(updated))
         |> redirect(to: Home.path(updated))
 
       {:error, %{address: address_changeset, user: user_changeset}} ->

@@ -9,7 +9,6 @@ defmodule VutuvWeb.SessionController do
   alias VutuvWeb.Home
   alias VutuvWeb.RateLimit
   alias VutuvWeb.UI
-  alias VutuvWeb.UserHelpers
 
   # The login page is logged-out-only, like registration. An already-logged-in
   # visitor is redirected to their home (the feed or, with no follows yet, their
@@ -403,12 +402,10 @@ defmodule VutuvWeb.SessionController do
 
   defp post_login_path(_context, user), do: Home.path(user)
 
-  # The greeting belongs on the page the member ends up *reading*. When the
-  # registration PIN routes them through the one-time welcome page, that page
-  # greets them in its own hero and its questions deserve an uncluttered
-  # screen, so the toast is skipped here — VutuvWeb.WelcomeController raises the
-  # same greeting when it hands them on to their profile, where the onboarding
-  # checklist it points at actually lives.
+  # The one-time welcome page greets the member in its own hero and its two
+  # questions deserve an uncluttered screen, so no toast rides along to it -
+  # and none follows afterwards either: the profile it hands them to already
+  # shows the completion checklist.
   # The welcome page is a **one-shot URL**: it opens only for the login that
   # routes there, and this session marker is the key. Typing /system/welcome
   # later - or in another session - finds no key and is sent to the profile,
@@ -444,15 +441,11 @@ defmodule VutuvWeb.SessionController do
     {ControllerHelpers.safe_return_to(path), delete_session(conn, :login_return_to)}
   end
 
-  # First-time sign-ups get their own greeting; returning members get a
-  # personal one with their name and, when they have any, a nudge about the
-  # conversations waiting for them (the same count the shell's message badge
-  # shows, so the two never disagree). The newcomer wording lives in
-  # UserHelpers because the welcome page raises the very same greeting when it
-  # is the one that hands the member on to their profile.
-  defp welcome_flash("registration", %User{} = user),
-    do: UserHelpers.registration_flash(user)
-
+  # A returning member gets a personal greeting with their name and, when they
+  # have any, a nudge about the conversations waiting for them (the same count
+  # the shell's message badge shows, so the two never disagree). A brand-new
+  # member gets none: their PIN routes them to the welcome page, and
+  # maybe_welcome_flash/4 keeps that screen free of toasts.
   defp welcome_flash(_context, %User{} = user) do
     [greeting(user), unread_note(user)]
     |> Enum.reject(&is_nil/1)

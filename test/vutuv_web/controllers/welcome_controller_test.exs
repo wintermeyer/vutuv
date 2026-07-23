@@ -307,9 +307,9 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert redirected_to(conn) == ~p"/#{user}"
       assert address_of(user) == nil
 
-      # The newcomer greeting the login held back while this page was in the
-      # way arrives here, on the way to the profile it talks about.
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Welcome to vutuv"
+      # No toast on the way out either: the profile's completion checklist
+      # already says what is still missing.
+      refute Phoenix.Flash.get(conn.assigns.flash, :info)
 
       user = reload(user)
       assert user.employment_status == nil
