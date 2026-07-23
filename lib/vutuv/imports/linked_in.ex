@@ -36,6 +36,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
+  alias Vutuv.WebAddress
 
   @empty %{
     profile: %{},
@@ -320,7 +321,11 @@ defmodule Vutuv.Imports.LinkedIn do
       %{
         first_name: blank_nil(row["First Name"]),
         last_name: blank_nil(row["Last Name"]),
-        headline: blank_nil(row["Headline"])
+        # A headline that is nothing but a link is refused by the profile
+        # changeset (Vutuv.WebAddress) — and it is applied in the SAME update as
+        # the names, so dropping it here keeps it from taking the name fill down
+        # with it, and the preview stops offering something that can't be saved.
+        headline: row["Headline"] |> blank_nil() |> reject_link_only()
       }
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
       |> Map.new()
@@ -972,6 +977,12 @@ defmodule Vutuv.Imports.LinkedIn do
       "" -> nil
       trimmed -> trimmed
     end
+  end
+
+  defp reject_link_only(nil), do: nil
+
+  defp reject_link_only(value) do
+    if WebAddress.link_only?(value), do: nil, else: value
   end
 
   defp compact(list), do: Enum.reject(list, &is_nil/1)

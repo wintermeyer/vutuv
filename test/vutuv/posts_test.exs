@@ -193,6 +193,17 @@ defmodule Vutuv.PostsTest do
       assert Enum.any?(post.tags, &(&1.id == existing.id))
     end
 
+    test "drops a web address from the post tags, keeping the post" do
+      # Post tags share the global namespace with profile tags, where a URL is
+      # refused — the composer must not be the way around it.
+      name = unique_tag_name("Elixir")
+
+      post =
+        create_post!(user(), %{body: "tagged", tags: "#{name}, https://www.example-shop.com/"})
+
+      assert Enum.map(post.tags, & &1.name) == [name]
+    end
+
     test "keeps at most #{Vutuv.Posts.max_tags_per_post()} tags, in input order" do
       tags = Enum.map_join(1..7, ", ", &"tag-number-#{&1}")
 
