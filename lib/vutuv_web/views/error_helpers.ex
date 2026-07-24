@@ -70,7 +70,10 @@ defmodule VutuvWeb.ErrorHelpers do
       ),
       # Vutuv.Tags.Tag, a name of punctuation only.
       dgettext_noop("errors", "must not be only punctuation"),
-      dgettext_noop("errors", "\"%{tag}\" is only punctuation, not a tag.")
+      dgettext_noop("errors", "\"%{tag}\" is only punctuation, not a tag."),
+      # Vutuv.Accounts.User, the Fediverse aliases (issue #986, alsoKnownAs).
+      dgettext_noop("errors", "Please list at most %{max} accounts."),
+      dgettext_noop("errors", "\"%{uri}\" is not a valid https account address.")
     ]
   end
 end

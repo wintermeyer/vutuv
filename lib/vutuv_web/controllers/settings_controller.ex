@@ -184,8 +184,17 @@ defmodule VutuvWeb.SettingsController do
       conn,
       "fediverse.html",
       fediverse_assigns(user) ++
-        [user: user, changeset: User.changeset(user), page_title: gettext("Fediverse")]
+        [user: user, changeset: fediverse_changeset(user), page_title: gettext("Fediverse")]
     )
+  end
+
+  # Seed the virtual textarea from the stored aliases so the edit form shows
+  # what is already set (the array column is not the form field). One URI per
+  # line, matching how normalize_also_known_as/1 splits them back.
+  defp fediverse_changeset(user) do
+    user
+    |> User.changeset()
+    |> Ecto.Changeset.put_change(:also_known_as_input, Enum.join(user.also_known_as, "\n"))
   end
 
   def update_fediverse(conn, %{"user" => params}) do

@@ -62,6 +62,18 @@ defmodule VutuvWeb.Fediverse.Docs do
         "url" => "#{base()}/#{user.username}/avatar.jpg"
       }
     }
+    |> put_also_known_as(user)
+  end
+
+  # The accounts the member is migrating *from* (issue #986). Rendered only
+  # when set: a remote server that moves followers here checks that its origin
+  # account is one of these aliases, so an empty list must be absent, never an
+  # empty array that reads as "claims nothing".
+  defp put_also_known_as(doc, user) do
+    case user.also_known_as do
+      [_ | _] = aliases -> Map.put(doc, "alsoKnownAs", aliases)
+      _ -> doc
+    end
   end
 
   @doc "Create(Note): a freshly published public post."

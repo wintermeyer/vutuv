@@ -79,6 +79,30 @@ deserves more room than one toggle row. --%>
           )}
         </.setting_toggle>
 
+        <%!-- alsoKnownAs (issue #986): the accounts a member is moving *from*.
+              A remote server checks these before it moves the member's
+              followers here, so listing the old account's address is what makes
+              a move *to* vutuv possible. Empty for almost everyone; only shown
+              once federation is on, where it can take effect. --%>
+        <div :if={Vutuv.Fediverse.federated?(@user)}>
+          <label for="user_also_known_as_input" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+            {gettext("Moving to vutuv from another account?")}
+          </label>
+          <%= textarea f, :also_known_as_input,
+            id: "user_also_known_as_input",
+            rows: 3,
+            class: [input_class(f, :also_known_as_input), "mt-1 resize-y font-mono text-xs"],
+            placeholder: "https://mastodon.social/users/yourname",
+            "aria-invalid": f.errors[:also_known_as_input] && "true" %>
+          <%= error_tag f, :also_known_as_input %>
+          <p :if={!f.errors[:also_known_as_input]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext(
+              "List the full address of each account you are migrating from, one per line (for example %{example}). On the other server, start the move to your vutuv handle; it will only go through once your old account is listed here. Leave empty if you are not moving accounts.",
+              example: "https://mastodon.social/users/yourname"
+            )}
+          </p>
+        </div>
+
         <div class="pt-1">
           <.button type="submit">{gettext("Save")}</.button>
         </div>

@@ -24,7 +24,15 @@ every endpoint 404s and nothing is delivered.
   (`Vutuv.Fediverse.Keys`), created lazily on opt-in. The documents are built
   by `VutuvWeb.Fediverse.Docs`; URLs hang off the member so no root slug is
   burned: `/:username/actor` (id), `.../inbox`, `.../followers` and
-  `.../outbox` (count-only collections).
+  `.../outbox` (count-only collections). The actor also carries
+  **`alsoKnownAs`** (issue #986) — the account URIs a member is migrating
+  *from* (`users.also_known_as`, set on `/settings/fediverse`, one per line).
+  A remote server that moves a member's followers *to* vutuv checks this before
+  it accepts the move (the destination must name the origin as an alias first).
+  Anyone can *claim* an alias, so verifying it is the remote server's job;
+  vutuv only publishes the claim, and the key renders only when non-empty. This
+  is half 1 of migration; emitting `Move` to carry followers *out* is not built
+  (see the v1 limits).
 - **Discovery**: `GET /.well-known/webfinger?resource=acct:handle@host`
   answers with the actor URL — how Mastodon's search resolves
   `@handle@vutuv.de`. The profile URL itself answers an
@@ -89,8 +97,14 @@ every endpoint 404s and nothing is delivered.
 ## Deliberate v1 limits
 
 No inbound content (likes/replies/boosts are dropped), no `Announce` for
-reposts, no `Move`/account migration, and account deletion sends no actor
-`Delete` broadcast (rows cascade; remote copies age out). The followers
+reposts, and account deletion sends no actor `Delete` broadcast (rows cascade;
+remote copies age out). Account migration is **half done** (issue #986):
+`alsoKnownAs` lets a member move their followers *in* from another server
+(the actor names the origin as an alias, Mastodon's own tooling drives the
+move), but vutuv never emits a `Move`, so a member leaving for another server
+still has to ask each follower to re-follow by hand. That half is gated on a
+product decision about what becomes of the vutuv account after a move-out. The
+followers
 collection is count-only (privacy). A follower row whose inbox answers 404/410
 is not pruned either: deliveries go to the sharedInbox where the remote
 declares one, so a per-actor gone signal rarely reaches us and pruning on a

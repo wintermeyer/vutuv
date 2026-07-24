@@ -30,6 +30,30 @@ defmodule VutuvWeb.Fediverse.DocsTest do
       # The avatar rides as the scraper-friendly square JPEG.
       assert doc["icon"]["url"] == "#{base()}/#{user.username}/avatar.jpg"
     end
+
+    test "renders alsoKnownAs only when the member listed origin accounts (#986)" do
+      user =
+        insert(:activated_user,
+          also_known_as: [
+            "https://mastodon.social/users/alice",
+            "https://fosstodon.org/users/alice"
+          ]
+        )
+
+      {:ok, actor} = Fediverse.ensure_actor(user)
+
+      assert Docs.actor(user, actor)["alsoKnownAs"] == [
+               "https://mastodon.social/users/alice",
+               "https://fosstodon.org/users/alice"
+             ]
+    end
+
+    test "omits alsoKnownAs entirely when empty (absent, never an empty array)" do
+      user = insert(:activated_user, also_known_as: [])
+      {:ok, actor} = Fediverse.ensure_actor(user)
+
+      refute Map.has_key?(Docs.actor(user, actor), "alsoKnownAs")
+    end
   end
 
   describe "create_activity/2 (public post -> Create(Note))" do

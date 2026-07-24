@@ -226,3 +226,13 @@ msgstr "darf nicht nur aus Satzzeichen bestehen"
 #, elixir-autogen, elixir-format
 msgid "\"%{tag}\" is only punctuation, not a tag."
 msgstr "„%{tag}“ besteht nur aus Satzzeichen und ist kein Tag."
+
+#: lib/vutuv_web/views/error_helpers.ex:75
+#, elixir-autogen, elixir-format
+msgid "Please list at most %{max} accounts."
+msgstr "Bitte geben Sie höchstens %{max} Konten an."
+
+#: lib/vutuv_web/views/error_helpers.ex:76
+#, elixir-autogen, elixir-format
+msgid "\"%{uri}\" is not a valid https account address."
+msgstr "„%{uri}“ ist keine gültige https-Kontoadresse."
