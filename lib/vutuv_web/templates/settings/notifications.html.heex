@@ -87,6 +87,29 @@ heading. --%>
       hint={gettext("When off, you never see this kind of notification, whoever sends it.")}
     />
 
+    <%!-- Thread replies (issue #1025): the second in-app kind a member can
+          switch off. It is what lets a live discussion reach everyone who wrote
+          in the thread, but a busy thread gets loud. Direct answers to your own
+          post (the "reply" kind) are unaffected and stay on. Never emailed. --%>
+    <.toggle_form_card
+      changeset={@changeset}
+      field={:thread_notifications?}
+      form_id="thread-notifications-form"
+      action={~p"/settings/notifications"}
+      title={gettext("Thread replies")}
+      intro={
+        gettext(
+          "When someone replies anywhere in a thread you have written in, you hear about it under the bell, so a discussion reaches everyone who took part. Never by email."
+        )
+      }
+      label={gettext("Tell me about new replies in threads I take part in")}
+      hint={
+        gettext(
+          "When off, you only hear about direct answers to your own posts, never other replies in the thread."
+        )
+      }
+    />
+
     <%!-- The remaining in-app notifications are not configurable (they are the
           product), so this card just explains them and links to the bell. --%>
     <.card>

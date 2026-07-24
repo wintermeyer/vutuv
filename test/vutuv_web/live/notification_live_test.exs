@@ -481,6 +481,25 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert length(row_ids(html, "reply")) == 1
     end
 
+    test "only the day's first thread row carries the opt-out hint (issue #1025)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # Two separate threads the member rooted, each answered by a third party
+      # to the first replier - two distinct thread rows on the same day.
+      for body <- ["Thread one", "Thread two"] do
+        root = insert(:post, user: user, body: body)
+        {:ok, first} = Vutuv.Posts.create_reply(insert(:user), root, %{body: "First answer"})
+        {:ok, _} = Vutuv.Posts.create_reply(insert(:user), first, %{body: "Third-party answer"})
+      end
+
+      {:ok, live, html} = live(conn, ~p"/notifications")
+
+      assert length(row_ids(html, "thread")) == 2
+      # Exactly one hint for the day, linking to the notification settings.
+      assert length(Regex.scan(~r/data-thread-hint/, html)) == 1
+      assert has_element?(live, ~s([data-thread-hint] a[href="/settings/notifications"]))
+    end
+
     test "the posts filter tab keeps thread rows", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
