@@ -72,7 +72,11 @@ defmodule Vutuv.Deliverability do
       email_value: address,
       action: "failed",
       status: dsn,
-      raw: String.slice(raw || "", 0, 100_000)
+      # A DSN diagnostic never needs 100 KB kept for forensics; bounding the
+      # stored copy caps per-row storage so one report can't write a giant row
+      # per recipient. The watcher's `raw` is a single short log line, well under
+      # this, so it is unaffected.
+      raw: String.slice(raw || "", 0, 16_000)
     })
 
     {transitioned, _} =

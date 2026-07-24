@@ -208,6 +208,60 @@ defmodule Vutuv.Notifications.BouncesTest do
     test "garbage is rejected" do
       assert {:error, :unparseable} = Bounces.record("To: whatever\n\nnot a DSN")
     end
+
+    test "a report packed with far more recipients than the cap records at most the cap" do
+      # A single 1 MB body can name tens of thousands of distinct recipients;
+      # uncapped, record_hard_bounces/3 would insert one ledger row (with a
+      # slice of the whole body) per recipient - the amplification this fix
+      # bounds. A real vutuv DSN has exactly one recipient.
+      recipient_lines =
+        1..150
+        |> Enum.map_join("\n", &"Final-Recipient: rfc822; dead#{&1}@example.com")
+
+      raw = """
+      From: MAILER-DAEMON@mail.example.com (Mail Delivery System)
+      Content-Type: multipart/report; report-type=delivery-status; boundary="ABC"
+
+      --ABC
+      Content-Type: message/delivery-status
+
+      #{recipient_lines}
+      Action: failed
+      Status: 5.1.1
+      Diagnostic-Code: smtp; 550 5.1.1 User unknown
+
+      --ABC--
+      """
+
+      assert {:ok, :failed} = Bounces.record(raw)
+
+      # 150 distinct recipients, but the report acts on at most @max_recipients
+      # (10) of them - not one row per recipient.
+      assert Repo.aggregate(EmailBounce, :count) == 10
+    end
+
+    test "the stored raw is bounded to the new cap even for a huge body" do
+      padding = String.duplicate("x", 200_000)
+
+      raw = """
+      From: MAILER-DAEMON@mail.example.com (Mail Delivery System)
+      Content-Type: multipart/report; report-type=delivery-status; boundary="ABC"
+
+      --ABC
+      Content-Type: message/delivery-status
+
+      Final-Recipient: rfc822; dead@example.com
+      Action: failed
+      Status: 5.1.1
+      Diagnostic-Code: smtp; 550 5.1.1 User unknown #{padding}
+
+      --ABC--
+      """
+
+      assert {:ok, :failed} = Bounces.record(raw)
+      assert [bounce] = Repo.all(EmailBounce)
+      assert String.length(bounce.raw) <= 16_000
+    end
   end
 
   describe "suppression in Emailer.deliver/1" do
