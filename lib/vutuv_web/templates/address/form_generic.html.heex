@@ -1,45 +1,59 @@
+<%!-- The fallback address form for countries with no dedicated variant. The
+      labels used to be passed as the *field* (`label f, :"street address,
+      p.o. box, organization name"`), which emitted a for= naming an id no
+      input has and rendered the whole comma list as the label text. They are
+      gettext strings now, with the extra examples moved into a hint line
+      where they belong. --%>
 <.form :let={f} for={@changeset} action={@action} class="editform">
   <.form_error changeset={@changeset} />
-  
+
   <%= hidden_input f, :country %>
 
   <.editform_field form={f} field={:description}>
-    <%= label f, :description %>
-    <%= text_input f, :description %>
+    <%= label f, :description, gettext("Description") %>
+    <%= text_input f, :description, [autofocus: true, placeholder: gettext("Home, Office")] ++ err_attrs(f, :description) %>
     <%= error_tag f, :description %>
   </.editform_field>
 
   <.editform_field form={f} field={:line_1}>
-    <%= label f, :"street address, p.o. box, organization name" %>
-    <%= text_input f, :line_1 %>
+    <%= label f, :line_1, gettext("Street address") %>
+    <%= text_input f, :line_1, [autocomplete: "address-line1"] ++ err_attrs(f, :line_1) %>
+    <p :if={!f.errors[:line_1]} class="editform__hint">
+      {gettext("Street, P.O. box or organization name.")}
+    </p>
     <%= error_tag f, :line_1 %>
   </.editform_field>
 
   <.editform_field form={f} field={:line_2}>
-    <%= label f, :"apartment, suite, unit, building, floor" %>
-    <%= text_input f, :line_2 %>
+    <%= label f, :line_2 do %>
+      {gettext("Apartment, suite, floor")}
+      <span class="editform__optional">{gettext("(optional)")}</span>
+    <% end %>
+    <%= text_input f, :line_2, [autocomplete: "address-line2"] ++ err_attrs(f, :line_2) %>
     <%= error_tag f, :line_2 %>
   </.editform_field>
 
-  <.editform_field form={f} field={:city}>
-    <%= label f, :city %>
-    <%= text_input f, :city %>
-    <%= error_tag f, :city %>
-  </.editform_field>
+  <div class="editform__row">
+    <.editform_field form={f} field={:city}>
+      <%= label f, :city, gettext("City") %>
+      <%= text_input f, :city, [autocomplete: "address-level2"] ++ err_attrs(f, :city) %>
+      <%= error_tag f, :city %>
+    </.editform_field>
 
-  <.editform_field form={f} field={:state}>
-    <%= label f, :"state, province, region" %>
-    <%= text_input f, :state %>
-    <%= error_tag f, :state %>
-  </.editform_field>
+    <.editform_field form={f} field={:state}>
+      <%= label f, :state, gettext("State, province or region") %>
+      <%= text_input f, :state, [autocomplete: "address-level1"] ++ err_attrs(f, :state) %>
+      <%= error_tag f, :state %>
+    </.editform_field>
+  </div>
 
   <.editform_field form={f} field={:zip_code}>
-    <%= label f, :"zip/postal_code" %>
-    <%= text_input f, :zip_code %>
+    <%= label f, :zip_code, gettext("ZIP or postal code") %>
+    <%= text_input f, :zip_code, [autocomplete: "postal-code"] ++ err_attrs(f, :zip_code) %>
     <%= error_tag f, :zip_code %>
   </.editform_field>
 
   <%= render "country_input.html", Map.put(assigns, :form, f) %>
-  
+
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>

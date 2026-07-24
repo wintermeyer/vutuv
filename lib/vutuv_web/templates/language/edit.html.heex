@@ -1,9 +1,8 @@
-<.page_header crumbs={[
-  {gettext("Settings"), ~p"/settings"},
-  {gettext("Languages"), ~p"/settings/languages"},
-  gettext("Edit")
-]} />
-
-<.card_section>
+<.form_page
+  user={@user}
+  active={:languages}
+  section={{gettext("Languages"), ~p"/settings/languages"}}
+  title={gettext("Edit language")}
+>
   <%= render "form_content.html", backlink: ~p"/settings/languages", changeset: @changeset, action: ~p"/settings/languages/#{@language}", delete_to: ~p"/settings/languages/#{@language}" %>
-</.card_section>
+</.form_page>

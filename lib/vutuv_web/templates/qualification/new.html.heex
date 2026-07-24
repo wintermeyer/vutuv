@@ -1,9 +1,8 @@
-<.page_header crumbs={[
-  {gettext("Settings"), ~p"/settings"},
-  {gettext("Certificates & licenses"), ~p"/settings/qualifications"},
-  gettext("New")
-]} />
-
-<.card_section>
+<.form_page
+  user={@user}
+  active={:qualifications}
+  section={{gettext("Certificates & licenses"), ~p"/settings/qualifications"}}
+  title={gettext("Add certificate or license")}
+>
   <%= render "form_content.html", backlink: ~p"/settings/qualifications", changeset: @changeset, action: ~p"/settings/qualifications", followers: @followers %>
-</.card_section>
+</.form_page>

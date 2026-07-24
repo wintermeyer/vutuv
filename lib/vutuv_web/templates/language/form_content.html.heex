@@ -3,13 +3,13 @@
 
   <.editform_field form={f} field={:language_code}>
     <%= label f, :language_code, gettext("Language") %>
-    <%= select f, :language_code, language_options(), prompt: gettext("Select a language"), autofocus: true %>
+    <%= select f, :language_code, language_options(), [prompt: gettext("Select a language"), autofocus: true] ++ err_attrs(f, :language_code) %>
     <%= error_tag f, :language_code %>
   </.editform_field>
 
   <.editform_field form={f} field={:proficiency}>
     <%= label f, :proficiency, gettext("Proficiency") %>
-    <%= select f, :proficiency, proficiency_options(), prompt: gettext("Select a proficiency") %>
+    <%= select f, :proficiency, proficiency_options(), [prompt: gettext("Select a proficiency")] ++ err_attrs(f, :proficiency) %>
     <%= error_tag f, :proficiency %>
   </.editform_field>
 

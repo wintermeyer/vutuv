@@ -11,14 +11,17 @@
     </div>
 
     <.editform_field form={f} field={:public?}>
-      <%= label f, :public?, gettext("Public (Everyone can view) or Private (Only you can view)") %>
-      <%= select f, :public?, [{gettext("Public"), true}, {gettext("Private"), false}] %>
+      <%= label f, :public?, gettext("Who can see it") %>
+      <%= select f, :public?, [{gettext("Everyone"), true}, {gettext("Only you"), false}], err_attrs(f, :public?) %>
       <%= error_tag f, :public? %>
     </.editform_field>
   <% else %>
     <.editform_field form={f} field={:value}>
       <%= label f, :value, gettext("Email Address") %>
-      <%= email_input f, :value, autofocus: true %>
+      <%= email_input f, :value, [autofocus: true, autocomplete: "email", inputmode: "email"] ++ err_attrs(f, :value) %>
+      <p :if={!f.errors[:value]} class="editform__hint">
+        {gettext("We send a PIN there to confirm the address belongs to you.")}
+      </p>
       <%= error_tag f, :value %>
     </.editform_field>
   <% end %>
@@ -27,7 +30,7 @@
         both the new and the edit form (the address itself stays read-only). --%>
   <.editform_field form={f} field={:email_type}>
     <%= label f, :email_type, gettext("Type of Email") %>
-    <%= select f, :email_type, [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}] %>
+    <%= select f, :email_type, [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}], err_attrs(f, :email_type) %>
     <%= error_tag f, :email_type %>
   </.editform_field>
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />

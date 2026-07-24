@@ -15,11 +15,10 @@
     >
       <div class="editform__field">
         <%= label f, :pin, gettext("PIN") %>
-        <%= text_input f, :pin,
-          autofocus: true,
+        <%= text_input f, :pin, [autofocus: true,
           autocomplete: "one-time-code",
           inputmode: "numeric",
-          placeholder: gettext("Enter your PIN") %>
+          placeholder: gettext("Enter your PIN")] ++ err_attrs(f, :pin) %>
       </div>
       <div class="editform__actions">
         <%= link gettext("Cancel"), to: ~p"/", class: "button button--cancel" %>

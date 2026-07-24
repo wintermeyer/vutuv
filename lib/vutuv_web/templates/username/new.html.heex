@@ -1,65 +1,68 @@
-<.page_header
-  title={gettext("Username")}
+<.settings_shell
+  user={@user}
+  active={:security}
+  title={gettext("Change username")}
   crumbs={[
     {gettext("Settings"), ~p"/settings"},
-    gettext("Username")
+    {gettext("Sign-in & security"), ~p"/settings/security"},
+    gettext("Change username")
   ]}
-/>
-
-<div class="card-list">
-  <section class="card">
-    <p>
-      <%= gettext(
-        "Your username is your profile address (vutuv.de/username) and how others mention you, like %{handle}.",
-        handle: "@#{@user.username}"
-      ) %>
-      <%= gettext(
-        "Changing it automatically rewrites every mention of your old handle in posts to the new one and notifies those posts' authors. Your old profile address stops working."
-      ) %>
-    </p>
-
-    <%!-- How many posts will be rewritten, so the member knows the blast radius
-          before renaming. --%>
-    <p :if={@mention_count > 0} class="editform__hint">
-      <%= ngettext(
-        "%{formatted} post currently mentions %{handle} and will be updated when you rename.",
-        "%{formatted} posts currently mention %{handle} and will be updated when you rename.",
-        @mention_count,
-        formatted: compact_count(@mention_count),
-        handle: "@#{@user.username}"
-      ) %>
-    </p>
-
-    <p class="editform__hint">
-      <%= gettext("You can change your username up to %{limit} times within %{days} days.",
-        limit: @quota.limit,
-        days: @quota.window_days
-      ) %>
-      <%= if @quota.remaining > 0 do %>
-        <%= gettext("%{remaining} of %{limit} changes left.",
-          remaining: @quota.remaining,
-          limit: @quota.limit
+>
+  <div class="card-list card-list--form">
+    <section class="card">
+      <p>
+        <%= gettext(
+          "Your username is your profile address (vutuv.de/username) and how others mention you, like %{handle}.",
+          handle: "@#{@user.username}"
         ) %>
-      <% end %>
-    </p>
+        <%= gettext(
+          "Changing it automatically rewrites every mention of your old handle in posts to the new one and notifies those posts' authors. Your old profile address stops working."
+        ) %>
+      </p>
 
-    <%= if @quota.remaining > 0 do %>
-      <%= render("form_content.html",
-        backlink: ~p"/settings/security",
-        changeset: @changeset,
-        action: ~p"/settings/usernames",
-        user: @user
-      ) %>
-    <% else %>
-      <p class="card__empty">
-        <%= gettext("You have used all %{limit} username changes of the last %{days} days.",
+      <%!-- How many posts will be rewritten, so the member knows the blast radius
+            before renaming. --%>
+      <p :if={@mention_count > 0} class="editform__hint">
+        <%= ngettext(
+          "%{formatted} post currently mentions %{handle} and will be updated when you rename.",
+          "%{formatted} posts currently mention %{handle} and will be updated when you rename.",
+          @mention_count,
+          formatted: compact_count(@mention_count),
+          handle: "@#{@user.username}"
+        ) %>
+      </p>
+
+      <p class="editform__hint">
+        <%= gettext("You can change your username up to %{limit} times within %{days} days.",
           limit: @quota.limit,
           days: @quota.window_days
         ) %>
-        <%= gettext("You can change it again on %{date}.",
-          date: Calendar.strftime(@quota.next_change_at, "%Y-%m-%d")
-        ) %>
+        <%= if @quota.remaining > 0 do %>
+          <%= gettext("%{remaining} of %{limit} changes left.",
+            remaining: @quota.remaining,
+            limit: @quota.limit
+          ) %>
+        <% end %>
       </p>
-    <% end %>
-  </section>
-</div>
+
+      <%= if @quota.remaining > 0 do %>
+        <%= render("form_content.html",
+          backlink: ~p"/settings/security",
+          changeset: @changeset,
+          action: ~p"/settings/usernames",
+          user: @user
+        ) %>
+      <% else %>
+        <p class="card__empty">
+          <%= gettext("You have used all %{limit} username changes of the last %{days} days.",
+            limit: @quota.limit,
+            days: @quota.window_days
+          ) %>
+          <%= gettext("You can change it again on %{date}.",
+            date: Calendar.strftime(@quota.next_change_at, "%Y-%m-%d")
+          ) %>
+        </p>
+      <% end %>
+    </section>
+  </div>
+</.settings_shell>

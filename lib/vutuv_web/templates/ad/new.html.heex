@@ -1,9 +1,12 @@
-<.page_header crumbs={[
-  {gettext("Advertising"), ~p"/ads"},
-  gettext("New")
-]} />
+<.page_header
+  title={gettext("Book an ad")}
+  crumbs={[
+    {gettext("Advertising"), ~p"/ads"},
+    gettext("New")
+  ]}
+/>
 
-<.card_section>
+<.card_section variant={:form}>
   <%!-- Submits to the preview step first; the binding POST /ads happens on
   the preview page's confirm button. --%>
   <.form :let={f} for={@changeset} action={~p"/ads/preview"} class="editform" id="ad-form">
@@ -65,7 +68,7 @@
 
     <.editform_field form={f} field={:content}>
       <%= label f, :content, gettext("Ad text") %>
-      <%= textarea f, :content, rows: 8, maxlength: Vutuv.Ads.Ad.content_max_length() %>
+      <%= textarea f, :content, [rows: 8, maxlength: Vutuv.Ads.Ad.content_max_length()] ++ err_attrs(f, :content) %>
       <%= error_tag f, :content %>
       <p class="editform__hint">
         {gettext("Markdown is supported. At most %{max} characters.",
@@ -79,43 +82,43 @@
 
     <.editform_field form={f} field={:billing_name}>
       <%= label f, :billing_name, gettext("Billing name") %>
-      <%= text_input f, :billing_name %>
+      <%= text_input f, :billing_name, err_attrs(f, :billing_name) %>
       <%= error_tag f, :billing_name %>
     </.editform_field>
 
     <.editform_field form={f} field={:billing_company}>
       <%= label f, :billing_company, gettext("Company (optional)") %>
-      <%= text_input f, :billing_company %>
+      <%= text_input f, :billing_company, err_attrs(f, :billing_company) %>
       <%= error_tag f, :billing_company %>
     </.editform_field>
 
     <.editform_field form={f} field={:billing_street}>
       <%= label f, :billing_street, gettext("Street and number") %>
-      <%= text_input f, :billing_street %>
+      <%= text_input f, :billing_street, err_attrs(f, :billing_street) %>
       <%= error_tag f, :billing_street %>
     </.editform_field>
 
     <.editform_field form={f} field={:billing_zip_code}>
       <%= label f, :billing_zip_code, gettext("Zip code") %>
-      <%= text_input f, :billing_zip_code %>
+      <%= text_input f, :billing_zip_code, err_attrs(f, :billing_zip_code) %>
       <%= error_tag f, :billing_zip_code %>
     </.editform_field>
 
     <.editform_field form={f} field={:billing_city}>
       <%= label f, :billing_city, gettext("City") %>
-      <%= text_input f, :billing_city %>
+      <%= text_input f, :billing_city, err_attrs(f, :billing_city) %>
       <%= error_tag f, :billing_city %>
     </.editform_field>
 
     <.editform_field form={f} field={:billing_country}>
       <%= label f, :billing_country, gettext("Country") %>
-      <%= text_input f, :billing_country %>
+      <%= text_input f, :billing_country, err_attrs(f, :billing_country) %>
       <%= error_tag f, :billing_country %>
     </.editform_field>
 
     <.editform_field form={f} field={:vat_id}>
       <%= label f, :vat_id, gettext("VAT ID (optional)") %>
-      <%= text_input f, :vat_id %>
+      <%= text_input f, :vat_id, err_attrs(f, :vat_id) %>
       <%= error_tag f, :vat_id %>
     </.editform_field>
 

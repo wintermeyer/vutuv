@@ -6,14 +6,58 @@ defmodule VutuvWeb.ErrorHelpers do
   use PhoenixHTMLHelpers
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Phoenix.HTML.Form
+
   @doc """
   Generates tag for inlined form input errors.
+
+  The span carries a stable `id` derived from the input's own id
+  (`url_value_error`), which is what `err_attrs/2` points `aria-describedby`
+  at, so a screen reader reads the reason together with the field instead of
+  leaving the message orphaned two nodes away.
   """
   def error_tag(form, field) do
     if error = form.errors[field] do
-      content_tag(:span, translate_error(error), class: "editform__error")
+      content_tag(:span, translate_error(error),
+        class: "editform__error",
+        id: error_id(form, field)
+      )
     end
   end
+
+  @doc """
+  The accessible state a failed field owes its user, as input options.
+
+  Returns `[]` for a clean field, and for a failed one the pair that makes the
+  red border mean something to a person who cannot see it: `aria-invalid`
+  (this control is wrong) and `aria-describedby` pointing at the `error_tag/2`
+  span right below it (this is why). Colour alone would leave the error
+  invisible to a screen-reader or colour-blind user — WCAG 1.4.1 / 3.3.1.
+
+  Pass it as the input's options, appending to any the field already has:
+
+      <%= text_input f, :value, err_attrs(f, :value) %>
+      <%= text_input f, :value, [placeholder: "…"] ++ err_attrs(f, :value) %>
+  """
+  def err_attrs(form, field) do
+    if form.errors[field] do
+      ["aria-invalid": "true"] ++
+        case error_id(form, field) do
+          nil -> []
+          id -> ["aria-describedby": id]
+        end
+    else
+      []
+    end
+  end
+
+  # `error_tag/2` is called with a `%Phoenix.HTML.Form{}` on the classic form
+  # pages and with a bare `%Ecto.Changeset{}` in a few LiveViews (TagNewLive),
+  # which has `.errors` but no input ids to derive one from. Only the form case
+  # can name an id, so the changeset case renders the message without one — it
+  # still reads, it just cannot be pointed at by `aria-describedby`.
+  defp error_id(%Form{} = form, field), do: "#{Form.input_id(form, field)}_error"
+  defp error_id(_other, _field), do: nil
 
   @doc """
   Translates an error message using gettext.

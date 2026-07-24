@@ -1,31 +1,42 @@
+<%!-- The German address form. The labels are hardcoded German on purpose (the
+      form variant is picked by country), but they must be passed as the label
+      TEXT, not as the field: `label f, "Strasse"` takes the string as the
+      *field*, so it emitted for="address_Strasse" — an id no input has. Every
+      label on this form pointed at nothing: clicking it focused no field and
+      assistive tech read the inputs as unlabelled. Always `label f, :field,
+      "Text"`. --%>
 <.form :let={f} for={@changeset} action={@action} class="editform">
   <.form_error changeset={@changeset} />
 
   <%= hidden_input f, :country %>
 
   <.editform_field form={f} field={:description}>
-    <%= label f, "Beschreibung" %>
-    <%= text_input f, :description, autofocus: true %>
+    <%= label f, :description, "Beschreibung" %>
+    <%= text_input f, :description, [autofocus: true, placeholder: "Zuhause, Büro"] ++ err_attrs(f, :description) %>
     <%= error_tag f, :description %>
   </.editform_field>
 
   <.editform_field form={f} field={:line_1}>
-    <%= label f, "Strasse" %>
-    <%= text_input f, :line_1 %>
+    <%= label f, :line_1, "Straße und Hausnummer" %>
+    <%= text_input f, :line_1, [autocomplete: "street-address"] ++ err_attrs(f, :line_1) %>
     <%= error_tag f, :line_1 %>
   </.editform_field>
 
-  <.editform_field form={f} field={:zip_code}>
-    <%= label f, "Postleitzahl" %>
-    <%= text_input f, :zip_code %>
-    <%= error_tag f, :zip_code %>
-  </.editform_field>
+  <%!-- Postleitzahl and Stadt name one place, so they share a row rather than
+        taking a full-width field each. --%>
+  <div class="editform__row">
+    <.editform_field form={f} field={:zip_code}>
+      <%= label f, :zip_code, "Postleitzahl" %>
+      <%= text_input f, :zip_code, [autocomplete: "postal-code", inputmode: "numeric"] ++ err_attrs(f, :zip_code) %>
+      <%= error_tag f, :zip_code %>
+    </.editform_field>
 
-  <.editform_field form={f} field={:city}>
-    <%= label f, "Stadt" %>
-    <%= text_input f, :city %>
-    <%= error_tag f, :city %>
-  </.editform_field>
+    <.editform_field form={f} field={:city}>
+      <%= label f, :city, "Stadt" %>
+      <%= text_input f, :city, [autocomplete: "address-level2"] ++ err_attrs(f, :city) %>
+      <%= error_tag f, :city %>
+    </.editform_field>
+  </div>
 
   <%= render "country_input.html", Map.put(assigns, :form, f) %>
 

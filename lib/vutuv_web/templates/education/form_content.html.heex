@@ -3,58 +3,73 @@
 
   <.editform_field form={f} field={:school}>
     <%= label f, :school, gettext("School") %>
-    <%= text_input f, :school, autofocus: true %>
+    <%= text_input f, :school, [autofocus: true] ++ err_attrs(f, :school) %>
     <%= error_tag f, :school %>
   </.editform_field>
 
   <.editform_field form={f} field={:degree}>
     <%= label f, :degree, gettext("Degree") %>
-    <%= text_input f, :degree %>
+    <%= text_input f, :degree, err_attrs(f, :degree) %>
     <%= error_tag f, :degree %>
   </.editform_field>
 
   <.editform_field form={f} field={:kind}>
     <%= label f, :kind, gettext("Category") %>
-    <%= select f, :kind, kind_options() %>
+    <%= select f, :kind, kind_options(), err_attrs(f, :kind) %>
     <%= error_tag f, :kind %>
   </.editform_field>
 
   <.editform_field form={f} field={:field_of_study}>
     <%= label f, :field_of_study, gettext("Field of study") %>
-    <%= text_input f, :field_of_study %>
+    <%= text_input f, :field_of_study, err_attrs(f, :field_of_study) %>
     <%= error_tag f, :field_of_study %>
   </.editform_field>
 
   <.editform_field form={f} field={:description}>
     <%= label f, :description, gettext("Description") %>
-    <%= textarea f, :description, rows: 3 %>
+    <%= textarea f, :description, [rows: 3] ++ err_attrs(f, :description) %>
     <p class="editform__hint">{gettext("Markdown is supported: bold, italics, links and lists.")}</p>
     <%= error_tag f, :description %>
   </.editform_field>
 
-  <.editform_field form={f} field={:start_year}>
-    <%= label f, :start_year, gettext("Start year") %>
-    <%= select f, :start_year, @current_year..1920//-1, prompt: gettext("Select a year") %>
-    <%= error_tag f, :start_year %>
-  </.editform_field>
+  <%!-- One date per row, month beside year — see the same block in
+        work_experience/form_content for why. --%>
+  <fieldset class="editform__group">
+    <legend>{gettext("From")}</legend>
+    <div class="editform__row">
+      <.editform_field form={f} field={:start_month}>
+        <%= label f, :start_month, gettext("Month") %>
+        <%= select f, :start_month, month_options(), [prompt: gettext("Month")] ++ err_attrs(f, :start_month) %>
+        <%= error_tag f, :start_month %>
+      </.editform_field>
 
-  <.editform_field form={f} field={:start_month}>
-    <%= label f, :start_month, gettext("Start month") %>
-    <%= select f, :start_month, month_options(), prompt: gettext("Select a month") %>
-    <%= error_tag f, :start_month %>
-  </.editform_field>
+      <.editform_field form={f} field={:start_year}>
+        <%= label f, :start_year, gettext("Year") %>
+        <%= select f, :start_year, @current_year..1920//-1, [prompt: gettext("Year")] ++ err_attrs(f, :start_year) %>
+        <%= error_tag f, :start_year %>
+      </.editform_field>
+    </div>
+  </fieldset>
 
-  <.editform_field form={f} field={:end_year}>
-    <%= label f, :end_year, gettext("End year") %>
-    <%= select f, :end_year, @current_year..1920//-1, prompt: gettext("Select a year") %>
-    <%= error_tag f, :end_year %>
-  </.editform_field>
+  <fieldset class="editform__group">
+    <legend>
+      {gettext("Until")}
+      <span class="editform__optional">{gettext("(leave empty if this is current)")}</span>
+    </legend>
+    <div class="editform__row">
+      <.editform_field form={f} field={:end_month}>
+        <%= label f, :end_month, gettext("Month") %>
+        <%= select f, :end_month, month_options(), [prompt: gettext("Month")] ++ err_attrs(f, :end_month) %>
+        <%= error_tag f, :end_month %>
+      </.editform_field>
 
-  <.editform_field form={f} field={:end_month}>
-    <%= label f, :end_month, gettext("End month") %>
-    <%= select f, :end_month, month_options(), prompt: gettext("Select a month") %>
-    <%= error_tag f, :end_month %>
-  </.editform_field>
+      <.editform_field form={f} field={:end_year}>
+        <%= label f, :end_year, gettext("Year") %>
+        <%= select f, :end_year, @current_year..1920//-1, [prompt: gettext("Year")] ++ err_attrs(f, :end_year) %>
+        <%= error_tag f, :end_year %>
+      </.editform_field>
+    </div>
+  </fieldset>
 
   <%!-- The author's "tell my followers" choice (issue #980). Only the new-entry
         form passes :followers, so an edit never re-announces an old entry. --%>

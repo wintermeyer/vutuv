@@ -1,10 +1,8 @@
-<.page_header crumbs={[
-  {gettext("Settings"), ~p"/settings"},
-  {gettext("Experience"), ~p"/settings/work_experiences"},
-  gettext("New")
-]} />
-
-
-<.card_section>
+<.form_page
+  user={@user}
+  active={:work}
+  section={{gettext("Experience"), ~p"/settings/work_experiences"}}
+  title={gettext("Add work experience")}
+>
   <%= render "form_content.html", backlink: ~p"/settings/work_experiences", changeset: @changeset, action: ~p"/settings/work_experiences", current_year: @current_year, linked_organization: @linked_organization, qualification_options: @qualification_options, followers: @followers %>
-</.card_section>
+</.form_page>

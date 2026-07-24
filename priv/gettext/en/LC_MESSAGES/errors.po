@@ -180,57 +180,57 @@ msgstr ""
 msgid "the review is missing the title of the work"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:55
+#: lib/vutuv_web/views/error_helpers.ex:99
 #, elixir-autogen, elixir-format
 msgid "PDF uploads are not available on this installation. Please upload an image instead."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:50
+#: lib/vutuv_web/views/error_helpers.ex:94
 #, elixir-autogen, elixir-format
 msgid "Please confirm that the file may be shown publicly. Without your consent nothing is uploaded."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:59
+#: lib/vutuv_web/views/error_helpers.ex:103
 #, elixir-autogen, elixir-format
 msgid "could not be read. Please upload a PDF, JPG, PNG or WebP file."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:54
+#: lib/vutuv_web/views/error_helpers.ex:98
 #, elixir-autogen, elixir-format
 msgid "is larger than 10 MB. Please upload a smaller file."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:62
+#: lib/vutuv_web/views/error_helpers.ex:106
 #, elixir-autogen, elixir-format
 msgid "must not be a web or email address"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:63
+#: lib/vutuv_web/views/error_helpers.ex:107
 #, elixir-autogen, elixir-format
 msgid "can't be only a link. Please describe yourself in a few words."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:67
+#: lib/vutuv_web/views/error_helpers.ex:111
 #, elixir-autogen, elixir-format
 msgid "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:72
+#: lib/vutuv_web/views/error_helpers.ex:116
 #, elixir-autogen, elixir-format
 msgid "must not be only punctuation"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:73
+#: lib/vutuv_web/views/error_helpers.ex:117
 #, elixir-autogen, elixir-format
 msgid "\"%{tag}\" is only punctuation, not a tag."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:76
+#: lib/vutuv_web/views/error_helpers.ex:120
 #, elixir-autogen, elixir-format
 msgid "\"%{uri}\" is not a valid https account address."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:75
+#: lib/vutuv_web/views/error_helpers.ex:119
 #, elixir-autogen, elixir-format
 msgid "Please list at most %{max} accounts."
 msgstr ""

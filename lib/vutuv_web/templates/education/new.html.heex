@@ -1,10 +1,8 @@
-<.page_header crumbs={[
-  {gettext("Settings"), ~p"/settings"},
-  {gettext("Education"), ~p"/settings/educations"},
-  gettext("New")
-]} />
-
-
-<.card_section>
+<.form_page
+  user={@user}
+  active={:education}
+  section={{gettext("Education"), ~p"/settings/educations"}}
+  title={gettext("Add education")}
+>
   <%= render "form_content.html", backlink: ~p"/settings/educations", changeset: @changeset, action: ~p"/settings/educations", current_year: @current_year, followers: @followers %>
-</.card_section>
+</.form_page>
