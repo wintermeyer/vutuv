@@ -822,6 +822,10 @@ defmodule VutuvWeb.Router do
     get("/fediverse", SettingsController, :fediverse)
     put("/fediverse", SettingsController, :update_fediverse)
     patch("/fediverse", SettingsController, :update_fediverse)
+    # Fediverse account migration, move out (issue #986): broadcast a Move to
+    # redirect followers, or cancel the redirect.
+    post("/fediverse/move", SettingsController, :move_fediverse)
+    delete("/fediverse/move", SettingsController, :cancel_move_fediverse)
     get("/notifications", SettingsController, :notifications)
     put("/notifications", SettingsController, :update_notifications)
     patch("/notifications", SettingsController, :update_notifications)

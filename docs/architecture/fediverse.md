@@ -24,7 +24,23 @@ every endpoint 404s and nothing is delivered.
   (`Vutuv.Fediverse.Keys`), created lazily on opt-in. The documents are built
   by `VutuvWeb.Fediverse.Docs`; URLs hang off the member so no root slug is
   burned: `/:username/actor` (id), `.../inbox`, `.../followers` and
-  `.../outbox` (count-only collections).
+  `.../outbox` (count-only collections). The actor also carries
+  **`alsoKnownAs`** (issue #986) — the account URIs a member is migrating
+  *from* (`users.also_known_as`, set on `/settings/fediverse`, one per line).
+  A remote server that moves a member's followers *to* vutuv checks this before
+  it accepts the move (the destination must name the origin as an alias first).
+  Anyone can *claim* an alias, so verifying it is the remote server's job;
+  vutuv only publishes the claim, and the key renders only when non-empty. A
+  member who instead moves *out* sets **`movedTo`** (`users.moved_to`):
+  `Vutuv.Fediverse.move_out/2` fetches the target actor, confirms it lists this
+  member in *its* `alsoKnownAs` (the same check every remote server makes, so a
+  doomed Move fails fast), stamps `moved_to`/`moved_at`, and broadcasts
+  `Move { actor, object, target }` to every follower inbox. From then on the
+  member's posts stop federating (`moved?/1` gate) while the actor keeps serving
+  the `movedTo` redirect; the vutuv profile is untouched (a redirect, not a
+  deletion). A 30-day cooldown (`move_cooldown_days/0`) stops move-spam, and
+  `cancel_move/1` clears the redirect while keeping `moved_at` so the cooldown
+  still holds.
 - **Discovery**: `GET /.well-known/webfinger?resource=acct:handle@host`
   answers with the actor URL — how Mastodon's search resolves
   `@handle@vutuv.de`. The profile URL itself answers an
@@ -89,8 +105,14 @@ every endpoint 404s and nothing is delivered.
 ## Deliberate v1 limits
 
 No inbound content (likes/replies/boosts are dropped), no `Announce` for
-reposts, no `Move`/account migration, and account deletion sends no actor
-`Delete` broadcast (rows cascade; remote copies age out). The followers
+reposts, and account deletion sends no actor `Delete` broadcast (rows cascade;
+remote copies age out). Account migration is **both ways** now (issue #986):
+`alsoKnownAs` moves followers *in*, `Move` + `movedTo` moves them *out* (see the
+Actor bullet above). The design choice worth remembering: a move-out is a
+**redirect, never a deletion** — the vutuv account is a full profile, not just a
+Fediverse actor, so moving your Fediverse followers away only pauses outbound
+post federation and publishes the redirect; the profile, CV and everything else
+stay. Deleting an account remains its own separate action. The followers
 collection is count-only (privacy). A follower row whose inbox answers 404/410
 is not pruned either: deliveries go to the sharedInbox where the remote
 declares one, so a per-actor gone signal rarely reaches us and pruning on a

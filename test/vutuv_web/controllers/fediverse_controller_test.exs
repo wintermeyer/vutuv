@@ -167,6 +167,24 @@ defmodule VutuvWeb.FediverseControllerTest do
       assert conn |> get("/#{user.username}/actor") |> Map.fetch!(:status) == 404
     end
 
+    test "renders the member's alsoKnownAs aliases (#986)", %{conn: conn} do
+      user = insert(:activated_user, fediverse_followers?: true, also_known_as: [@remote_actor])
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+
+      body = conn |> get("/#{user.username}/actor") |> Map.fetch!(:resp_body) |> Jason.decode!()
+
+      assert body["alsoKnownAs"] == [@remote_actor]
+    end
+
+    test "a moved account still serves its actor, now advertising movedTo (#986)", %{conn: conn} do
+      user = insert(:activated_user, fediverse_followers?: true, moved_to: @remote_actor)
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+
+      body = conn |> get("/#{user.username}/actor") |> Map.fetch!(:resp_body) |> Jason.decode!()
+
+      assert body["movedTo"] == @remote_actor
+    end
+
     test "followers and outbox are count-only collections", %{conn: conn} do
       user = federated_user()
 

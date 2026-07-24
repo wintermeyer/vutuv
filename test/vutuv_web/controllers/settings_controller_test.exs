@@ -283,6 +283,114 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
+  test "fediverse: the origin-account field is hidden until the member opts in", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+
+    refute conn |> get(~p"/settings/fediverse") |> html_response(200) =~
+             ~s(id="user_also_known_as_input")
+  end
+
+  describe "fediverse: alsoKnownAs account migration (#986)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, user} = Accounts.update_user(user, %{"fediverse_followers?" => "true"})
+      %{conn: conn, user: user}
+    end
+
+    test "the origin-account field shows once federation is on", %{conn: conn} do
+      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert html =~ ~s(id="user_also_known_as_input")
+    end
+
+    test "saving records the listed accounts, one per line", %{conn: conn, user: user} do
+      conn =
+        put(conn, ~p"/settings/fediverse",
+          user: %{
+            "fediverse_followers?" => "true",
+            "also_known_as_input" =>
+              "https://mastodon.social/users/alice\nhttps://fosstodon.org/users/alice\n"
+          }
+        )
+
+      assert redirected_to(conn) == ~p"/settings/fediverse"
+
+      assert Repo.get(User, user.id).also_known_as == [
+               "https://mastodon.social/users/alice",
+               "https://fosstodon.org/users/alice"
+             ]
+    end
+
+    test "the stored accounts are seeded back into the textarea", %{conn: conn, user: user} do
+      {:ok, _} =
+        Accounts.update_user(user, %{
+          "also_known_as_input" => "https://mastodon.social/users/alice"
+        })
+
+      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert html =~ "https://mastodon.social/users/alice"
+    end
+
+    test "a non-https entry is rejected without changing the stored list", %{
+      conn: conn,
+      user: user
+    } do
+      {:ok, _} =
+        Accounts.update_user(user, %{
+          "also_known_as_input" => "https://mastodon.social/users/alice"
+        })
+
+      conn =
+        put(conn, ~p"/settings/fediverse",
+          user: %{"fediverse_followers?" => "true", "also_known_as_input" => "not-a-url"}
+        )
+
+      assert html_response(conn, 422) =~ "not a valid https account address"
+      assert Repo.get(User, user.id).also_known_as == ["https://mastodon.social/users/alice"]
+    end
+
+    # Move-out rendering + cancel only (no HTTP stub, so this async module never
+    # touches :fediverse_req_options). The Move broadcast itself is covered by
+    # Vutuv.FediverseTest (async: false).
+    test "the move-out form points at the move route while not moved", %{conn: conn} do
+      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert html =~ ~s(id="move-form")
+      assert html =~ ~s(action="#{~p"/settings/fediverse/move"}")
+      # No redirect banner while the member has not moved.
+      refute html =~ "cancel-move-form"
+    end
+
+    test "once moved, the page shows the redirect and a cancel control, not the move-in field",
+         %{conn: conn, user: user} do
+      {:ok, _} =
+        user
+        |> Ecto.Changeset.change(moved_to: "https://mastodon.social/users/gone")
+        |> Repo.update()
+
+      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert html =~ "https://mastodon.social/users/gone"
+      assert html =~ ~s(id="cancel-move-form")
+      # The "moving in" field is hidden once you have moved out.
+      refute html =~ ~s(id="user_also_known_as_input")
+      refute html =~ ~s(id="move-form")
+    end
+
+    test "cancelling the move clears the redirect", %{conn: conn, user: user} do
+      {:ok, _} =
+        user
+        |> Ecto.Changeset.change(moved_to: "https://mastodon.social/users/gone")
+        |> Repo.update()
+
+      conn = delete(conn, ~p"/settings/fediverse/move")
+
+      assert redirected_to(conn) == ~p"/settings/fediverse"
+      assert Repo.get(User, user.id).moved_to == nil
+    end
+  end
+
   describe "notifications: granular email toggles" do
     test "saving the per-type toggles persists each one and stays on the page", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

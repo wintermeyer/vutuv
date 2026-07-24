@@ -79,10 +79,128 @@ deserves more room than one toggle row. --%>
           )}
         </.setting_toggle>
 
+        <%!-- alsoKnownAs (issue #986): the accounts a member is moving *from*.
+              A remote server checks these before it moves the member's
+              followers here, so listing the old account's address is what makes
+              a move *to* vutuv possible. Empty for almost everyone; only shown
+              once federation is on, where it can take effect. Hidden once the
+              member has moved *out* (moving in and out at once makes no sense). --%>
+        <div :if={Vutuv.Fediverse.federated?(@user) and is_nil(@user.moved_to)}>
+          <label for="user_also_known_as_input" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+            {gettext("Moving to vutuv from another account?")}
+          </label>
+          <%= textarea f, :also_known_as_input,
+            id: "user_also_known_as_input",
+            rows: 3,
+            class: [input_class(f, :also_known_as_input), "mt-1 resize-y font-mono text-xs"],
+            placeholder: "https://mastodon.social/users/yourname",
+            "aria-invalid": f.errors[:also_known_as_input] && "true" %>
+          <%= error_tag f, :also_known_as_input %>
+          <p :if={!f.errors[:also_known_as_input]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext(
+              "List the full address of each account you are migrating from, one per line (for example %{example}). On the other server, start the move to your vutuv handle; it will only go through once your old account is listed here. Leave empty if you are not moving accounts.",
+              example: "https://mastodon.social/users/yourname"
+            )}
+          </p>
+        </div>
+
         <div class="pt-1">
           <.button type="submit">{gettext("Save")}</.button>
         </div>
       </.form>
+    </.card>
+
+    <%!-- Move out (issue #986, half 2): redirect the member's Fediverse
+          followers to another account. Only meaningful while federating. The
+          key reassurance, repeated: this is a redirect, not a deletion — the
+          vutuv profile is untouched. --%>
+    <.card :if={Vutuv.Fediverse.federated?(@user)}>
+      <.section_title>{gettext("Move your followers to another account")}</.section_title>
+
+      <%= if @user.moved_to do %>
+        <div class="mt-3 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/50">
+          <p class="text-slate-700 dark:text-slate-200">
+            {gettext("You have redirected your Fediverse followers to another account:")}
+          </p>
+          <p class="mt-1">
+            <a
+              href={@user.moved_to}
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+            >{@user.moved_to}</a>
+          </p>
+          <p :if={@user.moved_at} class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {gettext("Redirected on %{date}",
+              date: Calendar.strftime(@user.moved_at, "%Y-%m-%d")
+            )}
+          </p>
+          <p class="mt-2 text-slate-600 dark:text-slate-400">
+            {gettext(
+              "New posts are no longer federated from here, and your actor points visitors to your new account. Your vutuv profile itself is unchanged."
+            )}
+          </p>
+          <.form
+            :let={_f}
+            for={%{}}
+            as={:cancel}
+            action={~p"/settings/fediverse/move"}
+            method="delete"
+            id="cancel-move-form"
+            class="mt-4"
+          >
+            <.button type="submit" variant="secondary">
+              {gettext("Cancel redirect")}
+            </.button>
+          </.form>
+        </div>
+      <% else %>
+        <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Leaving for another Fediverse account? You can send your followers there. They will be asked to follow your new account, and vutuv stops federating your new posts. This is only a redirect: your vutuv profile stays exactly as it is, and nothing is deleted."
+          )}
+        </p>
+        <ol class="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">
+          <li>
+            {gettext("On your other account, add your vutuv handle")}
+            <code class="select-all rounded bg-slate-100 px-1 py-0.5 text-slate-800 dark:bg-slate-800 dark:text-slate-100">@{@user.username}@{@fediverse_host}</code>
+            {gettext("as an account alias.")}
+          </li>
+          <li>{gettext("Enter that account's address below and redirect.")}</li>
+        </ol>
+        <.form
+          :let={_f}
+          for={%{}}
+          as={:move}
+          action={~p"/settings/fediverse/move"}
+          method="post"
+          id="move-form"
+          class="mt-4 space-y-3"
+        >
+          <div>
+            <label for="move_target" class="sr-only">
+              {gettext("Account you are moving to")}
+            </label>
+            <input
+              type="text"
+              name="move[target]"
+              id="move_target"
+              class={[input_class(), "font-mono text-xs"]}
+              placeholder="https://mastodon.social/users/yourname"
+            />
+          </div>
+          <.button
+            type="submit"
+            data-confirm={
+              gettext(
+                "This tells your Fediverse followers to follow your new account instead, and stops federating your posts from here. Your vutuv profile is not affected. Continue?"
+              )
+            }
+          >
+            {gettext("Redirect my followers")}
+          </.button>
+        </.form>
+      <% end %>
     </.card>
 
     <%!-- The no-federation-needed sibling feature, so members find both. --%>

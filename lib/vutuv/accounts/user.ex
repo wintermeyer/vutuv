@@ -181,12 +181,31 @@ defmodule Vutuv.Accounts.User do
     # Codeberg). Default on; the opt-out lives on the Privacy settings page.
     # Off, the accounts still render as plain links on the Social Media card.
     field(:show_code_stats?, :boolean, default: true)
-    # The Fediverse opt-in (Privacy settings, default off). Federation is not
-    # built yet: the flag ships ahead of the feature to measure demand and to
-    # collect the per-member consent any future ActivityPub federation must be
-    # gated on (remote deletion is unenforceable, so opt-in is the only lawful
-    # default). Until federation ships, nothing reads this flag.
+    # The Fediverse opt-in (the /settings/fediverse page, default off). Gates
+    # follow-only ActivityPub federation (Vutuv.Fediverse): with it on, remote
+    # servers can follow the member and receive their public posts. Opt-in
+    # because deleting federated copies on remote servers is unenforceable, so
+    # per-member consent is the only lawful default.
     field(:fediverse_followers?, :boolean, default: false)
+    # The Fediverse account(s) the member is migrating *from* (issue #986,
+    # half 1): actor URIs rendered as `alsoKnownAs` on the actor document. A
+    # remote server (Mastodon) checks this before it moves a member's followers
+    # *to* their vutuv account — the destination has to name the origin as an
+    # alias first. Anyone can *claim* an alias, so the verification is the
+    # remote server's job; vutuv only has to publish the claim honestly. Set
+    # through the virtual `also_known_as_input` textarea, one URI per line.
+    field(:also_known_as, {:array, :string}, default: [])
+    field(:also_known_as_input, :string, virtual: true)
+    # The Fediverse account the member redirected their followers *to* (issue
+    # #986, half 2). When set, the actor document advertises `movedTo`, remote
+    # servers re-point their follow, and vutuv stops pushing new posts to the
+    # Fediverse (the account is "moved" — a redirect, not a live feed). The
+    # vutuv profile itself is untouched: this is not a deletion or a logout,
+    # only a Fediverse redirect. `moved_at` stamps the last Move broadcast, so a
+    # cooldown can stop a member spamming their followers with moves. Both are
+    # set programmatically by `Vutuv.Fediverse.move_out/2` (never cast).
+    field(:moved_to, :string)
+    field(:moved_at, :naive_datetime)
     # The member-preference fields (the Vutuv.Prefs registry): deliberately
     # WITHOUT schema or DB defaults — nil means "inherit the installation
     # default" (admin-set at /admin/preferences, else the shipped default from
@@ -327,7 +346,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -338,6 +357,14 @@ defmodule Vutuv.Accounts.User do
   @employment_statuses ~w(open looking)
 
   def employment_statuses, do: @employment_statuses
+
+  # Fediverse aliases (issue #986, half 1): how many origin accounts a member
+  # may list, and the per-URI length ceiling. Real actor URIs are short; the
+  # cap is only there to stop a paste of nonsense reaching the array column.
+  @max_also_known_as 10
+  @max_also_known_as_length 500
+
+  def max_also_known_as, do: @max_also_known_as
 
   # How a job-seeking member wants to work. Deliberately the same three values
   # `Vutuv.Jobs.JobPosting`'s workplace_type uses (kept as literals here rather
@@ -527,6 +554,7 @@ defmodule Vutuv.Accounts.User do
     |> nullify_default_birthdate()
     |> validate_birthdate()
     |> validate_inclusion(:birthdate_visibility, @birthdate_visibilities)
+    |> normalize_also_known_as()
     |> revoke_verification_on_identity_change()
   end
 
@@ -935,6 +963,69 @@ defmodule Vutuv.Accounts.User do
     else
       changeset
     end
+  end
+
+  # The Fediverse aliases (issue #986) come from a textarea, one account URI
+  # per line. Split them, trim, drop blanks and duplicates, then store the
+  # survivors in the real array column. Each entry must be an absolute https
+  # URI (an ActivityPub actor id) and stay within a sane length — Postgres
+  # would not reject an over-long one (the column is text[]), so a field error
+  # is the guard against a member pasting nonsense. A whole-field error names
+  # the first bad entry rather than silently dropping it, so the member can fix
+  # it.
+  #
+  # Keyed off `changeset.params` (string keys after cast), not the cast change:
+  # Ecto turns an empty textarea into nil, and reading `get_change` there would
+  # make clearing the box a no-op — so a member could never *remove* an alias.
+  # A form that omits the field entirely leaves the list untouched.
+  defp normalize_also_known_as(changeset) do
+    case changeset.params do
+      %{"also_known_as_input" => raw} when is_binary(raw) ->
+        put_also_known_as(changeset, raw)
+
+      _ ->
+        changeset
+    end
+  end
+
+  defp put_also_known_as(changeset, raw) do
+    entries =
+      raw
+      |> String.split(~r/[\r\n]+/)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+
+    cond do
+      length(entries) > @max_also_known_as ->
+        add_error(
+          changeset,
+          :also_known_as_input,
+          "Please list at most %{max} accounts.",
+          max: @max_also_known_as
+        )
+
+      bad = Enum.find(entries, &(not valid_actor_uri?(&1))) ->
+        add_error(
+          changeset,
+          :also_known_as_input,
+          "\"%{uri}\" is not a valid https account address.",
+          uri: String.slice(bad, 0, 100)
+        )
+
+      true ->
+        put_change(changeset, :also_known_as, entries)
+    end
+  end
+
+  # An ActivityPub actor id is an absolute https URL with a real host, capped so
+  # nobody stores a novel in the array.
+  defp valid_actor_uri?(uri) do
+    String.length(uri) <= @max_also_known_as_length and
+      match?(
+        %URI{scheme: "https", host: host} when is_binary(host) and host != "",
+        URI.parse(uri)
+      )
   end
 
   # Stamp employment_status_set_at whenever the member changes their

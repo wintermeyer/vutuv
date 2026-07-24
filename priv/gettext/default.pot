@@ -14574,3 +14574,113 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "unreachable"
 msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:182
+#, elixir-autogen, elixir-format
+msgid "Account you are moving to"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:153
+#, elixir-autogen, elixir-format
+msgid "Cancel redirect"
+msgstr ""
+
+#: lib/vutuv_web/controllers/settings_controller.ex:222
+#, elixir-autogen, elixir-format
+msgid "Done. Your Fediverse followers have been asked to follow your new account, and new posts are no longer federated from here. Your vutuv profile is unchanged."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:169
+#, elixir-autogen, elixir-format
+msgid "Enter that account's address below and redirect."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:159
+#, elixir-autogen, elixir-format
+msgid "Leaving for another Fediverse account? You can send your followers there. They will be asked to follow your new account, and vutuv stops federating your new posts. This is only a redirect: your vutuv profile stays exactly as it is, and nothing is deleted."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:100
+#, elixir-autogen, elixir-format
+msgid "List the full address of each account you are migrating from, one per line (for example %{example}). On the other server, start the move to your vutuv handle; it will only go through once your old account is listed here. Leave empty if you are not moving accounts."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:118
+#, elixir-autogen, elixir-format
+msgid "Move your followers to another account"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:90
+#, elixir-autogen, elixir-format
+msgid "Moving to vutuv from another account?"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:139
+#, elixir-autogen, elixir-format
+msgid "New posts are no longer federated from here, and your actor points visitors to your new account. Your vutuv profile itself is unchanged."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:165
+#, elixir-autogen, elixir-format
+msgid "On your other account, add your vutuv handle"
+msgstr ""
+
+#: lib/vutuv_web/controllers/settings_controller.ex:261
+#, elixir-autogen, elixir-format
+msgid "Please enter the full https address of the account you are moving to."
+msgstr ""
+
+#: lib/vutuv_web/controllers/settings_controller.ex:247
+#, elixir-autogen, elixir-format
+msgid "Redirect cancelled. Your posts federate from here again."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:200
+#, elixir-autogen, elixir-format
+msgid "Redirect my followers"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:134
+#, elixir-autogen, elixir-format
+msgid "Redirected on %{date}"
+msgstr ""
+
+#: lib/vutuv_web/controllers/settings_controller.ex:274
+#, elixir-autogen, elixir-format
+msgid "That account could not be reached. Check the address, and that the other server is online."
+msgstr ""
+
+#: lib/vutuv_web/controllers/settings_controller.ex:268
+#, elixir-autogen, elixir-format
+msgid "That account does not list your vutuv profile as an alias yet. Add this profile's address there first, then try again."
+msgstr ""
+
+#: lib/vutuv_web/controllers/settings_controller.ex:264
+#, elixir-autogen, elixir-format
+msgid "That is this account. Enter the account you are moving to."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:195
+#, elixir-autogen, elixir-format
+msgid "This tells your Fediverse followers to follow your new account instead, and stops federating your posts from here. Your vutuv profile is not affected. Continue?"
+msgstr ""
+
+#: lib/vutuv_web/controllers/settings_controller.ex:252
+#, elixir-autogen, elixir-format
+msgid "Turn on federation first, then you can redirect your followers."
+msgstr ""
+
+#: lib/vutuv_web/controllers/settings_controller.ex:256
+#, elixir-autogen, elixir-format
+msgid "You can only move once every %{days} days."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:123
+#, elixir-autogen, elixir-format
+msgid "You have redirected your Fediverse followers to another account:"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:167
+#, elixir-autogen, elixir-format
+msgid "as an account alias."
+msgstr ""

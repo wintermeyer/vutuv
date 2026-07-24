@@ -184,8 +184,17 @@ defmodule VutuvWeb.SettingsController do
       conn,
       "fediverse.html",
       fediverse_assigns(user) ++
-        [user: user, changeset: User.changeset(user), page_title: gettext("Fediverse")]
+        [user: user, changeset: fediverse_changeset(user), page_title: gettext("Fediverse")]
     )
+  end
+
+  # Seed the virtual textarea from the stored aliases so the edit form shows
+  # what is already set (the array column is not the form field). One URI per
+  # line, matching how normalize_also_known_as/1 splits them back.
+  defp fediverse_changeset(user) do
+    user
+    |> User.changeset()
+    |> Ecto.Changeset.put_change(:also_known_as_input, Enum.join(user.also_known_as, "\n"))
   end
 
   def update_fediverse(conn, %{"user" => params}) do
@@ -200,6 +209,71 @@ defmodule VutuvWeb.SettingsController do
       end
     )
   end
+
+  # Redirect the member's Fediverse followers to another account (issue #986,
+  # half 2): broadcast a Move. The vutuv profile is untouched — only outbound
+  # federation of new posts stops, and the actor advertises the redirect.
+  def move_fediverse(conn, %{"move" => %{"target" => target}}) do
+    case Vutuv.Fediverse.move_out(conn.assigns[:user], target) do
+      {:ok, _moved} ->
+        conn
+        |> put_flash(
+          :info,
+          gettext(
+            "Done. Your Fediverse followers have been asked to follow your new account, and new posts are no longer federated from here. Your vutuv profile is unchanged."
+          )
+        )
+        |> redirect(to: ~p"/settings/fediverse")
+
+      {:error, reason} ->
+        conn
+        |> put_flash(:error, move_error_message(reason))
+        |> redirect(to: ~p"/settings/fediverse")
+    end
+  end
+
+  def move_fediverse(conn, _params) do
+    conn
+    |> put_flash(:error, move_error_message(:invalid_target))
+    |> redirect(to: ~p"/settings/fediverse")
+  end
+
+  # Undo the redirect: the member federates new posts again, the actor stops
+  # advertising the move. The cooldown still holds (Fediverse.cancel_move/1).
+  def cancel_move_fediverse(conn, _params) do
+    {:ok, _} = Vutuv.Fediverse.cancel_move(conn.assigns[:user])
+
+    conn
+    |> put_flash(:info, gettext("Redirect cancelled. Your posts federate from here again."))
+    |> redirect(to: ~p"/settings/fediverse")
+  end
+
+  defp move_error_message(:not_federated),
+    do: gettext("Turn on federation first, then you can redirect your followers.")
+
+  defp move_error_message(:cooldown),
+    do:
+      gettext("You can only move once every %{days} days.",
+        days: Vutuv.Fediverse.move_cooldown_days()
+      )
+
+  defp move_error_message(:invalid_target),
+    do: gettext("Please enter the full https address of the account you are moving to.")
+
+  defp move_error_message(:self_target),
+    do: gettext("That is this account. Enter the account you are moving to.")
+
+  defp move_error_message(:alias_missing),
+    do:
+      gettext(
+        "That account does not list your vutuv profile as an alias yet. Add this profile's address there first, then try again."
+      )
+
+  defp move_error_message(:target_unreachable),
+    do:
+      gettext(
+        "That account could not be reached. Check the address, and that the other server is online."
+      )
 
   defp fediverse_assigns(user) do
     [

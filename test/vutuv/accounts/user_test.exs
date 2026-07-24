@@ -509,4 +509,69 @@ defmodule Vutuv.Accounts.UserTest do
       assert User.changeset(%User{}, %{"first_name" => "first_name"}).valid?
     end
   end
+
+  describe "also_known_as (Fediverse migration, issue #986)" do
+    defp aka_changeset(input) do
+      User.changeset(%User{}, %{"first_name" => "first_name", "also_known_as_input" => input})
+    end
+
+    test "splits a textarea into a trimmed, de-duplicated actor-URI list" do
+      changeset =
+        aka_changeset("""
+          https://mastodon.social/users/alice
+          https://fosstodon.org/users/alice
+          https://mastodon.social/users/alice
+        """)
+
+      assert changeset.valid?
+
+      assert Ecto.Changeset.get_change(changeset, :also_known_as) == [
+               "https://mastodon.social/users/alice",
+               "https://fosstodon.org/users/alice"
+             ]
+    end
+
+    test "an empty textarea leaves the list empty" do
+      changeset = aka_changeset("")
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :also_known_as) == []
+    end
+
+    test "clearing the textarea removes an existing list" do
+      user = %User{also_known_as: ["https://mastodon.social/users/alice"]}
+
+      changeset =
+        User.changeset(user, %{"first_name" => "first_name", "also_known_as_input" => ""})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :also_known_as) == []
+    end
+
+    test "rejects a non-https entry" do
+      changeset = aka_changeset("http://mastodon.social/users/alice")
+      refute changeset.valid?
+      assert %{also_known_as_input: [_]} = errors_on(changeset)
+    end
+
+    test "rejects an entry that is not a URL at all" do
+      changeset = aka_changeset("@alice@mastodon.social")
+      refute changeset.valid?
+    end
+
+    test "rejects more than the allowed number of accounts" do
+      too_many =
+        1..(User.max_also_known_as() + 1)
+        |> Enum.map_join("\n", &"https://mastodon.social/users/alice#{&1}")
+
+      refute aka_changeset(too_many).valid?
+    end
+
+    test "an untouched form never clears an existing list" do
+      user = %User{also_known_as: ["https://mastodon.social/users/alice"]}
+      changeset = User.changeset(user, %{"first_name" => "first_name"})
+
+      assert changeset.valid?
+      refute Ecto.Changeset.get_change(changeset, :also_known_as)
+    end
+  end
 end

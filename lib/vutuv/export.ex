@@ -223,6 +223,8 @@ defmodule Vutuv.Export do
       noindex: user.noindex?,
       noai: user.noai?,
       fediverse_followers: user.fediverse_followers?,
+      also_known_as: user.also_known_as,
+      moved_to: user.moved_to,
       notification_emails: user.notification_emails?,
       email_on_endorsement: user.email_on_endorsement?,
       email_on_follower: user.email_on_follower?,
