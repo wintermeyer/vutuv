@@ -155,6 +155,46 @@ defmodule VutuvWeb.MarkdownTest do
     assert render("line one\nline two") =~ "<br"
   end
 
+  describe "post line breaks (breaks: false)" do
+    defp post(text), do: text |> Markdown.render_post([]) |> Phoenix.HTML.safe_to_string()
+
+    test "a soft-wrapped paragraph reflows instead of breaking at every source line" do
+      # A post whose source was hard-wrapped at ~80 columns (an editor's
+      # fill-paragraph, or pasted prose) must read as one flowing paragraph, not
+      # a break at every wrap. `render/1` (chat) keeps single newlines as `<br>`;
+      # `render_post/2` (prose) does not. Regression for the "Diese Woche auf
+      # vutuv" announcement, which broke at every soft wrap next to its links.
+      source =
+        "auch wenn sie\nzeitlich durcheinander kamen ([#1006](https://ex.com),\n[#1027](https://ex.com)). Lange Threads"
+
+      html = post(source)
+
+      refute html =~ "<br"
+      assert html =~ "auch wenn sie"
+      assert html =~ "Lange Threads"
+    end
+
+    test "an intentional hard break (trailing backslash from Milkdown) still breaks" do
+      # Milkdown serializes a real in-paragraph break as a trailing backslash, so
+      # a post written with a deliberate line break keeps it even with breaks off.
+      assert post("line one\\\nline two") =~ "<br"
+    end
+
+    test "a blank line still starts a new paragraph" do
+      html = post("para one\n\npara two")
+
+      assert html =~ "para one"
+      assert html =~ "para two"
+      assert html =~ ~r{para one</p>\s*<p[^>]*>\s*para two}
+    end
+
+    test "a chat message keeps single newlines as breaks (unchanged)" do
+      # Guard that fixing posts did not touch the chat/message renderer, whose
+      # single-newline-as-break behavior is relied on (address blocks, DMs).
+      assert render("line one\nline two") =~ "<br"
+    end
+  end
+
   test "drops the editor's empty-paragraph <br /> artifacts instead of showing them" do
     # The Milkdown editor serializes each blank line the writer adds as a
     # standalone `<br />` block. Because the pipeline escapes `<`, those would

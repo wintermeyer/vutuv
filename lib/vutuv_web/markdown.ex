@@ -10,8 +10,10 @@ defmodule VutuvWeb.Markdown do
   meaningful unit is two segments deep (long URLs would wreck chat bubbles);
   trailing sentence punctuation and unbalanced `)` stay outside the
   link. Earmark renders the Markdown (bold, italics, links, inline code, lists,
-  quotes; newlines become `<br>`), HtmlSanitizeEx strips anything dangerous as a
-  second line of defence (`javascript:` hrefs etc.), and links open in a new tab.
+  quotes; a single newline becomes a `<br>` in chat/messages, but **posts**
+  reflow soft-wrapped lines instead — see `render_pipeline/2`'s `breaks:` note),
+  HtmlSanitizeEx strips anything dangerous as a second line of defence
+  (`javascript:` hrefs etc.), and links open in a new tab.
 
   **Images**: only a post may embed pictures, and only its **own uploaded
   attachments** (`render_post/2`'s whitelist) — a hotlinked remote image would
@@ -96,7 +98,7 @@ defmodule VutuvWeb.Markdown do
     {prepared, replacements} = extract_inline_images(text, images)
 
     prepared
-    |> render_pipeline()
+    |> render_pipeline(breaks: false)
     |> open_links_in_new_tab()
     |> linkify_entities()
     |> inject_inline_images(replacements)
@@ -194,12 +196,23 @@ defmodule VutuvWeb.Markdown do
   # emits its `<img>`. The one legitimate image path — a post's own uploaded
   # attachments — bypasses the pipeline entirely via `render_post/2`'s
   # plain-text markers and is injected afterwards from known-safe parts.
-  defp render_pipeline(text) do
+  #
+  # `breaks:` (default `true`) decides whether a single newline is a `<br>`.
+  # Chat, remote Mastodon text, newsletters and legal address blocks want that
+  # (a lone Enter is a deliberate break), so they keep the default. **Posts**
+  # pass `breaks: false`: a post body is prose, and Milkdown (the composer)
+  # never emits a lone soft-wrap newline — it serializes a real break as a
+  # trailing backslash and a paragraph as a blank line, both of which render the
+  # same either way. The only bodies with lone newlines are ones hard-wrapped in
+  # an external editor or pasted in source mode, where `breaks: true` turned
+  # every ~80-column wrap into a visible break (a wall of stray `<br>`s next to
+  # long links); `breaks: false` reflows them into flowing paragraphs.
+  defp render_pipeline(text, opts \\ []) do
     text
     |> strip_break_artifacts()
     |> String.replace("<", "&lt;")
     |> autolink_bare_urls()
-    |> Earmark.as_html!(breaks: true, pure_links: false)
+    |> Earmark.as_html!(breaks: Keyword.get(opts, :breaks, true), pure_links: false)
     # Earmark escapes the ampersand of our pre-escaped `&lt;` — undo the double.
     |> String.replace("&amp;lt;", "&lt;")
     |> HtmlSanitizeEx.markdown_html()
