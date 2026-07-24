@@ -129,6 +129,37 @@ defmodule VutuvWeb.Fediverse.Docs do
     })
   end
 
+  @doc """
+  Announce: `reposter` boosts `author`'s public Note to the reposter's own
+  followers (issue #910). The object is a bare Note id — a URI string — which
+  is why the reposted author must federate too: a non-federating author serves
+  no Note at that URL, so a remote server could not render the boost.
+  """
+  def announce_activity(%Post{} = post, author, reposter) do
+    envelope(reposter, "Announce", announce_id(post, author, reposter), note_url(author, post.id))
+  end
+
+  @doc """
+  Undo(Announce): `reposter` takes their boost back. The wrapped Announce
+  carries the same stable id the original Announce had, so a remote server can
+  match and drop it.
+  """
+  def undo_announce_activity(%Post{} = post, author, reposter) do
+    reposter_actor = actor_url(reposter)
+
+    envelope(reposter, "Undo", announce_id(post, author, reposter) <> "#undo", %{
+      "id" => announce_id(post, author, reposter),
+      "type" => "Announce",
+      "actor" => reposter_actor,
+      "object" => note_url(author, post.id)
+    })
+  end
+
+  # Stable per (reposted note, reposter), so the Undo references the same
+  # Announce the repost sent.
+  defp announce_id(%Post{id: post_id}, author, reposter),
+    do: note_url(author, post_id) <> "#announce-" <> reposter.username
+
   @doc "Accept(Follow): the answer that seals a remote follow."
   def accept_activity(user, follow_object) do
     id = actor_url(user) <> "#accepts/" <> Vutuv.UUIDv7.generate()

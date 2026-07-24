@@ -346,6 +346,35 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  @doc """
+  A member reposts another member's public post -> `Announce` to the reposter's
+  Fediverse followers (issue #910). Enqueues only when all three hold: the
+  reposter federates and has not moved out, the post is public, and the
+  **original author** federates too (the `Announce` object is that author's Note
+  id, which a non-federating author does not serve). Best effort like every
+  other outbound activity.
+  """
+  def federate_repost(%Post{} = post, %User{} = reposter),
+    do: maybe_federate_repost(post, reposter, &Docs.announce_activity/3)
+
+  @doc "The member un-reposts -> `Undo(Announce)` with the matching id."
+  def federate_unrepost(%Post{} = post, %User{} = reposter),
+    do: maybe_federate_repost(post, reposter, &Docs.undo_announce_activity/3)
+
+  defp maybe_federate_repost(%Post{} = post, %User{} = reposter, builder) do
+    with true <- enabled?(),
+         true <- federated?(reposter),
+         false <- moved?(reposter),
+         false <- Vutuv.Posts.restricted?(post),
+         %User{} = author <- Repo.get(User, post.user_id),
+         true <- federated?(author),
+         [_ | _] = inboxes <- delivery_inboxes(reposter) do
+      enqueue(reposter, inboxes, builder.(post, author, reposter))
+    else
+      _ -> :skip
+    end
+  end
+
   @doc "Answers a Follow with Accept, straight to the follower's own inbox."
   def accept_follow(%User{} = user, follow_object, inbox_uri) do
     enqueue(user, [inbox_uri], Docs.accept_activity(user, follow_object))
