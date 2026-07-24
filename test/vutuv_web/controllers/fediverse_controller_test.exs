@@ -308,6 +308,79 @@ defmodule VutuvWeb.FediverseControllerTest do
     end
   end
 
+  describe "POST /:slug/actor/inbox — reactions from other networks (#1068)" do
+    defp reaction_activity(type, object) do
+      %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => "https://social.example/activities/#{type}",
+        "type" => type,
+        "actor" => @remote_actor,
+        "object" => object
+      }
+    end
+
+    test "a signed Like on a public post is counted, and only once", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      post = create_post!(user, %{body: "Reachable from anywhere."})
+      note = Docs.note_url(user, post.id)
+
+      conn = signed_post(conn, user, reaction_activity("Like", note), priv)
+      assert conn.status == 202
+      assert Fediverse.reaction_count(post.id) == 1
+
+      conn = signed_post(recycle(conn), user, reaction_activity("Like", note), priv)
+      assert conn.status == 202
+      assert Fediverse.reaction_count(post.id) == 1
+    end
+
+    test "an Announce counts beside the Like from the same account", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      post = create_post!(user, %{body: "Worth re-sharing."})
+      note = Docs.note_url(user, post.id)
+
+      signed_post(conn, user, reaction_activity("Like", note), priv)
+      signed_post(recycle(conn), user, reaction_activity("Announce", note), priv)
+
+      assert Fediverse.reaction_count(post.id) == 2
+    end
+
+    test "Undo(Like) removes it again", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      post = create_post!(user, %{body: "Briefly applauded."})
+      note = Docs.note_url(user, post.id)
+
+      signed_post(conn, user, reaction_activity("Like", note), priv)
+      assert Fediverse.reaction_count(post.id) == 1
+
+      undo = reaction_activity("Undo", reaction_activity("Like", note))
+      conn = signed_post(recycle(conn), user, undo, priv)
+
+      assert conn.status == 202
+      assert Fediverse.reaction_count(post.id) == 0
+    end
+
+    test "a reaction to a non-public post is acknowledged and dropped", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+
+      post =
+        create_post!(user, %{body: "Members only.", denials: [%{"wildcard" => "logged_out"}]})
+
+      conn =
+        signed_post(conn, user, reaction_activity("Like", Docs.note_url(user, post.id)), priv)
+
+      assert conn.status == 202
+      assert Fediverse.reaction_count(post.id) == 0
+    end
+  end
+
   describe "POST /:slug/actor/inbox — blocked servers (#1067)" do
     setup do
       admin = insert(:activated_user, admin?: true)

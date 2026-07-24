@@ -15738,3 +15738,25 @@ msgstr "%{blocked} Server blockiert, am aktivsten eingehend: %{host}."
 #, elixir-autogen, elixir-format
 msgid "none yet"
 msgstr "noch keiner"
+
+#: lib/vutuv_web/agent_docs/markdown.ex:845
+#, elixir-autogen, elixir-format
+msgid "Reactions from other networks"
+msgstr "Reaktionen aus anderen Netzwerken"
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:90
+#, elixir-autogen, elixir-format
+msgid "Count reactions from other networks"
+msgstr "Reaktionen aus anderen Netzwerken zählen"
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:93
+#, elixir-autogen, elixir-format
+msgid "Under each of your posts, show how many people on Mastodon & Co. liked or shared it. Just a number, visible to everyone who sees the post. We store no names, no pictures and no text for it. Switch it off and everything stored for it is deleted."
+msgstr "Zeigen Sie unter jedem Ihrer Beiträge, wie viele Menschen bei Mastodon & Co. ihn geliked oder geteilt haben. Nur eine Zahl, sichtbar für alle, die den Beitrag sehen. Namen, Bilder oder Texte speichern wir dafür nicht. Schalten Sie es aus, wird alles dafür Gespeicherte gelöscht."
+
+#: lib/vutuv_web/components/post_components.ex:2170
+#, elixir-autogen, elixir-format
+msgid "%{formatted} reaction from other networks"
+msgid_plural "%{formatted} reactions from other networks"
+msgstr[0] "%{formatted} Reaktion aus anderen Netzwerken"
+msgstr[1] "%{formatted} Reaktionen aus anderen Netzwerken"

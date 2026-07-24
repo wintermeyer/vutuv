@@ -405,6 +405,17 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     :ok = Vutuv.Posts.repost_post(fan, post)
     :ok = Vutuv.Posts.bookmark_post(fan, post)
 
+    # A favourite from another network (issue #1068): its own figure, so the
+    # `.json` sibling must carry the same number the HTML line shows. Written
+    # straight to the table — the inbox rules that put it there are the
+    # Fediverse tests' business, this one is about what the formats render.
+    Vutuv.Repo.insert!(%Vutuv.Fediverse.Reaction{
+      post_id: post.id,
+      actor_uri: "https://social.example/users/alice",
+      kind: "like",
+      received_at: DateTime.utc_now(:second)
+    })
+
     rendered = formats_for("/drift_tester/posts/#{post.id}")
 
     for fact <- [
@@ -421,9 +432,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert doc["like_count"] == 1
     assert doc["repost_count"] == 1
     assert doc["bookmark_count"] == 1
+    assert doc["fediverse_reaction_count"] == 1
 
     assert rendered.md =~ "Likes: 1"
     assert rendered.txt =~ "Likes: 1"
+    assert rendered.md =~ "Reactions from other networks: 1"
+    assert rendered.txt =~ "Reactions from other networks: 1"
   end
 
   test "post permalink: the whole conversation reaches every format (issue #1006)", %{

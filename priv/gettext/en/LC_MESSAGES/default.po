@@ -14985,3 +14985,25 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "none yet"
 msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:845
+#, elixir-autogen, elixir-format
+msgid "Reactions from other networks"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:90
+#, elixir-autogen, elixir-format
+msgid "Count reactions from other networks"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:93
+#, elixir-autogen, elixir-format
+msgid "Under each of your posts, show how many people on Mastodon & Co. liked or shared it. Just a number, visible to everyone who sees the post. We store no names, no pictures and no text for it. Switch it off and everything stored for it is deleted."
+msgstr ""
+
+#: lib/vutuv_web/components/post_components.ex:2170
+#, elixir-autogen, elixir-format
+msgid "%{formatted} reaction from other networks"
+msgid_plural "%{formatted} reactions from other networks"
+msgstr[0] ""
+msgstr[1] ""

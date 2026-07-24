@@ -94,7 +94,10 @@ defmodule VutuvWeb.PostLive.ActionBar do
             | likes: likes,
               bookmarks: bookmarks,
               reposts: reposts,
-              replies: replies
+              replies: replies,
+              # Issue #1068: a reaction from another network arrives without any
+              # viewer of ours acting, so this is the only path that updates it.
+              fediverse_reactions: payload.fediverse_reactions
           })
         end
     end

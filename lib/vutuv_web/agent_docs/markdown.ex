@@ -827,11 +827,23 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.map_join(tags, ", ", &"##{&1}")
 
-  # The public engagement counters, mirroring the HTML action bar.
+  # The public engagement counters, mirroring the HTML action bar — including
+  # the separate "from other networks" figure it shows on its own line
+  # (issue #1068), which is omitted here at zero exactly as the HTML omits it.
   @doc false
   def engagement_line(doc) do
-    "#{gettext("Likes")}: #{doc.like_count} · #{gettext("Reposts")}: #{doc.repost_count} · " <>
-      "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
+    vutuv_counts =
+      "#{gettext("Likes")}: #{doc.like_count} · #{gettext("Reposts")}: #{doc.repost_count} · " <>
+        "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
+
+    case doc.fediverse_reaction_count do
+      0 ->
+        vutuv_counts
+
+      count ->
+        vutuv_counts <>
+          " · " <> gettext("Reactions from other networks") <> ": #{count}"
+    end
   end
 
   @doc """

@@ -901,6 +901,16 @@ defmodule Vutuv.Posts do
                                     OR mu.suspended_until > (NOW() AT TIME ZONE 'utc'))))
             """,
             unquote(post).id
+          ),
+        # What OTHER networks did with this post (issue #1068): favourites and
+        # re-shares that arrived over ActivityPub. Deliberately a separate
+        # figure, never folded into the vutuv counters above — a hostile remote
+        # server can then only inflate its own line, and the member can see
+        # which world answered.
+        fediverse_reactions:
+          fragment(
+            "(SELECT count(*) FROM fediverse_reactions fr WHERE fr.post_id = ?)",
+            unquote(post).id
           )
       }
     end
@@ -912,7 +922,8 @@ defmodule Vutuv.Posts do
       from(p in Post, where: p.id == ^post_id)
       |> select([p], engagement_count_select(p))
 
-    Repo.one(query) || %{likes: 0, bookmarks: 0, reposts: 0, replies: 0}
+    Repo.one(query) ||
+      %{likes: 0, bookmarks: 0, reposts: 0, replies: 0, fediverse_reactions: 0}
   end
 
   @doc """
@@ -1005,6 +1016,13 @@ defmodule Vutuv.Posts do
   end
 
   defp post_topic(post_id), do: "post:#{post_id}"
+
+  @doc """
+  Re-broadcasts a post's counters to every open action bar. The Fediverse inbox
+  calls it when a remote reaction lands or is withdrawn (issue #1068), so the
+  "reactions from other networks" line ticks over with no reload.
+  """
+  def broadcast_post_counters(post_id), do: broadcast_counters(post_id)
 
   defp broadcast_counters(post_id, extra \\ %{}) do
     payload = engagement_counts(post_id) |> Map.put(:post_id, post_id) |> Map.merge(extra)

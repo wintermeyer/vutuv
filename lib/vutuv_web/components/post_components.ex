@@ -2161,8 +2161,38 @@ defmodule VutuvWeb.PostComponents do
         <:icon><.icon_bookmark filled?={@engagement.bookmarked?} /></:icon>
       </.action_button>
     </div>
+
+    <.fediverse_reaction_line :if={@engagement} count={@engagement.fediverse_reactions} />
     """
   end
+
+  # What other networks did with this post (issue #1068): a labelled count on
+  # its OWN line under the vutuv counters, never folded into them. A member who
+  # publishes outward otherwise gets no feedback at all, and keeping the figure
+  # separate means a hostile remote server can inflate only its own line — and
+  # the reader can see which world answered. Public, because it is an aggregate
+  # with no identity attached. Renders nothing at zero, so a post nobody out
+  # there touched stays clean.
+  attr(:count, :integer, required: true)
+
+  defp fediverse_reaction_line(%{count: count} = assigns) when count > 0 do
+    ~H"""
+    <div
+      class="mt-2 border-t border-slate-100 pt-2 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400"
+      data-fediverse-reactions={@count}
+    >
+      <span aria-hidden="true" class="mr-1">🌐</span>
+      {ngettext(
+        "%{formatted} reaction from other networks",
+        "%{formatted} reactions from other networks",
+        @count,
+        formatted: compact_count(@count)
+      )}
+    </div>
+    """
+  end
+
+  defp fediverse_reaction_line(assigns), do: ~H""
 
   # The Like control: a real toggle for everyone but the author. On your OWN
   # post it is a plain, non-interactive count instead of a clickable heart —
