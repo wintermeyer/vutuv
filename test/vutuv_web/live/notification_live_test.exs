@@ -498,6 +498,12 @@ defmodule VutuvWeb.NotificationLiveTest do
       # Exactly one hint for the day, linking to the notification settings.
       assert length(Regex.scan(~r/data-thread-hint/, html)) == 1
       assert has_element?(live, ~s([data-thread-hint] a[href="/settings/notifications"]))
+      # The link names what it switches off, not a vague "turn this off".
+      assert has_element?(
+               live,
+               ~s([data-thread-hint] a[href="/settings/notifications"]),
+               "Turn off thread notifications"
+             )
     end
 
     test "the posts filter tab keeps thread rows", %{conn: conn} do

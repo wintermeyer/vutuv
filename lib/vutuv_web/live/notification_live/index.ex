@@ -478,7 +478,7 @@ defmodule VutuvWeb.NotificationLive.Index do
             href={~p"/settings/notifications"}
             class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            {gettext("Turn this off")} ›
+            {gettext("Turn off thread notifications")} ›
           </.link>
         </p>
 
