@@ -14680,8 +14680,8 @@ msgstr "Sie haben in diesem Thread geschrieben."
 
 #: lib/vutuv_web/live/notification_live/index.ex:463
 #, elixir-autogen, elixir-format
-msgid "Turn this off"
-msgstr "Das abschalten"
+msgid "Turn off thread notifications"
+msgstr "Thread-Benachrichtigungen abschalten"
 
 #: lib/vutuv_web/live/notification_live/index.ex:1060
 #, elixir-autogen, elixir-format
