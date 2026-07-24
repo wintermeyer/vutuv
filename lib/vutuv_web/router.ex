@@ -962,6 +962,11 @@ defmodule VutuvWeb.Router do
       as: :settings_work_experience
     )
 
+    # Pin one education as the profile headline, or clear it back to the
+    # automatic job resolution (issue #882). Before the resources so "pin" is
+    # never read as an education id.
+    put("/educations/:id/pin", EducationController, :pin)
+    delete("/educations/:id/pin", EducationController, :unpin)
     get("/educations", EducationController, :manage)
 
     resources("/educations", EducationController,

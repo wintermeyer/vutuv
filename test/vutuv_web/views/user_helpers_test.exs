@@ -177,6 +177,41 @@ defmodule VutuvWeb.UserHelpersTest do
     end
   end
 
+  describe "a pinned education is the profile headline (issue #882)" do
+    test "education_headline/1 reads as 'Degree, School'" do
+      edu = build(:education, degree: "Doctor of Medicine", school: "St. Mary's University")
+      assert UserHelpers.education_headline(edu) == "Doctor of Medicine, St. Mary's University"
+    end
+
+    test "education_headline/1 falls back to the school alone when there is no degree" do
+      edu = build(:education, degree: nil, school: "Old Grammar School")
+      assert UserHelpers.education_headline(edu) == "Old Grammar School"
+    end
+
+    test "education_headline/1 is nil for a nil education, so a caller can fall through" do
+      assert UserHelpers.education_headline(nil) == nil
+    end
+
+    test "profile_headline/3 prefers the pinned education over the job line" do
+      user = insert(:user)
+      we(user, title: "Job Title", organization: "JobCo", end_month: nil, end_year: nil)
+      degree = insert(:education, user: user, degree: "PhD", school: "Uni")
+      {:ok, user} = Vutuv.Accounts.pin_profile_education(user, degree)
+
+      job = UserHelpers.current_job(user)
+      assert UserHelpers.profile_headline(user, job) == "PhD, Uni"
+    end
+
+    test "profile_headline/3 uses the job line when no education is pinned" do
+      user = insert(:user)
+      we(user, title: "Job Title", organization: "JobCo", end_month: nil, end_year: nil)
+      insert(:education, user: user, degree: "PhD", school: "Uni")
+
+      job = UserHelpers.current_job(user)
+      assert UserHelpers.profile_headline(user, job) == "Job Title @ JobCo"
+    end
+  end
+
   describe "work_information_string_for_job/2 matches work_information_string/2" do
     test "current job with title and organization" do
       user = insert(:user)

@@ -241,7 +241,11 @@ the resulting ~200px rail width. --%>
         >
           {VutuvWeb.Markdown.render(@user.headline)}
         </div>
-        <p :if={@work_info not in [nil, ""]} class="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
+        <p
+          :if={@work_info not in [nil, ""]}
+          id="profile-headline"
+          class="mt-1.5 text-sm text-slate-600 dark:text-slate-400"
+        >
           {@work_info}
         </p>
 

@@ -54,7 +54,11 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
         user.profile_work_experience_id
       )
 
-    work_info = UserHelpers.work_information_string_for_job(job, 256)
+    # The header line: a pinned education (issue #882) leads with its
+    # "Degree, School", else the job's "Title @ Org" — the same resolution the
+    # HTML header uses, so the doc's description/work_info can never drift from
+    # the page. `user` has :educations preloaded here, so it resolves in memory.
+    work_info = UserHelpers.profile_headline(user, job, 256)
     posts = Vutuv.Posts.profile_posts(user, viewer)
 
     # The #928 base gate AND the #938 exclusion, resolved together (one query):

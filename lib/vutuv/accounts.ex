@@ -34,6 +34,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Ordering
   alias Vutuv.Pages
   alias Vutuv.Profiles.Address
+  alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Social.Block
@@ -1234,7 +1235,10 @@ defmodule Vutuv.Accounts do
         user_id: user_id
       }) do
     user
-    |> Ecto.Changeset.change(profile_work_experience_id: we_id)
+    # The profile headline is EITHER a pinned work experience OR a pinned
+    # education (issue #882), never both, so pinning a job clears any pinned
+    # education in the same write.
+    |> Ecto.Changeset.change(profile_work_experience_id: we_id, profile_education_id: nil)
     # Guards against a race where the experience is deleted between the owner
     # resolution and this write: the FK constraint fails cleanly instead of
     # persisting a dangling pointer.
@@ -1251,6 +1255,42 @@ defmodule Vutuv.Accounts do
   def unpin_profile_work_experience(%User{} = user) do
     user
     |> Ecto.Changeset.change(profile_work_experience_id: nil)
+    |> Repo.update()
+  end
+
+  @doc """
+  Pins `education` as the member's profile headline (issue #882): the
+  "Degree, School" line the profile header, its title, meta description and
+  every agent format lead with, instead of a job title — for a student or
+  someone unemployed who would rather feature a degree or school.
+
+  The headline is EITHER a pinned work experience OR a pinned education, never
+  both, so this clears any pinned work experience in the same write.
+  `education` must belong to `user` (the caller resolves it owner-scoped); a
+  foreign one is rejected rather than pinned. `profile_education_id` is set
+  programmatically here, never cast from a form.
+  """
+  def pin_profile_education(%User{id: user_id} = user, %Education{
+        id: edu_id,
+        user_id: user_id
+      }) do
+    user
+    |> Ecto.Changeset.change(profile_education_id: edu_id, profile_work_experience_id: nil)
+    # Same race guard as the job pin: if the education is deleted between the
+    # owner resolution and this write, the FK constraint fails cleanly.
+    |> Ecto.Changeset.foreign_key_constraint(:profile_education_id)
+    |> Repo.update()
+  end
+
+  def pin_profile_education(%User{}, %Education{}), do: {:error, :not_owner}
+
+  @doc """
+  Clears the member's pinned profile education, so the headline falls back to
+  the automatic job resolution again (issue #882).
+  """
+  def unpin_profile_education(%User{} = user) do
+    user
+    |> Ecto.Changeset.change(profile_education_id: nil)
     |> Repo.update()
   end
 

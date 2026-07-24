@@ -307,6 +307,15 @@ defmodule Vutuv.Accounts.User do
     # experience is deleted (ON DELETE SET NULL), so it can never point at a
     # gone role.
     belongs_to(:profile_work_experience, Vutuv.Profiles.WorkExperience)
+
+    # The education the member pinned as their profile headline (issue #882).
+    # nil = no education pinned, so the header falls back to the work-experience
+    # resolution (UserHelpers.profile_headline/3). Mutually exclusive with
+    # profile_work_experience_id above: pinning one clears the other in
+    # Accounts.pin_profile_education/2 / pin_profile_work_experience/2 (never
+    # cast from a form). Nulled by the DB when the pinned education is deleted
+    # (ON DELETE SET NULL), so it can never point at a gone entry.
+    belongs_to(:profile_education, Vutuv.Profiles.Education)
     has_many(:search_terms, Vutuv.Accounts.SearchTerm, on_replace: :delete)
     has_many(:endorsements, Vutuv.Tags.UserTagEndorsement)
 
