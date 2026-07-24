@@ -384,6 +384,89 @@ defmodule VutuvWeb.SearchLiveTest do
     end
   end
 
+  describe "scope-aware search tips (#887)" do
+    test "the empty-state tips card hides people-only operators on the tags scope", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/search?scope=tags")
+
+      # The empty-query tips card is the always-open one, with its operator list.
+      assert has_element?(view, "#search-tips-empty #search-syntax")
+
+      # The people-only operators do not apply to a tag-name search, so their
+      # rows are gone (they would be misleading on this tab, issue #887).
+      refute has_element?(view, "#search-syntax dt", "status:looking")
+      refute has_element?(view, "#search-syntax dt", "city:koblenz")
+      refute has_element?(view, "#search-syntax dt", "first:stefan")
+      refute has_element?(view, "#search-syntax dt", "@stefan")
+      # tag: searches tag NAMES on this tab, so the tag: operator is meaningless here too.
+      refute has_element?(view, "#search-syntax dt", "tag:php")
+    end
+
+    test "the empty-state tips card keeps the people operators on all and people scopes",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/search")
+      assert has_element?(view, "#search-syntax dt", "status:looking")
+      assert has_element?(view, "#search-syntax dt", "city:koblenz")
+      assert has_element?(view, "#search-syntax dt", "first:stefan")
+      assert has_element?(view, "#search-syntax dt", "@stefan")
+
+      {:ok, view, _html} = live(conn, ~p"/search?scope=people")
+      assert has_element?(view, "#search-syntax dt", "status:looking")
+      assert has_element?(view, "#search-syntax dt", "city:koblenz")
+    end
+
+    test "the posts scope keeps tag: but drops the people-only operators", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/search?scope=posts")
+
+      # tag: filters posts (issue #946), so it applies on the posts tab ...
+      assert has_element?(view, "#search-syntax dt", "tag:php")
+      # ... but the people-only operators do not.
+      refute has_element?(view, "#search-syntax dt", "status:looking")
+      refute has_element?(view, "#search-syntax dt", "city:koblenz")
+    end
+
+    # Locale is a test dimension: the new scope intro strings ship a German
+    # translation, and the German render must stay scope-aware too.
+    test "the German render keeps the tips scope-aware on the tags scope", %{conn: conn} do
+      conn = put_req_header(conn, "accept-language", "de-DE,de")
+
+      {:ok, view, _html} = live(conn, ~p"/search?scope=tags")
+
+      # The German tag-scope intro resolved (not the English fallback) ...
+      assert has_element?(view, "#search-tips-empty", "Suchen Sie Tags")
+      # ... and the people-only operators are still gone.
+      refute has_element?(view, "#search-syntax dt", "status:looking")
+      refute has_element?(view, "#search-syntax dt", "city:koblenz")
+    end
+  end
+
+  describe "compact tips on the results page (#861)" do
+    test "results show a collapsed tips disclosure, not the big empty-state card", %{conn: conn} do
+      searchable_user("Maria", "Meier")
+
+      {:ok, view, _html} = live(conn, ~p"/search?q=meier")
+
+      # Results are showing ...
+      assert has_element?(view, "#search-people")
+      # ... so the compact, collapsed disclosure carries the tips ...
+      assert has_element?(view, "details#search-tips-results")
+      assert has_element?(view, "#search-tips-results #search-syntax")
+      # ... and the always-open empty-state card is not rendered.
+      refute has_element?(view, "#search-tips-empty")
+    end
+
+    test "the results disclosure is scope-aware too", %{conn: conn} do
+      author = insert(:activated_user)
+      create_post!(author, %{body: "Quantum gardening tips for beginners"})
+
+      {:ok, view, _html} = live(conn, ~p"/search?q=quantum gardening&scope=posts")
+
+      assert has_element?(view, "#search-tips-results #search-syntax")
+      # tag: applies on the posts scope, the people-only operators do not.
+      assert has_element?(view, "#search-tips-results #search-syntax dt", "tag:php")
+      refute has_element?(view, "#search-tips-results #search-syntax dt", "status:looking")
+    end
+  end
+
   describe "legacy search URLs" do
     test "a stored-query URL replays as a live search", %{conn: conn} do
       conn = get(conn, "/search/smith")

@@ -4524,6 +4524,21 @@ msgstr ""
 msgid "You can search for a name, email, or tag, or for words in public posts."
 msgstr ""
 
+#: lib/vutuv_web/live/search_live.ex:257
+#, elixir-autogen, elixir-format
+msgid "Search for people by name, email, or username."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:258
+#, elixir-autogen, elixir-format
+msgid "Search for tags by name."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:259
+#, elixir-autogen, elixir-format
+msgid "Search for words in public posts."
+msgstr ""
+
 #: lib/vutuv_web/templates/block/index.html.heex:28
 #: lib/vutuv_web/templates/user/show.html.heex:196
 #, elixir-autogen, elixir-format

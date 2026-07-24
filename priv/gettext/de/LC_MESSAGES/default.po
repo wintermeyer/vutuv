@@ -4699,6 +4699,21 @@ msgstr ""
 "Sie können nach Namen (Vor- und Nachname), E-Mail Adressen, Tags oder nach "
 "Wörtern in öffentlichen Beiträgen suchen."
 
+#: lib/vutuv_web/live/search_live.ex:257
+#, elixir-autogen, elixir-format
+msgid "Search for people by name, email, or username."
+msgstr "Suchen Sie Personen nach Name, E-Mail Adresse oder Benutzername."
+
+#: lib/vutuv_web/live/search_live.ex:258
+#, elixir-autogen, elixir-format
+msgid "Search for tags by name."
+msgstr "Suchen Sie Tags nach ihrem Namen."
+
+#: lib/vutuv_web/live/search_live.ex:259
+#, elixir-autogen, elixir-format
+msgid "Search for words in public posts."
+msgstr "Suchen Sie nach Wörtern in öffentlichen Beiträgen."
+
 #: lib/vutuv_web/templates/block/index.html.heex:28
 #: lib/vutuv_web/templates/user/show.html.heex:196
 #, elixir-autogen, elixir-format
