@@ -119,7 +119,11 @@ every endpoint 404s and nothing is delivered.
 
 ## Deliberate v1 limits
 
-No inbound content (likes/replies/boosts are dropped). Reposts now federate as
+No inbound content (likes/replies/boosts are dropped) — the inbound tier is
+planned in issues #1067–#1071 under an agreed retention model: counts before
+text, a counter row lives as long as its post, stored remote text expires after
+six months, and the operator blocklist ships with the first stored row. Reposts
+now federate as
 `Announce` (issue #910) and account deletion broadcasts an actor `Delete`
 (issue #985) — see the post-lifecycle and account-deletion bullets.
 Account migration is **both ways** now (issue #986):
@@ -132,4 +136,17 @@ stay. Deleting an account remains its own separate action. The followers
 collection is count-only (privacy). A follower row whose inbox answers 404/410
 is not pruned either: deliveries go to the sharedInbox where the remote
 declares one, so a per-actor gone signal rarely reaches us and pruning on a
-shared inbox would drop every follower on that server.
+shared inbox would drop every follower on that server (issue #1072).
+
+## Non-goal: reading other networks inside vutuv
+
+Members following Fediverse accounts and reading their posts in the vutuv feed
+is **not planned** (decided 2026-07-24). It would mean continuously storing the
+post stream of every followed remote account — a large, permanent pile of
+third-party content with the moderation and retention duties that come with it —
+to rebuild what the clients of those networks already do well. vutuv publishes
+outward and (once the inbound tier lands) shows the response to what its members
+published; it is not a reader for other networks. The existing profile feed of a
+member's *own* linked Mastodon/Bluesky accounts (`Vutuv.SocialFeed`) is a
+different thing: it shows the member's own posts, on their own profile, at their
+own request.
