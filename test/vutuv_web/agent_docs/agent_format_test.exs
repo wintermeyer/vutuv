@@ -241,10 +241,12 @@ defmodule VutuvWeb.AgentFormatTest do
       )
 
       # The owner still reaches their own frozen HTML profile (banner/review),
-      # but the agent formats are the anonymous view and must 404 like everyone.
+      # but the agent formats are the anonymous view and carry the same withheld
+      # status as everyone gets — a 403 since issue #812 (was a blanket 404) —
+      # never the owner-bypass profile content, so no cache is primed with it.
       assert html_response(get(conn, "/#{me.username}"), 200)
-      assert get(conn, "/#{me.username}.md").status == 404
-      assert get(conn, "/#{me.username}.json").status == 404
+      assert get(conn, "/#{me.username}.md").status == 403
+      assert get(conn, "/#{me.username}.json").status == 403
     end
 
     test "a private email's show page advertises no agent-format alternates", %{conn: conn} do

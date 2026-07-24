@@ -32,8 +32,20 @@ defmodule Vutuv.Moderation do
   alias Vutuv.Accounts.User
   alias Vutuv.Chat.{Message, Participant}
   alias Vutuv.Jobs.JobPosting
-  alias Vutuv.Moderation.{Case, Event, EvidenceScreenshot, Notifier, Report, Severance, Strike}
+
+  alias Vutuv.Moderation.{
+    AdminAction,
+    Case,
+    Event,
+    EvidenceScreenshot,
+    Notifier,
+    Report,
+    Severance,
+    Strike
+  }
+
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -1147,6 +1159,33 @@ defmodule Vutuv.Moderation do
     email_confirmed?(user) and (not account_hidden?(user) or bypass?(user, viewer))
   end
 
+  @doc """
+  The HTTP status a withheld profile should return to a viewer who cannot see
+  it (issue #812). Call it only once `profile_visible_to?/2` has already said
+  no; it decides *why* the profile is withheld:
+
+    * `404` — a never-activated registration (the anti-spam gate). These must
+      stay indistinguishable from a non-existent account: you must not be able
+      to probe whether an email is registered, so this is not negotiable.
+    * `410` Gone — a permanently deactivated account (`deactivated_at`). It
+      existed and is gone for good.
+    * `403` Forbidden — a reversible hold: frozen pending review, currently
+      suspended, or frozen for unreachability. The account exists and is
+      withheld, which is what 403 says (and what the old blanket 404 lied
+      about).
+
+  A confirmed but deactivated account still reports 410 even though its owner
+  never confirmed a second address, etc.; the `email_confirmed?` gate wins
+  first so an unconfirmed row can never leak its existence through a 403/410.
+  """
+  def withheld_status(%User{} = user) do
+    cond do
+      not email_confirmed?(user) -> 404
+      user.deactivated_at != nil -> 410
+      true -> 403
+    end
+  end
+
   # nil counts as activated: rows from before the activation gate existed.
   defp email_confirmed?(%User{email_confirmed?: false}), do: false
   defp email_confirmed?(%User{}), do: true
@@ -1154,6 +1193,107 @@ defmodule Vutuv.Moderation do
   defp bypass?(%User{id: id}, %User{id: id}), do: true
   defp bypass?(_user, %User{admin?: true}), do: true
   defp bypass?(_user, _viewer), do: false
+
+  ## Admin account freeze (issue #812)
+
+  @doc """
+  Admin-initiated freeze of an account (no report, no case): hides the profile
+  and everything it owns from everyone but the owner and admins, exactly like a
+  report-driven freeze (`account_hidden?/1` flips, `profile_visible_to?/2`
+  hides it, the owner sees their `frozen_banner`). It sets `frozen_at` only, so
+  it does **not** block login (`login_block/1` fires on suspension/deactivation,
+  not a freeze); a frozen member can still sign in and see their own banner.
+
+  Records a caseless `AdminAction` audit row (who froze whom, when, why). The
+  public, audited entry point the admin account tool uses instead of the
+  private `set_user_moderation!/2`.
+
+  Returns `{:ok, :frozen}`, or `{:ok, :noop}` if the account was already frozen.
+  """
+  def admin_freeze_user(user, admin, reason \\ nil)
+
+  def admin_freeze_user(%User{frozen_at: %NaiveDateTime{}}, %User{admin?: true}, _reason),
+    do: {:ok, :noop}
+
+  def admin_freeze_user(%User{} = user, %User{admin?: true} = admin, reason) do
+    set_user_moderation!(user.id, frozen_at: NaiveDateTime.utc_now(:second))
+    log_admin_action(user, admin, "account_frozen", reason)
+    {:ok, :frozen}
+  end
+
+  @doc """
+  Admin-initiated thaw: lifts a `frozen_at` hold, whatever set it (an admin
+  freeze or a report). Clearing a report-driven freeze un-hides the profile
+  while the case stays open in the queue — a deliberate admin override ("I have
+  looked, un-hide it"); the case ruling later clears an already-nil `frozen_at`
+  as a no-op. Records a caseless `AdminAction` audit row.
+
+  Returns `{:ok, :unfrozen}`, or `{:ok, :noop}` if it was not frozen.
+  """
+  def admin_unfreeze_user(user, admin, reason \\ nil)
+
+  def admin_unfreeze_user(%User{frozen_at: nil}, %User{admin?: true}, _reason),
+    do: {:ok, :noop}
+
+  def admin_unfreeze_user(%User{} = user, %User{admin?: true} = admin, reason) do
+    set_user_moderation!(user.id, frozen_at: nil)
+    log_admin_action(user, admin, "account_unfrozen", reason)
+    {:ok, :unfrozen}
+  end
+
+  defp log_admin_action(%User{} = user, %User{} = admin, action, reason) do
+    Repo.insert!(%AdminAction{
+      user_id: user.id,
+      actor_id: admin.id,
+      action: action,
+      reason: presence(reason)
+    })
+
+    :ok
+  end
+
+  defp presence(nil), do: nil
+
+  defp presence(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  @doc "How many accounts are currently in the moderation freezer (`frozen_at` set)."
+  def frozen_accounts_count do
+    Repo.aggregate(from(u in User, where: not is_nil(u.frozen_at)), :count)
+  end
+
+  @doc """
+  One page of currently-frozen accounts, newest freeze first, paginated like
+  the admin member browser (`Vutuv.Pages.paginate/4`). `opts` may carry
+  `:total` (skip the recount) and `:per_page`.
+  """
+  def list_frozen_accounts(params \\ %{}, opts \\ []) do
+    per_page = Keyword.get(opts, :per_page, 250)
+    total = Keyword.get(opts, :total) || frozen_accounts_count()
+
+    from(u in User, where: not is_nil(u.frozen_at), order_by: [desc: u.frozen_at, desc: u.id])
+    |> Pages.paginate(params, total, per_page)
+    |> Repo.all()
+  end
+
+  @doc """
+  Of the given account ids, the set currently frozen by an open report (a user
+  `Case` in an open status). Drives the frozen list's "Source" column: an id in
+  the set was frozen by a report, everything else by an admin. One query, no
+  per-row lookups.
+  """
+  def report_frozen_ids(user_ids) when is_list(user_ids) do
+    from(c in Case,
+      where: c.content_type == "user" and c.owner_id in ^user_ids and c.status in ^@open_statuses,
+      select: c.owner_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
 
   ## Content plumbing
 

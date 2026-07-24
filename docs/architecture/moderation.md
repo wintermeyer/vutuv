@@ -83,3 +83,44 @@ Every case carries an **audit log** (`moderation_events`: reports, freezes,
 severances, owner self-service, escalations, rulings, strikes, `owner_removed`)
 rendered as the History timeline on the admin case page, and the urgent admin
 email names the profile, category and reporter's note instead of just a link.
+
+## Admin-initiated freeze (`/admin/accounts`, issue #812)
+
+Freezing an account no longer only happens reactively as a report side effect.
+The **admin account tool** at `/admin/accounts` (see `admin.md`) lets an admin
+search any account (by name, `@handle` or email) and freeze / unfreeze it
+directly, with a paginated moderation-freezer list at `/admin/accounts/frozen`.
+The public, audited entry points are `Moderation.admin_freeze_user/3` and
+`admin_unfreeze_user/2` (never the private `set_user_moderation!/2`): they set /
+clear `frozen_at` and record a **caseless** audit row in `moderation_admin_actions`
+(`Vutuv.Moderation.AdminAction`, mirroring the deliverability ledger — an
+immutable, FK-free record of who froze whom, when, and an optional reason). A
+freeze sets `frozen_at` only, so it hides the profile everywhere but does **not**
+block login (that is what suspension/deactivation do). The frozen list derives
+each row's **Source** (admin vs report) from `report_frozen_ids/1`: an account
+with an open user `Case` was frozen by a report, everything else by an admin. An
+admin thaw clears `frozen_at` even for a report-frozen account (a deliberate
+override); the case stays in the queue and its later ruling clears an
+already-nil `frozen_at` as a no-op.
+
+## The HTTP status of a withheld profile (issue #812)
+
+`VutuvWeb.Plug.EnsureActivated` no longer returns a blanket 404 for every hidden
+profile — a 404 ("does not exist") lied about an account that exists and is
+merely withheld. `Moderation.withheld_status/1` classifies the reason once
+`profile_visible_to?/2` has said no:
+
+- a **never-activated** registration keeps **404** — it must stay
+  indistinguishable from a non-existent account (anti-enumeration), and that
+  wins first even when the row is also frozen;
+- a **reversible hold** (frozen / suspended / unreachable) returns **403
+  Forbidden** — the account exists and is withheld;
+- a **permanently deactivated** account returns **410 Gone**.
+
+The owner/admin HTML bypass (200) is unchanged, and HTML and the agent-format
+siblings (`.md`/`.json`/`.xml`/`.vcf`) share the plug, so they always report the
+same status. 403/410 render a profile-specific "This profile is currently
+unavailable" page (`VutuvWeb.ErrorHTML`, `profile_unavailable.html`) that does
+not reveal *why*. The separate `/api/2.0` JSON API keeps its own 404 for hidden
+accounts — it is not an agent-format sibling and follows problem+json
+conventions.

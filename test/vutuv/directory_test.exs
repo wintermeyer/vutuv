@@ -68,10 +68,10 @@ defmodule Vutuv.DirectoryTest do
     assert Enum.map(users, & &1.last_name) == ["Visible"]
   end
 
-  test "unreachable (every-email-bounced) members are excluded, like the profile 404s" do
+  test "unreachable (every-email-bounced) members are excluded, like the withheld profile" do
     # unreachable_at hides the profile (Moderation.account_hidden?/1); the
     # crawlable set must agree, or a zombie account leaks into the directory and
-    # sitemap while its profile 404s.
+    # sitemap while its profile is withheld (a 403 since issue #812).
     insert_activated_user(last_name: "Reachable")
     insert_activated_user(last_name: "Unreachable", unreachable_at: ~N[2026-01-01 00:00:00])
 

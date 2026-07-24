@@ -512,6 +512,18 @@ defmodule VutuvWeb.Router do
     # legacy POST both use.
     post("/users", UserController, :update)
 
+    # The admin account freezer (issue #812): search any account (by name,
+    # @handle or email) and freeze / unfreeze it directly — no report needed —
+    # plus a paginated list of every account currently in the moderation
+    # freezer. Freeze/unfreeze are CSRF-protected POSTs through a public,
+    # audited Moderation entry point. /accounts/frozen is defined before the
+    # /:id actions so the literal segment wins (same ordering as
+    # /moderation/reporters above).
+    get("/accounts", AccountController, :index)
+    get("/accounts/frozen", AccountController, :frozen)
+    post("/accounts/:id/freeze", AccountController, :freeze)
+    post("/accounts/:id/unfreeze", AccountController, :unfreeze)
+
     # The Honor tags overview: the discoverable home for the admin-granted
     # badges (mint one in a step, see holder counts, jump to each roster).
     # Defined before the tag catalog so `/admin/honor_tags` is a distinct path,

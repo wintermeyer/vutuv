@@ -14,15 +14,17 @@ defmodule VutuvWeb.ModerationGatesTest do
       {:ok, %{conn: conn, owner: owner}}
     end
 
-    test "404s for visitors", %{conn: conn, owner: owner} do
+    # Issue #812: a frozen account exists but is withheld, so it returns 403,
+    # not the misleading 404 it used to.
+    test "403s for visitors", %{conn: conn, owner: owner} do
       conn = get(conn, ~p"/#{owner}")
-      assert html_response(conn, 404)
+      assert html_response(conn, 403)
     end
 
-    test "404s for other logged-in members", %{conn: conn, owner: owner} do
+    test "403s for other logged-in members", %{conn: conn, owner: owner} do
       {conn, _user} = create_and_login_user(conn)
       conn = get(conn, ~p"/#{owner}")
-      assert html_response(conn, 404)
+      assert html_response(conn, 403)
     end
 
     test "stays reachable for the owner", %{conn: conn} do
