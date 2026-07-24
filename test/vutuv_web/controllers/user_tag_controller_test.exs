@@ -252,6 +252,68 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
   end
 
+  # The person's tag detail page shows who endorsed THEM for this tag (issue
+  # #1008): the member-specific endorsements, not only the global "people with
+  # this tag" card that used to be all this page carried.
+  describe "show" do
+    setup do
+      owner = insert_activated_user(username: "tag_detail_owner")
+      tag = insert(:tag)
+      user_tag = insert(:user_tag, user: owner, tag: tag)
+      {:ok, owner: owner, tag: tag, user_tag: user_tag}
+    end
+
+    test "names the endorsers and links to the full endorser list", %{
+      conn: conn,
+      owner: owner,
+      tag: tag,
+      user_tag: user_tag
+    } do
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert_activated_user(first_name: "Rick", last_name: "Sanchez")
+      )
+
+      html = conn |> get(~p"/#{owner}/tags/#{tag.slug}") |> html_response(200)
+
+      assert html =~ "Rick Sanchez"
+      assert html =~ ~p"/#{owner}/tags/#{tag.slug}/endorsers"
+    end
+
+    test "a tag nobody endorsed renders an empty-endorsements line, no crash", %{
+      conn: conn,
+      owner: owner,
+      tag: tag
+    } do
+      html = conn |> get(~p"/#{owner}/tags/#{tag.slug}") |> html_response(200)
+
+      assert html =~ tag.name
+      refute html =~ "Rick Sanchez"
+    end
+
+    test "drops hidden / unconfirmed endorsers from the detail page (issue #783)", %{
+      conn: conn,
+      owner: owner,
+      tag: tag,
+      user_tag: user_tag
+    } do
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert_activated_user(first_name: "Visible", last_name: "Voter")
+      )
+
+      insert(:user_tag_endorsement,
+        user_tag: user_tag,
+        user: insert(:user, first_name: "Hidden", last_name: "Voter")
+      )
+
+      html = conn |> get(~p"/#{owner}/tags/#{tag.slug}") |> html_response(200)
+
+      assert html =~ "Visible Voter"
+      refute html =~ "Hidden Voter"
+    end
+  end
+
   # The public endorser list behind the profile Tags popover's "and N more"
   # link: everyone who currently endorses this member for this tag.
   describe "endorsers" do

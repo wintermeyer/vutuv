@@ -5943,6 +5943,23 @@ msgstr "Apps & API-Zugang"
 msgid "Endorsements"
 msgstr "Empfehlungen"
 
+#: lib/vutuv_web/templates/user_tag/show.html.heex:34
+#, elixir-autogen, elixir-format
+msgid "All endorsers"
+msgstr "Alle Empfehlenden"
+
+#: lib/vutuv_web/templates/user_tag/show.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "Nobody has endorsed %{name} for this tag yet."
+msgstr "Noch niemand hat %{name} für dieses Tag empfohlen."
+
+#: lib/vutuv_web/templates/user_tag/show.html.heex:22
+#, elixir-autogen, elixir-format
+msgid "%{formatted} endorsement"
+msgid_plural "%{formatted} endorsements"
+msgstr[0] "%{formatted} Empfehlung"
+msgstr[1] "%{formatted} Empfehlungen"
+
 #: lib/vutuv_web/templates/settings/notifications.html.heex:99
 #, elixir-autogen, elixir-format
 msgid "Endorsements and new followers"

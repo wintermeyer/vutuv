@@ -19,6 +19,10 @@ defmodule VutuvWeb.UserTagController do
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.UserHelpers
 
+  # How many endorsers the tag detail page names inline (issue #1008); the rest
+  # live on the paginated endorsers page, one link away.
+  @endorsers_preview 12
+
   # Index and show are also served as Markdown / text / JSON via
   # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs). The
   # shared preload carries the endorsements the docs count and keeps the
@@ -58,16 +62,34 @@ defmodule VutuvWeb.UserTagController do
   end
 
   def show(conn, %{"id" => _id}) do
-    # Count only visible endorsers (issue #783); the agent doc derives the
-    # endorsement count from length(endorsements) on this plain preload.
+    # Load the endorsers themselves, not just their count (issue #1008): the
+    # detail page names who endorsed this member for this tag. Still only the
+    # visible ones (issue #783), so length(endorsements) stays the right count.
     user_tag =
       conn.assigns[:user_tag]
-      |> Repo.preload([:tag, endorsements: UserTagEndorsement.visible()])
+      |> Repo.preload([:tag, endorsements: UserTagEndorsement.visible_with_endorser()])
+
+    # Newest first (a UUID v7 endorsement id sorts by creation), so the detail
+    # page and the agent-doc sibling name the same people in the same order.
+    endorsers =
+      user_tag.endorsements
+      |> Enum.sort_by(& &1.id, :desc)
+      |> Enum.map(& &1.user)
+
+    # Show a capped preview as a normal people list; the rest lives on the
+    # existing paginated endorsers page, one link away. Batch the per-row
+    # work-info / follow lookups (one query each), like the listing pages.
+    preview = Enum.take(endorsers, @endorsers_preview)
 
     AgentDocs.respond(conn,
       html:
         &render(&1, "show.html",
           user_tag: user_tag,
+          endorsers: preview,
+          endorsement_count: length(endorsers),
+          work_info_by_id: UserHelpers.work_information_map(preview, 45),
+          following_by_id: UserHelpers.following_map(conn.assigns[:current_user], preview),
+          work_string_length: 45,
           page_title: UserHelpers.member_page_title(conn.assigns[:user], UserTag.name(user_tag))
         ),
       doc: fn -> SectionDocs.build_show(conn.assigns[:user], :tags, user_tag) end

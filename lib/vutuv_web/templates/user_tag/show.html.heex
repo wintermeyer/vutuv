@@ -10,6 +10,35 @@
 
 <div class="card-list">
 
+  <%!-- Who endorsed THIS member for THIS tag (issue #1008): the endorsements
+  are the point of this page, so they lead, above the global "people with this
+  tag" card. A capped people list plus a link to the full paginated list. --%>
+  <section class="card">
+    <h2 class="card__label">{gettext("Endorsements")}</h2>
+    <%= if @endorsement_count == 0 do %>
+      <p class="card__empty">
+        {gettext("Nobody has endorsed %{name} for this tag yet.", name: full_name(@user))}
+      </p>
+    <% else %>
+      <p>
+        {ngettext("%{formatted} endorsement", "%{formatted} endorsements", @endorsement_count,
+          formatted: delimited_count(@endorsement_count)
+        )}
+      </p>
+
+      {VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @endorsers))}
+
+      <p class="card__morelink">
+        <.link
+          href={~p"/#{@user}/tags/#{@user_tag.tag.slug}/endorsers"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("All endorsers")} ›
+        </.link>
+      </p>
+    <% end %>
+  </section>
+
   {VutuvWeb.TagHTML.single_card(Map.put(assigns, :tag, @user_tag.tag))}
 
 </div>
