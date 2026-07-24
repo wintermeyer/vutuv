@@ -93,6 +93,49 @@ defmodule VutuvWeb.ReportControllerTest do
       conn = get(conn, ~p"/reports/new?type=post&id=#{Vutuv.UUIDv7.generate()}")
       assert html_response(conn, 404)
     end
+
+    test "a bystander cannot preview frozen content once a case is open, but the author can" do
+      # Log both members in first, so each login PIN is read from the mailbox
+      # before the freeze fires its owner-notification email. Each needs its own
+      # session-initialised conn (see the ConnCase setup).
+      fresh_conn = fn -> Plug.Test.init_test_session(build_conn(), %{}) end
+      {author_conn, author} = create_and_login_user(fresh_conn.())
+      {bystander_conn, _bystander} = create_and_login_user(fresh_conn.())
+
+      post = insert(:post, user: author)
+
+      # A trusted reporter freezes the post and opens a moderation case; the
+      # permalink now 404s for everyone but the author and admins.
+      {:ok, _} = Moderation.report_content(insert_activated_user(), post, %{"category" => "spam"})
+      assert Repo.get!(Vutuv.Posts.Post, post.id).frozen_at
+
+      # F10: a bystander with no tie to the open case must not get the form. The
+      # open case alone used to render the preview to any logged-in member.
+      assert bystander_conn
+             |> get(~p"/reports/new?type=post&id=#{post.id}")
+             |> html_response(404)
+
+      # The author can see their own frozen post, so the gate still admits them.
+      assert author_conn
+             |> get(~p"/reports/new?type=post&id=#{post.id}")
+             |> html_response(200)
+    end
+
+    test "a reporter tied to the open case still reaches the form", %{conn: conn} do
+      {conn, reporter} = create_and_login_user(conn)
+      author = insert_activated_user()
+      post = insert(:post, user: author)
+
+      # Filing the report freezes the post and ties the reporter to the case.
+      {:ok, _} = Moderation.report_content(reporter, post, %{"category" => "spam"})
+      assert Repo.get!(Vutuv.Posts.Post, post.id).frozen_at
+
+      # The frozen post is no longer otherwise visible to them, but their own
+      # report on the open case keeps the form reachable.
+      assert conn
+             |> get(~p"/reports/new?type=post&id=#{post.id}")
+             |> html_response(200)
+    end
   end
 
   describe "create" do

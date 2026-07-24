@@ -125,29 +125,41 @@ defmodule VutuvWeb.OrganizationLive.Edit do
   end
 
   def handle_event("claim_handle", %{"username" => username}, socket) do
-    case Organizations.claim_handle(socket.assigns.organization, %{"username" => username}) do
-      {:ok, organization} ->
-        {:noreply,
-         socket
-         |> assign(:organization, organization)
-         |> assign(:handle_value, organization.username)
-         |> assign(:handle_error, nil)
-         |> put_flash(:info, gettext("Your organization handle is set."))}
+    # The form is owner-gated, but re-check here: an organization admin (not an
+    # owner) can reach the edit page, and claiming the global root handle (in
+    # the shared /:handle namespace) is owner-only.
+    if socket.assigns.owner? do
+      case Organizations.claim_handle(socket.assigns.organization, %{"username" => username}) do
+        {:ok, organization} ->
+          {:noreply,
+           socket
+           |> assign(:organization, organization)
+           |> assign(:handle_value, organization.username)
+           |> assign(:handle_error, nil)
+           |> put_flash(:info, gettext("Your organization handle is set."))}
 
-      {:error, :not_verified} ->
-        {:noreply,
-         socket
-         |> assign(:handle_value, username)
-         |> assign(
-           :handle_error,
-           gettext("Only a verified organization page can claim a handle.")
-         )}
+        {:error, :not_verified} ->
+          {:noreply,
+           socket
+           |> assign(:handle_value, username)
+           |> assign(
+             :handle_error,
+             gettext("Only a verified organization page can claim a handle.")
+           )}
 
-      {:error, changeset} ->
-        {:noreply,
-         socket
-         |> assign(:handle_value, username)
-         |> assign(:handle_error, handle_error_message(changeset))}
+        {:error, changeset} ->
+          {:noreply,
+           socket
+           |> assign(:handle_value, username)
+           |> assign(:handle_error, handle_error_message(changeset))}
+      end
+    else
+      {:noreply,
+       put_flash(
+         socket,
+         :error,
+         gettext("You are not allowed to change this organization's handle.")
+       )}
     end
   end
 

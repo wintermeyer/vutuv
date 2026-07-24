@@ -238,7 +238,7 @@ defmodule Vutuv.Organizations do
       Repo.all(
         from(u in User,
           where:
-            u.id not in ^exclude and
+            u.id not in ^exclude and account_confirmed_row(u) and not account_hidden_row(u) and
               (ilike(u.username, ^like) or ilike(u.first_name, ^like) or ilike(u.last_name, ^like)),
           order_by: [asc: u.username],
           limit: 6

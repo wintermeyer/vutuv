@@ -187,6 +187,27 @@ defmodule VutuvWeb.OrganizationManagementTest do
       assert slug_page =~ "/acmehandle"
     end
 
+    test "an organization admin (not an owner) sees no claim form and a forged event is refused",
+         %{conn: conn} do
+      {conn, admin} = create_and_login_user(conn)
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+      {:ok, _} = Organizations.add_role(organization, admin, "admin", owner)
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/edit")
+
+      # The claim form is owner-gated in the template.
+      refute has_element?(view, "#claim-handle-form")
+
+      # A forged socket event must not set the global root handle: an admin is
+      # not an owner, and the handle lives in the shared /:handle namespace.
+      render_click(view, "claim_handle", %{"username" => "adminhandle"})
+
+      assert is_nil(Organizations.get_organization(organization.id).username)
+      # The handle was never registered, so it stays claimable.
+      assert Vutuv.Handles.available?("adminhandle")
+    end
+
     test "owner cannot claim a handle already held by a member", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       organization = active_organization_for(owner)

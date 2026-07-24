@@ -101,11 +101,34 @@ defmodule Vutuv.Moderation do
   report form's `new` action shares with `report_content/3`, so the form never
   previews content (a private message, a restricted post) the reporter has no
   right to see. The owner must exist, and the reporter must currently be able to
-  report it (visibility) or already be tied to it by an open case.
+  report it (visibility) or already be tied to it by an open case they filed a
+  report on.
+
+  The open-case arm must be reporter-specific: a mere *existing* open case is
+  true for everyone, so keying the form on it alone let any logged-in member
+  preview frozen/restricted/private content (whose permalink 404s for them) the
+  moment a case was opened. A bystander with no report on the case falls through
+  to the ordinary visibility check.
   """
   def can_report?(%User{} = reporter, content) do
     owner_id(content) != nil and
-      (open_case_for(content) != nil or reportable_by?(reporter, content))
+      (reporter_on_open_case?(reporter, content) or reportable_by?(reporter, content))
+  end
+
+  # Whether `reporter` already filed a report on `content`'s open case. Being
+  # tied to the case this way keeps the report form reachable (e.g. to file a
+  # follow-up), but a case nobody else can see never opens the form to a
+  # stranger who cannot otherwise view the content.
+  defp reporter_on_open_case?(%User{id: reporter_id}, content) do
+    case open_case_for(content) do
+      nil ->
+        false
+
+      %Case{id: case_id} ->
+        Repo.exists?(
+          from(r in Report, where: r.case_id == ^case_id and r.reporter_id == ^reporter_id)
+        )
+    end
   end
 
   defp open_new_case(reporter, content, attrs) do
