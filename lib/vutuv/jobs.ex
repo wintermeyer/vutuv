@@ -965,7 +965,7 @@ defmodule Vutuv.Jobs do
   def board_filters(raw, viewer) when is_map(raw) do
     %{
       q: presence(raw["q"]),
-      tag: presence(raw["tag"]),
+      tags: parse_board_tags(raw["tag"]),
       workplace: parse_workplace(raw["workplace"]),
       employment: parse_employment(raw["employment"]),
       near: presence(raw["near"]),
@@ -994,6 +994,20 @@ defmodule Vutuv.Jobs do
   end
 
   defp put_filter_salary(filters, _value, _user), do: filters
+
+  # The board's `tag` param is a comma-separated list of tag slugs (issue #951):
+  # one slug is the common shareable link (`?tag=elixir`), several the
+  # multiselect filter (`?tag=elixir,phoenix`). Split, trim, drop blanks and
+  # dedupe into the OR list `filter_tags/2` applies. `nil`/blank -> [].
+  defp parse_board_tags(value) when is_binary(value) do
+    value
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+  end
+
+  defp parse_board_tags(_value), do: []
 
   defp parse_workplace(value) when value in ["onsite", "hybrid", "remote"],
     do: String.to_existing_atom(value)
@@ -1055,7 +1069,7 @@ defmodule Vutuv.Jobs do
   defp apply_board_filters(query, filters, viewer) do
     query
     |> filter_q(filters[:q])
-    |> filter_tag(filters[:tag])
+    |> filter_tags(filters[:tags])
     |> filter_workplace(filters[:workplace])
     |> filter_employment(filters[:employment])
     |> filter_location(filters[:near], filters[:radius], filters[:country])
@@ -1088,18 +1102,22 @@ defmodule Vutuv.Jobs do
 
   defp filter_q(query, _q), do: query
 
-  defp filter_tag(query, slug) when is_binary(slug) and slug != "" do
+  # OR semantics (issue #951): a posting matches when it carries **any** of the
+  # selected tag slugs, so adding a tag broadens the results (the standard
+  # job-board multiselect facet, and consistent with the "matches my tags"
+  # chip). A single slug is the degenerate one-element list.
+  defp filter_tags(query, slugs) when is_list(slugs) and slugs != [] do
     tagged =
       from(jpt in JobPostingTag,
         join: t in assoc(jpt, :tag),
-        where: t.slug == ^slug,
+        where: t.slug in ^slugs,
         select: jpt.job_posting_id
       )
 
     where(query, [p], p.id in subquery(tagged))
   end
 
-  defp filter_tag(query, _slug), do: query
+  defp filter_tags(query, _slugs), do: query
 
   defp filter_workplace(query, type) when type in [:onsite, :hybrid, :remote],
     do: where(query, [p], p.workplace_type == ^type)

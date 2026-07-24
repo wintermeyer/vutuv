@@ -104,6 +104,69 @@ defmodule VutuvWeb.JobBoardLiveTest do
     assert render(view) =~ "Just appeared"
   end
 
+  describe "tag filter (issue #951)" do
+    setup do
+      poster = poster_fixture()
+
+      elixir =
+        publish_job!(poster, %{"title" => "Elixir Engineer", "required_tags" => "Elixir, Phoenix"})
+
+      java = publish_job!(poster, %{"title" => "Java Developer", "required_tags" => "Java"})
+      %{elixir: elixir, java: java}
+    end
+
+    test "several tags OR: shows postings carrying any of them, each a removable pill", %{
+      conn: conn
+    } do
+      {:ok, view, html} = live(conn, ~p"/jobs?#{[tag: "elixir,java"]}")
+
+      assert html =~ "Elixir Engineer"
+      assert html =~ "Java Developer"
+      assert has_element?(view, "[data-active-tag='elixir']")
+      assert has_element?(view, "[data-active-tag='java']")
+    end
+
+    test "a single ?tag= still works (backward compatible)", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/jobs?#{[tag: "elixir"]}")
+
+      assert html =~ "Elixir Engineer"
+      refute html =~ "Java Developer"
+    end
+
+    test "the free-text add_tag field folds a typed name into the tag list", %{conn: conn} do
+      # On Elixir already; add "Java" by name -> both match, both pills show.
+      {:ok, view, html} = live(conn, ~p"/jobs?#{[tag: "elixir", add_tag: "Java"]}")
+
+      assert html =~ "Elixir Engineer"
+      assert html =~ "Java Developer"
+      assert has_element?(view, "[data-active-tag='java']")
+    end
+
+    test "an unknown add_tag value is dropped, not applied", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/jobs?#{[add_tag: "does-not-exist-xyz"]}")
+
+      # No filter applied -> both postings still show.
+      assert html =~ "Elixir Engineer"
+      assert html =~ "Java Developer"
+    end
+
+    test "offers unselected result tags as one-tap suggestions", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/jobs")
+
+      assert has_element?(view, "[data-suggest-tag='elixir']")
+      assert has_element?(view, "[data-suggest-tag='java']")
+    end
+
+    test "a selected tag drops out of the suggestions", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/jobs?#{[tag: "elixir"]}")
+
+      # Elixir is selected (so it is not suggested), Phoenix co-occurs on the
+      # one matching posting and is offered as a refinement.
+      refute has_element?(view, "[data-suggest-tag='elixir']")
+      assert has_element?(view, "[data-suggest-tag='phoenix']")
+    end
+  end
+
   describe "salary field (#953)" do
     test "everyone gets a minimum-salary input, even logged out", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/jobs")
