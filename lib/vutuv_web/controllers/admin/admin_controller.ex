@@ -2,6 +2,7 @@ defmodule VutuvWeb.Admin.AdminController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Geo
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Tags.Tag
@@ -35,11 +36,21 @@ defmodule VutuvWeb.Admin.AdminController do
       pref_overrides_count: map_size(Vutuv.Prefs.list_default_rows()),
       frozen_accounts_count: Vutuv.Deliverability.frozen_count(),
       moderation_frozen_count: Vutuv.Moderation.frozen_accounts_count(),
-      fediverse_enabled: Vutuv.Fediverse.enabled?(),
-      # Only the four COUNTs when the card will actually show them; an
-      # air-gapped install (FEDIVERSE_ENABLED=false) hides the card, mirroring
-      # the ads line above.
-      fediverse_stats: if(Vutuv.Fediverse.enabled?(), do: Vutuv.Fediverse.stats())
+      fediverse_enabled: Fediverse.enabled?(),
+      # Only the COUNTs when the card will actually show them; an air-gapped
+      # install (FEDIVERSE_ENABLED=false) hides the card, mirroring the ads line
+      # above.
+      fediverse_stats: if(Fediverse.enabled?(), do: Fediverse.stats()),
+      fediverse_top_host: if(Fediverse.enabled?(), do: top_inbound_host())
     )
+  end
+
+  # The one server sending us the most, for the dashboard card's inbound line
+  # (issue #1067); nil while nothing has arrived.
+  defp top_inbound_host do
+    case Fediverse.inbound_hosts(1) do
+      [%{host: host} | _] -> host
+      [] -> nil
+    end
   end
 end

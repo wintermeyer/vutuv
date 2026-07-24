@@ -308,6 +308,56 @@ defmodule VutuvWeb.FediverseControllerTest do
     end
   end
 
+  describe "POST /:slug/actor/inbox — blocked servers (#1067)" do
+    setup do
+      admin = insert(:activated_user, admin?: true)
+      {:ok, {_blocked, _purged}} = Fediverse.block_instance(%{"host" => "social.example"}, admin)
+      :ok
+    end
+
+    test "a blocked server is dropped before the signature is even checked", %{conn: conn} do
+      user = federated_user()
+
+      # No stub, no signature: if the blocklist did not cut in first, this would
+      # be a 401. It is answered 202 and dropped, so the blocklist cannot be
+      # enumerated from outside, and no remote actor document is fetched.
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/#{user.username}/actor/inbox", Jason.encode!(follow_activity(user)))
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 0
+      assert Repo.aggregate(Delivery, :count) == 0
+    end
+
+    test "a correctly signed Follow from a blocked server still writes no row", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+
+      conn = signed_post(conn, user, follow_activity(user), priv)
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 0
+      assert Repo.aggregate(Delivery, :count) == 0
+    end
+
+    test "an unblocked server is unaffected", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+
+      [blocked] = Fediverse.list_blocked_instances()
+      {:ok, _} = Fediverse.unblock_instance(blocked.id)
+
+      conn = signed_post(conn, user, follow_activity(user), priv)
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 1
+    end
+  end
+
   describe "POST /:slug/actor/inbox — remote actor lifecycle" do
     test "Update of the actor re-syncs the stored handle, name and inboxes", %{conn: conn} do
       {priv, pub} = Keys.generate()

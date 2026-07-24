@@ -79,14 +79,41 @@ defmodule VutuvWeb.FediverseController do
 
   def inbox(conn, %{"slug" => slug}) do
     with_federated_user(conn, slug, fn user ->
-      case VutuvWeb.RateLimit.check(conn, :fediverse_inbox, nil,
-             limit: 300,
-             window_ms: :timer.hours(1)
-           ) do
-        :ok -> verify_and_perform(conn, user)
-        :rate_limited -> send_resp(conn, 429, "")
+      cond do
+        # The operator's kill switch (issue #1067), checked FIRST: before the
+        # signature is verified, before the remote actor document is fetched
+        # (an outbound request to a host we refuse to talk to) and before any
+        # write. Answered 202 like every other dropped activity, never 403, so
+        # the blocklist cannot be enumerated from outside.
+        blocked_sender?(conn) ->
+          send_resp(conn, 202, "")
+
+        VutuvWeb.RateLimit.check(conn, :fediverse_inbox, nil,
+          limit: 300,
+          window_ms: :timer.hours(1)
+        ) == :rate_limited ->
+          send_resp(conn, 429, "")
+
+        true ->
+          verify_and_perform(conn, user)
       end
     end)
+  end
+
+  # Both names the request offers for its sender: the signature's `keyId` (whose
+  # host we would otherwise fetch the actor document from) and the activity's
+  # claimed `actor`. Neither is verified yet, so a match on *either* is enough —
+  # a blocked server must not be able to talk its way in by lying about one.
+  defp blocked_sender?(conn) do
+    key_id =
+      case signature_key_id(conn) do
+        {:ok, key_id} -> key_id
+        _ -> nil
+      end
+
+    [key_id, conn.body_params["actor"]]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.any?(&Fediverse.instance_blocked?/1)
   end
 
   # The signature names the sender (keyId -> actor document -> public key).

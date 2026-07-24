@@ -531,7 +531,8 @@ defmodule Vutuv.FediverseTest do
                federating_members: 2,
                remote_followers: 2,
                queue_depth: 2,
-               stuck_deliveries: 1
+               stuck_deliveries: 1,
+               blocked_instances: 0
              }
     end
   end

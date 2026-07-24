@@ -30,6 +30,7 @@ defmodule Vutuv.Fediverse do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Actor
+  alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Fediverse.Deliverer
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.Follower
@@ -37,6 +38,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Keys
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDenial
+  alias Vutuv.RateLimiter
   alias Vutuv.Repo
   alias Vutuv.SocialFeed.Http
   alias VutuvWeb.Fediverse.Docs
@@ -88,14 +90,20 @@ defmodule Vutuv.Fediverse do
   Records a remote follower (idempotent per remote actor). A repeat Follow
   re-syncs every cached field from the actor document, the display ones
   included — a remote who renamed must not stay listed under the old handle.
+
+  Subject to the inbound caps (issue #1067): a follower row is a stored inbound
+  row, so a server trying to plant thousands of them in an hour is throttled
+  with `{:error, :inbound_capped}`.
   """
   def add_follower(%User{} = user, attrs) do
-    %Follower{user_id: user.id}
-    |> Follower.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: {:replace, [:inbox_uri, :shared_inbox_uri, :handle, :name, :updated_at]},
-      conflict_target: [:user_id, :actor_uri]
-    )
+    with :ok <- check_inbound_cap(attrs[:actor_uri] || attrs["actor_uri"]) do
+      %Follower{user_id: user.id}
+      |> Follower.changeset(attrs)
+      |> Repo.insert(
+        on_conflict: {:replace, [:inbox_uri, :shared_inbox_uri, :handle, :name, :updated_at]},
+        conflict_target: [:user_id, :actor_uri]
+      )
+    end
   end
 
   @doc """
@@ -145,7 +153,8 @@ defmodule Vutuv.Fediverse do
   Installation-wide federation figures for the admin dashboard (issue #843):
   how many members federate, how many remote followers they have between them,
   the outbound delivery-queue depth and how many of those rows are stuck
-  (carry a `last_error`), so a broken delivery run is visible at a glance.
+  (carry a `last_error`), so a broken delivery run is visible at a glance, plus
+  how many remote servers the operator has shut out (issue #1067).
   """
   def stats do
     %{
@@ -153,7 +162,8 @@ defmodule Vutuv.Fediverse do
       remote_followers: Repo.aggregate(Follower, :count),
       queue_depth: Repo.aggregate(Delivery, :count),
       stuck_deliveries:
-        Repo.aggregate(from(d in Delivery, where: not is_nil(d.last_error)), :count)
+        Repo.aggregate(from(d in Delivery, where: not is_nil(d.last_error)), :count),
+      blocked_instances: blocked_instance_count()
     }
   end
 
@@ -198,6 +208,153 @@ defmodule Vutuv.Fediverse do
       )
     )
   end
+
+  ## Blocked instances and inbound caps (issue #1067)
+
+  # The operator's safety floor under everything inbound. Two independent
+  # levers, because they answer different abuse: the **blocklist** shuts one
+  # named server out for good, the **caps** bound how much any single server (or
+  # single remote person) can push in an hour, including servers nobody has
+  # thought to block yet.
+  #
+  # Stored inbound rows per hour, per remote host and per remote actor. Generous
+  # on purpose: a big instance legitimately sends a burst when a post travels,
+  # and a cap that bites honest traffic gets turned off. Overridable via
+  # `config :vutuv, :fediverse_inbound_caps, {host_limit, actor_limit}`.
+  @inbound_host_limit 600
+  @inbound_actor_limit 60
+  @inbound_window_ms :timer.hours(1)
+
+  # The host of an actor / inbox URI, as SQL: lowercased, scheme and path and
+  # port stripped, so it can be compared with a `fediverse_blocked_instances`
+  # row. Kept as one macro because three deletes and the admin volume list all
+  # need the same expression. NOTE: an Ecto `fragment/1` string may not contain
+  # a literal `?` (it is the parameter marker), which is why the pattern uses
+  # no non-capturing groups.
+  defmacrop uri_host(uri) do
+    quote do
+      fragment("lower(substring(? from '^[a-z]+://([^/:#]+)'))", unquote(uri))
+    end
+  end
+
+  @doc "Every blocked remote server, newest first, with who blocked it."
+  def list_blocked_instances do
+    Repo.all(from(b in BlockedInstance, order_by: [desc: b.id], preload: [:blocked_by]))
+  end
+
+  @doc "How many remote servers the operator has shut out."
+  def blocked_instance_count, do: Repo.aggregate(BlockedInstance, :count)
+
+  @doc """
+  Whether anything from `uri` (an actor id, a `keyId`, a bare host) must be
+  dropped. Called by the inbox **before** the signature is verified and before
+  the remote actor is fetched, so a blocked server costs us neither an outbound
+  request nor a write. A `nil`/unparseable host is not blocked — the request
+  fails the signature check moments later anyway.
+  """
+  def instance_blocked?(uri) do
+    case BlockedInstance.normalize_host(uri) do
+      nil -> false
+      host -> Repo.exists?(from(b in BlockedInstance, where: b.host == ^host))
+    end
+  end
+
+  @doc """
+  Blocks a remote server and purges everything already stored from it.
+
+  Blocking is not just "stop listening": the follower rows from that host are
+  also the delivery targets for the member's future posts, so leaving them would
+  keep federating *to* a server we refuse to hear from. So the block and the
+  purge are one action — see `purge_instance/1` for what goes.
+
+  Returns `{:ok, {blocked, purged}}` where `purged` is the per-table row count,
+  or `{:error, changeset}`.
+  """
+  def block_instance(attrs, %User{} = admin) do
+    changeset =
+      %BlockedInstance{blocked_by_id: admin.id}
+      |> BlockedInstance.changeset(attrs)
+
+    case Repo.insert(changeset) do
+      {:ok, blocked} -> {:ok, {blocked, purge_instance(blocked.host)}}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  @doc """
+  Lifts a block. Deliberately does **not** resurrect anything: the purged rows
+  are gone, and a remote that wants to follow again simply sends a new Follow.
+  """
+  def unblock_instance(id) do
+    case Repo.get(BlockedInstance, id) do
+      nil -> {:error, :not_found}
+      blocked -> Repo.delete(blocked)
+    end
+  end
+
+  @doc """
+  Deletes everything stored from `host`: its remote followers, and the outbound
+  deliveries still queued for it. Returns `%{followers: n, deliveries: n}`.
+  """
+  def purge_instance(host) when is_binary(host) do
+    {followers, _} =
+      Repo.delete_all(from(f in Follower, where: uri_host(f.actor_uri) == ^host))
+
+    {deliveries, _} =
+      Repo.delete_all(from(d in Delivery, where: uri_host(d.inbox_uri) == ^host))
+
+    %{followers: followers, deliveries: deliveries}
+  end
+
+  @doc """
+  What each remote server has stored here, biggest first — the operator's "who
+  is sending us the most" list on `/admin/fediverse`, and what a block decision
+  is made from. Capped at `limit` hosts.
+  """
+  def inbound_hosts(limit \\ 20) do
+    Repo.all(
+      from(f in Follower,
+        group_by: uri_host(f.actor_uri),
+        order_by: [desc: count(f.id)],
+        limit: ^limit,
+        select: %{host: uri_host(f.actor_uri), followers: count(f.id)}
+      )
+    )
+  end
+
+  @doc """
+  The inbound caps as `{host_limit, actor_limit}` per hour, for the admin
+  screen to state what it is enforcing.
+  """
+  def inbound_caps do
+    Application.get_env(:vutuv, :fediverse_inbound_caps, {
+      @inbound_host_limit,
+      @inbound_actor_limit
+    })
+  end
+
+  # One hourly budget per remote host and one per remote actor, checked right
+  # before a row is stored. The host bucket is hit FIRST and short-circuits, so
+  # a flooding server cannot also plant one actor bucket per forged actor id
+  # after its own budget is spent (the same rule `VutuvWeb.RateLimit` follows).
+  defp check_inbound_cap(actor_uri) when is_binary(actor_uri) do
+    {host_limit, actor_limit} = inbound_caps()
+    host = BlockedInstance.normalize_host(actor_uri) || actor_uri
+
+    with :ok <- RateLimiter.hit({:fediverse_inbound, :host, host}, host_limit, @inbound_window_ms),
+         :ok <-
+           RateLimiter.hit(
+             {:fediverse_inbound, :actor, actor_uri},
+             actor_limit,
+             @inbound_window_ms
+           ) do
+      :ok
+    else
+      _ -> {:error, :inbound_capped}
+    end
+  end
+
+  defp check_inbound_cap(_), do: :ok
 
   ## Account migration — move out (issue #986, half 2)
 
@@ -516,11 +673,14 @@ defmodule Vutuv.Fediverse do
   defp attempt(%Delivery{user: %User{} = user} = delivery, actor) do
     with %Actor{} = actor <- actor,
          %URI{scheme: "https", host: host} <- URI.parse(delivery.inbox_uri),
-         false <- Vutuv.Ssrf.resolves_to_internal?(host) do
+         false <- Vutuv.Ssrf.resolves_to_internal?(host),
+         # A server the operator blocked while this row waited in the queue must
+         # not be delivered to either — a block is both ears and mouth shut.
+         false <- instance_blocked?(delivery.inbox_uri) do
       post_activity(delivery, user, actor)
     else
-      # No key, a non-https inbox or an internal target: undeliverable for
-      # good, so the row goes instead of clogging the queue.
+      # No key, a non-https inbox, an internal target or a blocked server:
+      # undeliverable for good, so the row goes instead of clogging the queue.
       _ -> Repo.delete(delivery)
     end
   end

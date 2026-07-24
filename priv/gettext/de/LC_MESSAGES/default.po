@@ -15613,3 +15613,128 @@ msgstr "Sie haben in diesem Thread geschrieben."
 #, elixir-autogen, elixir-format
 msgid "e.g. crypto*, \"machine learning\", politics"
 msgstr "z. B. crypto*, \"machine learning\", Politik"
+
+#: lib/vutuv_web/controllers/admin/fediverse_controller.ex:43
+#, elixir-autogen, elixir-format
+msgid "Enter the server name on its own, for example mastodon.example."
+msgstr "Geben Sie nur den Servernamen ein, zum Beispiel mastodon.example."
+
+#: lib/vutuv_web/controllers/admin/fediverse_controller.ex:57
+#, elixir-autogen, elixir-format
+msgid "%{host} is no longer blocked. What was deleted stays deleted; the server has to follow again."
+msgstr "%{host} ist nicht mehr blockiert. Gelöschtes bleibt gelöscht; der Server muss erneut folgen."
+
+#: lib/vutuv_web/controllers/admin/fediverse_controller.ex:70
+#, elixir-autogen, elixir-format
+msgid "%{host} is blocked. Removed: %{followers} remote followers and %{deliveries} queued deliveries."
+msgstr "%{host} ist blockiert. Entfernt: %{followers} entfernte Follower und %{deliveries} wartende Zustellungen."
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:15
+#, elixir-autogen, elixir-format
+msgid "At a glance"
+msgstr "Auf einen Blick"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "%{members} members federate, %{followers} remote followers between them, %{queue} activities queued for delivery, %{blocked} servers blocked."
+msgstr "%{members} Mitglieder föderieren, zusammen %{followers} entfernte Follower, %{queue} Aktivitäten warten auf Zustellung, %{blocked} Server blockiert."
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:26
+#, elixir-autogen, elixir-format
+msgid "Anyone can run a server in this network, so a server that talks to us is not a vetted party. Per hour, one server may store at most %{host_cap} rows here and one remote account at most %{actor_cap}; anything beyond that is dropped."
+msgstr "Jede und jeder kann in diesem Netzwerk einen Server betreiben, ein Server, der mit uns spricht, ist also keine geprüfte Stelle. Pro Stunde darf ein Server hier höchstens %{host_cap} Einträge speichern und ein entferntes Konto höchstens %{actor_cap}; alles darüber wird verworfen."
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:37
+#, elixir-autogen, elixir-format
+msgid "Block a server"
+msgstr "Server blockieren"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Blocking drops everything that server sends before it is even checked, deletes its followers and its queued deliveries, and stops our members' posts from going there. Lifting the block later does not bring any of it back."
+msgstr "Blockieren verwirft alles, was dieser Server sendet, noch bevor es geprüft wird, löscht seine Follower und seine wartenden Zustellungen und stoppt die Beiträge unserer Mitglieder dorthin. Ein späteres Aufheben holt nichts davon zurück."
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:47
+#, elixir-autogen, elixir-format
+msgid "Server name"
+msgstr "Servername"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:56
+#, elixir-autogen, elixir-format
+msgid "A full address or an @user@server handle works too; we keep the server part."
+msgstr "Eine vollständige Adresse oder ein Handle der Form @name@server geht auch; wir behalten den Serverteil."
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:60
+#, elixir-autogen, elixir-format
+msgid "Note (optional)"
+msgstr "Notiz (optional)"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:66
+#, elixir-autogen, elixir-format
+msgid "Why this server is blocked"
+msgstr "Warum dieser Server blockiert ist"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:70
+#, elixir-autogen, elixir-format
+msgid "Block this server"
+msgstr "Diesen Server blockieren"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:77
+#, elixir-autogen, elixir-format
+msgid "Blocked servers"
+msgstr "Blockierte Server"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:79
+#, elixir-autogen, elixir-format
+msgid "No server is blocked."
+msgstr "Kein Server ist blockiert."
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:85
+#, elixir-autogen, elixir-format
+msgid "Server"
+msgstr "Server"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:86
+#, elixir-autogen, elixir-format
+msgid "Note"
+msgstr "Notiz"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:87
+#, elixir-autogen, elixir-format
+msgid "Blocked by"
+msgstr "Blockiert von"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:105
+#, elixir-autogen, elixir-format
+msgid "Unblock %{host}? Nothing that was deleted comes back; the server simply may talk to us again."
+msgstr "%{host} freigeben? Gelöschtes kommt nicht zurück; der Server darf lediglich wieder mit uns sprechen."
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:122
+#, elixir-autogen, elixir-format
+msgid "Inbound volume per server"
+msgstr "Eingehendes Volumen pro Server"
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:124
+#, elixir-autogen, elixir-format
+msgid "No server has sent us anything yet."
+msgstr "Bisher hat uns kein Server etwas geschickt."
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:127
+#, elixir-autogen, elixir-format
+msgid "How much each server has stored here. Use it to decide what to block."
+msgstr "Wie viel jeder Server hier gespeichert hat. Danach entscheiden Sie, was Sie blockieren."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:293
+#, elixir-autogen, elixir-format
+msgid "Block servers and see inbound volume"
+msgstr "Server blockieren und eingehendes Volumen ansehen"
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:311
+#, elixir-autogen, elixir-format
+msgid "%{blocked} servers blocked, busiest inbound: %{host}."
+msgstr "%{blocked} Server blockiert, am aktivsten eingehend: %{host}."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:313
+#, elixir-autogen, elixir-format
+msgid "none yet"
+msgstr "noch keiner"

@@ -116,6 +116,7 @@ Everything else has a default (the vutuv.de production value):
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |
 | `POST_EDIT_WINDOW_MINUTES` | `30` | How long a post stays editable after publishing. Editing also closes with the first like, repost or reply, whatever this value says (an edit would silently rewrite what somebody else endorsed); deleting is never blocked. Raise it for a closed community where posts get little immediate engagement |
 | `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
+| `FEDIVERSE_INBOUND_CAPS` | `600,60` | `host,actor`: how many rows one remote server, and one remote account, may store here per hour. Anything past the budget is dropped for that hour. The floor under the operator blocklist at `/admin/fediverse`, since it also bounds servers nobody has blocked yet |
 | `FETCH_BOOK_METADATA` | `true` | `false` turns the catalogue lookups behind post **book reviews** off (the composer's ISBN → title/author/year prefill, the cover image, page count and publisher from Open Library, and an audiobook's running time). The review feature itself keeps working — members type the fields by hand and the card renders without a cover or those details. Set it on installations that must not call out (intranets) |
 | `DNB_SRU_URL` | `https://services.dnb.de/sru/dnb` | Where an **audiobook's running time** is looked up by ISBN: an SRU endpoint answering MARC21-xml (the Deutsche Nationalbibliothek by default — Open Library records no durations). Point it at another catalogue's SRU endpoint, or set it **empty** (`DNB_SRU_URL=`) to switch that one lookup off while the rest of the book metadata keeps working |
 | `AMAZON_DOMAIN` | `www.amazon.de` | The store a book review card's shop link points at (`https://<domain>/dp/<isbn10>`). Set your regional store (`www.amazon.com`, …) — or an **empty** value (`AMAZON_DOMAIN=`) to remove the shop link entirely |
@@ -449,6 +450,32 @@ The badge shows on the member's profile (and its `.md`/`.json`/… siblings) wit
 small "honor tag" marker. Reserve honor for **new** tag names: flipping a
 tag that members already hold makes them keep it but blocks them from removing it
 themselves.
+
+## Federation: blocking a remote server
+
+vutuv can copy a member's public posts to other social websites — independent
+servers speaking ActivityPub (Mastodon is the best known), which talk to each
+other the way mail servers do. Anyone can run one, so a server that talks to you
+is not a vetted party. Your levers live at **`/admin` → Fediverse**
+(`/admin/fediverse`); the whole screen is gone on an installation with
+`FEDIVERSE_ENABLED=false`.
+
+- **Blocklist.** Enter a server name (`mastodon.example` — a full address or an
+  `@user@server` handle works too, only the server part is kept). From then on
+  everything that server sends is dropped **before** its signature is checked
+  and before any of its documents are fetched, and it is answered with a plain
+  `202` rather than a refusal, so the list cannot be probed from outside.
+  Blocking also **deletes what that server already stored here** (its remote
+  followers, its queued deliveries) and stops your members' posts from going
+  there. Lifting a block later does not bring any of that back — the server has
+  to follow again.
+- **Caps.** Independent of the list, one remote server may store at most 600
+  rows per hour here, and one remote account at most 60. This bounds servers
+  nobody has thought to block yet; anything past the budget is dropped for that
+  hour. Set `FEDIVERSE_INBOUND_CAPS` to change it (see the configuration table).
+- **Inbound volume.** The same page lists what each server has stored here,
+  biggest first, and the dashboard card names the busiest one. That is the list
+  a block decision is made from.
 
 ## Moderation & spam
 
