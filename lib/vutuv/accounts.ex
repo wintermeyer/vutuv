@@ -676,6 +676,14 @@ defmodule Vutuv.Accounts do
         )
       )
 
+    # The actor Delete broadcast (issue #985): a federating member's Fediverse
+    # followers must be told their actor is gone, but the follower rows *are*
+    # the delivery targets and the actor row holds the signing key, and both
+    # cascade away the instant the delete commits. So capture the signed payload
+    # now, while they still exist, and POST it after the account is gone (nil for
+    # a member who never federated — nothing to send).
+    actor_delete = Vutuv.Fediverse.prepare_actor_delete(user)
+
     # Kill every device's live sockets before the cascade removes the session
     # rows (after which their per-session topics are unknowable), so open tabs
     # drop the logged-in chrome at once instead of on their next reload.
@@ -705,6 +713,12 @@ defmodule Vutuv.Accounts do
     )
 
     Enum.each(post_targets.reply_parent_ids, &Vutuv.Posts.broadcast_reply_count/1)
+
+    # Best effort, after the account is gone (advisory by protocol): tell the
+    # member's Fediverse followers their actor is deleted so remote servers
+    # purge it and the copies of its posts. A failure here never blocks or
+    # reverses the deletion.
+    Vutuv.Fediverse.send_actor_delete(actor_delete)
 
     {:ok, user}
   end

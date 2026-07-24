@@ -87,6 +87,17 @@ every endpoint 404s and nothing is delivered.
   The Note carries the member-rendered HTML with absolutized links, and image
   attachments via the public post-image proxy URLs. A public post's permalink
   answers an AP Accept with the Note (remote servers dereference ids).
+- **Account deletion** (`Vutuv.Accounts.delete_user/1`, issue #985): a
+  federating member's followers are told their actor is gone with an actor
+  `Delete { object: <actor-url> }`. The follower rows *are* the delivery
+  targets and the actor row holds the signing key, and both cascade away the
+  instant the delete commits — so `Fediverse.prepare_actor_delete/1` reads the
+  inboxes and key **before** the transaction into a self-contained payload, and
+  `send_actor_delete/1` signs and POSTs it (concurrent, best effort, bounded)
+  **after** the account is gone. A failed or timed-out POST never blocks or
+  reverses the deletion; a member who never federated captures nothing. This is
+  the outbound mirror of the inbound remote-`Delete` handling above — a
+  courtesy, never a guarantee (remote deletion is advisory by protocol).
 
 ## Visibility
 
@@ -108,9 +119,9 @@ every endpoint 404s and nothing is delivered.
 
 ## Deliberate v1 limits
 
-No inbound content (likes/replies/boosts are dropped), and account deletion
-sends no actor `Delete` broadcast (rows cascade; remote copies age out).
-Reposts now federate as `Announce` (issue #910, see the post-lifecycle bullet).
+No inbound content (likes/replies/boosts are dropped). Reposts now federate as
+`Announce` (issue #910) and account deletion broadcasts an actor `Delete`
+(issue #985) — see the post-lifecycle and account-deletion bullets.
 Account migration is **both ways** now (issue #986):
 `alsoKnownAs` moves followers *in*, `Move` + `movedTo` moves them *out* (see the
 Actor bullet above). The design choice worth remembering: a move-out is a

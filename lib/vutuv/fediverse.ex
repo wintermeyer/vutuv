@@ -404,6 +404,70 @@ defmodule Vutuv.Fediverse do
     :ok
   end
 
+  ## Account deletion broadcast (issue #985)
+
+  @doc """
+  Prepares the actor `Delete` broadcast for a member about to be deleted: reads
+  the follower inboxes and the signing key **now**, while they still exist, and
+  returns a self-contained payload for `send_actor_delete/1` to POST **after**
+  the account (and its actor/follower rows) are gone. Returns `nil` for a
+  member who never federated — no actor, no followers, nothing to send.
+
+  Capturing then sending is the whole trick: the delivery queue keys on
+  `user_id`, so a queued row would cascade away with the member; holding the
+  key and inboxes in memory lets the signed POST outlive them.
+  """
+  def prepare_actor_delete(%User{} = user) do
+    with true <- enabled?(),
+         true <- federated?(user),
+         %Actor{} = actor <- get_actor(user),
+         [_ | _] = inboxes <- delivery_inboxes(user) do
+      %{
+        key_id: Docs.key_id(user),
+        private_key_pem: actor.private_key_pem,
+        inboxes: inboxes,
+        activity_json: Jason.encode!(Docs.actor_delete_activity(user))
+      }
+    else
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Sends a prepared actor `Delete` (from `prepare_actor_delete/1`) to every
+  follower inbox, signed with the captured key. Best effort and self-contained,
+  so it runs after the account is gone: a `nil` payload (a member who never
+  federated) is a no-op, and a failed or timed-out POST never surfaces —
+  account deletion must succeed regardless of the Fediverse side. Remote
+  deletion is advisory by protocol, so this is a courtesy, never a guarantee.
+  """
+  def send_actor_delete(nil), do: :ok
+
+  def send_actor_delete(%{inboxes: inboxes} = payload) do
+    if enabled?() do
+      inboxes
+      |> Task.async_stream(&post_actor_delete(payload, &1),
+        max_concurrency: 5,
+        timeout: 15_000,
+        on_timeout: :kill_task
+      )
+      |> Stream.run()
+    end
+
+    :ok
+  end
+
+  defp post_actor_delete(payload, inbox_uri) do
+    with %URI{scheme: "https", host: host} <- URI.parse(inbox_uri),
+         false <- Vutuv.Ssrf.resolves_to_internal?(host) do
+      ap_post(inbox_uri, payload.activity_json, payload.key_id, payload.private_key_pem)
+    end
+  rescue
+    _ -> :error
+  catch
+    _, _ -> :error
+  end
+
   ## Outbound deliveries (drained by Vutuv.Fediverse.Deliverer)
 
   @doc "Sends every due delivery (called by the Deliverer; returns how many)."
@@ -464,33 +528,12 @@ defmodule Vutuv.Fediverse do
   defp attempt(%Delivery{} = delivery, _actor), do: Repo.delete(delivery)
 
   defp post_activity(delivery, user, actor) do
-    body = delivery.activity_json
-
-    headers =
-      HttpSignature.signed_headers(
-        "post",
-        delivery.inbox_uri,
-        body,
-        Docs.key_id(user),
-        actor.private_key_pem
-      ) ++
-        [{"content-type", "application/activity+json"}, {"user-agent", Http.user_agent()}]
-
-    options =
-      Keyword.merge(
-        [
-          url: delivery.inbox_uri,
-          body: body,
-          headers: headers,
-          receive_timeout: 10_000,
-          connect_options: [timeout: 2_000],
-          retry: false,
-          redirect: false
-        ],
-        Application.get_env(:vutuv, :fediverse_req_options, [])
-      )
-
-    case Req.post(options) do
+    case ap_post(
+           delivery.inbox_uri,
+           delivery.activity_json,
+           Docs.key_id(user),
+           actor.private_key_pem
+         ) do
       {:ok, %Req.Response{status: status}} when status in 200..299 ->
         Repo.delete(delivery)
 
@@ -504,6 +547,30 @@ defmodule Vutuv.Fediverse do
       {:error, exception} ->
         fail(delivery, Exception.message(exception))
     end
+  end
+
+  # One signed POST of an activity JSON to an inbox — the shared transport for
+  # both the queued deliveries and the synchronous account-Delete broadcast.
+  defp ap_post(inbox_uri, body, key_id, private_key_pem) do
+    headers =
+      HttpSignature.signed_headers("post", inbox_uri, body, key_id, private_key_pem) ++
+        [{"content-type", "application/activity+json"}, {"user-agent", Http.user_agent()}]
+
+    options =
+      Keyword.merge(
+        [
+          url: inbox_uri,
+          body: body,
+          headers: headers,
+          receive_timeout: 10_000,
+          connect_options: [timeout: 2_000],
+          retry: false,
+          redirect: false
+        ],
+        Application.get_env(:vutuv, :fediverse_req_options, [])
+      )
+
+    Req.post(options)
   end
 
   defp fail(%Delivery{attempts: attempts} = delivery, error) when attempts + 1 >= @max_attempts do
