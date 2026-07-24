@@ -290,6 +290,54 @@ defmodule VutuvWeb.SettingsControllerTest do
              ~s(id="user_also_known_as_input")
   end
 
+  describe "fediverse: reaction counts from other networks (#1068)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, user} = Accounts.update_user(user, %{"fediverse_followers?" => "true"})
+      %{conn: conn, user: user}
+    end
+
+    test "the switch shows once federation is on, and is on by default", %{
+      conn: conn,
+      user: user
+    } do
+      assert user.fediverse_reactions?
+
+      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert html =~ ~s(name="user[fediverse_reactions?]")
+      assert html =~ "Count reactions from other networks"
+    end
+
+    test "the switch is hidden until the member federates", %{conn: conn, user: user} do
+      {:ok, _} = Accounts.update_user(user, %{"fediverse_followers?" => "false"})
+
+      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+      refute html =~ ~s(name="user[fediverse_reactions?]")
+    end
+
+    test "switching it off deletes what is already stored", %{conn: conn, user: user} do
+      post = Vutuv.PostsHelpers.create_post!(user, %{body: "Travelled far."})
+
+      Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: post.id,
+        actor_uri: "https://social.example/users/alice",
+        kind: "like",
+        received_at: DateTime.utc_now(:second)
+      })
+
+      conn =
+        put(conn, ~p"/settings/fediverse",
+          user: %{"fediverse_followers?" => "true", "fediverse_reactions?" => "false"}
+        )
+
+      assert redirected_to(conn) == ~p"/settings/fediverse"
+      refute Repo.get(User, user.id).fediverse_reactions?
+      assert Repo.aggregate(Vutuv.Fediverse.Reaction, :count) == 0
+    end
+  end
+
   describe "fediverse: alsoKnownAs account migration (#986)" do
     setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

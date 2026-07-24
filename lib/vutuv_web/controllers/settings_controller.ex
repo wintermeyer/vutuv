@@ -206,6 +206,11 @@ defmodule VutuvWeb.SettingsController do
       gettext("Fediverse settings saved."),
       fn saved ->
         if saved.fediverse_followers?, do: Vutuv.Fediverse.ensure_actor(saved)
+
+        # Switching the counts off is a deletion, not just a "stop counting"
+        # (issue #1068): what is already stored about people on other networks
+        # goes with it, since that is the whole reason storing it is defensible.
+        unless saved.fediverse_reactions?, do: Vutuv.Fediverse.drop_reactions(saved)
       end
     )
   end

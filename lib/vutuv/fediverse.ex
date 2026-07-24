@@ -36,11 +36,14 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Follower
   alias Vutuv.Fediverse.HttpSignature
   alias Vutuv.Fediverse.Keys
+  alias Vutuv.Fediverse.Reaction
+  alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDenial
   alias Vutuv.RateLimiter
   alias Vutuv.Repo
   alias Vutuv.SocialFeed.Http
+  alias Vutuv.UUIDv7
   alias VutuvWeb.Fediverse.Docs
 
   @max_attempts 8
@@ -356,6 +359,112 @@ defmodule Vutuv.Fediverse do
 
   defp check_inbound_cap(_), do: :ok
 
+  ## Inbound reactions (issue #1068)
+
+  @doc """
+  Records what somebody on another network did with a member's post: a `Like`
+  (they favourited it) or an `Announce` (they re-shared it). Idempotent per
+  remote person per post per kind, so a repeat activity never double-counts.
+
+  Every gate that must hold before a third party's row is stored, in order: the
+  installation switch, the member federates and has not switched the counts off,
+  the object really is one of *their* public posts (a Note URL we serve), the
+  post is public, and the sending server is within its inbound cap. Anything
+  else is `:skip` — the inbox acknowledges and drops it either way, so a
+  misdirected activity never tells the sender what happened.
+
+  Broadcasts the post's counters afterwards, so an open action bar ticks over
+  without a reload.
+  """
+  def record_reaction(%User{} = user, object, kind, actor_uri) when kind in ~w(like announce) do
+    with true <- enabled?(),
+         true <- federated?(user),
+         true <- user.fediverse_reactions?,
+         %Post{} = post <- resolve_own_note(user, object),
+         false <- Posts.restricted?(post),
+         :ok <- check_inbound_cap(actor_uri),
+         {:ok, _} <- insert_reaction(post, actor_uri, kind) do
+      Posts.broadcast_post_counters(post.id)
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  @doc """
+  Removes a reaction the remote side took back (`Undo(Like)` / `Undo(Announce)`).
+  Honoured at once and unconditionally — an upstream withdrawal is the deletion
+  path that makes storing the row defensible, so it must not depend on any
+  switch still being on.
+  """
+  def remove_reaction(%User{} = user, object, kind, actor_uri) when kind in ~w(like announce) do
+    with %Post{} = post <- resolve_own_note(user, object) do
+      {count, _} =
+        Repo.delete_all(
+          from(r in Reaction,
+            where: r.post_id == ^post.id and r.actor_uri == ^actor_uri and r.kind == ^kind
+          )
+        )
+
+      if count > 0, do: Posts.broadcast_post_counters(post.id)
+    end
+
+    :ok
+  end
+
+  @doc "How many people on other networks reacted to this post."
+  def reaction_count(post_id) do
+    Repo.aggregate(from(r in Reaction, where: r.post_id == ^post_id), :count)
+  end
+
+  @doc """
+  Drops every reaction stored for a member's posts — what switching the counts
+  off means. Nothing is kept "just in case": the switch is the member's
+  deletion lever over third-party data they never asked for.
+  """
+  def drop_reactions(%User{id: user_id}) do
+    {count, _} =
+      Repo.delete_all(
+        from(r in Reaction,
+          where:
+            r.post_id in subquery(from(p in Post, where: p.user_id == ^user_id, select: p.id))
+        )
+      )
+
+    count
+  end
+
+  defp insert_reaction(post, actor_uri, kind) do
+    %Reaction{post_id: post.id}
+    |> Reaction.changeset(%{
+      actor_uri: actor_uri,
+      kind: kind,
+      received_at: DateTime.utc_now(:second)
+    })
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:post_id, :actor_uri, :kind])
+  end
+
+  # The post behind an activity's `object`, but only when it is a Note URL we
+  # serve for *this* member. A URL naming somebody else's post, a foreign host,
+  # or a malformed id is a miss (nil), never a raise.
+  defp resolve_own_note(user, object) do
+    prefix = Docs.note_url(user, "")
+
+    with uri when is_binary(uri) <- activity_object_id(object),
+         post_id when post_id != uri <- String.replace_prefix(uri, prefix, ""),
+         %Post{user_id: user_id} = post when user_id == user.id <-
+           UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
+      post
+    else
+      _ -> nil
+    end
+  end
+
+  # An activity's object is either an embedded document or a bare id URI.
+  defp activity_object_id(%{"id" => id}) when is_binary(id), do: id
+  defp activity_object_id(id) when is_binary(id), do: id
+  defp activity_object_id(_), do: nil
+
   ## Account migration — move out (issue #986, half 2)
 
   @move_cooldown_days 30
@@ -469,7 +578,7 @@ defmodule Vutuv.Fediverse do
   deletion is advisory by protocol).
   """
   def federate_post_update(%Post{} = post) do
-    if Vutuv.Posts.restricted?(post) do
+    if Posts.restricted?(post) do
       federate_post_delete(post)
     else
       maybe_federate(post, &Docs.update_activity/2)
@@ -494,7 +603,7 @@ defmodule Vutuv.Fediverse do
          %User{} = user <- Repo.get(User, post.user_id),
          true <- federated?(user),
          false <- moved?(user),
-         false <- Vutuv.Posts.restricted?(post),
+         false <- Posts.restricted?(post),
          [_ | _] = inboxes <- delivery_inboxes(user) do
       post = Repo.preload(post, [:images, :review, reply_ref: [:parent_author]])
       enqueue(user, inboxes, builder.(post, user))
@@ -522,7 +631,7 @@ defmodule Vutuv.Fediverse do
     with true <- enabled?(),
          true <- federated?(reposter),
          false <- moved?(reposter),
-         false <- Vutuv.Posts.restricted?(post),
+         false <- Posts.restricted?(post),
          %User{} = author <- Repo.get(User, post.user_id),
          true <- federated?(author),
          [_ | _] = inboxes <- delivery_inboxes(reposter) do

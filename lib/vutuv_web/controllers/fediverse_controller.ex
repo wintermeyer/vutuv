@@ -161,6 +161,31 @@ defmodule VutuvWeb.FediverseController do
     send_resp(conn, 202, "")
   end
 
+  # Somebody on another network favourited (`Like`) or re-shared (`Announce`)
+  # one of the member's public posts (issue #1068). Stored as a bare counter
+  # row — no name, no text, no picture — so the member sees that their post
+  # travelled. Every gate lives in `Fediverse.record_reaction/4`; whatever it
+  # decides, the answer is the same 202, so a misdirected activity never tells
+  # the sender which of the conditions it failed.
+  defp perform(conn, user, %{"type" => type, "object" => object}, remote)
+       when type in ["Like", "Announce"] do
+    Fediverse.record_reaction(user, object, reaction_kind(type), remote.id)
+    send_resp(conn, 202, "")
+  end
+
+  # The remote side took its reaction back. Honoured at once: an upstream
+  # withdrawal is the deletion path that makes storing the row defensible.
+  defp perform(
+         conn,
+         user,
+         %{"type" => "Undo", "object" => %{"type" => type} = undone},
+         remote
+       )
+       when type in ["Like", "Announce"] do
+    Fediverse.remove_reaction(user, undone["object"], reaction_kind(type), remote.id)
+    send_resp(conn, 202, "")
+  end
+
   # A remote actor that renamed or moved its inbox broadcasts an `Update` of
   # itself to everyone following it. Re-sync from the actor document we just
   # fetched: the row is both a delivery target and what the member sees on
@@ -194,6 +219,9 @@ defmodule VutuvWeb.FediverseController do
   # Outbound-only federation: likes, replies, announces etc. are acknowledged
   # (so well-behaved servers stop retrying) and dropped.
   defp perform(conn, _user, _activity, _remote), do: send_resp(conn, 202, "")
+
+  defp reaction_kind("Like"), do: "like"
+  defp reaction_kind("Announce"), do: "announce"
 
   defp follower_attrs(remote) do
     %{

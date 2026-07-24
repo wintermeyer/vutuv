@@ -527,6 +527,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
         bookmarks: 0,
         reposts: 0,
         replies: 0,
+        fediverse_reactions: 0,
         liked?: true,
         bookmarked?: false,
         reposted?: false,

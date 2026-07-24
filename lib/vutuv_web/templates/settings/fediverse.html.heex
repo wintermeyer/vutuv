@@ -79,6 +79,22 @@ deserves more room than one toggle row. --%>
           )}
         </.setting_toggle>
 
+        <%!-- Reaction counts (issue #1068): what other networks did with the
+              member's posts, as a plain number under each post. On by default
+              for anyone who already federates, because they are publishing
+              outward and this is only the answer coming back; the switch is
+              here so it can be turned off, and turning it off deletes what is
+              stored. Only shown once federation is on, where it can apply. --%>
+        <.setting_toggle
+          :if={Vutuv.Fediverse.federated?(@user)}
+          label={gettext("Count reactions from other networks")}
+        >
+          <:checkbox><%= checkbox f, :fediverse_reactions?, class: checkbox_class() %></:checkbox>
+          {gettext(
+            "Under each of your posts, show how many people on Mastodon & Co. liked or shared it. Just a number, visible to everyone who sees the post. We store no names, no pictures and no text for it. Switch it off and everything stored for it is deleted."
+          )}
+        </.setting_toggle>
+
         <%!-- alsoKnownAs (issue #986): the accounts a member is moving *from*.
               A remote server checks these before it moves the member's
               followers here, so listing the old account's address is what makes

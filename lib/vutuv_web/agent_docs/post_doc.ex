@@ -72,7 +72,10 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # The public engagement counters the HTML action bar shows to everyone.
       like_count: engagement.likes,
       repost_count: engagement.reposts,
-      bookmark_count: engagement.bookmarks
+      bookmark_count: engagement.bookmarks,
+      # Favourites and re-shares from OTHER networks (issue #1068), the same
+      # separate figure the HTML shows on its own line under the vutuv counters.
+      fediverse_reaction_count: engagement.fediverse_reactions
     })
   end
 

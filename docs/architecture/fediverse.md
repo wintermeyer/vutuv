@@ -1,9 +1,11 @@
 # Fediverse (follow-only ActivityPub federation)
 
 People on Mastodon and other ActivityPub servers can follow an opted-in
-member and receive their **public** posts. Federation is outbound-only by
-design: no remote posts, likes or replies are stored — the inbox only
-processes `Follow`, `Undo(Follow)` and the remote actor's own lifecycle
+member and receive their **public** posts. Federation is outbound-first by
+design: no remote posts or reply text is stored. The one thing that does come
+back is a **count** (issue #1068) — how many people out there favourited or
+re-shared a post — and even that is a bare counter row. The inbox otherwise
+processes only `Follow`, `Undo(Follow)` and the remote actor's own lifecycle
 (`Update` / `Delete`); everything else is acknowledged (202) and dropped.
 Everything lives in `Vutuv.Fediverse`.
 
@@ -69,6 +71,32 @@ every endpoint 404s and nothing is delivered.
   it lands during the window where the account is suspended but still served.
   Deliveries to a gone inbox are dropped by the queue on 404/410 but do not
   yet prune the follower row (see the v1 limits).
+- **Reactions from other networks** (issue #1068, the one inbound thing that is
+  stored): a `Like` or `Announce` naming a member's public Note becomes one row
+  in `fediverse_reactions` (`Vutuv.Fediverse.Reaction`) — `post_id`,
+  `actor_uri`, `kind`, `received_at` and **nothing else**. No display name, no
+  avatar, no text: vutuv can never obtain consent from a stranger on another
+  server, so what makes this lawful is storing almost nothing about them plus a
+  deletion path that really works. The actor URI earns its place twice over:
+  each person counts once (unique on `(post_id, actor_uri, kind)`) and an
+  upstream `Undo` can find its row. `record_reaction/4` holds every gate in
+  order — the installation switch, the member federates and has not switched
+  the counts off (`users.fediverse_reactions?`, on by default, `/settings/
+  fediverse`; switching it off calls `drop_reactions/1`), the object really is
+  one of *their* public Note URLs, and the sender is within its inbound cap —
+  and the inbox answers the same 202 whatever it decides, so a misdirected
+  activity learns nothing. `remove_reaction/4` is deliberately **un**gated: an
+  upstream withdrawal is the deletion path, so it must not depend on a switch
+  still being on. Rows live exactly as long as the post (FK cascade, so a post
+  delete and an account delete both take them), like a vutuv like; there is no
+  separate expiry. The count rides the existing engagement select
+  (`Vutuv.Posts.engagement_count_select/1` → `:fediverse_reactions`), so it is
+  batched with the other counters, ticks live through `{:post_counters, …}`
+  (`broadcast_post_counters/1`) and reaches `VutuvWeb.AgentDocs.PostDoc` as
+  `fediverse_reaction_count`. It renders as its **own** labelled line under the
+  vutuv counters, never folded into them: a hostile server can then inflate
+  only its own line, and the reader sees which world answered. Public and
+  hidden at zero.
 - **The operator's safety floor** (issue #1067): anyone can run an ActivityPub
   server, so before anything a remote sends is stored, two independent levers
   sit in front of it. The **blocklist**
@@ -141,12 +169,13 @@ every endpoint 404s and nothing is delivered.
 
 ## Deliberate v1 limits
 
-No inbound content (likes/replies/boosts are dropped) — the inbound tier is
-planned in issues #1068–#1071 under an agreed retention model: counts before
-text, a counter row lives as long as its post, stored remote text expires after
-six months. The operator blocklist and the inbound caps that were the condition
-for storing anything have landed (issue #1067, see the safety-floor bullet
-above). Reposts
+No inbound **content** — remote reply text, names, avatars and boost rosters are
+all still dropped. Only the reaction *count* is stored (issue #1068, above); the
+rest of the inbound tier is planned in issues #1069–#1071 under the agreed
+retention model: counts before text, a counter row lives as long as its post,
+stored remote text expires after six months. The operator blocklist and the
+inbound caps that were the condition for storing anything shipped alongside it
+(issue #1067, see the safety-floor bullet above). Reposts
 now federate as
 `Announce` (issue #910) and account deletion broadcasts an actor `Delete`
 (issue #985) — see the post-lifecycle and account-deletion bullets.

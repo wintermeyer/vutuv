@@ -985,6 +985,30 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ ~s(id="post-actions-#{post.id}-like")
       assert html =~ ~r/data-count="like">\s*2\s*</
       assert html =~ ~r/data-count="repost">\s*1\s*</
+      # Nothing from other networks, so no line at all (issue #1068).
+      refute html =~ "data-fediverse-reactions"
+    end
+
+    test "reactions from other networks show as their own labelled line (#1068)", %{conn: conn} do
+      user = insert_activated_user()
+      post = create_post!(user, %{body: "travelled"})
+
+      for actor <- ["alice", "bob"] do
+        Repo.insert!(%Vutuv.Fediverse.Reaction{
+          post_id: post.id,
+          actor_uri: "https://social.example/users/#{actor}",
+          kind: "like",
+          received_at: DateTime.utc_now(:second)
+        })
+      end
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      assert html =~ ~s(data-fediverse-reactions="2")
+      assert html =~ "reactions from other networks"
+      # Its own line, never folded into the vutuv counters: nobody here liked
+      # or reposted, so those counters must show no 2 of their own.
+      refute html =~ ~r/data-count="(like|repost)">\s*2\s*</
     end
 
     test "the archive lists the author's reposts with the reposted-by line", %{conn: conn} do

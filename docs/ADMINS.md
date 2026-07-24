@@ -477,6 +477,16 @@ is not a vetted party. Your levers live at **`/admin` → Fediverse**
   biggest first, and the dashboard card names the busiest one. That is the list
   a block decision is made from.
 
+**What is stored from other servers.** Exactly one thing: a bare counter row per
+remote person per post per kind (favourite / re-share), holding only that
+person's account address, the kind and the time. No name, no picture, no text.
+Members see the tally as a "reactions from other networks" line under their post
+and can switch it off on `/settings/fediverse`, which deletes what is stored. A
+row is deleted when the remote side withdraws it, when the post goes, or when
+the account goes. **Your installation's privacy page has to say so** — it is
+per-installation content, edited at `/admin` → Legal pages, not shipped in the
+code.
+
 ## Moderation & spam
 
 Members report posts, messages and whole profiles from the quiet "Report"
