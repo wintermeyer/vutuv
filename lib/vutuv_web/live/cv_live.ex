@@ -38,6 +38,8 @@ defmodule VutuvWeb.CVLive do
     # short "CV" from the template.
     name = full_name(user)
 
+    cv = CV.build(user, viewer: current_user, photo: true)
+
     socket =
       socket
       |> assign(:user, user)
@@ -49,21 +51,21 @@ defmodule VutuvWeb.CVLive do
           name: name
         )
       )
-      |> assign(:cv, CV.build(user, viewer: current_user, photo: true))
+      |> assign(:cv, cv)
+      |> assign(:allowed_keys, allowed_keys(cv))
       |> put_hide(MapSet.new())
 
     {:ok, socket}
   end
 
+  # The public `/:slug/cv` socket must never accumulate arbitrary client strings.
+  # A CV offers only a few hundred toggleable keys, so this is generous headroom
+  # while a hard backstop against the hide set growing without bound (F12).
+  @max_hide_keys 500
+
   @impl true
   def handle_event("toggle", %{"key" => key}, socket) do
-    hide = socket.assigns.hide
-
-    hide =
-      if MapSet.member?(hide, key),
-        do: MapSet.delete(hide, key),
-        else: MapSet.put(hide, key)
-
+    hide = apply_toggle(socket.assigns.hide, key, socket.assigns.allowed_keys)
     {:noreply, put_hide(socket, hide)}
   end
 
@@ -75,6 +77,45 @@ defmodule VutuvWeb.CVLive do
   def handle_event("reset", _params, socket) do
     {:noreply, put_hide(socket, MapSet.new())}
   end
+
+  @doc """
+  The include/exclude toggle at the heart of `handle_event("toggle", …)`, kept
+  pure so both belt-and-braces guards are unit-testable without a giant CV: a
+  `key` the current CV does not offer (`allowed_keys`) is ignored, an offered
+  key flips, and the hide set is never grown past `@max_hide_keys` (F12).
+  """
+  def apply_toggle(hide, key, allowed_keys) do
+    cond do
+      not MapSet.member?(allowed_keys, key) -> hide
+      MapSet.member?(hide, key) -> MapSet.delete(hide, key)
+      MapSet.size(hide) >= @max_hide_keys -> hide
+      true -> MapSet.put(hide, key)
+    end
+  end
+
+  # Every key the loaded CV can legitimately toggle, built from the CV itself so
+  # it always matches what the template renders: the identity fields, the section
+  # and card heading keys, and every single entry/skill/link/qualification/
+  # language/social-media id. Any other key is a no-op (F12). The CV is built
+  # once at mount and never rebuilt for the socket's life, so this is computed
+  # once too.
+  defp allowed_keys(cv) do
+    identity = for {key, _field} <- CV.identity_fields(), do: key
+    card_keys = ~w(tags links qualifications languages social_media)
+    section_keys = for section <- cv.sections, do: section.key
+
+    entry_ids =
+      Enum.flat_map(cv.sections, fn section -> Enum.map(section.entries, & &1.id) end) ++
+        ids(cv.skills) ++
+        ids(cv.links) ++
+        ids(cv.qualifications) ++
+        ids(cv.languages) ++
+        ids(cv.social_media)
+
+    MapSet.new(identity ++ card_keys ++ section_keys ++ entry_ids)
+  end
+
+  defp ids(list), do: Enum.map(list, & &1.id)
 
   # Recompute the download query whenever the selection changes, so every
   # link in the render reflects the current include/exclude set.

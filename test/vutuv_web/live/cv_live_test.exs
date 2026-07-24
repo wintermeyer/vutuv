@@ -10,6 +10,7 @@ defmodule VutuvWeb.CVLiveTest do
 
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
+  alias VutuvWeb.CVLive
 
   defp seed(user) do
     insert(:work_experience,
@@ -141,6 +142,72 @@ defmodule VutuvWeb.CVLiveTest do
 
       assert has_element?(view, "#cv-download-docx")
       assert has_element?(view, "#cv-download-json")
+    end
+  end
+
+  # The CV page is public (no login), so a raw phx "toggle" event — bypassing
+  # the rendered checkboxes — must not let a client store arbitrary strings in
+  # the socket's :hide set and re-sort/re-join them into six download hrefs on
+  # every event (F12: an unbounded-accumulation DoS).
+  describe "the toggle event is hardened against arbitrary client keys (F12)" do
+    setup :owner
+
+    test "a toggle for a key the CV does not offer is ignored", %{conn: conn, owner: owner} do
+      {:ok, view, _html} = live(conn, ~p"/#{owner}/cv")
+
+      # Baseline: the full CV downloads carry no ?hide=.
+      assert has_element?(view, "#cv-download-docx[href='/#{owner.username}/cv/download/docx']")
+
+      # A raw phx event carrying an arbitrary multi-KB key is a no-op: nothing is
+      # stored, the query is unchanged, so no download link gains a ?hide=.
+      render_hook(view, "toggle", %{"key" => String.duplicate("x", 5_000)})
+
+      assert has_element?(view, "#cv-download-docx[href='/#{owner.username}/cv/download/docx']")
+      refute has_element?(view, "#cv-download-docx[href*='hide=']")
+    end
+
+    test "a toggle for a real CV key still toggles it", %{conn: conn, owner: owner} do
+      {:ok, view, _html} = live(conn, ~p"/#{owner}/cv")
+
+      render_hook(view, "toggle", %{"key" => "name"})
+      assert has_element?(view, "#cv-download-docx[href*='hide=name']")
+    end
+  end
+
+  describe "apply_toggle/3 (the pure toggle core)" do
+    test "ignores a key the CV does not offer" do
+      allowed = MapSet.new(["name", "photo"])
+      assert CVLive.apply_toggle(MapSet.new(), "bogus", allowed) == MapSet.new()
+    end
+
+    test "flips an offered key on and back off" do
+      allowed = MapSet.new(["name"])
+
+      on = CVLive.apply_toggle(MapSet.new(), "name", allowed)
+      assert MapSet.member?(on, "name")
+
+      off = CVLive.apply_toggle(on, "name", allowed)
+      refute MapSet.member?(off, "name")
+    end
+
+    test "refuses to grow the hide set past the cap" do
+      # 600 legitimate keys on offer, but the set can never hold more than 500.
+      allowed = MapSet.new(for i <- 0..599, do: "k#{i}")
+
+      full =
+        Enum.reduce(0..599, MapSet.new(), fn i, acc ->
+          CVLive.apply_toggle(acc, "k#{i}", allowed)
+        end)
+
+      assert MapSet.size(full) == 500
+
+      # A further offered, not-yet-hidden key is refused once the cap is hit...
+      next = Enum.find(0..599, fn i -> not MapSet.member?(full, "k#{i}") end)
+      assert CVLive.apply_toggle(full, "k#{next}", allowed) == full
+
+      # ...but removing an already-hidden key still works at the cap.
+      [some | _] = MapSet.to_list(full)
+      refute MapSet.member?(CVLive.apply_toggle(full, some, allowed), some)
     end
   end
 end

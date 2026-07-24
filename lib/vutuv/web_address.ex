@@ -73,6 +73,18 @@ defmodule Vutuv.WebAddress do
       iex> Vutuv.WebAddress.link_only?("???")
       false
   """
+  # ReDoS guard (F20): `strip_addresses/1` runs nine unanchored regexes with
+  # greedy/lazy quantifiers, whose bump-along is O(n²) in the input length, and
+  # `link_only?/1` is reached with length-unvalidated `user[headline]` and
+  # `user[tag_list]` tokens from the unauthenticated POST /new_registration. A
+  # value longer than its varchar(255) column can never be stored, so it is
+  # never a valid "names only a link" value — reject it before the regex battery
+  # runs. The bound is in bytes because it must cap the *regex input*, and a
+  # varchar(255) value holds at most 255 characters, i.e. at most 255 × 4 = 1020
+  # UTF-8 bytes; so >1020 bytes is never a storable value and no legitimate
+  # (≤255-character) input, multi-byte included, changes result.
+  def link_only?(text) when is_binary(text) and byte_size(text) > 255 * 4, do: false
+
   def link_only?(text) when is_binary(text) do
     case String.trim(text) do
       "" ->

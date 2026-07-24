@@ -12,7 +12,16 @@ defmodule VutuvWeb.Endpoint do
     max_age: 7_776_000
   ]
 
-  socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
+  # Cap a single websocket frame so no client can push an arbitrarily large
+  # payload over the LiveView socket (Phoenix's default is "infinity"). 1 MB
+  # clears every legitimate flow — LiveView uploads chunk at 64 kB, and the
+  # largest composer draft (a 20,000-character post body, worst case ~80 kB of
+  # UTF-8) rides well under it — while bounding a hostile frame. Only a single
+  # frame above 1 MB (an oversized paste far past the 20,000-char post limit, or
+  # a malicious payload) now closes the connection to reconnect.
+  socket("/live", Phoenix.LiveView.Socket,
+    websocket: [connect_info: [session: @session_options], max_frame_size: 1_000_000]
+  )
 
   # In dev, serve static assets with `cache-control: no-cache` so the browser
   # always revalidates against the ETag after a Tailwind rebuild (a 304 when the
