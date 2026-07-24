@@ -829,8 +829,14 @@ defmodule VutuvWeb.Router do
     get("/fediverse", SettingsController, :fediverse)
     put("/fediverse", SettingsController, :update_fediverse)
     patch("/fediverse", SettingsController, :update_fediverse)
-    # Fediverse account migration, move out (issue #986): broadcast a Move to
-    # redirect followers, or cancel the redirect.
+    # Fediverse account migration, both directions, on one subpage of its own:
+    # moving *to* vutuv (the alsoKnownAs aliases, PUT) and moving *away* (the
+    # Move broadcast, POST; DELETE cancels the redirect). It is an expert page —
+    # almost no member ever moves accounts — so it is deliberately off the main
+    # Fediverse page, which stays about taking part at all.
+    get("/fediverse/move", SettingsController, :fediverse_move)
+    put("/fediverse/move", SettingsController, :update_fediverse_aliases)
+    patch("/fediverse/move", SettingsController, :update_fediverse_aliases)
     post("/fediverse/move", SettingsController, :move_fediverse)
     delete("/fediverse/move", SettingsController, :cancel_move_fediverse)
     get("/notifications", SettingsController, :notifications)

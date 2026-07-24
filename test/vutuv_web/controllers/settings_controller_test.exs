@@ -283,11 +283,35 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
-  test "fediverse: the origin-account field is hidden until the member opts in", %{conn: conn} do
+  # The main Fediverse page answers one question — do I take part at all — for a
+  # member who has never heard the word. Account migration is an expert affair
+  # and lives on /settings/fediverse/move, so none of its controls may leak back
+  # onto the main page (that mix is what the split fixed).
+  test "fediverse: the main page carries no account-migration controls at all", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    {:ok, _} = Accounts.update_user(user, %{"fediverse_followers?" => "true"})
+
+    html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+    refute html =~ ~s(id="user_also_known_as_input")
+    refute html =~ ~s(id="move-form")
+    # It links there instead.
+    assert html =~ ~s(href="#{~p"/settings/fediverse/move"}")
+  end
+
+  test "fediverse: the migration link only shows once the member federates", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
 
     refute conn |> get(~p"/settings/fediverse") |> html_response(200) =~
-             ~s(id="user_also_known_as_input")
+             ~s(href="#{~p"/settings/fediverse/move"}")
+  end
+
+  test "fediverse: the migration page redirects a member who does not federate", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+
+    conn = get(conn, ~p"/settings/fediverse/move")
+
+    assert redirected_to(conn) == ~p"/settings/fediverse"
   end
 
   describe "fediverse: reaction counts from other networks (#1068)" do
@@ -345,23 +369,29 @@ defmodule VutuvWeb.SettingsControllerTest do
       %{conn: conn, user: user}
     end
 
-    test "the origin-account field shows once federation is on", %{conn: conn} do
-      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+    test "both directions live on the migration subpage, named as a pair", %{conn: conn} do
+      html = conn |> get(~p"/settings/fediverse/move") |> html_response(200)
 
+      # Moving in (the aliases) and moving out (the Move) side by side, each
+      # labelled with its direction — apart on one long page they read alike.
       assert html =~ ~s(id="user_also_known_as_input")
+      assert html =~ ~s(id="move-form")
+      assert html =~ "Moving to vutuv"
+      assert html =~ "Moving away from vutuv"
+      # The rendered form targets, not routes a test knows exist.
+      assert html =~ ~s(action="#{~p"/settings/fediverse/move"}")
     end
 
     test "saving records the listed accounts, one per line", %{conn: conn, user: user} do
       conn =
-        put(conn, ~p"/settings/fediverse",
+        put(conn, ~p"/settings/fediverse/move",
           user: %{
-            "fediverse_followers?" => "true",
             "also_known_as_input" =>
               "https://mastodon.social/users/alice\nhttps://fosstodon.org/users/alice\n"
           }
         )
 
-      assert redirected_to(conn) == ~p"/settings/fediverse"
+      assert redirected_to(conn) == ~p"/settings/fediverse/move"
 
       assert Repo.get(User, user.id).also_known_as == [
                "https://mastodon.social/users/alice",
@@ -375,7 +405,7 @@ defmodule VutuvWeb.SettingsControllerTest do
           "also_known_as_input" => "https://mastodon.social/users/alice"
         })
 
-      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+      html = conn |> get(~p"/settings/fediverse/move") |> html_response(200)
 
       assert html =~ "https://mastodon.social/users/alice"
     end
@@ -390,9 +420,7 @@ defmodule VutuvWeb.SettingsControllerTest do
         })
 
       conn =
-        put(conn, ~p"/settings/fediverse",
-          user: %{"fediverse_followers?" => "true", "also_known_as_input" => "not-a-url"}
-        )
+        put(conn, ~p"/settings/fediverse/move", user: %{"also_known_as_input" => "not-a-url"})
 
       assert html_response(conn, 422) =~ "not a valid https account address"
       assert Repo.get(User, user.id).also_known_as == ["https://mastodon.social/users/alice"]
@@ -402,7 +430,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     # touches :fediverse_req_options). The Move broadcast itself is covered by
     # Vutuv.FediverseTest (async: false).
     test "the move-out form points at the move route while not moved", %{conn: conn} do
-      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+      html = conn |> get(~p"/settings/fediverse/move") |> html_response(200)
 
       assert html =~ ~s(id="move-form")
       assert html =~ ~s(action="#{~p"/settings/fediverse/move"}")
@@ -410,19 +438,17 @@ defmodule VutuvWeb.SettingsControllerTest do
       refute html =~ "cancel-move-form"
     end
 
-    test "once moved, the page shows the redirect and a cancel control, not the move-in field",
+    test "once moved, the page shows the redirect and a cancel control, not the move-out form",
          %{conn: conn, user: user} do
       {:ok, _} =
         user
         |> Ecto.Changeset.change(moved_to: "https://mastodon.social/users/gone")
         |> Repo.update()
 
-      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+      html = conn |> get(~p"/settings/fediverse/move") |> html_response(200)
 
       assert html =~ "https://mastodon.social/users/gone"
       assert html =~ ~s(id="cancel-move-form")
-      # The "moving in" field is hidden once you have moved out.
-      refute html =~ ~s(id="user_also_known_as_input")
       refute html =~ ~s(id="move-form")
     end
 
@@ -434,7 +460,8 @@ defmodule VutuvWeb.SettingsControllerTest do
 
       conn = delete(conn, ~p"/settings/fediverse/move")
 
-      assert redirected_to(conn) == ~p"/settings/fediverse"
+      # Back to the migration page, where the state change is on screen.
+      assert redirected_to(conn) == ~p"/settings/fediverse/move"
       assert Repo.get(User, user.id).moved_to == nil
     end
   end

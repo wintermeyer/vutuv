@@ -1,67 +1,43 @@
-<%!-- Follow-only federation (Vutuv.Fediverse), the member's own page: what
-taking part means, their handle, the remote-follower count and the opt-in.
-Moved out of the privacy page when federation went live — a real feature
-deserves more room than one toggle row. --%>
+<%!-- Follow-only federation (Vutuv.Fediverse), the member's own page.
+
+This page answers ONE question for someone who has never heard the word
+"Fediverse": do I want this, yes or no. So it leads with what happens in plain
+terms, then the switch, then — once the switch is on — the two things that make
+it worth having: the handle to hand out, and the people who followed.
+
+Account migration used to sit here too, in both directions, between the switch
+and the Save button. It taxed every beginner with a raw actor-URI textarea they
+would never use, and its two directions read as the same thing. It has its own
+subpage now (/settings/fediverse/move), linked from the footer below. --%>
 <.settings_shell user={@user} active={:fediverse} title={gettext("Fediverse")}>
   <div class="space-y-6">
     <.card>
-      <.section_title>{gettext("Fediverse")}</.section_title>
+      <.section_title>{gettext("Followers from other networks")}</.section_title>
       <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
         {gettext(
-          "Mastodon and many other services form one big, open network: the Fediverse. If you take part, people there can follow you, and your public vutuv posts appear in their timelines. They don't need a vutuv account for that."
+          "Beside vutuv there are thousands of independent social websites that all talk to each other. Mastodon is the best known of them. Together they are called the Fediverse."
         )}
       </p>
 
-      <%= if Vutuv.Fediverse.federated?(@user) do %>
-        <div class="mt-5 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/50">
-          <p class="font-semibold text-slate-700 dark:text-slate-200">
-            {gettext("Your Fediverse handle")}
-          </p>
-          <p class="mt-1">
-            <code class="select-all rounded bg-slate-100 px-1.5 py-0.5 text-slate-800 dark:bg-slate-800 dark:text-slate-100">@{@user.username}@{@fediverse_host}</code>
-          </p>
-          <p class="mt-2 text-slate-600 dark:text-slate-400">
-            {gettext(
-              "Anyone on Mastodon can paste this handle into their search and follow you from there."
-            )}
-          </p>
-          <p class="mt-2 text-slate-600 dark:text-slate-400">
-            {gettext("Followers from the Fediverse:")} {compact_count(@follower_count)}
-          </p>
-
-          <%= if @followers != [] do %>
-            <ul class="mt-3 space-y-1.5">
-              <li :for={follower <- @followers}>
-                <a
-                  href={follower.actor_uri}
-                  target="_blank"
-                  rel="nofollow noopener noreferrer"
-                  class="group flex flex-wrap items-baseline gap-x-2"
-                >
-                  <span
-                    :if={follower.name}
-                    class="font-medium text-slate-700 dark:text-slate-200"
-                  >
-                    {follower.name}
-                  </span>
-                  <span class="text-slate-500 group-hover:text-brand-600 dark:text-slate-400 dark:group-hover:text-brand-400">
-                    {Vutuv.Fediverse.Follower.display_handle(follower)}
-                  </span>
-                </a>
-              </li>
-            </ul>
-            <p
-              :if={@follower_count > length(@followers)}
-              class="mt-2 text-xs text-slate-500 dark:text-slate-400"
-            >
-              {gettext("Showing the most recent %{shown} of %{total}.",
-                shown: delimited_count(length(@followers)),
-                total: delimited_count(@follower_count)
-              )}
-            </p>
-          <% end %>
-        </div>
-      <% end %>
+      <%!-- The "why would I want this" answer, which the old page never gave.
+            Three short lines beat one dense paragraph for a decision. --%>
+      <p class="mt-4 text-sm font-medium text-slate-900 dark:text-white">
+        {gettext("If you take part:")}
+      </p>
+      <ul class="mt-2 space-y-1.5 text-sm text-slate-600 dark:text-slate-400">
+        <li class="flex gap-2">
+          <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
+          {gettext("People there can follow you without opening a vutuv account.")}
+        </li>
+        <li class="flex gap-2">
+          <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
+          {gettext("Your public vutuv posts show up in their timelines.")}
+        </li>
+        <li class="flex gap-2">
+          <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
+          {gettext("Nothing changes on vutuv itself, and you can switch it off again.")}
+        </li>
+      </ul>
 
       <.form
         :let={f}
@@ -72,53 +48,25 @@ deserves more room than one toggle row. --%>
       >
         <.form_error changeset={@changeset} />
 
-        <.setting_toggle label={gettext("Allow followers from the Fediverse")}>
+        <.setting_toggle label={gettext("Take part in the Fediverse")}>
           <:checkbox><%= checkbox f, :fediverse_followers?, class: checkbox_class() %></:checkbox>
           {gettext(
-            "When on, your profile can be found from Mastodon & Co. and your public posts are delivered to your Fediverse followers. When off, your profile is not discoverable there and nothing is delivered. Copies already delivered to other servers may remain there, outside our reach."
+            "Off means your profile cannot be found there and nothing is sent. Posts already delivered may stay on those servers, beyond our reach."
           )}
         </.setting_toggle>
 
-        <%!-- Reaction counts (issue #1068): what other networks did with the
-              member's posts, as a plain number under each post. On by default
-              for anyone who already federates, because they are publishing
-              outward and this is only the answer coming back; the switch is
-              here so it can be turned off, and turning it off deletes what is
-              stored. Only shown once federation is on, where it can apply. --%>
+        <%!-- Reaction counts (issue #1068): the answer coming back. Only
+              meaningful once posts are actually going out, so it shows with the
+              rest of the "you are taking part" block. --%>
         <.setting_toggle
           :if={Vutuv.Fediverse.federated?(@user)}
           label={gettext("Count reactions from other networks")}
         >
           <:checkbox><%= checkbox f, :fediverse_reactions?, class: checkbox_class() %></:checkbox>
           {gettext(
-            "Under each of your posts, show how many people on Mastodon & Co. liked or shared it. Just a number, visible to everyone who sees the post. We store no names, no pictures and no text for it. Switch it off and everything stored for it is deleted."
+            "Show under each of your posts how many people out there liked or shared it. A number only, visible to everyone who sees the post. Switching it off deletes what is stored for it."
           )}
         </.setting_toggle>
-
-        <%!-- alsoKnownAs (issue #986): the accounts a member is moving *from*.
-              A remote server checks these before it moves the member's
-              followers here, so listing the old account's address is what makes
-              a move *to* vutuv possible. Empty for almost everyone; only shown
-              once federation is on, where it can take effect. Hidden once the
-              member has moved *out* (moving in and out at once makes no sense). --%>
-        <div :if={Vutuv.Fediverse.federated?(@user) and is_nil(@user.moved_to)}>
-          <label for="user_also_known_as_input" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-            {gettext("Moving to vutuv from another account?")}
-          </label>
-          <%= textarea f, :also_known_as_input,
-            id: "user_also_known_as_input",
-            rows: 3,
-            class: [input_class(f, :also_known_as_input), "mt-1 resize-y font-mono text-xs"],
-            placeholder: "https://mastodon.social/users/yourname",
-            "aria-invalid": f.errors[:also_known_as_input] && "true" %>
-          <%= error_tag f, :also_known_as_input %>
-          <p :if={!f.errors[:also_known_as_input]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {gettext(
-              "List the full address of each account you are migrating from, one per line (for example %{example}). On the other server, start the move to your vutuv handle; it will only go through once your old account is listed here. Leave empty if you are not moving accounts.",
-              example: "https://mastodon.social/users/yourname"
-            )}
-          </p>
-        </div>
 
         <div class="pt-1">
           <.button type="submit">{gettext("Save")}</.button>
@@ -126,113 +74,108 @@ deserves more room than one toggle row. --%>
       </.form>
     </.card>
 
-    <%!-- Move out (issue #986, half 2): redirect the member's Fediverse
-          followers to another account. Only meaningful while federating. The
-          key reassurance, repeated: this is a redirect, not a deletion — the
-          vutuv profile is untouched. --%>
+    <%!-- Once the switch is on, the payoff: the handle to hand out (with the
+          shared data-copy button, since copying it IS the action people come
+          for) and the people who followed. Deliberately a card of its own —
+          on the old page this was a grey readout box wedged above the form. --%>
     <.card :if={Vutuv.Fediverse.federated?(@user)}>
-      <.section_title>{gettext("Move your followers to another account")}</.section_title>
+      <.section_title>{gettext("Your Fediverse handle")}</.section_title>
+      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Give this out the way you give out an email address. Anyone on Mastodon and friends can paste it into their search and follow you from there."
+        )}
+      </p>
+      <div class="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700">
+        <code
+          id="fediverse-handle"
+          class="min-w-0 flex-1 select-all break-all text-sm text-slate-800 dark:text-slate-100"
+        >@{@user.username}@{@fediverse_host}</code>
+        <button
+          type="button"
+          data-copy
+          data-copy-target="fediverse-handle"
+          data-label-copy={gettext("Copy")}
+          data-label-copied={gettext("Copied")}
+          class="shrink-0 rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
+        >
+          {gettext("Copy")}
+        </button>
+      </div>
 
-      <%= if @user.moved_to do %>
-        <div class="mt-3 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/50">
-          <p class="text-slate-700 dark:text-slate-200">
-            {gettext("You have redirected your Fediverse followers to another account:")}
-          </p>
-          <p class="mt-1">
-            <a
-              href={@user.moved_to}
-              target="_blank"
-              rel="nofollow noopener noreferrer"
-              class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-            >{@user.moved_to}</a>
-          </p>
-          <p :if={@user.moved_at} class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {gettext("Redirected on %{date}",
-              date: Calendar.strftime(@user.moved_at, "%Y-%m-%d")
-            )}
-          </p>
-          <p class="mt-2 text-slate-600 dark:text-slate-400">
-            {gettext(
-              "New posts are no longer federated from here, and your actor points visitors to your new account. Your vutuv profile itself is unchanged."
-            )}
-          </p>
-          <.form
-            :let={_f}
-            for={%{}}
-            as={:cancel}
-            action={~p"/settings/fediverse/move"}
-            method="delete"
-            id="cancel-move-form"
-            class="mt-4"
-          >
-            <.button type="submit" variant="secondary">
-              {gettext("Cancel redirect")}
-            </.button>
-          </.form>
-        </div>
-      <% else %>
-        <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+      <h3 class="mt-6 text-sm font-semibold text-slate-900 dark:text-white">
+        {ngettext(
+          "%{formatted} follower from other networks",
+          "%{formatted} followers from other networks",
+          @follower_count,
+          formatted: compact_count(@follower_count)
+        )}
+      </h3>
+
+      <%= if @followers == [] do %>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
           {gettext(
-            "Leaving for another Fediverse account? You can send your followers there. They will be asked to follow your new account, and vutuv stops federating your new posts. This is only a redirect: your vutuv profile stays exactly as it is, and nothing is deleted."
+            "Nobody yet. Post your handle where people can see it, and the first follows will show up here."
           )}
         </p>
-        <ol class="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">
-          <li>
-            {gettext("On your other account, add your vutuv handle")}
-            <code class="select-all rounded bg-slate-100 px-1 py-0.5 text-slate-800 dark:bg-slate-800 dark:text-slate-100">@{@user.username}@{@fediverse_host}</code>
-            {gettext("as an account alias.")}
+      <% else %>
+        <ul class="mt-2 space-y-1.5">
+          <li :for={follower <- @followers}>
+            <a
+              href={follower.actor_uri}
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              class="group flex flex-wrap items-baseline gap-x-2 text-sm"
+            >
+              <span :if={follower.name} class="font-medium text-slate-700 dark:text-slate-200">
+                {follower.name}
+              </span>
+              <span class="text-slate-600 group-hover:text-brand-600 dark:text-slate-400 dark:group-hover:text-brand-300">
+                {Vutuv.Fediverse.Follower.display_handle(follower)}
+              </span>
+            </a>
           </li>
-          <li>{gettext("Enter that account's address below and redirect.")}</li>
-        </ol>
-        <.form
-          :let={_f}
-          for={%{}}
-          as={:move}
-          action={~p"/settings/fediverse/move"}
-          method="post"
-          id="move-form"
-          class="mt-4 space-y-3"
+        </ul>
+        <p
+          :if={@follower_count > length(@followers)}
+          class="mt-2 text-xs text-slate-600 dark:text-slate-400"
         >
-          <div>
-            <label for="move_target" class="sr-only">
-              {gettext("Account you are moving to")}
-            </label>
-            <input
-              type="text"
-              name="move[target]"
-              id="move_target"
-              class={[input_class(), "font-mono text-xs"]}
-              placeholder="https://mastodon.social/users/yourname"
-            />
-          </div>
-          <.button
-            type="submit"
-            data-confirm={
-              gettext(
-                "This tells your Fediverse followers to follow your new account instead, and stops federating your posts from here. Your vutuv profile is not affected. Continue?"
-              )
-            }
-          >
-            {gettext("Redirect my followers")}
-          </.button>
-        </.form>
+          {gettext("Showing the most recent %{shown} of %{total}.",
+            shown: delimited_count(length(@followers)),
+            total: delimited_count(@follower_count)
+          )}
+        </p>
       <% end %>
     </.card>
 
-    <%!-- The no-federation-needed sibling feature, so members find both. --%>
+    <%!-- The two neighbouring topics, as quiet links rather than full cards:
+          the expert migration subpage (only while federating, where it can
+          take effect) and the rel=me verification, which needs no federation
+          at all and is one sentence. --%>
     <.card>
-      <.section_title>{gettext("Get verified on Mastodon")}</.section_title>
-      <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-        {gettext(
-          "Independent of federation: your vutuv profile links your listed social media accounts with rel=\"me\", so adding your profile address to your Mastodon profile shows it there as verified."
-        )}
-        <.link
-          href={~p"/settings/social_media_accounts"}
-          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-        >
-          {gettext("Manage social media accounts")}
-        </.link>
-      </p>
+      <.section_title>{gettext("Related")}</.section_title>
+      <div class="mt-2 space-y-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        <p :if={Vutuv.Fediverse.federated?(@user)}>
+          {gettext("Moving to or away from another Fediverse account?")}
+          <.link
+            navigate={~p"/settings/fediverse/move"}
+            id="fediverse-move-link"
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+          >
+            {gettext("Move your account")} ›
+          </.link>
+        </p>
+        <p>
+          {gettext(
+            "Want the checkmark on your Mastodon profile? That works without taking part here: your vutuv profile links your listed accounts with rel=\"me\"."
+          )}
+          <.link
+            href={~p"/settings/social_media_accounts"}
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+          >
+            {gettext("Manage social media accounts")} ›
+          </.link>
+        </p>
+      </div>
     </.card>
   </div>
 </.settings_shell>
