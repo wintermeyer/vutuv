@@ -103,6 +103,25 @@ defmodule VutuvWeb.Fediverse.Docs do
     }
   end
 
+  @doc """
+  Delete: the member's own actor is gone (issue #985). Broadcast to their
+  follower inboxes when the account is deleted so remote servers purge the
+  actor and the copies of its posts. Best effort — remote deletion is advisory
+  by protocol, so this is a courtesy, never a guarantee.
+  """
+  def actor_delete_activity(user) do
+    actor_url = actor_url(user)
+
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => actor_url <> "#delete",
+      "type" => "Delete",
+      "actor" => actor_url,
+      "object" => actor_url,
+      "to" => [@public]
+    }
+  end
+
   @doc "Create(Note): a freshly published public post."
   def create_activity(%Post{} = post, user) do
     note = note(post, user)
