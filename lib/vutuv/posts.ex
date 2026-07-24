@@ -1664,14 +1664,15 @@ defmodule Vutuv.Posts do
     |> scope_visible(nil)
   end
 
-  # The like counts the rail ranks on: likes by anyone but the author, rolled
-  # up once for the whole table (likes are far rarer than posts, so this beats
-  # a correlated count per candidate row).
+  # The like counts the rail ranks on, rolled up once for the whole table
+  # (likes are far rarer than posts, so this beats a correlated count per
+  # candidate row). No self-like filter is needed: a member cannot like their
+  # own post (enforced in `like_post/2`, issue #1030), so every like is by
+  # someone other than the author.
   defp discover_like_counts do
     from(l in PostLike,
       join: p in Post,
       on: p.id == l.post_id,
-      where: l.user_id != p.user_id,
       group_by: l.post_id,
       select: %{post_id: l.post_id, likes: count(l.id)}
     )
