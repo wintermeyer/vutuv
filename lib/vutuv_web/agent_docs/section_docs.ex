@@ -75,7 +75,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   def build_show(user, section, record) when is_map_key(@sections, section) do
     segment = Atom.to_string(section)
     path = "/#{user.username}/#{segment}/#{Phoenix.Param.to_param(record)}"
-    entry = entry(section, record, user)
+    entry = section |> entry(record, user) |> maybe_add_endorsers(section, record)
 
     AgentDocs.doc_meta(@sections[section], path, noindex: true, noai: true)
     |> Map.merge(%{
@@ -151,6 +151,13 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   # the member's slug); every other section's vocabulary stays user-less.
   defp entry(:qualifications, record, user), do: qualification_entry(record, user)
   defp entry(section, record, _user), do: entry(section, record)
+
+  # The tag detail page names its endorsers now (issue #1008), so its doc
+  # sibling carries them too - the same list the index doc adds per row.
+  defp maybe_add_endorsers(entry, :tags, record),
+    do: Map.put(entry, :endorsers, endorsers(record))
+
+  defp maybe_add_endorsers(entry, _section, _record), do: entry
 
   # As many endorsers as the page's avatar stack shows, newest first (a UUID v7
   # endorsement id sorts by creation). `[]` when the association was not
