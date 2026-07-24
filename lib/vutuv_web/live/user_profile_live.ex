@@ -593,7 +593,12 @@ defmodule VutuvWeb.UserProfileLive do
     # the owner gets all of theirs (their card marks the lapsed ones).
     |> assign(:qualifications, user.qualifications)
     |> assign(:header_job, header_job)
-    |> assign(:work_info, work_information_string_for_job(header_job, 60))
+    # The header line: a pinned education (issue #882) leads with its
+    # "Degree, School", else the pinned/heuristic job's "Title @ Org". The user
+    # already has :educations preloaded, so profile_headline/3 resolves it in
+    # memory (no extra query). header_job stays the resolved work role for the
+    # JSON-LD Person markup below.
+    |> assign(:work_info, profile_headline(user, header_job, 60))
     |> assign(:completion_steps, steps)
     |> assign(:show_completion?, show_completion?)
     |> assign(:recommended_users, recommended_users)

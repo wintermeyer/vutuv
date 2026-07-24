@@ -11,6 +11,7 @@ defmodule VutuvWeb.UserHelpers do
   alias PhoenixHTMLHelpers.Link, as: HTMLLink
   alias Vutuv.Accounts.User
   alias Vutuv.Profiles.Address
+  alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
@@ -232,6 +233,71 @@ defmodule VutuvWeb.UserHelpers do
   defp most_recent_job(job, _), do: job
 
   @doc """
+  The profile header line for `user`: the pinned education's "Degree, School"
+  (issue #882) when they pinned one, else the pinned/heuristic job's
+  "Title @ Organization" (`job` already resolved by the caller). The single
+  seam the profile header, its page title, meta description and agent docs
+  share, so a member who features a degree instead of a job title reads
+  consistently everywhere. Falls through to `work_information_string_for_job/2`
+  (which is `""` when there is no job), so a member with neither reads exactly
+  as before.
+  """
+  def profile_headline(user, job, len \\ 256) do
+    education_headline(pinned_education(user), len) ||
+      work_information_string_for_job(job, len)
+  end
+
+  @doc """
+  The education a member pinned as their profile headline (issue #882), or nil.
+
+  Preload-aware: resolves from an already-loaded `:educations` assoc in memory
+  (the profile LiveView and `ProfileDoc` both preload it), else one indexed
+  query — and no query at all when nothing is pinned, the common case. Re-scoped
+  to the user so a stale pointer to a foreign or deleted row never surfaces.
+  """
+  def pinned_education(%User{profile_education_id: nil}), do: nil
+
+  def pinned_education(%User{profile_education_id: id, id: user_id, educations: educations})
+      when is_binary(id) and is_list(educations) do
+    Enum.find(educations, &(&1.id == id and &1.user_id == user_id))
+  end
+
+  def pinned_education(%User{profile_education_id: id, id: user_id}) when is_binary(id) do
+    Repo.one(from(e in Education, where: e.id == ^id and e.user_id == ^user_id))
+  end
+
+  def pinned_education(_user), do: nil
+
+  @doc """
+  A pinned education as a one-line header string (issue #882): "Degree, School"
+  (e.g. "Doctor of Medicine, St. Mary's University"), the school alone when the
+  entry carries no degree, truncated to `len`. nil for a nil education, so a
+  call site can fall through to the job line.
+  """
+  def education_headline(education, len \\ 256)
+
+  def education_headline(nil, _len), do: nil
+
+  def education_headline(%Education{degree: degree, school: school}, len) do
+    case [degree, school]
+         |> Enum.map(&trimmed/1)
+         |> Enum.reject(&(&1 == ""))
+         |> Enum.join(", ") do
+      "" -> nil
+      line -> truncate_headline(line, len)
+    end
+  end
+
+  defp trimmed(nil), do: ""
+  defp trimmed(value), do: String.trim(value)
+
+  defp truncate_headline(line, len) when len >= 3 do
+    if String.length(line) > len, do: String.slice(line, 0, len - 3) <> "...", else: line
+  end
+
+  defp truncate_headline(line, _len), do: line
+
+  @doc """
   The profile page's meta description: the current work line, optionally
   followed by a `detail` string (the member's follower count).
 
@@ -243,8 +309,8 @@ defmodule VutuvWeb.UserHelpers do
   """
   def meta_description(nil, _detail, _job), do: ""
 
-  def meta_description(_user, detail, job) do
-    case {work_information_string_for_job(job), detail || ""} do
+  def meta_description(user, detail, job) do
+    case {profile_headline(user, job), detail || ""} do
       {"", ""} ->
         []
 

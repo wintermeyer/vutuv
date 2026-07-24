@@ -139,7 +139,9 @@ defmodule VutuvWeb.LayoutHTML do
   end
 
   defp member_title_detail(user, header_job) do
-    case work_information_string_for_job(header_job, 60) do
+    # A pinned education (issue #882) leads the title too, else the job line —
+    # profile_headline/3 folds both, and returns "" when there is neither.
+    case profile_headline(user, header_job, 60) do
       "" -> headline_text(user.headline, 60)
       work -> work
     end

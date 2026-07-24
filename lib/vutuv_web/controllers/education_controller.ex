@@ -3,6 +3,7 @@ defmodule VutuvWeb.EducationController do
 
   import Ecto.Query
 
+  alias Vutuv.Accounts
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Profiles.Education
   alias Vutuv.Social
@@ -35,6 +36,10 @@ defmodule VutuvWeb.EducationController do
           as_owner?: false,
           user: user,
           education: user.educations,
+          # The pinned profile headline (issue #882), so the shared card_list
+          # never crashes on a missing assign — the chooser itself stays gated
+          # on as_owner? and never renders here.
+          profile_education_id: user.profile_education_id,
           page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Education"))
         )
       end,
@@ -42,16 +47,48 @@ defmodule VutuvWeb.EducationController do
     )
   end
 
-  # The owner's editor (GET /settings/educations).
+  # The owner's editor (GET /settings/educations), including the
+  # profile-headline pin chooser (issue #882).
   def manage(conn, _params) do
     user = user_with_educations(conn)
 
     render(conn, "manage.html",
       user: user,
       education: user.educations,
+      profile_education_id: user.profile_education_id,
       as_owner?: true,
       page_title: gettext("Education")
     )
+  end
+
+  # Pin one education as the member's profile headline, or clear the pin back to
+  # the automatic job resolution (issue #882). Owner-only (AuthUser) and
+  # owner-scoped (ResolveOwnedSlug assigns :education from the member's own
+  # rows), so a member can only ever pin their own entry. Pinning also clears a
+  # pinned work experience — the headline is one slot (Accounts).
+  def pin(conn, _params) do
+    user = conn.assigns[:user]
+
+    case Accounts.pin_profile_education(user, conn.assigns[:education]) do
+      {:ok, _user} ->
+        conn
+        |> put_flash(:info, gettext("This education now shows at the top of your profile."))
+        |> redirect(to: ~p"/settings/educations")
+
+      {:error, _} ->
+        conn
+        |> put_flash(:error, gettext("That education could not be pinned."))
+        |> redirect(to: ~p"/settings/educations")
+    end
+  end
+
+  def unpin(conn, _params) do
+    user = conn.assigns[:user]
+    {:ok, _user} = Accounts.unpin_profile_education(user)
+
+    conn
+    |> put_flash(:info, gettext("The top of your profile is chosen automatically again."))
+    |> redirect(to: ~p"/settings/educations")
   end
 
   def new(conn, _params) do

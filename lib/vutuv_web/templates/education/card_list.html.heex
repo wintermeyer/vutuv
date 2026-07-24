@@ -6,7 +6,44 @@ the visitor preview modes, gated on @as_owner?). Entries arrive newest-first
 
 The list is split into the CV categories (issue #849) — Studium,
 Berufsausbildung, Schulbildung — each under its own heading; a degrees-only
-member keeps the single unlabeled list. --%>
+member keeps the single unlabeled list.
+
+The owner also chooses whether a degree or school leads their profile headline
+(issue #882): the "Degree, School" line shown at the top of the profile, under
+the name, INSTEAD of a job title — for a student or someone unemployed. A short
+explainer up top says what fills that line and, when an education is pinned,
+offers the single "Choose automatically instead" revert; each entry below
+carries a "Show at top of profile" pin button, and the chosen one is marked.
+Pinning an education wins over the automatic job resolution and clears any
+pinned job (the headline is one slot). Owner-only, hidden in the public
+showcase. --%>
+<p
+  :if={@as_owner? and @education != []}
+  class="mb-5 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400"
+>
+  <%= cond do %>
+    <% pinned = pinned_entry(@education, @profile_education_id) -> %>
+      <.pin_star filled class="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" />
+      <span>
+        {gettext("%{job} shows at the top of your profile.", job: education_headline(pinned))}
+        <.link
+          href={~p"/settings/educations/#{pinned}/pin"}
+          method="delete"
+          class="font-semibold text-slate-600 underline hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          {gettext("Choose automatically instead")}
+        </.link>
+      </span>
+    <% true -> %>
+      <.pin_star class="mt-0.5 h-4 w-4 shrink-0 text-slate-600 dark:text-slate-400" />
+      <span>
+        {gettext(
+          "Pick a degree or school below to show it at the top of your profile instead of a job title."
+        )}
+      </span>
+  <% end %>
+</p>
+
 <div :for={{kind, entries} <- group_by_kind(@education)} class="mt-8 first:mt-0">
   <h2
     :if={show_kind_headings?(@education)}
@@ -38,6 +75,24 @@ member keeps the single unlabeled list. --%>
         text={edu.description}
         class="mt-1 text-sm text-slate-600 dark:text-slate-400"
       />
+      <div :if={@as_owner?} class="mt-2">
+        <span
+          :if={@profile_education_id == edu.id}
+          class="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 dark:text-brand-400"
+        >
+          <.pin_star filled class="h-4 w-4" />
+          {gettext("Shown at the top of your profile")}
+        </span>
+        <.link
+          :if={@profile_education_id != edu.id}
+          href={~p"/settings/educations/#{edu}/pin"}
+          method="put"
+          class="inline-flex items-center gap-1 rounded-full border border-brand-600 px-3 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/40"
+        >
+          <.pin_star class="h-4 w-4" />
+          {gettext("Show at top of profile")}
+        </.link>
+      </div>
       <.row_actions
         :if={@as_owner?}
         align={:start}
