@@ -16,9 +16,16 @@ defmodule Vutuv.Ssrf do
       if it is a literal internal host **or** any resolved address is internal.
       Run at fetch time to defeat DNS rebinding (a public hostname whose record
       points at an internal IP), which the literal check cannot catch (issues
-      #775 / #777). There is still a TOCTOU residual (the resolver could answer
-      differently between this check and the fetcher's own lookup); closing it
-      fully needs connect-time peer-address validation.
+      #775 / #777). On its own it leaves a TOCTOU residual: it only *checks*, and
+      a fetcher that then re-resolves the host could get a different, internal
+      answer.
+    * `vetted_address/1` — resolves once and returns the exact public IP to pin
+      the fetcher to, so there is no second lookup to poison. This closes the
+      TOCTOU for the one fetcher that re-resolved on its own, the headless-capture
+      browser: it is handed the vetted IP via `--host-resolver-rules`
+      (`Vutuv.PageScreenshot`, GHSA-mmjf-8cwc-6vwv / CWE-918) rather than the
+      hostname, and every redirect / `<meta refresh>` / in-page navigation it
+      then makes is pinned to that same address too.
 
   The resolver is injectable via `config :vutuv, :ssrf_resolver` (a
   `fun(charlist, :inet | :inet6) -> {:ok, [ip]} | {:error, term}`) so tests can
@@ -67,6 +74,47 @@ defmodule Vutuv.Ssrf do
   end
 
   def resolves_to_internal?(_), do: true
+
+  @doc """
+  Resolves `host` to a single **vetted public IP** so a downstream fetcher can be
+  pinned to exactly that address instead of re-resolving the hostname itself.
+
+  This is what `resolves_to_internal?/1` cannot do on its own: that predicate only
+  *checks* the host, and the fetcher then looked it up again — a second lookup that
+  could answer with an internal address (DNS rebinding), the TOCTOU acknowledged in
+  the moduledoc. Handing the fetcher the exact IP we validated (the headless-capture
+  browser gets it via `--host-resolver-rules`) removes that second lookup, so there
+  is no window for the answer to change.
+
+    * `{:ok, ip}` — a public IP literal (returns itself, no lookup), or a hostname
+      whose resolved addresses are **all** public (returns the first, to pin on).
+    * `{:error, :internal}` — a literal internal host, or a hostname where **any**
+      resolved address is internal (fail closed: one internal answer blocks).
+    * `{:error, :unresolvable}` — nothing resolved, or a hostless value; there is no
+      address to pin, so the caller must refuse rather than let the fetcher resolve.
+  """
+  def vetted_address(host) when is_binary(host) do
+    bare = bare_host(host)
+
+    cond do
+      internal_host?(host) -> {:error, :internal}
+      literal_ip?(bare) -> {:ok, parse_ip!(bare)}
+      true -> vet_resolved(resolved_addresses(bare))
+    end
+  end
+
+  def vetted_address(_), do: {:error, :unresolvable}
+
+  defp vet_resolved([]), do: {:error, :unresolvable}
+
+  defp vet_resolved([first | _] = addrs) do
+    if Enum.any?(addrs, &internal_ip?/1), do: {:error, :internal}, else: {:ok, first}
+  end
+
+  defp parse_ip!(bare) do
+    {:ok, addr} = :inet.parse_address(to_charlist(bare))
+    addr
+  end
 
   defp bare_host(host), do: host |> String.trim_leading("[") |> String.trim_trailing("]")
 

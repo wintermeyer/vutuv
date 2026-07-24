@@ -141,25 +141,41 @@ defmodule Vutuv.PageScreenshot do
   `url_value` is an untrusted member-supplied link. The changeset already
   rejected literal internal hosts, but a public hostname can resolve to an
   internal IP (DNS rebinding, issue #777), so resolve at capture time and refuse
-  before handing the URL to Chromium. `Vutuv.Moderation.EvidenceScreenshot`
-  calls `capture/3` directly to shoot the app's own host and is intentionally
-  not gated.
+  before handing the URL to Chromium.
+
+  Resolving is done **once** here, and the vetted IP is *pinned* into Chromium
+  via `--host-resolver-rules` (see `capture_args/3`): the browser never does its
+  own DNS lookup, so it cannot be steered onto an internal host by a redirect, a
+  `<meta http-equiv="refresh">`, in-page JavaScript navigation, or a DNS record
+  that flips between our check and Chromium's fetch — the SSRF-via-capture hole
+  of GHSA-mmjf-8cwc-6vwv (CWE-918). A host that resolves only to internal
+  addresses is a permanent property of the URL (`:internal_target`); one that
+  does not resolve at all right now is transient (`:unresolvable_target`), so the
+  caller retries rather than poisoning the row.
+
+  `Vutuv.Moderation.EvidenceScreenshot` calls `capture/3` directly to shoot the
+  app's own host and is intentionally neither gated nor pinned.
   """
   def capture_framed(url_value, id) when is_binary(url_value) do
-    if Ssrf.resolves_to_internal?(URI.parse(url_value).host) do
-      {:error, :internal_target}
-    else
-      page_path = tmp_path("page", id, "png")
-      framed_path = tmp_path("frame", id, "webp")
+    case Ssrf.vetted_address(URI.parse(url_value).host) do
+      {:ok, pin_ip} ->
+        page_path = tmp_path("page", id, "png")
+        framed_path = tmp_path("frame", id, "webp")
 
-      try do
-        with :ok <- capture(url_value, page_path),
-             {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url_value, framed_path) do
-          {:ok, framed_path}
+        try do
+          with :ok <- capture(url_value, page_path, pin_ip: pin_ip),
+               {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url_value, framed_path) do
+            {:ok, framed_path}
+          end
+        after
+          File.rm(page_path)
         end
-      after
-        File.rm(page_path)
-      end
+
+      {:error, :internal} ->
+        {:error, :internal_target}
+
+      {:error, :unresolvable} ->
+        {:error, :unresolvable_target}
     end
   end
 
@@ -205,6 +221,11 @@ defmodule Vutuv.PageScreenshot do
     end
   end
 
+  # We only read the status line and `location` header of the probe, never the
+  # body, so drop it during receipt at a small ceiling: a hostile member link
+  # could otherwise stream an unbounded body into memory (scan finding F15).
+  @probe_max_body_bytes 64 * 1024
+
   # A `redirect: false` GET so we see (and validate) each 3xx hop ourselves.
   defp probe(url) do
     [
@@ -213,7 +234,7 @@ defmodule Vutuv.PageScreenshot do
       connect_options: [timeout: 3_000],
       retry: false,
       redirect: false,
-      decode_body: false,
+      into: Vutuv.Http.capped_collector(@probe_max_body_bytes),
       headers: [{"user-agent", Http.user_agent()}]
     ]
     |> Keyword.merge(Application.get_env(:vutuv, @probe_req_options_key, []))
@@ -284,6 +305,17 @@ defmodule Vutuv.PageScreenshot do
   would spoil it: `--screenshot` renders the document **from the top**, so a
   page that scrolls itself on arrival is captured before those tiles are
   painted and stores a blank image (issue #1033).
+
+  `opts[:pin_ip]` (an `:inet.ip_address/0`) adds
+  `--host-resolver-rules=MAP * <ip>`, which forces **every** name Chromium would
+  resolve during the run — the seed host, its subresources, and any redirect /
+  meta-refresh / JavaScript-navigation target — to the single vetted public IP.
+  That is the SSRF egress control (GHSA-mmjf-8cwc-6vwv): Chromium does no DNS of
+  its own, so it cannot reach an internal address the seed URL was validated
+  against. The real hostname still rides in `Host:`/SNI, so the intended page
+  renders; only a *different* host is pinned to the wrong address and simply
+  fails to load. Omitted (`EvidenceScreenshot` shooting our own host), no rule
+  is added and behaviour is unchanged.
   """
   def capture_args(url, out_path, opts \\ []) do
     {width, height} = Keyword.get(opts, :window, window_size())
@@ -305,9 +337,21 @@ defmodule Vutuv.PageScreenshot do
       "--timeout=#{@page_timeout_seconds * 1000}",
       "--user-agent=#{Http.user_agent()}",
       "--window-size=#{width},#{height}",
-      "--screenshot=#{out_path}",
-      url
-    ]
+      "--screenshot=#{out_path}"
+    ] ++ host_resolver_args(Keyword.get(opts, :pin_ip)) ++ [url]
+  end
+
+  # The SSRF pin: map every resolved name to the one vetted IP, or nothing when
+  # unpinned. `MAP * <ip>` still lets Chromium send the correct `Host:`/SNI, so
+  # the seed page renders normally while nothing can be re-resolved elsewhere.
+  defp host_resolver_args(nil), do: []
+  defp host_resolver_args(pin_ip), do: ["--host-resolver-rules=MAP * #{format_pin(pin_ip)}"]
+
+  # Chromium's resolver-rule replacement wants a bare IPv4 literal, and a
+  # bracketed IPv6 literal so the optional `:port` suffix stays unambiguous.
+  defp format_pin(pin_ip) do
+    addr = pin_ip |> :inet.ntoa() |> to_string()
+    if tuple_size(pin_ip) == 8, do: "[#{addr}]", else: addr
   end
 
   @doc "The OS-level ceiling for one Chromium run, in seconds."

@@ -365,6 +365,11 @@ defmodule Vutuv.Posts.Screenshots do
   # Couldn't reach the target to check — transient, retried like a Chromium timeout.
   defp classify(_error), do: {:error, :probe_failed}
 
+  # Only the status line is read, never the body, so drop it during receipt at a
+  # small ceiling: a hostile member link could otherwise stream an unbounded
+  # body into memory (scan finding F15).
+  @probe_max_body_bytes 64 * 1024
+
   defp probe(url) do
     [
       url: url,
@@ -372,7 +377,7 @@ defmodule Vutuv.Posts.Screenshots do
       connect_options: [timeout: 3_000],
       retry: false,
       redirect: false,
-      decode_body: false,
+      into: Vutuv.Http.capped_collector(@probe_max_body_bytes),
       headers: [{"user-agent", Http.user_agent()}]
     ]
     |> Keyword.merge(Application.get_env(:vutuv, @probe_req_options_key, []))

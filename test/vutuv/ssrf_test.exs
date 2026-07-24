@@ -87,4 +87,36 @@ defmodule Vutuv.SsrfTest do
       assert Ssrf.resolves_to_internal?(nil)
     end
   end
+
+  describe "vetted_address/1 (resolve once, return a pinnable public IP)" do
+    test "a public IP literal returns itself without any lookup" do
+      Application.put_env(:vutuv, :ssrf_resolver, fn _h, _f -> raise "must not resolve" end)
+      assert Ssrf.vetted_address("93.184.216.34") == {:ok, {93, 184, 216, 34}}
+    end
+
+    test "a literal internal host is refused without any lookup" do
+      Application.put_env(:vutuv, :ssrf_resolver, fn _h, _f -> raise "must not resolve" end)
+      assert Ssrf.vetted_address("169.254.169.254") == {:error, :internal}
+      assert Ssrf.vetted_address("localhost") == {:error, :internal}
+    end
+
+    test "an all-public hostname returns its first resolved address (to pin on)" do
+      stub_resolver(%{"public.example" => [{93, 184, 216, 34}]})
+      assert Ssrf.vetted_address("public.example") == {:ok, {93, 184, 216, 34}}
+    end
+
+    test "one internal address among public ones fails closed" do
+      stub_resolver(%{"rebind.example" => [{93, 184, 216, 34}, {10, 0, 0, 5}]})
+      assert Ssrf.vetted_address("rebind.example") == {:error, :internal}
+    end
+
+    test "a host that resolves to nothing is unresolvable (never handed to a fetcher)" do
+      stub_resolver(%{})
+      assert Ssrf.vetted_address("nxdomain.example") == {:error, :unresolvable}
+    end
+
+    test "a nil / hostless value is unresolvable" do
+      assert Ssrf.vetted_address(nil) == {:error, :unresolvable}
+    end
+  end
 end
