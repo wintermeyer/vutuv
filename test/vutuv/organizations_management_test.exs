@@ -44,6 +44,44 @@ defmodule Vutuv.OrganizationsManagementTest do
     end
   end
 
+  describe "suggest_members/2" do
+    # The roles typeahead must honour the same visibility gate as every other
+    # people-search surface: never surface never-activated sign-ups or
+    # moderation-hidden accounts. Usernames/names are hardcoded here, which is
+    # safe because this module is async: false.
+    test "excludes unconfirmed and moderation-hidden accounts" do
+      future = NaiveDateTime.add(NaiveDateTime.utc_now(:second), 7 * 86_400)
+
+      visible = insert(:activated_user, username: "suggestme-visible", first_name: "Suggestme")
+      _unconfirmed = insert(:user, username: "suggestme-unconfirmed", first_name: "Suggestme")
+
+      _frozen =
+        insert(:activated_user,
+          username: "suggestme-frozen",
+          first_name: "Suggestme",
+          frozen_at: NaiveDateTime.utc_now(:second)
+        )
+
+      _suspended =
+        insert(:activated_user,
+          username: "suggestme-suspended",
+          first_name: "Suggestme",
+          suspended_until: future
+        )
+
+      _deactivated =
+        insert(:activated_user,
+          username: "suggestme-deactivated",
+          first_name: "Suggestme",
+          deactivated_at: NaiveDateTime.utc_now(:second)
+        )
+
+      ids = Organizations.suggest_members("suggestme") |> Enum.map(& &1.id)
+
+      assert ids == [visible.id]
+    end
+  end
+
   describe "roles" do
     test "owner powers vs admin vs recruiter" do
       {organization, owner} = active_organization()
