@@ -114,10 +114,12 @@ defmodule Vutuv.Activity do
 
     mention_max = select(mention_events(user_id), [mention: m], %{ts: max(m.inserted_at)})
 
+    # No self-like filter needed: a member cannot like their own post
+    # (enforced in Posts.like_post/2, issue #1030).
     like_max =
       from(l in PostLike,
         join: p in assoc(l, :post),
-        where: p.user_id == ^user_id and l.user_id != ^user_id,
+        where: p.user_id == ^user_id,
         select: %{ts: max(l.inserted_at)}
       )
 
@@ -864,13 +866,14 @@ defmodule Vutuv.Activity do
     )
   end
 
-  # Likes on this user's posts, minus self-likes. Carries the liked post's id
-  # so the notification can link to it.
+  # Likes on this user's posts. Carries the liked post's id so the notification
+  # can link to it. No self-like filter: a member cannot like their own post
+  # (enforced in Posts.like_post/2, issue #1030).
   defp like_items(user_id, limit, cursor) do
     from(l in PostLike,
       join: p in assoc(l, :post),
       join: liker in assoc(l, :user),
-      where: p.user_id == ^user_id and l.user_id != ^user_id,
+      where: p.user_id == ^user_id,
       order_by: [desc: l.inserted_at, desc: l.id],
       limit: ^limit,
       select: {l.id, l.inserted_at, struct(liker, ^User.listing_fields()), p.id}
@@ -1154,10 +1157,12 @@ defmodule Vutuv.Activity do
     |> since(read_at)
   end
 
+  # No self-like filter: a member cannot like their own post (enforced in
+  # Posts.like_post/2, issue #1030).
   defp count_likes(user_id, read_at) do
     from(l in PostLike,
       join: p in assoc(l, :post),
-      where: p.user_id == ^user_id and l.user_id != ^user_id,
+      where: p.user_id == ^user_id,
       select: %{count: count()}
     )
     |> since(read_at)
