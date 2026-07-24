@@ -152,10 +152,21 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   keyset-paginated (`%{entries:, more?:, cursor:}`; the web layer signs the
   `{first_published_at, id}` cursor with `VutuvWeb.ApiV2`).
 - **Filters** (all URL params): `q` (Postgres full-text over title +
-  description; see the search grammar below), `tag` (slug), `workplace`, `employment`,
+  description; see the search grammar below), `tag`, `workplace`, `employment`,
   `salary_min` (+ currency — same-currency only, the posting's yearly-normalised
   `salary_max` must reach the floor), `near` + `radius` + `country` (location),
   and the signed-in-member chip `my_tags` ("Passend zu meinen Tags").
+- **Tag filter, multi-select (issue #951).** `tag` is a **comma-separated list
+  of slugs** (`?tag=elixir,phoenix`); a single slug is the degenerate case, so
+  old `?tag=elixir` links and the tag-page/card links still work. Semantics are
+  **OR** (`filter_tags/2`: a posting matches when it carries *any* selected
+  tag), so adding a tag broadens — the standard board facet, consistent with the
+  `my_tags` chip. The board renders each active tag as a removable pill and
+  offers the current results' other tags as one-tap `+` suggestions; a free-text
+  `add_tag` field (native `<datalist>` typeahead) resolves a typed name to its
+  canonical slug (`Tag.find_by_value/1`) and folds it into `tag` in `mount` (an
+  unknown name is dropped — only existing tags can filter). The transient
+  `add_tag` never reaches a link.
 - **Salary filter, two ways in (issue #953).** A `salary_min` number field
   ("Mindestgehalt/Jahr", `#job-salary-min`) is open to **every** viewer —
   logged out, or a member with no #928 expectation — and files a bare yearly

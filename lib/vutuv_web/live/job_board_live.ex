@@ -24,6 +24,7 @@ defmodule VutuvWeb.JobBoardLive do
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Salary
+  alias Vutuv.Tags.Tag
   alias VutuvWeb.ApiV2
   alias VutuvWeb.Live.InitAssigns
 
@@ -34,7 +35,10 @@ defmodule VutuvWeb.JobBoardLive do
 
     if connected?(socket), do: Jobs.subscribe_board()
 
-    raw = session["params"] || %{}
+    # Fold a submitted free-text tag (issue #951) into the canonical comma
+    # list before anything reads it, so the filter and the shareable link both
+    # see one `tag` param and the transient `add_tag` never lingers in links.
+    raw = fold_add_tag(session["params"] || %{})
 
     {:ok,
      socket
@@ -58,6 +62,26 @@ defmodule VutuvWeb.JobBoardLive do
     |> assign(:engagement, Jobs.board_engagement_map(page.entries, user))
     |> assign(:more?, page.more?)
     |> assign(:next_cursor, page.cursor && ApiV2.encode_cursor(page.cursor))
+    |> assign_tag_suggestions(page.entries)
+  end
+
+  # Tags to offer as one-tap additions to the filter (issue #951), drawn from
+  # the tags on the current results and minus the ones already selected. In
+  # memory off the preloaded postings, so no extra query; capped so the row
+  # stays a hint, not a wall.
+  @tag_suggestion_limit 10
+
+  defp assign_tag_suggestions(socket, postings) do
+    selected = MapSet.new(tag_slugs(socket.assigns.params))
+
+    suggestions =
+      postings
+      |> Enum.flat_map(&tag_list/1)
+      |> Enum.uniq_by(& &1.slug)
+      |> Enum.reject(&MapSet.member?(selected, &1.slug))
+      |> Enum.take(@tag_suggestion_limit)
+
+    assign(socket, :tag_suggestions, suggestions)
   end
 
   # --- events ---------------------------------------------------------------
@@ -135,6 +159,47 @@ defmodule VutuvWeb.JobBoardLive do
   defp active?(params, key, value), do: params[key] == value
   defp any_filters?(params), do: params != %{}
 
+  # --- multi-tag filter (issue #951) ----------------------------------------
+
+  # The active tag slugs: the board's `tag` param is a comma-separated list.
+  defp tag_slugs(params) do
+    case params["tag"] do
+      value when is_binary(value) -> String.split(value, ",", trim: true)
+      _ -> []
+    end
+  end
+
+  # Params with `slug` appended to the tag list (a suggestion chip) or removed
+  # from it (a pill's ✕).
+  defp add_tag(params, slug), do: put_tags(params, tag_slugs(params) ++ [slug])
+  defp drop_tag(params, slug), do: put_tags(params, tag_slugs(params) -- [slug])
+
+  # Write the tag list back as a canonical comma param, or drop it when empty.
+  defp put_tags(params, slugs) do
+    case slugs |> Enum.reject(&(&1 == "")) |> Enum.uniq() do
+      [] -> Map.delete(params, "tag")
+      list -> Map.put(params, "tag", Enum.join(list, ","))
+    end
+  end
+
+  # Fold a submitted free-text `add_tag` (a tag name or slug) into the `tag`
+  # list. Only tags that actually exist can filter, so an unknown value is
+  # dropped; a match is stored by its canonical slug. Runs once in mount so the
+  # transient param never reaches a link.
+  defp fold_add_tag(raw) do
+    typed = raw["add_tag"]
+    raw = Map.drop(raw, ["add_tag"])
+
+    case is_binary(typed) && String.trim(typed) do
+      "" -> raw
+      false -> raw
+      value -> add_typed_tag(raw, Tag.find_by_value(value))
+    end
+  end
+
+  defp add_typed_tag(raw, %{slug: slug}), do: add_tag(raw, slug)
+  defp add_typed_tag(raw, _), do: raw
+
   # --- render ---------------------------------------------------------------
 
   @impl true
@@ -157,7 +222,7 @@ defmodule VutuvWeb.JobBoardLive do
         </.link>
       </div>
 
-      <.search_form params={@params} filters={@filters} />
+      <.search_form params={@params} filters={@filters} suggestions={@tag_suggestions} />
 
       <div id="job-filter-chips" class="mt-3 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
         <.link
@@ -201,15 +266,35 @@ defmodule VutuvWeb.JobBoardLive do
         class="mt-3"
       />
 
-      <p :if={@params["tag"]} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
-        {gettext("Tag")}:
+      <%!-- Active tag filters as removable pills, and one-tap suggestions drawn
+      from the current results (issue #951). Each pill's ✕ drops just that tag;
+      the whole `tag` param is comma-separated and shareable. --%>
+      <div
+        :if={tag_slugs(@params) != [] or @tag_suggestions != []}
+        id="job-tag-filters"
+        class="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400"
+      >
+        <span :if={tag_slugs(@params) != []} class="font-medium">{gettext("Tags")}:</span>
         <.link
-          navigate={~p"/jobs?#{Map.delete(@params, "tag")}"}
+          :for={slug <- tag_slugs(@params)}
+          navigate={~p"/jobs?#{drop_tag(@params, slug)}"}
+          data-active-tag={slug}
           class="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
         >
-          {@params["tag"]} <span aria-hidden="true">✕</span>
+          {slug} <span aria-hidden="true">✕</span>
         </.link>
-      </p>
+
+        <span :if={tag_slugs(@params) != [] and @tag_suggestions != []} class="text-slate-400">·</span>
+
+        <.link
+          :for={tag <- @tag_suggestions}
+          navigate={~p"/jobs?#{add_tag(@params, tag.slug)}"}
+          data-suggest-tag={tag.slug}
+          class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-800"
+        >
+          <span aria-hidden="true">+</span> {tag.name}
+        </.link>
+      </div>
 
       <div :if={@postings == []} class="mt-6 rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
         <p class="text-sm text-slate-600 dark:text-slate-400">{empty_line(@params)}</p>
@@ -245,6 +330,7 @@ defmodule VutuvWeb.JobBoardLive do
 
   attr(:params, :map, required: true)
   attr(:filters, :map, required: true)
+  attr(:suggestions, :list, default: [])
 
   defp search_form(assigns) do
     ~H"""
@@ -288,6 +374,24 @@ defmodule VutuvWeb.JobBoardLive do
           {label}
         </option>
       </select>
+
+      <%!-- Free-text tag filter (issue #951): type a tag to add it to the
+            comma-separated `tag` list on submit. Starts blank (an "add" field,
+            not a stored value); the datalist offers the current results' tags
+            as native typeahead, no JS. Only existing tags filter, so an unknown
+            value is silently dropped server-side. --%>
+      <input
+        type="text"
+        name="add_tag"
+        list="job-tag-options"
+        value=""
+        placeholder={gettext("Add a tag")}
+        aria-label={gettext("Filter by a tag")}
+        class={input_class()}
+      />
+      <datalist :if={@suggestions != []} id="job-tag-options">
+        <option :for={tag <- @suggestions} value={tag.name}></option>
+      </datalist>
 
       <%!-- Free minimum-salary filter, open to everyone (issue #953). While the
             "from my expectation" chip drives it, the field is disabled and a

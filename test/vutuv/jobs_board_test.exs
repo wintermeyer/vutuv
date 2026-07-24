@@ -112,7 +112,28 @@ defmodule Vutuv.JobsBoardTest do
     end
 
     test "tag filters to postings carrying the slug", %{elixir: elixir} do
-      assert ids(Jobs.board_page(nil, %{tag: "phoenix"})) == [elixir.id]
+      assert ids(Jobs.board_page(nil, %{tags: ["phoenix"]})) == [elixir.id]
+    end
+
+    # Issue #951: the tag filter takes several slugs now, OR between them (a
+    # posting matches when it carries ANY of them), so adding a tag broadens.
+    test "several tags OR: a posting carrying any of them matches", %{elixir: elixir, java: java} do
+      both = Jobs.board_page(nil, %{tags: ["phoenix", "java"]}) |> ids() |> Enum.sort()
+      assert both == Enum.sort([elixir.id, java.id])
+    end
+
+    test "board_filters parses a comma-separated tag param into the OR list", %{
+      elixir: elixir,
+      java: java
+    } do
+      # A shareable ?tag=phoenix,java URL.
+      filters = Jobs.board_filters(%{"tag" => "phoenix,java"}, nil)
+      both = Jobs.board_page(nil, filters) |> ids() |> Enum.sort()
+      assert both == Enum.sort([elixir.id, java.id])
+
+      # A single ?tag=phoenix still works (backward compatible).
+      single = Jobs.board_filters(%{"tag" => "phoenix"}, nil)
+      assert ids(Jobs.board_page(nil, single)) == [elixir.id]
     end
 
     test "workplace and employment type filter", %{elixir: elixir, java: java} do
