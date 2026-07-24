@@ -222,6 +222,13 @@ defmodule VutuvWeb.ApiV2.PostController do
 
   defp post_error(conn, :blocked), do: Problem.blocked(conn)
 
+  defp post_error(conn, :self) do
+    Problem.send_problem(conn, 422, "Cannot like your own post",
+      detail: "A member cannot like their own post.",
+      extra: %{reason: :self}
+    )
+  end
+
   defp post_error(conn, :not_visible), do: Problem.not_found(conn)
 
   defp post_error(conn, reason)

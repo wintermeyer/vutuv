@@ -99,7 +99,7 @@ defmodule VutuvWeb.PostLive.Actions do
   @impl true
   def render(assigns) do
     ~H"""
-    <.post_actions id={@id} post_id={@post_id} engagement={@engagement} />
+    <.post_actions id={@id} post_id={@post_id} engagement={@engagement} viewer_id={@viewer_id} />
     """
   end
 end

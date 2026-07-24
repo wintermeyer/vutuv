@@ -657,24 +657,24 @@ defmodule Vutuv.Posts do
   @doc """
   Likes `post` as `user` (idempotent). Only visible posts can be liked, and
   never across a block (a like notifies the author — a harassment vector).
+  A member cannot like their **own** post (`{:error, :self}`): a self-vote
+  inflating your own like count is not a real endorsement (issue #1030).
+  Bookmarking your own post stays fine — that is a private save.
   """
   def like_post(%User{} = user, %Post{} = post) do
-    if blocked?(user, post) do
-      {:error, :blocked}
-    else
-      do_like_post(user, post)
+    cond do
+      author?(post, user) -> {:error, :self}
+      blocked?(user, post) -> {:error, :blocked}
+      true -> do_like_post(user, post)
     end
   end
 
   defp do_like_post(%User{} = user, %Post{} = post) do
     case engage(PostLike, :like, user, post) do
       {:ok, %PostLike{}} ->
-        # A fresh like is news for the author; the idempotent repeat is not,
-        # and neither is liking your own post.
-        if post.user_id != user.id do
-          Vutuv.Activity.notify_like(post.user_id, user, post.id)
-        end
-
+        # A fresh like is news for the author; the idempotent repeat is not.
+        # Self-likes never reach here (`like_post/2` rejects them upstream).
+        Vutuv.Activity.notify_like(post.user_id, user, post.id)
         :ok
 
       {:ok, :noop} ->

@@ -162,7 +162,8 @@ defmodule Vutuv.ActivityTest do
       fan = insert(:user, first_name: "Fanny", last_name: "First")
       post = insert(:post, user: author)
       :ok = Vutuv.Posts.like_post(fan, post)
-      :ok = Vutuv.Posts.like_post(author, post)
+      # A self-like never happens (issue #1030), so it can produce no event.
+      assert {:error, :self} = Vutuv.Posts.like_post(author, post)
 
       assert [%{kind: "like", actor_name: "Fanny First"}] =
                author.id |> recent_notifications() |> Enum.filter(&(&1.kind == "like"))

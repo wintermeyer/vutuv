@@ -1034,7 +1034,9 @@ defmodule Vutuv.PostsTest do
       author = user()
 
       self_promoted = create_post!(author, %{body: "I like me"})
-      :ok = Posts.like_post(author, self_promoted)
+      # A self-like is refused outright (issue #1030), so the post keeps only
+      # the single stranger's like and stays below the discovery bar.
+      assert {:error, :self} = Posts.like_post(author, self_promoted)
       :ok = Posts.like_post(user(), self_promoted)
 
       earned = liked_post!(user(), %{body: "liked by others"})
@@ -1498,9 +1500,18 @@ defmodule Vutuv.PostsTest do
       :ok = Posts.like_post(fan, post)
       refute_receive {:new_notification, _}, 50
 
-      # Liking your own post is not news.
-      :ok = Posts.like_post(author, post)
+      # You cannot like your own post at all, so there is nothing to notify.
+      assert {:error, :self} = Posts.like_post(author, post)
       refute_receive {:new_notification, _}, 50
+    end
+
+    test "like_post/2 refuses a self-like and writes no row (#1030)" do
+      author = user()
+      post = create_post!(author, %{body: "I like me"})
+
+      assert {:error, :self} = Posts.like_post(author, post)
+      assert %{likes: 0} = Posts.engagement_counts(post.id)
+      refute Posts.post_engagement(post.id, author).liked?
     end
 
     test "unlike_post/2 removes the like" do

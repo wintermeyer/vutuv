@@ -51,7 +51,13 @@ defmodule VutuvWeb.PostLive.ActionsComponent do
   def render(assigns) do
     ~H"""
     <div id={@id}>
-      <.post_actions id={@id} post_id={@post_id} engagement={@engagement} target={@myself} />
+      <.post_actions
+        id={@id}
+        post_id={@post_id}
+        engagement={@engagement}
+        viewer_id={@viewer_id}
+        target={@myself}
+      />
     </div>
     """
   end

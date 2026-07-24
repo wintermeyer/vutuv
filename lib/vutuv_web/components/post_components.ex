@@ -2000,12 +2000,25 @@ defmodule VutuvWeb.PostComponents do
   attr(:post_id, :any, required: true)
   attr(:engagement, :any, default: nil)
 
+  attr(:viewer_id, :any,
+    default: nil,
+    doc: "the viewer's user id (nil when logged out), to detect their own post"
+  )
+
   attr(:target, :any,
     default: nil,
     doc: "phx-target: the LiveComponent's @myself on a host page, nil on a dead page"
   )
 
   def post_actions(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :own?,
+        assigns.engagement != nil and assigns.viewer_id != nil and
+          assigns.engagement.author_id == assigns.viewer_id
+      )
+
     ~H"""
     <%!-- justify-between spreads the four controls across the column's full
           width (X-style); -mx-2 cancels the outer buttons' px-2 so the first
@@ -2014,17 +2027,13 @@ defmodule VutuvWeb.PostComponents do
       :if={@engagement}
       class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-600 dark:text-slate-400"
     >
-      <.action_button
+      <.like_control
         id={"#{@id}-like"}
         target={@target}
-        kind="like"
-        active?={@engagement.liked?}
+        own?={@own?}
+        liked?={@engagement.liked?}
         count={@engagement.likes}
-        label={if @engagement.liked?, do: gettext("Unlike"), else: gettext("Like")}
-        active_class="text-accent"
-      >
-        <:icon><.icon_heart filled?={@engagement.liked?} /></:icon>
-      </.action_button>
+      />
 
       <.reply_link
         id={"#{@id}-reply"}
@@ -2059,6 +2068,44 @@ defmodule VutuvWeb.PostComponents do
         <:icon><.icon_bookmark filled?={@engagement.bookmarked?} /></:icon>
       </.action_button>
     </div>
+    """
+  end
+
+  # The Like control: a real toggle for everyone but the author. On your OWN
+  # post it is a plain, non-interactive count instead of a clickable heart —
+  # a member cannot like their own post (issue #1030), so the toggle would be
+  # a dead control. Same slot and id either way, so the row layout and the
+  # tests that key on `#…-like` don't care which branch renders.
+  attr(:id, :string, required: true)
+  attr(:target, :any, default: nil)
+  attr(:own?, :boolean, required: true)
+  attr(:liked?, :boolean, required: true)
+  attr(:count, :integer, required: true)
+
+  defp like_control(assigns) do
+    ~H"""
+    <.action_button
+      :if={!@own?}
+      id={@id}
+      target={@target}
+      kind="like"
+      active?={@liked?}
+      count={@count}
+      label={if @liked?, do: gettext("Unlike"), else: gettext("Like")}
+      active_class="text-accent"
+    >
+      <:icon><.icon_heart filled?={@liked?} /></:icon>
+    </.action_button>
+    <span
+      :if={@own?}
+      id={@id}
+      title={gettext("You can't like your own post.")}
+      aria-label={gettext("Likes")}
+      class="inline-flex cursor-default items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate-600 dark:text-slate-400"
+    >
+      <.icon_heart filled?={false} />
+      <.count_pill count={@count} kind="like" />
+    </span>
     """
   end
 
