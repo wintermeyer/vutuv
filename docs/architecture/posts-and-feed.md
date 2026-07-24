@@ -178,10 +178,17 @@ Deleting a group that posts deny is refused (it would silently widen audiences).
 
 ## Likes, bookmarks, reposts
 
-Every post card carries a live action bar (`VutuvWeb.PostLive.Actions`, one
-embedded LiveView per card via `live_render`), so the like/repost/bookmark
-counters tick in real time on the feed *and* on classic pages (permalink,
-profile, archive).
+Every post card carries an action bar with three renderings of one rule
+(`VutuvWeb.PostLive.ActionBar`): on LiveView host pages (feed, /likes,
+/bookmarks, reply, profile) it is the in-process
+`VutuvWeb.PostLive.ActionsComponent` (no per-card process or subscription;
+other people's counts refresh on reload); on dead controller pages (author
+archive, profile served dead) each card embeds the standalone
+`VutuvWeb.PostLive.Actions` LiveView via `live_render`, which subscribes
+itself and ticks live; and on the **post permalink** the thread host
+(`VutuvWeb.PostLive.Thread`) subscribes to its shown posts and forwards
+`{:post_counters, …}` into the in-process bars via `send_update`, so the
+post's own page ticks live with one process per visitor.
 
 Counters are counted live from the `post_likes` / `post_bookmarks` /
 `post_reposts` rows and broadcast as absolute values on the post topic
@@ -259,25 +266,44 @@ All read the same (each a single card of flat `divide-y` rows).
 The notification page reuses the compact `post_preview/1` for the post a
 like/reply quotes.
 
-**The permalink page renders the whole conversation** (issue #1006):
-`Vutuv.Posts.list_thread/3` fetches the thread's root plus every visible post
-of the thread in one `root_post_id` lookup (capped at 200 with a "conversation
-is longer" note; the permalinked post, its surviving ancestor chain and its
-direct replies are always unioned back in, which is also the degraded floor
-once a deleted root has nilified the thread's root links), returns them in
-`thread_order/1` reading order, and `PostComponents.thread_conversation/1`
-renders it as one feed-style conversation. The permalinked post is the tinted
-`:full`-mode card (`#thread-focus`; an absolutely positioned `::before` so the
-connector geometry is untouched) and, when it has context above, app.js scrolls
-it into view on arrival (`data-thread-scroll`) — for a person, not for the link
-screenshot browser, whose capture that jump left blank (issue #1033; see the
-URL-screenshot section of [images.md](images.md)). A post with no thread renders
-standalone exactly as before. The action bar carries a live reply counter, and
-the parent's author gets a derived "replied to your post" notification
-(self-replies excluded). The agent-format siblings mirror the page: `PostDoc`
-carries the conversation as `thread` in the same reading order (each entry with
-its parent pointer **and** its nesting `depth`), which the md renderer turns
-into a heading level per step and the txt renderer into two spaces per step.
+**The permalink page renders the conversation as an embedded LiveView**
+(`VutuvWeb.PostLive.Thread`, `live_render` from `PostController` — the
+profile's pattern: the controller keeps the URL and the agent-format
+negotiation, the socket owns the conversation card). A **small conversation
+(≤ 25 visible posts) renders whole** (issue #1006) in `thread_order/1` reading
+order via `PostComponents.thread_conversation/1`. A **bigger one opens as a
+window around the permalinked post** (`Vutuv.Posts.thread_window/3`, the issue
+#1033 follow-up — a 131-post thread used to dead-render ~930 KB of HTML with
+one embedded action-bar LiveView per card): the root pinned on top, a
+"Show N earlier posts" expander over the elided middle, the 3 nearest
+ancestors, the post itself, the first 20 posts of its **own reply subtree**
+(a reading-order prefix, so every shown reply's parent is on the page) and a
+"Show N more replies" expander; sibling branches stay off the page but are
+counted in a "part of a conversation with N posts" line linking to the root's
+permalink ("Read it from the start"). The expanders are plain `phx-click`
+events that widen server-side budgets and re-query — no custom JS. The window
+is computed on an id-only skeleton of the conversation (one `root_post_id`
+query, hard-capped at 1000), so only shown posts get loaded and preloaded; the
+degraded floor (deleted root nilified the links: surviving chain + direct
+replies) windows the same way. Inside the host the action bars are the
+in-process `ActionsComponent`; the thread subscribes to each **shown** post's
+counter topic and forwards `{:post_counters, …}` via `send_update`
+(`ActionBar.apply_counters/2`), so the permalink keeps live counters at one
+process per visitor, bounded by the window instead of the conversation.
+
+The permalinked post is the tinted `:full`-mode card (`#thread-focus`; an
+absolutely positioned `::before` so the connector geometry is untouched) and,
+when it has context above, app.js scrolls it into view on arrival
+(`data-thread-scroll`) — for a person, not for the link screenshot browser,
+whose capture that jump left blank (issue #1033; see the URL-screenshot
+section of [images.md](images.md)). A post with no thread renders standalone
+exactly as before. The parent's author gets a derived "replied to your post"
+notification (self-replies excluded). The agent-format siblings deliberately
+keep the **whole** conversation (`Vutuv.Posts.list_thread/3`, capped at 200):
+an agent reading `.md` has no expander to click, so `PostDoc` carries the full
+`thread` in the same reading order (each entry with its parent pointer **and**
+its nesting `depth`), which the md renderer turns into a heading level per
+step and the txt renderer into two spaces per step.
 
 A reply **outlives its parent**: where the parent is gone the card falls back to
 a banner (which names the account as `@handle`, never the clear name) that

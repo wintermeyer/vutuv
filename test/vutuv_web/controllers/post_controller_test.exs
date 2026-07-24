@@ -641,6 +641,35 @@ defmodule VutuvWeb.PostControllerTest do
       refute html =~ "Replying to"
     end
 
+    # The issue #1033 follow-up: a long conversation used to render every post
+    # (hundreds of cards, one embedded action-bar LiveView each). The page now
+    # opens as a window around the permalinked post; the embedded thread
+    # LiveView's expanders load the rest over the socket.
+    test "a long conversation dead-renders as a window, not the whole archive", %{conn: conn} do
+      author = insert_activated_user()
+      root = create_post!(author, %{body: "the huge conversation root"})
+
+      replies =
+        for i <- 1..30 do
+          {:ok, reply} = Posts.create_reply(author, root, %{body: "windowed reply #{i}"})
+          reply
+        end
+
+      html = html_response(get(conn, Posts.path(root)), 200)
+
+      # The first chunk is server-rendered (crawlers and no-JS visitors get
+      # real content), the tail is behind the expander.
+      assert html =~ "the huge conversation root"
+      assert html =~ Enum.at(replies, 19).body
+      refute html =~ Enum.at(replies, 20).body
+      assert html =~ ~s(id="thread-more")
+
+      # One embedded LiveView for the whole conversation (plus the app shell):
+      # the per-card action-bar LiveViews are in-process components inside the
+      # thread host now, so sockets no longer scale with the thread.
+      assert length(String.split(html, "data-phx-session")) - 1 == 2
+    end
+
     # The production report behind issue #1027: in a long branching thread the
     # newest reply was written hours after a busy branch point, so a flat
     # chronological chain put it under a stranger's post and it read as

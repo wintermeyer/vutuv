@@ -751,29 +751,122 @@ defmodule VutuvWeb.PostComponents do
         "batched for the cards' mute menu items like the feed does"
   )
 
+  attr(:engagement, :map,
+    default: %{},
+    doc:
+      "action-bar engagement by post id (Vutuv.Posts.post_engagement_map/2), " <>
+        "batched by the host so the cards' bars don't each load their own"
+  )
+
   attr(:conn_or_socket, :any, required: true)
 
   def thread_conversation(assigns) do
-    assigns = assign(assigns, :roots, conversation_roots(assigns))
+    top_id = with %{id: id} <- List.first(assigns.posts), do: id
+    assigns = assign(assigns, :roots, conversation_nodes(assigns.posts, top_id, assigns))
 
     ~H"""
     <.thread_chain nodes={@roots} viewer={@viewer} surface={:flat} conn_or_socket={@conn_or_socket} />
     """
   end
 
-  defp conversation_roots(%{posts: posts} = assigns) do
-    # `posts` is already in reading order, so the head is the card that renders
-    # first — the one case where the focused post has no context above it and
-    # the page must not jump on arrival.
-    top_id = with %{id: id} <- List.first(posts), do: id
+  @doc """
+  A **windowed** conversation on the permalink page (`VutuvWeb.PostLive.Thread`):
+  the rendering of `Vutuv.Posts.thread_window/3`'s `:window` mode. The root
+  stays pinned on top; when ancestors between it and the shown chain are
+  elided, a "Show N earlier posts" expander stands in for them (so the chain
+  below it starts as its own forest, its top card keeping the reply banner
+  that names the elided parent); below the permalinked post's subtree chunk a
+  "Show N more replies" expander loads the next chunk. Both fire plain
+  `phx-click` events handled by the hosting LiveView — no custom JS.
+  """
+  attr(:window, :map, required: true, doc: "Vutuv.Posts.thread_window/3 result, mode :window")
+  attr(:focus_id, :string, required: true)
+  attr(:viewer, :any, default: nil)
+  attr(:auto_scroll?, :boolean, default: true)
+  attr(:viewer_follows, :map, default: %{})
+  attr(:engagement, :map, default: %{})
+  attr(:conn_or_socket, :any, required: true)
 
+  def thread_window_conversation(assigns) do
+    window = assigns.window
+    top_id = with %{id: id} <- window.root || List.first(window.subtree), do: id
+
+    # With elided ancestors the pinned root and the window are separate
+    # forests (the expander stands between them); otherwise the chain connects
+    # the root and everything renders as one tree.
+    {root_nodes, window_posts} =
+      if window.gap > 0 do
+        {conversation_nodes([window.root], top_id, assigns), window.chain ++ window.subtree}
+      else
+        {nil, List.wrap(window.root) ++ window.chain ++ window.subtree}
+      end
+
+    assigns =
+      assigns
+      |> assign(:root_nodes, root_nodes)
+      |> assign(:window_nodes, conversation_nodes(window_posts, top_id, assigns))
+
+    ~H"""
+    <%= if @root_nodes do %>
+      <.thread_chain
+        nodes={@root_nodes}
+        viewer={@viewer}
+        surface={:flat}
+        conn_or_socket={@conn_or_socket}
+      />
+      <div class="py-3 pl-1">
+        <button
+          id="thread-earlier"
+          type="button"
+          phx-click="thread-earlier"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {ngettext(
+            "Show %{formatted} earlier post",
+            "Show %{formatted} earlier posts",
+            @window.gap,
+            formatted: compact_count(@window.gap)
+          )}
+        </button>
+      </div>
+    <% end %>
+    <.thread_chain
+      nodes={@window_nodes}
+      viewer={@viewer}
+      surface={:flat}
+      conn_or_socket={@conn_or_socket}
+    />
+    <div :if={@window.more > 0} class="pl-1 pt-3">
+      <button
+        id="thread-more"
+        type="button"
+        phx-click="thread-more"
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {ngettext(
+          "Show %{formatted} more reply",
+          "Show %{formatted} more replies",
+          @window.more,
+          formatted: compact_count(@window.more)
+        )}
+      </button>
+    </div>
+    """
+  end
+
+  # The plain preloaded `posts` as `thread_chain/1` nodes: the permalinked
+  # `focus_id` post in `:full` mode (tinted, and — with context above it —
+  # marked for the arrival auto-scroll), everything else a preview. `top_id`
+  # is the first card on the page, the one case where the focused post has no
+  # context above it and the page must not jump on arrival.
+  defp conversation_nodes(posts, top_id, assigns) do
     posts
     |> Enum.map(fn post ->
       focus? = post.id == assigns.focus_id
 
       %{
         post: post,
-        engagement: nil,
+        engagement: assigns.engagement[post.id],
         viewer_follow: assigns.viewer_follows[post.user_id],
         reposted_by: nil,
         reposters: nil,

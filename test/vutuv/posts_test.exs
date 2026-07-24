@@ -2026,6 +2026,185 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "thread_window/3" do
+    # A chain thread: root, then `depth` replies each answering the previous
+    # one. Returns `[root, c1, ..., cN]`.
+    defp chain_thread(depth) do
+      root = create_post!(user(), %{body: "chain root"})
+
+      chain =
+        Enum.reduce(1..depth, [root], fn i, [parent | _] = acc ->
+          {:ok, reply} = Posts.create_reply(user(), parent, %{body: "chain #{i}"})
+          [reply | acc]
+        end)
+
+      Enum.reverse(chain)
+    end
+
+    test "a small conversation loads whole, in list_thread's reading order" do
+      root = create_post!(user(), %{body: "thread root"})
+      {:ok, mid} = Posts.create_reply(user(), root, %{body: "mid"})
+      {:ok, branch_a} = Posts.create_reply(user(), mid, %{body: "branch a"})
+      {:ok, branch_b} = Posts.create_reply(user(), mid, %{body: "branch b"})
+      {:ok, leaf} = Posts.create_reply(user(), branch_a, %{body: "leaf"})
+
+      expected = [root.id, mid.id, branch_a.id, leaf.id, branch_b.id]
+
+      for post <- [root, branch_b, leaf] do
+        assert %{mode: :all, posts: posts, total: 5} = Posts.thread_window(post, nil)
+        assert Enum.map(posts, & &1.id) == expected
+      end
+    end
+
+    test "a post with no replies is a one-post :all window" do
+      post = create_post!(user(), %{body: "alone"})
+
+      assert %{mode: :all, posts: [%Post{id: id}], total: 1} = Posts.thread_window(post, nil)
+      assert id == post.id
+    end
+
+    test "a deep chain windows to the root, a gap and the nearest ancestors" do
+      [root | chain] = chain_thread(8)
+      focus = List.last(chain)
+
+      assert %{
+               mode: :window,
+               root: %Post{id: root_id},
+               gap: 5,
+               chain: shown,
+               subtree: [%Post{id: focus_id}],
+               more: 0,
+               rest: 0,
+               total: 9
+             } = Posts.thread_window(focus, nil, all_limit: 5, ancestors: 2)
+
+      assert root_id == root.id
+      assert focus_id == focus.id
+      # The two nearest ancestors, oldest first, directly above the focus.
+      assert Enum.map(shown, & &1.id) == chain |> Enum.slice(5, 2) |> Enum.map(& &1.id)
+    end
+
+    test "the focus post's replies come chunked in reading order" do
+      root = create_post!(user(), %{body: "wide root"})
+
+      replies =
+        for i <- 1..8 do
+          {:ok, reply} = Posts.create_reply(user(), root, %{body: "reply #{i}"})
+          reply
+        end
+
+      assert %{mode: :window, root: nil, gap: 0, chain: [], subtree: subtree, more: 5, rest: 0} =
+               Posts.thread_window(root, nil, all_limit: 5, replies: 3)
+
+      # The focus itself plus the first chunk of its subtree, oldest first.
+      assert Enum.map(subtree, & &1.id) == [
+               root.id | replies |> Enum.take(3) |> Enum.map(& &1.id)
+             ]
+    end
+
+    test "sibling branches outside the focus's chain and subtree count as rest" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, a} = Posts.create_reply(user(), root, %{body: "a"})
+      {:ok, focus} = Posts.create_reply(user(), a, %{body: "focus"})
+
+      for i <- 1..4, do: {:ok, _} = Posts.create_reply(user(), focus, %{body: "under focus #{i}"})
+      for i <- 1..3, do: {:ok, _} = Posts.create_reply(user(), root, %{body: "elsewhere #{i}"})
+
+      assert %{
+               mode: :window,
+               root: %Post{id: root_id},
+               gap: 0,
+               chain: [%Post{id: a_id}],
+               subtree: subtree,
+               more: 2,
+               rest: 3,
+               total: 10
+             } = Posts.thread_window(focus, nil, all_limit: 3, ancestors: 1, replies: 2)
+
+      assert root_id == root.id
+      assert a_id == a.id
+      assert List.first(subtree).id == focus.id
+      assert length(subtree) == 3
+    end
+
+    test "a gap of one ancestor is shown instead of a one-post expander" do
+      [root | chain] = chain_thread(4)
+      focus = List.last(chain)
+
+      # Budget 2 would elide exactly one ancestor — silly, so it is included.
+      assert %{mode: :window, root: %Post{id: root_id}, gap: 0, chain: shown} =
+               Posts.thread_window(focus, nil, all_limit: 3, ancestors: 2)
+
+      assert root_id == root.id
+
+      assert length(shown) == 3
+      assert Enum.map(shown, & &1.id) == chain |> Enum.take(3) |> Enum.map(& &1.id)
+    end
+
+    test "one leftover reply is shown instead of a one-post expander" do
+      root = create_post!(user(), %{body: "root"})
+      for i <- 1..4, do: {:ok, _} = Posts.create_reply(user(), root, %{body: "r#{i}"})
+
+      assert %{mode: :window, subtree: subtree, more: 0} =
+               Posts.thread_window(root, nil, all_limit: 2, replies: 3)
+
+      assert length(subtree) == 5
+    end
+
+    test "wider budgets grow the window (the LiveView's expanders)" do
+      [root | chain] = chain_thread(8)
+      focus = List.last(chain)
+
+      assert %{mode: :window, gap: 0, chain: shown, root: %Post{id: root_id}} =
+               Posts.thread_window(focus, nil, all_limit: 5, ancestors: 12)
+
+      assert root_id == root.id
+      assert length(shown) == 7
+    end
+
+    test "an invisible post mid-chain cuts the ancestor walk there" do
+      [_root | chain] = chain_thread(6)
+      focus = List.last(chain)
+      frozen = Enum.at(chain, 2)
+
+      Repo.update_all(from(p in Post, where: p.id == ^frozen.id),
+        set: [frozen_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      assert %{mode: :window, root: %Post{id: top_id}, gap: 0, chain: shown, rest: rest} =
+               Posts.thread_window(focus, user(), all_limit: 3, ancestors: 5)
+
+      # The chain above the frozen post is unreachable by parent walk: the
+      # window anchors at the oldest still-connected ancestor, the rest of the
+      # conversation stays counted (root + chain 1/2 = 3 posts elsewhere).
+      assert top_id == Enum.at(chain, 3).id
+      assert Enum.map(shown, & &1.id) == [Enum.at(chain, 4).id]
+      assert rest == 3
+    end
+
+    test "a deleted root degrades to a window over the surviving chain" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, a} = Posts.create_reply(user(), root, %{body: "a"})
+      {:ok, b} = Posts.create_reply(user(), a, %{body: "b"})
+      {:ok, c} = Posts.create_reply(user(), b, %{body: "c"})
+      for i <- 1..3, do: {:ok, _} = Posts.create_reply(user(), c, %{body: "under c #{i}"})
+
+      {:ok, _} = Posts.delete_post(root)
+
+      focus = Repo.preload(c, :reply_ref, force: true)
+
+      assert %{mode: :window, root: %Post{id: a_id}, chain: [%Post{id: b_id}], subtree: subtree} =
+               Posts.thread_window(focus, nil, all_limit: 3, ancestors: 1, replies: 2)
+
+      assert a_id == a.id
+      assert b_id == b.id
+      # The focus leads its chunked subtree; one reply is elided (more: 1
+      # would fold, so budget 2 of 3 leaves... 3 - 2 = 1 → folded in).
+      assert List.first(subtree).id == c.id
+      assert length(subtree) == 4
+    end
+  end
+
   describe "thread_forest/1" do
     test "nests every entry under the entry it answers, siblings oldest first" do
       root = create_post!(user(), %{body: "root"})

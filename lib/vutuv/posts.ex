@@ -77,6 +77,21 @@ defmodule Vutuv.Posts do
   # one-level reply cap plus the post itself, so the whole-thread page can
   # never show fewer posts than the old post-plus-direct-replies page did.
   @default_conversation_limit 200
+  # The permalink's conversation window (issue #1033 follow-up): a thread at
+  # most this big renders whole; a bigger one opens as a window around the
+  # permalinked post and grows on demand (VutuvWeb.PostLive.Thread).
+  @thread_all_limit 25
+  # Nearest ancestors first shown above the focus, and how many more each
+  # "show earlier" click reveals.
+  @thread_context_ancestors 3
+  @thread_ancestor_page 10
+  # Posts of the focus's own reply subtree first shown below it, and how many
+  # more each "show more" click reveals.
+  @thread_reply_page 20
+  # Hard cap on the id-only skeleton walk of one conversation: tree math stays
+  # bounded even on a degenerate thread; the page never renders more than the
+  # window anyway.
+  @thread_skeleton_limit 1000
   @pending_max_age_hours 24
   @max_tags 5
   @tag_posts_per_page 20
@@ -1923,6 +1938,254 @@ defmodule Vutuv.Posts do
       |> thread_order()
 
     %{posts: posts, truncated?: truncated?}
+  end
+
+  @doc """
+  The shipped conversation-window budgets, for the permalink LiveView
+  (`VutuvWeb.PostLive.Thread`): the initial `:ancestors` / `:replies` budgets
+  `thread_window/3` defaults to, and the `:ancestor_page` / `:reply_page`
+  steps its expanders grow them by.
+  """
+  def thread_window_defaults do
+    %{
+      ancestors: @thread_context_ancestors,
+      ancestor_page: @thread_ancestor_page,
+      replies: @thread_reply_page,
+      reply_page: @thread_reply_page,
+      all_limit: @thread_all_limit
+    }
+  end
+
+  @doc """
+  The conversation `post` belongs to, as a **window around the post** — what
+  the permalink page renders since the whole-thread rendering (issue #1006)
+  stopped scaling: a long conversation rendered hundreds of cards (and one
+  embedded action-bar LiveView each), most of them far from the post the
+  visitor came for.
+
+  A conversation of at most `:all_limit` visible posts (#{@thread_all_limit})
+  still loads whole — `%{mode: :all, posts:, total:}` in `list_thread/3`
+  reading order, exactly the old page. A bigger one returns `%{mode: :window}`
+  with the post's surroundings, each part budget-capped and grown on demand by
+  the LiveView's expanders:
+
+    * `root` — the conversation's first post, always pinned on top (`nil` when
+      the permalinked post is the root itself);
+    * `gap` — how many ancestors between the root and `chain` are elided
+      (0 = the chain connects to the root; a gap of exactly one is shown
+      instead of a one-post expander);
+    * `chain` — the `:ancestors` (#{@thread_context_ancestors}) nearest
+      ancestors, oldest first, directly above the post;
+    * `subtree` — the post itself plus the first `:replies`
+      (#{@thread_reply_page}) posts of its own reply subtree, reading order;
+    * `more` — how many of the post's subtree posts are still unloaded;
+    * `rest` — how many visible posts of the conversation live outside the
+      ancestor chain and the post's subtree (sibling branches), reachable via
+      the root's own permalink;
+    * `total` / `truncated?` — the conversation's visible size, `truncated?`
+      when even the id-only skeleton hit its #{@thread_skeleton_limit} cap.
+
+  The window is computed on an id-only skeleton of the conversation (one
+  indexed query over `post_replies.root_post_id`), so only the posts actually
+  shown are loaded and preloaded. Every shown reply's parent is on the page:
+  the subtree chunk is a reading-order prefix, and a parent always precedes
+  its replies in it. A degraded conversation (deleted root nilified the
+  `root_post_id` links) windows over the same floor `list_thread/3` falls back
+  to: the surviving ancestor chain plus the post's direct replies.
+  """
+  def thread_window(%Post{} = post, viewer, opts \\ []) do
+    all_limit = Keyword.get(opts, :all_limit, @thread_all_limit)
+    ancestor_budget = Keyword.get(opts, :ancestors, @thread_context_ancestors)
+    reply_budget = Keyword.get(opts, :replies, @thread_reply_page)
+    skeleton_limit = Keyword.get(opts, :skeleton_limit, @thread_skeleton_limit)
+
+    {skeletons, truncated?} = thread_skeletons(post, viewer, skeleton_limit)
+    order = skeleton_order(skeletons)
+    total = length(order)
+
+    if total <= all_limit and not truncated? do
+      posts = load_thread_posts(Enum.map(order, &elem(&1, 0)))
+      %{mode: :all, posts: posts, total: total, truncated?: false}
+    else
+      thread_window_slices(post, order, total, truncated?, ancestor_budget, reply_budget)
+    end
+  end
+
+  defp thread_window_slices(post, order, total, truncated?, ancestor_budget, reply_budget) do
+    parent_of = Map.new(order)
+    ancestors = skeleton_ancestors(post.id, parent_of)
+    subtree_ids = focus_subtree(post.id, order)
+    {shown_subtree, more} = chunk_prefix(subtree_ids, 1 + reply_budget)
+    {root_id, chain_ids, gap} = split_ancestors(ancestors, ancestor_budget)
+
+    posts = load_thread_posts(List.wrap(root_id) ++ chain_ids ++ shown_subtree)
+    by_id = Map.new(posts, &{&1.id, &1})
+
+    %{
+      mode: :window,
+      root: root_id && by_id[root_id],
+      gap: gap,
+      chain: for(id <- chain_ids, p = by_id[id], do: p),
+      subtree: for(id <- shown_subtree, p = by_id[id], do: p),
+      more: more,
+      rest: total - length(ancestors) - length(subtree_ids),
+      total: total,
+      truncated?: truncated?
+    }
+  end
+
+  # The conversation as light `{id, parent_id}` rows, visibility-scoped, in
+  # `{inserted_at, id}` order (so a parent always precedes its replies and
+  # sibling groups keep their age order without re-sorting). Second element:
+  # whether the skeleton cap cut the newest tail.
+  defp thread_skeletons(%Post{} = post, viewer, limit) do
+    reply_row =
+      Repo.one(
+        from(r in PostReply,
+          where: r.post_id == ^post.id,
+          select: {r.root_post_id, r.parent_post_id}
+        )
+      )
+
+    case reply_row do
+      {nil, _parent_id} ->
+        # Degraded thread (issue #1006's floor): the deleted root nilified the
+        # links, so the conversation is the surviving chain + direct replies.
+        degraded_skeletons(post, viewer)
+
+      _ ->
+        anchor_id =
+          case reply_row do
+            nil -> post.id
+            {root_id, _} -> root_id
+          end
+
+        rows =
+          from(p in Post,
+            left_join: r in PostReply,
+            on: r.post_id == p.id,
+            where: r.root_post_id == ^anchor_id or p.id == ^anchor_id,
+            order_by: [asc: p.inserted_at, asc: p.id],
+            limit: ^(limit + 1),
+            select: {p.id, r.parent_post_id}
+          )
+          |> scope_visible(viewer)
+          |> Repo.all()
+
+        truncated? = length(rows) > limit
+        rows = if truncated?, do: Enum.take(rows, limit), else: rows
+
+        # The permalinked post itself must always be in its own window, like
+        # list_thread/3's union floor — even when the cap cut its tail.
+        rows =
+          if Enum.any?(rows, &(elem(&1, 0) == post.id)) do
+            rows
+          else
+            rows ++ [{post.id, reply_row && elem(reply_row, 1)}]
+          end
+
+        {rows, truncated?}
+    end
+  end
+
+  defp degraded_skeletons(post, viewer) do
+    {_topmost, up} = surviving_chain(post, viewer)
+
+    floor =
+      (up ++ [post] ++ list_replies(post, viewer))
+      |> Enum.uniq_by(& &1.id)
+      |> Enum.sort_by(&{NaiveDateTime.to_erl(&1.inserted_at), &1.id})
+
+    ids = Enum.map(floor, & &1.id)
+
+    parents =
+      from(r in PostReply, where: r.post_id in ^ids, select: {r.post_id, r.parent_post_id})
+      |> Repo.all()
+      |> Map.new()
+
+    {Enum.map(floor, fn p -> {p.id, parents[p.id]} end), false}
+  end
+
+  # The skeleton rows in reading order: the same depth-first walk as
+  # `thread_forest/1`, on `{id, parent_id}` rows. A row whose parent is not in
+  # the set (top-level, or the parent is invisible) is a forest root.
+  defp skeleton_order(rows) do
+    present = MapSet.new(rows, &elem(&1, 0))
+
+    {roots, answers} =
+      Enum.split_with(rows, fn {_id, parent} ->
+        is_nil(parent) or not MapSet.member?(present, parent)
+      end)
+
+    by_parent = Enum.group_by(answers, &elem(&1, 1))
+
+    Enum.flat_map(roots, &skeleton_walk(&1, by_parent))
+  end
+
+  defp skeleton_walk({id, _parent} = row, by_parent) do
+    [row | by_parent |> Map.get(id, []) |> Enum.flat_map(&skeleton_walk(&1, by_parent))]
+  end
+
+  # The focus's visible ancestors as `[root, ..., parent]`, walked up the
+  # skeleton's parent pointers. The walk stops at the first invisible parent,
+  # so the window anchors at the oldest still-connected ancestor.
+  defp skeleton_ancestors(id, parent_of) do
+    case Map.get(parent_of, id) do
+      nil ->
+        []
+
+      parent ->
+        if Map.has_key?(parent_of, parent) do
+          skeleton_ancestors(parent, parent_of) ++ [parent]
+        else
+          []
+        end
+    end
+  end
+
+  # The focus plus its whole subtree, reading order — ids only.
+  defp focus_subtree(focus_id, order) do
+    by_parent =
+      order
+      |> Enum.reject(fn {_id, parent} -> is_nil(parent) end)
+      |> Enum.group_by(&elem(&1, 1), &elem(&1, 0))
+
+    collect_subtree(focus_id, by_parent)
+  end
+
+  defp collect_subtree(id, by_parent) do
+    [id | by_parent |> Map.get(id, []) |> Enum.flat_map(&collect_subtree(&1, by_parent))]
+  end
+
+  # The first `keep` ids and how many were left out — folding a leftover of
+  # exactly one in (a one-post "show more" button would be silly).
+  defp chunk_prefix(ids, keep) do
+    case length(ids) - keep do
+      more when more <= 1 -> {ids, 0}
+      more -> {Enum.take(ids, keep), more}
+    end
+  end
+
+  # Root pinned + the `budget` nearest ancestors; the elided middle is the
+  # gap. A gap of one folds in, same reasoning as `chunk_prefix/2`.
+  defp split_ancestors([], _budget), do: {nil, [], 0}
+
+  defp split_ancestors([root | rest], budget) do
+    case length(rest) - budget do
+      gap when gap <= 1 -> {root, rest, 0}
+      gap -> {root, Enum.drop(rest, gap), gap}
+    end
+  end
+
+  # `ids` as fully preloaded posts, keeping `ids` order.
+  defp load_thread_posts(ids) do
+    posts =
+      from(p in Post, where: p.id in ^ids)
+      |> Repo.all()
+      |> Repo.preload(post_preloads())
+      |> Map.new(&{&1.id, &1})
+
+    for id <- ids, post = posts[id], do: post
   end
 
   @doc """
