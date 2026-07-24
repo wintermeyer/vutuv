@@ -112,7 +112,7 @@ Everything else has a default (the vutuv.de production value):
 | `OPERATOR_URL` | `https://wintermeyer-consulting.de` | **Set this.** Linked from the site/email footer |
 | `OPERATOR_ADDRESS` | (vutuv.de's) | **Set this.** One-line postal address in every email footer |
 | `APPEAL_REPLY_TO` | (vutuv.de's) | Reply-To on the account-deactivation (strike 3) email |
-| `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = bounce handling off |
+| `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = the endpoint 404s and webhook bounce handling is off. **Prefer the log watcher (`MAIL_LOG_PATH`) to this webhook:** the webhook acts on the DSN it receives without verifying the installation ever mailed the address, so feeding it a raw local bounce mailbox lets a forged bounce freeze a member ([#1063](https://github.com/wintermeyer/vutuv/issues/1063)). On a watcher-only setup leave this unset |
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |
 | `POST_EDIT_WINDOW_MINUTES` | `30` | How long a post stays editable after publishing. Editing also closes with the first like, repost or reply, whatever this value says (an edit would silently rewrite what somebody else endorsed); deleting is never blocked. Raise it for a closed community where posts get little immediate engagement |
 | `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
@@ -324,8 +324,16 @@ vutuv runs fine without internet access:
 vutuv can detect hard bounces and stop mailing dead addresses: a watcher
 tails the local Postfix log (`MAIL_LOG_PATH`), or an external detector can
 POST to `/webhooks/bounces` (guarded by `BOUNCE_WEBHOOK_TOKEN`). Without
-either, bounce handling is simply off and nothing else breaks. The full
-design, DSN taxonomy and a new-server runbook:
+either, bounce handling is simply off and nothing else breaks.
+
+**Prefer the log watcher.** The webhook acts on the DSN it is handed without
+checking that this installation ever sent to the address, so piping a raw local
+bounce mailbox into it lets anyone forge a bounce and freeze a member
+([#1063](https://github.com/wintermeyer/vutuv/issues/1063)). The watcher has no
+such hole: it only acts on a bounce it can tie back to our own outbound mail. On
+a watcher-only setup, `BOUNCE_WEBHOOK_TOKEN` is not needed and can be left unset.
+
+The full design, DSN taxonomy and a new-server runbook:
 [`production-email-and-bounces.md`](production-email-and-bounces.md).
 
 ## Backups
