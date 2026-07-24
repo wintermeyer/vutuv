@@ -14593,6 +14593,36 @@ msgstr "Über neue Lebenslauf-Einträge von Personen informieren, denen ich folg
 msgid "When off, you never see this kind of notification, whoever sends it."
 msgstr "Wenn aus, erscheint diese Art von Benachrichtigung nie, von wem auch immer."
 
+#: lib/vutuv_web/templates/settings/notifications.html.heex:100
+#, elixir-autogen, elixir-format
+msgid "Thread replies"
+msgstr "Thread-Antworten"
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:103
+#, elixir-autogen, elixir-format
+msgid "When someone replies anywhere in a thread you have written in, you hear about it under the bell, so a discussion reaches everyone who took part. Never by email."
+msgstr "Wenn jemand irgendwo in einem Thread antwortet, in dem Sie geschrieben haben, hören Sie es unter der Glocke, damit eine Diskussion alle Beteiligten erreicht. Nie per E-Mail."
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:108
+#, elixir-autogen, elixir-format
+msgid "Tell me about new replies in threads I take part in"
+msgstr "Über neue Antworten in Threads informieren, an denen ich teilnehme"
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:110
+#, elixir-autogen, elixir-format
+msgid "When off, you only hear about direct answers to your own posts, never other replies in the thread."
+msgstr "Wenn aus, hören Sie nur von direkten Antworten auf Ihre eigenen Beiträge, nie von anderen Antworten im Thread."
+
+#: lib/vutuv_web/live/notification_live/index.ex:459
+#, elixir-autogen, elixir-format
+msgid "You wrote in this thread."
+msgstr "Sie haben in diesem Thread geschrieben."
+
+#: lib/vutuv_web/live/notification_live/index.ex:463
+#, elixir-autogen, elixir-format
+msgid "Turn this off"
+msgstr "Das abschalten"
+
 #: lib/vutuv_web/live/notification_live/index.ex:1060
 #, elixir-autogen, elixir-format
 msgid "added %{count} new entries to their CV:"

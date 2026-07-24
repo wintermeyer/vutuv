@@ -2533,10 +2533,24 @@ defmodule Vutuv.Posts do
         &(is_nil(&1) or &1 == reply.user_id or &1 == parent.user_id or
             Vutuv.Social.blocked_between?(&1, reply.user_id))
       )
+      # Honor the reader's opt-out on the write side too (issue #1025): the feed
+      # query already suppresses the "thread" kind for anyone who turned it off,
+      # so pushing a live badge here would leave them a count with nothing
+      # behind it. One query keeps only the members who still want the push.
+      |> thread_notifiable_ids()
       |> Enum.each(&Vutuv.Activity.notify_thread_reply(&1, reply.user, root_id, reply.id))
     end
 
     :ok
+  end
+
+  # Of the given member ids, the ones who still want thread pushes (issue
+  # #1025). Empty in, empty out — no query for a thread with no other eligible
+  # participant.
+  defp thread_notifiable_ids([]), do: []
+
+  defp thread_notifiable_ids(ids) do
+    Repo.all(from(u in User, where: u.id in ^ids and u.thread_notifications?, select: u.id))
   end
 
   # Reconcile the `post_mentions` rows behind the feed's "mention" kind against

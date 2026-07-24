@@ -1861,6 +1861,27 @@ defmodule Vutuv.PostsTest do
       {:ok, _} = Posts.create_reply(replier, first, %{body: "second"})
       refute_receive {:new_notification, %{kind: "thread"}}, 50
     end
+
+    test "a participant who switched thread notifications off gets no live push (issue #1025)" do
+      # The root author opted out, so the thread event must not reach them —
+      # not even the live badge push, or they would carry an unread count with
+      # nothing behind it. The directly answered author still gets their reply.
+      root_author = user(thread_notifications?: false)
+      first_replier = user()
+      second_replier = user()
+      root = create_post!(root_author, %{body: "root"})
+      {:ok, first} = Posts.create_reply(first_replier, root, %{body: "first"})
+
+      Vutuv.Activity.subscribe(root_author.id)
+      Vutuv.Activity.subscribe(first_replier.id)
+
+      {:ok, _second} = Posts.create_reply(second_replier, first, %{body: "second"})
+
+      # first_replier was answered directly -> still gets the "reply" event.
+      assert_receive {:new_notification, %{kind: "reply"}}
+      # root_author opted out -> no "thread" push at all.
+      refute_receive {:new_notification, %{kind: "thread"}}, 50
+    end
   end
 
   describe "reply tombstones" do

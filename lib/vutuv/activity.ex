@@ -813,6 +813,16 @@ defmodule Vutuv.Activity do
       join: reply in Post,
       on: reply.id == r.post_id,
       as: :reply_post,
+      # The reader's opt-out (issue #1025): with the switch off, this whole
+      # source yields nothing — feed and unread count both build on it. A
+      # constant subquery, so it costs no extra round trip and no caller change.
+      where:
+        exists(
+          from(reader in User,
+            where: reader.id == ^user_id and reader.thread_notifications?,
+            select: 1
+          )
+        ),
       where: not is_nil(r.root_post_id),
       where: reply.user_id != ^user_id,
       where: is_nil(r.parent_author_id) or r.parent_author_id != ^user_id,

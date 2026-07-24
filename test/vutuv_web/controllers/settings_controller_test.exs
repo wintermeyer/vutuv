@@ -318,6 +318,19 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert html =~ "dm_email_each_message?"
       assert html =~ "dm_email_delay_minutes"
       assert html =~ ~s(href="#{~p"/notifications"}")
+      # The two in-app opt-outs (issue #980 CV updates, issue #1025 threads).
+      assert html =~ "cv_update_notifications?"
+      assert html =~ "thread_notifications?"
+    end
+
+    test "switching thread notifications off persists (issue #1025)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        put(conn, ~p"/settings/notifications", user: %{"thread_notifications?" => "false"})
+
+      assert redirected_to(conn) == ~p"/settings/notifications"
+      assert %User{thread_notifications?: false} = Repo.get(User, user.id)
     end
 
     test "saving the message-email frequency and delay persists them", %{conn: conn} do

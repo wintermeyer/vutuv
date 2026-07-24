@@ -230,6 +230,13 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
+  # The id of the day's first "thread" group, so its row alone carries the
+  # opt-out hint (issue #1025) - one hint per Berlin-day section, not per row.
+  # nil when the day has no thread row, so nothing is marked.
+  defp first_thread_group_id(groups) do
+    Enum.find_value(groups, fn group -> group.kind == "thread" && group.id end)
+  end
+
   # The rail data (follow-back suggestions + 30-day summary) is skipped on
   # the static mount, like the remaining count, to keep the first paint lean.
   defp assign_rail(socket, false) do
@@ -291,12 +298,14 @@ defmodule VutuvWeb.NotificationLive.Index do
             >
               {day_label(section.day, @today)}
             </h2>
+            <% first_thread_id = first_thread_group_id(section.groups) %>
             <div class="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-slate-900 dark:ring-slate-800">
               <.notification_row
                 :for={group <- section.groups}
                 group={group}
                 current_user={@current_user}
                 quote_lines={@quote_lines}
+                thread_hint={group.kind == "thread" and group.id == first_thread_id}
               />
             </div>
           </section>
@@ -374,6 +383,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   attr(:group, :map, required: true)
   attr(:current_user, :any, required: true)
   attr(:quote_lines, :integer, required: true)
+  attr(:thread_hint, :boolean, default: false)
 
   defp notification_row(assigns) do
     assigns = assign(assigns, :n, assigns.group.item)
@@ -453,6 +463,24 @@ defmodule VutuvWeb.NotificationLive.Index do
             quote_lines={@quote_lines}
           />
         </div>
+
+        <%!-- The day's first thread row says why it is here and links to the
+        switch that stops it (issue #1025), once per day so it stays a hint and
+        not a banner. It shows only when thread events reach this reader, which
+        is exactly when the switch is still on. --%>
+        <p
+          :if={@thread_hint}
+          data-thread-hint
+          class="mb-0 mt-1.5 text-xs text-slate-500 dark:text-slate-400"
+        >
+          {gettext("You wrote in this thread.")}
+          <.link
+            href={~p"/settings/notifications"}
+            class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Turn this off")} ›
+          </.link>
+        </p>
 
         <%!-- A CV update covering several entries names them, each linking to
         its own page (issue #980). A single entry is named in the line itself. --%>

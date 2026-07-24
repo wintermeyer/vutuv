@@ -453,6 +453,28 @@ defmodule Vutuv.ActivityTest do
 
       assert Activity.unread_notification_count(me.id) == 1
     end
+
+    test "a member who switched thread notifications off sees no thread events, and they do not count" do
+      # Same shape as "thread events count as unread", but the reader opted out
+      # (issue #1025): the direct reply to their own post still surfaces and
+      # counts, the thread event is gone from both the feed and the tally.
+      me = insert(:user, thread_notifications?: false)
+      first_replier = insert(:user)
+      root = insert(:post, user: me)
+      first = insert(:post, user: first_replier)
+      insert(:post_reply, post: first, parent_post: root, parent_author: me, root_post: root)
+      nested = insert(:post, user: insert(:user))
+
+      insert(:post_reply,
+        post: nested,
+        parent_post: first,
+        parent_author: first_replier,
+        root_post: root
+      )
+
+      assert Enum.frequencies_by(recent_notifications(me.id), & &1.kind) == %{"reply" => 1}
+      assert Activity.unread_notification_count(me.id) == 1
+    end
   end
 
   describe "notifications_page/2" do

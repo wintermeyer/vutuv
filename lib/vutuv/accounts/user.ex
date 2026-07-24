@@ -159,6 +159,14 @@ defmodule Vutuv.Accounts.User do
     # settings page turns the whole kind off. Off, the events vanish from the
     # feed and the unread count retroactively — the feed is derived, not stored.
     field(:cv_update_notifications?, :boolean, default: true)
+    # The reader's switch for the in-app "someone replied elsewhere in a thread
+    # I wrote in" notification (issue #1025, the "thread" kind from #1010).
+    # Opt-OUT (default true): it is what makes a live discussion reach every
+    # participant, but a busy thread can get loud, so the notification settings
+    # page turns the whole kind off. Off, the events vanish from the feed and
+    # the unread count (derived, not stored) and the live push stops too. Direct
+    # answers to your own post (the "reply" kind) are unaffected and stay on.
+    field(:thread_notifications?, :boolean, default: true)
     # Whether this member's avatar shows the real-time "online" green dot while
     # they have the site open. Default on; opting out (Privacy settings) means
     # VutuvWeb.Presence never tracks them, so they show as online to no one.
@@ -319,7 +327,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
