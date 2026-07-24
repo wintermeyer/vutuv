@@ -9,12 +9,15 @@ defmodule VutuvWeb.SectionReorderLive do
   One LiveView serves all orderable sections (phone numbers, addresses, social
   media accounts, messengers, email addresses, links and languages — where the
   order additionally means preference, the first language being the member's
-  preferred contact language, issue #894); the `section` (the URL segment) and the owner's
-  `slug` arrive in the embedded session, the
-  authenticated owner in the raw browser session's `user_id` (merged under the
-  curated session by `Phoenix.LiveView.Static`, exactly like `ShellLive`). Every
-  reorder/move is scoped to that `user_id` through `Vutuv.Ordering`, so the
-  signed-in member can only ever renumber their own rows.
+  preferred contact language, issue #894); the `section` (the URL segment) and
+  the owner's `slug` arrive in the embedded session. The authenticated owner is
+  resolved from the cookie's `session_token` through
+  `VutuvWeb.Live.InitAssigns.session_user/1` — the same token-based resolver
+  `VutuvWeb.Plug.ConfigureSession` and the router LiveViews use — never a bare
+  `user_id`, so a remotely logged-out device or a suspended member can no longer
+  renumber rows. Every reorder/move is scoped to that resolved id through
+  `Vutuv.Ordering`, so the signed-in member can only ever renumber their own
+  rows.
 
   Both interactions persist over the socket with no page reload: the up/down
   arrows are `phx-click` events; drag-and-drop is the `Reorder` JS hook
@@ -45,6 +48,7 @@ defmodule VutuvWeb.SectionReorderLive do
   alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Repo
+  alias VutuvWeb.Live.InitAssigns
 
   # section (= URL segment) => the schema whose rows it orders.
   @schemas %{
@@ -63,13 +67,18 @@ defmodule VutuvWeb.SectionReorderLive do
     # the session locale here or the tool falls back to English.
     VutuvWeb.LiveLocale.put_locale(session)
 
+    # The authenticated owner is resolved from the cookie's session_token (the
+    # same resolver ConfigureSession / Live.InitAssigns use), never a bare
+    # user_id merged from the cookie or handed in through the curated map — so a
+    # revoked device or suspended member can no longer reorder, and the member
+    # can only ever renumber their own rows. Resolved on both renders: the
+    # disconnected one must list the owner's entries with no JavaScript, and the
+    # cookie's token is available there too (Static merges it under the session).
+    user = InitAssigns.session_user(session)
+
     socket =
       socket
-      # The authenticated owner is the raw browser session's user_id (merged
-      # UNDER the curated session), never a value the page handed us — so the
-      # signed-in member can only reorder their own rows. cast_or_nil tolerates
-      # a pre-cutover integer cookie.
-      |> assign(:user_id, Vutuv.UUIDv7.cast_or_nil(session["user_id"]))
+      |> assign(:user_id, user && user.id)
       |> assign(:section, session["section"])
       |> assign(:slug, session["slug"])
       |> assign(:locale, session["locale"])
@@ -78,15 +87,24 @@ defmodule VutuvWeb.SectionReorderLive do
     {:ok, socket}
   end
 
+  # An unauthenticated socket (no resolved owner — a revoked/absent token) never
+  # renders a reorder handle, but a hand-crafted client could still push the
+  # event; ignore it rather than scoping an `Ordering` write to a nil user_id
+  # (which Ecto would raise on anyway).
   @impl true
   def handle_event("reorder", %{"order" => order}, socket) when is_list(order) do
-    Vutuv.Ordering.reorder(schema(socket), socket.assigns.user_id, order)
+    if socket.assigns.user_id,
+      do: Vutuv.Ordering.reorder(schema(socket), socket.assigns.user_id, order)
+
     {:noreply, load_entries(socket)}
   end
 
   def handle_event("move", %{"id" => id, "dir" => dir}, socket) when dir in ["up", "down"] do
-    direction = if dir == "up", do: :up, else: :down
-    Vutuv.Ordering.move(schema(socket), socket.assigns.user_id, id, direction)
+    if socket.assigns.user_id do
+      direction = if dir == "up", do: :up, else: :down
+      Vutuv.Ordering.move(schema(socket), socket.assigns.user_id, id, direction)
+    end
+
     {:noreply, load_entries(socket)}
   end
 

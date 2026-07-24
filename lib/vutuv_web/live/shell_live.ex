@@ -31,28 +31,19 @@ defmodule VutuvWeb.ShellLive do
       presence_dot: 1
     ]
 
+  import VutuvWeb.UserHelpers, only: [full_name: 1]
+
   alias Vutuv.Accounts.MemberCounter
+  alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Dashboard
   alias Vutuv.DayClock
   alias Vutuv.Social
+  alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Presence
 
   @impl true
   def mount(_params, session, socket) do
-    # LayoutHTML.shell_session/1 (the curated :session) only carries the
-    # profile fields (user_param/name/avatar) for a current, valid user.
-    # Phoenix.LiveView.Static merges the raw browser session UNDER it, so a
-    # cookie pointing at a since-deleted or UUID-re-keyed account (every
-    # pre-cutover session is now one) leaks its bare `user_id` here with no
-    # profile fields. Key "logged in" off `user_param`, which only
-    # shell_session sets, so such a session renders the anonymous shell instead
-    # of the logged-in chrome that would crash on `~p"/#{nil}"`. cast_or_nil
-    # also tolerates the integer ids in cookies from before the UUID cutover.
-    user_param = session["user_param"]
-    user_id = user_param && Vutuv.UUIDv7.cast_or_nil(session["user_id"])
-    if connected?(socket), do: Activity.subscribe(user_id)
-
     # The shell mounts outside the `live_session` (embedded via live_render),
     # so InitAssigns never runs for it — apply the session locale here.
     VutuvWeb.LiveLocale.put_locale(session)
@@ -63,40 +54,110 @@ defmodule VutuvWeb.ShellLive do
     path = session["path"] || ""
 
     socket =
-      socket
-      |> assign(:user_id, user_id)
-      |> assign(:user_name, session["user_name"])
-      # Initials are built from first+last (matching <.avatar>); fall back to the
-      # display name only for sessions built before that key existed.
-      |> assign(:user_initials, session["user_initials"] || name_initials(session["user_name"]))
-      |> assign(:user_param, user_param)
-      |> assign(:user_avatar, session["user_avatar"])
-      |> assign(:user_admin?, session["user_admin?"] == true)
-      |> assign(:self_online?, false)
-      |> assign(:presence_hidden_ids, MapSet.new())
-      # The badge counts are the most expensive query on every page (an 8-way
-      # aggregate for notifications, a COUNT(DISTINCT) join for messages). The
-      # dead (static HTTP) render is thrown away the instant the socket connects,
-      # so computing them there doubles that cost site-wide for no benefit:
-      # start at 0 (count_badge renders nothing at 0) and fill them in on
-      # connect. A real unread count appears within a fraction of a second.
-      |> assign(:messages_count, 0)
-      |> assign(:notifications_count, 0)
-      |> assign(:brand_path, brand_path(user_param, path))
-      # The current path also drives the active-nav highlight (which top/bottom
-      # nav item is the page being viewed). Like brand_path it is the path at
-      # mount; every nav destination is reached by a full-reload `href`, so the
-      # shell remounts with a fresh path on each of those.
-      |> assign(:path, path)
-      # Admins get one more figure: how many sign-ups confirmed so far today.
-      # Zero renders nothing, so it is also the starting value for everyone else.
-      |> assign(:new_members_today, 0)
-      |> maybe_start_counts(user_id, path)
-      |> maybe_start_new_members()
-      |> maybe_start_presence(user_id, session["show_online"] == true)
-      |> push_badge()
+      if connected?(socket) do
+        # The live socket authenticates from the cookie's `session_token` — the
+        # same source of truth ConfigureSession / Live.InitAssigns use — never
+        # the curated shell_session map (signed, not encrypted, so replayable)
+        # nor the bare cookie `user_id` a revoked device still carries. So a
+        # remotely logged-out device or a suspended member drops to the anonymous
+        # shell on reconnect, and a replayed shell_session payload cannot render
+        # another member's chrome or subscribe to their "user:<id>" unread-badge
+        # topic. All identity therefore comes from the resolved user, not the
+        # curated map.
+        mount_authenticated(socket, InitAssigns.session_user(session), path)
+      else
+        # The throwaway dead render, authenticated by the HTTP request that built
+        # shell_session/1 from the validated current_user — so its curated
+        # display fields are safe to show, and the whole render is replaced the
+        # instant the socket connects and re-checks the token. It computes no
+        # counts / presence — those are connected-only anyway.
+        mount_static(socket, session, path)
+      end
 
     {:ok, socket}
+  end
+
+  # The dead render's identity: the curated display fields LayoutHTML.shell_session/1
+  # signs into `data-phx-session`. Phoenix.LiveView.Static merges the raw browser
+  # session UNDER them, so a cookie pointing at a since-deleted or UUID-re-keyed
+  # account (every pre-cutover session is now one) leaks its bare `user_id` here
+  # with no profile fields. Key "logged in" off `user_param`, which only
+  # shell_session sets, so such a session renders the anonymous shell instead of
+  # the logged-in chrome that would crash on `~p"/#{nil}"`. cast_or_nil also
+  # tolerates the integer ids in cookies from before the UUID cutover.
+  defp mount_static(socket, session, path) do
+    user_param = session["user_param"]
+    user_id = user_param && Vutuv.UUIDv7.cast_or_nil(session["user_id"])
+
+    socket
+    |> assign(:user_id, user_id)
+    |> assign(:user_name, session["user_name"])
+    # Initials are built from first+last (matching <.avatar>); fall back to the
+    # display name only for sessions built before that key existed.
+    |> assign(:user_initials, session["user_initials"] || name_initials(session["user_name"]))
+    |> assign(:user_param, user_param)
+    |> assign(:user_avatar, session["user_avatar"])
+    |> assign(:user_admin?, session["user_admin?"] == true)
+    |> assign_shell_defaults(path)
+  end
+
+  # The connected socket, authenticated from the session token. A nil user
+  # (missing / revoked / suspended / deactivated token) is the anonymous shell —
+  # no subscriptions, no counts, no presence.
+  defp mount_authenticated(socket, nil, path) do
+    socket
+    |> assign(:user_id, nil)
+    |> assign(:user_name, nil)
+    |> assign(:user_initials, nil)
+    |> assign(:user_param, nil)
+    |> assign(:user_avatar, nil)
+    |> assign(:user_admin?, false)
+    |> assign_shell_defaults(path)
+  end
+
+  # Everything the chrome shows is derived from the resolved user (recomputed the
+  # same way shell_session/1 builds the curated map), so a replayed curated map
+  # can neither render nor subscribe as another member.
+  defp mount_authenticated(socket, %User{} = user, path) do
+    user_id = user.id
+    Activity.subscribe(user_id)
+
+    socket
+    |> assign(:user_id, user_id)
+    |> assign(:user_name, full_name(user))
+    |> assign(:user_initials, name_initials(user))
+    |> assign(:user_param, Phoenix.Param.to_param(user))
+    |> assign(:user_avatar, Vutuv.Avatar.user_url(user, :thumb))
+    |> assign(:user_admin?, user.admin?)
+    |> assign_shell_defaults(path)
+    |> maybe_start_counts(user_id, path)
+    |> maybe_start_new_members()
+    |> maybe_start_presence(user_id, user.show_online_status?)
+    |> push_badge()
+  end
+
+  # The assigns every render carries, so render/1 never sees a missing key. The
+  # badge counts are the most expensive query on every page (an 8-way aggregate
+  # for notifications, a COUNT(DISTINCT) join for messages), and the dead render
+  # is thrown away the instant the socket connects, so they start at 0
+  # (count_badge renders nothing at 0) and are filled in on connect by
+  # maybe_start_counts/3. A real unread count appears within a fraction of a
+  # second.
+  defp assign_shell_defaults(socket, path) do
+    socket
+    |> assign(:self_online?, false)
+    |> assign(:presence_hidden_ids, MapSet.new())
+    |> assign(:messages_count, 0)
+    |> assign(:notifications_count, 0)
+    |> assign(:brand_path, brand_path(socket.assigns.user_param, path))
+    # The current path also drives the active-nav highlight (which top/bottom
+    # nav item is the page being viewed). Like brand_path it is the path at
+    # mount; every nav destination is reached by a full-reload `href`, so the
+    # shell remounts with a fresh path on each of those.
+    |> assign(:path, path)
+    # Admins get one more figure: how many sign-ups confirmed so far today.
+    # Zero renders nothing, so it is also the starting value for everyone else.
+    |> assign(:new_members_today, 0)
   end
 
   # Site-wide online presence. The shell is the one component on every page, so

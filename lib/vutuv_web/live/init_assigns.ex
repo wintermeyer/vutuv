@@ -96,31 +96,37 @@ defmodule VutuvWeb.Live.InitAssigns do
     |> assign(:shell_path, session["request_path"])
   end
 
-  # The one place a mount decides who the visitor is, shared by the `:default`
-  # hook and the off-router LiveViews. It resolves the **cookie** session's
-  # `session_token` — LiveView merges the cookie session into the mount session,
-  # so nothing has to pass it along — through the server-side session rows, the
-  # same revocation check `VutuvWeb.Plug.ConfigureSession` runs on every
-  # request, and refuses a suspended or deactivated member. Unlike the plug it
-  # has no side effects: a mount cannot rewrite the cookie, and an unauthorized
-  # socket simply staying anonymous is the right outcome (`:require_login` /
-  # `:require_admin` then redirect).
-  #
-  # There is deliberately **no** fallback to a bare `session["user_id"]`.
-  # `user_id` is not only a cookie value: a controller-curated `live_render`
-  # session map carries it too and is merged *over* the cookie session, and that
-  # map travels in `data-phx-session`, which is signed but not encrypted and
-  # stays valid for days. Honoring `user_id` without a token would therefore let
-  # a captured payload, replayed with a cookie holding no token, authenticate as
-  # the member it names, with no revocation check at all.
-  defp session_user(session) when is_map(session) do
+  @doc """
+  The one place a mount decides who the visitor is, shared by the `:default`
+  hook, the off-router LiveViews assigned through `assign_embedded/2`, and the
+  three embedded live_render children that carry no `:current_user`
+  (`VutuvWeb.ShellLive`, `VutuvWeb.PostLive.Actions`,
+  `VutuvWeb.SectionReorderLive`). Resolves the **cookie** session's
+  `session_token` — LiveView merges the cookie session into the mount session,
+  so nothing has to pass it along — through the server-side session rows, the
+  same revocation check `VutuvWeb.Plug.ConfigureSession` runs on every request,
+  and refuses a suspended or deactivated member. Returns the preloaded
+  `%Vutuv.Accounts.User{}` or `nil`. Unlike the plug it has no side effects: a
+  mount cannot rewrite the cookie, and an unauthorized socket simply staying
+  anonymous is the right outcome (`:require_login` / `:require_admin` then
+  redirect).
+
+  There is deliberately **no** fallback to a bare `session["user_id"]`.
+  `user_id` is not only a cookie value: a controller-curated `live_render`
+  session map carries it too and is merged *over* the cookie session, and that
+  map travels in `data-phx-session`, which is signed but not encrypted and
+  stays valid for days. Honoring `user_id` without a token would therefore let
+  a captured payload, replayed with a cookie holding no token, authenticate as
+  the member it names, with no revocation check at all.
+  """
+  def session_user(session) when is_map(session) do
     case Sessions.active_session(Map.get(session, "session_token")) do
       %{user: %User{} = user} -> if allowed?(user), do: user, else: nil
       _ -> nil
     end
   end
 
-  defp session_user(_session), do: nil
+  def session_user(_session), do: nil
 
   # Mirrors the plug's own gate: a suspension or deactivation must end running
   # sessions, not just block new logins.

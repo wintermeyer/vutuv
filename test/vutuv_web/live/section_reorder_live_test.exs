@@ -3,8 +3,10 @@ defmodule VutuvWeb.SectionReorderLiveTest do
   The owner's embedded reorder tool (`VutuvWeb.SectionReorderLive`). Both the
   drag-and-drop path (the JS hook pushes a "reorder" event with the new id
   order) and the up/down arrows ("move" phx-click) persist over the socket with
-  no page reload. The authoritative owner is the session `user_id`, so the tool
-  can only ever renumber that member's own rows.
+  no page reload. The authoritative owner is resolved from the cookie's
+  `session_token` (never a bare `user_id`), so a remotely logged-out device or a
+  suspended member can no longer reorder, and the tool can only ever renumber
+  that member's own rows.
   """
   use VutuvWeb.ConnCase, async: true
 
@@ -14,10 +16,19 @@ defmodule VutuvWeb.SectionReorderLiveTest do
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Url
+  alias Vutuv.Sessions
+
+  # A real active session for the owner: the tool authenticates from the
+  # cookie's session_token the way the embedded child sees it at mount, not a
+  # page-supplied user_id.
+  defp session_for(conn, user, extra) do
+    {token, _session} = Sessions.start_session(user, conn, alert: false)
+    Map.merge(%{"session_token" => token}, extra)
+  end
 
   defp mount_tool(conn, user, section) do
     live_isolated(conn, VutuvWeb.SectionReorderLive,
-      session: %{"user_id" => user.id, "section" => section, "slug" => user.username}
+      session: session_for(conn, user, %{"section" => section, "slug" => user.username})
     )
   end
 
@@ -165,6 +176,73 @@ defmodule VutuvWeb.SectionReorderLiveTest do
       {:ok, _view, html} = mount_tool(conn, user, "languages")
 
       refute html =~ "Preferred contact language"
+    end
+  end
+
+  describe "authentication (issue #1036)" do
+    # The tool must resolve its owner through the session token, so a device
+    # that was remotely logged out (issue #794) or a suspended member cannot
+    # keep reordering by reconnecting with the same cookie.
+    test "a revoked device can no longer reorder", %{conn: conn} do
+      user = insert_activated_user()
+      a = insert(:url, user: user, position: 1)
+      b = insert(:url, user: user, position: 2)
+
+      {token, session} = Sessions.start_session(user, conn, alert: false)
+      Sessions.revoke(session)
+
+      {:ok, view, html} =
+        live_isolated(conn, VutuvWeb.SectionReorderLive,
+          session: %{"session_token" => token, "section" => "links", "slug" => user.username}
+        )
+
+      # No owner resolved, so nothing is listed and a forced reorder event is a
+      # no-op: the positions stay put.
+      refute html =~ "reorder-item-"
+      render_hook(view, "reorder", %{"order" => [b.id, a.id]})
+
+      assert Repo.get(Url, a.id).position == 1
+      assert Repo.get(Url, b.id).position == 2
+    end
+
+    test "a suspended member can no longer reorder", %{conn: conn} do
+      user = insert_activated_user()
+      a = insert(:url, user: user, position: 1)
+      b = insert(:url, user: user, position: 2)
+
+      session = session_for(conn, user, %{"section" => "links", "slug" => user.username})
+
+      Repo.update_all(from(u in Vutuv.Accounts.User, where: u.id == ^user.id),
+        set: [suspended_until: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 86_400)]
+      )
+
+      {:ok, view, html} =
+        live_isolated(conn, VutuvWeb.SectionReorderLive, session: session)
+
+      refute html =~ "reorder-item-"
+      render_hook(view, "reorder", %{"order" => [b.id, a.id]})
+
+      assert Repo.get(Url, a.id).position == 1
+      assert Repo.get(Url, b.id).position == 2
+    end
+
+    test "a page-supplied user_id alone never authenticates", %{conn: conn} do
+      # The replay: no token in the cookie, just a bare user_id the way the old
+      # code trusted it. The tool must refuse it.
+      user = insert_activated_user()
+      a = insert(:url, user: user, position: 1)
+      b = insert(:url, user: user, position: 2)
+
+      {:ok, view, html} =
+        live_isolated(conn, VutuvWeb.SectionReorderLive,
+          session: %{"user_id" => user.id, "section" => "links", "slug" => user.username}
+        )
+
+      refute html =~ "reorder-item-"
+      render_hook(view, "reorder", %{"order" => [b.id, a.id]})
+
+      assert Repo.get(Url, a.id).position == 1
+      assert Repo.get(Url, b.id).position == 2
     end
   end
 end
