@@ -98,10 +98,11 @@ defmodule Vutuv.PageScreenshot do
         File.rm(framed_path)
         :ok
 
-      {:error, :internal_target = reason} ->
-        # A permanent property of this URL (SSRF guard, issue #777) and an
-        # expected policy outcome: flag it so the bulk task never retries it,
-        # and log quietly.
+      {:error, reason} when reason in [:internal_target, :blocked_host] ->
+        # A permanent property of this URL and an expected policy outcome — an
+        # SSRF-refused internal host (issue #777) or a blocklisted host that
+        # never screenshots (a login/consent wall). Flag it so the bulk task
+        # never retries it, and log quietly.
         Logger.warning(failure_message(url, reason))
         set_broken(url, true)
         :error
@@ -157,6 +158,14 @@ defmodule Vutuv.PageScreenshot do
   app's own host and is intentionally neither gated nor pinned.
   """
   def capture_framed(url_value, id) when is_binary(url_value) do
+    if host_blocked?(url_value) do
+      {:error, :blocked_host}
+    else
+      capture_vetted(url_value, id)
+    end
+  end
+
+  defp capture_vetted(url_value, id) do
     case Ssrf.vetted_address(URI.parse(url_value).host) do
       {:ok, pin_ip} ->
         page_path = tmp_path("page", id, "png")
@@ -177,6 +186,36 @@ defmodule Vutuv.PageScreenshot do
       {:error, :unresolvable} ->
         {:error, :unresolvable_target}
     end
+  end
+
+  @doc """
+  True when `url`'s host is on the screenshot blocklist
+  (`:screenshot_blocked_hosts`, default `["reddit.com"]`, override via
+  `SCREENSHOT_BLOCKED_HOSTS`). Those sites answer a headless capture with a
+  login / consent wall or block bots outright, so the shot is never useful
+  preview content — the caller skips the capture instead of spending a Chromium
+  run on it. Matches the apex host and any subdomain (`old.reddit.com`), so one
+  entry covers a site's mirrors.
+  """
+  def host_blocked?(url) when is_binary(url) do
+    case URI.parse(url).host do
+      nil -> false
+      host -> host_on_blocklist?(String.downcase(host))
+    end
+  end
+
+  def host_blocked?(_url), do: false
+
+  defp host_on_blocklist?(host) do
+    Enum.any?(blocked_hosts(), fn blocked ->
+      host == blocked or String.ends_with?(host, "." <> blocked)
+    end)
+  end
+
+  defp blocked_hosts do
+    :vutuv
+    |> Application.get_env(:screenshot_blocked_hosts, [])
+    |> Enum.map(&String.downcase/1)
   end
 
   # Resolve a member link to the final PUBLIC URL Chromium should shoot,

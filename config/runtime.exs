@@ -103,6 +103,14 @@ if config_env() == :prod do
     config :vutuv, :post_edit_window_minutes, String.to_integer(minutes)
   end
 
+  # Hosts to never take a link-preview screenshot of (default `reddit.com`; see
+  # config/config.exs). Comma-separated apex hosts; every subdomain is covered.
+  if blocked = System.get_env("SCREENSHOT_BLOCKED_HOSTS") do
+    config :vutuv,
+           :screenshot_blocked_hosts,
+           blocked |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+  end
+
   # Operator identity overrides (defaults in config/config.exs are the
   # vutuv.de values; see the "Operator identity" block there).
   if from_address = System.get_env("MAILER_FROM_ADDRESS") do
