@@ -28,7 +28,7 @@ every endpoint 404s and nothing is delivered.
   burned: `/:username/actor` (id), `.../inbox`, `.../followers` and
   `.../outbox` (count-only collections). The actor also carries
   **`alsoKnownAs`** (issue #986) — the account URIs a member is migrating
-  *from* (`users.also_known_as`, set on `/settings/fediverse`, one per line).
+  *from* (`users.also_known_as`, set on `/settings/fediverse/move`, one per line).
   A remote server that moves a member's followers *to* vutuv checks this before
   it accepts the move (the destination must name the origin as an alias first).
   Anyone can *claim* an alias, so verifying it is the remote server's job;
@@ -148,6 +148,19 @@ every endpoint 404s and nothing is delivered.
 
 ## Visibility
 
+- **The member's two pages.** `/settings/fediverse` answers one question for
+  someone who has never heard the word: do I take part at all. Plain-language
+  explainer, the three things that happen if you do, the on/off switch, the
+  reaction-count switch, then — once on — the handle (with the shared
+  `data-copy` button, since copying it is the action people come for) and who
+  followed. **`/settings/fediverse/move`** holds account migration, **both
+  directions on one page** (`Umzug zu vutuv` = the `alsoKnownAs` aliases,
+  `Umzug weg von vutuv` = the `Move` broadcast + cancel), reached by a quiet
+  link and only while federating. They used to share the main page, where a raw
+  actor-URI textarea sat between the switch and Save — a tax on everyone who
+  will never move accounts — and where the two directions, 300px apart, read as
+  the same thing. Every move action redirects back to that page, so the state
+  change lands on screen.
 - **The member** sees who follows them on `/settings/fediverse` (not just the
   count). The inbox captures each remote actor's `preferredUsername` and
   display name onto the `Follower` row (`handle`/`name`, cosmetic and

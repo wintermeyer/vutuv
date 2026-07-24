@@ -15007,3 +15007,135 @@ msgid "%{formatted} reaction from other networks"
 msgid_plural "%{formatted} reactions from other networks"
 msgstr[0] ""
 msgstr[1] ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:15
+#, elixir-autogen, elixir-format
+msgid "Followers from other networks"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "Beside vutuv there are thousands of independent social websites that all talk to each other. Mastodon is the best known of them. Together they are called the Fediverse."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:25
+#, elixir-autogen, elixir-format
+msgid "If you take part:"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:31
+#, elixir-autogen, elixir-format
+msgid "People there can follow you without opening a vutuv account."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:35
+#, elixir-autogen, elixir-format
+msgid "Your public vutuv posts show up in their timelines."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Nothing changes on vutuv itself, and you can switch it off again."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:53
+#, elixir-autogen, elixir-format
+msgid "Take part in the Fediverse"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:55
+#, elixir-autogen, elixir-format
+msgid "Off means your profile cannot be found there and nothing is sent. Posts already delivered may stay on those servers, beyond our reach."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:69
+#, elixir-autogen, elixir-format
+msgid "Show under each of your posts how many people out there liked or shared it. A number only, visible to everyone who sees the post. Switching it off deletes what is stored for it."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:88
+#, elixir-autogen, elixir-format
+msgid "Give this out the way you give out an email address. Anyone on Mastodon and friends can paste it into their search and follow you from there."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:122
+#, elixir-autogen, elixir-format
+msgid "Nobody yet. Post your handle where people can see it, and the first follows will show up here."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:159
+#, elixir-autogen, elixir-format
+msgid "Related"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:162
+#, elixir-autogen, elixir-format
+msgid "Moving to or away from another Fediverse account?"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:168
+#, elixir-autogen, elixir-format
+msgid "Move your account"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:173
+#, elixir-autogen, elixir-format
+msgid "Want the checkmark on your Mastodon profile? That works without taking part here: your vutuv profile links your listed accounts with rel=\"me\"."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "Changing which Fediverse account you use? A move keeps your followers: the other server asks them to follow the new account instead. Both directions are set up here."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:22
+#, elixir-autogen, elixir-format
+msgid "A move is a redirect, never a deletion. Whichever direction you go, your vutuv profile stays exactly as it is."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:32
+#, elixir-autogen, elixir-format
+msgid "Moving to vutuv"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:34
+#, elixir-autogen, elixir-format
+msgid "List the accounts you are moving away from. The other server only hands your followers over once it sees its own account named here, so this is the step that makes a move to vutuv possible. You start the move itself over there."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:52
+#, elixir-autogen, elixir-format
+msgid "Accounts you are moving from"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:67
+#, elixir-autogen, elixir-format
+msgid "One full account address per line, for example %{example}. Leave it empty if you are not moving to vutuv."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:82
+#, elixir-autogen, elixir-format
+msgid "Moving away from vutuv"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:86
+#, elixir-autogen, elixir-format
+msgid "Your Fediverse followers are being redirected to:"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:117
+#, elixir-autogen, elixir-format
+msgid "Send your Fediverse followers to another account. They are asked to follow it instead, and vutuv stops federating your new posts. Your vutuv profile stays exactly as it is, and nothing is deleted."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse_move.html.heex:158
+#, elixir-autogen, elixir-format
+msgid "Back to Fediverse settings"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/fediverse.html.heex:109
+#, elixir-autogen, elixir-format
+msgid "%{formatted} follower from other networks"
+msgid_plural "%{formatted} followers from other networks"
+msgstr[0] ""
+msgstr[1] ""

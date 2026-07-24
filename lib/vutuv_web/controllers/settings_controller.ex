@@ -177,6 +177,11 @@ defmodule VutuvWeb.SettingsController do
   # Follow-only federation (Vutuv.Fediverse): the member's handle, the
   # remote-follower count and the opt-in. Enabling mints the actor keypair
   # right away, so WebFinger answers the moment the switch is on.
+  #
+  # This page answers one question — do I take part at all? — for a member who
+  # has never heard the word "Fediverse". Account migration is an expert affair
+  # and lives on its own subpage (`fediverse_move/2`), so it stops taxing
+  # everyone who will never move accounts.
   def fediverse(conn, _params) do
     user = conn.assigns[:user]
 
@@ -185,6 +190,44 @@ defmodule VutuvWeb.SettingsController do
       "fediverse.html",
       fediverse_assigns(user) ++
         [user: user, changeset: fediverse_changeset(user), page_title: gettext("Fediverse")]
+    )
+  end
+
+  # Account migration, both directions on one page: the aliases that let another
+  # server move a member's followers *to* vutuv (`alsoKnownAs`) and the Move
+  # that sends them *away* (`movedTo`). Together on purpose — read 300px apart
+  # on the old single page, "Umzug zu vutuv" and "Umzug weg von vutuv" were
+  # easy to mistake for each other; side by side under one heading they are
+  # obviously a pair. Only meaningful while federating, so a member who is not
+  # lands back on the main page.
+  def fediverse_move(conn, _params) do
+    user = conn.assigns[:user]
+
+    if Vutuv.Fediverse.federated?(user) do
+      render(
+        conn,
+        "fediverse_move.html",
+        fediverse_assigns(user) ++
+          [
+            user: user,
+            changeset: fediverse_changeset(user),
+            page_title: gettext("Move your account")
+          ]
+      )
+    else
+      redirect(conn, to: ~p"/settings/fediverse")
+    end
+  end
+
+  # The alsoKnownAs aliases (issue #986, half 1), saved from the move page and
+  # returning there rather than to the main Fediverse page.
+  def update_fediverse_aliases(conn, %{"user" => params}) do
+    save(
+      conn,
+      params,
+      "fediverse_move.html",
+      ~p"/settings/fediverse/move",
+      gettext("Saved.")
     )
   end
 
@@ -218,6 +261,8 @@ defmodule VutuvWeb.SettingsController do
   # Redirect the member's Fediverse followers to another account (issue #986,
   # half 2): broadcast a Move. The vutuv profile is untouched — only outbound
   # federation of new posts stops, and the actor advertises the redirect.
+  # Every arm returns to the migration page, where the forms are and where the
+  # new state (the live redirect, or the form to try again) is on screen.
   def move_fediverse(conn, %{"move" => %{"target" => target}}) do
     case Vutuv.Fediverse.move_out(conn.assigns[:user], target) do
       {:ok, _moved} ->
@@ -228,19 +273,19 @@ defmodule VutuvWeb.SettingsController do
             "Done. Your Fediverse followers have been asked to follow your new account, and new posts are no longer federated from here. Your vutuv profile is unchanged."
           )
         )
-        |> redirect(to: ~p"/settings/fediverse")
+        |> redirect(to: ~p"/settings/fediverse/move")
 
       {:error, reason} ->
         conn
         |> put_flash(:error, move_error_message(reason))
-        |> redirect(to: ~p"/settings/fediverse")
+        |> redirect(to: ~p"/settings/fediverse/move")
     end
   end
 
   def move_fediverse(conn, _params) do
     conn
     |> put_flash(:error, move_error_message(:invalid_target))
-    |> redirect(to: ~p"/settings/fediverse")
+    |> redirect(to: ~p"/settings/fediverse/move")
   end
 
   # Undo the redirect: the member federates new posts again, the actor stops
@@ -250,7 +295,7 @@ defmodule VutuvWeb.SettingsController do
 
     conn
     |> put_flash(:info, gettext("Redirect cancelled. Your posts federate from here again."))
-    |> redirect(to: ~p"/settings/fediverse")
+    |> redirect(to: ~p"/settings/fediverse/move")
   end
 
   defp move_error_message(:not_federated),
@@ -582,7 +627,8 @@ defmodule VutuvWeb.SettingsController do
   # Every settings form page re-renders with user + changeset; the pages that
   # need more (the security page's devices and passkeys) carry no forms —
   # except the Fediverse page, whose shell shows the follower count.
-  defp error_assigns(conn, "fediverse.html", changeset) do
+  defp error_assigns(conn, template, changeset)
+       when template in ["fediverse.html", "fediverse_move.html"] do
     [user: conn.assigns[:user], changeset: changeset] ++
       fediverse_assigns(conn.assigns[:user])
   end
