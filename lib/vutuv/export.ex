@@ -145,6 +145,7 @@ defmodule Vutuv.Export do
       conversations: conversations(user),
       ad_bookings: ad_bookings(user),
       blocked_members: blocks(user),
+      content_filters: content_filters(user),
       saved_members: %{
         bookmarked: saved_users(user, UserBookmark),
         liked: saved_users(user, UserLike)
@@ -158,6 +159,14 @@ defmodule Vutuv.Export do
         liked: saved_jobs(user, JobPostingLike)
       }
     }
+  end
+
+  # The member's private content filters (issue #940): owner-only data, so it
+  # belongs in their GDPR export.
+  defp content_filters(user) do
+    Enum.map(Vutuv.ContentFilters.list_for_user(user), fn f ->
+      %{kind: f.kind, pattern: f.pattern, whole_word: f.whole_word, added_at: f.inserted_at}
+    end)
   end
 
   defp blocks(user) do

@@ -30,6 +30,7 @@ defmodule VutuvWeb.SettingsController do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.ContentFilters
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
   alias Vutuv.Organizations
@@ -257,6 +258,59 @@ defmodule VutuvWeb.SettingsController do
       user: user,
       followed_tags: Vutuv.Tags.followed_tags(user),
       page_title: gettext("Tags you follow")
+    )
+  end
+
+  # Muted words & tags (issue #940): the member's private content filter.
+  def filters(conn, _params) do
+    render_filters(conn, ContentFilters.change_filter())
+  end
+
+  def create_filter(conn, %{"content_filter" => params}) do
+    user = conn.assigns[:user]
+
+    case ContentFilters.create_filter(user, params) do
+      {:ok, _filter} ->
+        conn
+        |> put_flash(
+          :info,
+          gettext("Filter added. Matching posts are now hidden from your feed.")
+        )
+        |> redirect(to: ~p"/settings/filters")
+
+      {:error, :too_many} ->
+        conn
+        |> put_flash(
+          :error,
+          gettext("You have reached the maximum of %{count} filters.",
+            count: ContentFilters.max_filters()
+          )
+        )
+        |> redirect(to: ~p"/settings/filters")
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render_filters(changeset)
+    end
+  end
+
+  def delete_filter(conn, %{"id" => id}) do
+    _ = ContentFilters.delete_filter(conn.assigns[:user], id)
+
+    conn
+    |> put_flash(:info, gettext("Filter removed."))
+    |> redirect(to: ~p"/settings/filters")
+  end
+
+  defp render_filters(conn, changeset) do
+    user = conn.assigns[:user]
+
+    render(conn, "filters.html",
+      user: user,
+      filters: ContentFilters.list_for_user(user),
+      form: Phoenix.Component.to_form(changeset),
+      page_title: gettext("Muted words & tags")
     )
   end
 

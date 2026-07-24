@@ -3181,7 +3181,8 @@ defmodule VutuvWeb.UI do
        [
          {gettext("Privacy"), ~p"/settings/privacy", :privacy},
          {gettext("Fediverse"), ~p"/settings/fediverse", :fediverse},
-         {gettext("Notifications"), ~p"/settings/notifications", :notifications}
+         {gettext("Notifications"), ~p"/settings/notifications", :notifications},
+         {gettext("Muted words & tags"), ~p"/settings/filters", :filters}
        ] ++
          followed_tags_rows(user) ++
          saved_search_rows(user) ++

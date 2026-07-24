@@ -23,6 +23,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # card is a global VutuvWeb.UI component, imported already).
   import VutuvWeb.UserHTML, only: [user_row: 1]
 
+  alias Vutuv.ContentFilters
   alias Vutuv.Posts
   alias Vutuv.Social
   alias VutuvWeb.Live.DayClockRestream
@@ -72,10 +73,15 @@ defmodule VutuvWeb.PostLive.Feed do
       Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
     end
 
+    # The member's private content filters (issue #940): compiled once, applied
+    # to every page, and the set of posts they chose to reveal anyway.
+    compiled = ContentFilters.compile_for(user)
     page = Posts.feed_page(user, limit: @page_size)
-    entries = with_engagement(page.entries, user)
+    entries = page.entries |> with_engagement(user) |> mark_filtered(compiled, user.id)
 
     socket
+    |> assign(:content_filters, compiled)
+    |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
     |> assign(:more?, page.more?)
     |> assign(:cursor, page.next_cursor)
@@ -180,6 +186,33 @@ defmodule VutuvWeb.PostLive.Feed do
   # each entry carries a `%{post_id => engagement}` submap for those cards' bars.
   # Live-arriving single posts carry `engagement: nil` (falls back to the bar's
   # own query) and get their follow edge in `insert_entry/3`.
+  # The one-line stand-in for a content-filtered post (issue #940): says which
+  # filter hid it and offers to show it anyway, in place.
+  attr(:pattern, :string, required: true)
+  attr(:post_id, :string, required: true)
+
+  defp filtered_placeholder(assigns) do
+    ~H"""
+    <div
+      data-filtered-post={@pattern}
+      class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:ring-slate-800"
+    >
+      <span>
+        {gettext("Hidden: matches your filter")}
+        <code class="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">{@pattern}</code>
+      </span>
+      <button
+        type="button"
+        phx-click="reveal_filter"
+        phx-value-id={@post_id}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Show anyway")}
+      </button>
+    </div>
+    """
+  end
+
   defp with_engagement(entries, user) do
     ancestor_ids = fn entry -> Enum.map(entry[:ancestors] || [], & &1.id) end
 
@@ -218,7 +251,11 @@ defmodule VutuvWeb.PostLive.Feed do
     # nothing. Filter before the engagement batch so it queries only survivors.
     shown = shown_post_ids(socket.assigns.entries)
     fresh = Enum.reject(page.entries, &MapSet.member?(shown, &1.post.id))
-    entries = with_engagement(fresh, socket.assigns.current_user)
+
+    entries =
+      fresh
+      |> with_engagement(socket.assigns.current_user)
+      |> mark_filtered(socket.assigns.content_filters, socket.assigns.current_user.id)
 
     {:noreply,
      socket
@@ -235,6 +272,22 @@ defmodule VutuvWeb.PostLive.Feed do
   # The composer's corner ✕ (feed compose only) bubbles up here to collapse it.
   def handle_event("close-composer", _params, socket) do
     {:noreply, assign(socket, :composer_open?, false)}
+  end
+
+  # "Show anyway" on a content-filtered post (issue #940): reveal it in place,
+  # no reload. The reveal set survives a midnight restream, so the post stays
+  # open. Re-stream just this one entry so its placeholder swaps to the card.
+  def handle_event("reveal_filter", %{"id" => post_id}, socket) do
+    case Enum.find(socket.assigns.entries, &(&1.post.id == post_id)) do
+      nil ->
+        {:noreply, socket}
+
+      entry ->
+        {:noreply,
+         socket
+         |> update(:revealed_filters, &MapSet.put(&1, post_id))
+         |> stream_insert(:posts, entry, update_only: true)}
+    end
   end
 
   # The rail's "Follow" button (user_row live?): follow with no reload, then
@@ -423,7 +476,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
     cond do
       actor_id == user.id ->
-        decorated = decorate(entry, user)
+        decorated = decorate(entry, user, socket)
 
         {:noreply,
          socket
@@ -441,7 +494,7 @@ defmodule VutuvWeb.PostLive.Feed do
         {:noreply, socket}
 
       Posts.visible_to?(entry.post, user) ->
-        {:noreply, update(socket, :pending_posts, &[decorate(entry, user) | &1])}
+        {:noreply, update(socket, :pending_posts, &[decorate(entry, user, socket) | &1])}
 
       true ->
         {:noreply, socket}
@@ -477,10 +530,29 @@ defmodule VutuvWeb.PostLive.Feed do
   # dropped before either query runs. A live-arrived reply nests only its direct
   # parent (one level, whose bar self-loads); the full visible chain reassembles
   # on the next reload / "Load more" (which run through `collapse_threads/1`).
-  defp decorate(entry, user) do
+  defp decorate(entry, user, socket) do
     entry
     |> Map.put(:viewer_follow, Social.follow_edge(user.id, entry.post.user_id))
     |> Map.put(:engagement, Posts.post_engagement(entry.post.id, user.id))
+    |> mark_one(socket.assigns.content_filters, user.id)
+  end
+
+  # Content filters (issue #940): stamp each entry with the pattern that hides it
+  # (`:filtered_by`), or leave it clear. Never the viewer's own posts. A no-op
+  # for the vast majority who mute nothing, so the feed pays for it only when a
+  # filter exists.
+  defp mark_filtered(entries, compiled, viewer_id) do
+    if ContentFilters.any?(compiled),
+      do: Enum.map(entries, &mark_one(&1, compiled, viewer_id)),
+      else: entries
+  end
+
+  defp mark_one(entry, compiled, viewer_id) do
+    pattern =
+      if entry.post.user_id != viewer_id,
+        do: ContentFilters.filtered_pattern(entry.post, compiled)
+
+    Map.put(entry, :filtered_by, pattern)
   end
 
   # Every post id currently represented on screen — each streamed entry's own
@@ -597,7 +669,16 @@ defmodule VutuvWeb.PostLive.Feed do
           content. --%>
           <.post_list :if={!@empty?} id="feed-posts" phx-update="stream" data-post-list>
             <div :for={{dom_id, entry} <- @streams.posts} id={dom_id} class={post_row_class()}>
+              <%!-- A content-filtered post (issue #940) collapses to a line the
+              reader can still open, instead of vanishing (a silently shorter
+              feed confuses and breaks reply threads). --%>
+              <.filtered_placeholder
+                :if={entry[:filtered_by] && entry.post.id not in @revealed_filters}
+                pattern={entry.filtered_by}
+                post_id={entry.post.id}
+              />
               <.post_thread_entry
+                :if={!entry[:filtered_by] || entry.post.id in @revealed_filters}
                 post={entry.post}
                 viewer={@current_user}
                 viewer_follow={entry[:viewer_follow]}
