@@ -63,6 +63,7 @@ defmodule VutuvWeb.Fediverse.Docs do
       }
     }
     |> put_also_known_as(user)
+    |> put_moved_to(user)
   end
 
   # The accounts the member is migrating *from* (issue #986). Rendered only
@@ -74,6 +75,32 @@ defmodule VutuvWeb.Fediverse.Docs do
       [_ | _] = aliases -> Map.put(doc, "alsoKnownAs", aliases)
       _ -> doc
     end
+  end
+
+  # The account the member redirected their followers *to* (issue #986, half 2).
+  # Present only after a move: remote servers show a "moved to" notice and steer
+  # follows to the target instead of this actor.
+  defp put_moved_to(doc, %{moved_to: uri}) when is_binary(uri), do: Map.put(doc, "movedTo", uri)
+  defp put_moved_to(doc, _user), do: doc
+
+  @doc """
+  Move: the redirect broadcast to every follower inbox (issue #986). Both
+  `object` and `actor` are the member's own actor; `target` is the account they
+  moved to. A compliant server re-points its follow to `target` once that
+  account lists this actor in its `alsoKnownAs`.
+  """
+  def move_activity(user, target) do
+    actor_url = actor_url(user)
+
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => actor_url <> "#moves/" <> Vutuv.UUIDv7.generate(),
+      "type" => "Move",
+      "actor" => actor_url,
+      "object" => actor_url,
+      "target" => target,
+      "to" => [actor_url <> "/followers"]
+    }
   end
 
   @doc "Create(Note): a freshly published public post."

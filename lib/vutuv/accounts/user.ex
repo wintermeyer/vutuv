@@ -196,6 +196,16 @@ defmodule Vutuv.Accounts.User do
     # through the virtual `also_known_as_input` textarea, one URI per line.
     field(:also_known_as, {:array, :string}, default: [])
     field(:also_known_as_input, :string, virtual: true)
+    # The Fediverse account the member redirected their followers *to* (issue
+    # #986, half 2). When set, the actor document advertises `movedTo`, remote
+    # servers re-point their follow, and vutuv stops pushing new posts to the
+    # Fediverse (the account is "moved" — a redirect, not a live feed). The
+    # vutuv profile itself is untouched: this is not a deletion or a logout,
+    # only a Fediverse redirect. `moved_at` stamps the last Move broadcast, so a
+    # cooldown can stop a member spamming their followers with moves. Both are
+    # set programmatically by `Vutuv.Fediverse.move_out/2` (never cast).
+    field(:moved_to, :string)
+    field(:moved_at, :naive_datetime)
     # The member-preference fields (the Vutuv.Prefs registry): deliberately
     # WITHOUT schema or DB defaults — nil means "inherit the installation
     # default" (admin-set at /admin/preferences, else the shipped default from

@@ -54,6 +54,31 @@ defmodule VutuvWeb.Fediverse.DocsTest do
 
       refute Map.has_key?(Docs.actor(user, actor), "alsoKnownAs")
     end
+
+    test "renders movedTo only after a move-out (#986 half 2)" do
+      moved = insert(:activated_user, moved_to: "https://mastodon.social/users/gone")
+      staying = insert(:activated_user)
+      {:ok, ma} = Fediverse.ensure_actor(moved)
+      {:ok, sa} = Fediverse.ensure_actor(staying)
+
+      assert Docs.actor(moved, ma)["movedTo"] == "https://mastodon.social/users/gone"
+      refute Map.has_key?(Docs.actor(staying, sa), "movedTo")
+    end
+  end
+
+  describe "move_activity/2 (#986 half 2)" do
+    test "the Move names the member as actor and object, the target as target" do
+      user = insert(:activated_user)
+      target = "https://mastodon.social/users/gone"
+
+      activity = Docs.move_activity(user, target)
+
+      assert activity["type"] == "Move"
+      assert activity["actor"] == "#{base()}/#{user.username}/actor"
+      assert activity["object"] == activity["actor"]
+      assert activity["target"] == target
+      assert activity["to"] == ["#{base()}/#{user.username}/actor/followers"]
+    end
   end
 
   describe "create_activity/2 (public post -> Create(Note))" do

@@ -199,6 +199,108 @@ defmodule Vutuv.Fediverse do
     )
   end
 
+  ## Account migration — move out (issue #986, half 2)
+
+  @move_cooldown_days 30
+
+  @doc "How long (days) a member must wait between Move broadcasts."
+  def move_cooldown_days, do: @move_cooldown_days
+
+  @doc "Whether the member has redirected their Fediverse followers elsewhere."
+  def moved?(%User{moved_to: nil}), do: false
+  def moved?(%User{moved_to: moved_to}), do: is_binary(moved_to)
+
+  @doc """
+  Redirects the member's Fediverse followers to another account (`Move`).
+
+  Fetches the target actor and checks it lists this member's vutuv actor in its
+  own `alsoKnownAs` — the same guarantee every remote server demands before it
+  honors a Move, so a move the network would silently ignore fails fast here
+  instead. On success it stamps `moved_to`/`moved_at`, broadcasts
+  `Move { actor, object, target }` to every follower inbox (compliant servers
+  re-point their follow to the target), and from then on the member's new posts
+  stop federating (`moved?/1` gate above) while the actor keeps serving the
+  `movedTo` redirect. The vutuv profile itself is untouched — this is a redirect,
+  not a deletion or a logout.
+
+  Returns `{:ok, user}` or `{:error, reason}` where reason is one of
+  `:not_federated`, `:cooldown`, `:invalid_target`, `:self_target`,
+  `:alias_missing`, `:target_unreachable`.
+  """
+  def move_out(%User{} = user, target_input) do
+    with true <- (enabled?() and federated?(user)) or {:error, :not_federated},
+         :ok <- check_move_cooldown(user),
+         {:ok, target_id} <- resolve_move_target(user, target_input),
+         {:ok, moved} <- store_move(user, target_id) do
+      broadcast_move(moved, target_id)
+      {:ok, moved}
+    end
+  end
+
+  @doc """
+  Cancels a redirect: clears `moved_to` so the member federates new posts again
+  and the actor stops advertising `movedTo`. `moved_at` is deliberately kept, so
+  the re-move cooldown still holds — cancelling must not be a way to spam moves.
+  Followers a remote server already re-pointed do not come back automatically
+  (a Fediverse reality, not something vutuv can reverse).
+  """
+  def cancel_move(%User{} = user) do
+    user |> Ecto.Changeset.change(moved_to: nil) |> Repo.update()
+  end
+
+  # nil moved_at = never moved; otherwise block until the cooldown has elapsed.
+  defp check_move_cooldown(%User{moved_at: nil}), do: :ok
+
+  defp check_move_cooldown(%User{moved_at: moved_at}) do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(), -@move_cooldown_days * 86_400, :second)
+    if NaiveDateTime.compare(moved_at, cutoff) == :gt, do: {:error, :cooldown}, else: :ok
+  end
+
+  # Resolve the target to its canonical actor id and confirm it names us as an
+  # alias. A bare/non-https string never reaches the network (fetch_remote_actor
+  # would reject it, but a clean :invalid_target message is friendlier).
+  defp resolve_move_target(user, target_input) do
+    my_actor = Docs.actor_url(user)
+
+    with {:input, %URI{scheme: "https", host: h}} when is_binary(h) and h != "" <-
+           {:input, URI.parse(to_string(target_input))},
+         {:fetch, {:ok, remote}} <- {:fetch, fetch_remote_actor(target_input, signer(user))} do
+      cond do
+        remote.id == my_actor -> {:error, :self_target}
+        my_actor in remote.also_known_as -> {:ok, remote.id}
+        true -> {:error, :alias_missing}
+      end
+    else
+      {:input, _} -> {:error, :invalid_target}
+      {:fetch, _} -> {:error, :target_unreachable}
+    end
+  end
+
+  defp store_move(user, target_id) do
+    user
+    |> Ecto.Changeset.change(
+      moved_to: target_id,
+      moved_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    )
+    |> Repo.update()
+  end
+
+  defp broadcast_move(user, target_id) do
+    case delivery_inboxes(user) do
+      [] -> :ok
+      inboxes -> enqueue(user, inboxes, Docs.move_activity(user, target_id))
+    end
+  end
+
+  # The member's own key, to sign the target-actor fetch (authorized-fetch
+  # instances reject anonymous GETs). federated?/1 guaranteed the actor exists.
+  defp signer(user) do
+    case get_actor(user) do
+      nil -> nil
+      actor -> {Docs.key_id(user), actor.private_key_pem}
+    end
+  end
+
   ## Federating posts (called from Vutuv.Posts after commit)
 
   @doc "A freshly published post -> Create(Note) to every follower inbox."
@@ -222,6 +324,7 @@ defmodule Vutuv.Fediverse do
     with true <- enabled?(),
          %User{} = user <- Repo.get(User, user_id),
          true <- federated?(user),
+         false <- moved?(user),
          [_ | _] = inboxes <- delivery_inboxes(user) do
       enqueue(user, inboxes, Docs.delete_activity(post_id, user))
     else
@@ -233,6 +336,7 @@ defmodule Vutuv.Fediverse do
     with true <- enabled?(),
          %User{} = user <- Repo.get(User, post.user_id),
          true <- federated?(user),
+         false <- moved?(user),
          false <- Vutuv.Posts.restricted?(post),
          [_ | _] = inboxes <- delivery_inboxes(user) do
       post = Repo.preload(post, [:images, :review, reply_ref: [:parent_author]])
@@ -418,7 +522,12 @@ defmodule Vutuv.Fediverse do
          preferred_username: truncate(doc["preferredUsername"]),
          name: truncate(doc["name"]),
          public_key_id: get_in(doc, ["publicKey", "id"]),
-         public_key_pem: get_in(doc, ["publicKey", "publicKeyPem"])
+         public_key_pem: get_in(doc, ["publicKey", "publicKeyPem"]),
+         # The aliases the remote account claims (issue #986): a Move *to* this
+         # account is only honored once it lists the origin here, so move_out/2
+         # checks our own actor URL is among them. AP allows a bare string or a
+         # list; normalize to a list of strings.
+         also_known_as: normalize_uri_list(doc["alsoKnownAs"])
        }}
     else
       {:parse, _} -> {:error, :https_only}
@@ -434,6 +543,12 @@ defmodule Vutuv.Fediverse do
   # column's worth (nil and non-strings pass through as nil).
   defp truncate(value) when is_binary(value), do: String.slice(value, 0, 255)
   defp truncate(_), do: nil
+
+  # `alsoKnownAs` is a single URI string or a list of them; anything else (or
+  # absent) is no aliases. Keep only the strings.
+  defp normalize_uri_list(value) when is_binary(value), do: [value]
+  defp normalize_uri_list(value) when is_list(value), do: Enum.filter(value, &is_binary/1)
+  defp normalize_uri_list(_), do: []
 
   defp ap_get(url, signer) do
     signature_headers =

@@ -349,6 +349,46 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert html_response(conn, 422) =~ "not a valid https account address"
       assert Repo.get(User, user.id).also_known_as == ["https://mastodon.social/users/alice"]
     end
+
+    # Move-out rendering + cancel only (no HTTP stub, so this async module never
+    # touches :fediverse_req_options). The Move broadcast itself is covered by
+    # Vutuv.FediverseTest (async: false).
+    test "the move-out form points at the move route while not moved", %{conn: conn} do
+      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert html =~ ~s(id="move-form")
+      assert html =~ ~s(action="#{~p"/settings/fediverse/move"}")
+      # No redirect banner while the member has not moved.
+      refute html =~ "cancel-move-form"
+    end
+
+    test "once moved, the page shows the redirect and a cancel control, not the move-in field",
+         %{conn: conn, user: user} do
+      {:ok, _} =
+        user
+        |> Ecto.Changeset.change(moved_to: "https://mastodon.social/users/gone")
+        |> Repo.update()
+
+      html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert html =~ "https://mastodon.social/users/gone"
+      assert html =~ ~s(id="cancel-move-form")
+      # The "moving in" field is hidden once you have moved out.
+      refute html =~ ~s(id="user_also_known_as_input")
+      refute html =~ ~s(id="move-form")
+    end
+
+    test "cancelling the move clears the redirect", %{conn: conn, user: user} do
+      {:ok, _} =
+        user
+        |> Ecto.Changeset.change(moved_to: "https://mastodon.social/users/gone")
+        |> Repo.update()
+
+      conn = delete(conn, ~p"/settings/fediverse/move")
+
+      assert redirected_to(conn) == ~p"/settings/fediverse"
+      assert Repo.get(User, user.id).moved_to == nil
+    end
   end
 
   describe "notifications: granular email toggles" do

@@ -203,6 +203,126 @@ defmodule Vutuv.FediverseTest do
       assert :skip == Fediverse.federate_new_post(restricted)
       assert Repo.aggregate(Delivery, :count) == 0
     end
+
+    test "does nothing once the member has moved out" do
+      user = federated_user(moved_to: "https://mastodon.example/users/newme")
+      {:ok, _} = Fediverse.ensure_actor(user)
+
+      {:ok, _} =
+        Fediverse.add_follower(user, %{
+          actor_uri: "https://social.example/users/a",
+          inbox_uri: "https://social.example/inbox"
+        })
+
+      assert :skip == Fediverse.federate_new_post(insert(:post, user: user))
+      assert Repo.aggregate(Delivery, :count) == 0
+    end
+  end
+
+  describe "move_out/2 (issue #986, half 2)" do
+    @target "https://mastodon.example/users/newme"
+
+    # A target actor whose alsoKnownAs is whatever the test needs, or whose id
+    # can be forced (for the self-move check).
+    defp stub_target(also_known_as, id \\ @target) do
+      stub_remote(fn conn ->
+        doc =
+          Jason.encode!(%{
+            "id" => id,
+            "type" => "Person",
+            "inbox" => id <> "/inbox",
+            "alsoKnownAs" => also_known_as
+          })
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/activity+json")
+        |> Plug.Conn.send_resp(200, doc)
+      end)
+    end
+
+    defp with_follower(user) do
+      {:ok, _} = Fediverse.ensure_actor(user)
+
+      {:ok, _} =
+        Fediverse.add_follower(user, %{
+          actor_uri: "https://social.example/users/a",
+          inbox_uri: "https://social.example/inbox"
+        })
+
+      user
+    end
+
+    test "broadcasts a Move and stamps moved_to when the target lists us as an alias" do
+      user = with_follower(federated_user())
+      stub_target([Docs.actor_url(user)])
+
+      assert {:ok, moved} = Fediverse.move_out(user, @target)
+      assert moved.moved_to == @target
+      assert moved.moved_at
+
+      delivery = Repo.one(Delivery)
+      assert delivery.activity_json =~ ~s("type":"Move")
+      assert delivery.activity_json =~ @target
+    end
+
+    test "rejects a target that does not list us as an alias, storing nothing" do
+      user = with_follower(federated_user())
+      stub_target(["https://someone.else/actor"])
+
+      assert {:error, :alias_missing} = Fediverse.move_out(user, @target)
+      assert Repo.aggregate(Delivery, :count) == 0
+      assert Repo.reload(user).moved_to == nil
+    end
+
+    test "refuses to move to this same account" do
+      user = with_follower(federated_user())
+      # The fetched target's id IS our own actor URL.
+      stub_target([Docs.actor_url(user)], Docs.actor_url(user))
+
+      assert {:error, :self_target} = Fediverse.move_out(user, @target)
+    end
+
+    test "rejects a non-https target without reaching the network" do
+      user = with_follower(federated_user())
+      assert {:error, :invalid_target} = Fediverse.move_out(user, "not-a-url")
+    end
+
+    test "requires federation" do
+      assert {:error, :not_federated} = Fediverse.move_out(insert(:activated_user), @target)
+    end
+
+    test "holds within the cooldown window, then allows a move after it" do
+      recent =
+        NaiveDateTime.utc_now()
+        |> NaiveDateTime.add(-5 * 86_400, :second)
+        |> NaiveDateTime.truncate(:second)
+
+      user = with_follower(federated_user(moved_at: recent))
+      stub_target([Docs.actor_url(user)])
+
+      assert {:error, :cooldown} = Fediverse.move_out(user, @target)
+
+      long_ago = NaiveDateTime.add(recent, -40 * 86_400, :second)
+      {:ok, aged} = user |> Ecto.Changeset.change(moved_at: long_ago) |> Repo.update()
+      assert {:ok, _} = Fediverse.move_out(aged, @target)
+    end
+  end
+
+  describe "cancel_move/1 and moved?/1" do
+    test "moved?/1 reflects the redirect" do
+      refute Fediverse.moved?(federated_user())
+      assert Fediverse.moved?(federated_user(moved_to: @target))
+    end
+
+    test "cancel clears moved_to but keeps moved_at (the cooldown must hold)" do
+      at = ~N[2026-07-20 10:00:00]
+      user = federated_user(moved_to: @target, moved_at: at)
+
+      {:ok, cancelled} = Fediverse.cancel_move(user)
+
+      assert cancelled.moved_to == nil
+      assert cancelled.moved_at == at
+    end
   end
 
   describe "deliver_due/0" do
