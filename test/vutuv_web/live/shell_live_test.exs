@@ -3,17 +3,28 @@ defmodule VutuvWeb.ShellLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Sessions
+
   @bell_badge ~s(a[title="Notifications"] span.bg-accent)
   @mail_badge ~s(a[title="Messages"] span.bg-accent)
 
+  # The shell authenticates the live socket from the cookie's session_token
+  # (issue #1036), so a test drives it with a real active session and reads the
+  # chrome back from the resolved user, not a curated map. `extra` still carries
+  # the non-identity keys the shell reads straight from the session (`path`,
+  # `locale`); any leftover curated identity key is simply ignored now.
   defp session_for(user, extra \\ %{}) do
-    Map.merge(
-      %{
-        "user_id" => user.id,
-        "user_name" => "Stefan Wintermeyer",
-        "user_param" => "stefan"
-      },
-      extra
+    {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
+    Map.merge(%{"session_token" => token}, extra)
+  end
+
+  # The member whose name/handle the chrome assertions below expect. This module
+  # is synchronous, so the fixed "stefan" handle is safe (no async file mints it
+  # at the same time).
+  defp stefan(attrs \\ []) do
+    insert(
+      :user,
+      Keyword.merge([first_name: "Stefan", last_name: "Wintermeyer", username: "stefan"], attrs)
     )
   end
 
@@ -134,7 +145,7 @@ defmodule VutuvWeb.ShellLiveTest do
     test "points to the member's own profile on the feed", %{conn: conn} do
       # On /feed the logo would only round-trip through "/" back to the feed,
       # so there it deep-links to the member's own profile instead.
-      user = insert(:user)
+      user = stefan()
       session = session_for(user, %{"path" => "/feed"})
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
 
@@ -174,16 +185,15 @@ defmodule VutuvWeb.ShellLiveTest do
   end
 
   test "shows the user's avatar in the top bar when they have one", %{conn: conn} do
-    user = insert(:user)
-    session = session_for(user, %{"user_avatar" => "/avatars/#{user.id}/Stefan%20W_thumb.jpg"})
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
+    user = stefan(avatar: "me.jpg")
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     assert has_element?(view, ~s(summary[title="Stefan Wintermeyer"] img))
     refute has_element?(view, ~s(summary[title="Stefan Wintermeyer"]), "SW")
   end
 
   test "falls back to initials when the user has no avatar", %{conn: conn} do
-    user = insert(:user)
+    user = stefan()
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     assert has_element?(view, ~s(summary[title="Stefan Wintermeyer"]), "SW")
@@ -192,16 +202,22 @@ defmodule VutuvWeb.ShellLiveTest do
 
   test "the top-bar monogram uses the first+last initials, not the honorific title", %{conn: conn} do
     # Regression: "Dr. Anna Schmidt" showed "DA" in the shell instead of "AS".
-    user = insert(:user)
-    session = session_for(user, %{"user_name" => "Dr. Anna Schmidt", "user_initials" => "AS"})
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
+    user =
+      insert(:user,
+        honorific_prefix: "Dr.",
+        first_name: "Anna",
+        last_name: "Schmidt",
+        username: "anna-schmidt"
+      )
+
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     assert has_element?(view, ~s(summary[title="Dr. Anna Schmidt"]), "AS")
     refute has_element?(view, ~s(summary[title="Dr. Anna Schmidt"]), "DA")
   end
 
   test "the avatar opens an account menu linking to every account area", %{conn: conn} do
-    user = insert(:user)
+    user = stefan()
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     menu = "details[data-account-menu]"
@@ -275,7 +291,7 @@ defmodule VutuvWeb.ShellLiveTest do
       # The logo already deep-links to the profile on /feed, but that is not
       # obvious; a named "Profile" nav item makes the member's own profile a
       # first-class, discoverable destination.
-      user = insert(:user)
+      user = stefan()
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
       assert has_element?(view, ~s(nav a[data-nav-profile][href="/stefan"]), "Profile")
@@ -284,7 +300,7 @@ defmodule VutuvWeb.ShellLiveTest do
     test "the mobile tab bar carries a Profile tab to the member's profile", %{conn: conn} do
       # Desktop is not the only surface: the bottom tab bar gets a Profile tab
       # too, so phone visitors can reach their profile without hunting for it.
-      user = insert(:user)
+      user = stefan()
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
       assert has_element?(view, ~s(nav a[data-mobile-profile][href="/stefan"]), "Profile")
@@ -320,7 +336,7 @@ defmodule VutuvWeb.ShellLiveTest do
     test "the Profile item is active on the member's own profile (and its subpages)", %{
       conn: conn
     } do
-      user = insert(:user)
+      user = stefan()
 
       for path <- ["/stefan", "/stefan/tags"] do
         {:ok, view, _html} =
@@ -419,6 +435,62 @@ defmodule VutuvWeb.ShellLiveTest do
     assert has_element?(view, "a", "Log in")
     refute has_element?(view, ~s(a[title] img))
     refute has_element?(view, "span.bg-accent")
+  end
+
+  # The socket authenticates from the cookie's session_token, exactly like a
+  # request (issue #1036). So a remotely logged-out device (issue #794) and a
+  # suspended member drop the logged-in chrome on reconnect, and a captured,
+  # signed shell_session map (which carries a bare user_id) can never be replayed
+  # to render another member's chrome or leak their unread badge counts over the
+  # "user:<id>" PubSub topic.
+  describe "socket authentication (issue #1036)" do
+    test "a revoked device drops to the anonymous shell with no badge", %{conn: conn} do
+      user = user_with_unread_notification()
+      {token, session} = Sessions.start_session(user, build_conn(), alert: false)
+      Sessions.revoke(session)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: %{"session_token" => token})
+
+      # No account menu, and crucially no unread badge: the shell never
+      # subscribed to or counted this member's activity.
+      assert has_element?(view, "a", "Log in")
+      refute has_element?(view, "details[data-account-menu]")
+      refute has_element?(view, @bell_badge)
+    end
+
+    test "a suspended member drops to the anonymous shell", %{conn: conn} do
+      user = user_with_unread_notification()
+
+      Repo.update_all(from(u in Vutuv.Accounts.User, where: u.id == ^user.id),
+        set: [suspended_until: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 86_400)]
+      )
+
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+      assert has_element?(view, "a", "Log in")
+      refute has_element?(view, @bell_badge)
+    end
+
+    test "a replayed curated user_id without a token never authenticates", %{conn: conn} do
+      # The core leak: a captured, signed shell_session map replayed alongside an
+      # anonymous cookie must not render the member's chrome or leak their unread
+      # badge counts.
+      user = user_with_unread_notification()
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: %{
+            "user_id" => user.id,
+            "user_name" => "Stefan Wintermeyer",
+            "user_param" => "stefan"
+          }
+        )
+
+      assert has_element?(view, "a", "Log in")
+      refute has_element?(view, "details[data-account-menu]")
+      refute has_element?(view, @bell_badge)
+    end
   end
 
   test "a new-notification event recomputes the bell badge from the source of truth", %{
@@ -556,7 +628,11 @@ defmodule VutuvWeb.ShellLiveTest do
   describe "new members today" do
     @pill "#new-members-today"
 
-    defp admin_session(user), do: session_for(user, %{"user_admin?" => true})
+    # The admin pill is now gated on the resolved user's own admin flag (issue
+    # #1036), not a curated session key, so the socket must resolve a real admin.
+    defp admin_session(user), do: session_for(user)
+
+    defp admin, do: insert(:user, admin?: true)
 
     defp joined_today(count) do
       {day_start, _} = Vutuv.BerlinTime.day_bounds_utc(Vutuv.BerlinTime.today())
@@ -569,7 +645,7 @@ defmodule VutuvWeb.ShellLiveTest do
       joined_today(2)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(insert(:user)))
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
 
       assert has_element?(view, @pill, "2")
     end
@@ -588,14 +664,14 @@ defmodule VutuvWeb.ShellLiveTest do
       insert(:activated_user, inserted_at: day_start, updated_at: day_start)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(insert(:user)))
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
 
       refute has_element?(view, @pill)
     end
 
     test "appears and counts up when a registration confirms", %{conn: conn} do
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(insert(:user)))
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
 
       refute has_element?(view, @pill)
 
@@ -612,7 +688,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "names the exact figure in the viewer's language", %{conn: conn} do
       joined_today(1)
-      session = admin_session(insert(:user))
+      session = admin_session(admin())
 
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
       assert has_element?(view, ~s(#{@pill}[title="1 new member today"]))
@@ -627,7 +703,7 @@ defmodule VutuvWeb.ShellLiveTest do
       joined_today(1)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(insert(:user)))
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
 
       assert has_element?(view, @pill, "1")
 

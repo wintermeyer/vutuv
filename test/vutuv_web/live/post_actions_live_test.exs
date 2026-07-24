@@ -423,6 +423,93 @@ defmodule VutuvWeb.PostActionsLiveTest do
     end
   end
 
+  describe "viewer authentication (issue #1036)" do
+    # The standalone bar backs the dead controller pages, where it authenticates
+    # the viewer itself. It must do so from the cookie's session_token, never a
+    # bare user_id — otherwise a remotely logged-out device (issue #794) or a
+    # suspended member could keep writing likes/bookmarks/reposts from a bar it
+    # still has open.
+    defp bar_session(cookie, post) do
+      Map.merge(cookie, %{
+        "post_id" => post.id,
+        "id" => "post-actions-#{post.id}",
+        "locale" => "en"
+      })
+    end
+
+    test "an active session lets the viewer toggle a like", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      cookie = Plug.Conn.get_session(conn)
+      post = create_post!(other_user(), %{body: "gated"})
+
+      {:ok, bar, _html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Actions, session: bar_session(cookie, post))
+
+      bar |> element("#post-actions-#{post.id}-like") |> render_click()
+
+      assert %{likes: 1} = Posts.engagement_counts(post.id)
+      assert Posts.post_engagement(post.id, viewer.id).liked?
+    end
+
+    test "a revoked device cannot toggle", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      cookie = Plug.Conn.get_session(conn)
+      post = create_post!(other_user(), %{body: "locked"})
+
+      [device] = Vutuv.Sessions.list_active(viewer)
+      Vutuv.Sessions.revoke(device)
+
+      {:ok, bar, _html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Actions, session: bar_session(cookie, post))
+
+      # No viewer resolves, so the button sends them to login and writes nothing.
+      assert {:error, {:redirect, %{to: "/login"}}} =
+               bar |> element("#post-actions-#{post.id}-like") |> render_click()
+
+      assert %{likes: 0} = Posts.engagement_counts(post.id)
+    end
+
+    test "a suspended member cannot toggle", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      cookie = Plug.Conn.get_session(conn)
+      post = create_post!(other_user(), %{body: "no writes"})
+
+      Repo.update_all(from(u in Vutuv.Accounts.User, where: u.id == ^viewer.id),
+        set: [suspended_until: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 86_400)]
+      )
+
+      {:ok, bar, _html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Actions, session: bar_session(cookie, post))
+
+      assert {:error, {:redirect, %{to: "/login"}}} =
+               bar |> element("#post-actions-#{post.id}-like") |> render_click()
+
+      assert %{likes: 0} = Posts.engagement_counts(post.id)
+    end
+
+    test "a bare user_id with no token never authenticates a write" do
+      # The replay a curated session map enables: a real member's id, but no
+      # proof the session was not revoked. The bar must refuse it.
+      viewer = other_user()
+      post = create_post!(other_user(), %{body: "replayed"})
+
+      {:ok, bar, _html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Actions,
+          session: %{
+            "post_id" => post.id,
+            "id" => "post-actions-#{post.id}",
+            "locale" => "en",
+            "user_id" => viewer.id
+          }
+        )
+
+      assert {:error, {:redirect, %{to: "/login"}}} =
+               bar |> element("#post-actions-#{post.id}-like") |> render_click()
+
+      assert %{likes: 0} = Posts.engagement_counts(post.id)
+    end
+  end
+
   describe "preloaded engagement" do
     # A list page (the feed) pre-loads engagement once and hands each card its
     # own via the session, so the bar skips its mount query. Prove the bar

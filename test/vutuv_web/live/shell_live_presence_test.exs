@@ -13,18 +13,16 @@ defmodule VutuvWeb.ShellLivePresenceTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Sessions
   alias VutuvWeb.Presence
 
+  # The shell authenticates the live socket from the cookie's session_token
+  # (issue #1036) and reads "Show when I'm online" off the resolved user, not a
+  # curated key — so a test drives it with a real active session and sets the
+  # member's `show_online_status?` field to control tracking.
   defp session_for(user, extra \\ %{}) do
-    Map.merge(
-      %{
-        "user_id" => user.id,
-        "user_name" => "Greta Tester",
-        "user_param" => user.username,
-        "show_online" => true
-      },
-      extra
-    )
+    {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
+    Map.merge(%{"session_token" => token}, extra)
   end
 
   test "tracks the member online and pushes them in the online set", %{conn: conn} do
@@ -44,12 +42,10 @@ defmodule VutuvWeb.ShellLivePresenceTest do
   end
 
   test "a member who turned online status off is never tracked or dotted", %{conn: conn} do
-    user = insert(:user)
+    user = insert(:user, show_online_status?: false)
 
     {:ok, view, _html} =
-      live_isolated(conn, VutuvWeb.ShellLive,
-        session: session_for(user, %{"show_online" => false})
-      )
+      live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     refute Presence.online?(Presence.online_ids(), user.id)
     # No dot on their own avatar either.
@@ -124,12 +120,10 @@ defmodule VutuvWeb.ShellLivePresenceTest do
   end
 
   test "a live opt-in tracks the member and shows their dot", %{conn: conn} do
-    user = insert(:user)
+    user = insert(:user, show_online_status?: false)
 
     {:ok, view, _html} =
-      live_isolated(conn, VutuvWeb.ShellLive,
-        session: session_for(user, %{"show_online" => false})
-      )
+      live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     refute Presence.online?(Presence.online_ids(), user.id)
 

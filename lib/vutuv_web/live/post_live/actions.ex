@@ -16,19 +16,35 @@ defmodule VutuvWeb.PostLive.Actions do
   Logged-out viewers get the same live counters; pressing a button sends them
   to the login page. Mounted outside the `live_session` (embedded), so it
   applies the session locale itself, like `VutuvWeb.ShellLive`.
+
+  The viewer is authenticated from the cookie's `session_token` (through the
+  shared `VutuvWeb.Live.InitAssigns.session_user/1` resolver), never a bare
+  `user_id`, so a remotely logged-out device or a suspended member can no longer
+  write a like / bookmark / repost from this bar. That lookup runs **only on
+  connect**: the throwaway dead render does no writes and its engagement flags
+  are the threaded ones the controller already computed for the authenticated
+  request, so deferring the resolution keeps a many-post permalink from paying a
+  session lookup per card on a render that is discarded the moment the socket
+  connects.
   """
   use Phoenix.LiveView
 
   import VutuvWeb.PostComponents, only: [post_actions: 1]
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Posts
+  alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.PostLive.ActionBar
 
   @impl true
   def mount(_params, session, socket) do
     post_id = session["post_id"]
-    viewer_id = session["user_id"]
     VutuvWeb.LiveLocale.put_locale(session)
+
+    # Resolve the viewer from the session token on the connected socket only —
+    # it is the one that subscribes and writes. The dead render stays anonymous
+    # (viewer_id nil) and renders from the threaded engagement.
+    viewer_id = if connected?(socket), do: session_viewer_id(session), else: nil
 
     # The post topic carries everything this bar needs: absolute counts for
     # every viewer, plus — when the actor is the viewer (`:by_user_id`) — the
@@ -46,6 +62,15 @@ defmodule VutuvWeb.PostLive.Actions do
      |> assign(:post_id, post_id)
      |> assign(:viewer_id, viewer_id)
      |> assign(:engagement, engagement)}
+  end
+
+  # The token-resolved viewer id, or nil when the cookie's session token is
+  # missing / revoked / belongs to a suspended member.
+  defp session_viewer_id(session) do
+    case InitAssigns.session_user(session) do
+      %User{id: id} -> id
+      _ -> nil
+    end
   end
 
   @impl true
