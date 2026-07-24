@@ -72,4 +72,42 @@ defmodule Vutuv.WebAddressTest do
       for junk <- ["-", ".", "????????", "!!!"], do: refute(WebAddress.link_only?(junk))
     end
   end
+
+  describe "link_only?/1 caps its input before the regex battery (F20)" do
+    test "a value longer than the varchar(255) column is refused outright" do
+      # A single long URL is link-only when it fits the column, but a value too
+      # long to ever be a stored headline or tag is short-circuited to false —
+      # the guard flips this exact result, so the test fails without it.
+      short_url = "https://example.com/cv"
+      assert WebAddress.link_only?(short_url) == true
+
+      over_limit = "https://example.com/" <> String.duplicate("a", 2_000)
+      assert WebAddress.link_only?(over_limit) == false
+    end
+
+    test "a ~1 MB free-text payload returns false fast, not after an O(n²) scan" do
+      # The pathological ReDoS input the finding describes: length-unvalidated
+      # free text ending in a slash. Without the guard each of the nine
+      # unanchored patterns bump-alongs at O(n²) over ~1 MB; with it the byte
+      # cap returns instantly. Assert both the result and that it is fast.
+      giant = String.duplicate("a", 1_000_000) <> "/"
+
+      {micros, result} = :timer.tc(fn -> WebAddress.link_only?(giant) end)
+
+      assert result == false
+      assert micros < 100_000, "expected a fast short-circuit, took #{micros}µs"
+    end
+
+    test "a storable multi-byte link-only value is still caught, not clipped by the byte cap" do
+      # A value can be ≤255 *characters* (so it fits varchar(255)) yet exceed
+      # 255 *bytes* when it uses multi-byte characters. Such a value is still
+      # storable, so a link-only one must still be refused — the byte cap sits
+      # above any storable value's byte size (255 chars × 4 = 1020) precisely so
+      # it is not clipped. A naive 255-*byte* cap would wrongly accept this.
+      multibyte_url = "https://" <> String.duplicate("ü", 240) <> ".de"
+      assert String.length(multibyte_url) <= 255
+      assert byte_size(multibyte_url) > 255
+      assert WebAddress.link_only?(multibyte_url) == true
+    end
+  end
 end
