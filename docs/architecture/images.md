@@ -70,6 +70,36 @@ thread auto-scroll for that agent (issue #1033,
 `Vutuv.SocialFeed.Http.own_agent?/1`). Keep new on-arrival scroll/focus
 behaviour off the capture path for the same reason.
 
+### SSRF egress control (GHSA-mmjf-8cwc-6vwv, CWE-918)
+
+The captured URL is member-supplied, so headless Chromium is a
+server-side-request-forgery risk: left to itself it resolves DNS and follows
+redirects, `<meta http-equiv="refresh">` and JavaScript navigations, and could
+be steered onto `169.254.169.254`, `127.0.0.1:<port>`, or any LAN host and
+publish the rendered result on the attacker's own profile/post card. Validating
+only the seed URL does not help — the browser is what does the fetching.
+
+The guard therefore constrains Chromium itself. `Vutuv.PageScreenshot.capture_framed/2`
+resolves the target host **once** through `Vutuv.Ssrf.vetted_address/1`
+(fail-closed: any resolved internal address refuses the whole capture) and pins
+the browser to that exact IP with `--host-resolver-rules=MAP * <vetted-ip>`.
+Chromium then does no DNS of its own, so every request it makes — the seed page,
+its subresources, and any redirect / meta-refresh / in-page navigation — goes to
+the one vetted public address. This also closes the check-vs-fetch (TOCTOU) DNS
+rebinding window, since there is no second lookup to poison. The real hostname
+still rides in `Host:`/SNI, so the intended page renders; only a *different*
+host is pinned to the wrong address and simply fails to load — an accepted
+fidelity trade for cross-host subresources.
+
+`Vutuv.Moderation.EvidenceScreenshot` calls `capture/3` without a pin, on
+purpose: it shoots this installation's *own* host (a profile/evidence page),
+which may legitimately be internal.
+
+The pre-capture probes (redirect resolution on the profile path, the HTTP-200
+check on the post path) read only the status line and `location` header, and cap
+the response body during receipt with `Vutuv.Http.capped_collector/1` so a
+hostile link cannot stream an unbounded body into memory.
+
 ## AI image moderation (the Ollama scan)
 
 **Every** image that could become visible to anyone but its owner passes

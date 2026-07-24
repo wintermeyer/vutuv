@@ -35,6 +35,17 @@ defmodule Vutuv.PageScreenshotTest do
     Application.put_env(:vutuv, :page_screenshot_probe_req_options, plug: fun)
   end
 
+  # A stand-in "Chromium" that records its argv (one element per line, so the
+  # space-carrying `--host-resolver-rules=MAP * <ip>` stays one line) and writes
+  # no screenshot. Lets a test assert the exact command line without a browser.
+  defp fake_chromium(args_file) do
+    path = Path.join(System.tmp_dir!(), "fake-chromium-#{System.unique_integer([:positive])}")
+    File.write!(path, "#!/bin/sh\nprintf '%s\\n' \"$@\" > #{args_file}\n")
+    File.chmod!(path, 0o755)
+    on_exit(fn -> File.rm(path) end)
+    path
+  end
+
   test "the command line bounds the page load, so a hanging page still yields a shot" do
     args = Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png")
 
@@ -66,6 +77,81 @@ defmodule Vutuv.PageScreenshotTest do
     # scrolls itself is captured before those tiles are painted — the empty
     # preview image of issue #1033.
     assert "--user-agent=#{Http.user_agent()}" in args
+  end
+
+  describe "capture_args/3 host-resolver pinning (SSRF egress control)" do
+    test "no pin IP means no --host-resolver-rules flag (unchanged behaviour)" do
+      args = Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png")
+      refute Enum.any?(args, &String.starts_with?(&1, "--host-resolver-rules"))
+    end
+
+    test "a pin IP maps EVERY host Chromium resolves to that one vetted address" do
+      args =
+        Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png",
+          pin_ip: {93, 184, 216, 34}
+        )
+
+      # `MAP * <ip>` pins the seed host, its subresources, and any redirect /
+      # <meta refresh> / JS navigation to the single public IP we already
+      # vetted, so Chromium cannot be steered onto an internal host after the
+      # seed URL passed the guard (GHSA-mmjf-8cwc-6vwv).
+      assert "--host-resolver-rules=MAP * 93.184.216.34" in args
+    end
+
+    test "the URL stays the final positional argument, after the pin flag" do
+      args =
+        Vutuv.PageScreenshot.capture_args("https://example.com/page", "/tmp/out.png",
+          pin_ip: {93, 184, 216, 34}
+        )
+
+      assert List.last(args) == "https://example.com/page"
+    end
+
+    test "an IPv6 pin address is bracketed for the resolver rule" do
+      args =
+        Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png",
+          pin_ip: {0x2606, 0x2800, 0x220, 1, 0x248, 0x1893, 0x25C8, 0x1946}
+        )
+
+      assert "--host-resolver-rules=MAP * [2606:2800:220:1:248:1893:25c8:1946]" in args
+    end
+  end
+
+  test "capture_framed pins Chromium to the host's vetted IP (resolve-once, no re-lookup)" do
+    # A public-looking host that resolves to a public IP: capture_framed must
+    # resolve it ONCE and hand Chromium that exact address, so the browser never
+    # does its own lookup that DNS rebinding could flip to an internal IP.
+    Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family ->
+      {:ok, [{93, 184, 216, 34}]}
+    end)
+
+    args_file =
+      Path.join(System.tmp_dir!(), "chromium-args-#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm(args_file) end)
+    Application.put_env(:vutuv, :chromium_path, fake_chromium(args_file))
+
+    # The fake binary records argv and writes no image, so framing fails and
+    # capture_framed returns an error — but the recorded args are what we assert.
+    _ = Vutuv.PageScreenshot.capture_framed("https://public.example/page", "cap1")
+
+    assert File.read!(args_file) =~ "--host-resolver-rules=MAP * 93.184.216.34"
+  end
+
+  test "capture_framed refuses a host that resolves to an internal IP before launching Chromium" do
+    Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family -> {:ok, [{10, 0, 0, 5}]} end)
+
+    args_file =
+      Path.join(System.tmp_dir!(), "chromium-args-#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm(args_file) end)
+    Application.put_env(:vutuv, :chromium_path, fake_chromium(args_file))
+
+    assert {:error, :internal_target} =
+             Vutuv.PageScreenshot.capture_framed("https://rebind.example/page", "cap2")
+
+    # Chromium was never spawned, so no argv was recorded.
+    refute File.exists?(args_file)
   end
 
   describe "capture_outcome/2 (the file on disk decides)" do
