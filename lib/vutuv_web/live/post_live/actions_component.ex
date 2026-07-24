@@ -16,7 +16,11 @@ defmodule VutuvWeb.PostLive.ActionsComponent do
   counts refresh on reload / "Load more" rather than ticking live — the
   "minimum PubSub" trade-off. Dead controller pages, which have no LiveView
   host, keep the standalone `VutuvWeb.PostLive.Actions` LiveView, which does
-  still tick live.
+  still tick live. One host opts back in: the permalink thread
+  (`VutuvWeb.PostLive.Thread`) subscribes to its few dozen shown posts itself
+  and forwards each `{:post_counters, …}` here via `send_update` (the
+  `:counters` clause below), so the post's own page keeps live counters at one
+  process for the whole conversation.
   """
   use VutuvWeb, :live_component
 
@@ -25,6 +29,14 @@ defmodule VutuvWeb.PostLive.ActionsComponent do
   alias VutuvWeb.PostLive.ActionBar
 
   @impl true
+  def update(%{counters: payload}, socket) do
+    # A live counter tick forwarded by a host that holds the post-topic
+    # subscriptions for its cards (the permalink thread): counts-only, unless
+    # the toggle was the viewer's own from another tab (see
+    # `ActionBar.apply_counters/2`).
+    {:ok, ActionBar.apply_counters(socket, payload)}
+  end
+
   def update(assigns, socket) do
     # `assign_new` loads engagement once, then keeps our own (possibly toggled)
     # copy across later host re-renders — the list-based profile/reply hosts

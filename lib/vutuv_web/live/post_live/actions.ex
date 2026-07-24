@@ -80,32 +80,14 @@ defmodule VutuvWeb.PostLive.Actions do
 
   @impl true
   def handle_info(
-        {:post_counters,
-         %{likes: likes, bookmarks: bookmarks, reposts: reposts, replies: replies} = payload},
+        {:post_counters, %{likes: _, bookmarks: _, reposts: _, replies: _} = payload},
         socket
       ) do
-    case socket.assigns.engagement do
-      nil ->
-        {:noreply, socket}
-
-      engagement ->
-        # The viewer's own toggle (from this or another of their tabs) carries
-        # `:by_user_id`: reload so their filled-in flags follow, not just the
-        # counts. Anything else — another viewer's toggle, a reply-count tick —
-        # is counts-only and never touches this viewer's flags.
-        if payload[:by_user_id] && payload[:by_user_id] == socket.assigns.viewer_id do
-          {:noreply, ActionBar.load_engagement(socket)}
-        else
-          {:noreply,
-           assign(socket, :engagement, %{
-             engagement
-             | likes: likes,
-               bookmarks: bookmarks,
-               reposts: reposts,
-               replies: replies
-           })}
-        end
-    end
+    # The viewer's own toggle (from another of their tabs) carries
+    # `:by_user_id` and reloads their filled-in flags too; anything else is
+    # counts-only. The rule lives in `ActionBar.apply_counters/2`, shared with
+    # the permalink thread host's forwarding.
+    {:noreply, ActionBar.apply_counters(socket, payload)}
   end
 
   # The post was deleted while the bar was open: re-checking engagement turns it

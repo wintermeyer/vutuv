@@ -25,7 +25,6 @@ defmodule VutuvWeb.PostController do
   alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
-  alias Vutuv.Social
   alias Vutuv.SocialFeed.Http
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.PostDoc
@@ -222,22 +221,10 @@ defmodule VutuvWeb.PostController do
     restricted? = Posts.restricted?(post)
     {noindex?, noai?} = PostDoc.robots_axes(author, restricted?)
 
-    # The whole conversation this post belongs to (issue #1006), root first.
-    %{posts: thread, truncated?: thread_truncated?} = Posts.list_thread(post, viewer)
-
-    # The viewer's follow edges to every author on the page drive the cards'
-    # mute toggles — batched, the way the feed does it.
-    viewer_follows =
-      if viewer do
-        thread
-        |> Enum.map(& &1.user_id)
-        |> Enum.uniq()
-        |> Enum.reject(&(&1 == viewer.id))
-        |> then(&Social.follow_edges(viewer.id, &1))
-      else
-        %{}
-      end
-
+    # The conversation itself is the embedded `VutuvWeb.PostLive.Thread`
+    # LiveView (windowed for long threads, expanders load more on the fly);
+    # the controller only hands it the post id through the template's
+    # live_render session.
     conn
     |> VutuvWeb.ContentPolicy.put_robots_header(noindex?, noai?)
     |> render("show.html",
@@ -245,9 +232,6 @@ defmodule VutuvWeb.PostController do
       author: author,
       owner?: Posts.author?(post, viewer),
       restricted?: restricted?,
-      viewer_follows: viewer_follows,
-      thread: thread,
-      thread_truncated?: thread_truncated?,
       auto_scroll?: not page_capture?(conn),
       # The "Other formats" card links to the post's agent siblings — shown only
       # when the anonymous .md/.txt/.json/.xml would actually resolve (the same

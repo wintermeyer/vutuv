@@ -69,6 +69,38 @@ defmodule VutuvWeb.PostLive.ActionBar do
   end
 
   @doc """
+  Applies a `{:post_counters, …}` payload to the bar's socket: counts-only for
+  someone else's toggle or a reply-count tick, a full flag reload when the
+  toggle was the viewer's own from another tab (`:by_user_id`). Shared by the
+  standalone bar's own subscription (`VutuvWeb.PostLive.Actions`) and the
+  permalink thread host, which holds the subscriptions for its cards and
+  forwards each payload to the matching in-process component via
+  `send_update` (`VutuvWeb.PostLive.Thread`).
+  """
+  def apply_counters(
+        socket,
+        %{likes: likes, bookmarks: bookmarks, reposts: reposts, replies: replies} = payload
+      ) do
+    case socket.assigns.engagement do
+      nil ->
+        socket
+
+      engagement ->
+        if payload[:by_user_id] && payload[:by_user_id] == socket.assigns.viewer_id do
+          load_engagement(socket)
+        else
+          assign(socket, :engagement, %{
+            engagement
+            | likes: likes,
+              bookmarks: bookmarks,
+              reposts: reposts,
+              replies: replies
+          })
+        end
+    end
+  end
+
+  @doc """
   Reloads the viewer's engagement for the post and assigns it (turns `nil` once
   the post is deleted, which empties the bar).
   """
