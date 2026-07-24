@@ -15323,3 +15323,75 @@ msgstr "Unbestätigt"
 #, elixir-autogen, elixir-format
 msgid "unreachable"
 msgstr "Nicht erreichbar"
+
+#: lib/vutuv_web/components/ui.ex:3184
+#: lib/vutuv_web/controllers/settings_controller.ex:308
+#: lib/vutuv_web/templates/settings/filters.html.heex:2
+#, elixir-autogen, elixir-format
+msgid "Muted words & tags"
+msgstr "Stummgeschaltete Wörter & Tags"
+
+#: lib/vutuv_web/templates/settings/filters.html.heex:5
+#, elixir-autogen, elixir-format
+msgid "Hide posts from your feed that carry a tag, or that contain a word or phrase. This list is yours alone: it is never shared, the author is never told, and a hidden post collapses to a line you can still open."
+msgstr "Blenden Sie Beiträge aus Ihrem Feed aus, die ein Tag tragen oder ein Wort bzw. eine Phrase enthalten. Diese Liste gehört nur Ihnen: Sie wird nie geteilt, der Verfasser erfährt nichts davon, und ein ausgeblendeter Beitrag klappt zu einer Zeile zusammen, die Sie weiterhin öffnen können."
+
+#: lib/vutuv_web/templates/settings/filters.html.heex:18
+#, elixir-autogen, elixir-format
+msgid "Word or phrase"
+msgstr "Wort oder Phrase"
+
+#: lib/vutuv_web/views/settings_html.ex:24
+#, elixir-autogen, elixir-format
+msgid "Word or phrase (whole word)"
+msgstr "Wort oder Phrase (ganzes Wort)"
+
+#: lib/vutuv_web/templates/settings/filters.html.heex:34
+#, elixir-autogen, elixir-format
+msgid "e.g. crypto*, \"machine learning\", politics"
+msgstr "z. B. crypto*, \"machine learning\", Politik"
+
+#: lib/vutuv_web/templates/settings/filters.html.heex:37
+#, elixir-autogen, elixir-format
+msgid "Word, phrase or tag to mute"
+msgstr "Wort, Phrase oder Tag zum Stummschalten"
+
+#: lib/vutuv_web/templates/settings/filters.html.heex:47
+#, elixir-autogen, elixir-format
+msgid "Use * as a wildcard (crypto* → cryptobro). Whole-word by default."
+msgstr "Verwenden Sie * als Platzhalter (crypto* → cryptobro). Standardmäßig ganze Wörter."
+
+#: lib/vutuv_web/templates/settings/filters.html.heex:58
+#, elixir-autogen, elixir-format
+msgid "Match whole words only (word/phrase)"
+msgstr "Nur ganze Wörter treffen (Wort/Phrase)"
+
+#: lib/vutuv_web/templates/settings/filters.html.heex:85
+#, elixir-autogen, elixir-format
+msgid "You have not muted anything yet."
+msgstr "Sie haben noch nichts stummgeschaltet."
+
+#: lib/vutuv_web/live/post_live/feed.ex:521
+#, elixir-autogen, elixir-format
+msgid "Hidden: matches your filter"
+msgstr "Ausgeblendet: passt zu Ihrem Filter"
+
+#: lib/vutuv_web/live/post_live/feed.ex:530
+#, elixir-autogen, elixir-format
+msgid "Show anyway"
+msgstr "Trotzdem anzeigen"
+
+#: lib/vutuv_web/controllers/settings_controller.ex:271
+#, elixir-autogen, elixir-format
+msgid "Filter added. Matching posts are now hidden from your feed."
+msgstr "Filter hinzugefügt. Passende Beiträge sind jetzt in Ihrem Feed ausgeblendet."
+
+#: lib/vutuv_web/controllers/settings_controller.ex:279
+#, elixir-autogen, elixir-format
+msgid "You have reached the maximum of %{count} filters."
+msgstr "Sie haben das Maximum von %{count} Filtern erreicht."
+
+#: lib/vutuv_web/controllers/settings_controller.ex:295
+#, elixir-autogen, elixir-format
+msgid "Filter removed."
+msgstr "Filter entfernt."

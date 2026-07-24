@@ -34,10 +34,16 @@ defmodule Vutuv.ExportTest do
     Vutuv.Social.block_user(user, blocked)
     Vutuv.Social.bookmark_user(user, saved_member)
 
+    {:ok, _} =
+      Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "crypto"})
+
     data = Export.build(user)
 
     assert data.schema_version == 4
     assert Enum.any?(data.blocked_members, &(&1.member == blocked.username))
+    # The private content filters (issue #940) are owner-only, so they ride
+    # along in the member's own GDPR export.
+    assert Enum.any?(data.content_filters, &(&1.pattern == "crypto"))
     assert Enum.any?(data.saved_members.bookmarked, &(&1.member == saved_member.username))
     # The keys exist even when empty, so the export shape stays stable.
     assert Map.has_key?(data.saved_organizations, :liked)

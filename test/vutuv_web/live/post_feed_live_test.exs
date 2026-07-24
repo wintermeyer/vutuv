@@ -1290,4 +1290,78 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert feed_html =~ "sm:grid-cols-2"
     end
   end
+
+  # Personal content filters (issue #940): a matching post collapses to a
+  # "Show anyway" line instead of vanishing, and the viewer's own posts are
+  # never filtered.
+  describe "content filters" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      %{conn: conn, user: user, friend: friend}
+    end
+
+    test "a muted keyword collapses a matching post to a placeholder", %{
+      conn: conn,
+      user: user,
+      friend: friend
+    } do
+      {:ok, _} =
+        Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "crypto"})
+
+      {:ok, _} = Posts.create_post(friend, %{body: "buy crypto now"})
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, "[data-filtered-post='crypto']")
+      # The body itself is not on the page until revealed.
+      refute html =~ "buy crypto now"
+    end
+
+    test "'Show anyway' reveals the post in place", %{conn: conn, user: user, friend: friend} do
+      {:ok, _} =
+        Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "crypto"})
+
+      {:ok, post} = Posts.create_post(friend, %{body: "buy crypto now"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      revealed =
+        live
+        |> element("button[phx-click='reveal_filter'][phx-value-id='#{post.id}']")
+        |> render_click()
+
+      assert revealed =~ "buy crypto now"
+    end
+
+    test "the viewer's own matching post is never filtered", %{conn: conn, user: user} do
+      {:ok, _} =
+        Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "crypto"})
+
+      {:ok, _} = Posts.create_post(user, %{body: "my own crypto thoughts"})
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      # Own post shows in full; no placeholder swallows it.
+      assert html =~ "my own crypto thoughts"
+      refute html =~ "data-filtered-post"
+    end
+
+    test "a muted tag collapses a post carrying that tag", %{
+      conn: conn,
+      user: user,
+      friend: friend
+    } do
+      {:ok, _} =
+        Vutuv.ContentFilters.create_filter(user, %{"kind" => "tag", "pattern" => "crypto"})
+
+      {:ok, _} = Posts.create_post(friend, %{body: "a neutral looking body", tags: "crypto"})
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, "[data-filtered-post='crypto']")
+      refute html =~ "a neutral looking body"
+    end
+  end
 end

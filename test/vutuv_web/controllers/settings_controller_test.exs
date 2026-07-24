@@ -593,4 +593,62 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert Repo.get(User, user.id).default_map_service == nil
     end
   end
+
+  # Muted words & tags (issue #940): the member's private content filter.
+  describe "content filters (#940)" do
+    test "the page lists the member's filters and offers the add form", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, _} =
+        Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "crypto"})
+
+      html = conn |> get(~p"/settings/filters") |> html_response(200)
+
+      assert html =~ "crypto"
+      assert html =~ ~s(id="content-filter-form")
+    end
+
+    test "adding a filter persists it and stays on the page", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        post(conn, ~p"/settings/filters",
+          content_filter: %{"kind" => "keyword", "pattern" => "crypto*", "whole_word" => "false"}
+        )
+
+      assert redirected_to(conn) == ~p"/settings/filters"
+      assert [%{pattern: "crypto*", whole_word: false}] = Vutuv.ContentFilters.list_for_user(user)
+    end
+
+    test "a wildcard-only pattern is rejected with a 422", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        post(conn, ~p"/settings/filters",
+          content_filter: %{"kind" => "keyword", "pattern" => "***"}
+        )
+
+      assert html_response(conn, 422)
+      assert Vutuv.ContentFilters.list_for_user(user) == []
+    end
+
+    test "deleting removes the filter", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, filter} =
+        Vutuv.ContentFilters.create_filter(user, %{"kind" => "tag", "pattern" => "politics"})
+
+      conn = delete(conn, ~p"/settings/filters/#{filter.id}")
+
+      assert redirected_to(conn) == ~p"/settings/filters"
+      assert Vutuv.ContentFilters.list_for_user(user) == []
+    end
+
+    test "the filters row is on the settings hub", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings") |> html_response(200)
+
+      assert html =~ ~s(href="#{~p"/settings/filters"}")
+    end
+  end
 end

@@ -1,0 +1,90 @@
+<.settings_shell user={@user} active={:filters} title={gettext("Muted words & tags")}>
+  <.card>
+    <.section_title>{gettext("Muted words & tags")}</.section_title>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Hide posts from your feed that carry a tag, or that contain a word or phrase. This list is yours alone: it is never shared, the author is never told, and a hidden post collapses to a line you can still open."
+      )}
+    </p>
+
+    <.form
+      for={@form}
+      action={~p"/settings/filters"}
+      method="post"
+      id="content-filter-form"
+      class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start"
+    >
+      <select name={@form[:kind].name} class={[input_class(), "sm:w-40"]} aria-label={gettext("Kind")}>
+        <option value="keyword" selected={@form[:kind].value in [nil, "keyword", :keyword]}>
+          {gettext("Word or phrase")}
+        </option>
+        <option value="tag" selected={@form[:kind].value in ["tag", :tag]}>
+          {gettext("Tag")}
+        </option>
+      </select>
+
+      <div class="min-w-0 flex-1">
+        <input
+          type="text"
+          name={@form[:pattern].name}
+          value={Phoenix.HTML.Form.normalize_value("text", @form[:pattern].value)}
+          placeholder={gettext("e.g. crypto*, \"machine learning\", politics")}
+          class={input_class(@form[:pattern].errors != [])}
+          aria-label={gettext("Word, phrase or tag to mute")}
+          aria-invalid={@form[:pattern].errors != [] && "true"}
+        />
+        <p
+          :for={{msg, _} <- @form[:pattern].errors}
+          class="mt-1 text-sm font-medium text-red-600 dark:text-red-400"
+        >
+          {msg}
+        </p>
+        <p :if={@form[:pattern].errors == []} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+          {gettext("Use * as a wildcard (crypto* → cryptobro). Whole-word by default.")}
+        </p>
+        <label class="mt-2 inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+          <input type="hidden" name={@form[:whole_word].name} value="false" />
+          <input
+            type="checkbox"
+            name={@form[:whole_word].name}
+            value="true"
+            checked={@form[:whole_word].value in [nil, true, "true"]}
+            class={checkbox_class()}
+          />
+          {gettext("Match whole words only (word/phrase)")}
+        </label>
+      </div>
+
+      <.button type="submit">{gettext("Mute")}</.button>
+    </.form>
+
+    <ul id="content-filter-list" class="mt-6 divide-y divide-slate-100 dark:divide-slate-800">
+      <li
+        :for={filter <- @filters}
+        id={"content-filter-#{filter.id}"}
+        class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+        data-content-filter={filter.pattern}
+      >
+        <div class="min-w-0">
+          <code class="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {filter.pattern}
+          </code>
+          <span class="ml-2 text-xs text-slate-600 dark:text-slate-400">
+            {filter_kind_label(filter)}
+          </span>
+        </div>
+        <.link
+          href={~p"/settings/filters/#{filter.id}"}
+          method="delete"
+          class="flex-shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+        >
+          {gettext("Unmute")}
+        </.link>
+      </li>
+    </ul>
+
+    <p :if={@filters == []} class="mt-6 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("You have not muted anything yet.")}
+    </p>
+  </.card>
+</.settings_shell>

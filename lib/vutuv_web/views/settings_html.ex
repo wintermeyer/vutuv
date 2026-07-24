@@ -18,6 +18,13 @@ defmodule VutuvWeb.SettingsHTML do
 
   embed_templates("../templates/settings/*")
 
+  @doc "The human, localized label for a content filter's kind (issue #940)."
+  def filter_kind_label(%{kind: :tag}), do: gettext("Tag")
+  def filter_kind_label(%{kind: :keyword, whole_word: false}), do: gettext("Word or phrase")
+
+  def filter_kind_label(%{kind: :keyword}),
+    do: gettext("Word or phrase (whole word)")
+
   @doc """
   The human, localized status of one of the member's organization pages, derived
   the same way the public site decides visibility: a page under moderation

@@ -86,3 +86,28 @@ The private list at `/blocks` also unblocks; unblocking restores nothing
 (deliberately unlike a rejected moderation report) but thaws the conversation
 its own block froze, unless a reverse block or an active report severance still
 stands
+
+## Content filters (muted words & tags)
+
+Topic-level muting, the third layer above per-follow mute and the block
+(issue #940): `Vutuv.ContentFilters` is a member's private, viewer-only deny
+list, managed at `/settings/filters` ("Muted words & tags"). Each
+`content_filters` row mutes a **tag** or a **keyword/phrase** (with `*`
+wildcards); keyword rows match the post body **and** its tags/hashtags, tag rows
+match the post's tags only.
+
+Unlike a muted follow (which drops a *person* out of the feed via the query),
+content filters run **after** the feed page is hydrated: the feed compiles the
+viewer's whole list once (`compile_for/1`) and asks `filtered_pattern/2` per post
+which filter, if any, hides it. A match does not vanish — the post collapses to a
+"Show anyway" line (`PostLive.Feed`, `data-filtered-post`), so a filtered post
+never silently shortens the feed or breaks a reply thread; the reveal is
+in-place and survives the midnight restream. The viewer's **own** posts are never
+filtered.
+
+Keyword matching is a compiled, case-insensitive regex (`compile_pattern/2`):
+`*` → "any run of characters", literal segments escaped, word-boundaries by
+default (so `cess` does not hide "success") except on a side opened with `*`.
+The list is owner-only — never public, never in the agent formats — capped
+(`ContentFilters.max_filters/0`), and rides along in the GDPR export. `expires_at`
+is a column reserved for a later "snooze" UI (not honored yet).

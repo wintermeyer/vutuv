@@ -836,6 +836,12 @@ defmodule VutuvWeb.Router do
     # subscriptions. Following happens on the tag page; unfollowing here (and in
     # the feed rail) posts to DELETE /tag_follows/:tag_id.
     get("/followed_tags", SettingsController, :followed_tags)
+
+    # Muted words & tags (issue #940): the member's private content filter. Add
+    # a tag or a keyword/phrase to hide matching posts from your own feed.
+    get("/filters", SettingsController, :filters)
+    post("/filters", SettingsController, :create_filter)
+    delete("/filters/:id", SettingsController, :delete_filter)
     # The member's "Your organizations" hub: the organization pages they own or
     # help run, the explainer of how organizations work, and the add call to
     # action. The public browse directory stays at /organizations.
