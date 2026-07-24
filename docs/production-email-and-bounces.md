@@ -164,6 +164,20 @@ Either way it only catches what becomes a DSN, and gives no early signal on
 repeated *soft* failures (needed for the freeze decision, §4.2) until Postfix
 finally expires the message (~5 days).
 
+> **Security caveat: a raw mailbox pipe trusts forged DSNs (issue #1063).**
+> Where Option A *is* wired, `scripts/postfix/vutuv-bounce` forwards whatever
+> lands in the bounce mailbox to `/webhooks/bounces` verbatim, and the webhook
+> acts on the DSN's `Final-Recipient` / `Status` with no check that this
+> installation ever mailed that address. `BOUNCE_WEBHOOK_TOKEN` only proves the
+> message came through the pipe, not that the bounce is genuine. Because that
+> mailbox accepts arbitrary inbound internet mail, anyone can send a forged DSN
+> for an address they know and have it marked undeliverable; enough repeats (or
+> the grace window) then freeze the account and hide the profile (§4). Option B
+> does not have this hole: the log watcher only ever acts on a bounce it can
+> join back to *our own* outbound queue-id (§3.2), which is exactly the
+> sender/recipient correlation the webhook lacks. Prefer Option B, and do not
+> wire the raw mailbox pipe until the webhook grows that correlation (#1063).
+
 ### Option B — read Postfix's delivery log (CHOSEN, implemented)
 
 `Vutuv.Deliverability.Watcher` (a GenServer) tails `/var/log/mail.log`,
@@ -268,7 +282,11 @@ as the liveness check that the watcher is running in the current release.
   release) and let the app tail the log directly. Simplest; reversible.
 - **A tiny root-side shipper** (systemd unit) that tails the log and POSTs
   vutuv-attributed bounces to `POST /webhooks/bounces` with `BOUNCE_WEBHOOK_TOKEN`.
-  Keeps the app unprivileged; reuses the existing endpoint verbatim.
+  Keeps the app unprivileged; reuses the existing endpoint verbatim. The
+  "vutuv-attributed" is load-bearing: the shipper must do the queue-id join
+  itself (§3.2) and forward *only* bounces for our own outbound mail. Forwarding
+  a raw bounce *mailbox* into the webhook instead (Option A, §2) reopens the
+  forged-DSN hole (#1063), because the webhook does no correlation of its own.
 
 ---
 
