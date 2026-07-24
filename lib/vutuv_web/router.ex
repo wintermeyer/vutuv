@@ -554,6 +554,13 @@ defmodule VutuvWeb.Router do
     post("/deliverability/users/:id/thaw", DeliverabilityController, :thaw)
     post("/deliverability/emails/:id/clear", DeliverabilityController, :clear_address)
 
+    # The Fediverse screen (issue #1067): the operator's blocklist of remote
+    # servers, what each has stored here, and the inbound caps. Blocking is a
+    # POST (it deletes rows), unblocking a CSRF DELETE.
+    get("/fediverse", FediverseController, :index)
+    post("/fediverse", FediverseController, :create)
+    delete("/fediverse/:id", FediverseController, :delete)
+
     # The installation's legal pages (Impressum, Datenschutzerklärung,
     # Nutzungsbedingungen): per-installation trusted Markdown, edited here,
     # rendered by the public PageController routes. The set of pages is fixed,

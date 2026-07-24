@@ -1,0 +1,149 @@
+<%!-- The operator's Fediverse screen (issue #1067): the blocklist of remote
+servers, what each server has stored here, and the inbound caps in force.
+Classic admin page, so it uses the shared card/table/editform classes. --%>
+<.page_header
+  title={gettext("Fediverse")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    gettext("Fediverse")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <h2 class="card__label">{gettext("At a glance")}</h2>
+    <p>
+      {gettext(
+        "%{members} members federate, %{followers} remote followers between them, %{queue} activities queued for delivery, %{blocked} servers blocked.",
+        members: delimited_count(@stats.federating_members),
+        followers: delimited_count(@stats.remote_followers),
+        queue: delimited_count(@stats.queue_depth),
+        blocked: delimited_count(@stats.blocked_instances)
+      )}
+    </p>
+    <p class="editform__hint">
+      {gettext(
+        "Anyone can run a server in this network, so a server that talks to us is not a vetted party. Per hour, one server may store at most %{host_cap} rows here and one remote account at most %{actor_cap}; anything beyond that is dropped.",
+        host_cap: delimited_count(elem(@caps, 0)),
+        actor_cap: delimited_count(elem(@caps, 1))
+      )}
+    </p>
+  </section>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <h2 class="card__label">{gettext("Block a server")}</h2>
+    <p class="editform__hint">
+      {gettext(
+        "Blocking drops everything that server sends before it is even checked, deletes its followers and its queued deliveries, and stops our members' posts from going there. Lifting the block later does not bring any of it back."
+      )}
+    </p>
+
+    <.form for={%{}} action={~p"/admin/fediverse"} class="editform" id="block-instance-form">
+      <div class="editform__field">
+        <label for="blocked-instance-host">{gettext("Server name")}</label>
+        <input
+          type="text"
+          id="blocked-instance-host"
+          name="blocked_instance[host]"
+          autocomplete="off"
+          placeholder="mastodon.example"
+        />
+        <p class="editform__hint">
+          {gettext("A full address or an @user@server handle works too; we keep the server part.")}
+        </p>
+      </div>
+      <div class="editform__field">
+        <label for="blocked-instance-reason">{gettext("Note (optional)")}</label>
+        <input
+          type="text"
+          id="blocked-instance-reason"
+          name="blocked_instance[reason]"
+          autocomplete="off"
+          placeholder={gettext("Why this server is blocked")}
+        />
+      </div>
+      <div class="editform__actions">
+        <button class="button" type="submit">{gettext("Block this server")}</button>
+      </div>
+    </.form>
+  </section>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <h2 class="card__label">{gettext("Blocked servers")}</h2>
+    <%= if @blocked == [] do %>
+      <p class="card__empty">{gettext("No server is blocked.")}</p>
+    <% else %>
+      <div class="card__tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{gettext("Server")}</th>
+              <th>{gettext("Note")}</th>
+              <th>{gettext("Blocked by")}</th>
+              <th>{gettext("Since")}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={entry <- @blocked} data-blocked-host={entry.host}>
+              <td class="breakwrap">{entry.host}</td>
+              <td class="breakwrap">{entry.reason}</td>
+              <td>
+                <%= if entry.blocked_by do %>
+                  <.link navigate={~p"/#{entry.blocked_by.username}"}>
+                    {member_name(entry.blocked_by)}
+                  </.link>
+                <% end %>
+              </td>
+              <td><.local_time at={entry.inserted_at} format="%Y-%m-%d" /></td>
+              <td class="text-right">
+                <.row_actions
+                  delete_to={~p"/admin/fediverse/#{entry.id}"}
+                  confirm={
+                    gettext(
+                      "Unblock %{host}? Nothing that was deleted comes back; the server simply may talk to us again.",
+                      host: entry.host
+                    )
+                  }
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </section>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <h2 class="card__label">{gettext("Inbound volume per server")}</h2>
+    <%= if @inbound_hosts == [] do %>
+      <p class="card__empty">{gettext("No server has sent us anything yet.")}</p>
+    <% else %>
+      <p class="editform__hint">
+        {gettext("How much each server has stored here. Use it to decide what to block.")}
+      </p>
+      <div class="card__tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{gettext("Server")}</th>
+              <th>{gettext("Followers")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={row <- @inbound_hosts} data-inbound-host={row.host}>
+              <td class="breakwrap">{row.host}</td>
+              <td>{delimited_count(row.followers)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </section>
+</div>

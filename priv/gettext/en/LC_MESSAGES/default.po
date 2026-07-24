@@ -14860,3 +14860,128 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "e.g. crypto*, \"machine learning\", politics"
 msgstr ""
+
+#: lib/vutuv_web/controllers/admin/fediverse_controller.ex:43
+#, elixir-autogen, elixir-format
+msgid "Enter the server name on its own, for example mastodon.example."
+msgstr ""
+
+#: lib/vutuv_web/controllers/admin/fediverse_controller.ex:57
+#, elixir-autogen, elixir-format
+msgid "%{host} is no longer blocked. What was deleted stays deleted; the server has to follow again."
+msgstr ""
+
+#: lib/vutuv_web/controllers/admin/fediverse_controller.ex:70
+#, elixir-autogen, elixir-format
+msgid "%{host} is blocked. Removed: %{followers} remote followers and %{deliveries} queued deliveries."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:15
+#, elixir-autogen, elixir-format
+msgid "At a glance"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "%{members} members federate, %{followers} remote followers between them, %{queue} activities queued for delivery, %{blocked} servers blocked."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:26
+#, elixir-autogen, elixir-format
+msgid "Anyone can run a server in this network, so a server that talks to us is not a vetted party. Per hour, one server may store at most %{host_cap} rows here and one remote account at most %{actor_cap}; anything beyond that is dropped."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:37
+#, elixir-autogen, elixir-format
+msgid "Block a server"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Blocking drops everything that server sends before it is even checked, deletes its followers and its queued deliveries, and stops our members' posts from going there. Lifting the block later does not bring any of it back."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:47
+#, elixir-autogen, elixir-format
+msgid "Server name"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:56
+#, elixir-autogen, elixir-format
+msgid "A full address or an @user@server handle works too; we keep the server part."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:60
+#, elixir-autogen, elixir-format
+msgid "Note (optional)"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:66
+#, elixir-autogen, elixir-format
+msgid "Why this server is blocked"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:70
+#, elixir-autogen, elixir-format
+msgid "Block this server"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:77
+#, elixir-autogen, elixir-format
+msgid "Blocked servers"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:79
+#, elixir-autogen, elixir-format
+msgid "No server is blocked."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:85
+#, elixir-autogen, elixir-format
+msgid "Server"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:86
+#, elixir-autogen, elixir-format
+msgid "Note"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:87
+#, elixir-autogen, elixir-format
+msgid "Blocked by"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:105
+#, elixir-autogen, elixir-format
+msgid "Unblock %{host}? Nothing that was deleted comes back; the server simply may talk to us again."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:122
+#, elixir-autogen, elixir-format
+msgid "Inbound volume per server"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:124
+#, elixir-autogen, elixir-format
+msgid "No server has sent us anything yet."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/fediverse/index.html.heex:127
+#, elixir-autogen, elixir-format
+msgid "How much each server has stored here. Use it to decide what to block."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:293
+#, elixir-autogen, elixir-format
+msgid "Block servers and see inbound volume"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:311
+#, elixir-autogen, elixir-format
+msgid "%{blocked} servers blocked, busiest inbound: %{host}."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:313
+#, elixir-autogen, elixir-format
+msgid "none yet"
+msgstr ""

@@ -150,6 +150,17 @@ if config_env() == :prod do
     config :vutuv, :fediverse_enabled, false
   end
 
+  # How much any single remote server (and any single remote account) may store
+  # here per hour, as "host,actor" (issue #1067). The safety floor under the
+  # operator's blocklist: it bounds servers nobody has thought to block yet.
+  # A busier installation raises it, a cautious one lowers it.
+  if caps = System.get_env("FEDIVERSE_INBOUND_CAPS") do
+    [host_cap, actor_cap] =
+      caps |> String.split(",", parts: 2) |> Enum.map(&String.to_integer(String.trim(&1)))
+
+    config :vutuv, :fediverse_inbound_caps, {host_cap, actor_cap}
+  end
+
   # Book metadata + covers for post reviews come keyless from Open Library.
   # FETCH_BOOK_METADATA=false turns every such fetch off (intranets); the
   # review panel then has no lookup button and covers stay empty.

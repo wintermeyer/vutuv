@@ -288,9 +288,9 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
       title={gettext("Fediverse")}
       count={@fediverse_stats.federating_members}
       attention={@fediverse_stats.stuck_deliveries > 0}
-      href={~p"/admin/reports"}
+      href={~p"/admin/fediverse"}
       id="admin-fediverse-link"
-      cta={gettext("See the daily trend")}
+      cta={gettext("Block servers and see inbound volume")}
     >
       <%= if @fediverse_stats.stuck_deliveries > 0 do %>
         {gettext("Attention:")} {compact_count(@fediverse_stats.stuck_deliveries)} {ngettext(
@@ -304,6 +304,12 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
       {gettext("%{followers} remote followers, %{queue} queued for delivery.",
         followers: compact_count(@fediverse_stats.remote_followers),
         queue: compact_count(@fediverse_stats.queue_depth)
+      )}
+      <%!-- Issue #1067: the operator's kill switch is only useful if its state
+            is visible from the dashboard, not just on its own page. --%>
+      {gettext("%{blocked} servers blocked, busiest inbound: %{host}.",
+        blocked: compact_count(@fediverse_stats.blocked_instances),
+        host: @fediverse_top_host || gettext("none yet")
       )}
     </.admin_card>
 

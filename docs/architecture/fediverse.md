@@ -69,6 +69,25 @@ every endpoint 404s and nothing is delivered.
   it lands during the window where the account is suspended but still served.
   Deliveries to a gone inbox are dropped by the queue on 404/410 but do not
   yet prune the follower row (see the v1 limits).
+- **The operator's safety floor** (issue #1067): anyone can run an ActivityPub
+  server, so before anything a remote sends is stored, two independent levers
+  sit in front of it. The **blocklist**
+  (`Vutuv.Fediverse.BlockedInstance`, `fediverse_blocked_instances`, admin UI at
+  `/admin/fediverse`) shuts one named host out: the inbox checks it **first** —
+  before the signature is verified and before the remote actor document is
+  fetched, against *both* the signature's `keyId` and the activity's claimed
+  `actor`, since neither is verified yet — and answers `202` rather than `403`,
+  so the list is not enumerable from outside. Blocking is also a purge
+  (`purge_instance/1`: that host's follower rows and its queued deliveries) and
+  a mouth-shut: `deliver_due/0` drops a queued delivery to a blocked host, and
+  since the follower rows are the delivery targets, the member's posts stop
+  going there. Unblocking resurrects nothing. The **caps**
+  (`check_inbound_cap/1`, `Vutuv.RateLimiter`, `FEDIVERSE_INBOUND_CAPS`, default
+  600 rows/hour per host and 60 per remote actor, host bucket hit first so a
+  flooder cannot also plant one bucket per forged actor) bound the servers
+  nobody has thought to block yet; a capped write returns
+  `{:error, :inbound_capped}` and the inbox drops it silently. Both are behind
+  `:fediverse_enabled`, so an intranet installation has neither screen nor rows.
 - **Deliveries** (`Vutuv.Fediverse.Delivery` + `Deliverer`): the same
   DB-backed queue shape as webhooks — rows per activity × distinct inbox
   (sharedInbox dedupes per server), drained every 15s or on nudge, POSTs
@@ -111,18 +130,23 @@ every endpoint 404s and nothing is delivered.
   never under `/:slug`.
 - **The operator** sees federation health on `/admin`: `Fediverse.stats/0`
   reports federating members (the SQL mirror of `federated?/1`), total remote
-  followers, delivery-queue depth and how many rows are stuck (carry a
-  `last_error`); the "Fediverse" dashboard card flags `attention` when a
-  delivery run is stuck, and hides itself when `:fediverse_enabled` is off. The
-  nightly Tagesbericht (`Vutuv.Reports`) counts new remote followers per Berlin
-  day.
+  followers, delivery-queue depth, how many rows are stuck (carry a
+  `last_error`) and how many servers are blocked; the "Fediverse" dashboard card
+  flags `attention` when a delivery run is stuck, names the busiest inbound host
+  and links to `/admin/fediverse`, and hides itself when `:fediverse_enabled` is
+  off. That page is the blocklist plus `inbound_hosts/1` — what each remote
+  server has stored here, biggest first, which is what a block decision is made
+  from. The nightly Tagesbericht (`Vutuv.Reports`) counts new remote followers
+  per Berlin day.
 
 ## Deliberate v1 limits
 
 No inbound content (likes/replies/boosts are dropped) — the inbound tier is
-planned in issues #1067–#1071 under an agreed retention model: counts before
+planned in issues #1068–#1071 under an agreed retention model: counts before
 text, a counter row lives as long as its post, stored remote text expires after
-six months, and the operator blocklist ships with the first stored row. Reposts
+six months. The operator blocklist and the inbound caps that were the condition
+for storing anything have landed (issue #1067, see the safety-floor bullet
+above). Reposts
 now federate as
 `Announce` (issue #910) and account deletion broadcasts an actor `Delete`
 (issue #985) — see the post-lifecycle and account-deletion bullets.
