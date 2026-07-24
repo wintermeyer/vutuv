@@ -1,10 +1,8 @@
-<.page_header crumbs={[
-  {gettext("Settings"), ~p"/settings"},
-  {gettext("Addresses"), ~p"/settings/addresses"},
-  gettext("Edit")
-]} />
-
-
-<.card_section>
+<.form_page
+  user={@user}
+  active={:addresses}
+  section={{gettext("Addresses"), ~p"/settings/addresses"}}
+  title={gettext("Edit address")}
+>
   <%= render "form_"<>@country<>".html", backlink: ~p"/settings/addresses", changeset: @changeset, conn: @conn, action: ~p"/settings/addresses/#{@address}", delete_to: ~p"/settings/addresses/#{@address}" %>
-</.card_section>
+</.form_page>

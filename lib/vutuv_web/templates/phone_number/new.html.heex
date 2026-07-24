@@ -1,9 +1,8 @@
-<.page_header crumbs={[
-  {gettext("Settings"), ~p"/settings"},
-  {gettext("Phone Numbers"), ~p"/settings/phone_numbers"},
-  gettext("New")
-]} />
-
-<.card_section>
+<.form_page
+  user={@user}
+  active={:phones}
+  section={{gettext("Phone numbers"), ~p"/settings/phone_numbers"}}
+  title={gettext("Add a phone number")}
+>
   <%= render "form_content.html", backlink: ~p"/settings/phone_numbers", changeset: @changeset, action: ~p"/settings/phone_numbers" %>
-</.card_section>
+</.form_page>

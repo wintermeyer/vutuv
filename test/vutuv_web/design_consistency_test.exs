@@ -55,8 +55,13 @@ defmodule VutuvWeb.DesignConsistencyTest do
         |> get(~p"/settings/emails/#{email}/edit")
 
       html = html_response(conn, 200)
-      assert html =~ "Öffentlich"
-      refute html =~ ~s(>Public<)
+      # The options say who can see the address rather than naming a privacy
+      # mode ("Public" / "Private"), which read as jargon for the one thing the
+      # member actually wants to know.
+      assert html =~ "Alle"
+      assert html =~ "Nur Sie"
+      refute html =~ ~s(>Everyone<)
+      refute html =~ ~s(>Only you<)
     end
   end
 
@@ -251,7 +256,9 @@ defmodule VutuvWeb.DesignConsistencyTest do
       conn = get(conn, ~p"/settings/phone_numbers/new")
       html = html_response(conn, 200)
 
-      assert html =~ ~s(class="card-list")
+      # A form page uses the narrow `--form` variant of the shell, so the card
+      # hugs the form instead of stretching across the whole content column.
+      assert html =~ ~s(class="card-list card-list--form")
       assert html =~ ~s(<section class="card">)
       # The form_content is rendered inside the shell (its submit button is present).
       assert html =~ ~s(<button class="button" type="submit">)

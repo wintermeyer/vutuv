@@ -3,15 +3,14 @@
 
   <.editform_field form={f} field={:provider}>
     <%= label f, :provider, gettext("Provider") %>
-    <%= select f, :provider, Vutuv.Profiles.SocialMediaAccount.accepted_providers(),
-      prompt: gettext("Select a social media provider"),
-      autofocus: true %>
+    <%= select f, :provider, Vutuv.Profiles.SocialMediaAccount.accepted_providers(), [prompt: gettext("Select a social media provider"),
+      autofocus: true] ++ err_attrs(f, :provider) %>
     <%= error_tag f, :provider %>
   </.editform_field>
 
   <.editform_field form={f} field={:value}>
     <%= label f, :value, gettext("Account") %>
-    <%= text_input f, :value %>
+    <%= text_input f, :value, err_attrs(f, :value) %>
     <%= error_tag f, :value %>
     <%= error_tag f, :value_provider %>
   </.editform_field>

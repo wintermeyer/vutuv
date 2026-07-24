@@ -40,13 +40,12 @@ defmodule VutuvWeb.TagNewLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <.page_header crumbs={[
-      {gettext("Settings"), ~p"/settings"},
-      {gettext("Tags"), ~p"/settings/tags"},
-      gettext("New")
-    ]} />
-
-    <.card_section>
+    <.form_page
+      user={@current_user}
+      active={:tags}
+      section={{gettext("Tags"), ~p"/settings/tags"}}
+      title={gettext("Add a tag")}
+    >
       <.form for={@form} id="tag-form" class="editform" phx-change="preview" phx-submit="save">
         <.form_error :if={@changeset} changeset={@changeset} />
 
@@ -78,9 +77,9 @@ defmodule VutuvWeb.TagNewLive do
           </div>
         </div>
 
-        <.form_actions backlink={~p"/settings/tags"} />
+        <.form_actions backlink={~p"/settings/tags"} submit={gettext("Add tags")} />
       </.form>
-    </.card_section>
+    </.form_page>
     """
   end
 

@@ -3,13 +3,13 @@
 
   <.editform_field form={f} field={:value}>
     <%= label f, :value, gettext("URL") %>
-    <%= text_input f, :value, placeholder: gettext("http://www.example.com"), autofocus: true %>
+    <%= text_input f, :value, [placeholder: gettext("http://www.example.com"), autofocus: true] ++ err_attrs(f, :value) %>
     <%= error_tag f, :value %>
   </.editform_field>
 
   <.editform_field form={f} field={:description}>
     <%= label f, :description, gettext("Description") %>
-    <%= text_input f, :description, placeholder: gettext("Homepage")%>
+    <%= text_input f, :description, [placeholder: gettext("Homepage")] ++ err_attrs(f, :description) %>
     <%= error_tag f, :description %>
   </.editform_field>
 

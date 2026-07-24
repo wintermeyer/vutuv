@@ -1,9 +1,8 @@
-<.page_header crumbs={[
-  {gettext("Settings"), ~p"/settings"},
-  {gettext("Profiles"), ~p"/settings/social_media_accounts"},
-  gettext("New")
-]} />
-
-<.card_section>
+<.form_page
+  user={@user}
+  active={:social}
+  section={{gettext("Profiles"), ~p"/settings/social_media_accounts"}}
+  title={gettext("Add a social media account")}
+>
   <%= render "form_content.html", backlink: ~p"/settings/social_media_accounts", changeset: @changeset, action: ~p"/settings/social_media_accounts" %>
-</.card_section>
+</.form_page>

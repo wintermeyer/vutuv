@@ -59,7 +59,7 @@ defmodule VutuvWeb.UI do
   e.g. `class={[input_class(), "resize-y"]}`.
   """
   def input_class do
-    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-3 focus:ring-brand-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
   end
 
   @doc """
@@ -83,7 +83,7 @@ defmodule VutuvWeb.UI do
   """
   def input_class(invalid?) when is_boolean(invalid?) do
     if invalid? do
-      "w-full rounded-lg border border-red-400 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-none dark:border-red-500/70 dark:bg-slate-800 dark:text-slate-100"
+      "w-full rounded-lg border border-red-400 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-3 focus:ring-red-500/40 dark:border-red-500/70 dark:bg-slate-800 dark:text-slate-100"
     else
       input_class()
     end
@@ -96,7 +96,7 @@ defmodule VutuvWeb.UI do
   the sign-up form's consent checkboxes.
   """
   def checkbox_class do
-    "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800"
+    "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:focus:ring-offset-slate-900"
   end
 
   @doc """
@@ -2816,11 +2816,20 @@ defmodule VutuvWeb.UI do
   attr(:delete_to, :any, default: nil)
   attr(:confirm, :string, default: nil)
 
+  attr(:submit, :string,
+    default: nil,
+    doc: ~S(the primary button's label; defaults to "Save". Never "Submit")
+  )
+
   def form_actions(assigns) do
     ~H"""
     <div class="editform__actions">
+      <%!-- Source order is submit → cancel → delete, which is also the
+      keyboard order and (via .editform__actions' `order`) the visual one:
+      the button you came to press leads, and the destructive one sits at the
+      far end of the row. --%>
+      <button class="button" type="submit">{@submit || gettext("Save")}</button>
       <a class="button button--cancel" href={@backlink}>{gettext("Cancel")}</a>
-      <button class="button" type="submit">{gettext("Submit")}</button>
       <.link
         :if={@delete_to}
         id="delete-entry"
@@ -3013,11 +3022,21 @@ defmodule VutuvWeb.UI do
   attr(:add_label, :string, default: nil)
   attr(:empty, :boolean, default: false)
   attr(:empty_text, :string, default: nil)
+
+  attr(:variant, :atom,
+    default: :list,
+    values: [:list, :form],
+    doc: "`:form` narrows the card to hug a single form instead of the full column"
+  )
+
   slot(:inner_block, required: true)
 
   def card_section(assigns) do
     ~H"""
-    <div class="card-list">
+    <%!-- A plain string, not a class list: HEEx renders `["card-list", false]`
+    as `class="card-list "` with a trailing space, which is both untidy output
+    and enough to break an exact-match assertion. --%>
+    <div class={if(@variant == :form, do: "card-list card-list--form", else: "card-list")}>
       <section class="card">
         <%= cond do %>
           <% @empty and @add_href -> %>
@@ -3328,6 +3347,16 @@ defmodule VutuvWeb.UI do
   attr(:user, Vutuv.Accounts.User, required: true)
   attr(:title, :string, required: true)
   attr(:active, :atom, default: nil)
+
+  attr(:crumbs, :list,
+    default: nil,
+    doc: """
+    Overrides the default two-level "Settings / <title>" trail. The new/edit
+    form pages pass three levels ("Settings / Links / New") so the section
+    they belong to stays one tap away while you fill the form in.
+    """
+  )
+
   slot(:inner_block, required: true)
 
   def settings_shell(assigns) do
@@ -3347,7 +3376,9 @@ defmodule VutuvWeb.UI do
           overrides the class's centered 48rem measure so the trail
           left-aligns with the h1. --%>
           <div class="breadcrumbs mx-0">
-            {VutuvWeb.UserHelpers.gen_breadcrumbs([{gettext("Settings"), ~p"/settings"}, @title])}
+            {VutuvWeb.UserHelpers.gen_breadcrumbs(
+              @crumbs || [{gettext("Settings"), ~p"/settings"}, @title]
+            )}
           </div>
           <div class="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{@title}</h1>
@@ -3362,6 +3393,58 @@ defmodule VutuvWeb.UI do
         {render_slot(@inner_block)}
       </div>
     </div>
+    """
+  end
+
+  @doc """
+  The page chrome every classic `.editform` new/edit form under /settings
+  wears: the `<.settings_shell>` (sidebar, visible h1, breadcrumb trail back
+  to the section) around the form's own card.
+
+  Before this existed each of those pages rendered `<.page_header crumbs=…>`
+  plus a bare `<.card_section>`, which meant that the moment you pressed "Add"
+  you fell out of the settings area entirely — the sidebar vanished, and the
+  only heading was an `sr-only` h1 reading "New". So the pages carrying most
+  of a member's data entry were the least finished ones in the app, while
+  their siblings (Privacy, Language & display) had a proper shell. One
+  component now owns that chrome for all of them.
+
+  `title` names the task ("Add work experience"), not the step ("New").
+  `section` is the `{label, path}` of the list the form belongs to, which
+  supplies both the middle breadcrumb and the sidebar's active entry.
+
+  Use it as:
+
+      <.form_page
+        user={@user}
+        active={:links}
+        section={{gettext("Links"), ~p"/settings/links"}}
+        title={gettext("Add a link")}
+      >
+        <%= render "form_content.html", … %>
+      </.form_page>
+  """
+  attr(:user, Vutuv.Accounts.User, required: true)
+  attr(:title, :string, required: true, doc: "the visible h1: what this form does")
+  attr(:active, :atom, default: nil, doc: "the settings_menu key to mark in the sidebar")
+
+  attr(:section, :any,
+    required: true,
+    doc: ~S(`{label, path}` of the section list this form belongs to)
+  )
+
+  slot(:inner_block, required: true)
+
+  def form_page(assigns) do
+    ~H"""
+    <.settings_shell
+      user={@user}
+      active={@active}
+      title={@title}
+      crumbs={[{gettext("Settings"), ~p"/settings"}, @section, @title]}
+    >
+      <.card_section variant={:form}>{render_slot(@inner_block)}</.card_section>
+    </.settings_shell>
     """
   end
 end

@@ -1,11 +1,14 @@
-<.page_header crumbs={[
+<.page_header
+  title={gettext("Edit application")}
+  crumbs={[
   {gettext("Developers"), ~p"/developers"},
   {gettext("Applications"), ~p"/developers/apps"},
   {@app.name, ~p"/developers/apps/#{@app.id}"},
   gettext("Edit")
-]} />
+]}
+/>
 
-<.card_section>
+<.card_section variant={:form}>
   <%= render("form_content.html",
     changeset: @changeset,
     action: ~p"/developers/apps/#{@app.id}",

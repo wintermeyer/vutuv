@@ -3,7 +3,7 @@
 
   <.editform_field form={f} field={:organization}>
     <%= label f, :organization, gettext("Organization") %>
-    <%= text_input f, :organization, autofocus: true %>
+    <%= text_input f, :organization, [autofocus: true] ++ err_attrs(f, :organization) %>
     <%= error_tag f, :organization %>
 
     <%!-- Optional link to a verified organization page (issue #931). Progressive
@@ -34,53 +34,71 @@
 
   <.editform_field form={f} field={:title}>
     <%= label f, :title, gettext("Job Title") %>
-    <%= text_input f, :title %>
+    <%= text_input f, :title, err_attrs(f, :title) %>
     <%= error_tag f, :title %>
   </.editform_field>
 
   <.editform_field form={f} field={:kind}>
     <%= label f, :kind, gettext("Category") %>
-    <%= select f, :kind, kind_options() %>
+    <%= select f, :kind, kind_options(), err_attrs(f, :kind) %>
     <%= error_tag f, :kind %>
   </.editform_field>
 
   <.editform_field form={f} field={:description}>
     <%= label f, :description, gettext("Description") %>
-    <%= textarea f, :description, rows: 3 %>
+    <%= textarea f, :description, [rows: 3] ++ err_attrs(f, :description) %>
     <p class="editform__hint">{gettext("Markdown is supported: bold, italics, links and lists.")}</p>
     <%= error_tag f, :description %>
   </.editform_field>
 
-  <.editform_field form={f} field={:start_year}>
-    <%= label f, :start_year, gettext("Start year") %>
-    <%= select f, :start_year, @current_year..1920//-1, prompt: gettext("Select a year") %>
-    <%= error_tag f, :start_year %>
-  </.editform_field>
+  <%!-- Start and end each read as ONE date, so their month and year share a
+        row under a single legend. Four stacked full-width selects (the old
+        "Start year" / "Start month" / "End year" / "End month" ladder) made
+        the middle of this form a wall of identical dropdowns and buried the
+        fact that there are only two dates here. --%>
+  <fieldset class="editform__group">
+    <legend>{gettext("From")}</legend>
+    <div class="editform__row">
+      <.editform_field form={f} field={:start_month}>
+        <%= label f, :start_month, gettext("Month") %>
+        <%= select f, :start_month, month_options(), [prompt: gettext("Month")] ++ err_attrs(f, :start_month) %>
+        <%= error_tag f, :start_month %>
+      </.editform_field>
 
-  <.editform_field form={f} field={:start_month}>
-    <%= label f, :start_month, gettext("Start month") %>
-    <%= select f, :start_month, month_options(), prompt: gettext("Select a month") %>
-    <%= error_tag f, :start_month %>
-  </.editform_field>
+      <.editform_field form={f} field={:start_year}>
+        <%= label f, :start_year, gettext("Year") %>
+        <%= select f, :start_year, @current_year..1920//-1, [prompt: gettext("Year")] ++ err_attrs(f, :start_year) %>
+        <%= error_tag f, :start_year %>
+      </.editform_field>
+    </div>
+  </fieldset>
 
-  <.editform_field form={f} field={:end_year}>
-    <%= label f, :end_year, gettext("End year") %>
-    <%= select f, :end_year, @current_year..1920//-1, prompt: gettext("Select a year") %>
-    <%= error_tag f, :end_year %>
-  </.editform_field>
+  <fieldset class="editform__group">
+    <legend>
+      {gettext("Until")}
+      <span class="editform__optional">{gettext("(leave empty if this is current)")}</span>
+    </legend>
+    <div class="editform__row">
+      <.editform_field form={f} field={:end_month}>
+        <%= label f, :end_month, gettext("Month") %>
+        <%= select f, :end_month, month_options(), [prompt: gettext("Month")] ++ err_attrs(f, :end_month) %>
+        <%= error_tag f, :end_month %>
+      </.editform_field>
 
-  <.editform_field form={f} field={:end_month}>
-    <%= label f, :end_month, gettext("End month") %>
-    <%= select f, :end_month, month_options(), prompt: gettext("Select a month") %>
-    <%= error_tag f, :end_month %>
-  </.editform_field>
+      <.editform_field form={f} field={:end_year}>
+        <%= label f, :end_year, gettext("Year") %>
+        <%= select f, :end_year, @current_year..1920//-1, [prompt: gettext("Year")] ++ err_attrs(f, :end_year) %>
+        <%= error_tag f, :end_year %>
+      </.editform_field>
+    </div>
+  </fieldset>
 
   <%!-- The credential this job was earned with (issue #858). Rendered only when
         the member holds at least one certificate or license, so the common
         credential-less member sees the form exactly as before. --%>
   <.editform_field :if={@qualification_options != []} form={f} field={:qualification_id}>
     <%= label f, :qualification_id, gettext("Qualification") %>
-    <%= select f, :qualification_id, @qualification_options, prompt: gettext("None") %>
+    <%= select f, :qualification_id, @qualification_options, [prompt: gettext("None")] ++ err_attrs(f, :qualification_id) %>
     <p class="editform__hint">
       {gettext("Optional: the certificate or license you earned this job with.")}
     </p>

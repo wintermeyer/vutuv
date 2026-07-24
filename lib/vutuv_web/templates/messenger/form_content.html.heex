@@ -3,15 +3,14 @@
 
   <.editform_field form={f} field={:provider}>
     <%= label f, :provider, gettext("Messenger") %>
-    <%= select f, :provider, Vutuv.Profiles.Messenger.accepted_providers(),
-      prompt: gettext("Select a messenger"),
-      autofocus: true %>
+    <%= select f, :provider, Vutuv.Profiles.Messenger.accepted_providers(), [prompt: gettext("Select a messenger"),
+      autofocus: true] ++ err_attrs(f, :provider) %>
     <%= error_tag f, :provider %>
   </.editform_field>
 
   <.editform_field form={f} field={:value}>
     <%= label f, :value, gettext("Contact") %>
-    <%= text_input f, :value %>
+    <%= text_input f, :value, err_attrs(f, :value) %>
     <p class="editform__hint">
       {gettext("Signal and WhatsApp accept a phone number or a username; the other messengers use their own id or handle (e.g. an 8-character Threema ID or a Matrix @you:matrix.org).")}
     </p>

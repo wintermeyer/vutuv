@@ -388,10 +388,28 @@ body.stretch main {
 
 /* ---------- Forms ---------- */
 /* Layout only: forms are wrapped in a `.card` by the templates, so the card is
-   the surface. Centre the fields to a comfortable width inside that card. */
+   the surface. The fields cap at a readable measure and sit **flush left**
+   inside that card, the same way the kit settings pages (privacy, language &
+   display) lay their controls out. They used to be `margin: 0 auto`, which
+   floated a 34rem column in the middle of a 48rem card and left ~7rem of dead
+   space on either side — the single loudest reason these pages read as
+   unfinished next to their kit siblings. */
 .editform {
   max-width: 34rem;
-  margin: 0 auto;
+}
+/* The card around a single form hugs it, rather than stretching to the full
+   content column and leaving a wide empty gutter beside every field. (The
+   fields themselves keep the 34rem measure above — this only stops the white
+   surface from advertising the space they don't use.) */
+.card-list--form .card {
+  max-width: 38rem;
+}
+/* When a form follows explanatory prose in the same card (the username
+   change), it needs its own breathing room: the last thing above it is
+   usually an `.editform__hint`, whose `margin: 0.25rem 0 0` leaves the first
+   label sitting directly on the paragraph. */
+.card > .editform:not(:first-child) {
+  margin-top: 1.25rem;
 }
 .editform__field {
   margin-bottom: 1rem;
@@ -402,6 +420,44 @@ body.stretch main {
   font-weight: 500;
   color: #334155;
   margin-bottom: 0.375rem;
+}
+/* Two fields that name one value (a month and its year, a salary and its
+   currency) share a row instead of taking a full-width select each — the
+   work-experience form alone stacked four of them. Collapses to one column
+   when the card is too narrow to hold the pair. */
+.editform__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+/* A plain media query, not `@container`: nothing on these pages declares a
+   `container-type`, so a container query would never match. */
+@media (max-width: 30rem) {
+  .editform__row {
+    grid-template-columns: 1fr;
+  }
+}
+/* A field group ("From", "To") that owns a `.editform__row`: the legend reads
+   as a field label, the pair below it as one control. */
+.editform__group {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1rem;
+  min-width: 0;
+}
+.editform__group > legend {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+  margin-bottom: 0.375rem;
+  padding: 0;
+}
+/* The optional marker. Required is the norm on these forms, so the quiet
+   "(optional)" carries less ink than starring every other label would. */
+.editform__optional {
+  font-weight: 400;
+  color: #64748b;
 }
 .editform input[type="text"],
 .editform input[type="email"],
@@ -423,12 +479,28 @@ body.stretch main {
   font-size: 0.875rem;
   line-height: 1.5;
 }
-.editform input:focus,
+/* The focus ring. `input[type]` / `input:not([type])` (0,2,1) so it out-ranks
+   the base recipe above AND the dark-mode block at the end of this file — a
+   plain `.editform input:focus` (0,2,1) lost the border-colour to that later
+   same-specificity dark rule, which is why a focused field in dark mode kept
+   its slate border and showed only a 15%-opacity halo you could barely see.
+   The ring is the same two-part treatment the kit inputs use
+   (`VutuvWeb.UI.input_class/0`), so keyboard focus reads identically on a
+   classic and a kit form. */
+.editform input[type]:focus,
+.editform input:not([type]):focus,
 .editform select:focus,
 .editform textarea:focus {
   outline: none;
   border-color: var(--color-brand-500);
-  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.4);
+}
+/* Checkboxes and radios keep a native box, so they take the ring as an
+   offset outline instead of a border swap. */
+.editform input[type="checkbox"]:focus-visible,
+.editform input[type="radio"]:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
 }
 /* `input[type]` + `input:not([type])` (0,2,1 each) instead of a bare `input`
    (0,1,1): the base recipe above selects `.editform input[type="text"]` etc.
@@ -440,13 +512,35 @@ body.stretch main {
 .editform__field--error textarea {
   border-color: #ef4444;
 }
+/* The message under a failed field. The leading "!" glyph carries the meaning
+   for anyone who cannot separate the red from the slate around it — colour
+   alone would leave the error invisible to them (WCAG 1.4.1). */
 .editform__error,
 .editform__field--error span {
   color: #dc2626;
   font-size: 0.8rem;
   font-weight: 500;
   margin-top: 0.25rem;
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+.editform__error::before,
+.editform__field--error span::before {
+  content: "!";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 9999px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  transform: translateY(0.1rem);
 }
 /* Muted helper line under a field (e.g. "Markdown is supported"). */
 .editform__hint {
@@ -489,21 +583,38 @@ body.stretch main {
   flex: none;
   margin-top: 1px;
 }
+/* The actions row. The submit is the one thing you came here to press, so it
+   leads (and grows); Cancel keeps its natural width beside it rather than
+   claiming a third of the row as an equally-sized grey slab; Delete, on the
+   edit forms, is pushed to the far end so the destructive control is nowhere
+   near the one you aim for. Wraps to stacked full-width buttons on a phone. */
 .editform__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
   margin-top: 1.25rem;
   border-top: 1px solid #e2e8f0;
   padding-top: 15px;
 }
-.editform__actions a {
-  flex: 1;
-  text-align: center;
+.editform__actions input[type="submit"],
+.editform__actions button[type="submit"] {
+  flex: 1 1 12rem;
+  order: 1;
 }
-.editform__actions input,
-.editform__actions button {
-  flex: 2;
+.editform__actions .button--cancel {
+  flex: 0 0 auto;
+  order: 2;
+}
+.editform__actions .button--danger {
+  order: 3;
+  margin-left: auto;
+}
+@media (max-width: 30rem) {
+  .editform__actions > * {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
 }
 
 /* ---------- Buttons ---------- */
@@ -1626,7 +1737,9 @@ body.mde-fullscreen-lock { overflow: hidden; }
   a:where(:hover) { color: #93c5fd; }
   .card__morelink,
   .card__morelink:hover { color: #93c5fd; }
-  .editform label { color: #cbd5e1; }
+  .editform label,
+  .editform__group > legend { color: #cbd5e1; }
+  .editform__optional { color: #94a3b8; }
   /* Mirror the light-mode selector list above: its `[type=…]` attribute
      selectors outrank a plain `.editform input`, which would leave the
      fields white in dark mode. */
@@ -1693,6 +1806,8 @@ body.mde-fullscreen-lock { overflow: hidden; }
   .editform__field--error select,
   .editform__field--error textarea { border-color: #ef4444; }
   .editform__error, .editform__field--error span { color: #f87171; }
+  .editform__error::before,
+  .editform__field--error span::before { background: #f87171; color: #450a0a; }
   .editform__hint { color: #94a3b8; }
   .editform__hint.editform__hint--error { color: #f87171; }
   .button--cancel, .button--secondary, .button--icon:hover,

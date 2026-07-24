@@ -3,57 +3,81 @@
 
   <.editform_field form={f} field={:name}>
     <%= label f, :name, gettext("Name") %>
-    <%= text_input f, :name, autofocus: true %>
+    <%= text_input f, :name, [autofocus: true] ++ err_attrs(f, :name) %>
     <span class="editform__hint"><%= gettext("e.g. AWS Solutions Architect – Associate") %></span>
     <%= error_tag f, :name %>
   </.editform_field>
 
   <.editform_field form={f} field={:kind}>
     <%= label f, :kind, gettext("Type") %>
-    <%= select f, :kind, kind_options() %>
+    <%= select f, :kind, kind_options(), err_attrs(f, :kind) %>
     <%= error_tag f, :kind %>
   </.editform_field>
 
   <.editform_field form={f} field={:issuer}>
     <%= label f, :issuer, gettext("Issuer") %>
-    <%= text_input f, :issuer %>
+    <%= text_input f, :issuer, err_attrs(f, :issuer) %>
     <span class="editform__hint"><%= gettext("e.g. Amazon Web Services") %></span>
     <%= error_tag f, :issuer %>
   </.editform_field>
 
-  <.editform_field form={f} field={:awarded_year}>
-    <%= label f, :awarded_year, gettext("Issued year") %>
-    <%= select f, :awarded_year, award_year_options(), prompt: gettext("Select a year") %>
-    <%= error_tag f, :awarded_year %>
-  </.editform_field>
+  <%!-- Issued and expiry are each one date, so month and year share a row.
+        Four stacked full-width selects read as four unrelated questions. --%>
+  <fieldset class="editform__group">
+    <legend>{gettext("Issued")}</legend>
+    <div class="editform__row">
+      <.editform_field form={f} field={:awarded_month}>
+        <%= label f, :awarded_month, gettext("Month") %>
+        <%= select f, :awarded_month, month_number_options(), [prompt: gettext("Month")] ++ err_attrs(f, :awarded_month) %>
+        <%= error_tag f, :awarded_month %>
+      </.editform_field>
 
-  <.editform_field form={f} field={:awarded_month}>
-    <%= label f, :awarded_month, gettext("Issued month") %>
-    <%= select f, :awarded_month, month_number_options(), prompt: gettext("Select a month") %>
-    <%= error_tag f, :awarded_month %>
-  </.editform_field>
+      <.editform_field form={f} field={:awarded_year}>
+        <%= label f, :awarded_year, gettext("Year") %>
+        <%= select f, :awarded_year, award_year_options(), [prompt: gettext("Year")] ++ err_attrs(f, :awarded_year) %>
+        <%= error_tag f, :awarded_year %>
+      </.editform_field>
+    </div>
+  </fieldset>
 
-  <.editform_field form={f} field={:expires_year}>
-    <%= label f, :expires_year, gettext("Expiry year") %>
-    <%= select f, :expires_year, expiry_year_options(), prompt: gettext("Does not expire") %>
-    <%= error_tag f, :expires_year %>
-  </.editform_field>
+  <fieldset class="editform__group">
+    <legend>
+      {gettext("Expires")}
+      <span class="editform__optional">{gettext("(leave empty if it does not expire)")}</span>
+    </legend>
+    <div class="editform__row">
+      <.editform_field form={f} field={:expires_month}>
+        <%= label f, :expires_month, gettext("Month") %>
+        <%= select f, :expires_month, month_number_options(), [prompt: gettext("Month")] ++ err_attrs(f, :expires_month) %>
+        <%= error_tag f, :expires_month %>
+      </.editform_field>
 
-  <.editform_field form={f} field={:expires_month}>
-    <%= label f, :expires_month, gettext("Expiry month") %>
-    <%= select f, :expires_month, month_number_options(), prompt: gettext("Select a month") %>
-    <%= error_tag f, :expires_month %>
-  </.editform_field>
+      <.editform_field form={f} field={:expires_year}>
+        <%= label f, :expires_year, gettext("Year") %>
+        <%= select f, :expires_year, expiry_year_options(), [prompt: gettext("Does not expire")] ++ err_attrs(f, :expires_year) %>
+        <%= error_tag f, :expires_year %>
+      </.editform_field>
+    </div>
+  </fieldset>
 
   <.editform_field form={f} field={:credential_id}>
-    <%= label f, :credential_id, gettext("Credential ID") %>
-    <%= text_input f, :credential_id %>
+    <%= label f, :credential_id do %>
+      {gettext("Credential ID")}
+      <span class="editform__optional">{gettext("(optional)")}</span>
+    <% end %>
+    <%= text_input f, :credential_id, err_attrs(f, :credential_id) %>
     <%= error_tag f, :credential_id %>
   </.editform_field>
 
   <.editform_field form={f} field={:url}>
-    <%= label f, :url, gettext("Verification link") %>
-    <%= text_input f, :url, type: "url", placeholder: "https://" %>
+    <%= label f, :url do %>
+      {gettext("Verification link")}
+      <span class="editform__optional">{gettext("(optional)")}</span>
+    <% end %>
+    <%= text_input f, :url, [type: "url", placeholder: "https://"] ++ err_attrs(f, :url) %>
+    <p :if={!f.errors[:url]} class="editform__hint">
+      {gettext("A page where the credential can be checked.")}
+    </p>
     <%= error_tag f, :url %>
   </.editform_field>
 
@@ -94,7 +118,7 @@
 
   <.editform_field form={f} field={:document}>
     <%= label f, :document, gettext("Proof document (PDF or image)") %>
-    <%= file_input f, :document, accept: Enum.join(QualificationDocument.extension_whitelist(), ",") %>
+    <%= file_input f, :document, [accept: Enum.join(QualificationDocument.extension_whitelist(), ",")] ++ err_attrs(f, :document) %>
     <span class="editform__hint">
       <%= gettext("Optional. A scan or photo of the certificate, up to 10 MB.") %>
     </span>

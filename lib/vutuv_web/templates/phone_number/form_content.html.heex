@@ -3,13 +3,15 @@
 
   <.editform_field form={f} field={:value}>
     <%= label f, :value, gettext("Phone Number") %>
-    <%= telephone_input f, :value, placeholder: gettext("+49 30 12345678"), id: "textfield", autofocus: true %>
+    <%= telephone_input f, :value, [placeholder: gettext("+49 30 12345678"), id: "textfield", autofocus: true, autocomplete: "tel"] ++ err_attrs(f, :value) %>
+    <p :if={!f.errors[:value]} class="editform__hint">
+      {gettext("Include the country code so the number works from abroad.")}
+    </p>
     <%= error_tag f, :value %>
   </.editform_field>
   <.editform_field form={f} field={:number_type}>
     <%= label f, :number_type, gettext("Type of Number") %>
-    <%= select f, :number_type,
-      [{gettext("Choose One"), nil} | Enum.map(Vutuv.Profiles.PhoneNumber.number_types(), &{phone_type_label(&1), &1})] %>
+    <%= select f, :number_type, [{gettext("Choose One"), nil} | Enum.map(Vutuv.Profiles.PhoneNumber.number_types(), &{phone_type_label(&1), &1})], err_attrs(f, :number_type) %>
     <%= error_tag f, :number_type %>
   </.editform_field>
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
