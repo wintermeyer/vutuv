@@ -35,6 +35,15 @@ defmodule Vutuv.Notifications.Bounces do
   alias Vutuv.Deliverability.MailLog
   alias Vutuv.Repo
 
+  # A real vutuv DSN names exactly one recipient (vutuv sends single-recipient
+  # mail; see the moduledoc), so ten is already generous - a report naming far
+  # more is malformed or abuse. Each acted-on recipient writes its own bounce
+  # ledger row (with a slice of the raw body) synchronously in the request, so
+  # an uncapped list lets one 1 MB body packed with tens of thousands of
+  # distinct `Final-Recipient:` lines amplify into tens of thousands of rows and
+  # queries. Capping here bounds the rows/queries a single report can trigger.
+  @max_recipients 10
+
   @doc """
   Records one raw DSN message. Returns `{:ok, :failed}` when a recipient
   failure was recorded (address deactivated), `{:ok, :ignored}` for a
@@ -132,6 +141,7 @@ defmodule Vutuv.Notifications.Bounces do
       |> List.flatten()
       |> Enum.map(&String.downcase/1)
       |> Enum.uniq()
+      |> cap_recipients()
 
     action =
       case Regex.run(~r/^Action:\s*(\w+)/im, raw, capture: :all_but_first) do
@@ -147,4 +157,21 @@ defmodule Vutuv.Notifications.Bounces do
 
     if recipients != [] and action, do: {recipients, action, status}, else: :error
   end
+
+  # Bounds the amplification: act on at most `@max_recipients` addresses from one
+  # report. The capped list flows unchanged through every `record/1` branch, so a
+  # normal single-recipient DSN is untouched. Log the counts (never the dropped
+  # addresses) so an oversized report is visible in ops without leaking data.
+  defp cap_recipients(recipients) when length(recipients) > @max_recipients do
+    dropped = length(recipients) - @max_recipients
+
+    Logger.warning(
+      "Email bounce: report named #{length(recipients)} recipients; acting on the first " <>
+        "#{@max_recipients} and dropping #{dropped}"
+    )
+
+    Enum.take(recipients, @max_recipients)
+  end
+
+  defp cap_recipients(recipients), do: recipients
 end
