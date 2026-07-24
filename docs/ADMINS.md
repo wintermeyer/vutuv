@@ -187,6 +187,14 @@ everything to it. LiveView needs websocket upgrades:
 server {
     server_name example.com;
 
+    # HSTS: tell the browser to only ever reach this host over https, so it
+    # never sends the login-session cookie (`_vutuv_key`) over cleartext http —
+    # closing the very first-request window that the cookie's own `Secure` flag
+    # cannot cover. Only add this on a TLS (https) vhost; an intranet install
+    # served over plain http must NOT set it. `includeSubDomains` covers every
+    # subdomain; drop it if any subdomain is intentionally http-only.
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
     location / {
         proxy_pass http://127.0.0.1:4003;
         proxy_http_version 1.1;
@@ -200,6 +208,12 @@ server {
     client_max_body_size 64m;
 }
 ```
+
+The app itself does **not** send `Strict-Transport-Security` and does **not**
+enable `Plug.SSL`/`force_ssl`: the blue/green deploy's health gate curls
+`http://127.0.0.1:$PORT/health` on loopback with no `X-Forwarded-Proto`, which
+`Plug.SSL` would redirect and break the deploy. HSTS therefore belongs here in
+the nginx TLS terminator, which every internet install already runs.
 
 ### Uploaded images
 

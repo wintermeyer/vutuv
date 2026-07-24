@@ -417,8 +417,22 @@ defmodule Vutuv.Accounts do
     payload = Phoenix.Token.sign(@token_context, pin_cookie_salt(), email)
 
     conn
-    |> Conn.delete_resp_cookie(@pin_cookie, max_age: @pin_cookie_max_age)
-    |> Conn.put_resp_cookie(@pin_cookie, payload, max_age: @pin_cookie_max_age)
+    |> Conn.delete_resp_cookie(@pin_cookie, pin_cookie_opts())
+    |> Conn.put_resp_cookie(@pin_cookie, payload, pin_cookie_opts())
+  end
+
+  # Cookie attributes for the login-identity cookie. `Secure` is gated on the
+  # endpoint's public scheme exactly like the session cookie (only over https,
+  # so a plain-HTTP intranet install and dev/test can still set and read it), and
+  # `SameSite=Lax` is set on every scheme. `put_resp_cookie/4` already defaults
+  # `http_only: true`, which we keep. The signed payload holds the pending login
+  # identity, so an on-path attacker must never be able to lift it over http.
+  defp pin_cookie_opts do
+    [
+      max_age: @pin_cookie_max_age,
+      same_site: "Lax",
+      secure: VutuvWeb.Endpoint.secure_cookies?()
+    ]
   end
 
   @doc """
@@ -438,7 +452,7 @@ defmodule Vutuv.Accounts do
 
   @doc "Drops the login-identity cookie (after a successful login or lockout)."
   def delete_pin_cookie(conn) do
-    Conn.delete_resp_cookie(conn, @pin_cookie, max_age: @pin_cookie_max_age)
+    Conn.delete_resp_cookie(conn, @pin_cookie, pin_cookie_opts())
   end
 
   defp pin_cookie_salt do

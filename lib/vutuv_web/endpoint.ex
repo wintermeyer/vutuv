@@ -115,7 +115,19 @@ defmodule VutuvWeb.Endpoint do
   # /stefan.wintermeyer.md matches the /:slug route; see VutuvWeb.AgentDocs.
   plug(VutuvWeb.Plug.AgentFormat)
 
-  plug(Plug.Session, @session_options)
+  # The login-session cookie (`_vutuv_key`, which carries the `session_token`
+  # `VutuvWeb.Plug.ConfigureSession` trusts) must be marked `Secure` +
+  # `SameSite=Lax` over https, so an on-path attacker on a plain-HTTP request can
+  # never observe or replay it. But whether the cookie may be `Secure` depends on
+  # the endpoint's PUBLIC scheme, which is set at RUNTIME (config/runtime.exs):
+  # https on the internet, http on an intranet install and in dev/test. An
+  # unconditional `secure: true` would make the cookie unusable over plain HTTP.
+  # `@session_options` is a compile-time attribute, so the scheme-dependent flags
+  # are added per request here; the LiveView socket above keeps the plain
+  # `@session_options` (it only DECODES the cookie, so `secure`/`same_site` are
+  # irrelevant there — and must not change, or the key/signing_salt drift and
+  # everyone is logged out).
+  plug(:secure_session)
 
   plug(VutuvWeb.Router)
 
@@ -125,4 +137,27 @@ defmodule VutuvWeb.Endpoint do
   request, where `url/0` is not available.
   """
   def public_url, do: config(:public_url)
+
+  @doc """
+  Whether cookies this endpoint sets may carry the `Secure` flag: true only when
+  the public scheme is https. False on a plain-HTTP (intranet) install and in
+  dev/test, where a `Secure` cookie would never be sent back over http and would
+  break login. Read here by `Plug.Session` and by the login-identity PIN cookie
+  in `Vutuv.Accounts.put_pin_cookie/2`.
+  """
+  def secure_cookies?, do: config(:url)[:scheme] == "https"
+
+  # The `Plug.Session` options with the scheme-dependent `secure` flag and
+  # `SameSite=Lax` added onto the compile-time `@session_options`. Its
+  # `key`/`signing_salt`/`max_age` are `@session_options` unchanged, so existing
+  # cookies keep decoding. Public (`@doc false`) as a test seam: the session
+  # test builds it for an https and an http scheme without mutating global config.
+  @doc false
+  def session_options(secure?) do
+    @session_options ++ [secure: secure?, same_site: "Lax"]
+  end
+
+  defp secure_session(conn, _opts) do
+    Plug.Session.call(conn, Plug.Session.init(session_options(secure_cookies?())))
+  end
 end
