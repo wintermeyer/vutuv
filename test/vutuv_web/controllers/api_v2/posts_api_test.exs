@@ -205,6 +205,15 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
       assert json_response(conn3, 200)["liked?"] == false
     end
 
+    test "liking your own post is a 422 (#1030)", %{conn: conn, me: me, token: token} do
+      post = insert(:post, user: me)
+
+      conn = put(authed(conn, token), "/api/2.0/posts/#{post.id}/like")
+      assert conn.status == 422
+      assert Jason.decode!(conn.resp_body)["reason"] == "self"
+      assert %{likes: 0} = Posts.engagement_counts(post.id)
+    end
+
     test "reposting a restricted post is a 409", %{conn: conn, me: me, token: token} do
       {:ok, post} =
         Posts.create_post(me, %{

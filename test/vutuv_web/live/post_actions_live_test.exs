@@ -29,7 +29,9 @@ defmodule VutuvWeb.PostActionsLiveTest do
   describe "no nested action LiveView (flash + PubSub fix)" do
     test "the feed renders the action bar inline, not as a child LiveView", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      post = create_post!(user, %{body: "inline bar"})
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      post = create_post!(friend, %{body: "inline bar"})
 
       {:ok, feed, _html} = live(conn, ~p"/feed")
 
@@ -49,7 +51,9 @@ defmodule VutuvWeb.PostActionsLiveTest do
   describe "the action bar on the feed" do
     test "like toggles and counts", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      post = create_post!(user, %{body: "likeable"})
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      post = create_post!(friend, %{body: "likeable"})
       %{view: actions} = feed_actions(conn, post)
 
       html =
@@ -68,6 +72,30 @@ defmodule VutuvWeb.PostActionsLiveTest do
         |> render_click()
 
       refute html =~ ~s(data-count="like")
+      assert %{likes: 0} = Posts.engagement_counts(post.id)
+    end
+
+    # A member cannot like their own post (issue #1030), so on your own card
+    # the heart is a plain, inert count instead of a clickable toggle. The
+    # id stays (the row keeps its four columns), but there is no toggle wiring.
+    test "your own post shows a static like count, not a toggle", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "no self like"})
+      %{view: actions} = feed_actions(conn, post)
+
+      like = "#post-actions-post-#{post.id}-like"
+      assert has_element?(actions, like)
+
+      html = actions |> element(like) |> render()
+      assert html =~ "<span"
+      refute html =~ ~s(phx-click="toggle")
+      refute html =~ "<button"
+
+      # Bookmarking your own post is still fine — a private save, unchanged.
+      assert has_element?(actions, "#post-actions-post-#{post.id}-bookmark[phx-click]")
+
+      # A self-like cannot sneak in through the data layer either.
+      assert {:error, :self} = Posts.like_post(user, post)
       assert %{likes: 0} = Posts.engagement_counts(post.id)
     end
 
@@ -142,7 +170,9 @@ defmodule VutuvWeb.PostActionsLiveTest do
     # active and inactive reposts visually identical (both brand blue).
     test "buttons carry an explicit state color", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      post = create_post!(user, %{body: "state colors"})
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      post = create_post!(friend, %{body: "state colors"})
       %{view: actions} = feed_actions(conn, post)
 
       like = "#post-actions-post-#{post.id}-like"
@@ -162,7 +192,9 @@ defmodule VutuvWeb.PostActionsLiveTest do
     # doesn't shift the neighbouring buttons under the pointer.
     test "zero counters reserve their space", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      post = create_post!(user, %{body: "stable row"})
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      post = create_post!(friend, %{body: "stable row"})
       %{view: actions} = feed_actions(conn, post)
 
       like = "#post-actions-post-#{post.id}-like"
@@ -397,8 +429,11 @@ defmodule VutuvWeb.PostActionsLiveTest do
     # renders exactly what it was handed by passing a like count no query could
     # produce (the post has zero likes).
     test "renders engagement handed in via the session instead of querying" do
-      user = other_user()
-      post = create_post!(user, %{body: "preloaded"})
+      author = other_user()
+      # The viewer is a reader (not the author), so the Like heart stays a live
+      # toggle — an author sees a static count on their own post (issue #1030).
+      reader = other_user()
+      post = create_post!(author, %{body: "preloaded"})
 
       passed = %{
         likes: 999,
@@ -409,7 +444,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
         bookmarked?: false,
         reposted?: false,
         restricted?: false,
-        author_id: user.id,
+        author_id: author.id,
         id: post.id
       }
 
@@ -417,7 +452,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
         live_isolated(build_conn(), VutuvWeb.PostLive.Actions,
           session: %{
             "post_id" => post.id,
-            "user_id" => user.id,
+            "user_id" => reader.id,
             "id" => "post-actions-#{post.id}",
             "locale" => "en",
             "engagement" => passed
