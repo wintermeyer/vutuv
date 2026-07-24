@@ -97,6 +97,29 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
 
     <.admin_card
+      icon="shield"
+      title={gettext("Freeze an account")}
+      count={@moderation_frozen_count}
+      attention={@moderation_frozen_count > 0}
+      href={~p"/admin/accounts"}
+      id="admin-accounts-link"
+      cta={gettext("Search and freeze")}
+    >
+      <%= if @moderation_frozen_count == 0 do %>
+        {gettext(
+          "Find an account by name, @handle or email and freeze or unfreeze it directly, without waiting for a report. The frozen-accounts list is here too."
+        )}
+      <% else %>
+        {ngettext(
+          "%{formatted} account is in the moderation freezer.",
+          "%{formatted} accounts are in the moderation freezer.",
+          @moderation_frozen_count,
+          formatted: compact_count(@moderation_frozen_count)
+        )}
+      <% end %>
+    </.admin_card>
+
+    <.admin_card
       icon="trash"
       title={gettext("Delete account")}
       href={~p"/admin/users/delete"}

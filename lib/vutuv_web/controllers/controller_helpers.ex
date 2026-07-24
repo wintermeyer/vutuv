@@ -106,6 +106,22 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
+  Renders the "this profile is currently unavailable" page and halts with the
+  given status (issue #812): `403` for a reversible hold (frozen / suspended /
+  unreachable), `410` for a permanently deactivated account. Unlike
+  `render_error/2`'s generic 403 ("you are not allowed to view this page"), this
+  gives a profile-specific body that owns up to "exists, withheld" without
+  revealing *why*. `VutuvWeb.Plug.EnsureActivated` is the one caller.
+  """
+  def render_withheld_profile(%Conn{} = conn, status) when status in [403, 410] do
+    conn
+    |> Conn.put_status(status)
+    |> Phoenix.Controller.put_view(html: VutuvWeb.ErrorHTML)
+    |> Phoenix.Controller.render("profile_unavailable.html", code: status)
+    |> Conn.halt()
+  end
+
+  @doc """
   Looks up a member by a caller-supplied id, returning `nil` for a missing
   *or malformed* id — a garbage (non-UUID) id is a no-op, never an
   `Ecto.CastError` 500. The safe lookup the block/connection/save create paths

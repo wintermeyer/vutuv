@@ -34,6 +34,7 @@ defmodule VutuvWeb.Admin.AdminController do
       jobs_open_cases_count: jobs_counts.open_cases,
       pref_overrides_count: map_size(Vutuv.Prefs.list_default_rows()),
       frozen_accounts_count: Vutuv.Deliverability.frozen_count(),
+      moderation_frozen_count: Vutuv.Moderation.frozen_accounts_count(),
       fediverse_enabled: Vutuv.Fediverse.enabled?(),
       # Only the four COUNTs when the card will actually show them; an
       # air-gapped install (FEDIVERSE_ENABLED=false) hides the card, mirroring

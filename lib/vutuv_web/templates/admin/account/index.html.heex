@@ -1,0 +1,87 @@
+<.page_header
+  title={gettext("Freeze an account")}
+  crumbs={[{gettext("Admin"), ~p"/admin"}, gettext("Freeze an account")]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <h1>{gettext("Freeze an account")}</h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Find a member by name, @handle or email, then freeze or unfreeze the account. A freeze hides the profile and everything it owns from everyone but the member and admins; it does not block the member from signing in. Freezing is reversible."
+      )}
+    </p>
+
+    <p class="mt-2 text-sm">
+      <.link navigate={~p"/admin/accounts/frozen"} class="font-semibold text-brand-600 hover:text-brand-700">
+        {gettext("See all frozen accounts")} →
+      </.link>
+    </p>
+
+    <form id="account-search" method="get" action={~p"/admin/accounts"} class="mt-4">
+      <label for="search-q" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+        {gettext("Search")}
+      </label>
+      <div class="mt-1 flex gap-2">
+        <input
+          type="search"
+          name="q"
+          id="search-q"
+          value={@q}
+          autocomplete="off"
+          placeholder={gettext("name, @handle or email")}
+          class={input_class()}
+        />
+        <button
+          type="submit"
+          class="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+        >
+          {gettext("Search")}
+        </button>
+      </div>
+    </form>
+
+    <p :if={not @searched?} class="card__empty">
+      {gettext("Type a name, @handle or email to find an account to freeze.")}
+    </p>
+    <p :if={@searched? and @results == []} class="card__empty">
+      {gettext("No accounts match your search.")}
+    </p>
+
+    <div :if={@results != []} class="mt-4 card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Member")}</th>
+            <th>{gettext("Username")}</th>
+            <th>{gettext("Status")}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="account-results">
+          <tr :for={user <- @results} id={"account-#{user.id}"}>
+            <td>
+              <.link navigate={~p"/#{user}"} class="flex items-center gap-2">
+                <.avatar user={user} size="xs" />
+                <span class="breakwrap font-medium">{member_name(user)}</span>
+              </.link>
+            </td>
+            <td class="breakwrap">
+              <.link navigate={~p"/#{user}"} class="text-brand-600 hover:text-brand-700">
+                @{user.username}
+              </.link>
+            </td>
+            <td><.account_status user={user} /></td>
+            <td class="text-right">
+              <.freeze_toggle
+                user={user}
+                frozen?={user.frozen_at != nil}
+                return_to={~p"/admin/accounts?#{[q: @q]}"}
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

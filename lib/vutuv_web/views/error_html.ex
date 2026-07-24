@@ -37,11 +37,38 @@ defmodule VutuvWeb.ErrorHTML do
     |> error_page()
   end
 
+  def render("410.html", assigns) do
+    assigns
+    |> Map.new()
+    |> Map.merge(%{code: 410, message: gettext("This page is no longer available.")})
+    |> error_page()
+  end
+
   def render("500.html", assigns) do
     assigns
     |> Map.new()
     |> Map.merge(%{code: 500, message: gettext("Pardon us! Something went wrong.")})
     |> error_page()
+  end
+
+  # A withheld profile (issue #812): the account exists but is currently hidden
+  # (frozen / suspended → 403, permanently deactivated → 410). Deliberately
+  # vague — it does not reveal *why* — and distinct from the generic 403
+  # ("you are not allowed to view this page"), which is about the viewer's
+  # permissions, not the resource's state. `@code` is the status the caller
+  # (`EnsureActivated`) chose.
+  def render("profile_unavailable.html", assigns) do
+    assigns = assigns |> Map.new() |> Map.put_new(:code, 403)
+
+    ~H"""
+    <div class="error-page">
+      <p class="error-page__code">{@code}</p>
+      <h1 class="error-page__title">{gettext("This profile is currently unavailable.")}</h1>
+      <p class="error-page__actions">
+        <a href="/" class="button">{gettext("Back to the start page")}</a>
+      </p>
+    </div>
+    """
   end
 
   # An upload beyond Plug.Parsers' multipart cap raises before any controller

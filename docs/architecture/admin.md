@@ -212,6 +212,29 @@ ends in account deactivation — the "freeze the HR account" lever.
 An open-case count surfaces both on this page and as the coral "attention" badge on
 the `/admin` job-postings card.
 
+## Freeze an account (`/admin/accounts`)
+
+A focused, admins-only **classic controller** page for putting any account into
+the moderation freezer without waiting for a report (issue #812).
+
+**Search** by name, `@handle` or email address (the same matcher as the member
+browser), then hit **Freeze** (or **Unfreeze**) on a row. Freezing goes through
+the public, audited `Vutuv.Moderation.admin_freeze_user/3` (not the private
+`set_user_moderation!/2`): it sets `frozen_at` — which hides the profile and
+everything it owns from everyone but the member and admins — and records a
+caseless audit row in `moderation_admin_actions`. A freeze does **not** block
+login (that is suspension/deactivation); a frozen member can still sign in and
+sees their own amber banner. Freeze/unfreeze are **CSRF-protected POSTs** through
+the `:browser` pipeline.
+
+`/admin/accounts/frozen` is the paginated list of every currently-frozen account
+(newest freeze first, `<.pager>`, 250/page) with a **Source** column (admin vs
+report — an account frozen by an open report is labelled "report") and an
+Unfreeze control. See `moderation.md` for the freeze machinery and the honest
+403/410 HTTP status a withheld profile now returns (was a blanket 404).
+
+Admins-only via the `:admin` pipeline (`Plugs.RequireLogin` + `Plugs.AuthAdmin`).
+
 ## Delete account (`/admin/users/delete`)
 
 A focused, admins-only **LiveView** for permanently removing an account.

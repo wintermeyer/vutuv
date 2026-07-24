@@ -1,0 +1,72 @@
+<.page_header
+  title={gettext("Frozen accounts")}
+  crumbs={[{gettext("Admin"), ~p"/admin"}, gettext("Frozen accounts")]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <h1>{gettext("Frozen accounts")}</h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {ngettext(
+        "%{formatted} account is currently in the moderation freezer, newest freeze first.",
+        "%{formatted} accounts are currently in the moderation freezer, newest freeze first.",
+        @row_count,
+        formatted: delimited_count(@row_count)
+      )}
+    </p>
+
+    <p class="mt-2 text-sm">
+      <.link navigate={~p"/admin/accounts"} class="font-semibold text-brand-600 hover:text-brand-700">
+        {gettext("Search for an account to freeze")} →
+      </.link>
+    </p>
+
+    <p :if={@accounts == []} class="card__empty">
+      {gettext("No accounts are currently frozen.")}
+    </p>
+
+    <div :if={@accounts != []} class="mt-4 card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Member")}</th>
+            <th>{gettext("Username")}</th>
+            <th>{gettext("Frozen since")}</th>
+            <th>{gettext("Source")}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="frozen-accounts">
+          <tr :for={user <- @accounts} id={"frozen-#{user.id}"}>
+            <td>
+              <.link navigate={~p"/#{user}"} class="flex items-center gap-2">
+                <.avatar user={user} size="xs" />
+                <span class="breakwrap font-medium">{member_name(user)}</span>
+              </.link>
+            </td>
+            <td class="breakwrap">
+              <.link navigate={~p"/#{user}"} class="text-brand-600 hover:text-brand-700">
+                @{user.username}
+              </.link>
+            </td>
+            <td class="whitespace-nowrap text-slate-600 dark:text-slate-400">
+              <.local_time at={user.frozen_at} id={"frozen-since-#{user.id}"} format="%Y-%m-%d" />
+            </td>
+            <td class="text-slate-600 dark:text-slate-400">
+              {freeze_source_label(MapSet.member?(@report_frozen, user.id))}
+            </td>
+            <td class="text-right">
+              <.freeze_toggle
+                user={user}
+                frozen?={true}
+                return_to={~p"/admin/accounts/frozen?#{Map.take(@params, ["page"])}"}
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <.pager params={@params} total={@row_count} />
+  </section>
+</div>
