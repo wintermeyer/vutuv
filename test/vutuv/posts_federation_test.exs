@@ -24,11 +24,25 @@ defmodule Vutuv.PostsFederationTest do
     user
   end
 
+  # Federates (opt-in + confirmed + actor) but has no remote followers, so their
+  # own posts enqueue nothing — the right shape for the *reposted* author, whose
+  # Note the Announce points at.
+  defp federating_author do
+    user = insert(:activated_user, fediverse_followers?: true)
+    {:ok, _} = Fediverse.ensure_actor(user)
+    user
+  end
+
   defp activities do
     Delivery
     |> Repo.all()
     |> Enum.map(&Jason.decode!(&1.activity_json)["type"])
     |> Enum.sort()
+  end
+
+  defp only_activity do
+    [delivery] = Repo.all(Delivery)
+    Jason.decode!(delivery.activity_json)
   end
 
   test "publishing a public post federates a Create" do
@@ -77,6 +91,71 @@ defmodule Vutuv.PostsFederationTest do
 
     plain = insert(:activated_user)
     create_post!(plain, %{body: "öffentlich, aber kein Opt-in"})
+
+    assert activities() == []
+  end
+
+  test "reposting a federating author's public post federates an Announce" do
+    reposter = author_with_follower()
+    author = federating_author()
+    post = create_post!(author, %{body: "boost mich"})
+    Repo.delete_all(Delivery)
+
+    :ok = Posts.repost_post(reposter, post)
+
+    announce = only_activity()
+    assert announce["type"] == "Announce"
+    assert announce["actor"] =~ "/#{reposter.username}/actor"
+    assert announce["object"] == "#{VutuvWeb.Endpoint.url()}/#{author.username}/posts/#{post.id}"
+  end
+
+  test "un-reposting federates an Undo referencing the same Announce id" do
+    reposter = author_with_follower()
+    author = federating_author()
+    post = create_post!(author, %{body: "boost mich"})
+    Repo.delete_all(Delivery)
+
+    :ok = Posts.repost_post(reposter, post)
+    announce_id = only_activity()["id"]
+    Repo.delete_all(Delivery)
+
+    :ok = Posts.unrepost_post(reposter, post)
+
+    undo = only_activity()
+    assert undo["type"] == "Undo"
+    assert undo["object"]["type"] == "Announce"
+    assert undo["object"]["id"] == announce_id
+  end
+
+  test "reposting a non-federating author's post enqueues nothing" do
+    reposter = author_with_follower()
+    plain = insert(:activated_user)
+    post = create_post!(plain, %{body: "öffentlich, aber kein Opt-in"})
+    Repo.delete_all(Delivery)
+
+    :ok = Posts.repost_post(reposter, post)
+
+    assert activities() == []
+  end
+
+  test "reposting by a non-federating member enqueues nothing" do
+    plain = insert(:activated_user)
+    author = federating_author()
+    post = create_post!(author, %{body: "boost mich"})
+    Repo.delete_all(Delivery)
+
+    :ok = Posts.repost_post(plain, post)
+
+    assert activities() == []
+  end
+
+  test "an idempotent un-repost with nothing to undo enqueues nothing" do
+    reposter = author_with_follower()
+    author = federating_author()
+    post = create_post!(author, %{body: "boost mich"})
+    Repo.delete_all(Delivery)
+
+    :ok = Posts.unrepost_post(reposter, post)
 
     assert activities() == []
   end

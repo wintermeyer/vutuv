@@ -732,16 +732,30 @@ defmodule Vutuv.Posts do
 
       true ->
         case engage(PostRepost, :repost, user, post) do
-          {:ok, %PostRepost{} = repost} -> broadcast_new_repost(repost)
-          {:ok, :noop} -> :ok
-          {:error, _} = error -> error
+          {:ok, %PostRepost{} = repost} ->
+            Vutuv.Fediverse.federate_repost(post, user)
+            broadcast_new_repost(repost)
+
+          {:ok, :noop} ->
+            :ok
+
+          {:error, _} = error ->
+            error
         end
     end
   end
 
   @doc "Removes `user`'s repost (idempotent). The last one lifts the audience lock."
-  def unrepost_post(%User{} = user, %Post{} = post),
-    do: disengage(PostRepost, :repost, user, post)
+  def unrepost_post(%User{} = user, %Post{} = post) do
+    # Only federate the Undo when there really was a repost to undo, so an
+    # idempotent unrepost of a post the member never boosted stays silent.
+    reposted? =
+      Repo.exists?(from(r in PostRepost, where: r.post_id == ^post.id and r.user_id == ^user.id))
+
+    :ok = disengage(PostRepost, :repost, user, post)
+    if reposted?, do: Vutuv.Fediverse.federate_unrepost(post, user)
+    :ok
+  end
 
   @doc "Whether any reposts of this post exist (the audience lock)."
   def has_reposts?(%Post{id: id}), do: has_reposts?(id)

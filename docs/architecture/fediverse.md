@@ -79,7 +79,11 @@ every endpoint 404s and nothing is delivered.
   public post enqueues `Create(Note)`, editing `Update`, deleting
   `Delete(Tombstone)`; an edit that closes the audience federates a `Delete`
   too. Replies federate with `inReplyTo` only when the parent's author also
-  federates (else the id would not resolve). Reposts do not federate (v1).
+  federates (else the id would not resolve). A **repost** of a public post
+  enqueues an `Announce` to the reposter's own followers, un-reposting the
+  matching `Undo(Announce)` (stable id `<note-url>#announce-<reposter>`); both
+  fire only when the reposter federates and the **original author** federates
+  too, since the `Announce` object is that author's Note id (issue #910).
   The Note carries the member-rendered HTML with absolutized links, and image
   attachments via the public post-image proxy URLs. A public post's permalink
   answers an AP Accept with the Note (remote servers dereference ids).
@@ -104,9 +108,10 @@ every endpoint 404s and nothing is delivered.
 
 ## Deliberate v1 limits
 
-No inbound content (likes/replies/boosts are dropped), no `Announce` for
-reposts, and account deletion sends no actor `Delete` broadcast (rows cascade;
-remote copies age out). Account migration is **both ways** now (issue #986):
+No inbound content (likes/replies/boosts are dropped), and account deletion
+sends no actor `Delete` broadcast (rows cascade; remote copies age out).
+Reposts now federate as `Announce` (issue #910, see the post-lifecycle bullet).
+Account migration is **both ways** now (issue #986):
 `alsoKnownAs` moves followers *in*, `Move` + `movedTo` moves them *out* (see the
 Actor bullet above). The design choice worth remembering: a move-out is a
 **redirect, never a deletion** — the vutuv account is a full profile, not just a
