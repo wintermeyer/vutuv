@@ -178,6 +178,89 @@ defmodule VutuvWeb.SearchLive do
   defp scope_label(:tags), do: gettext("Tags")
   defp scope_label(:posts), do: gettext("Posts")
 
+  attr(:scope, :atom, required: true)
+
+  # The scope-aware Search Tips body, rendered by BOTH the empty-query card and
+  # the compact results-page disclosure so #887's scope-awareness applies in
+  # both places (#861). It shows only the operators that actually work in the
+  # active scope: the people operators (first:/last:, city:, status:, @handle)
+  # and the phonetic "similar names" note apply on :all/:people; tag: filters
+  # people AND posts (#946) so it applies on :all/:people/:posts but is dropped
+  # on :tags (which searches tag names directly); the quotes/exact tip is
+  # general. On a scope where a whole class of operators is irrelevant the tips
+  # explain what this tab does instead of listing dead operators (#887 point 2).
+  defp search_tips(assigns) do
+    tips = Enum.filter(operator_tips(), &(assigns.scope in &1.scopes))
+    assigns = assign(assigns, tips: tips, similar_names?: assigns.scope in [:all, :people])
+
+    ~H"""
+    <p class="text-sm text-slate-600 dark:text-slate-300">{tips_intro(@scope)}</p>
+    <p :if={@similar_names?} class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+      {gettext(
+        "Our search will try to match similar names to your search, so don't worry about spelling."
+      )}
+    </p>
+    <%!-- m-0 / font-normal undo the legacy `dl dt`/`dl dd` element defaults
+    from components.css so the grid rows line up. The operator examples are
+    gettext'd too: every operator has a German and an English key (both always
+    work), so each locale shows its own spelling. --%>
+    <dl
+      :if={@tips != []}
+      id="search-syntax"
+      class="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]"
+    >
+      <%= for tip <- @tips do %>
+        <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{tip.term}</dt>
+        <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{tip.desc}</dd>
+      <% end %>
+    </dl>
+    """
+  end
+
+  # The operator rows and the scopes each one works in (derived from
+  # Vutuv.Search's people/tags/posts guards). `search_tips/1` filters this by
+  # the active scope so no tab shows an operator it cannot honor.
+  defp operator_tips do
+    [
+      %{
+        term: gettext("first:stefan"),
+        desc: gettext("searches first names only (last: for last names)"),
+        scopes: [:all, :people]
+      },
+      %{
+        term: "tag:php",
+        desc: gettext("people and posts with this tag, combinable: miller tag:php"),
+        scopes: [:all, :people, :posts]
+      },
+      %{
+        term: gettext("city:koblenz"),
+        desc: gettext("only people with an address in this city"),
+        scopes: [:all, :people]
+      },
+      %{
+        term: "status:looking",
+        desc: gettext("only people open to offers (status:open) or looking (status:looking)"),
+        scopes: [:all, :people]
+      },
+      %{term: "@stefan", desc: gettext("searches usernames"), scopes: [:all, :people]},
+      %{
+        term: ~s("#{gettext("miller")}"),
+        desc: gettext("in quotes: exact matches only, no similar names"),
+        scopes: [:all, :people, :tags, :posts]
+      }
+    ]
+  end
+
+  # One intro sentence describing what the active scope searches. The generic
+  # :all copy is the original two-scope sentence; the narrowed scopes name only
+  # what they actually cover, so the tips stop over-promising (#887).
+  defp tips_intro(:people), do: gettext("Search for people by name, email, or username.")
+  defp tips_intro(:tags), do: gettext("Search for tags by name.")
+  defp tips_intro(:posts), do: gettext("Search for words in public posts.")
+
+  defp tips_intro(_all),
+    do: gettext("You can search for a name, email, or tag, or for words in public posts.")
+
   attr(:id, :string, required: true)
   attr(:patch, :string, required: true)
   attr(:active, :boolean, required: true)
@@ -276,35 +359,39 @@ defmodule VutuvWeb.SearchLive do
         {gettext("Results appear once you have typed at least three letters.")}
       </p>
 
-      <.card :if={@q == ""} class="mt-6">
+      <.card :if={@q == ""} id="search-tips-empty" class="mt-6">
         <.section_title>{gettext("Search Tips")}</.section_title>
-        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">
-          {gettext("You can search for a name, email, or tag, or for words in public posts.")}
-        </p>
-        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          {gettext("Our search will try to match similar names to your search, so don't worry about spelling.")}
-        </p>
-        <%!-- m-0 / font-normal undo the legacy `dl dt`/`dl dd` element
-        defaults from components.css so the grid rows line up. The operator
-        examples are gettext'd too: every operator has a German and an English
-        key (both always work), so each locale shows its own spelling. --%>
-        <dl id="search-syntax" class="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
-          <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("first:stefan")}</dt>
-          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("searches first names only (last: for last names)")}</dd>
-          <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">tag:php</dt>
-          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("people and posts with this tag, combinable: miller tag:php")}</dd>
-          <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("city:koblenz")}</dt>
-          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people with an address in this city")}</dd>
-          <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">status:looking</dt>
-          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people open to offers (status:open) or looking (status:looking)")}</dd>
-          <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">@stefan</dt>
-          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("searches usernames")}</dd>
-          <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">"{gettext("miller")}"</dt>
-          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("in quotes: exact matches only, no similar names")}</dd>
-        </dl>
+        <div class="mt-3">
+          <.search_tips scope={@effective_scope} />
+        </div>
       </.card>
 
       <div :if={@results} class="mt-6 space-y-6">
+        <%!-- Keep the tips reachable while refining a search (#861), but as a
+        collapsed one-line disclosure so they cost almost no real estate. It
+        renders the SAME scope-aware body as the empty-state card. --%>
+        <details
+          id="search-tips-results"
+          class="group rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+        >
+          <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-600 [&::-webkit-details-marker]:hidden dark:text-slate-300">
+            <svg
+              class="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-90 dark:text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="m9 5 7 7-7 7" />
+            </svg>
+            {gettext("Search Tips")}
+          </summary>
+          <div class="mt-3">
+            <.search_tips scope={@effective_scope} />
+          </div>
+        </details>
+
         <.save_search_control
           :if={@current_user && @saveable?}
           id="people-save-search"
