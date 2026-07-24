@@ -366,12 +366,20 @@ the save is never slowed. The subsystem is `Vutuv.Posts.Screenshots` with the
 the durable queue and the attachment record**: a `pending`/`capturing`/`failed`
 row is work, a `ready` row carries the stored screenshot.
 
-Two kinds of link are deliberately **not** screenshotted. A link to *this*
-installation's own **`/settings`, `/admin` or `/system`** area is rejected in
+Some links are deliberately **not** screenshotted. Two are caught in
 `qualifying_url/1` (a pure, no-network check on the request path, so no row is
-ever created) — the host is derived from `VutuvWeb.Endpoint.host()`, never a
+ever created): a link to *this* installation's own **`/settings`, `/admin` or
+`/system`** area — the host is derived from `VutuvWeb.Endpoint.host()`, never a
 literal `vutuv.de`, so it holds on any installation, and a shot of those pages
-would only ever be a login redirect or an internal page.
+would only ever be a login redirect or an internal page — and a link to a
+**screenshot-blocklisted host** (`Vutuv.PageScreenshot.host_blocked?/1`, the
+`:screenshot_blocked_hosts` config, default `reddit.com`, override with
+`SCREENSHOT_BLOCKED_HOSTS`). Those sites answer a headless capture with a
+login/consent wall or block bots outright, so the shot is always a useless
+placeholder; skipping them (matched on the apex host and every subdomain)
+spends no Chromium run at all. The same blocklist gates the profile-link
+previews inside `capture_framed/2` (returning `:blocked_host`, a permanent
+outcome).
 
 A link that does **not answer a plain HTTP 200** is rejected at capture time by
 `ensure_http_ok/1`, a `redirect: false` GET probe the worker runs before Chromium

@@ -138,6 +138,45 @@ defmodule Vutuv.PageScreenshotTest do
     assert File.read!(args_file) =~ "--host-resolver-rules=MAP * 93.184.216.34"
   end
 
+  describe "host_blocked?/1 (screenshot blocklist)" do
+    test "matches the apex host and every subdomain of a blocklisted host" do
+      # config/config.exs ships reddit.com on the list.
+      assert Vutuv.PageScreenshot.host_blocked?("https://reddit.com/r/elixir")
+      assert Vutuv.PageScreenshot.host_blocked?("https://www.reddit.com/r/elixir")
+      assert Vutuv.PageScreenshot.host_blocked?("http://old.reddit.com/r/programming")
+    end
+
+    test "a host that is not on the list is not blocked" do
+      refute Vutuv.PageScreenshot.host_blocked?("https://example.com/page")
+      # A host that merely ends with the letters but is a different domain.
+      refute Vutuv.PageScreenshot.host_blocked?("https://notreddit.com/page")
+      refute Vutuv.PageScreenshot.host_blocked?("garbage-not-a-url")
+    end
+
+    test "the list is config-driven (a per-installation override is honoured)" do
+      previous = Application.get_env(:vutuv, :screenshot_blocked_hosts)
+      on_exit(fn -> Application.put_env(:vutuv, :screenshot_blocked_hosts, previous) end)
+      Application.put_env(:vutuv, :screenshot_blocked_hosts, ["blocked.example"])
+
+      assert Vutuv.PageScreenshot.host_blocked?("https://blocked.example/x")
+      refute Vutuv.PageScreenshot.host_blocked?("https://reddit.com/r/elixir")
+    end
+  end
+
+  test "capture_framed refuses a blocklisted host before resolving or launching Chromium" do
+    args_file =
+      Path.join(System.tmp_dir!(), "chromium-args-#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm(args_file) end)
+    Application.put_env(:vutuv, :chromium_path, fake_chromium(args_file))
+
+    assert {:error, :blocked_host} =
+             Vutuv.PageScreenshot.capture_framed("https://reddit.com/r/elixir", "cap3")
+
+    # No DNS resolve, no Chromium spawn — the whole point is spending nothing.
+    refute File.exists?(args_file)
+  end
+
   test "capture_framed refuses a host that resolves to an internal IP before launching Chromium" do
     Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family -> {:ok, [{10, 0, 0, 5}]} end)
 

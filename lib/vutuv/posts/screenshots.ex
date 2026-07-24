@@ -85,7 +85,9 @@ defmodule Vutuv.Posts.Screenshots do
   The single URL a post should be screenshotted for, or `:none`. Qualifies only
   with **no image attachment** and **exactly one** distinct `http(s)` URL in the
   body (surrounding text is fine). A URL pointing at this installation's own
-  `/settings`, `/admin` or `/system` area does **not** qualify.
+  `/settings`, `/admin` or `/system` area, or at a screenshot-blocklisted host
+  (`Vutuv.PageScreenshot.host_blocked?/1`, e.g. `reddit.com`), does **not**
+  qualify — a blocklisted page never screenshots, so no job is even enqueued.
   """
   def qualifying_url(%Post{images: [], body: body}), do: sole_url_target(body)
   def qualifying_url(%Post{images: images}) when is_list(images), do: :none
@@ -98,7 +100,9 @@ defmodule Vutuv.Posts.Screenshots do
   end
 
   defp qualify(url) do
-    if own_internal_url?(url), do: :none, else: {:ok, url}
+    if own_internal_url?(url) or Vutuv.PageScreenshot.host_blocked?(url),
+      do: :none,
+      else: {:ok, url}
   end
 
   @doc "Every distinct bare `http(s)` URL in `body`, trailing punctuation trimmed."
@@ -292,11 +296,13 @@ defmodule Vutuv.Posts.Screenshots do
   end
 
   # A property of the target that won't change on retry: an SSRF-refused internal
-  # host, a link that redirects (`:redirect`), or a `4xx` non-200 answer
+  # host, a blocklisted host (`:blocked_host`, a login-walled site we never shoot),
+  # a link that redirects (`:redirect`), or a `4xx` non-200 answer
   # (`{:bad_status, _}`). Everything else — a `5xx` server error, an unreachable
   # probe, a missing/crashed/timed-out Chromium — is transient and retries with
   # backoff until the cap.
   defp permanent_failure?(:internal_target), do: true
+  defp permanent_failure?(:blocked_host), do: true
   defp permanent_failure?(:redirect), do: true
   defp permanent_failure?({:bad_status, _status}), do: true
   defp permanent_failure?(_reason), do: false

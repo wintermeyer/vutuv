@@ -96,6 +96,7 @@ Everything else has a default (the vutuv.de production value):
 | `POOL_SIZE` | `10` | DB connection pool |
 | `UPLOADS_DIR_PREFIX` | `/srv/legacy-vutuv` | **Set this.** Root directory for uploaded images (avatars, covers, screenshots, post images, private originals) |
 | `CHROMIUM_PATH` | – | Chromium binary, if not on `$PATH` |
+| `SCREENSHOT_BLOCKED_HOSTS` | `reddit.com` | Comma-separated hosts to never take a link-preview screenshot of (profile links **and** single-link posts). Some sites answer a headless capture with a login/consent wall or block bots outright, so the shot is always a useless placeholder — listing the host skips the Chromium run instead of burning it. Each entry matches the apex host and every subdomain (`old.reddit.com`). Set it (replacing the default) to tune the list for your installation |
 | `SMTP_RELAY` | `127.0.0.1` | SMTP server |
 | `SMTP_PORT` | `25` | SMTP port |
 | `SMTP_USERNAME` | – | SMTP auth (empty = no auth) |

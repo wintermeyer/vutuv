@@ -60,6 +60,14 @@ window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on
 `$PATH`)
 
+Some hosts never yield a useful shot — they answer a headless capture with a
+login/consent wall or block bots outright — so a **screenshot blocklist**
+(`:screenshot_blocked_hosts`, default `["reddit.com"]`, override with
+`SCREENSHOT_BLOCKED_HOSTS`) short-circuits both paths before any Chromium run:
+`Vutuv.PageScreenshot.host_blocked?/1` matches the apex host and every subdomain,
+`capture_framed/2` returns `:blocked_host`, and the post path skips the job
+entirely at `qualifying_url/1`.
+
 The capture browser sends vutuv's own `User-Agent`
 (`Vutuv.SocialFeed.Http.user_agent/0`), the same string the HTTP preflight
 probe uses, so a site sees one agent for both requests. It also lets our own

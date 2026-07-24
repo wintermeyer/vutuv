@@ -71,6 +71,15 @@ config :vutuv, Vutuv.Repo,
 config :vutuv, :generate_screenshots, true
 config :vutuv, :fetch_gravatar, true
 
+# Hosts whose pages are never worth a link-preview screenshot: they answer a
+# headless capture with a login/consent wall or block bots outright, so the
+# shot is always a useless placeholder. Skipping them (in Vutuv.PageScreenshot
+# and the single-link post queue) saves the Chromium run instead of burning it
+# on something that can't work. Matches the apex host and every subdomain
+# (`old.reddit.com`). Override per installation with SCREENSHOT_BLOCKED_HOSTS
+# (comma-separated) in config/runtime.exs.
+config :vutuv, :screenshot_blocked_hosts, ["reddit.com"]
+
 # AI image moderation (Vutuv.Moderation.ImageScans): every image — uploads
 # and machine-generated screenshots alike — is held in owner-only limbo until
 # an Ollama vision model releases it; unsafe images are deleted and the
