@@ -35,6 +35,9 @@ erl_crash.dump
 /screenshots
 /originals
 /moderation_evidence
+/qualification_documents
+/organization_images
+/job_posting_images
 # the AI-moderation limbo twin of the served trees (Vutuv.Uploads.quarantine_dir/1)
 /quarantine
 
