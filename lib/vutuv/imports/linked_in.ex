@@ -79,60 +79,97 @@ defmodule Vutuv.Imports.LinkedIn do
 
   @doc """
   Parses a LinkedIn export ZIP (a binary) into candidate lists. Returns
-  `{:error, :invalid_archive}` for anything that is not a readable ZIP.
+  `{:error, :invalid_archive}` for anything that is not a readable ZIP, and
+  `{:error, :archive_too_large}` for one whose contents blow past the safety
+  caps. `opts` may override those caps (for tests); production uses the
+  defaults in `@default_caps`.
   """
-  def parse(zip_binary) when is_binary(zip_binary) do
-    do_parse(zip_binary)
+  def parse(zip_binary, opts \\ []) when is_binary(zip_binary) do
+    do_parse(zip_binary, opts)
   end
 
   @doc """
   Like `parse/1`, but reads the ZIP from a file on disk (the uploaded temp
-  file), so the archive is never loaded into memory whole — `:zip` only
-  inflates the selected small entries.
+  file). The archive is read into memory whole (its size is already bounded by
+  the controller's upload cap) and only the small, selected entries are
+  inflated — each under a per-entry and cumulative output cap, with a cumulative
+  cap on the compressed bytes fed to the inflater as well.
   """
-  def parse_file(path) when is_binary(path) do
-    do_parse(String.to_charlist(path))
+  def parse_file(path, opts \\ []) when is_binary(path) do
+    case File.read(path) do
+      {:ok, bytes} -> do_parse(bytes, opts)
+      {:error, _} -> {:error, :invalid_archive}
+    end
   end
 
-  # `:zip` accepts both an in-memory binary and a filename charlist.
-  defp do_parse(zip_source) do
-    with {:ok, names} <- safe_entry_names(zip_source),
-         {:ok, files} <- extract(zip_source, names) do
+  defp do_parse(bytes, opts) when is_binary(bytes) do
+    caps = caps(opts)
+
+    with {:ok, entries} <- central_directory(bytes),
+         {:ok, kept} <- select_entries(entries, caps),
+         {:ok, located} <- locate_entries(bytes, kept),
+         :ok <- reject_overlaps(located),
+         {:ok, files} <- inflate_entries(bytes, caps, located) do
       {:ok, build(files)}
     end
   end
 
-  # Zip-bomb defense. The CSVs we need (profile, positions, volunteering,
-  # education, skills, phone) are tiny; a LinkedIn export's bulk (connections,
-  # messages, media) we
-  # don't touch. So we read the ZIP's central directory FIRST (no decompression),
-  # then:
-  #   * skip any single entry that declares more than @max_entry_bytes — the big
-  #     message dumps, and any honest bomb whose header admits its size;
-  #   * refuse the whole archive if it has more than @max_entries members, or if
-  #     the entries we would actually extract already declare more than
-  #     @max_total_bytes uncompressed.
-  # Only the surviving small entries are decompressed, so a classic bomb (e.g.
-  # 42.zip, whose members declare petabytes) is rejected before any inflation.
-  # The compressed upload is also capped in the controller (@max_upload_bytes),
-  # which bounds the worst case for a spoofed-header single stream.
-  @max_entries 2_000
-  @max_entry_bytes 15_000_000
-  @max_total_bytes 40_000_000
+  # Zip-bomb / decompression-DoS defense. The CSVs we need (profile, positions,
+  # volunteering, education, skills, phone) are tiny; a LinkedIn export's bulk
+  # (connections, messages, media) we don't touch. The declared central-directory
+  # sizes are attacker-controlled, so they are only a cheap FIRST filter — the
+  # real caps are enforced against actual inflated output AND compressed input:
+  #
+  #   * @max_entries  — refuse an archive with too many members.
+  #   * @max_entry_bytes  — pre-filter: skip any entry that *declares* more than
+  #     this (a cheap first line), then also abort a single entry that actually
+  #     inflates past it (a spoofed-header stream that lies about its size).
+  #   * @max_total_bytes  — refuse if the kept entries already *declare* more
+  #     than this uncompressed, and abort once the cumulative *actual* output
+  #     crosses it.
+  #   * @max_input_bytes  — a cumulative budget on the compressed bytes fed to
+  #     the inflater across ALL entries. This is what bounds decompression WORK:
+  #     a low-ratio stream (tiny output, huge input) never trips the output caps
+  #     but is stopped here, and duplicated/overlapping streams can never make us
+  #     inflate the same data twice past the budget. A legitimate export inflates
+  #     only its small CSVs, whose combined compressed size is tiny; and the
+  #     non-overlapping entries of a <=50 MB archive hold <=50 MB of compressed
+  #     data total, so 40 MB is generous for real data and fatal to the attack.
+  #   * @max_iterations  — a per-entry backstop on `safeInflate` calls, so a
+  #     truncated stream that keeps asking for input can never spin forever.
+  #
+  # Entries whose local-header data regions OVERLAP (or share an offset) are not
+  # a normal archive — they are the "2000 members all pointing at one 48 MB
+  # stream" attack — and the archive is rejected outright before any inflation.
+  # Only stored (0) and deflate (8) methods are accepted; anything else, or any
+  # malformed local header, degrades to `{:error, :invalid_archive}`.
+  @default_caps %{
+    max_entries: 2_000,
+    max_entry_bytes: 15_000_000,
+    max_total_bytes: 40_000_000,
+    max_input_bytes: 40_000_000,
+    max_iterations: 100_000
+  }
 
-  defp safe_entry_names(zip_source) do
-    case :zip.list_dir(zip_source) do
+  defp caps(opts) do
+    overrides = opts |> Map.new() |> Map.take(Map.keys(@default_caps))
+    Map.merge(@default_caps, overrides)
+  end
+
+  # Read the central directory only (no decompression): name + declared
+  # uncompressed size + local-header offset + compressed size per entry.
+  defp central_directory(bytes) do
+    case :zip.list_dir(bytes) do
       {:ok, table} ->
         entries =
-          for {:zip_file, name, info, _comment, _offset, _comp} <- table,
+          for {:zip_file, name, info, _comment, offset, comp_size} <- table,
               not directory?(name),
-              do: {name, elem(info, 1)}
+              is_integer(offset),
+              is_integer(comp_size),
+              is_integer(elem(info, 1)),
+              do: %{name: name, declared: elem(info, 1), offset: offset, comp_size: comp_size}
 
-        if length(entries) > @max_entries do
-          {:error, :archive_too_large}
-        else
-          select_entries(entries)
-        end
+        {:ok, entries}
 
       {:error, _} ->
         {:error, :invalid_archive}
@@ -141,34 +178,207 @@ defmodule Vutuv.Imports.LinkedIn do
     _ -> {:error, :invalid_archive}
   end
 
-  # Keep only entries small enough to be a real CSV, and refuse if their total
-  # declared uncompressed size is still too big.
-  defp select_entries(entries) do
-    kept = for {name, size} <- entries, size <= @max_entry_bytes, do: {name, size}
-    total = Enum.reduce(kept, 0, fn {_name, size}, acc -> acc + size end)
+  defp directory?(name), do: List.last(name) == ?/
 
-    if total > @max_total_bytes do
+  # Cheap first line: drop entries that DECLARE more than the per-entry cap, and
+  # refuse the whole archive on too many members or too much declared total.
+  defp select_entries(entries, caps) do
+    if length(entries) > caps.max_entries do
       {:error, :archive_too_large}
     else
-      {:ok, Enum.map(kept, fn {name, _size} -> name end)}
+      kept = Enum.filter(entries, &(&1.declared <= caps.max_entry_bytes))
+      total = Enum.reduce(kept, 0, &(&1.declared + &2))
+
+      if total > caps.max_total_bytes, do: {:error, :archive_too_large}, else: {:ok, kept}
     end
   end
 
-  defp directory?(name), do: List.last(name) == ?/
-
-  defp extract(_zip_source, []), do: {:ok, []}
-
-  defp extract(zip_source, names) do
-    case :zip.unzip(zip_source, [:memory, {:file_list, names}]) do
-      {:ok, entries} ->
-        {:ok,
-         Enum.map(entries, fn {name, content} -> {to_string(name), ensure_utf8(content)} end)}
-
-      {:error, _reason} ->
-        {:error, :invalid_archive}
+  # Parse each kept entry's LOCAL header to find where its compressed data
+  # actually starts and how much of it is present in the archive. name_len is at
+  # byte 26 of the local header, extra_len at byte 28, the compression method at
+  # byte 8; the data begins at offset + 30 + name_len + extra_len.
+  defp locate_entries(bytes, kept) do
+    kept
+    |> Enum.reduce_while([], fn entry, acc ->
+      case locate_entry(bytes, entry) do
+        {:ok, located} -> {:cont, [located | acc]}
+        :error -> {:halt, {:error, :invalid_archive}}
+      end
+    end)
+    |> case do
+      {:error, _} = err -> err
+      located -> {:ok, Enum.reverse(located)}
     end
-  rescue
-    _ -> {:error, :invalid_archive}
+  end
+
+  defp locate_entry(bytes, %{offset: offset, comp_size: comp_size, name: name})
+       when is_integer(offset) and offset >= 0 do
+    case bytes do
+      <<_::binary-size(^offset), 0x50, 0x4B, 0x03, 0x04, _::binary-size(4), method::little-16,
+        _::binary-size(16), name_len::little-16, extra_len::little-16, _rest::binary>>
+      when method in [0, 8] ->
+        data_start = offset + 30 + name_len + extra_len
+
+        if data_start <= byte_size(bytes) do
+          available = byte_size(bytes) - data_start
+          feed = min(max(comp_size, 0), available)
+          {:ok, %{name: name, method: method, data_start: data_start, feed: feed}}
+        else
+          :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  defp locate_entry(_bytes, _entry), do: :error
+
+  # Two kept entries whose compressed-data regions overlap (or share an offset)
+  # cannot happen in a normal archive; it is the "inflate one stream N times"
+  # attack. Reject the whole archive before any inflation.
+  defp reject_overlaps(located) do
+    regions =
+      located
+      |> Enum.map(fn %{data_start: start, feed: feed} -> {start, start + feed} end)
+      |> Enum.sort()
+
+    if overlapping?(regions), do: {:error, :invalid_archive}, else: :ok
+  end
+
+  defp overlapping?([{_start1, end1}, {start2, _end2} = next | rest]) do
+    start2 < end1 or overlapping?([next | rest])
+  end
+
+  defp overlapping?(_), do: false
+
+  # Inflate the located entries in one pass, threading two cumulative budgets:
+  # the actual output produced (@max_total_bytes) and the compressed input fed to
+  # the inflater (@max_input_bytes). The zlib port is opened once and closed in
+  # the `after`; any zlib raise (a corrupt/garbage stream) becomes
+  # `{:error, :invalid_archive}`.
+  defp inflate_entries(_bytes, _caps, []), do: {:ok, []}
+
+  defp inflate_entries(bytes, caps, located) do
+    z = :zlib.open()
+
+    try do
+      :zlib.inflateInit(z, -15)
+
+      result =
+        Enum.reduce_while(located, {[], 0, 0}, fn entry, {files, input_used, output_total} ->
+          case inflate_entry(z, bytes, caps, entry, input_used, output_total) do
+            {:ok, content, input_used2, output_total2} ->
+              {:cont, {[{to_string(entry.name), content} | files], input_used2, output_total2}}
+
+            {:error, _} = err ->
+              {:halt, err}
+          end
+        end)
+
+      case result do
+        {:error, _} = err -> err
+        {files, _input, _output} -> {:ok, Enum.reverse(files)}
+      end
+    rescue
+      _ -> {:error, :invalid_archive}
+    after
+      :zlib.close(z)
+    end
+  end
+
+  # A stored (uncompressed) entry: output is the raw slice, so it is bounded by
+  # the same caps directly.
+  defp inflate_entry(
+         _z,
+         bytes,
+         caps,
+         %{method: 0, data_start: data_start, feed: feed},
+         input_used,
+         output_total
+       ) do
+    new_input = input_used + feed
+
+    cond do
+      new_input > caps.max_input_bytes ->
+        {:error, :archive_too_large}
+
+      feed > caps.max_entry_bytes ->
+        {:error, :archive_too_large}
+
+      output_total + feed > caps.max_total_bytes ->
+        {:error, :archive_too_large}
+
+      true ->
+        {:ok, ensure_utf8(binary_part(bytes, data_start, feed)), new_input, output_total + feed}
+    end
+  end
+
+  # A deflate entry: stream-inflate it, aborting the moment the actual output
+  # crosses a cap. The compressed input is bounded up front by the cumulative
+  # input budget, before a single byte is fed.
+  defp inflate_entry(
+         z,
+         bytes,
+         caps,
+         %{method: 8, data_start: data_start, feed: feed},
+         input_used,
+         output_total
+       ) do
+    new_input = input_used + feed
+
+    if new_input > caps.max_input_bytes do
+      {:error, :archive_too_large}
+    else
+      :zlib.inflateReset(z)
+      data = binary_part(bytes, data_start, feed)
+
+      case drain(z, data, caps, output_total, 0, 0, []) do
+        {:ok, iodata, entry_out} ->
+          {:ok, ensure_utf8(:erlang.iolist_to_binary(iodata)), new_input,
+           output_total + entry_out}
+
+        {:error, _} = err ->
+          err
+      end
+    end
+  end
+
+  # Drain `safeInflate` until the stream finishes, feeding the compressed data on
+  # the first call and `[]` on every continuation. A zero-output `{:continue,
+  # <<>>}` is NORMAL (zlib documents output latency) and never rejected on its
+  # own — the caps and the iteration backstop stop a malicious stream, a zlib
+  # raise stops a garbage one.
+  defp drain(_z, _input, caps, _output_total, _entry_out, iterations, _acc)
+       when iterations > caps.max_iterations do
+    {:error, :archive_too_large}
+  end
+
+  defp drain(z, input, caps, output_total, entry_out, iterations, acc) do
+    case :zlib.safeInflate(z, input) do
+      {:continue, output} ->
+        entry_out2 = entry_out + :erlang.iolist_size(output)
+
+        cond do
+          entry_out2 > caps.max_entry_bytes ->
+            {:error, :archive_too_large}
+
+          output_total + entry_out2 > caps.max_total_bytes ->
+            {:error, :archive_too_large}
+
+          true ->
+            drain(z, [], caps, output_total, entry_out2, iterations + 1, [acc | [output]])
+        end
+
+      {:finished, output} ->
+        entry_out2 = entry_out + :erlang.iolist_size(output)
+
+        cond do
+          entry_out2 > caps.max_entry_bytes -> {:error, :archive_too_large}
+          output_total + entry_out2 > caps.max_total_bytes -> {:error, :archive_too_large}
+          true -> {:ok, [acc | [output]], entry_out2}
+        end
+    end
   end
 
   # LinkedIn writes UTF-8, but a member who opens a CSV in Excel and re-saves

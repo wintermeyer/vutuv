@@ -20,6 +20,63 @@ defmodule Vutuv.Imports.LinkedInTest do
 
   defp profile_csv, do: @profile_headers <> "\n" <> @profile_row <> "\n"
 
+  # ── Malicious-archive builders (craft what :zip.create won't) ──
+
+  # Overwrite the 4-byte little-endian field at absolute byte `pos` in `bin`.
+  defp patch_u32(bin, pos, value) do
+    binary_part(bin, 0, pos) <>
+      <<value::little-32>> <> binary_part(bin, pos + 4, byte_size(bin) - pos - 4)
+  end
+
+  # A single real deflate entry whose central-directory *declared* uncompressed
+  # size is overwritten to a small lie, so the cheap declared-size pre-filter
+  # keeps it while the stream actually inflates to `byte_size(actual)`.
+  # (Central-directory file header: uncompressed size is the 4 bytes at +24.)
+  defp bomb_zip(actual, declared_size) do
+    {:ok, {_n, bin}} = :zip.create(~c"bomb.zip", [{~c"Connections.csv", actual}], [:memory])
+    {cd, _} = :binary.match(bin, <<0x50, 0x4B, 0x01, 0x02>>)
+    patch_u32(bin, cd + 24, declared_size)
+  end
+
+  # `count` central-directory records all pointing at ONE local header (offset 0),
+  # i.e. `count` entries that share a single deflate stream — the "inflate one
+  # stream N times" attack. Built by duplicating the single record and rewriting
+  # the end-of-central-directory record's counts/sizes.
+  defp shared_offset_zip(count) do
+    # ~300 KB of real, compressible data at offset 0 — the stream the naive
+    # attack would inflate once per central-directory entry.
+    stream = :binary.copy("data,row,value\n", 20_000)
+    {:ok, {_n, bin}} = :zip.create(~c"s.zip", [{~c"x.csv", stream}], [:memory])
+    {cd_start, _} = :binary.match(bin, <<0x50, 0x4B, 0x01, 0x02>>)
+    {eocd_start, _} = :binary.match(bin, <<0x50, 0x4B, 0x05, 0x06>>)
+    prefix = binary_part(bin, 0, cd_start)
+    # Each copy declares a tiny uncompressed size (+24 in the record), so the
+    # archive clears the declared-size pre-filter and reaches the overlap check —
+    # mirroring an attack whose entries all lie about their size.
+    cdfh = patch_u32(binary_part(bin, cd_start, eocd_start - cd_start), 24, 5_000)
+    eocd = binary_part(bin, eocd_start, byte_size(bin) - eocd_start)
+    new_cd = :binary.copy(cdfh, count)
+
+    <<sig::binary-size(4), disk::binary-size(4), _recs1::little-16, _recs2::little-16,
+      _cd_size::little-32, _cd_off::little-32, rest::binary>> = eocd
+
+    new_eocd =
+      <<sig::binary-size(4), disk::binary-size(4), count::little-16, count::little-16,
+        byte_size(new_cd)::little-32, byte_size(prefix)::little-32, rest::binary>>
+
+    prefix <> new_cd <> new_eocd
+  end
+
+  # Two kept entries whose data regions overlap: entry b's central-directory
+  # local-header offset (+42 in the record) is patched to point at entry a's.
+  defp overlapping_zip do
+    {:ok, {_n, bin}} =
+      :zip.create(~c"o.zip", [{~c"a.csv", "aaaa\n"}, {~c"b.csv", "bbbb\n"}], [:memory])
+
+    [_first, {second, _}] = :binary.matches(bin, <<0x50, 0x4B, 0x01, 0x02>>)
+    patch_u32(bin, second + 42, 0)
+  end
+
   describe "parse/1 errors" do
     test "a non-zip binary is an invalid archive" do
       assert LinkedIn.parse("this is not a zip file") == {:error, :invalid_archive}
@@ -376,6 +433,103 @@ defmodule Vutuv.Imports.LinkedInTest do
     test "refuses an archive with too many entries" do
       files = for i <- 1..2001, do: {"f#{i}.csv", "Name\n"}
       assert {:error, :archive_too_large} = LinkedIn.parse(zip(files))
+    end
+
+    # The original finding: a spoofed central-directory header declares a small
+    # uncompressed size (so the cheap pre-filter keeps the entry) while the real
+    # deflate stream inflates far past the per-entry cap. The unpatched code fed
+    # the whole stream to `:zip.unzip` with no output cap and OOMed; now the
+    # streaming inflater aborts once the actual output crosses the cap.
+    test "rejects a declared-small but actually-huge single entry (spoofed header)" do
+      # 16 MB of zeros compresses to a few KB; declared as 5 KB it sails past the
+      # declared-size pre-filter, then trips the 15 MB per-entry OUTPUT cap.
+      archive = bomb_zip(:binary.copy(<<0>>, 16_000_000), 5_000)
+
+      assert {:error, :archive_too_large} = LinkedIn.parse(archive)
+    end
+
+    # Objection 1(a): many central-directory entries whose offsets all point at
+    # the SAME deflate stream. Detected as overlapping data regions and rejected
+    # BEFORE any inflation, so the shared stream is never inflated N times.
+    test "rejects an archive whose entries share one offset, promptly" do
+      archive = shared_offset_zip(500)
+
+      {micros, result} = :timer.tc(fn -> LinkedIn.parse(archive) end)
+
+      # Overlapping data regions are not a normal archive: rejected outright,
+      # before the shared stream is inflated even once.
+      assert {:error, :invalid_archive} = result
+      # No gigabytes inflated: rejection is a cheap header/interval check.
+      assert micros < 1_000_000
+    end
+
+    # The two-entry form of the same defect: entry b's data region is patched to
+    # overlap entry a's. A normal archive never overlaps.
+    test "rejects an archive with two overlapping data regions" do
+      assert {:error, :invalid_archive} = LinkedIn.parse(overlapping_zip())
+    end
+
+    # Objection 1(b): a stream can consume far more compressed INPUT (and CPU)
+    # than it produces OUTPUT, so the output caps alone don't bound the work. The
+    # cumulative-input budget is the primary fix. Caps are overridable so the
+    # test stays small; production keeps 15 MB / 40 MB / 40 MB.
+    test "rejects when the cumulative compressed input exceeds the input budget" do
+      # Two incompressible entries (~1.5 KB each). Their declared sizes are tiny
+      # so the per-entry OUTPUT caps never fire; only the cumulative INPUT budget
+      # (set here to 2 KB) stops them — the second entry pushes the total over.
+      a = :crypto.strong_rand_bytes(1_500)
+      b = :crypto.strong_rand_bytes(1_500)
+      archive = zip([{"a.csv", a}, {"b.csv", b}])
+
+      assert {:error, :archive_too_large} =
+               LinkedIn.parse(archive, max_input_bytes: 2_000)
+
+      # With a budget generous enough for both, the same archive is accepted.
+      assert {:ok, _} = LinkedIn.parse(archive, max_input_bytes: 40_000_000)
+    end
+
+    # Objection 2: a genuinely corrupt/garbage deflate stream must still
+    # terminate with an error (a zlib raise, caught and converted) — never hang.
+    test "rejects a corrupt deflate stream instead of hanging" do
+      {:ok, {_n, bin}} =
+        :zip.create(
+          ~c"g.zip",
+          [{~c"Positions.csv", :binary.copy("Company Name,Title\nA,B\n", 500)}],
+          [:memory]
+        )
+
+      {:ok, [_comment, {:zip_file, _name, _info, _cm, offset, _comp}]} = :zip.list_dir(bin)
+
+      <<_::binary-size(^offset), _::binary-size(26), name_len::little-16, extra_len::little-16,
+        _::binary>> = bin
+
+      data_start = offset + 30 + name_len + extra_len
+      # Overwrite the first deflate byte with an invalid block type (BTYPE = 11,
+      # reserved), so the very first inflate step raises `:data_error`.
+      <<pre::binary-size(^data_start), _first, post::binary>> = bin
+      corrupt = pre <> <<0x07>> <> post
+
+      assert {:error, _} = LinkedIn.parse(corrupt)
+    end
+
+    # A large but valid entry (well under the caps) must inflate fully across many
+    # `safeInflate` iterations — proving zero-output continuations are drained,
+    # not mistaken for corruption (objection 2's availability half).
+    test "imports a large valid entry that drains over many inflate iterations" do
+      header = "Company Name,Title,Description,Location,Started On,Finished On\n"
+
+      body =
+        Enum.map_join(1..40_000, "", fn i -> "Org#{i},Engineer #{i},desc,Berlin,2020,\n" end)
+
+      {:ok, result} = LinkedIn.parse(zip([{"Positions.csv", header <> body}]))
+
+      # The final row (end of a ~1.5 MB stream, many `safeInflate` iterations
+      # deep) is present, proving the whole stream drained rather than being cut
+      # off early or rejected on a zero-output continuation.
+      assert Enum.any?(result.positions, &(&1.params["organization"] == "Org40000"))
+      # phash2 candidate ids collide a handful of times across 40k rows, so allow
+      # for a few merges rather than asserting an exact count.
+      assert length(result.positions) > 39_900
     end
   end
 
