@@ -14,7 +14,7 @@ defmodule Vutuv.Social.Follow do
 
   use VutuvWeb, :model
 
-  import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+  import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
 
   schema "follows" do
     belongs_to(:follower, Vutuv.Accounts.User)
@@ -76,9 +76,14 @@ defmodule Vutuv.Social.Follow do
         limit: ^n
       )
 
+    # `account_hidden_row/1`, not the correlated `account_hidden/1`: both users
+    # rows are already joined above, so the row-bound twin reads the columns
+    # the planner has instead of running an EXISTS per candidate row — and it
+    # puts the whole gate (confirmed AND not hidden) in one predicate, which is
+    # what lets `users_visible_index` apply.
     case listed do
-      :follower -> Ecto.Query.from([follower: u] in query, where: not account_hidden(u.id))
-      :followee -> Ecto.Query.from([followee: u] in query, where: not account_hidden(u.id))
+      :follower -> Ecto.Query.from([follower: u] in query, where: not account_hidden_row(u))
+      :followee -> Ecto.Query.from([followee: u] in query, where: not account_hidden_row(u))
     end
   end
 end

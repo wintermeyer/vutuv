@@ -37,7 +37,7 @@ defmodule Vutuv.Tags.UserTag do
   state) add `preload(:endorsements)` themselves.
   """
   def ordered_by_endorsements(query \\ __MODULE__) do
-    import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
 
     from(u in query,
       left_join: e in assoc(u, :endorsements),
@@ -49,7 +49,7 @@ defmodule Vutuv.Tags.UserTag do
       left_join: endorser in assoc(e, :user),
       on:
         account_confirmed_row(endorser) and
-          not account_hidden(endorser.id),
+          not account_hidden_row(endorser),
       left_join: t in assoc(u, :tag),
       # `desc: t.honor?` sorts true (honor) before false, so admin badges lead.
       order_by: [desc: t.honor?, desc: count(endorser.id), asc: t.slug],

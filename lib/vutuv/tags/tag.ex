@@ -307,7 +307,7 @@ defmodule Vutuv.Tags.Tag do
   # Same visibility gate as search/most-followed (unactivated + moderation-
   # hidden accounts never surface), same narrow listing-row select.
   defp most_endorsed_in_tag(source, tag) do
-    import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
 
     Repo.all(
       from(u in source,
@@ -319,9 +319,9 @@ defmodule Vutuv.Tags.Tag do
         # unconfirmed endorser leaves `endorser` NULL and drops out of
         # count(endorser.id) — the ranking then agrees with the counts shown.
         left_join: endorser in assoc(e, :user),
-        on: account_confirmed_row(endorser) and not account_hidden(endorser.id),
+        on: account_confirmed_row(endorser) and not account_hidden_row(endorser),
         where: us.tag_id == ^tag.id,
-        where: account_confirmed_row(u) and not account_hidden(u.id),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
         # most endorsed (by visible endorsers only)
         order_by: fragment("count(?) DESC", endorser.id),
         group_by: u.id,

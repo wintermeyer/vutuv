@@ -384,7 +384,7 @@ defmodule Vutuv.Tags do
   renderer's no-hashtag path stays query-free.
   """
   def linkable_slugs(slugs) when is_list(slugs) do
-    import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
 
     case slugs |> Enum.map(&String.downcase/1) |> Enum.uniq() do
       [] ->
@@ -395,7 +395,7 @@ defmodule Vutuv.Tags do
           join: ut in assoc(t, :user_tags),
           join: u in assoc(ut, :user),
           where: t.slug in ^normalized,
-          where: account_confirmed_row(u) and not account_hidden(u.id),
+          where: account_confirmed_row(u) and not account_hidden_row(u),
           distinct: true,
           select: t.slug
         )
@@ -518,7 +518,7 @@ defmodule Vutuv.Tags do
   popular pool unchanged.
   """
   def people_for_followed_tags(%User{} = user, limit) do
-    import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
 
     case followed_tag_ids(user) do
       [] ->
@@ -534,10 +534,10 @@ defmodule Vutuv.Tags do
             # clause, so a hidden/unconfirmed endorser leaves `endorser` NULL and
             # drops out of `count(endorser.id)`.
             left_join: endorser in assoc(e, :user),
-            on: account_confirmed_row(endorser) and not account_hidden(endorser.id),
+            on: account_confirmed_row(endorser) and not account_hidden_row(endorser),
             where: ut.tag_id in ^tag_ids,
             where: u.id != ^user.id,
-            where: account_confirmed_row(u) and not account_hidden(u.id),
+            where: account_confirmed_row(u) and not account_hidden_row(u),
             group_by: u.id,
             order_by: fragment("count(?) DESC", endorser.id),
             limit: ^limit,

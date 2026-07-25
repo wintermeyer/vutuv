@@ -124,3 +124,45 @@ unavailable" page (`VutuvWeb.ErrorHTML`, `profile_unavailable.html`) that does
 not reveal *why*. The separate `/api/2.0` JSON API keeps its own 404 for hidden
 accounts — it is not an agent-format sibling and follows problem+json
 conventions.
+
+## The public-visibility gate, and the index behind it
+
+"Is this member publicly visible" is one predicate, spelled once in
+`Vutuv.Moderation.Query`: `account_confirmed_row(u) and not
+account_hidden_row(u)`. Roughly 55 query sites across 13 modules filter on it —
+search, the follower / following / connection lists, the tag pages, the member
+directory, the fediverse actor — so it is the single most-evaluated condition
+in the app.
+
+It comes in two spellings, and picking the wrong one is a performance bug:
+
+- **`account_hidden_row(u)`** takes an already-joined users row and reads its
+  columns. **Use this whenever the users row is in scope** (a join or the main
+  binding), which is nearly always.
+- **`account_hidden(user_id)`** is a correlated `EXISTS` against the users PK,
+  for the case where the users row is *not* joined — `Vutuv.Posts` scoping a
+  post by its author is the real example. It costs one subquery per candidate
+  row, and because it sits outside the row's own predicate it also splits the
+  gate in two, which stops the index below from applying.
+
+The index is `users_visible_index`: a partial index on `users (id)` whose
+predicate is the static half of the gate (confirmed, not frozen, not
+deactivated, not unreachable). It exists because the gate is far more selective
+than the table size suggests — on the production data only ~9% of members pass
+it, the rest being legacy accounts that never confirmed their email — so
+without it every gated query read the whole `users` heap to find a small set.
+
+Two things to know when touching this:
+
+- The `suspended_until > now()` arm is deliberately **not** in the index
+  predicate: `now()` is not immutable, so Postgres rejects it there. It stays a
+  filter on the rows the index returns. The implication still holds, because
+  the query's WHERE is the index predicate *and* the suspension test, which only
+  narrows it.
+- Postgres uses a partial index only when it can **prove** the query predicate
+  implies the index predicate, and it fails silently — a gate that drifts from
+  the index just goes back to full scans, with nothing in the logs.
+  `test/vutuv/moderation/visibility_index_test.exs` is the tripwire: it plans a
+  query built from the two macros with sequential scans disabled and fails if
+  the index no longer serves it. Change the gate and that test tells you to ship
+  a migration recreating the index.
