@@ -1,6 +1,6 @@
 <%= email_greeting(@user) %>,
 
-Ihre Firmenseite "<%= @organization_name %>" hat ihre letzte verifizierte Domain verloren
+Ihre Organisationsseite "<%= @organization_name %>" hat ihre letzte verifizierte Domain verloren
 und steht wieder auf "Verifizierung ausstehend". Sie ist damit nicht mehr öffentlich
 sichtbar. Betroffen ist die Domain <%= @domain %>.
 

@@ -26,13 +26,13 @@ msgid "is reserved"
 msgstr "ist reserviert"
 
 msgid "does not match confirmation"
-msgstr ""
+msgstr "stimmt nicht mit der Bestätigung überein"
 
 msgid "is still associated to this entry"
-msgstr ""
+msgstr "ist noch mit diesem Eintrag verknüpft"
 
 msgid "are still associated to this entry"
-msgstr ""
+msgstr "sind noch mit diesem Eintrag verknüpft"
 
 msgid "should be %{count} character(s)"
 msgid_plural "should be %{count} character(s)"

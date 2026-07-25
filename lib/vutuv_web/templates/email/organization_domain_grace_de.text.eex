@@ -1,6 +1,6 @@
 <%= email_greeting(@user) %>,
 
-der Domain-Nachweis Ihrer Firmenseite "<%= @organization_name %>" lässt sich nicht mehr
+der Domain-Nachweis Ihrer Organisationsseite "<%= @organization_name %>" lässt sich nicht mehr
 abrufen. Betroffen ist die Domain <%= @domain %>.
 
 Wir prüfen den Nachweis wöchentlich, und Sie haben bis zum

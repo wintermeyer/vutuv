@@ -232,7 +232,7 @@ defmodule Vutuv.OrganizationsTest do
       domain = Repo.get!(OrganizationDomain, domain.id)
       # Consume the "verified" operator notice so the demote assertion below
       # matches the second message, not this one.
-      assert_email_sent(fn email -> assert email.subject =~ "Firmenseite verifiziert" end)
+      assert_email_sent(fn email -> assert email.subject =~ "Organisationsseite verifiziert" end)
 
       # The record vanishes.
       Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
@@ -313,7 +313,7 @@ defmodule Vutuv.OrganizationsTest do
     defp break_proof(organization, domain) do
       stub_dns(domain.verification_token)
       {:ok, _organization} = Organizations.verify_dns(organization, domain)
-      assert_email_sent(fn email -> assert email.subject =~ "Firmenseite verifiziert" end)
+      assert_email_sent(fn email -> assert email.subject =~ "Organisationsseite verifiziert" end)
       Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
       Repo.get!(OrganizationDomain, domain.id)
     end
@@ -434,7 +434,7 @@ defmodule Vutuv.OrganizationsTest do
 
       stub_dns(primary.verification_token)
       {:ok, _} = Organizations.verify_dns(organization, primary)
-      assert_email_sent(fn email -> assert email.subject =~ "Firmenseite verifiziert" end)
+      assert_email_sent(fn email -> assert email.subject =~ "Organisationsseite verifiziert" end)
 
       {:ok, second} = Organizations.add_domain(organization, "second.example.org", "dns")
       stub_dns(second.verification_token)
@@ -451,7 +451,7 @@ defmodule Vutuv.OrganizationsTest do
         # The page keeps its other verified domain, so neither the subject nor
         # the body may threaten an outage that is not coming.
         refute email.text_body =~ "nicht mehr öffentlich sichtbar"
-        assert email.subject =~ "Eine Domain Ihrer Firmenseite auf vutuv entfällt bald"
+        assert email.subject =~ "Eine Domain Ihrer Organisationsseite auf vutuv entfällt bald"
         assert email.text_body =~ primary.domain
       end)
     end

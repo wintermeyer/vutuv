@@ -1,7 +1,7 @@
-<.email_layout preheader="Der Domain-Nachweis Ihrer Firmenseite fehlt" locale={@locale}>
+<.email_layout preheader="Der Domain-Nachweis Ihrer Organisationsseite fehlt" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    der Domain-Nachweis Ihrer Firmenseite „{@organization_name}" lässt sich nicht mehr abrufen.
+    der Domain-Nachweis Ihrer Organisationsseite „{@organization_name}" lässt sich nicht mehr abrufen.
     Betroffen ist die Domain <strong>{@domain}</strong>. Wir prüfen den Nachweis wöchentlich, und
     Sie haben bis zum <strong>{Calendar.strftime(@deadline, "%d.%m.%Y")}</strong> Zeit, ihn
     wiederherzustellen.

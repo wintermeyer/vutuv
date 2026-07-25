@@ -1,25 +1,25 @@
-<.email_layout preheader="vutuv Firmenseite" locale="de">
+<.email_layout preheader="vutuv Organisationsseite" locale="de">
   <%= cond do %>
     <% @kind == :verified -> %>
       <.email_p>
-        Eine Firmenseite wurde soeben über die Domain <strong>{@domain.domain}</strong>
+        Eine Organisationsseite wurde soeben über die Domain <strong>{@domain.domain}</strong>
         verifiziert und ist jetzt öffentlich.
       </.email_p>
     <% @kind == :domain_dropped -> %>
       <.email_p>
-        Eine Firmenseite hat die Domain <strong>{@domain.domain}</strong>
+        Eine Organisationsseite hat die Domain <strong>{@domain.domain}</strong>
         verloren (sie war nach der Prüfung nicht mehr nachweisbar). Die Seite
         bleibt über ihre übrigen Domains verifiziert und öffentlich.
       </.email_p>
     <% true -> %>
       <.email_p>
-        Eine Firmenseite hat ihre letzte verifizierte Domain
+        Eine Organisationsseite hat ihre letzte verifizierte Domain
         (<strong>{@domain.domain}</strong>) verloren und steht wieder auf
         "pending". Sie ist nicht mehr öffentlich sichtbar.
       </.email_p>
   <% end %>
   <.email_p>
-    Firma: {@organization.name}<br /> Seite:
+    Organisation: {@organization.name}<br /> Seite:
     <.email_link href={@page_url}>{@page_url}</.email_link><br /> Domain: {@domain.domain}
     ({@domain.method})
   </.email_p>
@@ -28,7 +28,7 @@
     <.email_link href={@admin_url}>{@admin_url}</.email_link>
   </.email_p>
   <.email_muted>
-    Diese Nachricht dient der Kontrolle neuer bzw. auffälliger Firmenseiten,
+    Diese Nachricht dient der Kontrolle neuer bzw. auffälliger Organisationsseiten,
     solange das Volumen gering ist.
   </.email_muted>
 </.email_layout>

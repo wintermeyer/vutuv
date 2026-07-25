@@ -757,7 +757,7 @@ defmodule Vutuv.Notifications.Emailer do
       :verified,
       organization,
       domain,
-      "vutuv: Firmenseite verifiziert - #{organization.name}"
+      "vutuv: Organisationsseite verifiziert - #{organization.name}"
     )
   end
 
@@ -767,7 +767,7 @@ defmodule Vutuv.Notifications.Emailer do
       :unverified,
       organization,
       domain,
-      "vutuv: Firmenseite nicht mehr verifiziert - #{organization.name}"
+      "vutuv: Organisationsseite nicht mehr verifiziert - #{organization.name}"
     )
   end
 
