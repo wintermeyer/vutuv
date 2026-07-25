@@ -26,12 +26,18 @@ import { MarkdownEditor } from "./markdown_editor"
 // Server-rendered timestamps are UTC; this runs as the LocalTime hook inside
 // LiveViews and as a DOMContentLoaded sweep over time[data-localtime] on
 // classic controller pages (post cards render on both kinds of page).
+//
+// data-localtime="second" asks for seconds in the rewritten text. Minutes are
+// right for "when did this arrive"; the account-activity log (issue #1087) is
+// where they are not — pinning a change down to the second is the whole point
+// of that page, and "short" silently drops them.
 function localizeTime(el) {
   const dt = new Date(el.dateTime)
   if (!isNaN(dt)) {
+    const seconds = el.dataset.localtime === "second"
     el.textContent = new Intl.DateTimeFormat(undefined, {
       dateStyle: "short",
-      timeStyle: "short",
+      timeStyle: seconds ? "medium" : "short",
     }).format(dt)
   }
 }

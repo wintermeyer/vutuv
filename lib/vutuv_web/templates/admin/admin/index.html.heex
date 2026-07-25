@@ -98,6 +98,18 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
 
     <.admin_card
       icon="shield"
+      title={gettext("Account activity")}
+      href={~p"/admin/activity"}
+      id="admin-activity-link"
+      cta={gettext("Open the activity log")}
+    >
+      {gettext(
+        "What changed on an account, when, from where and how it was confirmed - the answer to \"I didn't do anything!\". Opening it is recorded in your own log."
+      )}
+    </.admin_card>
+
+    <.admin_card
+      icon="shield"
       title={gettext("Freeze an account")}
       count={@moderation_frozen_count}
       attention={@moderation_frozen_count > 0}

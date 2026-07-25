@@ -2247,10 +2247,18 @@ defmodule VutuvWeb.UI do
   attach (the hook needs a DOM id); omit it on classic pages, where the
   `data-localtime` sweep handles it. `format` is the `Calendar.strftime/2` form
   of the fallback text (default `"%Y-%m-%d %H:%M"`).
+
+  `precision="second"` makes the rewritten text carry **seconds**
+  (`data-localtime="second"`, which the JS reads). Minutes are right for
+  everything that is merely "when did this arrive"; the account-activity log
+  (issue #1087) is the case where they are not — support answering "you changed
+  this at 14:32:07" needs the second, and two events inside one minute have to
+  be distinguishable in the order they are shown in.
   """
   attr(:at, :any, required: true, doc: "a NaiveDateTime (treated as UTC) or a UTC DateTime")
   attr(:id, :string, default: nil, doc: "DOM id; when set, the LocalTime hook attaches")
   attr(:format, :string, default: "%Y-%m-%d %H:%M")
+  attr(:precision, :string, values: ~w(minute second), default: "minute")
   attr(:class, :any, default: nil)
   attr(:rest, :global)
 
@@ -2261,7 +2269,7 @@ defmodule VutuvWeb.UI do
     <time
       id={@id}
       phx-hook={@id && "LocalTime"}
-      data-localtime
+      data-localtime={@precision}
       datetime={@iso}
       title={@iso}
       class={@class}
@@ -3319,6 +3327,11 @@ defmodule VutuvWeb.UI do
          row(:security, gettext("Sign-in & security"), ~p"/settings/security",
            hint: gettext("Passkeys, signed-in devices, login codes"),
            terms: gettext("password login sign in log out session device passkey totp 2fa pin")
+         ),
+         row(:activity, gettext("Account activity"), ~p"/settings/activity",
+           hint: gettext("What changed on your account, and when"),
+           terms:
+             gettext("log history audit trail security was that me who changed when protocol")
          ),
          row(:preferences, gettext("Language & display"), ~p"/settings/preferences",
            hint: gettext("Interface language, maps, how posts are shortened"),

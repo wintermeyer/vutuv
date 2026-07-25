@@ -23,6 +23,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [settings-and-account.md](settings-and-account.md) | the settings hub, onboarding, username changes, LinkedIn import, GDPR export, the CV (Lebenslauf) download |
 | [mentions.md](mentions.md) | `@handle` mentions: the shared grammar, existence validation (anti-reservation), handle availability (anti-hijack), and rewriting mentions + notifying authors when a member renames |
 | [authentication.md](authentication.md) | passwordless PIN login, passkeys, server-side sessions |
+| [account-activity.md](account-activity.md) | the append-only account-activity log: what changed on an account, when, from where and how it was confirmed; the member's page, the admin's page, retention |
 | [moderation.md](moderation.md) | reports, freezes, the strike ladder, reporter trust, evidence screenshots |
 | [agents-and-seo.md](agents-and-seo.md) | agent formats (`.md`/`.txt`/`.json`/`.xml`/`.vcf`), the member directory, sitemap/RSS/JSON-LD, Open Graph |
 | [email.md](email.md) | the Emailer chokepoint, multipart bodies, opt-outs, bounces & deliverability |
@@ -74,6 +75,7 @@ Business logic is organized into Phoenix context modules under `lib/vutuv/`:
 |---|---|---|
 | `Vutuv.Accounts` | User, Email, UsernameChange, SearchTerm, LoginPin | Registration, PIN-based authentication, user management |
 | `Vutuv.Sessions` | UserSession | Server-side per-device sessions: signed-in-devices list, remote logout, new-device security email |
+| `Vutuv.AccountEvents` | AccountEvent | The append-only account-activity log: what changed on an account, when, from where and how it was confirmed (member + admin readers, key-whitelisted details, retention sweep) |
 | `Vutuv.Credentials` | UserCredential | Passkeys (WebAuthn/FIDO2): enrolment + assertion verification for passkey login |
 | `Vutuv.ApiAuth` | Token, App, Grant, AuthCode | API credentials: personal access tokens, OAuth 2 apps/grants/codes, scopes |
 | `Vutuv.Webhooks` | Subscription, Delivery | Signed webhook deliveries to registered apps (queue, backoff, kill switch) |

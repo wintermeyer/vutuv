@@ -36,6 +36,7 @@ defmodule VutuvWeb.UsernameController do
   plug(VutuvWeb.Plug.AuthUser)
   plug(:scrub_params, "user" when action in [:create])
 
+  alias Vutuv.AccountEvents
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Credentials
@@ -172,7 +173,7 @@ defmodule VutuvWeb.UsernameController do
   defp confirm_and_rename(conn, user, handle, params) do
     cond do
       fresh_passkey_proof?(conn) ->
-        rename(conn, user, handle)
+        rename(conn, user, handle, "passkey")
 
       is_binary(params["username_confirmation"]["code"]) ->
         verify_code(conn, user, handle, params["username_confirmation"]["code"])
@@ -193,8 +194,8 @@ defmodule VutuvWeb.UsernameController do
 
   defp check_code(conn, user, handle, code) do
     case Accounts.check_confirmation_code(user, code, "username") do
-      {:ok, user} ->
-        rename(conn, user, handle)
+      {:ok, user, factor} ->
+        rename(conn, user, handle, factor)
 
       # Wrong but still usable: stay on the page so they can try again.
       {:error, reason} ->
@@ -216,13 +217,23 @@ defmodule VutuvWeb.UsernameController do
   end
 
   # The one place a rename is committed, whichever factor proved identity.
-  defp rename(conn, user, handle) do
+  defp rename(conn, user, handle, factor) do
     # The old handle is gone afterwards, so count the posts it appears in now to
     # report how many were updated.
     affected = Mentions.count_post_mentions(user.username)
+    old_handle = user.username
 
     case Accounts.update_username(user, %{"username" => handle}) do
       {:ok, user} ->
+        # The durable answer to "my username is different and I did not do that"
+        # (issue #1087). Both handles are public identity, so they go in whole;
+        # `factor` records which of the three proofs was given.
+        AccountEvents.record(user, "username_changed",
+          conn: conn,
+          factor: factor,
+          details: %{from: old_handle, to: user.username}
+        )
+
         conn
         |> clear_pending()
         |> put_flash(:info, rename_success_message(user.username, affected))

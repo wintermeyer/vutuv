@@ -23,6 +23,11 @@ defmodule VutuvWeb.ExportController do
     user = conn.assigns[:user]
     json = user |> Vutuv.Export.build() |> Jason.encode!(pretty: true)
 
+    # A full copy of everything vutuv holds about the member just left the
+    # building; that is worth a line in their own log (issue #1087), and a
+    # download they did not start is exactly the kind of thing they should see.
+    Vutuv.AccountEvents.record(user, "data_exported", conn: conn)
+
     filename = "vutuv-export-#{user.username}-#{Date.utc_today()}.json"
 
     conn

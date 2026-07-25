@@ -74,6 +74,7 @@ defmodule Vutuv.Application do
           :sweep_unconfirmed_registrations,
           Vutuv.Accounts.UnconfirmedRegistrationSweeper
         ) ++
+        optional_child(:sweep_account_events, Vutuv.AccountEvents.Sweeper) ++
         optional_child(:send_unread_message_emails, Vutuv.Chat.UnreadNotifier) ++
         optional_child(:moderation_sweeper, Vutuv.Moderation.Sweeper) ++
         optional_child(:prune_search_history, Vutuv.Search.HistorySweeper) ++

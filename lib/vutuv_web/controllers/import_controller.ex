@@ -88,6 +88,13 @@ defmodule VutuvWeb.ImportController do
     with {:ok, decoded} <- Jason.decode(payload),
          selection = LinkedIn.selection_from_payload(decoded, selected),
          {:ok, summary} <- LinkedIn.apply_selection(user, selection) do
+      # Which import ran, never what came in: the entries are on the profile
+      # already, and the archive's contents are none of the log's business.
+      Vutuv.AccountEvents.record(user, "import_applied",
+        conn: conn,
+        details: %{source: "linkedin"}
+      )
+
       conn
       |> put_flash(:info, summary_flash(summary))
       |> redirect(to: ~p"/#{user}")

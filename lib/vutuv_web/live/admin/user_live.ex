@@ -18,6 +18,7 @@ defmodule VutuvWeb.Admin.UserLive do
   import VutuvWeb.Admin.MemberBadges, only: [status_badges: 1, badge_class: 1]
   import VutuvWeb.UserHelpers, only: [member_name: 1]
 
+  alias Vutuv.AccountEvents
   alias Vutuv.Accounts
   alias Vutuv.Pages
 
@@ -77,7 +78,9 @@ defmodule VutuvWeb.Admin.UserLive do
     user = Enum.find(socket.assigns.users, &(&1.id == id))
 
     case user && Accounts.verify_identity(user) do
-      {:ok, _verified} ->
+      {:ok, verified} ->
+        record_admin_action(socket, verified, "identity_verified")
+
         {:noreply,
          socket
          |> assign(:users, mark_verified(socket.assigns.users, id))
@@ -92,7 +95,9 @@ defmodule VutuvWeb.Admin.UserLive do
     user = Enum.find(socket.assigns.users, &(&1.id == id))
 
     case user && Accounts.admin_restore_user(user) do
-      {:ok, _restored} ->
+      {:ok, restored} ->
+        record_admin_action(socket, restored, "account_restored")
+
         {:noreply,
          socket
          |> assign(:users, mark_restored(socket.assigns.users, id))
@@ -101,6 +106,14 @@ defmodule VutuvWeb.Admin.UserLive do
       _other ->
         {:noreply, put_flash(socket, :error, gettext("Could not restore this member."))}
     end
+  end
+
+  # An admin acting on somebody else's account writes into THAT member's
+  # activity log, naming the admin (issue #1087) — so the member can see that
+  # the change was made for them and by whom. No request IP: this is a socket,
+  # not a conn, and the acting admin is the fact that matters here.
+  defp record_admin_action(socket, member, kind) do
+    AccountEvents.record(member, kind, factor: "admin", actor: socket.assigns.current_user)
   end
 
   # Flip just the verified row in place, so the GUI updates without a reload.

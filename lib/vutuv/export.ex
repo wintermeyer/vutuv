@@ -27,7 +27,9 @@ defmodule Vutuv.Export do
   #    list — per-user data that delete_user/1 removes but the export had missed.
   # 4: a work experience carries the name of the credential it was earned with
   #    (issue #858).
-  @schema_version 4
+  # 5: the account-activity log (issue #1087) — what changed on the account,
+  #    when, from where and how it was confirmed.
+  @schema_version 5
 
   def build(%User{} = user) do
     user =
@@ -146,6 +148,10 @@ defmodule Vutuv.Export do
       ad_bookings: ad_bookings(user),
       blocked_members: blocks(user),
       content_filters: content_filters(user),
+      # The account-activity log (issue #1087): the member's own record of what
+      # changed on their account. Personal data by definition, so Art. 20 covers
+      # it — and it is the section that answers "was that me?".
+      account_events: Vutuv.AccountEvents.export(user),
       saved_members: %{
         bookmarked: saved_users(user, UserBookmark),
         liked: saved_users(user, UserLike)

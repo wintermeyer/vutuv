@@ -23,6 +23,16 @@ defmodule VutuvWeb.Admin.UserPrefController do
     with_member(conn, id, fn member ->
       case Prefs.admin_update_user(member, params) do
         {:ok, member} ->
+          # Support changed the member's own settings for them, so the member's
+          # activity log names the admin who did it (issue #1087). Field names
+          # only, like every other settings save.
+          Vutuv.AccountEvents.record(member, "preferences_overridden",
+            conn: conn,
+            factor: "admin",
+            actor: conn.assigns.current_user,
+            details: %{fields: submitted_pref_keys(params)}
+          )
+
           conn
           |> put_flash(
             :info,
@@ -43,6 +53,13 @@ defmodule VutuvWeb.Admin.UserPrefController do
           |> render_show(member, params, [])
       end
     end)
+  end
+
+  # The registry is the whitelist, so a hand-made request cannot write arbitrary
+  # strings into the activity log.
+  defp submitted_pref_keys(params) do
+    known = Enum.map(Prefs.keys(), &to_string/1)
+    params |> Map.keys() |> Enum.filter(&(&1 in known)) |> Enum.sort()
   end
 
   # The controls show the member's explicit value, or blank = "inherit"; on a

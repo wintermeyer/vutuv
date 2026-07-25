@@ -28,6 +28,7 @@ defmodule VutuvWeb.SettingsController do
     "user" when action in [:update_privacy, :update_notifications, :update_language, :update_maps]
   )
 
+  alias Vutuv.AccountEvents
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.ContentFilters
@@ -83,6 +84,10 @@ defmodule VutuvWeb.SettingsController do
 
     render(conn, "security.html",
       user: user,
+      # The last few account events right where a worried member lands (issue
+      # #1087). The card is the discovery path to the full log: nobody goes
+      # looking for a page whose name they have never seen.
+      recent_activity: AccountEvents.recent(user),
       sessions: Sessions.list_active(user),
       current_session_id: conn.assigns[:current_session_id],
       passkeys: Credentials.list_for_user(user),
@@ -168,9 +173,10 @@ defmodule VutuvWeb.SettingsController do
       "privacy.html",
       ~p"/settings/privacy",
       gettext("Privacy settings saved."),
+      event: "privacy_changed",
       # The member's open shells only re-read "Show when I'm online" on a full
       # reload, so push the new value to them to start/stop their dot live.
-      fn saved ->
+      on_success: fn saved ->
         Vutuv.Activity.broadcast(saved.id, {:presence_pref, saved.show_online_status?})
       end
     )
@@ -272,7 +278,8 @@ defmodule VutuvWeb.SettingsController do
       "fediverse.html",
       ~p"/settings/fediverse",
       gettext("Fediverse settings saved."),
-      fn saved ->
+      event: "fediverse_changed",
+      on_success: fn saved ->
         if saved.fediverse_followers?, do: Vutuv.Fediverse.ensure_actor(saved)
 
         # Switching the counts off is a deletion, not just a "stop counting"
@@ -394,7 +401,8 @@ defmodule VutuvWeb.SettingsController do
       params,
       "notifications.html",
       ~p"/settings/notifications",
-      gettext("Notification settings saved.")
+      gettext("Notification settings saved."),
+      event: "notifications_changed"
     )
   end
 
@@ -439,7 +447,15 @@ defmodule VutuvWeb.SettingsController do
     user = conn.assigns[:user]
 
     case ContentFilters.create_filter(user, params) do
-      {:ok, _filter} ->
+      {:ok, filter} ->
+        # The filter's KIND only, never the pattern: a member's muted words are
+        # about the worst thing this log could carry — they say what somebody is
+        # avoiding, and an admin reading the log has no business seeing them.
+        AccountEvents.record(user, "filter_added",
+          conn: conn,
+          details: %{filter_kind: filter.kind}
+        )
+
         conn
         |> put_flash(
           :info,
@@ -465,7 +481,12 @@ defmodule VutuvWeb.SettingsController do
   end
 
   def delete_filter(conn, %{"id" => id}) do
-    _ = ContentFilters.delete_filter(conn.assigns[:user], id)
+    user = conn.assigns[:user]
+
+    if ContentFilters.delete_filter(user, id) == :ok do
+      # The kind alone again — see create_filter/2 for why the pattern stays out.
+      AccountEvents.record(user, "filter_removed", conn: conn)
+    end
 
     conn
     |> put_flash(:info, gettext("Filter removed."))
@@ -615,8 +636,18 @@ defmodule VutuvWeb.SettingsController do
     user = conn.assigns[:user]
 
     case Sessions.get_session(user, id) do
-      nil -> nil
-      session -> Sessions.revoke(session)
+      nil ->
+        nil
+
+      session ->
+        Sessions.revoke(session)
+
+        # Which device was thrown out, in the same wording the device list uses,
+        # so the log and the list read as one story (issue #1087).
+        AccountEvents.record(user, "session_revoked",
+          conn: conn,
+          details: %{target_device: Sessions.device_summary(session.user_agent)}
+        )
     end
 
     conn
@@ -628,7 +659,9 @@ defmodule VutuvWeb.SettingsController do
   # logged out of the very page they clicked from).
   def revoke_other_sessions(conn, _params) do
     user = conn.assigns[:user]
-    Sessions.revoke_all_except(user, conn.assigns[:current_session_id])
+    count = Sessions.revoke_all_except(user, conn.assigns[:current_session_id])
+
+    AccountEvents.record(user, "other_sessions_revoked", conn: conn, details: %{count: count})
 
     conn
     |> put_flash(:info, gettext("All other devices have been logged out."))
@@ -651,12 +684,13 @@ defmodule VutuvWeb.SettingsController do
   # casts that subset and leaves the rest of the profile untouched. On success we
   # stay on the same settings page (not the public profile) so the change reads as
   # "saved, here", with the toggle reflecting the new value.
-  defp save(conn, params, template, redirect_to, flash, on_success \\ fn _user -> :ok end) do
+  defp save(conn, params, template, redirect_to, flash, opts \\ []) do
     user = conn.assigns[:user]
 
     case Accounts.update_user(user, params) do
       {:ok, saved} ->
-        on_success.(saved)
+        Keyword.get(opts, :on_success, fn _user -> :ok end).(saved)
+        record_change(conn, opts[:event], saved, params)
 
         conn
         |> put_flash(:info, flash)
@@ -680,4 +714,32 @@ defmodule VutuvWeb.SettingsController do
 
   defp error_assigns(conn, _template, changeset),
     do: [user: conn.assigns[:user], changeset: changeset]
+
+  # The account-activity entry for a settings save (issue #1087). Only the
+  # **names** of the fields the form carried are logged, never their values:
+  # which switches a member touched is what answers "when did my profile stop
+  # being indexed?", while the values are on the page itself and have no
+  # business sitting in a year-long log an admin can read. The names are
+  # intersected with the schema, so a hand-made request cannot write arbitrary
+  # strings into the log.
+  defp record_change(_conn, nil, _saved, _params), do: :ok
+
+  defp record_change(conn, kind, saved, params) do
+    AccountEvents.record(saved, kind, conn: conn, details: change_details(kind, saved, params))
+  end
+
+  defp change_details("fediverse_changed", saved, params) do
+    %{fields: changed_fields(params), enabled: saved.fediverse_followers?}
+  end
+
+  defp change_details(_kind, _saved, params), do: %{fields: changed_fields(params)}
+
+  @user_field_names Enum.map(User.__schema__(:fields), &to_string/1)
+
+  defp changed_fields(params) do
+    params
+    |> Map.keys()
+    |> Enum.filter(&(&1 in @user_field_names))
+    |> Enum.sort()
+  end
 end

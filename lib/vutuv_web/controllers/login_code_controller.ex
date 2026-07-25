@@ -17,6 +17,7 @@ defmodule VutuvWeb.LoginCodeController do
   # provides :user = the logged-in member; AuthUser stays as a guard.
   plug(VutuvWeb.Plug.AuthUser)
 
+  alias Vutuv.AccountEvents
   alias Vutuv.LoginCodes
 
   def index(conn, _params) do
@@ -27,7 +28,15 @@ defmodule VutuvWeb.LoginCodeController do
   end
 
   def create(conn, _params) do
-    LoginCodes.generate_list_codes(conn.assigns[:user])
+    user = conn.assigns[:user]
+    codes = LoginCodes.generate_list_codes(user)
+
+    # How many codes were minted, never a code (issue #1087): the count is the
+    # useful fact ("a fresh list exists since then"), the codes are credentials.
+    AccountEvents.record(user, "login_codes_generated",
+      conn: conn,
+      details: %{count: length(codes)}
+    )
 
     conn
     |> put_flash(
@@ -38,7 +47,9 @@ defmodule VutuvWeb.LoginCodeController do
   end
 
   def delete(conn, _params) do
-    LoginCodes.delete_list_codes(conn.assigns[:user])
+    user = conn.assigns[:user]
+    LoginCodes.delete_list_codes(user)
+    AccountEvents.record(user, "login_codes_deleted", conn: conn)
 
     conn
     |> put_flash(:info, gettext("One-time code list deleted."))

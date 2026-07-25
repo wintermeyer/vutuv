@@ -37,7 +37,15 @@ defmodule VutuvWeb.AccessTokenController do
     }
 
     case ApiAuth.create_pat(conn.assigns.current_user, attrs) do
-      {:ok, plaintext, _token} ->
+      {:ok, plaintext, token} ->
+        # A token is a standing key to the account, so minting one belongs in
+        # the activity log (issue #1087) — by its NAME. The token itself is
+        # shown once, on the next page, and never stored anywhere readable.
+        Vutuv.AccountEvents.record(conn.assigns.current_user, "api_token_created",
+          conn: conn,
+          details: %{name: token.name}
+        )
+
         conn
         |> put_flash(:new_token, plaintext)
         |> redirect(to: ~p"/access_tokens")
@@ -54,6 +62,11 @@ defmodule VutuvWeb.AccessTokenController do
 
       token ->
         ApiAuth.revoke_token!(token)
+
+        Vutuv.AccountEvents.record(conn.assigns.current_user, "api_token_revoked",
+          conn: conn,
+          details: %{name: token.name}
+        )
 
         conn
         |> put_flash(:info, gettext("The token \"%{name}\" no longer works.", name: token.name))

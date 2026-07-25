@@ -469,6 +469,11 @@ defmodule VutuvWeb.Router do
       # Before /settings/fediverse (the dead settings page) in the router, so
       # this longer path is matched first.
       live("/fediverse/followers", FediverseFollowersLive, :index)
+
+      # The member's own account-activity log (issue #1087): what changed on
+      # the account, exactly when, from where and how it was confirmed. A
+      # LiveView because it is a searchable, sortable, paged table.
+      live("/activity", AccountActivityLive, :index)
     end
   end
 
@@ -616,6 +621,11 @@ defmodule VutuvWeb.Router do
 
       # The deliverability dashboard: thaw/clear act reload-free over the socket.
       live("/deliverability", DeliverabilityLive, :index)
+
+      # The installation-wide account-activity log (issue #1087): the support
+      # side of every member's own /settings/activity. Opening it records an
+      # entry in the reading admin's own log.
+      live("/activity", ActivityLive, :index)
 
       # The moderation queue + case page: rulings (uphold/reject) act reload-free
       # and drop back to the queue. /moderation/reporters + /:id/evidence stay

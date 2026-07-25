@@ -23,6 +23,7 @@ defmodule VutuvWeb.PasskeyController do
   # a belt-and-braces guard.
   plug(VutuvWeb.Plug.AuthUser)
 
+  alias Vutuv.AccountEvents
   alias Vutuv.Credentials
   alias Vutuv.Sessions
 
@@ -49,6 +50,11 @@ defmodule VutuvWeb.PasskeyController do
 
     case challenge && Credentials.register(user, challenge, params, nickname) do
       {:ok, _credential} ->
+        # A new way into the account is the single most important thing an
+        # activity log can show (issue #1087). The nickname is the member's own
+        # device label, never any credential material.
+        AccountEvents.record(user, "passkey_added", conn: conn, details: %{nickname: nickname})
+
         conn
         |> put_flash(:info, gettext("Passkey added."))
         |> json(%{ok: true, redirect: ~p"/settings/security"})
@@ -67,8 +73,16 @@ defmodule VutuvWeb.PasskeyController do
     user = conn.assigns[:user]
 
     case Credentials.get_for_user(user, id) do
-      nil -> nil
-      credential -> Credentials.delete(credential)
+      nil ->
+        nil
+
+      credential ->
+        Credentials.delete(credential)
+
+        AccountEvents.record(user, "passkey_removed",
+          conn: conn,
+          details: %{nickname: credential.nickname}
+        )
     end
 
     conn

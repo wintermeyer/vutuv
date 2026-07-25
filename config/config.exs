@@ -159,6 +159,18 @@ config :vutuv, :fediverse_note_refresh, true
 config :vutuv, :fediverse_note_retention_days, 183
 config :vutuv, :fediverse_note_refresh_days, 7
 
+# Whether the daily GenServer that prunes the account-activity log runs (off in
+# tests, same sandbox reasoning; tests call
+# Vutuv.AccountEvents.delete_expired/0 directly).
+config :vutuv, :sweep_account_events, true
+
+# How long an account-activity event is kept (issue #1087). The log is personal
+# data — devices, IP addresses, what changed when — so it ages out. One year
+# covers the "this happened months ago and I only noticed now" support case
+# without turning the table into a permanent movement profile. Per-installation
+# via ACCOUNT_EVENT_RETENTION_DAYS in config/runtime.exs.
+config :vutuv, :account_event_retention_days, 365
+
 # The site-wide AI-crawler stance (see VutuvWeb.ContentPolicy): :permissive
 # welcomes search, live AI input AND model training; :block_training keeps
 # retrieval but declares ai-train=no and blocks the training crawlers in

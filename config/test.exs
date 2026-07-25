@@ -13,6 +13,9 @@ config :vutuv, :fetch_gravatar, false
 config :vutuv, :ads_enabled, true
 config :vutuv, :sweep_pending_images, false
 config :vutuv, :sweep_unconfirmed_registrations, false
+# The daily retention sweep of the account-activity log would touch the sandbox
+# from outside; tests call Vutuv.AccountEvents.delete_expired/0 directly.
+config :vutuv, :sweep_account_events, false
 # The installation-defaults cache (Vutuv.Prefs.Cache) reloads from the DB on
 # PubSub messages, which would touch the sandbox from outside; with it off,
 # pref resolution falls back to the shipped defaults and tests inject

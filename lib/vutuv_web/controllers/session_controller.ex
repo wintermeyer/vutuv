@@ -229,7 +229,7 @@ defmodule VutuvWeb.SessionController do
 
         conn
         |> clear_auth_challenge()
-        |> Accounts.login(user)
+        |> Accounts.login(user, "passkey")
         # put_pending_flash/3, not put_flash/3: this answers 200 JSON and the JS
         # navigates, and Phoenix keeps a flash across requests only on a 3xx —
         # so a plain put_flash here was silently dropped and the passkey login
@@ -289,9 +289,12 @@ defmodule VutuvWeb.SessionController do
   # — same field, same failure handling (Accounts.check_login_code/2).
   defp verify_login_pin(conn, email, pin, context) do
     case Accounts.check_login_code(email, pin) do
-      # correct, drop cookie, log the user in (unless moderation blocks it)
-      {:ok, user} ->
-        handle_login(conn, user, context)
+      # correct, drop cookie, log the user in (unless moderation blocks it).
+      # `factor` names which of the three the member typed, so the sign-in lands
+      # in their activity log as "confirmed by an authenticator app" rather than
+      # an anonymous "signed in" (issue #1087).
+      {:ok, user, factor} ->
+        handle_login(conn, user, context, factor)
 
       # incorrect, let them retry — but count the failure against a
       # server-side per-identity budget so an address WITHOUT an account
@@ -336,7 +339,7 @@ defmodule VutuvWeb.SessionController do
   end
 
   # The correct-PIN path: log the user in unless moderation blocks the account.
-  defp handle_login(conn, user, context) do
+  defp handle_login(conn, user, context, factor) do
     case Vutuv.Moderation.login_block(user) do
       nil ->
         # A page that sent the visitor to log in (the OAuth consent screen)
@@ -352,7 +355,7 @@ defmodule VutuvWeb.SessionController do
         # return_to.
         path = return_to || post_login_path(context, user)
 
-        Accounts.login(conn, user)
+        Accounts.login(conn, user, factor)
         |> Accounts.delete_pin_cookie()
         |> maybe_open_welcome(path)
         |> maybe_welcome_flash(path, context, user)

@@ -13,6 +13,10 @@ defmodule VutuvWeb.SettingsHTML do
   import VutuvWeb.SavedSearchComponents,
     only: [cadence_options: 0, saved_search_kind_label: 1, saved_search_summary: 1]
 
+  # The account-activity wording (issue #1087), so the recap on the security
+  # page reads exactly like the full log at /settings/activity.
+  import VutuvWeb.AccountEventText, only: [event_label: 1, detail: 1, by_someone_else?: 1]
+
   alias Vutuv.Accounts.User
   alias Vutuv.SavedSearches
 

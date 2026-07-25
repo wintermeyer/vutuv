@@ -56,7 +56,7 @@ defmodule Vutuv.LoginCodesTest do
       secret = enroll_totp(user)
       code = NimbleTOTP.verification_code(secret)
 
-      assert :ok = LoginCodes.redeem_login_code(user, code)
+      assert {:ok, :authenticator} = LoginCodes.redeem_login_code(user, code)
       # The same code is refused for the rest of its window (NimbleTOTP since:).
       assert :error = LoginCodes.redeem_login_code(user, code)
     end
@@ -66,7 +66,7 @@ defmodule Vutuv.LoginCodesTest do
       secret = enroll_totp(user)
       <<a::binary-size(3), b::binary-size(3)>> = NimbleTOTP.verification_code(secret)
 
-      assert :ok = LoginCodes.redeem_login_code(user, " #{a} #{b} ")
+      assert {:ok, :authenticator} = LoginCodes.redeem_login_code(user, " #{a} #{b} ")
     end
 
     test "turning the app off removes the enrolment" do
@@ -104,7 +104,7 @@ defmodule Vutuv.LoginCodesTest do
       user = insert(:user)
       [%{code: code} | _] = LoginCodes.generate_list_codes(user)
 
-      assert :ok = LoginCodes.redeem_login_code(user, String.downcase(code))
+      assert {:ok, :list_code} = LoginCodes.redeem_login_code(user, String.downcase(code))
       assert LoginCodes.unused_list_codes_count(user) == 9
       assert :error = LoginCodes.redeem_login_code(user, code)
     end
@@ -152,7 +152,7 @@ defmodule Vutuv.LoginCodesTest do
       assert LoginCodes.any_for_email?("sheet@example.com")
 
       for %{code: code} <- codes do
-        assert :ok = LoginCodes.redeem_login_code(user, code)
+        assert {:ok, :list_code} = LoginCodes.redeem_login_code(user, code)
       end
 
       refute LoginCodes.any_for_email?("sheet@example.com")

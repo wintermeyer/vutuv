@@ -50,7 +50,7 @@ defmodule VutuvWeb.LoginCodeControllerTest do
 
     test "a used code renders struck through", %{conn: conn, user: user} do
       [%{code: code} | _] = LoginCodes.generate_list_codes(user)
-      assert :ok = LoginCodes.redeem_login_code(user, code)
+      assert {:ok, :list_code} = LoginCodes.redeem_login_code(user, code)
 
       html = conn |> recycle() |> get(~p"/settings/login_codes") |> html_response(200)
       assert html =~ "line-through"

@@ -174,6 +174,13 @@ if config_env() == :prod do
     config :vutuv, :fediverse_note_refresh_days, String.to_integer(String.trim(days))
   end
 
+  # How long the account-activity log keeps an event (issue #1087). It holds
+  # devices, IP addresses and what changed when, so how long that may be kept is
+  # the operator's call; one year is what vutuv.de runs.
+  if days = System.get_env("ACCOUNT_EVENT_RETENTION_DAYS") do
+    config :vutuv, :account_event_retention_days, String.to_integer(String.trim(days))
+  end
+
   # Book metadata + covers for post reviews come keyless from Open Library.
   # FETCH_BOOK_METADATA=false turns every such fetch off (intranets); the
   # review panel then has no lookup button and covers stay empty.

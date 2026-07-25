@@ -23,6 +23,12 @@ defmodule VutuvWeb.ConnectedAppController do
       grant ->
         ApiAuth.revoke_grant!(grant)
 
+        # Which app lost access, and when (issue #1087).
+        Vutuv.AccountEvents.record(conn.assigns.current_user, "app_disconnected",
+          conn: conn,
+          details: %{app: grant.app.name}
+        )
+
         conn
         |> put_flash(
           :info,

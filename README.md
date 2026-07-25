@@ -41,7 +41,10 @@ We use the [MIT License](LICENSE).
   new match appears — a candidate for jobs, a recruiter for people open to
   offers — without a member's private salary expectation ever riding along.
 - **Passwordless**: login by emailed PIN, optionally passkeys (WebAuthn), an
-  authenticator app (TOTP) or a printed one-time code list.
+  authenticator app (TOTP) or a printed one-time code list. Every
+  security-relevant change is kept in an **account-activity log** the member can
+  read themselves: what changed, to the second, from which device, and how it
+  was confirmed.
 - Invite non-members by email: the link opens the sign-up form prefilled, with
   an optional personal note and opt-in auto-follow.
 - Agent-ready: every public page is also served as Markdown, plain text, JSON

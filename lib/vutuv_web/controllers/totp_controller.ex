@@ -20,6 +20,7 @@ defmodule VutuvWeb.TotpController do
   # provides :user = the logged-in member; AuthUser stays as a guard.
   plug(VutuvWeb.Plug.AuthUser)
 
+  alias Vutuv.AccountEvents
   alias Vutuv.LoginCodes
 
   def new(conn, _params) do
@@ -42,6 +43,10 @@ defmodule VutuvWeb.TotpController do
 
     case LoginCodes.confirm_totp(user, code) do
       {:ok, _totp} ->
+        # Another way into the account, so it belongs in the activity log
+        # (issue #1087). The secret itself never leaves this flow.
+        AccountEvents.record(user, "totp_enabled", conn: conn)
+
         conn
         |> put_flash(
           :info,
@@ -69,7 +74,9 @@ defmodule VutuvWeb.TotpController do
   end
 
   def delete(conn, _params) do
-    LoginCodes.disable_totp(conn.assigns[:user])
+    user = conn.assigns[:user]
+    LoginCodes.disable_totp(user)
+    AccountEvents.record(user, "totp_disabled", conn: conn)
 
     conn
     |> put_flash(:info, gettext("Authenticator app turned off."))

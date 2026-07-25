@@ -8,6 +8,7 @@ defmodule VutuvWeb.UserController do
   import VutuvWeb.UserHelpers
   import Phoenix.LiveView.Controller, only: [live_render: 3]
 
+  alias Vutuv.AccountEvents
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
@@ -164,6 +165,15 @@ defmodule VutuvWeb.UserController do
     # key wiped every search term (issue #780).
     case Accounts.update_user(user, user_params) do
       {:ok, updated} ->
+        # Only the NAMES of the fields that were submitted (issue #1087). A
+        # changed name or photo is what somebody notices and cannot place; the
+        # values are on the profile itself and have no business in a year-long
+        # log that support also reads.
+        AccountEvents.record(updated, "profile_updated",
+          conn: conn,
+          details: %{fields: changed_field_names(user_params)}
+        )
+
         conn
         |> save_flash(user, updated)
         |> redirect(to: ~p"/#{updated}")
@@ -192,6 +202,17 @@ defmodule VutuvWeb.UserController do
   end
 
   defp clear_birthdate_if_requested(user_params, _params), do: user_params
+
+  # Intersected with the schema, so a hand-made request cannot write arbitrary
+  # strings into the activity log.
+  @user_field_names Enum.map(User.__schema__(:fields), &to_string/1)
+
+  defp changed_field_names(params) do
+    params
+    |> Map.keys()
+    |> Enum.filter(&(&1 in @user_field_names))
+    |> Enum.sort()
+  end
 
   # Editing a name or birthday auto-revokes a prior identity verification
   # (User.changeset/2). When that happened, explain it instead of the generic

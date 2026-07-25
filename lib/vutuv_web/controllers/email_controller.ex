@@ -1,5 +1,6 @@
 defmodule VutuvWeb.EmailController do
   use VutuvWeb, :controller
+  alias Vutuv.AccountEvents
   alias Vutuv.Accounts
   alias Vutuv.Accounts.Email
   alias Vutuv.Notifications.Emailer
@@ -124,7 +125,17 @@ defmodule VutuvWeb.EmailController do
         |> Email.changeset(%{value: new_email, email_type: email_type})
         |> Repo.insert()
         |> case do
-          {:ok, _email} ->
+          {:ok, email} ->
+            # A new address is a new way to receive a login PIN, so it belongs
+            # in the activity log (issue #1087) — but MASKED: the owner
+            # recognizes "an***@example.com" at a glance, while a leaked backup
+            # or the admin's cross-member view gains no working address.
+            AccountEvents.record(user, "email_added",
+              conn: conn,
+              factor: "pin",
+              details: %{email: AccountEvents.mask_email(email.value)}
+            )
+
             conn
             |> delete_session(:pending_email_type)
             |> put_flash(:info, gettext("Email created successfully."))
@@ -230,8 +241,22 @@ defmodule VutuvWeb.EmailController do
   def update(conn, %{"id" => id, "email" => email_params}) do
     email = ControllerHelpers.get_owned!(conn, :emails, id)
     changeset = Email.update_changeset(email, email_params)
+    result = Repo.update(changeset)
 
-    ControllerHelpers.save(conn, Repo.update(changeset),
+    case result do
+      {:ok, updated} ->
+        # Whether an address is publicly visible is a privacy decision, so the
+        # log records the new state — with the address itself masked, as always.
+        AccountEvents.record(conn.assigns.current_user, "email_updated",
+          conn: conn,
+          details: %{email: AccountEvents.mask_email(updated.value), public: updated.public?}
+        )
+
+      _error ->
+        :ok
+    end
+
+    ControllerHelpers.save(conn, result,
       flash: gettext("Email updated successfully."),
       redirect_to: ~p"/settings/emails",
       render: "edit.html",
@@ -246,6 +271,11 @@ defmodule VutuvWeb.EmailController do
       # Here we use delete! (with a bang) because we expect
       # it to always work (and if it does not, it will raise).
       Repo.delete!(email)
+
+      AccountEvents.record(conn.assigns.current_user, "email_removed",
+        conn: conn,
+        details: %{email: AccountEvents.mask_email(email.value)}
+      )
 
       conn
       |> put_flash(:info, gettext("Email deleted successfully."))

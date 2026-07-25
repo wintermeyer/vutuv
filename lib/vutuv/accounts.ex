@@ -13,6 +13,7 @@ defmodule Vutuv.Accounts do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Plug.Conn
+  alias Vutuv.AccountEvents
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.LoginPin
@@ -221,13 +222,23 @@ defmodule Vutuv.Accounts do
 
   # ── Authentication ──
 
-  def login(conn, user) do
+  @doc """
+  Signs `user` in on `conn`. `factor` names what proved it was them (`"pin"`,
+  `"authenticator"`, `"list_code"`, `"passkey"`) and is recorded with the
+  sign-in in the account-activity log, so the member can later tell an ordinary
+  login of their own from one they never made.
+  """
+  def login(conn, user, factor \\ nil) do
     user = activate_user(user)
 
     # Mint a server-side session row so this device can be listed and revoked
     # remotely (issue #794) and a noteworthy login can be emailed about (issue
     # #786). The raw token rides in the cookie; only its hash is stored.
     {token, session} = Vutuv.Sessions.start_session(user, conn)
+
+    # The durable half of "was that me?" (issue #1087): the security email fires
+    # only for a NOTEWORTHY login, this records every one of them.
+    AccountEvents.record(user, "signed_in", conn: conn, factor: factor)
 
     conn
     |> Conn.assign(:current_user, user)
@@ -342,6 +353,8 @@ defmodule Vutuv.Accounts do
   end
 
   def logout(conn) do
+    AccountEvents.record(conn.assigns[:current_user], "signed_out", conn: conn)
+
     # Revoke this device's server-side session row so it drops out of the
     # owner's signed-in-devices list (issue #794); revoke/1 also kills its live
     # sockets (the embedded shell, /messages, /notifications), so the client
@@ -880,10 +893,14 @@ defmodule Vutuv.Accounts do
   A valid alternate code even after the emailed PIN expired or locked out is
   deliberate — it proves a strong enrolled credential, not a lucky guess
   (~39-bit codes / a replay-proof TOTP vs the 6-digit PIN the lockout guards).
+
+  Success is `{:ok, user, factor}`, naming which of the three proved it
+  (`"pin"` / `"authenticator"` / `"list_code"`) so the sign-in lands in the
+  account-activity log with the factor that confirmed it (issue #1087).
   """
   def check_login_code(email, code) when is_binary(email) do
     case check_pin(email, code, "login") do
-      {:ok, _user} = ok -> ok
+      {:ok, user} -> {:ok, user, "pin"}
       fallback -> redeem_alternate_code(email, code, fallback)
     end
   end
@@ -899,7 +916,9 @@ defmodule Vutuv.Accounts do
   one field accepts whatever the member has, exactly like the login PIN field.
   Members who use an alternate code need no PIN mailed at all.
 
-  Returns `{:ok, user}` or the PIN check's own `{:error, message}` /
+  Returns `{:ok, user, factor}` — naming which of the three proved it, so the
+  change lands in the account-activity log with its confirming factor (issue
+  #1087) — or the PIN check's own `{:error, message}` /
   `{:already_used, message}` / `{:expired, message}` / `:lockout`. An alternate
   code only ever *adds* a success path: every failure reads exactly as the PIN
   failure did, so the attempt counters and the lockout are unchanged. It
@@ -909,19 +928,19 @@ defmodule Vutuv.Accounts do
   """
   def check_confirmation_code(%User{} = user, code, type) when is_binary(code) do
     case check_pin(user, code, type) do
-      {:ok, user} -> {:ok, user}
-      {:ok, _payload, user} -> {:ok, user}
+      {:ok, user} -> {:ok, user, "pin"}
+      {:ok, _payload, user} -> {:ok, user, "pin"}
       fallback -> redeem_alternate_confirmation(user, code, type, fallback)
     end
   end
 
   defp redeem_alternate_confirmation(user, code, type, fallback) do
     case LoginCodes.redeem_login_code(user, code) do
-      :ok ->
+      {:ok, factor} ->
         # The alternate code proved identity, so an emailed PIN for the same
         # change still sitting in the member's inbox must not stay live.
         consume_outstanding_pin(user, type)
-        {:ok, user}
+        {:ok, user, to_string(factor)}
 
       :error ->
         fallback
@@ -930,13 +949,13 @@ defmodule Vutuv.Accounts do
 
   defp redeem_alternate_code(email, code, fallback) do
     with %User{} = user <- user_by_email(email),
-         :ok <- LoginCodes.redeem_login_code(user, code) do
+         {:ok, factor} <- LoginCodes.redeem_login_code(user, code) do
       # An alternate-code login ends the outstanding emailed PIN: the member
       # is in, so the PIN still sitting in their inbox must not stay live.
       # (No Bounces.clear/1 here — unlike a typed-back PIN, an alternate code
       # proves nothing about email deliverability.)
       consume_outstanding_login_pin(user)
-      {:ok, user}
+      {:ok, user, to_string(factor)}
     else
       _ -> fallback
     end

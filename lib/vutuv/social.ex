@@ -14,6 +14,7 @@ defmodule Vutuv.Social do
   import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
 
+  alias Vutuv.AccountEvents
   alias Vutuv.Accounts.User
   alias Vutuv.Pages
   alias Vutuv.Repo
@@ -412,6 +413,14 @@ defmodule Vutuv.Social do
       end
 
     if match?({:ok, _}, result) do
+      # In the blocker's own activity log (issue #1087), so "why can this person
+      # not write to me any more" has a date. Recorded at the context chokepoint
+      # rather than at the three call sites (the /blocks form, the profile
+      # LiveView's menu, the block-and-report flow), which is why it carries no
+      # request IP: two of the three have a socket, not a conn. The handle is
+      # public identity, so it goes in whole.
+      AccountEvents.record(blocker, "member_blocked", details: %{handle: blocked.username})
+
       broadcast_presence_blocks([blocker.id, blocked.id])
       # A block severs both follow edges (sever_between/2 is quiet by design), so
       # both members' open profiles must recompute their follower / following /
@@ -474,6 +483,8 @@ defmodule Vutuv.Social do
             Repo.delete!(block)
             maybe_unfreeze_conversation(block)
           end)
+
+        AccountEvents.record(blocker, "member_unblocked", details: %{handle: blocked.username})
 
         broadcast_presence_blocks([blocker.id, blocked.id])
         # Lifting the block changes the follow-state pill (the pair can interact

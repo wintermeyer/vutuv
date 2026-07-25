@@ -132,7 +132,7 @@ defmodule Vutuv.LoginCodes do
       |> Ecto.Changeset.change(last_used_at: DateTime.utc_now(:second))
       |> Repo.update!()
 
-      :ok
+      {:ok, :authenticator}
     else
       _ -> :error
     end
@@ -228,7 +228,7 @@ defmodule Vutuv.LoginCodes do
              from(c in ListCode, where: c.id == ^id and is_nil(c.used_at)),
              set: [used_at: DateTime.utc_now(:second)]
            ) do
-      :ok
+      {:ok, :list_code}
     else
       _ -> :error
     end
@@ -242,9 +242,13 @@ defmodule Vutuv.LoginCodes do
   was already checked — and failed — before this is called), an 8-character
   code to the one-time list. Whitespace and hyphens are ignored and letters
   upcased, so "abcd efgh", "ABCD-EFGH" and a Google-Authenticator-style
-  "123 456" all read correctly. Returns `:ok` or `:error` — deliberately the
-  same `:error` for every failure shape, so the caller's fallback (the PIN
-  check's own result) is all a client ever sees.
+  "123 456" all read correctly.
+
+  Returns `{:ok, :authenticator}` / `{:ok, :list_code}` — naming which factor
+  proved it, so the account-activity log can record how a sign-in or a
+  confirmation was confirmed (issue #1087) — or `:error`, deliberately the
+  same for every failure shape, so the caller's fallback (the PIN check's own
+  result) is all a client ever sees.
   """
   def redeem_login_code(%User{} = user, input) when is_binary(input) do
     code = normalize(input)

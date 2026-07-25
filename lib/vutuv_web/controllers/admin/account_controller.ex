@@ -72,11 +72,25 @@ defmodule VutuvWeb.Admin.AccountController do
       user ->
         {result, _} = apply_action(action, user, conn.assigns.current_user, params["reason"])
 
+        # The member did not do this to themselves, so their own activity log
+        # has to say so (issue #1087) — with the acting admin recorded and the
+        # internal moderation reason deliberately left out of it.
+        if result != :noop do
+          Vutuv.AccountEvents.record(user, freeze_event(action),
+            conn: conn,
+            factor: "admin",
+            actor: conn.assigns.current_user
+          )
+        end
+
         conn
         |> put_flash(:info, flash_message(action, result, user))
         |> redirect(to: back)
     end
   end
+
+  defp freeze_event(:freeze), do: "account_frozen"
+  defp freeze_event(:unfreeze), do: "account_unfrozen"
 
   defp apply_action(:freeze, user, admin, reason),
     do: {elem(Moderation.admin_freeze_user(user, admin, reason), 1), user}

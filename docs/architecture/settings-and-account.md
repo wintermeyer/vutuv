@@ -19,7 +19,7 @@ they cannot drift. If an editable area is not on it, it does not exist.
 | Contact details | Email addresses, Phone numbers, Addresses, Websites & links, Social media profiles, Messengers |
 | Notifications & feed | Notifications, Muted words & tags, Tags you follow, Saved searches |
 | Privacy | Visibility, Blocked members, Fediverse |
-| Account | Sign-in & security, Language & display, Import, Export, Apps & API, Delete account (red) |
+| Account | Sign-in & security, Account activity, Language & display, Import, Export, Apps & API, Delete account (red) |
 
 Each row is a map with `:key` (the sidebar's active state and the hub's entry
 counts), `:label`, `:path`, a `:hint` line saying what is inside, `:terms`
@@ -63,7 +63,10 @@ itself.
 
 The account areas are focused subpages: Sign-in & security
 (`/settings/security` — how you sign in, signed-in devices, passkeys, login
-codes), Language & display (`/settings/preferences`), Import
+codes, and the last few account events), Account activity
+(`/settings/activity` — the full log of what changed on the account and when,
+see [account-activity.md](account-activity.md)), Language & display
+(`/settings/preferences`), Import
 (`/settings/import/linkedin`), Export (`/:slug/export`, the profile-scoped export corner) and Delete account
 (`/settings/delete`). "Profil bearbeiten" jumps to the basics form
 (`/settings/profile`), which ends in links to the sibling sections; the old
@@ -225,8 +228,10 @@ a passkey or an authenticator app is **not** mailed unasked — an unrequested P
 should read as an alarm, not as noise. Sends are throttled by
 `RateLimit.check_username_pin/2` (5/hour), attempts by `:username_change_confirm`.
 
-Not yet covered: the member has no durable record of *when* their username
-changed and by which factor. That is issue #1087's account-activity log.
+The rename is also **recorded**: `username_changed`, both handles and the
+confirming factor land in the member's account-activity log (issue #1087, see
+[account-activity.md](account-activity.md)), so "my username is different and I
+did not do that" has an answer with a timestamp on it.
 
 ## Import from LinkedIn
 
@@ -273,7 +278,9 @@ Strictly owner-only — it includes private data (all email addresses, direct
 messages, ad bookings).
 
 `Vutuv.Export` builds the document; a new per-user subsystem must add its
-section there (just like `Accounts.delete_user/1` must learn to delete it)
+section there (just like `Accounts.delete_user/1` must learn to delete it). The
+account-activity log is one of its sections — and downloading the export is
+itself an entry in that log.
 
 ## CV (Lebenslauf) — `/:slug/cv`
 
