@@ -5,6 +5,13 @@ defmodule Vutuv.Fediverse.Delivery do
   key when `Vutuv.Fediverse.Deliverer` sends it. Mirrors the webhook queue:
   exponential backoff on failure, dropped after repeated failure, row deleted
   on success.
+
+  `rebuild_from` marks the one row that does **not** send the copy built at
+  enqueue time (issue #1070): a post whose picture the AI scan had not released
+  yet is held briefly and re-rendered when it goes out, so the picture rides
+  along. `activity_json` still holds a complete, valid activity for such a row, so
+  a release that does not know this column delivers that instead of choking — the
+  worst a deploy window can do is federate one post without its picture.
   """
 
   use VutuvWeb, :model
@@ -12,6 +19,7 @@ defmodule Vutuv.Fediverse.Delivery do
   schema "fediverse_deliveries" do
     field(:inbox_uri, :string)
     field(:activity_json, :string)
+    field(:rebuild_from, :string)
     field(:attempts, :integer, default: 0)
     field(:next_attempt_at, :utc_datetime)
     field(:last_error, :string)

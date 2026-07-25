@@ -26,6 +26,11 @@ defmodule Vutuv.Posts.Post do
     # Present iff this post is a reply; survives parent deletion (see PostReply).
     has_one(:reply_ref, Vutuv.Posts.PostReply, foreign_key: :post_id)
 
+    # Present iff this reply also answers a reply from another network (issue
+    # #1070). Rides alongside `reply_ref`, never instead of it, and carries its
+    # own copy of the delivery target so it outlives the cached remote note.
+    has_one(:remote_reply_ref, Vutuv.Posts.PostRemoteReply, foreign_key: :post_id)
+
     has_many(:denials, Vutuv.Posts.PostDenial, on_replace: :delete)
     has_many(:images, Vutuv.Posts.PostImage, preload_order: [asc: :position])
 

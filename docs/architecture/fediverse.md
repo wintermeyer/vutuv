@@ -190,6 +190,79 @@ every endpoint 404s and nothing is delivered.
     renders as a closed lid. The member also gets a notification: the
     `fediverse_reply` kind, sourced **straight from the notes table**, so
     deleting a note deletes its notification with no second place to remember.
+- **Answering a reply that came from another network** (issue #1070, the one
+  place a member's own action makes vutuv POST to a server that never followed
+  them): the "Reply" link on a remote reply's card opens
+  `/system/fediverse/reply/:id` (`VutuvWeb.PostLive.RemoteReply`) — the reply
+  above, the ordinary post composer below, and a line stating plainly, *before*
+  the member types, that the answer goes to that person on their own server and to
+  the member's Fediverse followers and is a public vutuv post as well. Nobody
+  should publish to another network by accident.
+  - **Underneath it is an ordinary reply.** `Posts.create_remote_reply/3` writes
+    the same `PostReply` row to the vutuv post the note answers, so local
+    threading, the parent-author notification, the public reply count and the edit
+    window are untouched, plus a `Vutuv.Posts.PostRemoteReply` sidecar recording
+    the *other* thing it answers. The conversation renderer reads that sidecar to
+    hang the answer **under** the remote card rather than beside it (the forest
+    would otherwise make them siblings).
+  - **The sidecar carries its own copy of the target** — `in_reply_to_uri`,
+    `actor_uri`, `inbox_uri`, `handle` — because a note is a cache that expires
+    six months out or is taken down before that, while the member's answer lives
+    on and an `Update`/`Delete` still has to reach the person answered. `note_id`
+    nilifies for that reason instead of cascading. The inbox itself was captured
+    when the note was stored (the inbox had already fetched and verified that
+    actor document to check the signature), so answering costs no network call.
+  - **The activity**: `inReplyTo` is the remote note's own id, not the vutuv post
+    underneath (that note already points back at our post, so this is what threads
+    the answer correctly over there); the answered actor joins `cc` beside the
+    usual public audience; and a `Mention` tag plus a leading linked `@user@host`
+    in the outgoing HTML is what gets them notified. The `Mention` is built from
+    the **stored** actor URI, never parsed out of the member's typed text — parsing
+    would let anyone mint a verified-looking Mention at an actor nobody checked,
+    which is mention spam with our signature on it. The handle is added on the wire
+    only: on vutuv the answer shows a "Replying to" line, so a member who has never
+    heard of Mastodon never types a handle in a foreign format.
+  - **Who may answer**: any member who federates, not only the author of the post
+    the note sits under — the conversation is on their post either way, and the
+    answer is delivered from the answerer's own actor to their own followers.
+    `Fediverse.check_remote_reply/2` holds the gates and **names** which one
+    refused, because `:not_federating` is the one the member can act on: the page
+    turns it into an explanation and a link to `/settings/fediverse` rather than a
+    dead end. Hiding the link from them instead would leave them no way to find out
+    the capability exists.
+  - **Public replies only** in v1, and the operator blocklist stops answers going
+    to a shut-out server (a block is both ears and mouth shut). Plus an hourly
+    per-member budget (`:fediverse_outbound_reply_limit`, 30) as the backstop
+    against a compromised account relaying: the shape of the feature already bounds
+    it hard, since an answer needs a stored reply on a vutuv post first, so the
+    targets are people who wrote here and never a list an attacker picks.
+  - **The inbox is vetted twice.** An actor document names its own inbox and
+    whoever runs that server writes the document, so a hostile one can point its
+    inbox at a third party and turn a member's answer into a signed POST there (the
+    classic ActivityPub inbox redirect). `Fediverse.own_inbox/1` therefore refuses
+    an inbox that is not https on the actor's **own host** before it is ever
+    stored — the same rule the inbox already applies to a signature's `keyId` — and
+    `attempt/2` re-checks every row at send time (https, not internal, not
+    blocked).
+- **Holding a post back until its pictures are vetted** (issue #1070): a post's
+  images are invisible until the AI scan releases them
+  (`Vutuv.Moderation.ImageScans`), so a Note built the instant the post commits
+  carries no attachment for them and nothing would ever send the picture. Such a
+  post is now enqueued with a short hold and a `rebuild_from` marker
+  (`fediverse_deliveries`), and the deliverer re-renders it when it goes out.
+  `Fediverse.images_settled/1`, called from
+  `Vutuv.Moderation.ImageSubjects.apply_approved/1` **and** `apply_rejected/1`
+  (a rejected picture settles the post just as an approved one does — it then
+  federates without it, which is what vetting first means), pulls the row forward
+  the moment the last picture on the post has a verdict, which is the normal case
+  and usually a few seconds. `:fediverse_image_hold_seconds` (90) is the
+  **ceiling**, not the usual wait: it is what happens when the scanner is down, and
+  then the post goes out without the unvetted picture rather than not at all.
+  `activity_json` still holds a complete, valid activity for a held row, so a
+  release that knows nothing of `rebuild_from` delivers that instead of choking —
+  the worst a deploy window can do is federate one post without its picture. The
+  rebuild re-checks the gates too, so a post deleted or made non-public during the
+  hold never goes out.
 - **The operator's safety floor** (issue #1067): anyone can run an ActivityPub
   server, so before anything a remote sends is stored, two independent levers
   sit in front of it. The **blocklist**
@@ -377,10 +450,13 @@ a link out instead), **boost rosters** (who re-shared stays a number), inline
 rather than a vutuv post — that conversation lives on its author's server, and
 following it would mean storing arbitrary third-party threads.
 
-Replying **back** to somebody on another network from vutuv is not built either:
-it would mean delivering to servers that never followed us and sending a member's
-words somewhere they did not choose, which deserves its own decision. The card
-links to the original instead.
+Replying **back** to somebody on another network is built now (issue #1070, see
+the outbound-replies bullet above) — for **public** replies only. A reply
+addressed to the member alone still cannot be answered: answering it publicly
+would publish half of an exchange its author asked to keep to one person, and
+answering it privately would mean a new kind of vutuv post that has to be
+invisible in the feed, on the profile, in the thread, in the agent formats and in
+the data export. That is its own feature; the card links to the original instead.
 
 The operator blocklist and the
 inbound caps that were the condition for storing anything shipped alongside it

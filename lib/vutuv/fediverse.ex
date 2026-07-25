@@ -47,6 +47,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDenial
+  alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.RateLimiter
   alias Vutuv.RemoteHtml
   alias Vutuv.Repo
@@ -617,6 +618,15 @@ defmodule Vutuv.Fediverse do
   @inbound_actor_limit 60
   @inbound_window_ms :timer.hours(1)
 
+  # Answers a member may send out to other networks per hour (issue #1070). Set
+  # for a person holding a conversation, not for a script: a real exchange is a
+  # handful of messages, so this only ever bites automation.
+  @outbound_reply_limit 30
+
+  # How long a post with an unvetted picture is held before it federates without
+  # it. The ceiling, not the normal wait — see `image_hold_seconds/0`.
+  @image_hold_seconds 90
+
   @doc "Every blocked remote server, newest first, with who blocked it."
   def list_blocked_instances do
     Repo.all(from(b in BlockedInstance, order_by: [desc: b.id], preload: [:blocked_by]))
@@ -1169,6 +1179,7 @@ defmodule Vutuv.Fediverse do
           actor_uri: actor.uri,
           origin_url: presence(object["url"]),
           in_reply_to_uri: object["inReplyTo"],
+          inbox_uri: own_inbox(actor),
           handle: actor.handle,
           display_name: actor.name,
           content_text: text,
@@ -1183,6 +1194,39 @@ defmodule Vutuv.Fediverse do
         |> Repo.insert()
     end
   end
+
+  @doc """
+  The inbox a remote actor may be answered at: their own, and only when it sits
+  on the **same host** as the actor id (issue #1070).
+
+  An actor document names its own inbox, and that document is written by whoever
+  runs the server. A hostile one can point its inbox at a third party and use a
+  member's reply to make vutuv deliver a signed POST there, which is the classic
+  ActivityPub inbox redirect. The inbox path already refuses a `keyId` served by
+  another host (`same_authority?/2` in `VutuvWeb.FediverseController`); this is
+  the same rule for the delivery target.
+
+  Returns `nil` when the document names a foreign, malformed or missing inbox, so
+  the answer is simply not delivered to it rather than delivered somewhere the
+  actor does not control.
+  """
+  def own_inbox(%{uri: actor_uri, inbox: inbox}) when is_binary(inbox) do
+    if same_host?(actor_uri, inbox), do: inbox
+  end
+
+  def own_inbox(_actor), do: nil
+
+  defp same_host?(a, b) when is_binary(a) and is_binary(b) do
+    case {URI.parse(a), URI.parse(b)} do
+      {%URI{host: host}, %URI{host: host, scheme: "https"}} when is_binary(host) and host != "" ->
+        true
+
+      _ ->
+        false
+    end
+  end
+
+  defp same_host?(_a, _b), do: false
 
   # How the note was addressed, read from `to`/`cc` on **both** the Create and
   # the Note (servers put the audience on either). Only the public collection
@@ -1454,10 +1498,77 @@ defmodule Vutuv.Fediverse do
   # instances reject anonymous GETs). federated?/1 guaranteed the actor exists.
   defp signer(user), do: signer_for(user, get_actor(user))
 
+  ## Answering another network (issue #1070)
+
+  @doc """
+  Whether `author` may answer the stored remote reply `note`, and when not, which
+  gate refused. `:ok`, or `{:error, reason}` with one of:
+
+    * `:fediverse_disabled` — the installation switch is off.
+    * `:note_not_public` — the reply was addressed to the member alone. Answering
+      it would mean publishing half of a private exchange, so v1 does not offer
+      it at all; the card links to the original instead.
+    * `:not_federating` — the member has not switched Fediverse participation on
+      (or their account is not in good standing). **The one refusal the member can
+      do something about**, which is why it is named separately: the reply page
+      turns it into an explanation and a link to `/settings/fediverse` rather than
+      a dead end.
+    * `:moved` — the member redirected their Fediverse followers to another
+      account, so nothing of theirs federates any more.
+    * `:instance_blocked` — the operator shut that server out. A block is both
+      ears and mouth shut, so it stops answers going the other way too.
+
+  Any federating member may answer, not only the author of the post the note sits
+  under: the conversation is on their post either way, and an answer is delivered
+  from the answerer's own actor to their own followers.
+
+  Deliberately free of side effects, so a render can ask it as safely as a write.
+  The outbound budget is claimed separately (`claim_reply_budget/1`).
+  """
+  def check_remote_reply(%User{} = author, %Note{} = note) do
+    cond do
+      not enabled?() -> {:error, :fediverse_disabled}
+      not Note.public?(note) -> {:error, :note_not_public}
+      not federated?(author) -> {:error, :not_federating}
+      moved?(author) -> {:error, :moved}
+      instance_blocked?(note.actor_uri) -> {:error, :instance_blocked}
+      true -> :ok
+    end
+  end
+
+  @doc """
+  Claims one slot from the member's hourly budget for answers that leave for
+  another network. `:ok`, or `{:error, :reply_capped}`.
+
+  This is the one place a member's own action makes vutuv POST to a server that
+  never followed them, so it is metered. The shape of the feature already bounds
+  it hard (an answer needs a stored reply on a vutuv post first, so the targets
+  are people who wrote here, never a list an attacker picks), and this is the
+  backstop for the rest: a compromised account cannot turn the installation into
+  a relay faster than the budget allows.
+
+  Consuming, so only the write path calls it.
+  """
+  def claim_reply_budget(%User{id: user_id}) do
+    case RateLimiter.hit(
+           {:fediverse_outbound_reply, user_id},
+           outbound_reply_limit(),
+           @inbound_window_ms
+         ) do
+      :ok -> :ok
+      _ -> {:error, :reply_capped}
+    end
+  end
+
+  @doc "How many answers per hour one member may send to other networks."
+  def outbound_reply_limit,
+    do: Application.get_env(:vutuv, :fediverse_outbound_reply_limit, @outbound_reply_limit)
+
   ## Federating posts (called from Vutuv.Posts after commit)
 
   @doc "A freshly published post -> Create(Note) to every follower inbox."
-  def federate_new_post(%Post{} = post), do: maybe_federate(post, &Docs.create_activity/2)
+  def federate_new_post(%Post{} = post),
+    do: maybe_federate(post, &Docs.create_activity/2, "post_create")
 
   @doc """
   An edited post -> Update(Note); one whose audience closed -> Delete, so
@@ -1468,36 +1579,129 @@ defmodule Vutuv.Fediverse do
     if Posts.restricted?(post) do
       federate_post_delete(post)
     else
-      maybe_federate(post, &Docs.update_activity/2)
+      maybe_federate(post, &Docs.update_activity/2, "post_update")
     end
   end
 
   @doc "A deleted post -> Delete(Tombstone) (best effort)."
-  def federate_post_delete(%Post{id: post_id, user_id: user_id}) do
+  def federate_post_delete(%Post{id: post_id, user_id: user_id} = post) do
     with true <- enabled?(),
          %User{} = user <- Repo.get(User, user_id),
          true <- federated?(user),
          false <- moved?(user),
-         [_ | _] = inboxes <- delivery_inboxes(user) do
+         [_ | _] = inboxes <- recipients(user, post) do
       enqueue(user, inboxes, Docs.delete_activity(post_id, user))
     else
       _ -> :skip
     end
   end
 
-  defp maybe_federate(%Post{} = post, builder) do
+  defp maybe_federate(%Post{} = post, builder, kind) do
     with true <- enabled?(),
          %User{} = user <- Repo.get(User, post.user_id),
          true <- federated?(user),
          false <- moved?(user),
          false <- Posts.restricted?(post),
-         [_ | _] = inboxes <- delivery_inboxes(user) do
-      post = Repo.preload(post, [:images, :review, reply_ref: [:parent_author]])
-      enqueue(user, inboxes, builder.(post, user))
+         post = Repo.preload(post, Docs.note_preloads()),
+         [_ | _] = inboxes <- recipients(user, post) do
+      enqueue(user, inboxes, builder.(post, user), hold_opts(post, kind))
     else
       _ -> :skip
     end
   end
+
+  ## Holding a post back until its pictures are vetted (issue #1070)
+
+  @doc """
+  How long a post with an unvetted picture waits before it federates anyway.
+
+  A post's images are invisible until the AI scan releases them
+  (`Vutuv.Moderation.ImageScans`), so a Note built the instant the post commits
+  carries no attachment for them and nothing would ever send the picture. The
+  post is therefore held, and released the moment the scan settles — usually a few
+  seconds later, through `images_settled/1`.
+
+  This is the **ceiling**, not the normal wait: it is what happens when the
+  scanner is down, and then the post goes out without the picture rather than not
+  at all. Configurable (`:fediverse_image_hold_seconds`) so tests do not sit on a
+  real clock.
+  """
+  def image_hold_seconds,
+    do: Application.get_env(:vutuv, :fediverse_image_hold_seconds, @image_hold_seconds)
+
+  # A post with nothing pending goes out now, exactly as before. One waiting on a
+  # picture is enqueued with a complete, valid activity anyway (so a release that
+  # knows nothing of `rebuild_from` still delivers something sane) plus the marker
+  # that tells this release to re-render it at send time.
+  defp hold_opts(%Post{} = post, kind) do
+    if Posts.awaiting_image_release?(post) do
+      [
+        delay_seconds: image_hold_seconds(),
+        rebuild_from: "#{kind}:#{post.id}"
+      ]
+    else
+      []
+    end
+  end
+
+  @doc """
+  The AI scan settled every picture on this post: send any held delivery now
+  instead of waiting out `image_hold_seconds/0`.
+
+  Called from `Vutuv.Moderation.ImageSubjects` on both outcomes, because a
+  rejected picture settles the post just as an approved one does — the post then
+  federates without it, which is the whole point of vetting first.
+
+  Nothing to do when a *second* picture on the same post is still pending: the
+  post waits for the last one.
+  """
+  def images_settled(post_id) when is_binary(post_id) do
+    if enabled?() and not Posts.awaiting_image_release?(post_id) do
+      release_held_deliveries(post_id)
+    end
+
+    :ok
+  end
+
+  def images_settled(_post_id), do: :ok
+
+  defp release_held_deliveries(post_id) do
+    now = DateTime.utc_now(:second)
+    markers = Enum.map(["post_create", "post_update"], &"#{&1}:#{post_id}")
+
+    {count, _} =
+      from(d in Delivery, where: d.rebuild_from in ^markers and d.next_attempt_at > ^now)
+      |> Repo.update_all(set: [next_attempt_at: now])
+
+    if count > 0, do: Deliverer.nudge()
+    count
+  end
+
+  @doc """
+  Every inbox one of a member's post activities goes to: the servers that
+  followed them, plus — when the post answers a reply from another network
+  (issue #1070) — the inbox of the person answered.
+
+  That last one is the only inbox vutuv ever posts to without having been asked,
+  which is why the address is vetted before it is ever stored (`own_inbox/1`
+  refuses an inbox on a host the actor does not control) and re-vetted per row at
+  send time (`attempt/2`: https, not internal, not a blocked server).
+
+  A member with no Fediverse followers at all still reaches the person they
+  answered, so the empty-follower case is not "nothing to do" any more.
+  """
+  def recipients(%User{} = user, %Post{} = post) do
+    (delivery_inboxes(user) ++ answered_inbox(post)) |> Enum.uniq()
+  end
+
+  # Read off the struct, never re-queried: on the delete path the sidecar row has
+  # already cascaded away with the post, and the preloaded association is the only
+  # copy of the address left (see `Vutuv.Posts.delete_post/1`).
+  defp answered_inbox(%Post{remote_reply_ref: %PostRemoteReply{inbox_uri: inbox}})
+       when is_binary(inbox),
+       do: [inbox]
+
+  defp answered_inbox(%Post{}), do: []
 
   @doc """
   A member reposts another member's public post -> `Announce` to the reposter's
@@ -1533,10 +1737,11 @@ defmodule Vutuv.Fediverse do
     enqueue(user, [inbox_uri], Docs.accept_activity(user, follow_object))
   end
 
-  defp enqueue(user, inboxes, activity) do
+  defp enqueue(user, inboxes, activity, opts \\ []) do
     json = Jason.encode!(activity)
     now = DateTime.utc_now(:second)
     stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    due = DateTime.add(now, Keyword.get(opts, :delay_seconds, 0))
 
     rows =
       Enum.map(inboxes, fn inbox ->
@@ -1545,8 +1750,9 @@ defmodule Vutuv.Fediverse do
           user_id: user.id,
           inbox_uri: inbox,
           activity_json: json,
+          rebuild_from: Keyword.get(opts, :rebuild_from),
           attempts: 0,
-          next_attempt_at: now,
+          next_attempt_at: due,
           inserted_at: stamp,
           updated_at: stamp
         }
@@ -1674,16 +1880,40 @@ defmodule Vutuv.Fediverse do
          false <- Vutuv.Ssrf.resolves_to_internal?(host),
          # A server the operator blocked while this row waited in the queue must
          # not be delivered to either — a block is both ears and mouth shut.
-         false <- instance_blocked?(delivery.inbox_uri) do
+         false <- instance_blocked?(delivery.inbox_uri),
+         {:ok, delivery} <- rebuilt(delivery, user) do
       post_activity(delivery, user, actor)
     else
-      # No key, a non-https inbox, an internal target or a blocked server:
-      # undeliverable for good, so the row goes instead of clogging the queue.
+      # No key, a non-https inbox, an internal target, a blocked server, or a
+      # post that is gone or no longer public: undeliverable for good, so the row
+      # goes instead of clogging the queue.
       _ -> Repo.delete(delivery)
     end
   end
 
   defp attempt(%Delivery{} = delivery, _actor), do: Repo.delete(delivery)
+
+  # A held row re-renders its activity now, so a picture the AI scan released
+  # while it waited rides along (issue #1070). The gates are re-checked at the
+  # same time: the post may have been deleted or had its audience closed during
+  # the hold, and then this delivery must not go out at all.
+  defp rebuilt(%Delivery{rebuild_from: nil} = delivery, _user), do: {:ok, delivery}
+
+  defp rebuilt(%Delivery{rebuild_from: marker} = delivery, user) do
+    with [kind, post_id] <- String.split(marker, ":", parts: 2),
+         builder when is_function(builder) <- rebuild_builder(kind),
+         %Post{} = post <- Posts.get_post(post_id),
+         false <- Posts.restricted?(post) do
+      post = Repo.preload(post, Docs.note_preloads())
+      {:ok, %{delivery | activity_json: Jason.encode!(builder.(post, user))}}
+    else
+      _ -> :drop
+    end
+  end
+
+  defp rebuild_builder("post_create"), do: &Docs.create_activity/2
+  defp rebuild_builder("post_update"), do: &Docs.update_activity/2
+  defp rebuild_builder(_kind), do: nil
 
   defp post_activity(delivery, user, actor) do
     case ap_post(

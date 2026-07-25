@@ -58,7 +58,56 @@ defmodule Vutuv.FediverseNotesTest do
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
-  defp remote(uri \\ @actor), do: %{uri: uri, handle: "alice", name: "Alice Anders"}
+  # The actor document the inbox verified the delivery against, reduced to what
+  # a stored note keeps. `inbox:` is what an answer would be delivered to
+  # (issue #1070); pass it explicitly to test the same-host rule.
+  defp remote(uri \\ @actor, opts \\ []) do
+    %{
+      uri: uri,
+      handle: "alice",
+      name: "Alice Anders",
+      inbox: Keyword.get(opts, :inbox, default_inbox(uri))
+    }
+  end
+
+  defp default_inbox(uri), do: uri <> "/inbox"
+
+  describe "the inbox an answer would go to (issue #1070)" do
+    test "is captured from the verified actor document", %{user: user, note_url: note_url} do
+      assert :ok = Fediverse.record_reply(user, create_activity(note_url), remote())
+
+      assert [%Note{inbox_uri: inbox}] = Repo.all(Note)
+      assert inbox == "#{@actor}/inbox"
+    end
+
+    test "is refused when the actor names an inbox on another host", %{
+      user: user,
+      note_url: note_url
+    } do
+      author = remote(@actor, inbox: "https://victim.example/inbox")
+
+      assert :ok = Fediverse.record_reply(user, create_activity(note_url), author)
+
+      # The classic ActivityPub inbox redirect: whoever runs social.example
+      # writes that document, so a foreign inbox would turn a member's answer
+      # into a signed POST at a third party. Not stored, so not delivered to.
+      assert [%Note{inbox_uri: nil}] = Repo.all(Note)
+    end
+
+    test "is refused when the actor names a plain-http inbox", %{user: user, note_url: note_url} do
+      author = remote(@actor, inbox: "http://social.example/users/alice/inbox")
+
+      assert :ok = Fediverse.record_reply(user, create_activity(note_url), author)
+      assert [%Note{inbox_uri: nil}] = Repo.all(Note)
+    end
+
+    test "is absent when the document carried none", %{user: user, note_url: note_url} do
+      author = remote(@actor, inbox: nil)
+
+      assert :ok = Fediverse.record_reply(user, create_activity(note_url), author)
+      assert [%Note{inbox_uri: nil}] = Repo.all(Note)
+    end
+  end
 
   describe "record_reply/3 — the gates" do
     test "stores a public reply to the member's own post", %{

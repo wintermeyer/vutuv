@@ -174,6 +174,21 @@ if config_env() == :prod do
     config :vutuv, :fediverse_note_refresh_days, String.to_integer(String.trim(days))
   end
 
+  # How many answers to other networks one member may send per hour (issue
+  # #1070). The one place a member's own action makes this installation POST to a
+  # server that never followed them, so the operator has to be able to meter it.
+  if limit = System.get_env("FEDIVERSE_OUTBOUND_REPLY_LIMIT") do
+    config :vutuv, :fediverse_outbound_reply_limit, String.to_integer(String.trim(limit))
+  end
+
+  # How long a post whose picture the AI image scan has not judged yet waits
+  # before it federates without it (issue #1070). The ceiling, not the usual
+  # wait — the post normally goes out the moment the scan settles. An
+  # installation running the scanner on slow hardware raises it.
+  if seconds = System.get_env("FEDIVERSE_IMAGE_HOLD_SECONDS") do
+    config :vutuv, :fediverse_image_hold_seconds, String.to_integer(String.trim(seconds))
+  end
+
   # How long the account-activity log keeps an event (issue #1087). It holds
   # devices, IP addresses and what changed when, so how long that may be kept is
   # the operator's call; one year is what vutuv.de runs.

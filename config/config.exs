@@ -159,6 +159,18 @@ config :vutuv, :fediverse_note_refresh, true
 config :vutuv, :fediverse_note_retention_days, 183
 config :vutuv, :fediverse_note_refresh_days, 7
 
+# How long a post whose picture the AI image scan has not judged yet waits before
+# it federates anyway (issue #1070). The scan normally settles within seconds and
+# releases the post at once, so this is the CEILING, not the usual wait: it is
+# what happens when the scanner is down, and then the post goes out without the
+# unvetted picture rather than not at all.
+config :vutuv, :fediverse_image_hold_seconds, 90
+
+# How many answers to other networks one member may send per hour (issue #1070).
+# The one place a member's own action makes vutuv POST to a server that never
+# followed them, so it is metered; sized for a conversation, not a script.
+config :vutuv, :fediverse_outbound_reply_limit, 30
+
 # Whether the daily GenServer that prunes the account-activity log runs (off in
 # tests, same sandbox reasoning; tests call
 # Vutuv.AccountEvents.delete_expired/0 directly).

@@ -119,6 +119,8 @@ Everything else has a default (the vutuv.de production value):
 | `FEDIVERSE_INBOUND_CAPS` | `600,60` | `host,actor`: how many rows one remote server, and one remote account, may store here per hour. Anything past the budget is dropped for that hour. The floor under the operator blocklist at `/admin/fediverse`, since it also bounds servers nobody has blocked yet |
 | `FEDIVERSE_NOTE_RETENTION_DAYS` | `183` | How long a reply written on another network may be held here at the very most, in days. It is deleted when the clock runs out whatever else happens, so this is the promise your privacy page can make. Only applies once a member switches replies on (off by default) |
 | `FEDIVERSE_NOTE_REFRESH_DAYS` | `7` | How stale a stored reply may get before vutuv asks its origin server whether it is still published there. Still there means the text is refreshed and the retention clock starts again; gone (or locked away) means it is deleted at once; unreachable changes nothing. Replies sent to a member privately are never re-checked |
+| `FEDIVERSE_OUTBOUND_REPLY_LIMIT` | `30` | How many answers to other networks one member may send per hour. This is the one place a member's own action makes your installation POST to a server that never followed them, so it is metered: the budget is the backstop against a compromised account relaying. Sized for somebody holding a conversation, so it only ever bites automation. Answering is only possible where a reply from that server already sits on a vutuv post, so the targets are always people who wrote here first |
+| `FEDIVERSE_IMAGE_HOLD_SECONDS` | `90` | How long a post whose picture the AI image scan has not judged yet waits before it federates **without** the picture. This is a ceiling, not the usual wait: the post goes out the moment the scan settles, normally within seconds. It only bites when the scanner is down, and then the choice is "the post without its picture" over "no post at all". Raise it if you run image moderation on slow hardware; irrelevant when `MODERATE_IMAGES` is off |
 | `ACCOUNT_EVENT_RETENTION_DAYS` | `365` | How long the **account-activity log** keeps an event, in days (see `docs/architecture/account-activity.md`). It records what changed on an account, when, from which coarse device (never an IP address), and how it was confirmed, so it is personal data with a clock on it: a year covers the "this happened months ago and I only noticed now" support case without becoming a permanent movement profile. The daily sweeper deletes anything older |
 | `FETCH_BOOK_METADATA` | `true` | `false` turns the catalogue lookups behind post **book reviews** off (the composer's ISBN → title/author/year prefill, the cover image, page count and publisher from Open Library, and an audiobook's running time). The review feature itself keeps working — members type the fields by hand and the card renders without a cover or those details. Set it on installations that must not call out (intranets) |
 | `DNB_SRU_URL` | `https://services.dnb.de/sru/dnb` | Where an **audiobook's running time** is looked up by ISBN: an SRU endpoint answering MARC21-xml (the Deutsche Nationalbibliothek by default — Open Library records no durations). Point it at another catalogue's SRU endpoint, or set it **empty** (`DNB_SRU_URL=`) to switch that one lookup off while the rest of the book metadata keeps working |
@@ -553,6 +555,37 @@ at all — they never signed up here and cannot practically be asked:
 If you run an installation where holding third-party text is not acceptable at
 all, leave it as it is: members have to switch it on themselves, and
 `FEDIVERSE_ENABLED=false` turns the whole of federation off.
+
+**Answering those replies.** A member who takes part in the Fediverse can answer
+a **public** reply that came from another network, from the reply's own card in the
+conversation. Any member who federates can answer, not only the author of the post
+it sits under. The answer is an ordinary public vutuv post that also travels to the
+person answered and to the answerer's Fediverse followers, and the page says so
+before they write a word, so nobody publishes to another network by accident. A
+member who has not switched federation on is shown what the setting does and a
+link to it rather than a disabled button.
+
+A reply that was addressed to a member alone cannot be answered: doing it publicly
+would publish half of an exchange its author meant for one person.
+
+This is the only case where your installation sends something to a server that
+never asked for it, so two things bound it. The target is never freely chosen —
+there has to be a stored reply from that server on a vutuv post first, so the
+person answered is always somebody who wrote here — and each member has an hourly
+budget (`FEDIVERSE_OUTBOUND_REPLY_LIMIT`) as the backstop against a compromised
+account being used to relay. Blocking a server at `/admin/fediverse` also stops
+answers going to it. Editing or deleting such an answer tells the person answered
+too, for as long as the answer exists here — which is why a small delivery address
+is kept alongside it even after the six-month copy of their reply is gone.
+
+**Posts with pictures reach other networks a moment later.** A picture is
+invisible until image moderation has judged it, so a post carrying one waits for
+that verdict before it federates — otherwise the other network would receive the
+text and never the picture. Normally that is a few seconds. If the scanner is down,
+the post goes out after `FEDIVERSE_IMAGE_HOLD_SECONDS` (90) **without** the
+unvetted picture, on the grounds that a post without its picture beats no post.
+A rejected picture settles the post the same way. None of this applies when
+`MODERATE_IMAGES` is off.
 
 **Followers who leave without saying so.** Somebody on another server who
 unfollows, or who deletes their account and whose server announces it, disappears

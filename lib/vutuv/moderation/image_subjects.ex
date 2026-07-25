@@ -236,6 +236,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
             Vutuv.Organizations.release_logo(Repo.get!(OrganizationImage, scan.subject_id))
         end
 
+        settle_post_federation(kind, scan.subject_id)
         broadcast(scan, :approved)
         :ok
 
@@ -323,6 +324,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
         # announced once it is released (no quarantine move — covers are
         # served through the authorizing proxy, which checks this state).
         Vutuv.Posts.broadcast_review_cover_ready(review.post_id)
+        Vutuv.Fediverse.images_settled(review.post_id)
         :ok
 
       _ ->
@@ -366,6 +368,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
         config.store.delete(image.token)
         Repo.delete(image, allow_stale: true)
         clear_gallery_references(kind, image)
+        # A rejected picture settles the post just as an approved one does: it
+        # federates now, without the picture, which is what vetting first means.
+        settle_post_federation(kind, image)
         broadcast(scan, :rejected)
         :ok
     end
@@ -436,12 +441,35 @@ defmodule Vutuv.Moderation.ImageSubjects do
     case cleared do
       {1, _} ->
         Vutuv.ReviewCover.delete_files(%PostReview{id: scan.subject_id})
+        # The cover is settled (as gone), so a post held for it federates now.
+        case Repo.get(PostReview, scan.subject_id) do
+          %PostReview{post_id: post_id} -> Vutuv.Fediverse.images_settled(post_id)
+          nil -> :ok
+        end
+
         :ok
 
       _ ->
         :stale
     end
   end
+
+  # A post picture reaching a verdict is what releases a post held back from
+  # federating (issue #1070). Takes the image row when it still exists (the
+  # rejection path has just deleted it, so the id would no longer resolve) or its
+  # id when it does. Only `post_image` matters here — the other gallery kinds do
+  # not federate.
+  defp settle_post_federation("post_image", %PostImage{post_id: post_id}),
+    do: Vutuv.Fediverse.images_settled(post_id)
+
+  defp settle_post_federation("post_image", subject_id) when is_binary(subject_id) do
+    case Repo.get(PostImage, subject_id) do
+      %PostImage{post_id: post_id} -> Vutuv.Fediverse.images_settled(post_id)
+      nil -> :ok
+    end
+  end
+
+  defp settle_post_federation(_kind, _subject), do: :ok
 
   # An organization's `logo` column points at its image token; a rejected logo
   # must not leave a dangling pointer behind.

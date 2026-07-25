@@ -17,6 +17,11 @@ defmodule Vutuv.Fediverse.Note do
       the cap is well defined in characters.
     * `audience` — how it was addressed. Only `"public"` is public; the other
       three render to the addressed member alone (issue #1071).
+    * `inbox_uri` — where an answer to this reply is delivered (issue #1070).
+      Free to keep: the inbox verifies every delivery against the sender's
+      freshly fetched actor document, which carries it, so storing it here means
+      answering costs no network call on the member's request path. Nullable,
+      since notes stored before issue #1070 have none.
     * `received_at` / `checked_at` / `expires_at` — the retention triple.
 
   There is no avatar column and there never will be: the card renders initials
@@ -62,6 +67,7 @@ defmodule Vutuv.Fediverse.Note do
     field(:actor_uri, :string)
     field(:origin_url, :string)
     field(:in_reply_to_uri, :string)
+    field(:inbox_uri, :string)
     field(:handle, :string)
     field(:display_name, :string)
     field(:content_text, :string)
@@ -118,6 +124,7 @@ defmodule Vutuv.Fediverse.Note do
       :actor_uri,
       :origin_url,
       :in_reply_to_uri,
+      :inbox_uri,
       :handle,
       :display_name,
       :content_text,
@@ -140,6 +147,7 @@ defmodule Vutuv.Fediverse.Note do
     |> validate_length(:actor_uri, max: @max_uri_bytes, count: :bytes)
     |> validate_length(:origin_url, max: @max_uri_bytes, count: :bytes)
     |> validate_length(:in_reply_to_uri, max: @max_uri_bytes, count: :bytes)
+    |> validate_length(:inbox_uri, max: @max_uri_bytes, count: :bytes)
     |> validate_length(:handle, max: 255)
     |> validate_length(:display_name, max: 255)
     |> validate_length(:content_text, max: @max_content)

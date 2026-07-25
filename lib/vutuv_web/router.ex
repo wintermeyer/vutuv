@@ -427,6 +427,11 @@ defmodule VutuvWeb.Router do
       live("/posts/:id/edit", PostLive.Edit, :edit)
       live("/posts/:id/reply", PostLive.Reply, :new)
 
+      # Answering a reply that came from another network (issue #1070). Under
+      # /system/ rather than a new root word, which profiles own; "system" is
+      # already reserved, so this burns no handle.
+      live("/system/fediverse/reply/:id", PostLive.RemoteReply, :new)
+
       # The private likes / bookmarks lists (reserved slugs too).
       live("/likes", PostLive.Saved, :likes)
       live("/bookmarks", PostLive.Saved, :bookmarks)

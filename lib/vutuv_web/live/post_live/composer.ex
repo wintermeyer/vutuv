@@ -31,6 +31,7 @@ defmodule VutuvWeb.PostLive.Composer do
   use VutuvWeb, :live_component
 
   alias Vutuv.BookMetadata
+  alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
@@ -53,7 +54,8 @@ defmodule VutuvWeb.PostLive.Composer do
 
   @impl true
   def update(assigns, socket) do
-    socket = assign(socket, Map.take(assigns, [:id, :current_user, :post, :parent]))
+    socket =
+      assign(socket, Map.take(assigns, [:id, :current_user, :post, :parent, :remote_note]))
 
     socket =
       if socket.assigns[:composer_ready?] do
@@ -72,6 +74,9 @@ defmodule VutuvWeb.PostLive.Composer do
     socket
     |> assign(:composer_ready?, true)
     |> assign_new(:parent, fn -> nil end)
+    # Set when this composer answers a reply from another network (issue #1070);
+    # it then saves through Posts.create_remote_reply/3 instead.
+    |> assign_new(:remote_note, fn -> nil end)
     # Reposted or answered posts carry other people's shares and replies:
     # the audience is pinned to public (Posts.update_post/2 enforces it; the
     # select disappears).
@@ -303,20 +308,31 @@ defmodule VutuvWeb.PostLive.Composer do
       image_ids: Enum.map(socket.assigns.images, & &1.id)
     }
 
-    socket.assigns.post
-    |> save_post(socket.assigns.current_user, attrs, socket.assigns.parent)
+    socket.assigns
+    |> save_post(attrs)
     |> handle_save_result(socket)
   end
 
-  defp save_post(nil, author, attrs, %Post{} = parent),
+  # Answering a reply from another network goes through its own context function:
+  # it writes the sidecar that carries the answer out to that network, and it
+  # holds the federation gates (issue #1070).
+  defp save_post(%{post: nil, remote_note: %Note{} = note, current_user: author}, attrs),
+    do: Posts.create_remote_reply(author, note, attrs)
+
+  defp save_post(%{post: nil, parent: %Post{} = parent, current_user: author}, attrs),
     do: Posts.create_reply(author, parent, attrs)
 
-  defp save_post(nil, author, attrs, nil), do: Posts.create_post(author, attrs)
-  defp save_post(post, _author, attrs, _parent), do: Posts.update_post(post, attrs)
+  defp save_post(%{post: nil, current_user: author}, attrs), do: Posts.create_post(author, attrs)
+  defp save_post(%{post: post}, attrs), do: Posts.update_post(post, attrs)
 
   defp handle_save_result({:ok, post}, socket) do
     cond do
       socket.assigns.post ->
+        {:noreply, push_navigate(socket, to: Posts.path(post))}
+
+      socket.assigns[:remote_note] ->
+        # An answer to a remote reply has no `parent` assign of its own, so its
+        # own permalink is the way back into that conversation.
         {:noreply, push_navigate(socket, to: Posts.path(post))}
 
       socket.assigns.parent ->
@@ -368,6 +384,24 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp save_error_message(reason) when reason in [:restricted, :not_visible],
     do: gettext("You can no longer reply to this post.")
+
+  # Answering another network (issue #1070). `:not_federating` is handled by the
+  # page before the composer ever renders, so these are the states that can only
+  # appear between opening the form and pressing Save.
+  defp save_error_message(:reply_capped),
+    do:
+      gettext(
+        "You have sent a lot of answers to other networks in the past hour. Please try again later."
+      )
+
+  defp save_error_message(:instance_blocked),
+    do: gettext("That server is blocked on this site, so no answer can be sent to it.")
+
+  defp save_error_message(:note_not_public),
+    do: gettext("This reply was sent to you alone, so it cannot be answered publicly.")
+
+  defp save_error_message(reason) when reason in [:not_federating, :moved, :fediverse_disabled],
+    do: gettext("Your Fediverse settings do not allow sending an answer right now.")
 
   defp save_error_message(_too_many_images) do
     gettext("No more than %{max} images per post.", max: Posts.max_images_per_post())

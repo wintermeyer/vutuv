@@ -252,11 +252,18 @@ defmodule VutuvWeb.FediverseController do
   defp reaction_kind("Announce"), do: "announce"
 
   # What a stored reply keeps about its author: the actor URI (the takedown and
-  # dedupe key) plus the two cosmetic display strings. No avatar — the card
+  # dedupe key), the two cosmetic display strings, and the inbox an answer goes
+  # to (issue #1070 — we hold the verified actor document right here, so keeping
+  # its inbox spares the reply path a network call). No avatar — the card
   # renders initials and links out, so vutuv never hosts a third party's
   # picture.
   defp remote_author(remote) do
-    %{uri: remote.id, handle: remote.preferred_username, name: remote.name}
+    %{
+      uri: remote.id,
+      handle: remote.preferred_username,
+      name: remote.name,
+      inbox: remote.inbox
+    }
   end
 
   defp follower_attrs(remote) do

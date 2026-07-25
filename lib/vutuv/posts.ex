@@ -45,6 +45,7 @@ defmodule Vutuv.Posts do
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse.Note
   alias Vutuv.Mentions
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Pages
@@ -55,6 +56,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostMention
+  alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostRepost
   alias Vutuv.Posts.PostReview
@@ -166,7 +168,37 @@ defmodule Vutuv.Posts do
   reference nilifies, on account deletion the author reference too (see
   `Vutuv.Posts.PostReply`).
   """
-  def create_reply(%User{} = author, %Post{} = parent, attrs) do
+  def create_reply(%User{} = author, %Post{} = parent, attrs),
+    do: do_create_reply(author, parent, attrs, nil)
+
+  @doc """
+  Creates a reply to a reply that came from **another network** (issue #1070).
+
+  Underneath it is an ordinary `create_reply/3` to the vutuv post the remote note
+  answers, so local threading, the parent-author notification, the public reply
+  count and the edit window behave exactly as for any other reply. On top it
+  writes the `Vutuv.Posts.PostRemoteReply` sidecar, which is what makes the
+  outgoing activity carry an `inReplyTo` into that other network, a `Mention` of
+  the person answered, and their inbox among its recipients.
+
+  Any member may answer a note, not only the author of the post it sits under, so
+  long as they federate: `Vutuv.Fediverse.check_remote_reply/2` holds that gate
+  (plus the installation switch, public-notes-only, the operator blocklist and an
+  outbound rate limit) and names which one refused, so the caller can tell a
+  member who simply has not switched federation on from a hard no.
+  """
+  def create_remote_reply(%User{} = author, %Note{} = note, attrs) do
+    with :ok <- Vutuv.Fediverse.check_remote_reply(author, note),
+         :ok <- Vutuv.Fediverse.claim_reply_budget(author),
+         %Post{} = parent <- get_post(note.post_id) do
+      do_create_reply(author, parent, attrs, note)
+    else
+      nil -> {:error, :not_visible}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp do_create_reply(%User{} = author, %Post{} = parent, attrs, note) do
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
 
     with :ok <- check_reply_allowed(author, parent),
@@ -176,7 +208,7 @@ defmodule Vutuv.Posts do
          # params are dropped, so the public reply count and the parent-author
          # notification only ever concern content the author can see (issue #774).
          {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, [], image_ids) do
-      case insert_post(changeset, image_ids, parent) do
+      case insert_post(changeset, image_ids, parent, note) do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
@@ -285,7 +317,11 @@ defmodule Vutuv.Posts do
   parent's fresh reply count is re-broadcast.
   """
   def delete_post(%Post{} = post) do
-    post = Repo.preload(post, [:images, :screenshot, :review])
+    # `:remote_reply_ref` is loaded before the delete on purpose: the sidecar row
+    # cascades away with the post, but the Delete(Tombstone) still has to reach
+    # the person on the other network who was answered (issue #1070). The
+    # in-memory struct is the only place that address is left afterwards.
+    post = Repo.preload(post, [:images, :screenshot, :review, :remote_reply_ref])
     parent_id = reply_parent_id(post.id)
 
     case Repo.delete(post) do
@@ -363,9 +399,10 @@ defmodule Vutuv.Posts do
 
   # Stamps the Berlin-day publication date (the archive coordinate; the same
   # calendar day the rendered timestamps use) and commits the post, its image
-  # claims and — for a reply — the PostReply row in one transaction, so post
-  # and reference land (or roll back) together.
-  defp insert_post(changeset, image_ids, parent \\ nil) do
+  # claims and — for a reply — the PostReply row (plus, when it answers another
+  # network, the PostRemoteReply sidecar) in one transaction, so post and
+  # references land (or roll back) together.
+  defp insert_post(changeset, image_ids, parent \\ nil, note \\ nil) do
     Repo.transaction(fn ->
       changeset
       |> Ecto.Changeset.change(published_on: Vutuv.BerlinTime.today())
@@ -374,12 +411,32 @@ defmodule Vutuv.Posts do
         {:ok, post} ->
           attach_images!(post, image_ids)
           insert_reply_ref!(post, parent)
+          insert_remote_reply_ref!(post, note)
           post
 
         {:error, changeset} ->
           Repo.rollback(changeset)
       end
     end)
+  end
+
+  defp insert_remote_reply_ref!(_post, nil), do: :ok
+
+  # Everything delivery needs is copied here now, while the note is still on
+  # hand: the note is a cache that expires (or is taken down), and an `Update` or
+  # `Delete` of this answer has to keep reaching the person who was answered long
+  # after that. Hence the copies, and hence `note_id` nilifying rather than
+  # cascading the answer away with its target.
+  defp insert_remote_reply_ref!(%Post{} = post, %Note{} = note) do
+    %PostRemoteReply{post_id: post.id}
+    |> PostRemoteReply.changeset(%{
+      note_id: note.id,
+      in_reply_to_uri: note.object_uri,
+      actor_uri: note.actor_uri,
+      inbox_uri: note.inbox_uri,
+      handle: Note.display_handle(note)
+    })
+    |> Repo.insert!()
   end
 
   defp insert_reply_ref!(_post, nil), do: :ok
@@ -2474,6 +2531,10 @@ defmodule Vutuv.Posts do
       # The book/film review sidecar (nil for ordinary posts) — the card
       # renders it wherever the post renders, so it always travels along.
       :review,
+      # Present only on an answer to a reply from another network (issue #1070).
+      # The conversation renderer reads it to hang such an answer under the
+      # remote card it answers rather than beside it.
+      :remote_reply_ref,
       denials: [:denied_user],
       tags: from(t in Tag, order_by: t.name),
       reply_ref: [
@@ -2556,6 +2617,42 @@ defmodule Vutuv.Posts do
     do: Enum.filter(images, &ImageScans.released?(&1.moderation))
 
   def released_images(_not_loaded), do: []
+
+  @doc """
+  Whether any picture on this post is still waiting for the AI image scan.
+
+  What federation asks before it sends a post to other networks (issue #1070): a
+  Note built while an image is in limbo carries no attachment for it, and nothing
+  would ever re-send it, so the picture would simply be missing over there. The
+  answer covers both kinds of picture a post can carry — its attached images and
+  a book review's fetched cover.
+
+  Takes an id (a fresh read, which is what the scan-settled hook needs) or a post
+  whose `:images` and `:review` are already loaded.
+  """
+  def awaiting_image_release?(post_id) when is_binary(post_id) do
+    case UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
+      nil -> false
+      post -> post |> Repo.preload([:images, :review]) |> awaiting_image_release?()
+    end
+  end
+
+  def awaiting_image_release?(%Post{} = post) do
+    pending_images?(post.images) or pending_cover?(post.review)
+  end
+
+  defp pending_images?(images) when is_list(images),
+    do: Enum.any?(images, &(not ImageScans.released?(&1.moderation)))
+
+  defp pending_images?(_not_loaded), do: false
+
+  # A cover that was fetched but not yet judged. A review with no cover at all,
+  # or one whose fetch failed, is not something to wait for.
+  defp pending_cover?(%PostReview{cover_status: "ready", cover: cover} = review)
+       when is_binary(cover),
+       do: not ImageScans.released?(review.cover_moderation)
+
+  defp pending_cover?(_review), do: false
 
   @doc "Deletes a pending (unattached) image: row and files."
   def delete_pending_image(%PostImage{post_id: nil} = image) do

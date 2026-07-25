@@ -20,12 +20,22 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.ReviewCover
   alias VutuvWeb.PostComponents
   alias VutuvWeb.UserHelpers
 
   @public "https://www.w3.org/ns/activitystreams#Public"
+
+  # Everything note/2 reads off a post. Kept here, beside the builder that needs
+  # it, because two call sites load it (the delivery queue and the permalink's
+  # ActivityPub rendering) and a field added to the Note must not silently render
+  # as `NotLoaded` at one of them.
+  @note_preloads [:images, :review, :remote_reply_ref, reply_ref: [:parent_author]]
+
+  @doc "The associations `note/2` needs loaded on a post."
+  def note_preloads, do: @note_preloads
 
   def actor_url(user), do: "#{base()}/#{user.username}/actor"
   def key_id(user), do: actor_url(user) <> "#main-key"
@@ -205,18 +215,68 @@ defmodule VutuvWeb.Fediverse.Docs do
 
   @doc "The Note a public post federates as."
   def note(%Post{} = post, user) do
+    remote = remote_target(post)
+
     %{
       "id" => note_url(user, post.id),
       "type" => "Note",
       "attributedTo" => actor_url(user),
-      "content" => content_html(post),
+      "content" => content_html(post, remote),
       "published" => iso8601(post.inserted_at),
       "to" => [@public],
-      "cc" => [actor_url(user) <> "/followers"],
+      "cc" => cc(user, remote),
       "url" => note_url(user, post.id)
     }
-    |> put_in_reply_to(post)
+    |> put_in_reply_to(post, remote)
+    |> put_tag(remote)
     |> put_attachments(post)
+  end
+
+  # The reply from another network this post answers, when it answers one
+  # (issue #1070). An un-preloaded association is a truthy `NotLoaded`, so it is
+  # matched away explicitly rather than treated as "no target".
+  defp remote_target(%Post{remote_reply_ref: %PostRemoteReply{} = ref}), do: ref
+  defp remote_target(%Post{}), do: nil
+
+  # A public answer is addressed like any other public post, plus the person it
+  # answers. Naming them in `cc` (rather than `to`) is what Mastodon does for a
+  # public reply: the post stays public, and the mentioned actor is delivered to
+  # directly so it lands in their notifications.
+  defp cc(user, nil), do: [actor_url(user) <> "/followers"]
+
+  defp cc(user, %PostRemoteReply{actor_uri: actor_uri}),
+    do: [actor_url(user) <> "/followers", actor_uri]
+
+  # The `Mention` tag is what makes the remote server notify the person answered
+  # and thread the reply under theirs.
+  #
+  # It is built from the **stored** actor URI, never from parsing the member's
+  # typed text. Parsing would let anyone put `@someone@anywhere` in a post body
+  # and have vutuv mint a verified-looking Mention at an actor nobody ever
+  # checked, which is mention spam with our signature on it.
+  defp put_tag(note, nil), do: note
+
+  defp put_tag(note, %PostRemoteReply{} = ref) do
+    Map.put(note, "tag", [
+      %{
+        "type" => "Mention",
+        "href" => ref.actor_uri,
+        "name" => mention_handle(ref)
+      }
+    ])
+  end
+
+  # How the answered account is written: the `@user@host` captured with the note.
+  # Falls back to the bare host when the remote document carried no
+  # `preferredUsername` (the same fallback `Vutuv.Fediverse.Note` makes).
+  defp mention_handle(%PostRemoteReply{handle: handle}) when is_binary(handle) and handle != "",
+    do: handle
+
+  defp mention_handle(%PostRemoteReply{actor_uri: actor_uri}) do
+    case URI.parse(actor_uri) do
+      %URI{host: host} when is_binary(host) and host != "" -> "@" <> host
+      _ -> actor_uri
+    end
   end
 
   defp envelope(user, type, id, object) do
@@ -236,14 +296,33 @@ defmodule VutuvWeb.Fediverse.Docs do
   # sidecar is rendered INTO the content: the Note is one more rendering of
   # the post (like the agent docs), so a Mastodon reader gets the reviewed
   # work's facts even though remote software knows nothing of review cards.
-  defp content_html(post) do
+  defp content_html(post, remote) do
     body_html =
       post.body
       |> VutuvWeb.Markdown.render_post(images(post))
       |> Phoenix.HTML.safe_to_string()
 
-    (body_html <> PostComponents.review_content_html(post))
+    (mention_html(remote) <> body_html <> PostComponents.review_content_html(post))
     |> absolutize()
+  end
+
+  # The answered account, written into the outgoing HTML the way these networks
+  # write a reply: a leading linked `@user@host`.
+  #
+  # It is added **here, on the wire, only** — the member's stored body does not
+  # carry it. On vutuv the answer shows a "Replying to" line instead, so a member
+  # who has never heard of Mastodon does not have to type a handle in a foreign
+  # format, and their post does not read like a foreign one. The handle is remote
+  # supplied, so it is escaped.
+  defp mention_html(nil), do: ""
+
+  defp mention_html(%PostRemoteReply{} = ref) do
+    handle =
+      ref |> mention_handle() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+    href = ref.actor_uri |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+    ~s(<p><span class="h-card"><a href="#{href}" class="u-url mention">#{handle}</a></span></p>)
   end
 
   # Remote servers are anonymous viewers: only AI-released images may render
@@ -260,9 +339,18 @@ defmodule VutuvWeb.Fediverse.Docs do
     VutuvWeb.Markdown.absolutize_html(html, base())
   end
 
-  # inReplyTo only when the parent's author federates too — otherwise the id
-  # would not resolve as ActivityPub and remote servers could drop the post.
-  defp put_in_reply_to(note, post) do
+  # An answer to a reply from another network points at **that** note (issue
+  # #1070), not at the vutuv post underneath: the remote note already carries its
+  # own `inReplyTo` back to our post, so this is what puts the answer in the right
+  # place in the conversation on the other server. The URI is the durable copy
+  # from the sidecar, so it still resolves after the cached note is collected.
+  defp put_in_reply_to(note, _post, %PostRemoteReply{in_reply_to_uri: uri}),
+    do: Map.put(note, "inReplyTo", uri)
+
+  # Otherwise inReplyTo only when the parent's author federates too — a
+  # non-federating author serves no Note at that id, and remote servers could
+  # drop the post over an id that does not resolve.
+  defp put_in_reply_to(note, post, nil) do
     case reply_parent(post) do
       nil -> note
       {parent_author, parent_id} -> Map.put(note, "inReplyTo", note_url(parent_author, parent_id))

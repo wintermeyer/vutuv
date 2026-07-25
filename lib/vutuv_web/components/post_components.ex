@@ -32,6 +32,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.ReviewCover
@@ -767,6 +768,10 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:initials, name_initials(note.display_name || note.handle))
       |> assign(:public?, Note.public?(note))
       |> assign(:warned?, Note.warned?(note))
+      # Only a public reply can be answered (issue #1070): a private one would
+      # mean publishing half of an exchange its author asked to keep to one
+      # person, so v1 does not offer it at all.
+      |> assign(:can_reply?, not is_nil(assigns.viewer) and Note.public?(note))
 
     ~H"""
     <article data-fediverse-reply={@note.id} data-audience={@note.audience}>
@@ -869,6 +874,21 @@ defmodule VutuvWeb.PostComponents do
               rel="nofollow noopener noreferrer"
               class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             >{gettext("View the original")}</a>
+            <%!-- Answering is the one action on a remote reply that exists, so it
+            sits here in the open beside where the reply came from. The card still
+            has no action bar: liking or resharing something on somebody else's
+            server is not a thing, and an absent row still beats a dead one. Shown
+            to every signed-in member on a public reply — the page behind it is
+            what explains a member who does not federate why they cannot send
+            (issue #1070). --%>
+            <span :if={@can_reply?}>
+              ·
+              <.link
+                navigate={~p"/system/fediverse/reply/#{@note.id}"}
+                data-remote-reply-link={@note.id}
+                class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+              >{gettext("Reply")}</.link>
+            </span>
           </p>
         </div>
       </div>
@@ -1088,11 +1108,36 @@ defmodule VutuvWeb.PostComponents do
   defp merge_remote_nodes(children, notes, post, viewer) do
     owner? = match?(%User{}, viewer) and viewer.id == post.user_id
 
-    remote_nodes =
-      Enum.map(notes, &%{note: &1, owner?: owner?, children: []})
+    # An answer to one of these notes (issue #1070) is, underneath, an ordinary
+    # reply to the same vutuv post — so `thread_forest/1` made it a *sibling* of
+    # the note it answers. Move it under the note, which is where the reader
+    # expects it and what the note's own server shows too.
+    {answers, siblings} = Enum.split_with(children, &(answered_note_id(&1) in note_ids(notes)))
 
-    Enum.sort_by(children ++ remote_nodes, &node_time/1, {:asc, NaiveDateTime})
+    remote_nodes =
+      Enum.map(notes, fn note ->
+        %{
+          note: note,
+          owner?: owner?,
+          children:
+            answers
+            |> Enum.filter(&(answered_note_id(&1) == note.id))
+            |> Enum.sort_by(&node_time/1, {:asc, NaiveDateTime})
+        }
+      end)
+
+    Enum.sort_by(siblings ++ remote_nodes, &node_time/1, {:asc, NaiveDateTime})
   end
+
+  defp note_ids(notes), do: Enum.map(notes, & &1.id)
+
+  # Which remote reply this node answers, or nil for every ordinary post. An
+  # un-preloaded association is a truthy `NotLoaded`, so it is matched away
+  # rather than treated as an answer.
+  defp answered_note_id(%{post: %{remote_reply_ref: %PostRemoteReply{note_id: note_id}}}),
+    do: note_id
+
+  defp answered_note_id(_node), do: nil
 
   defp node_time(%{note: note}), do: DateTime.to_naive(note.received_at)
   defp node_time(%{post: post}), do: post.inserted_at
