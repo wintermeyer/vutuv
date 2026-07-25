@@ -37,8 +37,8 @@ movement profile nobody asked us to keep, sitting in a table an admin page and
 every backup can read. (`user_sessions` still stores one per signed-in device:
 that is the devices list and the new-device security email, a different feature
 with its own lifetime.) Removing it took two releases, per the N-1 migration
-rule: one that stopped writing and reading the column and nulled what was
-already there, then one that dropped it.
+rule: v7.159.1 stopped writing and reading the column and nulled what was
+already there, v7.159.2 dropped it.
 
 ## What may never be in it
 

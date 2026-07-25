@@ -12,9 +12,8 @@ defmodule Vutuv.AccountEvents.AccountEvent do
   must be a declared one and every `details` key must be whitelisted for that
   kind, which is what keeps secrets and private values out of a table that a
   backup, an admin page and a support conversation all touch. There is
-  deliberately **no IP address** — the `ip_address` column is dropped in the
-  release after this one (an N-1-safe expand/contract), and nothing reads or
-  writes it any more.
+  deliberately **no IP address** — the `ip_address` column was removed
+  across v7.159.1 and v7.159.2 (an N-1-safe expand/contract).
   """
 
   use VutuvWeb, :model
