@@ -174,10 +174,13 @@ defmodule VutuvWeb.OrganizationLive.Domains do
             <span :if={domain.primary?} class="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
               {gettext("Primary")}
             </span>
-            <span :if={domain.verified_at} class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+            <span :if={domain.verified_at && !domain.grace_deadline_at} class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
               {gettext("Verified")}
             </span>
-            <span :if={!domain.verified_at} class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <span :if={domain.grace_deadline_at} class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+              {gettext("Proof missing")}
+            </span>
+            <span :if={!domain.verified_at && !domain.grace_deadline_at} class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               {gettext("Pending")}
             </span>
           </div>
@@ -185,6 +188,23 @@ defmodule VutuvWeb.OrganizationLive.Domains do
           <p :if={domain.last_checked_at} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {gettext("Method")}: {domain.method} &middot; {gettext("Last checked")}:
             <.local_time at={domain.last_checked_at} id={"domain-checked-#{domain.id}"} />
+          </p>
+
+          <%!-- The landing page of the grace-window warning email: it has to
+                explain the same thing the mail did, or the green pill above
+                would read as "nothing is wrong here". --%>
+          <p
+            :if={domain.grace_deadline_at}
+            id={"domain-grace-#{domain.id}"}
+            class="mt-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+          >
+            {gettext("We could not read this domain's proof on the last check. Restore it and check again, or the domain loses its verification.")}
+            {gettext("Deadline")}:
+            <.local_time
+              at={domain.grace_deadline_at}
+              id={"domain-grace-time-#{domain.id}"}
+              format="%Y-%m-%d"
+            />
           </p>
 
           {verify_block(assigns, domain)}
@@ -252,7 +272,10 @@ defmodule VutuvWeb.OrganizationLive.Domains do
       |> assign(:well_known_content, Organizations.well_known_content(domain))
 
     ~H"""
-    <div :if={is_nil(@domain.verified_at) and @verification_enabled?} class="mt-3 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
+    <%!-- Shown for a domain that was never verified AND for one whose proof
+          vanished (grace window running): the second case needs the record and
+          the "Verify now" button just as much, to fix it before the deadline. --%>
+    <div :if={(is_nil(@domain.verified_at) or not is_nil(@domain.grace_deadline_at)) and @verification_enabled?} class="mt-3 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
       <div class="flex gap-4">
         <label class="flex items-center gap-1.5 text-xs font-medium">
           <input

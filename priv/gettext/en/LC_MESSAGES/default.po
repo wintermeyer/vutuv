@@ -12632,6 +12632,36 @@ msgstr ""
 msgid "Your job posting on vutuv expires soon"
 msgstr ""
 
+#: lib/vutuv/notifications/emailer.ex:835
+#, elixir-autogen, elixir-format
+msgid "A domain of your organization page on vutuv is about to be dropped"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/domains.ex:202
+#, elixir-autogen, elixir-format
+msgid "Deadline"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/domains.ex:181
+#, elixir-autogen, elixir-format
+msgid "Proof missing"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/domains.ex:201
+#, elixir-autogen, elixir-format
+msgid "We could not read this domain's proof on the last check. Restore it and check again, or the domain loses its verification."
+msgstr ""
+
+#: lib/vutuv/notifications/emailer.ex:832
+#, elixir-autogen, elixir-format
+msgid "Your organization page on vutuv is about to lose its verification"
+msgstr ""
+
+#: lib/vutuv/notifications/emailer.ex:853
+#, elixir-autogen, elixir-format
+msgid "Your organization page on vutuv is no longer public"
+msgstr ""
+
 #: lib/vutuv_web/live/job_posting_live/show.ex:176
 #, elixir-autogen, elixir-format
 msgid "Your posting"

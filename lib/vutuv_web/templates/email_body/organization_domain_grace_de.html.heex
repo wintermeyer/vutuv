@@ -1,0 +1,33 @@
+<.email_layout preheader="Der Domain-Nachweis Ihrer Firmenseite fehlt" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    der Domain-Nachweis Ihrer Firmenseite „{@organization_name}" lässt sich nicht mehr abrufen.
+    Betroffen ist die Domain <strong>{@domain}</strong>. Wir prüfen den Nachweis wöchentlich, und
+    Sie haben bis zum <strong>{Calendar.strftime(@deadline, "%d.%m.%Y")}</strong> Zeit, ihn
+    wiederherzustellen.
+  </.email_p>
+  <%= if @last? do %>
+    <.email_p>
+      Passiert bis dahin nichts, verliert die Seite ihre Verifizierung und ist nicht mehr
+      öffentlich sichtbar.
+    </.email_p>
+  <% else %>
+    <.email_p>
+      Passiert bis dahin nichts, entfällt diese eine Domain. Die Seite bleibt über Ihre übrigen
+      verifizierten Domains öffentlich.
+    </.email_p>
+  <% end %>
+  <.email_p>
+    Meist genügt es, den ursprünglichen Nachweis wiederherzustellen:
+    <%= if @method == "dns" do %>
+      den DNS-TXT-Eintrag für {@domain}.
+    <% else %>
+      die Prüfdatei auf {@domain}.
+    <% end %>
+    Den genauen Wert und den Knopf zum erneuten Prüfen finden Sie auf der Domain-Seite.
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}/domains"}>
+    Domains verwalten
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

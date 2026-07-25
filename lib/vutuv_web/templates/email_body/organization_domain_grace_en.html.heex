@@ -1,0 +1,32 @@
+<.email_layout preheader="Your organization page's domain proof is missing" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    the domain proof for your organization page "{@organization_name}" no longer resolves. The
+    domain in question is <strong>{@domain}</strong>. We re-check the proof weekly, and you have
+    until <strong>{Calendar.strftime(@deadline, "%Y-%m-%d")}</strong> to restore it.
+  </.email_p>
+  <%= if @last? do %>
+    <.email_p>
+      If nothing changes by then, the page loses its verification and is no longer publicly
+      visible.
+    </.email_p>
+  <% else %>
+    <.email_p>
+      If nothing changes by then, this one domain is dropped. The page stays public through your
+      other verified domains.
+    </.email_p>
+  <% end %>
+  <.email_p>
+    Restoring the original proof is usually enough:
+    <%= if @method == "dns" do %>
+      the DNS TXT record for {@domain}.
+    <% else %>
+      the verification file on {@domain}.
+    <% end %>
+    The exact value and the button to check again are on the domains page.
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}/domains"}>
+    Manage domains
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

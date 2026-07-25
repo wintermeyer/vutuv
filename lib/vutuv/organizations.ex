@@ -18,6 +18,7 @@ defmodule Vutuv.Organizations do
   import Vutuv.Organizations.Query, only: [organization_public_row: 1]
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Engagement
   alias Vutuv.Handles
@@ -817,12 +818,18 @@ defmodule Vutuv.Organizations do
       is_nil(domain.grace_deadline_at) ->
         deadline = NaiveDateTime.add(now, @grace_days * 86_400)
 
-        domain
-        |> OrganizationDomain.check_changeset(%{
-          last_checked_at: now,
-          grace_deadline_at: deadline
-        })
-        |> Repo.update()
+        {:ok, domain} =
+          domain
+          |> OrganizationDomain.check_changeset(%{
+            last_checked_at: now,
+            grace_deadline_at: deadline
+          })
+          |> Repo.update()
+
+        # The one moment the owners can still prevent the outage: warn them now,
+        # once per window (the `:in_grace` arm below stays silent, so a weekly
+        # re-check does not nag them into ignoring the mail).
+        notify_owners_of_grace(domain)
 
         :grace_started
 
@@ -868,6 +875,10 @@ defmodule Vutuv.Organizations do
       |> Emailer.organization_unverified_notice(domain)
       |> Emailer.deliver()
 
+      # The operator hears about it above; the owners are the ones who have to
+      # act, so they hear about it too.
+      notify_owners_of_unverified(organization, domain)
+
       :demoted_organization
     else
       # A non-last domain was dropped: the page stays verified via its others,
@@ -881,6 +892,62 @@ defmodule Vutuv.Organizations do
 
       :demoted_domain
     end
+  end
+
+  # --- owner notices ----------------------------------------------------------
+  #
+  # The operator notices above tell the *installation operator* that a page
+  # changed state. They deliberately link to /admin/organizations, which the
+  # page's own staff cannot even open — so on their own they leave the one
+  # person who can republish the proof in the dark. These are the member-facing
+  # twins. Recipients are the **owners**: domains are an owner-only power
+  # (`can_manage_domains?/2`), so an admin or recruiter would get a call to
+  # action they cannot follow.
+
+  defp notify_owners_of_grace(domain) do
+    organization = get_organization!(domain.organization_id)
+    last? = verified_domain_count(organization.id) <= 1
+
+    notify_owners(organization, fn user, address ->
+      Emailer.organization_domain_grace_email(user, address, organization, domain, last?)
+    end)
+  end
+
+  defp notify_owners_of_unverified(organization, domain) do
+    notify_owners(organization, fn user, address ->
+      Emailer.organization_page_unverified_email(user, address, organization, domain)
+    end)
+  end
+
+  # Mails every owner at their first address, each in their own locale (the
+  # builder picks the template by `user.locale`). An owner without a usable
+  # address is simply skipped.
+  defp notify_owners(organization, build) do
+    organization
+    |> owners()
+    |> Enum.each(fn user ->
+      case Accounts.first_email_value(user) do
+        nil -> :ok
+        address -> user |> build.(address) |> Emailer.deliver()
+      end
+    end)
+  end
+
+  @doc """
+  The members who may manage `organization`'s domains, oldest role first. The
+  claim wizard makes the creator an owner, so this is never empty for a page
+  that went through it.
+  """
+  def owners(%Organization{id: id}) do
+    Repo.all(
+      from(r in OrganizationRole,
+        join: u in User,
+        on: u.id == r.user_id,
+        where: r.organization_id == ^id and r.role == "owner",
+        order_by: [asc: r.id],
+        select: u
+      )
+    )
   end
 
   # --- engagement (like + bookmark) ------------------------------------------

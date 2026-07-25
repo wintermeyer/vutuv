@@ -103,6 +103,45 @@ defmodule VutuvWeb.OrganizationManagementTest do
       assert Organizations.primary_domain(organization).domain == "acme.de"
     end
 
+    test "a domain in its grace window says so and offers the proof again", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      organization = active_organization_for(owner)
+      primary = Organizations.primary_domain(organization)
+
+      # The proof vanished; the weekly re-check opened the grace window.
+      Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
+      assert :grace_started = Organizations.recheck_domain(primary)
+      deadline = Organizations.get_domain(organization, primary.id).grace_deadline_at
+
+      {:ok, _view, html} = live(conn, ~p"/organizations/#{organization.slug}/domains")
+
+      # The warning email links here, so the page must not greet the owner with a
+      # bare green "Verified" pill that contradicts it.
+      assert html =~ "Proof missing"
+      assert html =~ Calendar.strftime(deadline, "%Y-%m-%d")
+
+      # And the record to re-publish is right there, with the button to re-check.
+      assert html =~ "vutuv-organization-verify=#{primary.verification_token}"
+      assert html =~ "verify-#{primary.id}"
+    end
+
+    test "restoring the proof during grace clears the warning", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      organization = active_organization_for(owner)
+      primary = Organizations.primary_domain(organization)
+
+      Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
+      assert :grace_started = Organizations.recheck_domain(primary)
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/domains")
+      stub_dns(primary.verification_token)
+
+      html = view |> element("#verify-#{primary.id}") |> render_click()
+
+      refute html =~ "Proof missing"
+      assert Organizations.get_domain(organization, primary.id).grace_deadline_at == nil
+    end
+
     test "removing the last verified domain is refused", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       organization = active_organization_for(owner)

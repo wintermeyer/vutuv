@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+Ihre Firmenseite "<%= @organization_name %>" hat ihre letzte verifizierte Domain verloren
+und steht wieder auf "Verifizierung ausstehend". Sie ist damit nicht mehr öffentlich
+sichtbar. Betroffen ist die Domain <%= @domain %>.
+
+Der Nachweis war eine Woche lang nicht abrufbar. Sobald Sie ihn wiederherstellen und die
+Domain erneut prüfen lassen, ist die Seite wieder online. Ihre Inhalte bleiben in der
+Zwischenzeit erhalten, nur eben unveröffentlicht.
+
+<%= @url %>organizations/<%= @organization_slug %>/domains
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

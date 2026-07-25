@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+your organization page "<%= @organization_name %>" has lost its last verified domain and is
+back to "verification pending". It is no longer publicly visible. The domain in question
+is <%= @domain %>.
+
+The proof had been unreachable for a week. Restore it, run the check again, and the page
+is back online. Your content is kept in the meantime, just unpublished.
+
+<%= @url %>organizations/<%= @organization_slug %>/domains
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

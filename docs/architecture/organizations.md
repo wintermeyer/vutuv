@@ -163,6 +163,32 @@ domain — the domain, not the name, is what viewers trust.
   falls back to `pending` and the operator is alerted
   (`Emailer.organization_unverified_notice/2`).
 
+### Who hears about a failing proof
+
+Two audiences, two mails, and they must not be confused. The
+`Emailer.organization_*_notice/2` builders go to the installation's
+**operator** (`:operator_recipient`) and link to `/admin/organizations`, the
+oversight dashboard — a page the organization's own staff cannot even open. On
+their own they leave the one person who can republish the proof uninformed,
+which is why the **owners** get their own mails (`Organizations.owners/1`, each
+in their own locale, linking to `/organizations/:slug/domains`):
+
+- **Grace start** — `Emailer.organization_domain_grace_email/5`, sent **once per
+  window** from the `:grace_started` arm. The `:in_grace` re-checks stay silent;
+  a weekly nag is how a warning mail gets filtered away. The subject and the
+  body branch on `last?` (`verified_domain_count/1 <= 1`), so a page with other
+  verified domains is not told it is about to go offline.
+- **Demotion** — `Emailer.organization_page_unverified_email/4`, sent alongside
+  the operator notice when the last verified domain is dropped.
+
+Recipients are **owners only**: domains are an owner-only power
+(`can_manage_domains?/2`), so an admin or recruiter would get a call to action
+they cannot follow. The domains page is the landing spot for both mails, so a
+domain in its grace window renders an amber "Proof missing" pill plus the
+deadline there, and its verification panel (record/file + **Verify now**) is
+shown for a grace-window domain as well as a never-verified one — otherwise the
+mail's recipient would arrive at a green "Verified" badge contradicting it.
+
 ## Team roles (`organization_roles`, #930)
 
 A page is run by a team, not just its claimant. Each `OrganizationRole` grants a

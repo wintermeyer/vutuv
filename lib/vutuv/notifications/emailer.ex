@@ -798,6 +798,62 @@ defmodule Vutuv.Notifications.Emailer do
     })
   end
 
+  @doc """
+  Warns an organization **owner** that a domain proof stopped resolving and a
+  grace window is running: restore the DNS record / well-known file before
+  `deadline` or the domain is dropped. `last?` says whether it is the page's
+  only verified domain, i.e. whether the page itself goes offline with it.
+
+  The operator notices above go to the installation's operator; this is the
+  member-facing twin, and the only one whose recipient can actually fix the
+  proof. Transactional (about their own page), so no opt-out, and it links to
+  the owner's domains page, never the admin dashboard.
+  """
+  def organization_domain_grace_email(user, email, organization, domain, last?) do
+    build_email(
+      user,
+      email,
+      "organization_domain_grace",
+      %{
+        organization_name: organization.name,
+        organization_slug: organization.slug,
+        domain: domain.domain,
+        method: domain.method,
+        deadline: domain.grace_deadline_at,
+        last?: last?
+      },
+      # A page with other verified domains is not about to go offline, so it
+      # must not be told it is.
+      fn -> grace_subject(last?) end
+    )
+  end
+
+  defp grace_subject(true),
+    do: gettext("Your organization page on vutuv is about to lose its verification")
+
+  defp grace_subject(false),
+    do: gettext("A domain of your organization page on vutuv is about to be dropped")
+
+  @doc """
+  Tells an organization owner the grace window ran out on the page's last
+  verified domain: it is back to "pending" and no longer publicly visible. The
+  member-facing twin of `organization_unverified_notice/2`.
+  """
+  def organization_page_unverified_email(user, email, organization, domain) do
+    build_email(
+      user,
+      email,
+      "organization_page_unverified",
+      %{
+        organization_name: organization.name,
+        organization_slug: organization.slug,
+        domain: domain.domain,
+        method: domain.method
+      },
+      fn -> gettext("Your organization page on vutuv is no longer public") end
+    )
+  end
+
   ## Moderation (see Vutuv.Moderation.Notifier, the only caller)
 
   @doc "Owner notice: content frozen, please delete / edit / dispute within 72h."

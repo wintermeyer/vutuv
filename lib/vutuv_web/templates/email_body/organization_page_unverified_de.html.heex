@@ -1,0 +1,17 @@
+<.email_layout preheader="Ihre Firmenseite ist nicht mehr öffentlich" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    Ihre Firmenseite „{@organization_name}" hat ihre letzte verifizierte Domain verloren
+    (<strong>{@domain}</strong>) und steht wieder auf „Verifizierung ausstehend". Sie ist damit
+    nicht mehr öffentlich sichtbar.
+  </.email_p>
+  <.email_p>
+    Der Nachweis war eine Woche lang nicht abrufbar. Sobald Sie ihn wiederherstellen und die
+    Domain erneut prüfen lassen, ist die Seite wieder online. Ihre Inhalte bleiben in der
+    Zwischenzeit erhalten, nur eben unveröffentlicht.
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}/domains"}>
+    Domain erneut prüfen
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

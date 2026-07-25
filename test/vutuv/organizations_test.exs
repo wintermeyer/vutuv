@@ -298,6 +298,165 @@ defmodule Vutuv.OrganizationsTest do
     end
   end
 
+  describe "owner notices on a failing domain proof" do
+    setup [:enable_verification]
+
+    # A member with an address to mail (the plain user factory has none).
+    defp owner_with_email(locale) do
+      user = insert(:activated_user, locale: locale)
+      insert(:email, user: user)
+      user
+    end
+
+    # Verifies `organization` via DNS, consumes the operator's "verified" notice,
+    # then makes the TXT record vanish so the next re-check fails.
+    defp break_proof(organization, domain) do
+      stub_dns(domain.verification_token)
+      {:ok, _organization} = Organizations.verify_dns(organization, domain)
+      assert_email_sent(fn email -> assert email.subject =~ "Firmenseite verifiziert" end)
+      Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
+      Repo.get!(OrganizationDomain, domain.id)
+    end
+
+    defp expire_grace(domain) do
+      past = NaiveDateTime.add(NaiveDateTime.utc_now(), -3600) |> NaiveDateTime.truncate(:second)
+
+      domain
+      |> OrganizationDomain.check_changeset(%{grace_deadline_at: past})
+      |> Repo.update!()
+    end
+
+    test "the grace window warns the owner, naming the deadline and the domains page" do
+      user = owner_with_email("de")
+      address = Vutuv.Accounts.first_email_value(user)
+
+      {:ok, %{organization: organization, domain: domain}} =
+        Organizations.create_pending_organization(user, @valid, "dns")
+
+      domain = break_proof(organization, domain)
+
+      assert :grace_started = Organizations.recheck_domain(domain)
+      deadline = Repo.get!(OrganizationDomain, domain.id).grace_deadline_at
+
+      assert_email_sent(fn email ->
+        assert [{_name, ^address}] = email.to
+        assert email.subject =~ "verliert bald ihre Verifizierung"
+        # The owner is told which domain broke, by when, and where to fix it:
+        # the owner's domains page, never the admin dashboard they cannot open.
+        refute email.text_body =~ "admin/organizations"
+        assert email.text_body =~ domain.domain
+        assert email.text_body =~ Calendar.strftime(deadline, "%d.%m.%Y")
+        assert email.text_body =~ "organizations/#{organization.slug}/domains"
+        assert email.html_body =~ "organizations/#{organization.slug}/domains"
+      end)
+    end
+
+    test "the warning goes out once per grace window, not on every re-check" do
+      user = owner_with_email("de")
+
+      {:ok, %{organization: organization, domain: domain}} =
+        Organizations.create_pending_organization(user, @valid, "dns")
+
+      domain = break_proof(organization, domain)
+
+      assert :grace_started = Organizations.recheck_domain(domain)
+      assert_email_sent(fn email -> assert email.subject =~ "Verifizierung" end)
+
+      # A second failing check inside the window is the same, already-reported
+      # problem: nagging weekly would train the owner to ignore the mail.
+      assert :in_grace = Organizations.recheck_domain(Repo.get!(OrganizationDomain, domain.id))
+      refute_email_sent()
+    end
+
+    test "losing the last verified domain tells the owner the page is offline" do
+      user = owner_with_email("de")
+      address = Vutuv.Accounts.first_email_value(user)
+
+      {:ok, %{organization: organization, domain: domain}} =
+        Organizations.create_pending_organization(user, @valid, "dns")
+
+      domain = break_proof(organization, domain)
+      assert :grace_started = Organizations.recheck_domain(domain)
+      assert_email_sent(fn email -> assert email.subject =~ "Verifizierung" end)
+
+      assert :demoted_organization =
+               Organizations.recheck_domain(
+                 expire_grace(Repo.get!(OrganizationDomain, domain.id))
+               )
+
+      # The operator notice stays first (it is the existing behaviour); the
+      # owner's is the new second message.
+      assert_email_sent(fn email ->
+        assert email.subject =~ "nicht mehr verifiziert"
+        assert email.text_body =~ "admin/organizations"
+      end)
+
+      assert_email_sent(fn email ->
+        assert [{_name, ^address}] = email.to
+        assert email.subject =~ "nicht mehr öffentlich"
+        assert email.text_body =~ organization.name
+        assert email.text_body =~ "organizations/#{organization.slug}/domains"
+      end)
+    end
+
+    test "every owner is warned, in their own locale; other role holders are not" do
+      owner = owner_with_email("de")
+      second_owner = owner_with_email("en")
+      recruiter = owner_with_email("de")
+
+      {:ok, %{organization: organization, domain: domain}} =
+        Organizations.create_pending_organization(owner, @valid, "dns")
+
+      {:ok, _} = Organizations.add_role(organization, second_owner, "owner", owner)
+      {:ok, _} = Organizations.add_role(organization, recruiter, "recruiter", owner)
+
+      domain = break_proof(organization, domain)
+      assert :grace_started = Organizations.recheck_domain(domain)
+
+      # Owners in role order (creator first), each in their own locale.
+      assert_email_sent(fn email ->
+        assert email.subject =~ "verliert bald ihre Verifizierung"
+      end)
+
+      assert_email_sent(fn email ->
+        assert email.subject =~ "is about to lose its verification"
+      end)
+
+      # Only an owner can manage domains, so a recruiter gets no call to action.
+      refute_email_sent()
+    end
+
+    test "a non-last domain failing still warns, without claiming the page goes offline" do
+      user = owner_with_email("de")
+
+      {:ok, %{organization: organization, domain: primary}} =
+        Organizations.create_pending_organization(user, @valid, "dns")
+
+      stub_dns(primary.verification_token)
+      {:ok, _} = Organizations.verify_dns(organization, primary)
+      assert_email_sent(fn email -> assert email.subject =~ "Firmenseite verifiziert" end)
+
+      {:ok, second} = Organizations.add_domain(organization, "second.example.org", "dns")
+      stub_dns(second.verification_token)
+      # Re-read the page (as the domains LiveView does) so `verified_at` is set
+      # and the already-sent "verified" operator notice is not sent a second time.
+      {:ok, _} = Organizations.verify_dns(Repo.get!(Organization, organization.id), second)
+
+      Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
+
+      assert :grace_started =
+               Organizations.recheck_domain(Repo.get!(OrganizationDomain, primary.id))
+
+      assert_email_sent(fn email ->
+        # The page keeps its other verified domain, so neither the subject nor
+        # the body may threaten an outage that is not coming.
+        refute email.text_body =~ "nicht mehr öffentlich sichtbar"
+        assert email.subject =~ "Eine Domain Ihrer Firmenseite auf vutuv entfällt bald"
+        assert email.text_body =~ primary.domain
+      end)
+    end
+  end
+
   describe "domains_due_for_recheck/1 (weekly cutoff)" do
     test "a domain checked within the past week is not due; older than a week is" do
       user = insert(:activated_user)

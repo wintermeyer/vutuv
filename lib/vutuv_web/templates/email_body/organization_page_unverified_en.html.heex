@@ -1,0 +1,16 @@
+<.email_layout preheader="Your organization page is no longer public" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    your organization page "{@organization_name}" has lost its last verified domain
+    (<strong>{@domain}</strong>) and is back to "verification pending". It is no longer publicly
+    visible.
+  </.email_p>
+  <.email_p>
+    The proof had been unreachable for a week. Restore it, run the check again, and the page is
+    back online. Your content is kept in the meantime, just unpublished.
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}/domains"}>
+    Check the domain again
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -1,0 +1,23 @@
+<%= email_greeting(@user) %>,
+
+the domain proof for your organization page "<%= @organization_name %>" no longer resolves.
+The domain in question is <%= @domain %>.
+
+We re-check the proof weekly, and you have until
+<%= Calendar.strftime(@deadline, "%Y-%m-%d") %> to restore it.
+<%= if @last? do %>
+If nothing changes by then, the page loses its verification and is no longer
+publicly visible.
+<% else %>
+If nothing changes by then, this one domain is dropped. The page stays public
+through your other verified domains.
+<% end %>
+Restoring the original proof is usually enough:
+<%= if @method == "dns" do %>the DNS TXT record for <%= @domain %><% else %>the verification file on <%= @domain %><% end %>.
+The exact value and the button to check again are here:
+
+<%= @url %>organizations/<%= @organization_slug %>/domains
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>
