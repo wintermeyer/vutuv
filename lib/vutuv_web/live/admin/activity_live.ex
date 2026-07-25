@@ -195,7 +195,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
       <section class="card">
         <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
           {gettext(
-            "What changed on which account, when, from where and how it was confirmed - the same log every member sees for themselves. Opening it is recorded in your own activity log."
+            "What changed on which account, when, from which device and how it was confirmed - the same log every member sees for themselves. Opening it is recorded in your own activity log."
           )}
         </p>
 
@@ -237,7 +237,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
               value={@filters.q}
               phx-debounce="250"
               autocomplete="off"
-              placeholder={gettext("device, IP address or detail")}
+              placeholder={gettext("device or detail")}
               class={input_class()}
             />
           </div>
@@ -293,7 +293,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
                     {header}{sort_caret(@filters, col)}
                   </button>
                 </th>
-                <th>{gettext("Where from")}</th>
+                <th>{gettext("Device")}</th>
               </tr>
             </thead>
             <tbody id="activity-events">
@@ -346,10 +346,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
                   </span>
                 </td>
                 <td class="align-top text-slate-600 dark:text-slate-400">
-                  <span :if={event.device} class="block">{event.device}</span>
-                  <span :if={event.ip_address} class="block break-all text-xs">
-                    {event.ip_address}
-                  </span>
+                  {event.device}
                 </td>
               </tr>
             </tbody>

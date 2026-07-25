@@ -41,7 +41,7 @@ defmodule VutuvWeb.Admin.ActivityLiveTest do
       bert = insert(:user, username: "admin-log-bert", first_name: "Bert")
 
       :ok = AccountEvents.record(anna, "passkey_added", details: %{nickname: "Anna's phone"})
-      :ok = AccountEvents.record(bert, "totp_enabled", ip: "198.51.100.42")
+      :ok = AccountEvents.record(bert, "totp_enabled", device: "Opera on Windows")
 
       %{conn: conn, admin: admin, anna: anna, bert: bert}
     end
@@ -75,10 +75,10 @@ defmodule VutuvWeb.Admin.ActivityLiveTest do
       assert_patched(live, ~p"/admin/activity?member=admin-log-bert")
     end
 
-    test "search matches the IP", %{conn: conn} do
+    test "search matches the device", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/admin/activity")
 
-      live |> element("#activity-filter") |> render_change(%{"q" => "198.51.100.42"})
+      live |> element("#activity-filter") |> render_change(%{"q" => "Opera on Windows"})
 
       rows = live |> element("#activity-events") |> render()
       assert rows =~ "admin-log-bert"

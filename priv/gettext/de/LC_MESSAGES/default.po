@@ -635,7 +635,7 @@ msgstr "Öffentlich"
 msgid "Save"
 msgstr "Speichern"
 
-#: lib/vutuv_web/live/account_activity_live.ex:201
+#: lib/vutuv_web/live/account_activity_live.ex:194
 #: lib/vutuv_web/live/admin/activity_live.ex:231
 #: lib/vutuv_web/live/admin/user_delete_live.ex:118
 #: lib/vutuv_web/live/admin/user_live.ex:244
@@ -5586,7 +5586,7 @@ msgstr "Navigation"
 #: lib/vutuv_web/components/ui.ex:3533
 #: lib/vutuv_web/components/ui.ex:3597
 #: lib/vutuv_web/controllers/settings_controller.ex:53
-#: lib/vutuv_web/live/account_activity_live.ex:162
+#: lib/vutuv_web/live/account_activity_live.ex:155
 #: lib/vutuv_web/live/fediverse_followers_live.ex:185
 #: lib/vutuv_web/live/shell_live.ex:579
 #: lib/vutuv_web/templates/email/confirm.html.heex:7
@@ -7167,7 +7167,7 @@ msgstr "Filter"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:212
 #: lib/vutuv_web/agent_docs/text.ex:200
-#: lib/vutuv_web/live/account_activity_live.ex:219
+#: lib/vutuv_web/live/account_activity_live.ex:212
 #: lib/vutuv_web/live/admin/activity_live.ex:249
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:254
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:296
@@ -8279,7 +8279,7 @@ msgstr "Alle Registrierungen"
 msgid "Awaiting verification"
 msgstr "Prüfung ausstehend"
 
-#: lib/vutuv_web/live/account_activity_live.ex:241
+#: lib/vutuv_web/live/account_activity_live.ex:234
 #: lib/vutuv_web/live/admin/activity_live.ex:269
 #: lib/vutuv_web/live/admin/user_live.ex:209
 #: lib/vutuv_web/live/fediverse_followers_live.ex:278
@@ -8855,7 +8855,7 @@ msgstr "Weitere Profil-Bereiche"
 
 #: lib/vutuv_web/components/ui.ex:3327
 #: lib/vutuv_web/controllers/settings_controller.ex:97
-#: lib/vutuv_web/live/account_activity_live.ex:375
+#: lib/vutuv_web/live/account_activity_live.ex:365
 #: lib/vutuv_web/templates/login_code/index.html.heex:5
 #: lib/vutuv_web/templates/settings/security.html.heex:11
 #: lib/vutuv_web/templates/totp/new.html.heex:5
@@ -13893,7 +13893,7 @@ msgid "Email me"
 msgstr "Benachrichtige mich"
 
 #: lib/vutuv_web/components/saved_search_components.ex:62
-#: lib/vutuv_web/live/account_activity_live.ex:223
+#: lib/vutuv_web/live/account_activity_live.ex:216
 #: lib/vutuv_web/live/admin/activity_live.ex:252
 #, elixir-autogen, elixir-format
 msgid "Everything"
@@ -16620,8 +16620,8 @@ msgstr "Dazu passt kein Follower. Versuchen Sie eine kürzere Suche, oder setzen
 msgid "Show only followers from this server"
 msgstr "Nur Follower von diesem Server zeigen"
 
-#: lib/vutuv_web/live/account_activity_live.ex:341
-#: lib/vutuv_web/live/admin/activity_live.ex:360
+#: lib/vutuv_web/live/account_activity_live.ex:331
+#: lib/vutuv_web/live/admin/activity_live.ex:357
 #: lib/vutuv_web/live/fediverse_followers_live.ex:360
 #, elixir-autogen, elixir-format
 msgid "Showing %{first}-%{last} of %{total}."
@@ -16806,9 +16806,9 @@ msgstr "API-Token widerrufen"
 
 #: lib/vutuv_web/components/ui.ex:3331
 #: lib/vutuv_web/live/account_activity_live.ex:40
-#: lib/vutuv_web/live/account_activity_live.ex:161
-#: lib/vutuv_web/live/account_activity_live.ex:162
-#: lib/vutuv_web/live/account_activity_live.ex:167
+#: lib/vutuv_web/live/account_activity_live.ex:154
+#: lib/vutuv_web/live/account_activity_live.ex:155
+#: lib/vutuv_web/live/account_activity_live.ex:160
 #: lib/vutuv_web/live/admin/activity_live.ex:41
 #: lib/vutuv_web/live/admin/activity_live.ex:190
 #: lib/vutuv_web/live/admin/activity_live.ex:191
@@ -16872,7 +16872,7 @@ msgstr "Von %{name}"
 msgid "CV update notifications"
 msgstr "Benachrichtigungen zu Lebenslauf-Änderungen"
 
-#: lib/vutuv_web/live/account_activity_live.ex:301
+#: lib/vutuv_web/live/account_activity_live.ex:294
 #: lib/vutuv_web/live/admin/activity_live.ex:338
 #, elixir-autogen, elixir-format
 msgid "Confirmed"
@@ -16913,7 +16913,7 @@ msgstr "E-Mail-Adresse entfernt"
 msgid "Endorsement emails"
 msgstr "E-Mails zu Empfehlungen"
 
-#: lib/vutuv_web/live/account_activity_live.ex:176
+#: lib/vutuv_web/live/account_activity_live.ex:169
 #, elixir-autogen, elixir-format
 msgid "Every change to your account: what changed, exactly when, from which device, and how it was confirmed. If a line surprises you, follow the link at the end of it."
 msgstr "Jede Änderung an Ihrem Konto: was geändert wurde, wann genau, von welchem Gerät und wie es bestätigt wurde. Wenn Sie eine Zeile überrascht, folgen Sie dem Link an ihrem Ende."
@@ -16958,7 +16958,7 @@ msgstr "Filter entfernt"
 msgid "Identity verified"
 msgstr "Identität verifiziert"
 
-#: lib/vutuv_web/live/account_activity_live.ex:359
+#: lib/vutuv_web/live/account_activity_live.ex:349
 #, elixir-autogen, elixir-format
 msgid "If something here was not you"
 msgstr "Wenn etwas hier nicht von Ihnen war"
@@ -16968,7 +16968,7 @@ msgstr "Wenn etwas hier nicht von Ihnen war"
 msgid "Import applied"
 msgstr "Import übernommen"
 
-#: lib/vutuv_web/live/account_activity_live.ex:372
+#: lib/vutuv_web/live/account_activity_live.ex:362
 #, elixir-autogen, elixir-format
 msgid "It is part of your data download, and it is deleted with your account."
 msgstr "Es ist Teil Ihres Datendownloads und wird mit Ihrem Konto gelöscht."
@@ -17003,23 +17003,23 @@ msgstr "E-Mails zu neuen Followern"
 msgid "No account activity has been recorded yet."
 msgstr "Es wurde noch keine Kontoaktivität aufgezeichnet."
 
-#: lib/vutuv_web/live/account_activity_live.ex:310
+#: lib/vutuv_web/live/account_activity_live.ex:303
 #: lib/vutuv_web/templates/settings/security.html.heex:54
 #, elixir-autogen, elixir-format
 msgid "Not by you"
 msgstr "Nicht von Ihnen"
 
-#: lib/vutuv_web/live/account_activity_live.ex:332
+#: lib/vutuv_web/live/account_activity_live.ex:322
 #, elixir-autogen, elixir-format
 msgid "Not you?"
 msgstr "Nicht Sie?"
 
-#: lib/vutuv_web/live/account_activity_live.ex:183
+#: lib/vutuv_web/live/account_activity_live.ex:176
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet. The next time you sign in or change a setting, it will be listed here."
 msgstr "Hier ist noch nichts. Wenn Sie sich das nächste Mal anmelden oder eine Einstellung ändern, steht es hier."
 
-#: lib/vutuv_web/live/account_activity_live.ex:250
+#: lib/vutuv_web/live/account_activity_live.ex:243
 #: lib/vutuv_web/live/admin/activity_live.ex:275
 #, elixir-autogen, elixir-format
 msgid "Nothing matches that. Try a shorter search, or clear the filters."
@@ -17090,7 +17090,7 @@ msgstr "Einstellungen vom Support geändert"
 msgid "Show only this member"
 msgstr "Nur dieses Mitglied anzeigen"
 
-#: lib/vutuv_web/live/account_activity_live.ex:361
+#: lib/vutuv_web/live/account_activity_live.ex:351
 #, elixir-autogen, elixir-format
 msgid "Sign every other device out, then check which passkeys, codes and email addresses your account has. All of it is on the sign-in & security page."
 msgstr "Melden Sie alle anderen Geräte ab und prüfen Sie dann, welche Passkeys, Codes und E-Mail-Adressen Ihr Konto hat. Das alles finden Sie auf der Seite Anmeldung & Sicherheit."
@@ -17105,7 +17105,7 @@ msgstr "Angemeldet"
 msgid "Signed out"
 msgstr "Abgemeldet"
 
-#: lib/vutuv_web/live/account_activity_live.ex:366
+#: lib/vutuv_web/live/account_activity_live.ex:356
 #, elixir-autogen, elixir-format
 msgid "This log keeps one day of history."
 msgid_plural "This log keeps %{formatted} days of history."
@@ -17137,7 +17137,7 @@ msgstr "Benutzername geändert"
 msgid "Visibility settings changed"
 msgstr "Sichtbarkeitseinstellungen geändert"
 
-#: lib/vutuv_web/live/account_activity_live.ex:273
+#: lib/vutuv_web/live/account_activity_live.ex:266
 #, elixir-autogen, elixir-format
 msgid "Was this you?"
 msgstr "Waren Sie das?"
@@ -17146,11 +17146,6 @@ msgstr "Waren Sie das?"
 #, elixir-autogen, elixir-format
 msgid "What changed on an account, when, from where and how it was confirmed - the answer to \"I didn't do anything!\". Opening it is recorded in your own log."
 msgstr "Was sich an einem Konto geändert hat, wann, von wo und wie es bestätigt wurde: die Antwort auf \"Ich habe doch nichts gemacht!\". Dass Sie es öffnen, wird in Ihrem eigenen Protokoll festgehalten."
-
-#: lib/vutuv_web/live/admin/activity_live.ex:197
-#, elixir-autogen, elixir-format
-msgid "What changed on which account, when, from where and how it was confirmed - the same log every member sees for themselves. Opening it is recorded in your own activity log."
-msgstr "Was sich an welchem Konto geändert hat, wann, von wo und wie es bestätigt wurde: dasselbe Protokoll, das jedes Mitglied für sich selbst sieht. Dass Sie es öffnen, wird in Ihrem eigenen Aktivitätsprotokoll festgehalten."
 
 #: lib/vutuv_web/templates/settings/security.html.heex:39
 #, elixir-autogen, elixir-format
@@ -17168,13 +17163,7 @@ msgstr "Was sich an Ihrem Konto geändert hat, und wann"
 msgid "What happened"
 msgstr "Was geschehen ist"
 
-#: lib/vutuv_web/live/account_activity_live.ex:272
-#: lib/vutuv_web/live/admin/activity_live.ex:296
-#, elixir-autogen, elixir-format
-msgid "Where from"
-msgstr "Von wo"
-
-#: lib/vutuv_web/live/admin/activity_live.ex:382
+#: lib/vutuv_web/live/admin/activity_live.ex:379
 #, elixir-autogen, elixir-format
 msgid "a deleted account"
 msgstr "einem gelöschten Konto"
@@ -17193,12 +17182,6 @@ msgstr "ein Wort oder eine Wortgruppe"
 #, elixir-autogen, elixir-format
 msgid "by the site operators"
 msgstr "durch den Betreiber"
-
-#: lib/vutuv_web/live/account_activity_live.ex:210
-#: lib/vutuv_web/live/admin/activity_live.ex:240
-#, elixir-autogen, elixir-format
-msgid "device, IP address or detail"
-msgstr "Gerät, IP-Adresse oder Detail"
 
 #: lib/vutuv_web/views/account_event_text.ex:138
 #, elixir-autogen, elixir-format
@@ -17239,3 +17222,20 @@ msgstr "mit einem per E-Mail geschickten PIN"
 #, elixir-autogen, elixir-format
 msgid "with your authenticator app"
 msgstr "mit Ihrer Authenticator-App"
+
+#: lib/vutuv_web/live/account_activity_live.ex:265
+#: lib/vutuv_web/live/admin/activity_live.ex:296
+#, elixir-autogen, elixir-format
+msgid "Device"
+msgstr "Gerät"
+
+#: lib/vutuv_web/live/admin/activity_live.ex:197
+#, elixir-autogen, elixir-format
+msgid "What changed on which account, when, from which device and how it was confirmed - the same log every member sees for themselves. Opening it is recorded in your own activity log."
+msgstr "Was sich an welchem Konto geändert hat, wann, von welchem Gerät und wie es bestätigt wurde: dasselbe Protokoll, das jedes Mitglied für sich selbst sieht. Dass Sie es öffnen, wird in Ihrem eigenen Aktivitätsprotokoll festgehalten."
+
+#: lib/vutuv_web/live/account_activity_live.ex:203
+#: lib/vutuv_web/live/admin/activity_live.ex:240
+#, elixir-autogen, elixir-format
+msgid "device or detail"
+msgstr "Gerät oder Detail"

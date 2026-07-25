@@ -10,18 +10,25 @@ defmodule Vutuv.AccountEvents do
 
   Who (`user_id`), what (`kind`), when (`inserted_at`, **microsecond**
   resolution so two changes in one second still have an order), the confirming
-  factor, the request IP, a **coarse** device summary and a small `details` map.
+  factor, a **coarse** device summary and a small `details` map.
   `actor_user_id` is set only when somebody else did it — an admin acting for
   support — which is what makes "that wasn't me" answerable at a glance.
+
+  **No IP address.** It was in the first cut and is deliberately gone: for the
+  member the question is "was that me?", which the device summary, the time and
+  the confirming factor answer, while a year of IPs per account is a movement
+  profile nobody asked us to keep. (`user_sessions` still stores one per
+  signed-in device — that is the devices list and the new-device security email,
+  a different feature with its own lifetime.)
 
   ## What a row must never hold
 
   Not the value of anything secret or guessable-and-private. No PIN, token,
   passkey material, TOTP secret or one-time list code — those never even reach
-  this module. No muted word, no message, no address. Email addresses are
-  stored **masked** (`mask_email/1`: `an***@example.com`), enough for the owner
-  to recognize which of their addresses it was, not enough for a leaked backup
-  or an admin screen to harvest one.
+  this module. No muted word, no message, no postal address, no IP address.
+  Email addresses are stored **masked** (`mask_email/1`: `an***@example.com`),
+  enough for the owner to recognize which of their addresses it was, not enough
+  for a leaked backup or an admin screen to harvest one.
 
   That rule is enforced structurally rather than by discipline: `@kinds` is the
   **whole** vocabulary, each kind declares exactly which `details` keys it may
@@ -51,8 +58,8 @@ defmodule Vutuv.AccountEvents do
 
   Rows older than `retention_days/0` (365 by default,
   `ACCOUNT_EVENT_RETENTION_DAYS`) are deleted by `Vutuv.AccountEvents.Sweeper`.
-  The log is personal data: it rides along in the GDPR export
-  (`Vutuv.Export`) and cascades away with the account.
+  The log is still personal data without the IP: it rides along in the GDPR
+  export (`Vutuv.Export`) and cascades away with the account.
   """
 
   import Ecto.Query
@@ -160,10 +167,10 @@ defmodule Vutuv.AccountEvents do
 
   `opts`:
 
-    * `:conn` — a `Plug.Conn`, to take the request IP and the coarse device
-      summary from (never the raw User-Agent).
-    * `:ip` / `:device` — the same two, when there is no conn (a LiveView
-      socket, a background job).
+    * `:conn` — a `Plug.Conn`, to take the coarse device summary from (never
+      the raw User-Agent, and never the IP — see the moduledoc).
+    * `:device` — the same, when there is no conn (a LiveView socket, a
+      background job).
     * `:factor` — how the member proved it was them, one of `factors/0`.
     * `:actor` — the `%User{}` who did it, when that is **not** the account's
       owner (an admin). Left out for the member's own actions.
@@ -178,13 +185,10 @@ defmodule Vutuv.AccountEvents do
   def record(%User{id: user_id}, kind, opts), do: record(user_id, kind, opts)
 
   def record(user_id, kind, opts) when is_binary(user_id) do
-    {ip, device} = source(opts)
-
     attrs = %{
       kind: kind,
       factor: opts[:factor],
-      ip_address: ip,
-      device: device,
+      device: device(opts),
       details: opts[:details] || %{}
     }
 
@@ -207,22 +211,16 @@ defmodule Vutuv.AccountEvents do
 
   def record(_user, _kind, _opts), do: :ok
 
-  # The request's own two facts. The device is deliberately the coarse summary
+  # The one request fact the log keeps. Deliberately the coarse summary
   # ("Chrome on macOS") the signed-in-devices list already shows, not the raw
   # User-Agent: the log should say which of your devices it was, not carry a
   # fingerprint for a year.
-  defp source(opts) do
+  defp device(opts) do
     case opts[:conn] do
-      %Plug.Conn{} = conn ->
-        {client_ip(conn), conn |> Plug.Conn.get_req_header("user-agent") |> device_summary()}
-
-      _ ->
-        {opts[:ip], opts[:device]}
+      %Plug.Conn{} = conn -> conn |> Plug.Conn.get_req_header("user-agent") |> device_summary()
+      _ -> opts[:device]
     end
   end
-
-  defp client_ip(%Plug.Conn{remote_ip: nil}), do: nil
-  defp client_ip(%Plug.Conn{remote_ip: ip}), do: ip |> :inet.ntoa() |> to_string()
 
   defp device_summary([ua | _]), do: Sessions.device_summary(ua)
   defp device_summary(_none), do: nil
@@ -391,7 +389,6 @@ defmodule Vutuv.AccountEvents do
           at: e.inserted_at,
           kind: e.kind,
           factor: e.factor,
-          ip_address: e.ip_address,
           device: e.device,
           by_someone_else: not is_nil(e.actor_user_id),
           details: e.details
@@ -444,8 +441,8 @@ defmodule Vutuv.AccountEvents do
     where(
       query,
       [event: e],
-      ilike(e.kind, ^like) or ilike(e.ip_address, ^like) or ilike(e.device, ^like) or
-        ilike(e.factor, ^like) or ilike(fragment("CAST(? AS text)", e.details), ^like)
+      ilike(e.kind, ^like) or ilike(e.device, ^like) or ilike(e.factor, ^like) or
+        ilike(fragment("CAST(? AS text)", e.details), ^like)
     )
   end
 

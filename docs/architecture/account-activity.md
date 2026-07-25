@@ -22,7 +22,6 @@ changeset:
 | `actor_user_id` | who did it, **only** when that was somebody else (an admin) |
 | `kind` | what happened, from a closed vocabulary |
 | `factor` | how it was confirmed: `passkey` / `authenticator` / `list_code` / `pin` / `session` / `admin` |
-| `ip_address` | the request IP as `RemoteIp` resolves it |
 | `device` | the **coarse** summary (`"Chrome on macOS"`), never the raw User-Agent |
 | `details` | a small per-kind map, key-whitelisted |
 | `inserted_at` | UTC, **microsecond** precision |
@@ -31,12 +30,22 @@ The precision is deliberate. Support has to be able to say "you changed this at
 14:32:07", and two changes inside the same second must still have an order —
 which second-resolution timestamps (what the rest of the app stores) cannot give.
 
+**There is no IP address.** The first cut kept one; it is gone. For the member
+the question is "was that me?", and the device summary, the exact time and the
+confirming factor answer it — while a year of IP addresses per account is a
+movement profile nobody asked us to keep, sitting in a table an admin page and
+every backup can read. (`user_sessions` still stores one per signed-in device:
+that is the devices list and the new-device security email, a different feature
+with its own lifetime.) Removing it took two releases, per the N-1 migration
+rule: one that stopped writing and reading the column and nulled what was
+already there, then one that dropped it.
+
 ## What may never be in it
 
 Not the value of anything secret or guessable-and-private. No PIN, token,
 passkey material, TOTP secret or one-time list code — those never reach the
 module. No muted word (a filter row records its *kind*, never the pattern), no
-message, no address. **Email addresses are stored masked**
+message, no postal address, no IP address. **Email addresses are stored masked**
 (`AccountEvents.mask_email/1`: `an***@example.com`), enough for the owner to
 recognize which of their addresses it was and not enough for a leaked backup or
 an admin screen to harvest one.
@@ -73,9 +82,8 @@ The hooks, by area:
   basics save.
 - **Privacy and reach** — the visibility, notification and Fediverse settings
   saves; blocking and unblocking (recorded at the `Vutuv.Social` chokepoint, so
-  it covers the /blocks form, the profile menu and the report flow alike — which
-  is also why those rows carry no request IP: two of the three have a socket,
-  not a conn); adding and removing a content filter.
+  it covers the /blocks form, the profile menu and the report flow alike);
+  adding and removing a content filter.
 - **Data** — the GDPR download, an applied LinkedIn import.
 - **Apps** — an access token minted or revoked, a connected app disconnected.
 - **Somebody else acting** — an admin freeze/unfreeze, a restore, an identity
@@ -95,8 +103,8 @@ Two readers, one query builder.
 **The member** — `/settings/activity` (`VutuvWeb.AccountActivityLive`), in the
 Account group of the settings menu. Newest first, one row per event reading as a
 sentence with a to-the-second `<.local_time precision="second">` stamp, the
-device and IP it came from, how it was confirmed, and an amber "Not by you"
-marker when `actor_user_id` is set. Search over device / IP / factor / details,
+device it came from, how it was confirmed, and an amber "Not by you"
+marker when `actor_user_id` is set. Search over device / factor / details,
 a kind filter offering only the kinds that actually occur, sorting by time (both
 ways) and by kind, numbered paging. **Every row ends in a quiet "Not you?" link
 into `/settings/security`** — a log you cannot act on is a curiosity, not a
@@ -121,8 +129,7 @@ particular view is shareable and the back button restores it.
 
 ## Retention
 
-The log is personal data — devices, IP addresses, what changed when — so it ages
-out. `Vutuv.AccountEvents.Sweeper` deletes rows past
+The log is personal data — devices, what changed when — so it ages out. `Vutuv.AccountEvents.Sweeper` deletes rows past
 `AccountEvents.retention_days/0` daily; the default is **365 days**, settable per
 installation via `ACCOUNT_EVENT_RETENTION_DAYS`. A year covers the "this
 happened months ago and I only noticed now" support case without turning the

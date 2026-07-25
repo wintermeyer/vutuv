@@ -37,7 +37,6 @@ defmodule VutuvWeb.AccountActivityLiveTest do
       :ok =
         AccountEvents.record(user, "username_changed",
           factor: "passkey",
-          ip: "203.0.113.55",
           device: "Firefox on Linux",
           details: %{from: "old_name", to: "new_name"}
         )
@@ -55,7 +54,11 @@ defmodule VutuvWeb.AccountActivityLiveTest do
       # them and the client rewrite is told to keep them.
       assert html =~ ~s(data-localtime="second")
       assert html =~ "Firefox on Linux"
-      assert html =~ "203.0.113.55"
+
+      # The IP was dropped from the log, so no row can show one. Scoped to the
+      # rows: a page-wide match would trip over any dotted number in the chrome.
+      refute live |> element("#activity-events") |> render() =~
+               ~r/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/
     end
 
     test "every row offers the way out", %{conn: conn} do
@@ -78,7 +81,7 @@ defmodule VutuvWeb.AccountActivityLiveTest do
       assert_patched(live, ~p"/settings/activity?kind=passkey_added")
     end
 
-    test "search matches the device, the IP and the details", %{conn: conn} do
+    test "search matches the device and the details", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/settings/activity")
 
       live |> element("#activity-filter") |> render_change(%{"q" => "Work laptop"})
@@ -86,7 +89,7 @@ defmodule VutuvWeb.AccountActivityLiveTest do
       assert rows =~ "Passkey added"
       refute rows =~ "Username changed"
 
-      live |> element("#activity-filter") |> render_change(%{"q" => "203.0.113.55"})
+      live |> element("#activity-filter") |> render_change(%{"q" => "Firefox on Linux"})
       rows = live |> element("#activity-events") |> render()
       assert rows =~ "Username changed"
       refute rows =~ "Passkey added"
@@ -122,11 +125,11 @@ defmodule VutuvWeb.AccountActivityLiveTest do
 
     test "only the member's own events, never another account's", %{conn: conn, user: user} do
       stranger = insert(:user)
-      :ok = AccountEvents.record(stranger, "signed_in", ip: "198.51.100.99")
+      :ok = AccountEvents.record(stranger, "signed_in", device: "Opera on Windows")
 
       {:ok, live_view, _html} = live(conn, ~p"/settings/activity")
 
-      refute live_view |> element("#activity-events") |> render() =~ "198.51.100.99"
+      refute live_view |> element("#activity-events") |> render() =~ "Opera on Windows"
       assert AccountEvents.count(user, AccountEvents.filters(%{})) == 3
     end
   end

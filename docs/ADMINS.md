@@ -119,7 +119,7 @@ Everything else has a default (the vutuv.de production value):
 | `FEDIVERSE_INBOUND_CAPS` | `600,60` | `host,actor`: how many rows one remote server, and one remote account, may store here per hour. Anything past the budget is dropped for that hour. The floor under the operator blocklist at `/admin/fediverse`, since it also bounds servers nobody has blocked yet |
 | `FEDIVERSE_NOTE_RETENTION_DAYS` | `183` | How long a reply written on another network may be held here at the very most, in days. It is deleted when the clock runs out whatever else happens, so this is the promise your privacy page can make. Only applies once a member switches replies on (off by default) |
 | `FEDIVERSE_NOTE_REFRESH_DAYS` | `7` | How stale a stored reply may get before vutuv asks its origin server whether it is still published there. Still there means the text is refreshed and the retention clock starts again; gone (or locked away) means it is deleted at once; unreachable changes nothing. Replies sent to a member privately are never re-checked |
-| `ACCOUNT_EVENT_RETENTION_DAYS` | `365` | How long the **account-activity log** keeps an event, in days (see `docs/architecture/account-activity.md`). It records what changed on an account, when, from which coarse device and IP, and how it was confirmed, so it is personal data with a clock on it: a year covers the "this happened months ago and I only noticed now" support case without becoming a permanent movement profile. The daily sweeper deletes anything older |
+| `ACCOUNT_EVENT_RETENTION_DAYS` | `365` | How long the **account-activity log** keeps an event, in days (see `docs/architecture/account-activity.md`). It records what changed on an account, when, from which coarse device (never an IP address), and how it was confirmed, so it is personal data with a clock on it: a year covers the "this happened months ago and I only noticed now" support case without becoming a permanent movement profile. The daily sweeper deletes anything older |
 | `FETCH_BOOK_METADATA` | `true` | `false` turns the catalogue lookups behind post **book reviews** off (the composer's ISBN → title/author/year prefill, the cover image, page count and publisher from Open Library, and an audiobook's running time). The review feature itself keeps working — members type the fields by hand and the card renders without a cover or those details. Set it on installations that must not call out (intranets) |
 | `DNB_SRU_URL` | `https://services.dnb.de/sru/dnb` | Where an **audiobook's running time** is looked up by ISBN: an SRU endpoint answering MARC21-xml (the Deutsche Nationalbibliothek by default — Open Library records no durations). Point it at another catalogue's SRU endpoint, or set it **empty** (`DNB_SRU_URL=`) to switch that one lookup off while the rest of the book metadata keeps working |
 | `AMAZON_DOMAIN` | `www.amazon.de` | The store a book review card's shop link points at (`https://<domain>/dp/<isbn10>`). Set your regional store (`www.amazon.com`, …) — or an **empty** value (`AMAZON_DOMAIN=`) to remove the shop link entirely |
@@ -442,15 +442,18 @@ Every security-relevant change to an account is recorded: signing in (and with
 which factor), a username rename, an email address added or removed, the
 visibility switches, a new passkey or authenticator app, a token minted, a
 LinkedIn import applied. Each entry carries the exact time (to the second), the
-request IP and a coarse device summary ("Chrome on macOS"), plus the acting
-admin when the change was not the member's own doing.
+coarse device summary ("Chrome on macOS"), plus the acting admin when the change
+was not the member's own doing. It deliberately keeps **no IP address**: the
+member's question is "was that me?", which the device, the time and the
+confirming factor answer, and a year of addresses per account is a movement
+profile with no support value.
 
 - **Members read their own** at `/settings/activity`, and see the last few
   entries on `/settings/security`. Every row ends in a "Not you?" link back to
   the security page, where they can sign every other device out.
 - **You read all of them** at **`/admin` → Account activity**
   (`/admin/activity`): filter by member (name, @handle or email), search over
-  device, IP or detail, filter by kind, sort by time, member or kind. This is
+  device or detail, filter by kind, sort by time, member or kind. This is
   where a support mail that says "my username is different and I did not do
   that" gets answered.
 

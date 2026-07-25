@@ -114,9 +114,9 @@ defmodule VutuvWeb.AccountActivityLive do
   # sort is not a filter: it hides nothing.
   defp filtered?(filters), do: filters.q != nil or filters.kind != nil
 
-  # The "Where from" column folds away below `sm`: the device and IP also ride
-  # under the sentence on a phone, and keeping the column would push the
-  # timestamp — the fact the page exists for — off the card edge.
+  # The "Device" column folds away below `sm`: the device also rides under the
+  # sentence on a phone, and keeping the column would push the timestamp — the
+  # fact the page exists for — off the card edge.
   @source_column_class "hidden sm:table-cell"
 
   defp source_column_class, do: @source_column_class
@@ -144,13 +144,6 @@ defmodule VutuvWeb.AccountActivityLive do
   defp range_first(_page, _per_page, _total), do: 0
 
   defp range_last(page, per_page, total), do: min(page * per_page, total)
-
-  # The device and the IP as one muted line. Either can be missing (an event
-  # recorded off a request has neither), so the line collapses rather than
-  # rendering a stray separator.
-  defp source_line(event) do
-    [event.device, event.ip_address] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(" · ")
-  end
 
   @impl true
   def render(assigns) do
@@ -207,7 +200,7 @@ defmodule VutuvWeb.AccountActivityLive do
                   value={@filters.q}
                   phx-debounce="250"
                   autocomplete="off"
-                  placeholder={gettext("device, IP address or detail")}
+                  placeholder={gettext("device or detail")}
                   class={input_class()}
                 />
               </div>
@@ -269,7 +262,7 @@ defmodule VutuvWeb.AccountActivityLive do
                         {header}{sort_caret(@filters, col)}
                       </button>
                     </th>
-                    <th class={source_column_class()}>{gettext("Where from")}</th>
+                    <th class={source_column_class()}>{gettext("Device")}</th>
                     <th><span class="sr-only">{gettext("Was this you?")}</span></th>
                   </tr>
                 </thead>
@@ -309,20 +302,17 @@ defmodule VutuvWeb.AccountActivityLive do
                       >
                         {gettext("Not by you")}
                       </span>
-                      <%!-- On a phone the "Where from" column is folded away, so
-                      its content rides here instead of being lost. --%>
+                      <%!-- On a phone the "Device" column is folded away, so its
+                      content rides here instead of being lost. --%>
                       <span
-                        :if={source_line(event) != ""}
+                        :if={event.device}
                         class="block text-xs text-slate-600 sm:hidden dark:text-slate-400"
                       >
-                        {source_line(event)}
+                        {event.device}
                       </span>
                     </td>
                     <td class={[source_column_class(), "align-top text-slate-600 dark:text-slate-400"]}>
-                      <span :if={event.device} class="block">{event.device}</span>
-                      <span :if={event.ip_address} class="block break-all text-xs">
-                        {event.ip_address}
-                      </span>
+                      {event.device}
                     </td>
                     <td class="whitespace-nowrap align-top text-right">
                       <.link

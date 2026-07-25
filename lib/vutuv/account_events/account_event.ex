@@ -11,7 +11,10 @@ defmodule Vutuv.AccountEvents.AccountEvent do
   What a row may hold is decided by `Vutuv.AccountEvents`, not here: the kind
   must be a declared one and every `details` key must be whitelisted for that
   kind, which is what keeps secrets and private values out of a table that a
-  backup, an admin page and a support conversation all touch.
+  backup, an admin page and a support conversation all touch. There is
+  deliberately **no IP address** — the `ip_address` column is dropped in the
+  release after this one (an N-1-safe expand/contract), and nothing reads or
+  writes it any more.
   """
 
   use VutuvWeb, :model
@@ -24,7 +27,6 @@ defmodule Vutuv.AccountEvents.AccountEvent do
 
     field(:kind, :string)
     field(:factor, :string)
-    field(:ip_address, :string)
     field(:device, :string)
     field(:details, :map, default: %{})
 
@@ -39,11 +41,10 @@ defmodule Vutuv.AccountEvents.AccountEvent do
   """
   def changeset(event, attrs) do
     event
-    |> cast(attrs, [:kind, :factor, :ip_address, :device, :details])
+    |> cast(attrs, [:kind, :factor, :device, :details])
     |> validate_required([:kind])
     |> validate_inclusion(:kind, AccountEvents.kinds())
     |> validate_inclusion(:factor, AccountEvents.factors())
-    |> validate_length(:ip_address, max: 100)
     |> validate_length(:device, max: 200)
     |> validate_details()
   end

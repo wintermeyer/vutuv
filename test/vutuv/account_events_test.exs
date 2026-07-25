@@ -17,18 +17,12 @@ defmodule Vutuv.AccountEventsTest do
     test "stores who, what, when, from where and how it was confirmed" do
       user = insert(:user)
 
-      :ok =
-        AccountEvents.record(user, "signed_in",
-          factor: "passkey",
-          ip: "203.0.113.4",
-          device: "Chrome on macOS"
-        )
+      :ok = AccountEvents.record(user, "signed_in", factor: "passkey", device: "Chrome on macOS")
 
       assert [event] = Repo.all(AccountEvent)
       assert event.user_id == user.id
       assert event.kind == "signed_in"
       assert event.factor == "passkey"
-      assert event.ip_address == "203.0.113.4"
       assert event.device == "Chrome on macOS"
       assert event.actor_user_id == nil
       assert %DateTime{} = event.inserted_at
@@ -59,7 +53,7 @@ defmodule Vutuv.AccountEventsTest do
       assert event.actor_user_id == admin.id
     end
 
-    test "takes the IP and a COARSE device summary from a conn, never the raw User-Agent" do
+    test "takes a COARSE device summary from a conn, never the raw User-Agent or the IP" do
       user = insert(:user)
 
       ua =
@@ -73,9 +67,11 @@ defmodule Vutuv.AccountEventsTest do
       :ok = AccountEvents.record(user, "signed_in", conn: conn)
 
       assert [event] = Repo.all(AccountEvent)
-      assert event.ip_address == "203.0.113.9"
       assert event.device == "Chrome on macOS"
       refute event.device =~ "AppleWebKit"
+      # The conn knows the address; the log deliberately does not keep it.
+      refute Map.has_key?(event, :ip_address)
+      refute inspect(event) =~ "203.0.113.9"
     end
 
     test "an undeclared kind is refused (and never raises on the caller)" do
@@ -131,17 +127,20 @@ defmodule Vutuv.AccountEventsTest do
       user = insert(:user)
       other = insert(:user)
 
-      :ok = AccountEvents.record(user, "signed_in", factor: "pin", ip: "203.0.113.1")
+      :ok = AccountEvents.record(user, "signed_in", factor: "pin", device: "Firefox on Linux")
       :ok = AccountEvents.record(user, "passkey_added", details: %{nickname: "Work laptop"})
-      :ok = AccountEvents.record(other, "signed_in", ip: "198.51.100.7")
+      :ok = AccountEvents.record(other, "signed_in", device: "Safari on iPhone")
 
       %{user: user, other: other}
     end
 
     test "only the member's own events", %{user: user} do
       assert AccountEvents.count(user, AccountEvents.filters(%{})) == 2
-      ips = user |> AccountEvents.page(AccountEvents.filters(%{})) |> Enum.map(& &1.ip_address)
-      refute "198.51.100.7" in ips
+
+      devices =
+        user |> AccountEvents.page(AccountEvents.filters(%{})) |> Enum.map(& &1.device)
+
+      refute "Safari on iPhone" in devices
     end
 
     test "newest first by default", %{user: user} do
@@ -166,9 +165,9 @@ defmodule Vutuv.AccountEventsTest do
       assert AccountEvents.count(user, filters) == 2
     end
 
-    test "searches the IP, the factor and the details", %{user: user} do
+    test "searches the device, the factor and the details", %{user: user} do
       assert [%{kind: "signed_in"}] =
-               AccountEvents.page(user, AccountEvents.filters(%{"q" => "203.0.113"}))
+               AccountEvents.page(user, AccountEvents.filters(%{"q" => "Firefox"}))
 
       assert [%{kind: "signed_in"}] =
                AccountEvents.page(user, AccountEvents.filters(%{"q" => "pin"}))
@@ -251,12 +250,15 @@ defmodule Vutuv.AccountEventsTest do
   describe "the log is personal data" do
     test "rides along in the GDPR export" do
       user = insert(:user)
-      :ok = AccountEvents.record(user, "signed_in", factor: "pin", ip: "203.0.113.1")
+      :ok = AccountEvents.record(user, "signed_in", factor: "pin", device: "Chrome on macOS")
 
       assert %{account_events: [entry]} = Vutuv.Export.build(user)
       assert entry.kind == "signed_in"
       assert entry.factor == "pin"
+      assert entry.device == "Chrome on macOS"
       assert entry.by_someone_else == false
+      # Nothing to export: the log does not keep an IP address.
+      refute Map.has_key?(entry, :ip_address)
     end
 
     test "is deleted with the account" do

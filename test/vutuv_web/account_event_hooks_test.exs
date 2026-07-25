@@ -23,7 +23,9 @@ defmodule VutuvWeb.AccountEventHooksTest do
   end
 
   describe "signing in and out" do
-    test "an emailed-PIN login is recorded with its factor, device and IP", %{conn: conn} do
+    test "an emailed-PIN login is recorded with its factor and device, not its IP", %{
+      conn: conn
+    } do
       user = insert(:user, email_confirmed?: true)
       insert(:email, value: "hook-login@example.com", user: user)
 
@@ -36,7 +38,7 @@ defmodule VutuvWeb.AccountEventHooksTest do
       assert [event] = events(user, "signed_in")
       assert event.factor == "pin"
       assert event.device == "Safari on iPhone"
-      assert event.ip_address
+      refute Map.has_key?(event, :ip_address)
     end
 
     test "logging out is recorded too", %{conn: conn} do
