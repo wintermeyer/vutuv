@@ -658,6 +658,76 @@ defmodule Vutuv.ActivityTest do
       assert Enum.map(page2.entries, & &1.kind) == ["like"]
       refute page2.more?
     end
+
+    # The follower and connection sources attach their actor *after* ordering
+    # and limiting (joining users first made Postgres scan the whole table to
+    # build a candidate set it then threw away). These pin what that shape can
+    # get wrong: the order must survive the two-step query, and the actor must
+    # still be the other person rather than the reader.
+    test "connection events come newest-first, honour the limit and walk the cursor" do
+      me = insert(:user)
+
+      # A connection is timestamped GREATEST(out, back), so both edges of each
+      # pair are back-dated to the same instant to pin the event's position.
+      for {name, at} <- [
+            {"Oldest", ~N[2021-01-01 12:00:00]},
+            {"Middle", ~N[2022-01-01 12:00:00]},
+            {"Newest", ~N[2023-01-01 12:00:00]}
+          ] do
+        friend = insert(:user, first_name: name, last_name: "Friend")
+
+        for edge <- [
+              insert(:follow, follower: me, followee: friend),
+              insert(:follow, follower: friend, followee: me)
+            ],
+            do: backdate_connection(edge, at)
+      end
+
+      page1 = Activity.notifications_page(me.id, limit: 2, kinds: ["connection"])
+
+      assert Enum.map(page1.entries, & &1.actor_name) == ["Newest Friend", "Middle Friend"]
+      assert page1.more?
+
+      page2 =
+        Activity.notifications_page(me.id,
+          limit: 2,
+          kinds: ["connection"],
+          cursor: page1.next_cursor
+        )
+
+      assert Enum.map(page2.entries, & &1.actor_name) == ["Oldest Friend"]
+      refute page2.more?
+
+      # ... and the same feed by numbered page.
+      assert Activity.notifications_page(me.id, limit: 2, page: 2, kinds: ["connection"])
+             |> Map.fetch!(:entries)
+             |> Enum.map(& &1.actor_name) == ["Oldest Friend"]
+    end
+
+    test "follower events name the follower, not the reader, past the limit" do
+      me = insert(:user)
+
+      for {name, at} <- [
+            {"Oldest", ~N[2021-01-01 12:00:00]},
+            {"Middle", ~N[2022-01-01 12:00:00]},
+            {"Newest", ~N[2023-01-01 12:00:00]}
+          ] do
+        follower = insert(:user, first_name: name, last_name: "Follower")
+        backdate_connection(insert(:follow, follower: follower, followee: me), at)
+      end
+
+      page = Activity.notifications_page(me.id, limit: 2, kinds: ["follower"])
+
+      assert Enum.map(page.entries, & &1.actor_name) == ["Newest Follower", "Middle Follower"]
+
+      assert Activity.notifications_page(me.id,
+               limit: 2,
+               kinds: ["follower"],
+               cursor: page.next_cursor
+             )
+             |> Map.fetch!(:entries)
+             |> Enum.map(& &1.actor_name) == ["Oldest Follower"]
+    end
   end
 
   describe "activity_summary/2" do
