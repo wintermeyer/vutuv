@@ -134,35 +134,19 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
         )}
       </h3>
 
-      <%= if @followers == [] do %>
+      <%!-- No preview list here: the followers live on their own page as a
+            searchable, sortable, paginated table with the date each follow
+            arrived. Repeating the newest few as bare lines said the same thing
+            worse, so this card just points at it. --%>
+      <%= if @follower_count == 0 do %>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
           {gettext(
             "Nobody yet. Post your handle where people can see it, and the first follows will show up here."
           )}
         </p>
       <% else %>
-        <%!-- The newest few only. The full list is its own page (a searchable,
-              sortable, paginated table), because a flat list here reads fine at
-              four followers and not at all at ten thousand. --%>
-        <ul class="mt-2 space-y-1.5">
-          <li :for={follower <- @followers}>
-            <a
-              href={follower.actor_uri}
-              target="_blank"
-              rel="nofollow noopener noreferrer"
-              class="group flex flex-wrap items-baseline gap-x-2 text-sm"
-            >
-              <span :if={follower.name} class="font-medium text-slate-700 dark:text-slate-200">
-                {follower.name}
-              </span>
-              <span class="text-slate-600 group-hover:text-brand-600 dark:text-slate-400 dark:group-hover:text-brand-300">
-                {Vutuv.Fediverse.Follower.display_handle(follower)}
-              </span>
-            </a>
-          </li>
-        </ul>
         <.card_footer_link href={~p"/settings/fediverse/followers"} id="all-followers-link">
-          {gettext("All followers")} ({delimited_count(@follower_count)})
+          {gettext("All followers")}
         </.card_footer_link>
       <% end %>
     </.card>

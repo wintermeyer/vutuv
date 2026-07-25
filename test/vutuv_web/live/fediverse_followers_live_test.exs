@@ -230,12 +230,17 @@ defmodule VutuvWeb.FediverseFollowersLiveTest do
     refute html =~ "Following since"
   end
 
-  test "the settings page links to the full list", %{conn: conn} do
+  # The switch page used to repeat the newest few followers as a bare list right
+  # above the link to this table, which says the same thing worse: no dates, no
+  # search, no sort. It offers the link only now.
+  test "the settings page links to the full list instead of previewing it", %{conn: conn} do
     {conn, user} = federating(conn)
-    follower(user, handle: "one")
+    follower(user, handle: "one", name: "Someone Out There")
 
     html = conn |> get(~p"/settings/fediverse") |> html_response(200)
 
     assert html =~ ~s(href="#{~p"/settings/fediverse/followers"}")
+    refute html =~ "Someone Out There"
+    refute html =~ "@one@mastodon.example"
   end
 end

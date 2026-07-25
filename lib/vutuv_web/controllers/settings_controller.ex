@@ -372,15 +372,10 @@ defmodule VutuvWeb.SettingsController do
         "That account could not be reached. Check the address, and that the other server is online."
       )
 
-  # The page shows only the newest few followers as a taste; the whole list,
-  # searchable and sortable, is `VutuvWeb.FediverseFollowersLive`.
-  @fediverse_follower_preview 5
-
+  # The page only says how many followers there are and links on; the list
+  # itself, searchable and sortable, is `VutuvWeb.FediverseFollowersLive`.
   defp fediverse_assigns(user) do
-    [
-      follower_count: Vutuv.Fediverse.follower_count(user),
-      followers: Vutuv.Fediverse.list_followers(user, @fediverse_follower_preview)
-    ]
+    [follower_count: Vutuv.Fediverse.follower_count(user)]
   end
 
   def notifications(conn, _params) do

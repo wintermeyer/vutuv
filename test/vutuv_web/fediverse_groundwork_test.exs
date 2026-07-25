@@ -97,7 +97,7 @@ defmodule VutuvWeb.FediverseGroundworkTest do
       assert body =~ "@#{user.username}@#{VutuvWeb.Endpoint.host()}"
     end
 
-    test "lists who follows the member from the Fediverse", %{conn: conn} do
+    test "counts who follows the member and links to the full list", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       conn =
@@ -118,9 +118,11 @@ defmodule VutuvWeb.FediverseGroundworkTest do
 
       body = conn |> recycle() |> get(~p"/settings/fediverse") |> html_response(200)
 
-      assert body =~ "Alice Example"
-      assert body =~ "@alice@social.example"
-      assert body =~ "https://social.example/users/alice"
+      # The followers themselves are one click away, on their own searchable
+      # table; this card only says how many there are.
+      assert body =~ "1 follower from other networks"
+      assert body =~ ~s(href="#{~p"/settings/fediverse/followers"}")
+      refute body =~ "Alice Example"
     end
 
     # The settings-hub restructure moved the update routes to the
