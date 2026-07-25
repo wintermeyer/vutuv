@@ -13,6 +13,11 @@ defmodule VutuvWeb.Router do
     plug(:accepts, ["html", "activity+json"])
     plug(:fetch_session)
     plug(:fetch_flash)
+    # Flashes a message an action stashed because its own response could not
+    # carry one: Phoenix keeps a flash across requests only on a 3xx, so the
+    # passkey ceremonies (fetch() + window.location) lose theirs. Right after
+    # fetch_flash, so the message is in place before any controller runs.
+    plug(Plugs.PendingFlash)
     # Records a click on a newsletter's tracked vutuv.de link and redirects to
     # the clean URL. Early, so a tracked click never does the rest of the
     # pipeline's per-request work just to throw the page away on the redirect.

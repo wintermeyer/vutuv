@@ -7,6 +7,7 @@ defmodule VutuvWeb.SessionController do
   alias Vutuv.Credentials
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Home
+  alias VutuvWeb.Plug.PendingFlash
   alias VutuvWeb.RateLimit
   alias VutuvWeb.UI
 
@@ -22,35 +23,13 @@ defmodule VutuvWeb.SessionController do
     # PIN form while a PIN is pending (PageController.display_pin_entry/2). Not
     # gated on a PIN row existing in the DB: that would betray whether the
     # address has an account (issue #759's enumeration oracle).
+    #
+    # The passkey fallback's friendly note arrives on its own: it is stashed by
+    # `pin_fallback/2` and flashed by `VutuvWeb.Plug.PendingFlash` before this
+    # action runs.
     case Accounts.read_pin_cookie(conn) do
-      email when is_binary(email) ->
-        conn
-        |> flash_passkey_fallback()
-        |> render("pin_user_login.html")
-
-      nil ->
-        render(conn, "new.html")
-    end
-  end
-
-  # The passkey fallback (see passkey_challenge/2) marks the session before it
-  # bounces the visitor here, so we greet them with the friendly note explaining
-  # why they landed on the PIN form. It is set here, in the same request that
-  # renders the form, because Phoenix only carries a flash across requests on a
-  # redirect response — and the JSON challenge answer that mailed the PIN is a
-  # 200, not a 3xx. The marker is one-shot: read it, drop it.
-  defp flash_passkey_fallback(conn) do
-    if get_session(conn, :passkey_pin_fallback) do
-      conn
-      |> delete_session(:passkey_pin_fallback)
-      |> put_flash(
-        :info,
-        gettext(
-          "You don't have a passkey yet, so we've emailed you a one-time PIN to sign in instead."
-        )
-      )
-    else
-      conn
+      email when is_binary(email) -> render(conn, "pin_user_login.html")
+      nil -> render(conn, "new.html")
     end
   end
 
@@ -189,17 +168,22 @@ defmodule VutuvWeb.SessionController do
   # No passkey for the typed address: behave like the email-PIN step 1. Throttle
   # on the same per-email budget as the "Log in" button so this cannot be used
   # to out-mail that limit, mail the PIN (only when the account exists — the JSON
-  # is identical regardless), mark the session so /login greets the visitor with
-  # the friendly note, and tell the JS to navigate there. The note is flashed by
-  # `new/2` rather than here because Phoenix carries a flash across requests only
-  # on a redirect, and this is a 200 JSON answer.
+  # is identical regardless), stash the friendly note explaining why they are
+  # about to land on the PIN form, and tell the JS to navigate there. The note
+  # goes through `put_pending_flash/3` because this is a 200 JSON answer and
+  # Phoenix carries a flash across requests only on a redirect.
   defp pin_fallback(conn, email) do
     case RateLimit.check(conn, :login_email, email) do
       :ok ->
         {:ok, conn} = Accounts.login_by_email(conn, email)
 
         conn
-        |> put_session(:passkey_pin_fallback, true)
+        |> PendingFlash.put_pending_flash(
+          :info,
+          gettext(
+            "You don't have a passkey yet, so we've emailed you a one-time PIN to sign in instead."
+          )
+        )
         |> json(%{redirect: ~p"/login"})
 
       :rate_limited ->
@@ -246,7 +230,11 @@ defmodule VutuvWeb.SessionController do
         conn
         |> clear_auth_challenge()
         |> Accounts.login(user)
-        |> put_flash(:info, welcome_flash(nil, user))
+        # put_pending_flash/3, not put_flash/3: this answers 200 JSON and the JS
+        # navigates, and Phoenix keeps a flash across requests only on a 3xx —
+        # so a plain put_flash here was silently dropped and the passkey login
+        # never greeted anyone (the PIN login, which redirects, always did).
+        |> PendingFlash.put_pending_flash(:info, welcome_flash(nil, user))
         # Same landing as the PIN path: home is the feed once you follow someone,
         # otherwise your profile (see VutuvWeb.Home).
         |> json(%{ok: true, redirect: return_to || Home.path(user)})
