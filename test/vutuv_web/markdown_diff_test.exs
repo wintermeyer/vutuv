@@ -103,12 +103,20 @@ defmodule VutuvWeb.MarkdownDiffTest do
       assert render("```patch\n+ added\n```") =~ ~s(diff-line--add)
     end
 
+    # The `elixir` fence is checked on a shorter slice of its own text: it is
+    # syntax-highlighted (VutuvWeb.CodeHighlight), so `not` sits in a span and
+    # the full line is no longer one contiguous string. The unlabelled fence and
+    # the inline span are untouched by both features.
     test "leaves every other code block alone" do
-      for fence <- ["```elixir\n- not a diff\n```", "```\n- not a diff\n```", "`- inline`"] do
+      for {fence, text} <- [
+            {"```elixir\n- not a diff\n```", "a diff"},
+            {"```\n- not a diff\n```", "- not a diff"},
+            {"`- inline`", "- inline"}
+          ] do
         html = render(fence)
 
         refute html =~ "diff-line"
-        assert html =~ "- not a diff" or html =~ "- inline"
+        assert html =~ text
       end
     end
   end
