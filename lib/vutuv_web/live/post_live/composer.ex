@@ -1726,7 +1726,16 @@ defmodule VutuvWeb.PostLive.Composer do
         title={gettext("Photo options")}
         class="block h-full w-full cursor-pointer rounded-lg focus-visible:ring-2 focus-visible:ring-brand-500"
       >
-        <img src={PostImage.url(@image, "thumb")} alt="" class="h-full w-full object-cover" />
+        <%!-- The natural-ratio frame needs the aspect-preserving `feed`
+        version: `thumb` is itself a 320×320 centre crop (Vutuv.Uploads.Spec),
+        so inside a portrait frame it would show a cut of a cut — exactly the
+        "still not the full picture" complaint the frame was meant to fix.
+        The square strip keeps the light thumb. --%>
+        <img
+          src={PostImage.url(@image, if(@natural?, do: "feed", else: "thumb"))}
+          alt=""
+          class="h-full w-full object-cover"
+        />
       </button>
 
       <div class="pointer-events-none absolute left-1 top-1 flex flex-col items-start gap-1">

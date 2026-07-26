@@ -428,6 +428,10 @@ defmodule VutuvWeb.PhotoComposerTest do
     } do
       # A photographer judges the upload by the full frame; the square crop
       # belongs to the compact text-mode strip alone. The test JPEG is 90×60.
+      # The frame's shape alone is not enough: the `thumb` version is itself a
+      # 320×320 centre crop (`Vutuv.Uploads.Spec`), so a natural-ratio frame
+      # around it still shows a cut — the tile must load the aspect-preserving
+      # `feed` version.
       live = open_photo_composer(conn)
       image = upload_photo!(live, user)
 
@@ -435,6 +439,15 @@ defmodule VutuvWeb.PhotoComposerTest do
                live,
                ~s([data-photo-tile="#{image.id}"] [style*="aspect-ratio: 90 / 60"])
              )
+
+      assert has_element?(live, ~s([data-photo-tile="#{image.id}"] img[src$="/feed.avif"]))
+    end
+
+    test "the text-mode strip keeps its square thumbs", %{conn: conn, user: user} do
+      live = open_composer(conn)
+      image = upload_photo!(live, user)
+
+      assert has_element?(live, ~s([data-photo-tile="#{image.id}"] img[src$="/thumb.avif"]))
     end
 
     test "the alt nudge shows only while a photo has neither caption nor description", %{
