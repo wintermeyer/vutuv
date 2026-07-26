@@ -632,6 +632,51 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "#open-composer")
       assert has_element?(live, "#composer-panel.hidden")
     end
+
+    test "a half-typed draft brings the composer back after a reconnect", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # What a reconnect does (issue #1130): the feed re-mounts, so the composer
+      # starts collapsed again, while LiveView's form recovery replays the
+      # composer's phx-change with the half-typed text still sitting in the DOM.
+      # This is that second half — a collapsed feed receiving a `validate` that
+      # carries a body. The draft has to bring the panel back, or the author
+      # returns to their tab and finds the form gone with the text inside it.
+      assert has_element?(live, "#composer-panel.hidden")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "half-typed draft"}})
+      |> render_change()
+
+      refute has_element?(live, "#composer-panel.hidden")
+      refute has_element?(live, "#open-composer")
+    end
+
+    test "typed tags alone bring the composer back too", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "", "tags" => "elixir"}})
+      |> render_change()
+
+      refute has_element?(live, "#composer-panel.hidden")
+    end
+
+    test "an empty composer stays collapsed", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Nothing typed, nothing to rescue: a recovered empty form must not pop
+      # the composer open under a reader who never opened it.
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "", "tags" => ""}})
+      |> render_change()
+
+      assert has_element?(live, "#composer-panel.hidden")
+      assert has_element?(live, "#open-composer")
+    end
   end
 
   describe "who to follow rail" do

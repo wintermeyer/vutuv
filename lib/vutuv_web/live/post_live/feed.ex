@@ -453,6 +453,17 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, refresh_shown_post(socket, post_id)}
   end
 
+  # The composer says it holds a draft, so show it (issue #1130). Two moments
+  # send this: the first characters of a normal compose (the panel is already
+  # open, so the assign is a no-op), and the `validate` LiveView's form recovery
+  # replays after a reconnect — which is the one that matters. A reconnect
+  # re-mounts this LiveView, and `composer_open?` is plain socket state, so the
+  # panel collapses while the text stays in it: the author comes back to their
+  # tab, finds the form gone and has no reason to believe the draft survived.
+  def handle_info({:composer_drafting, _id}, socket) do
+    {:noreply, assign(socket, :composer_open?, true)}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in
@@ -634,7 +645,9 @@ defmodule VutuvWeb.PostLive.Feed do
           <%!-- Collapsed by default: the shared avatar-card trigger (see
           <.composer_trigger>), revealed via phx-click. The composer stays
           mounted (just hidden) so a half-typed draft survives a background
-          feed re-render; posting or the composer's corner ✕ collapses it. --%>
+          feed re-render; posting or the composer's corner ✕ collapses it. A
+          reconnect re-mounts this LiveView and would collapse it under a draft,
+          so a drafting composer re-opens itself (:composer_drafting). --%>
           <.composer_trigger
             :if={!@composer_open?}
             viewer={@current_user}

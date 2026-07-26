@@ -265,6 +265,8 @@ defmodule VutuvWeb.PostLive.Composer do
   # post changeset. So both handlers take the whole payload.
   @impl true
   def handle_event("validate", %{"post" => params} = payload, socket) do
+    drafting_before? = drafting?(socket.assigns)
+
     # New posts publish public (there is no audience picker); the fallback to the
     # current preset keeps an edited restricted post from silently downgrading to
     # public as the author types.
@@ -290,7 +292,7 @@ defmodule VutuvWeb.PostLive.Composer do
         socket
       end
 
-    {:noreply, socket}
+    {:noreply, announce_draft(socket, drafting_before?)}
   end
 
   def handle_event("deny-user", %{"id" => id}, socket) do
@@ -515,6 +517,38 @@ defmodule VutuvWeb.PostLive.Composer do
     |> save_post(attrs)
     |> handle_save_result(socket)
   end
+
+  # Anything the author has already put into the composer by hand. Attached
+  # photos are deliberately left out: they live in assigns a re-mount drops
+  # anyway, so they can never be the thing that needs rescuing.
+  defp drafting?(assigns), do: assigns.body != "" or assigns.tags_value != ""
+
+  # Tell the feed that this composer holds a draft (issue #1130).
+  #
+  # The feed keeps its composer collapsed behind a "Write a post" trigger and
+  # holds that open/shut state in plain socket assigns, so every re-mount starts
+  # collapsed — and a websocket reconnect is a re-mount. A tab left in the
+  # background long enough gets one: the browser throttles the heartbeat, the
+  # socket times out, and rejoining on return re-mounts the feed. LiveView's
+  # form recovery then replays this very `validate` with the half-typed text
+  # still sitting in the DOM, so the draft comes back but the panel does not:
+  # the author returns from looking something up and the form is simply gone,
+  # with the text hidden inside it. Announcing the first content lets the feed
+  # re-open the panel in the same round trip.
+  #
+  # Only the feed composer announces. The edit, reply and remote-reply pages
+  # render the composer unconditionally, so they have nothing to re-open (and no
+  # handler for the message).
+  defp announce_draft(socket, drafting_before?) do
+    if not drafting_before? and drafting?(socket.assigns) and feed_composer?(socket.assigns) do
+      send(self(), {:composer_drafting, socket.assigns.id})
+    end
+
+    socket
+  end
+
+  defp feed_composer?(assigns),
+    do: is_nil(assigns.post) and is_nil(assigns.parent) and is_nil(assigns.remote_note)
 
   # Answering a reply from another network goes through its own context function:
   # it writes the sidecar that carries the answer out to that network, and it
