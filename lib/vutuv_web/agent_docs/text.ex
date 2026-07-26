@@ -427,6 +427,10 @@ defmodule VutuvWeb.AgentDocs.Text do
       # First fact, like the profile's first line under the name (see the
       # Markdown renderer).
       doc.name_pronunciation && "#{gettext("Name pronunciation")}: #{doc.name_pronunciation}",
+      # Which word of the heading is which (shared with the Markdown renderer,
+      # see Markdown.name_parts/1). The heading alone reads "Stefan
+      # Wintermeyer" and leaves a reader to guess the split.
+      Enum.map(Markdown.name_parts(doc), fn {label, value} -> "#{label}: #{value}" end),
       doc.verified && gettext("Verified profile: yes"),
       doc.employment_status &&
         "#{gettext("Employment status")}: #{User.employment_status_label(doc.employment_status)}",
@@ -713,7 +717,11 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc.noindex && "noindex: true",
       doc.noai && "noai: true"
     ]
-    |> Enum.reject(&is_nil/1)
+    # Keep only the emitted lines: a conditional whose flag is off is `false`,
+    # not nil (`false && "noindex: true"`), and rejecting only nils left every
+    # profile's footer ending in two bare "false" lines. The Markdown
+    # frontmatter fixed the same slip in issue #924; this is its twin.
+    |> Enum.filter(&is_binary/1)
     |> Enum.join("\n")
   end
 

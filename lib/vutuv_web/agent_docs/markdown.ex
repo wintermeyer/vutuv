@@ -432,6 +432,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       # says the name out loud should meet the pronunciation before anything else.
       doc.name_pronunciation &&
         "- #{gettext("Name pronunciation")}: #{doc.name_pronunciation}",
+      Enum.map(name_parts(doc), fn {label, value} -> "- #{label}: #{value}" end),
       doc.verified && "- " <> gettext("Verified profile: yes"),
       doc.employment_status &&
         "- #{gettext("Employment status")}: #{User.employment_status_label(doc.employment_status)}",
@@ -447,6 +448,33 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> List.flatten()
     |> Enum.filter(& &1)
     |> Enum.join("\n\n")
+  end
+
+  @doc """
+  The member's name broken into its labelled parts, `[{label, value}]`, with
+  the empty ones dropped (so most profiles yield just a first and a last name).
+
+  The heading prints the assembled name and nothing in it says which word is
+  which, so a reader that has to address the member, sort them by family name
+  or transliterate the name has to guess — and guesses wrong on every name
+  that does not follow the given-name-first convention. The machine formats
+  have carried the parts all along (the JSON/XML keys, the vCard's `N`), so
+  this is md/txt catching up rather than a new disclosure.
+
+  The labels are the ones the Basics form uses, so the document names each
+  part with the same word the member filled it in under. Shared with the
+  plain-text renderer, like `work_period/1` and friends.
+  """
+  def name_parts(doc) do
+    [
+      {gettext("Prefix"), doc.honorific_prefix},
+      {gettext("First Name"), doc.first_name},
+      {gettext("Middle Name"), doc.middle_name},
+      {gettext("Last Name"), doc.last_name},
+      {gettext("Suffix"), doc.honorific_suffix},
+      {gettext("Nickname"), doc.nickname}
+    ]
+    |> Enum.reject(fn {_label, value} -> value in [nil, ""] end)
   end
 
   # The birthday granularity the member chose (`User.birthdate_mode/1`) puts at

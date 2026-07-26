@@ -69,6 +69,27 @@ is a recorded audio file, and Apple's `X-PHONETIC-FIRST-NAME`/`-LAST-NAME` pair
 would need us to guess which half of a free-text hint is which). It is writable
 over `PATCH /api/2.0/me` and included in the GDPR export.
 
+## Which part of the name is which
+
+The profile header, and every agent format's heading, prints the **assembled**
+name (`Dr. Ada Lovelace FRS`). Nothing in that string says which word is the
+given name and which the family name, and a reader that has to address the
+member, file them by family name or transliterate the name cannot guess it: the
+given-name-first convention is ours, not everyone's.
+
+So the docs name the parts. The machine formats always did (JSON/XML carry
+`first_name`, `middle_name`, `last_name`, `nickname`, `honorific_prefix`,
+`honorific_suffix` as their own keys; the vCard's `N` is
+`last;first;middle;prefix;suffix`), and md/txt now render one labelled fact line
+per part the member filled in, right under the pronunciation. The labels come
+from `VutuvWeb.AgentDocs.Markdown.name_parts/1`, shared by both renderers, and
+are the gettext strings the Basics form uses ("First Name" / "Vorname"), so the
+document names each part with the word the member entered it under. Empty parts
+render nothing, so an ordinary profile shows just a first and a last name.
+
+The **nickname** is the one part `N`/`FN` has no room for, so the vCard emits it
+as its own RFC 2426 `NICKNAME` property rather than dropping it on export.
+
 ## Birthday visibility (General Info card)
 
 A member enters their birthday on the Basics form but chooses **how much of it

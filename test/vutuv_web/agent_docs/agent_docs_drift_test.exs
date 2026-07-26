@@ -435,6 +435,78 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert body =~ "X-PHONETIC-NAME:[GRAY-ta GRAY-dee-ent]"
   end
 
+  test "every format says which part of the name is which" do
+    user =
+      insert_activated_user(
+        username: "name_parts_tester",
+        honorific_prefix: "Dr.",
+        first_name: "Ada",
+        middle_name: "Augusta",
+        last_name: "Lovelace",
+        honorific_suffix: "FRS",
+        nickname: "Enchantress"
+      )
+
+    rendered = formats_for("/#{user.username}")
+
+    # The heading assembles the name and says nothing about the split, so the
+    # human-readable formats label each part.
+    for {label, value} <- [
+          {"Prefix", "Dr."},
+          {"First Name", "Ada"},
+          {"Middle Name", "Augusta"},
+          {"Last Name", "Lovelace"},
+          {"Suffix", "FRS"},
+          {"Nickname", "Enchantress"}
+        ] do
+      assert rendered.md =~ "- #{label}: #{value}"
+      assert rendered.txt =~ "#{label}: #{value}"
+    end
+
+    # The machine formats carry the same parts as their own fields.
+    json = Jason.decode!(rendered.json)
+
+    assert json["first_name"] == "Ada"
+    assert json["middle_name"] == "Augusta"
+    assert json["last_name"] == "Lovelace"
+    assert json["nickname"] == "Enchantress"
+    assert json["honorific_prefix"] == "Dr."
+    assert json["honorific_suffix"] == "FRS"
+
+    assert rendered.xml =~ "<first_name>Ada</first_name>"
+    assert rendered.xml =~ "<last_name>Lovelace</last_name>"
+
+    # The vCard's structured N is last;first;middle;prefix;suffix; the nickname
+    # has no room there, so it rides in its own RFC 2426 property.
+    vcard = get(build_conn(), "/#{user.username}.vcf").resp_body
+
+    assert vcard =~ "N:Lovelace;Ada;Augusta;Dr.;FRS"
+    assert vcard =~ "NICKNAME:Enchantress"
+
+    # The labels are gettext, and vutuv is a German site — the whole point of
+    # the lines is lost if they only name the parts in English.
+    german = get(build_conn(), "/#{user.username}.txt?lang=de").resp_body
+
+    assert german =~ "Vorname: Ada"
+    assert german =~ "Nachname: Lovelace"
+  end
+
+  test "a member with only the two usual name parts gets no empty label lines" do
+    user = insert_activated_user(username: "two_part_name", first_name: "Ada", last_name: "Byron")
+
+    rendered = formats_for("/#{user.username}")
+
+    assert rendered.txt =~ "First Name: Ada"
+    assert rendered.txt =~ "Last Name: Byron"
+
+    for label <- ["Prefix", "Middle Name", "Suffix", "Nickname"] do
+      refute rendered.md =~ "- #{label}:"
+      refute rendered.txt =~ "#{label}:"
+    end
+
+    refute get(build_conn(), "/#{user.username}.vcf").resp_body =~ "NICKNAME"
+  end
+
   test "a member without a pronunciation gets no phonetic line in the vCard" do
     user = insert_activated_user(username: "no_phonetics", first_name: "Plain")
 

@@ -31,6 +31,7 @@ defmodule VutuvWeb.AgentDocs.VCard do
       sanitize(doc.honorific_suffix) <>
       "\nFN:" <>
       sanitize(doc.name) <>
+      nickname(doc) <>
       phonetic_name(doc) <>
       bday(doc) <>
       "\nORG:#{organization(doc)}" <>
@@ -65,6 +66,15 @@ defmodule VutuvWeb.AgentDocs.VCard do
 
     if(name == "", do: "profile", else: name) <> "_vcard.vcf"
   end
+
+  # The one name part the N/FN pair has no room for. RFC 2426 has NICKNAME for
+  # exactly this, and every Contacts app files it, so the fact survives an
+  # export instead of being the single part of the member's name the vCard
+  # loses. Omitted entirely when they wrote none, like BDAY.
+  defp nickname(%{nickname: nickname}) when is_binary(nickname) and nickname != "",
+    do: "\nNICKNAME:" <> sanitize(nickname)
+
+  defp nickname(_doc), do: ""
 
   # How to say the name (issue #1112), right below FN because that is where it
   # belongs and where the profile shows it. vCard 3.0 has no standard property

@@ -41,6 +41,29 @@ defmodule VutuvWeb.AgentFormatTest do
       end
     end
 
+    test "/:slug.txt ends in a clean metadata footer — never a bare false" do
+      # The twin of the Markdown frontmatter's issue #924: an opt-out the member
+      # did not set is `false`, not nil, so rejecting only nils used to print two
+      # bare "false" lines under the canonical URL of every profile.
+      body = get(build_conn(), "/agent_tester.txt").resp_body
+
+      refute body =~ ~r/^false$/m
+      refute body =~ "noindex:"
+      refute body =~ "noai:"
+    end
+
+    test "/:slug.txt names an opt-out the member did set" do
+      # Only noindex: both flags together block the agent docs outright
+      # (AgentExportOptOut), so a rendered text doc never carries both.
+      user = insert_activated_user(noindex?: true, noai?: false)
+
+      body = get(build_conn(), "/#{user.username}.txt").resp_body
+
+      assert body =~ "noindex: true"
+      refute body =~ "noai:"
+      refute body =~ ~r/^false$/m
+    end
+
     test "/:slug.json answers a JSON document with schema_version" do
       conn = get(build_conn(), "/agent_tester.json")
 
