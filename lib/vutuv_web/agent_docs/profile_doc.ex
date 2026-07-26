@@ -94,6 +94,11 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       nickname: user.nickname,
       honorific_prefix: user.honorific_prefix,
       honorific_suffix: user.honorific_suffix,
+      # How the name is said out loud (issue #1112), exactly as the profile
+      # shows it under the name. nil for nearly every member, and the md/txt
+      # renderers drop the line then — an agent reading a profile aloud is one
+      # of the places this hint is worth the most.
+      name_pronunciation: User.name_pronunciation(user),
       username: user.username,
       verified: user.identity_verified?,
       # The job-availability signal (issue #870), the machine value nil /

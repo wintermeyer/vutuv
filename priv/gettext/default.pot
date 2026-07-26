@@ -16534,3 +16534,22 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "pinned post"
 msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:431
+#: lib/vutuv_web/agent_docs/text.ex:427
+#: lib/vutuv_web/templates/user/edit.html.heex:166
+#: lib/vutuv_web/templates/user/show.html.heex:216
+#: lib/vutuv_web/views/account_event_text.ex:151
+#, elixir-autogen, elixir-format
+msgid "Name pronunciation"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:170
+#, elixir-autogen, elixir-format
+msgid "e.g. SHTEH-fahn VIN-ter-my-er"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:174
+#, elixir-autogen, elixir-format
+msgid "Optional. Write your name the way it sounds, so someone calling you for the first time gets it right. It shows under your name on your profile; leave it empty and nothing is shown."
+msgstr ""

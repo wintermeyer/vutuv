@@ -19,6 +19,43 @@ inert (the profile ignores it).
 The profile-section pages behave the same way: `/:slug/<section>` IS the public
 view for everyone, and editing happens at `/settings/<section>`.
 
+## Name pronunciation (issue #1112)
+
+`users.name_pronunciation` is free text (varchar(255), nullable) saying how the
+member's name is said out loud: "SHTEH-fahn VIN-ter-my-er", "rhymes with 'a
+fan'", IPA for the few who write it. It renders as a quiet line with a speaker
+glyph **directly under the name** in the profile header, above the availability
+pill and the tagline, because it belongs to the name and to nothing else on the
+page.
+
+It is deliberately a **quiet, optional** field. It is asked for on the Basics
+form (`/settings/profile`, in the "Your name" card) and **nowhere else** — the
+sign-up form never mentions it, since it is not one of the few things a new
+member must decide. It is `nil` on nearly every account, and everything that
+renders it goes through `Vutuv.Accounts.User.name_pronunciation/1`, the one seam
+that folds a stored `""` (an older row, an API write) into `nil` — so "blank
+means the feature is simply not there" is decided in one place and an untouched
+profile looks exactly as it did.
+
+**Validation** (all in `User.changeset/2`): whitespace folds to one line first
+(it renders as one), so a value that only overruns because of stray whitespace
+is fixed rather than refused; then a 255-character cap matching the column, and
+a rule that the value must actually pronounce something — at least one letter
+(stricter than `Tag.punctuation_only?/1`, where a symbol like "C#" is a real
+name) and not the bare web/email address a spam sign-up drops into every free
+text field (`Vutuv.WebAddress.link_only?/1`, the same whole-value rule the
+tagline uses, so a hint that *mentions* an address stays valid). The field is
+**not** in `@identity_fields`: it says how the verified name *sounds*, not who
+the member is, so editing it does not revoke a verified badge.
+
+It reaches every sibling format — `ProfileDoc` carries `name_pronunciation`, the
+md/txt renderers lead the fact list with it (an agent reading a profile aloud is
+where the hint is worth the most), JSON/XML get it for free, and the vCard emits
+it as `X-PHONETIC-NAME` below `FN` (vCard 3.0 has no standard property: `SOUND`
+is a recorded audio file, and Apple's `X-PHONETIC-FIRST-NAME`/`-LAST-NAME` pair
+would need us to guess which half of a free-text hint is which). It is writable
+over `PATCH /api/2.0/me` and included in the GDPR export.
+
 ## Birthday visibility (General Info card)
 
 A member enters their birthday on the Basics form but chooses **how much of it

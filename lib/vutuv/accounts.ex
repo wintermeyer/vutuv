@@ -1277,8 +1277,8 @@ defmodule Vutuv.Accounts do
   # account flags (email_confirmed?, notification_emails?) are deliberately not
   # on it.
   @profile_fields ~w(headline first_name last_name middle_name nickname
-                     honorific_prefix honorific_suffix gender birthdate
-                     locale noindex? noai?)
+                     honorific_prefix honorific_suffix name_pronunciation
+                     gender birthdate locale noindex? noai?)
 
   @doc """
   Updates only the plain profile fields (see `@profile_fields`) — the

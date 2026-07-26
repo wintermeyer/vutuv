@@ -69,7 +69,8 @@ auth $API/users/wintermeyer
 
 Scope: `profile:write`. Updates the plain profile fields: `headline`,
 `first_name`, `middle_name`, `last_name`, `nickname`, `honorific_prefix`,
-`honorific_suffix`, `gender`, `birthdate` (ISO date), `locale`,
+`honorific_suffix`, `name_pronunciation` (how the name is said out loud, max
+255 characters), `gender`, `birthdate` (ISO date), `locale`,
 `noindex?` (search-engine opt-out), `noai?` (AI/LLM opt-out). Returns the
 fresh profile. The username and email addresses are deliberately **not**
 writable over the API.

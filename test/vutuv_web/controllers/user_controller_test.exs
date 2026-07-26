@@ -815,6 +815,79 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "e.g. Jr. or PhD"
   end
 
+  # The spoken-name hint (issue #1112). It is a settings-only field: asked for
+  # on the profile basics form, never at sign-up, and invisible on a profile
+  # until the member writes one.
+  describe "name pronunciation" do
+    test "the Basics form offers the field with an example", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/profile") |> html_response(200)
+
+      assert html =~ "Name pronunciation"
+      assert html =~ "e.g. SHTEH-fahn VIN-ter-my-er"
+      # The browser stops typing at the column width, so the cap is felt before
+      # the server has to refuse the save.
+      assert html =~ ~s(maxlength="255")
+    end
+
+    test "saving it from the Basics form shows it under the name on the profile", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        put(conn, ~p"/settings/profile", user: %{"name_pronunciation" => "SHTEH-fahn"})
+
+      assert redirected_to(conn) == ~p"/#{Repo.get!(User, user.id)}"
+
+      html = conn |> recycle() |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ "SHTEH-fahn"
+      assert html =~ ~s(id="profile-pronunciation")
+    end
+
+    test "a profile without one renders no pronunciation row at all", %{conn: conn} do
+      user = insert_activated_user()
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      refute html =~ ~s(id="profile-pronunciation")
+      refute html =~ "Name pronunciation"
+    end
+
+    test "a value that pronounces nothing re-renders the form with the error", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = put(conn, ~p"/settings/profile", user: %{"name_pronunciation" => "???"})
+
+      assert html_response(conn, 422) =~ "must spell out how the name sounds"
+      assert is_nil(Repo.get!(User, user.id).name_pronunciation)
+    end
+
+    # vutuv is a German site, so a new field with no German msgstr renders as an
+    # English island for most real visitors — which no English-only check sees.
+    test "the field is German for a German visitor", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/settings/profile")
+        |> html_response(200)
+
+      assert html =~ "Aussprache des Namens"
+      assert html =~ "damit ihn jemand beim ersten Anruf richtig ausspricht"
+    end
+
+    # It is deliberately hidden away in the settings: the sign-up form asks for
+    # the few things a new member must decide, and this is not one of them.
+    test "the registration form never asks for it", %{conn: conn} do
+      html = conn |> get(~p"/") |> html_response(200)
+
+      refute html =~ "name_pronunciation"
+      refute html =~ "Name pronunciation"
+    end
+  end
+
   test "the Tagline field carries a live character counter capped at 255 (#873)", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
     html = conn |> get(~p"/settings/profile") |> html_response(200)

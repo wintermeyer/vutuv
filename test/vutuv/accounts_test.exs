@@ -274,6 +274,85 @@ defmodule Vutuv.AccountsTest do
     end
   end
 
+  # The spoken-name hint (issue #1112). Optional everywhere, so the interesting
+  # cases are the empty one (stays absent, nothing renders) and the values that
+  # pronounce nothing at all.
+  describe "name pronunciation" do
+    test "stores a pronunciation hint" do
+      user = insert(:user)
+      hint = "SHTEH-fahn VIN-ter-my-er"
+
+      assert {:ok, updated} = Accounts.update_user(user, %{"name_pronunciation" => hint})
+      assert updated.name_pronunciation == hint
+      assert User.name_pronunciation(updated) == hint
+    end
+
+    test "an empty field stays empty and reads as absent" do
+      user = insert(:user)
+
+      assert {:ok, updated} = Accounts.update_user(user, %{"name_pronunciation" => "   "})
+      assert is_nil(updated.name_pronunciation)
+      assert is_nil(User.name_pronunciation(updated))
+    end
+
+    test "clearing a stored pronunciation removes it" do
+      user = insert(:user, name_pronunciation: "SHTEH-fahn")
+
+      assert {:ok, updated} = Accounts.update_user(user, %{"name_pronunciation" => ""})
+      assert is_nil(updated.name_pronunciation)
+    end
+
+    # It is one spoken line, so a pasted paragraph collapses instead of
+    # breaking the profile line it renders into.
+    test "folds whitespace into one line" do
+      user = insert(:user)
+
+      assert {:ok, updated} =
+               Accounts.update_user(user, %{
+                 "name_pronunciation" => "  SHTEH-fahn \n\n  VIN-ter-my-er  "
+               })
+
+      assert updated.name_pronunciation == "SHTEH-fahn VIN-ter-my-er"
+    end
+
+    test "refuses a value that pronounces nothing" do
+      user = insert(:user)
+
+      for value <- ["---", "???", "123", "https://www.example-shop.com/", "kontakt@example.com"] do
+        assert {:error, changeset} =
+                 Accounts.update_user(user, %{"name_pronunciation" => value})
+
+        assert "must spell out how the name sounds" in errors_on(changeset).name_pronunciation
+      end
+    end
+
+    test "accepts a hint that names a sound-alike with a dot in it" do
+      user = insert(:user)
+      hint = "like the 'stefan' in stefan.fm"
+
+      assert {:ok, updated} = Accounts.update_user(user, %{"name_pronunciation" => hint})
+      assert updated.name_pronunciation == hint
+    end
+
+    test "refuses more than 255 characters" do
+      user = insert(:user)
+
+      assert {:error, changeset} =
+               Accounts.update_user(user, %{"name_pronunciation" => String.duplicate("a", 256)})
+
+      assert "should be at most 255 character(s)" in errors_on(changeset).name_pronunciation
+    end
+
+    # The verified badge vouches for the written name, not for how it sounds,
+    # so fixing the hint must not cost the badge (unlike a name edit).
+    test "keeps a verified badge" do
+      user = insert(:user, identity_verified?: true)
+
+      assert {:ok, updated} = Accounts.update_user(user, %{"name_pronunciation" => "SHTEH-fahn"})
+      assert updated.identity_verified?
+    end
+  end
+
   describe "login_pins uniqueness" do
     test "rejects a second login pin for the same user and type" do
       user = insert(:user)

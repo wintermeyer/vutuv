@@ -236,3 +236,8 @@ msgstr "„%{uri}“ ist keine gültige https-Kontoadresse."
 #, elixir-autogen, elixir-format
 msgid "Please list at most %{max} accounts."
 msgstr "Bitte geben Sie höchstens %{max} Konten an."
+
+#: lib/vutuv_web/views/error_helpers.ex:114
+#, elixir-autogen, elixir-format
+msgid "must spell out how the name sounds"
+msgstr "muss beschreiben, wie der Name klingt"

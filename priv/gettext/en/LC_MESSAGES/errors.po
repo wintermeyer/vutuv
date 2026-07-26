@@ -234,3 +234,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Please list at most %{max} accounts."
 msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:114
+#, elixir-autogen, elixir-format
+msgid "must spell out how the name sounds"
+msgstr ""

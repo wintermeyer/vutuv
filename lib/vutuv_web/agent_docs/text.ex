@@ -423,6 +423,9 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp profile_facts(doc) do
     [
+      # First fact, like the profile's first line under the name (see the
+      # Markdown renderer).
+      doc.name_pronunciation && "#{gettext("Name pronunciation")}: #{doc.name_pronunciation}",
       doc.verified && gettext("Verified profile: yes"),
       doc.employment_status &&
         "#{gettext("Employment status")}: #{User.employment_status_label(doc.employment_status)}",
@@ -433,13 +436,21 @@ defmodule VutuvWeb.AgentDocs.Text do
       fediverse_fact(doc[:fediverse]),
       count_facts(doc.counts),
       doc.gender && "#{gettext("Gender")}: #{User.gender_gettext(doc.gender)}",
-      doc.birthdate && "#{gettext("Birthday")}: #{doc.birthdate}",
-      doc.birthday_month_day && "#{gettext("Birthday")}: #{doc.birthday_month_day}",
-      doc.age && "#{gettext("Age")}: #{doc.age}"
+      birthday_facts(doc)
     ]
     |> List.flatten()
     |> Enum.filter(& &1)
     |> Enum.join("\n")
+  end
+
+  # One group, for the same reason as the Markdown renderer's twin: at most one
+  # of the three is present, and it keeps `profile_facts/1` simple enough.
+  defp birthday_facts(doc) do
+    [
+      doc.birthdate && "#{gettext("Birthday")}: #{doc.birthdate}",
+      doc.birthday_month_day && "#{gettext("Birthday")}: #{doc.birthday_month_day}",
+      doc.age && "#{gettext("Age")}: #{doc.age}"
+    ]
   end
 
   # The member's Fediverse address, the same fact the profile's Fediverse card

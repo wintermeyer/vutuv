@@ -156,6 +156,25 @@ lands here). --%>
           <%= text_input f, :honorific_suffix, class: input_class(), placeholder: gettext("e.g. Jr. or PhD") %>
           <%= error_tag f, :honorific_suffix %>
         </div>
+        <%!-- How the name is said out loud (issue #1112). Full width, last in
+        the card: it belongs to the name, but it is the one field almost nobody
+        fills in, so it must not push the name inputs around. It is asked for
+        here and nowhere else — never at sign-up — and an empty field simply
+        adds nothing to the profile. --%>
+        <div class="sm:col-span-2">
+          <%= label f, :name_pronunciation, gettext("Name pronunciation"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= text_input f, :name_pronunciation,
+            class: input_class(f, :name_pronunciation),
+            maxlength: "255",
+            placeholder: gettext("e.g. SHTEH-fahn VIN-ter-my-er"),
+            "aria-invalid": f.errors[:name_pronunciation] && "true" %>
+          <p :if={!f.errors[:name_pronunciation]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext(
+              "Optional. Write your name the way it sounds, so someone calling you for the first time gets it right. It shows under your name on your profile; leave it empty and nothing is shown."
+            )}
+          </p>
+          <%= error_tag f, :name_pronunciation %>
+        </div>
       </div>
     </.card>
 

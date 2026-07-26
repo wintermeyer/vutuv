@@ -148,6 +148,7 @@ defmodule VutuvWeb.AccountEventText do
   def field_label("first_name"), do: gettext("First name")
   def field_label("last_name"), do: gettext("Last name")
   def field_label("headline"), do: gettext("Tagline")
+  def field_label("name_pronunciation"), do: gettext("Name pronunciation")
   def field_label("birthdate"), do: gettext("Date of birth")
   def field_label("gender"), do: gettext("Gender")
   def field_label("avatar"), do: gettext("Photo")

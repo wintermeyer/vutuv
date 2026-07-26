@@ -31,6 +31,7 @@ defmodule VutuvWeb.AgentDocs.VCard do
       sanitize(doc.honorific_suffix) <>
       "\nFN:" <>
       sanitize(doc.name) <>
+      phonetic_name(doc) <>
       bday(doc) <>
       "\nORG:#{organization(doc)}" <>
       "\nTITLE:#{title(doc)}" <>
@@ -64,6 +65,19 @@ defmodule VutuvWeb.AgentDocs.VCard do
 
     if(name == "", do: "profile", else: name) <> "_vcard.vcf"
   end
+
+  # How to say the name (issue #1112), right below FN because that is where it
+  # belongs and where the profile shows it. vCard 3.0 has no standard property
+  # for it: `SOUND` is a recorded audio file, and the Apple/Google
+  # `X-PHONETIC-FIRST-NAME` / `-LAST-NAME` pair would need us to guess which
+  # part of a free-text hint is the first name and which the last. So it rides
+  # as a single self-describing `X-PHONETIC-NAME` extension — no client turns it
+  # into a field, but the fact travels with the card instead of being dropped on
+  # export. Omitted entirely when the member wrote none, like BDAY.
+  defp phonetic_name(%{name_pronunciation: hint}) when is_binary(hint),
+    do: "\nX-PHONETIC-NAME:" <> sanitize(hint)
+
+  defp phonetic_name(_doc), do: ""
 
   # vCard 3.0 BDAY takes an ISO date (YYYY-MM-DD); doc.birthdate is a raw Date
   # or nil. The full date is already public in every other format (the HTML

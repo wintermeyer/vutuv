@@ -427,6 +427,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp profile_facts(doc) do
     [
+      # First fact, like the profile's first line under the name: a reader that
+      # says the name out loud should meet the pronunciation before anything else.
+      doc.name_pronunciation &&
+        "- #{gettext("Name pronunciation")}: #{doc.name_pronunciation}",
       doc.verified && "- " <> gettext("Verified profile: yes"),
       doc.employment_status &&
         "- #{gettext("Employment status")}: #{User.employment_status_label(doc.employment_status)}",
@@ -437,13 +441,22 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       fediverse_fact(doc[:fediverse]),
       count_facts(doc.counts),
       doc.gender && "- #{gettext("Gender")}: #{User.gender_gettext(doc.gender)}",
-      doc.birthdate && "- #{gettext("Birthday")}: #{doc.birthdate}",
-      doc.birthday_month_day && "- #{gettext("Birthday")}: #{doc.birthday_month_day}",
-      doc.age && "- #{gettext("Age")}: #{doc.age}"
+      birthday_facts(doc)
     ]
     |> List.flatten()
     |> Enum.filter(& &1)
     |> Enum.join("\n\n")
+  end
+
+  # The birthday granularity the member chose (`User.birthdate_mode/1`) puts at
+  # most one of these three in the doc, so they travel as one group — and keep
+  # `profile_facts/1` inside Credo's complexity budget.
+  defp birthday_facts(doc) do
+    [
+      doc.birthdate && "- #{gettext("Birthday")}: #{doc.birthdate}",
+      doc.birthday_month_day && "- #{gettext("Birthday")}: #{doc.birthday_month_day}",
+      doc.age && "- #{gettext("Age")}: #{doc.age}"
+    ]
   end
 
   # The member's Fediverse address, the same fact the profile's Fediverse card

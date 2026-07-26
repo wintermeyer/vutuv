@@ -19,6 +19,12 @@ defmodule Vutuv.Accounts.User do
     field(:nickname, :string)
     field(:honorific_prefix, :string)
     field(:honorific_suffix, :string)
+    # How to say the name out loud (issue #1112), free text: "SHTEH-fahn
+    # VIN-ter-my-er", "rhymes with 'a fan'", IPA for the few who write it. It is
+    # a deliberately quiet field — set on the profile basics form, never asked
+    # for at sign-up — and nil on nearly every account, which is why the profile
+    # renders the line only when it is present (`name_pronunciation/1`).
+    field(:name_pronunciation, :string)
     field(:gender, :string)
     # The member's job-availability signal (issue #870), shown as a badge next
     # to the tagline on the profile. nil = not specified (the default, no
@@ -381,7 +387,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -538,6 +544,9 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:nickname, max: 50)
     |> validate_length(:honorific_prefix, max: 50)
     |> validate_length(:honorific_suffix, max: 50)
+    |> normalize_name_pronunciation()
+    |> validate_length(:name_pronunciation, max: 255)
+    |> validate_name_pronunciation()
     |> validate_length(:gender, max: 50)
     |> validate_length(:headline, max: 255)
     # The tagline may only mention handles that exist (relaxed for the import).
@@ -607,11 +616,66 @@ defmodule Vutuv.Accounts.User do
     end)
   end
 
+  # A pronunciation is one spoken line, so fold every run of whitespace (a
+  # pasted line break included) into a single space and trim the ends. This runs
+  # *before* the length check on purpose: a value that only overruns 255 because
+  # of stray whitespace is fixed rather than refused. An emptied field folds to
+  # nil, which is what "I don't want this shown" means — `cast/3`'s own
+  # empty_values only catch a literal "".
+  defp normalize_name_pronunciation(changeset) do
+    case get_change(changeset, :name_pronunciation) do
+      nil ->
+        changeset
+
+      value ->
+        case value |> String.replace(~r/\s+/u, " ") |> String.trim() do
+          "" -> put_change(changeset, :name_pronunciation, nil)
+          normalized -> put_change(changeset, :name_pronunciation, normalized)
+        end
+    end
+  end
+
+  # What a pronunciation may not be. Two ways a value carries no pronunciation
+  # at all, refused with the same "say the name" nudge:
+  #
+  #   * no letter anywhere ("---", "???", "123"). A pronunciation is written in
+  #     letters — unlike a tag, where a symbol like "C#" or an emoji is a name
+  #     people really use, so this is stricter than `Tag.punctuation_only?/1`.
+  #   * nothing but a web or email address, the billboard a spam sign-up puts
+  #     into every free-text field — the same `Vutuv.WebAddress` whole-value
+  #     rule the tagline uses, so a hint that *mentions* one ("wie in
+  #     example.com") stays valid.
+  defp validate_name_pronunciation(changeset) do
+    validate_change(changeset, :name_pronunciation, fn :name_pronunciation, value ->
+      if Regex.match?(~r/\p{L}/u, value) and not WebAddress.link_only?(value),
+        do: [],
+        else: [name_pronunciation: "must spell out how the name sounds"]
+    end)
+  end
+
+  @doc """
+  The member's spoken-name hint (issue #1112), or `nil` when they never set one.
+
+  The single seam the profile, the CV/vCard and the agent documents read, so
+  "blank means the feature is simply not there" is decided in exactly one place
+  — a stored `""` (an older row, an API write) reads as absent, like a `nil`.
+  """
+  def name_pronunciation(%__MODULE__{name_pronunciation: value}) do
+    case value do
+      nil -> nil
+      value -> if String.trim(value) == "", do: nil, else: value
+    end
+  end
+
   # Every identity detail the verified badge vouches for: the legal name parts,
   # the nickname, the honorific titles, the gender and the birthday. An admin
   # checked these against the member's ID, so changing any of them invalidates
   # that check. Deliberately broad ("sicher ist sicher") — even a nickname,
   # title or gender edit shifts the verified identity, so it re-opens it.
+  # `name_pronunciation` is the one name-adjacent field deliberately left out:
+  # it says how the verified name *sounds*, not who the member is, so no ID
+  # check is invalidated by fixing it — and a badge that dropped over a spelling
+  # hint would just teach members to leave the hint wrong.
   @identity_fields ~w(first_name middle_name last_name nickname
     honorific_prefix honorific_suffix gender birthdate)a
 
