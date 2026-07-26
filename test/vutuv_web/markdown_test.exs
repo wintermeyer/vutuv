@@ -225,6 +225,32 @@ defmodule VutuvWeb.MarkdownTest do
     assert html =~ "<code"
   end
 
+  describe "URLs inside code" do
+    # A URL in a code sample is text to read, not a destination. Autolinking it
+    # rewrote the snippet into Markdown link syntax and the reader saw
+    # `curl [vutuv.de](https://vutuv.de/)` instead of the command.
+    test "a bare URL in a fenced block stays verbatim" do
+      html = render("```bash\ncurl -s https://vutuv.de/feed\n```")
+
+      assert html =~ "-s https://vutuv.de/feed"
+      refute html =~ "]("
+      refute html =~ "<a "
+    end
+
+    test "a bare URL in an inline code span stays verbatim" do
+      html = render("try `curl https://vutuv.de/` yourself")
+
+      assert html =~ ">curl https://vutuv.de/</code>"
+      refute html =~ "<a "
+    end
+
+    test "a bare URL beside a code block is still autolinked" do
+      html = render("see https://vutuv.de/feed\n\n```\nx\n```")
+
+      assert html =~ ~s(href="https://vutuv.de/feed")
+    end
+  end
+
   describe "render_preview/3 truncation" do
     defp preview(text, opts \\ []) do
       {html, truncated?} = Markdown.render_preview(text, [], opts)

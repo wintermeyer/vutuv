@@ -7,7 +7,11 @@ defmodule VutuvWeb.DevDocMarkdown do
 
   The docs are trusted repo content (not user input), so Earmark runs directly
   here rather than through the `VutuvWeb.Markdown` sanitizer used for posts.
+  Fenced code blocks get the same server-side language label and colouring the
+  posts do (`VutuvWeb.CodeHighlight`).
   """
+
+  alias VutuvWeb.CodeHighlight
 
   @headings ~w(h1 h2 h3 h4 h5 h6)
 
@@ -27,6 +31,7 @@ defmodule VutuvWeb.DevDocMarkdown do
     ast
     |> add_heading_ids()
     |> Earmark.Transform.transform()
+    |> CodeHighlight.render()
   end
 
   @doc """

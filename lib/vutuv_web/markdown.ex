@@ -28,6 +28,7 @@ defmodule VutuvWeb.Markdown do
   alias Vutuv.Accounts
   alias Vutuv.Posts.PostImage
   alias Vutuv.Tags
+  alias VutuvWeb.CodeHighlight
   alias VutuvWeb.UserHelpers
 
   @url_display_max 40
@@ -41,6 +42,10 @@ defmodule VutuvWeb.Markdown do
   # of that function already being linear.
   @autolink_max 2_000
   @preview_limit 1000
+  # The code regions of a Markdown source — fenced blocks first, then inline
+  # code spans — as one capture, so `Regex.split(include_captures: true)`
+  # alternates non-code / code chunks. Used by `map_outside_code/2`.
+  @code_region ~r/(```[\s\S]*?```|~~~[\s\S]*?~~~|``[^`]*``|`[^`\n]*`)/
   # When a whole block would overflow the preview, keep a word-cut of it (so a
   # one-line intro above a long block doesn't leave a one-line preview) — but
   # only if at least this many characters of budget remain, else just stop.
@@ -247,6 +252,11 @@ defmodule VutuvWeb.Markdown do
     |> String.replace("&amp;lt;", "&lt;")
     |> HtmlSanitizeEx.markdown_html()
     |> strip_img_tags()
+    # Order matters: `CodeHighlight` labels the block and colours its tokens,
+    # but leaves a `diff` fence's body alone (it is the one language whose
+    # rendering lives here), so `highlight_diff_blocks/1` still finds the plain
+    # `<pre><code class="language-diff">` inside the labelled wrapper.
+    |> CodeHighlight.render()
     |> highlight_diff_blocks()
   end
 
@@ -384,14 +394,19 @@ defmodule VutuvWeb.Markdown do
 
   def render_preview(_, _images, _opts), do: {Phoenix.HTML.raw(""), false}
 
-  # Bare URLs become `[truncated-display](url)`. The lookbehind skips URLs that
-  # are already the target of a Markdown link (`](http…`). A match longer than
-  # `@autolink_max` is left as literal text: no genuine URL is that long, and it
-  # caps the work per match so a pathological unbroken run can never drive the
+  # Bare URLs become `[truncated-display](url)`, but only **outside** code: in a
+  # fenced block or an inline code span a URL is sample text, and rewriting
+  # `curl https://vutuv.de` into Markdown link syntax corrupted the very snippet
+  # the author was showing. The lookbehind skips URLs that are already the
+  # target of a Markdown link (`](http…`). A match longer than `@autolink_max`
+  # is left as literal text: no genuine URL is that long, and it caps the work
+  # per match so a pathological unbroken run can never drive the
   # trailing-punctuation walk (findings F1/F9 — a body of `http://a` plus tens
   # of thousands of `.`/`)` matched as one token).
-  defp autolink_bare_urls(text) do
-    Regex.replace(~r{(?<!\]\()(?<![\w/])(https?://[^\s<>]+)}, text, fn _, raw ->
+  defp autolink_bare_urls(text), do: map_outside_code(text, &autolink_chunk/1)
+
+  defp autolink_chunk(chunk) do
+    Regex.replace(~r{(?<!\]\()(?<![\w/])(https?://[^\s<>]+)}, chunk, fn _, raw ->
       if byte_size(raw) > @autolink_max do
         raw
       else
@@ -399,6 +414,24 @@ defmodule VutuvWeb.Markdown do
         "[#{truncate_url(url)}](#{url})#{trailing}"
       end
     end)
+  end
+
+  # Applies `fun` to the parts of a Markdown source that are not code. Fenced
+  # blocks are matched before inline spans, so a URL on a line inside ``` is
+  # left alone rather than being caught by the inline-span alternative. A body
+  # with no backtick and no `~~~` skips the split entirely.
+  defp map_outside_code(text, fun) do
+    if String.contains?(text, ["`", "~~~"]) do
+      @code_region
+      |> Regex.split(text, include_captures: true)
+      |> Enum.with_index()
+      |> Enum.map_join("", fn
+        {chunk, index} when rem(index, 2) == 0 -> fun.(chunk)
+        {code, _index} -> code
+      end)
+    else
+      fun.(text)
+    end
   end
 
   # "…wiki/Elixir_(programming_language)), see!" — sentence punctuation and any

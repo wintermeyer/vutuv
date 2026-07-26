@@ -16,6 +16,46 @@ renderer runs (`VutuvWeb.Markdown`: posts, chat messages, ads, the RSS/JSON
 renderings), skipping entities typed inside code spans/blocks or existing links
 and resolving all of a body's mentions and hashtags in one batched query each.
 
+A **bare `http(s)://` URL is auto-linked too**, with its display text shortened
+to host + first path directory — but only *outside* code. Inside a fenced block
+or an inline code span a URL is sample text, so it is left verbatim
+(`VutuvWeb.Markdown.map_outside_code/2`); rewriting it turned `curl
+https://vutuv.de` into visible Markdown link syntax.
+
+### Fenced code blocks
+
+A fence that names its language (` ```elixir `) gets that language printed in
+the corner of the block, and its comments, strings, numbers and keywords in
+colour. Both happen **on the server**, in `VutuvWeb.CodeHighlight`, which runs
+at the end of the `VutuvWeb.Markdown` pipeline (posts, messages, ads, feeds) and
+in `VutuvWeb.DevDocMarkdown` (the `/developers` docs, legal pages). The page
+ships **no** highlighting JavaScript and no new dependency: the readers who
+never see a code block download nothing extra, and the browser side is the
+`.codeblock` / `.hl-*` rules in `assets/css/components.css`.
+
+It works on the rendered HTML rather than the Markdown because the sanitizer
+strips attributes off `<pre>` and `<span>` — so the step runs after the scrubber
+and builds its own markup from parts it controls. Nothing user-written reaches
+an attribute: the label and the `language-*` class come from
+`VutuvWeb.CodeHighlight.Languages` for a known language and from a
+`[a-z0-9+#._-]` slice of the fence word otherwise. The code text arrives escaped,
+so highlighting decodes it, tokenizes and re-escapes each token; a block whose
+escaping cannot be rebuilt byte for byte, or one over 20KB, keeps its label and
+skips the colouring rather than risk mangling someone's snippet.
+
+`VutuvWeb.CodeHighlight.Lexer` is a scanner, not a parser — comments, strings,
+numbers and known words, in two flavours (general code, markup). Adding a
+language is a keyword list in `Languages`, not a grammar. An unknown language
+still gets its label; `text`/`plain`/`none` and a fence with no info string are
+left exactly as they were.
+
+A ```` ```diff ```` fence is the one language whose **body** is not tokenized
+here: it gets the label and nothing else (`family: :none`), because
+`highlight_diff_blocks/1` runs right after and turns it into real added /
+removed rows (issue #1108, below). That is why the order in `render_pipeline/2`
+is `CodeHighlight.render/1` first — the diff renderer then still finds a plain
+`<pre><code class="language-diff">` sitting inside the labelled wrapper.
+
 Everything post-related lives under `/:slug/posts`: the author archive
 (`/:slug/posts`, scopable to a year/month/day — `/:slug/posts/2026/06`), and
 permalinks keyed by the post's UUID v7: `/:slug/posts/:id` (non-canonical casing

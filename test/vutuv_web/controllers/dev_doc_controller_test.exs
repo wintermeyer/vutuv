@@ -96,7 +96,9 @@ defmodule VutuvWeb.DevDocControllerTest do
 
   test "the overview gives a no-token, no-signup example to play with", %{conn: conn} do
     response = conn |> get(~p"/developers") |> html_response(200)
-    assert response =~ "curl https://vutuv.de/wintermeyer.json"
+    # The example sits in a ```bash fence, so `curl` is wrapped in a highlight
+    # span (VutuvWeb.CodeHighlight) — match the URL, which stays contiguous.
+    assert response =~ "https://vutuv.de/wintermeyer.json"
   end
 
   test "every internal link in the developer docs resolves (page and anchor)", %{conn: conn} do

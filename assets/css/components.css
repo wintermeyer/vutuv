@@ -1361,6 +1361,59 @@ ul.thumbs li .text .url a {
    down so the changed lines are what the eye lands on. */
 .diff-line--hunk { color: #64748b; font-weight: 600; }
 .diff-line--meta { color: #64748b; }
+
+/* Fenced code blocks that name their language (issues #1106 + #1107).
+   VutuvWeb.CodeHighlight wraps such a block in `.codeblock[data-language]` and
+   colours its tokens on the server, so no highlighting JavaScript is shipped —
+   readers who never see a code block pay nothing, and these rules are all the
+   browser needs. A block with no language keeps the plain `pre` above.
+
+   The label rides the WRAPPER, not the `pre`: an absolutely positioned child of
+   a scrolling box scrolls out of view with the code. The `pre` gets a top band
+   to sit it in, so a long first line can never run underneath it. */
+.markdown .codeblock {
+  margin: 0 0 0.75em;
+  position: relative;
+}
+.markdown .codeblock pre {
+  margin: 0;
+  padding-top: 2em;
+}
+/* A labelled ```diff fence is both: `.diff-block` above owns the rows and their
+   zero side padding, this restores the label band on top of them. Spelled out
+   at a higher specificity so it does not depend on which rule comes last. */
+.markdown .codeblock pre.diff-block { padding: 2em 0 0.75em; }
+.markdown .codeblock::after {
+  background: #e2e8f0;
+  border-radius: 5px;
+  color: #475569;
+  content: attr(data-language);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1em 0.45em;
+  pointer-events: none;
+  position: absolute;
+  right: 0.6em;
+  top: 0.5em;
+}
+
+/* The token colours. Six hues is more than the brand/accent/slate palette
+   carries, and deliberately so: telling a comment from a string from a keyword
+   is the whole point of highlighting, and every one of them is picked to clear
+   WCAG AA on the `#f1f5f9` code surface (and on `#1e293b` in the dark block at
+   the end of this file). */
+.markdown .hl-com { color: #475569; font-style: italic; }
+.markdown .hl-str { color: #047857; }
+.markdown .hl-num { color: #b45309; }
+.markdown .hl-key { color: #7c3aed; }
+.markdown .hl-typ { color: #0369a1; }
+.markdown .hl-lit { color: #be185d; }
+/* Markup: a tag name reads as a keyword, an attribute name as a type, and a
+   doctype / processing instruction as the scaffolding it is. */
+.markdown .hl-tag { color: #7c3aed; }
+.markdown .hl-att { color: #0369a1; }
+.markdown .hl-met { color: #64748b; }
 /* Markdown tables (the developer docs): readable cells, and the table
    scrolls horizontally instead of being clipped by the card's
    overflow:hidden (same idea as .card__tablewrap). */
@@ -1878,6 +1931,17 @@ body.mde-fullscreen-lock { overflow: hidden; }
   .diff-line--del .diff-line__marker { color: #fda4af; }
   .diff-line--hunk, .diff-line--meta { color: #94a3b8; }
   .markdown th, .markdown td { border-color: #1e293b; }
+  /* Code-block language label + token colours (light values above). */
+  .markdown .codeblock::after { background: #334155; color: #cbd5e1; }
+  .markdown .hl-com { color: #94a3b8; }
+  .markdown .hl-str { color: #6ee7b7; }
+  .markdown .hl-num { color: #fcd34d; }
+  .markdown .hl-key { color: #c4b5fd; }
+  .markdown .hl-typ { color: #7dd3fc; }
+  .markdown .hl-lit { color: #f9a8d4; }
+  .markdown .hl-tag { color: #c4b5fd; }
+  .markdown .hl-att { color: #7dd3fc; }
+  .markdown .hl-met { color: #94a3b8; }
   .error-page { background: #0f172a; outline-color: #1e293b; }
   .error-page__code { color: #334155; }
   .error-page__title { color: #f1f5f9; }
