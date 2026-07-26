@@ -2171,6 +2171,45 @@ defmodule Vutuv.PostsTest do
       assert id == post.id
     end
 
+    test "a focus at the ancestor budget still loads the conversation whole" do
+      root = create_post!(user(), %{body: "root"})
+      {:ok, a} = Posts.create_reply(user(), root, %{body: "a"})
+      {:ok, b} = Posts.create_reply(user(), a, %{body: "b"})
+      {:ok, focus} = Posts.create_reply(user(), b, %{body: "focus"})
+      {:ok, aside} = Posts.create_reply(user(), root, %{body: "aside"})
+
+      # Three ancestors, the default budget: the window would show all of them
+      # anyway, so the whole conversation (sibling branch included) still wins.
+      assert %{mode: :all, posts: posts, total: 5} = Posts.thread_window(focus, nil)
+      assert Enum.map(posts, & &1.id) == [root.id, a.id, b.id, focus.id, aside.id]
+    end
+
+    test "a focus below the ancestor budget windows even in a small conversation" do
+      # Issue #1156: a permalink four levels down rendered the whole tree, so
+      # the card on top was the conversation's root and the sibling branches
+      # came before the post the visitor had actually asked for.
+      root = create_post!(user(), %{body: "root"})
+      {:ok, a} = Posts.create_reply(user(), root, %{body: "a"})
+      {:ok, b} = Posts.create_reply(user(), a, %{body: "b"})
+      {:ok, parent} = Posts.create_reply(user(), b, %{body: "parent"})
+      {:ok, focus} = Posts.create_reply(user(), parent, %{body: "focus"})
+      for i <- 1..3, do: {:ok, _} = Posts.create_reply(user(), root, %{body: "elsewhere #{i}"})
+
+      assert %{
+               mode: :window,
+               root: %Post{id: root_id},
+               gap: 0,
+               chain: chain,
+               subtree: [%Post{id: focus_id}],
+               rest: 3,
+               total: 8
+             } = Posts.thread_window(focus, nil)
+
+      assert root_id == root.id
+      assert focus_id == focus.id
+      assert Enum.map(chain, & &1.id) == [a.id, b.id, parent.id]
+    end
+
     test "a deep chain windows to the root, a gap and the nearest ancestors" do
       [root | chain] = chain_thread(8)
       focus = List.last(chain)

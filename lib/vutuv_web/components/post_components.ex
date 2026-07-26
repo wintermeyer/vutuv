@@ -748,7 +748,7 @@ defmodule VutuvWeb.PostComponents do
             surface={@surface}
             conn_or_socket={@conn_or_socket}
             mode={Map.get(node, :mode, :preview)}
-            show_reply_banner={reply_banner?(node, @connected?, @indent?, first?)}
+            show_reply_banner={reply_banner?(node, @connected?, @indent?)}
           />
         <% end %>
       </div>
@@ -950,13 +950,17 @@ defmodule VutuvWeb.PostComponents do
 
   # A card names the post it answers only when its position alone does not say
   # it. While the thread still indents, the nesting says it. Past
-  # @thread_indent_cap every card shares its parent's column, so only the
-  # *first* answer — the one rendered directly below its parent — reads
-  # unambiguously and every later sibling (which follows the previous branch's
-  # whole subtree) gets its banner back. A forest root keeps it either way: its
+  # @thread_indent_cap it says nothing at all: every card shares its parent's
+  # column, so a whole run of generations reads as one flat list of siblings —
+  # which is how issue #1156 came in, its reporter unable to find the post his
+  # permalink answered though it sat two cards above. So every card past the
+  # cap names its parent, first answer included: the exemption used to argue
+  # that the first one is rendered directly below the post it answers, but with
+  # several capped generations stacked the card above is just as likely to be
+  # its own grandparent or a cousin. A forest root keeps it either way: its
   # parent is off the page.
-  defp reply_banner?(node, connected?, indent?, first?) do
-    Map.get(node, :show_reply_banner, false) or (connected? and not indent? and not first?)
+  defp reply_banner?(node, connected?, indent?) do
+    Map.get(node, :show_reply_banner, false) or (connected? and not indent?)
   end
 
   # Each node paired with whether it is the first and the last of its siblings —

@@ -2360,11 +2360,24 @@ defmodule Vutuv.Posts do
   embedded action-bar LiveView each), most of them far from the post the
   visitor came for.
 
-  A conversation of at most `:all_limit` visible posts (#{@thread_all_limit})
-  still loads whole — `%{mode: :all, posts:, total:}` in `list_thread/3`
-  reading order, exactly the old page. A bigger one returns `%{mode: :window}`
+  A conversation loads whole — `%{mode: :all, posts:, total:}` in
+  `list_thread/3` reading order, exactly the old page — while it stays both
+  **small** (at most `:all_limit` visible posts, #{@thread_all_limit}) and
+  **shallow** (the post has at most `:ancestors` ancestors,
+  #{@thread_context_ancestors}). Fail either and it returns `%{mode: :window}`
   with the post's surroundings, each part budget-capped and grown on demand by
-  the LiveView's expanders:
+  the LiveView's expanders.
+
+  The depth half is issue #1156: size alone let a permalink four levels down
+  render its whole tree, so the card on top was the conversation's root — by
+  then often a topic the exchange had long since drifted away from — and the
+  sibling branches nobody had asked for came before the post the visitor had
+  followed the link for. Past the ancestor budget the chain *is* the context,
+  so it becomes the page and the branches move behind the "read it from the
+  start" link. Below the budget the window would show every ancestor anyway,
+  and the whole tree is the friendlier read.
+
+  The window's parts:
 
     * `root` — the conversation's first post, always pinned on top (`nil` when
       the permalinked post is the root itself);
@@ -2399,18 +2412,33 @@ defmodule Vutuv.Posts do
     {skeletons, truncated?} = thread_skeletons(post, viewer, skeleton_limit)
     order = skeleton_order(skeletons)
     total = length(order)
+    ancestors = skeleton_ancestors(post.id, Map.new(order))
 
-    if total <= all_limit and not truncated? do
+    if total <= all_limit and not truncated? and length(ancestors) <= ancestor_budget do
       posts = load_thread_posts(Enum.map(order, &elem(&1, 0)))
       %{mode: :all, posts: posts, total: total, truncated?: false}
     else
-      thread_window_slices(post, order, total, truncated?, ancestor_budget, reply_budget)
+      thread_window_slices(
+        post,
+        order,
+        ancestors,
+        total,
+        truncated?,
+        ancestor_budget,
+        reply_budget
+      )
     end
   end
 
-  defp thread_window_slices(post, order, total, truncated?, ancestor_budget, reply_budget) do
-    parent_of = Map.new(order)
-    ancestors = skeleton_ancestors(post.id, parent_of)
+  defp thread_window_slices(
+         post,
+         order,
+         ancestors,
+         total,
+         truncated?,
+         ancestor_budget,
+         reply_budget
+       ) do
     subtree_ids = focus_subtree(post.id, order)
     {shown_subtree, more} = chunk_prefix(subtree_ids, 1 + reply_budget)
     {root_id, chain_ids, gap} = split_ancestors(ancestors, ancestor_budget)

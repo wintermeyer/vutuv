@@ -139,6 +139,58 @@ defmodule VutuvWeb.PostThreadLiveTest do
     end
   end
 
+  describe "a deep permalink opens on its own chain (issue #1156)" do
+    # The reporter's shape: a five-post chain hanging off a conversation that
+    # had branched elsewhere. The permalinked post sat four levels down, so
+    # the whole tree rendered — the card on top was the conversation's root,
+    # the branches nobody had asked for came first, and past the indent cap
+    # every card shared its parent's column with nothing naming the post it
+    # answered.
+    defp buried_thread do
+      root = create_post!(author(), %{body: "the far-off root"})
+      {:ok, a} = Posts.create_reply(author(), root, %{body: "level one"})
+      {:ok, b} = Posts.create_reply(author(), a, %{body: "level two"})
+
+      asker = author(username: Vutuv.Factory.unique_username("asker"))
+      {:ok, parent} = Posts.create_reply(asker, b, %{body: "the question asked"})
+      {:ok, focus} = Posts.create_reply(author(), parent, %{body: "the buried answer"})
+
+      for i <- 1..3, do: {:ok, _} = Posts.create_reply(author(), root, %{body: "aside #{i}"})
+
+      %{root: root, chain: [a, b, parent], asker: asker, parent: parent, focus: focus}
+    end
+
+    test "the ancestor chain is the page, not the whole tree" do
+      %{root: root, focus: focus} = buried_thread()
+
+      {:ok, _view, html} = thread_view(focus)
+
+      # Root pinned, then every ancestor down to the post itself.
+      assert html =~ "the far-off root"
+      assert html =~ "level one"
+      assert html =~ "level two"
+      assert html =~ "the question asked"
+      assert html =~ "the buried answer"
+
+      # The branches that have nothing to do with this exchange stay off it.
+      refute html =~ "aside 1"
+      assert html =~ "part of a conversation with"
+      assert html =~ ~s(id="thread-from-start")
+      assert html =~ Posts.path(root)
+    end
+
+    test "a card past the indent cap names the post it answers" do
+      %{asker: asker, parent: parent, focus: focus} = buried_thread()
+
+      {:ok, _view, html} = thread_view(focus)
+
+      # The focus is an only child, so it used to lose its banner the moment
+      # the indent gave up — leaving the reader no way to tell what it answers.
+      assert html =~ "Replying to @#{asker.username}"
+      assert html =~ Posts.path(parent)
+    end
+  end
+
   describe "live counters inside the thread host" do
     test "another viewer's like ticks the shown card's counter" do
       {root, replies} = wide_thread(2)
