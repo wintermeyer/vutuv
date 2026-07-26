@@ -10,6 +10,7 @@ defmodule VutuvWeb.PostImageControllerTest do
   alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.MutableImage
   alias Vutuv.Posts
+  alias Vutuv.Repo
 
   @other_login_attrs %{
     "emails" => %{"0" => %{"value" => "other@example.com"}},
@@ -209,6 +210,159 @@ defmodule VutuvWeb.PostImageControllerTest do
       File.rm_rf!(tmp)
 
       assert get(conn, "/post_images/#{image.token}/og.jpg").status == 404
+    end
+  end
+
+  # The original download (issue #1104) is the one route by which
+  # full-resolution bytes leave. Everything here is about it staying shut
+  # unless the photo's own author opened it, and about the cleaned copy really
+  # being clean.
+  describe "the original download" do
+    defp gps_post!(author, tmp, image_attrs) do
+      src = Path.join(tmp, "gps-#{System.unique_integer([:positive])}.jpg")
+      {:ok, img} = Image.new(120, 90, color: [200, 40, 40])
+
+      {:ok, tagged} =
+        Image.mutate(img, fn mut ->
+          :ok = MutableImage.set(mut, "exif-ifd0-Make", :gchararray, "Canon")
+          :ok = MutableImage.set(mut, "exif-ifd0-Model", :gchararray, "Canon EOS R6")
+          :ok = MutableImage.set(mut, "exif-ifd2-BodySerialNumber", :gchararray, "SN-77777")
+          :ok = MutableImage.set(mut, "exif-ifd3-GPSLatitude", :gchararray, "50/1 56/1 0/1")
+        end)
+
+      {:ok, _} = Image.write(tagged, src)
+      {:ok, image} = Posts.create_pending_image(author, src, "gps.jpg")
+      {:ok, image} = Posts.update_image_settings(image, image_attrs)
+      {:ok, _post} = Posts.create_post(author, %{body: "pic", image_ids: [image.id]})
+      image
+    end
+
+    test "404s while the author has not offered it", %{conn: conn, tmp: tmp} do
+      author = insert(:user, email_confirmed?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
+      assert get(conn, "/post_images/#{image.token}/original.orig").status == 404
+    end
+
+    test "an unoffered download is indistinguishable from an unknown photo", %{conn: conn} do
+      assert get(conn, "/post_images/nosuchtoken/original.orig").status == 404
+    end
+
+    test "serves the cleaned copy as an attachment once offered", %{conn: conn, tmp: tmp} do
+      author = insert(:user, email_confirmed?: true)
+      image = gps_post!(author, tmp, %{"download_original" => true})
+
+      conn = get(conn, "/post_images/#{image.token}/original.orig")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "image/jpeg"
+      # `attachment`, not `inline`: this response is a file being handed over.
+      assert [disposition] = get_resp_header(conn, "content-disposition")
+      assert disposition =~ "attachment"
+      assert disposition =~ author.username
+    end
+
+    test "the cleaned copy carries no location and no serial number", %{conn: conn, tmp: tmp} do
+      author = insert(:user, email_confirmed?: true)
+      image = gps_post!(author, tmp, %{"download_original" => true})
+
+      body = get(conn, "/post_images/#{image.token}/original.orig").resp_body
+
+      refute String.contains?(body, "GPS")
+      refute String.contains?(body, "SN-77777")
+      refute String.contains?(body, "Exif")
+      # …and it is still the full-resolution picture, not a downscaled version.
+      {:ok, decoded} = Image.from_binary(body)
+      assert {Image.width(decoded), Image.height(decoded)} == {120, 90}
+    end
+
+    test "the exact file keeps the metadata the author chose to hand over", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, email_confirmed?: true)
+
+      image =
+        gps_post!(author, tmp, %{"download_original" => true, "download_exact" => true})
+
+      body = get(conn, "/post_images/#{image.token}/original.orig").resp_body
+
+      assert String.contains?(body, "Exif")
+    end
+
+    test "the download follows the post's audience like every other version", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, email_confirmed?: true)
+      src = Path.join(tmp, "restricted.jpg")
+      {:ok, img} = Image.new(64, 64, color: [1, 2, 3])
+      {:ok, _} = Image.write(img, src)
+      {:ok, image} = Posts.create_pending_image(author, src, "r.jpg")
+      {:ok, image} = Posts.update_image_settings(image, %{"download_original" => true})
+
+      {:ok, _post} =
+        Posts.create_post(author, %{
+          body: "pic",
+          image_ids: [image.id],
+          denials: [%{"wildcard" => "logged_out"}]
+        })
+
+      assert get(conn, "/post_images/#{image.token}/original.orig").status == 404
+
+      {member_conn, _member} = create_and_login_user(conn)
+      assert get(member_conn, "/post_images/#{image.token}/original.orig").status == 200
+    end
+
+    test "the download is named after the owner and the day the photo was taken", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, email_confirmed?: true)
+      image = gps_post!(author, tmp, %{"download_original" => true})
+
+      {:ok, image} =
+        image |> Ecto.Changeset.change(taken_at: ~N[2026-07-25 14:32:07]) |> Repo.update()
+
+      conn = get(conn, "/post_images/#{image.token}/original.orig")
+
+      assert get_resp_header(conn, "content-disposition") ==
+               [~s(attachment; filename="#{author.username}-2026-07-25.jpg")]
+    end
+
+    test "404s when the original is gone rather than serving a derived version", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, email_confirmed?: true)
+      image = gps_post!(author, tmp, %{"download_original" => true})
+      File.rm_rf!(Path.join(tmp, "originals"))
+
+      assert get(conn, "/post_images/#{image.token}/original.orig").status == 404
+    end
+  end
+
+  describe "the xl version" do
+    test "is served for the lightbox", %{conn: conn, tmp: tmp} do
+      author = insert(:user, email_confirmed?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
+      assert get(conn, "/post_images/#{image.token}/xl.avif").status == 200
+    end
+
+    test "falls back to the large version for photos uploaded before it existed", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, email_confirmed?: true)
+      {_post, image} = post_with_image!(author, tmp)
+      # Simulate a pre-#1104 upload: every version on disk except xl.
+      File.rm!(Path.join([tmp, "post_images", image.token, "xl.avif"]))
+
+      conn = get(conn, "/post_images/#{image.token}/xl.avif")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "image/avif"
     end
   end
 

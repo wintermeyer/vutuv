@@ -67,11 +67,18 @@ defmodule Vutuv.Uploads.Spec do
       %{name: :cover, fit: {:box_down, 320}, quality: 58}
     ],
     post_image: [
-      # thumb: square feed-grid cell; feed: single-image feed width;
-      # large: permalink/lightbox.
+      # thumb: square feed-grid / mosaic cell; feed: single-image feed width;
+      # large: the permalink gallery; xl: the lightbox.
+      #
+      # `xl` exists because on a photo post the picture *is* the content
+      # (issue #1104): 1600px is a fine page image and a soft one filling a
+      # 4K screen, which is exactly what the lightbox does. It is the one
+      # version sized for looking at rather than for a layout slot, so it is
+      # also the only one worth its extra bytes — nothing else requests it.
       %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
       %{name: :feed, fit: {:box_down, 1200}, quality: 58},
-      %{name: :large, fit: {:box_down, 1600}, quality: 58}
+      %{name: :large, fit: {:box_down, 1600}, quality: 58},
+      %{name: :xl, fit: {:box_down, 2560}, quality: 60}
     ],
     # Job-posting gallery images: same sizes as post images.
     job_posting_image: [

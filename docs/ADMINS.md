@@ -210,7 +210,9 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-    # LinkedIn-import uploads may be up to 50 MB (the app enforces its own caps).
+    # LinkedIn-import archives and post photos may each be up to 50 MB (the app
+    # enforces its own caps). Keep this above both, or a member's camera JPEG is
+    # refused by nginx before the app ever sees it.
     client_max_body_size 64m;
 }
 ```

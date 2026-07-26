@@ -30,6 +30,7 @@ defmodule VutuvWeb.JsonLd do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Posts
+  alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
   alias Vutuv.Profiles.SocialMediaAccount
@@ -258,7 +259,10 @@ defmodule VutuvWeb.JsonLd do
       "articleBody" => post.body,
       "keywords" => Enum.map(post.tags, & &1.name),
       # Public structured data: only AI-released images.
-      "image" => post |> Posts.released_images() |> Enum.map(&image_url/1),
+      "image" =>
+        post
+        |> Posts.released_images()
+        |> Enum.map(&image_object(&1, post, author, permalink)),
       "mainEntityOfPage" => permalink
     })
   end
@@ -431,12 +435,39 @@ defmodule VutuvWeb.JsonLd do
     end
   end
 
-  defp image_url(image) do
-    case PostImage.url(image, "large") do
-      "/" <> _ = path -> AgentDocs.abs_url(path)
-      url -> url
-    end
+  # A post's photos as schema.org `ImageObject`s rather than bare URLs (issue
+  # #1104). The extra structure is what makes a photographer's licence
+  # actionable instead of decorative: `license` + `acquireLicensePage` are the
+  # properties image search reads to mark a result as licensable, and
+  # `creditText` / `copyrightNotice` / `creator` say who to credit — the whole
+  # point of publishing under CC BY rather than nothing.
+  #
+  # A caption becomes the `caption`, and the alt text the `description`; they
+  # are different things and schema.org has both.
+  defp image_object(image, post, author, permalink) do
+    compact(%{
+      "@type" => "ImageObject",
+      "contentUrl" => image_url(image),
+      "thumbnailUrl" => absolute(PostImage.url(image, "thumb")),
+      "width" => image.width,
+      "height" => image.height,
+      "caption" => image.caption,
+      "description" => image.alt,
+      "creator" => %{"@type" => "Person", "name" => UserHelpers.full_name(author)},
+      "creditText" => UserHelpers.full_name(author),
+      "copyrightNotice" => UserHelpers.full_name(author),
+      "license" => PhotoLicense.url(post.license),
+      # Where a would-be reuser goes to see the terms and reach the author:
+      # the post itself, which carries the licence line and the author's
+      # profile link.
+      "acquireLicensePage" => permalink
+    })
   end
+
+  defp image_url(image), do: absolute(PostImage.url(image, "large"))
+
+  defp absolute("/" <> _ = path), do: AgentDocs.abs_url(path)
+  defp absolute(url), do: url
 
   # schema.org consumers treat absent and null alike; empty lists and
   # strings carry no information either — drop them all so the markup

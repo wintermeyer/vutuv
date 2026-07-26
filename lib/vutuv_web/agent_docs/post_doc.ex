@@ -14,6 +14,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
+  alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
@@ -57,6 +58,10 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # Anonymous public view: images still in (or deleted by) AI moderation
       # never appear here.
       images: post |> Posts.released_images() |> Enum.map(&image_entry/1),
+      # The licence the photos are published under (issue #1104), as both the
+      # human label and the SPDX identifier — a machine deciding whether it may
+      # reuse a picture should not have to parse a translated sentence.
+      license: license_entry(post),
       in_reply_to: in_reply_to(post),
       # The anonymous doc lists only anonymous-visible replies; count the loaded
       # rows so it matches exactly. (Posts.reply_count/1 now also excludes
@@ -222,14 +227,55 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
 
   defp review_entry(_other), do: nil
 
+  # Only for a post that actually has photos: a licence line on a text post
+  # describes nothing.
+  defp license_entry(%Post{images: images} = post) when is_list(images) and images != [] do
+    %{
+      id: post.license,
+      name: PhotoLicense.label(post.license),
+      spdx: PhotoLicense.spdx(post.license),
+      url: PhotoLicense.url(post.license)
+    }
+  end
+
+  defp license_entry(_post), do: nil
+
+  # A photo as the agent formats publish it (issue #1104). Everything the HTML
+  # page shows a visitor is here — caption, the camera facts *when the author
+  # switched them on*, and the download URL *when the author opened it* — and
+  # nothing it does not: a photo whose camera panel is off carries no camera
+  # keys at all, rather than a set of nulls that would tell a reader the facts
+  # exist and are being withheld.
   defp image_entry(%PostImage{} = image) do
     %{
       alt: image.alt,
+      caption: image.caption,
       width: image.width,
       height: image.height,
-      urls: image |> PostImage.urls() |> Map.new(fn {k, v} -> {k, absolutize(v)} end)
+      urls: image |> PostImage.urls() |> Map.new(fn {k, v} -> {k, absolutize(v)} end),
+      download_url: image |> PostImage.download_url() |> absolutize_maybe()
     }
+    |> Map.merge(camera_entry(image))
   end
+
+  defp camera_entry(%PostImage{} = image) do
+    if PostImage.show_camera_info?(image) do
+      %{
+        camera: image.camera,
+        lens: image.lens,
+        focal_length_mm: image.focal_length,
+        aperture: image.aperture,
+        shutter: image.shutter,
+        iso: image.iso,
+        taken_at: image.taken_at
+      }
+    else
+      %{}
+    end
+  end
+
+  defp absolutize_maybe(nil), do: nil
+  defp absolutize_maybe(url), do: absolutize(url)
 
   defp absolutize("/" <> _ = path), do: AgentDocs.abs_url(path)
   defp absolutize(url), do: url

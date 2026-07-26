@@ -120,6 +120,14 @@ defmodule VutuvWeb.PostLive.Thread do
     {:noreply, load_window(socket)}
   end
 
+  # A photo on a shown post cleared the AI image scan (issue #1104). Re-window
+  # so the picture takes the place of its placecard, and the author's
+  # "checking your photos…" line counts down, with no reload. The subscription
+  # is the per-shown-post one this host already holds.
+  def handle_info({:post_images_settled, %{post_id: _}}, socket) do
+    {:noreply, load_window(socket)}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # (Re)computes the window for the current budgets and batches what the

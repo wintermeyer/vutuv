@@ -384,8 +384,11 @@ retained past account deletion.
 ## Post images
 
 Post images are uploaded eagerly in the composer (abandoned uploads are swept
-after a day), up to 10 per post, 6 MB each (`jpg/png/webp`, plus `heic` when the
-libvips build can decode it — capability-detected via `priv/heic_probe.heic`).
+after a day), up to 10 per post, 50 MB each (`jpg/png/webp`, plus `heic` when
+the libvips build can decode it — capability-detected via
+`priv/heic_probe.heic`). The 50 MB ceiling must stay below the endpoint's
+multipart limit (64 MB, `VutuvWeb.Endpoint`) and nginx's `client_max_body_size`
+(64 m, see `docs/ADMINS.md`).
 
 A post body may embed its uploads **inline**: `![alt](/post_images/<token>/<version>)`,
 optionally with an alignment fragment (`#left` / `#right` float beside the
@@ -426,6 +429,53 @@ organization image proxies; this controller keeps the post policy, the
 on-the-fly `og.jpg` and the download filename.
 
 Legacy `…/feed.webp` URLs in old post bodies keep resolving.
+
+## Photo posts (issue #1104)
+
+Not a second kind of post — the same post, showing its pictures properly.
+Everything beyond "drop photos, press Post" is one switch or one select.
+
+**In the feed, two or more attachments lay themselves out as an aspect-aware
+bento mosaic** (`VutuvWeb.PostComponents.mosaic/1`). The first photo is the
+hero and gets the big tile, so **reordering is the only layout control** — drag
+in the composer, or the ◀ ▶ buttons, which are the path on touch (HTML5 drag
+cannot fire there). At most five tiles show; the rest fold into a `+N` on the
+last one, and the block is height-capped, so a photo essay costs the same
+timeline height as a snapshot. The layout table is in `mosaic_shape/2` on a
+12×6 grid; what it tunes is the **hero cell's** aspect, not the frame's (a
+cell's shape is `frame × cols/12 ÷ rows/6`, so the two pull in opposite
+directions). `mosaic_layout_test.exs` asserts both the tiling and the hero
+shape.
+
+**On the permalink the photos keep their natural aspect ratio** — no crop — and
+a click opens the **lightbox** (`assets/js/lightbox.js`): the `xl` version
+(2560 px, added for this), caption, camera panel, download and licence, with
+←/→/Esc and swipe. The overlay is appended to `<body>`, deliberately outside
+every LiveView root: the permalink's conversation is a LiveView, and an overlay
+inside it would be re-rendered away by an unrelated counter tick. It reads the
+gallery links' `data-photo-*` attributes, so there is one copy of every fact;
+with JS off those links are plain hrefs to the full-size image.
+
+**Per photo** (`Posts.update_image_settings/2`, panel in
+`PostLive.Composer.photo_panel/1`): a `caption` (shown to everyone; distinct
+from `alt`, which describes the picture for people who cannot see it), a
+**camera-settings** switch (renders from the DB columns — the served files stay
+metadata-stripped) and an **original download** switch with its one follow-up,
+which file (see [images.md](images.md)). The panel expands below the strip
+rather than floating — a popover on a phone covers what it is about and has
+nowhere to put a follow-up. An "apply to all photos" shortcut copies the two
+switches (never the texts: a caption describes one picture).
+
+**Per post**, one `Vutuv.Posts.PhotoLicense` from a fixed vocabulary (`arr`
+default, CC BY / BY-SA / BY-NC / CC0 4.0). The select appears only once a photo
+is attached; the last pick is remembered on `users.default_post_license` and
+pre-selected next time, so a professional sets it once. It renders as a line
+under the photos **only when it grants something** — a rights notice on every
+picture in the app teaches people to stop reading the one that matters. It also
+reaches machines: the agent-format siblings carry the SPDX id, and the JSON-LD
+publishes each photo as an `ImageObject` with `license` /
+`acquireLicensePage` / `creditText`, which is what makes an image-search result
+licensable.
 
 ## Link screenshots
 

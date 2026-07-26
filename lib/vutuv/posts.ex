@@ -25,6 +25,13 @@ defmodule Vutuv.Posts do
   inline markdown can reference them before the post exists; submit attaches
   them (`image_ids`). Unattached leftovers are swept after a day.
 
+  **Photo posts** (issue #1104) are ordinary posts, not a second kind: several
+  photos lay themselves out as a bento mosaic in the feed, each carries an
+  optional caption, and the two per-photo opt-ins (camera panel, original
+  download) live on `Vutuv.Posts.PostImage`. The post carries one
+  `Vutuv.Posts.PhotoLicense` for the set, and the author's last pick is
+  remembered on their account as the next post's pre-selection.
+
   **Engagement**: likes, bookmarks and reposts are one row per (post, user),
   toggled idempotently; counters are counted live from the rows and every
   change broadcasts `{:post_counters, …}` on the post's topic
@@ -50,6 +57,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Pages
   alias Vutuv.PostImageStore
+  alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostBookmark
   alias Vutuv.Posts.PostDenial
@@ -134,6 +142,8 @@ defmodule Vutuv.Posts do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
+          # A photo post's license becomes the author's pre-selection next time.
+          remember_license(author, post)
           # Everyone the body names by @handle is told they were named.
           sync_mentions(post)
           # Follow-only federation: a federating author's public post goes
@@ -277,6 +287,7 @@ defmodule Vutuv.Posts do
         # (the owner's self-service round; see Vutuv.Moderation).
         Vutuv.Moderation.content_edited(updated)
         updated = preload_post(updated)
+        remember_license(updated.user, updated)
         # The edit can add a name, drop one, or (by changing the audience)
         # move a named member out of the post's reach: re-derive the set.
         sync_mentions(updated)
@@ -352,13 +363,25 @@ defmodule Vutuv.Posts do
 
     changeset =
       post_or_struct
-      |> Post.changeset(%{body: to_string(fetch(attrs, :body) || "")})
+      |> Post.changeset(post_params(attrs))
       |> Ecto.Changeset.put_assoc(:denials, Enum.map(denials, &struct(PostDenial, &1)))
       |> Ecto.Changeset.put_assoc(:post_tags, Enum.map(tag_ids, &%PostTag{tag_id: &1}))
       |> put_review(post_or_struct, fetch(attrs, :review))
       |> require_content(image_ids)
 
     if changeset.valid?, do: {:ok, changeset}, else: {:error, changeset}
+  end
+
+  # The license key is only put through when the caller sent one, so the API's
+  # partial PATCH (and every non-photo save path) leaves a stored license
+  # alone instead of resetting it to the default.
+  defp post_params(attrs) do
+    params = %{body: to_string(fetch(attrs, :body) || "")}
+
+    case fetch(attrs, :license) do
+      nil -> params
+      license -> Map.put(params, :license, license)
+    end
   end
 
   # The optional review sidecar (Vutuv.Posts.PostReview). Attrs without a
@@ -1096,6 +1119,49 @@ defmodule Vutuv.Posts do
   "reactions from other networks" line ticks over with no reload.
   """
   def broadcast_post_counters(post_id), do: broadcast_counters(post_id)
+
+  @doc """
+  Tells every open page showing this post that one of its photos has finished
+  the AI image scan (issue #1104).
+
+  It goes to **two** topics on purpose. The post's own topic reaches the
+  permalink, which subscribes per shown post. The **author's** activity topic
+  reaches their feed and profile, which subscribe to themselves and not to
+  every post they can see — and the author is the one actually waiting, since
+  it is their post that is being checked.
+
+  Callers hand in the post id; `Vutuv.Moderation.ImageSubjects` calls it from
+  the one place that runs on both the approve and the reject path.
+  """
+  def broadcast_images_settled(post_id) when is_binary(post_id) do
+    event = {:post_images_settled, %{post_id: post_id}}
+    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(post_id), event)
+
+    # `Vutuv.Activity.broadcast/2` is the house helper for a member's own
+    # topic, and it no-ops on a nil recipient — which is exactly the
+    # already-deleted-post case.
+    from(p in Post, where: p.id == ^post_id, select: p.user_id)
+    |> Repo.one()
+    |> Vutuv.Activity.broadcast(event)
+  end
+
+  def broadcast_images_settled(_post_id), do: :ok
+
+  @doc """
+  How far the AI image scan has got on this post: `%{total:, checked:,
+  pending:}` (issue #1104).
+
+  What the "checking your photos" indicator counts. `total` is the photos
+  still on the post — a rejected one is deleted, so the total shrinks rather
+  than a photo sitting at "not checked" forever, which is the honest way round:
+  the author is told separately that a picture was removed.
+  """
+  def image_check_progress(%Post{images: images}) when is_list(images) do
+    pending = Enum.count(images, &(not ImageScans.released?(&1.moderation)))
+    %{total: length(images), checked: length(images) - pending, pending: pending}
+  end
+
+  def image_check_progress(_post), do: %{total: 0, checked: 0, pending: 0}
 
   defp broadcast_counters(post_id, extra \\ %{}) do
     payload = engagement_counts(post_id) |> Map.put(:post_id, post_id) |> Map.merge(extra)
@@ -2662,6 +2728,62 @@ defmodule Vutuv.Posts do
   def update_image_alt(%PostImage{} = image, alt) do
     image |> PostImage.alt_changeset(%{alt: alt}) |> Repo.update()
   end
+
+  @doc """
+  Writes the composer's per-photo panel (issue #1104): alt text, caption and
+  the two opt-ins (`show_camera_info`, `download_original` +
+  `download_exact`).
+
+  The **cleanable** guard is the fail-closed half of the download promise: on
+  a format `Vutuv.Uploads.MetadataStrip` cannot take apart, "cleaned copy"
+  cannot be honoured, so the choice is forced to the exact file — which the
+  composer says out loud rather than quietly serving an uncleaned file under
+  the cleaned label.
+  """
+  def update_image_settings(%PostImage{} = image, params) do
+    image
+    |> PostImage.settings_changeset(params)
+    |> force_exact_when_uncleanable(image)
+    |> Repo.update()
+  end
+
+  defp force_exact_when_uncleanable(changeset, image) do
+    offering_download? = Ecto.Changeset.get_field(changeset, :download_original)
+    wants_cleaned? = not Ecto.Changeset.get_field(changeset, :download_exact)
+
+    if offering_download? and wants_cleaned? and not PostImageStore.cleanable?(image) do
+      Ecto.Changeset.put_change(changeset, :download_exact, true)
+    else
+      changeset
+    end
+  end
+
+  @doc """
+  The photo license a member's composer should pre-select: their last pick,
+  or the shipped default when they have never made one.
+  """
+  def default_license(%User{default_post_license: license}),
+    do: PhotoLicense.cast(license)
+
+  def default_license(_no_user), do: PhotoLicense.default()
+
+  # Remembers a photo post's license as the author's next pre-selection.
+  # Only photo posts count — a text-only post carries the default license
+  # nobody chose, and letting that overwrite a photographer's standing pick
+  # would silently reset it every time they wrote a sentence.
+  defp remember_license(%User{} = author, %Post{license: license} = post) do
+    if post.images != [] and PhotoLicense.valid?(license) and
+         author.default_post_license != license do
+      Repo.update_all(
+        from(u in User, where: u.id == ^author.id),
+        set: [default_post_license: license]
+      )
+    end
+
+    :ok
+  end
+
+  defp remember_license(_author, _post), do: :ok
 
   @doc """
   Only the AI-released images of a post — what every anonymous/public

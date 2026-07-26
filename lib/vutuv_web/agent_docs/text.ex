@@ -101,6 +101,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       tags_line(doc.tags),
       Markdown.engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
+      license_text(doc.license),
       section(
         "#{gettext("Conversation")} (#{length(doc.thread)})",
         doc.thread |> Enum.reject(&(&1.id == doc.id)) |> Enum.map(&thread_lines/1)
@@ -613,9 +614,25 @@ defmodule VutuvWeb.AgentDocs.Text do
   # a leading " — " with no closing bracket, passed in as `wrap`.
   defp dash_hint(inner), do: " — " <> inner
 
+  # Only when the author granted reuse — the HTML page's rule, kept in step.
+  defp license_text(%{spdx: spdx, name: name, url: url}) when is_binary(spdx) do
+    "#{gettext("Photos:")} #{name} (#{url})"
+  end
+
+  defp license_text(_license), do: nil
+
   defp image_lines(image) do
     alt = image.alt || "image"
-    "* #{alt}\n  #{Markdown.image_url(image)}"
+
+    [
+      "* #{alt}",
+      "  #{Markdown.image_url(image)}",
+      image[:caption] && "  #{image.caption}",
+      Markdown.camera_text(image),
+      image[:download_url] && "  #{gettext("Download the original")}: #{image.download_url}"
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n")
   end
 
   # How deep a thread entry still indents. Past this the entries stay in one

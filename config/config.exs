@@ -264,9 +264,16 @@ config :vutuv, :amazon_affiliate_tag, nil
 # installation points at its own Audible store — or none.
 config :vutuv, :audible_domain, "www.audible.de"
 
-# Post images: larger than avatars (6 MB), capped per post. Derived versions
-# are WebP; originals stay private on disk (see Vutuv.PostImageStore).
-config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
+# Post images: capped per post, and generous per file — a photo post carries
+# somebody's actual work (issue #1104), and a full-frame camera's JPEG runs
+# well past the 6 MB this used to allow, so the limit was rejecting exactly
+# the uploads the feature exists for. 50 MB sits under the endpoint's 64 MB
+# multipart limit and nginx's matching `client_max_body_size` (docs/ADMINS.md),
+# both of which must stay above it.
+#
+# Derived versions are AVIF; originals stay private on disk, and leave only
+# through the per-photo download an author switches on (Vutuv.PostImageStore).
+config :vutuv, :post_images, max_filesize: 50_000_000, max_per_post: 10
 
 # Job-posting images: same pattern and limits as post images.
 config :vutuv, :job_posting_images, max_filesize: 6_000_000, max_per_post: 10

@@ -5,11 +5,19 @@ defmodule Vutuv.Posts.Post do
 
   alias Vutuv.MarkdownContent
   alias Vutuv.Mentions
+  alias Vutuv.Posts.PhotoLicense
 
   @max_body_length 20_000
 
   schema "posts" do
     field(:body, :string, default: "")
+
+    # The license the post's photos are published under (issue #1104), from
+    # the fixed `Vutuv.Posts.PhotoLicense` vocabulary. It rides on the post,
+    # not the photo: a set of pictures posted together is one act of
+    # publishing, and a per-photo licence picker would be a forest of selects
+    # for a case nobody has.
+    field(:license, :string, default: "arr")
     # The archive coordinate (/:slug/posts/2026/06/06): the UTC date at
     # insert time, set programmatically, never cast from params. The
     # permalink itself is the post id (a UUID v7).
@@ -56,9 +64,13 @@ defmodule Vutuv.Posts.Post do
     post
     # empty_values: [] so clearing the body on edit is a real change ("" must
     # not be swallowed as "no change") — a photo-only post has an empty body.
-    |> cast(params, [:body], empty_values: [])
+    |> cast(params, [:body, :license], empty_values: [])
     |> update_change(:body, &String.trim/1)
     |> validate_length(:body, max: @max_body_length)
+    # An unknown licence becomes the safe default rather than a validation
+    # error: a tampered select must not be able to fail a post, and "all
+    # rights reserved" is the answer that grants nothing.
+    |> update_change(:license, &PhotoLicense.cast/1)
     # A post body may embed only its own uploaded images (`![](…)` with a
     # `/post_images/<token>/<version>` URL, optional alignment fragment) —
     # never a remote hotlink, which would leak every reader's IP. The renderer

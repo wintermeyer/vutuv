@@ -106,6 +106,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       tags_line(doc.tags),
       engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
+      license_line(doc.license),
       # The whole conversation (issue #1006), like the HTML permalink: every
       # other thread post oldest first (the page's own post already reads in
       # full above), each naming its parent when it is one of them.
@@ -940,10 +941,52 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   def cursor_hint(_doc, _wrap), do: ""
 
+  # A photo with everything the HTML page shows about it (issue #1104): the
+  # picture, its caption, the camera settings when the author published them
+  # and the download when the author opened it — each on its own indented line
+  # so a reader (human or machine) can tell the facts apart.
   defp image_line(image) do
-    alt = image.alt || "image"
-    "- ![#{alt}](#{image_url(image)})"
+    [
+      "- ![#{image.alt || "image"}](#{image_url(image)})",
+      image[:caption] && "  #{md_text(image.caption)}",
+      camera_line(image),
+      image[:download_url] && "  [#{gettext("Download the original")}](#{image.download_url})"
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n")
   end
+
+  defp camera_line(image), do: camera_text(image)
+
+  @doc """
+  The camera settings of one photo as an indented line, or `nil` when the
+  author did not publish them. Shared with the plain-text renderer so both
+  formats say the same thing.
+  """
+  def camera_text(image) do
+    [
+      image[:camera],
+      image[:lens],
+      image[:focal_length_mm] && "#{image.focal_length_mm} mm",
+      image[:aperture] && "f/#{image.aperture}",
+      image[:shutter] && "#{image.shutter} s",
+      image[:iso] && "ISO #{image.iso}"
+    ]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> case do
+      [] -> nil
+      parts -> "  " <> Enum.join(parts, " · ")
+    end
+  end
+
+  # The rights line, rendered only when the author granted something — the
+  # same rule the HTML page follows, so the formats cannot disagree about
+  # whether a post says anything about reuse.
+  defp license_line(%{spdx: spdx, name: name, url: url}) when is_binary(spdx) do
+    "**#{gettext("Photos:")}** [#{md_text(name)}](#{url})"
+  end
+
+  defp license_line(_license), do: nil
 
   # Shared with the plain-text renderer: prefer the feed-size variant, else any.
   @doc false

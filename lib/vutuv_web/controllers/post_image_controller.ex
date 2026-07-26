@@ -11,6 +11,11 @@ defmodule VutuvWeb.PostImageController do
   the on-the-fly `og.jpg` and the download filename. Pending images (post not
   yet submitted) are visible to their uploader alone; denied and unknown
   tokens are both 404 — the proxy must not leak whether an image exists.
+
+  `original.orig` is the one route by which full-resolution bytes leave
+  (issue #1104), and it is closed unless the photo's author opened it for that
+  photo. It is 404 by default, like everything else here — an unopened
+  download and a nonexistent one look identical from outside.
   """
 
   use VutuvWeb, :controller
@@ -30,9 +35,12 @@ defmodule VutuvWeb.PostImageController do
   end
 
   # "og.jpg" is the link-preview JPEG (og:image), derived on the fly rather
-  # than stored; everything else resolves through the shared whitelist parser
-  # ("original.*" never does).
+  # than stored; "original.orig" is the author-enabled full-resolution
+  # download (issue #1104), which `serve/3` gates on that photo's own
+  # `download_original` flag. Everything else resolves through the shared
+  # whitelist parser, which never resolves a stored filename.
   defp parse_version("og.jpg"), do: :og
+  defp parse_version("original.orig"), do: :download
 
   defp parse_version(version_file),
     do: ImageProxy.parse_version(version_file, PostImage.versions())
@@ -54,12 +62,63 @@ defmodule VutuvWeb.PostImageController do
     end
   end
 
+  # The full-resolution download (issue #1104). Three gates, all of which must
+  # hold — the audience check above has already passed at this point:
+  #
+  #   * the author switched this photo's download on;
+  #   * a file to serve actually resolves (a format whose metadata cannot be
+  #     stripped yields none rather than the untouched original — the promise
+  #     fails closed, see `Vutuv.PostImageStore.download_file/1`);
+  #   * `attachment`, not `inline`: this is a file handed over, and it is the
+  #     one response on this proxy that should not render in the tab.
+  #
+  # It deliberately does not go through `ImageProxy.serve/3`: that helper's
+  # X-Accel branch resolves paths inside the *served* versions location, and
+  # the original must never become reachable there.
+  defp serve(conn, %{download_original: false}, :download), do: ImageProxy.not_found(conn)
+
+  defp serve(conn, image, :download) do
+    case Vutuv.PostImageStore.download_file(image) do
+      nil ->
+        ImageProxy.not_found(conn)
+
+      {path, ext} ->
+        conn
+        |> ImageProxy.put_cache_control()
+        |> put_resp_content_type(MIME.from_path(path))
+        |> put_resp_header(
+          "content-disposition",
+          ~s(attachment; filename="#{filename(image, ext)}")
+        )
+        |> send_file(200, path)
+    end
+  end
+
   defp serve(conn, image, version) do
     ImageProxy.serve(conn, version,
       accel_path: &Vutuv.PostImageStore.accel_path(image, &1),
       version_path: &Vutuv.PostImageStore.version_path(image, &1),
       decorate: &put_download_name(&1, image, version, &2)
     )
+  end
+
+  # The downloaded file is named after the owner and the day the photo was
+  # taken (falling back to when it was uploaded), e.g. `ada_king-2026-07-25.jpg`
+  # — a name that sorts and files itself on the recipient's disk, which
+  # `feed.avif` never did.
+  defp filename(image, ext) do
+    date =
+      (image.taken_at || image.inserted_at)
+      |> NaiveDateTime.to_date()
+      |> Date.to_iso8601()
+
+    handle =
+      case image.user do
+        %{username: slug} when is_binary(slug) -> slug
+        _no_owner -> "photo"
+      end
+
+    "#{handle}-#{date}#{ext}"
   end
 
   # Suggest a download filename carrying the owner's handle, e.g.

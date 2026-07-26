@@ -445,6 +445,14 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, refresh_shown_post(socket, post_id)}
   end
 
+  # A photo of the author's post cleared the AI image scan (issue #1104):
+  # refresh the card so the picture appears and the "checking your photos…"
+  # line counts down and finally disappears — the author watches it finish
+  # instead of reloading to find out.
+  def handle_info({:post_images_settled, %{post_id: post_id}}, socket) do
+    {:noreply, refresh_shown_post(socket, post_id)}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in

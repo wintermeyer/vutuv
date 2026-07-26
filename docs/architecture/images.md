@@ -25,8 +25,52 @@ job-posting galleries (rows and files).
 
 Every uploaded **original** is kept verbatim (format + metadata) under the
 private `<UPLOADS_DIR_PREFIX>/originals/` tree (`Vutuv.Uploads.Originals`) as
-the source for re-deriving — it must **never** be served (no `Plug.Static`
-mount, no nginx alias; a regression test enforces this).
+the source for re-deriving. It is not reachable by URL construction (no
+`Plug.Static` mount, no nginx alias; a regression test enforces this). The one
+deliberate exception is the per-photo post-image download an author switches on
+themselves — see [Original downloads](#original-downloads-issue-1104) below.
+
+## EXIF: what is read, and what never is
+
+`Vutuv.Uploads.Exif` reads a **whitelist** of seven camera facts out of an
+uploaded photo — camera, lens, focal length, aperture, shutter, ISO and capture
+time — into `post_images` columns. Everything else a camera writes (maker
+notes, serial numbers, owner name, software trail) is never looked at, so a new
+proprietary tag cannot leak through a rule that has not heard of it.
+
+**GPS coordinates are never parsed.** `Exif.gps?/1` answers only *whether* the
+file carried a location, which is what lets the composer warn an author before
+they hand out the byte-identical file. There is no latitude/longitude column
+and no code path that reads one.
+
+Reading happens **before** `Image.autorotate/1`: rotating rewrites the header
+and on some libvips builds drops the EXIF block with it, so reading afterwards
+returns nothing.
+
+## Original downloads (issue #1104)
+
+A post photo's author can offer the full-resolution file per photo
+(`post_images.download_original`). The route is `/post_images/<token>/original.orig`
+and it is 404 by default — an unopened download and a nonexistent photo look
+identical from outside. It is gated by the post's audience like every other
+version.
+
+The author also chooses **which** file:
+
+- **"Just the picture"** (the default) — `Vutuv.Uploads.MetadataStrip` removes
+  every metadata block by container surgery: a JPEG's `APPn`/`COM` segments, a
+  PNG's non-whitelisted chunks, a WebP's `EXIF`/`XMP` chunks (and the `VP8X`
+  flags that advertise them). The compressed image data is copied through byte
+  for byte, so it is **not** a re-encode and loses no quality. It is a
+  whitelist, not a blacklist. The result is cached at
+  `originals/post_images/<token>/cleaned.<ext>`.
+- **"The file exactly as I uploaded it"** — the original, untouched.
+
+It **fails closed**: a container the stripper cannot take apart (HEIC) yields
+no cleaned copy rather than the untouched file, and
+`Posts.update_image_settings/2` forces such a photo to the exact-file choice so
+the composer can say so out loud. Never make `MetadataStrip.strip/2` fall back
+to returning the input.
 
 Cover photos are uploaded via the Edit profile form and served from
 `<UPLOADS_DIR_PREFIX>/covers/` (nginx needs a `location /covers/` alias in

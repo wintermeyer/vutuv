@@ -33,6 +33,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.BookMetadata
   alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
+  alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
@@ -70,6 +71,7 @@ defmodule VutuvWeb.PostLive.Composer do
   defp init_composer(socket) do
     post = socket.assigns[:post]
     {preset, wildcards, denied_users} = derive_audience(post)
+    images = post_images(post)
 
     socket
     |> assign(:composer_ready?, true)
@@ -88,8 +90,15 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:review, review_values(post))
     |> assign(:review_lookup_error, nil)
     |> assign(:tags_value, tags_value(post))
-    |> assign(:images, (post && post.images) || [])
-    |> assign(:alts, %{})
+    |> assign(:images, images)
+    # The per-photo settings the composer is editing (issue #1104), keyed by
+    # image id. Held in the socket rather than in form fields: the two switches
+    # reveal follow-up controls, and an unchecked checkbox submits nothing — so
+    # driving them by event keeps "off" an actual state instead of an absence.
+    |> assign(:photos, photo_state(images))
+    # Which photo's panel is open; nil = none, which is the whole hobby flow.
+    |> assign(:open_photo, nil)
+    |> assign(:license, initial_license(post, socket.assigns.current_user))
     |> assign(:preset, preset)
     |> assign(:deny_wildcards, wildcards)
     |> assign(:denied_users, denied_users)
@@ -107,6 +116,89 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp tags_value(nil), do: ""
   defp tags_value(post), do: Enum.map_join(post.tags, ", ", & &1.name)
+
+  defp post_images(nil), do: []
+  defp post_images(%Post{images: images}) when is_list(images), do: images
+  defp post_images(_post), do: []
+
+  # Editing keeps the post's own license; a new post starts from the author's
+  # last pick, so a professional sets it once and never again.
+  defp initial_license(%Post{license: license}, _author) when is_binary(license), do: license
+  defp initial_license(_post, author), do: Posts.default_license(author)
+
+  ## Per-photo settings (issue #1104)
+
+  # Seeded from the stored rows, so opening an existing post for editing shows
+  # the choices that are actually in force rather than fresh defaults.
+  defp photo_state(images), do: Map.new(images, &{&1.id, photo_defaults(&1)})
+
+  defp photo_defaults(%PostImage{} = image) do
+    %{
+      alt: image.alt || "",
+      caption: image.caption || "",
+      show_camera_info: image.show_camera_info,
+      download_original: image.download_original,
+      download_exact: image.download_exact
+    }
+  end
+
+  defp photo_settings(photos, %PostImage{} = image),
+    do: Map.get(photos, image.id) || photo_defaults(image)
+
+  defp photo_setting(photos, %PostImage{} = image, key),
+    do: photos |> photo_settings(image) |> Map.fetch!(key)
+
+  defp open_photo(_images, nil), do: nil
+  defp open_photo(images, id), do: Enum.find(images, &(&1.id == id))
+
+  defp update_photo(socket, id, fun) do
+    case Map.fetch(socket.assigns.photos, id) do
+      :error ->
+        socket
+
+      {:ok, settings} ->
+        assign(socket, :photos, Map.put(socket.assigns.photos, id, fun.(settings)))
+    end
+  end
+
+  # Only the open panel renders text inputs, so a change event carries at most
+  # one photo's texts — merge them in rather than replacing the map, or closing
+  # the panel would blank every other photo's caption.
+  defp merge_photo_texts(socket, nil), do: socket
+
+  defp merge_photo_texts(socket, submitted) when is_map(submitted) do
+    photos =
+      Enum.reduce(submitted, socket.assigns.photos, fn {id, texts}, acc ->
+        case Map.fetch(acc, id) do
+          :error ->
+            acc
+
+          {:ok, settings} ->
+            Map.put(acc, id, %{
+              settings
+              | alt: Map.get(texts, "alt", settings.alt),
+                caption: Map.get(texts, "caption", settings.caption)
+            })
+        end
+      end)
+
+    assign(socket, :photos, photos)
+  end
+
+  defp merge_photo_texts(socket, _other), do: socket
+
+  # Written on submit, not on every keystroke: an abandoned composer should not
+  # leave settings on rows it never attached to a post.
+  defp save_photo_settings(images, photos) do
+    Enum.each(images, fn image ->
+      case Map.fetch(photos, image.id) do
+        :error -> :ok
+        {:ok, settings} -> Posts.update_image_settings(image, stringify(settings))
+      end
+    end)
+  end
+
+  defp stringify(settings), do: Map.new(settings, fn {key, value} -> {to_string(key), value} end)
 
   # Edit mode prefills the panel from the stored review; the panel is open
   # exactly when a kind is set.
@@ -153,8 +245,12 @@ defmodule VutuvWeb.PostLive.Composer do
 
   ## Events
 
+  # The photo panel's inputs are named `photo[<id>][…]`, deliberately outside
+  # the `post[…]` namespace: they belong to an image row, not to the post, and
+  # they are written through `Posts.update_image_settings/2` rather than the
+  # post changeset. So both handlers take the whole payload.
   @impl true
-  def handle_event("validate", %{"post" => params}, socket) do
+  def handle_event("validate", %{"post" => params} = payload, socket) do
     # New posts publish public (there is no audience picker); the fallback to the
     # current preset keeps an edited restricted post from silently downgrading to
     # public as the author types.
@@ -164,10 +260,11 @@ defmodule VutuvWeb.PostLive.Composer do
       socket
       |> assign(:body, params["body"] || socket.assigns.body)
       |> assign(:tags_value, params["tags"] || socket.assigns.tags_value)
-      |> assign(:alts, params["alts"] || socket.assigns.alts)
+      |> assign(:license, PhotoLicense.cast(params["license"] || socket.assigns.license))
       |> assign(:review, Map.merge(socket.assigns.review, params["review"] || %{}))
       |> assign(:preset, preset)
       |> assign(:error, nil)
+      |> merge_photo_texts(payload["photo"])
       |> sweep_rejected_uploads()
 
     socket =
@@ -266,6 +363,86 @@ defmodule VutuvWeb.PostLive.Composer do
     end
   end
 
+  ## Photo strip and panel (issue #1104)
+
+  def handle_event("photo-open", %{"id" => id}, socket) do
+    # Tapping the open photo's ⚙ again closes it — the same button, so nobody
+    # has to find a second one.
+    open = if socket.assigns.open_photo == id, do: nil, else: id
+    {:noreply, assign(socket, :open_photo, open)}
+  end
+
+  def handle_event("photo-close", _params, socket) do
+    {:noreply, assign(socket, :open_photo, nil)}
+  end
+
+  def handle_event("photo-toggle", %{"id" => id, "field" => field}, socket)
+      when field in ["show_camera_info", "download_original"] do
+    key = String.to_existing_atom(field)
+
+    {:noreply,
+     update_photo(socket, id, fn settings ->
+       flipped = Map.put(settings, key, not settings[key])
+       # Switching the download off drops the exact-file choice with it, so
+       # turning it on again starts from the safe answer rather than silently
+       # restoring "hand out everything" (the schema enforces this too).
+       if key == :download_original and not flipped.download_original,
+         do: %{flipped | download_exact: false},
+         else: flipped
+     end)}
+  end
+
+  def handle_event("photo-exact", %{"id" => id, "exact" => exact}, socket) do
+    {:noreply, update_photo(socket, id, &Map.put(&1, :download_exact, exact == "true"))}
+  end
+
+  # Copies one photo's four choices onto every other photo of the post. The
+  # texts are deliberately NOT copied: a caption and an alt text describe one
+  # particular picture, and duplicating them across a set would be worse than
+  # leaving them empty.
+  def handle_event("photo-apply-all", %{"id" => id}, socket) do
+    case Map.fetch(socket.assigns.photos, id) do
+      :error ->
+        {:noreply, socket}
+
+      {:ok, source} ->
+        shared = Map.take(source, [:show_camera_info, :download_original, :download_exact])
+
+        photos =
+          Map.new(socket.assigns.photos, fn {photo_id, settings} ->
+            {photo_id, Map.merge(settings, shared)}
+          end)
+
+        {:noreply, assign(socket, :photos, photos)}
+    end
+  end
+
+  # The ◀ ▶ buttons: the reorder path on touch, where a native HTML5 drag
+  # cannot fire at all.
+  def handle_event("photo-move", %{"id" => id, "dir" => dir}, socket) do
+    images = socket.assigns.images
+    index = Enum.find_index(images, &(&1.id == id))
+    target = if dir == "back", do: index && index - 1, else: index && index + 1
+
+    if index && target >= 0 && target < length(images) do
+      moved = images |> List.delete_at(index) |> List.insert_at(target, Enum.at(images, index))
+      {:noreply, assign(socket, :images, moved)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # The drag path (the `PhotoStrip` hook pushes the id order it has already
+  # applied in the DOM). Ids are looked up rather than trusted: an order naming
+  # an unknown id must not be able to drop photos from the post.
+  def handle_event("photo-reorder", %{"order" => order}, socket) when is_list(order) do
+    by_id = Map.new(socket.assigns.images, &{&1.id, &1})
+    reordered = Enum.flat_map(order, fn id -> List.wrap(by_id[id]) end)
+    missing = Enum.reject(socket.assigns.images, &(&1.id in order))
+
+    {:noreply, assign(socket, :images, reordered ++ missing)}
+  end
+
   def handle_event("remove-image", %{"id" => id}, socket) do
     case Enum.find(socket.assigns.images, &(&1.id == id)) do
       nil ->
@@ -276,7 +453,15 @@ defmodule VutuvWeb.PostLive.Composer do
         # dropped from the list — update_post removes them on save, so
         # cancelling the edit keeps the post intact.
         if is_nil(image.post_id), do: Posts.delete_pending_image(image)
-        {:noreply, assign(socket, :images, Enum.reject(socket.assigns.images, &(&1.id == id)))}
+
+        {:noreply,
+         socket
+         |> assign(:images, Enum.reject(socket.assigns.images, &(&1.id == id)))
+         |> update(:photos, &Map.delete(&1, id))
+         |> assign(
+           :open_photo,
+           if(socket.assigns.open_photo == id, do: nil, else: socket.assigns.open_photo)
+         )}
     end
   end
 
@@ -284,8 +469,11 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, cancel_upload(socket, :images, ref)}
   end
 
-  def handle_event("save", %{"post" => params}, socket) do
-    save_alts(socket.assigns.images, params["alts"] || %{})
+  def handle_event("save", %{"post" => params} = payload, socket) do
+    # The submitted texts are the truth (a keystroke may not have round-tripped
+    # through `validate` yet), so merge them before writing.
+    socket = merge_photo_texts(socket, payload["photo"])
+    save_photo_settings(socket.assigns.images, socket.assigns.photos)
 
     # The audience comes from the submitted form (not from assigns): the
     # submit is the truth, and it must not depend on a phx-change having
@@ -301,6 +489,7 @@ defmodule VutuvWeb.PostLive.Composer do
     attrs = %{
       body: params["body"] || "",
       tags: params["tags"] || "",
+      license: params["license"] || socket.assigns.license,
       # The submitted panel fields are the truth; with the panel closed only
       # the hidden kind ("") arrives, which removes a stored review on save.
       review: params["review"] || %{"kind" => ""},
@@ -349,7 +538,8 @@ defmodule VutuvWeb.PostLive.Composer do
          |> assign(:review, @empty_review)
          |> assign(:review_lookup_error, nil)
          |> assign(:images, [])
-         |> assign(:alts, %{})
+         |> assign(:photos, %{})
+         |> assign(:open_photo, nil)
          |> assign(:error, nil)}
     end
   end
@@ -405,18 +595,6 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp save_error_message(_too_many_images) do
     gettext("No more than %{max} images per post.", max: Posts.max_images_per_post())
-  end
-
-  defp save_alts(images, alts) do
-    Enum.each(images, fn image ->
-      save_alt(image, Map.get(alts, image.id))
-    end)
-  end
-
-  defp save_alt(_image, nil), do: :ok
-
-  defp save_alt(image, alt) do
-    if String.trim(alt) != image.alt, do: Posts.update_image_alt(image, alt)
   end
 
   # Files refused at selection time (over the size limit, type not in the
@@ -482,6 +660,7 @@ defmodule VutuvWeb.PostLive.Composer do
             {:noreply,
              socket
              |> update(:images, &(&1 ++ [image]))
+             |> update(:photos, &Map.put(&1, image.id, photo_defaults(image)))
              |> push_event(
                "mde-image-uploaded",
                Map.put(editor_image_payload(socket, image), :name, entry.client_name)
@@ -617,45 +796,124 @@ defmodule VutuvWeb.PostLive.Composer do
             {delimited_count(String.length(@body))} / {delimited_count(Post.max_body_length())}
           </p>
 
-          <%!-- Uploaded images: thumbnail + alt input + inline/remove actions --%>
-          <ul :if={@images != []} class="mt-3 space-y-2" id={"#{@id}-images"}>
-            <li :for={image <- @images} class="flex items-center gap-3">
-              <img
-                src={PostImage.url(image, "thumb")}
-                alt=""
-                width="48"
-                height="48"
-                class="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
-              />
-              <input
-                type="text"
-                name={"post[alts][#{image.id}]"}
-                value={Map.get(@alts, image.id, image.alt)}
-                placeholder={gettext("Describe this image (alt text)")}
-                class={[input_class(), "flex-1"]}
-              />
-              <button
-                type="button"
-                phx-click="insert-inline"
-                phx-value-id={image.id}
-                phx-target={@myself}
-                title={gettext("Insert into text")}
-                class="rounded-lg px-2 py-1 text-sm font-semibold text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-800"
+          <%!-- The photo strip (issue #1104). Drop photos and press Post is the
+          whole flow; everything else is opt-in and one tap away. Tiles are
+          drag-reorderable on a pointer device and ◀ ▶ reorderable everywhere
+          (touch cannot fire native HTML5 drag), and the first tile is marked
+          the one that leads the mosaic, so ordering is the only layout control
+          there is. --%>
+          <div
+            :if={@images != []}
+            id={"#{@id}-images"}
+            phx-hook="PhotoStrip"
+            phx-target={@myself}
+            class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5"
+          >
+            <%!-- Each tile carries a DOM id so morphdom keys it: a drag has
+            already moved the node when the server's re-render arrives, and the
+            patch then just settles it (the profile reorder tool's pattern). --%>
+            <div
+              :for={{image, index} <- Enum.with_index(@images)}
+              id={"#{@id}-photo-#{image.id}"}
+              data-photo-tile={image.id}
+              draggable="true"
+              class={[
+                "group relative aspect-square overflow-hidden rounded-lg ring-1",
+                (@open_photo == image.id && "ring-2 ring-brand-500") ||
+                  "ring-slate-200 dark:ring-slate-800"
+              ]}
+            >
+              <img src={PostImage.url(image, "thumb")} alt="" class="h-full w-full object-cover" />
+
+              <%!-- The hero marker. A number on every tile would be noise; what
+              the author needs to know is which photo leads. --%>
+              <span
+                :if={index == 0}
+                class="absolute left-1 top-1 rounded bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
               >
-                ↳ {gettext("Insert")}
-              </button>
-              <button
-                type="button"
-                phx-click="remove-image"
-                phx-value-id={image.id}
-                phx-target={@myself}
-                title={gettext("Remove image")}
-                class="rounded-lg px-2 py-1 text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-slate-800"
+                {gettext("Cover")}
+              </span>
+
+              <%!-- The alt-text nudge: amber while a photo has no description,
+              so the gap is visible without blocking anything. --%>
+              <span
+                :if={photo_setting(@photos, image, :alt) == ""}
+                title={gettext("No image description yet")}
+                class="absolute right-1 top-1 rounded bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
+                data-photo-alt-missing={image.id}
               >
-                ✕
-              </button>
-            </li>
-          </ul>
+                ALT
+              </span>
+
+              <%!-- Controls sit on a scrim at the bottom of the tile: always
+              visible on touch (where there is no hover), so nothing is
+              undiscoverable on a phone. --%>
+              <div class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-0.5 bg-slate-900/60 px-1 py-1">
+                <button
+                  type="button"
+                  phx-click="photo-move"
+                  phx-value-id={image.id}
+                  phx-value-dir="back"
+                  phx-target={@myself}
+                  disabled={index == 0}
+                  aria-label={gettext("Move photo earlier")}
+                  class="rounded px-1 text-xs text-white disabled:opacity-30"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  phx-click="photo-open"
+                  phx-value-id={image.id}
+                  phx-target={@myself}
+                  aria-label={gettext("Photo options")}
+                  title={gettext("Photo options")}
+                  class="rounded px-1 text-xs text-white hover:bg-white/20"
+                >
+                  ⚙
+                </button>
+                <button
+                  type="button"
+                  phx-click="remove-image"
+                  phx-value-id={image.id}
+                  phx-target={@myself}
+                  aria-label={gettext("Remove photo")}
+                  title={gettext("Remove photo")}
+                  class="rounded px-1 text-xs text-white hover:bg-white/20"
+                >
+                  ✕
+                </button>
+                <button
+                  type="button"
+                  phx-click="photo-move"
+                  phx-value-id={image.id}
+                  phx-value-dir="forward"
+                  phx-target={@myself}
+                  disabled={index == length(@images) - 1}
+                  aria-label={gettext("Move photo later")}
+                  class="rounded px-1 text-xs text-white disabled:opacity-30"
+                >
+                  ▶
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p
+            :if={length(@images) > 1}
+            class="mt-1.5 text-xs text-slate-600 dark:text-slate-400"
+          >
+            {gettext("Drag to reorder. The first photo leads the gallery.")}
+          </p>
+
+          <.photo_panel
+            :if={open_photo(@images, @open_photo)}
+            image={open_photo(@images, @open_photo)}
+            settings={photo_settings(@photos, open_photo(@images, @open_photo))}
+            many?={length(@images) > 1}
+            id={"#{@id}-photo-panel"}
+            myself={@myself}
+          />
 
           <%!-- In-flight uploads --%>
           <div :for={entry <- @uploads.images.entries} class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
@@ -833,6 +1091,27 @@ defmodule VutuvWeb.PostLive.Composer do
               🎬<span class="hidden sm:inline">{gettext("Film")}</span>
             </button>
 
+            <%!-- The license select appears only once a photo is attached
+            (issue #1104): on a text post it would be a control about nothing.
+            It is a plain select of a fixed vocabulary, never free text, so
+            what is published stays machine-readable and nobody invents a
+            licence sentence by accident. --%>
+            <select
+              :if={@images != []}
+              name="post[license]"
+              id={"#{@id}-license"}
+              title={gettext("Who may reuse these photos")}
+              class={[input_class(), "h-9 w-auto max-w-[14rem] py-0 text-sm"]}
+            >
+              <option
+                :for={license <- PhotoLicense.values()}
+                value={license}
+                selected={@license == license}
+              >
+                {PhotoLicense.label(license)}
+              </option>
+            </select>
+
             <div class="ml-auto flex items-center gap-3">
               <span
                 :if={@audience_locked?}
@@ -974,6 +1253,224 @@ defmodule VutuvWeb.PostLive.Composer do
           </p>
         </.form>
       </.card>
+    </div>
+    """
+  end
+
+  @doc """
+  The per-photo panel: the two texts and the two opt-ins for one photo
+  (issue #1104).
+
+  It expands **below** the strip rather than floating over it as a popover.
+  A popover on a phone covers the thing it is about, cannot be scrolled
+  comfortably and has nowhere to put a follow-up question — and this panel has
+  one (which file a download hands over). The tile it belongs to is
+  ring-highlighted, so the connection is visible without the overlay.
+
+  Both switches say what they will actually do, with the answer in front of
+  the author rather than described: the camera switch shows the very line
+  visitors would see, or states that this file carries none; the download
+  switch reveals the choice of file and, when the photo carries a location,
+  warns about it at the moment the exact file is picked.
+  """
+  attr(:image, :any, required: true)
+  attr(:settings, :map, required: true)
+  attr(:many?, :boolean, required: true)
+  attr(:id, :string, required: true)
+  attr(:myself, :any, required: true)
+
+  def photo_panel(assigns) do
+    assigns =
+      assigns
+      |> assign(:camera_line, PostComponents.camera_line(assigns.image))
+      |> assign(:camera_info?, PostImage.camera_info?(assigns.image))
+      |> assign(:cleanable?, Vutuv.PostImageStore.cleanable?(assigns.image))
+
+    ~H"""
+    <div
+      id={@id}
+      class="mt-3 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
+    >
+      <div class="flex items-start gap-3">
+        <img
+          src={PostImage.url(@image, "thumb")}
+          alt=""
+          class="h-16 w-16 shrink-0 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+        />
+        <div class="min-w-0 flex-1 space-y-2">
+          <input
+            type="text"
+            name={"photo[#{@image.id}][caption]"}
+            value={@settings.caption}
+            phx-debounce="300"
+            placeholder={gettext("Caption, shown under the photo (optional)")}
+            class={input_class()}
+          />
+          <input
+            type="text"
+            name={"photo[#{@image.id}][alt]"}
+            value={@settings.alt}
+            phx-debounce="300"
+            placeholder={gettext("Describe the photo for people who can't see it")}
+            class={input_class()}
+          />
+        </div>
+        <button
+          type="button"
+          phx-click="photo-close"
+          phx-target={@myself}
+          aria-label={gettext("Close")}
+          class="shrink-0 rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div class="mt-4 space-y-3">
+        <%!-- Camera info. The switch is disabled when there is nothing to
+        show, and says so — a dead toggle with no explanation reads as a bug. --%>
+        <div>
+          <label class={[
+            "flex items-start gap-2 text-sm",
+            (@camera_info? && "text-slate-700 dark:text-slate-200") ||
+              "text-slate-500 dark:text-slate-500"
+          ]}>
+            <input
+              type="checkbox"
+              checked={@settings.show_camera_info}
+              disabled={not @camera_info?}
+              phx-click="photo-toggle"
+              phx-value-id={@image.id}
+              phx-value-field="show_camera_info"
+              phx-target={@myself}
+              class={checkbox_class()}
+              data-photo-camera-switch
+            />
+            <span>
+              <span class="font-semibold">{gettext("Show camera settings")}</span>
+              <span
+                :if={@camera_info?}
+                class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400"
+              >
+                {@camera_line}
+              </span>
+              <span :if={not @camera_info?} class="mt-0.5 block text-xs">
+                {gettext("This file carries no camera information.")}
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <%!-- Original download, and the one follow-up it reveals. --%>
+        <div>
+          <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              checked={@settings.download_original}
+              phx-click="photo-toggle"
+              phx-value-id={@image.id}
+              phx-value-field="download_original"
+              phx-target={@myself}
+              class={checkbox_class()}
+              data-photo-download-switch
+            />
+            <span>
+              <span class="font-semibold">{gettext("Everybody may download this photo")}</span>
+              <span class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
+                {gettext("Full resolution, straight from the post.")}
+              </span>
+            </span>
+          </label>
+
+          <div :if={@settings.download_original} class="ml-6 mt-2 space-y-1.5">
+            <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input
+                type="radio"
+                name={"photo[#{@image.id}][exact]"}
+                checked={not @settings.download_exact}
+                disabled={not @cleanable?}
+                phx-click="photo-exact"
+                phx-value-id={@image.id}
+                phx-value-exact="false"
+                phx-target={@myself}
+                class={checkbox_class()}
+              />
+              <span>
+                {gettext("Just the picture")}
+                <span class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
+                  {gettext(
+                    "Same pixels, nothing else: location and serial numbers removed, quality untouched."
+                  )}
+                </span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input
+                type="radio"
+                name={"photo[#{@image.id}][exact]"}
+                checked={@settings.download_exact}
+                phx-click="photo-exact"
+                phx-value-id={@image.id}
+                phx-value-exact="true"
+                phx-target={@myself}
+                class={checkbox_class()}
+              />
+              <span>
+                {gettext("The file exactly as I uploaded it")}
+                <span class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
+                  {gettext("Every metadata field kept, including anything your camera wrote.")}
+                </span>
+              </span>
+            </label>
+
+            <%!-- The warning that makes the choice informed. It appears at the
+            moment the exact file is selected on a photo that carries a
+            location — not as a standing notice nobody reads. --%>
+            <p
+              :if={@settings.download_exact and @image.has_gps}
+              class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+              data-photo-gps-warning
+            >
+              {gettext(
+                "This photo carries the location it was taken at. Anyone who downloads the exact file can read it."
+              )}
+            </p>
+            <p
+              :if={not @cleanable?}
+              class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+            >
+              {gettext(
+                "This file format can only be handed out as it is. Remove the photo if that is not what you want."
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          phx-click="insert-inline"
+          phx-value-id={@image.id}
+          phx-target={@myself}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        >
+          ↳ {gettext("Insert into text")}
+        </button>
+        <%!-- The shortcut that keeps a ten-photo set from being twenty taps.
+        Only shown when there is more than one photo to apply to. --%>
+        <button
+          :if={@many?}
+          type="button"
+          phx-click="photo-apply-all"
+          phx-value-id={@image.id}
+          phx-target={@myself}
+          class="ml-auto text-sm font-semibold text-brand-600 hover:text-brand-700"
+          data-photo-apply-all
+        >
+          {gettext("Apply these settings to all photos")}
+        </button>
+      </div>
     </div>
     """
   end

@@ -256,6 +256,12 @@ defmodule Vutuv.Accounts.User do
     # it has no "0 = never shorten" mode. Read through
     # notification_post_lines/1, never straight off the struct.
     field(:notification_post_lines, :integer)
+    # The license this member last published photos under (issue #1104),
+    # offered as the pre-selection on their next photo post so a professional
+    # sets it once. Written by Vutuv.Posts on save, never by a settings form —
+    # it is a memory of a choice, not a setting anyone has to find. NULL = has
+    # never picked one, so the shipped default (all rights reserved) applies.
+    field(:default_post_license, :string)
     # The account owner proved control of their email by entering a login PIN
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and

@@ -31,6 +31,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Isbn
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
+  alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
@@ -167,6 +168,10 @@ defmodule VutuvWeb.PostComponents do
         :limbo_pill?,
         Enum.any?(shown_images, &(&1.moderation == "pending"))
       )
+      # How far the AI scan has got, for the author's progress line. Counted
+      # from the post's own (unfiltered) image list, so "2 of 5" means the
+      # photos the author attached, not the subset this viewer can see.
+      |> assign(:check_progress, Posts.image_check_progress(assigns.post))
       |> assign(:body_html, body_html)
       # The inline CSS custom properties (`--post-clamp-*` / `--post-hyphens-*`)
       # that carry the reader's preference onto the post body; nil for a default
@@ -1533,6 +1538,7 @@ defmodule VutuvWeb.PostComponents do
                 gallery={@gallery}
                 mode={:preview}
                 permalink={@permalink}
+                license={@post.license}
               />
             <% true -> %>
               <.post_gallery
@@ -1540,7 +1546,14 @@ defmodule VutuvWeb.PostComponents do
                 gallery={@gallery}
                 mode={:full}
                 permalink={@permalink}
+                license={@post.license}
               />
+              <%!-- The rights line, under the photos where somebody deciding
+              whether they may use one is looking. Shown only on a post that
+              has photos and only when the author granted something: "all
+              rights reserved" is the default nobody chose, and a line saying
+              so on every picture in the app would be noise. --%>
+              <.photo_license_line :if={@gallery != []} license={@post.license} />
               <% end %>
             </div>
 
@@ -1568,33 +1581,22 @@ defmodule VutuvWeb.PostComponents do
               :for={_placecard <- 1..@held_count//1}
               class="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                class="h-8 w-8 text-slate-400 dark:text-slate-500"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A1.5 1.5 0 0 0 21.75 19.5V4.5A1.5 1.5 0 0 0 20.25 3H3.75A1.5 1.5 0 0 0 2.25 4.5v15A1.5 1.5 0 0 0 3.75 21Z"
-                />
-              </svg>
+              <.hourglass class="h-7 w-7 text-slate-400 dark:text-slate-500" />
               <span class="px-2 text-center text-xs text-slate-600 dark:text-slate-400">
-                {gettext("Image is being reviewed")}
+                {gettext("Photo is being checked")}
               </span>
             </div>
           </div>
 
-          <p
-            :if={@limbo_pill?}
-            class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
-            data-image-pending-pill
-          >
-            {gettext("Image awaiting review, visible only to you")}
-          </p>
+          <%!-- The author's own progress line while the AI scan runs. It is
+          deliberately louder than the old static pill: the check takes real
+          time on a multi-photo post, and a card that simply sits there with no
+          moving part reads as broken rather than as busy. So the hourglass
+          animates, the line counts the photos off as they clear, and the whole
+          thing disappears by itself when the last one lands (the host
+          LiveViews refresh the card on `{:post_images_settled, …}`) — no
+          reload, and nothing to click. --%>
+          <.photo_check_progress :if={@limbo_pill?} progress={@check_progress} />
 
 
           <%!-- The remaining layouts put the tags in their own full-width row
@@ -1802,50 +1804,432 @@ defmodule VutuvWeb.PostComponents do
   end
 
   # The attachment gallery below the body: images the body does NOT reference
-  # inline (`![](…)`), rendered at their **natural aspect ratio** — no crop — so
-  # a screenshot or panorama reads whole. One image fills the column; several
-  # tile 1-up on phones, 2-up on `sm+`. This is the ONE gallery rendering shared
-  # by the preview (feed / profile) and the permalink, so the two look identical:
-  # the preview grid used to force every tile to `aspect-[4/3]`, chopping content
-  # down to a middle band and looking worse than the permalink. The `feed` image
-  # version is already aspect-preserving (`box_down 1200`), so `w-full` alone
-  # shows it uncropped.
+  # inline (`![](…)`).
   #
-  # The only mode difference is the click target: a `:preview` tile opens the
-  # post (its permalink), a `:full` tile opens the `large` version in a new tab
-  # (the lightbox). A `false` value on `target`/`rel`/`aria-label` drops the
-  # attribute, so each mode carries only the attributes it needs.
+  # The two modes show the same photos with deliberately different priorities
+  # (issue #1104):
+  #
+  #   * **`:preview`** (feed, profile) is a glance. Several photos lay
+  #     themselves out as an aspect-aware **bento mosaic** of a capped height,
+  #     so a nine-photo post takes up as much of the timeline as a one-photo
+  #     post and the whole set reads in one look. A tile opens the permalink.
+  #
+  #   * **`:full`** (the permalink) is the show. Photos keep their **natural
+  #     aspect ratio** — no crop — so a portrait, a panorama and a screenshot
+  #     each read whole; one fills the column, several tile 2-up from `sm`.
+  #     A tile opens the lightbox.
+  #
+  # The `feed` image version is already aspect-preserving (`box_down 1200`), so
+  # `w-full` alone shows it uncropped in full mode.
   attr(:gallery, :list, required: true)
   attr(:mode, :atom, required: true, values: [:preview, :full])
   attr(:permalink, :string, required: true)
+  attr(:license, :string, default: nil, doc: "the post's license, for the lightbox panel")
+
+  defp post_gallery(%{mode: :preview} = assigns), do: mosaic(assigns)
 
   defp post_gallery(assigns) do
     ~H"""
-    <div class={[
-      "grid gap-2",
-      (@mode == :full && "mt-4") || "mt-3",
-      length(@gallery) > 1 && "sm:grid-cols-2"
-    ]}>
-      <.link
-        :for={image <- @gallery}
-        href={(@mode == :full && PostImage.url(image, "large")) || @permalink}
-        target={@mode == :full && "_blank"}
-        rel={@mode == :full && "noopener"}
-        aria-label={@mode == :preview && gettext("View post")}
-        class="block overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+    <div
+      class={["grid gap-2 mt-4", length(@gallery) > 1 && "sm:grid-cols-2"]}
+      data-lightbox-gallery
+      data-label-close={gettext("Close")}
+      data-label-prev={gettext("Previous photo")}
+      data-label-next={gettext("Next photo")}
+      data-label-download={gettext("Download the original")}
+    >
+      <figure
+        :for={{image, index} <- Enum.with_index(@gallery)}
+        class="mb-0 overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
       >
-        <img
-          src={PostImage.url(image, "feed")}
-          alt={image.alt}
-          width={image.width}
-          height={image.height}
-          loading="lazy"
-          class="w-full object-cover"
-        />
-      </.link>
+        <.lightbox_link
+          image={image}
+          index={index}
+          count={length(@gallery)}
+          license={@license}
+          class="block"
+        >
+          <img
+            src={PostImage.url(image, "feed")}
+            alt={photo_alt(image)}
+            width={image.width}
+            height={image.height}
+            loading="lazy"
+            class="w-full object-cover"
+          />
+        </.lightbox_link>
+        <figcaption
+          :if={present?(image.caption)}
+          class="px-3 py-2 text-sm text-slate-600 dark:text-slate-400"
+        >
+          {image.caption}
+        </figcaption>
+      </figure>
     </div>
     """
   end
+
+  @doc """
+  The **bento mosaic**: two or more photos laid out from their own aspect
+  ratios into one tile arrangement of a fixed, capped height (issue #1104).
+
+  Three things it is built around:
+
+    * **The first photo is the hero.** It gets the big tile, so reordering in
+      the composer is the whole layout control an author needs — no
+      tile-size editor.
+
+    * **The layout follows the shapes.** A portrait hero gets a tall
+      left-hand tile and the mosaic a portrait-ish frame; a landscape hero
+      gets a wide top tile and a landscape frame
+      (`VutuvWeb.PostComponents.mosaic_layout/1`). A mosaic crops — that is
+      what makes it a mosaic — and choosing the frame from the photos is what
+      keeps the crop gentle instead of chopping every picture to one
+      hardcoded band.
+
+    * **It stays one glance tall.** At most five tiles show; a sixth and
+      beyond fold into a `+N` on the last one, and the whole block is capped,
+      so a photo essay costs the same timeline height as a snapshot.
+
+  Every tile opens the post; the photos themselves are shown whole on the
+  permalink, which is where the lightbox lives.
+  """
+  # No `:global` rest attr on purpose: `post_gallery/1` delegates here with its
+  # own assigns, and a global would collect its `mode` and `license` and emit
+  # them as stray `mode="preview" license="arr"` attributes on the anchor.
+  attr(:gallery, :list, required: true)
+  attr(:permalink, :string, required: true)
+
+  def mosaic(assigns) do
+    layout = mosaic_layout(assigns.gallery)
+
+    assigns = assigns |> assign(:cells, layout.cells) |> assign(:frame, layout.aspect)
+
+    ~H"""
+    <.link
+      href={@permalink}
+      aria-label={gettext("View post")}
+      class="mt-3 grid gap-1 overflow-hidden rounded-lg"
+      style={"aspect-ratio: #{@frame}; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); max-height: 44rem"}
+      data-post-mosaic={length(@gallery)}
+    >
+      <div
+        :for={cell <- @cells}
+        class="relative overflow-hidden bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-800"
+        style={"grid-area: #{cell.area}"}
+      >
+        <img
+          src={PostImage.url(cell.image, "feed")}
+          alt={photo_alt(cell.image)}
+          loading="lazy"
+          class="h-full w-full object-cover"
+        />
+        <%!-- The overflow badge sits on the last visible tile and dims it, so
+        the count reads as "there are more behind this" rather than as a label
+        stuck on one particular photo. --%>
+        <span
+          :if={cell.more > 0}
+          class="absolute inset-0 flex items-center justify-center bg-slate-900/55 text-2xl font-semibold text-white"
+          data-mosaic-more
+        >
+          +{compact_count(cell.more)}
+        </span>
+      </div>
+    </.link>
+    """
+  end
+
+  # How many tiles a mosaic draws before the rest collapse into the `+N`.
+  # Five is what the layouts below are drawn for, and the point past which
+  # tiles get too small to be worth loading.
+  @mosaic_tiles 5
+
+  @doc """
+  The tile arrangement for a photo set: `%{aspect: "7 / 5", cells: [...]}`,
+  each cell carrying its image, its CSS `grid-area` on the shared 12×6 grid
+  and how many further photos it stands for (`more`, non-zero on the last tile
+  only).
+
+  Public so `mosaic_layout_test.exs` can check the geometry directly — the
+  arrangement is the feature, and it is much easier to get wrong than to see
+  wrong.
+  """
+  def mosaic_layout(gallery) do
+    shown = Enum.take(gallery, @mosaic_tiles)
+    more = length(gallery) - length(shown)
+    hero = List.first(shown)
+    tall? = hero && PostImage.orientation(hero) == :portrait
+
+    {aspect, areas} = mosaic_shape(length(shown), tall?)
+
+    cells =
+      shown
+      |> Enum.zip(areas)
+      |> Enum.with_index()
+      |> Enum.map(fn {{image, area}, index} ->
+        %{image: image, area: area, more: if(index == length(shown) - 1, do: more, else: 0)}
+      end)
+
+    %{aspect: aspect, cells: cells}
+  end
+
+  # The arrangements, on a 12×6 grid (`row-start / col-start / row-end /
+  # col-end`). Twelve columns divide by two, three, four and six, which is
+  # every split these layouts need; six rows do the same vertically. A coarser
+  # grid was tried first and could not express the tall-hero five-photo case
+  # without cropping the hero the wrong way.
+  #
+  # **What is tuned here is the hero cell, not the frame.** A cell's aspect is
+  # `frame_ratio × (cell_cols / 12) ÷ (cell_rows / 6)`, so the frame and the
+  # hero's own tile pull in opposite directions — a portrait hero wants a
+  # *wider* frame when its tile is narrow and full-height. That is the whole
+  # "aspect-aware" claim and the reason each count carries a portrait and a
+  # landscape variant instead of one compromise that crops both.
+  # `mosaic_layout_test.exs` asserts the resulting hero-cell shape.
+
+  # Two photos sit side by side either way (stacking a pair makes a card twice
+  # as tall as it is wide); only the frame differs, which is what decides
+  # whether the pair reads as two portraits or two landscapes.
+  defp mosaic_shape(2, tall?) do
+    {if(tall?, do: "7 / 5", else: "14 / 5"), ["1 / 1 / 7 / 7", "1 / 7 / 7 / 13"]}
+  end
+
+  # A portrait hero takes the left two thirds full height, with two stacked
+  # beside it; a landscape hero takes the top two thirds full width, with two
+  # side by side below.
+  defp mosaic_shape(3, true) do
+    {"6 / 5", ["1 / 1 / 7 / 9", "1 / 9 / 4 / 13", "4 / 9 / 7 / 13"]}
+  end
+
+  defp mosaic_shape(3, false) do
+    {"1 / 1", ["1 / 1 / 5 / 13", "5 / 1 / 7 / 7", "5 / 7 / 7 / 13"]}
+  end
+
+  # Four photos are the one count with a symmetric answer: a 2×2 grid, where
+  # every cell inherits the frame's aspect exactly, so all four crop equally
+  # little.
+  defp mosaic_shape(4, tall?) do
+    {if(tall?, do: "4 / 5", else: "3 / 2"),
+     ["1 / 1 / 4 / 7", "1 / 7 / 4 / 13", "4 / 1 / 7 / 7", "4 / 7 / 7 / 13"]}
+  end
+
+  # Five, portrait hero: the hero fills the left half top to bottom and the
+  # other four sit in a 2×2 beside it, so all five tiles come out portrait.
+  defp mosaic_shape(5, true) do
+    {"7 / 5",
+     [
+       "1 / 1 / 7 / 7",
+       "1 / 7 / 4 / 10",
+       "1 / 10 / 4 / 13",
+       "4 / 7 / 7 / 10",
+       "4 / 10 / 7 / 13"
+     ]}
+  end
+
+  # Five, landscape hero: the hero over two thirds of both axes, two stacked
+  # at its right and two across the bottom.
+  defp mosaic_shape(5, false) do
+    {"3 / 2",
+     [
+       "1 / 1 / 5 / 9",
+       "1 / 9 / 3 / 13",
+       "3 / 9 / 5 / 13",
+       "5 / 1 / 7 / 5",
+       "5 / 5 / 7 / 13"
+     ]}
+  end
+
+  # A single tile (and the defensive zero case) simply fills the frame; the
+  # post card routes one photo to its own full-width treatment before it ever
+  # gets here.
+  defp mosaic_shape(_count, tall?) do
+    {if(tall?, do: "4 / 5", else: "3 / 2"), ["1 / 1 / 7 / 13"]}
+  end
+
+  @doc """
+  One photo as a lightbox-opening link.
+
+  With JavaScript the `data-photo-*` attributes are all the overlay needs to
+  render the picture, its caption, the camera panel, the download and the
+  license — so the lightbox reads the page rather than being fed a second
+  copy of the data. Without JavaScript the same element is a plain link to
+  the full-size image, which is what it was before the lightbox existed.
+  """
+  attr(:image, :any, required: true)
+  attr(:index, :integer, required: true)
+  attr(:count, :integer, required: true)
+  attr(:license, :string, default: nil)
+  attr(:class, :string, default: nil)
+  slot(:inner_block, required: true)
+
+  def lightbox_link(assigns) do
+    assigns =
+      assigns
+      |> assign(:camera, PostImage.show_camera_info?(assigns.image) && camera_line(assigns.image))
+      |> assign(:download, PostImage.download_url(assigns.image))
+
+    ~H"""
+    <a
+      href={PostImage.url(@image, "xl")}
+      class={@class}
+      data-lightbox-photo={@index}
+      data-photo-src={PostImage.url(@image, "xl")}
+      data-photo-alt={photo_alt(@image)}
+      data-photo-caption={@image.caption}
+      data-photo-camera={@camera}
+      data-photo-download={@download}
+      data-photo-license={@license && license_label(@license)}
+      data-photo-license-url={@license && PhotoLicense.url(@license)}
+      data-photo-position={gettext("Photo %{n} of %{total}", n: @index + 1, total: @count)}
+    >
+      {render_slot(@inner_block)}
+    </a>
+    """
+  end
+
+  @doc """
+  The camera line under a photo, e.g.
+  "Canon EOS R6 · 50 mm · f/1.8 · 1/200 s · ISO 400 · 25 July 2026".
+
+  The capture date joins the technical facts here rather than being a field of
+  its own: on a photo it is one more fact about the shot, not the post's
+  timestamp (which the card already shows).
+  """
+  def camera_line(%PostImage{} = image) do
+    [PostImage.camera_summary(image), taken_on(image)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
+  end
+
+  defp taken_on(%PostImage{taken_at: nil}), do: nil
+
+  # The capture day only — a shutter time to the second is noise beside the
+  # exposure settings. Formatted the way the post timestamps already branch
+  # (`VutuvWeb.UI.post_time/1`), so dates read the same across the card.
+  defp taken_on(%PostImage{taken_at: taken_at}) do
+    case Gettext.get_locale(VutuvWeb.Gettext) do
+      "de" -> Calendar.strftime(taken_at, "%d.%m.%Y")
+      _other -> Calendar.strftime(taken_at, "%b %-d, %Y")
+    end
+  end
+
+  @doc """
+  The turning hourglass shown while a photo waits for the AI image scan
+  (issue #1104).
+
+  An hourglass rather than a spinner on purpose: a spinner says "loading", and
+  what is happening here is not a load but a wait for something being *judged*
+  — with a duration the reader cannot control and should not expect to be
+  instant. The rotation is CSS (`.hourglass`, `components.css`) and stops
+  under `prefers-reduced-motion`; the glyph reads the same either way.
+  """
+  attr(:class, :string, default: "h-5 w-5")
+
+  def hourglass(assigns) do
+    ~H"""
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      class={["hourglass shrink-0", @class]}
+      aria-hidden="true"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M6.75 2.25h10.5M6.75 21.75h10.5M7.5 2.25v3.336c0 .58.226 1.136.63 1.55L12 11l3.87-3.864c.404-.414.63-.97.63-1.55V2.25M7.5 21.75v-3.336c0-.58.226-1.136.63-1.55L12 13l3.87 3.864c.404.414.63.97.63 1.55v3.336"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
+  The author's "we are checking your photos" line (issue #1104).
+
+  Says three things a static badge did not: that a check is running **right
+  now** (the turning hourglass), **how far** it has got on a multi-photo post
+  ("2 of 5 done"), and that the post is already published and only the
+  unchecked pictures are held back — so nobody thinks their post is stuck.
+
+  It is `role="status"`, so a screen reader hears each step as the count
+  updates rather than only on arrival.
+  """
+  attr(:progress, :map, required: true, doc: "Vutuv.Posts.image_check_progress/1")
+
+  def photo_check_progress(assigns) do
+    ~H"""
+    <div
+      class="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+      role="status"
+      aria-live="polite"
+      data-image-pending-pill
+      data-check-pending={@progress.pending}
+    >
+      <.hourglass class="mt-0.5 h-4 w-4" />
+      <span>
+        <span class="font-semibold">
+          {ngettext(
+            "Checking your photo…",
+            "Checking your photos… %{done} of %{total} done",
+            @progress.total,
+            done: @progress.checked,
+            total: @progress.total
+          )}
+        </span>
+        <span class="mt-0.5 block">
+          {gettext(
+            "Your post is already published. Photos still being checked are visible to you alone until they are through."
+          )}
+        </span>
+      </span>
+    </div>
+    """
+  end
+
+  @doc "The license label, from the one vocabulary that owns it."
+  def license_label(license), do: PhotoLicense.label(license)
+
+  @doc """
+  The permalink's rights line under a photo set: the license, linked to its
+  deed so a reader can check the actual terms rather than trust a label.
+
+  Renders **nothing** for all-rights-reserved. That is the default every post
+  carries, so showing it would put a rights notice on every picture on the
+  site and teach people to stop reading the line — which is precisely the
+  line that has to be read on the posts where an author did grant something.
+  """
+  attr(:license, :string, required: true)
+
+  def photo_license_line(assigns) do
+    ~H"""
+    <p
+      :if={PhotoLicense.grants_reuse?(@license)}
+      class="mt-2 text-xs text-slate-600 dark:text-slate-400"
+      data-photo-license={@license}
+    >
+      {gettext("Photos:")}
+      <.link
+        href={PhotoLicense.url(@license)}
+        target="_blank"
+        rel="license noopener"
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {license_label(@license)}
+      </.link>
+    </p>
+    """
+  end
+
+  # A photo with no alt text still needs an accessible name when it has a
+  # caption: the caption is at least *about* the picture, which beats an empty
+  # string a screen reader announces as an unlabelled image. An alt the author
+  # wrote always wins.
+  defp photo_alt(%PostImage{alt: alt}) when is_binary(alt) and alt != "", do: alt
+  defp photo_alt(%PostImage{caption: caption}) when is_binary(caption), do: caption
+  defp photo_alt(%PostImage{}), do: ""
+
+  defp present?(value), do: is_binary(value) and String.trim(value) != ""
 
   # The "Reposted by" attribution line: an overlapping avatar stack (the
   # reposters the viewer follows, newest first) plus a sentence naming the

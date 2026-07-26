@@ -375,10 +375,16 @@ defmodule VutuvWeb.PostFeedLiveTest do
         url: "/post_images/" <> _
       })
 
-      # Each thumbnail row offers "Insert into text": clicking it tells the
+      # "Insert into text" lives in the photo's own panel (issue #1104): the
+      # tile is too small for four controls, and inline placement is a rarer
+      # choice than removing or reordering a photo. Clicking it still tells the
       # editor hook to place the image at the cursor.
-      assert has_element?(live, ~s([phx-click="insert-inline"]))
       [image] = Vutuv.Repo.all(PostImage)
+      refute has_element?(live, ~s([phx-click="insert-inline"]))
+
+      live
+      |> element(~s([phx-click="photo-open"][phx-value-id="#{image.id}"]))
+      |> render_click()
 
       live
       |> element(~s(button[phx-click="insert-inline"][phx-value-id="#{image.id}"]))
@@ -1264,15 +1270,17 @@ defmodule VutuvWeb.PostFeedLiveTest do
     end
   end
 
+  # The feed's multi-photo rendering is the bento mosaic (issue #1104): a
+  # glance of capped height, laid out from the photos' own shapes. The
+  # permalink is where they are shown whole — see the mosaic geometry in
+  # `mosaic_layout_test.exs` and the permalink gallery in the thread tests.
   describe "multi-image gallery" do
-    test "tiles images at their natural aspect ratio (no 4:3 crop), like the permalink", %{
-      conn: conn
-    } do
+    test "lays several photos out as one capped mosaic", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       one = insert(:post_image, user: user, post: nil, token: "galone")
       two = insert(:post_image, user: user, post: nil, token: "galtwo")
 
-      {:ok, _post} = Posts.create_post(user, %{body: "two shots", image_ids: [one.id, two.id]})
+      {:ok, post} = Posts.create_post(user, %{body: "two shots", image_ids: [one.id, two.id]})
 
       {:ok, live, _html} = live(conn, ~p"/feed")
       feed_html = live |> element("#feed-posts") |> render()
@@ -1280,14 +1288,37 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # Both attachments render at feed size…
       assert feed_html =~ "/post_images/galone/feed.avif"
       assert feed_html =~ "/post_images/galtwo/feed.avif"
-      # …uncropped. The preview grid used to force every tile to `aspect-[4/3]`,
-      # chopping a screenshot or panorama down to a middle band — the feed looked
-      # worse than the permalink, which shows the images whole. The feed gallery
-      # now shares the permalink's rendering (natural aspect, no crop).
+      # …as one mosaic of a bounded height, so a photo post costs the timeline
+      # no more room than a snapshot.
+      assert feed_html =~ ~s(data-post-mosaic="2")
+      assert feed_html =~ "max-height: 44rem"
+      # The whole mosaic is one link to the post: a tile is a glance, and the
+      # photos themselves are shown (and opened in the lightbox) on the
+      # permalink.
+      assert feed_html =~ Posts.path(post)
+      # The old blanket `aspect-[4/3]` tile crop is gone for good — the frame
+      # follows the photos now.
       refute feed_html =~ "aspect-[4/3]"
-      # …tiling 1-up on phones, 2-up on sm+ — the permalink's responsive grid,
-      # not the old always-two-column mobile layout that shrank each tile.
-      assert feed_html =~ "sm:grid-cols-2"
+    end
+
+    test "a sixth photo and beyond fold into a count rather than more tiles", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      images =
+        for index <- 1..7, do: insert(:post_image, user: user, post: nil, token: "gal#{index}")
+
+      {:ok, _post} =
+        Posts.create_post(user, %{body: "a set", image_ids: Enum.map(images, & &1.id)})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      feed_html = live |> element("#feed-posts") |> render()
+
+      assert feed_html =~ "data-mosaic-more"
+      assert feed_html =~ "+2"
+      # The sixth and seventh photos are not loaded at all — the point of the
+      # cap is that a photo essay does not cost seven image requests in a feed.
+      refute feed_html =~ "/post_images/gal6/feed.avif"
+      refute feed_html =~ "/post_images/gal7/feed.avif"
     end
   end
 

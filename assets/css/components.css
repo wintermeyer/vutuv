@@ -1791,6 +1791,141 @@ body.mde-fullscreen-lock { overflow: hidden; }
 .mde[data-mde-fullscreen="1"] .mde__mount { flex: 1 1 auto; overflow-y: auto; max-height: none; }
 .mde[data-mde-fullscreen="1"] .mde__source { flex: 1 1 auto; }
 
+/* The turning hourglass shown while a photo waits for the AI image scan
+   (issue #1104, VutuvWeb.PostComponents.hourglass/1). It turns slowly and
+   pauses at each half-turn, the way a real one is flipped — a steady spin
+   would read as a loading spinner, and this is a wait for a verdict, not a
+   download. Motion is the whole point of it, so it is the one thing that
+   tells an author the check is running *now*; under prefers-reduced-motion
+   the glyph simply stands still and says the same thing in words. */
+@keyframes hourglass-turn {
+  0%, 40% { transform: rotate(0deg); }
+  50%, 90% { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
+}
+.hourglass {
+  animation: hourglass-turn 3s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hourglass { animation: none; }
+}
+
+/* The photo lightbox (issue #1104, assets/js/lightbox.js).
+   A full-screen dark stage: it is the one surface in the app that deliberately
+   ignores the light/dark preference, because a photo is judged against a
+   neutral dark ground and a white overlay would tint how the picture reads.
+   Everything else about it is quiet — the chrome sits at low contrast until
+   hovered, so nothing competes with the photograph. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(2 6 23 / 0.94);
+}
+.lightbox[hidden] { display: none; }
+/* Freeze the page behind the overlay: without this a touch drag scrolls the
+   permalink underneath while the photo appears to sit still. */
+html.lightbox-open { overflow: hidden; }
+
+.lightbox__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(100%, 1600px);
+  max-height: 100%;
+  margin: 0;
+}
+.lightbox__image {
+  max-width: 100%;
+  /* Leave room for the caption block below, so a tall photo never pushes the
+     licence and download line off the bottom of the screen. */
+  max-height: calc(100vh - 9rem);
+  object-fit: contain;
+  border-radius: 0.5rem;
+}
+.lightbox__meta {
+  max-width: 44rem;
+  text-align: center;
+  color: #e2e8f0;
+}
+.lightbox__caption { margin: 0; font-size: 0.9375rem; }
+.lightbox__camera {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  /* Camera settings are a technical string of numbers; a fixed-width face
+     stops "f/1.8" and "1/200" from crowding the words around them. */
+  font-variant-numeric: tabular-nums;
+}
+.lightbox__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 1rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+.lightbox__license { color: #94a3b8; text-decoration: underline; }
+.lightbox__license:hover { color: #e2e8f0; }
+.lightbox__license.is-plain { text-decoration: none; pointer-events: none; }
+.lightbox__download {
+  font-weight: 600;
+  color: #93c5fd;
+  text-decoration: none;
+}
+.lightbox__download:hover { color: #bfdbfe; text-decoration: underline; }
+
+.lightbox__close,
+.lightbox__nav {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #cbd5e1;
+  background: rgb(15 23 42 / 0.6);
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.lightbox__close:hover,
+.lightbox__nav:hover { color: #fff; background: rgb(51 65 85 / 0.9); }
+.lightbox__close:focus-visible,
+.lightbox__nav:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.lightbox__close {
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.lightbox__nav {
+  top: 50%;
+  width: 3rem;
+  height: 3rem;
+  font-size: 2rem;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+.lightbox__nav[hidden] { display: none; }
+.lightbox__nav--prev { left: 0.75rem; }
+.lightbox__nav--next { right: 0.75rem; }
+
+/* On a phone the arrows would sit on top of the picture, so they move to the
+   bottom corners where a thumb reaches them anyway. */
+@media (width < 40rem) {
+  .lightbox__nav { top: auto; bottom: 1rem; transform: none; }
+  .lightbox__image { max-height: calc(100vh - 12rem); }
+}
+
 @media (prefers-color-scheme: dark) {
   .profile-header__manage {
     color: #93c5fd;

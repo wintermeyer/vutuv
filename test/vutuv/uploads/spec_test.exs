@@ -72,10 +72,14 @@ defmodule Vutuv.Uploads.SpecTest do
     assert Spec.version(:avatar, :medium).fit == {:crop, 192, 192, :center}
     assert Spec.version(:cover, :wide).fit == {:width_down, 1600}
     assert Spec.version(:screenshot, :thumb).fit == {:crop, 800, 528, :high}
-    assert Enum.map(Spec.versions(:post_image), & &1.name) == [:thumb, :feed, :large]
+    assert Enum.map(Spec.versions(:post_image), & &1.name) == [:thumb, :feed, :large, :xl]
     assert Spec.version(:post_image, :thumb).fit == {:crop, 320, 320, :center}
     assert Spec.version(:post_image, :feed).fit == {:box_down, 1200}
     assert Spec.version(:post_image, :large).fit == {:box_down, 1600}
+    # `xl` is the lightbox version (issue #1104): the one size meant for
+    # looking at rather than for a layout slot, so it is the only one big
+    # enough to fill a 4K screen.
+    assert Spec.version(:post_image, :xl).fit == {:box_down, 2560}
   end
 
   describe "write_derived/3" do

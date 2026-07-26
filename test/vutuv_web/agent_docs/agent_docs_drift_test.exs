@@ -472,8 +472,88 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.txt =~ "Reactions from other networks: 1"
   end
 
+  # Issue #1104. The rule these three assert together: an agent format shows
+  # exactly what a visitor to the HTML page sees about a photo — its caption
+  # and licence always, its camera settings and download link only where the
+  # author published them.
+  test "post permalink: a photo's caption and the post's licence reach every format", %{
+    user: user
+  } do
+    image = insert(:post_image, user: user, caption: "Lisbon, last morning", alt: "A yellow tram")
+
+    {:ok, post} =
+      Vutuv.Posts.create_post(user, %{
+        body: "From the trip.",
+        image_ids: [image.id],
+        license: "cc-by-4.0"
+      })
+
+    rendered = formats_for("/drift_tester/posts/#{post.id}")
+
+    for fact <- ["Lisbon, last morning", "CC BY 4.0"], do: assert_fact_everywhere(rendered, fact)
+
+    doc = Jason.decode!(rendered.json)
+    assert doc["license"]["spdx"] == "CC-BY-4.0"
+    assert doc["license"]["url"] == "https://creativecommons.org/licenses/by/4.0/"
+    assert [photo] = doc["images"]
+    assert photo["caption"] == "Lisbon, last morning"
+    assert photo["alt"] == "A yellow tram"
+  end
+
+  test "post permalink: camera settings and the download appear only where the author published them",
+       %{user: user} do
+    facts = [
+      camera: "Canon EOS R6",
+      lens: "RF50mm F1.8 STM",
+      focal_length: "50",
+      aperture: "1.8",
+      shutter: "1/200",
+      iso: 400
+    ]
+
+    shown =
+      insert(:post_image, [user: user, show_camera_info: true, download_original: true] ++ facts)
+
+    hidden = insert(:post_image, [user: user] ++ facts)
+
+    {:ok, post} =
+      Vutuv.Posts.create_post(user, %{body: "Two photos.", image_ids: [shown.id, hidden.id]})
+
+    rendered = formats_for("/drift_tester/posts/#{post.id}")
+    doc = Jason.decode!(rendered.json)
+    [published, withheld] = doc["images"]
+
+    assert published["camera"] == "Canon EOS R6"
+    assert published["iso"] == 400
+    assert published["download_url"] =~ "/post_images/#{shown.token}/original.orig"
+
+    # The withheld photo carries no camera keys at all — not a set of nulls,
+    # which would tell a reader the facts exist and are being kept back.
+    refute Map.has_key?(withheld, "camera")
+    refute Map.has_key?(withheld, "iso")
+    assert withheld["download_url"] == nil
+
+    assert rendered.md =~ "Canon EOS R6 · RF50mm F1.8 STM · 50 mm · f/1.8 · 1/200 s · ISO 400"
+    assert rendered.txt =~ "Canon EOS R6 · RF50mm F1.8 STM · 50 mm · f/1.8 · 1/200 s · ISO 400"
+  end
+
+  test "post permalink: an all-rights-reserved post advertises no reuse", %{user: user} do
+    image = insert(:post_image, user: user)
+    {:ok, post} = Vutuv.Posts.create_post(user, %{body: "Mine.", image_ids: [image.id]})
+
+    rendered = formats_for("/drift_tester/posts/#{post.id}")
+    doc = Jason.decode!(rendered.json)
+
+    assert doc["license"]["id"] == "arr"
+    assert doc["license"]["spdx"] == nil
+    # The HTML page renders no licence line for the default, so neither may
+    # the readable formats — a rights notice on every post trains people to
+    # stop reading the one that matters.
+    refute rendered.md =~ "Photos:"
+    refute rendered.txt =~ "Photos:"
+  end
+
   test "post permalink: a reply from another network reaches every format (issue #1069)", %{
-    user: user,
     post: post
   } do
     now = DateTime.utc_now(:second)
@@ -511,7 +591,6 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   end
 
   test "a reply sent to the member alone never reaches an agent format (issue #1071)", %{
-    user: user,
     post: post
   } do
     now = DateTime.utc_now(:second)

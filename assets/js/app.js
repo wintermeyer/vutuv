@@ -17,6 +17,9 @@ import { csrfToken, onReady, once, request, reducedMotion } from "./util"
 // The Milkdown WYSIWYG Markdown editor shared by the post + message composers
 // (VutuvWeb.UI.markdown_editor/1); registered as the MarkdownEditor hook below.
 import { MarkdownEditor } from "./markdown_editor"
+// The photo lightbox on the post permalink (self-contained page-level
+// enhancement, deliberately outside every LiveView root; see lightbox.js).
+import "./lightbox"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the
@@ -391,6 +394,66 @@ const Hooks = {
         })
       })
       this._tops = null
+    },
+  },
+  // Drag-to-reorder for the post composer's photo strip (issue #1104). The
+  // sibling of Reorder above, with two differences that matter: the strip is a
+  // wrapping grid, so the drop target is found by distance to a tile's centre
+  // in BOTH axes rather than by vertical midpoint; and the order is pushed on
+  // drop, because a photo set's order is the mosaic's layout — the first photo
+  // is the hero — so it must survive the re-render exactly as dropped.
+  //
+  // Touch cannot fire native HTML5 drag, so the ◀ ▶ buttons (plain phx-click)
+  // are the reorder path on a phone; this layers pointer drag on top.
+  PhotoStrip: {
+    mounted() {
+      this.dragging = null
+      const strip = this.el
+      const tiles = () => [...strip.querySelectorAll("[data-photo-tile]")]
+
+      const nearest = (x, y) =>
+        tiles()
+          .filter((tile) => tile !== this.dragging)
+          .reduce(
+            (closest, tile) => {
+              const box = tile.getBoundingClientRect()
+              const dx = x - (box.left + box.width / 2)
+              const dy = y - (box.top + box.height / 2)
+              const distance = dx * dx + dy * dy
+              return distance < closest.distance
+                ? { distance, tile, before: dx < 0 }
+                : closest
+            },
+            { distance: Number.POSITIVE_INFINITY, tile: null, before: false }
+          )
+
+      strip.addEventListener("dragstart", (e) => {
+        const tile = e.target.closest("[data-photo-tile]")
+        if (!tile) return
+        this.dragging = tile
+        tile.classList.add("opacity-40")
+      })
+
+      strip.addEventListener("dragend", () => {
+        if (!this.dragging) return
+        this.dragging.classList.remove("opacity-40")
+        this.dragging = null
+        // pushEventTo(this.el, …), not pushEvent: the composer is a
+        // LiveComponent, and a bare pushEvent would be delivered to the host
+        // LiveView, which has no handler for it.
+        this.pushEventTo(this.el, "photo-reorder", {
+          order: tiles().map((tile) => tile.dataset.photoTile),
+        })
+      })
+
+      strip.addEventListener("dragover", (e) => {
+        e.preventDefault()
+        if (!this.dragging) return
+        const { tile, before } = nearest(e.clientX, e.clientY)
+        if (!tile) return
+        if (before) strip.insertBefore(this.dragging, tile)
+        else strip.insertBefore(this.dragging, tile.nextSibling)
+      })
     },
   },
 }

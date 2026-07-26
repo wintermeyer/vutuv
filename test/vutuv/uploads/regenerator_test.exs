@@ -185,7 +185,11 @@ defmodule Vutuv.Uploads.RegeneratorTest do
   end
 
   describe "post images" do
-    test "relocates the original, derives all three AVIF versions, sweeps .webp", %{tmp: tmp} do
+    # This is also how the `xl` version (issue #1104) reaches photos uploaded
+    # before it existed: a regeneration run derives it from the kept original.
+    # Until then the proxy falls back to `large`, so nothing is ever broken —
+    # only softer on a very large screen.
+    test "relocates the original, derives every AVIF version, sweeps .webp", %{tmp: tmp} do
       image = insert(:post_image)
       dir = Path.join(tmp, "post_images/#{image.token}")
 
@@ -198,7 +202,9 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       summary = Regenerator.run(only: :post_images)
 
       assert summary.post_images == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
-      assert dir |> File.ls!() |> Enum.sort() == ["feed.avif", "large.avif", "thumb.avif"]
+
+      assert dir |> File.ls!() |> Enum.sort() ==
+               ["feed.avif", "large.avif", "thumb.avif", "xl.avif"]
 
       assert File.exists?(Path.join(tmp, "originals/post_images/#{image.token}/original.jpg"))
     end

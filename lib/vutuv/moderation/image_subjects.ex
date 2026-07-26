@@ -455,21 +455,31 @@ defmodule Vutuv.Moderation.ImageSubjects do
   end
 
   # A post picture reaching a verdict is what releases a post held back from
-  # federating (issue #1070). Takes the image row when it still exists (the
-  # rejection path has just deleted it, so the id would no longer resolve) or its
-  # id when it does. Only `post_image` matters here — the other gallery kinds do
-  # not federate.
+  # federating (issue #1070), and what the "checking your photos" indicator on
+  # the open page is waiting for (issue #1104). Takes the image row when it
+  # still exists (the rejection path has just deleted it, so the id would no
+  # longer resolve) or its id when it does. Only `post_image` matters here —
+  # the other gallery kinds neither federate nor show that indicator.
   defp settle_post_federation("post_image", %PostImage{post_id: post_id}),
-    do: Vutuv.Fediverse.images_settled(post_id)
+    do: settled(post_id)
 
   defp settle_post_federation("post_image", subject_id) when is_binary(subject_id) do
     case Repo.get(PostImage, subject_id) do
-      %PostImage{post_id: post_id} -> Vutuv.Fediverse.images_settled(post_id)
+      %PostImage{post_id: post_id} -> settled(post_id)
       nil -> :ok
     end
   end
 
   defp settle_post_federation(_kind, _subject), do: :ok
+
+  # A pending image belongs to no post yet (it is still in somebody's composer),
+  # so there is nothing to federate and nobody watching a card for it.
+  defp settled(nil), do: :ok
+
+  defp settled(post_id) do
+    Vutuv.Fediverse.images_settled(post_id)
+    Vutuv.Posts.broadcast_images_settled(post_id)
+  end
 
   # An organization's `logo` column points at its image token; a rejected logo
   # must not leave a dangling pointer behind.
