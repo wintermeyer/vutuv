@@ -217,27 +217,27 @@ msgstr "darf nicht nur ein Link sein. Bitte beschreiben Sie sich in ein paar Wor
 msgid "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
 msgstr "„%{tag}“ ist eine Web-Adresse, kein Tag. Bitte beschreiben Sie sich mit Worten."
 
-#: lib/vutuv_web/views/error_helpers.ex:116
+#: lib/vutuv_web/views/error_helpers.ex:118
 #, elixir-autogen, elixir-format
 msgid "must not be only punctuation"
 msgstr "darf nicht nur aus Satzzeichen bestehen"
 
-#: lib/vutuv_web/views/error_helpers.ex:117
+#: lib/vutuv_web/views/error_helpers.ex:119
 #, elixir-autogen, elixir-format
 msgid "\"%{tag}\" is only punctuation, not a tag."
 msgstr "„%{tag}“ besteht nur aus Satzzeichen und ist kein Tag."
 
-#: lib/vutuv_web/views/error_helpers.ex:120
+#: lib/vutuv_web/views/error_helpers.ex:122
 #, elixir-autogen, elixir-format
 msgid "\"%{uri}\" is not a valid https account address."
 msgstr "„%{uri}“ ist keine gültige https-Kontoadresse."
 
-#: lib/vutuv_web/views/error_helpers.ex:119
+#: lib/vutuv_web/views/error_helpers.ex:121
 #, elixir-autogen, elixir-format
 msgid "Please list at most %{max} accounts."
 msgstr "Bitte geben Sie höchstens %{max} Konten an."
 
-#: lib/vutuv_web/views/error_helpers.ex:114
+#: lib/vutuv_web/views/error_helpers.ex:116
 #, elixir-autogen, elixir-format
 msgid "must spell out how the name sounds"
 msgstr "muss beschreiben, wie der Name klingt"

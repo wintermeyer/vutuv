@@ -2265,7 +2265,7 @@ defmodule VutuvWeb.PostComponents do
         <span class="mt-0.5 block">
           {ngettext(
             "Our AI is checking the photo. As soon as it is through, the post goes live by itself.",
-            "Our AI is checking the photos — %{done} of %{total} done. As soon as the last one is through, the post goes live by itself.",
+            "Our AI is checking the photos, %{done} of %{total} done. As soon as the last one is through, the post goes live by itself.",
             @progress.total,
             done: @progress.checked,
             total: @progress.total

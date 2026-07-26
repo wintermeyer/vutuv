@@ -79,16 +79,16 @@ defmodule Vutuv.Posts.PhotoLicense do
   def label("arr"), do: gettext("© All rights reserved")
 
   def label("cc-by-4.0"),
-    do: gettext("CC BY 4.0 — reuse with credit")
+    do: gettext("CC BY 4.0 (reuse with credit)")
 
   def label("cc-by-sa-4.0"),
-    do: gettext("CC BY-SA 4.0 — reuse with credit, share alike")
+    do: gettext("CC BY-SA 4.0 (credit, share alike)")
 
   def label("cc-by-nc-4.0"),
-    do: gettext("CC BY-NC 4.0 — non-commercial reuse with credit")
+    do: gettext("CC BY-NC 4.0 (non-commercial, with credit)")
 
   def label("cc0-1.0"),
-    do: gettext("CC0 1.0 — no rights reserved")
+    do: gettext("CC0 1.0 (no rights reserved)")
 
   def label(_unknown), do: label(@default)
 
