@@ -461,6 +461,32 @@ Legacy `…/feed.webp` URLs in old post bodies keep resolving.
 Not a second kind of post — the same post, showing its pictures properly.
 Everything beyond "drop photos, press Post" is one switch or one select.
 
+### A post waits for all of its photos
+
+A post carrying a picture that has not finished the AI image scan is held back
+**whole**: out of every feed and profile, off its own permalink, out of the
+agent-format siblings and out of the Fediverse. Publishing the text with the
+unchecked pictures blanked would mean the post is *seen* before it is vetted,
+which is what the scan exists to prevent.
+
+`posts.images_pending?` carries it, and `Posts.moderation_hidden?/1` +
+`scope_unfrozen/2` (the SQL twin) gate on it beside `frozen_at` — so the hold
+rides the **existing** visibility chokepoint rather than a second one, and the
+author (and admins) keep their usual access. It is a denormalised flag on
+purpose: the visibility scope is the newsfeed's inner loop, and a `NOT EXISTS`
+over `post_images` there would be paid for on every candidate row.
+`Posts.refresh_images_pending/1` is its one owner and runs at the three moments
+it can change — create, edit, scan settles — with a guarded `update_all`, so
+two scans finishing at once cannot both claim the release.
+
+The author sees the post immediately, marked "Only you can see this post so
+far" with the turning hourglass and a count
+(`PostComponents.photo_check_progress/1`). Their **followers are not told yet**:
+`{:new_post, …}` goes to the author alone while the post is held and to the
+followers at the moment the last photo clears, so nobody gets a "Show 1 new
+post" pill for a post their feed query then filters out. Everything updates over
+PubSub, so the author watches it go live without reloading.
+
 **A single photo is shown whole in the feed.** `PostComponents.feed_photo_fit/1`
 answers `:whole` for every ordinary shape (the envelope is 2:1 down to 1:2, so
 4:3, 3:2, 16:9, 1:1 and a phone's 9:16 all qualify) and the image is bounded by

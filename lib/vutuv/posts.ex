@@ -286,7 +286,18 @@ defmodule Vutuv.Posts do
         # A reported post that its owner edits leaves the moderation freezer
         # (the owner's self-service round; see Vutuv.Moderation).
         Vutuv.Moderation.content_edited(updated)
-        updated = preload_post(updated)
+        # An edit can attach a fresh photo (holding the post again) or drop the
+        # last unchecked one (releasing it), so the hold is recomputed here
+        # too — and a release fans the post out, since for its followers this
+        # is the moment it appears.
+        {changed?, pending?} = recompute_images_pending(updated.id)
+        # preload/2 keeps the struct's own columns, so the fresh hold is put
+        # back on by hand — the composer navigates to a card built from this.
+        updated = %{preload_post(updated) | images_pending?: pending?}
+
+        if changed? and not pending?,
+          do: broadcast_new_post_to_followers(updated.id, updated.user_id)
+
         remember_license(updated.user, updated)
         # The edit can add a name, drop one, or (by changing the audience)
         # move a named member out of the post's reach: re-derive the set.
@@ -435,7 +446,7 @@ defmodule Vutuv.Posts do
           attach_images!(post, image_ids)
           insert_reply_ref!(post, parent)
           insert_remote_reply_ref!(post, note)
-          post
+          hold_for_image_check!(post)
 
         {:error, changeset} ->
           Repo.rollback(changeset)
@@ -502,6 +513,23 @@ defmodule Vutuv.Posts do
 
       if count != 1, do: Repo.rollback(:invalid_images)
     end)
+  end
+
+  # Sets the hold inside the insert transaction (issue #1104), so the struct
+  # the caller gets back already knows the post is not public yet — the
+  # composer's own card would otherwise render one state behind.
+  defp hold_for_image_check!(%Post{} = post) do
+    pending? =
+      Repo.exists?(
+        from(i in PostImage, where: i.post_id == ^post.id and i.moderation == "pending")
+      )
+
+    if pending? do
+      Repo.update_all(from(p in Post, where: p.id == ^post.id), set: [images_pending?: true])
+      %{post | images_pending?: true}
+    else
+      post
+    end
   end
 
   defp check_image_count(image_ids) do
@@ -607,16 +635,26 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  A post is in the moderation freezer, or its author's whole account is
-  hidden (frozen pending review, suspended, or deactivated). Such posts
-  vanish for everyone but the author (first `visible_to?/2` clause) and
-  admins — and unlike a plain audience restriction, no teaser stands in for
-  them (a frozen post gets a 404, not a "Follow to read" tombstone).
-  The policy itself lives in Vutuv.Moderation; render paths usually carry
+  A post is in the moderation freezer, its photos have not finished the AI
+  image scan, or its author's whole account is hidden (frozen pending review,
+  suspended, or deactivated). Such posts vanish for everyone but the author
+  (first `visible_to?/2` clause) and admins — and unlike a plain audience
+  restriction, no teaser stands in for them (a frozen post gets a 404, not a
+  "Follow to read" tombstone).
+
+  **The photo case holds the whole post, not just the picture** (issue #1104):
+  a post with six photos reaches the feed, the profile and the Fediverse only
+  once the scan has passed all six. Publishing the text with the unchecked
+  pictures blanked would mean the post is *seen* before it is vetted, which is
+  exactly what the scan exists to prevent — and it would hand every reader a
+  half-rendered card. The author keeps seeing it, marked as not yet public
+  (`VutuvWeb.PostComponents.photo_check_progress/1`).
+
+  The moderation policy lives in Vutuv.Moderation; render paths usually carry
   the author preloaded, so the user fetch is the fallback, not the rule.
   """
   def moderation_hidden?(%Post{} = post) do
-    post.frozen_at != nil or author_hidden?(post)
+    post.frozen_at != nil or post.images_pending? == true or author_hidden?(post)
   end
 
   defp author_hidden?(%Post{user: %User{} = author}),
@@ -714,12 +752,17 @@ defmodule Vutuv.Posts do
     |> scope_unfrozen(viewer)
   end
 
-  # The moderation arm of scope_visible/2: frozen posts and posts whose
-  # author's account is hidden (frozen / suspended / deactivated) vanish from
-  # every list, except the author's own. The SQL twin of moderation_hidden?/1;
-  # the hidden-account condition itself is owned by Vutuv.Moderation.Query.
+  # The moderation arm of scope_visible/2: frozen posts, posts still waiting
+  # for the AI image scan (issue #1104), and posts whose author's account is
+  # hidden (frozen / suspended / deactivated) vanish from every list, except
+  # the author's own. The SQL twin of moderation_hidden?/1; the hidden-account
+  # condition itself is owned by Vutuv.Moderation.Query.
   defp scope_unfrozen(query, viewer) do
-    passes = dynamic([p], is_nil(p.frozen_at) and not account_hidden(p.user_id))
+    passes =
+      dynamic(
+        [p],
+        is_nil(p.frozen_at) and p.images_pending? == false and not account_hidden(p.user_id)
+      )
 
     filter =
       case viewer do
@@ -1134,18 +1177,72 @@ defmodule Vutuv.Posts do
   the one place that runs on both the approve and the reject path.
   """
   def broadcast_images_settled(post_id) when is_binary(post_id) do
-    event = {:post_images_settled, %{post_id: post_id}}
+    # Recompute the hold first, so every listener that re-reads the post sees
+    # the state the message announces.
+    became_public? = refresh_images_pending(post_id)
+
+    event = {:post_images_settled, %{post_id: post_id, public?: became_public?}}
     Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(post_id), event)
 
     # `Vutuv.Activity.broadcast/2` is the house helper for a member's own
     # topic, and it no-ops on a nil recipient — which is exactly the
     # already-deleted-post case.
-    from(p in Post, where: p.id == ^post_id, select: p.user_id)
-    |> Repo.one()
-    |> Vutuv.Activity.broadcast(event)
+    author_id = Repo.one(from(p in Post, where: p.id == ^post_id, select: p.user_id))
+    Vutuv.Activity.broadcast(author_id, event)
+
+    # The post only now exists for anybody else, so this is when its followers
+    # are told about it — the `{:new_post, …}` fan-out that a held post skipped
+    # at creation. Without this a photo post would reach a follower's feed only
+    # on their next full reload.
+    if became_public? and author_id, do: broadcast_new_post_to_followers(post_id, author_id)
+
+    :ok
   end
 
   def broadcast_images_settled(_post_id), do: :ok
+
+  @doc """
+  Recomputes a post's `images_pending?` hold from its photos, and answers
+  whether **this call** is the one that released it (issue #1104).
+
+  The one owner of that column. Called at each of the three moments it can
+  change: a post is created, a post is edited (which can attach fresh photos),
+  and a scan settles. It is written with a guarded `update_all` so two scans
+  finishing at once cannot both claim the release and fan the post out twice.
+  """
+  def refresh_images_pending(post_id) when is_binary(post_id) do
+    {changed?, pending?} = recompute_images_pending(post_id)
+    changed? and not pending?
+  end
+
+  def refresh_images_pending(_post_id), do: false
+
+  # `{changed?, pending?}` — the write and the resulting state. The write is
+  # guarded on the value actually differing, so two scans finishing at the same
+  # moment cannot both report the release and fan the post out twice.
+  defp recompute_images_pending(post_id) do
+    pending? =
+      Repo.exists?(
+        from(i in PostImage,
+          where: i.post_id == ^post_id and i.moderation == "pending"
+        )
+      )
+
+    {changed, _} =
+      Repo.update_all(
+        from(p in Post, where: p.id == ^post_id and p.images_pending? != ^pending?),
+        set: [images_pending?: pending?]
+      )
+
+    {changed == 1, pending?}
+  end
+
+  @doc """
+  Whether this post is being held back from everyone but its author while the
+  AI image scan runs. What the card asks to decide between "not public yet"
+  and an ordinary post.
+  """
+  def held_for_image_check?(%Post{images_pending?: pending}), do: pending == true
 
   @doc """
   How far the AI image scan has got on this post: `%{total:, checked:,
@@ -3023,10 +3120,31 @@ defmodule Vutuv.Posts do
 
   ## Broadcasts
 
-  defp broadcast_new_post(%Post{} = post) do
-    event = {:new_post, %{post_id: post.id, author_id: post.user_id}}
-    broadcast_to_followers(post.user_id, event)
+  # A post held for the AI image scan (issue #1104) goes to its **author
+  # alone**: their own feed must still show the card they just posted — with
+  # its "only you can see this" banner — while a follower getting a "Show 1
+  # new post" pill for a post the feed query then filters out would be a dead
+  # end. The followers are told instead at the moment the last photo clears
+  # (`broadcast_images_settled/1`).
+  defp broadcast_new_post(%Post{images_pending?: true} = post) do
+    Vutuv.Activity.broadcast(post.user_id, new_post_event(post.id, post.user_id))
   end
+
+  defp broadcast_new_post(%Post{} = post) do
+    broadcast_to_followers(post.user_id, new_post_event(post.id, post.user_id))
+  end
+
+  # The release fan-out: followers only. The author already has the card on
+  # screen from the held broadcast above, and `{:post_images_settled, …}`
+  # refreshes it — sending them a second `{:new_post, …}` would re-prepend a
+  # post that has not moved.
+  defp broadcast_new_post_to_followers(post_id, author_id) do
+    event = new_post_event(post_id, author_id)
+    Enum.each(follower_ids(author_id), &Vutuv.Activity.broadcast(&1, event))
+  end
+
+  defp new_post_event(post_id, author_id),
+    do: {:new_post, %{post_id: post_id, author_id: author_id}}
 
   @doc """
   Removes a post's auto-captured link screenshot on the author's request (the

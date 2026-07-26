@@ -172,10 +172,12 @@ defmodule VutuvWeb.PostComponents do
       assigns
       |> assign(:post, post)
       |> assign(:held_count, held_count)
-      |> assign(
-        :limbo_pill?,
-        Enum.any?(shown_images, &(&1.moderation == "pending"))
-      )
+      # The "only you can see this" banner keys on the **post-level** hold, not
+      # on the individual pictures: what it announces is that the whole post is
+      # being held back (`Posts.moderation_hidden?/1`), which is a fact about
+      # the post. Keying it on the images would also make it disappear on a
+      # viewer whose image list happens to be filtered.
+      |> assign(:limbo_pill?, Posts.held_for_image_check?(post))
       # How far the AI scan has got, for the author's progress line. Counted
       # from the post's own (unfiltered) image list, so "2 of 5" means the
       # photos the author attached, not the subset this viewer can see.
@@ -2227,12 +2229,19 @@ defmodule VutuvWeb.PostComponents do
   end
 
   @doc """
-  The author's "we are checking your photos" line (issue #1104).
+  The author's "not public yet, we are checking your photos" banner
+  (issue #1104).
 
-  Says three things a static badge did not: that a check is running **right
-  now** (the turning hourglass), **how far** it has got on a multi-photo post
-  ("2 of 5 done"), and that the post is already published and only the
-  unchecked pictures are held back — so nobody thinks their post is stuck.
+  A post waits for **all** of its photos before it goes anywhere
+  (`Vutuv.Posts.moderation_hidden?/1`), so this banner has to carry the one
+  fact the author would otherwise get wrong: the post exists, they can see it,
+  and **nobody else can yet**. It says that first, then that a check is running
+  right now (the turning hourglass), then how far it has got on a multi-photo
+  post ("2 of 5 done") — and it disappears by itself the moment the last photo
+  clears, which is the answer to "when does it go live".
+
+  Deliberately a banner on the card and not a modal: the check takes as long as
+  it takes, and the author is meant to keep working meanwhile.
 
   It is `role="status"`, so a screen reader hears each step as the count
   updates rather than only on arrival.
@@ -2251,17 +2260,15 @@ defmodule VutuvWeb.PostComponents do
       <.hourglass class="mt-0.5 h-4 w-4" />
       <span>
         <span class="font-semibold">
+          {gettext("Only you can see this post so far.")}
+        </span>
+        <span class="mt-0.5 block">
           {ngettext(
-            "Checking your photo…",
-            "Checking your photos… %{done} of %{total} done",
+            "Our AI is checking the photo. As soon as it is through, the post goes live by itself.",
+            "Our AI is checking the photos — %{done} of %{total} done. As soon as the last one is through, the post goes live by itself.",
             @progress.total,
             done: @progress.checked,
             total: @progress.total
-          )}
-        </span>
-        <span class="mt-0.5 block">
-          {gettext(
-            "Your post is already published. Photos still being checked are visible to you alone until they are through."
           )}
         </span>
       </span>

@@ -25,6 +25,15 @@ defmodule Vutuv.Posts.Post do
     # Set while the post is in the moderation freezer: hidden from everyone
     # but the author and admins. Managed by Vutuv.Moderation, never cast.
     field(:frozen_at, :naive_datetime)
+
+    # True while any attached photo is still waiting for the AI image scan
+    # (issue #1104). Such a post is held back **whole** — out of every feed,
+    # profile, permalink and the Fediverse — and visible to its author alone,
+    # who sees it marked as not yet public. Denormalised from `images` so the
+    # visibility scope stays a boolean test rather than a subquery in the
+    # newsfeed's inner loop; `Vutuv.Posts.refresh_images_pending/1` owns it and
+    # it is never cast from params.
+    field(:images_pending?, :boolean, default: false)
     # Postgres-generated tsvector over body (see the migration); referenced
     # only by search_public/2's fragments, never loaded or written by Ecto.
     field(:search_tsv, :string, load_in_query: false)

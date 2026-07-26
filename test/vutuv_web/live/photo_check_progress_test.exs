@@ -36,7 +36,7 @@ defmodule VutuvWeb.PhotoCheckProgressTest do
   end
 
   describe "the author's progress line" do
-    test "counts the photos that are through and says the post is already published", %{
+    test "says the post is not public yet and counts the photos that are through", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
@@ -47,8 +47,10 @@ defmodule VutuvWeb.PhotoCheckProgressTest do
 
       assert html =~ "data-image-pending-pill"
       assert html =~ ~s(data-check-pending="1")
+      # The fact the author would otherwise get wrong comes first.
+      assert html =~ "Only you can see this post so far."
       assert html =~ "2 of 3 done"
-      assert html =~ "already published"
+      assert html =~ "goes live by itself"
       # The moving part: a still card is what reads as stuck.
       assert html =~ "hourglass"
     end
@@ -59,7 +61,7 @@ defmodule VutuvWeb.PhotoCheckProgressTest do
 
       html = live_feed_html(conn)
 
-      assert html =~ "Checking your photo"
+      assert html =~ "Our AI is checking the photo."
       refute html =~ "of 1 done"
     end
 
