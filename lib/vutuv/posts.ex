@@ -61,6 +61,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostBookmark
   alias Vutuv.Posts.PostDenial
+  alias Vutuv.Posts.PostDraft
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostMention
@@ -3069,14 +3070,149 @@ defmodule Vutuv.Posts do
   @doc """
   Removes pending images older than a day (abandoned composer sessions),
   files included. Returns the number of swept images.
+
+  A photo a **draft** still names is not abandoned, however long it has been
+  sitting there: the composer will hand it back the moment the member reopens
+  it (issue #1148), and sweeping it would restore a draft with holes in it.
+  Those images go when their draft does, either on save or through
+  `sweep_drafts/1`.
   """
   def sweep_pending_images(max_age_hours \\ @pending_max_age_hours) do
     cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -max_age_hours * 3600)
 
-    from(i in PostImage, where: is_nil(i.post_id) and i.inserted_at < ^cutoff)
+    from(i in PostImage,
+      as: :image,
+      where: is_nil(i.post_id) and i.inserted_at < ^cutoff,
+      where: not exists(drafts_naming_image())
+    )
     |> Repo.all()
     |> Enum.count(&delete_if_pending/1)
   end
+
+  # Correlated "some draft still lists this image". Both `?`s in the fragment
+  # are real parameter markers (the outer image's id, the draft's id array),
+  # not literal question marks, so nothing shifts.
+  defp drafts_naming_image do
+    from(d in PostDraft,
+      where: fragment("? = ANY(?)", parent_as(:image).id, d.image_ids),
+      select: 1
+    )
+  end
+
+  ## Composer drafts (issue #1148)
+
+  # How long an untouched draft is kept. Long enough that "I'll finish this
+  # tomorrow" works and that a holiday does not eat it, short enough that the
+  # composer does not greet someone with a half-sentence they have long
+  # forgotten writing. Per installation: POST_DRAFT_RETENTION_DAYS.
+  @default_draft_max_age_days 30
+
+  @doc "How many days an untouched draft is kept."
+  def draft_max_age_days,
+    do: Application.get_env(:vutuv, :post_draft_retention_days, @default_draft_max_age_days)
+
+  @doc """
+  The member's draft for one composer context, or `nil`.
+
+  `context` is what the composer is: `nil` for the feed's new post, a `%Post{}`
+  it is answering, or a `%Note{}` (a reply from another network) it is
+  answering. A draft holding nothing is treated as no draft, so an autosave
+  that raced the member emptying the composer cannot make an empty composer
+  announce itself as restored.
+  """
+  def get_draft(%User{} = author, context \\ nil) do
+    case Repo.one(from(d in PostDraft, where: ^draft_scope(author, context))) do
+      %PostDraft{} = draft -> if PostDraft.any_content?(draft), do: draft, else: nil
+      nil -> nil
+    end
+  end
+
+  @doc """
+  Writes the composer's current content for one context, replacing whatever was
+  there. Returns `:ok` either way.
+
+  This is an **autosave**, so it never reports a problem to the member: an
+  invalid changeset (a body past the post limit, say — which the post itself
+  would refuse too) simply skips this round rather than interrupting someone
+  mid-sentence. A draft with nothing in it is deleted instead of stored, so
+  clearing the composer really clears it.
+  """
+  def save_draft(%User{} = author, context, attrs) do
+    changeset =
+      PostDraft.changeset(
+        %PostDraft{
+          user_id: author.id,
+          parent_id: draft_parent_id(context),
+          remote_note_id: draft_remote_note_id(context)
+        },
+        attrs
+      )
+
+    cond do
+      not changeset.valid? ->
+        :ok
+
+      not PostDraft.any_content?(Ecto.Changeset.apply_changes(changeset)) ->
+        delete_draft(author, context)
+
+      true ->
+        changeset
+        |> Repo.insert(
+          on_conflict:
+            {:replace, [:body, :tags, :mode, :license, :review, :image_ids, :photos, :updated_at]},
+          conflict_target: draft_conflict_target(context)
+        )
+        |> case do
+          {:ok, _draft} -> :ok
+          {:error, _changeset} -> :ok
+        end
+    end
+  end
+
+  @doc "Drops the member's draft for one context (the post was sent, or discarded)."
+  def delete_draft(%User{} = author, context \\ nil) do
+    Repo.delete_all(from(d in PostDraft, where: ^draft_scope(author, context)))
+    :ok
+  end
+
+  @doc """
+  Removes drafts nobody has touched in `max_age_days`. Returns how many went.
+
+  Their pending photos go with them on the next image sweep, which spares only
+  images a *live* draft names.
+  """
+  def sweep_drafts(max_age_days \\ draft_max_age_days()) do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -max_age_days * 86_400)
+
+    {count, _} = Repo.delete_all(from(d in PostDraft, where: d.updated_at < ^cutoff))
+    count
+  end
+
+  # The three composer contexts, as a scope and as the matching conflict target
+  # of the partial unique index that owns them.
+  defp draft_scope(%User{id: author_id}, nil),
+    do: dynamic([d], d.user_id == ^author_id and is_nil(d.parent_id) and is_nil(d.remote_note_id))
+
+  defp draft_scope(%User{id: author_id}, %Post{id: parent_id}),
+    do: dynamic([d], d.user_id == ^author_id and d.parent_id == ^parent_id)
+
+  defp draft_scope(%User{id: author_id}, %Note{id: note_id}),
+    do: dynamic([d], d.user_id == ^author_id and d.remote_note_id == ^note_id)
+
+  defp draft_parent_id(%Post{id: id}), do: id
+  defp draft_parent_id(_context), do: nil
+
+  defp draft_remote_note_id(%Note{id: id}), do: id
+  defp draft_remote_note_id(_context), do: nil
+
+  defp draft_conflict_target(nil),
+    do: {:unsafe_fragment, "(user_id) WHERE parent_id IS NULL AND remote_note_id IS NULL"}
+
+  defp draft_conflict_target(%Post{}),
+    do: {:unsafe_fragment, "(user_id, parent_id) WHERE parent_id IS NOT NULL"}
+
+  defp draft_conflict_target(%Note{}),
+    do: {:unsafe_fragment, "(user_id, remote_note_id) WHERE remote_note_id IS NOT NULL"}
 
   @doc """
   Person typeahead for the composer's "Hide from…" sheet: activated members

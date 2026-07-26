@@ -464,38 +464,6 @@ const Hooks = {
       this._tops = null
     },
   },
-  // Ask before a reload throws a draft away (issue #1148). Hitting F5 or Cmd+R
-  // with half a post in the composer used to wipe it without a word; now the
-  // browser's own "Leave site?" dialog gets in the way first. That dialog is
-  // the only one on offer — its wording and buttons belong to the browser, and
-  // it appears only after the member has interacted with the page, which typing
-  // a post is — so the whole job here is to arm it at the right moments.
-  //
-  // The right moments are decided on the server: PostLive.Composer knows both
-  // what is in the form and what the post looked like when it opened, and
-  // stamps the verdict on data-draft-unsaved. Reading one attribute keeps this
-  // handler cheap, and (more to the point) keeps "is this worth asking about?"
-  // in one place instead of splitting it between Elixir and a DOM walk here.
-  //
-  // Only *browser*-initiated unloads reach this — reload, tab close, Back, a
-  // link to another site. A LiveView navigation never unloads the document, so
-  // it never prompts; a save that redirects releases the guard server-side
-  // before it navigates (see handle_save_result/2).
-  DraftGuard: {
-    mounted() {
-      this.guard = (event) => {
-        if (this.el.dataset.draftUnsaved !== "true") return
-        // preventDefault() is the modern way to ask for the dialog; returnValue
-        // is what Chrome/Edge < 119 and older Safari still look at.
-        event.preventDefault()
-        event.returnValue = true
-      }
-      window.addEventListener("beforeunload", this.guard)
-    },
-    destroyed() {
-      window.removeEventListener("beforeunload", this.guard)
-    },
-  },
   // Drag-to-reorder for the post composer's photo strip (issue #1104). The
   // sibling of Reorder above, with two differences that matter: the strip is a
   // wrapping grid, so the drop target is found by distance to a tile's centre

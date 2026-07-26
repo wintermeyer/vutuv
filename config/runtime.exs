@@ -103,6 +103,13 @@ if config_env() == :prod do
     config :vutuv, :post_edit_window_minutes, String.to_integer(minutes)
   end
 
+  # How long an untouched composer draft is kept (default 30 days; see
+  # config/config.exs). It is a retention promise, so your privacy page and this
+  # value should agree.
+  if days = System.get_env("POST_DRAFT_RETENTION_DAYS") do
+    config :vutuv, :post_draft_retention_days, String.to_integer(days)
+  end
+
   # Hosts to never take a link-preview screenshot of (default `reddit.com`; see
   # config/config.exs). Comma-separated apex hosts; every subdomain is covered.
   if blocked = System.get_env("SCREENSHOT_BLOCKED_HOSTS") do

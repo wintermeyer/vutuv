@@ -203,38 +203,64 @@ ActivityPub **`featured` collection** and pushed to their followers as
 profile they render — same anonymous-public gate, see
 `docs/architecture/fediverse.md`.
 
-## A reload asks before it eats a draft (issue #1148)
+## The composer keeps what you typed (issue #1148)
 
-Hitting F5 or Cmd+R halfway through a post used to wipe it without a word. Now
-the browser's own "Leave site?" dialog gets in the way first. That dialog is
-the only one available — `beforeunload` cannot be styled, worded or replaced,
-and browsers only raise it once the member has interacted with the page (typing
-a post counts) — so the whole design question is *when* to arm it.
+A page reload used to empty the composer, with no warning and no way back.
+LiveView's form recovery does not help here: it replays a form's `phx-change`
+on a socket **reconnect**, while a reload throws the page away and builds a new
+one from the server. So the composer stores what it is holding and reads it
+back when it opens.
 
-`PostLive.Composer` answers that server-side and stamps the verdict on its root
-element as `data-draft-unsaved`; the tiny `DraftGuard` hook in `assets/js/app.js`
-reads that one attribute when the browser is about to leave. Keeping the decision
-in Elixir is the point: the composer already holds both halves of it — what is in
-the form now (`@body`, `@tags_value`, `@images`, `@review`, kept current by the
-form's ordinary `phx-change`) and what the post looked like when it opened.
+**Where it is kept.** `post_drafts` (`Vutuv.Posts.PostDraft`), one row per
+member per *composer context* — three partial unique indexes enforce that:
+at most one new-post draft, at most one per post being answered, at most one
+per remote reply being answered. The row mirrors the composer's own fields
+rather than a post: `body` and `tags` are the raw strings in the form, `review`
+is the book/film panel's values, `photos` the per-photo alt/caption/switch
+panel, and `image_ids` names the still-pending `post_images` rows in the
+author's order (the first photo leads the mosaic, so the order **is** the
+layout, which is why it is an array and not a join table).
 
-The comparison is `unsaved?/1`, and it is deliberately **not** `drafting?/1`:
-the edit page opens full of the stored post, so "there is text in it" would arm
-the guard on every visit, and a prompt that fires when nothing is at stake is one
-people learn to click away. A quote the reply page seeded (`initial_body`) counts
-as part of the opening state too — the reader did not type it, and it comes back
-from the URL on a reload.
+**When it is written.** From every handler that changes the content, debounced
+through `send_update_after/3` to the component itself — so no host LiveView
+needs a handler for it, and a burst of keystrokes costs one write rather than
+one per character. `:composer_draft_debounce_ms` sets the pause (1.5s shipped,
+`0` in the test env, where it writes inside the `validate` that changed
+something so a test never races a timer). It is an **autosave**, so it never
+interrupts: an invalid changeset simply skips that round, and a draft holding
+nothing is deleted rather than stored, so clearing the composer clears it.
 
-Two things the guard deliberately does not do. It never fires on a **LiveView
-navigation**, because no document unload happens there; it catches reloads, tab
-closes, Back and links off the site. And a **successful save releases it**
-(`:saved?`, set in `handle_save_result/2` before the redirect): the permalink the
-composer navigates to is a controller page, so LiveView's `live_redirect` degrades
-into a full page load, and without the release the author would be asked to
-confirm leaving the post they just published. LiveView pushes a component's diff
-*ahead* of its redirect, so the released marker reaches the browser in time —
-verified in a browser, not only in the tests (`composer_draft_guard_test.exs`
-covers the marker; the release-before-redirect ordering is a browser fact).
+**What happens on restore.** The composer refills, and says so — a brand-tinted
+"Picked up where you left off." line above the form with a *Discard draft*
+action, which resets to the composer's opening state (on the reply page that
+still includes the `?quote=` passage). The notice steps aside on the first
+edit. `/feed` opens its collapsed composer when a draft exists (resolved in
+`Feed.mount`, so the disconnected render agrees and the panel never flickers),
+because text hidden behind a collapsed panel reads exactly like text that was
+thrown away. Nothing restored is trusted: `Posts.pending_images/2` re-checks
+every image id against the author's own unattached rows, and the post changeset
+validates the content on save as it always did.
+
+**Where it stops.** The **edit page** has no draft. Its composer opens full of a
+*published* post, and quietly restoring a weeks-old unsaved edit over text other
+people have already read is a different and much less welcome promise.
+
+**Lifecycle.** A successful save drops the draft (in `handle_save_result/2`, so
+all four branches are covered). `Vutuv.Posts.DraftSweeper` removes drafts
+untouched for `Posts.draft_max_age_days/0` (30) — a draft is a convenience, not
+an archive. `sweep_pending_images/1` spares any photo a live draft still names,
+so a restored draft never comes back with holes in it; those photos go when
+their draft does. The row cascades with the account and with the post being
+answered, so `Accounts.delete_user/1` needs no new step, and drafts ride in the
+GDPR export (`Vutuv.Export`, schema v6) — content the member never chose to
+publish is theirs to take with them.
+
+**The dialog that used to be here is gone.** The first attempt at this issue
+armed `beforeunload`, so a reload with a draft in the composer raised the
+browser's "Leave site?" prompt. It worked, but the wording is the browser's own
+and cannot be set — every browser has ignored a custom `beforeunload` string
+since ~2016 — so it could never say what was actually at stake. With the
+content kept there is nothing left to warn about, and the prompt went with it.
 
 ## Editing closes (the edit window)
 

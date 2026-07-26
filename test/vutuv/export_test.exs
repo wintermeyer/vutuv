@@ -39,7 +39,7 @@ defmodule Vutuv.ExportTest do
 
     data = Export.build(user)
 
-    assert data.schema_version == 5
+    assert data.schema_version == 6
     assert Enum.any?(data.blocked_members, &(&1.member == blocked.username))
     # The private content filters (issue #940) are owner-only, so they ride
     # along in the member's own GDPR export.
@@ -48,6 +48,31 @@ defmodule Vutuv.ExportTest do
     # The keys exist even when empty, so the export shape stays stable.
     assert Map.has_key?(data.saved_organizations, :liked)
     assert Map.has_key?(data.saved_jobs, :bookmarked)
+  end
+
+  test "a started but never sent post is in the export (schema v6)" do
+    user = insert(:activated_user)
+    :ok = Vutuv.Posts.save_draft(user, nil, %{"body" => "half a thought", "tags" => "elixir"})
+
+    data = Export.build(user)
+
+    # The composer stores drafts on the server so a reload cannot eat them
+    # (issue #1148), which makes them the member's own content sitting here —
+    # Art. 20 covers them like any published post.
+    assert [draft] = data.drafts
+    assert draft.body == "half a thought"
+    assert draft.tags == "elixir"
+    assert draft.replying_to_post_id == nil
+    assert draft.image_count == 0
+  end
+
+  test "a member's account deletion takes their drafts with it" do
+    user = insert(:activated_user)
+    :ok = Vutuv.Posts.save_draft(user, nil, %{"body" => "half a thought"})
+
+    {:ok, _} = Vutuv.Accounts.delete_user(user)
+
+    assert Repo.aggregate(Vutuv.Posts.PostDraft, :count) == 0
   end
 
   test "the profile keeps the live email opt-ins but not the dropped connection-request one" do

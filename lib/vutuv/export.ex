@@ -16,7 +16,7 @@ defmodule Vutuv.Export do
   alias Vutuv.Chat.{Conversation, Participant}
   alias Vutuv.Jobs.{JobPostingBookmark, JobPostingLike}
   alias Vutuv.Organizations.{OrganizationBookmark, OrganizationLike}
-  alias Vutuv.Posts.{Post, PostBookmark, PostLike, PostRepost}
+  alias Vutuv.Posts.{Post, PostBookmark, PostDraft, PostLike, PostRepost}
   alias Vutuv.Repo
   alias Vutuv.Social.{Block, Follow, UserBookmark, UserLike}
   alias Vutuv.Tags.UserTagEndorsement
@@ -29,7 +29,8 @@ defmodule Vutuv.Export do
   #    (issue #858).
   # 5: the account-activity log (issue #1087) — what changed on the account,
   #    when, from where and how it was confirmed.
-  @schema_version 5
+  # 6: composer drafts (issue #1148) — posts the member started but never sent.
+  @schema_version 6
 
   def build(%User{} = user) do
     user =
@@ -141,6 +142,11 @@ defmodule Vutuv.Export do
       following: follow_side(user, :follower_id, :followee),
       connections: connections(user),
       posts: posts(user),
+      # Posts that were started and never sent (issue #1148). The composer
+      # stores them so a reload cannot eat them, which makes them the member's
+      # own content sitting on our server — so they belong in the export just
+      # as much as a published post does.
+      drafts: drafts(user),
       likes: engagement(user, PostLike),
       bookmarks: engagement(user, PostBookmark),
       reposts: engagement(user, PostRepost),
@@ -299,6 +305,24 @@ defmodule Vutuv.Export do
         images:
           Enum.map(post.images, &%{token: &1.token, alt: &1.alt, content_type: &1.content_type}),
         audience_denials: Enum.map(post.denials, &denial/1)
+      }
+    end)
+  end
+
+  defp drafts(user) do
+    from(d in PostDraft, where: d.user_id == ^user.id, order_by: [asc: d.id])
+    |> Repo.all()
+    |> Enum.map(fn draft ->
+      %{
+        body: draft.body,
+        tags: draft.tags,
+        # Which composer it belongs to: a new post, an answer to one of our
+        # posts, or an answer to a reply from another network.
+        replying_to_post_id: draft.parent_id,
+        replying_to_remote_note_id: draft.remote_note_id,
+        image_count: length(draft.image_ids),
+        started_at: draft.inserted_at,
+        last_edited_at: draft.updated_at
       }
     end)
   end

@@ -12,6 +12,12 @@ config :vutuv, :fetch_gravatar, false
 # flow, so it runs with the system on. ads_disabled_test.exs flips it off.
 config :vutuv, :ads_enabled, true
 config :vutuv, :sweep_pending_images, false
+config :vutuv, :sweep_post_drafts, false
+# The composer's draft autosave (issue #1148) normally waits for a pause in the
+# typing. Zero means it writes as part of the `validate` that changed something,
+# so a test can assert on the stored draft right after `render_change` instead
+# of racing a timer.
+config :vutuv, :composer_draft_debounce_ms, 0
 config :vutuv, :sweep_unconfirmed_registrations, false
 # The daily retention sweep of the account-activity log would touch the sandbox
 # from outside; tests call Vutuv.AccountEvents.delete_expired/0 directly.

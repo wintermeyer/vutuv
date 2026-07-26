@@ -70,6 +70,7 @@ defmodule Vutuv.Application do
       ] ++
         optional_child(:prefs_defaults_cache, Vutuv.Prefs.Cache) ++
         optional_child(:sweep_pending_images, Vutuv.Posts.PendingImageSweeper) ++
+        optional_child(:sweep_post_drafts, Vutuv.Posts.DraftSweeper) ++
         optional_child(
           :sweep_unconfirmed_registrations,
           Vutuv.Accounts.UnconfirmedRegistrationSweeper

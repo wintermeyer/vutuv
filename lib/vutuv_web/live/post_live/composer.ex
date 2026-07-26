@@ -56,6 +56,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostDraft
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
   alias VutuvWeb.ErrorHelpers
@@ -75,7 +76,13 @@ defmodule VutuvWeb.PostLive.Composer do
     "medium" => ""
   }
 
+  # The debounced autosave firing (issue #1148): `schedule_draft_save/1` sends
+  # this to the component itself via `send_update_after/3`, so the write happens
+  # once the member pauses rather than once per keystroke, and no host LiveView
+  # needs a handler for it.
   @impl true
+  def update(%{save_draft: true}, socket), do: {:ok, persist_draft(socket)}
+
   def update(assigns, socket) do
     socket =
       assign(
@@ -165,9 +172,13 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:user_search, "")
     |> assign(:user_results, [])
     |> assign(:error, nil)
-    # Released once the post is saved, so the unload guard (`unsaved?/1`) stops
-    # asking about content that is now safely in the database.
-    |> assign(:saved?, false)
+    # Whether what is on screen came back from a stored draft, which the notice
+    # above the form says out loud (issue #1148). Cleared by the first edit:
+    # from then on it is simply what the member is writing.
+    |> assign(:restored_draft?, false)
+    # True while an autosave is already queued, so a burst of keystrokes
+    # schedules one write rather than one per character.
+    |> assign(:draft_scheduled?, false)
     |> allow_upload(:images,
       accept: Vutuv.PostImageStore.extension_whitelist(),
       max_entries: Posts.max_images_per_post(),
@@ -175,6 +186,146 @@ defmodule VutuvWeb.PostLive.Composer do
       auto_upload: true,
       progress: &handle_progress/3
     )
+    |> restore_draft()
+  end
+
+  ## Drafts (issue #1148)
+  #
+  # A reload rebuilds the page from nothing — LiveView's form recovery only
+  # runs on a socket reconnect — so the composer stores what it is holding and
+  # reads it back here. There is no "are you sure you want to leave" dialog any
+  # more: the browser never let us word one, and with the content kept there is
+  # nothing left to warn about.
+
+  # How long the composer waits after the last change before writing. Long
+  # enough that ordinary typing costs one write per pause instead of one per
+  # character, short enough that a reload is very unlikely to outrun it. `0`
+  # means "write on the spot", which is what the test env uses so a draft is
+  # observable the moment a change round trips (and what an installation would
+  # set to trade writes for never losing the last second of typing).
+  @default_draft_debounce_ms 1_500
+
+  defp draft_debounce_ms,
+    do: Application.get_env(:vutuv, :composer_draft_debounce_ms, @default_draft_debounce_ms)
+
+  # The edit page is deliberately draft-free: its composer opens full of a
+  # *published* post, and silently restoring a weeks-old unsaved edit over text
+  # other people have already read is a different promise from keeping a draft.
+  defp draftable?(assigns), do: assigns[:post] == nil
+
+  # Which composer this is, in the terms `Vutuv.Posts` keys drafts by.
+  defp draft_context(assigns), do: assigns[:parent] || assigns[:remote_note]
+
+  defp restore_draft(socket) do
+    assigns = socket.assigns
+
+    with true <- draftable?(assigns),
+         %PostDraft{} = draft <- Posts.get_draft(assigns.current_user, draft_context(assigns)) do
+      # The ids are re-checked against the author's own still-pending rows, so a
+      # stale list cannot resurrect a photo that was removed or attached since.
+      images = Posts.pending_images(assigns.current_user, draft.image_ids)
+
+      socket
+      |> assign(:body, draft.body)
+      |> assign(:tags_value, draft.tags)
+      # `resolve_mode/2` is the same gate a switch goes through, so a reply —
+      # which is text-only — cannot be pushed into photo mode by a stored value.
+      |> assign(:mode, resolve_mode(%{"mode" => draft.mode}, assigns))
+      |> assign(:review, Map.merge(@empty_review, Map.take(draft.review, review_keys())))
+      |> assign(:images, images)
+      |> assign(:photos, photo_state_from_draft(draft, images))
+      |> assign(:license, PhotoLicense.cast(draft.license || assigns.license))
+      |> assign(:text_open?, draft.body != "")
+      |> assign(:restored_draft?, true)
+    else
+      _no_draft -> socket
+    end
+  end
+
+  # Rebuilds the per-photo panel state from the stored map. The keys are read
+  # by name from a fixed list rather than turned into atoms, and anything the
+  # draft does not name falls back to the image row's own value, so a photo
+  # attached after the last autosave still arrives with sane settings.
+  defp photo_state_from_draft(%PostDraft{photos: stored}, images) when is_map(stored) do
+    Map.new(images, fn image ->
+      defaults = photo_defaults(image)
+
+      settings =
+        case Map.get(stored, image.id) do
+          saved when is_map(saved) ->
+            %{
+              alt: Map.get(saved, "alt", defaults.alt),
+              caption: Map.get(saved, "caption", defaults.caption),
+              show_camera_info:
+                Map.get(saved, "show_camera_info", defaults.show_camera_info) == true,
+              download_original:
+                Map.get(saved, "download_original", defaults.download_original) == true,
+              download_exact: Map.get(saved, "download_exact", defaults.download_exact) == true
+            }
+
+          _missing ->
+            defaults
+        end
+
+      {image.id, settings}
+    end)
+  end
+
+  defp photo_state_from_draft(_draft, images), do: photo_state(images)
+
+  # The review panel's own field names, so a stored map cannot smuggle extra
+  # keys into the assign the form and the save path read.
+  defp review_keys, do: Map.keys(@empty_review)
+
+  # Queues one autosave. Called from every handler that changes what the
+  # composer is holding; the flag collapses a burst into a single write.
+  defp schedule_draft_save(socket) do
+    cond do
+      not draftable?(socket.assigns) ->
+        socket
+
+      draft_debounce_ms() == 0 ->
+        persist_draft(socket)
+
+      socket.assigns.draft_scheduled? ->
+        socket
+
+      true ->
+        send_update_after(
+          __MODULE__,
+          [id: socket.assigns.id, save_draft: true],
+          draft_debounce_ms()
+        )
+
+        assign(socket, :draft_scheduled?, true)
+    end
+  end
+
+  defp persist_draft(socket) do
+    assigns = socket.assigns
+
+    if draftable?(assigns) do
+      Posts.save_draft(assigns.current_user, draft_context(assigns), %{
+        "body" => assigns.body,
+        "tags" => assigns.tags_value,
+        "mode" => assigns.mode,
+        "license" => assigns.license,
+        "review" => assigns.review,
+        "image_ids" => Enum.map(assigns.images, & &1.id),
+        "photos" => Map.new(assigns.photos, fn {id, settings} -> {id, stringify(settings)} end)
+      })
+    end
+
+    assign(socket, :draft_scheduled?, false)
+  end
+
+  # Called once the post is really saved, and by the notice's "Discard".
+  defp drop_draft(socket) do
+    if draftable?(socket.assigns) do
+      Posts.delete_draft(socket.assigns.current_user, draft_context(socket.assigns))
+    end
+
+    assign(socket, :restored_draft?, false)
   end
 
   defp tags_value(nil), do: ""
@@ -339,6 +490,9 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:review, Map.merge(socket.assigns.review, params["review"] || %{}))
       |> assign(:preset, resolve_preset(params, socket.assigns))
       |> assign(:error, nil)
+      # The restore notice has said its piece once the member starts editing;
+      # from here on this is simply what they are writing.
+      |> assign(:restored_draft?, false)
       |> adopt_recovered_images(params["image_ids"])
       |> merge_photo_texts(payload["photo"])
       |> sweep_rejected_uploads()
@@ -352,7 +506,7 @@ defmodule VutuvWeb.PostLive.Composer do
         socket
       end
 
-    {:noreply, announce_draft(socket, drafting_before?)}
+    {:noreply, socket |> announce_draft(drafting_before?) |> schedule_draft_save()}
   end
 
   def handle_event("deny-user", %{"id" => id}, socket) do
@@ -395,7 +549,8 @@ defmodule VutuvWeb.PostLive.Composer do
       {:noreply,
        socket
        |> assign(:review, review)
-       |> assign(:review_lookup_error, nil)}
+       |> assign(:review_lookup_error, nil)
+       |> schedule_draft_save()}
     else
       {:noreply, socket}
     end
@@ -417,7 +572,11 @@ defmodule VutuvWeb.PostLive.Composer do
           "year" => if(data.year, do: Integer.to_string(data.year), else: review["year"])
         })
 
-      {:noreply, socket |> assign(:review, filled) |> assign(:review_lookup_error, nil)}
+      {:noreply,
+       socket
+       |> assign(:review, filled)
+       |> assign(:review_lookup_error, nil)
+       |> schedule_draft_save()}
     else
       :error ->
         {:noreply,
@@ -471,11 +630,15 @@ defmodule VutuvWeb.PostLive.Composer do
        if key == :download_original and not flipped.download_original,
          do: %{flipped | download_exact: false},
          else: flipped
-     end)}
+     end)
+     |> schedule_draft_save()}
   end
 
   def handle_event("photo-exact", %{"id" => id, "exact" => exact}, socket) do
-    {:noreply, update_photo(socket, id, &Map.put(&1, :download_exact, exact == "true"))}
+    {:noreply,
+     socket
+     |> update_photo(id, &Map.put(&1, :download_exact, exact == "true"))
+     |> schedule_draft_save()}
   end
 
   # Copies one photo's four choices onto every other photo of the post. The
@@ -495,7 +658,7 @@ defmodule VutuvWeb.PostLive.Composer do
             {photo_id, Map.merge(settings, shared)}
           end)
 
-        {:noreply, assign(socket, :photos, photos)}
+        {:noreply, socket |> assign(:photos, photos) |> schedule_draft_save()}
     end
   end
 
@@ -508,7 +671,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
     if index && target >= 0 && target < length(images) do
       moved = images |> List.delete_at(index) |> List.insert_at(target, Enum.at(images, index))
-      {:noreply, assign(socket, :images, moved)}
+      {:noreply, socket |> assign(:images, moved) |> schedule_draft_save()}
     else
       {:noreply, socket}
     end
@@ -522,7 +685,7 @@ defmodule VutuvWeb.PostLive.Composer do
     reordered = Enum.flat_map(order, fn id -> List.wrap(by_id[id]) end)
     missing = Enum.reject(socket.assigns.images, &(&1.id in order))
 
-    {:noreply, assign(socket, :images, reordered ++ missing)}
+    {:noreply, socket |> assign(:images, reordered ++ missing) |> schedule_draft_save()}
   end
 
   def handle_event("remove-image", %{"id" => id}, socket) do
@@ -543,7 +706,8 @@ defmodule VutuvWeb.PostLive.Composer do
          |> assign(
            :open_photo,
            if(socket.assigns.open_photo == id, do: nil, else: socket.assigns.open_photo)
-         )}
+         )
+         |> schedule_draft_save()}
     end
   end
 
@@ -551,19 +715,27 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, cancel_upload(socket, :images, ref)}
   end
 
-  # Photo mode's ✕: a real discard, not a collapse. Closing over invisible
-  # uploaded photos meant the next "Write a post" surprised people with last
-  # week's pictures, so the pending rows die now (their files with them), the
-  # form resets, and the feed collapses the panel. Only the feed composer
-  # renders the ✕, so the host always has the handle_info.
+  # Discarding really discards. Two controls share it: photo mode's ✕, where
+  # closing over invisible uploaded photos meant the next "Write a post"
+  # surprised people with last week's pictures, and the restore notice's
+  # "Discard draft" (issue #1148). So the pending rows die now (their files
+  # with them), the stored draft goes, and the form falls back to the state the
+  # composer opened in — which on the reply page still includes the quote.
+  #
+  # Only the feed has a panel to collapse, and only the feed LiveView has the
+  # matching handle_info: the reply, remote-reply and edit pages define none at
+  # all, so an ungated `send` would crash them the moment the notice's button
+  # is used there.
   def handle_event("discard-draft", _params, socket) do
     Enum.each(socket.assigns.images, fn image ->
       if is_nil(image.post_id), do: Posts.delete_pending_image(image)
     end)
 
-    send(self(), {:composer_discarded, socket.assigns.id})
+    if feed_composer?(socket.assigns) do
+      send(self(), {:composer_discarded, socket.assigns.id})
+    end
 
-    {:noreply, reset_composer(socket)}
+    {:noreply, socket |> drop_draft() |> reset_composer()}
   end
 
   def handle_event("save", %{"post" => params} = payload, socket) do
@@ -602,39 +774,6 @@ defmodule VutuvWeb.PostLive.Composer do
   # re-opening the feed composer for.
   defp drafting?(assigns),
     do: assigns.body != "" or assigns.tags_value != "" or assigns.images != []
-
-  # What a reload would throw away (issue #1148) — the answer the `DraftGuard`
-  # hook turns into the browser's "Leave site?" prompt. Deliberately *not*
-  # `drafting?/1`: on the edit page the composer opens full of the stored post,
-  # so "there is text in it" would arm the guard on every visit, and a prompt
-  # that fires when nothing is at stake is one people learn to click away.
-  # What counts is the difference between the form and the state it opened in.
-  #
-  # A quote the reply page seeded (`initial_body`) is part of that opening
-  # state: the reader did not type it, and it comes back from the URL anyway.
-  # Audience, licence and the per-photo settings are left out — nobody sets
-  # them without also having content, which is caught here already.
-  defp unsaved?(%{saved?: true}), do: false
-
-  defp unsaved?(assigns), do: composer_state(assigns) != opened_state(assigns)
-
-  defp composer_state(assigns) do
-    %{
-      body: assigns.body,
-      tags: assigns.tags_value,
-      image_ids: Enum.map(assigns.images, & &1.id),
-      review: assigns.review
-    }
-  end
-
-  defp opened_state(%{post: post} = assigns) do
-    %{
-      body: (post && post.body) || assigns[:initial_body] || "",
-      tags: tags_value(post),
-      image_ids: Enum.map(post_images(post), & &1.id),
-      review: review_values(post)
-    }
-  end
 
   # Re-adopts photos LiveView form recovery hands back after a reconnect: the
   # composer's socket state died with the old socket, but the pending rows
@@ -742,14 +881,11 @@ defmodule VutuvWeb.PostLive.Composer do
   defp save_post(%{post: post}, attrs), do: Posts.update_post(post, attrs)
 
   defp handle_save_result({:ok, post}, socket) do
-    # The post is in the database, so there is nothing left to warn about —
-    # release the unload guard before we hand over. The three navigating
-    # branches below need this: the permalink they push to is a controller
-    # page, so LiveView's `live_redirect` degrades into a full page load, and
-    # a still-armed guard would greet the author with "Leave site?" for the
-    # post they just published. LiveView pushes a component's diff *before*
-    # its redirect, so the browser sees the released marker in time.
-    socket = assign(socket, :saved?, true)
+    # The post exists now, so the draft that was standing in for it goes. Doing
+    # it here rather than in each branch below covers all four: three of them
+    # navigate away and would otherwise leave a draft behind that reopens the
+    # composer with a copy of what was just published.
+    socket = drop_draft(socket)
 
     cond do
       socket.assigns.post ->
@@ -780,20 +916,22 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   # Back to an empty form: after a successful post, and after photo mode's ✕
-  # discards a draft. Mode and audience choice stick on purpose, and the
-  # unload guard re-arms for whatever gets typed next (`saved?` back to
-  # false, issue #1148) — the form is empty now, so it stays quiet.
+  # discards a draft. Mode and audience choice stick on purpose. The stored
+  # draft is dropped by the caller (issue #1148), not here — a reset is not
+  # always a discard, and clearing the form would autosave an empty draft away
+  # anyway.
   defp reset_composer(socket) do
+    opening_body = socket.assigns[:initial_body] || ""
+
     socket
-    |> assign(:body, "")
+    |> assign(:body, opening_body)
     |> assign(:tags_value, "")
     |> assign(:review, @empty_review)
     |> assign(:review_lookup_error, nil)
     |> assign(:images, [])
     |> assign(:photos, %{})
     |> assign(:open_photo, nil)
-    |> assign(:text_open?, false)
-    |> assign(:saved?, false)
+    |> assign(:text_open?, opening_body != "")
     |> assign(:error, nil)
   end
 
@@ -909,7 +1047,8 @@ defmodule VutuvWeb.PostLive.Composer do
              |> push_event(
                "mde-image-uploaded",
                Map.put(editor_image_payload(socket, image), :name, entry.client_name)
-             )}
+             )
+             |> schedule_draft_save()}
 
           {:error, _reason} ->
             {:noreply, assign(socket, :error, gettext("That file could not be processed."))}
@@ -1001,19 +1140,30 @@ defmodule VutuvWeb.PostLive.Composer do
   @impl true
   def render(assigns) do
     ~H"""
-    <%!-- `data-draft-unsaved` is the whole unload guard (issue #1148): the
-    `DraftGuard` hook in app.js reads it when the browser is about to leave the
-    page and, while it says "true", asks the member first. The decision is made
-    here rather than by inspecting the DOM because the composer already holds
-    both halves of it — what is in the form now, and what the post looked like
-    when it opened. --%>
-    <div
-      id={@id}
-      data-composer-mode={@mode}
-      phx-hook="DraftGuard"
-      data-draft-unsaved={to_string(unsaved?(assigns))}
-    >
+    <div id={@id} data-composer-mode={@mode}>
       <.card>
+        <%!-- Says out loud that this text came back rather than being typed
+        just now (issue #1148) — without it a restored draft is indistinguishable
+        from a composer someone else left open. It sits above the form, not
+        inside it, so nothing it holds is ever submitted, and it steps aside as
+        soon as the member edits anything. --%>
+        <div
+          :if={@restored_draft?}
+          id={"#{@id}-restored"}
+          data-draft-restored
+          class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-900/40 dark:text-brand-100"
+        >
+          <span>{gettext("Picked up where you left off.")}</span>
+          <button
+            type="button"
+            phx-click="discard-draft"
+            phx-target={@myself}
+            class="font-semibold underline underline-offset-2 hover:text-brand-900 dark:hover:text-white"
+          >
+            {gettext("Discard draft")}
+          </button>
+        </div>
+
         <.form
           for={to_form(%{}, as: :post)}
           id={"#{@id}-form"}

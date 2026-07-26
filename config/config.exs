@@ -113,6 +113,19 @@ config :vutuv, :image_scan_reject_votes, 3
 # POST_EDIT_WINDOW_MINUTES (config/runtime.exs).
 config :vutuv, :post_edit_window_minutes, 30
 
+# How long the composer keeps a draft nobody has touched (issue #1148). A draft
+# is a convenience, not an archive: past this the composer would greet somebody
+# with half a sentence they have long forgotten writing, and it keeps the photos
+# attached to it alive meanwhile. Runtime override: POST_DRAFT_RETENTION_DAYS
+# (config/runtime.exs).
+config :vutuv, :post_draft_retention_days, 30
+
+# How long the composer waits after the last change before it writes the draft,
+# in milliseconds. The pause is what keeps ordinary typing at one write per
+# pause instead of one per character; `0` writes on the spot, trading writes for
+# never losing the last second of typing (which is what the test env uses).
+config :vutuv, :composer_draft_debounce_ms, 1_500
+
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
 # Off for now: no banner serves, the public /ads flow and the admin review
 # dashboard 404. "ads" stays a reserved username slug either way, so the

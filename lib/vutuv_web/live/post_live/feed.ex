@@ -88,8 +88,12 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:empty?, page.entries == [])
     |> assign(:pending_posts, [])
     # The composer starts collapsed to a single "What's new?" button; posting
-    # (own activity arriving below) collapses it again.
-    |> assign(:composer_open?, false)
+    # (own activity arriving below) collapses it again. A stored draft opens it
+    # instead (issue #1148): the composer will restore that draft, and text
+    # hidden behind a collapsed panel is indistinguishable from text that was
+    # thrown away. Resolved here rather than announced by the composer so the
+    # disconnected render already agrees and the panel never flickers open.
+    |> assign(:composer_open?, Posts.get_draft(socket.assigns.current_user) != nil)
     # The set of entries currently on screen, kept so the midnight :day_changed
     # tick can re-render each stamp in place (streams don't retain their data).
     # Order/dupes don't matter: the refresh uses stream_insert update_only, which
