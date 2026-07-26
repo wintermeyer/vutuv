@@ -161,6 +161,40 @@ defmodule VutuvWeb.PhotoComposerTest do
       # control about nothing.
       refute has_element?(live, "#composer-license")
     end
+
+    test "is never asked about the licence or the download, photo or not", %{conn: conn} do
+      # Stapling a screenshot to a text does not make somebody a publisher of
+      # pictures: the two rights questions belong to the Fotos tab, and a text
+      # post takes the author's default licence and web versions only.
+      {conn, user} = create_and_login_user(conn)
+      live = open_composer(conn)
+      upload_photo!(live, user)
+
+      assert has_element?(live, "[data-photo-tile]")
+      refute has_element?(live, "#composer-license")
+      refute has_element?(live, "#composer-download")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "Ein Screenshot."}})
+      |> render_submit()
+
+      post = only_post(user)
+      assert post.license == "arr"
+      assert [%{download_original: false, download_exact: false}] = post.images
+    end
+
+    test "the panel offers no download override either", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      live = open_composer(conn)
+      image = upload_photo!(live, user)
+      upload_photo!(live, user)
+
+      open_panel(live, image)
+
+      # Two photos would earn the per-photo override — but only where the
+      # post-wide question is asked, which text mode never does.
+      refute has_element?(live, "input[data-photo-download-switch]")
+    end
   end
 
   describe "the panel" do
@@ -219,12 +253,14 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
 
     test "one photo gets no download switch: the post-wide select is its answer", %{
-      live: live,
+      conn: conn,
       user: user
     } do
       # Two controls for one state on one screen is the duplicate the photo
       # grid keeps being cleaned of; the panel's switch is the OVERRIDE, so it
-      # only means something once there is a set to differ from.
+      # only means something once there is a set to differ from. Photo mode,
+      # because that is where the post-wide answer is given at all.
+      live = open_photo_composer(conn)
       image = upload_photo!(live, user)
       open_panel(live, image)
 
@@ -236,9 +272,10 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
 
     test "the exact-file choice appears only once a download is offered", %{
-      live: live,
+      conn: conn,
       user: user
     } do
+      live = open_photo_composer(conn)
       image = upload_photo!(live, user)
       upload_photo!(live, user)
       open_panel(live, image)
@@ -253,9 +290,10 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
 
     test "a photo carrying a location warns only when the exact file is picked", %{
-      live: live,
+      conn: conn,
       user: user
     } do
+      live = open_photo_composer(conn)
       image = upload_photo!(live, user, exif: [{"exif-ifd3-GPSLatitude", "50/1 56/1 0/1"}])
       assert image.has_gps
       upload_photo!(live, user)
@@ -275,7 +313,8 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, "[data-photo-gps-warning]")
     end
 
-    test "a photo with no location never warns, whatever is picked", %{live: live, user: user} do
+    test "a photo with no location never warns, whatever is picked", %{conn: conn, user: user} do
+      live = open_photo_composer(conn)
       image = upload_photo!(live, user)
       refute image.has_gps
       upload_photo!(live, user)
@@ -292,7 +331,9 @@ defmodule VutuvWeb.PhotoComposerTest do
       refute has_element?(live, "[data-photo-gps-warning]")
     end
 
-    test "apply-to-all copies the switches but never the caption", %{live: live, user: user} do
+    test "apply-to-all copies the switches but never the caption", %{conn: conn, user: user} do
+      # Photo mode: the download switch it copies is only asked there.
+      live = open_photo_composer(conn)
       first = upload_photo!(live, user)
       second = upload_photo!(live, user)
 
@@ -304,7 +345,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       toggle(live, first, "download_original")
       live |> element("[data-photo-apply-all]") |> render_click()
-      live |> form("#composer-form", %{"post" => %{"body" => "Two photos."}}) |> render_submit()
+      live |> form("#composer-form") |> render_submit()
 
       assert %{download_original: true, caption: "Only mine"} = reload(first)
       # The switch travelled; the caption, which describes one particular
@@ -780,18 +821,41 @@ defmodule VutuvWeb.PhotoComposerTest do
   describe "the licence" do
     test "appears once a photo is attached and is remembered for next time", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      live = open_composer(conn)
+      live = open_photo_composer(conn)
       upload_photo!(live, user)
 
       assert has_element?(live, "#composer-license")
 
       live
-      |> form("#composer-form", %{"post" => %{"body" => "A photo.", "license" => "cc-by-4.0"}})
+      |> form("#composer-form", %{"post" => %{"license" => "cc-by-4.0"}})
       |> render_submit()
 
       post = only_post(user)
       assert post.license == "cc-by-4.0"
       assert Vutuv.Accounts.User |> Repo.get(user.id) |> Posts.default_license() == "cc-by-4.0"
+    end
+
+    test "a photo post edited from the text tab keeps the licence it was given", %{conn: conn} do
+      # The pair is one tab away rather than gone: the stored answer must not
+      # be reset by an edit that never showed the select.
+      {conn, user} = create_and_login_user(conn)
+      image = pending_image!(user)
+
+      {:ok, post} =
+        Posts.create_post(user, %{
+          body: "Worte dazu.",
+          image_ids: [image.id],
+          license: "cc-by-sa-4.0"
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="text"]))
+      refute has_element?(live, "#composer-license")
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Andere Worte."}}) |> render_submit()
+
+      assert %{body: "Andere Worte.", license: "cc-by-sa-4.0"} = Repo.get!(Post, post.id)
     end
   end
 
@@ -801,13 +865,14 @@ defmodule VutuvWeb.PhotoComposerTest do
       %{conn: conn, user: user}
     end
 
-    test "it sits beside the licence in both modes, not behind a photo", %{
+    test "it sits beside the licence in photo mode, not behind a photo", %{
       conn: conn,
       user: user
     } do
       # Tapping a photo to find out whether the original can be downloaded is
       # exactly the hunt the photo grid was meant to end, so the question is
-      # asked where the licence is asked.
+      # asked where the licence is asked — and it leaves with the licence when
+      # the post goes back to being a text post.
       live = open_photo_composer(conn)
       upload_photo!(live, user)
 
@@ -815,11 +880,12 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       live |> form("#composer-form", %{"post" => %{"mode" => "text"}}) |> render_change()
 
-      assert has_element?(live, "#composer-download")
+      refute has_element?(live, "#composer-download")
+      refute has_element?(live, "#composer-license")
     end
 
     test "no photos, no question", %{conn: conn} do
-      live = open_composer(conn)
+      live = open_photo_composer(conn)
 
       refute has_element?(live, "#composer-download")
     end

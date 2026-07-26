@@ -549,9 +549,9 @@ bottom scrim is gone — with a single photo it was two dead arrows plus a ⚙
 the picture-tap covers. What remains on the tile: a remove dot top-right,
 and the ◀ ▶ reorder dots only when more than one photo gives them meaning
 (they stay the touch reorder path, native drag cannot fire there). The book/film review triggers and the bottom-row picker are
-text-mode-only; the licence row sits with the photos in both modes. The
-cover badge appears only from the second photo on, and the amber ALT nudge
-only while a photo has **neither** caption nor alt.
+text-mode-only; the licence and download pair is photo-mode-only (see
+below). The cover badge appears only from the second photo on, and the amber
+ALT nudge only while a photo has **neither** caption nor alt.
 
 The mode is a **radio pair inside the form** (`post[mode]`, the segmented
 control at the top), so switching is an ordinary `validate` and LiveView form
@@ -636,8 +636,9 @@ with JS off those links are plain hrefs to the full-size image.
 `PostLive.Composer.photo_panel/1`): a `caption` (shown to everyone; distinct
 from `alt`, which describes the picture for people who cannot see it), a
 **camera-settings** switch (renders from the DB columns — the served files stay
-metadata-stripped) and, for a set of several photos, the **download override**
-with its one follow-up, which file (see [images.md](images.md)). The panel
+metadata-stripped) and, in photo mode with a set of several photos, the
+**download override** with its one follow-up, which file (see
+[images.md](images.md)). The panel
 expands below the strip rather than floating — a popover on a phone covers what
 it is about and has nowhere to put a follow-up. In photo mode the caption and
 the camera switch move out of the panel to under the tile itself (the panel
@@ -646,7 +647,14 @@ input renders in the panel in both modes. An "apply to all photos" shortcut
 copies the two switches (never the texts: a caption describes one picture).
 
 **Per post**, the two questions about the pictures themselves, asked as a
-labeled pair below the photos in both modes and only once a photo is attached.
+labeled pair below the photos — **in photo mode only**, and only once a photo
+is attached. Someone stapling a screenshot to a text is not publishing
+pictures: making them rule on reuse rights and original files is two answers
+they do not have as the price of an ordinary post. A text post therefore takes
+the author's default licence and the web-versions-only download silently, and
+an edited photo post finds the pair again one tab away under *Fotos* (the
+stored answers are untouched by an edit that never rendered the controls,
+since `save` falls back to the assign).
 
 The first is **what a visitor can save**: the served AVIF versions only (the
 default), the full-resolution original with its metadata removed, or the

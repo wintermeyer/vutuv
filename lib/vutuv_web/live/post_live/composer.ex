@@ -30,13 +30,17 @@ defmodule VutuvWeb.PostLive.Composer do
 
   **Two modes, one post.** The same composer serves two crowds whose needs
   point in opposite directions: the writer who staples a screenshot or two to
-  a text (camera facts are noise to them), and the photographer whose post IS
-  the photos (the prose is noise to them). `@mode` arranges the same fields
-  for one or the other; nothing about the stored post differs. `"text"` is
-  today's layout — editor first, compact photo strip below. `"photos"` leads
-  with a dropzone and a large photo grid whose caption/description inputs sit
-  under every photo (no panel hunting), the licence beside them, and the text
-  editor folded behind one button until asked for. The mode is a **radio pair
+  a text (camera facts, licences and download rules are noise to them), and
+  the photographer whose post IS the photos (the prose is noise to them).
+  `@mode` arranges the same fields for one or the other; nothing about the
+  stored post differs. `"text"` is today's layout — editor first, compact
+  photo strip below, and **no licence or download question at all**: a
+  screenshot stapled to a text keeps the author's default licence and the
+  web-versions-only download rather than charging a normal post two rulings
+  its author has no answer to. `"photos"` leads with a dropzone and a large
+  photo grid whose caption/description inputs sit under every photo (no panel
+  hunting), the licence and download pair beside them, and the text editor
+  folded behind one button until asked for. The mode is a **radio pair
   inside the form** (`post[mode]`), so switching is an ordinary `validate`
   (no event/race split) and form recovery restores the mode with the rest of
   the form after a reconnect. Entry points: the feed's camera trigger opens
@@ -1481,6 +1485,7 @@ defmodule VutuvWeb.PostLive.Composer do
             many?={length(@images) > 1}
             caption?={@mode == "text"}
             camera?={@mode == "text"}
+            download?={@mode == "photos"}
             insert?={@mode == "text"}
             id={"#{@id}-photo-panel"}
             myself={@myself}
@@ -1490,8 +1495,16 @@ defmodule VutuvWeb.PostLive.Composer do
           them, and what a visitor can actually save — as one quiet labeled
           pair, at home with the photos they are about instead of loose in the
           button row (where they read as controls about nothing, issue #1104
-          feedback). --%>
-          <div :if={@images != []} class="mt-3 space-y-2">
+          feedback).
+
+          They belong to PHOTO MODE only. Someone stapling a screenshot to a
+          text is not publishing a picture, and asking them to rule on reuse
+          rights and original files turns two questions they have no answer to
+          into the price of a normal post. A text post keeps the author's
+          default licence and the web-versions-only download; the moment the
+          pictures ARE the post, the Fotos tab asks — which is also where an
+          edited photo post finds the pair again. --%>
+          <div :if={@mode == "photos" and @images != []} class="mt-3 space-y-2">
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
               <label
                 for={"#{@id}-license"}
@@ -2162,7 +2175,9 @@ defmodule VutuvWeb.PostLive.Composer do
   The download switch is the **override** of the post-wide answer the select
   beside the licence gives, so it renders only for a set of several photos
   (`many?`) — with one photo the two controls would be the same state asked
-  twice on the same screen.
+  twice on the same screen — and only where that answer is asked at all
+  (`download?`, photo mode). Overriding a question a text post never asks is
+  a control about nothing.
 
   Photo mode moves two things out of here to where they are seen (issue
   #1104 follow-up): `caption?` drops the caption input (it sits under every
@@ -2177,6 +2192,7 @@ defmodule VutuvWeb.PostLive.Composer do
   attr(:many?, :boolean, required: true)
   attr(:caption?, :boolean, default: true)
   attr(:camera?, :boolean, default: true)
+  attr(:download?, :boolean, default: true)
   attr(:insert?, :boolean, default: true)
   attr(:id, :string, required: true)
   attr(:myself, :any, required: true)
@@ -2269,8 +2285,10 @@ defmodule VutuvWeb.PostLive.Composer do
         <%!-- The per-photo override of the post-wide download answer, and the
         one follow-up it reveals. With a single photo there is nothing to
         override — the select beside the licence IS that photo's answer — so
-        the block stays away rather than offering the same state twice. --%>
-        <div :if={@many?}>
+        the block stays away rather than offering the same state twice. Text
+        mode is never asked the question in the first place, so there is
+        nothing to override there either. --%>
+        <div :if={@many? and @download?}>
           <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
             <input
               type="checkbox"
