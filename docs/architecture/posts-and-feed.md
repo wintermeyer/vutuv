@@ -297,6 +297,26 @@ Replying works on **public** parents only (the reply button on restricted posts
 is disabled, like repost) and pins the parent's audience open like reposts do.
 Replies to replies are allowed.
 
+**Quoting a passage** (issue #1114). Marking part of a post and then pressing
+that post's Reply opens the composer with the marked text already in it as a
+Markdown blockquote, so a long post can be answered point by point. The whole
+mechanism is the Reply link the card already has — no floating menu, no new
+route, nothing stored: `assets/js/app.js` reads the selection at click time and
+appends it as a `quote` query parameter, and `VutuvWeb.PostLive.Reply` runs that
+untrusted string through `VutuvWeb.Markdown.blockquote/1` (trim each line, keep
+the quote marker across blank lines, cap at 500 characters cut back to the last
+whole word) into the composer's `initial_body`. The server marks the two halves
+the client needs: `data-post-body` on a post's prose and `data-quote-reply` on
+the enclosing card, naming its Reply control by id. Because thread cards nest,
+the card is resolved from the **selection** (innermost marked ancestor), not
+from the link — otherwise a marked reply would quote itself into its parent's
+answer. A restricted post carries no marker (its Reply control is a dead span),
+and the reply page's own parent preview passes `quotable={false}`, since its
+Reply link leads back to the page being composed on and would discard the draft.
+The quote is plain Markdown in the answer's body; the attribution is the reply
+card itself, which already shows the post it answers with its author's avatar
+and a link to it.
+
 **A post is rendered by one shared component everywhere**
 (`VutuvWeb.PostComponents`): `post_thread_entry/1` shows a reply as a **nested
 conversation** — the posts it answers are stacked **above** it as full cards

@@ -160,6 +160,74 @@ window.addEventListener("resize", () => {
   previewClampResizeTimer = setTimeout(sweepPreviewClamps, 150)
 })
 
+// Quote a passage into a reply (issue #1114). Mark part of a post, press that
+// post's Reply control, and the reply page opens with the marked text already
+// in the composer as a blockquote. No new chrome: the selection rides along on
+// the Reply link the card already has, as a `quote` query parameter that
+// VutuvWeb.Markdown.blockquote/1 normalizes and caps server-side.
+//
+// The server marks the two halves — `data-post-body` on a post's prose, and
+// `data-quote-reply` on the enclosing card naming its Reply control. Thread
+// cards nest, so resolving the card from the SELECTION (innermost marked
+// ancestor) rather than from the link is what keeps a marked reply from
+// quoting itself into its parent's answer.
+const QUOTE_MAX = 500
+
+// What was selected when the pointer went down. The browser collapses a
+// selection as part of the default action of pointerdown, i.e. before the
+// link's click event ever fires, so by click time it is already gone.
+let pendingQuote = null
+
+function selectionQuote() {
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed) return null
+
+  const text = selection.toString().trim()
+  if (!text) return null
+
+  const anchor = selection.anchorNode
+  const start = anchor && (anchor.nodeType === 1 ? anchor : anchor.parentElement)
+  const body = start && start.closest("[data-post-body]")
+  const card = body && body.closest("[data-quote-reply]")
+  if (!card) return null
+
+  return { text: text.slice(0, QUOTE_MAX), replyId: card.dataset.quoteReply }
+}
+
+// Capture, so a handler that stops propagation can't rob us of the selection.
+document.addEventListener(
+  "pointerdown",
+  () => {
+    pendingQuote = selectionQuote()
+  },
+  true
+)
+
+document.addEventListener(
+  "click",
+  (e) => {
+    // A keyboard activation fires no pointerdown and leaves the selection
+    // standing, so the live selection is tried first and the remembered one is
+    // the fallback for the mouse/touch path.
+    const quote = selectionQuote() || pendingQuote
+    pendingQuote = null
+    if (!quote) return
+
+    const link = e.target.closest("a[href]")
+    if (!link || link.id !== quote.replyId) return
+
+    const href = link.getAttribute("href")
+    const url = new URL(href, window.location.origin)
+    url.searchParams.set("quote", quote.text)
+    link.setAttribute("href", url.pathname + url.search)
+    // Put the plain href back once the navigation is under way: a click the
+    // browser does not follow (opening in a new tab) would otherwise leave this
+    // card's Reply link pointing at a stale quote.
+    setTimeout(() => link.setAttribute("href", href), 0)
+  },
+  true
+)
+
 // Hooks. MarkdownEditor is the Milkdown WYSIWYG composer (posts + messages).
 // LocalTime localizes timestamps (see above). ScrollBottom keeps a chat thread
 // pinned to its newest message.

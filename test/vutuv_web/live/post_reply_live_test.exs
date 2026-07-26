@@ -69,6 +69,43 @@ defmodule VutuvWeb.PostReplyLiveTest do
       assert Posts.list_replies(parent, author) == []
     end
 
+    test "opens the composer with the marked passage as a quote", %{conn: conn} do
+      # Issue #1114: app.js puts the reader's text selection on the Reply link,
+      # and the composer opens with it quoted, ready to be answered under.
+      {conn, _user} = create_and_login_user(conn)
+      parent = create_post!(other_user(), %{body: "one claim. another claim."})
+
+      {:ok, _live, html} =
+        live(conn, ~p"/posts/#{parent.id}/reply?#{[quote: "another claim."]}")
+
+      assert html =~ "&gt; another claim."
+    end
+
+    test "submitting the seeded quote posts it as the reply's body", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      parent = create_post!(other_user(), %{body: "the question"})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{parent.id}/reply?#{[quote: "the question"]}")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "> the question\n\nmy answer"}})
+      |> render_submit()
+
+      assert [reply] = Posts.list_replies(parent, user)
+      assert reply.body == "> the question\n\nmy answer"
+    end
+
+    test "the parent preview is not armed for quoting, so a draft cannot be lost", %{conn: conn} do
+      # This card's own Reply link leads back to this page; arming it would let a
+      # second selection reload the page over whatever has been typed below.
+      {conn, _user} = create_and_login_user(conn)
+      parent = create_post!(other_user(), %{body: "the original"})
+
+      {:ok, _live, html} = live(conn, ~p"/posts/#{parent.id}/reply")
+
+      refute html =~ "data-quote-reply"
+    end
+
     test "submitting creates the reply and returns to the parent", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       parent = create_post!(other_user(), %{body: "the question"})

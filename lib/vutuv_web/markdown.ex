@@ -46,6 +46,9 @@ defmodule VutuvWeb.Markdown do
   # code spans — as one capture, so `Regex.split(include_captures: true)`
   # alternates non-code / code chunks. Used by `map_outside_code/2`.
   @code_region ~r/(```[\s\S]*?```|~~~[\s\S]*?~~~|``[^`]*``|`[^`\n]*`)/
+  # How much of a text selection a reply may quote (issue #1114). A paragraph
+  # fits; marking half the page does not, and the excerpt rides in a URL.
+  @quote_max_length 500
   # When a whole block would overflow the preview, keep a word-cut of it (so a
   # one-line intro above a long block doesn't leave a one-line preview) — but
   # only if at least this many characters of budget remain, else just stop.
@@ -209,6 +212,64 @@ defmodule VutuvWeb.Markdown do
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.join("\n")
+  end
+
+  @doc """
+  Turn a plain-text excerpt into Markdown **blockquote source** — what the reply
+  composer opens with when the reader marked part of the post before pressing
+  Reply (issue #1114).
+
+  The excerpt comes from a browser text selection, so it arrives with the DOM's
+  own line breaks and indentation: each line is trimmed and prefixed with the
+  quote marker, and a blank line keeps the quote open across a paragraph break
+  instead of ending it. The whole excerpt is capped at #{@quote_max_length}
+  characters — cut back to the last whole word and closed with an ellipsis — so
+  one selection can neither fill the answer nor bloat the URL that carries it.
+  The trailing blank line puts the cursor below the quote, where the answer goes.
+
+  Returns `nil` when there is nothing to quote, so a raw query parameter can be
+  passed straight in.
+  """
+  def blockquote(text) when is_binary(text) do
+    case text |> String.trim() |> cut_excerpt() do
+      "" ->
+        nil
+
+      excerpt ->
+        excerpt
+        |> String.split(["\r\n", "\n", "\r"])
+        |> Enum.map_join("\n", &quote_line/1)
+        |> Kernel.<>("\n\n")
+    end
+  end
+
+  def blockquote(_), do: nil
+
+  # A blank line inside a blockquote ends it, so an empty line keeps the marker
+  # and becomes a paragraph break within the quote.
+  defp quote_line(line) do
+    case String.trim(line) do
+      "" -> ">"
+      trimmed -> "> " <> trimmed
+    end
+  end
+
+  # Cut back to the last whitespace so the quote never ends mid-word; a single
+  # run too long to cut back (a pasted token, a language that doesn't space its
+  # words) is cut hard rather than thrown away. The `s` flag lets the greedy
+  # `.*` reach across line breaks, so the last word of a multi-line selection is
+  # the one dropped.
+  defp cut_excerpt(text) do
+    if String.length(text) <= @quote_max_length do
+      text
+    else
+      cut = String.slice(text, 0, @quote_max_length)
+
+      case Regex.run(~r/^(.*)\s\S*$/su, cut, capture: :all_but_first) do
+        [head] -> head <> " …"
+        nil -> cut <> " …"
+      end
+    end
   end
 
   # The escapes Earmark and the sanitizer emit. `&amp;` goes last: decoding it

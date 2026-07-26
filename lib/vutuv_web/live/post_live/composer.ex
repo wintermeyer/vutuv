@@ -2,7 +2,8 @@ defmodule VutuvWeb.PostLive.Composer do
   @moduledoc """
   The post composer, used by the feed (new posts), the edit page and the
   reply page (pass `parent` to create the post as a reply via
-  `Vutuv.Posts.create_reply/3`).
+  `Vutuv.Posts.create_reply/3`, and `initial_body` to open it with text
+  already in the editor).
 
   **Images upload eagerly**: the moment a file is picked it is processed
   (`Vutuv.Posts.create_pending_image/3` — AVIF versions, private original)
@@ -55,7 +56,17 @@ defmodule VutuvWeb.PostLive.Composer do
   @impl true
   def update(assigns, socket) do
     socket =
-      assign(socket, Map.take(assigns, [:id, :current_user, :post, :parent, :remote_note]))
+      assign(
+        socket,
+        Map.take(assigns, [
+          :id,
+          :current_user,
+          :post,
+          :parent,
+          :remote_note,
+          :initial_body
+        ])
+      )
 
     socket =
       if socket.assigns[:composer_ready?] do
@@ -84,7 +95,10 @@ defmodule VutuvWeb.PostLive.Composer do
       :audience_locked?,
       post != nil and (Posts.has_reposts?(post) or Posts.has_replies?(post))
     )
-    |> assign(:body, (post && post.body) || "")
+    # `initial_body` opens the composer with text already in it — the reply
+    # page seeds a Markdown blockquote when the reader marked part of the post
+    # before pressing Reply (issue #1114). An edited post's own body wins.
+    |> assign(:body, (post && post.body) || socket.assigns[:initial_body] || "")
     |> assign(:review, review_values(post))
     |> assign(:review_lookup_error, nil)
     |> assign(:tags_value, tags_value(post))

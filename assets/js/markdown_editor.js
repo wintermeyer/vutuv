@@ -266,6 +266,7 @@ export const MarkdownEditor = {
 
     this.editor = await editor.create()
 
+    this.ensureTrailingParagraph()
     this.applyState()
     this.wireToolbar()
     this.wireSubmitShortcut()
@@ -283,7 +284,11 @@ export const MarkdownEditor = {
     if (serverMd === this.lastPushed) return
     this.lastPushed = serverMd
     this.source.value = serverMd
-    if (this.mode !== "source") this.setEditorMarkdown(serverMd)
+
+    if (this.mode !== "source") {
+      this.setEditorMarkdown(serverMd)
+      this.ensureTrailingParagraph()
+    }
   },
 
   // Re-stamp the hook's view state onto the (server-managed) root. Cheap and
@@ -388,6 +393,26 @@ export const MarkdownEditor = {
       (whole, sigil, handle) =>
         handle.includes("\\_") ? sigil + handle.replace(/\\_/g, "_") : whole
     )
+  },
+
+  // ProseMirror offers no place to put the cursor after a trailing block that
+  // owns its content: click below a blockquote, a table or a code block and the
+  // cursor lands INSIDE it. That is fatal for a seeded quote (issue #1114) — the
+  // whole document is one blockquote, so the answer would be typed into the
+  // quotation. Append an empty paragraph so there is somewhere to write, and do
+  // it after every seed rather than in a plugin: a plugin's appendTransaction
+  // never sees the editor's initial state, which is exactly the state that needs
+  // it. The paragraph costs nothing in the stored source — Milkdown serializes
+  // it as the `<br />` artifact `normalizeMarkdown` already drops.
+  ensureTrailingParagraph() {
+    this.editor?.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      const { state } = view
+      const paragraph = state.schema.nodes.paragraph
+      const last = state.doc.lastChild
+      if (!paragraph || !last || last.type === paragraph) return
+      view.dispatch(state.tr.insert(state.doc.content.size, paragraph.create()))
+    })
   },
 
   setEditorMarkdown(markdown) {

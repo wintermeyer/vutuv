@@ -86,6 +86,14 @@ defmodule VutuvWeb.PostComponents do
     doc: ":card stands alone; :flat embeds inside an existing card (profile Posts section)"
   )
 
+  attr(:quotable, :boolean,
+    default: true,
+    doc:
+      "let a text selection inside this card's body ride along to the reply page " <>
+        "as a quote (issue #1114). Set false where the Reply link leads back to " <>
+        "the page the reader is already composing on"
+  )
+
   attr(:conn_or_socket, :any,
     required: true,
     doc: "@conn (dead pages) or @socket (LiveViews) — anchors the embedded live action bar"
@@ -1259,7 +1267,12 @@ defmodule VutuvWeb.PostComponents do
 
   defp render_post_card_inner(assigns) do
     ~H"""
-    <div>
+    <%!-- data-quote-reply names this card's Reply control, so a text selection
+    inside its body can ride along to the reply page as a quote (issue #1114,
+    wired in app.js). It sits on the card, not on the body, because thread cards
+    nest: the INNERMOST marked ancestor of the selection is the post that was
+    marked. Absent on a restricted post, whose Reply control is a dead span. --%>
+    <div data-quote-reply={@quotable and not @restricted? and "#{@actions_id}-reply"}>
       <%!-- The owner's freezer notice: only the author (and admins) still see
       a reported post; everyone else gets nothing, not even a tombstone. --%>
       <.frozen_banner :if={@frozen? and @author?} class="mb-3 rounded-lg px-3 py-2 text-xs">
@@ -1431,6 +1444,7 @@ defmodule VutuvWeb.PostComponents do
               beside-the-text reading as the preview, at the same width. --%>
               <div
                 :if={@mode == :full and @post.body != ""}
+                data-post-body
                 class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
                 {style_attrs(@body_style)}
               >
@@ -1750,6 +1764,7 @@ defmodule VutuvWeb.PostComponents do
             "markdown markdown--post text-slate-800 dark:text-slate-200"
           ]}
           data-clamp-body
+          data-post-body
           {style_attrs(@body_style)}
         >
           <%!-- The floated media is the clamp block's FIRST child so the body text

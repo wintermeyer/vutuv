@@ -22,6 +22,36 @@ defmodule VutuvWeb.PostFeedLiveTest do
     end
   end
 
+  describe "quoting a passage into a reply (#1114)" do
+    test "a card names its own Reply control, so a selection can ride along", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _post} = Posts.create_post(user, %{body: "a passage worth answering"})
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      # The card points at the Reply control by id and marks the prose the
+      # selection has to come from — app.js needs both halves to fire.
+      assert [reply_id] = Regex.run(~r/data-quote-reply="([^"]+)"/, html, capture: :all_but_first)
+      assert html =~ ~s(id="#{reply_id}")
+      assert html =~ "data-post-body"
+    end
+
+    test "a restricted post is not armed — its Reply control is a dead span", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, _post} =
+        Posts.create_post(user, %{
+          body: "not for everyone",
+          denials: [%{"wildcard" => "logged_out"}]
+        })
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      assert html =~ "not for everyone"
+      refute html =~ "data-quote-reply"
+    end
+  end
+
   describe "engagement query batching" do
     test "feed engagement queries do not grow with post count", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
