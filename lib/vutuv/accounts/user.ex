@@ -19,11 +19,13 @@ defmodule Vutuv.Accounts.User do
     field(:nickname, :string)
     field(:honorific_prefix, :string)
     field(:honorific_suffix, :string)
-    # How to say the name out loud (issue #1112), free text: "SHTEH-fahn
-    # VIN-ter-my-er", "rhymes with 'a fan'", IPA for the few who write it. It is
-    # a deliberately quiet field — set on the profile basics form, never asked
-    # for at sign-up — and nil on nearly every account, which is why the profile
-    # renders the line only when it is present (`name_pronunciation/1`).
+    # How to say the name out loud (issue #1112), free text stored in the square
+    # brackets a transcription is written in (the changeset adds them):
+    # "[SHTEH-fahn VIN-ter-my-er]", "[rhymes with 'a fan']", IPA for those who
+    # write it. It is a deliberately quiet field — set on the profile basics
+    # form, never asked for at sign-up — and nil on nearly every account, which
+    # is why the profile renders the line only when it is present
+    # (`name_pronunciation/1`).
     field(:name_pronunciation, :string)
     field(:gender, :string)
     # The member's job-availability signal (issue #870), shown as a badge next
