@@ -623,7 +623,8 @@ defmodule Vutuv.Accounts.User do
   end
 
   # A pronunciation is one spoken line, so fold every run of whitespace (a
-  # pasted line break included) into a single space and trim the ends. This runs
+  # pasted line break included) into a single space and trim the ends, then put
+  # the value in the square brackets a transcription is written in. Both run
   # *before* the length check on purpose: a value that only overruns 255 because
   # of stray whitespace is fixed rather than refused. An emptied field folds to
   # nil, which is what "I don't want this shown" means — `cast/3`'s own
@@ -636,9 +637,22 @@ defmodule Vutuv.Accounts.User do
       value ->
         case value |> String.replace(~r/\s+/u, " ") |> String.trim() do
           "" -> put_change(changeset, :name_pronunciation, nil)
-          normalized -> put_change(changeset, :name_pronunciation, normalized)
+          normalized -> put_change(changeset, :name_pronunciation, bracket(normalized))
         end
     end
+  end
+
+  # `[…]` is how a phonetic transcription is written, and the brackets are what
+  # tell a reader that the string is one rather than a nickname or a spelling —
+  # which matters all the more now that the line carries no other label. So the
+  # form does not *demand* them: whichever bracket is missing is simply added,
+  # and a member who typed them keeps exactly what they typed (no doubling).
+  # Deliberately literal about the brackets Stefan asked for: the phonemic
+  # `/…/` spelling is not treated as a delimiter of its own, so `/ˈʃtɛfan/`
+  # becomes `[/ˈʃtɛfan/]` rather than silently changing what the member wrote.
+  defp bracket(value) do
+    value = if String.starts_with?(value, "["), do: value, else: "[" <> value
+    if String.ends_with?(value, "]"), do: value, else: value <> "]"
   end
 
   # What a pronunciation may not be. Two ways a value carries no pronunciation

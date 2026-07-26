@@ -278,13 +278,45 @@ defmodule Vutuv.AccountsTest do
   # cases are the empty one (stays absent, nothing renders) and the values that
   # pronounce nothing at all.
   describe "name pronunciation" do
-    test "stores a pronunciation hint" do
+    test "stores a pronunciation hint in the transcription brackets" do
       user = insert(:user)
-      hint = "SHTEH-fahn VIN-ter-my-er"
 
-      assert {:ok, updated} = Accounts.update_user(user, %{"name_pronunciation" => hint})
-      assert updated.name_pronunciation == hint
-      assert User.name_pronunciation(updated) == hint
+      assert {:ok, updated} =
+               Accounts.update_user(user, %{"name_pronunciation" => "SHTEH-fahn VIN-ter-my-er"})
+
+      assert updated.name_pronunciation == "[SHTEH-fahn VIN-ter-my-er]"
+      assert User.name_pronunciation(updated) == "[SHTEH-fahn VIN-ter-my-er]"
+    end
+
+    # The brackets are what tell a reader the line is a transcription, so they
+    # are added rather than demanded — whichever one is missing, and never a
+    # second copy of one the member already typed.
+    test "adds only the bracket that is missing" do
+      user = insert(:user)
+
+      for {typed, stored} <- [
+            {"[ˈʃtɛfan]", "[ˈʃtɛfan]"},
+            {"[ˈʃtɛfan", "[ˈʃtɛfan]"},
+            {"ˈʃtɛfan]", "[ˈʃtɛfan]"},
+            {"ˈʃtɛfan", "[ˈʃtɛfan]"},
+            # The phonemic /…/ spelling is not a delimiter we recognise, so it
+            # is kept verbatim inside the brackets rather than rewritten.
+            {"/ˈʃtɛfan/", "[/ˈʃtɛfan/]"}
+          ] do
+        assert {:ok, updated} = Accounts.update_user(user, %{"name_pronunciation" => typed})
+        assert updated.name_pronunciation == stored
+      end
+    end
+
+    test "empty brackets pronounce nothing and are refused" do
+      user = insert(:user)
+
+      for value <- ["[]", "["] do
+        assert {:error, changeset} =
+                 Accounts.update_user(user, %{"name_pronunciation" => value})
+
+        assert "must spell out how the name sounds" in errors_on(changeset).name_pronunciation
+      end
     end
 
     test "an empty field stays empty and reads as absent" do
@@ -312,7 +344,7 @@ defmodule Vutuv.AccountsTest do
                  "name_pronunciation" => "  SHTEH-fahn \n\n  VIN-ter-my-er  "
                })
 
-      assert updated.name_pronunciation == "SHTEH-fahn VIN-ter-my-er"
+      assert updated.name_pronunciation == "[SHTEH-fahn VIN-ter-my-er]"
     end
 
     test "refuses a value that pronounces nothing" do
@@ -331,9 +363,11 @@ defmodule Vutuv.AccountsTest do
       hint = "like the 'stefan' in stefan.fm"
 
       assert {:ok, updated} = Accounts.update_user(user, %{"name_pronunciation" => hint})
-      assert updated.name_pronunciation == hint
+      assert updated.name_pronunciation == "[#{hint}]"
     end
 
+    # The cap is the column's, so it is checked on the value that is stored —
+    # brackets included, which is why the form stops typing at 255 too.
     test "refuses more than 255 characters" do
       user = insert(:user)
 
@@ -341,6 +375,11 @@ defmodule Vutuv.AccountsTest do
                Accounts.update_user(user, %{"name_pronunciation" => String.duplicate("a", 256)})
 
       assert "should be at most 255 character(s)" in errors_on(changeset).name_pronunciation
+
+      assert {:ok, updated} =
+               Accounts.update_user(user, %{"name_pronunciation" => String.duplicate("a", 253)})
+
+      assert String.length(updated.name_pronunciation) == 255
     end
 
     # The verified badge vouches for the written name, not for how it sounds,

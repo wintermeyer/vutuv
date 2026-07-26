@@ -22,11 +22,17 @@ view for everyone, and editing happens at `/settings/<section>`.
 ## Name pronunciation (issue #1112)
 
 `users.name_pronunciation` is free text (varchar(255), nullable) saying how the
-member's name is said out loud: "SHTEH-fahn VIN-ter-my-er", "rhymes with 'a
-fan'", IPA for the few who write it. It renders as a quiet line with a speaker
-glyph **directly under the name** in the profile header, above the availability
-pill and the tagline, because it belongs to the name and to nothing else on the
-page.
+member's name is said out loud: `[SHTEH-fahn VIN-ter-my-er]`, `[rhymes with 'a
+fan']`, IPA for those who write it. It renders as a quiet **monospace** line
+**directly under the name** in the profile header (tight against it, `mt-0.5`,
+so it reads as part of the name block), above the availability pill and the
+tagline, because it belongs to the name and to nothing else on the page.
+
+It carries **no icon**: a speaker glyph promises audio the page does not play.
+What marks the line as a transcription is the `[…]` the changeset guarantees
+plus the monospace face, which also keeps it distinct from the name above and
+the tagline below without a label word competing with either. An `sr-only`
+label carries the same meaning for anyone who cannot see that.
 
 It is deliberately a **quiet, optional** field. It is asked for on the Basics
 form (`/settings/profile`, in the "Your name" card) and **nowhere else** — the
@@ -38,8 +44,15 @@ means the feature is simply not there" is decided in one place and an untouched
 profile looks exactly as it did.
 
 **Validation** (all in `User.changeset/2`): whitespace folds to one line first
-(it renders as one), so a value that only overruns because of stray whitespace
-is fixed rather than refused; then a 255-character cap matching the column, and
+(it renders as one) and the value is wrapped in the transcription brackets —
+whichever of `[` / `]` is missing is **added**, never demanded and never
+doubled, so the member is not made to type punctuation to satisfy a rule (the
+phonemic `/…/` spelling is deliberately not recognised as a delimiter of its
+own: `/ˈʃtɛfan/` becomes `[/ˈʃtɛfan/]` rather than silently rewriting what was
+written). Both run before the length check, so a value that only overruns
+because of stray whitespace is fixed rather than refused; then a 255-character
+cap matching the column — checked on the **stored** value, brackets included,
+which is why the form's `maxlength` is 255 too — and
 a rule that the value must actually pronounce something — at least one letter
 (stricter than `Tag.punctuation_only?/1`, where a symbol like "C#" is a real
 name) and not the bare web/email address a spam sign-up drops into every free

@@ -164,13 +164,13 @@ lands here). --%>
         <div class="sm:col-span-2">
           <%= label f, :name_pronunciation, gettext("Name pronunciation"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
           <%= text_input f, :name_pronunciation,
-            class: input_class(f, :name_pronunciation),
+            class: [input_class(f, :name_pronunciation), "font-mono"],
             maxlength: "255",
-            placeholder: gettext("e.g. SHTEH-fahn VIN-ter-my-er"),
+            placeholder: gettext("e.g. [SHTEH-fahn VIN-ter-my-er]"),
             "aria-invalid": f.errors[:name_pronunciation] && "true" %>
           <p :if={!f.errors[:name_pronunciation]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
             {gettext(
-              "Optional. Write your name the way it sounds, so someone calling you for the first time gets it right. It shows under your name on your profile; leave it empty and nothing is shown."
+              "Optional. Write your name the way it sounds, so someone calling you for the first time gets it right. It shows in square brackets under your name on your profile, the way a transcription is written, and the brackets are added for you. Leave it empty and nothing is shown."
             )}
           </p>
           <%= error_tag f, :name_pronunciation %>

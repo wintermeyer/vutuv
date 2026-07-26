@@ -28,7 +28,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         # The spoken-name hint (issue #1112): the profile shows it under the
         # name, so every agent format must carry it too — it is worth the most
         # to a reader that says the name out loud.
-        name_pronunciation: "GRAY-ta GRAY-dee-ent",
+        name_pronunciation: "[GRAY-ta GRAY-dee-ent]",
         gender: "female",
         birthdate: ~D[1991-04-23],
         employment_status: "looking",
@@ -184,7 +184,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       "Greta Gradient",
       "bridges between humans and agents",
       # how the name is said out loud (issue #1112)
-      "GRAY-ta GRAY-dee-ent",
+      "[GRAY-ta GRAY-dee-ent]",
       # experience
       "Bridge Engineer",
       "Span AG",
@@ -432,7 +432,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert body =~ "IMPP;TYPE=telegram:https://t.me/gretachats"
     # How the name is said (issue #1112): vCard 3.0 has no standard property for
     # a free-text hint, so it rides as an X- extension right below FN.
-    assert body =~ "X-PHONETIC-NAME:GRAY-ta GRAY-dee-ent"
+    assert body =~ "X-PHONETIC-NAME:[GRAY-ta GRAY-dee-ent]"
   end
 
   test "a member without a pronunciation gets no phonetic line in the vCard" do

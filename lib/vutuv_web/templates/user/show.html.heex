@@ -198,23 +198,24 @@ the resulting ~200px rail width. --%>
             </.card_menu>
           </div>
         </div>
-        <%!-- How to say the name (issue #1112), the line directly under it,
-        because it belongs to the name and to nothing else on this page. Shown
-        only when the member wrote one — on nearly every profile this renders
-        nothing at all, which is the point: it is help where help is needed, not
-        a field everyone has to fill in. The speaker glyph does the labelling
-        (no label word competing with the tagline below), so the row carries an
-        sr-only name for anyone who can't see it. --%>
+        <%!-- How to say the name (issue #1112), the line directly under it (and
+        tight against it, `mt-0.5`, so it reads as part of the name block rather
+        than as another fact). Shown only when the member wrote one — on nearly
+        every profile this renders nothing at all, which is the point: it is
+        help where help is needed, not a field everyone has to fill in.
+
+        No icon: a speaker glyph promises audio we do not play. What marks the
+        line as a transcription instead is the `[…]` the changeset guarantees
+        plus the monospace face — the notation look, and distinct from the name
+        above and the tagline below without a label word competing with either.
+        The sr-only label carries the meaning for anyone who can't see that. --%>
         <% pronunciation = Vutuv.Accounts.User.name_pronunciation(@user) %>
         <p
           :if={pronunciation}
           id="profile-pronunciation"
           data-name-pronunciation
-          class="mt-1 flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400"
+          class="mt-0.5 font-mono text-sm text-slate-600 dark:text-slate-400"
         >
-          <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5 6.5 9H3v6h3.5L11 19V5Zm4.5 3.5a5 5 0 0 1 0 7m2.8-9.8a9 9 0 0 1 0 12.6" />
-          </svg>
           <span class="sr-only">{gettext("Name pronunciation")}:</span>
           <span class="breakwrap">{pronunciation}</span>
         </p>

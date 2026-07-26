@@ -824,7 +824,9 @@ defmodule VutuvWeb.UserControllerTest do
       html = conn |> get(~p"/settings/profile") |> html_response(200)
 
       assert html =~ "Name pronunciation"
-      assert html =~ "e.g. SHTEH-fahn VIN-ter-my-er"
+      # The example carries the transcription brackets, so the convention is
+      # visible before the member finds out the server adds them.
+      assert html =~ "e.g. [SHTEH-fahn VIN-ter-my-er]"
       # The browser stops typing at the column width, so the cap is felt before
       # the server has to refuse the save.
       assert html =~ ~s(maxlength="255")
@@ -840,8 +842,22 @@ defmodule VutuvWeb.UserControllerTest do
 
       html = conn |> recycle() |> get(~p"/#{user}") |> html_response(200)
 
-      assert html =~ "SHTEH-fahn"
+      assert html =~ "[SHTEH-fahn]"
       assert html =~ ~s(id="profile-pronunciation")
+    end
+
+    # A speaker glyph would promise audio the page cannot play, so the brackets
+    # and the monospace face are what mark the line as a transcription.
+    test "the profile line is monospaced and carries no audio icon", %{conn: conn} do
+      user = insert_activated_user(name_pronunciation: "[ˈʃtɛfan]")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      [row] = Regex.run(~r|<p[^>]*id="profile-pronunciation".*?</p>|s, html)
+
+      assert row =~ "font-mono"
+      assert row =~ "[ˈʃtɛfan]"
+      refute row =~ "<svg"
     end
 
     test "a profile without one renders no pronunciation row at all", %{conn: conn} do
@@ -876,6 +892,7 @@ defmodule VutuvWeb.UserControllerTest do
 
       assert html =~ "Aussprache des Namens"
       assert html =~ "damit ihn jemand beim ersten Anruf richtig ausspricht"
+      assert html =~ "eckigen Klammern"
     end
 
     # It is deliberately hidden away in the settings: the sign-up form asks for
