@@ -72,6 +72,18 @@ defmodule VutuvWeb.RemoteReplyPageTest do
       refute html =~ "Turn on Fediverse participation"
     end
 
+    test "the composer carries no corner ✕ (its close event lives on the feed alone)", %{
+      conn: conn,
+      note: note
+    } do
+      # The feed's corner ✕ bubbles `close-composer` up to whatever
+      # LiveView hosts the composer, and this page has no handler for it — a
+      # click here crashed the page instead of doing nothing.
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/reply/#{note.id}")
+
+      refute has_element?(view, ~s(button[phx-click="close-composer"]))
+    end
+
     test "sends the answer and lands back in the conversation", %{conn: conn, note: note} do
       {:ok, view, _html} = live(conn, ~p"/system/fediverse/reply/#{note.id}")
 

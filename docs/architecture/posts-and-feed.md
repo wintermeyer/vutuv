@@ -461,6 +461,42 @@ Legacy `…/feed.webp` URLs in old post bodies keep resolving.
 Not a second kind of post — the same post, showing its pictures properly.
 Everything beyond "drop photos, press Post" is one switch or one select.
 
+### The composer's two modes
+
+The composer serves two crowds whose needs point in opposite directions: the
+writer who staples a screenshot or two to a text (camera facts and licences
+are noise to them), and the photographer whose post IS the photos (the prose
+is noise to them). `PostLive.Composer` therefore arranges the same fields one
+of two ways — `@mode`, `"text"` or `"photos"`; nothing about the stored post
+differs.
+
+**Text mode** is the classic layout: editor first, a compact thumbnail strip
+below, caption/alt behind each tile's ⚙ panel. **Photo mode** leads with a
+dropzone (the grid is a `phx-drop-target`), renders the photos as a large
+grid whose caption and alt inputs sit visibly under every tile (the ⚙ panel
+keeps only camera/download), adds more photos via a tile in the grid, and
+folds the text editor behind one "Add text (optional)" button — a non-empty
+body keeps it open, so recovered text can never hide. The book/film review
+triggers and the bottom-row picker are text-mode-only; the licence row sits
+with the photos in both modes. The cover badge appears only from the second
+photo on (with one photo there is no order to mark).
+
+The mode is a **radio pair inside the form** (`post[mode]`, the segmented
+control at the top), so switching is an ordinary `validate` and LiveView form
+recovery restores it after a reconnect. Entry points: the feed's trigger row
+offers the pill (text-first) and a camera button (photos-first) — the feed
+sends `set_mode` via `send_update`, where the camera always gets its way and
+the pill never rearranges a held draft; editing a photo-only post (images,
+empty body) derives photo mode; replies are text-only (no switch).
+
+**Photos survive a reconnect.** The attached rows ride the form as hidden
+`post[image_ids][]` inputs; a re-mounted composer re-adopts the recovered,
+still-pending rows (`Posts.pending_images/2` — own, unattached rows only, so
+a stale or hostile id list can neither steal a photo nor resurrect a removed
+one). This is the photo half of issue #1130: the pending rows survive in the
+DB, only the socket state died. A photos-only draft also counts as drafting,
+so the feed re-opens the collapsed composer over it.
+
 ### A post waits for all of its photos
 
 A post carrying a picture that has not finished the AI image scan is held back
@@ -524,8 +560,10 @@ from `alt`, which describes the picture for people who cannot see it), a
 metadata-stripped) and an **original download** switch with its one follow-up,
 which file (see [images.md](images.md)). The panel expands below the strip
 rather than floating — a popover on a phone covers what it is about and has
-nowhere to put a follow-up. An "apply to all photos" shortcut copies the two
-switches (never the texts: a caption describes one picture).
+nowhere to put a follow-up. In photo mode the two texts move out of the panel
+to inline inputs under every tile (the panel drops them there — two same-name
+inputs would corrupt the submit). An "apply to all photos" shortcut copies the
+two switches (never the texts: a caption describes one picture).
 
 **Per post**, one `Vutuv.Posts.PhotoLicense` from a fixed vocabulary (`arr`
 default, CC BY / BY-SA / BY-NC / CC0 4.0). The select appears only once a photo

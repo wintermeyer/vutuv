@@ -2873,6 +2873,34 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  The author's still-pending composer images among `ids`, in the order given.
+
+  This is the recovery half of the eager-upload design: a reconnect re-mounts
+  the composer and its socket state dies, but the pending rows survive in the
+  DB, and LiveView form recovery replays their ids from the old DOM's hidden
+  inputs. Attached rows and other people's rows are silently dropped, so a
+  stale or tampered id list can neither steal a photo nor resurrect a removed
+  one (removed pending rows are deleted on the spot).
+  """
+  def pending_images(%User{} = author, ids) when is_list(ids) do
+    case parse_ids(ids) do
+      [] ->
+        []
+
+      parsed ->
+        rows =
+          Repo.all(
+            from(i in PostImage,
+              where: i.id in ^parsed and i.user_id == ^author.id and is_nil(i.post_id)
+            )
+          )
+
+        by_id = Map.new(rows, &{&1.id, &1})
+        Enum.flat_map(parsed, &List.wrap(by_id[&1]))
+    end
+  end
+
+  @doc """
   Writes the composer's per-photo panel (issue #1104): alt text, caption and
   the two opt-ins (`show_camera_info`, `download_original` +
   `download_exact`).

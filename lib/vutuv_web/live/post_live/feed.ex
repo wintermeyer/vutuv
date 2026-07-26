@@ -265,7 +265,14 @@ defmodule VutuvWeb.PostLive.Feed do
      |> stream(:posts, entries, at: -1)}
   end
 
-  def handle_event("open-composer", _params, socket) do
+  def handle_event("open-composer", params, socket) do
+    # Each trigger names the layout it stands for: the camera button opens
+    # photos-first, the plain pill text-first. The composer itself decides
+    # whether to honour the pill (it won't rearrange itself under a held
+    # draft — see `set_mode` in its update/2).
+    mode = if params["mode"] == "photos", do: "photos", else: "text"
+    send_update(VutuvWeb.PostLive.Composer, id: "composer", set_mode: mode)
+
     {:noreply, assign(socket, :composer_open?, true)}
   end
 
@@ -643,19 +650,57 @@ defmodule VutuvWeb.PostLive.Feed do
           <h1 class="sr-only">{gettext("Feed")}</h1>
 
           <%!-- Collapsed by default: the shared avatar-card trigger (see
-          <.composer_trigger>), revealed via phx-click. The composer stays
-          mounted (just hidden) so a half-typed draft survives a background
-          feed re-render; posting or the composer's corner ✕ collapses it. A
-          reconnect re-mounts this LiveView and would collapse it under a draft,
-          so a drafting composer re-opens itself (:composer_drafting). --%>
-          <.composer_trigger
+          <.composer_trigger>), revealed via phx-click, plus the camera button
+          that opens the same composer photos-first — the two crowds the
+          composer serves get one entry each. The composer stays mounted
+          (just hidden) so a half-typed draft survives a background feed
+          re-render; posting or the composer's corner ✕ collapses it. A
+          reconnect re-mounts this LiveView and would collapse it under a
+          draft, so a drafting composer re-opens itself (:composer_drafting). --%>
+          <div
             :if={!@composer_open?}
-            viewer={@current_user}
-            id="open-composer"
-            phx-click="open-composer"
+            class="flex items-center gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
           >
-            {gettext("Write a post")}
-          </.composer_trigger>
+            <.composer_trigger
+              viewer={@current_user}
+              surface={:flat}
+              avatar_size="md"
+              class="min-w-0 flex-1"
+              id="open-composer"
+              phx-click="open-composer"
+            >
+              {gettext("Write a post")}
+            </.composer_trigger>
+            <button
+              type="button"
+              id="open-photo-composer"
+              phx-click="open-composer"
+              phx-value-mode="photos"
+              title={gettext("Post photos")}
+              aria-label={gettext("Post photos")}
+              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+            >
+              <svg
+                class="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"
+                />
+              </svg>
+            </button>
+          </div>
 
           <%!-- The panel is just the composer component; its corner ✕ bubbles a
           `close-composer` up to this LiveView, and it also collapses on its own

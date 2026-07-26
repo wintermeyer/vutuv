@@ -66,6 +66,27 @@ defmodule VutuvWeb.PhotoComposerTest do
     live
   end
 
+  defp open_photo_composer(conn) do
+    {:ok, live, _html} = live(conn, ~p"/feed")
+    live |> element("#open-photo-composer") |> render_click()
+    live
+  end
+
+  # A pending row minted outside any composer — the shape a reconnected
+  # composer finds in the DB when form recovery hands its ids back.
+  defp pending_image!(user, opts \\ []) do
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "vutuv_pending_#{System.unique_integer([:positive])}.jpg"
+      )
+
+    File.write!(path, jpeg(opts))
+    {:ok, image} = Posts.create_pending_image(user, path, Path.basename(path))
+    File.rm(path)
+    image
+  end
+
   # Drives one photo through the composer's own upload and returns the row it
   # created, so a test can address its tile and panel by id.
   defp upload_photo!(live, user, opts \\ []) do
@@ -274,6 +295,288 @@ defmodule VutuvWeb.PhotoComposerTest do
       |> render_change()
 
       refute has_element?(live, ~s([data-photo-alt-missing="#{image.id}"]))
+    end
+  end
+
+  describe "the two composer modes (photo-first vs. text-first)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "the composer opens text-first by default", %{conn: conn} do
+      live = open_composer(conn)
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="text"]))
+      refute has_element?(live, "[data-photo-dropzone]")
+    end
+
+    test "the feed's camera trigger opens the composer photo-first", %{conn: conn} do
+      live = open_photo_composer(conn)
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="photos"]))
+      # Photos lead: a real dropzone up top, no book/film noise, and the text
+      # editor waits behind one button instead of headlining the panel.
+      assert has_element?(live, "[data-photo-dropzone]")
+      refute has_element?(live, ~s(button[phx-click="review-kind"]))
+      assert has_element?(live, "#composer-add-text")
+      refute has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
+    end
+
+    test "photo mode shows caption and description with every photo, no panel needed", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      assert has_element?(live, ~s(input[name="photo[#{image.id}][caption]"]))
+      assert has_element?(live, ~s(input[name="photo[#{image.id}][alt]"]))
+      # The panel still exists for the rarer switches, but must not render a
+      # second caption field (two same-name inputs corrupt the submit).
+      open_panel(live, image)
+
+      assert has_element?(live, "#composer-photo-panel")
+
+      assert live
+             |> render()
+             |> then(fn html ->
+               length(String.split(html, ~s(name="photo[#{image.id}][caption]"))) == 2
+             end)
+    end
+
+    test "the licence stays with the photos in photo mode", %{conn: conn, user: user} do
+      live = open_photo_composer(conn)
+      upload_photo!(live, user)
+
+      assert has_element?(live, "#composer-license")
+    end
+
+    test "the text editor unfolds on request and photo mode keeps a typed body", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+      upload_photo!(live, user)
+
+      live |> element("#composer-add-text") |> render_click()
+
+      assert has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
+      refute has_element?(live, "#composer-add-text")
+
+      # Switching to text mode and back never drops the body or the photos.
+      live
+      |> form("#composer-form", %{"post" => %{"mode" => "text", "body" => "Ein Satz dazu."}})
+      |> render_change()
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="text"]))
+
+      live
+      |> form("#composer-form", %{"post" => %{"mode" => "photos", "body" => "Ein Satz dazu."}})
+      |> render_change()
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="photos"]))
+      assert has_element?(live, "[data-photo-tile]")
+      # A body exists, so the editor stays unfolded rather than hiding it.
+      assert has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
+    end
+
+    test "the unfolded editor stays open when the author deletes their text", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+      upload_photo!(live, user)
+
+      live |> element("#composer-add-text") |> render_click()
+
+      live
+      |> form("#composer-form", %{"post" => %{"mode" => "photos", "body" => "Erst was, dann"}})
+      |> render_change()
+
+      # Deleting the last character must not fold the editor away under the
+      # cursor.
+      live
+      |> form("#composer-form", %{"post" => %{"mode" => "photos", "body" => ""}})
+      |> render_change()
+
+      assert has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
+      refute has_element?(live, "#composer-add-text")
+    end
+
+    test "after posting, the plain pill opens text-first again", %{conn: conn, user: user} do
+      live = open_photo_composer(conn)
+      upload_photo!(live, user)
+
+      live |> form("#composer-form", %{"post" => %{"mode" => "photos"}}) |> render_submit()
+      live |> element("#open-composer") |> render_click()
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="text"]))
+    end
+
+    test "the pill never rearranges the composer under a held photo draft", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+      upload_photo!(live, user)
+
+      live |> element(~s(button[phx-click="close-composer"])) |> render_click()
+      live |> element("#open-composer") |> render_click()
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="photos"]))
+    end
+
+    test "a photo-only post saves from photo mode", %{conn: conn, user: user} do
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      # No body field at all: the editor is folded away, which is the point —
+      # the form still submits (the caption inputs are in the photo grid).
+      live
+      |> form("#composer-form", %{
+        "post" => %{"mode" => "photos"},
+        "photo" => %{image.id => %{"caption" => "Abendlicht", "alt" => "Ein Sonnenuntergang"}}
+      })
+      |> render_submit()
+
+      post = only_post(user)
+      assert post.body == ""
+      assert [%{caption: "Abendlicht", alt: "Ein Sonnenuntergang"}] = post.images
+    end
+  end
+
+  describe "which mode an existing post opens in" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "editing a photo-only post opens photo-first", %{conn: conn, user: user} do
+      image = pending_image!(user)
+      {:ok, post} = Posts.create_post(user, %{body: "", image_ids: [image.id]})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="photos"]))
+    end
+
+    test "editing a text post with an attached photo opens text-first", %{
+      conn: conn,
+      user: user
+    } do
+      image = pending_image!(user)
+      {:ok, post} = Posts.create_post(user, %{body: "Worte dazu.", image_ids: [image.id]})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="text"]))
+    end
+
+    test "a reply composer offers no photo mode", %{conn: conn, user: _user} do
+      author = insert(:user)
+      {:ok, parent} = Posts.create_post(author, %{body: "Ein Beitrag."})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{parent.id}/reply")
+
+      refute has_element?(live, "#composer-mode-photos")
+    end
+  end
+
+  describe "the cover badge" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user, live: open_composer(conn)}
+    end
+
+    test "appears only once a second photo makes the order mean anything", %{
+      live: live,
+      user: user
+    } do
+      upload_photo!(live, user)
+
+      refute has_element?(live, "[data-cover-badge]")
+
+      upload_photo!(live, user)
+
+      assert has_element?(live, "[data-cover-badge]")
+    end
+  end
+
+  describe "photos surviving a reconnect (form recovery, issue #1130's photo half)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "every attached photo rides the form as a hidden id", %{conn: conn, user: user} do
+      live = open_composer(conn)
+      image = upload_photo!(live, user)
+
+      assert has_element?(live, ~s(input[name="post[image_ids][]"][value="#{image.id}"]))
+    end
+
+    test "a freshly mounted composer re-adopts its pending photos from the replayed form", %{
+      conn: conn,
+      user: user
+    } do
+      image = pending_image!(user)
+
+      # The re-mounted composer starts empty — exactly what a reconnect leaves.
+      live = open_composer(conn)
+      refute has_element?(live, "[data-photo-tile]")
+
+      # Form recovery replays the change event with the OLD DOM's values —
+      # values the fresh render does not carry, which is why this goes through
+      # the element (the `form/3` helper insists on rendered inputs).
+      live
+      |> element("#composer-form")
+      |> render_change(%{"post" => %{"mode" => "photos", "image_ids" => [image.id]}})
+
+      assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
+      assert has_element?(live, ~s(#composer[data-composer-mode="photos"]))
+    end
+
+    test "a recovered photo draft re-opens the collapsed feed composer", %{
+      conn: conn,
+      user: user
+    } do
+      image = pending_image!(user)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      assert has_element?(live, "#composer-panel.hidden")
+
+      live
+      |> element("#composer-form")
+      |> render_change(%{"post" => %{"image_ids" => [image.id]}})
+
+      refute has_element?(live, "#composer-panel.hidden")
+    end
+
+    test "somebody else's pending photo is never adopted", %{conn: conn, user: _user} do
+      other = insert(:user)
+      foreign = pending_image!(other)
+
+      live = open_composer(conn)
+
+      live
+      |> element("#composer-form")
+      |> render_change(%{"post" => %{"image_ids" => [foreign.id]}})
+
+      refute has_element?(live, "[data-photo-tile]")
+    end
+
+    test "a photo already attached to a post is never adopted", %{conn: conn, user: user} do
+      image = pending_image!(user)
+      {:ok, _post} = Posts.create_post(user, %{body: "Schon gepostet.", image_ids: [image.id]})
+
+      live = open_composer(conn)
+
+      live
+      |> element("#composer-form")
+      |> render_change(%{"post" => %{"image_ids" => [image.id]}})
+
+      refute has_element?(live, "[data-photo-tile]")
     end
   end
 

@@ -418,6 +418,15 @@ defmodule VutuvWeb.PostComponents do
   attr(:viewer, :any, required: true, doc: "the viewer; their avatar anchors the row")
   attr(:href, :any, default: nil)
   attr(:surface, :atom, default: :card, values: [:card, :flat])
+
+  attr(:avatar_size, :string,
+    default: nil,
+    doc:
+      "overrides the surface's avatar default (:card md / :flat sm) — the feed " <>
+        "wraps a :flat trigger in its own card beside the camera button and keeps " <>
+        "the big page-anchor avatar"
+  )
+
   attr(:class, :any, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
@@ -434,13 +443,13 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <%= if @href do %>
       <.link href={@href} data-composer-trigger class={@shell_class} {@rest}>
-        <.composer_trigger_body viewer={@viewer} surface={@surface}>
+        <.composer_trigger_body viewer={@viewer} surface={@surface} avatar_size={@avatar_size}>
           {render_slot(@inner_block)}
         </.composer_trigger_body>
       </.link>
     <% else %>
       <button type="button" data-composer-trigger class={@shell_class} {@rest}>
-        <.composer_trigger_body viewer={@viewer} surface={@surface}>
+        <.composer_trigger_body viewer={@viewer} surface={@surface} avatar_size={@avatar_size}>
           {render_slot(@inner_block)}
         </.composer_trigger_body>
       </button>
@@ -450,6 +459,7 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:viewer, :any, required: true)
   attr(:surface, :atom, required: true)
+  attr(:avatar_size, :string, required: true)
   slot(:inner_block, required: true)
 
   # Standalone (:card, the feed) carries the big `md` avatar as the page's
@@ -459,7 +469,7 @@ defmodule VutuvWeb.PostComponents do
   # at text-sm comes out exactly avatar-high (36px).
   defp composer_trigger_body(assigns) do
     ~H"""
-    <.avatar user={@viewer} size={if(@surface == :card, do: "md", else: "sm")} />
+    <.avatar user={@viewer} size={@avatar_size || if(@surface == :card, do: "md", else: "sm")} />
     <span class={[
       "flex-1 rounded-full bg-slate-100 px-4 text-sm text-slate-500 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:group-hover:bg-slate-700",
       if(@surface == :card, do: "py-2.5", else: "py-2")
