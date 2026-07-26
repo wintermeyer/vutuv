@@ -302,6 +302,12 @@ defmodule VutuvWeb.Router do
     # is in ReservedSlugs).
     delete("/posts/:id", PostController, :delete)
 
+    # The profile pin (issue #1110): the one post that rides above the author's
+    # timeline. Owner-only (checked in the controller), and PUT rather than POST
+    # because pinning is idempotent — the same shape the profile job pin uses.
+    put("/posts/:id/pin", PostController, :pin)
+    delete("/posts/:id/pin", PostController, :unpin)
+
     # The community guidelines every moderation email and report form links to.
     get("/community", PageController, :community)
 

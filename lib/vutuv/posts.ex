@@ -1652,6 +1652,63 @@ defmodule Vutuv.Posts do
   def normalize_post_filter("replies"), do: :replies
   def normalize_post_filter(_type), do: :all
 
+  ## The pinned post (issue #1110)
+
+  @doc """
+  Pins `post` to `author`'s profile: the one post their profile shows above
+  the timeline, however much they write afterwards.
+
+  **Exactly one post is pinned at a time**, so this *replaces* any earlier
+  pin — `users.pinned_post_id` holds a single id, which makes the rule
+  structural rather than something the code has to keep true. `post` must be
+  the member's own (the caller resolves it owner-scoped); someone else's is
+  rejected rather than pinned.
+  """
+  def pin_to_profile(%User{id: author_id} = author, %Post{id: post_id, user_id: author_id}) do
+    author
+    |> Ecto.Changeset.change(pinned_post_id: post_id)
+    # Guards the race where the post is deleted between resolving the owner and
+    # this write: the FK fails cleanly instead of persisting a dangling pointer.
+    |> Ecto.Changeset.foreign_key_constraint(:pinned_post_id)
+    |> Repo.update()
+  end
+
+  def pin_to_profile(%User{}, %Post{}), do: {:error, :not_author}
+
+  @doc """
+  Clears `author`'s pinned post, so their profile leads with the newest entry
+  again. Idempotent — unpinning when nothing is pinned is a no-op update.
+  """
+  def unpin_from_profile(%User{} = author) do
+    author
+    |> Ecto.Changeset.change(pinned_post_id: nil)
+    |> Repo.update()
+  end
+
+  @doc """
+  `author`'s pinned post as `viewer` may see it, preloaded like every rendered
+  post — or `nil` when nothing is pinned or the pin is invisible to this
+  viewer (a restricted or frozen post simply does not show up on the profile,
+  exactly as it stays out of the timeline). No query when nothing is pinned.
+  """
+  def pinned_post(%User{pinned_post_id: nil}, _viewer), do: nil
+
+  def pinned_post(%User{pinned_post_id: post_id}, viewer) do
+    from(p in Post, where: p.id == ^post_id)
+    |> scope_visible(viewer)
+    |> Repo.one()
+    |> preload_post()
+  end
+
+  @doc """
+  Whether `post` is the one `user` pinned to their profile — the predicate
+  behind the card menu's Pin / Unpin label and the pinned banner.
+  """
+  def pinned?(%User{pinned_post_id: post_id}, %Post{id: post_id}) when is_binary(post_id),
+    do: true
+
+  def pinned?(_user, _post), do: false
+
   @doc """
   The newest anonymous-visible posts for the RSS feeds: `author`'s own
   original posts (reposts are engagement rows, so they never appear), or

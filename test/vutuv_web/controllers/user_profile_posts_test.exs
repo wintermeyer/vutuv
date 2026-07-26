@@ -86,4 +86,57 @@ defmodule VutuvWeb.UserProfilePostsTest do
     member_view = get(member_conn, "/#{user.username}")
     assert member_view.resp_body =~ "members club"
   end
+
+  describe "the pinned post (issue #1110)" do
+    test "leads the card, marked, and is not listed twice", %{conn: conn} do
+      user = insert_activated_user()
+      {:ok, pinned} = Posts.create_post(user, %{body: "the one I am proud of"})
+      {:ok, _newer} = Posts.create_post(user, %{body: "just something new"})
+      {:ok, _} = Posts.pin_to_profile(user, pinned)
+
+      body = html_response(get(conn, "/#{user.username}"), 200)
+
+      # Its own block above the timeline, carrying the pin marker...
+      assert body =~ ~s(data-pinned-post="#{pinned.id}")
+      assert body =~ "data-pinned-banner"
+      assert body =~ "Pinned post"
+
+      # ...and it reads before the newer post, although it is older.
+      assert :binary.match(body, "the one I am proud of") <
+               :binary.match(body, "just something new")
+
+      # Exactly once: the timeline below leaves the pinned post out.
+      assert length(:binary.matches(body, "the one I am proud of")) == 1
+    end
+
+    test "a pin the viewer may not see simply is not there", %{conn: conn} do
+      user = insert_activated_user()
+
+      {:ok, pinned} =
+        Posts.create_post(user, %{body: "for members", denials: [%{"wildcard" => "logged_out"}]})
+
+      {:ok, _} = Posts.create_post(user, %{body: "for everyone"})
+      {:ok, _} = Posts.pin_to_profile(user, pinned)
+
+      body = html_response(get(conn, "/#{user.username}"), 200)
+
+      refute body =~ "data-pinned-post"
+      refute body =~ "for members"
+      assert body =~ "for everyone"
+    end
+
+    test "the owner's menu offers Pin on a normal post and Unpin on the pinned one", %{conn: conn} do
+      {owner_conn, user} = create_and_login_user(conn)
+      {:ok, pinned} = Posts.create_post(user, %{body: "showcased"})
+      {:ok, other} = Posts.create_post(user, %{body: "ordinary"})
+      {:ok, _} = Posts.pin_to_profile(user, pinned)
+
+      body = html_response(get(owner_conn, "/#{user.username}"), 200)
+
+      # The showcase block's card ids carry its "pinned-" entry key; the
+      # timeline's carry the usual "post-" one.
+      assert body =~ ~s(id="unpin-post-pinned-#{pinned.id}")
+      assert body =~ ~s(id="pin-post-post-#{other.id}")
+    end
+  end
 end

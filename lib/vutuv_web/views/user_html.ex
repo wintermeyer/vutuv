@@ -6,6 +6,7 @@ defmodule VutuvWeb.UserHTML do
     only: [
       composer_trigger: 1,
       post_archive_path: 2,
+      post_card: 1,
       post_filter_empty_text: 1,
       post_filter_tabs: 1,
       post_list: 1,

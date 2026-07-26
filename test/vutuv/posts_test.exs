@@ -493,6 +493,93 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "the pinned post (issue #1110)" do
+    test "pinning stores the post and pinned?/2 recognises it" do
+      author = user()
+      post = create_post!(author, %{body: "my best work"})
+
+      assert {:ok, author} = Posts.pin_to_profile(author, post)
+      assert author.pinned_post_id == post.id
+      assert Posts.pinned?(author, post)
+      assert Posts.pinned_post(author, nil).id == post.id
+    end
+
+    test "only one post is pinned at a time: pinning again replaces the first" do
+      author = user()
+      first = create_post!(author, %{body: "first"})
+      second = create_post!(author, %{body: "second"})
+
+      {:ok, author} = Posts.pin_to_profile(author, first)
+      {:ok, author} = Posts.pin_to_profile(author, second)
+
+      assert author.pinned_post_id == second.id
+      refute Posts.pinned?(author, first)
+      assert Posts.pinned?(author, second)
+    end
+
+    test "unpinning clears it and is idempotent" do
+      author = user()
+      post = create_post!(author, %{body: "pinned for now"})
+
+      {:ok, author} = Posts.pin_to_profile(author, post)
+      {:ok, author} = Posts.unpin_from_profile(author)
+
+      assert author.pinned_post_id == nil
+      assert Posts.pinned_post(author, nil) == nil
+      refute Posts.pinned?(author, post)
+
+      assert {:ok, %{pinned_post_id: nil}} = Posts.unpin_from_profile(author)
+    end
+
+    test "someone else's post cannot be pinned" do
+      author = user()
+      stranger = user()
+      theirs = create_post!(stranger, %{body: "not yours"})
+
+      assert Posts.pin_to_profile(author, theirs) == {:error, :not_author}
+      assert Repo.get!(Vutuv.Accounts.User, author.id).pinned_post_id == nil
+    end
+
+    test "deleting the pinned post unpins it" do
+      author = user()
+      post = create_post!(author, %{body: "gone soon"})
+      {:ok, author} = Posts.pin_to_profile(author, post)
+
+      {:ok, _} = Posts.delete_post(post)
+
+      assert Repo.get!(Vutuv.Accounts.User, author.id).pinned_post_id == nil
+    end
+
+    test "a pinned post the viewer may not see does not surface" do
+      author = user()
+      stranger = user()
+
+      post =
+        create_post!(author, %{
+          body: "followers only",
+          denials: [%{"wildcard" => "non_followers"}]
+        })
+
+      {:ok, author} = Posts.pin_to_profile(author, post)
+
+      assert Posts.pinned_post(author, author).id == post.id
+      assert Posts.pinned_post(author, stranger) == nil
+      assert Posts.pinned_post(author, nil) == nil
+    end
+
+    test "pinned_post/2 preloads what a post card renders" do
+      author = user()
+      post = create_post!(author, %{body: "with everything"})
+      {:ok, author} = Posts.pin_to_profile(author, post)
+
+      pinned = Posts.pinned_post(author, nil)
+
+      assert %Vutuv.Accounts.User{} = pinned.user
+      assert is_list(pinned.images)
+      assert is_list(pinned.tags)
+    end
+  end
+
   describe "feed_page/2" do
     test "shows own and followees' posts, not strangers'" do
       viewer = user()

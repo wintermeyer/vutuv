@@ -62,6 +62,10 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     # the page. `user` has :educations preloaded here, so it resolves in memory.
     work_info = UserHelpers.profile_headline(user, job, 256)
     posts = Vutuv.Posts.profile_posts(user, viewer)
+    # The showcased post (issue #1110): it leads the list, marked `pinned`, and
+    # drops out of the timeline below — exactly the order the page renders. nil
+    # when nothing is pinned or the pin is invisible to this viewer.
+    pinned_post = Vutuv.Posts.pinned_post(user, viewer)
 
     # The #928 base gate AND the #938 exclusion, resolved together (one query):
     # a signed-in /api/2.0 viewer on the owner's exclusion list (by member or
@@ -160,7 +164,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # nil otherwise. An agent handing a human "where else can I follow this
       # person" needs exactly the handle; the actor URL is the machine sibling.
       fediverse: fediverse_entry(user),
-      posts: Enum.map(posts, &post_entry/1)
+      posts: post_entries(pinned_post, posts)
     })
     |> Map.merge(birthday_fields(user))
     |> maybe_include_photo(user, opts)
@@ -281,12 +285,29 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     }
   end
 
+  # The profile's post list: the pinned post first (issue #1110), then the
+  # timeline without it — one post, listed once, the way the page shows it.
+  # A repost of the pinned post stays: it is a different timeline event.
+  defp post_entries(nil, entries), do: Enum.map(entries, &post_entry/1)
+
+  defp post_entries(pinned_post, entries) do
+    rest =
+      Enum.reject(entries, &(is_nil(&1.reposted_by) and &1.post.id == pinned_post.id))
+
+    [pinned_entry(pinned_post) | Enum.map(rest, &post_entry/1)]
+  end
+
+  defp pinned_entry(post) do
+    %{post: post, reposted_by: nil} |> post_entry() |> Map.put(:pinned, true)
+  end
+
   defp post_entry(entry) do
     %{
       url: AgentDocs.abs_url(Vutuv.Posts.path(entry.post)),
       published_on: entry.post.published_on,
       excerpt: AgentDocs.excerpt(entry.post.body),
-      reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by)
+      reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by),
+      pinned: false
     }
   end
 

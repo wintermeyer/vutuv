@@ -404,6 +404,28 @@ the resulting ~200px rail width. --%>
         {if @posts_total == 0, do: gettext("Write your first post"), else: gettext("Write a post")}
       </.composer_trigger>
 
+      <%!-- The pinned post (issue #1110): the one post the member showcases,
+      above the timeline and outside it (the list below leaves it out, so it
+      shows once). It carries the card's brand-tinted "Pinned post" banner and
+      sits on a brand tint of its own, so nobody has to guess why an older post
+      leads the card. Shown only under the unfiltered "All" tab — the other tabs
+      are the plain timeline, where a pinned own post would just be a stray. --%>
+      <div
+        :if={@pinned_post && @post_filter == "all"}
+        id="pinned-post"
+        data-pinned-post={@pinned_post.id}
+        class="mb-4 rounded-xl bg-brand-50/70 p-4 ring-1 ring-brand-100 dark:bg-brand-900/20 dark:ring-brand-900"
+      >
+        <.post_card
+          post={@pinned_post}
+          viewer={@current_user}
+          entry_id={"pinned-#{@pinned_post.id}"}
+          conn_or_socket={@socket}
+          surface={:flat}
+          pinned?
+        />
+      </div>
+
       <%!-- Filter the timeline by entry kind (issue #945): All / Own posts /
       Reposts / Replies, so a visitor can skip past reposts to a member's own
       writing. Only when there is something to filter; toggles with no reload. --%>

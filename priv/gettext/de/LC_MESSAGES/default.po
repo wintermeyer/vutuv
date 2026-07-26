@@ -17269,3 +17269,47 @@ msgstr "Was sich an welchem Konto geändert hat, wann, von welchem Gerät und wi
 #, elixir-autogen, elixir-format
 msgid "device or detail"
 msgstr "Gerät oder Detail"
+
+#: lib/vutuv_web/components/post_components.ex:1270
+#, elixir-autogen, elixir-format
+msgid "Pinned post"
+msgstr "Angehefteter Beitrag"
+
+#: lib/vutuv_web/components/post_components.ex:1358
+#, elixir-autogen, elixir-format
+msgid "Pin to profile"
+msgstr "An Profil anheften"
+
+#: lib/vutuv_web/components/post_components.ex:1366
+#, elixir-autogen, elixir-format
+msgid "Unpin from profile"
+msgstr "Vom Profil lösen"
+
+#: lib/vutuv_web/components/post_components.ex:1353
+#, elixir-autogen, elixir-format
+msgid "Only one post can be pinned to your profile. Pin this one and release the other?"
+msgstr ""
+"Es kann nur ein Beitrag an Ihrem Profil angeheftet sein. Diesen anheften und "
+"den anderen lösen?"
+
+#: lib/vutuv_web/controllers/post_controller.ex:247
+#, elixir-autogen, elixir-format
+msgid "Pinned to the top of your profile."
+msgstr "Oben an Ihr Profil angeheftet."
+
+#: lib/vutuv_web/controllers/post_controller.ex:244
+#, elixir-autogen, elixir-format
+msgid "Pinned to the top of your profile. The post pinned before it is a normal post again."
+msgstr ""
+"Oben an Ihr Profil angeheftet. Der zuvor angeheftete Beitrag ist wieder ein "
+"normaler Beitrag."
+
+#: lib/vutuv_web/controllers/post_controller.ex:264
+#, elixir-autogen, elixir-format
+msgid "Unpinned. The post is a normal post again."
+msgstr "Nicht mehr angeheftet. Der Beitrag ist wieder ein normaler Beitrag."
+
+#: lib/vutuv_web/agent_docs/markdown.ex:785
+#, elixir-autogen, elixir-format
+msgid "pinned post"
+msgstr "angehefteter Beitrag"

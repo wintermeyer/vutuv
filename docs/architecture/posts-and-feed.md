@@ -127,6 +127,36 @@ and no control. The permalink (`mode={:full}`) never clamps.
 
 The profile page and the archive show the author's timeline (posts + reposts).
 
+## The pinned post (issue #1110)
+
+A member can pin **one** of their own posts to the top of their profile, so
+the thing they are proud of stays visible however much they write afterwards.
+"One" is structural, not a rule the code enforces: it is the nullable
+`users.pinned_post_id` column (`ON DELETE SET NULL`, so deleting the post
+simply unpins it), the same shape the profile job pin uses. `Vutuv.Posts`
+owns it — `pin_to_profile/2` (author-scoped, replaces any earlier pin),
+`unpin_from_profile/1`, `pinned_post/2` (visibility-scoped and preloaded, no
+query when nothing is pinned) and the `pinned?/2` predicate the UI reads.
+
+The affordance is the post card's author ⋯ menu, everywhere a post renders:
+"Pin to profile" (`PUT /posts/:id/pin`) or "Unpin from profile" (`DELETE`),
+both CSRF links like Edit and Delete. Pinning while another post holds the
+spot asks first ("Only one post can be pinned to your profile…"), so the rule
+shows up where it bites instead of in a help text, and both actions land on
+the profile with a flash, where the change is visible.
+
+On the profile the pinned post renders in its **own brand-tinted block above
+the timeline** (`#pinned-post`), carrying the card's brand "Pinned post"
+banner (`<.post_card pinned?>`, `data-pinned-banner`) — and the timeline below
+leaves it out, so it shows once and nobody wonders why an old post leads the
+card. The block belongs to the unfiltered "All" tab only: the Own posts /
+Reposts / Replies tabs are the plain timeline, where the post takes its
+chronological place again. The archive (`/:slug/posts`) is unaffected — it is
+history, not a showcase. The agent formats mirror the page: `ProfileDoc` puts
+the pinned entry first with `pinned: true` (md/txt append "(pinned post)")
+and drops it from the timeline list, and a pin that is restricted, frozen or
+invisible to the viewer is simply absent, in every format.
+
 ## Editing closes (the edit window)
 
 An edit rewrites what other people already put their name to: like "I love

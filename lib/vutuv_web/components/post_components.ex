@@ -63,6 +63,15 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:mode, :atom, default: :preview, values: [:preview, :full])
 
+  attr(:pinned?, :boolean,
+    default: false,
+    doc:
+      "render the \"Pinned post\" banner (issue #1110). Set where the pin is in " <>
+        "effect — the author's profile — so a feed card never claims a pin it is " <>
+        "not the showcase for. A `:full` card (the permalink, the post's own " <>
+        "page) resolves it itself and needs no flag"
+  )
+
   attr(:show_reply_banner, :boolean,
     default: true,
     doc:
@@ -194,10 +203,27 @@ defmodule VutuvWeb.PostComponents do
       # user id or nil.
       |> assign(:viewer_id, if(user?, do: viewer.id))
       |> assign(:menu_id, "post-menu-#{entry_key}")
+      # Keyed on the timeline entry like every other id here, so the same post
+      # rendered twice on a page keeps unique pin controls.
+      |> assign(:pin_item_id, "pin-post-#{entry_key}")
+      |> assign(:unpin_item_id, "unpin-post-#{entry_key}")
       |> assign(:report_menu_id, "post-report-#{entry_key}")
       |> assign(:time_id, "post-time-#{entry_key}")
       |> assign(:body_id, "post-body-#{entry_key}")
       |> assign(:author?, Posts.author?(post, viewer))
+      # Whether this post is the one its author pinned to their profile (issue
+      # #1110) — read off the already-preloaded author, so it costs no query.
+      # Drives the menu's Pin / Unpin label and its "replaces the other one"
+      # prompt; the visible banner is the caller's `pinned?` (see the attr).
+      |> assign(:pinned_to_profile?, Posts.pinned?(post.user, post))
+      |> assign(:pin_replaces_other?, pin_replaces_other?(post))
+      # The visible marker: wherever the caller says the pin is in effect, plus
+      # the permalink — the post's own page, where "this one is pinned to their
+      # profile" is simply a fact about it. A feed preview stays unmarked.
+      |> assign(
+        :show_pin_banner?,
+        assigns.pinned? or (assigns.mode == :full and Posts.pinned?(post.user, post))
+      )
       # The no-query half of Posts.editable?/1 — the feed renders many cards.
       |> assign(:editable?, Posts.edit_window_open?(post))
       |> assign(:reporter?, user? and not Posts.author?(post, viewer))
@@ -1240,6 +1266,18 @@ defmodule VutuvWeb.PostComponents do
         {gettext("Only you can see this post while a report about it is handled.")}
       </.frozen_banner>
 
+      <%!-- The pinned marker (issue #1110): brand-tinted, not the muted grey of
+      the repost/reply lines, because "this one is pinned" is the card's whole
+      reason for sitting above the timeline. --%>
+      <p
+        :if={@show_pin_banner?}
+        class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300"
+        data-pinned-banner
+      >
+        <.icon_pin class="h-4 w-4 shrink-0" />
+        {gettext("Pinned post")}
+      </p>
+
       <.reposted_banner reposters={@reposters} />
 
       <%!-- The reply banner: the live parent links its permalink; a deleted
@@ -1307,6 +1345,34 @@ defmodule VutuvWeb.PostComponents do
             <div :if={@author?} class="-mr-1 -mt-1 shrink-0">
               <.card_menu id={@menu_id}>
                 <:item :if={@editable?} href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
+                <%!-- The profile pin (issue #1110). Only one post can be pinned,
+                so pinning while another post holds the spot asks first and says
+                what it replaces — the rule is visible where it bites, not buried
+                in a help text. --%>
+                <:item
+                  :if={!@pinned_to_profile?}
+                  id={@pin_item_id}
+                  href={~p"/posts/#{@post.id}/pin"}
+                  method="put"
+                  confirm={
+                    if(@pin_replaces_other?,
+                      do:
+                        gettext(
+                          "Only one post can be pinned to your profile. Pin this one and release the other?"
+                        )
+                    )
+                  }
+                >
+                  {gettext("Pin to profile")}
+                </:item>
+                <:item
+                  :if={@pinned_to_profile?}
+                  id={@unpin_item_id}
+                  href={~p"/posts/#{@post.id}/pin"}
+                  method="delete"
+                >
+                  {gettext("Unpin from profile")}
+                </:item>
                 <:item
                   href={~p"/posts/#{@post.id}"}
                   method="delete"
@@ -1796,6 +1862,39 @@ defmodule VutuvWeb.PostComponents do
   # one-avatar roster; the feed passes the whole `reposters` list.
   defp repost_roster(%{reposters: reposters}) when is_list(reposters), do: reposters
   defp repost_roster(%{reposted_by: reposted_by}), do: List.wrap(reposted_by)
+
+  # Whether pinning this post would push another one off the profile — the
+  # author already pins a different post (issue #1110). Read off the preloaded
+  # author, so it costs no query.
+  defp pin_replaces_other?(%{user: %User{pinned_post_id: pinned_id}, id: id})
+       when is_binary(pinned_id),
+       do: pinned_id != id
+
+  defp pin_replaces_other?(_post), do: false
+
+  # The pushpin marking the post a member showcases on their profile (issue
+  # #1110). Private to this module by convention: the pin is a post idea, and
+  # the profile job pin has its own star (`WorkExperienceHTML.pin_star/1`).
+  attr(:class, :string, default: "h-5 w-5")
+
+  defp icon_pin(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      aria-hidden="true"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M12 14.25v6.75M8.25 3.75h7.5l-.9 4.5 2.4 2.4v1.6H6.75v-1.6l2.4-2.4-.9-4.5Z"
+      />
+    </svg>
+    """
+  end
 
   defp reposted_banner(%{reposters: []} = assigns), do: ~H""
 

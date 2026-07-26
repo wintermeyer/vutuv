@@ -1,8 +1,9 @@
 defmodule VutuvWeb.PostController do
   @moduledoc """
   The author post archive (`/:slug/posts`, optionally scoped to a year,
-  month or day), the post permalink (`/:slug/posts/:id`, the post's UUID v7)
-  and post deletion.
+  month or day), the post permalink (`/:slug/posts/:id`, the post's UUID v7),
+  post deletion and the profile pin (issue #1110: `PUT`/`DELETE
+  /posts/:id/pin`, the one post an author showcases above their timeline).
 
   The permalink is public and crawlable when the post has no denials; any
   denial noindexes the page and hides it from non-matching readers. A denied
@@ -20,7 +21,7 @@ defmodule VutuvWeb.PostController do
 
   plug(VutuvWeb.Plug.UserResolveSlug when action in [:show, :index])
   plug(VutuvWeb.Plug.EnsureActivated when action in [:show, :index])
-  plug(VutuvWeb.Plug.RequireLogin when action in [:delete])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:delete, :pin, :unpin])
 
   alias Vutuv.Fediverse
   alias Vutuv.Posts
@@ -214,6 +215,57 @@ defmodule VutuvWeb.PostController do
       |> redirect(to: ~p"/#{current_user}")
     else
       VutuvWeb.ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  # Pin one of your own posts to the top of your profile (issue #1110). Only one
+  # post can be pinned, so this replaces whatever was pinned before — the menu
+  # asked before the click, the flash names what happened afterwards. Both
+  # actions land on the profile, the one page where the effect is visible.
+  def pin(conn, %{"id" => id}) do
+    current_user = conn.assigns[:current_user]
+    post = Posts.get_post(id)
+
+    if post && Posts.author?(post, current_user) do
+      replaced? = current_user.pinned_post_id not in [nil, post.id]
+      {:ok, _user} = Posts.pin_to_profile(current_user, post)
+
+      conn
+      |> put_flash(:info, pin_flash(replaced?))
+      |> redirect(to: ~p"/#{current_user}" <> "#profile-posts")
+    else
+      VutuvWeb.ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  defp pin_flash(true),
+    do:
+      gettext(
+        "Pinned to the top of your profile. The post pinned before it is a normal post again."
+      )
+
+  defp pin_flash(false), do: gettext("Pinned to the top of your profile.")
+
+  # Release the pinned post. Scoped to the author and to the post that really
+  # holds the spot, so a stale menu (someone pinned something else meanwhile in
+  # another tab) cannot unpin the wrong post; it just does nothing.
+  def unpin(conn, %{"id" => id}) do
+    current_user = conn.assigns[:current_user]
+    post = Posts.get_post(id)
+
+    cond do
+      is_nil(post) or not Posts.author?(post, current_user) ->
+        VutuvWeb.ControllerHelpers.render_error(conn, 404)
+
+      Posts.pinned?(current_user, post) ->
+        {:ok, _user} = Posts.unpin_from_profile(current_user)
+
+        conn
+        |> put_flash(:info, gettext("Unpinned. The post is a normal post again."))
+        |> redirect(to: ~p"/#{current_user}" <> "#profile-posts")
+
+      true ->
+        redirect(conn, to: ~p"/#{current_user}" <> "#profile-posts")
     end
   end
 

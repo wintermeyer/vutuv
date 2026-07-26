@@ -16492,3 +16492,43 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "device or detail"
 msgstr ""
+
+#: lib/vutuv_web/components/post_components.ex:1270
+#, elixir-autogen, elixir-format
+msgid "Pinned post"
+msgstr ""
+
+#: lib/vutuv_web/components/post_components.ex:1358
+#, elixir-autogen, elixir-format
+msgid "Pin to profile"
+msgstr ""
+
+#: lib/vutuv_web/components/post_components.ex:1366
+#, elixir-autogen, elixir-format
+msgid "Unpin from profile"
+msgstr ""
+
+#: lib/vutuv_web/components/post_components.ex:1353
+#, elixir-autogen, elixir-format
+msgid "Only one post can be pinned to your profile. Pin this one and release the other?"
+msgstr ""
+
+#: lib/vutuv_web/controllers/post_controller.ex:247
+#, elixir-autogen, elixir-format
+msgid "Pinned to the top of your profile."
+msgstr ""
+
+#: lib/vutuv_web/controllers/post_controller.ex:244
+#, elixir-autogen, elixir-format
+msgid "Pinned to the top of your profile. The post pinned before it is a normal post again."
+msgstr ""
+
+#: lib/vutuv_web/controllers/post_controller.ex:264
+#, elixir-autogen, elixir-format
+msgid "Unpinned. The post is a normal post again."
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:785
+#, elixir-autogen, elixir-format
+msgid "pinned post"
+msgstr ""

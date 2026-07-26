@@ -334,6 +334,14 @@ defmodule Vutuv.Accounts.User do
     # cast from a form). Nulled by the DB when the pinned education is deleted
     # (ON DELETE SET NULL), so it can never point at a gone entry.
     belongs_to(:profile_education, Vutuv.Profiles.Education)
+
+    # The post the member showcases at the top of their profile (issue #1110).
+    # nil = nothing pinned. Exactly one at a time — that is what a column
+    # rather than a join table buys — and set only through
+    # Vutuv.Posts.pin_to_profile/2 / unpin_from_profile/1 (never cast from a
+    # form). Nulled by the DB when the post is deleted (ON DELETE SET NULL),
+    # so it can never point at a gone post.
+    belongs_to(:pinned_post, Vutuv.Posts.Post)
     has_many(:search_terms, Vutuv.Accounts.SearchTerm, on_replace: :delete)
     has_many(:endorsements, Vutuv.Tags.UserTagEndorsement)
 

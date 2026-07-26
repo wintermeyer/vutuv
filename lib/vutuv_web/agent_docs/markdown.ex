@@ -775,8 +775,15 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp post_line(post) do
-    "- #{post.published_on}#{repost_suffix(post)}: [#{md_text(post.excerpt)}](#{post.url})"
+    "- #{post.published_on}#{pin_suffix(post)}#{repost_suffix(post)}: " <>
+      "[#{md_text(post.excerpt)}](#{post.url})"
   end
+
+  @doc false
+  # The post the member showcases on their profile (issue #1110). Only the
+  # profile doc's entries carry the flag, so every other post list is unchanged.
+  def pin_suffix(%{pinned: true}), do: " (#{gettext("pinned post")})"
+  def pin_suffix(_post), do: ""
 
   # "(reposted by A)" for a lone reposter, "(reposted by A and 3 more)" once a
   # post carries a whole roster (the feed's follow-scoped reposters, newest

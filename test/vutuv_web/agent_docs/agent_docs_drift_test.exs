@@ -387,6 +387,31 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.xml =~ "<honor>true</honor>"
   end
 
+  test "profile: the pinned post is marked in every format (issue #1110)",
+       %{user: user, post: post} do
+    {:ok, _} = Vutuv.Posts.pin_to_profile(user, post)
+
+    rendered = formats_for("/drift_tester")
+
+    # The page leads the Posts card with the marked showcase block...
+    assert rendered.html =~ ~s(data-pinned-post="#{post.id}")
+    assert rendered.html =~ "data-pinned-banner"
+    assert rendered.html =~ "Pinned post"
+
+    # ...md/txt mark the same entry inline, JSON/XML carry the flag.
+    assert rendered.md =~ "(pinned post)"
+    assert rendered.txt =~ "(pinned post)"
+
+    posts_json = Jason.decode!(rendered.json)["posts"]
+    assert [%{"pinned" => true}] = posts_json
+    assert rendered.xml =~ "<pinned>true</pinned>"
+
+    # Listed once in every format: the pin replaces the timeline entry, it does
+    # not double it (the page drops it from the list below the block).
+    assert length(:binary.matches(rendered.html, "Suspension bridges are underrated.")) == 1
+    assert length(:binary.matches(rendered.md, "Suspension bridges are underrated.")) == 1
+  end
+
   test "profile vCard carries the same contact facts", %{user: _user} do
     body = get(build_conn(), "/drift_tester.vcf").resp_body
 

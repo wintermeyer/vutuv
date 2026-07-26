@@ -1292,4 +1292,115 @@ defmodule VutuvWeb.PostControllerTest do
       assert Posts.get_post(post.id)
     end
   end
+
+  describe "the profile pin (issue #1110)" do
+    defp reload_user(user), do: Repo.get!(Vutuv.Accounts.User, user.id)
+
+    test "the author pins their post and lands on the profile", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "my best work"})
+
+      conn = put(conn, "/posts/#{post.id}/pin")
+
+      assert redirected_to(conn) == "/#{user.username}#profile-posts"
+      assert reload_user(user).pinned_post_id == post.id
+    end
+
+    test "pinning a second post replaces the first and says so", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      first = create_post!(user, %{body: "first"})
+      second = create_post!(user, %{body: "second"})
+
+      conn = put(conn, "/posts/#{first.id}/pin")
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Pinned to the top of your profile."
+
+      conn = put(recycle(conn), "/posts/#{second.id}/pin")
+
+      assert reload_user(user).pinned_post_id == second.id
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "normal post again"
+    end
+
+    test "the menu asks before replacing an existing pin, and not otherwise", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      pinned = create_post!(user, %{body: "already pinned"})
+      other = create_post!(user, %{body: "the other one"})
+      {:ok, _} = Posts.pin_to_profile(user, pinned)
+
+      html = html_response(get(conn, Posts.path(other)), 200)
+
+      # The other post offers Pin, behind the "only one at a time" prompt...
+      assert html =~ ~s(id="pin-post-#{other.id}")
+      assert html =~ "Only one post can be pinned to your profile."
+
+      # ...while the pinned one offers the release, with nothing to confirm.
+      html = html_response(get(recycle(conn), Posts.path(pinned)), 200)
+      assert html =~ ~s(id="unpin-post-#{pinned.id}")
+      refute html =~ ~s(id="pin-post-#{pinned.id}")
+      refute html =~ "Only one post can be pinned to your profile."
+    end
+
+    test "the permalink of a pinned post says so to every reader", %{conn: conn} do
+      author = insert_activated_user()
+      pinned = create_post!(author, %{body: "showcased"})
+      plain = create_post!(author, %{body: "ordinary"})
+      {:ok, _} = Posts.pin_to_profile(author, pinned)
+
+      body = html_response(get(conn, Posts.path(pinned)), 200)
+      assert body =~ "data-pinned-banner"
+      assert body =~ "Pinned post"
+
+      refute html_response(get(fresh_conn(), Posts.path(plain)), 200) =~ "data-pinned-banner"
+    end
+
+    test "the release clears it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "pinned for now"})
+      {:ok, _} = Posts.pin_to_profile(user, post)
+
+      conn = delete(conn, "/posts/#{post.id}/pin")
+
+      assert redirected_to(conn) == "/#{user.username}#profile-posts"
+      assert reload_user(user).pinned_post_id == nil
+    end
+
+    test "releasing a post that is not the pinned one leaves the pin alone", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      pinned = create_post!(user, %{body: "still pinned"})
+      other = create_post!(user, %{body: "never pinned"})
+      {:ok, _} = Posts.pin_to_profile(user, pinned)
+
+      conn = delete(conn, "/posts/#{other.id}/pin")
+
+      assert redirected_to(conn) == "/#{user.username}#profile-posts"
+      assert reload_user(user).pinned_post_id == pinned.id
+    end
+
+    test "someone else's post cannot be pinned", %{conn: conn} do
+      other = insert_activated_user()
+      post = create_post!(other, %{body: "not yours"})
+
+      {conn, user} = create_and_login_user(conn)
+      assert put(conn, "/posts/#{post.id}/pin").status == 404
+      assert reload_user(user).pinned_post_id == nil
+    end
+
+    test "logged out is redirected away", %{conn: conn} do
+      author = insert_activated_user()
+      post = create_post!(author, %{body: "x"})
+
+      assert redirected_to(put(conn, "/posts/#{post.id}/pin")) == "/"
+      assert reload_user(author).pinned_post_id == nil
+    end
+
+    test "a reader sees no pin controls on someone else's post", %{conn: conn} do
+      author = insert_activated_user()
+      post = create_post!(author, %{body: "public words"})
+      {reader_conn, _reader} = create_and_login_user(fresh_conn(), @other_login_attrs)
+
+      for viewer_conn <- [conn, reader_conn] do
+        html = html_response(get(viewer_conn, Posts.path(post)), 200)
+        refute html =~ "/posts/#{post.id}/pin"
+      end
+    end
+  end
 end

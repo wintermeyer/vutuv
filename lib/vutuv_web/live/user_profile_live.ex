@@ -290,8 +290,15 @@ defmodule VutuvWeb.UserProfileLive do
   def handle_info({:post_deleted, %{post_id: post_id}}, socket) do
     kept = Enum.reject(socket.assigns.posts, &(&1.post.id == post_id))
 
+    # The pinned post (issue #1110) is shown above the timeline, not in it, so
+    # it needs its own check. Deleting it unpins it in the DB (ON DELETE SET
+    # NULL); the block has to go with it.
+    pinned_gone? = match?(%{id: ^post_id}, socket.assigns.pinned_post)
+
+    socket = if pinned_gone?, do: assign(socket, :pinned_post, nil), else: socket
+
     socket =
-      if length(kept) == length(socket.assigns.posts) do
+      if length(kept) == length(socket.assigns.posts) and not pinned_gone? do
         socket
       else
         # A shown post sits in both the overall count and the active filter's
@@ -523,18 +530,45 @@ defmodule VutuvWeb.UserProfileLive do
   # image-moderation update) goes through here so a background refresh keeps
   # the filter the reader chose instead of snapping back to "all".
   defp fetch_profile_posts(socket, filter) do
-    Vutuv.Posts.profile_posts(
+    profile_posts(
       socket.assigns.user,
       socket.assigns.current_user,
-      type: Vutuv.Posts.normalize_post_filter(filter)
+      filter,
+      socket.assigns[:pinned_post]
     )
   end
 
+  # The Beiträge card shows the pinned post (issue #1110) in its own block above
+  # the timeline, so the timeline leaves it out — one post, shown once. Only
+  # under the unfiltered "All" tab: the filtered views are the plain timeline and
+  # the pinned block is hidden there, so nothing would be missing. A repost entry
+  # of the same post stays (it is a different timeline event).
+  defp profile_posts(user, viewer, filter, pinned_post) do
+    entries =
+      Vutuv.Posts.profile_posts(user, viewer, type: Vutuv.Posts.normalize_post_filter(filter))
+
+    if filter == "all" and pinned_post do
+      Enum.reject(entries, &pinned_entry?(&1, pinned_post))
+    else
+      entries
+    end
+  end
+
+  defp pinned_entry?(%{post: %{id: id}, reposted_by: nil}, %{id: id}), do: true
+  defp pinned_entry?(_entry, _pinned_post), do: false
+
   # Re-fetch the shown posts in the reader's current filter and re-assign them:
-  # the fresh list (new identity) re-renders the `:for` with no reload. Shared by
-  # the day-roll, screenshot and image-moderation handlers.
-  defp reload_posts(socket),
-    do: assign(socket, :posts, fetch_profile_posts(socket, socket.assigns.post_filter))
+  # the fresh list (new identity) re-renders the `:for` with no reload. The
+  # pinned post rides along — it is a post card too, so it needs the same day
+  # roll, screenshot and image-moderation refresh the timeline gets.
+  defp reload_posts(socket) do
+    socket
+    |> assign(
+      :pinned_post,
+      Vutuv.Posts.pinned_post(socket.assigns.user, socket.assigns.current_user)
+    )
+    |> then(&assign(&1, :posts, fetch_profile_posts(&1, &1.assigns.post_filter)))
+  end
 
   # ── Initial load (ports UserController.show_html) ──
 
@@ -565,6 +599,11 @@ defmodule VutuvWeb.UserProfileLive do
     posts_total = Vutuv.Posts.count_author_posts(user, current_user)
     steps = completion_steps(user, posts_total)
 
+    # The showcased post (issue #1110), scoped to this viewer: a pin that is
+    # restricted, frozen or gone simply isn't there. It renders above the
+    # timeline, which therefore leaves it out (see profile_posts/4).
+    pinned_post = Vutuv.Posts.pinned_post(user, current_user)
+
     show_completion? =
       owner? and not user.onboarding_dismissed? and
         Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
@@ -575,7 +614,8 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:viewer_block, viewer_block(current_user, user))
     |> assign(:user_saved, header_user_saved(current_user, user))
     |> assign(:emails, profile_emails(private_emails?, current_user, user))
-    |> assign(:posts, Vutuv.Posts.profile_posts(user, current_user))
+    |> assign(:pinned_post, pinned_post)
+    |> assign(:posts, profile_posts(user, current_user, "all", pinned_post))
     |> assign(:posts_total, posts_total)
     # The Beiträge card's type filter (issue #945). Resets to "all" on a full
     # profile reload (mount, block/unblock); a tab click re-fetches in place.

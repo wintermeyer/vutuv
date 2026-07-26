@@ -566,7 +566,8 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp verified_suffix(_link), do: ""
 
   defp post_lines(post) do
-    "* #{post.published_on}#{Markdown.repost_suffix(post)}: #{post.excerpt}\n  #{post.url}"
+    "* #{post.published_on}#{Markdown.pin_suffix(post)}#{Markdown.repost_suffix(post)}: " <>
+      "#{post.excerpt}\n  #{post.url}"
   end
 
   defp person_line(person, prefix \\ "* ") do

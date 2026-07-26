@@ -646,6 +646,27 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute html =~ "my own post"
     end
 
+    test "a pinned post shows once under All and joins the timeline under a filter",
+         %{conn: conn} do
+      owner = insert_activated_user()
+      {:ok, pinned} = Posts.create_post(owner, %{body: "pinned showcase"})
+      {:ok, _newer} = Posts.create_post(owner, %{body: "newer chatter"})
+      {:ok, _} = Posts.pin_to_profile(owner, pinned)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # "All": the showcase block carries it, the timeline below does not.
+      assert has_element?(view, ~s([data-pinned-post="#{pinned.id}"]))
+      assert length(:binary.matches(render(view), "pinned showcase")) == 1
+
+      # A filtered view is the plain timeline: no showcase block, and the post
+      # is back in its chronological place rather than missing entirely.
+      html = view |> tab("posts") |> render_click()
+      refute html =~ "data-pinned-post"
+      assert html =~ "pinned showcase"
+      assert html =~ "newer chatter"
+    end
+
     test "an empty filter shows a per-kind empty state, keeping the tab bar", %{conn: conn} do
       # A member who only reposts: the Replies tab has nothing to show.
       owner = insert_activated_user()
