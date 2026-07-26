@@ -206,3 +206,4 @@ the browser within ~2s; if they ever don't, suspect that watcher first.
 - Don't reskin legacy pages per-template — edit `components.css`.
 - Don't invent new bespoke colours; stay on brand / accent / slate.
 - No em-dashes in UI copy (project-wide rule).
+- **Everything must work on a phone, and too-small UX elements are a problem** (Stefan, 2026-07-26): every interactive control a member must hit on a phone gets a finger-sized target (aim ~40px; a compact variant is acceptable only where the space genuinely cannot fit it, like the text-strip photo tiles), inputs keep their full `input_class()` size (a shrunken input is a shrunken touch target), and a feature that only works with hover or drag needs a touch path (the ◀ ▶ arrows beside HTML5 drag are the model). When in doubt, judge the mobile rendering first, not the desktop one.

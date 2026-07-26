@@ -504,15 +504,23 @@ of two ways — `@mode`, `"text"` or `"photos"`; nothing about the stored post
 differs.
 
 **Text mode** is the classic layout: editor first, a compact thumbnail strip
-below, caption/alt behind each tile's ⚙ panel. **Photo mode** leads with a
-dropzone (the grid is a `phx-drop-target`), renders the photos as a large
-grid whose caption and alt inputs sit visibly under every tile (the ⚙ panel
-keeps only camera/download), adds more photos via a tile in the grid, and
-folds the text editor behind one "Add text (optional)" button — a non-empty
-body keeps it open, so recovered text can never hide. The book/film review
-triggers and the bottom-row picker are text-mode-only; the licence row sits
-with the photos in both modes. The cover badge appears only from the second
-photo on (with one photo there is no order to mark).
+below, caption/alt behind each tile's ⚙ panel. **Photo mode** opens with a
+one-line explainer of what the mode is, leads with a dropzone (the grid is a
+`phx-drop-target`), renders the photos as a large grid, adds more photos via
+a tile in the grid, and folds the text editor behind one "Add text
+(optional)" button — a non-empty body keeps it open, so recovered text can
+never hide. Under every tile sit the things a photographer looks for and
+would not find behind the ⚙: **one caption input** (it doubles as the
+accessible name via `photo_alt/1`, so the alt input stays an opt-in
+refinement in the panel rather than a second required-looking field) and,
+when the file carries camera facts, the **"Show camera settings" switch with
+the very line visitors would see**. **Tapping the photo itself opens its
+options panel** (alt, download) — the scrim's ⚙ stays as the labeled,
+keyboard-reachable control, but the picture is the target people actually
+try. The book/film review triggers and the bottom-row picker are
+text-mode-only; the licence row sits with the photos in both modes. The
+cover badge appears only from the second photo on, and the amber ALT nudge
+only while a photo has **neither** caption nor alt.
 
 The mode is a **radio pair inside the form** (`post[mode]`, the segmented
 control at the top), so switching is an ordinary `validate` and LiveView form
@@ -521,6 +529,13 @@ offers the pill (text-first) and a camera button (photos-first) — the feed
 sends `set_mode` via `send_update`, where the camera always gets its way and
 the pill never rearranges a held draft; editing a photo-only post (images,
 empty body) derives photo mode; replies are text-only (no switch).
+
+**The ✕ means two different things by mode.** A text draft survives a close
+(issue #1135 — the composer only collapses). Photo mode's ✕ is a real
+**discard** behind a confirm: the pending rows are deleted on the spot
+(`discard-draft` → `{:composer_discarded, id}` to the feed), because
+collapsing over invisible uploaded photos meant the next "Write a post"
+surprised people with last week's pictures.
 
 **Photos survive a reconnect.** The attached rows ride the form as hidden
 `post[image_ids][]` inputs; a re-mounted composer re-adopts the recovered,
@@ -593,10 +608,11 @@ from `alt`, which describes the picture for people who cannot see it), a
 metadata-stripped) and an **original download** switch with its one follow-up,
 which file (see [images.md](images.md)). The panel expands below the strip
 rather than floating — a popover on a phone covers what it is about and has
-nowhere to put a follow-up. In photo mode the two texts move out of the panel
-to inline inputs under every tile (the panel drops them there — two same-name
-inputs would corrupt the submit). An "apply to all photos" shortcut copies the
-two switches (never the texts: a caption describes one picture).
+nowhere to put a follow-up. In photo mode the caption and the camera switch
+move out of the panel to under the tile itself (the panel drops them there —
+two same-name inputs would corrupt the submit); the alt input renders in the
+panel in both modes. An "apply to all photos" shortcut copies the two
+switches (never the texts: a caption describes one picture).
 
 **Per post**, one `Vutuv.Posts.PhotoLicense` from a fixed vocabulary (`arr`
 default, CC BY / BY-SA / BY-NC / CC0 4.0). The select appears only once a photo

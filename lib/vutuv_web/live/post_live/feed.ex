@@ -471,6 +471,12 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign(socket, :composer_open?, true)}
   end
 
+  # Photo mode's ✕ discarded the draft inside the component; the panel
+  # collapses with it (the component cannot reach this assign itself).
+  def handle_info({:composer_discarded, _id}, socket) do
+    {:noreply, assign(socket, :composer_open?, false)}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in

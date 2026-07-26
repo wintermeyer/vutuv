@@ -412,8 +412,10 @@ defmodule VutuvWeb.PostFeedLiveTest do
       [image] = Vutuv.Repo.all(PostImage)
       refute has_element?(live, ~s([phx-click="insert-inline"]))
 
+      # The scrim's ⚙ specifically — the tile's img opens the panel too, so a
+      # bare [phx-click=photo-open] selector matches two elements.
       live
-      |> element(~s([phx-click="photo-open"][phx-value-id="#{image.id}"]))
+      |> element(~s(button[phx-click="photo-open"][phx-value-id="#{image.id}"]))
       |> render_click()
 
       live

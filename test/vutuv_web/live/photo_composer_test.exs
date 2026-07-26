@@ -115,7 +115,11 @@ defmodule VutuvWeb.PhotoComposerTest do
   end
 
   defp open_panel(live, image) do
-    live |> element(~s([phx-click="photo-open"][phx-value-id="#{image.id}"])) |> render_click()
+    # The scrim's ⚙ specifically — the tile's img opens the panel too now,
+    # so a bare [phx-click=photo-open] selector matches two elements.
+    live
+    |> element(~s(button[phx-click="photo-open"][phx-value-id="#{image.id}"]))
+    |> render_click()
   end
 
   defp toggle(live, image, field) do
@@ -323,7 +327,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       refute has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
     end
 
-    test "photo mode shows caption and description with every photo, no panel needed", %{
+    test "photo mode shows one caption per photo; the alt text lives in the panel", %{
       conn: conn,
       user: user
     } do
@@ -331,18 +335,94 @@ defmodule VutuvWeb.PhotoComposerTest do
       image = upload_photo!(live, user)
 
       assert has_element?(live, ~s(input[name="photo[#{image.id}][caption]"]))
-      assert has_element?(live, ~s(input[name="photo[#{image.id}][alt]"]))
-      # The panel still exists for the rarer switches, but must not render a
-      # second caption field (two same-name inputs corrupt the submit).
+      # One visible text per photo: the caption already serves as the
+      # accessible name when no alt is written, so the alt input is the
+      # panel's opt-in refinement rather than a second required-looking field.
+      refute has_element?(live, ~s(input[name="photo[#{image.id}][alt]"]))
+
       open_panel(live, image)
 
       assert has_element?(live, "#composer-photo-panel")
+      assert has_element?(live, ~s(input[name="photo[#{image.id}][alt]"]))
 
+      # The open panel must not render a second caption field (two same-name
+      # inputs corrupt the submit).
       assert live
              |> render()
              |> then(fn html ->
                length(String.split(html, ~s(name="photo[#{image.id}][caption]"))) == 2
              end)
+    end
+
+    test "a photo carrying camera facts offers the publish switch right under its tile", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+
+      image =
+        upload_photo!(live, user,
+          exif: [
+            {"exif-ifd0-Make", "Canon"},
+            {"exif-ifd0-Model", "Canon EOS R6"},
+            {"exif-ifd2-FocalLength", "50/1"},
+            {"exif-ifd2-FNumber", "18/10"},
+            {"exif-ifd2-ExposureTime", "1/200"},
+            {"exif-ifd2-ISOSpeedRatings", "400"}
+          ]
+        )
+
+      assert has_element?(live, ~s([data-photo-camera-inline="#{image.id}"]))
+      assert render(live) =~ "Canon EOS R6 · 50 mm · f/1.8 · 1/200 s · ISO 400"
+
+      live
+      |> element(~s([data-photo-camera-inline="#{image.id}"] input[phx-click="photo-toggle"]))
+      |> render_click()
+
+      live |> form("#composer-form", %{"post" => %{"mode" => "photos"}}) |> render_submit()
+
+      assert %{show_camera_info: true} = reload(image)
+    end
+
+    test "a photo without camera facts gets no camera row", %{conn: conn, user: user} do
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      refute has_element?(live, ~s([data-photo-camera-inline="#{image.id}"]))
+    end
+
+    test "tapping the photo itself opens its options panel", %{conn: conn, user: user} do
+      # The ⚙ in the tile scrim is real but nobody sees it; the picture is the
+      # biggest target on screen and the first thing people try.
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      refute has_element?(live, "#composer-photo-panel")
+
+      live |> element(~s([data-photo-tile="#{image.id}"] img)) |> render_click()
+
+      assert has_element?(live, "#composer-photo-panel")
+    end
+
+    test "the alt nudge shows only while a photo has neither caption nor description", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      assert has_element?(live, ~s([data-photo-alt-missing="#{image.id}"]))
+
+      # A caption gives the photo its accessible name (photo_alt/1 falls back
+      # to it), so the nudge is satisfied without the panel.
+      live
+      |> form("#composer-form", %{
+        "post" => %{"mode" => "photos"},
+        "photo" => %{image.id => %{"caption" => "Zugfenster"}}
+      })
+      |> render_change()
+
+      refute has_element?(live, ~s([data-photo-alt-missing="#{image.id}"]))
     end
 
     test "the licence stays with the photos in photo mode", %{conn: conn, user: user} do
@@ -414,17 +494,57 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, ~s(#composer[data-composer-mode="text"]))
     end
 
-    test "the pill never rearranges the composer under a held photo draft", %{
+    test "the photo ✕ discards everything: rows deleted, form empty, panel collapsed", %{
       conn: conn,
       user: user
     } do
       live = open_photo_composer(conn)
-      upload_photo!(live, user)
+      image = upload_photo!(live, user)
+
+      live
+      |> form("#composer-form", %{
+        "post" => %{"mode" => "photos"},
+        "photo" => %{image.id => %{"caption" => "Gleich weg"}}
+      })
+      |> render_change()
+
+      live |> element(~s(button[phx-click="discard-draft"])) |> render_click()
+
+      # The pending row (and with it the stored files) is gone, the panel is
+      # collapsed, and reopening starts fresh and text-first.
+      assert reload(image) == nil
+      assert has_element?(live, "#composer-panel.hidden")
+
+      live |> element("#open-composer") |> render_click()
+
+      assert has_element?(live, ~s(#composer[data-composer-mode="text"]))
+      refute has_element?(live, "[data-photo-tile]")
+    end
+
+    test "the text ✕ keeps the draft (issue #1135), only photo mode discards", %{
+      conn: conn,
+      user: _user
+    } do
+      live = open_composer(conn)
+
+      live
+      |> form("#composer-form", %{"post" => %{"mode" => "text", "body" => "Halb getippt."}})
+      |> render_change()
 
       live |> element(~s(button[phx-click="close-composer"])) |> render_click()
       live |> element("#open-composer") |> render_click()
 
-      assert has_element?(live, ~s(#composer[data-composer-mode="photos"]))
+      assert render(live) =~ "Halb getippt."
+    end
+
+    test "photo mode explains itself in one line", %{conn: conn, user: _user} do
+      live = open_photo_composer(conn)
+
+      assert has_element?(live, "[data-photo-mode-hint]")
+
+      live |> form("#composer-form", %{"post" => %{"mode" => "text"}}) |> render_change()
+
+      refute has_element?(live, "[data-photo-mode-hint]")
     end
 
     test "a photo-only post saves from photo mode", %{conn: conn, user: user} do
@@ -432,7 +552,10 @@ defmodule VutuvWeb.PhotoComposerTest do
       image = upload_photo!(live, user)
 
       # No body field at all: the editor is folded away, which is the point —
-      # the form still submits (the caption inputs are in the photo grid).
+      # the form still submits (the caption input is in the photo grid, the
+      # alt refinement in the opened panel).
+      open_panel(live, image)
+
       live
       |> form("#composer-form", %{
         "post" => %{"mode" => "photos"},
