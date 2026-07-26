@@ -236,6 +236,13 @@ export const MarkdownEditor = {
     this.fullscreen = false
     this.imagesEnabled = this.root.dataset.mdeImages === "1"
     this.imageSelected = false
+    // The height the member dragged the source textarea to, if they did. It is
+    // the same story as the state above: `resize: vertical` makes the browser
+    // write the drag onto the textarea's own inline `style`, and the textarea
+    // is the server-rendered form field, so the patch after the next keystroke
+    // or paste strips it and the box springs back (issue #1143). beforeUpdate()
+    // reads it while it is still there, applyState() puts it back.
+    this.sourceHeight = null
     // Files this editor sent to the upload input, waiting for the server's
     // `mde-image-uploaded` echo: [{name, pos}] — pos is where they were
     // dropped/pasted (null = current cursor at insert time).
@@ -272,6 +279,16 @@ export const MarkdownEditor = {
     this.wireSubmitShortcut()
   },
 
+  // Last look at the DOM before morphdom patches it: a manual resize lives in
+  // the textarea's inline style and the patch is about to drop it, so take a
+  // copy. Never overwrite a remembered height with an empty one — an earlier
+  // patch may already have stripped the style, and the member's choice should
+  // outlive that.
+  beforeUpdate() {
+    if (!this.source) return
+    if (this.source.style.height) this.sourceHeight = this.source.style.height
+  },
+
   updated() {
     // morphdom just re-rendered the composer and stripped our JS-set attributes;
     // re-stamp them in the same synchronous patch (before paint, so no flicker).
@@ -298,6 +315,7 @@ export const MarkdownEditor = {
     this.root.dataset.mdeMode = this.mode
     this.root.dataset.mdeFullscreen = this.fullscreen ? "1" : "0"
     this.root.dataset.mdeImg = this.imageSelected ? "1" : "0"
+    if (this.sourceHeight) this.source.style.height = this.sourceHeight
   },
 
   destroyed() {
