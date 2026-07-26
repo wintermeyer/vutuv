@@ -160,6 +160,11 @@ scope first (ask the author / plan mode) before code appears. Name dependencies
 4. **precommit green?** Yes → `gh pr merge <nr> --squash --delete-branch`, then
    **release** the lock; show me the PR link + one sentence. No/conflict/unclear
    → do NOT merge, hold the lock, put the problem to me and ask.
+5. **The merge auto-closes the issue, so the note is on you.** Draft the shipped
+   note per CLAUDE.md's issue-close rule, case (a) — what now works, the version,
+   and why I built it this way. Show me the draft, get my OK, then
+   `gh issue comment N --body "..."` (a closed issue still takes comments, so
+   posting after the merge is fine). Skip only for an issue I filed myself.
 
 ## Ask the author (question back on the issue)
 Always offer this as an option. Get the author (`gh issue view N --json author`).
@@ -167,19 +172,15 @@ Draft a friendly question in the first person, in the language of the issue, wit
 the authorship footer (CLAUDE.md). Show me the draft, get my OK, then (after
 **claim**) `gh issue comment N --body "..."`, then **release**.
 
-## Reject / decline (close with a thank-you note)
+## Reject / decline (close without doing it)
 Always offer this as an option in every per-issue walk. When I decide an issue
 won't be done — out of scope, won't fix, a design we don't want, a duplicate
 we're closing — you close it **kindly**, never let it rot. First **ask me for the
 reason** in the same question (offer a short, reasoned recommendation; the reason
 may also be "none / just decline"), then, after **claim**:
-1. Get the author (`gh issue view N --json author`). Draft a friendly **thank-you
-   note** in the first person, in the language of the issue: thank the author for
-   taking the time to write it, say plainly and warmly that I won't do it, give
-   the brief **why** (my reason) so it's understandable — never a flat "no", never
-   dismissive (CLAUDE.md's decline-kindly rule). A duplicate adds a one-line
-   "closing as a duplicate of #M". End with the authorship footer (CLAUDE.md).
-   Show me the draft, get my OK.
+1. Get the author (`gh issue view N --json author`) and draft the closing note per
+   CLAUDE.md's issue-close rule, case (b) — or case (c) when the close is simply
+   my call rather than a judgement on the merits. Show me the draft, get my OK.
 2. `gh issue comment N --body "..."` (post the note), then close:
    `gh issue close N --reason "not planned"` (use `--reason completed` only when
    it's genuinely resolved another way).
