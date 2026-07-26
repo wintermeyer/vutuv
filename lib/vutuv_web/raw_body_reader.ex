@@ -1,13 +1,14 @@
 defmodule VutuvWeb.RawBodyReader do
   @moduledoc """
   The endpoint's `Plug.Parsers` body reader: passes every body through
-  unchanged, but keeps a copy of the **raw bytes** for the ActivityPub inbox
-  (`POST /:slug/actor/inbox`) in `conn.private[:fediverse_raw_body]`.
+  unchanged, but keeps a copy of the **raw bytes** for the two ActivityPub
+  inboxes (`POST /:slug/actor/inbox` and the installation-wide
+  `POST /system/inbox`, issue #1073) in `conn.private[:fediverse_raw_body]`.
 
   HTTP-signature verification (`Vutuv.Fediverse.HttpSignature`) must hash the
   body exactly as sent — after `Plug.Parsers` has consumed it into
-  `body_params`, the original bytes are otherwise gone. Only the inbox path
-  pays the copy; every other request streams through untouched.
+  `body_params`, the original bytes are otherwise gone. Only those paths pay
+  the copy; every other request streams through untouched.
   """
 
   def read_body(conn, opts) do
@@ -24,10 +25,17 @@ defmodule VutuvWeb.RawBodyReader do
 
   def raw_body(_conn), do: nil
 
-  defp store(%Plug.Conn{path_info: [_slug, "actor", "inbox"]} = conn, chunk) do
+  defp store(%Plug.Conn{path_info: [_slug, "actor", "inbox"]} = conn, chunk),
+    do: keep(conn, chunk)
+
+  # The installation-wide inbox (issue #1073) verifies the very same signature,
+  # so it needs the very same copy of the bytes.
+  defp store(%Plug.Conn{path_info: ["system", "inbox"]} = conn, chunk), do: keep(conn, chunk)
+
+  defp store(conn, _chunk), do: conn
+
+  defp keep(conn, chunk) do
     collected = conn.private[:fediverse_raw_body] || []
     Plug.Conn.put_private(conn, :fediverse_raw_body, [collected, chunk])
   end
-
-  defp store(conn, _chunk), do: conn
 end

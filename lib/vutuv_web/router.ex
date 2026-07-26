@@ -134,6 +134,14 @@ defmodule VutuvWeb.Router do
     # The pinned post (issue #1110), at the path other servers already look for.
     get("/:slug/actor/collections/featured", FediverseController, :featured)
     post("/:slug/actor/inbox", FediverseController, :inbox)
+    # The installation-wide inbox (issue #1073), so a server with many
+    # followers here delivers a broadcast once instead of once per member.
+    # Under /system/ rather than at a root word, which profiles own; remote
+    # servers only ever read the path out of the actor document's
+    # endpoints.sharedInbox. Must stay above the /system scopes further down —
+    # those ride the :browser pipeline, which this machine-to-machine POST
+    # (no session, no CSRF) must not.
+    post("/system/inbox", FediverseController, :shared_inbox)
     # Deploy readiness probe (see VutuvWeb.HealthController). No pipeline:
     # it is hit by curl on localhost and must not depend on sessions or
     # content negotiation.

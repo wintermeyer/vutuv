@@ -15,6 +15,10 @@ defmodule VutuvWeb.Fediverse.Docs do
       /:username/actor/followers             count-only collection
       /:username/actor/outbox                count-only collection
       /:username/actor/collections/featured  the pinned post (issue #1110)
+
+  The one exception is the installation-wide `endpoints.sharedInbox` (issue
+  #1073), which belongs to nobody in particular and therefore lives under
+  `/system/` — see `shared_inbox_url/0`.
   """
 
   alias Vutuv.Fediverse.Actor
@@ -41,6 +45,20 @@ defmodule VutuvWeb.Fediverse.Docs do
   def actor_url(user), do: "#{base()}/#{user.username}/actor"
   def key_id(user), do: actor_url(user) <> "#main-key"
   def note_url(user, post_id), do: "#{base()}/#{user.username}/posts/#{post_id}"
+
+  @doc """
+  The one inbox the whole installation offers (issue #1073), advertised as
+  `endpoints.sharedInbox` in every actor document so a server with many
+  followers here delivers a broadcast **once** instead of once per member — the
+  efficiency we already take advantage of when we deliver outward.
+
+  It is the only Fediverse URL that does not hang off a member, so it lives
+  under `/system/` rather than at a root word: profiles own the URL root, and a
+  new root segment would permanently burn a word a member could otherwise claim
+  as a handle. Nothing is lost by the odd-looking path — remote servers only
+  ever read it out of the actor document.
+  """
+  def shared_inbox_url, do: "#{base()}/system/inbox"
 
   @doc """
   The `featured` collection: the member's pinned post (issue #1110), which is
@@ -78,6 +96,10 @@ defmodule VutuvWeb.Fediverse.Docs do
       "inbox" => actor_url <> "/inbox",
       "outbox" => actor_url <> "/outbox",
       "followers" => actor_url <> "/followers",
+      # The installation-wide inbox (issue #1073). The per-member one above is
+      # what every server already knows and keeps working forever; this is the
+      # offer to deliver a broadcast once for all of them.
+      "endpoints" => %{"sharedInbox" => shared_inbox_url()},
       # Where a remote server looks for the pinned post (issue #1110). Always
       # advertised, even with nothing pinned: the collection is then simply
       # empty, and an actor that only sometimes names the field would make the

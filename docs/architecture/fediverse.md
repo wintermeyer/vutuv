@@ -30,7 +30,10 @@ every endpoint 404s and nothing is delivered.
   by `VutuvWeb.Fediverse.Docs`; URLs hang off the member so no root slug is
   burned: `/:username/actor` (id), `.../inbox`, `.../followers` and
   `.../outbox` (count-only collections) and `.../collections/featured` (the
-  pinned post, see the post-lifecycle bullet below). The actor also carries
+  pinned post, see the post-lifecycle bullet below). The one URL that belongs to
+  nobody in particular is `endpoints.sharedInbox` (issue #1073), which for the
+  same reason lives under `/system/` rather than at a root word — see the
+  shared-inbox bullet below. The actor also carries
   **`alsoKnownAs`** (issue #986) — the account URIs a member is migrating
   *from* (`users.also_known_as`, set on `/settings/fediverse/move`, one per line).
   A remote server that moves a member's followers *to* vutuv checks this before
@@ -63,6 +66,41 @@ every endpoint 404s and nothing is delivered.
   (anti-spoofing). A valid `Follow` stores the follower
   (`Vutuv.Fediverse.Follower`: actor URI + inbox + sharedInbox) and answers
   with a delivered `Accept`; `Undo` removes it. Per-IP rate limited.
+- **Shared inbox** (`POST /system/inbox`, issue #1073): the same endpoint once
+  for the whole installation, advertised as `endpoints.sharedInbox` in every
+  actor document (`Docs.shared_inbox_url/0`), so a server with many followers
+  here delivers a broadcast **once** instead of once per member it touches —
+  the efficiency we already take advantage of on the way out, where the queue
+  dedupes one row per distinct remote inbox. It is the same code: the same
+  installation switch, the same blocklist checked first, the same per-IP limit,
+  the same signature and anti-spoofing verification, and then the very same
+  per-member handling. The per-member inbox keeps working forever; it is what
+  every server already knows.
+
+  The only thing that differs is where the addressees come from —
+  `Vutuv.Fediverse.inbox_recipients/2` reads them out of the activity instead of
+  the URL, from three places: the **addressing** (`to`/`cc`/`bto`/`bcc`/
+  `audience` on the activity and its object, plus the object itself and, for an
+  `Undo`, the object it wraps — a `Follow` names an actor URL, a `Like` a Note
+  URL, a reply its `inReplyTo`, each of which hangs off the member it belongs
+  to); the **remote actor's own `Update`/`Delete`**, which names no local member
+  at all and is therefore fanned out to exactly the members that actor follows
+  here (this is the case worth having the endpoint for — one account deletion
+  used to be one signed delivery per member); and an author's `Update`/`Delete`
+  **of a note they wrote**, fanned out to the members whose posts hold a copy.
+  Addressee URIs are attacker-chosen text, so the list is cut at 25; the two
+  lifecycle fan-outs are bounded by rows we wrote ourselves and are not.
+
+  Two deliberate asymmetries. It never answers `404`/`410`: those belong to a
+  URL that names one member, where a `410` is how a server learns *that account*
+  is gone, so here a member who does not federate is simply no recipient and the
+  delivery is acknowledged like any other — the endpoint cannot be used to ask
+  who takes part. And the actor fetch that verification needs is signed with the
+  key of the first addressee resolved from the still-unverified body (the
+  per-member inbox uses the addressed member's key); it only ever picks a member
+  the sender itself named, and the fetch goes back to the sender's own host.
+  Recipients are resolved before verification because a key is needed for it,
+  and acted on only afterwards, once the claimed `actor` is proven.
 - **Remote actor lifecycle**: an `Update` of the actor itself re-syncs the
   stored row from the freshly fetched document (a renamed remote must not stay
   listed under the old handle, a moved inbox must not keep receiving posts) and
@@ -518,7 +556,9 @@ stay. Deleting an account remains its own separate action. The followers
 collection is count-only (privacy). Followers who leave without saying so are
 found now (issue #1072) — the hourly re-check above prunes a row only on a
 `404`/`410` from the actor document itself, never on a failed delivery to a
-shared inbox.
+shared inbox. And we now offer a shared inbox of our own (issue #1073), so the
+asymmetry of asking other servers for an efficiency we did not give back is
+gone; it is pure scale work, with no change to what any activity does.
 
 ## Non-goal: reading other networks inside vutuv
 

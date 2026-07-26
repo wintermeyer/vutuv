@@ -12,7 +12,10 @@ defmodule VutuvWeb.FediverseController do
       issue #1068; `Create(Note)`, issues #1069 and #1071, plus the author's own
       `Update`/`Delete` of such a note) and the remote actor's own lifecycle
       (`Update` re-syncs the stored follower, `Delete` of the actor removes it);
-      everything else is acknowledged and dropped.
+      everything else is acknowledged and dropped,
+    * `POST /system/inbox` — the same handling once for the whole installation
+      (issue #1073), so a server with many followers here delivers a broadcast
+      once and it is fanned out to every member the activity addresses.
 
   Deliberately outside the `:browser` pipeline: no session, no CSRF — remote
   servers authenticate with HTTP signatures instead, verified against the
@@ -97,25 +100,64 @@ defmodule VutuvWeb.FediverseController do
 
   def inbox(conn, %{"slug" => slug}) do
     with_federated_user(conn, slug, fn user ->
-      cond do
-        # The operator's kill switch (issue #1067), checked FIRST: before the
-        # signature is verified, before the remote actor document is fetched
-        # (an outbound request to a host we refuse to talk to) and before any
-        # write. Answered 202 like every other dropped activity, never 403, so
-        # the blocklist cannot be enumerated from outside.
-        blocked_sender?(conn) ->
-          send_resp(conn, 202, "")
-
-        VutuvWeb.RateLimit.check(conn, :fediverse_inbox, nil,
-          limit: 300,
-          window_ms: :timer.hours(1)
-        ) == :rate_limited ->
-          send_resp(conn, 429, "")
-
-        true ->
-          verify_and_perform(conn, user)
-      end
+      guarded(conn, fn -> verify_and_perform(conn, [user]) end)
     end)
+  end
+
+  @doc """
+  The installation-wide inbox (issue #1073, `VutuvWeb.Fediverse.Docs.shared_inbox_url/0`):
+  one endpoint a remote server can deliver a broadcast to **once** instead of
+  once per member it touches here — the efficiency we already take advantage of
+  when we deliver outward through a remote's own sharedInbox.
+
+  Everything about it is the per-member inbox: the same installation switch, the
+  same operator blocklist checked first, the same per-IP limit, the same
+  signature and anti-spoofing verification, and then the very same handling per
+  member. The only difference is where the addressees come from — the activity
+  instead of the URL (`Vutuv.Fediverse.inbox_recipients/2`).
+
+  Two deliberate asymmetries:
+
+    * it never answers `404`/`410`. Those belong to a URL that names one member,
+      where a `410` is how a server learns *that account* is gone; here every
+      accepted delivery is a `202`, so the endpoint cannot be used to ask
+      whether a given member takes part.
+    * the actor fetch that verification needs is signed with the key of the
+      first addressee we resolved from the still-unverified body (the per-member
+      inbox uses the addressed member's key). It only ever picks a member the
+      sender itself named, and the fetch goes back to the sender's own host.
+  """
+  def shared_inbox(conn, _params) do
+    if Fediverse.enabled?() do
+      activity = conn.body_params
+
+      guarded(conn, fn ->
+        verify_and_perform(conn, Fediverse.inbox_recipients(activity, activity["actor"]))
+      end)
+    else
+      send_resp(conn, 404, "")
+    end
+  end
+
+  # The operator's kill switch (issue #1067) is checked FIRST: before the
+  # signature is verified, before the remote actor document is fetched (an
+  # outbound request to a host we refuse to talk to) and before any write.
+  # Answered 202 like every other dropped activity, never 403, so the blocklist
+  # cannot be enumerated from outside.
+  defp guarded(conn, fun) do
+    cond do
+      blocked_sender?(conn) ->
+        send_resp(conn, 202, "")
+
+      VutuvWeb.RateLimit.check(conn, :fediverse_inbox, nil,
+        limit: 300,
+        window_ms: :timer.hours(1)
+      ) == :rate_limited ->
+        send_resp(conn, 429, "")
+
+      true ->
+        fun.()
+    end
   end
 
   # Both names the request offers for its sender: the signature's `keyId` (whose
@@ -137,15 +179,21 @@ defmodule VutuvWeb.FediverseController do
   # The signature names the sender (keyId -> actor document -> public key).
   # The activity's actor must be that same actor, or anyone could sign a
   # Follow as themselves while claiming to be someone else.
-  defp verify_and_perform(conn, user) do
+  #
+  # `users` is who the activity is for: exactly one member at the per-member
+  # inbox, whoever the activity addressed at the shared one — where it may also
+  # be nobody, which is still verified first and only then dropped, so an
+  # unsigned delivery is a 401 whatever it claims to be addressed to.
+  defp verify_and_perform(conn, users) do
     activity = conn.body_params
 
     with {:ok, key_id} <- signature_key_id(conn),
-         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, signer(user)),
+         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, signer(users)),
          true <- same_authority?(key_id, remote.id),
          :ok <- verify_signature(conn, remote),
          true <- activity["actor"] == remote.id do
-      perform(conn, user, activity, remote)
+      Enum.each(users, &perform(&1, activity, remote))
+      send_resp(conn, 202, "")
     else
       _ -> send_resp(conn, 401, "")
     end
@@ -161,7 +209,10 @@ defmodule VutuvWeb.FediverseController do
 
   defp same_authority?(_key_id, _actor_id), do: false
 
-  defp perform(conn, user, %{"type" => "Follow"} = activity, remote) do
+  # What one addressed member does with an activity. Deliberately returns
+  # nothing the caller uses: the answer is the same 202 whatever any of these
+  # decide, and at the shared inbox one delivery runs this once per addressee.
+  defp perform(user, %{"type" => "Follow"} = activity, remote) do
     if activity["object"] == Docs.actor_url(user) do
       # A remote actor doc with an over-long / malformed inbox or id yields an
       # invalid changeset; accept only a successful insert, never crash the inbox.
@@ -171,12 +222,12 @@ defmodule VutuvWeb.FediverseController do
       end
     end
 
-    send_resp(conn, 202, "")
+    :ok
   end
 
-  defp perform(conn, user, %{"type" => "Undo", "object" => %{"type" => "Follow"}}, remote) do
+  defp perform(user, %{"type" => "Undo", "object" => %{"type" => "Follow"}}, remote) do
     Fediverse.remove_follower(user, remote.id)
-    send_resp(conn, 202, "")
+    :ok
   end
 
   # Somebody on another network favourited (`Like`) or re-shared (`Announce`)
@@ -188,23 +239,18 @@ defmodule VutuvWeb.FediverseController do
   # `Fediverse.record_reaction/4`; whatever it decides, the answer is the same
   # 202, so a misdirected activity never tells the sender which of the
   # conditions it failed.
-  defp perform(conn, user, %{"type" => type, "object" => object}, remote)
+  defp perform(user, %{"type" => type, "object" => object}, remote)
        when type in ["Like", "Announce"] do
     Fediverse.record_reaction(user, object, reaction_kind(type), reacting_actor(remote))
-    send_resp(conn, 202, "")
+    :ok
   end
 
   # The remote side took its reaction back. Honoured at once: an upstream
   # withdrawal is the deletion path that makes storing the row defensible.
-  defp perform(
-         conn,
-         user,
-         %{"type" => "Undo", "object" => %{"type" => type} = undone},
-         remote
-       )
+  defp perform(user, %{"type" => "Undo", "object" => %{"type" => type} = undone}, remote)
        when type in ["Like", "Announce"] do
     Fediverse.remove_reaction(user, undone["object"], reaction_kind(type), remote.id)
-    send_resp(conn, 202, "")
+    :ok
   end
 
   # Somebody on another network answered one of the member's posts (issues
@@ -212,9 +258,9 @@ defmodule VutuvWeb.FediverseController do
   # member's separate opt-in among them — and the answer is the same 202
   # whatever it decides, so a misdirected activity never learns which gate it
   # failed.
-  defp perform(conn, user, %{"type" => "Create"} = activity, remote) do
+  defp perform(user, %{"type" => "Create"} = activity, remote) do
     Fediverse.record_reply(user, activity, remote_author(remote))
-    send_resp(conn, 202, "")
+    :ok
   end
 
   # A remote actor that renamed or moved its inbox broadcasts an `Update` of
@@ -226,14 +272,14 @@ defmodule VutuvWeb.FediverseController do
   # An `Update` of anything else is an author editing a note they sent us, which
   # is honoured too — including a narrowed audience, which is the same "stop
   # showing this" signal a 403 carries.
-  defp perform(conn, user, %{"type" => "Update"} = activity, remote) do
+  defp perform(user, %{"type" => "Update"} = activity, remote) do
     if object_id(activity["object"]) == remote.id do
       Fediverse.refresh_follower(user, follower_attrs(remote))
     else
       Fediverse.update_reply(user, activity, remote.id)
     end
 
-    send_resp(conn, 202, "")
+    :ok
   end
 
   # A remote account deleting itself tells every server that follows it, so
@@ -244,7 +290,7 @@ defmodule VutuvWeb.FediverseController do
   # so the signature can no longer be verified and `verify_and_perform/2`
   # rejects it; this catches the window where the account is suspended but
   # still served, which is when most servers send the Delete.
-  defp perform(conn, user, %{"type" => "Delete"} = activity, remote) do
+  defp perform(user, %{"type" => "Delete"} = activity, remote) do
     if object_id(activity["object"]) == remote.id do
       Fediverse.remove_follower(user, remote.id)
     else
@@ -255,12 +301,12 @@ defmodule VutuvWeb.FediverseController do
       Fediverse.delete_reply(remote.id, object_id(activity["object"]))
     end
 
-    send_resp(conn, 202, "")
+    :ok
   end
 
   # Outbound-only federation: likes, replies, announces etc. are acknowledged
   # (so well-behaved servers stop retrying) and dropped.
-  defp perform(conn, _user, _activity, _remote), do: send_resp(conn, 202, "")
+  defp perform(_user, _activity, _remote), do: :ok
 
   defp reaction_kind("Like"), do: "like"
   defp reaction_kind("Announce"), do: "announce"
@@ -325,13 +371,18 @@ defmodule VutuvWeb.FediverseController do
 
   # Remote-actor fetches are signed with the followed member's own key —
   # instances running in authorized-fetch ("secure") mode reject anonymous
-  # GETs.
-  defp signer(user) do
+  # GETs. At the shared inbox that is the first addressee we resolved; a
+  # delivery addressed to nobody here falls back to an anonymous fetch, which
+  # such an instance may refuse — and then the delivery is rejected, which is
+  # the right outcome for an activity that was for none of our members anyway.
+  defp signer([%User{} = user | _rest]) do
     case Fediverse.get_actor(user) do
       nil -> nil
       actor -> {Docs.key_id(user), actor.private_key_pem}
     end
   end
+
+  defp signer([]), do: nil
 
   defp with_federated_user(conn, slug, fun) do
     with true <- Fediverse.enabled?(),

@@ -51,9 +51,13 @@ defmodule VutuvWeb.FediverseControllerTest do
     on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
   end
 
-  defp signed_post(conn, user, activity, private_pem) do
+  defp signed_post(conn, user, activity, private_pem),
+    do: signed_post_to(conn, "/#{user.username}/actor/inbox", activity, private_pem)
+
+  # The shared inbox (issue #1073) is the same delivery to a different path, so
+  # the signing helper takes the path rather than the addressed member.
+  defp signed_post_to(conn, path, activity, private_pem) do
     body = Jason.encode!(activity)
-    path = "/#{user.username}/actor/inbox"
 
     headers =
       HttpSignature.signed_headers(
@@ -769,6 +773,232 @@ defmodule VutuvWeb.FediverseControllerTest do
 
       assert conn.status == 202
       assert Fediverse.follower_count(user) == 1
+    end
+  end
+
+  # One inbox for the whole installation (issue #1073): a server with many
+  # followers here delivers a broadcast once instead of once per member. Same
+  # signature, anti-spoofing, blocklist and rate-limit rules as the per-member
+  # inbox — the only difference is that who the activity is for is read out of
+  # the activity instead of the URL.
+  describe "POST /system/inbox — the shared inbox (#1073)" do
+    defp shared_post(conn, activity, priv),
+      do: signed_post_to(conn, "/system/inbox", activity, priv)
+
+    test "every actor document advertises it", %{conn: conn} do
+      user = federated_user()
+
+      body = conn |> get("/#{user.username}/actor") |> Map.fetch!(:resp_body) |> Jason.decode!()
+
+      assert body["endpoints"]["sharedInbox"] == Docs.shared_inbox_url()
+      assert Docs.shared_inbox_url() == "#{VutuvWeb.Endpoint.url()}/system/inbox"
+      # The per-member inbox is what every server already knows; it stays.
+      assert body["inbox"] == Docs.actor_url(user) <> "/inbox"
+    end
+
+    test "one Update of the remote actor re-syncs the row of every member it follows",
+         %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub, %{"preferredUsername" => "alice_renamed", "name" => "Alice Renamed"})
+
+      users = for _ <- 1..3, do: federated_user()
+      for user <- users, do: :ok = existing_follower(user)
+
+      activity = lifecycle_activity("Update", %{"id" => @remote_actor, "type" => "Person"})
+      conn = shared_post(conn, activity, priv)
+
+      assert conn.status == 202
+
+      # One delivery, one row updated per member — the whole point of the
+      # endpoint.
+      for user <- users do
+        assert [follower] = Fediverse.list_followers(user)
+        assert follower.handle == "alice_renamed"
+        assert follower.name == "Alice Renamed"
+        assert follower.shared_inbox_uri == @remote_shared
+      end
+    end
+
+    test "one Delete of the remote actor drops it from every member it followed",
+         %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+
+      users = for _ <- 1..3, do: federated_user()
+      for user <- users, do: :ok = existing_follower(user)
+
+      conn = shared_post(conn, lifecycle_activity("Delete", @remote_actor), priv)
+
+      assert conn.status == 202
+      for user <- users, do: assert(Fediverse.follower_count(user) == 0)
+    end
+
+    test "a Follow stores the follower and queues the Accept", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+
+      conn = shared_post(conn, follow_activity(user), priv)
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 1
+
+      [delivery] = Repo.all(Delivery)
+      assert delivery.inbox_uri == @remote_inbox
+      assert delivery.activity_json =~ ~s("type":"Accept")
+    end
+
+    test "Undo(Follow) finds the member through the Follow it wraps", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      :ok = existing_follower(user)
+
+      undo = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => "https://social.example/activities/2",
+        "type" => "Undo",
+        "actor" => @remote_actor,
+        "object" => follow_activity(user)
+      }
+
+      conn = shared_post(conn, undo, priv)
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 0
+    end
+
+    test "a Like is counted on the post it names, and on nobody else's", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      bystander = federated_user()
+      post = create_post!(user, %{body: "Reachable from anywhere."})
+      other = create_post!(bystander, %{body: "Not the one that was liked."})
+
+      conn = shared_post(conn, reaction_activity("Like", Docs.note_url(user, post.id)), priv)
+
+      assert conn.status == 202
+      assert Fediverse.reaction_count(post.id) == 1
+      assert Fediverse.reaction_count(other.id) == 0
+    end
+
+    test "a reply lands under the post it answers, and only there", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub, %{"preferredUsername" => "alice"})
+      user = replying_user()
+      bystander = replying_user()
+      post = create_post!(user, %{body: "Reachable from anywhere."})
+      other = create_post!(bystander, %{body: "Nobody answered this one."})
+
+      conn = shared_post(conn, create_note(Docs.note_url(user, post.id)), priv)
+
+      assert conn.status == 202
+      assert [note] = Fediverse.list_notes([post.id], user)[post.id]
+      assert note.content_text == "Sehe ich auch so."
+      assert Fediverse.note_count(other.id) == 0
+    end
+
+    test "the author's Delete of that reply finds it without naming the member",
+         %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = replying_user()
+      post = create_post!(user, %{body: "Reachable from anywhere."})
+
+      shared_post(conn, create_note(Docs.note_url(user, post.id)), priv)
+      assert Fediverse.note_count(post.id) == 1
+
+      delete = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => "https://social.example/activities/delete-1",
+        "type" => "Delete",
+        "actor" => @remote_actor,
+        "object" => %{"id" => "#{@remote_actor}/statuses/1", "type" => "Tombstone"}
+      }
+
+      conn = shared_post(recycle(conn), delete, priv)
+
+      assert conn.status == 202
+      assert Fediverse.note_count(post.id) == 0
+    end
+
+    test "an unsigned activity is rejected exactly as at the per-member inbox", %{conn: conn} do
+      user = federated_user()
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/system/inbox", Jason.encode!(follow_activity(user)))
+
+      assert conn.status == 401
+      assert Fediverse.follower_count(user) == 0
+    end
+
+    test "a spoofed actor is rejected", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+
+      spoofed = Map.put(follow_activity(user), "actor", "https://evil.example/users/mallory")
+      conn = shared_post(conn, spoofed, priv)
+
+      assert conn.status == 401
+      assert Fediverse.follower_count(user) == 0
+    end
+
+    test "an activity signed with the wrong key is rejected", %{conn: conn} do
+      {_remote_priv, remote_pub} = Keys.generate()
+      {other_priv, _} = Keys.generate()
+      stub_remote_actor(remote_pub)
+      user = federated_user()
+
+      conn = shared_post(conn, follow_activity(user), other_priv)
+
+      assert conn.status == 401
+      assert Fediverse.follower_count(user) == 0
+    end
+
+    test "a blocked server is refused here too, before the signature is checked", %{conn: conn} do
+      admin = insert(:activated_user, admin?: true)
+      {:ok, {_blocked, _purged}} = Fediverse.block_instance(%{"host" => "social.example"}, admin)
+      user = federated_user()
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/system/inbox", Jason.encode!(follow_activity(user)))
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 0
+      assert Repo.aggregate(Delivery, :count) == 0
+    end
+
+    test "a member without the opt-in is no recipient — acknowledged and dropped",
+         %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      plain = insert(:activated_user)
+
+      conn = shared_post(conn, follow_activity(plain), priv)
+
+      # 202, not the per-member inbox's 404: the shared endpoint must not become
+      # a way to ask whether a given member federates.
+      assert conn.status == 202
+      assert Fediverse.follower_count(plain) == 0
+    end
+
+    test "404s while federation is globally off", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      Application.put_env(:vutuv, :fediverse_enabled, false)
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_enabled) end)
+
+      conn = shared_post(conn, follow_activity(user), priv)
+
+      assert conn.status == 404
+      assert Fediverse.follower_count(user) == 0
     end
   end
 

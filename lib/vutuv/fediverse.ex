@@ -769,6 +769,135 @@ defmodule Vutuv.Fediverse do
 
   defp check_inbound_cap(_), do: :ok
 
+  ## The shared inbox (issue #1073)
+
+  # How many addressee URIs one delivery may name. `to`/`cc` are attacker-chosen
+  # text and each entry costs a lookup, so the list is cut rather than walked:
+  # a real mention list is a handful of accounts, far under this. The fan-out
+  # that is NOT capped is the actor-lifecycle one below, because it is bounded
+  # by rows we ourselves wrote (who really follows whom), and it is exactly the
+  # work the per-member inbox would otherwise do across N separate requests.
+  @inbox_addressed_cap 25
+
+  @doc """
+  Every local member a delivery to the **shared inbox** is for (issue #1073).
+
+  The per-member inbox learns who the activity is for from the URL; the shared
+  one has to read it out of the activity. Three sources, because that is where
+  ActivityPub actually puts it:
+
+    * the **addressing** — `to` / `cc` / `bto` / `bcc` / `audience` on the
+      activity and on its object — plus the object itself and, for an `Undo`,
+      the object it wraps: a `Follow` names an actor URL, a `Like` or
+      `Announce` a Note URL, a reply its `inReplyTo`. Every URL of ours resolves
+      to the member it hangs off.
+    * the **remote actor's own lifecycle** (`Update`/`Delete` of itself), which
+      names no local member at all: it is broadcast to everyone following that
+      actor, so the addressees are exactly the members it follows here. This is
+      the case the endpoint is worth having for — one account deletion used to
+      mean one signed delivery per member.
+    * an author's **`Update`/`Delete` of a note they wrote**, which likewise
+      names nobody here: the addressees are the members whose posts hold a
+      stored copy of it.
+
+  Members who do not federate (or are suspended, frozen, gone) are filtered out,
+  so a delivery to them is silently dropped — never answered differently, or the
+  endpoint would become a way to ask who takes part.
+
+  `actor_uri` is the activity's *claimed* actor. The caller resolves recipients
+  before the signature is verified (it needs one of their keys to sign the
+  actor fetch that verification depends on) and only acts on the result
+  afterwards, once that claim is proven.
+  """
+  def inbox_recipients(activity, actor_uri) when is_map(activity) do
+    (addressed_users(activity) ++ lifecycle_users(activity, actor_uri))
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.filter(&federated?/1)
+  end
+
+  def inbox_recipients(_activity, _actor_uri), do: []
+
+  defp addressed_users(activity) do
+    object = if is_map(activity["object"]), do: activity["object"], else: %{}
+    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
+
+    (audience_uris(activity) ++
+       audience_uris(object) ++
+       [activity["object"], object["object"], object["inReplyTo"]])
+    |> Enum.filter(&is_binary/1)
+    |> Enum.uniq()
+    |> Enum.take(@inbox_addressed_cap)
+    |> Enum.flat_map(&local_username(&1, base))
+    |> users_by_username()
+  end
+
+  defp audience_uris(map) when is_map(map) do
+    Enum.flat_map(~w(to cc bto bcc audience), fn field ->
+      case map[field] do
+        list when is_list(list) -> list
+        uri when is_binary(uri) -> [uri]
+        _ -> []
+      end
+    end)
+  end
+
+  defp audience_uris(_other), do: []
+
+  # The member an actor or Note URL of ours hangs off, as a username. Anything
+  # else — a foreign host, the public collection, a malformed URI — is a miss.
+  defp local_username(uri, base) do
+    case String.replace_prefix(uri, base, "") do
+      ^uri -> []
+      rest -> rest |> String.split("/") |> username_from_segments()
+    end
+  end
+
+  defp username_from_segments([username, "actor" | _rest]), do: [String.downcase(username)]
+  defp username_from_segments([username, "posts", _id | _rest]), do: [String.downcase(username)]
+  defp username_from_segments(_segments), do: []
+
+  # One query for the whole addressee list, not one per URI.
+  defp users_by_username([]), do: []
+
+  defp users_by_username(usernames),
+    do: Repo.all(from(u in User, where: u.username in ^usernames))
+
+  defp lifecycle_users(%{"type" => type} = activity, actor_uri)
+       when type in ~w(Update Delete) and is_binary(actor_uri) do
+    case activity_object_id(activity["object"]) do
+      ^actor_uri -> followed_local_users(actor_uri)
+      uri when is_binary(uri) -> note_holding_users(actor_uri, uri)
+      _ -> []
+    end
+  end
+
+  defp lifecycle_users(_activity, _actor_uri), do: []
+
+  defp followed_local_users(actor_uri) do
+    Repo.all(
+      from(f in Follower,
+        join: u in User,
+        on: u.id == f.user_id,
+        where: f.actor_uri == ^actor_uri,
+        select: u
+      )
+    )
+  end
+
+  defp note_holding_users(actor_uri, object_uri) do
+    Repo.all(
+      from(n in Note,
+        join: p in Post,
+        on: p.id == n.post_id,
+        join: u in User,
+        on: u.id == p.user_id,
+        where: n.object_uri == ^object_uri and n.actor_uri == ^actor_uri,
+        distinct: true,
+        select: u
+      )
+    )
+  end
+
   ## Inbound reactions (issue #1068)
 
   @doc """
