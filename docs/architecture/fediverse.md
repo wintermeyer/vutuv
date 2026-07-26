@@ -157,24 +157,40 @@ every endpoint 404s and nothing is delivered.
   deletion path, so it must not depend on a switch still being on. Rows live
   exactly as long as the post (FK cascade, so a post delete and an account
   delete both take them), like a vutuv like; there is no separate expiry.
-  - The count **and the newest few accounts** ride the existing engagement
-    select (`Vutuv.Posts.engagement_count_select/1` → `:fediverse_reactions`
-    plus a `json_agg` of `:fediverse_reaction_actors`, capped at 4 rows), so
-    both are batched with the other counters, tick live through
-    `{:post_counters, …}` (`broadcast_post_counters/1`) and reach
-    `VutuvWeb.AgentDocs.PostDoc` as `fediverse_reaction_count` and
-    `fediverse_reactions`. The cap lives in SQL so a post with a thousand boosts
-    cannot drag a thousand rows into a feed card; the count stays the true total
-    behind the "+N more" tail.
-  - It renders as its **own** line under the vutuv counters, never folded into
-    them: a hostile server can then inflate only its own line, and the reader
-    sees which world answered. Each account is a chip — the heart or re-share
-    glyph the vutuv action bar uses for the same act, the `@handle@host`
-    (`Vutuv.Fediverse.Handle`, shared with the follower list and the reply
-    cards), linking **out** to the account, since there is no vutuv profile
-    behind it. Public, like the counts always were: both acts are published
-    under the actor's own name on their own server, and the reply cards below
-    already name their authors the same way. Hidden at zero.
+  - The counts **and the newest few accounts** ride the existing engagement
+    select (`Vutuv.Posts.engagement_count_select/1` → `:fediverse_likes` and
+    `:fediverse_reposts`, counted per verb, plus a `json_agg` of
+    `:fediverse_reaction_actors`, capped at 4 rows), so all of it is batched
+    with the other counters, ticks live through `{:post_counters, …}`
+    (`broadcast_post_counters/1`) and reaches `VutuvWeb.AgentDocs.PostDoc`. The
+    cap lives in SQL so a post with a thousand boosts cannot drag a thousand
+    rows into a feed card; the counts stay the true totals behind the "+N more"
+    tail.
+  - **The card shows one number per act.** A favourite is a like and an
+    `Announce` is a repost, so `Vutuv.Posts.shown_counts/1` adds the remote
+    figures into the like / repost / reply counters the buttons print, and
+    `PostDoc` carries the same folded `like_count` / `repost_count` /
+    `reply_count`. The card used to print two sets of figures, the vutuv ones in
+    the buttons and a permanent "from other networks" line under them: correct,
+    and it read as bookkeeping — a reader had to add two columns in their head
+    to learn how a post did.
+  - **The split is one tap away, in an expandable panel** (`<details>`,
+    collapsed, no JS): how many of the likes / reposts / replies arrived from
+    out there, the accounts behind them, and the sentence that they are already
+    counted above. So the transparency the separate line was for survives the
+    folding — the reader can still see which world answered, and a hostile
+    server can only inflate figures this panel labels as its own. Each account
+    is a chip — the heart or re-share glyph the vutuv action bar uses for the
+    same act, the `@handle@host` (`Vutuv.Fediverse.Handle`, shared with the
+    follower list and the reply cards), linking **out** to the account, since
+    there is no vutuv profile behind it. Public, like the counts always were:
+    both acts are published under the actor's own name on their own server, and
+    the reply cards below already name their authors the same way. The whole
+    panel is hidden while every remote figure is zero, so a post nobody out
+    there touched stays clean. The agent formats mirror it: the folded totals,
+    then `fediverse_like_count` / `fediverse_repost_count` /
+    `fediverse_reaction_count` / `fediverse_reply_count` and `fediverse_reactions`
+    as the breakdown.
   - A new reaction also **notifies the author** (`fediverse_reaction`, the
     notification kind shaped exactly like `fediverse_reply`): derived straight
     from the reaction rows, so an `Undo`, a deleted post or the member switching

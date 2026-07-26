@@ -2954,12 +2954,15 @@ defmodule VutuvWeb.PostComponents do
 
   def post_actions(assigns) do
     assigns =
-      assign(
-        assigns,
+      assigns
+      |> assign(
         :own?,
         assigns.engagement != nil and assigns.viewer_id != nil and
           assigns.engagement.author_id == assigns.viewer_id
       )
+      # One number per act, vutuv's own and the other networks' together
+      # (`Posts.shown_counts/1`); the panel below breaks it back down.
+      |> assign(:counts, assigns.engagement && Posts.shown_counts(assigns.engagement))
 
     ~H"""
     <%!-- justify-between spreads the four controls across the column's full
@@ -2974,13 +2977,13 @@ defmodule VutuvWeb.PostComponents do
         target={@target}
         own?={@own?}
         liked?={@engagement.liked?}
-        count={@engagement.likes}
+        count={@counts.likes}
       />
 
       <.reply_link
         id={"#{@id}-reply"}
         post_id={@post_id}
-        count={@engagement.replies}
+        count={@counts.replies}
         disabled={@engagement.restricted?}
       />
 
@@ -2989,7 +2992,7 @@ defmodule VutuvWeb.PostComponents do
         target={@target}
         kind="repost"
         active?={@engagement.reposted?}
-        count={@engagement.reposts}
+        count={@counts.reposts}
         label={if @engagement.reposted?, do: gettext("Undo repost"), else: gettext("Repost")}
         active_class="text-brand-600 dark:text-brand-300"
         disabled={@engagement.restricted?}
@@ -3011,89 +3014,151 @@ defmodule VutuvWeb.PostComponents do
       </.action_button>
     </div>
 
-    <.fediverse_line
+    <.fediverse_details
       :if={@engagement}
-      reactions={@engagement.fediverse_reactions}
+      likes={Map.get(@engagement, :fediverse_likes) || 0}
+      reposts={Map.get(@engagement, :fediverse_reposts) || 0}
+      replies={Map.get(@engagement, :fediverse_replies) || 0}
       actors={Map.get(@engagement, :fediverse_reaction_actors, [])}
-      replies={Map.get(@engagement, :fediverse_replies, 0)}
     />
     """
   end
 
-  # What other networks did with this post (issues #1068 and #1069): its OWN
-  # line under the vutuv counters, never folded into them. A member who
-  # publishes outward otherwise gets no feedback at all, and keeping the figures
-  # separate means a hostile remote server can inflate only its own line — the
-  # reader can see which world answered.
+  # What other networks did with this post (issues #1068 and #1069), now folded
+  # into the counters above and explained here.
   #
-  # It **names** the accounts that reacted, one chip each, rather than reporting
-  # a bare number: "1 reaction from other networks" told the author that their
-  # post had travelled somewhere, and nothing whatsoever about where or to whom,
-  # which is not transparency but a rumour. A chip carries the whole stored row
-  # — the account address and the verb — and links out to the account, since
-  # there is no vutuv profile behind it. Public, like the counts always were:
+  # The card used to print two sets of figures: the vutuv counters in the
+  # buttons and a permanent "from other networks" line under them. Correct, and
+  # it read as bookkeeping — a reader wanting to know how a post did had to add
+  # two columns in their head, and a post with one boost carried a whole line
+  # about it. So a like is a like and a repost is a repost whichever world it
+  # came from (`Vutuv.Posts.shown_counts/1`), and the split moves in here, one
+  # tap away.
+  #
+  # Nothing is lost by folding, which is what this panel is for: it breaks the
+  # totals back down per verb, **names** the accounts that reacted (one chip
+  # each, linking out to the account — there is no vutuv profile behind it) and
+  # says in so many words that the numbers above already include them. A bare
+  # "1 reaction from other networks" was a rumour; a chip is the whole stored
+  # row, the account address and the verb. Public, like the counts always were:
   # both a favourite and a re-share are acts those networks publish under the
   # actor's own name, and the reply cards below already name their authors the
-  # same way.
+  # same way. A remote server can still only inflate figures that this panel
+  # labels as its own.
   #
-  # The reply figure stays a count (the replies themselves render as cards on
-  # the permalink) and counts **public** ones only, so a note addressed to the
-  # member alone (issue #1071) never moves a number a stranger can read.
-  # Renders nothing while everything is zero, so a post nobody out there touched
-  # stays clean.
-  attr(:reactions, :integer, required: true)
-  attr(:actors, :list, required: true, doc: "the newest few reaction rows, JSON-decoded")
+  # Collapsed by default (`<details>`, no JS), so the common reader sees three
+  # calm numbers; renders nothing at all while every remote figure is zero, so
+  # a post nobody out there touched stays clean. The reply figure counts
+  # **public** replies only, so a note addressed to the member alone (issue
+  # #1071) never moves a number a stranger can read.
+  attr(:likes, :integer, required: true)
+  attr(:reposts, :integer, required: true)
   attr(:replies, :integer, required: true)
+  attr(:actors, :list, required: true, doc: "the newest few reaction rows, JSON-decoded")
 
-  defp fediverse_line(%{reactions: reactions, replies: replies} = assigns)
-       when reactions > 0 or replies > 0 do
+  defp fediverse_details(%{likes: likes, reposts: reposts, replies: replies} = assigns)
+       when likes > 0 or reposts > 0 or replies > 0 do
+    reactions = likes + reposts
     shown = shown_reaction_actors(assigns.actors, reactions)
 
     assigns =
       assigns
+      |> assign(:reactions, reactions)
+      |> assign(:total, reactions + replies)
       |> assign(:shown, shown)
       |> assign(:more, reactions - length(shown))
 
     ~H"""
-    <div
-      class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-2 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400"
+    <details
+      class="group mt-2 border-t border-slate-100 pt-1 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400"
+      data-fediverse-details
       data-fediverse-reactions={@reactions}
       data-fediverse-replies={@replies}
     >
-      <span class="inline-flex items-center gap-1">
-        <span aria-hidden="true">🌐</span>{gettext("From other networks")}
-      </span>
+      <%!-- min-h-10: a finger-sized target, since this is the one control on
+            the card a phone reader is meant to open. --%>
+      <summary class={[
+        "-mx-2 flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-2",
+        "hover:bg-slate-100 dark:hover:bg-slate-800",
+        "[&::-webkit-details-marker]:hidden"
+      ]}>
+        <span aria-hidden="true">🌐</span>
+        <span>{gettext("From other networks")}</span>
+        <%!-- slate-200/700, a step off the row's own hover tint, so the pill
+              stays a pill while the summary is hovered or open. --%>
+        <span class="rounded-full bg-slate-200 px-1.5 text-xs font-semibold tabular-nums dark:bg-slate-700">
+          {compact_count(@total)}
+        </span>
+        <svg
+          class="ml-auto h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7" />
+        </svg>
+      </summary>
 
-      <a
-        :for={actor <- @shown}
-        href={actor.uri}
-        target="_blank"
-        rel="nofollow noopener noreferrer"
-        data-fediverse-reaction={actor.kind}
-        title={reaction_title(actor)}
-        class="inline-flex min-h-8 max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-brand-300"
-      >
-        <%!-- The same two glyphs the vutuv action bar above uses for the same
-              two acts, so "shared" and "favourited" read identically whichever
-              world they came from. --%>
-        <.icon_repost :if={actor.kind == "announce"} class="h-3.5 w-3.5 shrink-0" />
-        <.icon_heart :if={actor.kind != "announce"} filled?={false} class="h-3.5 w-3.5 shrink-0" />
-        <span class="sr-only">{reaction_title(actor)}</span>
-        <span aria-hidden="true" class="break-all">{actor.handle}</span>
-      </a>
+      <div class="space-y-2 px-2 pb-2 pt-1">
+        <%!-- The split, in the same order and with the same glyphs as the
+              buttons above, so each figure is obviously part of one of them. --%>
+        <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span :if={@likes > 0} class="inline-flex items-center gap-1" data-fediverse-likes={@likes}>
+            <.icon_heart filled?={false} class="h-4 w-4 shrink-0" />{like_phrase(@likes)}
+          </span>
+          <span
+            :if={@replies > 0}
+            class="inline-flex items-center gap-1"
+            data-fediverse-reply-count={@replies}
+          >
+            <.icon_reply class="h-4 w-4 shrink-0" />{reply_phrase(@replies)}
+          </span>
+          <span
+            :if={@reposts > 0}
+            class="inline-flex items-center gap-1"
+            data-fediverse-reposts={@reposts}
+          >
+            <.icon_repost class="h-4 w-4 shrink-0" />{repost_phrase(@reposts)}
+          </span>
+        </p>
 
-      <span :if={@more > 0} data-fediverse-reactions-more={@more}>
-        {gettext("+%{count} more", count: compact_count(@more))}
-      </span>
+        <p :if={@shown != []} class="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <a
+            :for={actor <- @shown}
+            href={actor.uri}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            data-fediverse-reaction={actor.kind}
+            title={reaction_title(actor)}
+            class="inline-flex min-h-8 max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-brand-300"
+          >
+            <%!-- The same two glyphs the vutuv action bar above uses for the
+                  same two acts, so "shared" and "favourited" read identically
+                  whichever world they came from. --%>
+            <.icon_repost :if={actor.kind == "announce"} class="h-3.5 w-3.5 shrink-0" />
+            <.icon_heart
+              :if={actor.kind != "announce"}
+              filled?={false}
+              class="h-3.5 w-3.5 shrink-0"
+            />
+            <span class="sr-only">{reaction_title(actor)}</span>
+            <span aria-hidden="true" class="break-all">{actor.handle}</span>
+          </a>
 
-      <span :if={@replies > 0} class="inline-flex items-center gap-1">
-        <.icon_reply class="h-3.5 w-3.5 shrink-0" />{reply_phrase(@replies)}
-      </span>
-    </div>
+          <span :if={@more > 0} data-fediverse-reactions-more={@more}>
+            {gettext("+%{count} more", count: compact_count(@more))}
+          </span>
+        </p>
+
+        <p class="text-xs">{gettext("Already counted in the numbers above.")}</p>
+      </div>
+    </details>
     """
   end
 
-  defp fediverse_line(assigns), do: ~H""
+  defp fediverse_details(assigns), do: ~H""
 
   # The rows the SQL cap handed us (`Vutuv.Posts.engagement_count_select/1`
   # fetches a few more than a card should show), normalised out of their
@@ -3126,6 +3191,16 @@ defmodule VutuvWeb.PostComponents do
 
   defp reply_phrase(count) do
     ngettext("%{formatted} reply", "%{formatted} replies", count, formatted: compact_count(count))
+  end
+
+  defp like_phrase(count) do
+    ngettext("%{formatted} like", "%{formatted} likes", count, formatted: compact_count(count))
+  end
+
+  defp repost_phrase(count) do
+    ngettext("%{formatted} repost", "%{formatted} reposts", count,
+      formatted: compact_count(count)
+    )
   end
 
   # The Like control: a real toggle for everyone but the author. On your OWN

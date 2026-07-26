@@ -1036,13 +1036,18 @@ defmodule Vutuv.Posts do
             unquote(post).id
           ),
         # What OTHER networks did with this post (issue #1068): favourites and
-        # re-shares that arrived over ActivityPub. Deliberately a separate
-        # figure, never folded into the vutuv counters above — a hostile remote
-        # server can then only inflate its own line, and the member can see
-        # which world answered.
-        fediverse_reactions:
+        # re-shares that arrived over ActivityPub. Counted **per verb**, because
+        # a favourite is a like and an `Announce` is a repost — the same two
+        # acts the buttons above count, so the card can show one figure each
+        # (`shown_counts/1`) and still break it down for whoever asks.
+        fediverse_likes:
           fragment(
-            "(SELECT count(*) FROM fediverse_reactions fr WHERE fr.post_id = ?)",
+            "(SELECT count(*) FROM fediverse_reactions fr WHERE fr.post_id = ? AND fr.kind = 'like')",
+            unquote(post).id
+          ),
+        fediverse_reposts:
+          fragment(
+            "(SELECT count(*) FROM fediverse_reactions fr WHERE fr.post_id = ? AND fr.kind = 'announce')",
             unquote(post).id
           ),
         # ...and WHO they were. A bare number told the author nothing: their
@@ -1094,11 +1099,47 @@ defmodule Vutuv.Posts do
         bookmarks: 0,
         reposts: 0,
         replies: 0,
-        fediverse_reactions: 0,
+        fediverse_likes: 0,
+        fediverse_reposts: 0,
         fediverse_reaction_actors: [],
         fediverse_replies: 0
       }
   end
+
+  @doc """
+  The three figures a reader sees on the action bar: vutuv's own tally plus
+  what other networks did with the same post.
+
+  A favourite from another server is a like, an `Announce` is a repost and a
+  public remote reply is a reply, so one post has **one** like count, one reply
+  count and one repost count — a member should not have to add two columns in
+  their head to learn how their post did (the card used to print the vutuv
+  figures in the buttons and the remote ones on a line of their own).
+
+  Nothing is hidden by the folding: `fediverse_likes` / `fediverse_reposts` /
+  `fediverse_replies` stay on the engagement map, and the card's expandable
+  "from other networks" panel breaks the totals back down, names the accounts
+  and says the numbers above already include them. So a reader can still see
+  which world answered — and a server that inflates its own figures inflates a
+  line that is labelled as theirs.
+  """
+  def shown_counts(engagement) do
+    %{
+      likes: engagement.likes + remote_count(engagement, :fediverse_likes),
+      reposts: engagement.reposts + remote_count(engagement, :fediverse_reposts),
+      replies: engagement.replies + remote_count(engagement, :fediverse_replies)
+    }
+  end
+
+  @doc "Favourites and re-shares from other networks together (issue #1068)."
+  def fediverse_reaction_count(engagement) do
+    remote_count(engagement, :fediverse_likes) + remote_count(engagement, :fediverse_reposts)
+  end
+
+  # An engagement map assembled by hand (a test, a host that built one before
+  # these keys existed) may not carry the remote figures; a missing one means
+  # "nothing arrived", never a crash on a post card.
+  defp remote_count(engagement, key), do: Map.get(engagement, key) || 0
 
   @doc """
   How many publicly-visible replies a post has: the reply post must still

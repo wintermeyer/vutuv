@@ -40,6 +40,26 @@ defmodule VutuvWeb.PostControllerTest do
     })
   end
 
+  # A public reply written on another network (issue #1069), straight to the
+  # table — the inbox rules that put it there are the Fediverse tests' business.
+  defp remote_note!(post, name) do
+    now = DateTime.utc_now(:second)
+
+    Repo.insert!(%Vutuv.Fediverse.Note{
+      post_id: post.id,
+      object_uri: "https://social.example/users/#{name}/statuses/1",
+      actor_uri: "https://social.example/users/#{name}",
+      origin_url: "https://social.example/@#{name}/1",
+      handle: name,
+      display_name: name,
+      content_text: "Nice one.",
+      audience: "public",
+      received_at: now,
+      checked_at: now,
+      expires_at: DateTime.add(now, 86_400)
+    })
+  end
+
   # Where `text` first shows up in the rendered page — how the thread tests
   # assert reading order without parsing the whole card tree.
   defp position(html, text) do
@@ -1048,10 +1068,45 @@ defmodule VutuvWeb.PostControllerTest do
       # its account URI (rows stored before the handle was kept, too).
       assert html =~ ~s(data-fediverse-reaction="like")
       assert html =~ "@bob@social.example liked this"
+    end
 
-      # Its own line, never folded into the vutuv counters: nobody here liked
-      # or reposted, so those counters must show no 2 of their own.
-      refute html =~ ~r/data-count="(like|repost)">\s*2\s*</
+    test "a remote like, boost and reply are counted in the post's own counters", %{conn: conn} do
+      user = insert_activated_user()
+      post = create_post!(user, %{body: "travelled far"})
+      :ok = Posts.like_post(insert(:user), post)
+
+      remote_reaction!(post, "alice", "announce")
+      remote_reaction!(post, "bob", "like")
+      remote_note!(post, "carol")
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      # One number per act: the vutuv like plus the remote favourite are two
+      # likes, the boost is the post's one repost, the remote note its one
+      # reply. A reader should not have to add two columns in their head.
+      assert html =~ ~r/data-count="like">\s*2\s*</
+      assert html =~ ~r/data-count="repost">\s*1\s*</
+      assert html =~ ~r/data-count="reply">\s*1\s*</
+
+      # ...and the panel behind them still breaks it back down, names the
+      # accounts and says the numbers above already include them.
+      assert html =~ "data-fediverse-details"
+      assert html =~ ~s(data-fediverse-likes="1")
+      assert html =~ ~s(data-fediverse-reposts="1")
+      assert html =~ ~s(data-fediverse-reply-count="1")
+      assert html =~ "@alice@social.example shared this"
+      assert html =~ "Already counted in the numbers above."
+    end
+
+    test "a post nobody out there touched carries no panel at all", %{conn: conn} do
+      user = insert_activated_user()
+      post = create_post!(user, %{body: "stayed home"})
+      :ok = Posts.like_post(insert(:user), post)
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      refute html =~ "data-fediverse-details"
+      refute html =~ "From other networks"
     end
 
     test "a much-shared post names a few and counts the rest (#1068)", %{conn: conn} do

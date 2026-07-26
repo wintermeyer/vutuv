@@ -424,6 +424,9 @@ defmodule VutuvWeb.PostActionsLiveTest do
       _ = :sys.get_state(bar.pid)
       html = render(bar)
 
+      # The boost is the post's repost count now, not a figure beside it...
+      assert html =~ ~r/data-count="repost">\s*1\s*</
+      # ...and the panel behind that number still names who it was.
       assert html =~ ~s(data-fediverse-reactions="1")
       assert html =~ "@alice@social.example"
       assert html =~ ~s(data-fediverse-reaction="announce")
@@ -566,7 +569,8 @@ defmodule VutuvWeb.PostActionsLiveTest do
         bookmarks: 0,
         reposts: 0,
         replies: 0,
-        fediverse_reactions: 0,
+        fediverse_likes: 0,
+        fediverse_reposts: 0,
         liked?: true,
         bookmarked?: false,
         reposted?: false,

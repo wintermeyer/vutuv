@@ -43,6 +43,15 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     %{posts: thread, truncated?: thread_truncated?} = Posts.list_thread(post, viewer)
     {noindex?, noai?} = robots_axes(author, Posts.restricted?(post))
     engagement = Posts.engagement_counts(post.id)
+    counts = Posts.shown_counts(engagement)
+
+    # The replies written on other networks that the HTML thread weaves in
+    # (issue #1069). **Public ones only, on every path** — note the hardcoded
+    # `nil` viewer: `build/3` also serves the authenticated `/api/2.0` reads,
+    # and a reply addressed to the member alone (issue #1071) must not leave
+    # the page it was sent to, not through an API and not through a `.json`
+    # sibling. The member reads their private replies on the post itself.
+    remote_replies = [post.id] |> Fediverse.list_notes(nil) |> remote_entries(post.id)
 
     AgentDocs.doc_meta("post", Posts.path(post), noindex: noindex?, noai: noai?)
     |> Map.merge(%{
@@ -64,11 +73,13 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # reuse a picture should not have to parse a translated sentence.
       license: license_entry(post),
       in_reply_to: in_reply_to(post),
-      # The anonymous doc lists only anonymous-visible replies; count the loaded
-      # rows so it matches exactly. (Posts.reply_count/1 now also excludes
-      # frozen / denied replies (issue #774), but counting `replies` here avoids
-      # a second query and can never drift from the list.)
-      reply_count: length(replies),
+      # Every reply the page counts, from both worlds — the figure the HTML
+      # reply button now shows (a remote reply is a reply). Counted off the two
+      # loaded lists rather than re-queried, so the number and the entries below
+      # it can never drift: `replies` holds the anonymous-visible vutuv ones
+      # (Posts.reply_count/1 excludes frozen / denied replies since issue #774)
+      # and `fediverse_replies` the public remote ones.
+      reply_count: length(replies) + length(remote_replies),
       replies: Enum.map(replies, &reply_entry/1),
       # The whole conversation the HTML permalink renders (issue #1006), in
       # the same reading order (the reply tree depth-first, issue #1027);
@@ -77,25 +88,25 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # one-level list for API consumers that relied on it.
       thread: thread_entries(thread),
       thread_truncated: thread_truncated?,
-      # The public engagement counters the HTML action bar shows to everyone.
-      like_count: engagement.likes,
-      repost_count: engagement.reposts,
+      # The public engagement counters the HTML action bar shows to everyone —
+      # vutuv's own tally **and** what other networks did, in one figure each,
+      # exactly as the buttons print them (`Posts.shown_counts/1`).
+      like_count: counts.likes,
+      repost_count: counts.reposts,
       bookmark_count: engagement.bookmarks,
-      # Favourites and re-shares from OTHER networks (issue #1068), the same
-      # separate figure the HTML shows on its own line under the vutuv counters.
-      fediverse_reaction_count: engagement.fediverse_reactions,
+      # ...and the breakdown the card's "from other networks" panel shows when
+      # you open it, so a machine can tell the two worlds apart again: how many
+      # of the likes and reposts above arrived over ActivityPub (issue #1068).
+      # Nothing here is additional to the counts, it is part of them.
+      fediverse_like_count: engagement.fediverse_likes,
+      fediverse_repost_count: engagement.fediverse_reposts,
+      fediverse_reaction_count: Posts.fediverse_reaction_count(engagement),
       # ...and the accounts behind the newest few of them, exactly the chips the
-      # HTML line names — same rows, same cap, so the two cannot drift. The
-      # count above stays the true total.
+      # HTML panel names — same rows, same cap, so the two cannot drift. The
+      # counts above stay the true totals.
       fediverse_reactions: reaction_entries(engagement),
       fediverse_reply_count: engagement.fediverse_replies,
-      # The replies written on other networks that the HTML thread weaves in
-      # (issue #1069). **Public ones only, on every path** — note the hardcoded
-      # `nil` viewer: `build/3` also serves the authenticated `/api/2.0` reads,
-      # and a reply addressed to the member alone (issue #1071) must not leave
-      # the page it was sent to, not through an API and not through a `.json`
-      # sibling. The member reads their private replies on the post itself.
-      fediverse_replies: [post.id] |> Fediverse.list_notes(nil) |> remote_entries(post.id)
+      fediverse_replies: remote_replies
     })
   end
 

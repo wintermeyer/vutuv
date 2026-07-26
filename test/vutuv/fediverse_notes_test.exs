@@ -787,10 +787,12 @@ defmodule Vutuv.FediverseNotesTest do
 
       counts = Posts.engagement_counts(post.id)
       assert counts.fediverse_replies == 1
-      # Never folded into the vutuv figures: a hostile remote server may only
-      # inflate its own line.
+      # Kept apart in the data — a remote reply never moves the vutuv figure —
+      # while the card adds the two up into the one reply count it shows
+      # (`shown_counts/1`) and names the split in its panel.
       assert counts.replies == 0
-      assert counts.fediverse_reactions == 0
+      assert Posts.fediverse_reaction_count(counts) == 0
+      assert %{replies: 1} = Posts.shown_counts(counts)
     end
 
     test "a private reply is invisible to the public figure", %{

@@ -296,22 +296,40 @@ defmodule Vutuv.FediverseReactionsTest do
       post: post,
       note: note
     } do
-      assert Posts.engagement_counts(post.id).fediverse_reactions == 0
+      assert Posts.engagement_counts(post.id).fediverse_likes == 0
 
       :ok = Fediverse.record_reaction(user, note, "like", @actor)
 
       counts = Posts.engagement_counts(post.id)
-      assert counts.fediverse_reactions == 1
-      # Never folded into the vutuv figures: a hostile remote server may only
-      # inflate its own line.
+      # Counted per verb, and kept apart from vutuv's own tally in the data —
+      # the card adds the two up for display (`shown_counts/1`), the panel
+      # behind it breaks them back down, and a hostile remote server can still
+      # only inflate the figures that panel labels as its own.
+      assert counts.fediverse_likes == 1
+      assert counts.fediverse_reposts == 0
       assert counts.likes == 0
       assert counts.reposts == 0
+
+      assert %{likes: 1, reposts: 0, replies: 0} = Posts.shown_counts(counts)
+    end
+
+    test "a re-share counts as a repost, a favourite as a like", %{
+      user: user,
+      post: post,
+      note: note
+    } do
+      :ok = Fediverse.record_reaction(user, note, "announce", @actor)
+
+      counts = Posts.engagement_counts(post.id)
+      assert counts.fediverse_reposts == 1
+      assert counts.fediverse_likes == 0
+      assert %{likes: 0, reposts: 1} = Posts.shown_counts(counts)
     end
 
     test "post_engagement/2 carries it too", %{user: user, post: post, note: note} do
       :ok = Fediverse.record_reaction(user, note, "like", @actor)
 
-      assert Posts.post_engagement(post.id, nil).fediverse_reactions == 1
+      assert Posts.post_engagement(post.id, nil).fediverse_likes == 1
     end
 
     test "and the accounts behind it, newest first and capped", %{
@@ -331,7 +349,7 @@ defmodule Vutuv.FediverseReactionsTest do
 
       # The count stays the true total; only the named rows are capped, so the
       # card can render "and N more" without a second query.
-      assert counts.fediverse_reactions == 6
+      assert Posts.fediverse_reaction_count(counts) == 6
       assert length(counts.fediverse_reaction_actors) == 4
 
       assert [%{"handle" => "fan6", "kind" => "announce"} | _] =

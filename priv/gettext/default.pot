@@ -15688,6 +15688,26 @@ msgid_plural "%{formatted} replies"
 msgstr[0] ""
 msgstr[1] ""
 
+#: lib/vutuv_web/components/post_components.ex:3195
+#, elixir-autogen, elixir-format
+msgid "%{formatted} like"
+msgid_plural "%{formatted} likes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/components/post_components.ex:3199
+#, elixir-autogen, elixir-format
+msgid "%{formatted} repost"
+msgid_plural "%{formatted} reposts"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:928
+#: lib/vutuv_web/components/post_components.ex:3153
+#, elixir-autogen, elixir-format
+msgid "Already counted in the numbers above."
+msgstr ""
+
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:167
 #, elixir-autogen, elixir-format
 msgid "A report deletes the reply right away, with no queue to work through. This is the trail, so a server that keeps showing up here can be blocked above. It holds no text and no links, only which server and which account (as a short digest)."

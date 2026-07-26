@@ -897,30 +897,37 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.map_join(tags, ", ", &"##{&1}")
 
-  # The public engagement counters, mirroring the HTML action bar — including
-  # the separate "from other networks" figure it shows on its own line
-  # (issue #1068), which is omitted here at zero exactly as the HTML omits it.
+  # The public engagement counters, mirroring the HTML action bar: one figure
+  # per act, vutuv's own and the other networks' together (issues #1068, #1069).
+  # What arrived from out there follows as a breakdown of those totals — the
+  # same split the card's expandable panel shows, down to the closing sentence
+  # that it is not additional — and is omitted at zero exactly as the HTML
+  # omits the whole panel.
   @doc false
   def engagement_line(doc) do
-    vutuv_counts =
+    counts =
       "#{gettext("Likes")}: #{doc.like_count} · #{gettext("Reposts")}: #{doc.repost_count} · " <>
         "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
 
-    case doc.fediverse_reaction_count do
-      0 ->
-        vutuv_counts
-
-      count ->
-        vutuv_counts <>
-          " · " <>
-          gettext("Reactions from other networks") <> ": #{count}#{reaction_names(doc)}"
+    case fediverse_share(doc) do
+      [] -> counts
+      parts -> Enum.join([counts | parts], " · ")
     end
-    |> then(fn line ->
-      case doc[:fediverse_reply_count] || 0 do
-        0 -> line
-        count -> line <> " · " <> gettext("Replies from other networks") <> ": #{count}"
-      end
-    end)
+  end
+
+  # The "from other networks" clauses: how much of the counts above came from
+  # there, who reacted, and that it is already included.
+  defp fediverse_share(doc) do
+    reactions = doc[:fediverse_reaction_count] || 0
+    replies = doc[:fediverse_reply_count] || 0
+
+    [
+      reactions > 0 &&
+        gettext("Reactions from other networks") <> ": #{reactions}#{reaction_names(doc)}",
+      replies > 0 && gettext("Replies from other networks") <> ": #{replies}",
+      (reactions > 0 or replies > 0) && gettext("Already counted in the numbers above.")
+    ]
+    |> Enum.filter(& &1)
   end
 
   # The accounts behind those reactions, the same ones the HTML line names as

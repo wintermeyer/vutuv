@@ -526,11 +526,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     :ok = Vutuv.Posts.repost_post(fan, post)
     :ok = Vutuv.Posts.bookmark_post(fan, post)
 
-    # A favourite from another network (issue #1068): its own figure AND the
-    # account behind it, both of which the HTML line shows, so both must reach
-    # the siblings. Written straight to the table — the inbox rules that put it
-    # there are the Fediverse tests' business, this one is about what the
-    # formats render.
+    # A favourite from another network (issue #1068): the HTML counts it as a
+    # like like any other and breaks it back out — with the account behind it —
+    # in the card's "from other networks" panel, so the siblings must carry the
+    # folded figure AND the split. Written straight to the table — the inbox
+    # rules that put it there are the Fediverse tests' business, this one is
+    # about what the formats render.
     Vutuv.Repo.insert!(%Vutuv.Fediverse.Reaction{
       post_id: post.id,
       actor_uri: "https://social.example/users/alice",
@@ -552,9 +553,14 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     doc = Jason.decode!(rendered.json)
     assert doc["type"] == "post"
     assert doc["reply_count"] == 1
-    assert doc["like_count"] == 1
+    # The vutuv like plus the remote favourite: one like count, the way the
+    # button shows it.
+    assert doc["like_count"] == 2
     assert doc["repost_count"] == 1
     assert doc["bookmark_count"] == 1
+    # ...and the panel's breakdown of how much of that came from out there.
+    assert doc["fediverse_like_count"] == 1
+    assert doc["fediverse_repost_count"] == 0
     assert doc["fediverse_reaction_count"] == 1
 
     # The HTML names the account and the verb on its chip, so the siblings do
@@ -565,12 +571,15 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert reaction["url"] == "https://social.example/users/alice"
     assert reaction["network"] == "social.example"
 
-    assert rendered.md =~ "Likes: 1"
-    assert rendered.txt =~ "Likes: 1"
+    assert rendered.md =~ "Likes: 2"
+    assert rendered.txt =~ "Likes: 2"
 
     for format <- [rendered.md, rendered.txt] do
       assert format =~ "Reactions from other networks: 1"
       assert format =~ "@alice@social.example liked this"
+      # The same sentence the panel closes with: the split is part of the
+      # counts above, not something to add to them.
+      assert format =~ "Already counted in the numbers above."
     end
   end
 
@@ -684,9 +693,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert [entry] = doc["fediverse_replies"]
     assert entry["handle"] == "@alice@social.example"
     assert entry["url"] == "https://social.example/@alice/9"
-    # Never folded into the vutuv reply figure: this post has no vutuv reply,
-    # and one from another network must not make it look as though it had.
-    assert doc["reply_count"] == 0
+    # A reply is a reply, whichever world wrote it: the HTML reply button counts
+    # this one, so `reply_count` does too. The split stays readable one field
+    # down — `fediverse_reply_count` says how much of it came from out there,
+    # and `replies` (the vutuv ones) is empty.
+    assert doc["reply_count"] == 1
+    assert doc["replies"] == []
 
     assert rendered.md =~ "Replies from other networks: 1"
     assert rendered.txt =~ "Replies from other networks: 1"
