@@ -27,6 +27,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
   alias Vutuv.Isbn
   alias Vutuv.Moderation.ImageScans
@@ -3009,63 +3010,115 @@ defmodule VutuvWeb.PostComponents do
     <.fediverse_line
       :if={@engagement}
       reactions={@engagement.fediverse_reactions}
+      actors={Map.get(@engagement, :fediverse_reaction_actors, [])}
       replies={Map.get(@engagement, :fediverse_replies, 0)}
     />
     """
   end
 
-  # What other networks did with this post (issues #1068 and #1069): labelled
-  # counts on their OWN line under the vutuv counters, never folded into them. A
-  # member who publishes outward otherwise gets no feedback at all, and keeping
-  # the figures separate means a hostile remote server can inflate only its own
-  # line — and the reader can see which world answered. Public, because both are
-  # aggregates with no identity attached; the reply figure counts **public**
-  # replies only, so a note addressed to the member alone (issue #1071) never
-  # moves a number a stranger can read. Renders nothing while both are zero, so
-  # a post nobody out there touched stays clean.
+  # What other networks did with this post (issues #1068 and #1069): its OWN
+  # line under the vutuv counters, never folded into them. A member who
+  # publishes outward otherwise gets no feedback at all, and keeping the figures
+  # separate means a hostile remote server can inflate only its own line — the
+  # reader can see which world answered.
+  #
+  # It **names** the accounts that reacted, one chip each, rather than reporting
+  # a bare number: "1 reaction from other networks" told the author that their
+  # post had travelled somewhere, and nothing whatsoever about where or to whom,
+  # which is not transparency but a rumour. A chip carries the whole stored row
+  # — the account address and the verb — and links out to the account, since
+  # there is no vutuv profile behind it. Public, like the counts always were:
+  # both a favourite and a re-share are acts those networks publish under the
+  # actor's own name, and the reply cards below already name their authors the
+  # same way.
+  #
+  # The reply figure stays a count (the replies themselves render as cards on
+  # the permalink) and counts **public** ones only, so a note addressed to the
+  # member alone (issue #1071) never moves a number a stranger can read.
+  # Renders nothing while everything is zero, so a post nobody out there touched
+  # stays clean.
   attr(:reactions, :integer, required: true)
+  attr(:actors, :list, required: true, doc: "the newest few reaction rows, JSON-decoded")
   attr(:replies, :integer, required: true)
 
   defp fediverse_line(%{reactions: reactions, replies: replies} = assigns)
        when reactions > 0 or replies > 0 do
-    assigns = assign(assigns, :text, fediverse_line_text(reactions, replies))
+    shown = shown_reaction_actors(assigns.actors, reactions)
+
+    assigns =
+      assigns
+      |> assign(:shown, shown)
+      |> assign(:more, reactions - length(shown))
 
     ~H"""
     <div
-      class="mt-2 border-t border-slate-100 pt-2 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400"
+      class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-2 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400"
       data-fediverse-reactions={@reactions}
       data-fediverse-replies={@replies}
     >
-      <span aria-hidden="true" class="mr-1">🌐</span>{@text}
+      <span class="inline-flex items-center gap-1">
+        <span aria-hidden="true">🌐</span>{gettext("From other networks")}
+      </span>
+
+      <a
+        :for={actor <- @shown}
+        href={actor.uri}
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        data-fediverse-reaction={actor.kind}
+        title={reaction_title(actor)}
+        class="inline-flex min-h-8 max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-brand-300"
+      >
+        <%!-- The same two glyphs the vutuv action bar above uses for the same
+              two acts, so "shared" and "favourited" read identically whichever
+              world they came from. --%>
+        <.icon_repost :if={actor.kind == "announce"} class="h-3.5 w-3.5 shrink-0" />
+        <.icon_heart :if={actor.kind != "announce"} filled?={false} class="h-3.5 w-3.5 shrink-0" />
+        <span class="sr-only">{reaction_title(actor)}</span>
+        <span aria-hidden="true" class="break-all">{actor.handle}</span>
+      </a>
+
+      <span :if={@more > 0} data-fediverse-reactions-more={@more}>
+        {gettext("+%{count} more", count: compact_count(@more))}
+      </span>
+
+      <span :if={@replies > 0} class="inline-flex items-center gap-1">
+        <.icon_reply class="h-3.5 w-3.5 shrink-0" />{reply_phrase(@replies)}
+      </span>
     </div>
     """
   end
 
   defp fediverse_line(assigns), do: ~H""
 
-  # One **whole** sentence per case, never a line assembled from fragments: the
-  # figures go in as placeholders so a translator owns the word order (German
-  # would otherwise be at the mercy of where the English happens to put "from
-  # other networks"). The noun phrases are their own ngettext calls, because
-  # only they need the singular/plural split.
-  defp fediverse_line_text(reactions, 0), do: gettext_from_networks(reaction_phrase(reactions))
-  defp fediverse_line_text(0, replies), do: gettext_from_networks(reply_phrase(replies))
+  # The rows the SQL cap handed us (`Vutuv.Posts.engagement_count_select/1`
+  # fetches a few more than a card should show), normalised out of their
+  # JSON string keys. Showing every fetched row when the total fits keeps the
+  # common "one boost" case whole; past that one slot goes to the "+N" tail so
+  # the count and the chips always add up.
+  defp shown_reaction_actors(actors, total) when is_list(actors) do
+    actors = Enum.map(actors, &reaction_actor/1)
 
-  defp fediverse_line_text(reactions, replies) do
-    gettext("%{reactions} and %{replies} from other networks",
-      reactions: reaction_phrase(reactions),
-      replies: reply_phrase(replies)
-    )
+    if total > length(actors), do: Enum.take(actors, length(actors) - 1), else: actors
   end
 
-  defp gettext_from_networks(phrase),
-    do: gettext("%{count} from other networks", count: phrase)
+  defp shown_reaction_actors(_actors, _total), do: []
 
-  defp reaction_phrase(count) do
-    ngettext("%{formatted} reaction", "%{formatted} reactions", count,
-      formatted: compact_count(count)
-    )
+  defp reaction_actor(%{"actor_uri" => uri} = row) do
+    %{
+      uri: uri,
+      kind: row["kind"],
+      handle: Handle.display(row["handle"], uri)
+    }
   end
+
+  # What the chip says to a screen reader and on hover — the sentence the glyph
+  # alone cannot carry.
+  defp reaction_title(%{kind: "announce", handle: handle}),
+    do: gettext("%{handle} shared this", handle: handle)
+
+  defp reaction_title(%{handle: handle}),
+    do: gettext("%{handle} liked this", handle: handle)
 
   defp reply_phrase(count) do
     ngettext("%{formatted} reply", "%{formatted} replies", count, formatted: compact_count(count))

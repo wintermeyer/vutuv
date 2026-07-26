@@ -3,9 +3,10 @@
 People on Mastodon and other ActivityPub servers can follow an opted-in
 member and receive their **public** posts. Federation is outbound-first by
 design, and what comes back is accepted in two tiers, each with its own switch:
-a bare **count** of favourites and re-shares (issue #1068, on by default) and,
-behind a second and deliberately separate opt-in, the **replies** people out
-there write under a member's post (issues #1069 and #1071, off by default). The
+the **favourites and re-shares** people out there give a post, as their account
+address and nothing else (issue #1068, on by default) and, behind a second and
+deliberately separate opt-in, the **replies** they write under it (issues #1069
+and #1071, off by default — that tier stores their words). The
 inbox otherwise processes only `Follow`, `Undo(Follow)`, the remote actor's own
 lifecycle (`Update` / `Delete`) and an author's `Update`/`Delete` of a reply they
 sent us; everything else is acknowledged (202) and dropped. Everything lives in
@@ -99,29 +100,49 @@ every endpoint 404s and nothing is delivered.
 - **Reactions from other networks** (issue #1068, the one inbound thing that is
   stored): a `Like` or `Announce` naming a member's public Note becomes one row
   in `fediverse_reactions` (`Vutuv.Fediverse.Reaction`) — `post_id`,
-  `actor_uri`, `kind`, `received_at` and **nothing else**. No display name, no
-  avatar, no text: vutuv can never obtain consent from a stranger on another
-  server, so what makes this lawful is storing almost nothing about them plus a
-  deletion path that really works. The actor URI earns its place twice over:
-  each person counts once (unique on `(post_id, actor_uri, kind)`) and an
-  upstream `Undo` can find its row. `record_reaction/4` holds every gate in
-  order — the installation switch, the member federates and has not switched
-  the counts off (`users.fediverse_reactions?`, on by default, `/settings/
-  fediverse`; switching it off calls `drop_reactions/1`), the object really is
-  one of *their* public Note URLs, and the sender is within its inbound cap —
-  and the inbox answers the same 202 whatever it decides, so a misdirected
-  activity learns nothing. `remove_reaction/4` is deliberately **un**gated: an
-  upstream withdrawal is the deletion path, so it must not depend on a switch
-  still being on. Rows live exactly as long as the post (FK cascade, so a post
-  delete and an account delete both take them), like a vutuv like; there is no
-  separate expiry. The count rides the existing engagement select
-  (`Vutuv.Posts.engagement_count_select/1` → `:fediverse_reactions`), so it is
-  batched with the other counters, ticks live through `{:post_counters, …}`
-  (`broadcast_post_counters/1`) and reaches `VutuvWeb.AgentDocs.PostDoc` as
-  `fediverse_reaction_count`. It renders as its **own** labelled line under the
-  vutuv counters, never folded into them: a hostile server can then inflate
-  only its own line, and the reader sees which world answered. Public and
-  hidden at zero.
+  `actor_uri`, `handle`, `kind`, `received_at` and **nothing else**. No display
+  name, no avatar, no text: vutuv can never obtain consent from a stranger on
+  another server, so what makes this lawful is storing almost nothing about them
+  plus a deletion path that really works. The two stored identifiers are one and
+  the same account address in two notations — `handle` is the actor document's
+  `preferredUsername`, which the inbox has in hand anyway from the fetch that
+  verifies the signature, so naming the account costs no extra request. The
+  actor URI earns its place three times over: each person counts once (unique on
+  `(post_id, actor_uri, kind)`), an upstream `Undo` finds its row, and the post
+  can say who answered. `record_reaction/4` holds every gate in order — the
+  installation switch, the member federates and has not switched reactions off
+  (`users.fediverse_reactions?`, on by default, `/settings/fediverse`; switching
+  it off calls `drop_reactions/1`), the object really is one of *their* public
+  Note URLs, and the sender is within its inbound cap — and the inbox answers
+  the same 202 whatever it decides, so a misdirected activity learns nothing.
+  `remove_reaction/4` is deliberately **un**gated: an upstream withdrawal is the
+  deletion path, so it must not depend on a switch still being on. Rows live
+  exactly as long as the post (FK cascade, so a post delete and an account
+  delete both take them), like a vutuv like; there is no separate expiry.
+  - The count **and the newest few accounts** ride the existing engagement
+    select (`Vutuv.Posts.engagement_count_select/1` → `:fediverse_reactions`
+    plus a `json_agg` of `:fediverse_reaction_actors`, capped at 4 rows), so
+    both are batched with the other counters, tick live through
+    `{:post_counters, …}` (`broadcast_post_counters/1`) and reach
+    `VutuvWeb.AgentDocs.PostDoc` as `fediverse_reaction_count` and
+    `fediverse_reactions`. The cap lives in SQL so a post with a thousand boosts
+    cannot drag a thousand rows into a feed card; the count stays the true total
+    behind the "+N more" tail.
+  - It renders as its **own** line under the vutuv counters, never folded into
+    them: a hostile server can then inflate only its own line, and the reader
+    sees which world answered. Each account is a chip — the heart or re-share
+    glyph the vutuv action bar uses for the same act, the `@handle@host`
+    (`Vutuv.Fediverse.Handle`, shared with the follower list and the reply
+    cards), linking **out** to the account, since there is no vutuv profile
+    behind it. Public, like the counts always were: both acts are published
+    under the actor's own name on their own server, and the reply cards below
+    already name their authors the same way. Hidden at zero.
+  - A new reaction also **notifies the author** (`fediverse_reaction`, the
+    notification kind shaped exactly like `fediverse_reply`): derived straight
+    from the reaction rows, so an `Undo`, a deleted post or the member switching
+    reactions off deletes the notification with the row and there is no second
+    place that has to remember to forget. Rows merge per post *and* per kind —
+    a favourite and a re-share are different news.
 - **Replies from other networks** (issues #1069 and #1071, the first content
   vutuv stores that its own members did not write): a `Create(Note)` whose
   `inReplyTo` names one of a member's public posts becomes a row in
@@ -340,7 +361,7 @@ every endpoint 404s and nothing is delivered.
 - **The member's two pages.** `/settings/fediverse` answers one question for
   someone who has never heard the word: do I take part at all. Plain-language
   explainer, the three things that happen if you do, the on/off switch, the
-  reaction-count switch, then — once on — the handle (with the shared
+  reactions switch, then — once on — the handle (with the shared
   `data-copy` button, since copying it is the action people come for) and who
   followed. **`/settings/fediverse/move`** holds account migration, **both
   directions on one page** (`Umzug zu vutuv` = the `alsoKnownAs` aliases,
@@ -445,7 +466,7 @@ account.
 
 Because leaving now really does ask other servers to forget the member,
 switching off also **drops their follower rows** (`drop_followers/1`, the
-symmetry `drop_reactions/1` already had for the reaction counts): those servers
+symmetry `drop_reactions/1` already had for the reactions): those servers
 drop the follow at their end, so a kept row would only be a relationship that
 exists nowhere else.
 

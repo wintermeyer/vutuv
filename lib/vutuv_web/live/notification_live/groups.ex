@@ -14,6 +14,8 @@ defmodule VutuvWeb.NotificationLive.Groups do
     * one endorser's **endorsements** - "endorsed you for Elixir and Phoenix."
     * **thread** events of the same thread - "Anna and Ben replied in a
       thread you posted in."
+    * **reactions from other networks** to the same post, per kind -
+      "@anna@chaos.social and @ben@social.example shared your post."
 
   Direct replies, mentions and every rarer kind (moderation, CV updates,
   handle changes, ...) stay one row per event - each carries its own content.
@@ -95,6 +97,12 @@ defmodule VutuvWeb.NotificationLive.Groups do
   defp group_key(%{kind: "thread", root_post_id: root_id}) when is_binary(root_id),
     do: {:thread, root_id}
 
+  # Reactions from other networks merge per post *and per kind*: a favourite and
+  # a re-share are different news, and one row can only carry one verb.
+  defp group_key(%{kind: "fediverse_reaction", post_id: post_id, reaction_kind: reaction_kind})
+       when is_binary(post_id) and is_binary(reaction_kind),
+       do: {:fediverse_reaction, post_id, reaction_kind}
+
   defp group_key(%{kind: "follower"}), do: :follower
   defp group_key(%{kind: "connection"}), do: :connection
   defp group_key(%{kind: "endorsement"} = item), do: {:endorsement, actor_key(item)}
@@ -120,6 +128,10 @@ defmodule VutuvWeb.NotificationLive.Groups do
   defp group_id({:single, id}, _day, _newest), do: id
   defp group_id({:like, post_id}, day, _newest), do: "like-#{post_id}-#{day_key(day)}"
   defp group_id({:thread, root_id}, day, _newest), do: "thread-#{root_id}-#{day_key(day)}"
+
+  defp group_id({:fediverse_reaction, post_id, reaction_kind}, day, _newest),
+    do: "fediverse-reaction-#{reaction_kind}-#{post_id}-#{day_key(day)}"
+
   defp group_id(:follower, day, _newest), do: "follower-#{day_key(day)}"
   defp group_id(:connection, day, _newest), do: "connection-#{day_key(day)}"
 

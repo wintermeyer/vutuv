@@ -52,7 +52,7 @@ defmodule Vutuv.FediverseReactionsTest do
       assert Fediverse.reaction_count(post.id) == 1
     end
 
-    test "stores nothing but the actor, the kind and when it arrived", %{
+    test "stores nothing but the account address, the kind and when it arrived", %{
       user: user,
       post: post,
       note: note
@@ -64,8 +64,52 @@ defmodule Vutuv.FediverseReactionsTest do
       assert row.actor_uri == @actor
       assert row.kind == "like"
       assert row.received_at
-      # The whole schema: no name, no avatar, no text about a third party.
-      assert Reaction.__schema__(:fields) == [:id, :actor_uri, :kind, :received_at, :post_id]
+      # The whole schema: an account address in two notations, and what they
+      # did. Still no display name, no avatar, no text about a third party.
+      assert Reaction.__schema__(:fields) ==
+               [:id, :actor_uri, :handle, :kind, :received_at, :post_id]
+    end
+
+    test "keeps the handle the inbox already fetched, so the post can name them", %{
+      user: user,
+      note: note
+    } do
+      assert :ok =
+               Fediverse.record_reaction(user, note, "announce", %{
+                 uri: @actor,
+                 handle: "alice"
+               })
+
+      assert [%Reaction{} = row] = Repo.all(Reaction)
+      assert row.actor_uri == @actor
+      assert row.handle == "alice"
+      assert Reaction.display_handle(row) == "@alice@social.example"
+    end
+
+    test "names them from the actor URI when the server sent no preferredUsername", %{
+      user: user,
+      note: note
+    } do
+      assert :ok = Fediverse.record_reaction(user, note, "like", %{uri: @actor, handle: nil})
+
+      assert [%Reaction{handle: nil} = row] = Repo.all(Reaction)
+      assert Reaction.display_handle(row) == "@alice@social.example"
+    end
+
+    test "a hostile handle is cut to a column's worth, and the reaction still counts", %{
+      user: user,
+      post: post,
+      note: note
+    } do
+      assert :ok =
+               Fediverse.record_reaction(user, note, "like", %{
+                 uri: @actor,
+                 handle: String.duplicate("a", 300)
+               })
+
+      assert [%Reaction{handle: handle}] = Repo.all(Reaction)
+      assert String.length(handle) == 255
+      assert Fediverse.reaction_count(post.id) == 1
     end
 
     test "ignores a post that is not the addressed member's", %{note: note} do
@@ -190,6 +234,62 @@ defmodule Vutuv.FediverseReactionsTest do
     end
   end
 
+  describe "the author hears about it" do
+    test "a new reaction pushes a notification naming the account and the verb", %{
+      user: user,
+      post: post,
+      note: note
+    } do
+      Vutuv.Activity.subscribe(user.id)
+
+      :ok = Fediverse.record_reaction(user, note, "announce", %{uri: @actor, handle: "alice"})
+
+      assert_receive {:new_notification, n}
+      assert n.kind == "fediverse_reaction"
+      assert n.reaction_kind == "announce"
+      assert n.post_id == post.id
+      assert n.actor_handle == "@alice@social.example"
+      # A stranger with no vutuv profile: linked out to, never into a profile
+      # route that does not exist.
+      assert n.actor_url == @actor
+      assert n.actor_param == nil
+      assert n.actor_avatar == nil
+    end
+
+    test "a redelivery of the same reaction does not ring twice", %{user: user, note: note} do
+      :ok = Fediverse.record_reaction(user, note, "like", @actor)
+
+      Vutuv.Activity.subscribe(user.id)
+      :ok = Fediverse.record_reaction(user, note, "like", @actor)
+
+      refute_receive {:new_notification, _}
+    end
+
+    test "it joins the derived feed and the unread badge", %{user: user, post: post, note: note} do
+      :ok = Fediverse.record_reaction(user, note, "announce", %{uri: @actor, handle: "alice"})
+
+      assert Vutuv.Activity.unread_notification_count(user.id) == 1
+
+      assert %{entries: [entry]} =
+               Vutuv.Activity.notifications_page(user.id, kinds: ["fediverse_reaction"])
+
+      assert entry.kind == "fediverse_reaction"
+      assert entry.reaction_kind == "announce"
+      assert entry.post_id == post.id
+      assert entry.actor_handle == "@alice@social.example"
+    end
+
+    test "taking the reaction back takes its notification with it", %{user: user, note: note} do
+      :ok = Fediverse.record_reaction(user, note, "like", @actor)
+      :ok = Fediverse.remove_reaction(user, note, "like", @actor)
+
+      # The whole point of deriving the feed from the reaction rows: there is no
+      # second place that has to remember to forget.
+      assert Vutuv.Activity.unread_notification_count(user.id) == 0
+      assert %{entries: []} = Vutuv.Activity.notifications_page(user.id)
+    end
+  end
+
   describe "the count reaches the action bar" do
     test "engagement_counts/1 carries it beside the vutuv counters", %{
       user: user,
@@ -212,6 +312,30 @@ defmodule Vutuv.FediverseReactionsTest do
       :ok = Fediverse.record_reaction(user, note, "like", @actor)
 
       assert Posts.post_engagement(post.id, nil).fediverse_reactions == 1
+    end
+
+    test "and the accounts behind it, newest first and capped", %{
+      user: user,
+      post: post,
+      note: note
+    } do
+      for n <- 1..6 do
+        :ok =
+          Fediverse.record_reaction(user, note, "announce", %{
+            uri: "https://social.example/users/fan#{n}",
+            handle: "fan#{n}"
+          })
+      end
+
+      counts = Posts.engagement_counts(post.id)
+
+      # The count stays the true total; only the named rows are capped, so the
+      # card can render "and N more" without a second query.
+      assert counts.fediverse_reactions == 6
+      assert length(counts.fediverse_reaction_actors) == 4
+
+      assert [%{"handle" => "fan6", "kind" => "announce"} | _] =
+               counts.fediverse_reaction_actors
     end
   end
 end

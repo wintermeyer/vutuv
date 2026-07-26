@@ -30,6 +30,8 @@ defmodule Vutuv.Fediverse.Note do
 
   use VutuvWeb, :model
 
+  alias Vutuv.Fediverse.Handle
+
   @audiences ~w(public followers direct unknown)
 
   # Remote URIs are unbounded in theory. Cap them in **bytes**, because
@@ -92,26 +94,14 @@ defmodule Vutuv.Fediverse.Note do
 
   @doc """
   How the card names the author: `@handle@host`, the form every one of these
-  networks uses. Falls back to the bare host when the remote document carried no
-  `preferredUsername`.
+  networks uses. Shared with the follower list and the reaction chips
+  (`Vutuv.Fediverse.Handle`), so one person reads the same way everywhere.
   """
-  def display_handle(%__MODULE__{handle: handle, actor_uri: actor_uri}) do
-    case {handle, host(actor_uri)} do
-      {_, nil} -> handle
-      {nil, host} -> "@#{host}"
-      {handle, host} -> "@#{handle}@#{host}"
-    end
-  end
+  def display_handle(%__MODULE__{handle: handle, actor_uri: actor_uri}),
+    do: Handle.display(handle, actor_uri)
 
   @doc "The server this note came from, for the card's footer and the ledger."
-  def host(uri) when is_binary(uri) do
-    case URI.parse(uri) do
-      %URI{host: host} when is_binary(host) and host != "" -> host
-      _ -> nil
-    end
-  end
-
-  def host(_), do: nil
+  defdelegate host(uri), to: Handle
 
   @doc "Where a human reads the original: the note's own page, or its id."
   def origin(%__MODULE__{origin_url: url}) when is_binary(url) and url != "", do: url

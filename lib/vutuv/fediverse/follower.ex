@@ -16,6 +16,8 @@ defmodule Vutuv.Fediverse.Follower do
 
   use VutuvWeb, :model
 
+  alias Vutuv.Fediverse.Handle
+
   # Remote URIs are unbounded in theory; cap generously (they are `text`
   # columns) so a hostile payload cannot store megabytes.
   @max_uri 2_048
@@ -52,15 +54,13 @@ defmodule Vutuv.Fediverse.Follower do
   end
 
   @doc """
-  The `@user@host` Fediverse handle to show the member. Uses the captured
-  `handle` (the remote `preferredUsername`) when present, else the last path
-  segment of the actor URI; the host is always the actor URI's host. This is a
-  best-effort display label — the linked `actor_uri` is the canonical target.
+  The `@user@host` Fediverse handle to show the member. A best-effort display
+  label — the linked `actor_uri` is the canonical target — built by the shared
+  `Vutuv.Fediverse.Handle`, so a follower, a reply and a reaction never write
+  the same person two different ways on one page.
   """
-  def display_handle(%__MODULE__{actor_uri: actor_uri} = follower) do
-    uri = URI.parse(actor_uri)
-    "@#{follower.handle || derive_username(uri)}@#{uri.host}"
-  end
+  def display_handle(%__MODULE__{actor_uri: actor_uri} = follower),
+    do: Handle.display(follower.handle, actor_uri)
 
   @doc """
   The remote server this follower lives on, as the follower browser's Server
@@ -72,13 +72,5 @@ defmodule Vutuv.Fediverse.Follower do
       nil -> ""
       host -> String.downcase(host)
     end
-  end
-
-  defp derive_username(%URI{path: path}) do
-    (path || "")
-    |> String.split("/", trim: true)
-    |> List.last()
-    |> to_string()
-    |> String.trim_leading("@")
   end
 end

@@ -25,6 +25,21 @@ defmodule VutuvWeb.PostControllerTest do
 
   defp pad(int), do: String.pad_leading(Integer.to_string(int), 2, "0")
 
+  # One reaction from another network, written straight to the table: these
+  # tests are about what the page *shows*, not about the inbox gates that put
+  # the row there (`Vutuv.FediverseReactionsTest` owns those). `handle: nil`
+  # stands for a server that sent no preferredUsername, and for every row
+  # stored before the column existed.
+  defp remote_reaction!(post, name, kind, opts \\ []) do
+    Repo.insert!(%Vutuv.Fediverse.Reaction{
+      post_id: post.id,
+      actor_uri: "https://social.example/users/#{name}",
+      handle: Keyword.get(opts, :handle, name),
+      kind: kind,
+      received_at: DateTime.utc_now(:second)
+    })
+  end
+
   # Where `text` first shows up in the rendered page — how the thread tests
   # assert reading order without parsing the whole card tree.
   defp position(html, text) do
@@ -1009,26 +1024,49 @@ defmodule VutuvWeb.PostControllerTest do
       refute html =~ "data-fediverse-reactions"
     end
 
-    test "reactions from other networks show as their own labelled line (#1068)", %{conn: conn} do
+    test "reactions from other networks name who reacted and what they did (#1068)", %{
+      conn: conn
+    } do
       user = insert_activated_user()
       post = create_post!(user, %{body: "travelled"})
 
-      for actor <- ["alice", "bob"] do
-        Repo.insert!(%Vutuv.Fediverse.Reaction{
-          post_id: post.id,
-          actor_uri: "https://social.example/users/#{actor}",
-          kind: "like",
-          received_at: DateTime.utc_now(:second)
-        })
-      end
+      remote_reaction!(post, "alice", "announce")
+      remote_reaction!(post, "bob", "like", handle: nil)
 
       html = html_response(get(conn, Posts.path(post)), 200)
 
       assert html =~ ~s(data-fediverse-reactions="2")
-      assert html =~ "reactions from other networks"
+      assert html =~ "From other networks"
+
+      # Each account is named and links out to itself — there is no vutuv
+      # profile behind it — and the verb rides along, so a boost and a
+      # favourite do not read as the same event.
+      assert html =~ ~s(href="https://social.example/users/alice")
+      assert html =~ ~s(data-fediverse-reaction="announce")
+      assert html =~ "@alice@social.example shared this"
+      # A server that sent no preferredUsername still gets a usable name out of
+      # its account URI (rows stored before the handle was kept, too).
+      assert html =~ ~s(data-fediverse-reaction="like")
+      assert html =~ "@bob@social.example liked this"
+
       # Its own line, never folded into the vutuv counters: nobody here liked
       # or reposted, so those counters must show no 2 of their own.
       refute html =~ ~r/data-count="(like|repost)">\s*2\s*</
+    end
+
+    test "a much-shared post names a few and counts the rest (#1068)", %{conn: conn} do
+      user = insert_activated_user()
+      post = create_post!(user, %{body: "went far"})
+
+      for n <- 1..9, do: remote_reaction!(post, "fan#{n}", "announce")
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      assert html =~ ~s(data-fediverse-reactions="9")
+      # Three named chips plus a tail, so the card cannot grow without bound and
+      # the named ones and the tail still add up to the real total.
+      assert length(Regex.scan(~r/data-fediverse-reaction="/, html)) == 3
+      assert html =~ ~s(data-fediverse-reactions-more="6")
     end
 
     test "the archive lists the author's reposts with the reposted-by line", %{conn: conn} do

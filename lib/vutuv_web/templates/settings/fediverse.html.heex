@@ -63,16 +63,19 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
           )}
         </.setting_toggle>
 
-        <%!-- Reaction counts (issue #1068): the answer coming back. Only
-              meaningful once posts are actually going out, so it shows with the
-              rest of the "you are taking part" block. --%>
+        <%!-- Reactions (issue #1068): the answer coming back. Only meaningful
+              once posts are actually going out, so it shows with the rest of
+              the "you are taking part" block. The wording names what is stored
+              about a stranger, because that is the part a member is deciding
+              about — and it has to stay true to the line under the post, which
+              names those accounts rather than merely counting them. --%>
         <.setting_toggle
           :if={Vutuv.Fediverse.federated?(@user)}
-          label={gettext("Count reactions from other networks")}
+          label={gettext("Show reactions from other networks")}
         >
           <:checkbox><%= checkbox f, :fediverse_reactions?, class: checkbox_class() %></:checkbox>
           {gettext(
-            "Show under each of your posts how many people out there liked or shared it. A number only, visible to everyone who sees the post. Switching it off deletes what is stored for it."
+            "Show under each of your posts who out there liked or shared it, by their account address on their own server, linked to that account. Visible to everyone who sees the post. We keep nothing else about these people: no name, no picture, no text. Switching it off deletes what is stored for it."
           )}
         </.setting_toggle>
 

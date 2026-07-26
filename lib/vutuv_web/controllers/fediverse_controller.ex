@@ -180,14 +180,17 @@ defmodule VutuvWeb.FediverseController do
   end
 
   # Somebody on another network favourited (`Like`) or re-shared (`Announce`)
-  # one of the member's public posts (issue #1068). Stored as a bare counter
-  # row — no name, no text, no picture — so the member sees that their post
-  # travelled. Every gate lives in `Fediverse.record_reaction/4`; whatever it
-  # decides, the answer is the same 202, so a misdirected activity never tells
-  # the sender which of the conditions it failed.
+  # one of the member's public posts (issue #1068). Stored as their account
+  # address and what they did — no display name, no text, no picture — so the
+  # member sees that their post travelled and by whom. The handle rides along
+  # from the actor document this request already fetched to check the
+  # signature, so naming them costs no second request. Every gate lives in
+  # `Fediverse.record_reaction/4`; whatever it decides, the answer is the same
+  # 202, so a misdirected activity never tells the sender which of the
+  # conditions it failed.
   defp perform(conn, user, %{"type" => type, "object" => object}, remote)
        when type in ["Like", "Announce"] do
-    Fediverse.record_reaction(user, object, reaction_kind(type), remote.id)
+    Fediverse.record_reaction(user, object, reaction_kind(type), reacting_actor(remote))
     send_resp(conn, 202, "")
   end
 
@@ -268,6 +271,14 @@ defmodule VutuvWeb.FediverseController do
   # its inbox spares the reply path a network call). No avatar — the card
   # renders initials and links out, so vutuv never hosts a third party's
   # picture.
+  # A reaction keeps the account address alone: the URI and the same address in
+  # the `@handle@host` notation. Deliberately not `remote_author/1` — a
+  # favourite is not a text somebody wrote, so their display name has no job
+  # here.
+  defp reacting_actor(remote) do
+    %{uri: remote.id, handle: remote.preferred_username}
+  end
+
   defp remote_author(remote) do
     %{
       uri: remote.id,

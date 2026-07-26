@@ -281,7 +281,10 @@ defmodule VutuvWeb.SettingsControllerTest do
       html = conn |> get(~p"/settings/fediverse") |> html_response(200)
 
       assert html =~ ~s(name="user[fediverse_reactions?]")
-      assert html =~ "Count reactions from other networks"
+      assert html =~ "Show reactions from other networks"
+      # The copy has to stay true to the line under the post, which names the
+      # accounts rather than merely counting them.
+      assert html =~ "who out there liked or shared it"
     end
 
     test "the switch is hidden until the member federates", %{conn: conn, user: user} do

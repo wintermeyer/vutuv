@@ -97,8 +97,10 @@ defmodule VutuvWeb.PostLive.ActionBar do
               replies: replies,
               # Issues #1068 and #1069: a reaction or a reply from another
               # network arrives without any viewer of ours acting, so this is the
-              # only path that updates the two remote figures.
+              # only path that updates the two remote figures — and, since the
+              # reactions line names the accounts behind them, the chips too.
               fediverse_reactions: payload.fediverse_reactions,
+              fediverse_reaction_actors: payload.fediverse_reaction_actors,
               fediverse_replies: payload.fediverse_replies
           })
         end

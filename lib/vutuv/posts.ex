@@ -1045,6 +1045,30 @@ defmodule Vutuv.Posts do
             "(SELECT count(*) FROM fediverse_reactions fr WHERE fr.post_id = ?)",
             unquote(post).id
           ),
+        # ...and WHO they were. A bare number told the author nothing: their
+        # post had travelled somewhere and there was no way to see where or to
+        # whom (issue #1068 shipped the count alone). Each entry is the stored
+        # account address and the verb, which is the whole row — there is
+        # nothing else about these people to show.
+        #
+        # Capped here rather than in the renderer: a post with a thousand boosts
+        # must not drag a thousand rows into every feed card, and the count
+        # above already carries the true total for the "+N more" tail. Rides the
+        # engagement select so it is batched with the counters, reaches the
+        # `{:post_counters, …}` broadcast, and needs no second round trip on any
+        # page that already loads engagement.
+        fediverse_reaction_actors:
+          fragment(
+            """
+            (SELECT coalesce(json_agg(a ORDER BY a.received_at DESC, a.id DESC), '[]'::json)
+               FROM (SELECT fr.id, fr.kind, fr.actor_uri, fr.handle, fr.received_at
+                       FROM fediverse_reactions fr
+                      WHERE fr.post_id = ?
+                      ORDER BY fr.received_at DESC, fr.id DESC
+                      LIMIT 4) a)
+            """,
+            unquote(post).id
+          ),
         # Replies written on other networks (issue #1069), on their own figure
         # for the same reason. **Public ones only**: a reply addressed to the
         # member alone (issue #1071) must not move a number anybody else can
@@ -1071,6 +1095,7 @@ defmodule Vutuv.Posts do
         reposts: 0,
         replies: 0,
         fediverse_reactions: 0,
+        fediverse_reaction_actors: [],
         fediverse_replies: 0
       }
   end

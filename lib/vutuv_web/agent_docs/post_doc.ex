@@ -12,6 +12,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
@@ -83,6 +84,10 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # Favourites and re-shares from OTHER networks (issue #1068), the same
       # separate figure the HTML shows on its own line under the vutuv counters.
       fediverse_reaction_count: engagement.fediverse_reactions,
+      # ...and the accounts behind the newest few of them, exactly the chips the
+      # HTML line names — same rows, same cap, so the two cannot drift. The
+      # count above stays the true total.
+      fediverse_reactions: reaction_entries(engagement),
       fediverse_reply_count: engagement.fediverse_replies,
       # The replies written on other networks that the HTML thread weaves in
       # (issue #1069). **Public ones only, on every path** — note the hardcoded
@@ -193,6 +198,24 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
         received_at: note.received_at,
         content_warning: note.summary,
         text: note.content_text
+      }
+    end)
+  end
+
+  # One reaction from another network as a doc entry: the account address in
+  # both notations and what they did. That is the entire stored row — there is
+  # no name, no avatar and no text to add.
+  defp reaction_entries(engagement) do
+    engagement
+    |> Map.get(:fediverse_reaction_actors, [])
+    |> List.wrap()
+    |> Enum.map(fn row ->
+      %{
+        handle: Handle.display(row["handle"], row["actor_uri"]),
+        network: Handle.host(row["actor_uri"]),
+        url: row["actor_uri"],
+        kind: row["kind"],
+        received_at: row["received_at"]
       }
     end)
   end

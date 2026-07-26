@@ -170,7 +170,7 @@ defmodule VutuvWeb.AccountEventText do
   def field_label("cv_update_notifications?"), do: gettext("CV update notifications")
   def field_label("thread_notifications?"), do: gettext("Thread notifications")
   def field_label("fediverse_followers?"), do: gettext("Fediverse participation")
-  def field_label("fediverse_reactions?"), do: gettext("Fediverse reaction counts")
+  def field_label("fediverse_reactions?"), do: gettext("Fediverse reactions")
   def field_label("fediverse_replies?"), do: gettext("Fediverse replies")
   def field_label("also_known_as_input"), do: gettext("Fediverse aliases")
 

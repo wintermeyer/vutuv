@@ -526,13 +526,15 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     :ok = Vutuv.Posts.repost_post(fan, post)
     :ok = Vutuv.Posts.bookmark_post(fan, post)
 
-    # A favourite from another network (issue #1068): its own figure, so the
-    # `.json` sibling must carry the same number the HTML line shows. Written
-    # straight to the table — the inbox rules that put it there are the
-    # Fediverse tests' business, this one is about what the formats render.
+    # A favourite from another network (issue #1068): its own figure AND the
+    # account behind it, both of which the HTML line shows, so both must reach
+    # the siblings. Written straight to the table — the inbox rules that put it
+    # there are the Fediverse tests' business, this one is about what the
+    # formats render.
     Vutuv.Repo.insert!(%Vutuv.Fediverse.Reaction{
       post_id: post.id,
       actor_uri: "https://social.example/users/alice",
+      handle: "alice",
       kind: "like",
       received_at: DateTime.utc_now(:second)
     })
@@ -555,10 +557,21 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert doc["bookmark_count"] == 1
     assert doc["fediverse_reaction_count"] == 1
 
+    # The HTML names the account and the verb on its chip, so the siblings do
+    # too — a reader of the `.md` learns exactly what a reader of the page does.
+    assert [%{"handle" => "@alice@social.example", "kind" => "like"} = reaction] =
+             doc["fediverse_reactions"]
+
+    assert reaction["url"] == "https://social.example/users/alice"
+    assert reaction["network"] == "social.example"
+
     assert rendered.md =~ "Likes: 1"
     assert rendered.txt =~ "Likes: 1"
-    assert rendered.md =~ "Reactions from other networks: 1"
-    assert rendered.txt =~ "Reactions from other networks: 1"
+
+    for format <- [rendered.md, rendered.txt] do
+      assert format =~ "Reactions from other networks: 1"
+      assert format =~ "@alice@social.example liked this"
+    end
   end
 
   # Issue #1104. The rule these three assert together: an agent format shows

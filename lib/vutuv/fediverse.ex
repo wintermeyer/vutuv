@@ -783,23 +783,45 @@ defmodule Vutuv.Fediverse do
   else is `:skip` — the inbox acknowledges and drops it either way, so a
   misdirected activity never tells the sender what happened.
 
+  `actor` is the remote actor as `%{uri:, handle:}` (the inbox has the fetched
+  document in hand), or a bare URI string when there is no handle to keep.
+
   Broadcasts the post's counters afterwards, so an open action bar ticks over
-  without a reload.
+  without a reload, and tells the author — a favourite or a boost from out
+  there is news exactly like a vutuv like, and until it notified nothing the
+  count simply crept up unseen.
   """
-  def record_reaction(%User{} = user, object, kind, actor_uri) when kind in ~w(like announce) do
+  def record_reaction(%User{} = user, object, kind, actor) when kind in ~w(like announce) do
+    %{uri: actor_uri} = actor = actor_attrs(actor)
+
     with true <- enabled?(),
          true <- federated?(user),
          true <- user.fediverse_reactions?,
          %Post{} = post <- resolve_own_note(user, object),
          false <- Posts.restricted?(post),
          :ok <- check_inbound_cap(actor_uri),
-         {:ok, _} <- insert_reaction(post, actor_uri, kind) do
+         {:ok, reaction} <- insert_reaction(post, actor, kind) do
       Posts.broadcast_post_counters(post.id)
+      notify_reaction(user, post, reaction)
       :ok
     else
       _ -> :skip
     end
   end
+
+  # Both call shapes as one map. A bare URI is what an `Undo` and the tests
+  # carry; the inbox passes the actor document's `preferredUsername` along.
+  defp actor_attrs(uri) when is_binary(uri), do: %{uri: uri, handle: nil}
+  defp actor_attrs(%{uri: uri} = actor), do: %{uri: uri, handle: actor[:handle]}
+  defp actor_attrs(other), do: %{uri: other, handle: nil}
+
+  # Only a genuinely new row is news: a redelivery of a Like we already hold
+  # must not ring the bell a second time (`insert_reaction/3` reports it as
+  # `:exists`).
+  defp notify_reaction(user, post, %Reaction{} = reaction),
+    do: Activity.notify_fediverse_reaction(user, post, reaction)
+
+  defp notify_reaction(_user, _post, :exists), do: :ok
 
   @doc """
   Removes a reaction the remote side took back (`Undo(Like)` / `Undo(Announce)`).
@@ -844,15 +866,47 @@ defmodule Vutuv.Fediverse do
     count
   end
 
-  defp insert_reaction(post, actor_uri, kind) do
-    %Reaction{post_id: post.id}
-    |> Reaction.changeset(%{
-      actor_uri: actor_uri,
-      kind: kind,
-      received_at: DateTime.utc_now(:second)
-    })
-    |> Repo.insert(on_conflict: :nothing, conflict_target: [:post_id, :actor_uri, :kind])
+  # Validated by the changeset, written by `insert_all` — because the caller
+  # has to know whether this delivery was *new*. `Repo.insert(on_conflict:
+  # :nothing)` cannot say: the v7 id is minted in Elixir, so the struct it hands
+  # back looks identical whether the row landed or collided. `insert_all`'s row
+  # count is the honest answer, and `:exists` is what keeps a redelivery from
+  # notifying twice.
+  defp insert_reaction(post, actor, kind) do
+    changeset =
+      %Reaction{post_id: post.id}
+      |> Reaction.changeset(%{
+        actor_uri: actor.uri,
+        # Cosmetic, remote-supplied and hostile: cut it to a column's worth
+        # rather than lose the whole reaction to an over-long one.
+        handle: truncate_handle(actor.handle),
+        kind: kind,
+        received_at: DateTime.utc_now(:second)
+      })
+
+    with {:ok, reaction} <- Ecto.Changeset.apply_action(changeset, :insert) do
+      row = %{
+        id: UUIDv7.generate(),
+        post_id: post.id,
+        actor_uri: reaction.actor_uri,
+        handle: reaction.handle,
+        kind: reaction.kind,
+        received_at: reaction.received_at
+      }
+
+      case Repo.insert_all(Reaction, [row],
+             on_conflict: :nothing,
+             conflict_target: [:post_id, :actor_uri, :kind],
+             returning: true
+           ) do
+        {0, _} -> {:ok, :exists}
+        {1, [inserted]} -> {:ok, inserted}
+      end
+    end
   end
+
+  defp truncate_handle(handle) when is_binary(handle), do: String.slice(handle, 0, 255)
+  defp truncate_handle(_handle), do: nil
 
   # The post behind an activity's `object`, but only when it is a Note URL we
   # serve for *this* member. A URL naming somebody else's post, a foreign host,

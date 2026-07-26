@@ -39,6 +39,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Activity.NotificationPostRead
   alias Vutuv.Engagement
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.Reaction
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Organizations.Organization
@@ -443,6 +444,34 @@ defmodule Vutuv.Activity do
   end
 
   @doc ~S"""
+  Convenience: a "favourited / shared your post from another network"
+  notification (issue #1068) — the answer coming back from Mastodon and its
+  kin, now stored as a `Vutuv.Fediverse.Reaction`.
+
+  Same shape as `notify_fediverse_reply/3`, and for the same reason: the live
+  push only, with the reaction row itself as the durable half that
+  `fediverse_reaction_items/3` derives the feed entry from. An upstream `Undo`
+  deletes the row, and the notification goes with it — there is no second place
+  that has to remember to forget.
+
+  `reaction_kind` rides along because the sentence turns on it: a favourite and
+  a re-share are not the same news.
+  """
+  def notify_fediverse_reaction(%User{} = user, post, reaction) do
+    notify(
+      user.id,
+      Map.merge(remote_actor_fields(reaction), %{
+        kind: "fediverse_reaction",
+        text: "reacted to your post from another network.",
+        post_id: post.id,
+        reaction_id: reaction.id,
+        reaction_kind: reaction.kind,
+        at: reaction.received_at
+      })
+    )
+  end
+
+  @doc ~S"""
   Convenience: a "mentioned you in a post" notification for a member the post's
   body names by `@handle`. `post_id` is that post — written by the actor, not by
   the recipient, so the row links it under the **author's** profile.
@@ -613,6 +642,7 @@ defmodule Vutuv.Activity do
       {"thread", &thread_items(user_id, &1, &2)},
       {"mention", &mention_items(user_id, &1, &2)},
       {"fediverse_reply", &fediverse_reply_items(user_id, &1, &2)},
+      {"fediverse_reaction", &fediverse_reaction_items(user_id, &1, &2)},
       {"like", &like_items(user_id, &1, &2)},
       {"organization_role", &organization_role_items(user_id, &1, &2)},
       {"moderation", &moderation_items(user_id, &1, &2)},
@@ -722,6 +752,7 @@ defmodule Vutuv.Activity do
       {"thread", count_thread_replies(user_id, read_at, unread?)},
       {"mention", count_mentions(user_id, read_at, unread?)},
       {"fediverse_reply", count_fediverse_replies(user_id, read_at)},
+      {"fediverse_reaction", count_fediverse_reactions(user_id, read_at)},
       {"like", count_likes(user_id, read_at)},
       {"organization_role", count_organization_roles(user_id, read_at)},
       {"cv_update", count_cv_updates(user_id, read_at)},
@@ -953,6 +984,50 @@ defmodule Vutuv.Activity do
     user_id
     |> fediverse_reply_events()
     |> select([note: n], %{count: count()})
+    |> note_since(read_at)
+  end
+
+  # Favourites and re-shares from other networks (issue #1068), sourced straight
+  # from the reaction rows for the same reason the replies are: an upstream
+  # `Undo`, a deleted post or a member switching the counts off deletes the row,
+  # and the notification goes with it.
+  defp fediverse_reaction_items(user_id, limit, cursor) do
+    user_id
+    |> fediverse_reaction_events()
+    |> order_by([note: r], desc: r.received_at, desc: r.id)
+    |> limit(^limit)
+    |> select([note: r], r)
+    |> note_at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn reaction ->
+      reaction
+      |> remote_actor_fields()
+      |> Map.merge(%{
+        id: "fediverse_reaction-#{reaction.id}",
+        kind: "fediverse_reaction",
+        at: DateTime.to_naive(reaction.received_at),
+        post_id: reaction.post_id,
+        reaction_id: reaction.id,
+        reaction_kind: reaction.kind
+      })
+    end)
+  end
+
+  # Named `:note` like the reply source so both share `note_at_or_before/2` and
+  # `note_since/2` — the same `received_at` boundary conversion, one copy.
+  defp fediverse_reaction_events(user_id) do
+    from(r in Reaction,
+      as: :note,
+      join: p in Post,
+      on: p.id == r.post_id,
+      where: p.user_id == ^user_id
+    )
+  end
+
+  defp count_fediverse_reactions(user_id, read_at) do
+    user_id
+    |> fediverse_reaction_events()
+    |> select([note: r], %{count: count()})
     |> note_since(read_at)
   end
 
@@ -1305,6 +1380,21 @@ defmodule Vutuv.Activity do
       actor_avatar: nil,
       actor_handle: Note.display_handle(note),
       actor_url: note.actor_uri
+    }
+  end
+
+  # A reaction knows no display name (we deliberately never stored one), so the
+  # `@handle@host` is both the name and the handle.
+  defp remote_actor_fields(%Reaction{} = reaction) do
+    handle = Reaction.display_handle(reaction)
+
+    %{
+      actor_id: nil,
+      actor_name: handle,
+      actor_param: nil,
+      actor_avatar: nil,
+      actor_handle: handle,
+      actor_url: reaction.actor_uri
     }
   end
 

@@ -15,7 +15,9 @@ defmodule VutuvWeb.PostActionsLiveTest do
   import Phoenix.LiveViewTest
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Fediverse
   alias Vutuv.Posts
+  alias VutuvWeb.Fediverse.Docs
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
@@ -388,6 +390,43 @@ defmodule VutuvWeb.PostActionsLiveTest do
       {:ok, _} = Posts.delete_post(post)
       _ = :sys.get_state(bar.pid)
       refute render(bar) =~ ~s(phx-click="toggle")
+    end
+  end
+
+  describe "reactions from other networks (#1068)" do
+    # A favourite or a boost arrives with nobody here clicking anything, so the
+    # counter broadcast is the *only* path that can update an open bar — and
+    # since the line names the accounts, the chips have to ride it too, not just
+    # the number.
+    test "a reaction landing while the page is open names its account live" do
+      user = insert(:activated_user, fediverse_followers?: true)
+      post = create_post!(user, %{body: "waiting for the world"})
+
+      {:ok, bar, html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Actions,
+          session: %{
+            "post_id" => post.id,
+            "id" => "post-actions-#{post.id}",
+            "locale" => "en"
+          }
+        )
+
+      refute html =~ "data-fediverse-reactions"
+
+      :ok =
+        Fediverse.record_reaction(
+          user,
+          Docs.note_url(user, post.id),
+          "announce",
+          %{uri: "https://social.example/users/alice", handle: "alice"}
+        )
+
+      _ = :sys.get_state(bar.pid)
+      html = render(bar)
+
+      assert html =~ ~s(data-fediverse-reactions="1")
+      assert html =~ "@alice@social.example"
+      assert html =~ ~s(data-fediverse-reaction="announce")
     end
   end
 

@@ -912,7 +912,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
       count ->
         vutuv_counts <>
-          " · " <> gettext("Reactions from other networks") <> ": #{count}"
+          " · " <>
+          gettext("Reactions from other networks") <> ": #{count}#{reaction_names(doc)}"
     end
     |> then(fn line ->
       case doc[:fediverse_reply_count] || 0 do
@@ -921,6 +922,21 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       end
     end)
   end
+
+  # The accounts behind those reactions, the same ones the HTML line names as
+  # chips. Parenthesised after the count so the figure stays first and a doc for
+  # a post nobody reacted to is unchanged.
+  defp reaction_names(doc) do
+    case doc[:fediverse_reactions] || [] do
+      [] -> ""
+      entries -> " (" <> Enum.map_join(entries, ", ", &reaction_name/1) <> ")"
+    end
+  end
+
+  defp reaction_name(%{kind: "announce", handle: handle}),
+    do: gettext("%{handle} shared this", handle: handle)
+
+  defp reaction_name(%{handle: handle}), do: gettext("%{handle} liked this", handle: handle)
 
   @doc """
   The post's review sidecar as one fact line (what the HTML review card

@@ -74,7 +74,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # `kinds:` option keeps. "all" passes nil (every source).
   @filters %{
     "all" => nil,
-    "posts" => ~w(reply thread mention like fediverse_reply),
+    "posts" => ~w(reply thread mention like fediverse_reply fediverse_reaction),
     "people" => ~w(follower connection endorsement),
     "other" =>
       ~w(organization_role moderation image_rejected report_protection handle_change cv_update
@@ -863,7 +863,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # Event kinds that share the brand badge colour, so the class string lives
   # in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply)
+  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction)
 
   defp kind_classes("endorsement"),
     do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -894,6 +894,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   # A reply written on another network (issue #1069) — the same globe the
   # post card's "from other networks" line uses, so one glyph means one thing.
   defp kind_glyph("fediverse_reply"), do: "🌐"
+  # A favourite or a re-share from out there (issue #1068) — same globe, since
+  # "this came from another network" is the one thing the glyph has to say; the
+  # sentence beside it names the verb.
+  defp kind_glyph("fediverse_reaction"), do: "🌐"
   # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
   defp kind_glyph("connection"), do: "🤝"
   defp kind_glyph("moderation"), do: "⚑"
@@ -915,6 +919,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("mention"), do: gettext("Mention")
   defp kind_label("like"), do: gettext("Like")
   defp kind_label("fediverse_reply"), do: gettext("Reply from another network")
+  defp kind_label("fediverse_reaction"), do: gettext("Reaction from another network")
   defp kind_label("connection"), do: gettext("Connection")
   defp kind_label("moderation"), do: gettext("Moderation")
   defp kind_label("image_rejected"), do: gettext("Image review")
@@ -950,7 +955,37 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp group_text(%{kind: "thread", actor_count: count}), do: thread_text(count)
 
+  defp group_text(%{kind: "fediverse_reaction", actor_count: count, item: item}),
+    do: fediverse_reaction_text(item[:reaction_kind], count)
+
   defp group_text(%{item: item}), do: notification_text(item)
+
+  # German conjugates the verb across the actor count (hat/haben) where English
+  # does not, so both branches go through ngettext even when the two English
+  # forms read the same — the same trick `thread_text/1` uses.
+  defp fediverse_reaction_text("announce", count) do
+    ngettext(
+      "shared your post on another network.",
+      "shared your post on another network.",
+      count
+    )
+  end
+
+  defp fediverse_reaction_text("like", count) do
+    ngettext(
+      "liked your post on another network.",
+      "liked your post on another network.",
+      count
+    )
+  end
+
+  defp fediverse_reaction_text(_kind, count) do
+    ngettext(
+      "reacted to your post from another network.",
+      "reacted to your post from another network.",
+      count
+    )
+  end
 
   # The English tail is number-blind ("A and B replied in..."), but German
   # conjugates the verb (hat/haben), so the actor count goes through ngettext
@@ -1042,7 +1077,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # vutuv unless they choose otherwise, and a private reply (issue #1071) has no
   # public page to open anyway.
   defp primary_target(%{kind: kind} = n, viewer)
-       when kind in ["reply", "like", "fediverse_reply"] do
+       when kind in ["reply", "like", "fediverse_reply", "fediverse_reaction"] do
     if is_binary(n[:post_id]) and viewer != nil, do: ~p"/#{viewer}/posts/#{n.post_id}"
   end
 
@@ -1064,6 +1099,12 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp notification_text(%{kind: "fediverse_reply"}),
     do: gettext("replied to your post from another network.")
+
+  # Live-pushed reactions land here (no group context yet): one actor. The verb
+  # is the whole point of the news, so `fediverse_reaction_text/2` owns both
+  # sentences and this and the grouped row share them.
+  defp notification_text(%{kind: "fediverse_reaction"} = n),
+    do: fediverse_reaction_text(n[:reaction_kind], 1)
 
   # Live-pushed thread events land here (no group context yet): one actor.
   defp notification_text(%{kind: "thread"}), do: thread_text(1)

@@ -861,6 +861,76 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
   end
 
+  describe "reactions from other networks (#1068)" do
+    # Written straight to the table: the inbox gates are the Fediverse tests'
+    # business, this is about the row the reader gets.
+    defp remote_reaction!(post, name, kind) do
+      Vutuv.Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: post.id,
+        actor_uri: "https://social.example/users/#{name}",
+        handle: name,
+        kind: kind,
+        received_at: DateTime.utc_now(:second)
+      })
+    end
+
+    test "a boost names the account and says what they did", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "went out into the world"})
+      remote_reaction!(post, "alice", "announce")
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert length(row_ids(html, "fediverse_reaction")) == 1
+      assert html =~ "@alice@social.example"
+      assert html =~ "shared your post on another network."
+      # It opens the reader's own post, where the line naming them sits — not
+      # the remote copy, which they can still reach from the chip there.
+      assert has_element?(live, ~s(a[href="/#{user.username}/posts/#{post.id}"]))
+    end
+
+    test "a favourite and a boost of one post stay two rows", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "two kinds of answer"})
+      remote_reaction!(post, "alice", "announce")
+      remote_reaction!(post, "bob", "like")
+
+      html = render_the_page(conn)
+
+      # Same post, same day, but a re-share and a favourite are different news,
+      # so they must not merge into one sentence.
+      assert length(row_ids(html, "fediverse_reaction")) == 2
+      assert html =~ "shared your post on another network."
+      assert html =~ "liked your post on another network."
+    end
+
+    test "same-day boosts of one post merge into a single row", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "much shared"})
+      for name <- ~w(alice bob carol), do: remote_reaction!(post, name, "announce")
+
+      html = render_the_page(conn)
+
+      assert length(row_ids(html, "fediverse_reaction")) == 1
+      assert html =~ "and 1 more"
+    end
+
+    test "the posts filter tab keeps them", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      remote_reaction!(create_post!(user, %{body: "filtered"}), "alice", "like")
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+
+      assert length(row_ids(render(live), "fediverse_reaction")) == 1
+    end
+
+    defp render_the_page(conn) do
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      render(live)
+    end
+  end
+
   describe "pagination" do
     # The page size is 50 raw events; a day's followers group into ONE row, so
     # the rows are counted through the grouped row's overflow label ("and N
