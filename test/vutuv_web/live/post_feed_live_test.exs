@@ -1213,8 +1213,8 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert html =~ "float-right"
       assert html =~ "post-clamp--wrap"
       assert html =~ "/post_images/sqtok/feed.avif"
-      # It must NOT also render the cropping full-width single-image variant.
-      refute html =~ "max-h-96"
+      # It must NOT also render the full-width single-image variant.
+      refute html =~ "data-photo-fit"
     end
 
     test "the image floats first (before the text/tags) so the text wraps around it", %{
@@ -1242,7 +1242,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
              "expected the floated image to render before (be wrapped by) the text and tag"
     end
 
-    test "a clearly landscape image keeps the full-width layout", %{conn: conn} do
+    test "a clearly landscape image keeps the full-width layout, uncropped", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       # 1200×600 = 2.0 — a wide banner reads fine full-width (short, uncropped),
       # so it must not be squeezed into a third beside the text.
@@ -1251,8 +1251,37 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {:ok, _live, html} = live(conn, ~p"/feed")
 
       refute html =~ "post-clamp--wrap"
-      assert html =~ "max-h-96"
       assert html =~ "/post_images/widetok/feed.avif"
+      # 2:1 is still an ordinary shape, so it is shown whole (issue #1104):
+      # a single photo is bounded in height, never cut down to a middle band.
+      assert html =~ ~s(data-photo-fit="whole")
+      refute html =~ "object-cover"
+    end
+
+    test "a stitched panorama is cropped to an ordinary frame instead of a slit", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # 6000×1000 = 6:1. Shown whole at column width this is a ~120px letterbox
+      # strip, so it is the one single-photo case that still crops.
+      post_with_image(user, "A panorama", 6000, 1000, "panotok")
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      assert html =~ ~s(data-photo-fit="crop")
+      assert html =~ "aspect-ratio: 2 / 1"
+      assert html =~ "object-cover"
+    end
+
+    test "a tall portrait is shown whole rather than cut off top and bottom", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # 1080×1920 = 9:16, what a phone hands you by default. The old card put
+      # every single photo in a 24rem object-cover box, which cut this one's
+      # head and feet off.
+      post_with_image(user, "A phone portrait", 1080, 1920, "porttok")
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      assert html =~ ~s(data-photo-fit="whole")
+      refute html =~ "object-cover"
     end
 
     test "a squarish image with no body text stays full-width (no empty text column)", %{

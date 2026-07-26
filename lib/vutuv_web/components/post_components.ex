@@ -1512,26 +1512,17 @@ defmodule VutuvWeb.PostComponents do
               />
 
               <%!-- Attachments the body does NOT reference inline. A single
-              image keeps the feed-compact treatment (a squarish one floats
-              above; anything else stacks full-width, height-capped at 24rem so
-              one post can't run away down the timeline). Multiple images tile
-              through the shared `post_gallery` — natural aspect, no crop, the
-              same way the permalink shows them (it used to crop each tile to
-              `aspect-[4/3]`, chopping content to a middle band). --%>
+              photo shows **whole** (a squarish one floats above; every other
+              ordinary shape renders uncropped below) — see
+              `<.single_feed_photo>`. Multiple images tile through the shared
+              `post_gallery` as the bento mosaic. --%>
               <.link
                 :if={length(@gallery) == 1}
                 href={@permalink}
                 aria-label={gettext("View post")}
                 class="mt-3 block"
               >
-                <img
-                  src={PostImage.url(hd(@gallery), "feed")}
-                  alt={hd(@gallery).alt}
-                  width={hd(@gallery).width}
-                  height={hd(@gallery).height}
-                  loading="lazy"
-                  class="max-h-96 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
-                />
+                <.single_feed_photo image={hd(@gallery)} />
               </.link>
               <.post_gallery
                 :if={length(@gallery) > 1}
@@ -2111,6 +2102,82 @@ defmodule VutuvWeb.PostComponents do
       "de" -> Calendar.strftime(taken_at, "%d.%m.%Y")
       _other -> Calendar.strftime(taken_at, "%b %-d, %Y")
     end
+  end
+
+  # The envelope of shapes a photo is shown **whole** in, in the feed.
+  # Everything a camera or a phone actually produces lives inside it: 4:3
+  # (1.33), 3:2 (1.5), 16:9 (1.78) and their portrait mirrors down to 9:16
+  # (0.5625). Outside it are the deliberate extremes — a stitched panorama, a
+  # full-page screenshot, a tall infographic — which at column width would
+  # either be a letterbox slit or a photo the reader has to scroll past.
+  # Those are cropped to the nearest ordinary frame instead.
+  @whole_ratio_max 2.0
+  @whole_ratio_min 0.5
+
+  @doc """
+  How a lone photo is fitted into a feed card (issue #1104): `:whole`, or
+  `{:crop, aspect}` for a shape too extreme to show at column width.
+
+  **A single photo is not cropped.** The old card forced every one into a
+  24rem-tall `object-cover` box, which cut the top and bottom off any portrait
+  — the shape a phone takes by default. Now an ordinary photo is shown
+  complete and merely bounded in height, so it can be *smaller* than the
+  column but never a fragment of itself.
+
+  The exceptions are the shapes that are not really "a photo" at column width:
+  past 2:1 a panorama becomes a slit, past 1:2 a tower turns the card into a
+  scroll. Those crop to 2:1 and 3:4 — a normal frame, as the issue asks — and
+  the permalink still shows them whole.
+
+  Public for `single_photo_fit_test.exs`: the boundary is the feature, and a
+  ratio rule is the kind of thing that reads correct and is off by a factor.
+  """
+  def feed_photo_fit(%PostImage{} = image) do
+    ratio = PostImage.aspect(image)
+
+    cond do
+      ratio > @whole_ratio_max -> {:crop, "2 / 1"}
+      ratio < @whole_ratio_min -> {:crop, "3 / 4"}
+      true -> :whole
+    end
+  end
+
+  @doc """
+  The lone photo on a feed card, fitted per `feed_photo_fit/1`.
+
+  A whole photo is bounded by **height**, not width: `max-h` with an auto
+  width lets the browser scale it down until it fits, so a portrait keeps its
+  full frame and simply occupies a narrower centred column instead of running
+  a thousand pixels down the timeline. A cropped one fills the width in a
+  fixed frame, where `object-cover` is the right tool because the crop is the
+  point.
+  """
+  attr(:image, :any, required: true)
+
+  def single_feed_photo(assigns) do
+    assigns = assign(assigns, :fit, feed_photo_fit(assigns.image))
+
+    ~H"""
+    <img
+      :if={@fit == :whole}
+      src={PostImage.url(@image, "feed")}
+      alt={photo_alt(@image)}
+      width={@image.width}
+      height={@image.height}
+      loading="lazy"
+      class="mx-auto max-h-[32rem] w-auto max-w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+      data-photo-fit="whole"
+    />
+    <img
+      :if={@fit != :whole}
+      src={PostImage.url(@image, "feed")}
+      alt={photo_alt(@image)}
+      loading="lazy"
+      style={"aspect-ratio: #{elem(@fit, 1)}"}
+      class="w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+      data-photo-fit="crop"
+    />
+    """
   end
 
   @doc """

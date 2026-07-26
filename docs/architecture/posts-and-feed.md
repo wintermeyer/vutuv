@@ -435,6 +435,15 @@ Legacy `…/feed.webp` URLs in old post bodies keep resolving.
 Not a second kind of post — the same post, showing its pictures properly.
 Everything beyond "drop photos, press Post" is one switch or one select.
 
+**A single photo is shown whole in the feed.** `PostComponents.feed_photo_fit/1`
+answers `:whole` for every ordinary shape (the envelope is 2:1 down to 1:2, so
+4:3, 3:2, 16:9, 1:1 and a phone's 9:16 all qualify) and the image is bounded by
+height rather than cropped, so a portrait occupies a narrower centred column
+instead of losing its top and bottom to the old 24rem `object-cover` box. Only
+the extremes crop — past 2:1 a panorama is a slit at column width, past 1:2 a
+tower is something you scroll past — to `2 / 1` and `3 / 4` respectively, and
+the permalink still shows those whole.
+
 **In the feed, two or more attachments lay themselves out as an aspect-aware
 bento mosaic** (`VutuvWeb.PostComponents.mosaic/1`). The first photo is the
 hero and gets the big tile, so **reordering is the only layout control** — drag
