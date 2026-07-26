@@ -533,6 +533,19 @@ defmodule VutuvWeb.UserHTML do
     """
   end
 
+  # The globe the app already uses for "another network" (the admin dashboard's
+  # Fediverse tile), drawn as a circle plus two meridians rather than one path,
+  # so it stays crisp at 16px next to the brand glyphs of the Profiles card.
+  def detail_icon(%{name: "globe"} = assigns) do
+    ~H"""
+    <svg class={@class} fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path stroke-linecap="round" d="M3.5 12h17" />
+      <path d="M12 3.5c2.3 2.3 3.7 5.3 3.7 8.5s-1.4 6.2-3.7 8.5c-2.3-2.3-3.7-5.3-3.7-8.5S9.7 5.8 12 3.5Z" />
+    </svg>
+    """
+  end
+
   def detail_icon(assigns) do
     ~H"""
     <svg class={@class} fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">

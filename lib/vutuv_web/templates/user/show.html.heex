@@ -807,8 +807,11 @@ the resulting ~200px rail width. --%>
     It closes the page: the profile itself is what a visitor came for, and this
     is the "take me with you" footer under it. `order-3` keeps it last on a
     phone too, where every card is one flex child of a single column and the
-    rail's utility footer sits at `order-2`. --%>
-    <.card :if={@fediverse} id="profile-fediverse" class="order-3 md:order-none">
+    rail's utility footer sits at `order-2`. Two links jump straight here — the
+    Profiles card's shortcut row and the remote-follow controller's error
+    redirect — so `scroll-mt-24` keeps the sticky top bar off the card's title
+    when the browser lands on the anchor. --%>
+    <.card :if={@fediverse} id="profile-fediverse" class="order-3 scroll-mt-24 md:order-none">
       <.section_title>{gettext("Fediverse")}</.section_title>
 
       <%= if @fediverse.moved_to do %>
@@ -1071,8 +1074,10 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <% smas_count = Enum.count(@user.social_media_accounts) %>
+    <%!-- @fediverse joins the card's render condition: a member who federates
+    but lists no other account still has one address worth showing here. --%>
     <.card
-      :if={smas_count > 0 or @as_owner?}
+      :if={smas_count > 0 or @fediverse != nil or @as_owner?}
       id="profile-social-media"
     >
       <.section_header title={gettext("Profiles")} />
@@ -1089,6 +1094,35 @@ the resulting ~200px rail width. --%>
         accounts={@user.social_media_accounts}
         social_feed_loading={@social_feed_loading}
       />
+
+      <%!-- The member's Fediverse address, in the one card a visitor scans for
+      "where else is this person" (issue #1111). The full explanation — copy
+      button, remote-follow tool, or the forwarding address of a member who
+      moved away — closes the page, and repeating that here would say the same
+      thing twice on one screen; so this is a single row that names the address
+      and jumps to it. Its own heading, unlike the two buckets above (whose
+      labels appear only when both are present): this row is not an account on
+      another site but the member's account right here, seen from the outside,
+      and naming the network is what makes that legible. --%>
+      <div :if={@fediverse} class={smas_count > 0 && "mt-6"}>
+        <h3 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          {gettext("Fediverse")}
+        </h3>
+        <a
+          id="profile-fediverse-shortcut"
+          href="#profile-fediverse"
+          class="group flex items-center gap-2.5 py-1.5 text-sm text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
+        >
+          <.detail_icon
+            name="globe"
+            class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
+          />
+          <span class="truncate font-medium">{@fediverse.moved_handle || @fediverse.handle}</span>
+          <span class="ml-auto shrink-0 text-xs text-slate-500 dark:text-slate-400">
+            {gettext("Follow")} ›
+          </span>
+        </a>
+      </div>
 
       <.manage_footer
         href={~p"/#{@user}/social_media_accounts"}

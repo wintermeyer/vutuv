@@ -15,6 +15,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
   @card "#profile-fediverse"
   @handle "#profile-fediverse-handle"
   @form "#remote-follow-form"
+  @shortcut "#profile-fediverse-shortcut"
 
   defp federating_member(attrs \\ []) do
     insert_activated_user(Keyword.merge([fediverse_followers?: true], attrs))
@@ -115,6 +116,54 @@ defmodule VutuvWeb.UserProfileFediverseTest do
       assert view
              |> element(@form)
              |> render() =~ ~s|action="/#{user.username}/fediverse/follow"|
+    end
+  end
+
+  describe "the shortcut in the Profiles card" do
+    test "names the address and points at the card", %{conn: conn} do
+      user = federating_member()
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      assert has_element?(view, "#profile-social-media " <> @shortcut)
+      assert view |> element(@shortcut) |> render() =~ Docs.handle(user)
+      assert view |> element(@shortcut) |> render() =~ ~s|href="#profile-fediverse"|
+    end
+
+    test "does not repeat the card's tools", %{conn: conn} do
+      user = federating_member()
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      # The point of the shortcut is that the explanation, the copy button and
+      # the remote-follow form exist once, at the foot of the page. A second
+      # copy up here would be the heavy version this replaced.
+      refute has_element?(view, "#profile-social-media #remote-follow-form")
+      refute has_element?(view, "#profile-social-media [data-copy]")
+    end
+
+    test "the card it points at clears the sticky top bar", %{conn: conn} do
+      user = federating_member()
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      assert has_element?(view, "#profile-fediverse.scroll-mt-24")
+    end
+
+    test "shows the forwarding address once the member moved away", %{conn: conn} do
+      user = federating_member(moved_to: "https://social.example/users/greta")
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      assert view |> element(@shortcut) |> render() =~ "@greta@social.example"
+    end
+
+    test "is absent for a member who does not federate", %{conn: conn} do
+      user = insert_activated_user()
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      refute has_element?(view, @shortcut)
     end
   end
 
