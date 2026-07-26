@@ -28,6 +28,7 @@ defmodule VutuvWeb.ApiV2.MessageController do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
+  alias VutuvWeb.Markdown
 
   # ── Reads ──
 
@@ -194,7 +195,10 @@ defmodule VutuvWeb.ApiV2.MessageController do
       status: Chat.display_status(conversation),
       with: AgentDocs.person_ref(other),
       last_message_at: entry.last_at,
-      preview: entry.last_body && AgentDocs.excerpt(entry.last_body),
+      # A glance line, so it is flattened like the website's sidebar row: the
+      # Markdown source itself is served by the messages endpoint's
+      # `body_markdown`, and a preview full of `**`/`[…](…)` reads as noise.
+      preview: entry.last_body && Markdown.to_preview_line(entry.last_body),
       unread: entry.unread
     }
   end

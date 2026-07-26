@@ -290,6 +290,32 @@ defmodule Vutuv.Notifications.EmailerTest do
       refute email.text_body =~ "only email"
     end
 
+    test "the unread email renders the quoted message instead of its Markdown source" do
+      user = insert(:user, locale: "en")
+      other = insert(:user, username: "the-sender")
+
+      email =
+        Emailer.unread_messages_email(
+          "unread@example.com",
+          user,
+          other,
+          Vutuv.UUIDv7.generate(),
+          "Hello **[Stefan](https://vutuv.de/wintermeyer)** glad to be in touch."
+        )
+
+      # The HTML part shows the formatting the sender applied — real bold, a
+      # real link — never the markers they never typed (the composer is WYSIWYG).
+      assert email.html_body =~ "<strong>"
+      assert email.html_body =~ ~s|href="https://vutuv.de/wintermeyer"|
+      refute email.html_body =~ "**"
+      refute email.html_body =~ "[Stefan]"
+
+      # The text part reads as prose but keeps the link target, which is the one
+      # thing flattening must not drop: nothing is clickable there.
+      assert email.text_body =~ "Hello Stefan (https://vutuv.de/wintermeyer) glad"
+      refute email.text_body =~ "**"
+    end
+
     test "the unread email quotes only an opening excerpt of a long message" do
       user = insert(:user, locale: "en")
       other = insert(:user, username: "the-sender")

@@ -53,6 +53,9 @@ defmodule VutuvWeb.Markdown do
   # one-line intro above a long block doesn't leave a one-line preview) — but
   # only if at least this many characters of budget remain, else just stop.
   @preview_min_block 200
+  # A one-line preview is truncated by the row it sits in long before this, so
+  # the cap is only there to keep a whole essay out of a list payload.
+  @preview_line_length 200
   @inline_image ~r/!\[([^\]]*)\]\(([^)\s]+)\)/
   # The alignment fragments an inline image src may carry (`#left` floats the
   # picture beside the text, `#right` mirrored, `#center` centers it; no
@@ -187,8 +190,23 @@ defmodule VutuvWeb.Markdown do
   Entities are **not** linkified, so this costs no DB query.
   """
   def to_plain_text(text) when is_binary(text) do
-    text
-    |> render_pipeline()
+    text |> render_pipeline() |> html_to_plain_text()
+  end
+
+  def to_plain_text(_), do: ""
+
+  @doc """
+  The flattening half of `to_plain_text/1`, on HTML **one of our own renderers
+  produced**: block ends become line breaks, tags are dropped and the escapes
+  decoded.
+
+  Split out for `VutuvWeb.EmailMarkdown.to_text/1`, which runs the email
+  renderer (full URLs, real links) rather than the post pipeline and expands
+  each link's target before flattening. Only feed it already-sanitized HTML —
+  on arbitrary input the tag-stripping regex is not a sanitizer.
+  """
+  def html_to_plain_text(html) when is_binary(html) do
+    html
     |> String.replace(~r{<br\s*/?>}i, "\n")
     |> String.replace(~r{</(?:p|li|h[1-6]|blockquote|tr|div)>}i, "\n")
     # Every `<…>` left is a tag: the pipeline escaped typed HTML to `&lt;` a
@@ -198,7 +216,27 @@ defmodule VutuvWeb.Markdown do
     |> normalize_lines()
   end
 
-  def to_plain_text(_), do: ""
+  @doc """
+  Flatten Markdown to the **single line** a list row previews it with: the
+  messages sidebar's last-message line and the `preview` field of the API's
+  conversation list.
+
+  `to_plain_text/1` plus the block breaks folded into spaces, so a message
+  whose first line is short still fills the row, and capped at
+  #{@preview_line_length} characters (the row truncates far earlier; the cap
+  keeps a long body out of the payload).
+
+  Returns `""` for a body that isn't a string, so a `nil` preview can be
+  passed straight in.
+  """
+  def to_preview_line(text) when is_binary(text) do
+    text
+    |> to_plain_text()
+    |> String.replace("\n", " ")
+    |> String.slice(0, @preview_line_length)
+  end
+
+  def to_preview_line(_), do: ""
 
   # Earmark lays its HTML out with whitespace of its own (a newline after every
   # opening `<p>`, indented list items, blank lines between tags), which turns

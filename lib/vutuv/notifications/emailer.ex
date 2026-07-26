@@ -271,6 +271,7 @@ defmodule Vutuv.Notifications.Emailer do
   def unread_messages_email(email, user, other, conversation_id, message_body) do
     locale = get_locale(user.locale)
     unsubscribe_url = VutuvWeb.UnsubscribeToken.url(user)
+    excerpt = message_excerpt(message_body)
 
     base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
@@ -286,7 +287,13 @@ defmodule Vutuv.Notifications.Emailer do
       user: user,
       other_slug: other.username,
       conversation_id: conversation_id,
-      message_body: message_excerpt(message_body),
+      # A DM is Markdown source (the composer is Milkdown), so the quote is
+      # rendered, not printed: the HTML body runs the source through
+      # `<.email_markdown>`, the text body gets it flattened. Quoting the source
+      # showed the markers themselves ("Hello **[Stefan](https://…") in a mail
+      # meant to let the member read the message without opening the app.
+      message_body: excerpt,
+      message_text: excerpt && VutuvWeb.EmailMarkdown.to_text(excerpt),
       # The recipient's own settings drive the copy: whether they are told this
       # is the only email for the burst or that every message is mailed, and the
       # deep link where they can change that (and the delay).

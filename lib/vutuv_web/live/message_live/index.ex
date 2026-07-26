@@ -19,7 +19,7 @@ defmodule VutuvWeb.MessageLive.Index do
 
   alias Vutuv.Chat
   alias Vutuv.Chat.{Conversation, Message}
-  alias VutuvWeb.Presence
+  alias VutuvWeb.{Markdown, Presence}
 
   @typing_clear_ms 2500
   @page_size 30
@@ -364,9 +364,18 @@ defmodule VutuvWeb.MessageLive.Index do
     user = socket.assigns.current_user
 
     socket
-    |> assign(:conversations, Chat.list_conversations(user))
-    |> assign(:requests, Chat.list_requests(user))
+    |> assign(:conversations, put_previews(Chat.list_conversations(user)))
+    |> assign(:requests, put_previews(Chat.list_requests(user)))
   end
+
+  # A message body is Markdown *source* (the composer is Milkdown), so a sidebar
+  # row printing it raw showed the markers themselves — "Hello **[Stefan](https://…"
+  # where the thread reads "Hello Stefan". Flatten it once per entry, here and in
+  # bump_conversation/2, and never in the template: the row re-renders on every
+  # presence tick and typing event, which would re-parse every preview each time.
+  defp put_previews(entries), do: Enum.map(entries, &put_preview/1)
+
+  defp put_preview(entry), do: Map.put(entry, :preview, Markdown.to_preview_line(entry.last_body))
 
   # Reflect the just-marked-read state in the sidebar: drop the opened
   # conversation's unread badge to zero.
@@ -404,7 +413,14 @@ defmodule VutuvWeb.MessageLive.Index do
            &(&1.conversation.id == message.conversation_id)
          ) do
       {[entry], rest} ->
-        bumped = %{entry | last_body: message.body, last_at: message.inserted_at, unread: 0}
+        bumped =
+          put_preview(%{
+            entry
+            | last_body: message.body,
+              last_at: message.inserted_at,
+              unread: 0
+          })
+
         assign(socket, :conversations, [bumped | rest])
 
       _ ->
@@ -513,7 +529,7 @@ defmodule VutuvWeb.MessageLive.Index do
                   <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
                     {display_name(entry.other)}
                   </span>
-                  <span class="block truncate text-xs text-slate-600 dark:text-slate-400">{entry.last_body}</span>
+                  <span class="block truncate text-xs text-slate-600 dark:text-slate-400">{entry.preview}</span>
                 </span>
               </.link>
               <.request_actions id={entry.conversation.id} class="mt-2" />
@@ -539,7 +555,7 @@ defmodule VutuvWeb.MessageLive.Index do
                 <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
                   {display_name(entry.other)}
                 </span>
-                <span class="block truncate text-xs text-slate-600 dark:text-slate-400">{entry.last_body}</span>
+                <span class="block truncate text-xs text-slate-600 dark:text-slate-400">{entry.preview}</span>
               </span>
               <.count_badge count={entry.unread} />
             </.link>

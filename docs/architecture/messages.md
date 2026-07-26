@@ -23,6 +23,25 @@ Markdown (`VutuvWeb.Markdown.render/1`), unchanged by the editor. The `typing`
 handler keeps the draft body in the form so the editor clears after a send; see
 `.claude/rules/design.md` for the component.
 
+Because the stored body is Markdown **source**, every place that shows a message
+outside the thread must flatten it or it prints the markers themselves. The
+one-line glance form is `VutuvWeb.Markdown.to_preview_line/1` (plain text, block
+breaks folded into spaces, capped at 200 chars): the sidebar's last-message line
+and the `preview` field of the API's conversation list both go through it. In
+the LiveView that happens once per entry where the lists are built
+(`put_preview/1` in `MessageLive.Index`, on the `Chat` query result and on the
+in-memory bump), never in the template — the sidebar rows re-render on every
+presence tick and typing event, which would re-parse every preview each time.
+
+The **unread-message email** quotes the DM in full rather than at a glance, so it
+uses the email renderer (`VutuvWeb.EmailMarkdown`, the one invitations use: full
+Markdown, bare URLs kept whole and clickable, images dropped) — the HTML body
+through `<.email_markdown>`, the `text/plain` body through
+`EmailMarkdown.to_text/1`, which flattens that same HTML and expands each link to
+`label (url)`, because in a text body nothing is clickable and the URL *is* the
+link. Quoting the raw source instead put "Hello \*\*[Stefan](https://…" in the
+member's inbox.
+
 Messages carry **no images**: `Vutuv.MarkdownContent.validate_no_images/2` in
 `Message.changeset` rejects a body with image Markdown (`![](…)`) on every write
 path (the web composer and `POST …/messages` alike — a 422 for the API), and

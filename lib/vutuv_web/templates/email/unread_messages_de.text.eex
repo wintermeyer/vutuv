@@ -2,7 +2,7 @@
 
 Sie haben eine neue Nachricht von @<%= @other_slug %> auf vutuv:
 <%= if @message_body do %>
-<%= @message_body %>
+<%= @message_text %>
 <% end %>
 Hier können Sie sie lesen und beantworten:
 

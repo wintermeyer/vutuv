@@ -1,7 +1,7 @@
 <.email_layout preheader="Sie haben eine neue Nachricht auf vutuv" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>Sie haben eine neue Nachricht von @{@other_slug} auf vutuv:</.email_p>
-  <.email_quote :if={@message_body} body={@message_body} />
+  <.email_markdown :if={@message_body} body={@message_body} />
   <.email_button href={"#{@url}messages/#{@conversation_id}"}>Lesen und antworten</.email_button>
   <.email_p>
     {(@each_message? &&

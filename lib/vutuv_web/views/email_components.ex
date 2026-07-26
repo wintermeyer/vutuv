@@ -2,7 +2,7 @@ defmodule VutuvWeb.EmailComponents do
   @moduledoc """
   The shared HTML-email framework: one `email_layout/1` chrome plus a small set
   of inline-styled building blocks (`email_p`, `email_pin`, `email_button`,
-  `email_panel`/`email_row`, `email_quote`, `email_list`, `email_divider`,
+  `email_panel`/`email_row`, `email_markdown`, `email_list`, `email_divider`,
   `email_muted`, `email_signature`). Every HTML email body
   (`lib/vutuv_web/templates/email_body/`) composes these, so the look and feel
   is defined in exactly one place.
@@ -222,30 +222,16 @@ defmodule VutuvWeb.EmailComponents do
   end
 
   @doc """
-  A quoted message body — the DM that triggered an unread-notification email.
-  A brand left-rule panel that preserves the message's own line breaks
-  (`white-space:pre-wrap`) so it reads like the original, without rendering any
-  markup the sender wrote.
-  """
-  attr(:body, :string, required: true)
+  A quoted **Markdown** message body in a brand left-rule panel: the personal
+  note a member writes in an invitation (`Vutuv.Invitations`) and the DM that
+  triggered an unread-notification email. Rendered to HTML by
+  `VutuvWeb.EmailMarkdown`, so links are clickable and the formatting the writer
+  applied shows.
 
-  def email_quote(assigns) do
-    ~H"""
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-panel" style="margin:0 0 20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1d4ed8;border-radius:8px;">
-      <tr>
-        <td class="email-text" style={quote_style()}>{@body}</td>
-      </tr>
-    </table>
-    """
-  end
-
-  @doc """
-  A **Markdown** message body — the personal note a member writes in an
-  invitation (`Vutuv.Invitations`). Same branded left-rule panel as
-  `email_quote/1`, but its body is rendered from Markdown to HTML by
-  `VutuvWeb.EmailMarkdown`, so links are clickable and formatting shows. Use
-  `email_quote/1` (literal, pre-wrapped text) for a quoted DM; use this for text
-  the writer means as Markdown.
+  Every member-written body we quote is Markdown, so there is no literal
+  (pre-wrapped, unrendered) variant: quoting the source printed the markers
+  themselves in the DM notice. The `text/plain` half of the same mail gets
+  `VutuvWeb.EmailMarkdown.to_text/1`.
   """
   attr(:body, :string, required: true)
 
@@ -431,12 +417,8 @@ defmodule VutuvWeb.EmailComponents do
   defp row_value_style,
     do: "padding:6px 0;font-family:#{@font};font-size:14px;color:#334155;word-break:break-word;"
 
-  defp quote_style,
-    do:
-      "padding:14px 18px;font-family:#{@font};font-size:15px;line-height:1.6;color:#334155;white-space:pre-wrap;word-break:break-word;"
-
-  # Like quote_style/0 but without white-space:pre-wrap — the rendered Markdown
-  # is block HTML that manages its own line breaks and spacing.
+  # No `white-space: pre-wrap` — the rendered Markdown is block HTML that
+  # manages its own line breaks and spacing.
   defp markdown_quote_style,
     do:
       "padding:14px 18px;font-family:#{@font};font-size:15px;line-height:1.6;color:#334155;word-break:break-word;"

@@ -2,7 +2,7 @@
 
 you have a new message from @<%= @other_slug %> on vutuv:
 <%= if @message_body do %>
-<%= @message_body %>
+<%= @message_text %>
 <% end %>
 Read and reply here:
 

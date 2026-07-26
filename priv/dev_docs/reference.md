@@ -328,7 +328,8 @@ declines. Declining is silent. New requests are rate-limited.
 Scope: `messages:read`. Your accepted conversations and own outgoing
 requests under `conversations`, incoming requests under `requests` — each
 with the other member, a preview, `last_message_at` and your `unread`
-count.
+count. The preview is the last message flattened to one line of plain
+text; its Markdown source is in `body_markdown` on the thread endpoint.
 
 ### GET /conversations/:id/messages
 

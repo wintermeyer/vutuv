@@ -170,6 +170,28 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
       assert [%{"unread" => 0}] = json_response(conn4, 200)["conversations"]
     end
 
+    test "the conversation preview is flattened text, the message keeps its Markdown", %{
+      conn: conn,
+      me: me,
+      other: other,
+      token: token
+    } do
+      follow!(other, me)
+      conversation = insert_conversation_between(me, other)
+      body = "Hello **[Stefan](https://vutuv.de/stefan)** welcome"
+      {:ok, _} = Chat.send_message(other, conversation.id, body)
+
+      conn1 = get(authed(conn, token), "/api/2.0/conversations")
+
+      assert [%{"preview" => preview}] = json_response(conn1, 200)["conversations"]
+      assert preview == "Hello Stefan welcome"
+
+      conn2 =
+        get(authed(build_conn(), token), "/api/2.0/conversations/#{conversation.id}/messages")
+
+      assert [%{"body_markdown" => ^body}] = json_response(conn2, 200)["messages"]
+    end
+
     test "messages:read cannot send", %{conn: conn, me: me, other: other} do
       {:ok, read_token, _} =
         ApiAuth.create_pat(me, %{"name" => "r", "scopes" => ["messages:read"]})

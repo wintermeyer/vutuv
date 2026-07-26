@@ -50,6 +50,30 @@ defmodule VutuvWeb.MessageLiveTest do
       assert html =~ "Hello there"
     end
 
+    test "the sidebar preview shows the rendered text, not the Markdown source", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      other = insert_activated_user(first_name: "Berta", last_name: "Beispiel")
+      conversation = insert_conversation_between(me, other)
+
+      {:ok, _} =
+        Chat.send_message(
+          other,
+          conversation.id,
+          "Hello **[Stefan](https://vutuv.de/stefan)** I'm glad to be in touch."
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/messages")
+
+      preview =
+        view
+        |> element(~s|a[href="/messages/#{conversation.id}"] span.truncate.text-xs|)
+        |> render()
+
+      assert preview =~ "Hello Stefan I"
+      refute preview =~ "**"
+      refute preview =~ "https://vutuv.de/stefan"
+    end
+
     test "shows an empty state without any conversations", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
 
@@ -241,6 +265,25 @@ defmodule VutuvWeb.MessageLiveTest do
     defp at_index(html, needle) do
       {index, _length} = :binary.match(html, needle)
       index
+    end
+
+    test "a message arriving in the open thread flattens the sidebar preview too", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      {_other_conn, other} = login_other_user("Alpha")
+      conversation = insert_conversation_between(me, other)
+      {:ok, _} = Chat.send_message(other, conversation.id, "first")
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+      {:ok, _} = Chat.send_message(other, conversation.id, "a **bold** claim")
+      _ = :sys.get_state(view.pid)
+
+      preview =
+        view
+        |> element(~s|a[href="/messages/#{conversation.id}"] span.truncate.text-xs|)
+        |> render()
+
+      assert preview =~ "a bold claim"
+      refute preview =~ "**"
     end
 
     test "messages render markdown safely with a timestamp", %{conn: conn} do
