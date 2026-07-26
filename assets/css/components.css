@@ -1325,6 +1325,42 @@ ul.thumbs li .text .url a {
   padding: 0.75em 0.9em;
 }
 .markdown pre code { background: transparent; padding: 0; }
+/* Fenced `diff` blocks (issue #1108). VutuvWeb.Markdown gives every line of a
+   ```diff fence its own `.diff-line` row and moves the leading +/- into a
+   gutter span, so an added line reads green, a removed one red and the marker
+   stops running into the code. The marker stays real text: colour alone must
+   not carry the meaning (WCAG 1.4.1), a copied block has to remain a valid
+   diff, and the same HTML goes out over RSS and the fediverse without our CSS.
+
+   The `<pre>` drops back to `white-space: normal` so the real newlines the
+   markup keeps between the rows (for copy and to_plain_text/1) collapse away
+   instead of rendering as blank lines; each row turns `pre` back on for its
+   own indentation. `width: max-content; min-width: 100%` on the code element
+   makes a row's tint span the full scroll width of a wide diff. */
+.markdown pre.diff-block { padding: 0.75em 0; white-space: normal; }
+.markdown pre.diff-block > code {
+  display: block;
+  min-width: 100%;
+  white-space: normal;
+  width: max-content;
+}
+.diff-line { display: block; padding: 0 0.9em; white-space: pre; }
+/* Fixed gutter in monospace `ch` units, so the code columns of every row line
+   up whether or not that row has a marker. An empty gutter span still forms a
+   line box, which is what gives a blank diff line its height. */
+.diff-line__marker {
+  color: #64748b;
+  display: inline-block;
+  width: 2ch;
+}
+.diff-line--add { background: #d1fae5; }
+.diff-line--add .diff-line__marker { color: #047857; }
+.diff-line--del { background: #ffe4e6; }
+.diff-line--del .diff-line__marker { color: #be123c; }
+/* Hunk (`@@ … @@`) and file headers are scaffolding, not content: quiet them
+   down so the changed lines are what the eye lands on. */
+.diff-line--hunk { color: #64748b; font-weight: 600; }
+.diff-line--meta { color: #64748b; }
 /* Markdown tables (the developer docs): readable cells, and the table
    scrolls horizontally instead of being clipped by the card's
    overflow:hidden (same idea as .card__tablewrap). */
@@ -1832,6 +1868,15 @@ body.mde-fullscreen-lock { overflow: hidden; }
   .markdown blockquote { border-color: #334155; color: #94a3b8; }
   .markdown code { background: #1e293b; }
   .markdown pre { background: #1e293b; }
+  /* Diff rows: translucent tints, so they read as a wash over the slate code
+     block instead of two flat blocks of colour, and light markers for contrast
+     against it. */
+  .diff-line__marker { color: #94a3b8; }
+  .diff-line--add { background: rgb(16 185 129 / 0.18); }
+  .diff-line--add .diff-line__marker { color: #6ee7b7; }
+  .diff-line--del { background: rgb(244 63 94 / 0.18); }
+  .diff-line--del .diff-line__marker { color: #fda4af; }
+  .diff-line--hunk, .diff-line--meta { color: #94a3b8; }
   .markdown th, .markdown td { border-color: #1e293b; }
   .error-page { background: #0f172a; outline-color: #1e293b; }
   .error-page__code { color: #334155; }

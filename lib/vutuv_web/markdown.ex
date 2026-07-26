@@ -13,7 +13,9 @@ defmodule VutuvWeb.Markdown do
   quotes; a single newline becomes a `<br>` in chat/messages, but **posts**
   reflow soft-wrapped lines instead — see `render_pipeline/2`'s `breaks:` note),
   HtmlSanitizeEx strips anything dangerous as a second line of defence
-  (`javascript:` hrefs etc.), and links open in a new tab.
+  (`javascript:` hrefs etc.), and links open in a new tab. A fenced `diff`
+  block then gets its lines marked up as added / removed / context so it reads
+  as a diff (`highlight_diff_blocks/1`).
 
   **Images**: only a post may embed pictures, and only its **own uploaded
   attachments** (`render_post/2`'s whitelist) — a hotlinked remote image would
@@ -60,6 +62,34 @@ defmodule VutuvWeb.Markdown do
   # DB by `linkify_entities/1`. Captures: 1 = fediverse user, 2 = fediverse
   # host, 3 = local handle, 4 = hashtag (exactly one kind is set per hit).
   @entity Vutuv.Mentions.entity_regex()
+
+  # The fence languages whose code block renders as a diff (issue #1108).
+  @diff_languages ~w(diff patch)
+
+  # A fenced code block as Earmark and the sanitizer leave it
+  # (`<pre><code class="diff">…</code></pre>`). The content is already escaped
+  # at this point — it can hold no `<` — so the non-greedy match can never run
+  # past the end of its own block.
+  @diff_block ~r{<pre>\s*<code class="([^"]*)">([\s\S]*?)</code>\s*</pre>}
+
+  # Diff lines that carry no +/- of their own: the file headers a `git diff`
+  # emits above the first hunk, and the "no newline" note below the last one.
+  # `+++`/`---` are matched before the single-character `+`/`-`, so a file
+  # header never reads as an added or removed line.
+  @diff_meta_prefixes [
+    "+++",
+    "---",
+    "diff ",
+    "index ",
+    "new file mode",
+    "deleted file mode",
+    "old mode",
+    "new mode",
+    "similarity index",
+    "rename from",
+    "rename to",
+    "\\ No newline"
+  ]
 
   # Inside these elements an entity is left as plain text (a handle/hashtag in a
   # code span/block is sample text, and we never nest a link inside a link).
@@ -217,7 +247,90 @@ defmodule VutuvWeb.Markdown do
     |> String.replace("&amp;lt;", "&lt;")
     |> HtmlSanitizeEx.markdown_html()
     |> strip_img_tags()
+    |> highlight_diff_blocks()
   end
+
+  ## Fenced `diff` blocks
+
+  # Turns a ```` ```diff ```` block into a real diff: every line becomes its own
+  # row carrying what it is (added / removed / context / hunk header / file
+  # header), and the leading `+`/`-` moves into a gutter column so it stops
+  # reading as part of the code (issue #1108). All the styling lives in
+  # `.diff-*` in `components.css`; this only supplies the structure.
+  #
+  # It runs **after** the sanitizer on purpose. The scrubber allows a `class` on
+  # `<code>` (so the fence language survives to be read here) but strips every
+  # attribute off a `<span>`, which would throw the per-line classes away if we
+  # emitted them earlier. Everything injected here is built from known-safe
+  # parts: the class attributes are literals of ours, and the line text is the
+  # already-escaped output of the scrubber, re-emitted verbatim.
+  #
+  # The `+`/`-` stays **real text** rather than a CSS glyph, for three reasons:
+  # a copied block is still a valid diff, the added/removed distinction does not
+  # rest on colour alone (WCAG 1.4.1), and the same HTML goes out over RSS, mail
+  # and the fediverse, where none of our CSS applies and the marker is all a
+  # reader has left.
+  defp highlight_diff_blocks(html) do
+    # Cheap bail-out: a body with no fenced code block at all skips the scan.
+    if String.contains?(html, ~s(<code class=")) do
+      Regex.replace(@diff_block, html, &rewrite_diff_block/3)
+    else
+      html
+    end
+  end
+
+  defp rewrite_diff_block(whole, class, content) do
+    if diff_language?(class), do: diff_block_html(content), else: whole
+  end
+
+  defp diff_language?(class) do
+    class
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.map(&(&1 |> String.downcase() |> String.replace_prefix("language-", "")))
+    |> Enum.any?(&(&1 in @diff_languages))
+  end
+
+  # The block keeps its real newlines between the rows, so copying it (and
+  # `to_plain_text/1`, which just drops the tags) still yields the diff line by
+  # line. They are not *rendered* twice because `.diff-block` drops the `<pre>`
+  # back to `white-space: normal` — whitespace-only text between two block-level
+  # rows then collapses away — while each row sets `white-space: pre` again to
+  # keep its own indentation.
+  defp diff_block_html(content) do
+    rows =
+      content
+      # Earmark emits no trailing newline of its own; a fence that ends with a
+      # blank line does, and it would render as a stray empty row.
+      |> String.replace_suffix("\n", "")
+      |> String.split("\n")
+      |> Enum.map_join("\n", &diff_row_html/1)
+
+    ~s(<pre class="diff-block"><code class="diff">) <> rows <> "</code></pre>"
+  end
+
+  defp diff_row_html(line) do
+    {kind, marker, text} = classify_diff_line(line)
+
+    ~s(<span class="diff-line diff-line--#{kind}">) <>
+      ~s(<span class="diff-line__marker">#{marker}</span>) <>
+      text <> "</span>"
+  end
+
+  # Every row renders a gutter span, empty ones included, so the code columns of
+  # a loose diff (context lines written without the unified format's leading
+  # space, which is how people paste them) line up with the +/- rows anyway.
+  defp classify_diff_line(line) do
+    cond do
+      String.starts_with?(line, "@@") -> {"hunk", "", line}
+      String.starts_with?(line, @diff_meta_prefixes) -> {"meta", "", line}
+      String.starts_with?(line, "+") -> {"add", "+", drop_marker(line)}
+      String.starts_with?(line, "-") -> {"del", "-", drop_marker(line)}
+      String.starts_with?(line, " ") -> {"context", " ", drop_marker(line)}
+      true -> {"context", "", line}
+    end
+  end
+
+  defp drop_marker(line), do: binary_part(line, 1, byte_size(line) - 1)
 
   # The Milkdown editor emits a literal `<br />` for content it has no plain
   # Markdown for: an **empty paragraph** (a blank line the writer adds with
