@@ -14,7 +14,7 @@ defmodule Vutuv.PostDraftsTest do
   defp user(attrs \\ []), do: insert(:activated_user, attrs)
 
   defp attrs(overrides \\ %{}) do
-    Map.merge(%{"body" => "half a thought", "tags" => "", "mode" => "text"}, overrides)
+    Map.merge(%{"body" => "half a thought", "tags" => ""}, overrides)
   end
 
   describe "save_draft/3 and get_draft/2" do
@@ -23,7 +23,7 @@ defmodule Vutuv.PostDraftsTest do
 
       :ok = Posts.save_draft(author, nil, attrs())
 
-      assert %PostDraft{body: "half a thought", mode: "text"} = Posts.get_draft(author, nil)
+      assert %PostDraft{body: "half a thought"} = Posts.get_draft(author, nil)
     end
 
     test "saving again replaces the draft instead of collecting a second one" do

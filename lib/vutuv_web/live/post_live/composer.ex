@@ -28,24 +28,23 @@ defmodule VutuvWeb.PostLive.Composer do
   editable. Any restriction also closes anonymous access, and `Vutuv.Posts`
   enforces it.
 
-  **Two modes, one post.** The same composer serves two crowds whose needs
-  point in opposite directions: the writer who staples a screenshot or two to
-  a text (camera facts, licences and download rules are noise to them), and
-  the photographer whose post IS the photos (the prose is noise to them).
-  `@mode` arranges the same fields for one or the other; nothing about the
-  stored post differs. `"text"` is today's layout — editor first, compact
-  photo strip below, and **no licence or download question at all**: a
-  screenshot stapled to a text keeps the author's default licence and the
-  web-versions-only download rather than charging a normal post two rulings
-  its author has no answer to. `"photos"` leads with a dropzone and a large
-  photo grid whose caption/description inputs sit under every photo (no panel
-  hunting), the licence and download pair beside them, and the text editor
-  folded behind one button until asked for. The mode is a **radio pair
-  inside the form** (`post[mode]`), so switching is an ordinary `validate`
-  (no event/race split) and form recovery restores the mode with the rest of
-  the form after a reconnect. Entry points: the feed's camera trigger opens
-  photos-first (`set_mode` via `send_update`), editing a photo-only post
-  derives it, replies stay text-only.
+  **One composer, no tabs.** A post is one kind — photos are optional
+  attachments on it — and the composer says so: the editor is always on
+  screen, and every arrangement decision keys on **whether photos are
+  attached**, never on a mode. Attached photos always render as the large
+  natural-ratio grid with their caption input and camera switch inline under
+  every tile (no panel hunting). The two rights questions — licence and
+  download — fold behind the collapsed **"Photo details"** row that appears
+  with the first photo, prefilled with the author's defaults: someone
+  stapling a screenshot to a text is not charged two rulings they have no
+  answer to (the spirit of issue #1157), while a photographer is one tap
+  away. A post saved with the row folded keeps the author's default licence
+  and the web-versions-only download; `save` falls back to the stored value
+  on edit, so an edit that never rendered the selects cannot reset them.
+  The Text|Fotos tabs this replaces made the same stored post *feel* like
+  two kinds, with the questions asked diverging per tab. Entry points: the
+  feed's pill opens the composer plain, its camera button opens the same
+  composer and client-side clicks the "Add photos" control.
 
   **Photos survive a reconnect.** The attached rows ride the form as hidden
   `post[image_ids][]` inputs; a re-mounted composer re-adopts the recovered,
@@ -68,7 +67,6 @@ defmodule VutuvWeb.PostLive.Composer do
   alias VutuvWeb.PostComponents
 
   @presets ~w(public followers connections only_me custom)
-  @modes ~w(text photos)
 
   # The review panel's form values, kept as a plain string-keyed map (the
   # panel inputs are plain form fields; the changeset runs on save).
@@ -109,24 +107,6 @@ defmodule VutuvWeb.PostLive.Composer do
         init_composer(socket)
       end
 
-    # One-shot mode override from the host's two triggers (the feed's camera
-    # button opens photos-first, the pill text-first). Not a template prop: a
-    # prop would re-force the mode on every host re-render, undoing the
-    # author's own switch. The camera always gets its way — pressing it IS
-    # the request for the photo layout — while the pill, the default entry,
-    # never rearranges the composer under a held draft.
-    socket =
-      case assigns[:set_mode] do
-        "photos" ->
-          assign(socket, :mode, "photos")
-
-        "text" ->
-          if drafting?(socket.assigns), do: socket, else: assign(socket, :mode, "text")
-
-        _no_override ->
-          socket
-      end
-
     {:ok, socket}
   end
 
@@ -152,13 +132,10 @@ defmodule VutuvWeb.PostLive.Composer do
     # page seeds a Markdown blockquote when the reader marked part of the post
     # before pressing Reply (issue #1114). An edited post's own body wins.
     |> assign(:body, (post && post.body) || socket.assigns[:initial_body] || "")
-    |> assign(:mode, initial_mode(socket.assigns, post, images))
-    # Whether photo mode's optional text editor is unfolded. It latches: once
-    # the editor was on screen (asked for, or opened by an existing body), it
-    # stays — deleting the last character must not fold the editor away under
-    # the cursor. A reconnect that resets the flag cannot hide recovered text
-    # either, since `validate` re-latches from the recovered body (#1130).
-    |> assign(:text_open?, ((post && post.body) || socket.assigns[:initial_body] || "") != "")
+    # Whether the folded licence/download row is opened. Starts folded even on
+    # edit — the fold names the answers in force, and a reconnect that resets
+    # the flag hides no data (the values live in assigns and the draft).
+    |> assign(:photo_details_open?, false)
     |> assign(:review, review_values(post))
     |> assign(:review_lookup_error, nil)
     |> assign(:tags_value, tags_value(post))
@@ -233,14 +210,10 @@ defmodule VutuvWeb.PostLive.Composer do
       socket
       |> assign(:body, draft.body)
       |> assign(:tags_value, draft.tags)
-      # `resolve_mode/2` is the same gate a switch goes through, so a reply —
-      # which is text-only — cannot be pushed into photo mode by a stored value.
-      |> assign(:mode, resolve_mode(%{"mode" => draft.mode}, assigns))
       |> assign(:review, Map.merge(@empty_review, Map.take(draft.review, review_keys())))
       |> assign(:images, images)
       |> assign(:photos, photo_state_from_draft(draft, images))
       |> assign(:license, PhotoLicense.cast(draft.license || assigns.license))
-      |> assign(:text_open?, draft.body != "")
       |> assign(:restored_draft?, true)
     else
       _no_draft -> socket
@@ -313,7 +286,6 @@ defmodule VutuvWeb.PostLive.Composer do
       Posts.save_draft(assigns.current_user, draft_context(assigns), %{
         "body" => assigns.body,
         "tags" => assigns.tags_value,
-        "mode" => assigns.mode,
         "license" => assigns.license,
         "review" => assigns.review,
         "image_ids" => Enum.map(assigns.images, & &1.id),
@@ -544,12 +516,6 @@ defmodule VutuvWeb.PostLive.Composer do
     socket =
       socket
       |> assign(:body, body)
-      |> assign(:mode, resolve_mode(params, socket.assigns))
-      # The latch half of `show_editor?/3`: once a body existed, photo mode's
-      # editor stays unfolded even after the author deletes the last character
-      # (folding it away under the cursor would read as data loss) — and a
-      # recovered body re-latches it after a reconnect (#1130).
-      |> assign(:text_open?, socket.assigns.text_open? or body != "")
       |> assign(:tags_value, params["tags"] || socket.assigns.tags_value)
       |> assign(:license, PhotoLicense.cast(params["license"] || socket.assigns.license))
       |> assign(:review, Map.merge(socket.assigns.review, params["review"] || %{}))
@@ -663,12 +629,12 @@ defmodule VutuvWeb.PostLive.Composer do
     end
   end
 
-  ## Photo strip and panel (issue #1104)
+  ## Photo grid and panel (issue #1104)
 
-  # Photo mode's folded text editor unfolds on request; a non-empty body keeps
-  # it open without this flag (see `show_editor?/3`).
-  def handle_event("show-text", _params, socket) do
-    {:noreply, assign(socket, :text_open?, true)}
+  # The folded licence/download row (the two rights questions) opens on
+  # request and stays open; the fold itself names the answers in force.
+  def handle_event("toggle-photo-details", _params, socket) do
+    {:noreply, assign(socket, :photo_details_open?, not socket.assigns.photo_details_open?)}
   end
 
   def handle_event("photo-open", %{"id" => id}, socket) do
@@ -789,12 +755,12 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, cancel_upload(socket, :images, ref)}
   end
 
-  # Discarding really discards. Two controls share it: photo mode's ✕, where
-  # closing over invisible uploaded photos meant the next "Write a post"
-  # surprised people with last week's pictures, and the restore notice's
-  # "Discard draft" (issue #1148). So the pending rows die now (their files
-  # with them), the stored draft goes, and the form falls back to the state the
-  # composer opened in — which on the reply page still includes the quote.
+  # Discarding really discards. Two controls share it: the header's own
+  # "Discard draft" button (shown while there is something to lose — the ✕
+  # only collapses, issue #1135) and the restore notice's "Discard draft"
+  # (issue #1148). So the pending rows die now (their files with them), the
+  # stored draft goes, and the form falls back to the state the composer
+  # opened in — which on the reply page still includes the quote.
   #
   # Only the feed has a panel to collapse, and only the feed LiveView has the
   # matching handle_info: the reply, remote-reply and edit pages define none at
@@ -889,32 +855,6 @@ defmodule VutuvWeb.PostLive.Composer do
   defp resolve_preset(params, assigns),
     do: if(params["preset"] in @presets, do: params["preset"], else: assigns.preset)
 
-  # The mode radios live inside the form, so a switch is just a validate —
-  # and form recovery replays the checked radio after a reconnect. Replies
-  # never switch (their composer is a conversation turn, not a gallery).
-  defp resolve_mode(params, assigns) do
-    if params["mode"] in @modes and mode_switchable?(assigns),
-      do: params["mode"],
-      else: assigns.mode
-  end
-
-  # Replies (local and remote) stay text-first: their composer is a turn in a
-  # conversation, not a gallery.
-  defp mode_switchable?(assigns), do: is_nil(assigns.parent) and is_nil(assigns.remote_note)
-
-  defp initial_mode(host_assigns, post, images) do
-    cond do
-      host_assigns[:parent] != nil or host_assigns[:remote_note] != nil -> "text"
-      post != nil and images != [] and (post.body || "") == "" -> "photos"
-      true -> "text"
-    end
-  end
-
-  # Photo mode folds the editor away until asked for — but a body always keeps
-  # it open, so recovered text (#1130) can never sit invisible in a hidden
-  # field.
-  defp show_editor?(mode, body, text_open?), do: mode == "text" or body != "" or text_open?
-
   # Tell the feed that this composer holds a draft (issue #1130).
   #
   # The feed keeps its composer collapsed behind a "Write a post" trigger and
@@ -989,11 +929,10 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, assign(socket, :error, save_error_message(reason))}
   end
 
-  # Back to an empty form: after a successful post, and after photo mode's ✕
-  # discards a draft. Mode and audience choice stick on purpose. The stored
-  # draft is dropped by the caller (issue #1148), not here — a reset is not
-  # always a discard, and clearing the form would autosave an empty draft away
-  # anyway.
+  # Back to an empty form: after a successful post, and after "Discard draft".
+  # The audience choice sticks on purpose. The stored draft is dropped by the
+  # caller (issue #1148), not here — a reset is not always a discard, and
+  # clearing the form would autosave an empty draft away anyway.
   defp reset_composer(socket) do
     opening_body = socket.assigns[:initial_body] || ""
 
@@ -1005,7 +944,7 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:images, [])
     |> assign(:photos, %{})
     |> assign(:open_photo, nil)
-    |> assign(:text_open?, opening_body != "")
+    |> assign(:photo_details_open?, false)
     |> assign(:error, nil)
   end
 
@@ -1219,7 +1158,7 @@ defmodule VutuvWeb.PostLive.Composer do
       assign(assigns, :download_choice, download_selection(assigns.photos, assigns.images))
 
     ~H"""
-    <div id={@id} data-composer-mode={@mode}>
+    <div id={@id}>
       <.card>
         <%!-- Says out loud that this text came back rather than being typed
         just now (issue #1148) — without it a restored draft is indistinguishable
@@ -1250,119 +1189,65 @@ defmodule VutuvWeb.PostLive.Composer do
           phx-change="validate"
           phx-target={@myself}
         >
-          <%!-- Header row: the text/photos mode switch (a radio pair riding
-          the form, so switching is an ordinary validate and form recovery
-          restores it), and — feed compose only — the corner ✕ that collapses
-          the composer. The ✕ carries no phx-target: the event bubbles up to
-          the feed LiveView that owns the reveal (`close-composer`). The edit,
-          reply and remote-reply pages navigate away instead, so they must
-          never render it (the remote-reply page has no handler and a click
-          there crashed the page). --%>
+          <%!-- Header row, feed compose only: "Discard draft" (while there is
+          something to lose) and the corner ✕ that merely collapses the
+          composer. The ✕ carries no phx-target: the event bubbles up to the
+          feed LiveView that owns the reveal (`close-composer`) — a draft
+          always survives it (issue #1135; the server-side draft of #1148
+          keeps the photos too, and the feed re-opens over a held draft, so
+          nothing sits invisibly). Really throwing a draft away is its own,
+          confirmed control. The edit, reply and remote-reply pages navigate
+          away instead, so they must never render either button (the
+          remote-reply page has no close handler and a click there crashed
+          the page). --%>
           <div
-            :if={mode_switchable?(assigns) or (@post == nil and @parent == nil and @remote_note == nil)}
-            class="mb-2 flex items-start justify-between gap-3"
+            :if={@post == nil and @parent == nil and @remote_note == nil}
+            class="-mt-1 mb-2 flex items-center justify-end gap-1"
           >
-            <div
-              :if={mode_switchable?(assigns)}
-              role="radiogroup"
-              aria-label={gettext("Post type")}
-              class="inline-flex items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800"
-            >
-              <.mode_tab id={"#{@id}-mode-text"} value="text" active={@mode == "text"}>
-                {gettext("Text")}
-              </.mode_tab>
-              <.mode_tab id={"#{@id}-mode-photos"} value="photos" active={@mode == "photos"}>
-                {gettext("Photos")}
-              </.mode_tab>
-            </div>
-
-            <%!-- The ✕ means two different things by mode, and says so via
-            its tooltip: a TEXT draft survives a close (issue #1135 — the
-            composer only collapses, `close-composer` bubbling to the feed),
-            while a PHOTO draft is really discarded (`discard-draft`, handled
-            here): collapsing over invisible uploaded photos meant the next
-            "Write a post" surprised people with last week's pictures. The
-            confirm guards the destructive half, and only when there is
-            something to lose. --%>
             <button
-              :if={@post == nil and @parent == nil and @remote_note == nil}
+              :if={drafting?(assigns)}
               type="button"
-              phx-click={if @mode == "photos", do: "discard-draft", else: "close-composer"}
-              phx-target={if @mode == "photos", do: @myself}
-              data-confirm={
-                if @mode == "photos" and drafting?(assigns),
-                  do: gettext("Discard the photos and text of this draft?")
-              }
-              aria-label={if @mode == "photos", do: gettext("Discard draft"), else: gettext("Close")}
-              title={if @mode == "photos", do: gettext("Discard draft"), else: gettext("Close")}
-              class="-mr-2 -mt-1 ml-auto rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              id={"#{@id}-discard"}
+              phx-click="discard-draft"
+              phx-target={@myself}
+              data-confirm={gettext("Discard the photos and text of this draft?")}
+              class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-red-400"
+            >
+              {gettext("Discard draft")}
+            </button>
+            <button
+              type="button"
+              phx-click="close-composer"
+              aria-label={gettext("Close")}
+              title={gettext("Close")}
+              class="-mr-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
               ✕
             </button>
           </div>
 
-          <%!-- One line saying what this mode IS, for everyone who lands here
-          from the camera button without a mental model of the two modes. --%>
-          <p
-            :if={@mode == "photos"}
-            data-photo-mode-hint
-            class="mb-3 text-xs text-slate-600 dark:text-slate-400"
-          >
-            {gettext(
-              "A photo post shows your pictures big and first; text is optional. For a post that is mainly text, switch to \"Text\"."
-            )}
-          </p>
+          <%!-- The editor is always on screen: a post is one kind, words
+          first, whether or not pictures join it below. --%>
+          <.body_editor id={@id} body={@body} post={@post} />
 
-          <%!-- Text mode leads with the editor. Photo mode renders the same
-          editor below the photos instead (one instance at a time, so the ids
-          never collide). --%>
-          <.body_editor :if={@mode == "text"} id={@id} body={@body} post={@post} mode={@mode} />
-
-          <%!-- The compact photo strip (text mode, issue #1104). Drop photos
-          and press Post is the whole flow; everything else is opt-in and one
-          tap away. Tiles are drag-reorderable on a pointer device and ◀ ▶
-          reorderable everywhere (touch cannot fire native HTML5 drag), and
-          the first tile is marked the one that leads the mosaic, so ordering
-          is the only layout control there is. --%>
+          <%!-- The photo grid, whenever photos are attached: they come large
+          in their own aspect ratio, with their caption and camera switch in
+          plain sight under every tile — nothing to hunt for behind ⚙, which
+          keeps only the rarer refinements (alt text, download override). The
+          grid is also the drop target, and adding more is a tile of its own,
+          the way every photo tool does it. Tiles are drag-reorderable on a
+          pointer device and ◀ ▶ reorderable everywhere (touch cannot fire
+          native HTML5 drag); the first tile leads the mosaic, so ordering is
+          the only layout control there is. Each tile carries a DOM id so
+          morphdom keys it: a drag has already moved the node when the
+          server's re-render arrives, and the patch then just settles it. --%>
           <div
-            :if={@mode == "text" and @images != []}
-            id={"#{@id}-images"}
-            phx-hook="PhotoStrip"
-            phx-target={@myself}
-            class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5"
-          >
-            <%!-- Each tile carries a DOM id so morphdom keys it: a drag has
-            already moved the node when the server's re-render arrives, and the
-            patch then just settles it (the profile reorder tool's pattern). --%>
-            <div
-              :for={{image, index} <- Enum.with_index(@images)}
-              id={"#{@id}-photo-#{image.id}"}
-              data-photo-tile={image.id}
-            >
-              <.photo_frame
-                image={image}
-                index={index}
-                count={length(@images)}
-                open?={@open_photo == image.id}
-                alt_missing?={photo_described?(@photos, image) == false}
-                myself={@myself}
-              />
-            </div>
-          </div>
-
-          <%!-- The photo grid (photo mode): the photos ARE the post, so they
-          come large, with their caption and description in plain sight under
-          every tile — nothing to hunt for behind ⚙, which keeps only the
-          rarer switches (camera line, download). The grid is also the drop
-          target, and adding more is a tile of its own, the way every photo
-          tool does it. --%>
-          <div
-            :if={@mode == "photos"}
+            :if={@images != []}
             id={"#{@id}-images"}
             phx-hook="PhotoStrip"
             phx-target={@myself}
             phx-drop-target={@uploads.images.ref}
-            class="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-3"
+            class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"
           >
             <div
               :for={{image, index} <- Enum.with_index(@images)}
@@ -1376,8 +1261,6 @@ defmodule VutuvWeb.PostLive.Composer do
                 count={length(@images)}
                 open?={@open_photo == image.id}
                 alt_missing?={photo_described?(@photos, image) == false}
-                natural?
-                roomy?
                 myself={@myself}
               />
 
@@ -1424,31 +1307,17 @@ defmodule VutuvWeb.PostLive.Composer do
               </div>
             </div>
 
-            <%!-- Adding more photos is a tile among tiles; an empty grid is
-            one big dropzone instead. Only one of the two renders, so the
-            upload input exists exactly once. --%>
+            <%!-- Adding more photos is a tile among tiles. It shares its id
+            with the bottom row's picker (exactly one of the two renders, so
+            the upload input exists exactly once), which is how the feed's
+            camera button always finds a target to click. --%>
             <label
-              :if={@images != []}
+              id={"#{@id}-add-photos"}
               data-photo-add-tile
               class="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-slate-300 text-slate-600 hover:border-brand-400 hover:bg-brand-50/50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-200"
             >
               <.camera_icon class="h-6 w-6" />
               <span class="px-2 text-center text-xs font-semibold">{gettext("Add photos")}</span>
-              <.live_file_input upload={@uploads.images} class="sr-only" />
-            </label>
-
-            <label
-              :if={@images == []}
-              data-photo-dropzone
-              class="col-span-full flex h-44 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 text-slate-600 hover:border-brand-400 hover:bg-brand-50/50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-200"
-            >
-              <.camera_icon class="h-8 w-8" />
-              <span class="px-4 text-center text-sm font-semibold">
-                {gettext("Select photos, or drag them here")}
-              </span>
-              <span class="px-4 text-center text-xs">
-                {gettext("Up to %{max} photos per post", max: Posts.max_images_per_post())}
-              </span>
               <.live_file_input upload={@uploads.images} class="sr-only" />
             </label>
           </div>
@@ -1483,135 +1352,121 @@ defmodule VutuvWeb.PostLive.Composer do
             image={open_photo(@images, @open_photo)}
             settings={photo_settings(@photos, open_photo(@images, @open_photo))}
             many?={length(@images) > 1}
-            caption?={@mode == "text"}
-            camera?={@mode == "text"}
-            download?={@mode == "photos"}
-            insert?={@mode == "text"}
             id={"#{@id}-photo-panel"}
             myself={@myself}
           />
 
           <%!-- The two questions about the pictures themselves — who may reuse
-          them, and what a visitor can actually save — as one quiet labeled
-          pair, at home with the photos they are about instead of loose in the
-          button row (where they read as controls about nothing, issue #1104
-          feedback).
-
-          They belong to PHOTO MODE only. Someone stapling a screenshot to a
-          text is not publishing a picture, and asking them to rule on reuse
-          rights and original files turns two questions they have no answer to
-          into the price of a normal post. A text post keeps the author's
-          default licence and the web-versions-only download; the moment the
-          pictures ARE the post, the Fotos tab asks — which is also where an
-          edited photo post finds the pair again. --%>
-          <div :if={@mode == "photos" and @images != []} class="mt-3 space-y-2">
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <label
-                for={"#{@id}-license"}
-                class="text-sm font-medium text-slate-600 dark:text-slate-400"
-              >
-                {gettext("Licence")}
-              </label>
-              <select
-                name="post[license]"
-                id={"#{@id}-license"}
-                title={gettext("Who may reuse these photos")}
-                class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
-              >
-                <option
-                  :for={license <- PhotoLicense.values()}
-                  value={license}
-                  selected={@license == license}
-                >
-                  {PhotoLicense.label(license)}
-                </option>
-              </select>
-            </div>
-
-            <%!-- The download question used to be reachable only by tapping a
-            photo, where nobody found it (the same complaint that moved the
-            camera switch out of the panel). It belongs here: what a visitor
-            gets is the licence's practical half, and it is one answer for the
-            whole set. The panel keeps the per-photo override, so a post whose
-            photos disagree reads "Different per photo" rather than pretending
-            the set agrees. --%>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <label
-                for={"#{@id}-download"}
-                class="text-sm font-medium text-slate-600 dark:text-slate-400"
-              >
-                {gettext("Download")}
-              </label>
-              <select
-                name="post[download]"
-                id={"#{@id}-download"}
-                phx-change="download-choice"
-                phx-target={@myself}
-                title={gettext("What a visitor can save")}
-                class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
-              >
-                <option value="none" selected={@download_choice == "none"}>
-                  {gettext("Web versions only (%{format})", format: served_format())}
-                </option>
-                <option value="clean" selected={@download_choice == "clean"}>
-                  {gettext("Original, metadata removed")}
-                </option>
-                <option value="exact" selected={@download_choice == "exact"}>
-                  {gettext("Original, exactly as uploaded")}
-                </option>
-                <option :if={@download_choice == "mixed"} value="mixed" selected>
-                  {gettext("Different per photo")}
-                </option>
-              </select>
-            </div>
-
-            <%!-- The two things that make the choice an informed one, each
-            shown at the moment it applies rather than as a standing notice
-            nobody reads. --%>
-            <p
-              :if={@download_choice == "exact" and located_photos(@images) > 0}
-              class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
-              data-download-gps-warning
-            >
-              {ngettext(
-                "This photo carries the location it was taken at, and the exact file hands it over.",
-                "Some of these photos carry the location they were taken at, and the exact file hands it over.",
-                located_photos(@images)
-              )}
-            </p>
-            <p
-              :if={@download_choice == "clean" and uncleanable?(@images)}
-              class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
-              data-download-clean-notice
-            >
-              {gettext(
-                "A file whose format cannot be cleaned is handed out exactly as uploaded."
-              )}
-            </p>
-          </div>
-
-          <%!-- Photo mode: the optional words come after the pictures, folded
-          behind one button until asked for. A non-empty body keeps the editor
-          open on its own (recovered text must never hide, #1130). --%>
-          <div :if={@mode == "photos"} class="mt-3">
+          them, and what a visitor can actually save — behind one collapsed
+          row that appears with the first photo. Someone stapling a screenshot
+          to a text is not publishing a picture, so they are never made to
+          rule on reuse rights and original files as the price of an ordinary
+          post (the spirit of issue #1157): the fold names the answers in
+          force and can simply be ignored, while a photographer is one tap
+          away. The selects render only while open, so a save with the row
+          folded falls back to the stored value and cannot reset it. --%>
+          <div :if={@images != []} class="mt-3">
             <button
-              :if={not show_editor?(@mode, @body, @text_open?)}
               type="button"
-              id={"#{@id}-add-text"}
-              phx-click="show-text"
+              id={"#{@id}-photo-details-toggle"}
+              data-photo-details-toggle
+              phx-click="toggle-photo-details"
               phx-target={@myself}
-              class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              aria-expanded={to_string(@photo_details_open?)}
+              aria-controls={"#{@id}-photo-details"}
+              class="-ml-2 inline-flex min-h-9 flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
             >
-              ✏️ {gettext("Add text (optional)")}
+              <span aria-hidden="true" class="text-xs">
+                {if @photo_details_open?, do: "▾", else: "▸"}
+              </span>
+              {gettext("Photo details")}
+              <span class="font-normal text-slate-500 dark:text-slate-400">
+                · {PhotoLicense.label(@license)} · {download_label(@download_choice)}
+              </span>
             </button>
 
-            <.body_editor
-              :if={show_editor?(@mode, @body, @text_open?)}
-              id={@id}
-              body={@body}
-              post={@post}
-              mode={@mode}
-            />
+            <div :if={@photo_details_open?} id={"#{@id}-photo-details"} class="mt-2 space-y-2">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <label
+                  for={"#{@id}-license"}
+                  class="text-sm font-medium text-slate-600 dark:text-slate-400"
+                >
+                  {gettext("Licence")}
+                </label>
+                <select
+                  name="post[license]"
+                  id={"#{@id}-license"}
+                  title={gettext("Who may reuse these photos")}
+                  class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
+                >
+                  <option
+                    :for={license <- PhotoLicense.values()}
+                    value={license}
+                    selected={@license == license}
+                  >
+                    {PhotoLicense.label(license)}
+                  </option>
+                </select>
+              </div>
+
+              <%!-- What a visitor gets is the licence's practical half, and
+              it is one answer for the whole set. The panel keeps the
+              per-photo override, so a post whose photos disagree reads
+              "Different per photo" rather than pretending the set agrees. --%>
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <label
+                  for={"#{@id}-download"}
+                  class="text-sm font-medium text-slate-600 dark:text-slate-400"
+                >
+                  {gettext("Download")}
+                </label>
+                <select
+                  name="post[download]"
+                  id={"#{@id}-download"}
+                  phx-change="download-choice"
+                  phx-target={@myself}
+                  title={gettext("What a visitor can save")}
+                  class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
+                >
+                  <option value="none" selected={@download_choice == "none"}>
+                    {download_label("none")}
+                  </option>
+                  <option value="clean" selected={@download_choice == "clean"}>
+                    {download_label("clean")}
+                  </option>
+                  <option value="exact" selected={@download_choice == "exact"}>
+                    {download_label("exact")}
+                  </option>
+                  <option :if={@download_choice == "mixed"} value="mixed" selected>
+                    {download_label("mixed")}
+                  </option>
+                </select>
+              </div>
+
+              <%!-- The two things that make the choice an informed one, each
+              shown at the moment it applies rather than as a standing notice
+              nobody reads. --%>
+              <p
+                :if={@download_choice == "exact" and located_photos(@images) > 0}
+                class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+                data-download-gps-warning
+              >
+                {ngettext(
+                  "This photo carries the location it was taken at, and the exact file hands it over.",
+                  "Some of these photos carry the location they were taken at, and the exact file hands it over.",
+                  located_photos(@images)
+                )}
+              </p>
+              <p
+                :if={@download_choice == "clean" and uncleanable?(@images)}
+                class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+                data-download-clean-notice
+              >
+                {gettext(
+                  "A file whose format cannot be cleaned is handed out exactly as uploaded."
+                )}
+              </p>
+            </div>
           </div>
 
           <%!-- Tags get their own full-width row. --%>
@@ -1736,30 +1591,32 @@ defmodule VutuvWeb.PostLive.Composer do
             </p>
           </div>
 
-          <%!-- Bottom row: the image picker on the left (text mode; photo mode
-          adds photos in the grid itself), the (slightly wider) submit button
-          on the right. New posts publish public, so there is no audience
-          picker here; a post pinned public by reposts/replies still shows the
-          read-only lock chip beside the button. --%>
+          <%!-- Bottom row: the photo picker on the left (once photos are
+          attached, the grid's add tile takes over — exactly one upload input
+          renders), the (slightly wider) submit button on the right. New
+          posts publish public, so there is no audience picker here; a post
+          pinned public by reposts/replies still shows the read-only lock
+          chip beside the button. --%>
           <div class="mt-3 flex items-center gap-3">
             <%!-- h-9 pins this to the Post button's height (both 36px, the
             standard control height): the 📷 emoji would otherwise inflate the
             line box, and mb-0 drops the global `label` margin (components.css)
-            that would offset it in this row. --%>
+            that would offset it in this row. Shares its id with the grid's
+            add tile (one of the two renders), so the feed's camera button
+            always has a target to click. --%>
             <label
-              :if={@mode == "text"}
+              :if={@images == []}
+              id={"#{@id}-add-photos"}
               class="inline-flex h-9 mb-0 cursor-pointer items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
-              📷 {gettext("Add images")}
+              📷 {gettext("Add photos")}
               <.live_file_input upload={@uploads.images} class="sr-only" />
             </label>
 
             <%!-- Review triggers: open the book/film review panel. Emoji-only
-            on phones (the row is tight there), labeled from sm up. Text mode
-            only — a photo post is not a review, and photo mode's job is to
-            carry nothing the photographer does not need. --%>
+            on phones (the row is tight there), labeled from sm up. --%>
             <button
-              :if={@mode == "text" and @review["kind"] == ""}
+              :if={@review["kind"] == ""}
               type="button"
               phx-click="review-kind"
               phx-value-kind="book"
@@ -1771,7 +1628,7 @@ defmodule VutuvWeb.PostLive.Composer do
               📖<span class="hidden sm:inline">{gettext("Book")}</span>
             </button>
             <button
-              :if={@mode == "text" and @review["kind"] == ""}
+              :if={@review["kind"] == ""}
               type="button"
               phx-click="review-kind"
               phx-value-kind="movie"
@@ -1928,38 +1785,20 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  # One tab of the text/photos mode switch: a label styled like the segmented
-  # post-filter tabs, wrapping a real radio (`post[mode]`) so a switch is an
-  # ordinary form change and recovery restores it. The sr-only radio keeps
-  # keyboard semantics; `has-[:focus-visible]` paints the focus ring on the
-  # visible label in its place.
-  attr(:id, :string, required: true)
-  attr(:value, :string, required: true)
-  attr(:active, :boolean, required: true)
-  slot(:inner_block, required: true)
+  # What the folded details row says a visitor may save — the same wording
+  # the download select's options use, so the fold and the open control can
+  # never disagree.
+  defp download_label("clean"), do: gettext("Original, metadata removed")
+  defp download_label("exact"), do: gettext("Original, exactly as uploaded")
+  defp download_label("mixed"), do: gettext("Different per photo")
 
-  defp mode_tab(assigns) do
-    ~H"""
-    <label class={[
-      "cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5",
-      "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500",
-      (@active &&
-         "bg-white font-semibold text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-100") ||
-        "font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-    ]}>
-      <input type="radio" id={@id} name="post[mode]" value={@value} checked={@active} class="sr-only" />
-      {render_slot(@inner_block)}
-    </label>
-    """
-  end
+  defp download_label(_none),
+    do: gettext("Web versions only (%{format})", format: served_format())
 
-  # The markdown editor plus its quiet character counter — rendered in one of
-  # two places (text mode up top, photo mode below the photos), never both,
-  # so the DOM ids stay unique.
+  # The markdown editor plus its quiet character counter.
   attr(:id, :string, required: true)
   attr(:body, :string, required: true)
   attr(:post, :any, required: true)
-  attr(:mode, :string, required: true)
 
   defp body_editor(assigns) do
     ~H"""
@@ -1968,7 +1807,7 @@ defmodule VutuvWeb.PostLive.Composer do
         id={"#{@id}-body"}
         name="post[body]"
         value={@body}
-        label={if(@mode == "photos", do: gettext("Text (optional)"), else: gettext("What's new?"))}
+        label={gettext("What's new?")}
         placeholder={gettext("What's new? Markdown is supported.")}
         rows={if(@post, do: 10, else: 3)}
         images
@@ -1983,29 +1822,22 @@ defmodule VutuvWeb.PostLive.Composer do
 
   # One photo's frame: the picture as one big options button, the badges, a
   # remove dot and (only when there is an order to change) the two reorder
-  # dots — shared by the text-mode strip and the photo-mode grid, which
-  # differ around it (tile size, inline inputs) but not in it. The old
-  # four-button bottom scrim is gone: with a single photo it was two dead
-  # arrows plus a ⚙ the picture-tap already covers. `draggable` sits here
-  # rather than on the outer cell so a drag in the grid's caption inputs
-  # selects text instead of starting a photo drag; the PhotoStrip hook finds
-  # the reorder unit via closest("[data-photo-tile]") either way. `natural?`
-  # sizes the frame to the photo's own aspect ratio (photo mode — a
-  # photographer judges the upload by the full frame), while the compact
-  # text strip keeps its uniform squares. `roomy?` grows the corner dots to
-  # finger size; the strip's small tiles get the compact variant.
+  # dots. The old four-button bottom scrim is gone: with a single photo it
+  # was two dead arrows plus a ⚙ the picture-tap already covers. `draggable`
+  # sits here rather than on the outer cell so a drag in the grid's caption
+  # inputs selects text instead of starting a photo drag; the PhotoStrip
+  # hook finds the reorder unit via closest("[data-photo-tile]") either way.
+  # The frame takes the photo's own aspect ratio — the author judges the
+  # upload by the full frame, never by a square crop.
   attr(:image, :any, required: true)
   attr(:index, :integer, required: true)
   attr(:count, :integer, required: true)
   attr(:open?, :boolean, required: true)
-  attr(:alt_badge?, :boolean, default: true)
   attr(:alt_missing?, :boolean, required: true)
-  attr(:natural?, :boolean, default: false)
-  attr(:roomy?, :boolean, default: false)
   attr(:myself, :any, required: true)
 
   defp photo_frame(assigns) do
-    assigns = assign(assigns, :ratio_style, assigns.natural? && natural_ratio(assigns.image))
+    assigns = assign(assigns, :ratio_style, natural_ratio(assigns.image))
 
     ~H"""
     <div
@@ -2032,13 +1864,8 @@ defmodule VutuvWeb.PostLive.Composer do
         <%!-- The natural-ratio frame needs the aspect-preserving `feed`
         version: `thumb` is itself a 320×320 centre crop (Vutuv.Uploads.Spec),
         so inside a portrait frame it would show a cut of a cut — exactly the
-        "still not the full picture" complaint the frame was meant to fix.
-        The square strip keeps the light thumb. --%>
-        <img
-          src={PostImage.url(@image, if(@natural?, do: "feed", else: "thumb"))}
-          alt=""
-          class="h-full w-full object-cover"
-        />
+        "still not the full picture" complaint the frame was meant to fix. --%>
+        <img src={PostImage.url(@image, "feed")} alt="" class="h-full w-full object-cover" />
       </button>
 
       <div class="pointer-events-none absolute left-1 top-1 flex flex-col items-start gap-1">
@@ -2056,7 +1883,7 @@ defmodule VutuvWeb.PostLive.Composer do
         <%!-- The alt-text nudge: amber while a photo has no description, so
         the gap is visible without blocking anything. --%>
         <span
-          :if={@alt_badge? and @alt_missing?}
+          :if={@alt_missing?}
           title={gettext("No image description yet")}
           class="pointer-events-auto rounded bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
           data-photo-alt-missing={@image.id}
@@ -2072,7 +1899,7 @@ defmodule VutuvWeb.PostLive.Composer do
         phx-target={@myself}
         aria-label={gettext("Remove photo")}
         title={gettext("Remove photo")}
-        class={["absolute right-1 top-1", tile_dot_class(@roomy?)]}
+        class={["absolute right-1 top-1", tile_dot_class()]}
       >
         ✕
       </button>
@@ -2088,7 +1915,7 @@ defmodule VutuvWeb.PostLive.Composer do
         phx-value-dir="back"
         phx-target={@myself}
         aria-label={gettext("Move photo earlier")}
-        class={["absolute bottom-1 left-1", tile_dot_class(@roomy?)]}
+        class={["absolute bottom-1 left-1", tile_dot_class()]}
       >
         ◀
       </button>
@@ -2100,7 +1927,7 @@ defmodule VutuvWeb.PostLive.Composer do
         phx-value-dir="forward"
         phx-target={@myself}
         aria-label={gettext("Move photo later")}
-        class={["absolute bottom-1 right-1", tile_dot_class(@roomy?)]}
+        class={["absolute bottom-1 right-1", tile_dot_class()]}
       >
         ▶
       </button>
@@ -2108,15 +1935,10 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  # The corner-dot recipe: finger-sized in the photo grid (roomy), compact in
-  # the text strip whose small tiles cannot fit 40px targets.
-  defp tile_dot_class(true),
+  # The corner-dot recipe: finger-sized, per the phone-first rule.
+  defp tile_dot_class,
     do:
       "flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/60 text-sm text-white hover:bg-slate-900/80"
-
-  defp tile_dot_class(false),
-    do:
-      "flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/60 text-xs text-white hover:bg-slate-900/80"
 
   # The photo's own shape as an inline aspect-ratio, so the frame is stable
   # before the thumbnail loads; a row without stored dimensions falls back to
@@ -2172,36 +1994,25 @@ defmodule VutuvWeb.PostLive.Composer do
   switch reveals the choice of file and, when the photo carries a location,
   warns about it at the moment the exact file is picked.
 
-  The download switch is the **override** of the post-wide answer the select
-  beside the licence gives, so it renders only for a set of several photos
+  The download switch is the **override** of the post-wide answer the
+  "Photo details" row gives, so it renders only for a set of several photos
   (`many?`) — with one photo the two controls would be the same state asked
-  twice on the same screen — and only where that answer is asked at all
-  (`download?`, photo mode). Overriding a question a text post never asks is
-  a control about nothing.
+  twice on the same screen.
 
-  Photo mode moves two things out of here to where they are seen (issue
-  #1104 follow-up): `caption?` drops the caption input (it sits under every
-  tile there, and a second input of the same name would corrupt the submit)
-  and `camera?` drops the camera block (the inline row under the tile owns
-  it). The alt input always renders here — one opt-in refinement, one place.
-  `insert?` drops the "Insert into text" action (photo mode may have no
-  editor on screen to insert into).
+  The caption input and the camera switch live inline under the tile (issue
+  #1104 follow-up), not here — a second input of the same name would corrupt
+  the submit. The alt input always renders here: one opt-in refinement, one
+  place.
   """
   attr(:image, :any, required: true)
   attr(:settings, :map, required: true)
   attr(:many?, :boolean, required: true)
-  attr(:caption?, :boolean, default: true)
-  attr(:camera?, :boolean, default: true)
-  attr(:download?, :boolean, default: true)
-  attr(:insert?, :boolean, default: true)
   attr(:id, :string, required: true)
   attr(:myself, :any, required: true)
 
   def photo_panel(assigns) do
     assigns =
       assigns
-      |> assign(:camera_line, PostComponents.camera_line(assigns.image))
-      |> assign(:camera_info?, PostImage.camera_info?(assigns.image))
       |> assign(:cleanable?, Vutuv.PostImageStore.cleanable?(assigns.image))
 
     ~H"""
@@ -2216,15 +2027,6 @@ defmodule VutuvWeb.PostLive.Composer do
           class="h-16 w-16 shrink-0 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
         />
         <div class="min-w-0 flex-1 space-y-2">
-          <input
-            :if={@caption?}
-            type="text"
-            name={"photo[#{@image.id}][caption]"}
-            value={@settings.caption}
-            phx-debounce="300"
-            placeholder={gettext("Caption, shown under the photo (optional)")}
-            class={input_class()}
-          />
           <input
             type="text"
             name={"photo[#{@image.id}][alt]"}
@@ -2246,49 +2048,11 @@ defmodule VutuvWeb.PostLive.Composer do
       </div>
 
       <div class="mt-4 space-y-3">
-        <%!-- Camera info. The switch is disabled when there is nothing to
-        show, and says so — a dead toggle with no explanation reads as a bug.
-        Photo mode drops the whole block: the inline row under the tile owns
-        the switch there. --%>
-        <div :if={@camera?}>
-          <label class={[
-            "flex items-start gap-2 text-sm",
-            (@camera_info? && "text-slate-700 dark:text-slate-200") ||
-              "text-slate-500 dark:text-slate-500"
-          ]}>
-            <input
-              type="checkbox"
-              checked={@settings.show_camera_info}
-              disabled={not @camera_info?}
-              phx-click="photo-toggle"
-              phx-value-id={@image.id}
-              phx-value-field="show_camera_info"
-              phx-target={@myself}
-              class={checkbox_class()}
-              data-photo-camera-switch
-            />
-            <span>
-              <span class="font-semibold">{gettext("Show camera settings")}</span>
-              <span
-                :if={@camera_info?}
-                class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400"
-              >
-                {@camera_line}
-              </span>
-              <span :if={not @camera_info?} class="mt-0.5 block text-xs">
-                {gettext("This file carries no camera information.")}
-              </span>
-            </span>
-          </label>
-        </div>
-
         <%!-- The per-photo override of the post-wide download answer, and the
         one follow-up it reveals. With a single photo there is nothing to
-        override — the select beside the licence IS that photo's answer — so
-        the block stays away rather than offering the same state twice. Text
-        mode is never asked the question in the first place, so there is
-        nothing to override there either. --%>
-        <div :if={@many? and @download?}>
+        override — the "Photo details" select IS that photo's answer — so
+        the block stays away rather than offering the same state twice. --%>
+        <div :if={@many?}>
           <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
             <input
               type="checkbox"
@@ -2375,7 +2139,6 @@ defmodule VutuvWeb.PostLive.Composer do
 
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <button
-          :if={@insert?}
           type="button"
           phx-click="insert-inline"
           phx-value-id={@image.id}

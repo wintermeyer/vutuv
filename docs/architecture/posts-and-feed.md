@@ -520,53 +520,52 @@ Legacy `…/feed.webp` URLs in old post bodies keep resolving.
 Not a second kind of post — the same post, showing its pictures properly.
 Everything beyond "drop photos, press Post" is one switch or one select.
 
-### The composer's two modes
+### One composer, no tabs
 
-The composer serves two crowds whose needs point in opposite directions: the
-writer who staples a screenshot or two to a text (camera facts and licences
-are noise to them), and the photographer whose post IS the photos (the prose
-is noise to them). `PostLive.Composer` therefore arranges the same fields one
-of two ways — `@mode`, `"text"` or `"photos"`; nothing about the stored post
-differs.
+A post is one kind — photos are optional attachments on it — and the composer
+says so. The Text|Fotos tabs it used to have made the same stored post *feel*
+like two kinds, with the questions asked diverging per tab, so they went:
+`PostLive.Composer` has no mode, and every arrangement decision keys on
+**whether photos are attached**.
 
-**Text mode** is the classic layout: editor first, a compact thumbnail strip
-below, caption/alt behind each tile's ⚙ panel. **Photo mode** opens with a
-one-line explainer of what the mode is, leads with a dropzone (the grid is a
-`phx-drop-target`), renders the photos as a large grid, adds more photos via
-a tile in the grid, and folds the text editor behind one "Add text
-(optional)" button — a non-empty body keeps it open, so recovered text can
-never hide. In photo mode the tiles keep the photo's **own aspect ratio** (inline
-`aspect-ratio` from the stored dimensions — a photographer judges the upload
-by the full frame; the compact text strip keeps its uniform squares). Under
-every tile sit the things a photographer looks for and would not find
-behind a gear icon: **one caption input** (it doubles as the accessible name
-via `photo_alt/1`, so the alt input stays an opt-in refinement in the panel
-rather than a second required-looking field) and, when the file carries
-camera facts, the **"Show camera settings" switch with the very line
-visitors would see**. **The picture itself is the options button** (a real
-`<button>`, so keyboard users reach the panel too); the old four-button
-bottom scrim is gone — with a single photo it was two dead arrows plus a ⚙
-the picture-tap covers. What remains on the tile: a remove dot top-right,
-and the ◀ ▶ reorder dots only when more than one photo gives them meaning
-(they stay the touch reorder path, native drag cannot fire there). The book/film review triggers and the bottom-row picker are
-text-mode-only; the licence and download pair is photo-mode-only (see
+The **editor is always on top**. Attached photos always render as the
+**large grid** below it (the grid is a `phx-drop-target`; adding more photos
+is a tile in the grid, and with no photos yet the picker is the bottom row's
+"Add photos" label — exactly one upload input renders, and both carry the
+same `composer-add-photos` id, which is how the feed's camera button finds
+its target). Tiles keep the photo's **own aspect ratio** (inline
+`aspect-ratio` from the stored dimensions — the author judges the upload by
+the full frame, never a square crop). Under every tile sit the things a
+photographer looks for and would not find behind a gear icon: **one caption
+input** (it doubles as the accessible name via `photo_alt/1`, so the alt
+input stays an opt-in refinement in the panel rather than a second
+required-looking field) and, when the file carries camera facts, the **"Show
+camera settings" switch with the very line visitors would see**. **The
+picture itself is the options button** (a real `<button>`, so keyboard users
+reach the panel too); the old four-button bottom scrim is gone — with a
+single photo it was two dead arrows plus a ⚙ the picture-tap covers. What
+remains on the tile: a remove dot top-right, and the ◀ ▶ reorder dots only
+when more than one photo gives them meaning (they stay the touch reorder
+path, native drag cannot fire there). The book/film review triggers are
+always available (a book review may well carry a photo of the book); the
+licence and download pair folds behind the **"Photo details" row** (see
 below). The cover badge appears only from the second photo on, and the amber
 ALT nudge only while a photo has **neither** caption nor alt.
 
-The mode is a **radio pair inside the form** (`post[mode]`, the segmented
-control at the top), so switching is an ordinary `validate` and LiveView form
-recovery restores it after a reconnect. Entry points: the feed's trigger row
-offers the pill (text-first) and a camera button (photos-first) — the feed
-sends `set_mode` via `send_update`, where the camera always gets its way and
-the pill never rearranges a held draft; editing a photo-only post (images,
-empty body) derives photo mode; replies are text-only (no switch).
+Entry points: the feed's trigger row offers the pill and a camera button —
+both open the **same** composer; the camera button additionally chains a
+`JS.dispatch` click onto the composer's "Add photos" control (the label
+exists in the hidden panel), so the native photo picker opens in the same
+gesture, and a browser that refuses the scripted click still lands in a
+composer with that control in view.
 
-**The ✕ means two different things by mode.** A text draft survives a close
-(issue #1135 — the composer only collapses). Photo mode's ✕ is a real
-**discard** behind a confirm: the pending rows are deleted on the spot
-(`discard-draft` → `{:composer_discarded, id}` to the feed), because
-collapsing over invisible uploaded photos meant the next "Write a post"
-surprised people with last week's pictures.
+**The ✕ always collapses and keeps the draft** (issue #1135) — the
+server-side draft (issue #1148) keeps the photos too, and the feed re-opens
+over a held draft, so nothing ever sits invisibly behind the collapsed
+panel. Really throwing a draft away is its own control: the header's
+**"Discard draft"** button, shown only while there is something to lose,
+behind a confirm (`discard-draft` → `{:composer_discarded, id}` to the
+feed); the restore notice's button shares the handler.
 
 **Photos survive a reconnect.** The attached rows ride the form as hidden
 `post[image_ids][]` inputs; a re-mounted composer re-adopts the recovered,
@@ -636,25 +635,26 @@ with JS off those links are plain hrefs to the full-size image.
 `PostLive.Composer.photo_panel/1`): a `caption` (shown to everyone; distinct
 from `alt`, which describes the picture for people who cannot see it), a
 **camera-settings** switch (renders from the DB columns — the served files stay
-metadata-stripped) and, in photo mode with a set of several photos, the
-**download override** with its one follow-up, which file (see
-[images.md](images.md)). The panel
-expands below the strip rather than floating — a popover on a phone covers what
-it is about and has nowhere to put a follow-up. In photo mode the caption and
-the camera switch move out of the panel to under the tile itself (the panel
-drops them there — two same-name inputs would corrupt the submit); the alt
-input renders in the panel in both modes. An "apply to all photos" shortcut
-copies the two switches (never the texts: a caption describes one picture).
+metadata-stripped) and, for a set of several photos, the **download override**
+with its one follow-up, which file (see [images.md](images.md)). The caption
+and the camera switch live inline under the tile, not in the panel (two
+same-name inputs would corrupt the submit); the panel keeps the alt input and
+the override. It expands below the grid rather than floating — a popover on a
+phone covers what it is about and has nowhere to put a follow-up. An "apply to
+all photos" shortcut copies the two switches (never the texts: a caption
+describes one picture).
 
-**Per post**, the two questions about the pictures themselves, asked as a
-labeled pair below the photos — **in photo mode only**, and only once a photo
-is attached. Someone stapling a screenshot to a text is not publishing
-pictures: making them rule on reuse rights and original files is two answers
-they do not have as the price of an ordinary post. A text post therefore takes
-the author's default licence and the web-versions-only download silently, and
-an edited photo post finds the pair again one tab away under *Fotos* (the
-stored answers are untouched by an edit that never rendered the controls,
-since `save` falls back to the assign).
+**Per post**, the two questions about the pictures themselves — who may reuse
+them, and what a visitor can save — fold behind the collapsed **"Photo
+details" row** that appears with the first photo. Someone stapling a
+screenshot to a text is not publishing pictures: making them rule on reuse
+rights and original files is two answers they do not have as the price of an
+ordinary post (the spirit of issue #1157), so the fold names the answers in
+force (licence label + download label) and can simply be ignored, while a
+photographer is one tap away. A post saved with the row folded keeps the
+author's default licence and the web-versions-only download; the selects
+render only while the row is open, so an edit that never rendered them
+cannot reset the stored answers (`save` falls back to the assign).
 
 The first is **what a visitor can save**: the served AVIF versions only (the
 default), the full-resolution original with its metadata removed, or the

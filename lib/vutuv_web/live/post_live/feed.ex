@@ -23,6 +23,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # card is a global VutuvWeb.UI component, imported already).
   import VutuvWeb.UserHTML, only: [user_row: 1]
 
+  alias Phoenix.LiveView.JS
   alias Vutuv.ContentFilters
   alias Vutuv.Posts
   alias Vutuv.Social
@@ -269,14 +270,11 @@ defmodule VutuvWeb.PostLive.Feed do
      |> stream(:posts, entries, at: -1)}
   end
 
-  def handle_event("open-composer", params, socket) do
-    # Each trigger names the layout it stands for: the camera button opens
-    # photos-first, the plain pill text-first. The composer itself decides
-    # whether to honour the pill (it won't rearrange itself under a held
-    # draft — see `set_mode` in its update/2).
-    mode = if params["mode"] == "photos", do: "photos", else: "text"
-    send_update(VutuvWeb.PostLive.Composer, id: "composer", set_mode: mode)
-
+  def handle_event("open-composer", _params, socket) do
+    # Both triggers open the same composer — there are no modes. The camera
+    # button additionally clicks the composer's "Add photos" control
+    # client-side (a JS.dispatch chained onto its phx-click), so the photo
+    # picker opens in the same gesture.
     {:noreply, assign(socket, :composer_open?, true)}
   end
 
@@ -661,12 +659,15 @@ defmodule VutuvWeb.PostLive.Feed do
 
           <%!-- Collapsed by default: the shared avatar-card trigger (see
           <.composer_trigger>), revealed via phx-click, plus the camera button
-          that opens the same composer photos-first — the two crowds the
-          composer serves get one entry each. The composer stays mounted
-          (just hidden) so a half-typed draft survives a background feed
-          re-render; posting or the composer's corner ✕ collapses it. A
-          reconnect re-mounts this LiveView and would collapse it under a
-          draft, so a drafting composer re-opens itself (:composer_drafting). --%>
+          that opens the very same composer and client-side clicks its "Add
+          photos" control (the label exists in the hidden panel, so the
+          native picker opens in the same gesture; if a browser refuses the
+          scripted click, the opened composer still shows the control). The
+          composer stays mounted (just hidden) so a half-typed draft survives
+          a background feed re-render; posting or the composer's corner ✕
+          collapses it. A reconnect re-mounts this LiveView and would
+          collapse it under a draft, so a drafting composer re-opens itself
+          (:composer_drafting). --%>
           <div
             :if={!@composer_open?}
             class="flex items-center gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
@@ -684,8 +685,10 @@ defmodule VutuvWeb.PostLive.Feed do
             <button
               type="button"
               id="open-photo-composer"
-              phx-click="open-composer"
-              phx-value-mode="photos"
+              phx-click={
+                JS.push("open-composer")
+                |> JS.dispatch("click", to: "#composer-add-photos input[type=file]")
+              }
               title={gettext("Post photos")}
               aria-label={gettext("Post photos")}
               class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"

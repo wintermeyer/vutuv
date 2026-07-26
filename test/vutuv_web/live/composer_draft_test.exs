@@ -117,20 +117,19 @@ defmodule VutuvWeb.ComposerDraftTest do
       refute has_element?(reloaded, "[data-draft-restored]")
     end
 
-    test "photo mode's ✕ drops the stored draft too, not just the form", %{conn: conn} do
+    test "the header's Discard button drops the stored draft too, not just the form", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
 
       {:ok, live, _html} = live(conn, ~p"/feed")
-      type(live, %{"body" => "Ein halber Gedanke", "mode" => "photos"})
+      type(live, %{"body" => "Ein halber Gedanke"})
       assert Posts.get_draft(user)
 
-      # The ✕ is a real discard in photo mode (issue #1104), and it shares its
-      # handler with the restore notice's button — so it has to take the stored
-      # draft with it, or the next visit would hand back what was just thrown
-      # away.
-      live
-      |> element(~s(#composer button[phx-click="discard-draft"][title="Discard draft"]))
-      |> render_click()
+      # Discard shares its handler with the restore notice's button — so it
+      # has to take the stored draft with it, or the next visit would hand
+      # back what was just thrown away.
+      live |> element("#composer-discard") |> render_click()
 
       assert Posts.get_draft(user) == nil
     end

@@ -32,12 +32,13 @@ defmodule Vutuv.Posts.PostDraft do
 
   alias Vutuv.Posts.Post
 
-  @modes ~w(text photos)
-
   # Generous next to the handful of tags a post may carry, but bounded: the
   # field is raw text the member types, not the parsed tag list.
   @max_tags_length 2_000
 
+  # The `mode` column of the composer's retired Text/Fotos tabs still exists
+  # in the table (it has a DB default, so inserts stay fine); it is unused
+  # since the tabs went and gets dropped in a later deploy (N-1 rule).
   schema "post_drafts" do
     belongs_to(:user, Vutuv.Accounts.User)
     belongs_to(:parent, Post)
@@ -45,7 +46,6 @@ defmodule Vutuv.Posts.PostDraft do
 
     field(:body, :string, default: "")
     field(:tags, :string, default: "")
-    field(:mode, :string, default: "text")
     field(:license, :string)
     field(:review, :map, default: %{})
     field(:image_ids, {:array, :binary_id}, default: [])
@@ -66,10 +66,9 @@ defmodule Vutuv.Posts.PostDraft do
   """
   def changeset(draft, attrs) do
     draft
-    |> cast(attrs, [:body, :tags, :mode, :license, :review, :image_ids, :photos])
+    |> cast(attrs, [:body, :tags, :license, :review, :image_ids, :photos])
     |> validate_length(:body, max: Post.max_body_length())
     |> validate_length(:tags, max: @max_tags_length)
-    |> validate_inclusion(:mode, @modes)
   end
 
   @doc "The raw tag line's cap, so the composer and the tests agree on it."
