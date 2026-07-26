@@ -59,6 +59,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Posts.PostDraft
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
+  alias Vutuv.Uploads.Spec
   alias VutuvWeb.ErrorHelpers
   alias VutuvWeb.PostComponents
 
@@ -373,6 +374,66 @@ defmodule VutuvWeb.PostLive.Composer do
   defp open_photo(_images, nil), do: nil
   defp open_photo(images, id), do: Enum.find(images, &(&1.id == id))
 
+  ## The post-wide download answer (issue #1104 follow-up)
+
+  # What a visitor can save, as one value for the whole set: the served
+  # versions the page shows, the full-resolution original with its metadata
+  # removed, or the uploaded file byte for byte. The choice is per photo in
+  # the database (and the panel still edits it there), but it is asked once
+  # per post — a photographer decides "may my originals be downloaded" for a
+  # set, not for picture three of nine.
+  @download_choices ~w(none clean exact)
+
+  defp download_choice(%{download_original: false}), do: "none"
+  defp download_choice(%{download_exact: true}), do: "exact"
+  defp download_choice(_settings), do: "clean"
+
+  # `"mixed"` is a reading, not a choice: a post whose photos disagree (a
+  # per-photo override in the panel, or an older post opened for editing) must
+  # not have the select claim an answer nobody gave.
+  defp download_selection(photos, images) do
+    images
+    |> Enum.map(&download_choice(photo_settings(photos, &1)))
+    |> Enum.uniq()
+    |> case do
+      [] -> "none"
+      [one] -> one
+      _differing -> "mixed"
+    end
+  end
+
+  defp apply_download_choice(socket, choice) when choice in @download_choices do
+    settings = download_settings(choice)
+
+    photos =
+      Map.new(socket.assigns.photos, fn {id, current} -> {id, Map.merge(current, settings)} end)
+
+    assign(socket, :photos, photos)
+  end
+
+  defp apply_download_choice(socket, _mixed_or_unknown), do: socket
+
+  defp download_settings("none"), do: %{download_original: false, download_exact: false}
+  defp download_settings("clean"), do: %{download_original: true, download_exact: false}
+  defp download_settings("exact"), do: %{download_original: true, download_exact: true}
+
+  # How many of the photos carry the place they were taken. Only `has_gps` is
+  # stored (never the coordinates), which is all the warning needs.
+  defp located_photos(images), do: Enum.count(images, & &1.has_gps)
+
+  # A format `Vutuv.Uploads.MetadataStrip` cannot take apart is handed out as
+  # it is, whatever "metadata removed" says — `Posts.update_image_settings/2`
+  # forces the exact file at save time rather than breaking the promise, so
+  # the composer says so up front.
+  defp uncleanable?(images),
+    do: Enum.any?(images, &(not Vutuv.PostImageStore.cleanable?(&1)))
+
+  # "AVIF" — the served format names itself, so the select cannot advertise a
+  # format the pipeline no longer produces.
+  defp served_format do
+    Spec.served_ext() |> String.trim_leading(".") |> String.upcase()
+  end
+
   defp update_photo(socket, id, fun) do
     case Map.fetch(socket.assigns.photos, id) do
       :error ->
@@ -639,6 +700,15 @@ defmodule VutuvWeb.PostLive.Composer do
      socket
      |> update_photo(id, &Map.put(&1, :download_exact, exact == "true"))
      |> schedule_draft_save()}
+  end
+
+  # The post-wide download select. It carries its own `phx-change` rather than
+  # riding the form's `validate`, so it speaks only when the author actually
+  # turns it: every keystroke replays the whole form, and a replayed value
+  # would push the select's answer back over a per-photo choice just made in
+  # the panel. `validate` therefore ignores `post[download]` on purpose.
+  def handle_event("download-choice", %{"post" => %{"download" => choice}}, socket) do
+    {:noreply, apply_download_choice(socket, choice)}
   end
 
   # Copies one photo's four choices onto every other photo of the post. The
@@ -1139,6 +1209,11 @@ defmodule VutuvWeb.PostLive.Composer do
 
   @impl true
   def render(assigns) do
+    # Read off the per-photo state rather than kept beside it, so the select
+    # and the panel can never disagree about what is in force.
+    assigns =
+      assign(assigns, :download_choice, download_selection(assigns.photos, assigns.images))
+
     ~H"""
     <div id={@id} data-composer-mode={@mode}>
       <.card>
@@ -1411,30 +1486,95 @@ defmodule VutuvWeb.PostLive.Composer do
             myself={@myself}
           />
 
-          <%!-- Who may reuse the photos — one quiet labeled row, at home with
-          the photos it is about instead of loose in the button row (where it
-          read as a control about nothing, issue #1104 feedback). --%>
-          <div :if={@images != []} class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <label
-              for={"#{@id}-license"}
-              class="text-sm font-medium text-slate-600 dark:text-slate-400"
-            >
-              {gettext("Licence")}
-            </label>
-            <select
-              name="post[license]"
-              id={"#{@id}-license"}
-              title={gettext("Who may reuse these photos")}
-              class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
-            >
-              <option
-                :for={license <- PhotoLicense.values()}
-                value={license}
-                selected={@license == license}
+          <%!-- The two questions about the pictures themselves — who may reuse
+          them, and what a visitor can actually save — as one quiet labeled
+          pair, at home with the photos they are about instead of loose in the
+          button row (where they read as controls about nothing, issue #1104
+          feedback). --%>
+          <div :if={@images != []} class="mt-3 space-y-2">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <label
+                for={"#{@id}-license"}
+                class="text-sm font-medium text-slate-600 dark:text-slate-400"
               >
-                {PhotoLicense.label(license)}
-              </option>
-            </select>
+                {gettext("Licence")}
+              </label>
+              <select
+                name="post[license]"
+                id={"#{@id}-license"}
+                title={gettext("Who may reuse these photos")}
+                class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
+              >
+                <option
+                  :for={license <- PhotoLicense.values()}
+                  value={license}
+                  selected={@license == license}
+                >
+                  {PhotoLicense.label(license)}
+                </option>
+              </select>
+            </div>
+
+            <%!-- The download question used to be reachable only by tapping a
+            photo, where nobody found it (the same complaint that moved the
+            camera switch out of the panel). It belongs here: what a visitor
+            gets is the licence's practical half, and it is one answer for the
+            whole set. The panel keeps the per-photo override, so a post whose
+            photos disagree reads "Different per photo" rather than pretending
+            the set agrees. --%>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <label
+                for={"#{@id}-download"}
+                class="text-sm font-medium text-slate-600 dark:text-slate-400"
+              >
+                {gettext("Download")}
+              </label>
+              <select
+                name="post[download]"
+                id={"#{@id}-download"}
+                phx-change="download-choice"
+                phx-target={@myself}
+                title={gettext("What a visitor can save")}
+                class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
+              >
+                <option value="none" selected={@download_choice == "none"}>
+                  {gettext("Web versions only (%{format})", format: served_format())}
+                </option>
+                <option value="clean" selected={@download_choice == "clean"}>
+                  {gettext("Original, metadata removed")}
+                </option>
+                <option value="exact" selected={@download_choice == "exact"}>
+                  {gettext("Original, exactly as uploaded")}
+                </option>
+                <option :if={@download_choice == "mixed"} value="mixed" selected>
+                  {gettext("Different per photo")}
+                </option>
+              </select>
+            </div>
+
+            <%!-- The two things that make the choice an informed one, each
+            shown at the moment it applies rather than as a standing notice
+            nobody reads. --%>
+            <p
+              :if={@download_choice == "exact" and located_photos(@images) > 0}
+              class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+              data-download-gps-warning
+            >
+              {ngettext(
+                "This photo carries the location it was taken at, and the exact file hands it over.",
+                "Some of these photos carry the location they were taken at, and the exact file hands it over.",
+                located_photos(@images)
+              )}
+            </p>
+            <p
+              :if={@download_choice == "clean" and uncleanable?(@images)}
+              class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+              data-download-clean-notice
+            >
+              {gettext(
+                "A file whose format cannot be cleaned is handed out exactly as uploaded."
+              )}
+            </p>
           </div>
 
           <%!-- Photo mode: the optional words come after the pictures, folded
@@ -2019,6 +2159,11 @@ defmodule VutuvWeb.PostLive.Composer do
   switch reveals the choice of file and, when the photo carries a location,
   warns about it at the moment the exact file is picked.
 
+  The download switch is the **override** of the post-wide answer the select
+  beside the licence gives, so it renders only for a set of several photos
+  (`many?`) — with one photo the two controls would be the same state asked
+  twice on the same screen.
+
   Photo mode moves two things out of here to where they are seen (issue
   #1104 follow-up): `caption?` drops the caption input (it sits under every
   tile there, and a second input of the same name would corrupt the submit)
@@ -2121,8 +2266,11 @@ defmodule VutuvWeb.PostLive.Composer do
           </label>
         </div>
 
-        <%!-- Original download, and the one follow-up it reveals. --%>
-        <div>
+        <%!-- The per-photo override of the post-wide download answer, and the
+        one follow-up it reveals. With a single photo there is nothing to
+        override — the select beside the licence IS that photo's answer — so
+        the block stays away rather than offering the same state twice. --%>
+        <div :if={@many?}>
           <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
             <input
               type="checkbox"

@@ -17625,3 +17625,40 @@ msgstr "Fotos und Text dieses Entwurfs verwerfen?"
 #, elixir-autogen, elixir-format
 msgid "Picked up where you left off."
 msgstr "Weiter, wo Sie aufgehört haben."
+
+#: lib/vutuv_web/live/post_live/composer.ex:1424
+#, elixir-autogen, elixir-format
+msgid "A file whose format cannot be cleaned is handed out exactly as uploaded."
+msgstr "Eine Datei, deren Format sich nicht säubern lässt, wird exakt so weitergegeben, wie sie hochgeladen wurde."
+
+#: lib/vutuv_web/live/post_live/composer.ex:1399
+#, elixir-autogen, elixir-format
+msgid "Different per photo"
+msgstr "Pro Foto verschieden"
+
+#: lib/vutuv_web/live/post_live/composer.ex:1396
+#, elixir-autogen, elixir-format
+msgid "Original, exactly as uploaded"
+msgstr "Original, exakt wie hochgeladen"
+
+#: lib/vutuv_web/live/post_live/composer.ex:1393
+#, elixir-autogen, elixir-format
+msgid "Original, metadata removed"
+msgstr "Original, ohne Metadaten"
+
+#: lib/vutuv_web/live/post_live/composer.ex:1390
+#, elixir-autogen, elixir-format
+msgid "Web versions only (%{format})"
+msgstr "Nur Web-Versionen (%{format})"
+
+#: lib/vutuv_web/live/post_live/composer.ex:1386
+#, elixir-autogen, elixir-format
+msgid "What a visitor can save"
+msgstr "Was Besucher speichern können"
+
+#: lib/vutuv_web/live/post_live/composer.ex:1412
+#, elixir-autogen, elixir-format
+msgid "This photo carries the location it was taken at, and the exact file hands it over."
+msgid_plural "Some of these photos carry the location they were taken at, and the exact file hands it over."
+msgstr[0] "Dieses Foto trägt den Ort, an dem es aufgenommen wurde, und die exakte Datei gibt ihn weiter."
+msgstr[1] "Einige dieser Fotos tragen den Ort, an dem sie aufgenommen wurden, und die exakte Datei gibt ihn weiter."

@@ -130,6 +130,14 @@ defmodule VutuvWeb.PhotoComposerTest do
     |> render_click()
   end
 
+  # The post-wide download select carries its own phx-change (not the form's),
+  # so a test drives it through the element rather than through `form/3`.
+  defp choose_download(live, choice) do
+    live
+    |> element("#composer-download")
+    |> render_change(%{"post" => %{"download" => choice}})
+  end
+
   defp reload(image), do: Repo.get(PostImage, image.id)
 
   # The post the composer just saved, with its photos in stored order (the
@@ -210,11 +218,29 @@ defmodule VutuvWeb.PhotoComposerTest do
       refute has_element?(live, "input[data-photo-camera-switch][disabled]")
     end
 
+    test "one photo gets no download switch: the post-wide select is its answer", %{
+      live: live,
+      user: user
+    } do
+      # Two controls for one state on one screen is the duplicate the photo
+      # grid keeps being cleaned of; the panel's switch is the OVERRIDE, so it
+      # only means something once there is a set to differ from.
+      image = upload_photo!(live, user)
+      open_panel(live, image)
+
+      refute has_element?(live, "input[data-photo-download-switch]")
+
+      upload_photo!(live, user)
+
+      assert has_element?(live, "input[data-photo-download-switch]")
+    end
+
     test "the exact-file choice appears only once a download is offered", %{
       live: live,
       user: user
     } do
       image = upload_photo!(live, user)
+      upload_photo!(live, user)
       open_panel(live, image)
 
       refute render(live) =~ "The file exactly as I uploaded it"
@@ -232,6 +258,7 @@ defmodule VutuvWeb.PhotoComposerTest do
     } do
       image = upload_photo!(live, user, exif: [{"exif-ifd3-GPSLatitude", "50/1 56/1 0/1"}])
       assert image.has_gps
+      upload_photo!(live, user)
 
       open_panel(live, image)
       toggle(live, image, "download_original")
@@ -251,6 +278,7 @@ defmodule VutuvWeb.PhotoComposerTest do
     test "a photo with no location never warns, whatever is picked", %{live: live, user: user} do
       image = upload_photo!(live, user)
       refute image.has_gps
+      upload_photo!(live, user)
 
       open_panel(live, image)
       toggle(live, image, "download_original")
@@ -764,6 +792,126 @@ defmodule VutuvWeb.PhotoComposerTest do
       post = only_post(user)
       assert post.license == "cc-by-4.0"
       assert Vutuv.Accounts.User |> Repo.get(user.id) |> Posts.default_license() == "cc-by-4.0"
+    end
+  end
+
+  describe "the download choice" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "it sits beside the licence in both modes, not behind a photo", %{
+      conn: conn,
+      user: user
+    } do
+      # Tapping a photo to find out whether the original can be downloaded is
+      # exactly the hunt the photo grid was meant to end, so the question is
+      # asked where the licence is asked.
+      live = open_photo_composer(conn)
+      upload_photo!(live, user)
+
+      assert has_element?(live, "#composer-download")
+
+      live |> form("#composer-form", %{"post" => %{"mode" => "text"}}) |> render_change()
+
+      assert has_element?(live, "#composer-download")
+    end
+
+    test "no photos, no question", %{conn: conn} do
+      live = open_composer(conn)
+
+      refute has_element?(live, "#composer-download")
+    end
+
+    test "the web versions are all a visitor gets until the author says otherwise", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      assert has_element?(live, ~s(#composer-download option[value="none"][selected]))
+
+      live |> form("#composer-form", %{"post" => %{"mode" => "photos"}}) |> render_submit()
+
+      assert %{download_original: false, download_exact: false} = reload(image)
+    end
+
+    test "offering the original answers for the whole set at once", %{conn: conn, user: user} do
+      live = open_photo_composer(conn)
+      first = upload_photo!(live, user)
+      second = upload_photo!(live, user)
+
+      choose_download(live, "clean")
+      live |> form("#composer-form", %{"post" => %{"mode" => "photos"}}) |> render_submit()
+
+      assert %{download_original: true, download_exact: false} = reload(first)
+      assert %{download_original: true, download_exact: false} = reload(second)
+    end
+
+    test "the exact file is its own answer", %{conn: conn, user: user} do
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      choose_download(live, "exact")
+      live |> form("#composer-form", %{"post" => %{"mode" => "photos"}}) |> render_submit()
+
+      assert %{download_original: true, download_exact: true} = reload(image)
+    end
+
+    test "a location is called out at the moment the exact file is picked", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user, exif: [{"exif-ifd3-GPSLatitude", "50/1 56/1 0/1"}])
+      assert image.has_gps
+
+      choose_download(live, "clean")
+      refute has_element?(live, "[data-download-gps-warning]")
+
+      choose_download(live, "exact")
+      assert has_element?(live, "[data-download-gps-warning]")
+
+      choose_download(live, "none")
+      refute has_element?(live, "[data-download-gps-warning]")
+    end
+
+    test "a set without a location never warns", %{conn: conn, user: user} do
+      live = open_photo_composer(conn)
+      upload_photo!(live, user)
+
+      choose_download(live, "exact")
+
+      refute has_element?(live, "[data-download-gps-warning]")
+    end
+
+    test "a per-photo override reads as such, and no keystroke quietly undoes it", %{
+      conn: conn,
+      user: user
+    } do
+      live = open_photo_composer(conn)
+      first = upload_photo!(live, user)
+      second = upload_photo!(live, user)
+
+      open_panel(live, first)
+      toggle(live, first, "download_original")
+
+      # The set now disagrees, and the select says so rather than claiming an
+      # answer nobody gave.
+      assert has_element?(live, ~s(#composer-download option[value="mixed"][selected]))
+
+      # A validate carrying the select's stale value (every keystroke does)
+      # must not push that value back onto the photos.
+      live
+      |> element("#composer-form")
+      |> render_change(%{"post" => %{"mode" => "photos", "download" => "none"}})
+
+      live |> form("#composer-form", %{"post" => %{"mode" => "photos"}}) |> render_submit()
+
+      assert %{download_original: true} = reload(first)
+      assert %{download_original: false} = reload(second)
     end
   end
 

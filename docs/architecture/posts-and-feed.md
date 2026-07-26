@@ -636,19 +636,37 @@ with JS off those links are plain hrefs to the full-size image.
 `PostLive.Composer.photo_panel/1`): a `caption` (shown to everyone; distinct
 from `alt`, which describes the picture for people who cannot see it), a
 **camera-settings** switch (renders from the DB columns — the served files stay
-metadata-stripped) and an **original download** switch with its one follow-up,
-which file (see [images.md](images.md)). The panel expands below the strip
-rather than floating — a popover on a phone covers what it is about and has
-nowhere to put a follow-up. In photo mode the caption and the camera switch
-move out of the panel to under the tile itself (the panel drops them there —
-two same-name inputs would corrupt the submit); the alt input renders in the
-panel in both modes. An "apply to all photos" shortcut copies the two
-switches (never the texts: a caption describes one picture).
+metadata-stripped) and, for a set of several photos, the **download override**
+with its one follow-up, which file (see [images.md](images.md)). The panel
+expands below the strip rather than floating — a popover on a phone covers what
+it is about and has nowhere to put a follow-up. In photo mode the caption and
+the camera switch move out of the panel to under the tile itself (the panel
+drops them there — two same-name inputs would corrupt the submit); the alt
+input renders in the panel in both modes. An "apply to all photos" shortcut
+copies the two switches (never the texts: a caption describes one picture).
 
-**Per post**, one `Vutuv.Posts.PhotoLicense` from a fixed vocabulary (`arr`
-default, CC BY / BY-SA / BY-NC / CC0 4.0). The select appears only once a photo
-is attached; the last pick is remembered on `users.default_post_license` and
-pre-selected next time, so a professional sets it once. It renders as a line
+**Per post**, the two questions about the pictures themselves, asked as a
+labeled pair below the photos in both modes and only once a photo is attached.
+
+The first is **what a visitor can save**: the served AVIF versions only (the
+default), the full-resolution original with its metadata removed, or the
+uploaded file byte for byte. The columns behind it are per photo
+(`download_original` + `download_exact`), but the select answers for the whole
+set, because that is how a photographer decides it — a single photo therefore
+gets no switch in its panel at all, and a set whose photos disagree (a panel
+override, an older post) reads "Different per photo" rather than claiming an
+answer nobody gave. The select carries its own `phx-change` instead of riding
+the form's `validate`: every keystroke replays the whole form, and a replayed
+value would push the select's answer back over a per-photo choice just made in
+the panel. Picking the exact file names the location it hands over when any
+photo carries one, and a format `Vutuv.Uploads.MetadataStrip` cannot take apart
+says so up front rather than quietly serving an uncleaned file under the
+cleaned label (`Posts.update_image_settings/2` forces the exact file there).
+
+The second is the licence: one `Vutuv.Posts.PhotoLicense` from a fixed
+vocabulary (`arr` default, CC BY / BY-SA / BY-NC / CC0 4.0). The last pick is
+remembered on `users.default_post_license` and pre-selected next time, so a
+professional sets it once. It renders as a line
 under the photos **only when it grants something** — a rights notice on every
 picture in the app teaches people to stop reading the one that matters. It also
 reaches machines: the agent-format siblings carry the SPDX id, and the JSON-LD
