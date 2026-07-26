@@ -18,6 +18,13 @@ defmodule Vutuv.Fediverse do
     * deliveries — a DB-backed outbound queue (`Vutuv.Fediverse.Delivery`)
       drained by `Vutuv.Fediverse.Deliverer` with signed POSTs
       (`Vutuv.Fediverse.HttpSignature`), mirroring the webhooks queue.
+    * revocations — every takedown asks the other servers to drop their copy:
+      `revoke_post/1` for a post (from the owner's own delete *and* the
+      moderation freezer), `revoke_actor/1` for a permanently removed account,
+      and a `Flag` to the origin when a reply from another network is reported.
+      `Vutuv.Fediverse.PostDelivery` records where each copy went and under which
+      id, so a `Delete` is addressed rather than broadcast; a takedown that never
+      arrives lands in `Vutuv.Fediverse.DeliveryFailure`.
 
   Everything sits behind the global `:fediverse_enabled` switch
   (FEDIVERSE_ENABLED, for installations that must not call out — intranets)
@@ -36,12 +43,14 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Fediverse.Deliverer
   alias Vutuv.Fediverse.Delivery
+  alias Vutuv.Fediverse.DeliveryFailure
   alias Vutuv.Fediverse.Follower
   alias Vutuv.Fediverse.FollowerPrune
   alias Vutuv.Fediverse.HttpSignature
   alias Vutuv.Fediverse.Keys
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.NoteEvent
+  alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Pages
   alias Vutuv.Posts
@@ -97,6 +106,23 @@ defmodule Vutuv.Fediverse do
 
   defp suspended?(%User{suspended_until: until}),
     do: NaiveDateTime.compare(until, NaiveDateTime.utc_now()) == :gt
+
+  @doc """
+  Whether a **revocation** for this member may still leave the building: the
+  switch is on and they have an actor, i.e. they took part at some point, so
+  copies of their posts may be sitting on other servers.
+
+  Deliberately **not** `federated?/1` (issue #1102). Every takedown path runs at
+  the exact moment the post or the account is hidden here — frozen, suspended,
+  deactivated — which is precisely when `federated?/1` turns false. Gating a
+  revocation on it would mean the only activities that never go out are the ones
+  asking other servers to remove something.
+
+  For the same reason it ignores `moved?/1`: a member who redirected their
+  Fediverse followers elsewhere stopped *publishing*, but the servers that
+  followed them still hold everything published before the move.
+  """
+  def ever_federated?(%User{} = user), do: enabled?() and get_actor(user) != nil
 
   ## Actors
 
@@ -412,7 +438,8 @@ defmodule Vutuv.Fediverse do
   how many members federate, how many remote followers they have between them,
   the outbound delivery-queue depth and how many of those rows are stuck
   (carry a `last_error`), so a broken delivery run is visible at a glance, plus
-  how many remote servers the operator has shut out (issue #1067).
+  how many remote servers the operator has shut out (issue #1067) and how many
+  takedowns gave up without arriving (issue #1102).
   """
   def stats do
     %{
@@ -421,7 +448,8 @@ defmodule Vutuv.Fediverse do
       queue_depth: Repo.aggregate(Delivery, :count),
       stuck_deliveries:
         Repo.aggregate(from(d in Delivery, where: not is_nil(d.last_error)), :count),
-      blocked_instances: blocked_instance_count()
+      blocked_instances: blocked_instance_count(),
+      failed_takedowns: delivery_failure_count()
     }
   end
 
@@ -701,8 +729,9 @@ defmodule Vutuv.Fediverse do
 
   @doc """
   Deletes everything stored from `host`: its remote followers, the replies its
-  members wrote under vutuv posts, and the outbound deliveries still queued for
-  it. Returns `%{followers: n, notes: n, deliveries: n}`.
+  members wrote under vutuv posts, the outbound deliveries still queued for it and
+  the records of what was delivered there.
+  Returns `%{followers: n, notes: n, deliveries: n, post_deliveries: n}`.
   """
   def purge_instance(host) when is_binary(host) do
     {followers, _} =
@@ -716,7 +745,17 @@ defmodule Vutuv.Fediverse do
     {deliveries, _} =
       Repo.delete_all(from(d in Delivery, where: uri_host(d.inbox_uri) == ^host))
 
-    %{followers: followers, notes: notes, deliveries: deliveries}
+    # A blocked server is not talked to again, so the record of what it received
+    # (issue #1102) would only ever address a revocation nobody will deliver.
+    {post_deliveries, _} =
+      Repo.delete_all(from(d in PostDelivery, where: uri_host(d.inbox_uri) == ^host))
+
+    %{
+      followers: followers,
+      notes: notes,
+      deliveries: deliveries,
+      post_deliveries: post_deliveries
+    }
   end
 
   @doc """
@@ -1206,9 +1245,16 @@ defmodule Vutuv.Fediverse do
   @doc """
   The member takes a reply off their own post. Deletes it at once and records
   the takedown in `Vutuv.Fediverse.NoteEvent`.
+
+  Nothing leaves the building: removing a reply from your own post is a decision
+  about *your* page, not an accusation, so the origin server is not told. Saying
+  "this is not appropriate" is `report_note/2`, which does tell them.
   """
-  def remove_note(note_id, %User{} = actor),
-    do: take_down_note(note_id, actor, "removed_by_member", &note_owner?/3)
+  def remove_note(note_id, %User{} = actor) do
+    with {:ok, _note, _author_id} <-
+           take_down_note(note_id, actor, "removed_by_member", &note_owner?/3),
+         do: :ok
+  end
 
   @doc """
   Somebody marks a reply as not appropriate. **Deletes it immediately** — there
@@ -1216,9 +1262,16 @@ defmodule Vutuv.Fediverse do
   a cache of something that still exists at its origin, so removing it costs the
   author nothing they did not keep.
 
+  And because it still exists there, the report also goes **out**: a `Flag` to the
+  origin server's inbox (issue #1102), which is how these networks file a report
+  with each other. Deleting our cached copy alone left the original up with its
+  moderators never learning anybody had objected.
+
   Rate limited per reporter (`report_limit/0` a day), so quietly wiping every
-  answer under somebody's post is not free. A private reply can only be reported
-  by the member it was addressed to, since nobody else may even see it.
+  answer under somebody's post is not free — and since the `Flag` only rides a
+  successful takedown, that same cap bounds how many reports one member can push
+  onto other servers. A private reply can only be reported by the member it was
+  addressed to, since nobody else may even see it.
   """
   def report_note(note_id, %User{} = reporter) do
     case RateLimiter.hit(
@@ -1226,8 +1279,43 @@ defmodule Vutuv.Fediverse do
            @note_report_limit,
            :timer.hours(24)
          ) do
-      :ok -> take_down_note(note_id, reporter, "reported", &note_visible?/3)
-      _ -> {:error, :rate_limited}
+      :ok ->
+        with {:ok, note, author_id} <-
+               take_down_note(note_id, reporter, "reported", &note_visible?/3) do
+          flag_note(note, author_id, reporter)
+          :ok
+        end
+
+      _ ->
+        {:error, :rate_limited}
+    end
+  end
+
+  # Files the report with the server the reply came from (issue #1102).
+  #
+  # Signed by the member whose post the reply sat under, never by the reporter.
+  # A `Flag` is a signed statement, so it has to come from an actor we serve a
+  # key for, and vutuv has no installation-wide actor to file from (Mastodon uses
+  # its instance actor for exactly this). The thread's owner is the party that
+  # server already knows in this conversation, and using them keeps a bystander
+  # reporter out of a message that travels to strangers: nothing in the `Flag`
+  # names who reported it, and no content rides along — the reported object's own
+  # id is the whole reference.
+  #
+  # Skipped when the note carried no answerable inbox (`own_inbox/1` refuses an
+  # inbox on a host the actor does not control), when the post's author never
+  # federated (no key to sign with), or when the operator has blocked that server
+  # — a block is both ears and mouth shut.
+  defp flag_note(%Note{} = note, author_id, %User{} = reporter) do
+    with inbox when is_binary(inbox) <- note.inbox_uri,
+         %User{} = author <- Repo.get(User, author_id),
+         true <- ever_federated?(author),
+         false <- instance_blocked?(note.actor_uri) do
+      enqueue(author, [inbox], Docs.flag_activity(author, note.object_uri, note.actor_uri))
+      log_note_event(note, author_id, reporter, "flagged")
+      :ok
+    else
+      _ -> :skip
     end
   end
 
@@ -1490,7 +1578,10 @@ defmodule Vutuv.Fediverse do
           Repo.delete(note)
           log_note_event(note, author_id, actor, action)
           Posts.broadcast_post_counters(note.post_id)
-          :ok
+          # The deleted row is handed back so the caller can still address the
+          # origin server (`flag_note/3`) — after this it is the only copy of
+          # that address left.
+          {:ok, note, author_id}
         else
           {:error, :not_allowed}
         end
@@ -1777,22 +1868,9 @@ defmodule Vutuv.Fediverse do
   """
   def federate_post_update(%Post{} = post) do
     if Posts.restricted?(post) do
-      federate_post_delete(post)
+      revoke_post(post)
     else
       maybe_federate(post, &Docs.update_activity/2, "post_update")
-    end
-  end
-
-  @doc "A deleted post -> Delete(Tombstone) (best effort)."
-  def federate_post_delete(%Post{id: post_id, user_id: user_id} = post) do
-    with true <- enabled?(),
-         %User{} = user <- Repo.get(User, user_id),
-         true <- federated?(user),
-         false <- moved?(user),
-         [_ | _] = inboxes <- recipients(user, post) do
-      enqueue(user, inboxes, Docs.delete_activity(post_id, user))
-    else
-      _ -> :skip
     end
   end
 
@@ -1804,10 +1882,187 @@ defmodule Vutuv.Fediverse do
          false <- Posts.restricted?(post),
          post = Repo.preload(post, Docs.note_preloads()),
          [_ | _] = inboxes <- recipients(user, post) do
+      # Remember where this copy went and under which id, so the takedown can be
+      # addressed rather than broadcast at whoever follows today (issue #1102).
+      record_post_deliveries(user, post, inboxes)
       enqueue(user, inboxes, builder.(post, user), hold_opts(post, kind))
     else
       _ -> :skip
     end
+  end
+
+  ## Revocation: taking something back off the other servers (issue #1102)
+
+  @doc """
+  **The one revocation chokepoint.** Asks every server that received this post
+  to drop its copy (`Delete(Tombstone)`), best effort.
+
+  Called from every takedown path, so "taken down here" can never mean "still
+  published there" for want of a call site: the owner's own delete
+  (`Vutuv.Posts.delete_post/1`), an edit that closes the audience
+  (`federate_post_update/1`), and the moderation freezer
+  (`Vutuv.Moderation.freeze_content/1` — a trusted report, or the second one that
+  upgrades a merely flagged case).
+
+  **Addressed, not broadcast.** The recorded deliveries
+  (`Vutuv.Fediverse.PostDelivery`) name the inboxes that actually received the
+  post and the Note id it was published under, so the `Delete` reaches a server
+  that has since unfollowed and still matches after a username change. A post
+  with no records — published before those were kept — falls back to the old
+  behaviour: the current follower inboxes and the current Note id, which is
+  better than sending nothing.
+
+  Gated on `ever_federated?/1`, not `federated?/1`, and with no `moved?/1` skip:
+  see that function for why a takedown must not be blocked by the very state the
+  takedown creates. Returns `:ok` or `:skip`.
+  """
+  def revoke_post(%Post{} = post) do
+    with true <- enabled?(),
+         %User{} = user <- Repo.get(User, post.user_id),
+         true <- ever_federated?(user),
+         [_ | _] = targets <- revocation_targets(user, post) do
+      Enum.each(targets, fn {object_uri, inboxes} ->
+        enqueue(user, inboxes, Docs.tombstone_activity(object_uri, user))
+      end)
+
+      # The addresses have done their job; a copy that comes back re-records
+      # them (`republish_post/1`).
+      forget_post_deliveries(post.id)
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  @doc """
+  Publishes a post again after a **reversible** takedown was lifted — the other
+  half of revoking on a freeze (issue #1102).
+
+  A freeze hides the post from everyone but its owner, so the copies elsewhere
+  have to go too or the freeze is a local fiction; and a rejected report has to
+  put the post back where it was, here and there. It is a fresh `Create`, not an
+  `Update`: the remote servers were told to delete the object, so there is
+  nothing left there for an `Update` to change.
+
+  Reads the post again rather than trusting the struct handed in: the callers
+  clear `frozen_at` with an `update_all`, so their copy still looks frozen and
+  the publish would gate itself away.
+  """
+  def republish_post(%Post{id: post_id}) do
+    case Posts.get_post(post_id) do
+      %Post{} = post -> maybe_federate(post, &Docs.create_activity/2, "post_create")
+      _ -> :skip
+    end
+  end
+
+  @doc """
+  Tells the servers that follow this member their actor is gone
+  (`Delete { object: <actor-url> }`) — the account-level revocation, for a
+  **permanent** moderation removal: an admin's `remove_owner :deactivate` and the
+  strike ladder's third strike (`Vutuv.Moderation`).
+
+  Deliberately a broadcast and not a status code. `410 Gone` on the actor
+  endpoints stays reserved for the member's own opt-out (`departed?/1`), and every
+  *temporary* hiding — a freeze, a week's suspension — keeps answering `404` and
+  sends nothing at all: a three-day suspension must never tell the network to
+  delete the account. What makes these two paths different is that they do not
+  come back.
+
+  Unlike `prepare_actor_delete/1` this enqueues an ordinary delivery, because
+  moderation leaves the account, its actor key and its follower rows in place —
+  so the takedown gets the full retry ladder and, if it never arrives, the
+  give-up ledger (`recent_delivery_failures/1`).
+  """
+  def revoke_actor(%User{} = user) do
+    with true <- enabled?(),
+         true <- ever_federated?(user),
+         [_ | _] = inboxes <- delivery_inboxes(user) do
+      enqueue(user, inboxes, Docs.actor_delete_activity(user))
+    else
+      _ -> :skip
+    end
+  end
+
+  @doc """
+  Drops every recorded post delivery for a member — called by the account
+  deletion chokepoint (`Vutuv.Accounts.delete_user/1`).
+
+  The rows carry no foreign key into `posts` (a revocation has to outlive the post
+  row), so the cascade cannot clear them and the deletion says so explicitly. The
+  member's actor `Delete` covers the copies themselves: it asks remote servers to
+  purge the actor **and** its posts, which is why nothing is revoked per post here.
+  """
+  def drop_post_deliveries(%User{id: user_id}) do
+    {count, _} = Repo.delete_all(from(d in PostDelivery, where: d.user_id == ^user_id))
+    count
+  end
+
+  @doc """
+  The takedowns that never arrived, newest first — a `Delete` or `Flag` dropped
+  after the last attempt. The operator's list on `/admin/fediverse`, so an
+  incomplete takedown is not just a line in the log.
+  """
+  def recent_delivery_failures(limit \\ 25) do
+    Repo.all(from(f in DeliveryFailure, order_by: [desc: f.id], limit: ^limit))
+  end
+
+  @doc "How many takedowns gave up without arriving."
+  def delivery_failure_count, do: Repo.aggregate(DeliveryFailure, :count)
+
+  # Where a post's copies are, as `[{published_note_id, inboxes}]`. Grouped by
+  # the id rather than flattened, because an `Update` sent after a rename
+  # published a second id and both copies have to be named.
+  defp revocation_targets(%User{} = user, %Post{} = post) do
+    case recorded_post_deliveries(post.id) do
+      [] -> fallback_targets(user, post)
+      recorded -> recorded
+    end
+  end
+
+  defp recorded_post_deliveries(post_id) do
+    from(d in PostDelivery,
+      where: d.post_id == ^post_id,
+      select: {d.object_uri, d.inbox_uri}
+    )
+    |> Repo.all()
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.map(fn {object_uri, inboxes} -> {object_uri, Enum.uniq(inboxes)} end)
+  end
+
+  # Nothing recorded: a post from before the records existed. The current
+  # followers and the current Note id are a worse address than the real one, and
+  # a much better one than silence.
+  defp fallback_targets(%User{} = user, %Post{} = post) do
+    case recipients(user, post) do
+      [] -> []
+      inboxes -> [{Docs.note_url(user, post.id), inboxes}]
+    end
+  end
+
+  defp record_post_deliveries(%User{} = user, %Post{} = post, inboxes) do
+    object_uri = Docs.note_url(user, post.id)
+    stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+    rows =
+      Enum.map(inboxes, fn inbox ->
+        %{
+          id: UUIDv7.generate(),
+          post_id: post.id,
+          user_id: user.id,
+          inbox_uri: inbox,
+          object_uri: object_uri,
+          inserted_at: stamp
+        }
+      end)
+
+    Repo.insert_all(PostDelivery, rows,
+      on_conflict: :nothing,
+      conflict_target: [:post_id, :inbox_uri, :object_uri]
+    )
+  end
+
+  defp forget_post_deliveries(post_id) do
+    Repo.delete_all(from(d in PostDelivery, where: d.post_id == ^post_id))
   end
 
   ## Holding a post back until its pictures are vetted (issue #1070)
@@ -2017,10 +2272,15 @@ defmodule Vutuv.Fediverse do
   Capturing then sending is the whole trick: the delivery queue keys on
   `user_id`, so a queued row would cascade away with the member; holding the
   key and inboxes in memory lets the signed POST outlive them.
+
+  Gated on `ever_federated?/1` (issue #1102). It used to require `federated?/1`,
+  which is false for a frozen, suspended or deactivated account — so deleting
+  exactly the accounts moderation had already hidden broadcast nothing, and their
+  posts stayed up everywhere.
   """
   def prepare_actor_delete(%User{} = user) do
     with true <- enabled?(),
-         true <- federated?(user),
+         true <- ever_federated?(user),
          %Actor{} = actor <- get_actor(user),
          [_ | _] = inboxes <- delivery_inboxes(user) do
       %{
@@ -2205,6 +2465,7 @@ defmodule Vutuv.Fediverse do
 
   defp fail(%Delivery{attempts: attempts} = delivery, error) when attempts + 1 >= @max_attempts do
     Logger.info("fediverse delivery to #{delivery.inbox_uri} gave up: #{error}")
+    record_give_up(delivery, error)
     Repo.delete(delivery)
   end
 
@@ -2222,6 +2483,36 @@ defmodule Vutuv.Fediverse do
   defp backoff_at(attempts) do
     DateTime.add(DateTime.utc_now(:second), trunc(:math.pow(2, attempts)) * 60)
   end
+
+  # The activities whose give-up an operator has to be able to see (issue #1102).
+  # A `Create` that never lands means one post did not travel; a `Delete` that
+  # never lands means a copy we promised to have asked about is still published,
+  # and a `Flag` that never lands means a report nobody received. Recording every
+  # type instead would drown that signal in ordinary delivery noise.
+  @revocation_types ~w(Delete Flag)
+
+  defp record_give_up(%Delivery{} = delivery, error) do
+    with {:ok, %{"type" => type} = activity} when type in @revocation_types <-
+           Jason.decode(delivery.activity_json) do
+      Repo.insert(%DeliveryFailure{
+        activity_type: type,
+        host: BlockedInstance.normalize_host(delivery.inbox_uri) || "unknown",
+        object_uri: give_up_object(activity),
+        user_id: delivery.user_id,
+        attempts: @max_attempts,
+        last_error: String.slice(error, 0, 255)
+      })
+    end
+
+    :ok
+  end
+
+  # What the activity was about: a Tombstone/actor object, a bare id, or the
+  # first entry of a Flag's object list.
+  defp give_up_object(%{"object" => %{"id" => id}}) when is_binary(id), do: id
+  defp give_up_object(%{"object" => id}) when is_binary(id), do: id
+  defp give_up_object(%{"object" => [id | _]}) when is_binary(id), do: id
+  defp give_up_object(_activity), do: nil
 
   ## Remote actors
 

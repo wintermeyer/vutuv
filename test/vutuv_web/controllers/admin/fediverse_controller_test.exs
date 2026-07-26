@@ -77,6 +77,29 @@ defmodule VutuvWeb.Admin.FediverseControllerTest do
     assert Fediverse.blocked_instance_count() == 0
   end
 
+  test "names the takedowns that never arrived (issue #1102)", %{conn: conn} do
+    {conn, _admin} = login_admin(conn)
+    member = insert(:activated_user, fediverse_followers?: true)
+
+    Repo.insert!(%Vutuv.Fediverse.DeliveryFailure{
+      activity_type: "Delete",
+      host: "stubborn.example",
+      object_uri: "https://vutuv.test/#{member.username}/posts/abc",
+      user_id: member.id,
+      attempts: 8,
+      last_error: "HTTP 500"
+    })
+
+    html = conn |> get(~p"/admin/fediverse") |> html_response(200)
+
+    # A copy somebody asked us to withdraw is still published somewhere; the one
+    # delivery failure that must not be invisible.
+    assert html =~ ~s(data-failed-takedown="Delete")
+    assert html =~ "stubborn.example"
+    assert html =~ "HTTP 500"
+    assert html =~ "posts/abc"
+  end
+
   test "the page 404s on an installation with federation switched off", %{conn: conn} do
     {conn, _admin} = login_admin(conn)
     Application.put_env(:vutuv, :fediverse_enabled, false)

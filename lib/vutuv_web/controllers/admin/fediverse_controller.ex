@@ -29,6 +29,10 @@ defmodule VutuvWeb.Admin.FediverseController do
       # us the most" question, now that text arrives too.
       note_hosts: Map.new(Fediverse.note_hosts(), &{&1.host, &1.notes}),
       note_events: Fediverse.recent_note_events(),
+      # Takedowns that gave up without arriving (issue #1102). The one delivery
+      # failure that is not just noise: a copy we asked to have removed is still
+      # published somewhere, and nobody would know from the log alone.
+      failed_takedowns: Fediverse.recent_delivery_failures(),
       stats: Fediverse.stats(),
       caps: Fediverse.inbound_caps(),
       page_title: gettext("Fediverse")

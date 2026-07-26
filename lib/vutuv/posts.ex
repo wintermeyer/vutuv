@@ -362,8 +362,9 @@ defmodule Vutuv.Posts do
         if parent_id, do: broadcast_reply_count(parent_id)
         # Deleting reported content settles its moderation case.
         Vutuv.Moderation.content_deleted(deleted)
-        # Remote copies get a Delete(Tombstone) — best effort by protocol.
-        Vutuv.Fediverse.federate_post_delete(deleted)
+        # Remote copies get a Delete(Tombstone) — best effort by protocol. The
+        # one revocation chokepoint, shared with the moderation takedowns.
+        Vutuv.Fediverse.revoke_post(deleted)
         {:ok, deleted}
 
       {:error, _} = error ->

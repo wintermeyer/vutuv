@@ -191,3 +191,52 @@ block) are not listed; they would drown this and go to the log file instead. --%
     <% end %>
   </section>
 </div>
+
+<%!-- Takedowns that never arrived (issue #1102). Every outbound activity is best
+effort, but there is a difference in kind: a post that did not travel is one post,
+while a Delete that did not travel means a copy somebody asked us to withdraw is
+still published on another server. That has to be visible, not only logged. --%>
+<div class="card-list">
+  <section class="card" id="failed-takedowns">
+    <h2 class="card__label">{gettext("Takedowns that did not get through")}</h2>
+    <%= if @failed_takedowns == [] do %>
+      <p class="card__empty">
+        {gettext("Every withdrawal request so far has been delivered.")}
+      </p>
+    <% else %>
+      <p class="editform__hint">
+        {gettext(
+          "These withdrawal requests were retried eight times over about four hours and then dropped. We cannot make another server delete anything, but a server showing up here repeatedly is either broken or ignoring us, and can be blocked above."
+        )}
+      </p>
+      <div class="card__tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{gettext("When")}</th>
+              <th>{gettext("What")}</th>
+              <th>{gettext("Server")}</th>
+              <th>{gettext("Reason given")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              :for={failure <- @failed_takedowns}
+              data-failed-takedown={failure.activity_type}
+            >
+              <td><.local_time at={failure.inserted_at} /></td>
+              <td class="breakwrap">
+                {takedown_label(failure)}
+                <span :if={failure.object_uri} class="editform__hint breakwrap">
+                  {failure.object_uri}
+                </span>
+              </td>
+              <td class="breakwrap">{failure.host}</td>
+              <td class="breakwrap">{failure.last_error || gettext("No answer")}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </section>
+</div>

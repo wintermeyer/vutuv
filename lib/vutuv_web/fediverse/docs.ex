@@ -195,13 +195,49 @@ defmodule VutuvWeb.Fediverse.Docs do
   end
 
   @doc "Delete(Tombstone): a removed post (or one whose audience closed)."
-  def delete_activity(post_id, user) do
-    note_url = note_url(user, post_id)
+  def delete_activity(post_id, user), do: tombstone_activity(note_url(user, post_id), user)
 
+  @doc """
+  Delete(Tombstone) for an **explicit** Note id (issue #1102).
+
+  A revocation names the id the receiving server actually stored, which is not
+  always the one `note_url/2` builds today: that id carries the username, so
+  after a rename (issue #1086) a Tombstone built from the current username
+  matches nothing on the other end. `Vutuv.Fediverse` keeps the published id per
+  delivery and passes it here.
+  """
+  def tombstone_activity(note_url, user) when is_binary(note_url) do
     envelope(user, "Delete", note_url <> "#delete", %{
       "id" => note_url,
       "type" => "Tombstone"
     })
+  end
+
+  @doc """
+  Flag: a reply that came from another network was reported here, so the
+  moderators of its home server hear about it (issue #1102). Mastodon files an
+  incoming `Flag` as a report.
+
+  `object` is a **list** — the shape those servers send and expect — naming the
+  reported note and the account that wrote it. Nothing else travels: no content,
+  no category, and above all not who reported it.
+
+  The `content` line is a fixed English sentence rather than a `gettext/1` one on
+  purpose. It is read by a stranger's moderation team, not by a vutuv member, so
+  it must not depend on the reporter's browser language; and a fixed sentence
+  cannot leak anything a member typed.
+  """
+  def flag_activity(user, object_uri, actor_uri) do
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => actor_url(user) <> "#flags/" <> Vutuv.UUIDv7.generate(),
+      "type" => "Flag",
+      "actor" => actor_url(user),
+      "object" => [object_uri, actor_uri],
+      "content" =>
+        "Reported by a member of #{VutuvWeb.Endpoint.host()} as inappropriate. " <>
+          "The copy stored there has been removed."
+    }
   end
 
   @doc """

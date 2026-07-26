@@ -348,7 +348,8 @@ every endpoint 404s and nothing is delivered.
   fetched, against *both* the signature's `keyId` and the activity's claimed
   `actor`, since neither is verified yet — and answers `202` rather than `403`,
   so the list is not enumerable from outside. Blocking is also a purge
-  (`purge_instance/1`: that host's follower rows and its queued deliveries) and
+  (`purge_instance/1`: that host's follower rows, its queued deliveries and the
+  records of what was delivered there) and
   a mouth-shut: `deliver_due/0` drops a queued delivery to a blocked host, and
   since the follower rows are the delivery targets, the member's posts stop
   going there. Unblocking resurrects nothing. The **caps**
@@ -364,9 +365,13 @@ every endpoint 404s and nothing is delivered.
   signed with the member's key, exponential backoff (2, 4, 8 … minutes),
   dropped after 8 attempts or on 404/410. Test seam: `:fediverse_req_options`
   (Req plug), deliverer off in tests.
+- **Revocation** (issue #1102) — the one chokepoint every takedown goes through,
+  because "taken down here" must not mean "still published there". See the
+  section of its own below.
 - **Post lifecycle** (hooks in `Vutuv.Posts` after commit): publishing a
   public post enqueues `Create(Note)`, editing `Update`, deleting
-  `Delete(Tombstone)`; an edit that closes the audience federates a `Delete`
+  `Delete(Tombstone)` through the one revocation chokepoint (`revoke_post/1`, see
+  the revocation section); an edit that closes the audience revokes
   too. Replies federate with `inReplyTo` only when the parent's author also
   federates (else the id would not resolve). A **repost** of a public post
   enqueues an `Announce` to the reposter's own followers, un-reposting the
@@ -459,12 +464,14 @@ every endpoint 404s and nothing is delivered.
 - **The operator** sees federation health on `/admin`: `Fediverse.stats/0`
   reports federating members (the SQL mirror of `federated?/1`), total remote
   followers, delivery-queue depth, how many rows are stuck (carry a
-  `last_error`) and how many servers are blocked; the "Fediverse" dashboard card
+  `last_error`), how many servers are blocked and how many takedowns gave up
+  without arriving (`failed_takedowns`, issue #1102); the "Fediverse" dashboard card
   flags `attention` when a delivery run is stuck, names the busiest inbound host
   and links to `/admin/fediverse`, and hides itself when `:fediverse_enabled` is
   off. That page is the blocklist plus `inbound_hosts/1` — what each remote
   server has stored here, biggest first, which is what a block decision is made
-  from. The nightly Tagesbericht (`Vutuv.Reports`) counts new remote followers
+  from, plus the member takedown log and the undelivered-takedown list. The
+  nightly Tagesbericht (`Vutuv.Reports`) counts new remote followers
   per Berlin day.
 
 ## Follow from your own server
@@ -498,6 +505,95 @@ own redirect following would skip that second check), short timeouts, no
 retries, and a body ceiling that halts the stream rather than buffering. Every
 failure lands back on the profile with a plain-language flash naming the server,
 and the handle is right there to copy, so there is always a way through.
+## Revocation: a takedown has to leave the building
+
+Until issue #1102 only one path federated a `Delete`: the owner pressing delete
+on their own post. Everything else hid the content here and told the network
+nothing — a report that froze a post, an admin's `remove_owner :deactivate`, the
+strike ladder's permanent deactivation, and a reported reply from another network
+whose origin never learned anybody had objected. Worse, the one path that did
+federate was gated on `federated?/1`, which is false for a frozen, suspended or
+deactivated account: the accounts moderation had already hidden were exactly the
+ones whose deletions never went out.
+
+**One chokepoint.** `Vutuv.Fediverse.revoke_post/1` sends the
+`Delete(Tombstone)`, and every takedown calls it: `Vutuv.Posts.delete_post/1`, an
+edit that closes the audience (`federate_post_update/1`), and the moderation
+freezer (`Vutuv.Moderation.freeze_content/1`). `revoke_actor/1` is its
+account-level twin for a **permanent** removal (`remove_owner :deactivate` and the
+third strike), and `prepare_actor_delete/1` + `send_actor_delete/1` stay the
+account-deletion path, which has to outlive the rows it reads.
+
+**Gated on `ever_federated?/1`, not `federated?/1`** — the switch is on and the
+member has an actor, i.e. copies of their posts may exist out there. Every
+takedown runs at the moment the post or the account is hidden here, which is
+precisely when `federated?/1` turns false; gating on it made the withdrawing
+activities the only ones that never left. For the same reason there is no
+`moved?/1` skip: a member who redirected their followers elsewhere stopped
+*publishing*, but the servers that followed them still hold what came before.
+
+**Addressed, not broadcast.** `Vutuv.Fediverse.PostDelivery`
+(`fediverse_post_deliveries`) records each `(post, inbox, published Note id)`
+when a `Create`/`Update` is enqueued, and the revocation reads it back. That
+fixes two holes at once: delivery targets used to come from the follower table,
+so a server that received the post and has since unfollowed kept its copy
+forever; and the Tombstone id was built from the *current* username, so after a
+rename (issue #1086) a delivered `Delete` matched nothing. An `Update` sent after
+a rename publishes a second id, so the records are grouped by id and one `Delete`
+goes out per id. A post with no records at all (published before the records
+existed) falls back to the current follower inboxes and the current id — a worse
+address than the real one, and a much better one than silence. The rows carry
+**no foreign key** into `posts` on purpose: `delete_post/1` federates after the
+commit, so a cascade would erase the addresses moments before they are needed.
+They are cleared by the revocation that spends them, by
+`drop_post_deliveries/1` in the account-deletion chokepoint, and by
+`purge_instance/1`.
+
+**A freeze is reversible, so it revokes and re-publishes.** Freezing a post hides
+it from everyone but its owner, so leaving the remote copies up would make the
+freeze a local fiction — `freeze_content/1` revokes. Lifting it (a rejected
+report, or the owner editing the post) calls `republish_post/1`, which sends a
+fresh `Create`: the other servers were told to delete the object, so there is
+nothing left there for an `Update` to change. It re-reads the post rather than
+trusting the caller's struct, whose `frozen_at` is still set (the unfreeze is an
+`update_all`).
+
+**A temporary hiding sends nothing at all.** No actor `Delete` for a week's
+suspension, a profile freeze or an unconfirmed account, and no `410` either —
+that stays reserved for the member's own opt-out (see the next section). A
+three-day hiding must never read to the network as "this account is gone". A
+profile freeze also deliberately does *not* fan a `Delete` out over every post
+the member ever published: one report would then trigger a network-wide storm,
+and a rejection a second one.
+
+**Reports travel too.** Reporting a reply from another network
+(`report_note/2`) deletes our cached copy *and* POSTs a `Flag` to the origin
+actor's inbox — how these networks file a report with each other (Mastodon shows
+an incoming `Flag` as a report). It is signed by the member whose post the reply
+sat under, never by the reporter: a `Flag` is a signed statement, so it needs an
+actor we serve a key for, vutuv has no installation-wide actor to file from, and
+the thread's owner is the party that server already knows in this conversation.
+Nothing in it names the reporter and no content rides along — the reported
+object's own id is the whole reference, and the `content` line is a fixed English
+sentence (read by a stranger's moderators, so not `gettext`). The reporter's daily
+report cap bounds it, since the `Flag` only rides a successful takedown, and a
+`"flagged"` row joins the `NoteEvent` ledger so an operator can tell a takedown
+that only happened here from one the other server was told about. `remove_note/2`
+— taking a reply off your own post — sends nothing: that is a decision about your
+own page, not an accusation.
+
+**An incomplete takedown is not silent.** A `Delete` or `Flag` that exhausts its
+eight attempts is written to `Vutuv.Fediverse.DeliveryFailure` and listed on
+`/admin/fediverse` ("Takedowns that did not get through", with the server, the
+object and the last error), plus counted in `stats/0` as `failed_takedowns`. Only
+the withdrawing types are recorded: a `Create` that never lands is one post that
+did not travel, while a `Delete` that never lands means a copy somebody asked us
+to withdraw is still published somewhere.
+
+None of this is a guarantee. Remote deletion is advisory by protocol and always
+will be, so the UI never claims a copy is gone — but every takedown now at least
+asks.
+
 ## Leaving: 410 Gone, and saying so first
 
 Switching the opt-in off used to make every actor endpoint answer `404`, which
@@ -574,7 +670,9 @@ found now (issue #1072) — the hourly re-check above prunes a row only on a
 `404`/`410` from the actor document itself, never on a failed delivery to a
 shared inbox. And we now offer a shared inbox of our own (issue #1073), so the
 asymmetry of asking other servers for an efficiency we did not give back is
-gone; it is pure scale work, with no change to what any activity does.
+gone; it is pure scale work, with no change to what any activity does. Every
+takedown, not just the owner's own delete button, now asks the other servers to
+withdraw the copy (issue #1102, the revocation section above).
 
 ## Non-goal: reading other networks inside vutuv
 

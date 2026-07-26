@@ -698,7 +698,9 @@ defmodule Vutuv.FediverseTest do
                remote_followers: 2,
                queue_depth: 2,
                stuck_deliveries: 1,
-               blocked_instances: 0
+               blocked_instances: 0,
+               # Takedowns that gave up without arriving (issue #1102).
+               failed_takedowns: 0
              }
     end
   end

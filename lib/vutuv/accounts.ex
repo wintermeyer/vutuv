@@ -689,6 +689,13 @@ defmodule Vutuv.Accounts do
     # a member who never federated — nothing to send).
     actor_delete = Vutuv.Fediverse.prepare_actor_delete(user)
 
+    # The per-post delivery records (issue #1102) carry no foreign key into
+    # `posts` on purpose — a revocation has to outlive the post row — so the
+    # cascade below cannot clear them and this deletion says so explicitly. The
+    # copies themselves are covered by the actor `Delete`, which asks remote
+    # servers to purge the actor *and* its posts.
+    Vutuv.Fediverse.drop_post_deliveries(user)
+
     # Kill every device's live sockets before the cascade removes the session
     # rows (after which their per-session topics are unknowable), so open tabs
     # drop the logged-in chrome at once instead of on their next reload.

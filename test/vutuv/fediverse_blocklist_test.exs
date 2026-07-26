@@ -140,7 +140,9 @@ defmodule Vutuv.FediverseBlocklistTest do
 
       # `notes` joined the tally with issue #1069: a block is also a takedown of
       # the replies that server's members wrote under vutuv posts.
-      assert purged == %{followers: 1, deliveries: 1, notes: 0}
+      # `post_deliveries` joined with issue #1102: the record of what that server
+      # received would only ever address a revocation nobody will deliver.
+      assert purged == %{followers: 1, deliveries: 1, notes: 0, post_deliveries: 0}
       assert [%Follower{actor_uri: "https://social.example/users/alice"}] = Repo.all(Follower)
       assert [%Delivery{inbox_uri: "https://social.example/inbox"}] = Repo.all(Delivery)
     end

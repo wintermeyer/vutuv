@@ -5,6 +5,10 @@ defmodule Vutuv.Fediverse.NoteEvent do
   with no case workflow, because the note is a cache of something that still
   exists at its origin.
 
+  A report also writes a second `"flagged"` row when the report actually reached
+  that origin as an ActivityPub `Flag` (issue #1102), so the operator can tell a
+  takedown that only happened here from one the other server was told about.
+
   The row exists so the operator can answer one question: **is this one troll,
   or is this server the problem?** That is the decision the blocklist at
   `/admin/fediverse` acts on, and it needs the host, a way to tell repeat actors
@@ -31,7 +35,7 @@ defmodule Vutuv.Fediverse.NoteEvent do
 
   use VutuvWeb, :model
 
-  @actions ~w(reported removed_by_member)
+  @actions ~w(reported removed_by_member flagged)
 
   @doc "The closed set of `action` values this ledger records."
   def actions, do: @actions

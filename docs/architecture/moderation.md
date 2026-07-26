@@ -79,6 +79,18 @@ token-guarded `/moderation/evidence/:token` page), stored under the private
 `moderation_evidence/` tree and shown to admins via the authorizing
 `/admin/moderation/:id/evidence` route.
 
+**A takedown also leaves the building** (issue #1102). Freezing a post revokes
+the copies on other Fediverse servers (`Vutuv.Fediverse.revoke_post/1`) and
+lifting the freeze publishes it again, so a freeze is not a local fiction while
+the post stays up on Mastodon; a **permanent** account removal — `remove_owner/4`
+with `:deactivate`, and the strike ladder's third strike — broadcasts the actor
+`Delete` the way a real account deletion does. Everything temporary deliberately
+sends nothing: a week's suspension or a profile freeze must never tell the
+network an account is gone, and one report must not fan a `Delete` out over every
+post a member ever published. The reasoning, the addressing and the limits are in
+`fediverse.md`; remote deletion is advisory by protocol, so this asks, it does not
+promise.
+
 Every case carries an **audit log** (`moderation_events`: reports, freezes,
 severances, owner self-service, escalations, rulings, strikes, `owner_removed`)
 rendered as the History timeline on the admin case page, and the urgent admin

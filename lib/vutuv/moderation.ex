@@ -24,6 +24,14 @@ defmodule Vutuv.Moderation do
   consequences on the user row (`suspended_until`, `deactivated_at`); the
   visibility chokepoints (`Vutuv.Posts.scope_visible/2`, `Vutuv.Chat`,
   `Vutuv.Search`, `VutuvWeb.Plug.EnsureActivated`) read them directly.
+
+  A takedown here also leaves the building (issue #1102): freezing a post revokes
+  the copies on other Fediverse servers (`Vutuv.Fediverse.revoke_post/1`) and
+  lifting the freeze publishes it again, while a **permanent** account removal —
+  `remove_owner/4` with `:deactivate`, and the strike ladder's third strike —
+  broadcasts the actor `Delete` (`Vutuv.Fediverse.revoke_actor/1`). Everything
+  temporary deliberately sends nothing: a week's suspension or a profile freeze
+  must never tell the network an account is gone.
   """
 
   import Ecto.Query
@@ -31,6 +39,7 @@ defmodule Vutuv.Moderation do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Chat.{Message, Participant}
+  alias Vutuv.Fediverse
   alias Vutuv.Jobs.JobPosting
 
   alias Vutuv.Moderation.{
@@ -778,8 +787,14 @@ defmodule Vutuv.Moderation do
 
       {:ok, updated} ->
         now = NaiveDateTime.utc_now(:second)
-        set_user_moderation!(case_record.owner_id, deactivated_at: now, moderation_reason: reason)
+        owner = Repo.get!(User, case_record.owner_id)
+        set_user_moderation!(owner.id, deactivated_at: now, moderation_reason: reason)
         log(updated, admin, "owner_removed", %{"action" => "deactivate", "reason" => reason})
+        # A removal that does not come back gets the same actor `Delete` a real
+        # account deletion sends (issue #1102), or the member keeps federating
+        # from every server that follows them. `410 Gone` stays reserved for the
+        # member's own opt-out, so this is a broadcast, not a status code.
+        Fediverse.revoke_actor(owner)
         {:ok, updated}
     end
   end
@@ -842,6 +857,10 @@ defmodule Vutuv.Moderation do
   defp apply_ladder(user, _level, now) do
     set_user_moderation!(user.id, deactivated_at: now)
     Notifier.deactivation(user)
+    # The third strike is permanent, so it federates like the admin's own
+    # removal above (issue #1102). The week's suspension one rung down does not:
+    # a temporary hiding must never tell the network an account is gone.
+    Fediverse.revoke_actor(user)
   end
 
   ## Relationship severance
@@ -1383,10 +1402,24 @@ defmodule Vutuv.Moderation do
     # Open chat threads drop the message live; posts need no push (the read
     # paths filter on the next render).
     if match?(%Message{}, content), do: Vutuv.Chat.broadcast_message_frozen(content)
+    # A frozen post is invisible to everyone but its owner here, so the copies on
+    # other servers have to be asked to go too, or the freeze is a local fiction
+    # (issue #1102). Best effort and reversible: lifting the freeze publishes it
+    # again. A frozen *profile* deliberately sends nothing — see the freeze note
+    # in `Vutuv.Fediverse.revoke_actor/1`: a temporary hiding must never tell the
+    # network an account is gone, and one report must not fan a Delete out over
+    # every post the member ever published.
+    if match?(%Post{}, content), do: Fediverse.revoke_post(content)
     :ok
   end
 
-  defp unfreeze_content(content), do: set_frozen_at(content, nil)
+  defp unfreeze_content(content) do
+    set_frozen_at(content, nil)
+    # The other half of revoking on a freeze: a rejected report (or the owner's
+    # own edit) has to put the post back on the other servers, not only here.
+    if match?(%Post{}, content), do: Fediverse.republish_post(content)
+    :ok
+  end
 
   defp set_frozen_at(%Post{id: id}, value) do
     Repo.update_all(from(p in Post, where: p.id == ^id), set: [frozen_at: value])

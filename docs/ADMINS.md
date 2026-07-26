@@ -617,6 +617,26 @@ first, in plain words, because neither can be undone: what has already been
 delivered is out of reach, and a member who leaves and comes back may not be
 shown again by every server right away.
 
+**When something is taken down here.** Every takedown now asks the other servers
+to withdraw their copy, not only a member pressing delete on their own post. A
+report that freezes a post asks for its copies to be deleted (and lifting the
+freeze publishes the post again); a permanent removal of an account — an admin
+ruling, or the third strike on the ladder — tells the servers that follow that
+member their account is gone, the same message a real account deletion sends; and
+reporting a reply that came from another network passes the report on to that
+server's moderators as well as deleting the copy here. Everything **temporary**
+deliberately sends nothing at all: a week's suspension or a frozen profile must
+never read to the network as "this account was deleted".
+
+None of it is enforceable. Another server can ignore the request, and a request
+addressed to a server that is down for a day is retried for about four hours and
+then given up on. That is why **`/admin` → Fediverse** ends in a
+"Takedowns that did not get through" list: the server, what was asked, and the
+last error. A copy on that list is very likely still published somewhere, so it
+is worth reading before you tell a member their post is gone — and a server
+appearing there again and again is either broken or ignoring you, and can be
+blocked on the same page.
+
 **What is stored from other servers.** Exactly one thing: a bare counter row per
 remote person per post per kind (favourite / re-share), holding only that
 person's account address, the kind and the time. No name, no picture, no text.
