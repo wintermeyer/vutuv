@@ -392,16 +392,49 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
 
     test "tapping the photo itself opens its options panel", %{conn: conn, user: user} do
-      # The ⚙ in the tile scrim is real but nobody sees it; the picture is the
-      # biggest target on screen and the first thing people try.
+      # The picture is the biggest target on screen and the first thing
+      # people try — it IS the options button (a real <button>, so the
+      # keyboard reaches it too; the old scrim ⚙ is gone).
       live = open_photo_composer(conn)
       image = upload_photo!(live, user)
 
       refute has_element?(live, "#composer-photo-panel")
 
-      live |> element(~s([data-photo-tile="#{image.id}"] img)) |> render_click()
+      open_panel(live, image)
 
       assert has_element?(live, "#composer-photo-panel")
+    end
+
+    test "a single photo carries no reorder arrows, just remove and the photo itself", %{
+      conn: conn,
+      user: user
+    } do
+      # With one photo there is no order to change: the ◀ ▶ pair would be two
+      # dead ghost buttons (Stefan: do we need these at all?).
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      refute has_element?(live, ~s([phx-click="photo-move"]))
+      assert has_element?(live, ~s(button[phx-click="remove-image"][phx-value-id="#{image.id}"]))
+
+      upload_photo!(live, user)
+
+      assert has_element?(live, ~s([phx-click="photo-move"]))
+    end
+
+    test "the editor shows a photo in its own aspect ratio, not a square crop", %{
+      conn: conn,
+      user: user
+    } do
+      # A photographer judges the upload by the full frame; the square crop
+      # belongs to the compact text-mode strip alone. The test JPEG is 90×60.
+      live = open_photo_composer(conn)
+      image = upload_photo!(live, user)
+
+      assert has_element?(
+               live,
+               ~s([data-photo-tile="#{image.id}"] [style*="aspect-ratio: 90 / 60"])
+             )
     end
 
     test "the alt nudge shows only while a photo has neither caption nor description", %{

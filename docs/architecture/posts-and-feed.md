@@ -509,15 +509,20 @@ one-line explainer of what the mode is, leads with a dropzone (the grid is a
 `phx-drop-target`), renders the photos as a large grid, adds more photos via
 a tile in the grid, and folds the text editor behind one "Add text
 (optional)" button — a non-empty body keeps it open, so recovered text can
-never hide. Under every tile sit the things a photographer looks for and
-would not find behind the ⚙: **one caption input** (it doubles as the
-accessible name via `photo_alt/1`, so the alt input stays an opt-in
-refinement in the panel rather than a second required-looking field) and,
-when the file carries camera facts, the **"Show camera settings" switch with
-the very line visitors would see**. **Tapping the photo itself opens its
-options panel** (alt, download) — the scrim's ⚙ stays as the labeled,
-keyboard-reachable control, but the picture is the target people actually
-try. The book/film review triggers and the bottom-row picker are
+never hide. In photo mode the tiles keep the photo's **own aspect ratio** (inline
+`aspect-ratio` from the stored dimensions — a photographer judges the upload
+by the full frame; the compact text strip keeps its uniform squares). Under
+every tile sit the things a photographer looks for and would not find
+behind a gear icon: **one caption input** (it doubles as the accessible name
+via `photo_alt/1`, so the alt input stays an opt-in refinement in the panel
+rather than a second required-looking field) and, when the file carries
+camera facts, the **"Show camera settings" switch with the very line
+visitors would see**. **The picture itself is the options button** (a real
+`<button>`, so keyboard users reach the panel too); the old four-button
+bottom scrim is gone — with a single photo it was two dead arrows plus a ⚙
+the picture-tap covers. What remains on the tile: a remove dot top-right,
+and the ◀ ▶ reorder dots only when more than one photo gives them meaning
+(they stay the touch reorder path, native drag cannot fire there). The book/film review triggers and the bottom-row picker are
 text-mode-only; the licence row sits with the photos in both modes. The
 cover badge appears only from the second photo on, and the amber ALT nudge
 only while a photo has **neither** caption nor alt.

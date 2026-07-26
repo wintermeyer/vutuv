@@ -1147,6 +1147,7 @@ defmodule VutuvWeb.PostLive.Composer do
                 count={length(@images)}
                 open?={@open_photo == image.id}
                 alt_missing?={photo_described?(@photos, image) == false}
+                natural?
                 roomy?
                 myself={@myself}
               />
@@ -1677,132 +1678,142 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  # One photo's square frame: picture, cover marker, alt nudge and the scrim
-  # controls — shared by the text-mode strip and the photo-mode grid, which
-  # differ around it (tile size, inline inputs) but not in it. `draggable`
-  # sits here rather than on the outer cell so a drag in the grid's caption
-  # inputs selects text instead of starting a photo drag; the PhotoStrip hook
-  # finds the reorder unit via closest("[data-photo-tile]") either way.
-  # `roomy?` grows the scrim buttons to finger size — the photo-mode tiles
-  # have the width for it, while the text strip's small tiles (3-5 per row)
-  # would overflow; too-small touch targets are a standing mobile complaint.
+  # One photo's frame: the picture as one big options button, the badges, a
+  # remove dot and (only when there is an order to change) the two reorder
+  # dots — shared by the text-mode strip and the photo-mode grid, which
+  # differ around it (tile size, inline inputs) but not in it. The old
+  # four-button bottom scrim is gone: with a single photo it was two dead
+  # arrows plus a ⚙ the picture-tap already covers. `draggable` sits here
+  # rather than on the outer cell so a drag in the grid's caption inputs
+  # selects text instead of starting a photo drag; the PhotoStrip hook finds
+  # the reorder unit via closest("[data-photo-tile]") either way. `natural?`
+  # sizes the frame to the photo's own aspect ratio (photo mode — a
+  # photographer judges the upload by the full frame), while the compact
+  # text strip keeps its uniform squares. `roomy?` grows the corner dots to
+  # finger size; the strip's small tiles get the compact variant.
   attr(:image, :any, required: true)
   attr(:index, :integer, required: true)
   attr(:count, :integer, required: true)
   attr(:open?, :boolean, required: true)
   attr(:alt_badge?, :boolean, default: true)
   attr(:alt_missing?, :boolean, required: true)
+  attr(:natural?, :boolean, default: false)
   attr(:roomy?, :boolean, default: false)
   attr(:myself, :any, required: true)
 
   defp photo_frame(assigns) do
+    assigns = assign(assigns, :ratio_style, assigns.natural? && natural_ratio(assigns.image))
+
     ~H"""
     <div
       draggable="true"
+      style={@ratio_style}
       class={[
-        "group relative aspect-square overflow-hidden rounded-lg ring-1",
+        "group relative overflow-hidden rounded-lg ring-1",
+        !@ratio_style && "aspect-square",
         (@open? && "ring-2 ring-brand-500") || "ring-slate-200 dark:ring-slate-800"
       ]}
     >
-      <%!-- The picture itself opens its options panel: it is the biggest
-      target on screen and the first thing people try, where the scrim's ⚙
-      (kept as the labeled, keyboard-reachable control) goes unseen. The
-      binding sits on the img, not the frame, so the scrim buttons don't
-      double-fire it through bubbling. --%>
-      <img
-        src={PostImage.url(@image, "thumb")}
-        alt=""
+      <%!-- The picture IS the options button: the biggest target on screen,
+      the first thing people try, and as a real <button> the keyboard path
+      too (which is why the scrim's ⚙ could go). --%>
+      <button
+        type="button"
         phx-click="photo-open"
         phx-value-id={@image.id}
         phx-target={@myself}
-        class="h-full w-full cursor-pointer object-cover"
-      />
-
-      <%!-- The hero marker. A number on every tile would be noise; what the
-      author needs to know is which photo leads — and with a single photo
-      there is nothing to lead, so it stays away. --%>
-      <span
-        :if={@index == 0 and @count > 1}
-        data-cover-badge
-        class="absolute left-1 top-1 rounded bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+        aria-label={gettext("Photo options")}
+        title={gettext("Photo options")}
+        class="block h-full w-full cursor-pointer rounded-lg focus-visible:ring-2 focus-visible:ring-brand-500"
       >
-        {gettext("Cover")}
-      </span>
+        <img src={PostImage.url(@image, "thumb")} alt="" class="h-full w-full object-cover" />
+      </button>
 
-      <%!-- The alt-text nudge: amber while a photo has no description, so the
-      gap is visible without blocking anything. Photo mode shows the empty
-      input itself right under the tile, which says the same thing better. --%>
-      <span
-        :if={@alt_badge? and @alt_missing?}
-        title={gettext("No image description yet")}
-        class="absolute right-1 top-1 rounded bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
-        data-photo-alt-missing={@image.id}
-      >
-        ALT
-      </span>
+      <div class="pointer-events-none absolute left-1 top-1 flex flex-col items-start gap-1">
+        <%!-- The hero marker. A number on every tile would be noise; what the
+        author needs to know is which photo leads — and with a single photo
+        there is nothing to lead, so it stays away. --%>
+        <span
+          :if={@index == 0 and @count > 1}
+          data-cover-badge
+          class="rounded bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+        >
+          {gettext("Cover")}
+        </span>
 
-      <%!-- Controls sit on a scrim at the bottom of the tile: always visible
-      on touch (where there is no hover), so nothing is undiscoverable on a
-      phone. --%>
-      <div class={[
-        "absolute inset-x-0 bottom-0 flex items-center justify-between bg-slate-900/60",
-        (@roomy? && "gap-1 px-1.5 py-1") || "gap-0.5 px-1 py-1"
-      ]}>
-        <button
-          type="button"
-          phx-click="photo-move"
-          phx-value-id={@image.id}
-          phx-value-dir="back"
-          phx-target={@myself}
-          disabled={@index == 0}
-          aria-label={gettext("Move photo earlier")}
-          class={[scrim_button_class(@roomy?), "disabled:opacity-30"]}
+        <%!-- The alt-text nudge: amber while a photo has no description, so
+        the gap is visible without blocking anything. --%>
+        <span
+          :if={@alt_badge? and @alt_missing?}
+          title={gettext("No image description yet")}
+          class="pointer-events-auto rounded bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-bold text-amber-950"
+          data-photo-alt-missing={@image.id}
         >
-          ◀
-        </button>
-        <button
-          type="button"
-          phx-click="photo-open"
-          phx-value-id={@image.id}
-          phx-target={@myself}
-          aria-label={gettext("Photo options")}
-          title={gettext("Photo options")}
-          class={[scrim_button_class(@roomy?), "hover:bg-white/20"]}
-        >
-          ⚙
-        </button>
-        <button
-          type="button"
-          phx-click="remove-image"
-          phx-value-id={@image.id}
-          phx-target={@myself}
-          aria-label={gettext("Remove photo")}
-          title={gettext("Remove photo")}
-          class={[scrim_button_class(@roomy?), "hover:bg-white/20"]}
-        >
-          ✕
-        </button>
-        <button
-          type="button"
-          phx-click="photo-move"
-          phx-value-id={@image.id}
-          phx-value-dir="forward"
-          phx-target={@myself}
-          disabled={@index == @count - 1}
-          aria-label={gettext("Move photo later")}
-          class={[scrim_button_class(@roomy?), "disabled:opacity-30"]}
-        >
-          ▶
-        </button>
+          ALT
+        </span>
       </div>
+
+      <button
+        type="button"
+        phx-click="remove-image"
+        phx-value-id={@image.id}
+        phx-target={@myself}
+        aria-label={gettext("Remove photo")}
+        title={gettext("Remove photo")}
+        class={["absolute right-1 top-1", tile_dot_class(@roomy?)]}
+      >
+        ✕
+      </button>
+
+      <%!-- Reorder, only when there is an order: the end positions simply
+      drop their arrow instead of showing a dead one. Touch cannot fire
+      native HTML5 drag, so these stay the reorder path on a phone. --%>
+      <button
+        :if={@count > 1 and @index > 0}
+        type="button"
+        phx-click="photo-move"
+        phx-value-id={@image.id}
+        phx-value-dir="back"
+        phx-target={@myself}
+        aria-label={gettext("Move photo earlier")}
+        class={["absolute bottom-1 left-1", tile_dot_class(@roomy?)]}
+      >
+        ◀
+      </button>
+      <button
+        :if={@count > 1 and @index < @count - 1}
+        type="button"
+        phx-click="photo-move"
+        phx-value-id={@image.id}
+        phx-value-dir="forward"
+        phx-target={@myself}
+        aria-label={gettext("Move photo later")}
+        class={["absolute bottom-1 right-1", tile_dot_class(@roomy?)]}
+      >
+        ▶
+      </button>
     </div>
     """
   end
 
-  # The tile scrim's button recipe: finger-sized in the photo grid (roomy),
-  # compact in the text strip whose small tiles cannot fit four 40px targets.
-  defp scrim_button_class(true), do: "rounded-md px-2.5 py-1.5 text-sm text-white"
-  defp scrim_button_class(false), do: "rounded px-1 text-xs text-white"
+  # The corner-dot recipe: finger-sized in the photo grid (roomy), compact in
+  # the text strip whose small tiles cannot fit 40px targets.
+  defp tile_dot_class(true),
+    do:
+      "flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/60 text-sm text-white hover:bg-slate-900/80"
+
+  defp tile_dot_class(false),
+    do:
+      "flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/60 text-xs text-white hover:bg-slate-900/80"
+
+  # The photo's own shape as an inline aspect-ratio, so the frame is stable
+  # before the thumbnail loads; a row without stored dimensions falls back to
+  # the square.
+  defp natural_ratio(%PostImage{width: width, height: height})
+       when is_integer(width) and width > 0 and is_integer(height) and height > 0,
+       do: "aspect-ratio: #{width} / #{height}"
+
+  defp natural_ratio(_image), do: nil
 
   # The outline camera glyph (heroicons "camera") for the dropzone and the
   # add-more tile — an SVG rather than the 📷 emoji so it takes the text
