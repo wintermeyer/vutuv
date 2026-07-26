@@ -165,6 +165,9 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:user_search, "")
     |> assign(:user_results, [])
     |> assign(:error, nil)
+    # Released once the post is saved, so the unload guard (`unsaved?/1`) stops
+    # asking about content that is now safely in the database.
+    |> assign(:saved?, false)
     |> allow_upload(:images,
       accept: Vutuv.PostImageStore.extension_whitelist(),
       max_entries: Posts.max_images_per_post(),
@@ -577,6 +580,39 @@ defmodule VutuvWeb.PostLive.Composer do
   defp drafting?(assigns),
     do: assigns.body != "" or assigns.tags_value != "" or assigns.images != []
 
+  # What a reload would throw away (issue #1148) — the answer the `DraftGuard`
+  # hook turns into the browser's "Leave site?" prompt. Deliberately *not*
+  # `drafting?/1`: on the edit page the composer opens full of the stored post,
+  # so "there is text in it" would arm the guard on every visit, and a prompt
+  # that fires when nothing is at stake is one people learn to click away.
+  # What counts is the difference between the form and the state it opened in.
+  #
+  # A quote the reply page seeded (`initial_body`) is part of that opening
+  # state: the reader did not type it, and it comes back from the URL anyway.
+  # Audience, licence and the per-photo settings are left out — nobody sets
+  # them without also having content, which is caught here already.
+  defp unsaved?(%{saved?: true}), do: false
+
+  defp unsaved?(assigns), do: composer_state(assigns) != opened_state(assigns)
+
+  defp composer_state(assigns) do
+    %{
+      body: assigns.body,
+      tags: assigns.tags_value,
+      image_ids: Enum.map(assigns.images, & &1.id),
+      review: assigns.review
+    }
+  end
+
+  defp opened_state(%{post: post} = assigns) do
+    %{
+      body: (post && post.body) || assigns[:initial_body] || "",
+      tags: tags_value(post),
+      image_ids: Enum.map(post_images(post), & &1.id),
+      review: review_values(post)
+    }
+  end
+
   # Re-adopts photos LiveView form recovery hands back after a reconnect: the
   # composer's socket state died with the old socket, but the pending rows
   # survived, and the hidden `post[image_ids][]` inputs rode the recovered
@@ -683,6 +719,15 @@ defmodule VutuvWeb.PostLive.Composer do
   defp save_post(%{post: post}, attrs), do: Posts.update_post(post, attrs)
 
   defp handle_save_result({:ok, post}, socket) do
+    # The post is in the database, so there is nothing left to warn about —
+    # release the unload guard before we hand over. The three navigating
+    # branches below need this: the permalink they push to is a controller
+    # page, so LiveView's `live_redirect` degrades into a full page load, and
+    # a still-armed guard would greet the author with "Leave site?" for the
+    # post they just published. LiveView pushes a component's diff *before*
+    # its redirect, so the browser sees the released marker in time.
+    socket = assign(socket, :saved?, true)
+
     cond do
       socket.assigns.post ->
         {:noreply, push_navigate(socket, to: Posts.path(post))}
@@ -698,7 +743,8 @@ defmodule VutuvWeb.PostLive.Composer do
 
       true ->
         # The feed prepends the new post via its own {:new_post, …} broadcast;
-        # the composer just resets (audience choice sticks).
+        # the composer just resets (audience choice sticks) and re-arms for
+        # whatever gets typed next — it is empty now, so it stays quiet.
         {:noreply,
          socket
          |> assign(:body, "")
@@ -709,6 +755,7 @@ defmodule VutuvWeb.PostLive.Composer do
          |> assign(:photos, %{})
          |> assign(:open_photo, nil)
          |> assign(:text_open?, false)
+         |> assign(:saved?, false)
          |> assign(:error, nil)}
     end
   end
@@ -925,7 +972,18 @@ defmodule VutuvWeb.PostLive.Composer do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id={@id} data-composer-mode={@mode}>
+    <%!-- `data-draft-unsaved` is the whole unload guard (issue #1148): the
+    `DraftGuard` hook in app.js reads it when the browser is about to leave the
+    page and, while it says "true", asks the member first. The decision is made
+    here rather than by inspecting the DOM because the composer already holds
+    both halves of it — what is in the form now, and what the post looked like
+    when it opened. --%>
+    <div
+      id={@id}
+      data-composer-mode={@mode}
+      phx-hook="DraftGuard"
+      data-draft-unsaved={to_string(unsaved?(assigns))}
+    >
       <.card>
         <.form
           for={to_form(%{}, as: :post)}

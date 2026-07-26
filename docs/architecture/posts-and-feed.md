@@ -203,6 +203,39 @@ ActivityPub **`featured` collection** and pushed to their followers as
 profile they render — same anonymous-public gate, see
 `docs/architecture/fediverse.md`.
 
+## A reload asks before it eats a draft (issue #1148)
+
+Hitting F5 or Cmd+R halfway through a post used to wipe it without a word. Now
+the browser's own "Leave site?" dialog gets in the way first. That dialog is
+the only one available — `beforeunload` cannot be styled, worded or replaced,
+and browsers only raise it once the member has interacted with the page (typing
+a post counts) — so the whole design question is *when* to arm it.
+
+`PostLive.Composer` answers that server-side and stamps the verdict on its root
+element as `data-draft-unsaved`; the tiny `DraftGuard` hook in `assets/js/app.js`
+reads that one attribute when the browser is about to leave. Keeping the decision
+in Elixir is the point: the composer already holds both halves of it — what is in
+the form now (`@body`, `@tags_value`, `@images`, `@review`, kept current by the
+form's ordinary `phx-change`) and what the post looked like when it opened.
+
+The comparison is `unsaved?/1`, and it is deliberately **not** `drafting?/1`:
+the edit page opens full of the stored post, so "there is text in it" would arm
+the guard on every visit, and a prompt that fires when nothing is at stake is one
+people learn to click away. A quote the reply page seeded (`initial_body`) counts
+as part of the opening state too — the reader did not type it, and it comes back
+from the URL on a reload.
+
+Two things the guard deliberately does not do. It never fires on a **LiveView
+navigation**, because no document unload happens there; it catches reloads, tab
+closes, Back and links off the site. And a **successful save releases it**
+(`:saved?`, set in `handle_save_result/2` before the redirect): the permalink the
+composer navigates to is a controller page, so LiveView's `live_redirect` degrades
+into a full page load, and without the release the author would be asked to
+confirm leaving the post they just published. LiveView pushes a component's diff
+*ahead* of its redirect, so the released marker reaches the browser in time —
+verified in a browser, not only in the tests (`composer_draft_guard_test.exs`
+covers the marker; the release-before-redirect ordering is a browser fact).
+
 ## Editing closes (the edit window)
 
 An edit rewrites what other people already put their name to: like "I love
