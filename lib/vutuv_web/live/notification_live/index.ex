@@ -211,8 +211,26 @@ defmodule VutuvWeb.NotificationLive.Index do
     socket
     |> assign(:page, page)
     |> assign(:total, total)
-    |> assign(:items, with_post_previews(feed.entries, user))
+    |> assign(:items, feed.entries |> with_seen_flags(user) |> with_post_previews(user))
     |> assign_sections()
+  end
+
+  # Rows the reader has already dealt with out in the feed: they answered,
+  # liked, bookmarked or reposted the post the row is about, so
+  # `Vutuv.Activity.mark_post_seen/2` recorded it and the shell's badge stopped
+  # counting it. They stay listed — the page is the log of what happened — they
+  # just no longer render as new, so the list and the badge tell one story. One
+  # query per page.
+  defp with_seen_flags(entries, viewer) do
+    seen =
+      entries
+      |> Enum.map(&Activity.subject_post_id/1)
+      |> Enum.reject(&is_nil/1)
+      |> then(&Activity.seen_post_ids(viewer.id, &1))
+
+    Enum.map(entries, fn entry ->
+      Map.put(entry, :seen?, MapSet.member?(seen, Activity.subject_post_id(entry)))
+    end)
   end
 
   defp assign_sections(socket) do

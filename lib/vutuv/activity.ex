@@ -16,17 +16,28 @@ defmodule Vutuv.Activity do
   thread the user writes in a "thread" one —, `post_mentions` — a post naming
   the user by `@handle` is a "mention" event —, `post_likes`, and the announced
   CV rows behind `Vutuv.Profiles.CvUpdates`) instead of being
-  persisted per notification — which makes it automatically retroactive. The only stored
-  state is `users.notifications_read_at`, the read marker behind the unread
-  badge; `mark_notifications_read/1` bumps it and broadcasts. Older events are
-  reached via `notifications_page/2`, a timestamp-cursor pagination that backs
-  the "Load more" button.
+  persisted per notification — which makes it automatically retroactive. Older
+  events are reached via `notifications_page/2`, a timestamp-cursor pagination
+  that backs the "Load more" button.
+
+  Read state is stored in two places, and they answer different questions:
+
+    * `users.notifications_read_at` is the **marker**: everything up to here
+      has been seen. `mark_notifications_read/1` bumps it and broadcasts, which
+      is what opening /notifications does.
+    * `notification_post_reads` holds the **per-post** exceptions written by
+      `mark_post_seen/2`: the member answered, liked, bookmarked or reposted
+      that post, so what the feed has to say about it is old news even though
+      the marker still sits behind it. Only the unread tally consults them —
+      the page keeps listing those events, it just stops calling them new.
   """
   import Ecto.Query
   require Logger
 
   alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.User
+  alias Vutuv.Activity.NotificationPostRead
+  alias Vutuv.Engagement
   alias Vutuv.Fediverse.Note
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Emailer
@@ -186,6 +197,67 @@ defmodule Vutuv.Activity do
     from(t in subquery(union), select: max(t.ts))
     |> Repo.one()
   end
+
+  @doc """
+  Record that `user_id` has seen `post_id`, so the notifications *about* that
+  post stop counting as unread (`notification_post_reads`).
+
+  Called from `Vutuv.Posts` whenever a member answers, likes, bookmarks or
+  reposts a post: all four are deliberate acts on a post they were looking at,
+  which makes "you were mentioned here" or "somebody answered this" news they
+  already have. Idempotent (the four actions are toggles that may fire again),
+  and a no-op for a missing member or post.
+
+  The badge is not decremented here — `:notifications_changed` tells the shell
+  to recount from the source, the same way a silently removed event does, so
+  the two can never drift. Only a fresh mark broadcasts; the repeat changes
+  nothing to recount.
+  """
+  def mark_post_seen(nil, _post_id), do: :ok
+  def mark_post_seen(_user_id, nil), do: :ok
+
+  def mark_post_seen(user_id, post_id) when is_binary(user_id) and is_binary(post_id) do
+    case Engagement.insert_if_new(
+           NotificationPostRead,
+           %{user_id: user_id, post_id: post_id},
+           [:user_id, :post_id]
+         ) do
+      {:inserted, _row} -> broadcast(user_id, :notifications_changed)
+      :exists -> :ok
+    end
+  end
+
+  @doc """
+  Which of `post_ids` the member has already seen (`mark_post_seen/2`), as a
+  `MapSet`. One query for a whole notifications page, so its rows can render
+  the individually-read ones as read; empty in, empty out.
+  """
+  def seen_post_ids(_user_id, []), do: MapSet.new()
+  def seen_post_ids(nil, _post_ids), do: MapSet.new()
+
+  def seen_post_ids(user_id, post_ids) do
+    from(s in NotificationPostRead,
+      where: s.user_id == ^user_id and s.post_id in ^post_ids,
+      select: s.post_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  @doc """
+  The post a feed item is *about* — the one the member would engage with to
+  prove they have seen it, and the key `mark_post_seen/2` marks.
+
+  Only the three kinds whose subject is somebody else's post have one: the
+  answer to your post, the answer elsewhere in your thread, and the post that
+  named you. A "like" names your own post instead, and engaging with your own
+  post says nothing about having seen who liked it, so it has none.
+  """
+  def subject_post_id(%{kind: kind} = item) when kind in ~w(reply thread),
+    do: Map.get(item, :reply_post_id)
+
+  def subject_post_id(%{kind: "mention"} = item), do: Map.get(item, :post_id)
+  def subject_post_id(_item), do: nil
 
   @doc "Tell a user's shell their messages were just read (clears the badge)."
   def mark_messages_read(user_id), do: broadcast(user_id, :messages_read)
@@ -584,17 +656,23 @@ defmodule Vutuv.Activity do
   def notifications_count(user_id, kinds \\ nil)
   def notifications_count(nil, _kinds), do: 0
 
-  def notifications_count(user_id, kinds), do: total_count(user_id, nil, kinds)
+  def notifications_count(user_id, kinds), do: total_count(user_id, nil, kinds, false)
 
   @doc """
   How many feed events are newer than the user's read marker (all of them when
-  the marker is NULL). Zero for a logged-out visitor.
+  the marker is NULL) **and** not about a post the member has already seen.
+  Zero for a logged-out visitor.
+
+  The second half is what makes the badge mean "things you have not looked at"
+  rather than "things since your last visit to /notifications": answering,
+  liking, bookmarking or reposting a post marks it seen (`mark_post_seen/2`)
+  and its event drops out of the tally right there in the feed.
   """
   def unread_notification_count(nil), do: 0
 
   def unread_notification_count(user_id) do
     read_at = Repo.one(from(u in User, where: u.id == ^user_id, select: u.notifications_read_at))
-    total_count(user_id, read_at)
+    total_count(user_id, read_at, nil, true)
   end
 
   # The feed sources are counted in a single round trip: each count is a
@@ -606,9 +684,14 @@ defmodule Vutuv.Activity do
   #
   # `kinds` picks the subset to count, mirroring `kind_sources/1`; the sum is
   # built with dynamics so the filtered case stays one query too.
-  defp total_count(user_id, read_at, kinds \\ nil) do
+  #
+  # `unread?` additionally drops the events whose post the member has already
+  # engaged with (`mark_post_seen/2`). It is deliberately not derived from
+  # `read_at` — that one is nil for a member who never opened /notifications,
+  # who still wants the per-post exceptions applied.
+  defp total_count(user_id, read_at, kinds, unread?) do
     counts =
-      for {kind, count} <- kind_counts(user_id, read_at),
+      for {kind, count} <- kind_counts(user_id, read_at, unread?),
           kinds == nil or kind in kinds,
           do: count
 
@@ -630,14 +713,14 @@ defmodule Vutuv.Activity do
   # count-side twin of `kind_sources/1`, so a `kinds:` filter narrows the feed
   # and its total the same way. `report_protection` is two queries (severed and
   # restored), matching the one source that emits both.
-  defp kind_counts(user_id, read_at) do
+  defp kind_counts(user_id, read_at, unread?) do
     [
       {"follower", count_followers(user_id, read_at)},
       {"endorsement", count_endorsements(user_id, read_at)},
       {"connection", count_connections(user_id, read_at)},
-      {"reply", count_replies(user_id, read_at)},
-      {"thread", count_thread_replies(user_id, read_at)},
-      {"mention", count_mentions(user_id, read_at)},
+      {"reply", count_replies(user_id, read_at, unread?)},
+      {"thread", count_thread_replies(user_id, read_at, unread?)},
+      {"mention", count_mentions(user_id, read_at, unread?)},
       {"fediverse_reply", count_fediverse_replies(user_id, read_at)},
       {"like", count_likes(user_id, read_at)},
       {"organization_role", count_organization_roles(user_id, read_at)},
@@ -1282,25 +1365,39 @@ defmodule Vutuv.Activity do
     end
   end
 
-  defp count_replies(user_id, read_at) do
+  defp count_replies(user_id, read_at, unread? \\ false) do
     from(r in PostReply,
       join: reply in assoc(r, :post),
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
       select: %{count: count()}
     )
     |> since(read_at)
+    |> unless_seen(user_id, unread?)
   end
 
-  defp count_thread_replies(user_id, read_at) do
+  defp count_thread_replies(user_id, read_at, unread?) do
     thread_replies(user_id)
     |> select([thread_ref: r], %{count: count()})
     |> since(read_at)
+    |> unless_seen(user_id, unread?)
   end
 
-  defp count_mentions(user_id, read_at) do
+  defp count_mentions(user_id, read_at, unread?) do
     mention_events(user_id)
     |> select([mention: m], %{count: count()})
     |> since(read_at)
+    |> unless_seen(user_id, unread?)
+  end
+
+  # Drops the events whose subject post the member has already engaged with.
+  # All three affected sources key on `post_id` of their first binding — the
+  # answer for a reply / thread event, the naming post for a mention — which is
+  # exactly what `mark_post_seen/2` writes, so one clause covers them.
+  defp unless_seen(query, _user_id, false), do: query
+
+  defp unless_seen(query, user_id, true) do
+    seen = from(s in NotificationPostRead, where: s.user_id == ^user_id, select: s.post_id)
+    where(query, [event], event.post_id not in subquery(seen))
   end
 
   # No self-like filter: a member cannot like their own post (enforced in

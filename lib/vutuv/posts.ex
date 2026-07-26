@@ -221,6 +221,9 @@ defmodule Vutuv.Posts do
       case insert_post(changeset, image_ids, parent, note) do
         {:ok, post} ->
           post = preload_post(post)
+          # Answering a post is the clearest possible proof of having read it,
+          # so any notification about the parent stops counting as unread.
+          Vutuv.Activity.mark_post_seen(author.id, parent.id)
           broadcast_new_post(post)
           broadcast_reply(parent, post)
           sync_mentions(post)
@@ -918,6 +921,12 @@ defmodule Vutuv.Posts do
 
   defp engage(schema, kind, %User{} = user, %Post{} = post) do
     if visible_to?(post, user) do
+      # Liking, bookmarking or reposting a post is proof the member read it, so
+      # whatever the notifications feed has to say about that post is old news
+      # — including on the idempotent repeat, which is still a member acting on
+      # a post in front of them.
+      Vutuv.Activity.mark_post_seen(user.id, post.id)
+
       case Vutuv.Engagement.insert_if_new(
              schema,
              %{user_id: user.id, post_id: post.id},

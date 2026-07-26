@@ -37,7 +37,9 @@ defmodule VutuvWeb.NotificationLive.Groups do
   member's time), `:actors` (distinct, newest first), `:actor_count`,
   `:tags` (endorsement groups: chronological), `:item` (the newest raw item,
   for kind-specific fields and post previews) and `:unread?` - true when any
-  member is newer than `read_marker` (nil marker = everything unread).
+  member is newer than `read_marker` (nil marker = everything unread) and not
+  already marked `:seen?` by the caller (the reader engaged with the post the
+  item is about, see `Vutuv.Activity.mark_post_seen/2`).
   """
   def sections(items, read_marker) do
     items
@@ -169,6 +171,11 @@ defmodule VutuvWeb.NotificationLive.Groups do
       "anon-#{:erlang.phash2(item[:actor_name])}"
   end
 
+  # An item the reader already engaged with (`:seen?`, set by the page from
+  # `Vutuv.Activity.mark_post_seen/2`) is read whatever the marker says: they
+  # answered, liked, bookmarked or reposted the post it is about, and the shell
+  # badge stopped counting it there and then.
+  defp unread?(%{seen?: true}, _read_marker), do: false
   defp unread?(_item, nil), do: true
 
   defp unread?(item, read_marker),

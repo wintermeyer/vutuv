@@ -731,6 +731,26 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert Vutuv.Activity.unread_notification_count(user.id) == 0
     end
 
+    test "a reply I already answered is listed but not marked unread", %{conn: conn} do
+      # The row stays - the page is the log of what happened - but answering the
+      # reply out in the feed already settled it, so it must not read as new
+      # here either, or the page and the bell badge would tell two stories.
+      {conn, user} = create_and_login_user(conn)
+      backdate_welcome_note(user, ~N[2016-11-24 12:00:00])
+      set_read_marker(user, ~N[2016-11-25 00:00:00])
+
+      mine = insert(:post, user: user)
+      answer = insert(:post, user: insert(:user))
+      insert(:post_reply, post: answer, parent_post: mine, parent_author: user)
+
+      {:ok, _reply} = Vutuv.Posts.create_reply(user, answer, %{body: "Thanks!"})
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(live, ~s([data-notification-row][data-kind="reply"]))
+      refute has_element?(live, ~s([data-notification-row][data-kind="reply"][data-unread]))
+    end
+
     test "redirects a logged-out visitor to the login", %{conn: conn} do
       assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/notifications")
     end

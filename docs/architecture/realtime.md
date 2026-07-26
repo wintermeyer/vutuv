@@ -142,10 +142,44 @@ organizations share the handle namespace but have no feed.
 you, and a mention supersedes the quieter "thread" event for the same reply. So
 a single post never produces two notifications for the same reader.
 
-The only stored state derived-feed-wise is the `users.notifications_read_at`
-read marker behind the unread badge; `post_mentions` and
-`handle_change_notifications` are the two event tables written for a feed kind
-rather than read from one that already existed.
+`post_mentions` and `handle_change_notifications` are the two event tables
+written for a feed kind rather than read from one that already existed.
+
+### Read state: one marker plus per-post exceptions
+
+Derived-feed-wise, read state is stored in exactly two places.
+
+`users.notifications_read_at` is the **marker**: everything up to here has been
+seen. `Activity.mark_notifications_read/1` bumps it when the member opens
+/notifications, and anchors it to the newest *event* rather than the wall clock,
+so an event landing in the same second is not swallowed (the event tables keep
+second precision and the unread filter is a strict `>`).
+
+`notification_post_reads` holds the **per-post exceptions**, written by
+`Activity.mark_post_seen/2` when a member answers, likes, bookmarks or reposts a
+post. Nobody does any of those four to a post they have not read, so whatever
+the feed has to say about that post is news they already have — and the badge is
+supposed to mean "things you have not looked at", not "things since your last
+visit to /notifications". Before this, you could read an answer in the feed,
+reply to it, and the badge would still insist on one unread notification until
+you opened the page and dismissed it by hand.
+
+The chokepoints are `Vutuv.Posts`'s `engage/4` (like / bookmark / repost, on the
+idempotent repeat too) and `do_create_reply/4` (the parent). Marking broadcasts
+`:notifications_changed`, the shell's recount-from-source signal, rather than
+decrementing a tally, so the badge cannot drift.
+
+Which events a seen post clears is `Activity.subject_post_id/1`, and it is
+deliberately narrow — only the three kinds whose subject is somebody *else's*
+post: the answer to your post ("reply"), the answer elsewhere in your thread
+("thread") and the post that named you ("mention"). A "like" names your own
+post, and bookmarking or reposting your own post says nothing about having seen
+who liked it, so those keep waiting for a real visit. Only the **unread tally**
+consults the table (`unread_notification_count/1`); `notifications_count/2` and
+the feed itself do not, so the row stays listed and the pager's total is
+unchanged — /notifications remains the log of what happened, it just stops
+calling that row new. The page marks those rows with one extra query per page
+(`Activity.seen_post_ids/2`), so the list and the badge tell one story.
 
 ### The notifications page (2026-07 redesign)
 
@@ -183,7 +217,9 @@ Around the list:
 
 * **Unread highlighting**: events newer than the previous visit's read marker
   get a tint + coral dot and a "N new notifications" header line; the visit
-  itself still advances `users.notifications_read_at` and clears the bell.
+  itself still advances `users.notifications_read_at` and clears the bell. A row
+  whose post the reader already engaged with is exempt (see the read-state
+  section above) — it is listed, plain.
 * **Filter tabs** (all / posts / people / more) restrict the feed server-side
   via `Activity.notifications_page/2`'s `kinds:` option (only the matching
   source queries run, so pagination stays exact) and live in the URL
