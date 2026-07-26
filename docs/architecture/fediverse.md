@@ -28,7 +28,8 @@ every endpoint 404s and nothing is delivered.
   (`Vutuv.Fediverse.Keys`), created lazily on opt-in. The documents are built
   by `VutuvWeb.Fediverse.Docs`; URLs hang off the member so no root slug is
   burned: `/:username/actor` (id), `.../inbox`, `.../followers` and
-  `.../outbox` (count-only collections). The actor also carries
+  `.../outbox` (count-only collections) and `.../collections/featured` (the
+  pinned post, see the post-lifecycle bullet below). The actor also carries
   **`alsoKnownAs`** (issue #986) — the account URIs a member is migrating
   *from* (`users.also_known_as`, set on `/settings/fediverse/move`, one per line).
   A remote server that moves a member's followers *to* vutuv checks this before
@@ -300,6 +301,28 @@ every endpoint 404s and nothing is delivered.
   The Note carries the member-rendered HTML with absolutized links, and image
   attachments via the public post-image proxy URLs. A public post's permalink
   answers an AP Accept with the Note (remote servers dereference ids).
+- **The pinned post** (issue #1110): the post a member pins to their profile
+  is published as the ActivityPub **`featured` collection**, which is how
+  Mastodon and friends show a pin at the top of the profile *they* render. The
+  actor names it unconditionally (`"featured": <actor-url>/collections/featured`
+  — an actor that only sometimes carries the field would make a remote profile
+  depend on when it was last fetched), and `GET` on it answers an
+  `OrderedCollection` whose `orderedItems` embed the **full Note**, the shape
+  Mastodon serves, so no second fetch is needed. It is strictly the
+  **anonymous public** view (`Fediverse.featured_posts/1` → `Posts.pinned_post(user, nil)`):
+  the collection is served unauthenticated, so a pin that is restricted, frozen
+  or otherwise not public is simply not in it, exactly as it is absent from the
+  profile's `.md` sibling. Pinning also **pushes**: `Add { object: <note-url>,
+  target: <featured-url> }` goes to every follower inbox so a remote profile
+  updates right away instead of at its next actor refresh, releasing sends
+  `Remove`, and replacing one pin with another sends both halves. Those two
+  name different posts, so the remote end state is the same whichever arrives
+  first — worth knowing, because the delivery queue drains concurrently and
+  promises no order. A `Remove` fires even for a pin that
+  was never public — a post that stopped being public must still be able to
+  leave a remote profile — while an `Add` never does. Deleting the pinned post
+  needs no `Remove`: the pin nulls itself in the database (`ON DELETE SET
+  NULL`) and the post's own `Delete(Tombstone)` takes the remote copy with it.
 - **Account deletion** (`Vutuv.Accounts.delete_user/1`, issue #985): a
   federating member's followers are told their actor is gone with an actor
   `Delete { object: <actor-url> }`. The follower rows *are* the delivery

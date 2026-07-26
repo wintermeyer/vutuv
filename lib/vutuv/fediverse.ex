@@ -453,6 +453,23 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  What the `featured` collection holds (issue #1110): the member's pinned post
+  when the **anonymous public** may see it, else nothing. A list, because that
+  is the collection's shape — one entry today.
+
+  Anonymous is the right viewer here and not a simplification: the collection
+  is served unauthenticated to every remote server, so a pin that is
+  restricted, frozen or hidden must be absent from it exactly as it is absent
+  from the `.md` sibling of the profile. Preloaded for `Docs.note/2`.
+  """
+  def featured_posts(%User{} = user) do
+    case Posts.pinned_post(user, nil) do
+      %Post{} = post -> [Repo.preload(post, Docs.note_preloads())]
+      nil -> []
+    end
+  end
+
+  @doc """
   The distinct inboxes a member's activities go to: one per server where the
   remote declared a sharedInbox (however many followers live there), else the
   per-actor inbox.
@@ -1727,6 +1744,48 @@ defmodule Vutuv.Fediverse do
          true <- federated?(author),
          [_ | _] = inboxes <- delivery_inboxes(reposter) do
       enqueue(reposter, inboxes, builder.(post, author, reposter))
+    else
+      _ -> :skip
+    end
+  end
+
+  ## The pinned post as the `featured` collection (issue #1110)
+
+  @doc """
+  The member pinned a post -> `Add` it to their `featured` collection, so a
+  remote profile shows the pin right away instead of at its next actor
+  refresh. Only for a pin the anonymous public may see: the collection is
+  served unauthenticated, so a restricted or frozen post never goes into it —
+  and then nothing is sent either.
+  """
+  def federate_pin(%Post{} = post, %User{} = user) do
+    # The public-visibility check sits behind the federation gates on purpose:
+    # it costs a query, and for the overwhelming majority (members who do not
+    # federate at all) there is nothing to decide.
+    pin_activity(user, fn user ->
+      if Posts.visible_to?(post, nil), do: Docs.add_featured_activity(post, user)
+    end)
+  end
+
+  @doc """
+  The pin was released or replaced -> `Remove` from the collection. Takes the
+  bare post id: the post may be restricted, deleted or simply replaced by the
+  time this runs, and a `Remove` naming an id the remote does not have pinned
+  is a harmless no-op there. Sent whenever the member federates, so a post
+  that stopped being public still leaves the remote profile.
+  """
+  def federate_unpin(post_id, %User{} = user) when is_binary(post_id),
+    do: pin_activity(user, &Docs.remove_featured_activity(post_id, &1))
+
+  # A builder returning nil means "nothing to send after all" (a pin the public
+  # may not see), so it lands on the same :skip as every other closed gate.
+  defp pin_activity(%User{} = user, builder) do
+    with true <- enabled?(),
+         true <- federated?(user),
+         false <- moved?(user),
+         [_ | _] = inboxes <- delivery_inboxes(user),
+         activity when is_map(activity) <- builder.(user) do
+      enqueue(user, inboxes, activity)
     else
       _ -> :skip
     end

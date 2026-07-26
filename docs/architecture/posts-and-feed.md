@@ -197,6 +197,12 @@ the pinned entry first with `pinned: true` (md/txt append "(pinned post)")
 and drops it from the timeline list, and a pin that is restricted, frozen or
 invisible to the viewer is simply absent, in every format.
 
+Other networks see the pin too: for a federating member it is published as the
+ActivityPub **`featured` collection** and pushed to their followers as
+`Add`/`Remove`, so Mastodon and friends show the same post at the top of the
+profile they render — same anonymous-public gate, see
+`docs/architecture/fediverse.md`.
+
 ## Editing closes (the edit window)
 
 An edit rewrites what other people already put their name to: like "I love

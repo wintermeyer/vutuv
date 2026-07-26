@@ -9,6 +9,7 @@ defmodule Vutuv.FediverseTest do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.Follower
+  alias Vutuv.Posts
   alias VutuvWeb.Fediverse.Docs
 
   defp stub_remote(fun) do
@@ -269,6 +270,118 @@ defmodule Vutuv.FediverseTest do
 
       assert :skip == Fediverse.federate_new_post(insert(:post, user: user))
       assert Repo.aggregate(Delivery, :count) == 0
+    end
+  end
+
+  describe "the pinned post as the featured collection (issue #1110)" do
+    # A federating member with one remote follower — the shape every pin
+    # activity needs before anything is enqueued.
+    defp follower_of(user) do
+      {:ok, _} =
+        Fediverse.add_follower(user, %{
+          actor_uri: "https://social.example/users/alice",
+          inbox_uri: "https://social.example/inbox"
+        })
+
+      user
+    end
+
+    # The post's own Create is already in the queue by the time it is pinned
+    # (the member has a follower), so every assertion below starts from empty.
+    defp queued_after_clearing(fun) do
+      Repo.delete_all(Delivery)
+      result = fun.()
+      # Ordered by the UUID v7 id, i.e. by insertion: an unordered Repo.all/1
+      # returns the rows in whatever order Postgres likes, which made this
+      # flaky.
+      {result, Repo.all(from(d in Delivery, order_by: d.id, select: d.activity_json))}
+    end
+
+    test "featured_posts/1 holds the pinned post, and only a public one" do
+      user = federated_user()
+      post = create_post!(user, %{body: "my best work"})
+
+      assert Fediverse.featured_posts(user) == []
+
+      {:ok, user} = Posts.pin_to_profile(user, post)
+      assert [%{id: id}] = Fediverse.featured_posts(user)
+      assert id == post.id
+
+      # A restricted pin is not served to the anonymous collection at all.
+      restricted =
+        create_post!(user, %{body: "members only", denials: [%{"wildcard" => "logged_out"}]})
+
+      {:ok, user} = Posts.pin_to_profile(user, restricted)
+      assert Fediverse.featured_posts(user) == []
+    end
+
+    test "pinning sends Add, releasing sends Remove" do
+      user = federated_user() |> follower_of()
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+      post = create_post!(user, %{body: "pin me"})
+
+      {{:ok, user}, [add]} = queued_after_clearing(fn -> Posts.pin_to_profile(user, post) end)
+
+      assert add =~ ~s("type":"Add")
+      assert add =~ Docs.note_url(user, post.id)
+      assert add =~ Docs.featured_url(user)
+
+      {_result, [remove]} = queued_after_clearing(fn -> Posts.unpin_from_profile(user) end)
+
+      assert remove =~ ~s("type":"Remove")
+      assert remove =~ Docs.note_url(user, post.id)
+      assert remove =~ Docs.featured_url(user)
+    end
+
+    test "replacing a pin removes the old one and adds the new one" do
+      user = federated_user() |> follower_of()
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+      first = create_post!(user, %{body: "first"})
+      second = create_post!(user, %{body: "second"})
+      {:ok, user} = Posts.pin_to_profile(user, first)
+
+      {_result, activities} = queued_after_clearing(fn -> Posts.pin_to_profile(user, second) end)
+
+      # Both halves go out: the old post leaves the collection, the new one
+      # joins it. They name different posts, so the remote end state is the
+      # same whichever arrives first (the queue drains concurrently).
+      assert [remove, add] = activities
+      assert remove =~ ~s("type":"Remove")
+      assert remove =~ first.id
+      assert add =~ ~s("type":"Add")
+      assert add =~ second.id
+    end
+
+    test "a restricted pin is never announced, but releasing it still is" do
+      user = federated_user() |> follower_of()
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+
+      hidden =
+        create_post!(user, %{body: "members only", denials: [%{"wildcard" => "logged_out"}]})
+
+      {{:ok, user}, queued} = queued_after_clearing(fn -> Posts.pin_to_profile(user, hidden) end)
+      assert queued == []
+
+      # The Remove goes out regardless: a post that stopped being public must
+      # still be able to leave a remote profile.
+      {_result, [remove]} = queued_after_clearing(fn -> Posts.unpin_from_profile(user) end)
+      assert remove =~ ~s("type":"Remove")
+    end
+
+    test "a member who does not federate (or has moved out) sends nothing" do
+      plain = insert(:activated_user)
+      post = create_post!(plain, %{body: "no federation here"})
+
+      moved = federated_user(moved_to: "https://mastodon.example/users/newme") |> follower_of()
+      moved_post = create_post!(moved, %{body: "already left"})
+
+      {_result, queued} =
+        queued_after_clearing(fn ->
+          {:ok, _} = Posts.pin_to_profile(plain, post)
+          {:ok, _} = Posts.pin_to_profile(moved, moved_post)
+        end)
+
+      assert queued == []
     end
   end
 

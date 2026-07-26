@@ -1729,26 +1729,63 @@ defmodule Vutuv.Posts do
   structural rather than something the code has to keep true. `post` must be
   the member's own (the caller resolves it owner-scoped); someone else's is
   rejected rather than pinned.
+
+  A federating member's pin also travels: the replaced post (if any) is
+  `Remove`d from their ActivityPub `featured` collection and the new one
+  `Add`ed, so other networks show the same pin (issue #1110).
   """
-  def pin_to_profile(%User{id: author_id} = author, %Post{id: post_id, user_id: author_id}) do
+  def pin_to_profile(
+        %User{id: author_id} = author,
+        %Post{id: post_id, user_id: author_id} = post
+      ) do
+    replaced_id = author.pinned_post_id
+
     author
     |> Ecto.Changeset.change(pinned_post_id: post_id)
     # Guards the race where the post is deleted between resolving the owner and
     # this write: the FK fails cleanly instead of persisting a dangling pointer.
     |> Ecto.Changeset.foreign_key_constraint(:pinned_post_id)
     |> Repo.update()
+    |> case do
+      {:ok, user} = ok ->
+        # A replacement sends both halves: the old post leaves the collection
+        # and the new one joins it. The two name different posts, so the remote
+        # end state is the same whichever arrives first (the queue drains
+        # concurrently and does not promise an order).
+        if replaced_id && replaced_id != post_id do
+          Vutuv.Fediverse.federate_unpin(replaced_id, user)
+        end
+
+        Vutuv.Fediverse.federate_pin(%{post | user: user}, user)
+        ok
+
+      error ->
+        error
+    end
   end
 
   def pin_to_profile(%User{}, %Post{}), do: {:error, :not_author}
 
   @doc """
   Clears `author`'s pinned post, so their profile leads with the newest entry
-  again. Idempotent — unpinning when nothing is pinned is a no-op update.
+  again, and `Remove`s it from a federating member's `featured` collection.
+  Idempotent — unpinning when nothing is pinned is a no-op update that sends
+  nothing.
   """
   def unpin_from_profile(%User{} = author) do
+    released_id = author.pinned_post_id
+
     author
     |> Ecto.Changeset.change(pinned_post_id: nil)
     |> Repo.update()
+    |> case do
+      {:ok, user} = ok ->
+        if released_id, do: Vutuv.Fediverse.federate_unpin(released_id, user)
+        ok
+
+      error ->
+        error
+    end
   end
 
   @doc """

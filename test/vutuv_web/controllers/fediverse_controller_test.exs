@@ -185,6 +185,16 @@ defmodule VutuvWeb.FediverseControllerTest do
       assert body["movedTo"] == @remote_actor
     end
 
+    test "advertises the featured collection (#1110)", %{conn: conn} do
+      user = federated_user()
+
+      body = conn |> get("/#{user.username}/actor") |> Map.fetch!(:resp_body) |> Jason.decode!()
+
+      # Always named, even with nothing pinned — an actor that only sometimes
+      # carries the field would make a remote profile depend on fetch timing.
+      assert body["featured"] == Docs.featured_url(user)
+    end
+
     test "followers and outbox are count-only collections", %{conn: conn} do
       user = federated_user()
 
@@ -198,6 +208,61 @@ defmodule VutuvWeb.FediverseControllerTest do
         conn |> recycle() |> get("/#{user.username}/actor/outbox") |> Map.fetch!(:resp_body)
 
       assert Jason.decode!(outbox)["type"] == "OrderedCollection"
+    end
+  end
+
+  describe "GET /:slug/actor/collections/featured (issue #1110)" do
+    defp featured(conn, user) do
+      conn |> get("/#{user.username}/actor/collections/featured") |> Map.fetch!(:resp_body)
+    end
+
+    test "is an empty OrderedCollection while nothing is pinned", %{conn: conn} do
+      user = federated_user()
+      _post = create_post!(user, %{body: "not pinned"})
+
+      body = conn |> featured(user) |> Jason.decode!()
+
+      assert body["type"] == "OrderedCollection"
+      assert body["id"] == Docs.featured_url(user)
+      assert body["totalItems"] == 0
+      assert body["orderedItems"] == []
+    end
+
+    test "carries the pinned post as a full Note", %{conn: conn} do
+      user = federated_user()
+      post = create_post!(user, %{body: "the one I am proud of"})
+      {:ok, _} = Vutuv.Posts.pin_to_profile(user, post)
+
+      body = conn |> featured(user) |> Jason.decode!()
+
+      assert body["totalItems"] == 1
+      assert [note] = body["orderedItems"]
+      assert note["type"] == "Note"
+      assert note["id"] == Docs.note_url(user, post.id)
+      # Embedded in full, so a remote server renders it without a second fetch.
+      assert note["content"] =~ "the one I am proud of"
+      assert note["attributedTo"] == Docs.actor_url(user)
+    end
+
+    test "a pin the anonymous public may not see is absent", %{conn: conn} do
+      user = federated_user()
+
+      hidden =
+        create_post!(user, %{body: "members only", denials: [%{"wildcard" => "logged_out"}]})
+
+      {:ok, _} = Vutuv.Posts.pin_to_profile(user, hidden)
+
+      body = conn |> featured(user) |> Jason.decode!()
+
+      assert body["totalItems"] == 0
+      refute body |> Jason.encode!() =~ "members only"
+    end
+
+    test "404s without the opt-in", %{conn: conn} do
+      user = insert(:activated_user)
+
+      conn = get(conn, "/#{user.username}/actor/collections/featured")
+      assert conn.status == 404
     end
   end
 

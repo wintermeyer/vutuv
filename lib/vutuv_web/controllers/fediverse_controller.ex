@@ -4,7 +4,8 @@ defmodule VutuvWeb.FediverseController do
 
     * `GET /.well-known/webfinger` — how Mastodon's search turns
       `@handle@host` into an actor URL,
-    * `GET /:slug/actor` (+ `/followers`, `/outbox`) — the member's
+    * `GET /:slug/actor` (+ `/followers`, `/outbox`,
+      `/collections/featured` — the pinned post, issue #1110) — the member's
       machine-readable identity,
     * `POST /:slug/actor/inbox` — receives signed `Follow`/`Undo` activities,
       the reactions and replies other networks send back (`Like`/`Announce`,
@@ -81,6 +82,16 @@ defmodule VutuvWeb.FediverseController do
         "type" => "OrderedCollection",
         "totalItems" => Fediverse.public_post_count(user)
       })
+    end)
+  end
+
+  # The pinned post (issue #1110), the collection Mastodon and friends read to
+  # show a pin at the top of the profile they render. Strictly the **anonymous
+  # public** view — a pin that is restricted, frozen or otherwise not public is
+  # simply not in it, exactly as it is absent from the agent formats.
+  def featured(conn, %{"slug" => slug}) do
+    with_federated_user(conn, slug, fn user ->
+      send_activity_json(conn, Docs.featured_collection(user, Fediverse.featured_posts(user)))
     end)
   end
 

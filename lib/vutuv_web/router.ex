@@ -131,6 +131,8 @@ defmodule VutuvWeb.Router do
     get("/:slug/actor", FediverseController, :actor)
     get("/:slug/actor/followers", FediverseController, :followers)
     get("/:slug/actor/outbox", FediverseController, :outbox)
+    # The pinned post (issue #1110), at the path other servers already look for.
+    get("/:slug/actor/collections/featured", FediverseController, :featured)
     post("/:slug/actor/inbox", FediverseController, :inbox)
     # Deploy readiness probe (see VutuvWeb.HealthController). No pipeline:
     # it is hit by curl on localhost and must not depend on sessions or

@@ -10,10 +10,11 @@ defmodule VutuvWeb.Fediverse.Docs do
 
   URL scheme (all under the member, so nothing new burns a root slug):
 
-      /:username/actor            the actor document (id)
-      /:username/actor/inbox      POST target for Follow/Undo
-      /:username/actor/followers  count-only collection
-      /:username/actor/outbox     count-only collection
+      /:username/actor                       the actor document (id)
+      /:username/actor/inbox                 POST target for Follow/Undo
+      /:username/actor/followers             count-only collection
+      /:username/actor/outbox                count-only collection
+      /:username/actor/collections/featured  the pinned post (issue #1110)
   """
 
   alias Vutuv.Fediverse.Actor
@@ -40,6 +41,13 @@ defmodule VutuvWeb.Fediverse.Docs do
   def actor_url(user), do: "#{base()}/#{user.username}/actor"
   def key_id(user), do: actor_url(user) <> "#main-key"
   def note_url(user, post_id), do: "#{base()}/#{user.username}/posts/#{post_id}"
+
+  @doc """
+  The `featured` collection: the member's pinned post (issue #1110), which is
+  how Mastodon and friends show a pinned post at the top of the profile they
+  render. The path is the one those servers already expect.
+  """
+  def featured_url(user), do: actor_url(user) <> "/collections/featured"
 
   @doc """
   The member's Fediverse address without the leading `@`
@@ -70,6 +78,11 @@ defmodule VutuvWeb.Fediverse.Docs do
       "inbox" => actor_url <> "/inbox",
       "outbox" => actor_url <> "/outbox",
       "followers" => actor_url <> "/followers",
+      # Where a remote server looks for the pinned post (issue #1110). Always
+      # advertised, even with nothing pinned: the collection is then simply
+      # empty, and an actor that only sometimes names the field would make the
+      # profile a remote server renders depend on when it last fetched.
+      "featured" => featured_url(user),
       "manuallyApprovesFollowers" => false,
       "published" => iso8601(user.inserted_at),
       "publicKey" => %{
@@ -199,6 +212,49 @@ defmodule VutuvWeb.Fediverse.Docs do
   # Announce the repost sent.
   defp announce_id(%Post{id: post_id}, author, reposter),
     do: note_url(author, post_id) <> "#announce-" <> reposter.username
+
+  @doc """
+  The `featured` collection document (issue #1110): the member's pinned post
+  as a full Note, so a remote server can render it without a second fetch —
+  the shape Mastodon serves and expects. `posts` is a list (empty = nothing
+  pinned, or a pin the anonymous public may not see), so the collection can
+  grow past one entry without changing the document.
+  """
+  def featured_collection(user, posts) when is_list(posts) do
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => featured_url(user),
+      "type" => "OrderedCollection",
+      "totalItems" => length(posts),
+      "orderedItems" => Enum.map(posts, &note(&1, user))
+    }
+  end
+
+  @doc """
+  Add(Note -> featured): the member pinned a post (issue #1110). Sent to the
+  follower inboxes so a remote profile shows the pin without waiting for its
+  next actor refresh; the collection itself stays the authority.
+  """
+  def add_featured_activity(%Post{id: post_id}, user), do: featured_activity("Add", post_id, user)
+
+  @doc """
+  Remove(Note -> featured): the pin was released or replaced. Takes the bare
+  post id, because the row is often already gone (or replaced) by the time
+  this is built.
+  """
+  def remove_featured_activity(post_id, user) when is_binary(post_id),
+    do: featured_activity("Remove", post_id, user)
+
+  # Both carry the Note's **id** rather than the object: the receiving server
+  # already knows the post (it was delivered as a Create), and the collection
+  # is what it re-reads when it wants the full thing.
+  defp featured_activity(type, post_id, user) do
+    note_url = note_url(user, post_id)
+
+    user
+    |> envelope(type, note_url <> "##{String.downcase(type)}-featured", note_url)
+    |> Map.put("target", featured_url(user))
+  end
 
   @doc "Accept(Follow): the answer that seals a remote follow."
   def accept_activity(user, follow_object) do
