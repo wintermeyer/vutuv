@@ -47,6 +47,11 @@ config :vutuv, :fediverse_note_sweeping, false
 # the log, since nothing awaits a Task. Tests call
 # Vutuv.Fediverse.refresh_note/1 directly with a stubbed HTTP layer.
 config :vutuv, :fediverse_note_refresh, false
+
+# Downloading the pictures of followed accounts (issue #1163) runs in a Task,
+# which would sit outside the SQL sandbox; tests call
+# Vutuv.Fediverse.Media.fetch_now/1 directly with a stubbed HTTP layer.
+config :vutuv, :fediverse_media_fetch, false
 # Post link-screenshots drain via a polling GenServer that would touch the
 # sandbox from outside; tests call Vutuv.Posts.Screenshots.deliver_due/1 directly
 # with a stubbed capture. ScreenshotWorker.nudge/0 casts into the void then.

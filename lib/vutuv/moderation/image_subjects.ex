@@ -16,6 +16,8 @@ defmodule Vutuv.Moderation.ImageSubjects do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Moderation.ImageScan
   alias Vutuv.Organizations.Organization
@@ -26,6 +28,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
   alias Vutuv.QualificationDocument
+  alias Vutuv.RemoteMedia
   alias Vutuv.Repo
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Originals
@@ -109,6 +112,31 @@ defmodule Vutuv.Moderation.ImageSubjects do
     with %Url{} = url <- Repo.get(Url, scan.subject_id),
          true <- url.screenshot != nil and url.screenshot == scan.fingerprint do
       screenshot_source(url.id)
+    else
+      _ -> :gone
+    end
+  end
+
+  # A picture fetched from another network (issue #1163). Fingerprint-guarded
+  # like every other in-place asset: the stored filename carries the hash of the
+  # bytes, so a verdict can never release a picture the model did not see.
+  def source(%ImageScan{kind: "remote_post_image"} = scan) do
+    with %RemoteImage{} = image <- Repo.get(RemoteImage, scan.subject_id),
+         true <- image.file != nil and image.file == scan.fingerprint,
+         path when is_binary(path) <-
+           RemoteMedia.post_image_path(image.id, Path.rootname(image.file), image.file) do
+      {:ok, path}
+    else
+      _ -> :gone
+    end
+  end
+
+  def source(%ImageScan{kind: "remote_avatar"} = scan) do
+    with %RemoteAccount{} = account <- Repo.get(RemoteAccount, scan.subject_id),
+         true <- account.avatar != nil and account.avatar == scan.fingerprint,
+         path when is_binary(path) <-
+           RemoteMedia.avatar_path(account.id, Path.rootname(account.avatar), account.avatar) do
+      {:ok, path}
     else
       _ -> :gone
     end
@@ -308,6 +336,17 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  # Releasing a picture from another network is only a state flip: it is served
+  # through the authorizing proxy, which reads this column per request, so
+  # there is no quarantine tree to move it out of.
+  def apply_approved(%ImageScan{kind: "remote_post_image"} = scan) do
+    verdict_applied(flip_remote(RemoteImage, scan, :file, :moderation, "approved"))
+  end
+
+  def apply_approved(%ImageScan{kind: "remote_avatar"} = scan) do
+    verdict_applied(flip_remote(RemoteAccount, scan, :avatar, :avatar_moderation, "approved"))
+  end
+
   def apply_approved(%ImageScan{kind: "review_cover"} = scan) do
     flipped =
       from(r in PostReview,
@@ -433,6 +472,29 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  # A rejected remote picture: the file goes at once, the row stays. Nobody is
+  # notified — no member uploaded it, so there is no content of theirs that was
+  # removed, and the post it hangs off simply renders without it.
+  def apply_rejected(%ImageScan{kind: "remote_post_image"} = scan) do
+    with :ok <-
+           verdict_applied(
+             flip_remote(RemoteImage, scan, :file, :moderation, nil, clear_file: true)
+           ) do
+      RemoteMedia.delete_post_image(scan.subject_id)
+      :ok
+    end
+  end
+
+  def apply_rejected(%ImageScan{kind: "remote_avatar"} = scan) do
+    with :ok <-
+           verdict_applied(
+             flip_remote(RemoteAccount, scan, :avatar, :avatar_moderation, nil, clear_file: true)
+           ) do
+      RemoteMedia.delete_avatar(scan.subject_id)
+      :ok
+    end
+  end
+
   def apply_rejected(%ImageScan{kind: "review_cover"} = scan) do
     cleared =
       from(r in PostReview, where: r.id == ^scan.subject_id and r.cover == ^scan.fingerprint)
@@ -452,6 +514,28 @@ defmodule Vutuv.Moderation.ImageSubjects do
       _ ->
         :stale
     end
+  end
+
+  # The one write behind both remote-picture verdicts (issue #1163): flip the
+  # moderation column, guarded on the fingerprint so a verdict can never touch
+  # bytes that changed under it. `clear_file: true` also drops the reference, so
+  # a rejected picture has neither file nor row pointing at one.
+  # `apply_approved/1` and `apply_rejected/1` answer `:ok` or `:stale`, never an
+  # update tuple: a caller reading `{1, nil}` as success by accident is exactly
+  # how a stale verdict would slip through.
+  defp verdict_applied({1, _}), do: :ok
+  defp verdict_applied(_other), do: :stale
+
+  defp flip_remote(schema, scan, file_field, state_field, state, opts \\ []) do
+    sets =
+      if Keyword.get(opts, :clear_file, false),
+        do: [{state_field, state}, {file_field, nil}],
+        else: [{state_field, state}]
+
+    from(r in schema,
+      where: r.id == ^scan.subject_id and field(r, ^file_field) == ^scan.fingerprint
+    )
+    |> Repo.update_all(set: sets)
   end
 
   # A post picture reaching a verdict is what releases a post held back from
@@ -544,7 +628,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
       url_screenshot_stranded() ++
       post_screenshot_stranded() ++
       review_cover_stranded() ++
-      qualification_document_stranded()
+      qualification_document_stranded() ++
+      remote_post_image_stranded() ++
+      remote_avatar_stranded()
   end
 
   defp open_scan_exists(kind) do
@@ -620,6 +706,32 @@ defmodule Vutuv.Moderation.ImageSubjects do
     |> Enum.map(fn {id, owner_id, fingerprint} ->
       {"review_cover", id, owner_id, fingerprint}
     end)
+  end
+
+  # The two ownerless kinds (issue #1163): nobody here uploaded these, so the
+  # owner is nil. Without them a remote picture stranded `pending` would sit
+  # invisible forever with its bytes un-judged on disk and nothing to reclaim
+  # it — fail-closed, but a permanent hole.
+  defp remote_post_image_stranded do
+    from(i in RemoteImage,
+      as: :subject,
+      where: i.moderation == "pending" and not is_nil(i.file),
+      where: not exists(open_scan_exists("remote_post_image")),
+      select: {i.id, i.file}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, fingerprint} -> {"remote_post_image", id, nil, fingerprint} end)
+  end
+
+  defp remote_avatar_stranded do
+    from(a in RemoteAccount,
+      as: :subject,
+      where: a.avatar_moderation == "pending" and not is_nil(a.avatar),
+      where: not exists(open_scan_exists("remote_avatar")),
+      select: {a.id, a.avatar}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, fingerprint} -> {"remote_avatar", id, nil, fingerprint} end)
   end
 
   defp qualification_document_stranded do

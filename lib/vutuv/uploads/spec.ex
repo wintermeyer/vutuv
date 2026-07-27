@@ -66,6 +66,22 @@ defmodule Vutuv.Uploads.Spec do
       # than we display would be one we cannot justify.
       %{name: :cover, fit: {:box_down, 320}, quality: 58}
     ],
+    # A picture attached to a post by an account somebody here follows
+    # (`Vutuv.RemoteMedia`, issue #1163). One version, aspect preserved, sized
+    # for the feed column and its HiDPI double — and no further. The same
+    # reasoning as the review cover: this is somebody else's picture shown
+    # beside their post, and a copy larger than we display is one we cannot
+    # justify keeping. It is also why there is no lightbox `xl` here; the
+    # full-size original is one click away on their own server.
+    remote_media: [
+      %{name: :image, fit: {:box_down, 1200}, quality: 58}
+    ],
+    # The avatar of such an account: the same two sizes a member's own avatar
+    # gets would be two files for a picture only ever shown at 36-56px, so it
+    # is one.
+    remote_avatar: [
+      %{name: :image, fit: {:crop, 192, 192, :center}, quality: 62}
+    ],
     post_image: [
       # thumb: square feed-grid / mosaic cell; feed: single-image feed width;
       # large: the permalink gallery; xl: the lightbox.

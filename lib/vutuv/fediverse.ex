@@ -37,6 +37,8 @@ defmodule Vutuv.Fediverse do
   federated copies on remote servers is not enforceable.
   """
 
+  use Gettext, backend: VutuvWeb.Gettext
+
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_hidden_row: 1]
 
@@ -54,12 +56,14 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.FollowerPrune
   alias Vutuv.Fediverse.HttpSignature
   alias Vutuv.Fediverse.Keys
+  alias Vutuv.Fediverse.Media
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.NoteEvent
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
+  alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Pages
   alias Vutuv.Posts
@@ -68,6 +72,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.RateLimiter
   alias Vutuv.RemoteHtml
+  alias Vutuv.RemoteMedia
   alias Vutuv.Repo
   alias Vutuv.SearchText
   alias Vutuv.SocialFeed.Http
@@ -959,8 +964,16 @@ defmodule Vutuv.Fediverse do
   `Update` is a broadcast, not a request, so it must never mint a row.
   """
   def refresh_remote_account(%{id: actor_uri} = remote) when is_binary(actor_uri) do
-    if account = Repo.get_by(RemoteAccount, actor_uri: actor_uri) do
-      account |> RemoteAccount.changeset(remote_account_attrs(remote)) |> Repo.update()
+    with %RemoteAccount{} = account <- Repo.get_by(RemoteAccount, actor_uri: actor_uri),
+         # A rejected changeset is swallowed, like `refresh_follower/2` swallows
+         # its own: a hostile actor document must not crash the inbox, and only
+         # some of what it carries is truncated on the way in (an over-long key
+         # or self-description is the changeset's to refuse, quietly).
+         {:ok, account} <-
+           account |> RemoteAccount.changeset(remote_account_attrs(remote)) |> Repo.update() do
+      # An actor `Update` is exactly when a picture changes, and the fetch is
+      # a no-op when the URL is the one already stored (issue #1163).
+      Media.fetch_avatar_async(account, remote[:icon])
     end
 
     :ok
@@ -977,7 +990,17 @@ defmodule Vutuv.Fediverse do
   longer exists, which is exactly what happened.
   """
   def remove_remote_account(actor_uri) when is_binary(actor_uri) do
-    Repo.delete_all(from(a in RemoteAccount, where: a.actor_uri == ^actor_uri))
+    accounts = from(a in RemoteAccount, where: a.actor_uri == ^actor_uri)
+
+    # The rows cascade, the files do not: the account's own picture and every
+    # picture on the posts we cached for it have to be swept before the delete
+    # takes away the ids that name them.
+    wipe_media(
+      from(p in RemotePost, join: a in ^subquery(accounts), on: p.remote_account_id == a.id)
+    )
+
+    wipe_avatars(accounts)
+    Repo.delete_all(accounts)
     :ok
   end
 
@@ -1060,23 +1083,44 @@ defmodule Vutuv.Fediverse do
 
   # ── Storage ───────────────────────────────────────────────────────────────
 
+  # Columns an upsert must NOT touch, beyond the identity ones. The avatar three
+  # (issue #1163) are ours, not the actor document's: the document names a URL,
+  # we then fetch it, store a fingerprinted file and let the AI gate rule on it,
+  # all of it long after this write. `{:replace_all_except, …}` sets every other
+  # column from the INSERT, and these are absent from it — so leaving them out
+  # of this list would null a stored, approved picture on every repeat resolve.
+  @remote_account_keep [
+    :id,
+    :actor_uri,
+    :inserted_at,
+    :avatar,
+    :avatar_moderation,
+    :avatar_source
+  ]
+
   defp upsert_remote_account(remote) do
     attrs = remote_account_attrs(remote)
 
-    %RemoteAccount{}
-    |> RemoteAccount.changeset(attrs)
-    |> Repo.insert(
-      # Everything the actor document carries is re-synced, named as "all but the
-      # identity" rather than as a list to keep in step: a column added later
-      # (an avatar, a follower count) must refresh on a repeat follow too, and a
-      # hand-maintained list is exactly what silently stops doing that.
-      on_conflict: {:replace_all_except, [:id, :actor_uri, :inserted_at]},
-      conflict_target: [:actor_uri],
-      # The id is minted in Elixir (UUID v7), so on a conflict the struct would
-      # otherwise carry the id of the row that was NOT written. Reading it back
-      # is what makes the follow point at the account that actually exists.
-      returning: [:id]
-    )
+    result =
+      %RemoteAccount{}
+      |> RemoteAccount.changeset(attrs)
+      |> Repo.insert(
+        # Everything the actor document really carries is re-synced, named as
+        # "all but what is ours" rather than as an allowlist: a column added
+        # later must refresh on a repeat follow too, and a hand-maintained list
+        # is exactly what silently stops doing that.
+        on_conflict: {:replace_all_except, @remote_account_keep},
+        conflict_target: [:actor_uri],
+        # The id is minted in Elixir (UUID v7), so on a conflict the struct
+        # would otherwise carry the id of the row that was NOT written. Reading
+        # it back is what makes the follow point at the account that exists.
+        returning: [:id]
+      )
+
+    with {:ok, account} <- result do
+      Media.fetch_avatar_async(account, remote[:icon])
+      {:ok, account}
+    end
   end
 
   defp remote_account_attrs(remote) do
@@ -1275,7 +1319,8 @@ defmodule Vutuv.Fediverse do
   and there is text left once the markup is gone.
 
   Returns `:ok` or `:skip`; the inbox answers 202 either way, so a misdirected
-  activity never learns which gate it failed.
+  activity never learns which gate it failed. A redelivery of a post we already
+  hold is a `:skip` — the row is already there and so are its pictures.
   """
   def record_remote_post(activity, actor_uri) when is_binary(actor_uri) do
     with true <- enabled?(),
@@ -1284,7 +1329,8 @@ defmodule Vutuv.Fediverse do
          audience when is_binary(audience) <- remote_post_audience(object, activity),
          :ok <- check_inbound_cap(actor_uri),
          true <- own_thread?(object, account),
-         {:ok, _post} <- insert_remote_post(account, object, audience) do
+         {:ok, post} <- insert_remote_post(account, object, audience) do
+      attach_pictures(post, object)
       :ok
     else
       _ -> :skip
@@ -1292,6 +1338,20 @@ defmodule Vutuv.Fediverse do
   end
 
   def record_remote_post(_activity, _actor_uri), do: :skip
+
+  # The post's pictures (issue #1163): recorded here, downloaded afterwards.
+  # The inbox must answer 202 without waiting on a third party's image server,
+  # and nothing renders before the AI gate has seen the bytes anyway, so the
+  # delivery only writes down what it wants.
+  #
+  # `sensitive` is the author's own call and covers every picture under the
+  # post: their explicit flag, or a content warning, which is the same request
+  # in different words.
+  defp attach_pictures(%RemotePost{} = post, object) do
+    post
+    |> Media.record_attachments(List.wrap(object["attachment"]), RemotePost.warned?(post))
+    |> Media.fetch_async()
+  end
 
   @doc """
   Applies an author's edit of a post we cached (`Update`).
@@ -1323,7 +1383,11 @@ defmodule Vutuv.Fediverse do
   """
   def delete_remote_post(actor_uri, object_uri)
       when is_binary(actor_uri) and is_binary(object_uri) do
-    if post = remote_post_by(object_uri, actor_uri), do: Repo.delete(post)
+    if post = remote_post_by(object_uri, actor_uri) do
+      # The author took their words back, so their pictures go with them.
+      delete_cached_post(post)
+    end
+
     :ok
   end
 
@@ -1378,6 +1442,66 @@ defmodule Vutuv.Fediverse do
     where(query, [p], p.published_at <= ^DateTime.from_naive!(at, "Etc/UTC"))
   end
 
+  @doc "One stored remote picture with its post, or nil."
+  def get_remote_image(id) do
+    UUIDv7.with_cast(id, &Repo.get(RemoteImage, &1)) |> Repo.preload(:remote_post)
+  end
+
+  @doc """
+  Whether `viewer` may see a cached picture: exactly whether they may see the
+  post it hangs off.
+
+  A picture URL is the one thing a reader can hand to somebody else, so the
+  proxy re-asks this per request rather than trusting that a card rendered it.
+  """
+  def remote_image_visible?(%RemoteImage{remote_post: %RemotePost{} = post}, viewer),
+    do: remote_post_visible?(post, viewer)
+
+  def remote_image_visible?(_image, _viewer), do: false
+
+  @doc """
+  Whether `viewer` may see a cached post: they follow its author (not muted —
+  a mute is about the feed, not about access), and for a followers-only post
+  that follow is accepted.
+
+  The read half of what `feed_remote_posts/3` and `account_posts/2` enforce in
+  SQL, for the one caller that has a post in hand rather than a query.
+  """
+  def remote_post_visible?(%RemotePost{} = post, %User{id: viewer_id}) do
+    Repo.exists?(
+      from(f in Follow,
+        where: f.user_id == ^viewer_id and f.remote_account_id == ^post.remote_account_id,
+        # The feed's vocabulary (`RemotePost.open?/1`), not a negated literal,
+        # for the reason `account_posts/2` spells out: a fourth audience value
+        # must not open here and close there.
+        where: ^RemotePost.open?(post) or f.state == "accepted"
+      )
+    )
+  end
+
+  def remote_post_visible?(_post, _viewer), do: false
+
+  @doc """
+  Every picture recorded for `post_ids`, grouped by post id, in the author's
+  order — including the ones still downloading or still with the AI gate.
+
+  Deliberately *not* filtered to released pictures. The one thing that decides
+  whether bytes reach a reader is `RemoteImage.released?/1`, at the point of
+  rendering and again in the proxy, so a row here is not a permission. What the
+  unreleased rows buy is the card being able to say "a picture is on its way"
+  instead of rendering nothing: a post from another network can be a photograph
+  and nothing else, and such a post with its picture silently missing is not a
+  quiet card, it is a broken one.
+  """
+  def list_remote_images(post_ids) do
+    from(i in RemoteImage,
+      where: i.remote_post_id in ^post_ids,
+      order_by: [asc: i.position, asc: i.id]
+    )
+    |> Repo.all()
+    |> Enum.group_by(& &1.remote_post_id)
+  end
+
   @doc "One cached remote post with its account, or nil."
   def get_remote_post(id) do
     UUIDv7.with_cast(id, &Repo.get(RemotePost, &1)) |> Repo.preload(:remote_account)
@@ -1413,7 +1537,7 @@ defmodule Vutuv.Fediverse do
   defp take_down_remote_post(post_id, %User{} = reporter) do
     case get_remote_post(post_id) do
       %RemotePost{remote_account: %RemoteAccount{} = account} = post ->
-        Repo.delete(post)
+        delete_cached_post(post)
 
         # No `user_id`: unlike a reply, a cached post sits under nobody's post,
         # so there is no member whose page it was on.
@@ -1430,6 +1554,50 @@ defmodule Vutuv.Fediverse do
       _ ->
         {:error, :not_found}
     end
+  end
+
+  @doc """
+  Deletes the stored files of the pictures on `post_ids`, before their rows go.
+
+  The rows cascade with their post, but files do not: a deletion that leaves
+  bytes at rest is not a deletion, so every path that removes cached posts goes
+  through here first — the bulk sweeps (expiry, the unfollow purge, an instance
+  block, a deleted account) call it via `wipe_media/1`, and every single-post
+  delete goes through `delete_cached_post/1`, which is the one place a post row
+  is removed.
+  """
+  def delete_media_for_posts(post_ids) when is_list(post_ids) do
+    from(i in RemoteImage, where: i.remote_post_id in ^post_ids, select: i.id)
+    |> Repo.all()
+    |> Enum.each(&RemoteMedia.delete_post_image/1)
+  end
+
+  # Deleting one cached post, pictures first. The wipe belongs *inside* the
+  # delete rather than beside each caller: it was beside them, and three paths
+  # (a member's report, an author narrowing their own post, the account's own
+  # `Delete`) quietly did not have it, so a reader who reported a picture was
+  # told "our copy was deleted right away" while the bytes stayed on disk.
+  defp delete_cached_post(%RemotePost{} = post) do
+    delete_media_for_posts([post.id])
+    Repo.delete(post)
+  end
+
+  # The same, for a query that is about to delete posts: the ids are read out
+  # first, because after the delete there is nothing left to read them from.
+  # They are returned, so a caller that also wants to count what it removed
+  # (`block_instance/2`) does not repeat the read.
+  defp wipe_media(query) do
+    ids = Repo.all(from(p in query, select: p.id))
+    delete_media_for_posts(ids)
+    ids
+  end
+
+  # The avatar twin, for a query that is about to delete accounts: their rows
+  # cascade, their pictures on disk do not.
+  defp wipe_avatars(query) do
+    from(a in query, select: a.id)
+    |> Repo.all()
+    |> Enum.each(&RemoteMedia.delete_avatar/1)
   end
 
   @doc """
@@ -1482,6 +1650,9 @@ defmodule Vutuv.Fediverse do
   end
 
   defp delete_unfollowed_posts(query) do
+    # Files first: the rows cascade, bytes on disk do not, and a deletion that
+    # leaves a stranger's photograph at rest is not a deletion (issue #1163).
+    wipe_media(query)
     {count, _} = Repo.delete_all(query)
     count
   end
@@ -1543,28 +1714,30 @@ defmodule Vutuv.Fediverse do
   installation".
   """
   def purge_unreferenced_remote_accounts do
-    {count, _} =
-      Repo.delete_all(
-        from(a in RemoteAccount,
-          as: :account,
-          # All four written the same way, as `NOT EXISTS`: an `a.id not in
-          # subquery(...)` form makes the planner hash every row of the other
-          # table first (a whole scan of the installation-wide post cache on
-          # every sweep), while a correlated anti-join can use that table's own
-          # index per candidate row.
-          where:
-            not exists(from(f in Follow, where: f.remote_account_id == parent_as(:account).id)),
-          where:
-            not exists(
-              from(p in RemotePost, where: p.remote_account_id == parent_as(:account).id)
-            ),
-          where: not exists(from(n in Note, where: n.actor_uri == parent_as(:account).actor_uri)),
-          where:
-            not exists(from(r in Reaction, where: r.actor_uri == parent_as(:account).actor_uri))
-        )
-      )
+    unreferenced = unreferenced_accounts_query()
 
+    # Their avatar files, before the rows go: the row cascade cannot reach
+    # bytes on disk (issue #1163).
+    wipe_avatars(unreferenced)
+
+    {count, _} = Repo.delete_all(unreferenced)
     count
+  end
+
+  defp unreferenced_accounts_query do
+    from(a in RemoteAccount,
+      as: :account,
+      # All four written the same way, as `NOT EXISTS`: an `a.id not in
+      # subquery(...)` form makes the planner hash every row of the other
+      # table first (a whole scan of the installation-wide post cache on
+      # every sweep), while a correlated anti-join can use that table's own
+      # index per candidate row.
+      where: not exists(from(f in Follow, where: f.remote_account_id == parent_as(:account).id)),
+      where:
+        not exists(from(p in RemotePost, where: p.remote_account_id == parent_as(:account).id)),
+      where: not exists(from(n in Note, where: n.actor_uri == parent_as(:account).actor_uri)),
+      where: not exists(from(r in Reaction, where: r.actor_uri == parent_as(:account).actor_uri))
+    )
   end
 
   @doc """
@@ -1648,10 +1821,13 @@ defmodule Vutuv.Fediverse do
     received = DateTime.utc_now(:second)
 
     with uri when is_binary(uri) <- presence(object["id"]),
-         # Nothing left once the markup is gone (a picture-only post, until
-         # issue #1163 gives pictures a home): a row about a third party has to
-         # earn its place.
-         text when is_binary(text) <- remote_post_text(object) do
+         # Text, or a picture, or both. A picture-only post used to be dropped
+         # for having nothing to show; since issue #1163 the picture IS what it
+         # has, so an empty body only disqualifies a post that carries no
+         # picture either — a row about a third party still has to earn its
+         # place, but a photograph earns it.
+         text when is_binary(text) <-
+           remote_post_text(object) || picture_only_text(object) do
       %RemotePost{remote_account_id: account.id}
       |> RemotePost.changeset(
         Map.merge(remote_post_attrs(object, text, audience), %{
@@ -1665,10 +1841,36 @@ defmodule Vutuv.Fediverse do
         })
       )
       |> Repo.insert(on_conflict: :nothing, conflict_target: [:object_uri])
+      |> stored_post(uri)
     else
       _ -> :error
     end
   end
+
+  # Which row this delivery actually left behind, and whether it was *this*
+  # delivery that wrote it.
+  #
+  # `on_conflict: :nothing` cannot say: the v7 id is minted in Elixir, so the
+  # struct comes back looking identical whether the row landed or collided —
+  # and on a collision that id names no row at all. Writing the post's pictures
+  # against it therefore raised a foreign-key error and 500ed the inbox, on the
+  # most ordinary delivery pattern there is: two members following the same
+  # account each get their own copy of the same `Create`, and a sender that
+  # gets a 500 retries the whole batch forever.
+  #
+  # Reading the row back by its one unique column answers both questions at
+  # once — the struct that really exists, and (by the id) whose insert it was.
+  # A redelivery is `:exists`, which the caller drops, so a post's pictures are
+  # recorded exactly once.
+  defp stored_post({:ok, %RemotePost{id: minted_id}}, uri) do
+    case Repo.get_by(RemotePost, object_uri: uri) do
+      %RemotePost{id: ^minted_id} = post -> {:ok, post}
+      %RemotePost{} -> :exists
+      nil -> :error
+    end
+  end
+
+  defp stored_post(_result, _uri), do: :error
 
   # Everything about a cached post its author can still change after publishing.
   # Shared by the insert and the `Update` path, so an edit cannot silently stop
@@ -1702,6 +1904,22 @@ defmodule Vutuv.Fediverse do
   end
 
   defp remote_post_text(object), do: remote_text(object["content"], RemotePost.max_content())
+
+  # The body of a post whose author wrote no words: the empty string, when it
+  # carries at least one picture (and nil otherwise, which drops the post).
+  #
+  # Empty on purpose, and emphatically NOT a rendered sentence like "(a
+  # picture)". The inbox runs no `:browser` pipeline, so it has no locale: a
+  # translated string built here freezes the **English** one into the column
+  # for every German reader on this German site, permanently — and it would
+  # then be what the agent formats quote, what the search text indexes and what
+  # the muted-word filter matches (muting "picture" would hide every wordless
+  # photo post). The reader is told there is a picture by seeing it, in the
+  # card, in their own language.
+  defp picture_only_text(object) do
+    pictures = object["attachment"] |> List.wrap() |> Enum.filter(&Media.image_attachment?/1)
+    if pictures != [], do: ""
+  end
 
   # A poll's options live under `oneOf` (pick one) or `anyOf` (pick several),
   # each a Note whose `name` is the option text.
@@ -1739,17 +1957,28 @@ defmodule Vutuv.Fediverse do
   end
 
   defp apply_remote_post_update(%RemotePost{} = post, object, activity) do
-    text = remote_post_text(object)
+    # The same "text, or a picture, or both" the insert accepts. Reading only
+    # the text here deleted a photo post the moment its author edited it — and
+    # they edit for an added content warning, a fixed alt text or a poll tick,
+    # not just for words.
+    text = remote_post_text(object) || picture_only_text(object)
     audience = remote_post_audience(object, activity)
 
     if is_nil(text) or is_nil(audience) do
       # The author narrowed it past what we may hold, or emptied it: the same
       # "stop showing this" signal a `Delete` carries, just spelled differently.
-      Repo.delete(post)
+      delete_cached_post(post)
     else
-      post
-      |> RemotePost.changeset(remote_post_attrs(object, text, audience))
-      |> Repo.update()
+      with {:ok, updated} <-
+             post
+             |> RemotePost.changeset(remote_post_attrs(object, text, audience))
+             |> Repo.update() do
+        # An edit is where a picture is added, dropped, described or covered —
+        # see `Media.sync_attachments/3`.
+        updated
+        |> Media.sync_attachments(List.wrap(object["attachment"]), RemotePost.warned?(updated))
+        |> Media.fetch_async()
+      end
     end
   end
 
@@ -1985,15 +2214,19 @@ defmodule Vutuv.Fediverse do
     # they are counted before the delete rather than deleted separately.
     # Nothing is sent: a blocked server is not talked to, not even to say
     # goodbye.
-    cached_posts =
-      Repo.aggregate(
-        from(p in RemotePost,
-          join: a in RemoteAccount,
-          on: a.id == p.remote_account_id,
-          where: a.host == ^host
-        ),
-        :count
+    host_posts =
+      from(p in RemotePost,
+        join: a in RemoteAccount,
+        on: a.id == p.remote_account_id,
+        where: a.host == ^host
       )
+
+    # Their pictures' files, and the avatars, before the rows cascade away
+    # (issue #1163): a blocked server must leave nothing of itself at rest.
+    # The wipe hands back the post ids it read, which is also the tally.
+    cached_posts = length(wipe_media(host_posts))
+
+    wipe_avatars(from(a in RemoteAccount, where: a.host == ^host))
 
     {remote_accounts, _} =
       Repo.delete_all(from(a in RemoteAccount, where: a.host == ^host))
@@ -2685,7 +2918,13 @@ defmodule Vutuv.Fediverse do
   # out, whatever else did or did not happen to it.
   defp expire_due(schema, now) do
     now = now || DateTime.utc_now(:second)
-    {count, _} = Repo.delete_all(where(schema, [r], r.expires_at <= ^now))
+    due = where(schema, [r], r.expires_at <= ^now)
+
+    # A cached post takes its pictures' files with it (issue #1163); a reply has
+    # none, so this is a no-op for the other caller.
+    if schema == RemotePost, do: wipe_media(due)
+
+    {count, _} = Repo.delete_all(due)
     count
   end
 
@@ -3926,6 +4165,10 @@ defmodule Vutuv.Fediverse do
          # caller reduces it to text before it is stored, like every other
          # stranger's HTML.
          summary: doc["summary"],
+         # The account's picture, when the document names one (issue #1163).
+         # Only the URL travels here; whether it is fetched, stored and shown is
+         # decided later and behind the AI gate.
+         icon: Media.actor_icon_url(doc),
          public_key_id: get_in(doc, ["publicKey", "id"]),
          public_key_pem: get_in(doc, ["publicKey", "publicKeyPem"]),
          # The aliases the remote account claims (issue #986): a Move *to* this

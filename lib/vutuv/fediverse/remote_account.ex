@@ -51,6 +51,15 @@ defmodule Vutuv.Fediverse.RemoteAccount do
     field(:public_key_pem, :string)
     field(:refreshed_at, :utc_datetime)
 
+    # The account's picture (issue #1163): the fingerprinted file we stored, the
+    # AI gate's verdict on it, and the URL it came from so a re-delivered actor
+    # document does not re-download an unchanged picture. Initials stay the
+    # fallback everywhere — a member without a picture and a remote account we
+    # have not (or may not) show one for read the same way.
+    field(:avatar, :string)
+    field(:avatar_moderation, :string)
+    field(:avatar_source, :string)
+
     has_many(:follows, Vutuv.Fediverse.Follow, foreign_key: :remote_account_id)
 
     timestamps()
@@ -93,6 +102,25 @@ defmodule Vutuv.Fediverse.RemoteAccount do
   """
   def display_handle(%__MODULE__{} = account),
     do: Handle.display(account.handle, account.actor_uri)
+
+  @doc """
+  Whether this account's cached picture may be shown: we have one and the AI
+  gate cleared it. The one chokepoint every surface reads, so "has a file" can
+  never drift from "was allowed"; false means initials, which is what a
+  picture-less account gets anyway.
+  """
+  def avatar_ready?(%__MODULE__{avatar: file, avatar_moderation: state}),
+    do: is_binary(file) and file != "" and state == "approved"
+
+  @doc """
+  The URL of the account's cached picture, or nil — which every surface renders
+  as initials. Nil whenever the gate has not cleared it, so this is the one
+  place the display rule lives.
+  """
+  def avatar_url(%__MODULE__{} = account) do
+    if avatar_ready?(account),
+      do: Vutuv.RemoteMedia.avatar_url(account.id, account.avatar)
+  end
 
   @doc """
   What the account is called on screen: its display name, else the handle, else

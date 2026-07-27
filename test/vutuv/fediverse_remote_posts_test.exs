@@ -11,12 +11,14 @@ defmodule Vutuv.FediverseRemotePostsTest do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
 
   @actor "https://social.example/users/them"
   @public "https://www.w3.org/ns/activitystreams#Public"
   @followers @actor <> "/followers"
+  @picture "https://social.example/media/1.jpg"
 
   setup do
     Vutuv.RateLimiter.reset()
@@ -89,15 +91,64 @@ defmodule Vutuv.FediverseRemotePostsTest do
       assert DateTime.to_date(post.published_at) == ~D[2026-07-20]
     end
 
-    test "a redelivery stores no second row" do
+    test "a redelivery stores no second row, and is a skip" do
       user = member()
       acc = account()
       follow(user, acc)
 
       assert :ok = Fediverse.record_remote_post(create_activity(), @actor)
-      assert :ok = Fediverse.record_remote_post(create_activity(), @actor)
+      # A `:skip`, not a second `:ok`: the row is already here. The distinction
+      # is what keeps the delivery from writing this post's pictures twice —
+      # against an id that names no row, which raised a foreign-key error and
+      # 500ed the inbox for the most ordinary delivery pattern there is (two
+      # members following the same account each get their own copy).
+      assert :skip = Fediverse.record_remote_post(create_activity(), @actor)
 
       assert Repo.aggregate(RemotePost, :count) == 1
+    end
+
+    test "a redelivered post with a picture does not raise, and keeps one picture" do
+      user = member()
+      acc = account()
+      follow(user, acc)
+
+      with_picture = %{
+        object: %{
+          "attachment" => [
+            %{"type" => "Document", "mediaType" => "image/jpeg", "url" => @picture}
+          ]
+        }
+      }
+
+      assert :ok = Fediverse.record_remote_post(create_activity(with_picture), @actor)
+      assert :skip = Fediverse.record_remote_post(create_activity(with_picture), @actor)
+
+      assert Repo.aggregate(RemoteImage, :count) == 1
+    end
+
+    test "a post that is only a picture is stored, with no words put in the author's mouth" do
+      user = member()
+      acc = account()
+      follow(user, acc)
+
+      activity =
+        create_activity(%{
+          object: %{
+            "content" => "",
+            "attachment" => [
+              %{"type" => "Document", "mediaType" => "image/jpeg", "url" => @picture}
+            ]
+          }
+        })
+
+      assert :ok = Fediverse.record_remote_post(activity, @actor)
+
+      # Empty, deliberately: the inbox has no locale, so any sentence built
+      # here would freeze the English one into the column for every German
+      # reader — and into the search text and the muted-word filter with it.
+      assert [post] = Repo.all(RemotePost)
+      assert post.content_text == ""
+      assert Repo.aggregate(RemoteImage, :count) == 1
     end
 
     test "a stranger's post is dropped, and so is one from an unanswered follow" do

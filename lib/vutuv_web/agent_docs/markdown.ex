@@ -818,8 +818,25 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp post_line(post) do
     "- #{post.published_on}#{pin_suffix(post)}#{repost_suffix(post)}: " <>
-      "[#{md_text(post.excerpt)}](#{post.url})"
+      "[#{md_text(entry_label(post))}](#{post.url})"
   end
+
+  @doc false
+  # What a timeline entry reads as. Normally its excerpt — but a post from
+  # another network can be a photograph and nothing else (issue #1163), and its
+  # stored body is then genuinely the empty string, on purpose: the inbox that
+  # wrote it has no locale, so any sentence built there would freeze the English
+  # one into the row. The fact that there is a picture is therefore stated
+  # here instead, where the reader's language is known.
+  def entry_label(post) do
+    case {String.trim(post.excerpt || ""), Map.get(post, :pictures, 0)} do
+      {excerpt, 0} -> excerpt
+      {"", count} -> picture_note(count)
+      {excerpt, count} -> excerpt <> " " <> picture_note(count)
+    end
+  end
+
+  defp picture_note(count), do: ngettext("(a picture)", "(%{count} pictures)", count)
 
   @doc false
   # The post the member showcases on their profile (issue #1110). Only the

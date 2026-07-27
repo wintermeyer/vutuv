@@ -832,3 +832,76 @@ capped at 30, and "View their full profile on <host>" in every state. It is also
 the only place a **muted** account can still be reached, which is why unmute
 lives here — muting from the feed removes that account's posts, and with them
 the menu that muted it.
+
+### Their pictures (issue #1163)
+
+For a reader who follows photographers, the picture **is** the post. The reply
+cards took the opposite stance on purpose (initials and a link out, never a
+stranger's picture copied here), and that is still right for somebody who
+answered a member's post — but not for an account somebody deliberately chose
+to follow.
+
+So the bytes are **fetched and stored**, never hot-linked. Hot-linking would
+hand the remote server every reader's IP address and would make the picture
+unmoderatable: the one thing that cannot happen is publishing what an unknown
+server sent us sight unseen.
+
+`fediverse_post_images` is up to four rows per cached post (`source_uri`,
+`position`, `alt`, the stored `file`, its `moderation` verdict and the author's
+`sensitive` flag); `fediverse_remote_accounts` grew three matching columns for
+one avatar per account. `Vutuv.Fediverse.Media` records what a delivery names
+and fetches it **afterwards, in a task** — the inbox answers 202 without waiting
+on a third party's image server. Every fetch wears the outbound fence the rest
+of this subsystem wears (https only, `Vutuv.Ssrf`, short timeouts, no redirects)
+plus the one that matters most here: a per-file byte ceiling
+(`FEDIVERSE_MEDIA_MAX_BYTES`, 8 MB) that **halts the stream** rather than
+buffering and measuring afterwards, because a picture's size is the attack.
+`:fediverse_media_fetch` turns the whole download off (an intranet install, and
+the test env).
+
+Two independent conditions decide what a reader sees, and they must not be
+conflated:
+
+* **`moderation`** is ours. A stored picture starts `pending` and only
+  `Vutuv.Moderation.ImageScans` clears it — the same AI gate a member's own
+  upload passes, with two new kinds (`remote_post_image`, `remote_avatar`) that
+  are the first **ownerless** scans in the system, which is why
+  `image_scans.owner_user_id` is now nullable. Nobody here uploaded these, so a
+  rejection notifies nobody: there is no member whose content was removed.
+* **`sensitive`** is the **author's**. Their flag or their content warning,
+  rendering the picture blurred behind a lid that can be closed again.
+  Deliberately not overridable by our verdict: our model judging a picture safe
+  does not overrule the person who published it asking for it to be covered.
+
+`RemoteImage.released?/1` and `RemoteAccount.avatar_ready?/1` are the display
+chokepoints ("we have the file **and** the gate cleared it"), read both at
+render time and again in `VutuvWeb.RemoteMediaController` — the authorizing
+proxy at `/system/remote_media/…`, which re-checks per request that the reader
+is signed in, that the post's own audience reaches them, that the gate cleared
+the picture, and that the URL's version segment names the exact fingerprinted
+file we currently store. Everything else is a 404, and every response carries
+`X-Robots-Tag: noindex, noimageindex`: this is somebody else's photograph, and
+it must never surface as ours in an image search. An unguessable URL is not an
+access control.
+
+A post can now be a **photograph and nothing else**, which used to be dropped
+for having no text. Its `content_text` is then the empty string — emphatically
+not a rendered sentence like "(a picture)". The inbox runs no `:browser`
+pipeline and therefore has no locale, so a translated string built there would
+freeze the **English** one into the column for every German reader, and into the
+search text and the muted-word filter with it. What the reader is told comes
+from the card (and, for agents, from the `pictures` count the doc builders
+carry), rendered in their own language. A recorded-but-unreleased picture
+renders as a neutral waiting tile with the same hourglass a member's own held
+post wears, because a photo post with its picture silently absent is not a quiet
+card, it is a broken one.
+
+Deletion is the part that is easy to get wrong: rows cascade, **files do not**.
+Every single-post delete therefore goes through one chokepoint
+(`delete_cached_post/1`) and every bulk sweep through `wipe_media/1` /
+`wipe_avatars/1`, so expiry, an upstream `Delete`, an author narrowing their own
+post, a member's report, the unfollow purge, an instance block and an account
+deleting itself all take the bytes with them. An author's `Update` re-syncs the
+pictures too (`Media.sync_attachments/3`): a warning added after publishing
+covers them here as well, a removed picture goes with its file, an added one is
+fetched.

@@ -885,7 +885,11 @@ defmodule VutuvWeb.PostLive.Feed do
                   <%!-- A post by an account the reader follows out there: the
                   same remote skin the reply cards wear, no action bar
                   (interactions are #1164-#1166), and its own report control. --%>
-                  <.remote_post_card remote_post={entry.remote_post} viewer={@current_user} />
+                  <.remote_post_card
+                    remote_post={entry.remote_post}
+                    images={entry[:images] || []}
+                    viewer={@current_user}
+                  />
                 <% true -> %>
                   <.post_thread_entry
                     post={entry.post}

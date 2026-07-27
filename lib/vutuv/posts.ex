@@ -1581,7 +1581,19 @@ defmodule Vutuv.Posts do
       |> collapse_reposts()
       |> attach_reposters(viewer)
 
-    Vutuv.FeedPage.sort_entries(local ++ remote)
+    Vutuv.FeedPage.sort_entries(local ++ attach_remote_images(remote))
+  end
+
+  # The pictures of the remote half (issue #1163), read once for the whole page
+  # rather than once per card. The card is handed only released ones — the read
+  # filters on the AI gate — so an entry with no `:images` and one whose
+  # pictures are still pending render the same way.
+  defp attach_remote_images([]), do: []
+
+  defp attach_remote_images(remote) do
+    by_post = remote |> Enum.map(& &1.remote_post.id) |> Vutuv.Fediverse.list_remote_images()
+
+    Enum.map(remote, &Map.put(&1, :images, Map.get(by_post, &1.remote_post.id, [])))
   end
 
   @doc """

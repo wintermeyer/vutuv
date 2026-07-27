@@ -126,7 +126,6 @@ defmodule Vutuv.Fediverse.RemotePost do
       :object_uri,
       :in_reply_to_uri,
       :origin_url,
-      :content_text,
       :summary,
       :sensitive,
       :audience,
@@ -135,9 +134,16 @@ defmodule Vutuv.Fediverse.RemotePost do
       :received_at,
       :expires_at
     ])
+    # Cast on its own, with no empty values: since issue #1163 a post can be a
+    # photograph and nothing else, and its body is then genuinely the empty
+    # string. Ecto's default `:empty_values` reads "" as "not given", which
+    # would drop the change and leave the NOT NULL column with a nil.
+    |> cast(attrs, [:content_text], empty_values: [])
+    # And so it cannot be `validate_required` either (which reads "" as missing
+    # too). The column stays NOT NULL, and both write paths in `Vutuv.Fediverse`
+    # compute the body through one `is_binary` gate, so it is never nil.
     |> validate_required([
       :object_uri,
-      :content_text,
       :audience,
       :kind,
       :published_at,

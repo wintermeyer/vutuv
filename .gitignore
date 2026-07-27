@@ -38,6 +38,9 @@ erl_crash.dump
 /qualification_documents
 /organization_images
 /job_posting_images
+# pictures fetched from other networks (Vutuv.RemoteMedia): a followed
+# account's avatar and its posts' attachments
+/remote_media
 # the AI-moderation limbo twin of the served trees (Vutuv.Uploads.quarantine_dir/1)
 /quarantine
 

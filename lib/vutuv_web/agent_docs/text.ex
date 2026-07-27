@@ -583,7 +583,7 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp post_lines(post) do
     "* #{post.published_on}#{Markdown.pin_suffix(post)}#{Markdown.repost_suffix(post)}: " <>
-      "#{post.excerpt}\n  #{post.url}"
+      "#{Markdown.entry_label(post)}\n  #{post.url}"
   end
 
   defp person_line(person, prefix \\ "* ") do

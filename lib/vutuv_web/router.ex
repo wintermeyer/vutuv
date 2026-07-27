@@ -319,6 +319,16 @@ defmodule VutuvWeb.Router do
     # verdict guard the cover.
     get("/review_covers/:id/:version", ReviewCoverController, :show)
 
+    # The authorizing proxy for pictures cached from other networks (issue
+    # #1163). Like the others, plus two things of its own: the post's own
+    # audience guards its attachments, and every response is `noindex,
+    # noimageindex` — this is somebody else's photograph, held here only
+    # because a member follows them, and it must never surface as ours. It sits
+    # under `/system/` rather than taking a root word of its own, which would
+    # permanently burn a handle no member could ever claim again.
+    get("/system/remote_media/posts/:id/:version", RemoteMediaController, :post_image)
+    get("/system/remote_media/avatars/:id/:version", RemoteMediaController, :avatar)
+
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).
     delete("/posts/:id", PostController, :delete)

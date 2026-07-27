@@ -82,8 +82,12 @@ defmodule VutuvWeb.FediverseAccountLive do
   # `unfollow_remote/2` deletes them the moment nobody does.
   defp load_posts(socket) do
     {posts, more?} = Fediverse.account_posts(socket.assigns.account, socket.assigns.current_user)
+    images = posts |> Enum.map(& &1.id) |> Fediverse.list_remote_images()
 
-    socket |> assign(:posts, posts) |> assign(:more?, more?)
+    socket
+    |> assign(:posts, posts)
+    |> assign(:images, images)
+    |> assign(:more?, more?)
   end
 
   # ── Events ────────────────────────────────────────────────────────────────
@@ -222,7 +226,11 @@ defmodule VutuvWeb.FediverseAccountLive do
     <div id="fediverse-account" class="mx-auto max-w-2xl space-y-6 py-6">
       <.card>
         <div class="flex items-start gap-4">
-          <.remote_avatar initials={name_initials(@account.name || @account.handle)} size="lg" />
+          <.remote_avatar
+            initials={name_initials(@account.name || @account.handle)}
+            src={RemoteAccount.avatar_url(@account)}
+            size="lg"
+          />
 
           <div class="min-w-0 flex-1">
             <%!-- Before the name, not after the handle: the round tile, the
@@ -339,6 +347,7 @@ defmodule VutuvWeb.FediverseAccountLive do
             <div :for={post <- @posts} class="py-4 first:pt-0 last:pb-0">
               <.remote_post_card
                 remote_post={%{post | remote_account: @account}}
+                images={Map.get(@images, post.id, [])}
                 viewer={@current_user}
               />
             </div>

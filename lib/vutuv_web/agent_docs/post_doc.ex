@@ -15,6 +15,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
@@ -144,7 +145,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   follow-scoped roster; the archive a single one), newest first, as names —
   `reposted_by` stays the newest for callers that want just the one name.
   """
-  def timeline_entry(%{remote_post: %RemotePost{} = remote}) do
+  def timeline_entry(%{remote_post: %RemotePost{} = remote} = entry) do
     account = remote.remote_account
 
     %{
@@ -155,6 +156,12 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       author: RemoteAccount.label(account),
       published_on: DateTime.to_date(remote.published_at),
       excerpt: AgentDocs.excerpt(remote.content_text),
+      # How many pictures the entry carries (issue #1163). A post from another
+      # network can be a photograph and nothing else, and its stored body is
+      # then genuinely empty — so without this an agent would read a wordless
+      # photo post as an entry with no content at all. The renderers turn the
+      # count into a phrase in the reader's own language.
+      pictures: Enum.count(entry[:images] || [], &RemoteImage.released?/1),
       reposted_by: nil,
       reposters: [],
       # What the HTML card says in its footer, as a fact rather than a skin: an

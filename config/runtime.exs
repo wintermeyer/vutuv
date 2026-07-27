@@ -203,6 +203,13 @@ if config_env() == :prod do
     config :vutuv, :fediverse_post_retention_days, String.to_integer(String.trim(days))
   end
 
+  # The per-file ceiling on a picture downloaded from another network (issue
+  # #1163). Raise it if your members follow photographers who post large files;
+  # anything over it is simply not stored and the post renders without it.
+  if bytes = System.get_env("FEDIVERSE_MEDIA_MAX_BYTES") do
+    config :vutuv, :fediverse_media_max_bytes, String.to_integer(String.trim(bytes))
+  end
+
   # Following accounts on other networks (issue #1160): the hourly follow-request
   # budget per member, and the total number of accounts one member may follow.
   # The first bounds a compromised account, the second bounds how many other

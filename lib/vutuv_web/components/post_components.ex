@@ -30,6 +30,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Isbn
   alias Vutuv.Moderation.ImageScans
@@ -39,6 +40,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.RemoteMedia
   alias Vutuv.ReviewCover
 
   # How many reposter faces the "Reposted by" avatar stack shows before the
@@ -920,6 +922,8 @@ defmodule VutuvWeb.PostComponents do
     doc: "`lg` for the account page's header, where the tile is the page's subject"
   )
 
+  attr(:src, :any, default: nil, doc: "the cached avatar's URL, when the gate has cleared one")
+
   @doc """
   The slate initials tile with its globe badge — "this did not come from
   vutuv", in one definition. Public so the account page
@@ -930,7 +934,25 @@ defmodule VutuvWeb.PostComponents do
   def remote_avatar(assigns) do
     ~H"""
     <span class="relative shrink-0">
+      <%!-- The account's own picture once it is stored AND the AI gate has
+      cleared it (issue #1163); initials until then, and for good if it never
+      is. `RemoteAccount.avatar_ready?/1` is the one chokepoint, so "we have a
+      file" can never drift from "we were allowed to show it" — and a
+      picture-less remote account reads exactly like a picture-less member. --%>
+      <img
+        :if={@src}
+        src={@src}
+        alt=""
+        data-remote-avatar
+        loading="lazy"
+        class={[
+          "inline-block rounded-full object-cover",
+          @size == "lg" && "h-14 w-14",
+          @size == "sm" && "h-9 w-9"
+        ]}
+      />
       <span
+        :if={is_nil(@src)}
         data-remote-avatar
         aria-hidden="true"
         class={[
@@ -1057,7 +1079,10 @@ defmodule VutuvWeb.PostComponents do
   # not a lid.
   defp remote_body(assigns) do
     ~H"""
-    <div class="mt-1.5 border-l-2 border-dashed border-slate-300 pl-3 dark:border-slate-600">
+    <div
+      :if={@warning || presence?(@text)}
+      class="mt-1.5 border-l-2 border-dashed border-slate-300 pl-3 dark:border-slate-600"
+    >
       <%= if @warning do %>
         <details data-remote-warning class="group">
           <summary class="flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -1107,6 +1132,109 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
+  attr(:images, :list, default: [])
+
+  @doc """
+  The pictures on a post from another network (issue #1163).
+
+  Only released ones ever reach here (`Vutuv.Fediverse.list_remote_images/1`
+  filters on the AI gate), so this component's own job is the second, separate
+  condition: a picture its **author** flagged sensitive, or one under their
+  content warning, renders blurred behind a click. That is deliberately not
+  overridable by our verdict — our model judging a picture safe does not
+  overrule the person who published it asking for it to be covered.
+
+  The alt text is the author's own, kept through the whole journey, because it
+  is the only thing that makes the picture readable to somebody who cannot see
+  it. A picture with none gets an empty alt rather than an invented one: an
+  unlabelled image is honest, a made-up label is not.
+  """
+  def remote_post_images(assigns) do
+    ~H"""
+    <div
+      :if={@images != []}
+      data-remote-images={length(@images)}
+      class={[
+        "mt-2 grid gap-2",
+        length(@images) > 1 && "grid-cols-2"
+      ]}
+    >
+      <div :for={image <- @images} class="overflow-hidden rounded-lg">
+        <%= if !RemoteImage.released?(image) do %>
+          <%!-- Recorded, not shown: still downloading from its own server, or
+          still with the AI gate. The tile is what keeps a wordless photo post
+          from rendering as an empty card — a reader must be able to tell "a
+          picture is coming" from "this post is broken". The hourglass is the
+          same glyph a member's own held post wears. --%>
+          <div
+            data-remote-image-pending
+            class="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+          >
+            <.hourglass />
+            <span>{gettext("A picture is on its way.")}</span>
+          </div>
+        <% else %>
+          <%= if RemoteImage.blurred?(image) do %>
+          <%!-- `<details>` rather than a JS toggle: the cover has to hold with
+          no JavaScript at all, because "this is covered for a reason" is not a
+          promise to break on a slow bundle. --%>
+          <details data-remote-image-sensitive class="group relative">
+            <%!-- The cover is inside the summary, so it must take itself away
+            when the picture is shown: a `<summary>` renders open or closed
+            alike, and without the `group-open:hidden` the blurred cover simply
+            stayed on top of the picture it had just revealed. What stands in
+            its place is the way back — like the content-warning lid above, a
+            cover you cannot put back is not a cover. --%>
+            <summary class="block cursor-pointer list-none">
+              <span class="relative block group-open:hidden">
+                <img
+                  src={RemoteMedia.post_image_url(image.id, image.file)}
+                  alt=""
+                  loading="lazy"
+                  class="block max-h-96 w-full scale-105 object-cover blur-xl"
+                />
+                <span class="absolute inset-0 flex items-center justify-center p-3 text-center text-xs font-semibold text-white">
+                  <span class="rounded-full bg-slate-900/70 px-3 py-2">
+                    {gettext("Sensitive. Show the picture.")}
+                  </span>
+                </span>
+              </span>
+              <span class="hidden min-h-10 items-center gap-1 text-xs font-medium text-brand-600 group-open:flex dark:text-brand-400">
+                <span aria-hidden="true">⚠</span>{gettext("Cover it again")}
+              </span>
+            </summary>
+            <.remote_image image={image} />
+          </details>
+          <% else %>
+            <.remote_image image={image} />
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  # Whether there is a body to render at all. A post from an account somebody
+  # follows can be a photograph and nothing else (issue #1163) — the picture is
+  # the post, so an empty body renders no rail and no empty paragraph, the same
+  # as a local photo post.
+  defp presence?(text), do: is_binary(text) and String.trim(text) != ""
+
+  attr(:image, :map, required: true)
+
+  # The picture itself — the same rendering whether it stood open or the reader
+  # just uncovered a sensitive one, so it is written once.
+  defp remote_image(assigns) do
+    ~H"""
+    <img
+      src={RemoteMedia.post_image_url(@image.id, @image.file)}
+      alt={@image.alt || ""}
+      loading="lazy"
+      class="block max-h-96 w-full object-contain"
+    />
+    """
+  end
+
   @doc """
   A post by an account the reader follows on another network, in their feed
   (issue #1161).
@@ -1131,6 +1259,11 @@ defmodule VutuvWeb.PostComponents do
   attr(:remote_post, :map, required: true, doc: "a Vutuv.Fediverse.RemotePost, account preloaded")
   attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil")
 
+  attr(:images, :list,
+    default: [],
+    doc: "the post's released pictures (issue #1163); the caller batches the read"
+  )
+
   def remote_post_card(assigns) do
     post = assigns.remote_post
     account = post.remote_account
@@ -1143,7 +1276,7 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <article data-remote-post={@remote_post.id} data-audience={@remote_post.audience}>
       <div class="flex items-start gap-3">
-        <.remote_avatar initials={@initials} />
+        <.remote_avatar initials={@initials} src={RemoteAccount.avatar_url(@account)} />
 
         <div class="min-w-0 flex-1">
           <%!-- The stamp is the author's own publication time, which is also
@@ -1198,6 +1331,8 @@ defmodule VutuvWeb.PostComponents do
             }
             text={@remote_post.content_text}
           />
+
+          <.remote_post_images images={@images} />
 
           <%!-- A poll's options are shown above, but a vote is not something
           vutuv can carry, so the link says what it is actually for. --%>

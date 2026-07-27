@@ -213,6 +213,23 @@ config :vutuv, :fediverse_outbound_reply_limit, 30
 # standing invitation each accepted follow is, since every one of them lets
 # another server deliver here. Both env-overridable
 # (FEDIVERSE_REMOTE_FOLLOW_LIMIT / FEDIVERSE_MAX_REMOTE_FOLLOWS).
+# Pictures from the accounts a member follows (issue #1163): the per-file
+# ceiling on a downloaded image.
+#
+# A picture is the one thing here whose *size* is the attack, so the ceiling is
+# per file and the stream is halted at it rather than buffered and measured
+# afterwards. Generous enough for a real photo off a phone, small enough that
+# one delivery cannot cost a hundred megabytes. Env-overridable
+# (FEDIVERSE_MEDIA_MAX_BYTES).
+config :vutuv, :fediverse_media_max_bytes, 8_000_000
+
+# Whether the background task that downloads those pictures runs (off in tests,
+# where it would touch the SQL sandbox from outside; tests call
+# Vutuv.Fediverse.Media.fetch_now/1 directly). A no-op while :fediverse_enabled
+# is off. Nothing it stores is ever shown before the AI image gate clears it, so
+# this switch is about the download, not about the display.
+config :vutuv, :fediverse_media_fetch, true
+
 config :vutuv, :fediverse_remote_follow_limit, 30
 config :vutuv, :fediverse_max_remote_follows, 1_000
 
