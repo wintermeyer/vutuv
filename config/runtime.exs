@@ -196,6 +196,12 @@ if config_env() == :prod do
     config :vutuv, :fediverse_outbound_reply_limit, String.to_integer(String.trim(limit))
   end
 
+  # The same, for likes of posts on other networks (issue #1164). A separate
+  # knob because the two are nothing alike in frequency: a like is one tap.
+  if limit = System.get_env("FEDIVERSE_OUTBOUND_LIKE_LIMIT") do
+    config :vutuv, :fediverse_outbound_like_limit, String.to_integer(String.trim(limit))
+  end
+
   # How long a post by an account a member follows may be held here (issue
   # #1161). The promise the privacy page makes about the other half of
   # following: it is deleted when the clock runs out whatever else happens.

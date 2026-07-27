@@ -1581,15 +1581,30 @@ defmodule Vutuv.Posts do
       |> collapse_reposts()
       |> attach_reposters(viewer)
 
-    Vutuv.FeedPage.sort_entries(local ++ attach_remote_images(remote))
+    Vutuv.FeedPage.sort_entries(local ++ decorate_remote(remote, viewer))
+  end
+
+  defp decorate_remote([], _viewer), do: []
+
+  defp decorate_remote(remote, viewer) do
+    remote |> attach_remote_images() |> attach_remote_likes(viewer)
+  end
+
+  # Which of the page's remote posts the reader already likes (issue #1164),
+  # read once for the whole page. It rides the entry rather than a socket-level
+  # set because the feed re-renders a card by re-inserting its entry into the
+  # stream, so the state a card draws from has to live on the entry it draws.
+  defp attach_remote_likes(remote, viewer) do
+    ids = Enum.map(remote, & &1.remote_post.id)
+    liked = Vutuv.Fediverse.liked_remote_post_ids(viewer, ids)
+
+    Enum.map(remote, &Map.put(&1, :liked?, MapSet.member?(liked, &1.remote_post.id)))
   end
 
   # The pictures of the remote half (issue #1163), read once for the whole page
   # rather than once per card. The card is handed only released ones — the read
   # filters on the AI gate — so an entry with no `:images` and one whose
   # pictures are still pending render the same way.
-  defp attach_remote_images([]), do: []
-
   defp attach_remote_images(remote) do
     by_post = remote |> Enum.map(& &1.remote_post.id) |> Vutuv.Fediverse.list_remote_images()
 

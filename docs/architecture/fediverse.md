@@ -905,3 +905,49 @@ deleting itself all take the bytes with them. An author's `Update` re-syncs the
 pictures too (`Media.sync_attachments/3`): a warning added after publishing
 covers them here as well, a removed picture goes with its file, an added one is
 fetched.
+
+### Liking one of their posts (issue #1164)
+
+The heart on a remote card really federates: `like_remote_post/2` writes the
+local marker (`fediverse_post_likes`, one row per member and post, through the
+same `Vutuv.Engagement.insert_if_new/3` kernel every other engagement toggle
+uses) and queues a signed `Like` addressed to the **author alone**, never to the
+public collection and never to the member's own followers — what somebody reads
+and likes is not a thing to publish on their behalf, and it keeps a
+followers-only post's like from travelling where the post did not. `Undo(Like)`
+repeats the original's id, which is derived from the pair rather than stored so
+it survives a like → unlike → like.
+
+The gates are the reply path's (`check_remote_like/2` mirrors
+`check_remote_reply/2`) plus one of its own, and minus the follow. A follow is
+the wrong question: the account page shows an account's public posts to any
+signed-in member, follower or not, and liking what you are shown has to work
+there. The right question is whether the post is one this member may **read**,
+which `remote_post_readable?/2` answers in the same vocabulary `account_posts/2`
+uses — and it has to be asked here, because the id in a click is the member's to
+choose and cannot be left to the page having rendered the card. The post is also
+re-read first: the row can be gone by the time the heart is pressed (expiry, an
+upstream `Delete`, another member's report), and `on_conflict: :nothing`
+suppresses the unique violation but never the foreign key one.
+
+The hourly budget is its own knob (`FEDIVERSE_OUTBOUND_LIKE_LIMIT`, 200) because
+a like is one tap while reading, and it is claimed only when a like really is
+new — a double tap sends nothing, so it costs nothing — and never on the way
+back out: refusing to let somebody take a like back because they have been busy
+would be an odd shape of limit. A refused like rolls its marker back, because a
+heart painted for a like that never left is the one disagreement a member cannot
+fix from here.
+
+The `Undo` is gated on `ever_federated?/1`, not `federated?/1`, for the reason
+revocation is (issue #1102): a withdrawal happens exactly when the state that
+allowed the original act is already gone. Leaving the Fediverse therefore
+withdraws every like and drops the markers (`drop_remote_likes/1`) beside the
+follows, and the likes are in the GDPR export, because an act of the member's
+recorded here is their data.
+
+There is **no count**, here or in the agent docs. vutuv does not know how many
+people liked a post on somebody else's server, and a tally assembled from the
+likes that happened to pass through this installation would read as the real one
+while being a fraction of it. The marker cascades with the cached post, expiry
+included; the like on the author's server stands, and a re-like after expiry
+sends a duplicate every implementation treats as a no-op.

@@ -228,6 +228,27 @@ defmodule VutuvWeb.FediverseAccountLiveTest do
 
       refute has_element?(view, "[data-remote-post='#{p.id}']")
     end
+
+    test "the heart works here too, on an account nobody follows (issue #1164)", %{
+      conn: conn,
+      user: user,
+      account: acc
+    } do
+      user |> Ecto.Changeset.change(fediverse_followers?: true) |> Repo.update!()
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+      cached_post(acc)
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+
+      # This page shows public posts of accounts the reader does NOT follow, so
+      # liking what it shows has to work — which is why the gate asks whether
+      # the post is readable, not whether there is a follow.
+      view |> element("[phx-click='like-remote-post']") |> render_click()
+      assert has_element?(view, "[data-remote-like='on']")
+
+      view |> element("[phx-click='unlike-remote-post']") |> render_click()
+      refute has_element?(view, "[data-remote-like='on']")
+    end
   end
 
   describe "the entry points" do

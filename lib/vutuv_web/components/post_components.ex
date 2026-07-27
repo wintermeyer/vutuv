@@ -42,6 +42,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.RemoteMedia
   alias Vutuv.ReviewCover
+  alias VutuvWeb.FediverseComponents
 
   # How many reposter faces the "Reposted by" avatar stack shows before the
   # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
@@ -1244,12 +1245,15 @@ defmodule VutuvWeb.PostComponents do
   not come from vutuv" reads identically wherever it appears, and a member never
   has to learn two visual vocabularies for the same fact.
 
-  Three things it deliberately does not have:
+  What it has and what it deliberately does not:
 
-    * **no action bar.** Liking or resharing something on somebody else's server
-      is its own issue (#1164-#1166); an absent row beats a dead one.
-    * **no avatar.** Pictures are issue #1163. Until then the tile is initials
-      and the handle links out.
+    * **one action, not a bar.** A heart that really federates (issue #1164):
+      it delivers a `Like` to the author and shows the reader's **own** state,
+      with **no count**. vutuv does not know how many people liked a post on
+      somebody else's server, and a number assembled from the likes that
+      happened to pass through this installation would read as the real one
+      while being a fraction of it. Replying and resharing are still their own
+      issues (#1165, #1166); an absent control beats a dead one.
     * **no permalink of ours.** The post lives on its own server; "View the
       original" is where it is read in full.
 
@@ -1262,6 +1266,11 @@ defmodule VutuvWeb.PostComponents do
   attr(:images, :list,
     default: [],
     doc: "the post's released pictures (issue #1163); the caller batches the read"
+  )
+
+  attr(:liked?, :boolean,
+    default: false,
+    doc: "whether the viewer already likes this post (issue #1164); batched by the caller"
   )
 
   def remote_post_card(assigns) do
@@ -1334,6 +1343,40 @@ defmodule VutuvWeb.PostComponents do
 
           <.remote_post_images images={@images} />
 
+          <%!-- The one act this card carries (issue #1164). A plain toggle with
+          no number beside it: the heart says what the reader did, and the only
+          honest answer to "how many others" is the author's own server, which
+          is one click away in the footer below. Sized as a real touch target.
+
+          Shown to every signed-in reader, including one who has not switched
+          Fediverse participation on: the `Like` is signed with their own key,
+          so for them it cannot be sent — but hiding the control would leave
+          them with no way to find that out. Pressing it explains and points at
+          the switch, the same way the reply page does (issue #1070). --%>
+          <button
+            :if={@viewer}
+            type="button"
+            phx-click={if @liked?, do: "unlike-remote-post", else: "like-remote-post"}
+            phx-value-id={@remote_post.id}
+            aria-pressed={to_string(@liked?)}
+            data-remote-like={@liked? && "on"}
+            class={[
+              "mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
+              if(@liked?,
+                do: "text-accent",
+                else: "text-slate-600 hover:text-accent dark:text-slate-400"
+              )
+            ]}
+          >
+            <.icon_heart filled?={@liked?} class="h-5 w-5" />
+            <%!-- One label in both states, with the state carried by the filled
+            heart, the accent colour and `aria-pressed` — the same way the local
+            action bar does it. Two labels needed two words, and German has one
+            for both ("Gefällt mir"), so the state would have read differently
+            per language, and in German not at all. --%>
+            <span>{gettext("Like")}</span>
+          </button>
+
           <%!-- A poll's options are shown above, but a vote is not something
           vutuv can carry, so the link says what it is actually for. --%>
           <.remote_footer
@@ -1353,6 +1396,37 @@ defmodule VutuvWeb.PostComponents do
       do: gettext("Vote on the original"),
       else: gettext("View the original")
   end
+
+  @doc """
+  The sentence for one `{:error, reason}` refusing the heart above (issue
+  #1164). Beside the control rather than in each of the two pages that render
+  it (`/feed` and the account page), so the same refusal cannot be explained
+  precisely on one and shrugged at on the other.
+
+  Its own table and not `VutuvWeb.FediverseComponents.refusal_message/1`, which
+  answers the *follow* pages: the one refusal a member can act on says what to
+  do about it, and the rest deliberately say only that it did not work. Somebody
+  who pressed a heart while reading has not asked to be told what the operator
+  blocks, and that table's fallback tells them to check an address a like does
+  not have.
+  """
+  def like_refusal_message(:like_capped),
+    do: gettext("That is a lot of likes in one hour. Please try again later.")
+
+  def like_refusal_message(reason) when reason in [:not_found, :not_visible],
+    do: gettext("That post is not here any more.")
+
+  # The states a member is in rather than a fact about this act: those already
+  # have one wording in `FediverseComponents.refusal_message/1`, and saying
+  # "switch it on under Settings" here would be wrong for the several ways
+  # `federated?/1` is false with the switch already on (an unconfirmed address,
+  # a frozen or suspended account). Only its catch-all is overridden, which is
+  # about an address a heart does not have.
+  def like_refusal_message(reason)
+      when reason in [:not_federating, :moved, :fediverse_disabled, :instance_blocked],
+      do: FediverseComponents.refusal_message(reason)
+
+  def like_refusal_message(_reason), do: gettext("That did not work.")
 
   # A card names the post it answers only when its position alone does not say
   # it. While the thread still indents, the nesting says it. Past

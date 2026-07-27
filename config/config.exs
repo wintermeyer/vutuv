@@ -205,6 +205,12 @@ config :vutuv, :fediverse_image_hold_seconds, 90
 # followed them, so it is metered; sized for a conversation, not a script.
 config :vutuv, :fediverse_outbound_reply_limit, 30
 
+# How many likes of posts on other networks one member may send per hour (issue
+# #1164). Its own budget, and a far larger one: a like is one tap while reading,
+# so a limit sized for writing prose would refuse ordinary reading. Taking a
+# like back is never metered.
+config :vutuv, :fediverse_outbound_like_limit, 200
+
 # Following accounts on other networks (issue #1160): how many follow requests
 # one member may send per hour, and how many accounts they may follow at all.
 #

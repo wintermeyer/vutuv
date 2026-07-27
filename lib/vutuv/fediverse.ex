@@ -46,6 +46,7 @@ defmodule Vutuv.Fediverse do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
+  alias Vutuv.Engagement
   alias Vutuv.Fediverse.Actor
   alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Fediverse.Deliverer
@@ -60,6 +61,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.NoteEvent
   alias Vutuv.Fediverse.PostDelivery
+  alias Vutuv.Fediverse.PostLike
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
@@ -876,11 +878,53 @@ defmodule Vutuv.Fediverse do
   def drop_remote_follows(%User{} = user) do
     follows = list_remote_follows(user)
     undo_remote_follows(user, follows)
+    # Their likes are the other half of "the rows about people on other
+    # networks, in both directions" (issue #1164). Withdrawn before the follows
+    # go, and unconditionally: a like of an account somebody else here still
+    # follows would otherwise survive this member leaving, as a record of what
+    # they read on another network kept after they asked to be out of it.
+    drop_remote_likes(user)
 
     {count, _} = Repo.delete_all(from(f in Follow, where: f.user_id == ^user.id))
     # Their cached posts existed because this member followed their authors
     # (issue #1161); for the ones nobody else here follows, that reason is gone.
     purge_unfollowed_remote_posts(Enum.map(follows, & &1.remote_account_id))
+    count
+  end
+
+  @doc """
+  Every remote post this member likes, as `{post, account}` — for their GDPR
+  export and for the withdrawal below, which needs the same two rows.
+  """
+  def list_remote_likes(%User{id: user_id}) do
+    Repo.all(
+      from(l in PostLike,
+        join: p in RemotePost,
+        on: p.id == l.remote_post_id,
+        join: a in RemoteAccount,
+        on: a.id == p.remote_account_id,
+        where: l.user_id == ^user_id,
+        order_by: [desc: l.id],
+        select: {p, a}
+      )
+    )
+  end
+
+  @doc """
+  Withdraws every like this member holds on posts from other networks and drops
+  the markers: an `Undo(Like)` per post, then the rows.
+
+  Called when they leave the Fediverse, so what stands on other servers under
+  their name goes with the decision rather than after it.
+  """
+  def drop_remote_likes(%User{} = user) do
+    posts = list_remote_likes(user)
+
+    Enum.each(posts, fn {post, account} ->
+      deliver_like(user, %{post | remote_account: account}, &Docs.undo_like_activity/3)
+    end)
+
+    {count, _} = Repo.delete_all(from(l in PostLike, where: l.user_id == ^user.id))
     count
   end
 
@@ -2136,6 +2180,13 @@ defmodule Vutuv.Fediverse do
   # for a person holding a conversation, not for a script: a real exchange is a
   # handful of messages, so this only ever bites automation.
   @outbound_reply_limit 30
+
+  # Likes a member may send out per hour (issue #1164). Its own budget, and a
+  # much larger one than the replies above: a like is one tap while reading, so
+  # a limit sized for writing prose would refuse ordinary reading. It is still
+  # a limit, because this is a member action that makes vutuv POST to a server
+  # that never followed them.
+  @outbound_like_limit 200
 
   # How long a post with an unvetted picture is held before it federates without
   # it. The ceiling, not the normal wait — see `image_hold_seconds/0`.
@@ -3452,6 +3503,229 @@ defmodule Vutuv.Fediverse do
   @doc "How many answers per hour one member may send to other networks."
   def outbound_reply_limit,
     do: Application.get_env(:vutuv, :fediverse_outbound_reply_limit, @outbound_reply_limit)
+
+  ## Liking a post on another network (issue #1164)
+
+  @doc """
+  Whether `user` may like the cached post `post`, and when not, which gate
+  refused (the `check_remote_reply/2` vocabulary, minus the one that does not
+  apply):
+
+    * `:fediverse_disabled` — the installation switch is off.
+    * `:not_federating` — the member has not switched Fediverse participation on.
+      The `Like` is signed with their own actor key, so there is no such thing
+      as an actorless like. The one refusal they can do something about.
+    * `:moved` — they redirected their Fediverse identity elsewhere.
+    * `:instance_blocked` — the operator shut that server out, in both
+      directions.
+    * `:not_visible` — the post is not one this member may read.
+
+  Deliberately **no follow requirement**, and just as deliberately not "no check
+  at all": a follow is the wrong question, because the account page shows an
+  account's public posts to any signed-in member, follower or not
+  (`account_posts/2`), and liking what you are shown has to work there. The
+  right question is whether the post is one they may read, which is what
+  `remote_post_readable?/2` asks in the same vocabulary that query uses. The
+  id in a click is attacker-controlled, so this cannot be left to the fact that
+  the LiveView resolves it against its own rendered list.
+
+  Free of side effects, so a render may ask it. The budget is claimed separately.
+  """
+  def check_remote_like(%User{} = user, %RemotePost{} = post) do
+    cond do
+      not enabled?() -> {:error, :fediverse_disabled}
+      not federated?(user) -> {:error, :not_federating}
+      moved?(user) -> {:error, :moved}
+      instance_blocked?(actor_uri_of(post)) -> {:error, :instance_blocked}
+      not remote_post_readable?(post, user) -> {:error, :not_visible}
+      true -> :ok
+    end
+  end
+
+  @doc """
+  Whether `viewer` may read this cached post: an open audience is readable by
+  any signed-in member (that is what the account page shows), and a
+  followers-only one needs their own accepted follow.
+
+  The read half of what `account_posts/2` enforces in SQL, for a caller holding
+  a post rather than a query. `remote_post_visible?/2` beside it answers the
+  narrower feed question ("would this reach them unprompted"), which also
+  requires a follow — the two are different questions and must not be merged.
+  """
+  def remote_post_readable?(%RemotePost{} = post, %User{id: viewer_id}) do
+    RemotePost.open?(post) or
+      Repo.exists?(
+        from(f in Follow,
+          where:
+            f.user_id == ^viewer_id and f.remote_account_id == ^post.remote_account_id and
+              f.state == "accepted"
+        )
+      )
+  end
+
+  def remote_post_readable?(_post, _viewer), do: false
+
+  @doc """
+  Claims one slot from the member's hourly like budget. `:ok`, or
+  `{:error, :like_capped}`.
+
+  Consuming, so only the write path calls it — and only the **like** path: an
+  unlike is a withdrawal, and refusing to let somebody take a like back because
+  they have been busy would be an odd shape of limit.
+  """
+  def claim_like_budget(%User{id: user_id}) do
+    case RateLimiter.hit(
+           {:fediverse_outbound_like, user_id},
+           outbound_like_limit(),
+           @inbound_window_ms
+         ) do
+      :ok -> :ok
+      _ -> {:error, :like_capped}
+    end
+  end
+
+  @doc "How many likes per hour one member may send to other networks."
+  def outbound_like_limit,
+    do: Application.get_env(:vutuv, :fediverse_outbound_like_limit, @outbound_like_limit)
+
+  @doc """
+  The member likes a cached post: writes the local marker and queues a signed
+  `Like` to the author's own inbox.
+
+  `{:ok, :liked}`, `{:ok, :already}` when the marker was already there (a
+  double tap, or a second tab — no second activity goes out), or the gate's
+  `{:error, reason}`.
+
+  The marker is written **first** and the activity queued after it, in that
+  order on purpose: a queued activity whose marker failed to write would paint
+  no heart while the author's server counts the like, which is the one
+  disagreement a member cannot fix from here.
+  """
+  def like_remote_post(%User{} = user, %RemotePost{} = post) do
+    # Re-read first. The card was rendered at some earlier moment and the row
+    # can be gone by the time the heart is pressed — expiry, an upstream
+    # `Delete`, another member's report, an instance block — and the insert
+    # would then hit the foreign key and take the whole LiveView down with it.
+    # `on_conflict: :nothing` suppresses the *unique* violation, never this one.
+    with %RemotePost{} = post <- reload_remote_post(post),
+         :ok <- check_remote_like(user, post) do
+      case insert_post_like(user, post) do
+        {:ok, :liked} -> send_like(user, post)
+        other -> other
+      end
+    else
+      nil -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  # The budget is claimed here rather than before the insert, so a double tap or
+  # a second tab — which writes nothing and sends nothing — does not spend
+  # somebody's slot. A refusal rolls the marker back: a heart painted for a like
+  # that never left is the one disagreement a member cannot fix from here.
+  defp send_like(user, post) do
+    case claim_like_budget(user) do
+      :ok ->
+        deliver_like(user, post, &Docs.like_activity/3)
+        {:ok, :liked}
+
+      {:error, _} = capped ->
+        Repo.delete_all(
+          from(l in PostLike, where: l.user_id == ^user.id and l.remote_post_id == ^post.id)
+        )
+
+        capped
+    end
+  end
+
+  defp reload_remote_post(%RemotePost{id: id, remote_account: account}) do
+    case Repo.get(RemotePost, id) do
+      %RemotePost{} = post -> %{post | remote_account: account}
+      nil -> nil
+    end
+  end
+
+  @doc """
+  The member takes the like back: drops the marker and queues the matching
+  `Undo(Like)`.
+
+  `{:ok, :unliked}` or `{:ok, :already}`. No gate and no budget — a withdrawal
+  must not be refusable, and if the member has since stopped federating there
+  is simply nothing to send, which `deliver_like/3` handles by finding no actor.
+  """
+  def unlike_remote_post(%User{} = user, %RemotePost{} = post) do
+    {count, _} =
+      Repo.delete_all(
+        from(l in PostLike, where: l.user_id == ^user.id and l.remote_post_id == ^post.id)
+      )
+
+    if count > 0 do
+      deliver_like(user, post, &Docs.undo_like_activity/3)
+      {:ok, :unliked}
+    else
+      {:ok, :already}
+    end
+  end
+
+  @doc """
+  Which of `post_ids` this member already likes, as a `MapSet` — one query for a
+  whole feed page rather than one per card.
+  """
+  def liked_remote_post_ids(%User{id: user_id}, post_ids) when is_list(post_ids) do
+    from(l in PostLike,
+      where: l.user_id == ^user_id and l.remote_post_id in ^post_ids,
+      select: l.remote_post_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  def liked_remote_post_ids(_viewer, _post_ids), do: MapSet.new()
+
+  # The join-row kernel every other engagement toggle here writes through
+  # (`Vutuv.Engagement`), for the reason `insert_reaction/3` spells out:
+  # `Repo.insert(on_conflict: :nothing)` cannot say whether the row landed,
+  # because the v7 id is minted in Elixir and the struct comes back looking
+  # identical either way, so only the inserted row count is an honest answer.
+  # Here that answer decides whether an activity leaves the building. Nothing
+  # needs a changeset — both ids come from records the caller already resolved.
+  defp insert_post_like(user, post) do
+    case Engagement.insert_if_new(
+           PostLike,
+           %{user_id: user.id, remote_post_id: post.id},
+           [:user_id, :remote_post_id]
+         ) do
+      {:inserted, _row} -> {:ok, :liked}
+      :exists -> {:ok, :already}
+    end
+  end
+
+  # The author's own inbox, never the shared one: a Like is addressed to one
+  # person, and a shared inbox is for what a server fans out to many.
+  defp deliver_like(user, %RemotePost{} = post, builder) do
+    with %RemoteAccount{} = account <- post_account(post),
+         # `ever_federated?/1`, never `federated?/1`, for the reason the
+         # revocation paths spell out (issue #1102): a withdrawal happens
+         # exactly when the state that allowed the original act is already
+         # gone. Gating the `Undo` on it would leave the favourite standing
+         # under a member's name on a server they can no longer reach.
+         true <- ever_federated?(user),
+         inbox when is_binary(inbox) <- account.inbox_uri do
+      enqueue(user, [inbox], builder.(user, account.actor_uri, post.object_uri))
+    else
+      _ -> :skip
+    end
+  end
+
+  defp post_account(%RemotePost{remote_account: %RemoteAccount{} = account}), do: account
+  defp post_account(%RemotePost{remote_account_id: id}), do: Repo.get(RemoteAccount, id)
+
+  defp actor_uri_of(%RemotePost{} = post) do
+    case post_account(post) do
+      %RemoteAccount{actor_uri: uri} -> uri
+      _ -> nil
+    end
+  end
 
   ## Federating posts (called from Vutuv.Posts after commit)
 

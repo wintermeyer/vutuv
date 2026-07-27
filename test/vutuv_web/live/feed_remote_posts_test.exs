@@ -61,10 +61,56 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     assert has_element?(view, "[data-remote-post='#{post.id}']")
     assert html =~ "A thought from over there."
     assert html =~ "@them@social.example"
-    # It links out to where it really lives, and offers nothing to like or
-    # reshare — those are #1164-#1166.
+    # It links out to where it really lives, and offers one heart but no vutuv
+    # action bar — replying and resharing are #1165/#1166.
     assert has_element?(view, "[data-remote-origin][href='https://social.example/@them/1']")
     refute has_element?(view, "[data-remote-post='#{post.id}'] [data-post-actions]")
+  end
+
+  describe "the heart (issue #1164)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      user = user |> Ecto.Changeset.change(fediverse_followers?: true) |> Repo.update!()
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+
+      %{conn: conn, user: Repo.reload!(user), post: cached_post(user)}
+    end
+
+    test "paints the reader's own state with no reload and no count", ctx do
+      {:ok, view, html} = live(ctx.conn, ~p"/feed")
+
+      # Nothing about how many others liked it: the real number is on their
+      # server, and one assembled from what passed through here would be a lie.
+      assert has_element?(view, "[phx-click='like-remote-post']")
+      refute html =~ "data-remote-like=\"on\""
+
+      view |> element("[phx-click='like-remote-post']") |> render_click()
+
+      assert has_element?(view, "[data-remote-like='on']")
+      assert has_element?(view, "[phx-click='unlike-remote-post']")
+
+      view |> element("[phx-click='unlike-remote-post']") |> render_click()
+
+      refute has_element?(view, "[data-remote-like='on']")
+    end
+
+    test "a member who does not federate is told where the switch is", ctx do
+      ctx.user |> Ecto.Changeset.change(fediverse_followers?: false) |> Repo.update!()
+
+      {:ok, view, _html} = live(ctx.conn, ~p"/feed")
+
+      # The heart is shown anyway: hiding it would leave them no way to find
+      # out that this exists and is one setting away.
+      html = view |> element("[phx-click='like-remote-post']") |> render_click()
+
+      # The wording is the one every other Fediverse refusal uses, and it must
+      # not claim the switch is off — `federated?/1` is also false for an
+      # unconfirmed address or a frozen account, whose switch is already on.
+      assert html =~ VutuvWeb.FediverseComponents.refusal_message(:not_federating)
+      refute has_element?(view, "[data-remote-like='on']")
+      # And no marker is written for a like that never left.
+      assert Repo.aggregate(Vutuv.Fediverse.PostLike, :count) == 0
+    end
   end
 
   test "a followers-only post wears the lock", %{conn: conn} do

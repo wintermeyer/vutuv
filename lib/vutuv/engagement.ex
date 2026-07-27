@@ -18,14 +18,23 @@ defmodule Vutuv.Engagement do
   alias Vutuv.UUIDv7
 
   @doc """
-  Inserts a join row (stamped with a v7 id and `inserted_at`/`updated_at`)
-  unless the unique `conflict_target` already holds it. `fields` are the row's
-  own columns (e.g. `%{user_id: ..., post_id: ...}`). Returns `{:inserted, row}`
-  on a fresh insert, or `:exists` when it was already there.
+  Inserts a join row (stamped with a v7 id and whichever of
+  `inserted_at`/`updated_at` the schema declares) unless the unique
+  `conflict_target` already holds it. `fields` are the row's own columns (e.g.
+  `%{user_id: ..., post_id: ...}`). Returns `{:inserted, row}` on a fresh
+  insert, or `:exists` when it was already there.
   """
   def insert_if_new(schema, fields, conflict_target) do
     now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
-    row = Map.merge(fields, %{id: UUIDv7.generate(), inserted_at: now, updated_at: now})
+
+    # `updated_at` only where there is one. A pure marker row — nothing ever
+    # updates it, so it declares `timestamps(updated_at: false)` — would
+    # otherwise be handed a column it does not have, which raises.
+    row =
+      %{inserted_at: now, updated_at: now}
+      |> Map.take(schema.__schema__(:fields))
+      |> Map.merge(fields)
+      |> Map.put(:id, UUIDv7.generate())
 
     case Repo.insert_all(schema, [row],
            on_conflict: :nothing,

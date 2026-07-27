@@ -16,6 +16,7 @@ defmodule Vutuv.Export do
   alias Vutuv.Chat.{Conversation, Participant}
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Jobs.{JobPostingBookmark, JobPostingLike}
   alias Vutuv.Organizations.{OrganizationBookmark, OrganizationLike}
   alias Vutuv.Posts.{Post, PostBookmark, PostDraft, PostLike, PostRepost}
@@ -176,8 +177,25 @@ defmodule Vutuv.Export do
       # The accounts the member follows on other networks (issue #1160). Their
       # own remote followers are deliberately absent: those rows are about other
       # people, and this export is the member's data.
-      fediverse_following: fediverse_following(user)
+      fediverse_following: fediverse_following(user),
+      # What they liked on other networks (issue #1164). Unambiguously their own
+      # data — an act of theirs, recorded here — so Art. 20 covers it, the same
+      # way the saved_* sections above are covered.
+      fediverse_likes: fediverse_likes(user)
     }
+  end
+
+  defp fediverse_likes(user) do
+    user
+    |> Fediverse.list_remote_likes()
+    |> Enum.map(fn {post, account} ->
+      %{
+        post: RemotePost.origin(post),
+        author: RemoteAccount.display_handle(account),
+        server: account.host,
+        at: post.published_at
+      }
+    end)
   end
 
   defp fediverse_following(user) do

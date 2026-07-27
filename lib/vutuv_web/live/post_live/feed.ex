@@ -344,6 +344,18 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
+  # The heart on a post from another network (issue #1164): the marker is
+  # written here and a signed `Like` goes to the author's own server. Only the
+  # reader's own state is painted — there is no count to update, because vutuv
+  # does not know the post's real one.
+  def handle_event("like-remote-post", %{"id" => id}, socket) do
+    {:noreply, toggle_remote_like(socket, id, &Fediverse.like_remote_post/2, true)}
+  end
+
+  def handle_event("unlike-remote-post", %{"id" => id}, socket) do
+    {:noreply, toggle_remote_like(socket, id, &Fediverse.unlike_remote_post/2, false)}
+  end
+
   # "Not this account today": the private, reversible lever beside Report. The
   # follow survives; its posts leave this feed, so every row from that account
   # goes in the same round trip rather than lingering until the next reload.
@@ -691,15 +703,36 @@ defmodule VutuvWeb.PostLive.Feed do
   # emptied a feed this way.
   defp drop_remote_entry(socket, remote_post_id) do
     socket
-    |> update(
-      :entries,
-      &Enum.reject(&1, fn entry ->
-        Posts.remote_feed_entry?(entry) and entry.remote_post.id == remote_post_id
-      end)
-    )
+    |> update(:entries, &Enum.reject(&1, fn entry -> remote_entry?(entry, remote_post_id) end))
     |> stream_delete_by_dom_id(:posts, "feed-remote-#{remote_post_id}")
     |> then(&assign(&1, :empty?, &1.assigns.entries == [] and &1.assigns.pending_posts == []))
   end
+
+  # The heart, one shape for both directions (issue #1164). The entry is
+  # re-inserted into the stream rather than an assign being flipped: a stream
+  # item redraws only when its own entry is handed back, which is also why
+  # `:liked?` rides the entry.
+  defp toggle_remote_like(socket, remote_post_id, action, liked?) do
+    with %{} = entry <- Enum.find(socket.assigns.entries, &remote_entry?(&1, remote_post_id)),
+         {:ok, _} <- action.(socket.assigns.current_user, entry.remote_post) do
+      updated = Map.put(entry, :liked?, liked?)
+
+      socket
+      |> update(:entries, &replace_remote_entry(&1, remote_post_id, updated))
+      |> stream_insert(:posts, updated, update_only: true)
+    else
+      {:error, reason} -> put_flash(socket, :error, like_refusal_message(reason))
+      _ -> socket
+    end
+  end
+
+  defp replace_remote_entry(entries, remote_post_id, updated),
+    do: Enum.map(entries, &if(remote_entry?(&1, remote_post_id), do: updated, else: &1))
+
+  # "This row is the cached post with that id" — the one predicate the three
+  # scans over `:entries` that single a remote post out all read from.
+  defp remote_entry?(entry, remote_post_id),
+    do: Posts.remote_feed_entry?(entry) and entry.remote_post.id == remote_post_id
 
   # The entries carrying a vutuv post. A cached post from another network has
   # `post: nil`, so every batch read and every scan that reaches for
@@ -883,11 +916,13 @@ defmodule VutuvWeb.PostLive.Feed do
                   <.filtered_placeholder pattern={entry.filtered_by} key={filter_key(entry)} />
                 <% Posts.remote_feed_entry?(entry) -> %>
                   <%!-- A post by an account the reader follows out there: the
-                  same remote skin the reply cards wear, no action bar
-                  (interactions are #1164-#1166), and its own report control. --%>
+                  same remote skin the reply cards wear, one federating heart
+                  (issue #1164; replies and boosts are #1165/#1166), and its own
+                  report control. --%>
                   <.remote_post_card
                     remote_post={entry.remote_post}
                     images={entry[:images] || []}
+                    liked?={entry[:liked?] == true}
                     viewer={@current_user}
                   />
                 <% true -> %>

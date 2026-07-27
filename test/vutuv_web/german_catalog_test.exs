@@ -60,15 +60,39 @@ defmodule VutuvWeb.GermanCatalogTest do
   defp translated?(block) do
     cond do
       Regex.match?(~r/^#,.*\bfuzzy\b/m, block) -> false
-      Regex.match?(~r/^msgstr\[\d\] "(?!")/m, block) -> plural_complete?(block)
-      true -> Regex.match?(~r/^msgstr "(?:[^"\\]|\\.)+"$/m, block)
+      Regex.match?(~r/^msgstr\[\d\] /m, block) -> plural_complete?(block)
+      true -> msgstr_value(block) != ""
     end
   end
 
+  # Every plural form carries a value, not just the first.
   defp plural_complete?(block) do
-    ~r/^msgstr\[\d\] "((?:[^"\\]|\\.)*)"$/m
-    |> Regex.scan(block)
-    |> Enum.all?(fn [_, value] -> value != "" end)
+    block
+    |> String.split(~r/^msgstr\[\d\] /m)
+    |> Enum.drop(1)
+    |> Enum.all?(&(folded_value(&1) != ""))
+  end
+
+  # A .po value longer than one line is **folded**: `msgstr ""` followed by the
+  # real text on quoted continuation lines. Reading only the `msgstr` line
+  # therefore called a perfectly translated long sentence untranslated, which is
+  # what this test did to the fediverse like refusal (issue #1164) although its
+  # German had been in the catalog from the start. So the value is the msgstr
+  # line plus every quoted line under it.
+  defp msgstr_value(block) do
+    case String.split(block, ~r/^msgstr /m, parts: 2) do
+      [_, tail] -> folded_value(tail)
+      _ -> ""
+    end
+  end
+
+  defp folded_value(tail), do: tail |> String.split("\n") |> Enum.map_join(&quoted_part/1)
+
+  defp quoted_part(line) do
+    case Regex.run(~r/^"((?:[^"\\]|\\.)*)"$/, String.trim(line)) do
+      [_, value] -> value
+      _ -> ""
+    end
   end
 
   defp used_strings do

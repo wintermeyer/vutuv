@@ -81,12 +81,17 @@ defmodule VutuvWeb.FediverseAccountLive do
   # move this: the copies exist because somebody here follows the author, and
   # `unfollow_remote/2` deletes them the moment nobody does.
   defp load_posts(socket) do
-    {posts, more?} = Fediverse.account_posts(socket.assigns.account, socket.assigns.current_user)
-    images = posts |> Enum.map(& &1.id) |> Fediverse.list_remote_images()
+    viewer = socket.assigns.current_user
+    {posts, more?} = Fediverse.account_posts(socket.assigns.account, viewer)
+    ids = Enum.map(posts, & &1.id)
 
     socket
     |> assign(:posts, posts)
-    |> assign(:images, images)
+    |> assign(:images, Fediverse.list_remote_images(ids))
+    # Which of them the reader already likes (issue #1164), read once for the
+    # page. Unlike the feed this page holds its posts in a plain assign, so a
+    # set beside them redraws every card on a toggle, which is what we want.
+    |> assign(:liked, Fediverse.liked_remote_post_ids(viewer, ids))
     |> assign(:more?, more?)
   end
 
@@ -169,6 +174,17 @@ defmodule VutuvWeb.FediverseAccountLive do
     end
   end
 
+  # The heart (issue #1164): the local marker plus a signed `Like` to this
+  # account's own inbox. Only the reader's own state changes — there is no
+  # count on the card, because the real one lives on their server.
+  def handle_event("like-remote-post", %{"id" => id}, socket) do
+    {:noreply, toggle_like(socket, id, &Fediverse.like_remote_post/2)}
+  end
+
+  def handle_event("unlike-remote-post", %{"id" => id}, socket) do
+    {:noreply, toggle_like(socket, id, &Fediverse.unlike_remote_post/2)}
+  end
+
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
     viewer = socket.assigns.current_user
     :ok = Fediverse.set_remote_follow_mute(viewer, account_id, true)
@@ -194,6 +210,25 @@ defmodule VutuvWeb.FediverseAccountLive do
 
   def handle_event("typing", %{"address" => address}, socket) do
     {:noreply, socket |> assign(:address, address) |> assign(:error, nil)}
+  end
+
+  # Both directions, one shape (below the last `handle_event/3` clause, so the
+  # group is not split). The like set is re-read rather than nudged, so what the
+  # page draws is what the database says — a second tab that liked the same post
+  # is then not contradicted by this one.
+  defp toggle_like(socket, remote_post_id, action) do
+    case Enum.find(socket.assigns.posts, &(&1.id == remote_post_id)) do
+      nil ->
+        socket
+
+      post ->
+        post = %{post | remote_account: socket.assigns.account}
+
+        case action.(socket.assigns.current_user, post) do
+          {:ok, _} -> load_posts(socket)
+          {:error, reason} -> put_flash(socket, :error, like_refusal_message(reason))
+        end
+    end
   end
 
   defp mute_message(true),
@@ -348,6 +383,7 @@ defmodule VutuvWeb.FediverseAccountLive do
               <.remote_post_card
                 remote_post={%{post | remote_account: @account}}
                 images={Map.get(@images, post.id, [])}
+                liked?={MapSet.member?(@liked, post.id)}
                 viewer={@current_user}
               />
             </div>

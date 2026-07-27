@@ -405,6 +405,61 @@ defmodule VutuvWeb.Fediverse.Docs do
     }
   end
 
+  @doc """
+  Like: a member here likes a post on another network.
+
+  Addressed to the **author alone**, never to the public collection or to the
+  member's own followers. A like is a message to the person who wrote the
+  thing, and telling a member's followers what they liked would publish a
+  reading habit nobody asked to publish. It also keeps a followers-only post's
+  like from travelling anywhere the post itself did not.
+  """
+  def like_activity(user, author_actor_uri, object_uri) do
+    user
+    |> like_object(object_uri)
+    |> Map.merge(%{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "to" => [author_actor_uri]
+    })
+  end
+
+  @doc """
+  Undo(Like): the member takes the like back. The wrapped `Like` repeats the id
+  the original carried, so the other server drops that exact activity instead of
+  guessing from actor and object.
+  """
+  def undo_like_activity(user, author_actor_uri, object_uri) do
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => like_activity_id(user, object_uri) <> "#undo",
+      "type" => "Undo",
+      "actor" => actor_url(user),
+      "object" => like_object(user, object_uri),
+      "to" => [author_actor_uri]
+    }
+  end
+
+  # The Like itself, built once for both halves the way `follow_object/3` is:
+  # the Undo has to wrap the very activity it withdraws, and two hand-written
+  # copies of one document are two chances for them to drift apart. Without the
+  # JSON-LD context and the addressing — those are the top-level document's job.
+  defp like_object(user, object_uri) do
+    %{
+      "id" => like_activity_id(user, object_uri),
+      "type" => "Like",
+      "actor" => actor_url(user),
+      "object" => object_uri
+    }
+  end
+
+  # Stable per (member, liked note), like `announce_id/3` and unlike the
+  # `Follow`'s: the `Undo` has to name the very activity it withdraws, and the
+  # id must survive a like → unlike → like, which a minted-per-row one would
+  # not. A `Like` is never echoed back at us (a `Follow`'s id returns inside an
+  # `Accept`), so there is nothing for a column to join on either.
+  defp like_activity_id(user, object_uri),
+    do: actor_url(user) <> "#likes/" <> Base.url_encode64(object_uri, padding: false)
+
   @doc "Accept(Follow): the answer that seals a remote follow."
   def accept_activity(user, follow_object) do
     id = actor_url(user) <> "#accepts/" <> Vutuv.UUIDv7.generate()
