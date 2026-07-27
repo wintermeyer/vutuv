@@ -295,6 +295,18 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
 
     <.admin_card
+      icon="chart"
+      title={gettext("Headline test")}
+      href={~p"/admin/experiments"}
+      id="admin-experiments-link"
+      cta={gettext("See which start page wins")}
+    >
+      {gettext(
+        "The start page shows one of two founder quotes at random. Views, sign-ups and confirmed members per variant, and whether the difference is real yet."
+      )}
+    </.admin_card>
+
+    <.admin_card
       :if={@fediverse_enabled}
       icon="globe"
       title={gettext("Fediverse")}

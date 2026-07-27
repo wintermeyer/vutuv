@@ -30,6 +30,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [images.md](images.md) | the AVIF pipeline, kept originals, fingerprinted filenames, URL screenshots, AI image moderation (Ollama) |
 | [admin.md](admin.md) | the admin panel: live dashboard, member browser, account deletion, newsletter & audiences, daily report |
 | [ads.md](ads.md) | the daily text ad: booking, review, serving |
+| [experiments.md](experiments.md) | split tests on public copy: the landing-page headline test, per-variant counters, how the winner is called |
 | [api.md](api.md) | `/api/2.0`: personal access tokens, OAuth 2, webhooks, developer docs |
 
 ## The stack

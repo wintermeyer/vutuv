@@ -6,6 +6,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.User
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
+  alias VutuvWeb.LandingExperiment
 
   def index(conn, params) do
     # An invitation link lands here with the invited person's data in the query:
@@ -39,7 +40,11 @@ defmodule VutuvWeb.PageController do
 
     # The member count is rendered by the embedded VutuvWeb.MemberCountLive (it
     # ticks up live), so the controller no longer fetches it here.
-    render(conn, "index.html",
+    # The headline is under a split test (VutuvWeb.LandingExperiment): the
+    # variant is drawn once per session and one view is counted with it.
+    conn
+    |> LandingExperiment.assign_variant()
+    |> render("index.html",
       changeset: changeset,
       prefetch: prefetch
     )
@@ -139,7 +144,12 @@ defmodule VutuvWeb.PageController do
         # If this address was invited with the auto-follow flag, the inviter now
         # follows the new member (a no-op otherwise). See Vutuv.Invitations.
         Vutuv.Invitations.apply_auto_follow(email, user)
-        handle_post_registration_login(conn, email)
+
+        # Credit the headline this visitor was shown. The variant stays in the
+        # session, so the PIN that follows can be credited too.
+        conn
+        |> LandingExperiment.record_signup()
+        |> handle_post_registration_login(email)
 
       {:error, changeset} ->
         if Vutuv.Accounts.email_already_taken?(changeset) do
@@ -149,7 +159,12 @@ defmodule VutuvWeb.PageController do
           # "has already been taken" error here would be an enumeration oracle.
           handle_existing_email_registration(conn, email)
         else
-          conn |> put_status(:unprocessable_entity) |> render("index.html", changeset: changeset)
+          # The same landing page again, so the same headline: assign the
+          # session's variant without counting a second view for it.
+          conn
+          |> LandingExperiment.assign_variant_without_view()
+          |> put_status(:unprocessable_entity)
+          |> render("index.html", changeset: changeset)
         end
     end
   end

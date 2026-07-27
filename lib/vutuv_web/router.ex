@@ -532,6 +532,11 @@ defmodule VutuvWeb.Router do
     # Vutuv.Reports.DailyReporter mails the previous day's copy each night.
     get("/reports", ReportController, :index)
 
+    # The landing-page headline split test (Vutuv.Experiments): views,
+    # sign-ups and confirmations per variant, plus how sure we are yet.
+    # Read-only — the winner ships as a deploy, not as a dashboard toggle.
+    get("/experiments", ExperimentController, :index)
+
     # The moderation queue + case page are LiveViews (in the live_session below)
     # so rulings act reload-free. These classic routes stay: /reporters (the
     # read-only misuse dashboard), the private evidence-screenshot stream, and the

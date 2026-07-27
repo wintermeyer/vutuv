@@ -1,0 +1,121 @@
+<.page_header
+  title={gettext("Landing page headline test")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    gettext("Headline test")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <h2 class="card__label">{gettext("What is being measured")}</h2>
+
+    <p>
+      {gettext(
+        "Every logged-out visitor to the start page is shown one of two founder quotes at random and keeps it for their session. Counted per variant: the visitors who saw it, the sign-up forms that created an account, and the PINs that turned such an account into a real member."
+      )}
+    </p>
+
+    <p
+      :if={!@enabled?}
+      id="experiment-disabled"
+      class="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-900/40 dark:text-brand-100"
+    >
+      {gettext(
+        "The test is switched off on this installation (LANDING_HEADLINE_EXPERIMENT), so every visitor sees the same headline and nothing new is counted. The figures below are whatever was collected while it ran."
+      )}
+    </p>
+  </section>
+
+  <section class="card">
+    <h2 class="card__label">{gettext("Result")}</h2>
+
+    <%!-- The two verdicts read first: the numbers below are the evidence, this
+          is the reading. Sign-ups are the headline metric Stefan asked for,
+          confirmations the harder one (a headline that pulls in people who
+          never confirm has won nothing). --%>
+    <p
+      id="signup-verdict"
+      class={[
+        "font-semibold",
+        verdict_decided?(@report.signup_verdict) && "text-brand-700 dark:text-brand-300"
+      ]}
+    >
+      {gettext("Sign-ups:")} {verdict_text(@report.signup_verdict, @min_signups)}
+    </p>
+
+    <p id="confirmation-verdict">
+      {gettext("Confirmed members:")} {verdict_text(@report.confirmation_verdict, @min_signups)}
+    </p>
+
+    <div class="card__tablewrap mt-4">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Variant")}</th>
+            <th>{gettext("Views")}</th>
+            <th>{gettext("Sign-ups")}</th>
+            <th>{gettext("Sign-up rate")}</th>
+            <th>{gettext("Confirmed")}</th>
+            <th>{gettext("Confirmation rate")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={total <- @report.totals} data-variant={total.variant}>
+            <td>
+              <strong>{variant_label(total.variant)}</strong>
+              <br />
+              <span class="text-sm text-slate-600 dark:text-slate-400">
+                {variant_quote(total.variant)}
+              </span>
+            </td>
+            <td class="font-mono">{delimited_count(total.views)}</td>
+            <td class="font-mono">{delimited_count(total.signups)}</td>
+            <td class="font-mono">{percent(total.signup_rate)}</td>
+            <td class="font-mono">{delimited_count(total.confirmations)}</td>
+            <td class="font-mono">{percent(total.confirmation_rate)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="editform__hint mt-3">
+      {gettext(
+        "Crawlers that ignore cookies count as views, which drags both rates down by roughly the same amount. That is why the verdict above is read from how the sign-ups split between the two variants, not from the rates themselves: a random 50/50 assignment makes an uneven split the signal, and no amount of bot traffic can tilt it."
+      )}
+    </p>
+  </section>
+
+  <section class="card">
+    <h2 class="card__label">{gettext("By day")}</h2>
+
+    <p :if={@report.days == []} class="card__empty">
+      {gettext("Nothing counted yet.")}
+    </p>
+
+    <div :if={@report.days != []} class="card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Day")}</th>
+            <th>{gettext("Variant")}</th>
+            <th>{gettext("Views")}</th>
+            <th>{gettext("Sign-ups")}</th>
+            <th>{gettext("Confirmed")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for day <- @report.days, {total, index} <- Enum.with_index(day.variants) do %>
+            <tr>
+              <td>{if index == 0, do: Date.to_iso8601(day.day)}</td>
+              <td>{variant_label(total.variant)}</td>
+              <td class="font-mono">{delimited_count(total.views)}</td>
+              <td class="font-mono">{delimited_count(total.signups)}</td>
+              <td class="font-mono">{delimited_count(total.confirmations)}</td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

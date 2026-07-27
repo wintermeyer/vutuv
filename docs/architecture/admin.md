@@ -30,7 +30,7 @@ it stays current without a reload.
 Below it the panel groups the sections by what you come to do — **Moderation &
 queues** (moderation, member browser, deliverability), **Communication**
 (newsletters, audiences), **Content & taxonomy** (tags, usernames) and **System
-& insights** (API apps, daily report, ads) — each tile with a one-line
+& insights** (API apps, daily report, headline test, ads) — each tile with a one-line
 description and, where it matters, a live count badge.
 
 Every actionable admin page is a **LiveView** whose actions apply with no
@@ -417,3 +417,11 @@ text) and the `/admin/reports` page all render, so the three surfaces stay in
 sync; a busier day than the cap ends each section with a "… und N weitere" note.
 
 Behind `config :vutuv, :daily_report_email` (off in tests, on by default).
+
+## Headline test (`/admin/experiments`)
+
+The read-only result of the landing-page split test: views, sign-ups and
+confirmed members per headline variant, both conversion rates, and a
+plain-language verdict that refuses to name a winner until there is enough to
+go on. Read-only on purpose — the winning copy ships as a deploy, not as a
+dashboard toggle. See [experiments.md](experiments.md).

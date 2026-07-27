@@ -7,6 +7,7 @@ defmodule VutuvWeb.SessionController do
   alias Vutuv.Credentials
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Home
+  alias VutuvWeb.LandingExperiment
   alias VutuvWeb.Plug.PendingFlash
   alias VutuvWeb.RateLimit
   alias VutuvWeb.UI
@@ -355,7 +356,9 @@ defmodule VutuvWeb.SessionController do
         # return_to.
         path = return_to || post_login_path(context, user)
 
-        Accounts.login(conn, user, factor)
+        conn
+        |> maybe_record_landing_confirmation(context)
+        |> Accounts.login(user, factor)
         |> Accounts.delete_pin_cookie()
         |> maybe_open_welcome(path)
         |> maybe_welcome_flash(path, context, user)
@@ -379,6 +382,17 @@ defmodule VutuvWeb.SessionController do
         |> redirect(to: ~p"/")
     end
   end
+
+  # The PIN that confirms a brand-new registration is the moment a sign-up
+  # becomes a real member, so it is what the landing-page headline test counts
+  # as its second, harder metric (VutuvWeb.LandingExperiment). Gated on the
+  # "registration" context, so an ordinary login by a member who happened to
+  # pass the landing page first is never counted.
+  defp maybe_record_landing_confirmation(conn, "registration") do
+    LandingExperiment.record_confirmation(conn)
+  end
+
+  defp maybe_record_landing_confirmation(conn, _context), do: conn
 
   # Where a successful login lands. Normally home (the feed, or the member's
   # own profile while they follow nobody — VutuvWeb.Home). The one exception is

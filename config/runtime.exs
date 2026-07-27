@@ -157,6 +157,14 @@ if config_env() == :prod do
     config :vutuv, :fediverse_enabled, false
   end
 
+  # The landing-page headline split test (Vutuv.Experiments).
+  # LANDING_HEADLINE_EXPERIMENT=false shows every visitor the default headline
+  # and counts nothing — for an installation that does not want its start page
+  # to vary, or that has replaced the copy anyway.
+  if System.get_env("LANDING_HEADLINE_EXPERIMENT") == "false" do
+    config :vutuv, :landing_headline_experiment, false
+  end
+
   # How much any single remote server (and any single remote account) may store
   # here per hour, as "host,actor" (issue #1067). The safety floor under the
   # operator's blocklist: it bounds servers nobody has thought to block yet.

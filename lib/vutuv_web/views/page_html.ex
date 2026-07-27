@@ -10,4 +10,20 @@ defmodule VutuvWeb.PageHTML do
   alias Vutuv.Accounts.Email
 
   embed_templates("../templates/page/*")
+
+  @doc """
+  The founder quote at the top of the logged-out landing page, in the variant
+  this visitor was assigned (`Vutuv.Experiments`).
+
+  Both are one short question plus an answer, so the hero's typography holds
+  either. An unknown key falls back to the default variant, which is what an
+  installation with the split test switched off always renders.
+  """
+  def founder_quote("knapp") do
+    gettext("“LinkedIn is annoying. vutuv is not.”")
+  end
+
+  def founder_quote(_stube) do
+    gettext("“Tired of LinkedIn? Then come on in and make yourself at home.”")
+  end
 end

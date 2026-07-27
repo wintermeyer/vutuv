@@ -1,6 +1,8 @@
-<.auth_layout title={gettext("“Tired of LinkedIn, and want your data to stay in Germany? I can help.”")}>
+<.auth_layout title={founder_quote(@landing_variant)}>
   <:headline>
-    <% founder_quote = gettext("“Tired of LinkedIn, and want your data to stay in Germany? I can help.”") %>
+    <%!-- Two headlines are under test (VutuvWeb.LandingExperiment); this
+          visitor keeps the one their session was assigned. --%>
+    <% founder_quote = founder_quote(@landing_variant) %>
     <% founder_name = "Stefan Wintermeyer" %>
     <% founder_role = gettext("Founder of vutuv") %>
     <%!-- Founder hero: the whole quote in one heading at a single size, then a
