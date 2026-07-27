@@ -141,7 +141,30 @@ test suite, and the naive loop ingests its full output once per iteration:
     The merge lands on `main` and that push is what starts
     `.github/workflows/deploy.yml`.
 
-12. **Report** — one short summary: PR link, new version, hot vs cold, CI green,
+12. **Delete the local branch by force, then prune** — `--delete-branch` reliably
+    removes the *remote* branch but routinely leaves the local one behind, so
+    without this step every deploy leaks a branch (16 had piled up by
+    2026-07-26). The cause is the **squash** merge: it replays your work as one
+    new commit, so your branch tip never becomes an ancestor of `main` and git's
+    safe delete refuses it with *"the branch is not fully merged"*. Force is
+    correct here and not a risk — the PR is merged, so the content is on `main`.
+
+    ```bash
+    git checkout main && git pull --ff-only
+    git branch -D <branch>
+    git fetch --prune origin
+    ```
+
+    Run it from the checkout that owns the branch. In a **worktree** session the
+    branch is checked out there, and git refuses to delete a branch checked out
+    anywhere — so tear the worktree down instead (`ExitWorktree`, or
+    `git worktree remove <path>`), which drops the branch with it.
+
+13. **Verify nothing leaked** — `git branch -vv` must show no branch marked
+    `[origin/<name>: gone]`. A `gone` marker is the signature of this leak: the
+    remote branch was deleted, the local one survived.
+
+14. **Report** — one short summary: PR link, new version, hot vs cold, CI green,
     merged, and (if step 3 ran) a one-line note that precommit failures were
     fixed. Optionally confirm the deploy started
     (`gh run list --workflow=deploy.yml --limit 1`). Do not paste command output.

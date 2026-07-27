@@ -84,6 +84,27 @@ requirement, needed product decision, or a migration that isn't N-1 compatible
 (CLAUDE.md). A merge to `main` = auto-deploy to production, so never merge with a
 red precommit.
 
+## Branch cleanup (after every merge — not optional)
+`--squash --delete-branch` reliably deletes the **remote** branch but routinely
+leaves the **local** one behind, so a session that merges several issues leaks a
+branch per issue (16 had piled up by 2026-07-26). The squash is the cause: it
+replays the work as one new commit, so the branch tip never becomes an ancestor
+of `main` and git's safe delete refuses it with *"the branch is not fully
+merged"*. Force is right here — the PR is merged, the content is on `main`:
+
+```bash
+git checkout main && git pull --ff-only
+git branch -D <branch>
+git fetch --prune origin
+```
+
+Since the fix flow dispatches each agent with `isolation: "worktree"`, the branch
+is checked out in that worktree and git refuses to delete a branch checked out
+anywhere — so **tear the worktree down** (`ExitWorktree`, or `git worktree remove
+<path>`) and the branch goes with it. Before reporting, `git branch -vv` must show
+no branch marked `[origin/<name>: gone]`; that marker is the signature of this
+leak.
+
 ---
 
 ## Dispatch
@@ -158,8 +179,10 @@ scope first (ask the author / plan mode) before code appears. Name dependencies
    precommit` green, bump `mix.exs`, push the branch, open the PR (body +
    authorship footer). Report back: PR number, precommit result, short summary.
 4. **precommit green?** Yes → `gh pr merge <nr> --squash --delete-branch`, then
-   **release** the lock; show me the PR link + one sentence. No/conflict/unclear
-   → do NOT merge, hold the lock, put the problem to me and ask.
+   clean up locally (see **Branch cleanup** below — `--delete-branch` leaves the
+   local branch behind after a squash merge), then **release** the lock; show me
+   the PR link + one sentence. No/conflict/unclear → do NOT merge, hold the lock,
+   put the problem to me and ask.
 5. **The merge auto-closes the issue, so the note is on you.** Draft the shipped
    note per CLAUDE.md's issue-close rule, case (a) — what now works, the version,
    and why I built it this way. Show me the draft, get my OK, then
@@ -196,8 +219,9 @@ just saying so mid-flow. **Do not treat this as an emergency kill.** The rule:
    the next issue.
 2. **Let in-flight FIX AGENTS finish.** Any sub-agent already running keeps going;
    when it reports, apply the normal merge policy (green → `--squash
-   --delete-branch`, then **release** that issue's lock; red/conflict/unclear →
-   hold the lock and tell me). Keep watching CI for a PR that is mid-merge.
+   --delete-branch` + the **Branch cleanup** below, then **release** that issue's
+   lock; red/conflict/unclear → hold the lock and tell me). Keep watching CI for a
+   PR that is mid-merge.
 3. **Queued-but-not-started items** (claimed + assigned, but no agent dispatched
    yet): these count as "not started". List them and **ask me once** whether to
    keep them claimed for a later `/issues` run or release them now (release =
