@@ -770,3 +770,65 @@ inbox that no longer answers.
 The profile feed of a member's *own* linked Mastodon/Bluesky accounts
 (`Vutuv.SocialFeed`) remains a separate, unrelated thing: it shows the member's
 own posts, on their own profile, at their own request.
+
+### Their posts in the feed (issue #1161)
+
+`fediverse_posts` is one row per remote post — **not** one per follower, since
+several members can follow the same account and it is the same post — hanging
+off the account. A `Create(Note)` from an actor with at least one **accepted**
+local follow is reduced to plain text and stored by `perform_once/2` in the
+inbox controller, which runs once per delivery rather than once per addressed
+member.
+
+What is refused is as much of the design as what is stored. A reply into
+somebody else's conversation is dropped at the door (`own_thread?/2`): a
+followed account's own thread is what a follower subscribed to, while their
+reply under a stranger's post drags a third party's conversation into our
+storage for the sake of one half of it. An audience narrower than public /
+unlisted / followers is dropped too — a reply had to be kept in order to reach
+the member it was addressed to, a post nobody here was published to has no such
+claim. A `published` stamp in the future is clamped, so a server cannot pin
+itself to the top of a feed forever.
+
+Retention is the same "bounded copy" argument the replies make, minus the
+freshness re-fetch: a followed account's stream is pushed to us continuously, so
+an edit or a withdrawal arrives on its own, and re-asking about every cached post
+of every account our members read would be far heavier than the per-reply check.
+So: `FEDIVERSE_POST_RETENTION_DAYS` (183) as the ceiling, an upstream
+`Update`/`Delete` honoured at once, purged when the last follow of the author
+ends, gone with the accounts on an instance block.
+
+The feed reads it as a **fourth source** in `Vutuv.Posts.feed_page/2`, merged on
+publication time. `decorate_feed_entries/2` splits the remote entries off before
+the local pipeline (they are not `%Post{}`, have no thread, no reposters and no
+engagement) and merges them back on `at`. A muted follow leaves the feed and
+keeps the subscription; a followers-only post reaches only a member whose own
+follow is accepted.
+
+One thing worth remembering about the report path: there is **one** cached row
+per post, shared by everybody following its author, so one member's report
+deletes it out of all of their feeds. That is why the card leads with Mute — the
+private, reversible lever — and why the confirmation says so.
+
+### The account page (issue #1162)
+
+`/system/fediverse/account/:id` (`VutuvWeb.FediverseAccountLive`) is where every
+remote handle now points: reaction chips, remote reply cards and remote feed
+cards link inward when we know the account and straight out when we do not.
+Signed-in only and `noindex` (the `:noindex_pipe` pipeline), keyed by the **row
+id** so the page is no open-ended fetch surface, and it fetches nothing on view.
+
+Which means account rows have to exist for more than just followed accounts:
+`remember_remote_account/1` keeps the actor document the inbox already fetched
+and verified whenever a reply or a reaction from that actor is stored. That
+would otherwise grow into a directory of everybody who ever touched the
+installation, so `purge_unreferenced_remote_accounts/0` (hourly, in the sweeper)
+drops every account with no follow, no cached post, no stored reply and no
+stored reaction.
+
+The page is a **follow surface plus a preview**, not a mirror profile: identity,
+self-description (clamped), follow / requested / mute state, the cached posts
+capped at 30, and "View their full profile on <host>" in every state. It is also
+the only place a **muted** account can still be reached, which is why unmute
+lives here — muting from the feed removes that account's posts, and with them
+the menu that muted it.

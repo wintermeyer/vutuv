@@ -833,7 +833,13 @@ defmodule VutuvWeb.PostComponents do
         <.remote_avatar initials={@initials} />
 
         <div class="min-w-0 flex-1">
-          <.remote_header author={@author} handle={@handle} actor_uri={@note.actor_uri} at={@note.received_at}>
+          <.remote_header
+            author={@author}
+            handle={@handle}
+            actor_uri={@note.actor_uri}
+            at={@note.received_at}
+            account_id={@note.account_id}
+          >
             <:menu>
               <%!-- The takedown controls. Report is open to anyone who can see the
               reply (which for a private one is its addressee alone) and deletes it
@@ -908,13 +914,30 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:initials, :string, required: true)
 
-  defp remote_avatar(assigns) do
+  attr(:size, :string,
+    default: "sm",
+    values: ~w(sm lg),
+    doc: "`lg` for the account page's header, where the tile is the page's subject"
+  )
+
+  @doc """
+  The slate initials tile with its globe badge — "this did not come from
+  vutuv", in one definition. Public so the account page
+  (`VutuvWeb.FediverseAccountLive`) wears the same skin as the cards: that page
+  is where a reader decides about a stranger, so it is the last place the badge
+  should be missing.
+  """
+  def remote_avatar(assigns) do
     ~H"""
     <span class="relative shrink-0">
       <span
         data-remote-avatar
         aria-hidden="true"
-        class="inline-flex h-9 w-9 select-none items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+        class={[
+          "inline-flex select-none items-center justify-center rounded-full bg-slate-200 font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+          @size == "lg" && "h-14 w-14 text-base",
+          @size == "sm" && "h-9 w-9 text-xs"
+        ]}
       >
         {@initials}
       </span>
@@ -939,6 +962,11 @@ defmodule VutuvWeb.PostComponents do
     doc: "the server, shown as a chip when the card's position does not say where it came from"
   )
 
+  attr(:account_id, :any,
+    default: nil,
+    doc: "the stored account row, when we know it: the handle then links to its page here"
+  )
+
   slot(:menu)
 
   # `break-words` on the author and the handle is not cosmetic: both come
@@ -953,12 +981,11 @@ defmodule VutuvWeb.PostComponents do
       <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
         <span class="break-words font-semibold text-slate-900 dark:text-white">{@author}</span>
         <span class="min-w-0 text-xs text-slate-600 dark:text-slate-400">
-          <a
-            href={@actor_uri}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
+          <.link
+            {remote_actor_destination(@account_id, @actor_uri)}
+            data-remote-account={@account_id}
             class="break-all hover:text-brand-700 dark:hover:text-brand-300 sm:break-normal"
-          >{@handle}</a>
+          >{@handle}</.link>
           · <.post_time at={@at} />
         </span>
         <%!-- Where this came from, up here where the eye lands, not only in the
@@ -979,6 +1006,24 @@ defmodule VutuvWeb.PostComponents do
     </div>
     """
   end
+
+  # Where a remote handle leads, as the attributes to splat onto a `<.link>`.
+  #
+  # Inward when we know the account (issue #1162): the handle is the thing a
+  # reader taps to ask "who is this", and the answer to that is a page here
+  # where they can see what the account posts and follow it — not a trip off
+  # the site to somebody else's server. The link out is still one click away,
+  # in the footer. Straight out when we do not know them, since there would be
+  # nothing to show.
+  #
+  # One definition, because the header of every remote card and the reaction
+  # chips ask the same question, and a chip that answered it differently from
+  # the card above it would be the same handle leading two places.
+  defp remote_actor_destination(nil, actor_uri),
+    do: [href: actor_uri, target: "_blank", rel: "nofollow noopener noreferrer"]
+
+  defp remote_actor_destination(account_id, _actor_uri),
+    do: [navigate: ~p"/system/fediverse/account/#{account_id}"]
 
   # The lock line. The same glyph a restricted vutuv post wears, so "not
   # everybody sees this" reads the same way across the app; the sentence is the
@@ -1110,6 +1155,7 @@ defmodule VutuvWeb.PostComponents do
             actor_uri={@account.actor_uri}
             at={@remote_post.published_at}
             network={@account.host}
+            account_id={@account.id}
           >
             <:menu>
               <.card_menu :if={@viewer} id={"remote-post-menu-#{@remote_post.id}"}>
@@ -3350,14 +3396,18 @@ defmodule VutuvWeb.PostComponents do
         </p>
 
         <p :if={@shown != []} class="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <a
+          <%!-- A chip is somebody the reader may well want to know more about —
+                that is the whole point of naming them — so it goes wherever the
+                handle on a remote card goes (`remote_actor_destination/2`): to
+                their page here when we know them, out to their own server when
+                we do not. Only the destination differs; the chip is one. --%>
+          <.link
             :for={actor <- @shown}
-            href={actor.uri}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
+            {remote_actor_destination(actor.account_id, actor.uri)}
             data-fediverse-reaction={actor.kind}
+            data-remote-account={actor.account_id}
             title={reaction_title(actor)}
-            class="inline-flex min-h-8 max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-brand-300"
+            class="inline-flex min-h-10 max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-brand-300"
           >
             <%!-- The same two glyphs the vutuv action bar above uses for the
                   same two acts, so "shared" and "favourited" read identically
@@ -3370,7 +3420,7 @@ defmodule VutuvWeb.PostComponents do
             />
             <span class="sr-only">{reaction_title(actor)}</span>
             <span aria-hidden="true" class="break-all">{actor.handle}</span>
-          </a>
+          </.link>
 
           <span :if={@more > 0} data-fediverse-reactions-more={@more}>
             {gettext("+%{count} more", count: compact_count(@more))}
@@ -3402,7 +3452,10 @@ defmodule VutuvWeb.PostComponents do
     %{
       uri: uri,
       kind: row["kind"],
-      handle: Handle.display(row["handle"], uri)
+      handle: Handle.display(row["handle"], uri),
+      # Whether we already know this account (issue #1162), read alongside the
+      # reaction in the engagement query rather than looked up per chip.
+      account_id: row["account_id"]
     }
   end
 

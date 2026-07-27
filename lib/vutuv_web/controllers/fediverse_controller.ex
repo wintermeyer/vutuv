@@ -266,8 +266,9 @@ defmodule VutuvWeb.FediverseController do
   # conditions it failed.
   defp perform(user, %{"type" => type, "object" => object}, remote)
        when type in ["Like", "Announce"] do
-    Fediverse.record_reaction(user, object, reaction_kind(type), reacting_actor(remote))
-    :ok
+    user
+    |> Fediverse.record_reaction(object, reaction_kind(type), reacting_actor(remote))
+    |> remember_actor_if_stored(remote)
   end
 
   # The remote side took its reaction back. Honoured at once: an upstream
@@ -284,8 +285,9 @@ defmodule VutuvWeb.FediverseController do
   # whatever it decides, so a misdirected activity never learns which gate it
   # failed.
   defp perform(user, %{"type" => "Create"} = activity, remote) do
-    Fediverse.record_reply(user, activity, remote_author(remote))
-    :ok
+    user
+    |> Fediverse.record_reply(activity, remote_author(remote))
+    |> remember_actor_if_stored(remote)
   end
 
   # A remote actor that renamed or moved its inbox broadcasts an `Update` of
@@ -372,6 +374,17 @@ defmodule VutuvWeb.FediverseController do
   end
 
   defp perform_once(_activity, _remote), do: :ok
+
+  # Takes the outcome of `record_reaction/4` / `record_reply/3` and remembers
+  # the actor only when something was really stored (`Fediverse.remember_remote_account/1`):
+  # a stranger's activity that every gate refused must not be able to plant an
+  # account row.
+  defp remember_actor_if_stored(:ok, remote) do
+    Fediverse.remember_remote_account(remote)
+    :ok
+  end
+
+  defp remember_actor_if_stored(_skipped, _remote), do: :ok
 
   defp reaction_kind("Like"), do: "like"
   defp reaction_kind("Announce"), do: "announce"

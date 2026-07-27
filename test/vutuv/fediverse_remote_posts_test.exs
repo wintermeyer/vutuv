@@ -471,6 +471,62 @@ defmodule Vutuv.FediverseRemotePostsTest do
     end
   end
 
+  describe "remembering an account (issue #1162)" do
+    # The fetched actor document the inbox has in hand once a delivery is
+    # verified — the same shape `fetch_remote_actor/2` returns.
+    defp actor_doc(uri \\ @actor) do
+      %{
+        id: uri,
+        inbox: uri <> "/inbox",
+        shared_inbox: nil,
+        preferred_username: "them",
+        name: "Them",
+        summary: "<p>Schreibt über <b>Züge</b>.</p>",
+        public_key_id: nil,
+        public_key_pem: "PEM",
+        also_known_as: []
+      }
+    end
+
+    test "keeps what the inbox already read, as plain text" do
+      assert :ok = Fediverse.remember_remote_account(actor_doc())
+
+      account = Repo.get_by!(RemoteAccount, actor_uri: @actor)
+      assert account.host == "social.example"
+      assert account.handle == "them"
+      assert account.summary == "Schreibt über Züge."
+      refute account.summary =~ "<b>"
+    end
+
+    test "a second delivery re-syncs the one row" do
+      assert :ok = Fediverse.remember_remote_account(actor_doc())
+      assert :ok = Fediverse.remember_remote_account(%{actor_doc() | name: "Renamed"})
+
+      assert Repo.aggregate(RemoteAccount, :count) == 1
+      assert Repo.get_by!(RemoteAccount, actor_uri: @actor).name == "Renamed"
+    end
+
+    test "an account nothing refers to any more is forgotten" do
+      :ok = Fediverse.remember_remote_account(actor_doc())
+      assert Repo.aggregate(RemoteAccount, :count) == 1
+
+      # Nothing follows it, it wrote nothing here, nobody's post carries a reply
+      # or a reaction from it: "we remember who reacted to your post" must not
+      # become a directory of everybody who ever touched this installation.
+      assert Fediverse.purge_unreferenced_remote_accounts() == 1
+      assert Repo.aggregate(RemoteAccount, :count) == 0
+    end
+
+    test "an account somebody follows, or whose words we hold, is kept" do
+      :ok = Fediverse.remember_remote_account(actor_doc())
+      acc = Repo.get_by!(RemoteAccount, actor_uri: @actor)
+      follow(member(), acc)
+
+      assert Fediverse.purge_unreferenced_remote_accounts() == 0
+      assert Repo.aggregate(RemoteAccount, :count) == 1
+    end
+  end
+
   describe "who an activity concerns" do
     test "a Create from a followed account names the members who follow it" do
       user = member()

@@ -640,15 +640,8 @@ defmodule Vutuv.Fediverse do
   """
   def follow_remote(%User{} = user, address) do
     with :ok <- check_can_follow(user),
-         {:ok, {_name, host}} <- RemoteFollow.parse_address(address),
-         :ok <- check_follow_host(host),
-         :ok <- claim_remote_follow_budget(user),
          :ok <- check_follow_limit(user),
-         {:ok, actor_uri} <- RemoteFollow.resolve_actor(address),
-         :ok <- check_follow_host(actor_uri),
-         {:ok, remote} <- fetch_follow_target(actor_uri, user),
-         :ok <- check_follow_host(remote.id),
-         {:ok, account} <- upsert_remote_account(remote),
+         {:ok, account} <- resolve_remote_account(user, address),
          {:ok, follow} <- insert_remote_follow(user, account) do
       enqueue(
         user,
@@ -659,6 +652,63 @@ defmodule Vutuv.Fediverse do
       {:ok, %{follow | remote_account: account}}
     end
   end
+
+  @doc """
+  Looks an address up and remembers the account behind it, **without** following
+  it (issue #1162): the half of `follow_remote/2` that answers "who is this",
+  which is the question somebody has before they decide.
+
+  Deliberately does **not** require the member to federate. Following needs their
+  own actor key to sign the request; looking somebody up does not, and requiring
+  it would be a chicken-and-egg — the account page is where a member who has not
+  switched participation on finds out what they would be switching it on for.
+  The fetch is then signed anonymously, which a few authorized-fetch servers
+  refuse; that is a worse answer for those accounts, not a wrong one.
+
+  Every other gate still holds, in the same order and for the same reasons: the
+  installation switch, the operator blocklist on each of the three hosts a
+  lookup passes through, an address on this installation, and the hourly budget
+  — this is a member-triggered outbound request either way.
+
+  Returns `{:ok, account}` or the same `{:error, reason}` vocabulary
+  `follow_remote/2` speaks.
+  """
+  def resolve_remote_account(%User{} = user, address) do
+    with :ok <- check_can_resolve(),
+         {:ok, {_name, host}} <- RemoteFollow.parse_address(address),
+         :ok <- check_follow_host(host),
+         :ok <- claim_remote_follow_budget(user),
+         {:ok, actor_uri} <- RemoteFollow.resolve_actor(address),
+         :ok <- check_follow_host(actor_uri),
+         {:ok, remote} <- fetch_follow_target(actor_uri, user),
+         :ok <- check_follow_host(remote.id) do
+      upsert_remote_account(remote)
+    end
+  end
+
+  @doc """
+  Remembers an account we have just stored something from — a reply under a
+  member's post, or a reaction to one (issue #1162).
+
+  It costs no request: the inbox has already fetched and verified that actor
+  document in order to check the signature, so this is only a matter of keeping
+  what it read. What it buys is that every remote handle vutuv shows has an
+  internal destination, instead of a bare link out of the site to somebody the
+  reader cannot decide about.
+
+  Called only after something from that actor was really stored, so a stranger's
+  activity cannot plant account rows; and the rows go again by themselves once
+  nothing references them (`purge_unreferenced_remote_accounts/0`).
+  """
+  def remember_remote_account(%{id: actor_uri} = remote) when is_binary(actor_uri) do
+    if enabled?(), do: upsert_remote_account(remote)
+    :ok
+  end
+
+  def remember_remote_account(_remote), do: :ok
+
+  @doc "One stored remote account by row id, or nil."
+  def get_remote_account(id), do: UUIDv7.with_cast(id, &Repo.get(RemoteAccount, &1))
 
   @doc """
   The member takes the follow back: a best-effort `Undo(Follow)` to the other
@@ -707,6 +757,42 @@ defmodule Vutuv.Fediverse do
     end)
 
     :ok
+  end
+
+  @doc """
+  *Why* this member cannot follow anybody out there, when they cannot: `nil`
+  when they can, else `:opted_out`, `:restricted` or `:disabled`.
+
+  `federated?/1` is one boolean over four very different situations, and the
+  difference decides which sentence is true and which link helps. Telling a
+  member the moderation freezer is holding to go and flip a switch they already
+  flipped, and pointing them at a page that shows it on, is exactly the wrong
+  answer in the one place clarity matters most.
+
+  Shared by every page that offers a follow (`/settings/fediverse/following`
+  and the account page), so the four situations cannot be told apart on one and
+  collapsed on the other.
+  """
+  def follow_refusal(%User{} = user) do
+    cond do
+      not enabled?() -> :disabled
+      Vutuv.Moderation.account_hidden?(user) -> :restricted
+      not user.fediverse_followers? or not user.email_confirmed? -> :opted_out
+      # A member who redirected their Fediverse followers elsewhere: this
+      # account no longer acts out there at all, so a live Follow button would
+      # be a promise `check_can_follow/1` then refuses. Listed last because it
+      # is the only one of the four that a *federating* member can be in.
+      moved?(user) -> :moved
+      true -> nil
+    end
+  end
+
+  @doc """
+  The member's follow of one remote account, or nil — what the account page's
+  button branches on.
+  """
+  def remote_follow_for(%User{id: user_id}, %RemoteAccount{id: account_id}) do
+    Repo.get_by(Follow, user_id: user_id, remote_account_id: account_id)
   end
 
   @doc """
@@ -899,13 +985,21 @@ defmodule Vutuv.Fediverse do
 
   # ── The gates, cheapest first ──────────────────────────────────────────────
 
+  # Following is looking somebody up plus an identity of one's own, so it is
+  # written that way: the installation switch is asserted once, where a lookup
+  # asserts it, instead of restated here where the two could drift apart.
   defp check_can_follow(%User{} = user) do
-    cond do
-      not enabled?() -> {:error, :fediverse_disabled}
-      not federated?(user) -> {:error, :not_federating}
-      moved?(user) -> {:error, :moved}
-      true -> :ok
+    with :ok <- check_can_resolve() do
+      cond do
+        not federated?(user) -> {:error, :not_federating}
+        moved?(user) -> {:error, :moved}
+        true -> :ok
+      end
     end
+  end
+
+  defp check_can_resolve do
+    if enabled?(), do: :ok, else: {:error, :fediverse_disabled}
   end
 
   # A block is both ears and mouth shut, and this is the mouth. Checked three
@@ -1394,6 +1488,84 @@ defmodule Vutuv.Fediverse do
 
   @doc "How many cached posts are stored across the installation."
   def remote_post_total, do: Repo.aggregate(RemotePost, :count)
+
+  # How many of an account's cached posts the account page shows. It is a
+  # preview — "what do they actually post", the thing that decides a follow —
+  # not an archive of somebody else's writing, and the page says so when there
+  # is more.
+  @account_page_posts 30
+
+  @doc """
+  The cached posts of one account for `viewer`, newest first, as
+  `{posts, more?}` (issue #1162).
+
+  Audience-scoped exactly like the feed: public and unlisted for anybody signed
+  in, followers-only solely for a viewer whose own follow is **accepted**. So the
+  page can be opened by any member without becoming a way to read what an author
+  addressed to their followers.
+
+  The cap and the "there is more" flag are both answered here — one row past the
+  cap is fetched and dropped — so no caller has to know the number or repeat the
+  +1 trick to rediscover a fact this query already had.
+  """
+  def account_posts(%RemoteAccount{id: account_id}, %User{id: viewer_id}) do
+    accepted =
+      from(f in Follow,
+        where:
+          f.remote_account_id == ^account_id and f.user_id == ^viewer_id and
+            f.state == "accepted"
+      )
+
+    from(p in RemotePost,
+      where: p.remote_account_id == ^account_id,
+      # The feed's vocabulary, not a negated literal: `open_audiences/0` is the
+      # one list the query and the card (`RemotePost.open?/1`) both read, so a
+      # fourth audience value cannot open here and close there.
+      where: p.audience in ^RemotePost.open_audiences() or exists(accepted),
+      order_by: [desc: p.published_at, desc: p.id],
+      limit: ^(@account_page_posts + 1)
+    )
+    |> Repo.all()
+    |> Enum.split(@account_page_posts)
+    |> then(fn {posts, rest} -> {posts, rest != []} end)
+  end
+
+  @doc """
+  Drops every stored remote account nothing refers to any more (issue #1162).
+
+  An account row is minted for three reasons — somebody followed it, it replied
+  under a member's post, or it reacted to one — and it is kept only while one of
+  those still holds. The follows and the cached posts are foreign keys; the
+  replies and reactions name the actor by URI, so those are matched on the URI.
+
+  This is what keeps "we remember who reacted to your post" from quietly
+  becoming "we keep a directory of everybody who ever touched this
+  installation".
+  """
+  def purge_unreferenced_remote_accounts do
+    {count, _} =
+      Repo.delete_all(
+        from(a in RemoteAccount,
+          as: :account,
+          # All four written the same way, as `NOT EXISTS`: an `a.id not in
+          # subquery(...)` form makes the planner hash every row of the other
+          # table first (a whole scan of the installation-wide post cache on
+          # every sweep), while a correlated anti-join can use that table's own
+          # index per candidate row.
+          where:
+            not exists(from(f in Follow, where: f.remote_account_id == parent_as(:account).id)),
+          where:
+            not exists(
+              from(p in RemotePost, where: p.remote_account_id == parent_as(:account).id)
+            ),
+          where: not exists(from(n in Note, where: n.actor_uri == parent_as(:account).actor_uri)),
+          where:
+            not exists(from(r in Reaction, where: r.actor_uri == parent_as(:account).actor_uri))
+        )
+      )
+
+    count
+  end
 
   @doc """
   What each remote server has stored here as cached posts, biggest first — the
@@ -2358,7 +2530,7 @@ defmodule Vutuv.Fediverse do
   read the pages use, so the visibility rule cannot be forgotten at a call site.
   """
   def list_notes(post_ids, viewer) do
-    from(n in Note,
+    from(n in notes_with_account(),
       join: p in Post,
       on: p.id == n.post_id,
       where: n.post_id in ^post_ids,
@@ -2367,6 +2539,24 @@ defmodule Vutuv.Fediverse do
     )
     |> Repo.all()
     |> Enum.group_by(& &1.post_id)
+  end
+
+  # Notes carrying `account_id`: whether we hold a row for the actor who wrote
+  # one, which is what decides whether the card's handle links to their page
+  # here or out to their own server (issue #1162). A LEFT join by URI rather
+  # than a foreign key, because a note may well be older than the account row
+  # and the row goes again by itself once nothing refers to it.
+  #
+  # **Every** loader of a note reads through this. The same card is rendered
+  # from a list on the permalink and from a single row on the reply page, and a
+  # handle that led two different places depending on which loader fetched it
+  # would be nobody's decision and nothing's test.
+  defp notes_with_account do
+    from(n in Note,
+      left_join: a in RemoteAccount,
+      on: a.actor_uri == n.actor_uri,
+      select: %{n | account_id: a.id}
+    )
   end
 
   @doc """
@@ -2384,7 +2574,11 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc "One stored reply, or nil."
-  def get_note(id), do: UUIDv7.with_cast(id, &Repo.get(Note, &1))
+  def get_note(id) do
+    UUIDv7.with_cast(id, fn uuid ->
+      Repo.one(from(n in notes_with_account(), where: n.id == ^uuid))
+    end)
+  end
 
   @doc """
   The member takes a reply off their own post. Deletes it at once and records

@@ -11,6 +11,10 @@ defmodule VutuvWeb.Plug.NoIndex do
   `ListDocs`). The public profile page itself is not routed through this
   plug and carries only the member's own opt-outs.
 
+  Also by `:settings_pipe`, and by `:noindex_pipe` — the bare form, for the
+  signed-in `/system/fediverse/*` pages, which are assembled from what other
+  people wrote on other servers and are not ours to publish.
+
   robots.txt only *asks* crawlers not to fetch a URL; a disallowed URL can
   still be indexed (as a bare link) if referenced elsewhere. This header
   closes that gap by telling compliant crawlers not to index the page even

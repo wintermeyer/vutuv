@@ -55,7 +55,7 @@ defmodule Vutuv.Fediverse.NoteSweeper do
     {:noreply, state}
   end
 
-  # Three deletions, all of them "the reason for this copy is gone":
+  # Four deletions, all of them "the reason for this copy is gone":
   #
   #   * replies past their ceiling (issue #1069),
   #   * cached posts from followed accounts past theirs (issue #1161),
@@ -63,10 +63,13 @@ defmodule Vutuv.Fediverse.NoteSweeper do
   #     paths purge those immediately; this is what catches the follows that
   #     vanished through a cascade — a deleted member account, a purged
   #     instance — without anybody calling the purge.
+  #   * stored accounts nothing refers to any more (issue #1162). Last, so it
+  #     sees the rows the three above just freed.
   defp sweep do
     log("expired remote reply", Fediverse.expire_due_notes())
     log("expired cached post", Fediverse.expire_due_remote_posts())
     log("cached post of an unfollowed account", Fediverse.purge_unfollowed_remote_posts())
+    log("remote account nothing refers to", Fediverse.purge_unreferenced_remote_accounts())
   end
 
   defp log(_what, 0), do: :ok

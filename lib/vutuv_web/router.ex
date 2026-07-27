@@ -35,6 +35,14 @@ defmodule VutuvWeb.Router do
     plug(Plugs.AdBanner)
   end
 
+  # Pages that are routable but must not be indexed, without the rest of a
+  # scope's machinery. The header is what does the work; robots.txt only asks a
+  # crawler not to fetch, which does not stop a referenced URL being indexed as
+  # a bare link.
+  pipeline :noindex_pipe do
+    plug(Plugs.NoIndex)
+  end
+
   pipeline :user_pipe do
     # Keep the per-user detail pages (phone numbers, emails, addresses, …) out
     # of search indexes. Runs first so the header is present even when a later
@@ -446,10 +454,18 @@ defmodule VutuvWeb.Router do
       live("/posts/:id/edit", PostLive.Edit, :edit)
       live("/posts/:id/reply", PostLive.Reply, :new)
 
-      # Answering a reply that came from another network (issue #1070). Under
-      # /system/ rather than a new root word, which profiles own; "system" is
-      # already reserved, so this burns no handle.
-      live("/system/fediverse/reply/:id", PostLive.RemoteReply, :new)
+      # The two signed-in Fediverse pages that are not settings: answering a
+      # reply from another network (issue #1070) and the page for one remote
+      # account (issue #1162). Under /system/ rather than a new root word, which
+      # profiles own; "system" is already reserved, so this burns no handle.
+      # `:noindex_pipe` because both are assembled from things other people
+      # wrote on other servers.
+      scope "/system/fediverse" do
+        pipe_through(:noindex_pipe)
+
+        live("/reply/:id", PostLive.RemoteReply, :new)
+        live("/account/:id", FediverseAccountLive, :show)
+      end
 
       # The private likes / bookmarks lists (reserved slugs too).
       live("/likes", PostLive.Saved, :likes)

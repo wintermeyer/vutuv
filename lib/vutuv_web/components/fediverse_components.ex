@@ -1,0 +1,304 @@
+defmodule VutuvWeb.FediverseComponents do
+  @moduledoc """
+  What the two pages that offer a follow out there have in common: the
+  address box, the panel that explains a refusal, the wording of every
+  `{:error, reason}` the context can answer with, and the follow-state pill.
+
+  `VutuvWeb.FediverseFollowingLive` (`/settings/fediverse/following`) and
+  `VutuvWeb.FediverseAccountLive` (`/system/fediverse/account/:id`, issue #1162)
+  arrive at the same act from opposite ends — one starts from an address, the
+  other from an account already in front of the reader — but from the moment
+  the member presses Follow they are the same flow against the same context
+  function, so they must not describe it differently.
+
+  `Vutuv.Fediverse.follow_refusal/1` is the data half of that (which of the four
+  situations the member is in); this is the half that says it in words. Keeping
+  them apart would have been the same mistake one layer up: the atom shared,
+  the sentence copied.
+
+  Sibling of `VutuvWeb.BrowseTable`, which does the same job for the two
+  relationship tables.
+  """
+
+  use Phoenix.Component
+  use Gettext, backend: VutuvWeb.Gettext
+
+  use Phoenix.VerifiedRoutes,
+    endpoint: VutuvWeb.Endpoint,
+    router: VutuvWeb.Router,
+    statics: ~w(assets fonts images favicon.ico)
+
+  import VutuvWeb.UI
+
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Follow
+
+  attr(:id, :string,
+    required: true,
+    doc: "names the form, the input, the button and the error line (`<id>-form`, …)"
+  )
+
+  attr(:address, :string, required: true)
+  attr(:error, :any, default: nil, doc: "the reason the last submit came back with, or nil")
+  attr(:event, :string, required: true, doc: "the phx-submit event the host handles")
+  attr(:submit, :string, required: true, doc: "what the button says")
+  attr(:variant, :string, default: "primary")
+
+  attr(:label_hidden, :boolean,
+    default: false,
+    doc: "the field label reads to assistive tech only, where the card heading already names it"
+  )
+
+  attr(:class, :string, default: nil)
+
+  slot(:error_detail, doc: "where to go instead, appended to the message")
+
+  @doc """
+  The address box: an `@name@server` in, an act on that account out.
+
+  One markup for both pages, because the parts that matter here are the parts
+  that get fixed on one copy only — the phone-keyboard attributes, and the
+  `aria-invalid` / `aria-describedby` pair that ties the refusal to the field.
+  `phx-change="typing"` is shared too: typing again clears the last refusal, so
+  the box is not still shouting about an address the member has since corrected.
+  """
+  def address_form(assigns) do
+    ~H"""
+    <form
+      id={"#{@id}-form"}
+      phx-submit={@event}
+      phx-change="typing"
+      class={["flex flex-wrap items-end gap-3", @class]}
+    >
+      <div class="min-w-56 grow">
+        <label
+          for={"#{@id}-address"}
+          class={
+            if @label_hidden,
+              do: "sr-only",
+              else: "block text-sm font-semibold text-slate-700 dark:text-slate-200"
+          }
+        >
+          {gettext("Address of the account")}
+        </label>
+        <%!-- `inputmode="email"` for the @ and the dot on a phone keyboard's
+              first layer, without the validation an `type="email"` would apply
+              to a two-@ address. iOS honours autocorrect separately from
+              spellcheck. --%>
+        <input
+          type="text"
+          name="address"
+          id={"#{@id}-address"}
+          value={@address}
+          inputmode="email"
+          autocomplete="off"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          placeholder="@name@server"
+          aria-invalid={@error && "true"}
+          aria-describedby={@error && "#{@id}-error"}
+          class={input_class(@error != nil)}
+        />
+      </div>
+      <.button type="submit" id={"#{@id}-submit"} variant={@variant} class="w-full sm:w-auto">
+        {@submit}
+      </.button>
+    </form>
+
+    <p
+      :if={@error}
+      id={"#{@id}-error"}
+      role="alert"
+      class="mt-2 text-sm font-medium text-red-700 dark:text-red-300"
+    >
+      {refusal_message(@error)}
+      {render_slot(@error_detail)}
+    </p>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:reason, :atom, required: true, doc: "from `Vutuv.Fediverse.follow_refusal/1`")
+
+  attr(:address, :string,
+    default: nil,
+    doc: "an address the member brought along, kept in view while they go and switch on"
+  )
+
+  attr(:class, :string, default: nil)
+
+  @doc """
+  Why this member cannot follow anybody out there, and the one thing that helps.
+
+  No actor, no follow: the request is signed with the member's own key. Say
+  that, and put the switch one click away, rather than bouncing them to a page
+  that does not mention following. Which sentence, though, depends on why — a
+  member the moderation freezer is holding has already flipped that switch, and
+  telling them to flip it again, on a page that shows it on, is the worst place
+  to be vague.
+  """
+  def follow_refusal_panel(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      data-reason={@reason}
+      class={[
+        "rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 ring-1 ring-slate-200",
+        "dark:bg-slate-800/50 dark:text-slate-300 dark:ring-slate-700",
+        @class
+      ]}
+    >
+      <%= case @reason do %>
+        <% :restricted -> %>
+          <p>
+            {gettext(
+              "Your account is on hold at the moment, so nothing of yours goes out to other networks and you cannot follow anybody there. This lifts by itself once the hold ends."
+            )}
+          </p>
+          <p class="mt-3">
+            <.link navigate={~p"/moderation/cases"} id="moderation-cases-link" class={refusal_link()}>
+              {gettext("Why is my account on hold?")} ›
+            </.link>
+          </p>
+        <% :disabled -> %>
+          <p>
+            {gettext(
+              "This vutuv does not exchange anything with other networks, so there is nothing to follow from here. That is an operator setting, not yours."
+            )}
+          </p>
+        <% :moved -> %>
+          <%!-- The one refusal a *federating* member can be in: they redirected
+                their Fediverse followers to another account, so this one no
+                longer acts out there. Without its own arm they would get a live
+                Follow button and a "that did not work, try again" for a state
+                that is permanent until they cancel the redirect. --%>
+          <p>
+            {gettext(
+              "You redirected your Fediverse followers to another account, so this one no longer follows anybody out there."
+            )}
+          </p>
+          <p class="mt-3">
+            <.link navigate={~p"/settings/fediverse/move"} id="fediverse-move-link" class={refusal_link()}>
+              {gettext("Your account move")} ›
+            </.link>
+          </p>
+        <% _opted_out -> %>
+          <p>
+            {gettext(
+              "To follow an account out there you need a Fediverse identity of your own: the request is signed in your name, so the other server knows who is asking."
+            )}
+          </p>
+          <p :if={@address not in [nil, ""]} class="mt-3">
+            {gettext("The address you brought along is kept here:")}
+            <span class="font-semibold break-all">{@address}</span>
+          </p>
+          <p class="mt-3">
+            <.link navigate={~p"/settings/fediverse"} id="enable-fediverse-link" class={refusal_link()}>
+              {gettext("Take part in the Fediverse")} ›
+            </.link>
+          </p>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp refusal_link,
+    do:
+      "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+
+  @doc """
+  A follow that has not been answered reads **"Requested"**, not "Following".
+  An account that approves its followers by hand may take days or never answer,
+  and showing it as settled would be a lie the member acts on.
+  """
+  def follow_state_label(follow) do
+    if Follow.accepted?(follow), do: gettext("Following"), else: gettext("Requested")
+  end
+
+  @doc "The pill's colours for that state: emerald once settled, calm slate while it waits."
+  def follow_state_class(follow) do
+    if Follow.accepted?(follow),
+      do:
+        "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:ring-emerald-800",
+      else:
+        "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+  end
+
+  @doc """
+  A request nobody has answered is not something you unfollow — you take the
+  request back. Two labels, because a member who reads "Unfollow" on a
+  Requested row learns that the state badge does not mean anything.
+  """
+  def end_follow_label(follow) do
+    if Follow.accepted?(follow), do: gettext("Unfollow"), else: gettext("Cancel request")
+  end
+
+  @doc """
+  The sentence for one `{:error, reason}` from `Vutuv.Fediverse`.
+
+  One table for both pages, because both speak to the same context function:
+  a reason that got a precise sentence on one page and a shrugging "that did
+  not work" on the other would be the same refusal explained twice, once badly.
+  """
+  def refusal_message(:invalid_address),
+    do:
+      gettext(
+        "That does not look like an address on another network. They look like @name@server."
+      )
+
+  def refusal_message(:unreachable),
+    do: gettext("That server did not answer. Check the address, and that the server is online.")
+
+  def refusal_message(:no_actor),
+    do: gettext("That server answered, but it has no account at that address to follow.")
+
+  def refusal_message(:unreachable_actor),
+    do: gettext("That account could not be loaded from its server. Try again in a little while.")
+
+  def refusal_message(:instance_blocked),
+    do: gettext("This vutuv does not exchange anything with that server.")
+
+  # The address turned out to name somebody on this very vutuv. The caller adds
+  # where to go instead, since only it knows whether the handle resolved.
+  def refusal_message(:local_account),
+    do: gettext("That is an address on this vutuv, not another network.")
+
+  # Deliberately without "it is in the list below": the error keeps the active
+  # filter and the table is paged, so the row it points at is often genuinely
+  # not below.
+  def refusal_message(:already_following),
+    do: gettext("You already follow that account.")
+
+  # The one refusal the member can act on, so it never falls through to the
+  # generic "check the address" line — the address was fine. Reachable although
+  # both pages render the switch panel for a non-federating member, because
+  # participation can end between mount and submit (a second tab, a freeze).
+  def refusal_message(:not_federating),
+    do:
+      gettext(
+        "You are not taking part in the Fediverse at the moment, so there is no identity to sign the request with. Open the Fediverse settings to switch it on."
+      )
+
+  def refusal_message(:follow_capped),
+    do:
+      gettext("You have sent a lot of follow requests in the last hour. Please try again later.")
+
+  def refusal_message(:follow_limit),
+    do:
+      gettext("You are following the most accounts we allow (%{max}).",
+        max: delimited_count(Fediverse.max_remote_follows())
+      )
+
+  def refusal_message(:moved),
+    do:
+      gettext(
+        "You redirected your Fediverse followers to another account, so this account no longer acts out there."
+      )
+
+  def refusal_message(:fediverse_disabled),
+    do: gettext("The Fediverse is switched off on this vutuv.")
+
+  def refusal_message(_other),
+    do: gettext("That did not work. Check the address and try again.")
+end

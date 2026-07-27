@@ -34,17 +34,16 @@ defmodule VutuvWeb.FediverseFollowingLive do
   use VutuvWeb, :live_view
 
   import VutuvWeb.BrowseTable
+  import VutuvWeb.FediverseComponents
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Handles
-  alias Vutuv.Moderation
   alias Vutuv.Pages
 
   @impl true
@@ -56,33 +55,11 @@ defmodule VutuvWeb.FediverseFollowingLive do
      |> assign(:page_title, gettext("Accounts you follow elsewhere"))
      |> assign(:user, user)
      |> assign(:federating?, Fediverse.federated?(user))
-     |> assign(:blocked_reason, blocked_reason(user))
+     |> assign(:blocked_reason, Fediverse.follow_refusal(user))
      |> assign(:address, "")
      |> assign(:error, nil)
      |> assign(:local_member, nil)
      |> assign_totals()}
-  end
-
-  # *Why* this member cannot follow, when they cannot. `federated?/1` is one
-  # boolean over four very different situations, and the difference decides
-  # which sentence is true and which link helps:
-  #
-  #   nil          — they can, nothing to explain.
-  #   :opted_out   — they have not switched Fediverse participation on. The
-  #                  switch is the answer.
-  #   :restricted  — the account is frozen, suspended, deactivated or
-  #                  unreachable. Telling them to flip a switch they already
-  #                  flipped, and linking to a page showing it on, is exactly
-  #                  the wrong answer in the one place clarity matters most.
-  #   :disabled    — the operator switched federation off installation-wide.
-  #                  Nothing the member can do, so nothing is offered.
-  defp blocked_reason(%User{} = user) do
-    cond do
-      Fediverse.federated?(user) -> nil
-      not Fediverse.enabled?() -> :disabled
-      Moderation.account_hidden?(user) -> :restricted
-      true -> :opted_out
-    end
   end
 
   @impl true
@@ -230,88 +207,14 @@ defmodule VutuvWeb.FediverseFollowingLive do
     gettext("Follow request sent to %{account}.", account: RemoteAccount.label(account))
   end
 
-  defp error_message(:invalid_address),
-    do:
-      gettext(
-        "That does not look like an address on another network. They look like @name@server."
-      )
-
-  defp error_message(:unreachable),
-    do: gettext("That server did not answer. Check the address, and that the server is online.")
-
-  defp error_message(:no_actor),
-    do: gettext("That server answered, but it has no account at that address to follow.")
-
-  defp error_message(:unreachable_actor),
-    do: gettext("That account could not be loaded from its server. Try again in a little while.")
-
-  defp error_message(:instance_blocked),
-    do: gettext("This vutuv does not exchange anything with that server.")
-
-  # Deliberately without "it is in the list below": the error keeps the active
-  # filter and the table is paged, so the row it points at is often genuinely
-  # not below.
-  defp error_message(:already_following),
-    do: gettext("You already follow that account.")
-
-  # The one refusal the member can act on, so it never falls through to the
-  # generic "check the address" line — the address was fine. Reachable although
-  # the page renders the switch panel for a non-federating member, because
-  # participation can end between mount and submit (a second tab, a freeze).
-  defp error_message(:not_federating),
-    do:
-      gettext(
-        "You are not taking part in the Fediverse at the moment, so there is no identity to sign the request with. Open the Fediverse settings to switch it on."
-      )
-
-  defp error_message(:follow_capped),
-    do:
-      gettext("You have sent a lot of follow requests in the last hour. Please try again later.")
-
-  defp error_message(:follow_limit),
-    do:
-      gettext("You are following the most accounts we allow (%{max}).",
-        max: delimited_count(Fediverse.max_remote_follows())
-      )
-
-  defp error_message(:moved),
-    do:
-      gettext(
-        "You redirected your Fediverse followers to another account, so this account no longer acts out there."
-      )
-
-  defp error_message(:fediverse_disabled),
-    do: gettext("The Fediverse is switched off on this vutuv.")
-
-  defp error_message(_other),
-    do: gettext("That did not work. Check the address and try again.")
-
-  defp state_label(follow) do
-    if Follow.accepted?(follow), do: gettext("Following"), else: gettext("Requested")
-  end
-
-  # A request nobody has answered is not something you unfollow — you take the
-  # request back. Two labels and two confirmations, because a member who reads
-  # "Unfollow" on a Requested row learns that the state badge does not mean
-  # anything.
-  defp end_follow_label(follow) do
-    if Follow.accepted?(follow), do: gettext("Unfollow"), else: gettext("Cancel request")
-  end
-
+  # The confirmation that goes with `end_follow_label/1`. This page knows the
+  # account behind the row (the table preloads it), so it names it.
   defp end_follow_confirm(follow) do
     account = RemoteAccount.label(follow.remote_account)
 
     if Follow.accepted?(follow),
       do: gettext("Stop following %{account}?", account: account),
       else: gettext("Withdraw your follow request to %{account}?", account: account)
-  end
-
-  defp state_class(follow) do
-    if Follow.accepted?(follow),
-      do:
-        "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:ring-emerald-800",
-      else:
-        "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
   end
 
   # Both middle columns fold away on a phone (`phone_hidden_class/0`), so the
@@ -366,58 +269,21 @@ defmodule VutuvWeb.FediverseFollowingLive do
           <%= if @federating? do %>
             <%!-- The add box is the reason this page exists, so it sits above
                   everything else and is a full-size input at every width. --%>
-            <form
-              id="follow-form"
-              phx-submit="follow"
-              phx-change="typing"
-              class="mt-4 flex flex-wrap items-end gap-3"
+            <.address_form
+              id="follow"
+              address={@address}
+              error={@error}
+              event="follow"
+              submit={gettext("Follow")}
+              class="mt-4"
             >
-              <div class="min-w-56 grow">
-                <label
-                  for="follow-address"
-                  class="block text-sm font-semibold text-slate-700 dark:text-slate-200"
-                >
-                  {gettext("Address of the account")}
-                </label>
-                <%!-- `inputmode="email"` for the @ and the dot on a phone
-                      keyboard's first layer, without the validation an
-                      `type="email"` would apply to a two-@ address. iOS honours
-                      autocorrect separately from spellcheck. --%>
-                <input
-                  type="text"
-                  name="address"
-                  id="follow-address"
-                  value={@address}
-                  inputmode="email"
-                  autocomplete="off"
-                  autocapitalize="none"
-                  autocorrect="off"
-                  spellcheck="false"
-                  placeholder="@name@server"
-                  aria-invalid={@error && "true"}
-                  aria-describedby={@error && "follow-error"}
-                  class={input_class(@error != nil)}
-                />
-              </div>
-              <.button type="submit" id="follow-submit" class="w-full sm:w-auto">
-                {gettext("Follow")}
-              </.button>
-            </form>
-
-            <p
-              :if={@error}
-              id="follow-error"
-              role="alert"
-              class="mt-2 text-sm font-medium text-red-700 dark:text-red-300"
-            >
-              <%= if @error == :local_account do %>
-                {gettext("That is an address on this vutuv, not another network.")}
+              <:error_detail>
                 <%!-- The profile when the handle really resolves to a member,
                       the search when it does not (a pasted profile URL that is
                       local but names nothing) — either way a next step, never a
                       sentence that just stops. --%>
                 <.link
-                  :if={@local_member}
+                  :if={@error == :local_account and @local_member}
                   navigate={~p"/#{@local_member}"}
                   id="local-member-link"
                   class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300"
@@ -425,70 +291,22 @@ defmodule VutuvWeb.FediverseFollowingLive do
                   {gettext("Open their profile")} ›
                 </.link>
                 <.link
-                  :if={is_nil(@local_member)}
+                  :if={@error == :local_account and is_nil(@local_member)}
                   navigate={~p"/search?#{[q: @address]}"}
                   id="local-member-search"
                   class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300"
                 >
                   {gettext("Search for them here")} ›
                 </.link>
-              <% else %>
-                {error_message(@error)}
-              <% end %>
-            </p>
+              </:error_detail>
+            </.address_form>
           <% else %>
-            <%!-- No actor, no follow: the request is signed with the member's
-                  own key. Say that, and put the switch one click away, rather
-                  than bouncing them to a page that does not mention following.
-                  Which sentence, though, depends on why — see blocked_reason/1. --%>
-            <div
+            <.follow_refusal_panel
               id="not-federating"
-              data-reason={@blocked_reason}
-              class="mt-4 rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:ring-slate-700"
-            >
-              <%= case @blocked_reason do %>
-                <% :restricted -> %>
-                  <p>
-                    {gettext(
-                      "Your account is on hold at the moment, so nothing of yours goes out to other networks and you cannot follow anybody there. This lifts by itself once the hold ends."
-                    )}
-                  </p>
-                  <p class="mt-3">
-                    <.link
-                      navigate={~p"/moderation/cases"}
-                      id="moderation-cases-link"
-                      class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
-                    >
-                      {gettext("Why is my account on hold?")} ›
-                    </.link>
-                  </p>
-                <% :disabled -> %>
-                  <p>
-                    {gettext(
-                      "This vutuv does not exchange anything with other networks, so there is nothing to follow from here. That is an operator setting, not yours."
-                    )}
-                  </p>
-                <% _opted_out -> %>
-                  <p>
-                    {gettext(
-                      "To follow an account out there you need a Fediverse identity of your own: the request is signed in your name, so the other server knows who is asking."
-                    )}
-                  </p>
-                  <p :if={@address != ""} class="mt-3">
-                    {gettext("The address you brought along is kept here:")}
-                    <span class="font-semibold break-all">{@address}</span>
-                  </p>
-                  <p class="mt-3">
-                    <.link
-                      navigate={~p"/settings/fediverse"}
-                      id="enable-fediverse-link"
-                      class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
-                    >
-                      {gettext("Take part in the Fediverse")} ›
-                    </.link>
-                  </p>
-              <% end %>
-            </div>
+              reason={@blocked_reason}
+              address={@address}
+              class="mt-4"
+            />
           <% end %>
 
           <%= if @federating? and @total_follows == 0 do %>
@@ -556,10 +374,10 @@ defmodule VutuvWeb.FediverseFollowingLive do
                           data-follow-state={follow.state}
                           class={[
                             "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
-                            state_class(follow)
+                            follow_state_class(follow)
                           ]}
                         >
-                          {state_label(follow)}
+                          {follow_state_label(follow)}
                         </span>
                         <button
                           type="button"

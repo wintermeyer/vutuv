@@ -79,6 +79,14 @@ defmodule Vutuv.Fediverse.Note do
     field(:checked_at, :utc_datetime)
     field(:expires_at, :utc_datetime)
 
+    # The stored account behind `actor_uri`, when we have one (issue #1162).
+    # Virtual because a note is keyed to its author by URI, not by a foreign
+    # key; every loader fills it through the one join that knows why (see the
+    # private `notes_with_account/0` in `Vutuv.Fediverse`). Nil means "we do not
+    # know them", and then the card's handle links straight out instead of
+    # inward.
+    field(:account_id, :binary_id, virtual: true)
+
     belongs_to(:post, Vutuv.Posts.Post)
   end
 

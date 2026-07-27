@@ -1067,7 +1067,9 @@ defmodule Vutuv.Posts do
           fragment(
             """
             (SELECT coalesce(json_agg(a ORDER BY a.received_at DESC, a.id DESC), '[]'::json)
-               FROM (SELECT fr.id, fr.kind, fr.actor_uri, fr.handle, fr.received_at
+               FROM (SELECT fr.id, fr.kind, fr.actor_uri, fr.handle, fr.received_at,
+                            (SELECT ra.id FROM fediverse_remote_accounts ra
+                              WHERE ra.actor_uri = fr.actor_uri) AS account_id
                        FROM fediverse_reactions fr
                       WHERE fr.post_id = ?
                       ORDER BY fr.received_at DESC, fr.id DESC
