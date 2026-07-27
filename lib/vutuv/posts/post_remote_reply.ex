@@ -1,20 +1,35 @@
 defmodule Vutuv.Posts.PostRemoteReply do
   @moduledoc """
-  One vutuv post that answers a reply written on another network (issue #1070).
+  One vutuv post that answers something written on another network.
 
-  The sidecar to `Vutuv.Posts.PostReply`, not a replacement for it: such an
-  answer is still an ordinary reply to the vutuv post underneath, so local
-  threading, the reply notification, the public reply count and the edit window
-  all keep working untouched. This row records the *other* thing it answers, and
-  it is what makes the outgoing `Create(Note)` carry an `inReplyTo` pointing into
-  the other network plus a `Mention` of the person being answered.
+  Two shapes of that, and one row for both:
 
-  **Why it holds its own copy of the target.** A stored remote reply is a cache:
-  it is collected six months out (`Vutuv.Fediverse.NoteSweeper`), and a takedown
-  or an upstream delete can remove it long before that. The member's own answer
-  lives on, and editing or deleting it has to keep reaching the person who was
-  answered. So `note_id` nilifies rather than cascading, and everything delivery
-  needs is copied here at creation time:
+    * a **reply** that arrived under one of the member's own posts (issue
+      #1070, `note_id`). It is still an ordinary reply to the vutuv post
+      underneath — the sidecar to `Vutuv.Posts.PostReply`, not a replacement
+      for it — so local threading, the reply notification, the public reply
+      count and the edit window all keep working untouched; this row records
+      the *other* thing it answers.
+    * a **post by an account the member follows** (issue #1165,
+      `remote_post_id`). There is no vutuv post underneath: the thing answered
+      lives entirely on another server, so the answer is a top-level vutuv post
+      that happens to carry this row.
+
+  Exactly one of the two ids is set, and neither is what delivery reads: every
+  field it needs is copied onto this row (below), so both cases produce the same
+  outgoing activity and nothing downstream has to know which it was. That is why
+  the sidecar generalized instead of a second table appearing beside it.
+
+  Either way it is what makes the outgoing `Create(Note)` carry an `inReplyTo`
+  pointing into the other network plus a `Mention` of the person answered.
+
+  **Why it holds its own copy of the target.** Both targets are caches: a stored
+  reply is collected six months out (`Vutuv.Fediverse.NoteSweeper`) and a cached
+  post likewise (`expire_due_remote_posts/1`), and a takedown or an upstream
+  delete can remove either long before that. The member's own answer lives on,
+  and editing or deleting it has to keep reaching the person who was answered.
+  So both target ids nilify rather than cascading, and everything delivery needs
+  is copied here at creation time:
 
     * `in_reply_to_uri` — the remote note's own id, what `inReplyTo` names.
     * `actor_uri` — who was answered. The `Mention` tag is built from **this**,
@@ -39,6 +54,7 @@ defmodule Vutuv.Posts.PostRemoteReply do
   schema "post_remote_replies" do
     belongs_to(:post, Vutuv.Posts.Post)
     belongs_to(:note, Vutuv.Fediverse.Note)
+    belongs_to(:remote_post, Vutuv.Fediverse.RemotePost)
 
     field(:in_reply_to_uri, :string)
     field(:actor_uri, :string)
@@ -50,7 +66,14 @@ defmodule Vutuv.Posts.PostRemoteReply do
 
   def changeset(%__MODULE__{} = remote_reply, attrs) do
     remote_reply
-    |> cast(attrs, [:note_id, :in_reply_to_uri, :actor_uri, :inbox_uri, :handle])
+    |> cast(attrs, [
+      :note_id,
+      :remote_post_id,
+      :in_reply_to_uri,
+      :actor_uri,
+      :inbox_uri,
+      :handle
+    ])
     |> validate_required([:in_reply_to_uri, :actor_uri])
     |> validate_length(:in_reply_to_uri, max: @max_uri_bytes, count: :bytes)
     |> validate_length(:actor_uri, max: @max_uri_bytes, count: :bytes)

@@ -53,6 +53,8 @@ defmodule Vutuv.Posts do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Mentions
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Pages
@@ -134,33 +136,8 @@ defmodule Vutuv.Posts do
   author_id:}}` to the author's and every follower's activity topic.
   """
   def create_post(%User{} = author, attrs) do
-    image_ids = parse_ids(fetch(attrs, :image_ids) || [])
-
-    with {:ok, denials} <- normalize_denials(author.id, fetch(attrs, :denials) || []),
-         :ok <- check_image_count(image_ids),
-         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids) do
-      case insert_post(changeset, image_ids) do
-        {:ok, post} ->
-          post = preload_post(post)
-          broadcast_new_post(post)
-          # A photo post's license becomes the author's pre-selection next time.
-          remember_license(author, post)
-          # Everyone the body names by @handle is told they were named.
-          sync_mentions(post)
-          # Follow-only federation: a federating author's public post goes
-          # out to their remote followers (no-op for everyone else).
-          Vutuv.Fediverse.federate_new_post(post)
-          # A single-URL, image-less post gets a link screenshot, captured off
-          # the request path via the durable queue.
-          reconcile_screenshot(post)
-          # A book review with an ISBN gets its cover fetched off the request
-          # path (no-op for every other post).
-          ReviewCovers.reconcile(post)
-          {:ok, post}
-
-        {:error, _} = error ->
-          error
-      end
+    with {:ok, denials} <- normalize_denials(author.id, fetch(attrs, :denials) || []) do
+      do_create_post(author, attrs, denials, nil)
     end
   end
 
@@ -206,6 +183,79 @@ defmodule Vutuv.Posts do
     else
       nil -> {:error, :not_visible}
       {:error, _} = error -> error
+    end
+  end
+
+  @doc """
+  Creates a member's answer to a post by an account they follow on another
+  network (issue #1165).
+
+  Unlike `create_remote_reply/3` this is **not** a reply to anything here: the
+  post being answered lives entirely on somebody else's server, so what is
+  created is a top-level vutuv post carrying the `Vutuv.Posts.PostRemoteReply`
+  sidecar. That sidecar is what makes the outgoing `Create(Note)` thread under
+  their post over there — `inReplyTo`, the author in `cc`, and a `Mention` built
+  from the stored actor URI rather than from anything the member typed.
+
+  Every gate is `Vutuv.Fediverse.check_remote_post_reply/2`'s, including the one
+  that makes this narrower than answering a reply: a followers-only post cannot
+  be answered at all, because the answer is public here and republishing the
+  audience its author chose is not ours to do.
+
+  Denials are dropped (an answer that federates is public by definition), the
+  same call `do_create_reply/4` makes.
+  """
+  def create_remote_post_reply(%User{} = author, %RemotePost{} = remote_post, attrs) do
+    # Re-read first, and gate on what comes back. The struct in hand was
+    # captured when the composer opened, and a member types for minutes: in that
+    # time the row can be **gone** (expiry, an upstream `Delete`, another
+    # member's report, an instance block), which would hit the sidecar's foreign
+    # key and take the LiveView down; or its **audience can have narrowed**, in
+    # which case the stale struct still says public and this feature's one rule
+    # — no public answer to a followers-only post — would be bypassed by simply
+    # having the form open when the author changed their mind.
+    with %RemotePost{} = remote_post <- Vutuv.Fediverse.reload_remote_post(remote_post),
+         :ok <- Vutuv.Fediverse.check_remote_post_reply(author, remote_post),
+         :ok <- Vutuv.Fediverse.claim_reply_budget(author) do
+      do_create_post(author, attrs, [], remote_post)
+    else
+      nil -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  # Creating a post that answers nothing on this site: the feed's own composer
+  # (`create_post/2`, with the audience its author picked) and the answer to a
+  # post on another network (issue #1165 — public by definition, so no denials,
+  # and carrying the sidecar `remote_target` writes instead). Everything after
+  # the insert is the same act either way, so it is written once here.
+  defp do_create_post(%User{} = author, attrs, denials, remote_target) do
+    image_ids = parse_ids(fetch(attrs, :image_ids) || [])
+
+    with :ok <- check_image_count(image_ids),
+         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids) do
+      case insert_post(changeset, image_ids, nil, remote_target) do
+        {:ok, post} ->
+          post = preload_post(post)
+          broadcast_new_post(post)
+          # A photo post's license becomes the author's pre-selection next time.
+          remember_license(author, post)
+          # Everyone the body names by @handle is told they were named.
+          sync_mentions(post)
+          # Follow-only federation: a federating author's public post goes
+          # out to their remote followers (no-op for everyone else).
+          Vutuv.Fediverse.federate_new_post(post)
+          # A single-URL, image-less post gets a link screenshot, captured off
+          # the request path via the durable queue.
+          reconcile_screenshot(post)
+          # A book review with an ISBN gets its cover fetched off the request
+          # path (no-op for every other post).
+          ReviewCovers.reconcile(post)
+          {:ok, post}
+
+        {:error, _} = error ->
+          error
+      end
     end
   end
 
@@ -441,7 +491,7 @@ defmodule Vutuv.Posts do
   # claims and — for a reply — the PostReply row (plus, when it answers another
   # network, the PostRemoteReply sidecar) in one transaction, so post and
   # references land (or roll back) together.
-  defp insert_post(changeset, image_ids, parent \\ nil, note \\ nil) do
+  defp insert_post(changeset, image_ids, parent, remote_target) do
     Repo.transaction(fn ->
       changeset
       |> Ecto.Changeset.change(published_on: Vutuv.BerlinTime.today())
@@ -450,7 +500,7 @@ defmodule Vutuv.Posts do
         {:ok, post} ->
           attach_images!(post, image_ids)
           insert_reply_ref!(post, parent)
-          insert_remote_reply_ref!(post, note)
+          insert_remote_reply_ref!(post, remote_target)
           hold_for_image_check!(post)
 
         {:error, changeset} ->
@@ -467,14 +517,40 @@ defmodule Vutuv.Posts do
   # after that. Hence the copies, and hence `note_id` nilifying rather than
   # cascading the answer away with its target.
   defp insert_remote_reply_ref!(%Post{} = post, %Note{} = note) do
-    %PostRemoteReply{post_id: post.id}
-    |> PostRemoteReply.changeset(%{
+    write_remote_reply_ref!(post, %{
       note_id: note.id,
       in_reply_to_uri: note.object_uri,
       actor_uri: note.actor_uri,
       inbox_uri: note.inbox_uri,
-      handle: Note.display_handle(note)
+      handle: truncate_handle(Note.display_handle(note))
     })
+  end
+
+  # The same row for a post by a followed account (issue #1165). Its author is
+  # an account row we resolved from a verified actor document, so its inbox has
+  # the property the note path relies on: an inbox on the actor's own host.
+  defp insert_remote_reply_ref!(%Post{} = post, %RemotePost{} = remote_post) do
+    account = remote_post.remote_account
+
+    write_remote_reply_ref!(post, %{
+      remote_post_id: remote_post.id,
+      in_reply_to_uri: remote_post.object_uri,
+      actor_uri: account.actor_uri,
+      inbox_uri: account.inbox_uri,
+      handle: truncate_handle(RemoteAccount.display_handle(account))
+    })
+  end
+
+  # The handle is cosmetic and composed from two independently 255-capped remote
+  # values ("@" <> handle <> "@" <> host), so it can overrun its own column.
+  # Cut it rather than lose the whole answer to an over-long display string: the
+  # addresses delivery actually uses are stored separately and untouched.
+  defp truncate_handle(handle) when is_binary(handle), do: String.slice(handle, 0, 255)
+  defp truncate_handle(handle), do: handle
+
+  defp write_remote_reply_ref!(%Post{} = post, attrs) do
+    %PostRemoteReply{post_id: post.id}
+    |> PostRemoteReply.changeset(attrs)
     |> Repo.insert!()
   end
 
@@ -2951,10 +3027,14 @@ defmodule Vutuv.Posts do
       # The book/film review sidecar (nil for ordinary posts) — the card
       # renders it wherever the post renders, so it always travels along.
       :review,
-      # Present only on an answer to a reply from another network (issue #1070).
-      # The conversation renderer reads it to hang such an answer under the
-      # remote card it answers rather than beside it.
-      :remote_reply_ref,
+      # Present only on an answer to something from another network. The
+      # conversation renderer reads it to hang an answer to a *reply* (issue
+      # #1070) under the remote card it answers rather than beside it; an answer
+      # to a followed account's *post* (issue #1165) has no card above it and
+      # instead wears a "Replying to @user@host" line, whose link needs the
+      # account behind the post. Two extra batched queries per page, and only
+      # for the handful of posts that carry the sidecar at all.
+      remote_reply_ref: [remote_post: :remote_account],
       denials: [:denied_user],
       tags: from(t in Tag, order_by: t.name),
       reply_ref: [
@@ -3268,8 +3348,9 @@ defmodule Vutuv.Posts do
   The member's draft for one composer context, or `nil`.
 
   `context` is what the composer is: `nil` for the feed's new post, a `%Post{}`
-  it is answering, or a `%Note{}` (a reply from another network) it is
-  answering. A draft holding nothing is treated as no draft, so an autosave
+  it is answering, a `%Note{}` (a reply from another network) it is answering,
+  or a `%RemotePost{}` (a post by an account the member follows there, issue
+  #1165). A draft holding nothing is treated as no draft, so an autosave
   that raced the member emptying the composer cannot make an empty composer
   announce itself as restored.
   """
@@ -3292,14 +3373,9 @@ defmodule Vutuv.Posts do
   """
   def save_draft(%User{} = author, context, attrs) do
     changeset =
-      PostDraft.changeset(
-        %PostDraft{
-          user_id: author.id,
-          parent_id: draft_parent_id(context),
-          remote_note_id: draft_remote_note_id(context)
-        },
-        attrs
-      )
+      %PostDraft{user_id: author.id}
+      |> struct(draft_context_fields(context))
+      |> PostDraft.changeset(attrs)
 
     cond do
       not changeset.valid? ->
@@ -3341,31 +3417,71 @@ defmodule Vutuv.Posts do
     count
   end
 
-  # The three composer contexts, as a scope and as the matching conflict target
-  # of the partial unique index that owns them.
-  defp draft_scope(%User{id: author_id}, nil),
-    do: dynamic([d], d.user_id == ^author_id and is_nil(d.parent_id) and is_nil(d.remote_note_id))
+  # Each composer context as the one draft column that names it — the single
+  # place a new context is added. A draft is keyed by which composer it was
+  # typed in, so a context missing from here would silently share the new-post
+  # composer's key and overwrite its draft.
+  defp draft_key(%Post{id: id}), do: {:parent_id, id}
+  defp draft_key(%Note{id: id}), do: {:remote_note_id, id}
+  defp draft_key(nil), do: nil
 
-  defp draft_scope(%User{id: author_id}, %Post{id: parent_id}),
-    do: dynamic([d], d.user_id == ^author_id and d.parent_id == ^parent_id)
+  # Answering a followed account's post (issue #1165) is deliberately NOT a
+  # draft context, and adding one is not the small change it looks like. Every
+  # context needs its own partial unique index, and a new one also has to be
+  # excluded from the new-post composer's index — which means dropping and
+  # recreating that index. Deploys here are blue/green, so during the switch
+  # the previous release is still writing `ON CONFLICT (user_id) WHERE
+  # parent_id IS NULL AND remote_note_id IS NULL`, and Postgres infers an
+  # arbiter only when the supplied predicate implies the index's: two conjuncts
+  # do not imply three, so every keystroke in the old release's feed composer
+  # would raise 42P10. Verified against Postgres, not reasoned about. Making it
+  # a draft context is therefore an expand/contract pair of deploys, worth doing
+  # on its own and not worth smuggling into this feature.
+  defp draft_key(_context), do: nil
 
-  defp draft_scope(%User{id: author_id}, %Note{id: note_id}),
-    do: dynamic([d], d.user_id == ^author_id and d.remote_note_id == ^note_id)
+  # The feed's new-post composer is the row where every context column is NULL,
+  # which is why they are also listed: its scope and its conflict target are
+  # "none of these".
+  @draft_context_columns [:parent_id, :remote_note_id]
 
-  defp draft_parent_id(%Post{id: id}), do: id
-  defp draft_parent_id(_context), do: nil
+  # Read scope and write key of one context, derived from the same `draft_key/1`
+  # so a draft can never be looked up under one and stored under another. Each
+  # conflict target names the partial unique index that owns its context
+  # (`priv/repo/migrations/*_post_drafts*`): `(user_id, <column>) WHERE <column>
+  # IS NOT NULL`, and `(user_id) WHERE <every column> IS NULL` for the new post.
+  defp draft_scope(%User{id: author_id}, context) do
+    case draft_key(context) do
+      {column, id} ->
+        dynamic([d], d.user_id == ^author_id and field(d, ^column) == ^id)
 
-  defp draft_remote_note_id(%Note{id: id}), do: id
-  defp draft_remote_note_id(_context), do: nil
+      nil ->
+        mine = dynamic([d], d.user_id == ^author_id)
 
-  defp draft_conflict_target(nil),
-    do: {:unsafe_fragment, "(user_id) WHERE parent_id IS NULL AND remote_note_id IS NULL"}
+        Enum.reduce(@draft_context_columns, mine, fn column, scope ->
+          dynamic([d], ^scope and is_nil(field(d, ^column)))
+        end)
+    end
+  end
 
-  defp draft_conflict_target(%Post{}),
-    do: {:unsafe_fragment, "(user_id, parent_id) WHERE parent_id IS NOT NULL"}
+  defp draft_conflict_target(context) do
+    case draft_key(context) do
+      {column, _id} ->
+        {:unsafe_fragment, "(user_id, #{column}) WHERE #{column} IS NOT NULL"}
 
-  defp draft_conflict_target(%Note{}),
-    do: {:unsafe_fragment, "(user_id, remote_note_id) WHERE remote_note_id IS NOT NULL"}
+      nil ->
+        nulls = Enum.map_join(@draft_context_columns, " AND ", &"#{&1} IS NULL")
+        {:unsafe_fragment, "(user_id) WHERE #{nulls}"}
+    end
+  end
+
+  # What a new draft row carries of its context: the one column, or nothing at
+  # all for the feed's composer.
+  defp draft_context_fields(context) do
+    case draft_key(context) do
+      {column, id} -> [{column, id}]
+      nil -> []
+    end
+  end
 
   @doc """
   Person typeahead for the composer's "Hide from…" sheet: activated members

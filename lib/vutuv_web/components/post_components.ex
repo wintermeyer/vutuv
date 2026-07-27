@@ -249,7 +249,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:editable?, Posts.edit_window_open?(post))
       |> assign(:reporter?, user? and not Posts.author?(post, viewer))
       |> assign(:frozen?, post.frozen_at != nil)
-      |> assign(:reply_banner, reply_banner(post, assigns.show_reply_banner))
+      |> assign(:reply_banner, reply_banner(post, assigns.show_reply_banner, assigns[:viewer]))
       |> assign(:reposters, repost_roster(assigns))
       |> assign(
         :edited?,
@@ -1384,7 +1384,27 @@ defmodule VutuvWeb.PostComponents do
             origin={RemotePost.origin(@remote_post)}
             label={origin_label(@remote_post)}
             data-remote-origin
-          />
+          >
+            <%!-- Answering (issue #1165) sits beside where the post came from,
+            like the remote reply card's does. Only on an open post: an answer
+            is a public vutuv post, and republishing the audience a
+            followers-only post's author chose is not ours to do, so there is no
+            control rather than one that refuses. Shown to every signed-in
+            member including one who does not federate — the page behind it is
+            what explains why they cannot send yet. --%>
+            <span :if={@viewer && RemotePost.open?(@remote_post)}>
+              ·
+              <%!-- Padded to a finger-sized target rather than left as a
+              `text-xs` word: this is the card's second real action, and it sits
+              right beside a link that leaves the site — a mis-tap there is not
+              a small mistake. --%>
+              <.link
+                navigate={~p"/system/fediverse/reply/post/#{@remote_post.id}"}
+                data-remote-post-reply-link={@remote_post.id}
+                class="inline-flex min-h-10 items-center px-1 font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+              >{gettext("Reply")}</.link>
+            </span>
+          </.remote_footer>
         </div>
       </div>
     </article>
@@ -1427,6 +1447,121 @@ defmodule VutuvWeb.PostComponents do
       do: FediverseComponents.refusal_message(reason)
 
   def like_refusal_message(_reason), do: gettext("That did not work.")
+
+  @doc """
+  The chrome both "answer something on another network" pages wear: the reply
+  that arrived under one of the member's own posts
+  (`VutuvWeb.PostLive.RemoteReply`, issue #1070) and the post by an account they
+  follow (`VutuvWeb.PostLive.RemotePostReply`, issue #1165).
+
+  One definition, because what the two pages share is exactly what must never
+  drift between them: the sentence saying **before anybody types** that these
+  words leave the site, and the explanation a member who has not switched
+  Fediverse participation on gets instead of a hidden action. Each page still
+  brings what is genuinely its own — the card for the thing being answered, the
+  composer with its own context (and so its own save path), the way back, and
+  the one sentence that names what kind of thing is being answered.
+  """
+  attr(:id, :string, required: true, doc: "the page wrapper's id")
+  attr(:handle, :string, required: true, doc: "`@user@host` of the person being answered")
+
+  attr(:refusal, :atom,
+    default: nil,
+    doc:
+      "`:not_federating` puts the explanation where the composer would be; every other refusal redirects before this renders"
+  )
+
+  attr(:explanation, :string,
+    required: true,
+    doc: "why the words would leave the site, in the terms of this page's target"
+  )
+
+  attr(:back_href, :any, default: nil, doc: "the way back, or nil for no link")
+  attr(:back_label, :string, default: nil)
+
+  slot(:target, required: true, doc: "the remote card showing what is being answered")
+  slot(:composer, required: true)
+
+  def remote_answer_page(assigns) do
+    ~H"""
+    <div id={@id} class="py-6">
+      <div class="mx-auto max-w-2xl space-y-4">
+        <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
+          {gettext("Reply to %{handle}", handle: @handle)}
+        </h1>
+
+        <.card>{render_slot(@target)}</.card>
+
+        <%= if @refusal == :not_federating do %>
+          <.card>
+            <h2 class="mb-2 text-base font-semibold text-slate-900 dark:text-white">
+              {gettext("Turn on Fediverse participation to answer")}
+            </h2>
+            <p class="mb-3 text-sm text-slate-600 dark:text-slate-400">{@explanation}</p>
+            <.button navigate={~p"/settings/fediverse"}>
+              {gettext("Open Fediverse settings")}
+            </.button>
+          </.card>
+        <% else %>
+          <%!-- Said before they type, not after they send: the whole point of
+          the page is that nobody publishes to another network by accident. --%>
+          <p
+            data-remote-reply-notice
+            class="rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-800 dark:bg-brand-900/30 dark:text-brand-100"
+          >
+            {gettext(
+              "Your answer goes to %{handle} on their own server and to your Fediverse followers. It is a public post on vutuv as well.",
+              handle: @handle
+            )}
+          </p>
+
+          {render_slot(@composer)}
+        <% end %>
+
+        <.link
+          :if={@back_href}
+          href={@back_href}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {@back_label}
+        </.link>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  The sentence for one `{:error, reason}` that keeps a member off those pages
+  entirely (`Vutuv.Fediverse.check_remote_reply/2` and
+  `check_remote_post_reply/2` answer in one vocabulary, so one table covers
+  both). `:not_federating` is deliberately absent: it is the one refusal the
+  member can act on, so it gets the page and its explanation rather than a
+  sentence on the way out.
+
+  Its own table and not `like_refusal_message/1` beside it: a member who opened
+  a page in order to write something has asked why they cannot, where somebody
+  who pressed a heart while reading has not.
+  """
+  def answer_refusal_message(:note_not_public),
+    do: gettext("This reply was sent to you alone, so it cannot be answered publicly.")
+
+  def answer_refusal_message(:post_not_public),
+    do:
+      gettext(
+        "This post was published to that account's followers only, so it cannot be answered with a public post here."
+      )
+
+  def answer_refusal_message(:instance_blocked),
+    do: gettext("That server is blocked on this site, so no answer can be sent to it.")
+
+  def answer_refusal_message(:moved),
+    do:
+      gettext(
+        "You moved your Fediverse account to another server, so answers are no longer sent from here."
+      )
+
+  def answer_refusal_message(_disabled),
+    do: gettext("This site does not take part in the Fediverse.")
 
   # A card names the post it answers only when its position alone does not say
   # it. While the thread still indents, the nesting says it. Past
@@ -1810,6 +1945,25 @@ defmodule VutuvWeb.PostComponents do
             <.link href={~p"/#{parent_author}"} class="hover:text-brand-700">
               {gettext("Reply to a now-deleted post by %{handle}", handle: handle(parent_author))}
             </.link>
+          </.reply_banner_line>
+        <% {:remote, remote_handle, remote_account_id} -> %>
+          <%!-- Answering a post on another network (issue #1165). The link goes
+          to that account's page *here* rather than out to their server: the
+          reader is one click from the same context the answer's author had,
+          without leaving the site and without an outbound request. It degrades
+          to plain text once our copy of the post has expired, since the account
+          is reached through the post. --%>
+          <.reply_banner_line variant="remote">
+            <.link
+              :if={remote_account_id}
+              navigate={~p"/system/fediverse/account/#{remote_account_id}"}
+              class="hover:text-brand-700"
+            >
+              {gettext("Replying to %{handle}", handle: remote_handle)}
+            </.link>
+            <span :if={!remote_account_id}>
+              {gettext("Replying to %{handle}", handle: remote_handle)}
+            </span>
           </.reply_banner_line>
         <% :gone -> %>
           <.reply_banner_line variant="gone">
@@ -2909,15 +3063,42 @@ defmodule VutuvWeb.PostComponents do
   # Pattern-match the structs: an un-preloaded has_one is a truthy
   # %Ecto.Association.NotLoaded{}. `show?` is false where the caller already
   # shows the parent post inline (the profile thread), so the banner is dropped.
-  defp reply_banner(_post, false), do: nil
-  defp reply_banner(post, true), do: reply_banner(post)
+  defp reply_banner(_post, false, _viewer), do: nil
+  defp reply_banner(post, true, viewer), do: reply_banner(post, viewer)
 
-  defp reply_banner(post) do
+  defp reply_banner(post, viewer) do
     case Posts.reply_ref_state(post) do
       {:parent, parent} -> {:parent, parent.user, Posts.path(parent)}
+      # A top-level post that answers a post on another network (issue #1165)
+      # has no local parent at all, so its "Replying to" line comes from the
+      # sidecar instead. Only ever reached when there is no local reply ref: an
+      # answer to a *reply* (issue #1070) is a real reply here and shows the
+      # local parent, which is the more useful of the two.
+      nil -> remote_reply_banner(post, viewer)
       state -> state
     end
   end
+
+  # The account behind the post, not the post: the line is about *who* is being
+  # answered, and its link is the reader's way to that person's page here. It
+  # degrades to plain text once our six-month copy of the post has expired,
+  # which is also when the account row may have been swept — the handle stays,
+  # because the sidecar keeps its own copy of it.
+  defp remote_reply_banner(%{remote_reply_ref: %PostRemoteReply{handle: handle} = ref}, viewer)
+       when is_binary(handle),
+       # The account page behind the link is signed-in only, so a logged-out
+       # reader of this answer's public permalink gets the fact without a link
+       # into a login wall. The handle is the fact; the link is a convenience.
+       do: {:remote, handle, viewer && remote_account_id(ref)}
+
+  defp remote_reply_banner(_post, _viewer), do: nil
+
+  defp remote_account_id(%PostRemoteReply{
+         remote_post: %RemotePost{remote_account: %RemoteAccount{id: id}}
+       }),
+       do: id
+
+  defp remote_account_id(%PostRemoteReply{}), do: nil
 
   # Reply system messages name the account handle, never the clear name.
   defp handle(%User{username: username}), do: "@" <> username

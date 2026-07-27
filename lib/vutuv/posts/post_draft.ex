@@ -15,8 +15,13 @@ defmodule Vutuv.Posts.PostDraft do
   leads the mosaic, so the order is the layout and an array keeps it.
 
   **A draft belongs to a composer context**, carried by the two nullable
-  references: both nil is the feed's new-post composer, `parent_id` is a reply
-  to that post, `remote_note_id` an answer to a reply from another network.
+  references: all nil is the feed's new-post composer, `parent_id` is a reply to
+  that post, `remote_note_id` an answer to a reply from another network. A draft
+  is keyed by which composer it was typed in, so the contexts must stay
+  distinct: a new one that forgot its own column would share the new-post
+  composer's key and overwrite the draft on `/feed`. Adding one is an
+  expand/contract pair of deploys, not one — see `Vutuv.Posts.draft_key/1`.
+
   The edit page deliberately has no draft: its composer opens full of a
   *published* post, and quietly restoring a weeks-old unsaved edit over text
   other people have already read is a different and much less welcome promise.

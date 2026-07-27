@@ -39,9 +39,11 @@ defmodule VutuvWeb.PostJSON do
     }
   end
 
-  # The reply reference mirrors the card banner's three states: a live
-  # parent, a deleted post whose author still exists, or nothing nameable
-  # once the account is gone too. `nil` when the post is not a reply.
+  # The reply reference mirrors the card banner's states: a live parent, a
+  # deleted post whose author still exists, nothing nameable once the account is
+  # gone too, or — for an answer to a post on another network (issue #1165) —
+  # the origin URI and the handle it threads under over there. `nil` when the
+  # post answers nothing.
   defp in_reply_to(post) do
     case Posts.reply_ref_state(post) do
       {:parent, parent} ->
@@ -58,9 +60,15 @@ defmodule VutuvWeb.PostJSON do
         %{post_id: nil, url: nil, author: nil}
 
       nil ->
-        nil
+        remote_in_reply_to(post)
     end
   end
+
+  defp remote_in_reply_to(%{remote_reply_ref: %Vutuv.Posts.PostRemoteReply{} = ref})
+       when is_binary(ref.handle),
+       do: %{post_id: nil, url: ref.in_reply_to_uri, author: ref.handle, network: "fediverse"}
+
+  defp remote_in_reply_to(_post), do: nil
 
   # AI-moderation limbo filter: released for everyone, everything for the
   # author and admins (the proxy enforces the same rule on the bytes).

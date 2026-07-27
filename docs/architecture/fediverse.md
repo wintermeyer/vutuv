@@ -951,3 +951,57 @@ likes that happened to pass through this installation would read as the real one
 while being a fraction of it. The marker cascades with the cached post, expiry
 included; the like on the author's server stands, and a re-like after expiry
 sends a duplicate every implementation treats as a no-op.
+
+### Answering one of their posts (issue #1165)
+
+The `Vutuv.Posts.PostRemoteReply` sidecar generalized rather than a second table
+appearing beside it. It now records either of two things a vutuv post can
+answer: a **reply** that arrived under one of the member's own posts (#1070,
+`note_id`) or a **post by an account they follow** (#1165, `remote_post_id`).
+Exactly one id is set, and **neither is what delivery reads** — every field the
+outgoing activity needs (`in_reply_to_uri`, `actor_uri`, `inbox_uri`, `handle`)
+was already copied onto the row at creation time, so both cases produce the same
+`Create(Note)` and nothing downstream has to know which it was. Both ids nilify
+rather than cascade: the member's own answer outlives our six-month copy of what
+it answered, and editing or deleting it has to keep reaching the person it went
+to.
+
+The difference is what sits underneath. A #1070 answer is a real reply to the
+vutuv post the remote reply arrived under, so local threading, the reply count
+and the edit window all apply. A #1165 answer has no vutuv post underneath at
+all — the thing answered lives entirely on somebody else's server — so
+`create_remote_post_reply/3` creates a **top-level** post that happens to carry
+the sidecar, and the card wears a "Replying to `@user@host`" line pointing at
+that account's page *here*, not out to their server.
+
+One gate is stricter than the reply path's: a **followers-only** post cannot be
+answered at all (`:post_not_public`). The answer is a public vutuv post, and
+republishing the audience its author deliberately narrowed is not ours to do —
+so the card offers no Reply there rather than a control that refuses, and the
+page refuses if the URL is typed by hand. That audience question is the whole of
+`check_remote_post_reply/2`; behind it sits the very gate the **like** path asks
+(`check_remote_like/2` — installation switch, the member's own standing, the
+blocklist, "is this post theirs to read"), because both are the same shape of
+act on the same cached post. Everything else is shared with #1070, including the
+hourly outbound budget: both are a member's own words leaving for a server that
+never followed them, and metering them separately would let one member's hour of
+answering hide inside the other's.
+
+The answer composer is deliberately **not** a draft context, and the reason is
+worth writing down because it looks like a two-line change. A draft is keyed by
+which composer it was typed in, so a fourth context needs its own partial unique
+index *and* has to be excluded from the new-post composer's — which means
+dropping and recreating that index. Deploys here are blue/green, so during the
+switch the previous release is still writing `ON CONFLICT (user_id) WHERE
+parent_id IS NULL AND remote_note_id IS NULL`, and Postgres infers an arbiter
+index only when the supplied predicate **implies** the index's: two conjuncts do
+not imply three, so every keystroke in the old release's feed composer would
+raise 42P10. (Verified against Postgres, not reasoned about.) Giving answers
+drafts is therefore an expand/contract pair of deploys, worth doing on its own.
+
+One thing that did have to change: `post_remote_replies`' three URI columns were
+`varchar(255)` while everything they copy from is `text` capped at 2048 bytes.
+A remote server publishing a post with a 300-character id — legal, accepted at
+our inbox, refused by no changeset — would have raised 22001 the moment a member
+answered it. Widened to `text`; the `handle` stays 255 and the writer truncates,
+since it is cosmetic and composed from two independently capped remote strings.

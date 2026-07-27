@@ -56,6 +56,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   alias Vutuv.BookMetadata
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
@@ -96,6 +97,7 @@ defmodule VutuvWeb.PostLive.Composer do
           :post,
           :parent,
           :remote_note,
+          :remote_post,
           :initial_body
         ])
       )
@@ -121,6 +123,10 @@ defmodule VutuvWeb.PostLive.Composer do
     # Set when this composer answers a reply from another network (issue #1070);
     # it then saves through Posts.create_remote_reply/3 instead.
     |> assign_new(:remote_note, fn -> nil end)
+    # …and this one when it answers a post by an account the member follows
+    # (issue #1165): Posts.create_remote_post_reply/3, a top-level post rather
+    # than a reply.
+    |> assign_new(:remote_post, fn -> nil end)
     # Reposted or answered posts carry other people's shares and replies:
     # the audience is pinned to public (Posts.update_post/2 enforces it; the
     # select disappears).
@@ -193,9 +199,14 @@ defmodule VutuvWeb.PostLive.Composer do
   # The edit page is deliberately draft-free: its composer opens full of a
   # *published* post, and silently restoring a weeks-old unsaved edit over text
   # other people have already read is a different promise from keeping a draft.
-  defp draftable?(assigns), do: assigns[:post] == nil
+  defp draftable?(assigns), do: assigns[:post] == nil and assigns[:remote_post] == nil
 
   # Which composer this is, in the terms `Vutuv.Posts` keys drafts by.
+  # Which composer this is, in the terms `Vutuv.Posts` keys drafts by. The
+  # answer-to-a-followed-post composer (issue #1165) is deliberately absent: it
+  # is not a draft context, for the blue/green reason `Posts.draft_key/1`
+  # spells out. `draftable?/1` keeps it from autosaving into the feed
+  # composer's row.
   defp draft_context(assigns), do: assigns[:parent] || assigns[:remote_note]
 
   defp restore_draft(socket) do
@@ -879,14 +890,31 @@ defmodule VutuvWeb.PostLive.Composer do
     socket
   end
 
-  defp feed_composer?(assigns),
-    do: is_nil(assigns.post) and is_nil(assigns.parent) and is_nil(assigns.remote_note)
+  # The standalone composer on /feed: not editing a post, and answering nothing —
+  # which is exactly "no draft context", so a new context is added in one place
+  # (`draft_context/1`) rather than in every list of nils.
+  # Deliberately spelled out rather than derived from `draft_context/1`, though
+  # the two look interchangeable: "is this the feed's own composer" and "does
+  # this composer keep drafts" are different questions that merely coincided
+  # until issue #1165 added a composer that is neither. Defining one in terms of
+  # the other put the feed's ✕ back on the answer page, where nothing handles
+  # `close-composer` and a click therefore kills the LiveView.
+  defp feed_composer?(assigns) do
+    is_nil(assigns.post) and is_nil(assigns.parent) and is_nil(assigns.remote_note) and
+      is_nil(assigns.remote_post)
+  end
 
   # Answering a reply from another network goes through its own context function:
   # it writes the sidecar that carries the answer out to that network, and it
   # holds the federation gates (issue #1070).
   defp save_post(%{post: nil, remote_note: %Note{} = note, current_user: author}, attrs),
     do: Posts.create_remote_reply(author, note, attrs)
+
+  # Answering a post by a followed account (issue #1165). Not a reply to
+  # anything here — the thing answered lives on another server — so what this
+  # creates is a top-level post carrying the same sidecar.
+  defp save_post(%{post: nil, remote_post: %RemotePost{} = post, current_user: author}, attrs),
+    do: Posts.create_remote_post_reply(author, post, attrs)
 
   defp save_post(%{post: nil, parent: %Post{} = parent, current_user: author}, attrs),
     do: Posts.create_reply(author, parent, attrs)
@@ -905,7 +933,7 @@ defmodule VutuvWeb.PostLive.Composer do
       socket.assigns.post ->
         {:noreply, push_navigate(socket, to: Posts.path(post))}
 
-      socket.assigns[:remote_note] ->
+      socket.assigns[:remote_note] || socket.assigns[:remote_post] ->
         # An answer to a remote reply has no `parent` assign of its own, so its
         # own permalink is the way back into that conversation.
         {:noreply, push_navigate(socket, to: Posts.path(post))}
@@ -980,11 +1008,14 @@ defmodule VutuvWeb.PostLive.Composer do
         "You have sent a lot of answers to other networks in the past hour. Please try again later."
       )
 
-  defp save_error_message(:instance_blocked),
-    do: gettext("That server is blocked on this site, so no answer can be sent to it.")
-
-  defp save_error_message(:note_not_public),
-    do: gettext("This reply was sent to you alone, so it cannot be answered publicly.")
+  # The three the answer page itself refuses with, in the page's own words
+  # (`PostComponents.answer_refusal_message/1`): the audience of the thing being
+  # answered can narrow while the form sits open (an `Update` arrives), and the
+  # operator can block the server in that same window. A refusal must not be
+  # worded one way on the page and another way on save.
+  defp save_error_message(reason)
+       when reason in [:instance_blocked, :note_not_public, :post_not_public],
+       do: PostComponents.answer_refusal_message(reason)
 
   defp save_error_message(reason) when reason in [:not_federating, :moved, :fediverse_disabled],
     do: gettext("Your Fediverse settings do not allow sending an answer right now.")
@@ -1201,7 +1232,7 @@ defmodule VutuvWeb.PostLive.Composer do
           remote-reply page has no close handler and a click there crashed
           the page). --%>
           <div
-            :if={@post == nil and @parent == nil and @remote_note == nil}
+            :if={feed_composer?(assigns)}
             class="-mt-1 mb-2 flex items-center justify-end gap-1"
           >
             <button

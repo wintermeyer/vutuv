@@ -3477,6 +3477,35 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  Whether `user` may answer the cached post `post` (issue #1165), and when not,
+  which gate refused. The same vocabulary `check_remote_reply/2` answers in, so
+  one wording table covers both, plus one gate of its own:
+
+    * `:post_not_public` — the author published it to their followers only. The
+      answer would be a **public vutuv post** quoting a restricted context, and
+      republishing the audience somebody chose is not ours to do, so v1 offers no
+      Reply there at all rather than a control that refuses.
+
+  Everything after that is the like path's gate unchanged (`check_remote_like/2`
+  and its `:not_visible`), which is why the two share it: the same member-side
+  switches, the same blocklist and the same "is this theirs to see" question.
+
+  Free of side effects. The budget (`claim_reply_budget/1`) is the reply path's,
+  shared deliberately: both are the same act — a member's own words leaving for
+  a server that never followed them — and metering them separately would let one
+  member's hour of answering hide inside the other's budget.
+  """
+  def check_remote_post_reply(%User{} = user, %RemotePost{} = post) do
+    # The audience question first, and then nothing of its own: every other gate
+    # is the like path's, asked in the same order (`check_remote_post_act/2`).
+    # A followers-only post is refused whatever the member's own settings say,
+    # since no setting of theirs could ever make it answerable.
+    if RemotePost.open?(post),
+      do: check_remote_post_act(user, post),
+      else: {:error, :post_not_public}
+  end
+
+  @doc """
   Claims one slot from the member's hourly budget for answers that leave for
   another network. `:ok`, or `{:error, :reply_capped}`.
 
@@ -3531,7 +3560,16 @@ defmodule Vutuv.Fediverse do
 
   Free of side effects, so a render may ask it. The budget is claimed separately.
   """
-  def check_remote_like(%User{} = user, %RemotePost{} = post) do
+  def check_remote_like(%User{} = user, %RemotePost{} = post),
+    do: check_remote_post_act(user, post)
+
+  # What both outbound acts on a cached post ask, in one place: the installation
+  # switch, the member's own Fediverse standing (they sign with their own key,
+  # so there is no actorless like or answer), the operator blocklist — a block
+  # shuts both directions — and whether this is a post they may read at all,
+  # since the id in a click is attacker-controlled. Answering adds its own
+  # audience gate on top; liking has none.
+  defp check_remote_post_act(%User{} = user, %RemotePost{} = post) do
     cond do
       not enabled?() -> {:error, :fediverse_disabled}
       not federated?(user) -> {:error, :not_federating}
@@ -3638,7 +3676,18 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  defp reload_remote_post(%RemotePost{id: id, remote_account: account}) do
+  @doc """
+  This cached post as it is **now**, keeping the account already in hand, or nil
+  once the row is gone.
+
+  Every write path that acts on a post a member is looking at goes through here
+  first. A card is rendered at one moment and acted on at another, and in
+  between the row can be deleted (expiry, an upstream `Delete`, another
+  member's report, an instance block) or changed (its author narrowing the
+  audience with an `Update`). Acting on the struct in hand means a foreign-key
+  crash in the first case and a bypassed audience rule in the second.
+  """
+  def reload_remote_post(%RemotePost{id: id, remote_account: account}) do
     case Repo.get(RemotePost, id) do
       %RemotePost{} = post -> %{post | remote_account: account}
       nil -> nil

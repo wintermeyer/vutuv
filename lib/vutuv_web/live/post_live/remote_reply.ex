@@ -69,7 +69,7 @@ defmodule VutuvWeb.PostLive.RemoteReply do
 
       {:error, reason} ->
         socket
-        |> put_flash(:error, refusal_message(reason))
+        |> put_flash(:error, answer_refusal_message(reason))
         |> redirect(to: Posts.path(socket.assigns.post))
     end
   end
@@ -80,80 +80,35 @@ defmodule VutuvWeb.PostLive.RemoteReply do
     |> redirect(to: ~p"/")
   end
 
-  defp refusal_message(:note_not_public),
-    do: gettext("This reply was sent to you alone, so it cannot be answered publicly.")
-
-  defp refusal_message(:instance_blocked),
-    do: gettext("That server is blocked on this site, so no answer can be sent to it.")
-
-  defp refusal_message(:moved),
-    do:
-      gettext(
-        "You moved your Fediverse account to another server, so answers are no longer sent from here."
-      )
-
-  defp refusal_message(_disabled),
-    do: gettext("This site does not take part in the Fediverse.")
-
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="remote-reply" class="py-6">
-      <div class="mx-auto max-w-2xl space-y-4">
-        <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
-          {gettext("Reply to %{handle}", handle: Note.display_handle(@note))}
-        </h1>
-
-        <.card>
-          <.remote_reply_card note={@note} viewer={@current_user} />
-        </.card>
-
-        <%= if @refusal == :not_federating do %>
-          <.card>
-            <h2 class="mb-2 text-base font-semibold text-slate-900 dark:text-white">
-              {gettext("Turn on Fediverse participation to answer")}
-            </h2>
-            <p class="mb-3 text-sm text-slate-600 dark:text-slate-400">
-              {gettext(
-                "This reply was written on another network. Answering it means sending your words to that network, which vutuv only does for members who have switched Fediverse participation on."
-              )}
-            </p>
-            <.button navigate={~p"/settings/fediverse"}>
-              {gettext("Open Fediverse settings")}
-            </.button>
-          </.card>
-        <% else %>
-          <%!-- Said before they type, not after they send: the whole point of the
-          page is that nobody publishes to another network by accident. --%>
-          <p
-            data-remote-reply-notice
-            class="rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-800 dark:bg-brand-900/30 dark:text-brand-100"
-          >
-            {gettext(
-              "Your answer goes to %{handle} on their own server and to your Fediverse followers. It is a public post on vutuv as well.",
-              handle: Note.display_handle(@note)
-            )}
-          </p>
-
-          <.live_component
-            module={VutuvWeb.PostLive.Composer}
-            id="composer"
-            current_user={@current_user}
-            post={nil}
-            parent={nil}
-            remote_note={@note}
-          />
-        <% end %>
-
-        <.link
-          :if={@post}
-          href={Posts.path(@post)}
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-        >
-          {gettext("Back to the conversation")}
-        </.link>
-      </div>
-    </div>
+    <.remote_answer_page
+      id="remote-reply"
+      handle={Note.display_handle(@note)}
+      refusal={@refusal}
+      explanation={
+        gettext(
+          "This reply was written on another network. Answering it means sending your words to that network, which vutuv only does for members who have switched Fediverse participation on."
+        )
+      }
+      back_href={@post && Posts.path(@post)}
+      back_label={gettext("Back to the conversation")}
+    >
+      <:target>
+        <.remote_reply_card note={@note} viewer={@current_user} />
+      </:target>
+      <:composer>
+        <.live_component
+          module={VutuvWeb.PostLive.Composer}
+          id="composer"
+          current_user={@current_user}
+          post={nil}
+          parent={nil}
+          remote_note={@note}
+        />
+      </:composer>
+    </.remote_answer_page>
     """
   end
 end

@@ -21,6 +21,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UserHelpers
@@ -359,7 +360,18 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
         %{url: nil, author: nil}
 
       nil ->
-        nil
+        # Not a reply here, but it may answer a post on another network (issue
+        # #1165): the HTML card says so, so the agent formats must too, or a
+        # `.md`/`.json` sibling reads as a post with no context while the page
+        # names who it answers. The origin URI is the authoritative thing to
+        # point at — that answer threads under it over there.
+        remote_in_reply_to(post)
     end
   end
+
+  defp remote_in_reply_to(%{remote_reply_ref: %PostRemoteReply{} = ref})
+       when is_binary(ref.handle),
+       do: %{url: ref.in_reply_to_uri, author: ref.handle, network: "fediverse"}
+
+  defp remote_in_reply_to(_post), do: nil
 end

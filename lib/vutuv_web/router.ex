@@ -464,16 +464,21 @@ defmodule VutuvWeb.Router do
       live("/posts/:id/edit", PostLive.Edit, :edit)
       live("/posts/:id/reply", PostLive.Reply, :new)
 
-      # The two signed-in Fediverse pages that are not settings: answering a
-      # reply from another network (issue #1070) and the page for one remote
-      # account (issue #1162). Under /system/ rather than a new root word, which
+      # The signed-in Fediverse pages that are not settings: answering a reply
+      # that arrived under one's own post (issue #1070), answering a post by a
+      # followed account (issue #1165) and the page for one remote account
+      # (issue #1162). Under /system/ rather than a new root word, which
       # profiles own; "system" is already reserved, so this burns no handle.
-      # `:noindex_pipe` because both are assembled from things other people
-      # wrote on other servers.
+      # `:noindex_pipe` because all of them are assembled from things other
+      # people wrote on other servers.
+      #
+      # The two reply routes differ in segment count, so neither shadows the
+      # other, and each keeps the id space of its own table.
       scope "/system/fediverse" do
         pipe_through(:noindex_pipe)
 
         live("/reply/:id", PostLive.RemoteReply, :new)
+        live("/reply/post/:id", PostLive.RemotePostReply, :new)
         live("/account/:id", FediverseAccountLive, :show)
       end
 
