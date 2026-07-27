@@ -60,6 +60,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -102,6 +103,12 @@ defmodule Vutuv.Fediverse do
     "as:Public",
     "Public"
   ]
+
+  # An actor's followers collection is conventionally its actor URI plus this,
+  # and there is no other way to recognise one from the address alone. Named
+  # beside the public collections because it is the same kind of fact: a
+  # well-known collection URI whose spelling the audience readers depend on.
+  @followers_suffix "/followers"
 
   @doc "The installation-wide switch (FEDIVERSE_ENABLED; off = no endpoints, no deliveries)."
   def enabled?, do: Application.get_env(:vutuv, :fediverse_enabled, true)
@@ -485,7 +492,12 @@ defmodule Vutuv.Fediverse do
       stuck_deliveries:
         Repo.aggregate(from(d in Delivery, where: not is_nil(d.last_error)), :count),
       blocked_instances: blocked_instance_count(),
-      failed_takedowns: delivery_failure_count()
+      failed_takedowns: delivery_failure_count(),
+      # The inbound-following side (issues #1160 and #1161): how many accounts
+      # out there members here follow, and how much of what those accounts wrote
+      # is currently cached.
+      remote_follows: Repo.aggregate(Follow, :count),
+      cached_posts: remote_post_total()
     }
   end
 
@@ -665,8 +677,36 @@ defmodule Vutuv.Fediverse do
       follow ->
         undo_remote_follow(user, follow)
         Repo.delete(follow)
+        # The cached posts existed because somebody here followed the author
+        # (issue #1161). If nobody does any more, they go now rather than at the
+        # next sweep.
+        purge_unfollowed_remote_posts([follow.remote_account_id])
         :ok
     end
+  end
+
+  @doc """
+  Mutes (or unmutes) the member's follow of one remote account.
+
+  The same meaning a local follow's mute has: the subscription stays, its posts
+  leave the feed. It is the private, reversible answer to "not this account
+  today" — and having it matters because the only other lever on a cached post
+  is a report, which deletes the one shared copy for **every** member following
+  that author.
+
+  Scoped to the member's own follow, so an account id from anywhere resolves to
+  nothing but their own row. Returns `:ok` either way — muting something you do
+  not follow is not an error worth a message.
+  """
+  def set_remote_follow_mute(%User{id: user_id}, remote_account_id, muted?) do
+    UUIDv7.with_cast(remote_account_id, fn account_id ->
+      Repo.update_all(
+        from(f in Follow, where: f.user_id == ^user_id and f.remote_account_id == ^account_id),
+        set: [muted: muted?, updated_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)]
+      )
+    end)
+
+    :ok
   end
 
   @doc """
@@ -743,9 +783,13 @@ defmodule Vutuv.Fediverse do
   Returns how many rows went.
   """
   def drop_remote_follows(%User{} = user) do
-    undo_remote_follows(user, list_remote_follows(user))
+    follows = list_remote_follows(user)
+    undo_remote_follows(user, follows)
 
     {count, _} = Repo.delete_all(from(f in Follow, where: f.user_id == ^user.id))
+    # Their cached posts existed because this member followed their authors
+    # (issue #1161); for the ones nobody else here follows, that reason is gone.
+    purge_unfollowed_remote_posts(Enum.map(follows, & &1.remote_account_id))
     count
   end
 
@@ -1096,6 +1140,447 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  ## What the followed accounts post (issue #1161)
+
+  # The other half of following somebody out there: their posts, cached so they
+  # can appear in the follower's home feed.
+  #
+  # The whole design is "bounded copy". An author publishing to their followers
+  # chose exactly this delivery — their server pushes each post to every
+  # follower's server — but consent from somebody who never signed up here is
+  # not obtainable, so what we keep is bounded instead: plain text only, six
+  # months at the very most, an upstream `Delete` honoured at once, and gone the
+  # moment the last member here stops following them.
+  @remote_post_retention_days 183
+
+  # How many cached posts one member may report per day. Same lever and same
+  # reasoning as the reply reports: deleting a cached copy costs its author
+  # nothing they did not keep, so the lever stays open — but not unlimited, or
+  # wiping a whole account's stream is free.
+  @remote_post_report_limit 20
+
+  @doc "How long a cached post from a followed account may live (days)."
+  def remote_post_retention_days,
+    do: Application.get_env(:vutuv, :fediverse_post_retention_days, @remote_post_retention_days)
+
+  @doc "How many cached posts one member may report per day."
+  def remote_post_report_limit, do: @remote_post_report_limit
+
+  @doc """
+  Stores a post a followed account published (`Create(Note)` / `Create(Question)`).
+
+  Deliberately **installation-wide and idempotent**, not per member: several
+  members can follow the same account, and it is the same post. The unique
+  `object_uri` is what makes a redelivery (one per follower, until every server
+  uses our shared inbox) store one row.
+
+  Every gate, in order: the installation switch, at least one **accepted** local
+  follow of the sending actor, the object really is a Note or a Question, the
+  audience is one somebody here was published to, the sending server is within
+  its inbound cap, the post is not a reply into somebody else's conversation,
+  and there is text left once the markup is gone.
+
+  Returns `:ok` or `:skip`; the inbox answers 202 either way, so a misdirected
+  activity never learns which gate it failed.
+  """
+  def record_remote_post(activity, actor_uri) when is_binary(actor_uri) do
+    with true <- enabled?(),
+         %RemoteAccount{} = account <- followed_account(actor_uri),
+         %{} = object <- remote_post_object(activity["object"]),
+         audience when is_binary(audience) <- remote_post_audience(object, activity),
+         :ok <- check_inbound_cap(actor_uri),
+         true <- own_thread?(object, account),
+         {:ok, _post} <- insert_remote_post(account, object, audience) do
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  def record_remote_post(_activity, _actor_uri), do: :skip
+
+  @doc """
+  Applies an author's edit of a post we cached (`Update`).
+
+  Scoped to the account that wrote it, so one server cannot rewrite another's
+  words, and it re-reads the audience: an author who narrows a public post to
+  their followers has said "show this to fewer people", and that has to take
+  effect. A narrowing past what we may keep at all deletes the row.
+  """
+  def update_remote_post(activity, actor_uri) when is_binary(actor_uri) do
+    with %{} = object <- remote_post_object(activity["object"]),
+         uri when is_binary(uri) <- object["id"],
+         %RemotePost{} = post <- remote_post_by(uri, actor_uri) do
+      apply_remote_post_update(post, object, activity)
+    end
+
+    :ok
+  end
+
+  def update_remote_post(_activity, _actor_uri), do: :ok
+
+  @doc """
+  Honours an upstream `Delete` of a cached post.
+
+  Deliberately **un**gated, like `delete_reply/2`: an author withdrawing their
+  words is the deletion path that makes storing them defensible in the first
+  place, so it must not depend on any switch still being on. Scoped to the
+  account that wrote it, so one server cannot delete another's.
+  """
+  def delete_remote_post(actor_uri, object_uri)
+      when is_binary(actor_uri) and is_binary(object_uri) do
+    if post = remote_post_by(object_uri, actor_uri), do: Repo.delete(post)
+    :ok
+  end
+
+  def delete_remote_post(_actor_uri, _object_uri), do: :ok
+
+  @doc """
+  One page of the cached posts for `viewer`'s feed — the fourth source beside
+  followed members, reposts and followed tags.
+
+  Muted follows are left out (the subscription stays, the posts leave the feed,
+  exactly as a muted local follow behaves), and a followers-only post reaches
+  only a member whose own follow is **accepted**: a request nobody answered is
+  not a relationship, so it does not open the author's restricted posts.
+
+  `at` is the author's own `published_at` as a naive UTC stamp, because that is
+  what the merged feed sorts on.
+  """
+  def feed_remote_posts(%User{id: viewer_id}, fetch_n, cursor) do
+    if enabled?() do
+      from(p in RemotePost,
+        join: a in RemoteAccount,
+        on: a.id == p.remote_account_id,
+        join: f in Follow,
+        on: f.remote_account_id == a.id,
+        where: f.user_id == ^viewer_id and f.muted == false,
+        where: p.audience in ^RemotePost.open_audiences() or f.state == "accepted",
+        order_by: [desc: p.published_at, desc: p.id],
+        limit: ^fetch_n,
+        preload: [remote_account: a]
+      )
+      |> remote_posts_at_or_before(cursor)
+      |> Repo.all()
+      |> Enum.map(&remote_feed_entry/1)
+    else
+      []
+    end
+  end
+
+  defp remote_feed_entry(%RemotePost{} = post) do
+    %{
+      id: "remote-#{post.id}",
+      post: nil,
+      remote_post: post,
+      reposted_by: nil,
+      at: DateTime.to_naive(post.published_at)
+    }
+  end
+
+  defp remote_posts_at_or_before(query, nil), do: query
+
+  defp remote_posts_at_or_before(query, %{at: at}) do
+    where(query, [p], p.published_at <= ^DateTime.from_naive!(at, "Etc/UTC"))
+  end
+
+  @doc "One cached remote post with its account, or nil."
+  def get_remote_post(id) do
+    UUIDv7.with_cast(id, &Repo.get(RemotePost, &1)) |> Repo.preload(:remote_account)
+  end
+
+  @doc """
+  Somebody reports a cached post as not appropriate. **Deletes it immediately**
+  and records the takedown in the content-free ledger
+  (`Vutuv.Fediverse.NoteEvent`), the same way a reported reply is handled and
+  for the same reason: this is a cache of something that still exists at its
+  origin, so removing it costs the author nothing they did not keep.
+
+  Unlike a reported reply this sends **no `Flag`**. A reply arrived under a
+  member's own post, addressed into a conversation here, and the thread's owner
+  is a party that server already knows; a post from an account somebody chose to
+  follow is simply that author publishing to their own followers, and filing a
+  report about it in a member's name would put them in a message to strangers
+  they never asked to send. Deleting our copy is the whole action.
+
+  Rate limited per reporter (`remote_post_report_limit/0` a day).
+  """
+  def report_remote_post(post_id, %User{} = reporter) do
+    case RateLimiter.hit(
+           {:fediverse_post_report, reporter.id},
+           @remote_post_report_limit,
+           :timer.hours(24)
+         ) do
+      :ok -> take_down_remote_post(post_id, reporter)
+      _ -> {:error, :rate_limited}
+    end
+  end
+
+  defp take_down_remote_post(post_id, %User{} = reporter) do
+    case get_remote_post(post_id) do
+      %RemotePost{remote_account: %RemoteAccount{} = account} = post ->
+        Repo.delete(post)
+
+        # No `user_id`: unlike a reply, a cached post sits under nobody's post,
+        # so there is no member whose page it was on.
+        log_takedown(%{
+          action: "reported_post",
+          host: account.host,
+          actor_uri: account.actor_uri,
+          audience: post.audience,
+          actor_id: reporter.id
+        })
+
+        :ok
+
+      _ ->
+        {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Deletes every cached post past its ceiling — the floor under everything else,
+  so a copy nobody looked at and no server told us about still goes.
+  """
+  def expire_due_remote_posts(now \\ nil), do: expire_due(RemotePost, now)
+
+  @doc """
+  Deletes the cached posts of every remote account nobody here follows any more.
+
+  The account row itself stays: it may still be named by a reaction chip or a
+  stored reply, and re-resolving it on the next follow would be a needless
+  round trip. What goes is the content, which we only ever had a claim to hold
+  because somebody here was following its author.
+
+  This unscoped form is the **hourly sweep's**: it has to read every cached post
+  to answer the question, which is what catches the follows that vanished
+  through a cascade — a deleted account, a purged instance — without anybody
+  calling it. The unfollow paths call `purge_unfollowed_remote_posts/1` instead,
+  which asks the same question about the handful of accounts that just changed.
+  """
+  def purge_unfollowed_remote_posts do
+    followed = from(f in Follow, select: f.remote_account_id, distinct: true)
+
+    delete_unfollowed_posts(
+      from(p in RemotePost, where: p.remote_account_id not in subquery(followed))
+    )
+  end
+
+  @doc """
+  The same purge, narrowed to the accounts somebody just stopped following.
+
+  What the unfollow paths call, so the copy disappears the moment the reason for
+  it does. Narrowed because the unscoped form above is a whole-table anti-join,
+  and an unfollow is a member's own click inside their own request: it must not
+  cost a scan of every cached post on the installation to drop the posts of one
+  account.
+  """
+  def purge_unfollowed_remote_posts(account_ids) when is_list(account_ids) do
+    still_followed =
+      from(f in Follow, where: f.remote_account_id in ^account_ids, select: f.remote_account_id)
+
+    delete_unfollowed_posts(
+      from(p in RemotePost,
+        where: p.remote_account_id in ^account_ids,
+        where: p.remote_account_id not in subquery(still_followed)
+      )
+    )
+  end
+
+  defp delete_unfollowed_posts(query) do
+    {count, _} = Repo.delete_all(query)
+    count
+  end
+
+  @doc "How many cached posts are stored across the installation."
+  def remote_post_total, do: Repo.aggregate(RemotePost, :count)
+
+  @doc """
+  What each remote server has stored here as cached posts, biggest first — the
+  third column of the operator's `/admin/fediverse` picture, beside the follower
+  and reply volumes. Capped at `limit` hosts.
+  """
+  def remote_post_hosts(limit \\ 20) do
+    Repo.all(
+      from(p in RemotePost,
+        join: a in RemoteAccount,
+        on: a.id == p.remote_account_id,
+        group_by: a.host,
+        order_by: [desc: count(p.id)],
+        limit: ^limit,
+        select: %{host: a.host, posts: count(p.id)}
+      )
+    )
+  end
+
+  # The account behind an actor URI, but only when somebody here has an
+  # **accepted** follow of it. A requested-but-unanswered follow does not open
+  # the door: the other server has not agreed to anything, and neither have we.
+  defp followed_account(actor_uri) do
+    Repo.one(
+      from(a in RemoteAccount,
+        join: f in Follow,
+        on: f.remote_account_id == a.id,
+        where: a.actor_uri == ^actor_uri and f.state == "accepted",
+        limit: 1
+      )
+    )
+  end
+
+  # An activity delivers what it claims, or it is dropped. A `Question` is a
+  # poll; every other object type keeps the 202-and-drop.
+  defp remote_post_object(%{"type" => type} = object) when type in ~w(Note Question), do: object
+  defp remote_post_object(_object), do: nil
+
+  # How the post was addressed, read from `to`/`cc` on both the Create and the
+  # object (servers put the audience on either).
+  #
+  #   public   — the public collection in `to`: on that server's timelines.
+  #   unlisted — the public collection in `cc` only: deliverable to followers,
+  #              kept out of that server's discovery surfaces.
+  #   followers — a followers collection and nothing public.
+  #
+  # Anything else (a direct message, an audience we cannot read) is **not
+  # stored at all**. A reply had to be kept in order to reach the member it was
+  # addressed to; a post nobody here was published to has no such claim.
+  defp remote_post_audience(object, activity) do
+    to = normalize_uri_list(object["to"]) ++ normalize_uri_list(activity["to"])
+    cc = normalize_uri_list(object["cc"]) ++ normalize_uri_list(activity["cc"])
+
+    cond do
+      Enum.any?(to, &(&1 in @public_collections)) -> "public"
+      Enum.any?(cc, &(&1 in @public_collections)) -> "unlisted"
+      Enum.any?(to ++ cc, &String.ends_with?(&1, @followers_suffix)) -> "followers"
+      true -> nil
+    end
+  end
+
+  # Whether this is the author's own thread rather than a reply into somebody
+  # else's conversation. A top-level post always is; a reply is kept only when
+  # it continues a post of theirs we already hold.
+  #
+  # The line is deliberate: a followed account's own thread is what a follower
+  # subscribed to, while their reply under a stranger's post drags a third
+  # party's conversation into our storage for the sake of one half of it.
+  defp own_thread?(%{"inReplyTo" => parent}, %RemoteAccount{} = account) when is_binary(parent) do
+    Repo.exists?(
+      from(p in RemotePost,
+        where: p.object_uri == ^parent and p.remote_account_id == ^account.id
+      )
+    )
+  end
+
+  defp own_thread?(_object, _account), do: true
+
+  defp insert_remote_post(%RemoteAccount{} = account, object, audience) do
+    received = DateTime.utc_now(:second)
+
+    with uri when is_binary(uri) <- presence(object["id"]),
+         # Nothing left once the markup is gone (a picture-only post, until
+         # issue #1163 gives pictures a home): a row about a third party has to
+         # earn its place.
+         text when is_binary(text) <- remote_post_text(object) do
+      %RemotePost{remote_account_id: account.id}
+      |> RemotePost.changeset(
+        Map.merge(remote_post_attrs(object, text, audience), %{
+          object_uri: uri,
+          in_reply_to_uri: object["inReplyTo"],
+          origin_url: presence(object["url"]),
+          kind: remote_post_kind(object),
+          published_at: published_at(object["published"], received),
+          received_at: received,
+          expires_at: DateTime.add(received, remote_post_retention_days() * 86_400)
+        })
+      )
+      |> Repo.insert(on_conflict: :nothing, conflict_target: [:object_uri])
+    else
+      _ -> :error
+    end
+  end
+
+  # Everything about a cached post its author can still change after publishing.
+  # Shared by the insert and the `Update` path, so an edit cannot silently stop
+  # carrying a field the insert writes.
+  defp remote_post_attrs(object, text, audience) do
+    %{
+      content_text: text,
+      summary: remote_text(object["summary"], RemotePost.max_summary()),
+      sensitive: object["sensitive"] == true,
+      audience: audience
+    }
+  end
+
+  defp remote_post_kind(%{"type" => "Question"}), do: "question"
+  defp remote_post_kind(_object), do: "note"
+
+  # The post's text, with a poll's options folded in as lines. Carrying a vote is
+  # not something we can do, so the card links back to the original to vote —
+  # but a poll whose options are invisible is not a poll, it is a question with
+  # no answers.
+  defp remote_post_text(%{"type" => "Question"} = object) do
+    options =
+      object
+      |> poll_options()
+      |> Enum.map_join("\n", &("• " <> &1))
+
+    [remote_text(object["content"], RemotePost.max_content()), presence(options)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n\n")
+    |> presence()
+  end
+
+  defp remote_post_text(object), do: remote_text(object["content"], RemotePost.max_content())
+
+  # A poll's options live under `oneOf` (pick one) or `anyOf` (pick several),
+  # each a Note whose `name` is the option text.
+  defp poll_options(object) do
+    options =
+      for option <- List.wrap(object["oneOf"]) ++ List.wrap(object["anyOf"]),
+          is_map(option),
+          name = presence(option["name"]),
+          do: name
+
+    Enum.take(options, 20)
+  end
+
+  # The author's own stamp, which is what orders the feed — clamped against the
+  # future, so a server cannot pin itself to the top of somebody's feed forever
+  # by publishing with a date in 2099. An unreadable or absent stamp falls back
+  # to arrival.
+  defp published_at(value, received) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, at, _offset} -> Enum.min([DateTime.truncate(at, :second), received], DateTime)
+      _ -> received
+    end
+  end
+
+  defp published_at(_value, received), do: received
+
+  defp remote_post_by(object_uri, actor_uri) do
+    Repo.one(
+      from(p in RemotePost,
+        join: a in RemoteAccount,
+        on: a.id == p.remote_account_id,
+        where: p.object_uri == ^object_uri and a.actor_uri == ^actor_uri
+      )
+    )
+  end
+
+  defp apply_remote_post_update(%RemotePost{} = post, object, activity) do
+    text = remote_post_text(object)
+    audience = remote_post_audience(object, activity)
+
+    if is_nil(text) or is_nil(audience) do
+      # The author narrowed it past what we may hold, or emptied it: the same
+      # "stop showing this" signal a `Delete` carries, just spelled differently.
+      Repo.delete(post)
+    else
+      post
+      |> RemotePost.changeset(remote_post_attrs(object, text, audience))
+      |> Repo.update()
+    end
+  end
+
   ## Pruning followers whose account is gone (issue #1072)
 
   # Not every departure is announced. An `Undo(Follow)` or the remote actor's
@@ -1324,8 +1809,20 @@ defmodule Vutuv.Fediverse do
 
     # A block cuts both directions (issue #1160): the accounts our members
     # follow over there go with the ones that follow us, and the follow rows
-    # cascade off them. Nothing is sent — a blocked server is not talked to,
-    # not even to say goodbye.
+    # cascade off them — as do their cached posts (issue #1161), which is why
+    # they are counted before the delete rather than deleted separately.
+    # Nothing is sent: a blocked server is not talked to, not even to say
+    # goodbye.
+    cached_posts =
+      Repo.aggregate(
+        from(p in RemotePost,
+          join: a in RemoteAccount,
+          on: a.id == p.remote_account_id,
+          where: a.host == ^host
+        ),
+        :count
+      )
+
     {remote_accounts, _} =
       Repo.delete_all(from(a in RemoteAccount, where: a.host == ^host))
 
@@ -1345,6 +1842,7 @@ defmodule Vutuv.Fediverse do
     %{
       followers: followers,
       remote_accounts: remote_accounts,
+      cached_posts: cached_posts,
       notes: notes,
       deliveries: deliveries,
       post_deliveries: post_deliveries
@@ -1352,9 +1850,40 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  What each remote server has stored here, biggest first — the operator's "who
-  is sending us the most" list on `/admin/fediverse`, and what a block decision
-  is made from. Capped at `limit` hosts.
+  What each remote server has stored here, all of it, biggest first — the
+  operator's "who is sending us the most" table on `/admin/fediverse`, and what
+  a block decision is made from.
+
+  Merged across the three things a server can leave here: followers of our
+  members, replies under their posts (issue #1069) and cached posts from
+  accounts they follow (issue #1161). Merged rather than joined onto the
+  follower list, because a server can appear through any one of them alone — a
+  member following an account somewhere nobody there follows back is exactly the
+  case the follower-keyed table used to miss, and it is the case that arrives
+  with somebody else's content.
+
+  Rows are `%{host:, followers:, notes:, posts:}`, sorted by the total, capped
+  at `limit`.
+  """
+  def inbound_volume(limit \\ 20) do
+    # Every source already returns `%{host: …, <its own key>: count}`, so merging
+    # them is a group-by on the host with the missing keys defaulted. A fourth
+    # inbound kind joins the list and the blank row, and nothing else changes.
+    blank = %{followers: 0, notes: 0, posts: 0}
+
+    [inbound_hosts(limit), note_hosts(limit), remote_post_hosts(limit)]
+    |> Enum.concat()
+    |> Enum.group_by(& &1.host)
+    |> Enum.map(fn {host, rows} ->
+      Enum.reduce(rows, Map.put(blank, :host, host), &Map.merge(&2, &1))
+    end)
+    |> Enum.sort_by(&(&1.followers + &1.notes + &1.posts), :desc)
+    |> Enum.take(limit)
+  end
+
+  @doc """
+  How many remote followers each server has here, biggest first — one of the
+  three columns `inbound_volume/1` merges. Capped at `limit` hosts.
   """
   def inbound_hosts(limit \\ 20) do
     Repo.all(
@@ -1498,12 +2027,30 @@ defmodule Vutuv.Fediverse do
   defp users_by_username(usernames),
     do: Repo.all(from(u in User, where: u.username in ^usernames))
 
+  # A post an account publishes to its followers (issue #1161) names no local
+  # member at all — the addressing is the public collection and the author's own
+  # followers collection. The members it concerns are the ones who follow that
+  # account here, and naming them matters for more than the fan-out: the shared
+  # inbox signs its actor fetch with the first resolved addressee's key, and an
+  # authorized-fetch server refuses an anonymous one, so a delivery that
+  # resolved to nobody would fail verification and the post would be lost.
+  defp lifecycle_users(%{"type" => "Create"}, actor_uri) when is_binary(actor_uri),
+    do: remote_follow_users(actor_uri)
+
   defp lifecycle_users(%{"type" => type} = activity, actor_uri)
        when type in ~w(Update Delete) and is_binary(actor_uri) do
     case activity_object_id(activity["object"]) do
-      ^actor_uri -> followed_local_users(actor_uri) ++ remote_follow_users(actor_uri)
-      uri when is_binary(uri) -> note_holding_users(actor_uri, uri)
-      _ -> []
+      ^actor_uri ->
+        followed_local_users(actor_uri) ++ remote_follow_users(actor_uri)
+
+      # An author editing or withdrawing something they wrote: the members whose
+      # posts hold a copy of it, plus (issue #1161) the members who follow them,
+      # since a cached post of theirs may be the thing being changed.
+      uri when is_binary(uri) ->
+        note_holding_users(actor_uri, uri) ++ remote_follow_users(actor_uri)
+
+      _ ->
+        []
     end
   end
 
@@ -1937,9 +2484,14 @@ defmodule Vutuv.Fediverse do
   Deletes every stored reply past its ceiling — the floor under everything else,
   so a copy nobody looked at and no server told us about still goes.
   """
-  def expire_due_notes(now \\ nil) do
+  def expire_due_notes(now \\ nil), do: expire_due(Note, now)
+
+  # The ceiling enforcement itself, one copy for every kind of cached remote
+  # content: everything that carries an `expires_at` goes when its clock runs
+  # out, whatever else did or did not happen to it.
+  defp expire_due(schema, now) do
     now = now || DateTime.utc_now(:second)
-    {count, _} = Repo.delete_all(from(n in Note, where: n.expires_at <= ^now))
+    {count, _} = Repo.delete_all(where(schema, [r], r.expires_at <= ^now))
     count
   end
 
@@ -2124,7 +2676,7 @@ defmodule Vutuv.Fediverse do
 
     cond do
       Enum.any?(addressed, &(&1 in @public_collections)) -> "public"
-      Enum.any?(addressed, &String.ends_with?(&1, "/followers")) -> "followers"
+      Enum.any?(addressed, &String.ends_with?(&1, @followers_suffix)) -> "followers"
       Docs.actor_url(user) in addressed -> "direct"
       true -> "unknown"
     end
@@ -2189,13 +2741,29 @@ defmodule Vutuv.Fediverse do
   end
 
   defp log_note_event(%Note{} = note, author_id, %User{} = actor, action) do
-    Repo.insert!(%NoteEvent{
+    log_takedown(%{
       action: action,
       host: Note.host(note.actor_uri) || "unknown",
-      actor_digest: note_actor_digest(note.actor_uri),
+      actor_uri: note.actor_uri,
       audience: note.audience,
       user_id: author_id,
       actor_id: actor.id
+    })
+  end
+
+  # The one writer of the content-free takedown ledger, so its field set — and
+  # the keyed digest that stands in for the actor — has a single definition
+  # whatever kind of cached content was taken down. `user_id` is the member
+  # whose page it sat on, and is absent for content that sat on nobody's (a
+  # cached post from a followed account, issue #1161).
+  defp log_takedown(attrs) do
+    Repo.insert!(%NoteEvent{
+      action: attrs.action,
+      host: attrs.host,
+      actor_digest: note_actor_digest(attrs.actor_uri),
+      audience: attrs.audience,
+      user_id: attrs[:user_id],
+      actor_id: attrs.actor_id
     })
   end
 

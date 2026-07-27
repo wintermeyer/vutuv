@@ -12,6 +12,13 @@ defmodule VutuvWeb.Admin.FediverseHTML do
   something rather than leaking a raw string at the operator.
   """
   def note_event_label(%{action: "reported"}), do: gettext("Reported as not appropriate")
+
+  # Named apart from a reported reply (issue #1161): a reply sat under one
+  # member's post, a cached post is shared by everybody who follows its author,
+  # so this one removal emptied it out of all of their feeds.
+  def note_event_label(%{action: "reported_post"}),
+    do: gettext("Cached post reported, removed for everyone here")
+
   def note_event_label(%{action: "removed_by_member"}), do: gettext("Removed by the member")
   def note_event_label(%{action: "flagged"}), do: gettext("Reported to the origin server")
   def note_event_label(_event), do: gettext("Taken down")

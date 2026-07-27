@@ -1,6 +1,8 @@
 defmodule Vutuv.Fediverse.NoteSweeper do
   @moduledoc """
-  The hard ceiling under the stored replies from other networks (issue #1069).
+  The hard ceiling under everything vutuv caches from other networks: the
+  replies written under members' posts (issue #1069) and the posts of the
+  accounts members follow (issue #1161).
 
   Everything else that deletes a remote reply depends on somebody doing
   something: the author withdrawing it, the member taking it down, a reader
@@ -44,19 +46,31 @@ defmodule Vutuv.Fediverse.NoteSweeper do
   @impl true
   def handle_info(:sweep, state) do
     try do
-      if Fediverse.enabled?() do
-        case Fediverse.expire_due_notes() do
-          0 -> :ok
-          count -> Logger.info("Fediverse note sweep: deleted #{count} expired remote reply(s)")
-        end
-      end
+      if Fediverse.enabled?(), do: sweep()
     rescue
-      error -> Logger.error("Fediverse note sweep failed: #{inspect(error)}")
+      error -> Logger.error("Fediverse sweep failed: #{inspect(error)}")
     end
 
     schedule()
     {:noreply, state}
   end
+
+  # Three deletions, all of them "the reason for this copy is gone":
+  #
+  #   * replies past their ceiling (issue #1069),
+  #   * cached posts from followed accounts past theirs (issue #1161),
+  #   * cached posts whose author nobody here follows any more. The unfollow
+  #     paths purge those immediately; this is what catches the follows that
+  #     vanished through a cascade — a deleted member account, a purged
+  #     instance — without anybody calling the purge.
+  defp sweep do
+    log("expired remote reply", Fediverse.expire_due_notes())
+    log("expired cached post", Fediverse.expire_due_remote_posts())
+    log("cached post of an unfollowed account", Fediverse.purge_unfollowed_remote_posts())
+  end
+
+  defp log(_what, 0), do: :ok
+  defp log(what, count), do: Logger.info("Fediverse sweep: deleted #{count} #{what}(s)")
 
   defp schedule, do: Process.send_after(self(), :sweep, @interval)
 end

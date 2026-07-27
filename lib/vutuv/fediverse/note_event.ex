@@ -35,7 +35,13 @@ defmodule Vutuv.Fediverse.NoteEvent do
 
   use VutuvWeb, :model
 
-  @actions ~w(reported removed_by_member flagged)
+  # `reported_post` is its own value rather than a second `reported` (issue
+  # #1161): a reply sat under one member's post and only that member's page
+  # changed, while a cached post is shared by everybody who follows its author,
+  # so one report takes it out of every one of their feeds. An operator reading
+  # this ledger has to be able to tell those two apart at a glance, and the
+  # heading above the table cannot name both if the rows do not distinguish them.
+  @actions ~w(reported reported_post removed_by_member flagged)
 
   @doc "The closed set of `action` values this ledger records."
   def actions, do: @actions

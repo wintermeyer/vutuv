@@ -145,9 +145,12 @@ defmodule Vutuv.FediverseBlocklistTest do
       # `remote_accounts` joined with issue #1160: a block cuts both directions,
       # so the accounts our members follow over there go too (and their follow
       # rows cascade off them).
+      # `cached_posts` joined with issue #1161: a block also takes the posts
+      # cached from accounts on that server, which cascade off the accounts.
       assert purged == %{
                followers: 1,
                remote_accounts: 0,
+               cached_posts: 0,
                deliveries: 1,
                notes: 0,
                post_deliveries: 0

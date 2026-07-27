@@ -539,6 +539,76 @@ defmodule VutuvWeb.FediverseControllerTest do
     end
   end
 
+  describe "POST /:slug/actor/inbox — posts from a followed account (#1161)" do
+    defp remote_create(id \\ "https://social.example/posts/1") do
+      %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => "https://social.example/activities/create",
+        "type" => "Create",
+        "actor" => @remote_actor,
+        "object" => %{
+          "id" => id,
+          "type" => "Note",
+          "attributedTo" => @remote_actor,
+          "content" => "<p>Posted over there.</p>",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => [@remote_actor <> "/followers"]
+        }
+      }
+    end
+
+    test "a signed Create from a followed account is cached once", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      follow = requested_follow(user)
+      accept_follow(user, follow)
+
+      conn = signed_post(conn, user, remote_create(), priv)
+
+      assert conn.status == 202
+      assert [post] = Repo.all(Vutuv.Fediverse.RemotePost)
+      assert post.content_text == "Posted over there."
+
+      # A second follower's delivery of the same post is the same post.
+      conn |> recycle() |> signed_post(user, remote_create(), priv)
+      assert Repo.aggregate(Vutuv.Fediverse.RemotePost, :count) == 1
+    end
+
+    test "a Create from an account nobody follows is acknowledged and dropped", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+
+      conn = signed_post(conn, user, remote_create(), priv)
+
+      assert conn.status == 202
+      assert Repo.aggregate(Vutuv.Fediverse.RemotePost, :count) == 0
+    end
+
+    test "the author's Delete removes the cached copy", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      follow = requested_follow(user)
+      accept_follow(user, follow)
+
+      signed_post(conn, user, remote_create(), priv)
+      assert Repo.aggregate(Vutuv.Fediverse.RemotePost, :count) == 1
+
+      withdrawal =
+        lifecycle_activity("Delete", %{
+          "id" => "https://social.example/posts/1",
+          "type" => "Tombstone"
+        })
+
+      conn = conn |> recycle() |> signed_post(user, withdrawal, priv)
+
+      assert conn.status == 202
+      assert Repo.aggregate(Vutuv.Fediverse.RemotePost, :count) == 0
+    end
+  end
+
   describe "POST /:slug/actor/inbox — Undo and noise" do
     test "Undo(Follow) removes the follower", %{conn: conn} do
       {priv, pub} = Keys.generate()

@@ -1,0 +1,187 @@
+defmodule VutuvWeb.FeedRemotePostsTest do
+  @moduledoc """
+  A followed account's post in the home feed (issue #1161): the remote card, the
+  content-filter placeholder over it, and the report control that deletes our
+  copy.
+  """
+  use VutuvWeb.ConnCase
+
+  import Phoenix.LiveViewTest
+
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Follow
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
+
+  @actor "https://social.example/users/them"
+
+  defp cached_post(user, overrides \\ %{}) do
+    account =
+      Repo.insert!(%RemoteAccount{
+        actor_uri: @actor,
+        host: "social.example",
+        handle: "them",
+        name: "Them Themself",
+        inbox_uri: @actor <> "/inbox"
+      })
+
+    Repo.insert!(%Follow{
+      user_id: user.id,
+      remote_account_id: account.id,
+      state: "accepted",
+      follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/1"
+    })
+
+    now = DateTime.utc_now(:second)
+
+    Repo.insert!(
+      struct(
+        %RemotePost{
+          remote_account_id: account.id,
+          object_uri: "https://social.example/posts/1",
+          origin_url: "https://social.example/@them/1",
+          content_text: "A thought from over there.",
+          audience: "public",
+          kind: "note",
+          published_at: now,
+          received_at: now,
+          expires_at: DateTime.add(now, 86_400)
+        },
+        overrides
+      )
+    )
+  end
+
+  test "a followed account's post renders with the remote skin and no action bar", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    post = cached_post(user)
+
+    {:ok, view, html} = live(conn, ~p"/feed")
+
+    assert has_element?(view, "[data-remote-post='#{post.id}']")
+    assert html =~ "A thought from over there."
+    assert html =~ "@them@social.example"
+    # It links out to where it really lives, and offers nothing to like or
+    # reshare — those are #1164-#1166.
+    assert has_element?(view, "[data-remote-origin][href='https://social.example/@them/1']")
+    refute has_element?(view, "[data-remote-post='#{post.id}'] [data-post-actions]")
+  end
+
+  test "a followers-only post wears the lock", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    cached_post(user, %{audience: "followers"})
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    assert has_element?(view, "[data-remote-private]")
+  end
+
+  test "a content warning stays closed until it is opened", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    cached_post(user, %{summary: "Politics", sensitive: true})
+
+    {:ok, view, html} = live(conn, ~p"/feed")
+
+    assert has_element?(view, "[data-remote-warning]")
+    assert html =~ "Politics"
+  end
+
+  test "a muted word collapses it to the placeholder, and reveal opens it", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    {:ok, _filter} =
+      Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "thought"})
+
+    post = cached_post(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    assert has_element?(view, "[data-filtered-post]")
+    refute has_element?(view, "[data-remote-post='#{post.id}']")
+
+    view |> element("[data-filtered-post] button, [data-filtered-post] a") |> render_click()
+
+    assert has_element?(view, "[data-remote-post='#{post.id}']")
+  end
+
+  test "reporting deletes our copy and drops the row", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    post = cached_post(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    view
+    |> element("[data-remote-post='#{post.id}'] [phx-click='report-remote-post']")
+    |> render_click()
+
+    assert Repo.aggregate(RemotePost, :count) == 0
+    refute has_element?(view, "[data-remote-post='#{post.id}']")
+    # The takedown is on record, without any of what was said.
+    assert [event] = Fediverse.recent_note_events()
+    assert event.action == "reported_post"
+  end
+
+  test "a remote post arriving on a later page", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    # Older than everything below, so it lands on the SECOND page — which is
+    # what puts it through the "already on screen?" scan that runs over a newly
+    # loaded page and reaches for `entry.post.id`, a field a cached remote post
+    # does not have.
+    cached_post(user, %{published_at: DateTime.add(DateTime.utc_now(:second), -3600)})
+
+    for n <- 1..21, do: Vutuv.PostsHelpers.create_post!(user, %{"body" => "Mine #{n}."})
+
+    {:ok, view, html} = live(conn, ~p"/feed")
+
+    refute html =~ "A thought from over there."
+    assert has_element?(view, "#load-more")
+
+    view |> element("#load-more") |> render_click()
+
+    assert has_element?(view, "[data-remote-post]")
+  end
+
+  test "the card names where it came from up in the header, not only below the text", %{
+    conn: conn
+  } do
+    {conn, user} = create_and_login_user(conn)
+    cached_post(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    # In a flat feed nothing else says "not a member": the reply card can leave
+    # this to its footer because it is visibly indented under a member's post.
+    assert has_element?(view, "[data-remote-network='social.example']")
+  end
+
+  test "muting the account takes its posts out of the feed and keeps the follow", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    post = cached_post(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    view
+    |> element("[data-remote-post='#{post.id}'] [phx-click='mute-remote-account']")
+    |> render_click()
+
+    refute has_element?(view, "[data-remote-post='#{post.id}']")
+    # Private and reversible: the post is still cached and the follow still
+    # stands. This is the lever Report must not be the only alternative to.
+    assert Repo.aggregate(RemotePost, :count) == 1
+    assert Fediverse.remote_follow_count(user) == 1
+    assert Fediverse.feed_remote_posts(user, 10, nil) == []
+    # And the timeline says it is empty rather than leaving a blank card.
+    assert render(view) =~ "Nothing here yet"
+  end
+
+  test "nobody else's feed carries it", %{conn: conn} do
+    # The follow is somebody else's, so the cache is somebody else's to read.
+    cached_post(insert(:activated_user, fediverse_followers?: true))
+
+    {conn, _stranger} = create_and_login_user(conn)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    refute has_element?(view, "[data-remote-post]")
+  end
+end

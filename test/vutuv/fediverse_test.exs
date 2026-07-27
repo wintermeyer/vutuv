@@ -700,7 +700,12 @@ defmodule Vutuv.FediverseTest do
                stuck_deliveries: 1,
                blocked_instances: 0,
                # Takedowns that gave up without arriving (issue #1102).
-               failed_takedowns: 0
+               failed_takedowns: 0,
+               # The inbound-following side: accounts our members follow out
+               # there (issue #1160) and how much of their writing is cached
+               # here (issue #1161).
+               remote_follows: 0,
+               cached_posts: 0
              }
     end
   end

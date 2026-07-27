@@ -23,11 +23,11 @@ defmodule VutuvWeb.Admin.FediverseController do
   def index(conn, _params) do
     render(conn, "index.html",
       blocked: Fediverse.list_blocked_instances(),
-      inbound_hosts: Fediverse.inbound_hosts(),
-      # Stored replies per server (issue #1069), keyed by host so the volume
-      # table can show them beside the follower counts: the same "who is sending
-      # us the most" question, now that text arrives too.
-      note_hosts: Map.new(Fediverse.note_hosts(), &{&1.host, &1.notes}),
+      # Everything each server has left here — followers, replies under our
+      # members' posts (issue #1069) and posts cached from accounts they follow
+      # (issue #1161) — as one merged table. The same "who is sending us the
+      # most" question, now that content arrives in two directions.
+      inbound_volume: Fediverse.inbound_volume(),
       note_events: Fediverse.recent_note_events(),
       # Takedowns that gave up without arriving (issue #1102). The one delivery
       # failure that is not just noise: a copy we asked to have removed is still

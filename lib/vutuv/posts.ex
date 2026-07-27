@@ -1549,21 +1549,50 @@ defmodule Vutuv.Posts do
         [
           &feed_post_items(viewer, &1, &2),
           &feed_repost_items(viewer, &1, &2),
-          &feed_tag_items(viewer, &1, &2)
+          &feed_tag_items(viewer, &1, &2),
+          &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2)
         ],
         limit,
         cursor
       )
 
-    entries =
-      page.entries
+    %{page | entries: decorate_feed_entries(page.entries, viewer)}
+  end
+
+  # Everything the four sources produce, made ready to render.
+  #
+  # The fourth source (issue #1161) carries a cached post from another network,
+  # which is not a `%Post{}` and has no author here, no thread, no reposters and
+  # no engagement. So it is split off, the local pipeline runs on the rest, and
+  # the two are merged back through `Vutuv.FeedPage.sort_entries/1` — the same
+  # ordering rule the paginator used. The split is what keeps every transform
+  # below free of "unless this is a remote entry" branches, and the merge is
+  # needed (rather than a guarded map) because `collapse_threads/1` and
+  # `collapse_reposts/1` drop and fold entries, so the local half is not 1:1.
+  defp decorate_feed_entries(entries, viewer) do
+    {remote, local} = Enum.split_with(entries, &remote_feed_entry?/1)
+
+    local =
+      local
       |> hydrate_posts()
       |> collapse_threads()
       |> collapse_reposts()
       |> attach_reposters(viewer)
 
-    %{page | entries: entries}
+    Vutuv.FeedPage.sort_entries(local ++ remote)
   end
+
+  @doc """
+  Whether a feed entry carries a cached post from another network (issue #1161)
+  rather than a vutuv post.
+
+  The **one** test for it, so nothing has to know that such an entry is spotted
+  by a present `:remote_post` and an absent `:post`. A renderer picks the card
+  from it; every batch read and every scan that reaches for `entry.post` filters
+  through it first, because a remote entry has no author, no thread and no
+  engagement here.
+  """
+  def remote_feed_entry?(entry), do: not is_nil(entry[:remote_post])
 
   defp feed_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     from(p in Post,

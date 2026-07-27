@@ -29,6 +29,8 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Isbn
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
@@ -828,104 +830,49 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <article data-fediverse-reply={@note.id} data-audience={@note.audience}>
       <div class="flex items-start gap-3">
-        <span class="relative shrink-0">
-          <span
-            data-remote-avatar
-            aria-hidden="true"
-            class="inline-flex h-9 w-9 select-none items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-          >
-            {@initials}
-          </span>
-          <span
-            aria-hidden="true"
-            title={gettext("From another network")}
-            class="absolute -bottom-1 -left-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[9px] ring-2 ring-white dark:bg-slate-900 dark:ring-slate-900"
-          >
-            🌐
-          </span>
-        </span>
+        <.remote_avatar initials={@initials} />
 
         <div class="min-w-0 flex-1">
-          <div class="flex items-start gap-2">
-            <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
-              <span class="font-semibold text-slate-900 dark:text-white">{@author}</span>
-              <span class="text-xs text-slate-600 dark:text-slate-400">
-                <a
-                  href={@note.actor_uri}
-                  target="_blank"
-                  rel="nofollow noopener noreferrer"
-                  class="hover:text-brand-700 dark:hover:text-brand-300"
-                >{@handle}</a>
-                · <.post_time at={@note.received_at} />
-              </span>
-            </div>
-
-            <%!-- The takedown controls. Report is open to anyone who can see the
-            reply (which for a private one is its addressee alone) and deletes it
-            at once — no case workflow, because this is a cache of something that
-            still exists at its origin. --%>
-            <.card_menu :if={@viewer} id={"remote-reply-menu-#{@note.id}"}>
-              <:item
-                :if={@owner?}
-                click="remove-remote-reply"
-                value={@note.id}
-                confirm={gettext("Remove this reply from your post?")}
-              >
-                {gettext("Remove")}
-              </:item>
-              <:item
-                click="report-remote-reply"
-                value={@note.id}
-                danger
-                confirm={
-                  gettext("Report this reply as not appropriate? It is deleted right away.")
-                }
-              >
-                {gettext("Report")}
-              </:item>
-            </.card_menu>
-          </div>
+          <.remote_header author={@author} handle={@handle} actor_uri={@note.actor_uri} at={@note.received_at}>
+            <:menu>
+              <%!-- The takedown controls. Report is open to anyone who can see the
+              reply (which for a private one is its addressee alone) and deletes it
+              at once — no case workflow, because this is a cache of something that
+              still exists at its origin. --%>
+              <.card_menu :if={@viewer} id={"remote-reply-menu-#{@note.id}"}>
+                <:item
+                  :if={@owner?}
+                  click="remove-remote-reply"
+                  value={@note.id}
+                  confirm={gettext("Remove this reply from your post?")}
+                >
+                  {gettext("Remove")}
+                </:item>
+                <:item
+                  click="report-remote-reply"
+                  value={@note.id}
+                  danger
+                  confirm={
+                    gettext("Report this reply as not appropriate? It is deleted right away.")
+                  }
+                >
+                  {gettext("Report")}
+                </:item>
+              </.card_menu>
+            </:menu>
+          </.remote_header>
 
           <%!-- A reply addressed to the member alone (issue #1071). The lock is
           the same glyph a restricted post wears, so "not everybody sees this"
           reads the same way across the app — and the member must know it before
           they answer as if the world were watching. --%>
-          <p
-            :if={!@public?}
-            data-remote-private
-            class="mb-0 mt-0.5 text-xs font-medium text-slate-600 dark:text-slate-400"
-          >
-            <span aria-hidden="true">🔒</span> {gettext("Sent to you only, visible to nobody else")}
-          </p>
+          <.remote_restricted_note :if={!@public?}>
+            {gettext("Sent to you only, visible to nobody else")}
+          </.remote_restricted_note>
 
-          <div class="mt-1.5 border-l-2 border-dashed border-slate-300 pl-3 dark:border-slate-600">
-            <%= if @warned? do %>
-              <details data-remote-warning class="group">
-                <summary class="cursor-pointer list-none text-sm font-medium text-slate-700 dark:text-slate-300">
-                  <span aria-hidden="true">⚠</span> {@note.summary}
-                  <span class="ml-1 text-xs font-normal text-brand-600 group-open:hidden dark:text-brand-400">
-                    {gettext("Show")}
-                  </span>
-                </summary>
-                <p class="mb-0 mt-1.5 whitespace-pre-line text-sm text-slate-700 dark:text-slate-300">
-                  {@note.content_text}
-                </p>
-              </details>
-            <% else %>
-              <p class="mb-0 whitespace-pre-line text-sm text-slate-700 dark:text-slate-300">
-                {@note.content_text}
-              </p>
-            <% end %>
-          </div>
+          <.remote_body warning={@warned? && @note.summary} text={@note.content_text} />
 
-          <p class="mb-0 mt-1.5 text-xs text-slate-600 dark:text-slate-400">
-            {gettext("From another network")}<span :if={@host}> · {@host}</span> ·
-            <a
-              href={@origin}
-              target="_blank"
-              rel="nofollow noopener noreferrer"
-              class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-            >{gettext("View the original")}</a>
+          <.remote_footer host={@host} origin={@origin} label={gettext("View the original")}>
             <%!-- Answering is the one action on a remote reply that exists, so it
             sits here in the open beside where the reply came from. The card still
             has no action bar: liking or resharing something on somebody else's
@@ -941,11 +888,289 @@ defmodule VutuvWeb.PostComponents do
                 class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >{gettext("Reply")}</.link>
             </span>
-          </p>
+          </.remote_footer>
         </div>
       </div>
     </article>
     """
+  end
+
+  # ## The remote skin
+  #
+  # The four pieces every card for content from another network is built from,
+  # so "this did not come from vutuv" — the slate initials tile with its globe
+  # badge, the lock line, the dashed rail with its content-warning lid, the
+  # origin footer — has ONE definition and reads identically wherever it
+  # appears. `remote_reply_card/1` (a reply under a member's post) and
+  # `remote_post_card/1` (a post by a followed account) differ only in which
+  # struct feeds them, which controls their menu carries and what their footer
+  # link says; the look is not theirs to vary.
+
+  attr(:initials, :string, required: true)
+
+  defp remote_avatar(assigns) do
+    ~H"""
+    <span class="relative shrink-0">
+      <span
+        data-remote-avatar
+        aria-hidden="true"
+        class="inline-flex h-9 w-9 select-none items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+      >
+        {@initials}
+      </span>
+      <span
+        aria-hidden="true"
+        title={gettext("From another network")}
+        class="absolute -bottom-1 -left-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[9px] ring-2 ring-white dark:bg-slate-900 dark:ring-slate-900"
+      >
+        🌐
+      </span>
+    </span>
+    """
+  end
+
+  attr(:author, :string, required: true)
+  attr(:handle, :string, required: true)
+  attr(:actor_uri, :string, required: true)
+  attr(:at, :any, required: true, doc: "the stamp the card shows for this content")
+
+  attr(:network, :any,
+    default: nil,
+    doc: "the server, shown as a chip when the card's position does not say where it came from"
+  )
+
+  slot(:menu)
+
+  # `break-words` on the author and the handle is not cosmetic: both come
+  # straight from a remote actor document and may be 255 characters with no
+  # space in them. Without it a single unbreakable token sets the row's
+  # min-content, and on a phone that scrolls the whole page sideways and pushes
+  # the ⋯ menu off the viewport — taking Report with it, on exactly the post
+  # most likely to need it.
+  defp remote_header(assigns) do
+    ~H"""
+    <div class="flex items-start gap-2">
+      <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <span class="break-words font-semibold text-slate-900 dark:text-white">{@author}</span>
+        <span class="min-w-0 text-xs text-slate-600 dark:text-slate-400">
+          <a
+            href={@actor_uri}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            class="break-all hover:text-brand-700 dark:hover:text-brand-300 sm:break-normal"
+          >{@handle}</a>
+          · <.post_time at={@at} />
+        </span>
+        <%!-- Where this came from, up here where the eye lands, not only in the
+        footer under the text. A reply card can leave it to the footer because
+        it is visibly indented under a member's post; in a flat feed that
+        context is gone, and a reader must not have to finish the post before
+        learning it is not a member's. --%>
+        <span
+          :if={@network}
+          data-remote-network={@network}
+          class="inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+        >
+          <span aria-hidden="true">🌐</span>
+          <span class="truncate">{@network}</span>
+        </span>
+      </div>
+      {render_slot(@menu)}
+    </div>
+    """
+  end
+
+  # The lock line. The same glyph a restricted vutuv post wears, so "not
+  # everybody sees this" reads the same way across the app; the sentence is the
+  # caller's, since who "everybody" excludes differs.
+  slot(:inner_block, required: true)
+
+  defp remote_restricted_note(assigns) do
+    ~H"""
+    <p
+      data-remote-private
+      class="mb-0 mt-0.5 text-xs font-medium text-slate-600 dark:text-slate-400"
+    >
+      <span aria-hidden="true">🔒</span> {render_slot(@inner_block)}
+    </p>
+    """
+  end
+
+  # The dashed rail and the text down it. `warning` set (a content warning, or
+  # the author's sensitive flag) closes the lid: the text hides behind a click,
+  # which is the one thing that author asked for.
+  attr(:warning, :any, default: nil)
+  attr(:text, :string, required: true)
+
+  # `break-words` for the same reason the header has it: this is a stranger's
+  # text, up to 10,000 characters, and nothing stops it being one unbroken
+  # token. A vutuv post body is saved by `.markdown`'s own rule; this one is
+  # outside it.
+  #
+  # The lid is a real touch target (`min-h-10`) and says both things: "Show"
+  # while it is closed, "Hide" once it is open — a lid you cannot shut again is
+  # not a lid.
+  defp remote_body(assigns) do
+    ~H"""
+    <div class="mt-1.5 border-l-2 border-dashed border-slate-300 pl-3 dark:border-slate-600">
+      <%= if @warning do %>
+        <details data-remote-warning class="group">
+          <summary class="flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+            <span aria-hidden="true">⚠</span>
+            <span class="min-w-0 break-words">{@warning}</span>
+            <span class="text-xs font-normal text-brand-600 group-open:hidden dark:text-brand-400">
+              {gettext("Show")}
+            </span>
+            <span class="hidden text-xs font-normal text-brand-600 group-open:inline dark:text-brand-400">
+              {gettext("Hide")}
+            </span>
+          </summary>
+          <p class="mb-0 mt-1.5 whitespace-pre-line break-words text-sm text-slate-700 dark:text-slate-300">
+            {@text}
+          </p>
+        </details>
+      <% else %>
+        <p class="mb-0 whitespace-pre-line break-words text-sm text-slate-700 dark:text-slate-300">
+          {@text}
+        </p>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Where it came from and the way on to the real thing. The inner block is for
+  # the rare extra action that belongs beside it (answering a reply).
+  attr(:host, :any, default: nil)
+  attr(:origin, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:rest, :global)
+  slot(:inner_block)
+
+  defp remote_footer(assigns) do
+    ~H"""
+    <p class="mb-0 mt-1.5 break-words text-xs text-slate-600 dark:text-slate-400">
+      {gettext("From another network")}<span :if={@host}> · {@host}</span> ·
+      <a
+        href={@origin}
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        {@rest}
+      >{@label}</a>
+      {render_slot(@inner_block)}
+    </p>
+    """
+  end
+
+  @doc """
+  A post by an account the reader follows on another network, in their feed
+  (issue #1161).
+
+  It wears the **same remote skin** as `remote_reply_card/1` — slate initials
+  tile, globe badge, dashed rail, plain text, "View the original" — so "this did
+  not come from vutuv" reads identically wherever it appears, and a member never
+  has to learn two visual vocabularies for the same fact.
+
+  Three things it deliberately does not have:
+
+    * **no action bar.** Liking or resharing something on somebody else's server
+      is its own issue (#1164-#1166); an absent row beats a dead one.
+    * **no avatar.** Pictures are issue #1163. Until then the tile is initials
+      and the handle links out.
+    * **no permalink of ours.** The post lives on its own server; "View the
+      original" is where it is read in full.
+
+  A content warning (or the author's `sensitive` flag) renders as a closed lid
+  and reveals the text on a click, which is the one thing that author asked for.
+  """
+  attr(:remote_post, :map, required: true, doc: "a Vutuv.Fediverse.RemotePost, account preloaded")
+  attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil")
+
+  def remote_post_card(assigns) do
+    post = assigns.remote_post
+    account = post.remote_account
+
+    assigns =
+      assigns
+      |> assign(:account, account)
+      |> assign(:initials, name_initials(account.name || account.handle))
+
+    ~H"""
+    <article data-remote-post={@remote_post.id} data-audience={@remote_post.audience}>
+      <div class="flex items-start gap-3">
+        <.remote_avatar initials={@initials} />
+
+        <div class="min-w-0 flex-1">
+          <%!-- The stamp is the author's own publication time, which is also
+          what orders the feed: a post that reached us late must not read as
+          newer than it is. --%>
+          <.remote_header
+            author={RemoteAccount.label(@account)}
+            handle={RemoteAccount.display_handle(@account)}
+            actor_uri={@account.actor_uri}
+            at={@remote_post.published_at}
+            network={@account.host}
+          >
+            <:menu>
+              <.card_menu :if={@viewer} id={"remote-post-menu-#{@remote_post.id}"}>
+                <%!-- Mute first, and Report is not the only way out. The usual
+                complaint about a followed account is "not today", and a report
+                does not answer it: there is ONE cached row per post, shared by
+                everybody who follows the author, so one member's report empties
+                it out of all of their feeds. Muting is the private, reversible
+                lever — the same one the member card's ⋯ menu offers — and the
+                follow itself survives it. --%>
+                <:item click="mute-remote-account" value={@account.id}>
+                  {gettext("Mute %{handle}", handle: RemoteAccount.display_handle(@account))}
+                </:item>
+                <:item
+                  click="report-remote-post"
+                  value={@remote_post.id}
+                  danger
+                  confirm={
+                    gettext(
+                      "Report this post as not appropriate? Our copy is deleted for everyone on this vutuv right away."
+                    )
+                  }
+                >
+                  {gettext("Report")}
+                </:item>
+              </.card_menu>
+            </:menu>
+          </.remote_header>
+
+          <%!-- A post its author addressed to their followers alone. The reader
+          has to know it before they quote it anywhere. --%>
+          <.remote_restricted_note :if={!RemotePost.open?(@remote_post)}>
+            {gettext("Only for this account's followers")}
+          </.remote_restricted_note>
+
+          <.remote_body
+            warning={
+              RemotePost.warned?(@remote_post) &&
+                (@remote_post.summary || gettext("Marked as sensitive by its author"))
+            }
+            text={@remote_post.content_text}
+          />
+
+          <%!-- A poll's options are shown above, but a vote is not something
+          vutuv can carry, so the link says what it is actually for. --%>
+          <.remote_footer
+            host={@account.host}
+            origin={RemotePost.origin(@remote_post)}
+            label={origin_label(@remote_post)}
+            data-remote-origin
+          />
+        </div>
+      </div>
+    </article>
+    """
+  end
+
+  defp origin_label(post) do
+    if RemotePost.question?(post),
+      do: gettext("Vote on the original"),
+      else: gettext("View the original")
   end
 
   # A card names the post it answers only when its position alone does not say

@@ -188,6 +188,13 @@ if config_env() == :prod do
     config :vutuv, :fediverse_outbound_reply_limit, String.to_integer(String.trim(limit))
   end
 
+  # How long a post by an account a member follows may be held here (issue
+  # #1161). The promise the privacy page makes about the other half of
+  # following: it is deleted when the clock runs out whatever else happens.
+  if days = System.get_env("FEDIVERSE_POST_RETENTION_DAYS") do
+    config :vutuv, :fediverse_post_retention_days, String.to_integer(String.trim(days))
+  end
+
   # Following accounts on other networks (issue #1160): the hourly follow-request
   # budget per member, and the total number of accounts one member may follow.
   # The first bounds a compromised account, the second bounds how many other

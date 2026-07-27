@@ -14,6 +14,8 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
@@ -142,6 +144,27 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   follow-scoped roster; the archive a single one), newest first, as names —
   `reposted_by` stays the newest for callers that want just the one name.
   """
+  def timeline_entry(%{remote_post: %RemotePost{} = remote}) do
+    account = remote.remote_account
+
+    %{
+      id: remote.id,
+      # The origin, not a vutuv URL: the post lives on its own server and we
+      # serve no page for it.
+      url: RemotePost.origin(remote),
+      author: RemoteAccount.label(account),
+      published_on: DateTime.to_date(remote.published_at),
+      excerpt: AgentDocs.excerpt(remote.content_text),
+      reposted_by: nil,
+      reposters: [],
+      # What the HTML card says in its footer, as a fact rather than a skin: an
+      # agent reading this timeline has to be able to tell a member's own post
+      # from somebody else's, published elsewhere and cached here.
+      network: "fediverse",
+      account: RemoteAccount.display_handle(account)
+    }
+  end
+
   def timeline_entry(%{post: post} = entry) do
     reposters = entry[:reposters] || List.wrap(entry[:reposted_by])
 

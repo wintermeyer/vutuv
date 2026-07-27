@@ -24,7 +24,7 @@ defmodule Vutuv.ContentFiltersTest do
     keywords =
       for {:keyword, p, ww} <- filters, do: {p, ContentFilters.compile_pattern(p, ww)}
 
-    %{tags: tags, keywords: keywords}
+    %{tags: tags, keywords: keywords, tag_words: ContentFilters.tag_words(tags)}
   end
 
   defp hidden_by(post, filters), do: ContentFilters.filtered_pattern(post, compile(filters))

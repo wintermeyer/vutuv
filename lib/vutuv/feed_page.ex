@@ -25,6 +25,16 @@ defmodule Vutuv.FeedPage do
       dropped into; `next_cursor` is always nil.
   """
 
+  @doc """
+  The merged newest-first order, applied to `entries`.
+
+  The single definition of the feed's ordering rule, so a caller that decorates
+  a page and has to re-partition it (`Vutuv.Posts.feed_page/2` splits the cached
+  remote posts off the local pipeline) restores exactly the order the paginators
+  below handed over, instead of spelling the comparator out again.
+  """
+  def sort_entries(entries), do: Enum.sort_by(entries, & &1.at, {:desc, NaiveDateTime})
+
   def paginate(sources, limit, cursor) when is_list(sources) do
     seen = if cursor, do: cursor.ids, else: []
 
@@ -37,7 +47,7 @@ defmodule Vutuv.FeedPage do
       sources
       |> Enum.flat_map(fn fetch -> fetch.(fetch_n, cursor) end)
       |> Enum.reject(&(&1.id in seen))
-      |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
+      |> sort_entries()
 
     entries = Enum.take(candidates, limit)
     more? = length(candidates) > limit
@@ -60,7 +70,7 @@ defmodule Vutuv.FeedPage do
     candidates =
       sources
       |> Enum.flat_map(fn fetch -> fetch.(fetch_n, nil) end)
-      |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
+      |> sort_entries()
 
     %{
       entries: candidates |> Enum.drop(offset) |> Enum.take(limit),

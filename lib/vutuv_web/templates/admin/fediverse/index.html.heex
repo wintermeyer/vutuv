@@ -21,6 +21,18 @@ Classic admin page, so it uses the shared card/table/editform classes. --%>
         blocked: delimited_count(@stats.blocked_instances)
       )}
     </p>
+    <%!-- The other direction (issues #1160 and #1161): what our members
+          subscribed to out there, and how much of it is currently cached
+          here. Its own line, because it is a different question from "who
+          follows us" and it is the one that grows this installation's
+          storage of other people's words. --%>
+    <p>
+      {gettext(
+        "%{follows} accounts on other networks are followed from here, with %{posts} of their posts cached.",
+        follows: delimited_count(@stats.remote_follows),
+        posts: delimited_count(@stats.cached_posts)
+      )}
+    </p>
     <p class="editform__hint">
       {gettext(
         "Anyone can run a server in this network, so a server that talks to us is not a vetted party. Per hour, one server may store at most %{host_cap} rows here and one remote account at most %{actor_cap}; anything beyond that is dropped.",
@@ -122,7 +134,7 @@ Classic admin page, so it uses the shared card/table/editform classes. --%>
 <div class="card-list">
   <section class="card">
     <h2 class="card__label">{gettext("Inbound volume per server")}</h2>
-    <%= if @inbound_hosts == [] do %>
+    <%= if @inbound_volume == [] do %>
       <p class="card__empty">{gettext("No server has sent us anything yet.")}</p>
     <% else %>
       <p class="editform__hint">
@@ -135,13 +147,15 @@ Classic admin page, so it uses the shared card/table/editform classes. --%>
               <th>{gettext("Server")}</th>
               <th>{gettext("Followers")}</th>
               <th>{gettext("Stored replies")}</th>
+              <th>{gettext("Cached posts")}</th>
             </tr>
           </thead>
           <tbody>
-            <tr :for={row <- @inbound_hosts} data-inbound-host={row.host}>
+            <tr :for={row <- @inbound_volume} data-inbound-host={row.host}>
               <td class="breakwrap">{row.host}</td>
               <td>{delimited_count(row.followers)}</td>
-              <td>{delimited_count(Map.get(@note_hosts, row.host, 0))}</td>
+              <td>{delimited_count(row.notes)}</td>
+              <td>{delimited_count(row.posts)}</td>
             </tr>
           </tbody>
         </table>
@@ -159,13 +173,13 @@ visible as repeats. Automatic deletions (expiry, an upstream withdrawal, a
 block) are not listed; they would drown this and go to the log file instead. --%>
 <div class="card-list">
   <section class="card">
-    <h2 class="card__label">{gettext("Replies taken down by members")}</h2>
+    <h2 class="card__label">{gettext("Content from other networks taken down by members")}</h2>
     <%= if @note_events == [] do %>
-      <p class="card__empty">{gettext("Nobody has removed or reported a reply yet.")}</p>
+      <p class="card__empty">{gettext("Nobody has removed or reported anything yet.")}</p>
     <% else %>
       <p class="editform__hint">
         {gettext(
-          "A report deletes the reply right away, with no queue to work through. This is the trail, so a server that keeps showing up here can be blocked above. It holds no text and no links, only which server and which account (as a short digest)."
+          "A report deletes our copy right away, with no queue to work through. This is the trail, so a server that keeps showing up here can be blocked above. It holds no text and no links, only which server and which account (as a short digest). The What column says whether a reply under one member's post was taken down or a cached post, which is shared by everybody following its author."
         )}
       </p>
       <div class="card__tablewrap">

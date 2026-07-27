@@ -25,6 +25,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
   alias Phoenix.LiveView.JS
   alias Vutuv.ContentFilters
+  alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Social
   alias VutuvWeb.Live.DayClockRestream
@@ -194,7 +195,11 @@ defmodule VutuvWeb.PostLive.Feed do
   # The one-line stand-in for a content-filtered post (issue #940): says which
   # filter hid it and offers to show it anyway, in place.
   attr(:pattern, :string, required: true)
-  attr(:post_id, :string, required: true)
+
+  attr(:key, :string,
+    required: true,
+    doc: "what the reveal set remembers this entry by (`filter_key/1`), not always a post id"
+  )
 
   defp filtered_placeholder(assigns) do
     ~H"""
@@ -209,7 +214,7 @@ defmodule VutuvWeb.PostLive.Feed do
       <button
         type="button"
         phx-click="reveal_filter"
-        phx-value-id={@post_id}
+        phx-value-id={@key}
         class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
         {gettext("Show anyway")}
@@ -221,23 +226,34 @@ defmodule VutuvWeb.PostLive.Feed do
   defp with_engagement(entries, user) do
     ancestor_ids = fn entry -> Enum.map(entry[:ancestors] || [], & &1.id) end
 
+    # A cached post from another network (issue #1161) has no author here, so
+    # there is nothing to like, nothing to mute and nobody to follow: it is kept
+    # out of both batch reads, and then passed through untouched. Decorating in
+    # place rather than splitting the list keeps the order the page arrived in,
+    # so nothing has to be sorted back together afterwards.
+    local = local_entries(entries)
+
     engagement =
-      entries
+      local
       |> Enum.flat_map(fn entry -> [entry.post.id | ancestor_ids.(entry)] end)
       |> Enum.uniq()
       |> Posts.post_engagement_map(user)
 
     follows =
-      entries
+      local
       |> Enum.map(& &1.post.user_id)
       |> Enum.uniq()
       |> then(&Social.follow_edges(user.id, &1))
 
     Enum.map(entries, fn entry ->
-      entry
-      |> Map.put(:engagement, engagement[entry.post.id])
-      |> Map.put(:ancestor_engagement, Map.take(engagement, ancestor_ids.(entry)))
-      |> Map.put(:viewer_follow, follows[entry.post.user_id])
+      if Posts.remote_feed_entry?(entry) do
+        entry
+      else
+        entry
+        |> Map.put(:engagement, engagement[entry.post.id])
+        |> Map.put(:ancestor_engagement, Map.take(engagement, ancestor_ids.(entry)))
+        |> Map.put(:viewer_follow, follows[entry.post.user_id])
+      end
     end)
   end
 
@@ -255,7 +271,11 @@ defmodule VutuvWeb.PostLive.Feed do
     # complete follow-scoped roster, so dropping the older duplicate loses
     # nothing. Filter before the engagement batch so it queries only survivors.
     shown = shown_post_ids(socket.assigns.entries)
-    fresh = Enum.reject(page.entries, &MapSet.member?(shown, &1.post.id))
+
+    fresh =
+      Enum.reject(page.entries, fn entry ->
+        not Posts.remote_feed_entry?(entry) and MapSet.member?(shown, entry.post.id)
+      end)
 
     entries =
       fresh
@@ -286,17 +306,61 @@ defmodule VutuvWeb.PostLive.Feed do
   # "Show anyway" on a content-filtered post (issue #940): reveal it in place,
   # no reload. The reveal set survives a midnight restream, so the post stays
   # open. Re-stream just this one entry so its placeholder swaps to the card.
-  def handle_event("reveal_filter", %{"id" => post_id}, socket) do
-    case Enum.find(socket.assigns.entries, &(&1.post.id == post_id)) do
+  def handle_event("reveal_filter", %{"id" => key}, socket) do
+    case Enum.find(socket.assigns.entries, &(filter_key(&1) == key)) do
       nil ->
         {:noreply, socket}
 
       entry ->
         {:noreply,
          socket
-         |> update(:revealed_filters, &MapSet.put(&1, post_id))
+         |> update(:revealed_filters, &MapSet.put(&1, key))
          |> stream_insert(:posts, entry, update_only: true)}
     end
+  end
+
+  # A member reports a cached post from another network. It is deleted at once
+  # (`Vutuv.Fediverse.report_remote_post/2`) — this is a cache of something that
+  # still exists at its origin, so there is no case and no freezer — and the
+  # row leaves the feed in the same round trip.
+  def handle_event("report-remote-post", %{"id" => id}, socket) do
+    case Fediverse.report_remote_post(id, socket.assigns.current_user) do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
+         |> drop_remote_entry(id)}
+
+      {:error, :rate_limited} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("You have reported a lot today. Please try again tomorrow.")
+         )}
+
+      {:error, :not_found} ->
+        {:noreply, drop_remote_entry(socket, id)}
+    end
+  end
+
+  # "Not this account today": the private, reversible lever beside Report. The
+  # follow survives; its posts leave this feed, so every row from that account
+  # goes in the same round trip rather than lingering until the next reload.
+  def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
+    :ok = Fediverse.set_remote_follow_mute(socket.assigns.current_user, account_id, true)
+
+    muted =
+      Enum.filter(socket.assigns.entries, fn entry ->
+        Posts.remote_feed_entry?(entry) and entry.remote_post.remote_account_id == account_id
+      end)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, gettext("Muted. You still follow them; their posts leave your feed."))
+     |> then(fn socket ->
+       Enum.reduce(muted, socket, &drop_remote_entry(&2, &1.remote_post.id))
+     end)}
   end
 
   # The rail's "Follow" button (user_row live?): follow with no reload, then
@@ -380,7 +444,7 @@ defmodule VutuvWeb.PostLive.Feed do
       is_nil(reposter) ->
         {:noreply, socket}
 
-      shown = Enum.find(socket.assigns.entries, &(&1.post.id == post_id)) ->
+      shown = find_by_post_id(socket.assigns.entries, post_id) ->
         {:noreply, restack_shown(socket, shown, reposter)}
 
       MapSet.member?(shown_post_ids(socket.assigns.entries), post_id) ->
@@ -485,8 +549,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # place (update_only, so an off-page id is a harmless no-op). The entry's other
   # fields — engagement, follow edge, repost roster — are preserved.
   defp refresh_shown_post(socket, post_id) do
-    with entry when not is_nil(entry) <-
-           Enum.find(socket.assigns.entries, &(&1.post.id == post_id)),
+    with entry when not is_nil(entry) <- find_by_post_id(socket.assigns.entries, post_id),
          post when not is_nil(post) <- Posts.get_post(post_id) do
       updated = %{entry | post: post}
 
@@ -582,18 +645,78 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mark_one(entry, compiled, viewer_id) do
-    pattern =
-      if entry.post.user_id != viewer_id,
-        do: ContentFilters.filtered_pattern(entry.post, compiled)
+    Map.put(entry, :filtered_by, filtered_pattern(entry, compiled, viewer_id))
+  end
 
-    Map.put(entry, :filtered_by, pattern)
+  defp filtered_pattern(entry, compiled, viewer_id) do
+    cond do
+      # A cached post from another network (issue #1161) is filtered on its
+      # plain text: the member muted a word because they do not want to read it,
+      # and where it was written changes nothing about that.
+      Posts.remote_feed_entry?(entry) ->
+        ContentFilters.filtered_text(entry.remote_post.content_text, compiled)
+
+      # Never the member's own posts. A remote post cannot reach this arm: it has
+      # no author here, so the exemption has nothing to match on.
+      entry.post.user_id == viewer_id ->
+        nil
+
+      true ->
+        ContentFilters.filtered_pattern(entry.post, compiled)
+    end
+  end
+
+  # What the reveal set remembers. A vutuv post is keyed by its own id (so the
+  # same post stays revealed when it is restreamed), a cached post from another
+  # network (issue #1161) by its row id — it is not a `%Post{}` and has no post
+  # id to key on.
+  defp filter_key(entry) do
+    if Posts.remote_feed_entry?(entry), do: entry.remote_post.id, else: entry.post.id
+  end
+
+  # Whether the reader's filters currently hide this entry: it matched one, and
+  # they have not opened it. The single expression the row's three renderings
+  # branch on, so the placeholder and the card it stands in for cannot both show
+  # (or both vanish).
+  defp hidden_by_filter?(entry, revealed),
+    do: entry[:filtered_by] != nil and filter_key(entry) not in revealed
+
+  # A reported or muted cached post leaves the feed in the same round trip, so
+  # the reader never looks at a row that is no longer theirs to see.
+  #
+  # `empty?` is recomputed because it gates the whole timeline container: a
+  # reader whose feed held nothing but the account they just muted would
+  # otherwise be left looking at an empty white card instead of the "nothing
+  # here yet" message. Caught in a browser, not by the tests — none of them
+  # emptied a feed this way.
+  defp drop_remote_entry(socket, remote_post_id) do
+    socket
+    |> update(
+      :entries,
+      &Enum.reject(&1, fn entry ->
+        Posts.remote_feed_entry?(entry) and entry.remote_post.id == remote_post_id
+      end)
+    )
+    |> stream_delete_by_dom_id(:posts, "feed-remote-#{remote_post_id}")
+    |> then(&assign(&1, :empty?, &1.assigns.entries == [] and &1.assigns.pending_posts == []))
+  end
+
+  # The entries carrying a vutuv post. A cached post from another network has
+  # `post: nil`, so every batch read and every scan that reaches for
+  # `entry.post` goes through this (or `find_by_post_id/2`) first.
+  defp local_entries(entries), do: Enum.reject(entries, &Posts.remote_feed_entry?/1)
+
+  defp find_by_post_id(entries, post_id) do
+    Enum.find(entries, fn entry ->
+      not Posts.remote_feed_entry?(entry) and entry.post.id == post_id
+    end)
   end
 
   # Every post id currently represented on screen — each streamed entry's own
   # post plus every ancestor it nests — so a live or paged repost of an
   # already-shown post updates that card (or drops) instead of duplicating it.
   defp shown_post_ids(entries) do
-    for entry <- entries,
+    for entry <- local_entries(entries),
         post <- [entry.post | entry[:ancestors] || []],
         into: MapSet.new(),
         do: post.id
@@ -747,29 +870,37 @@ defmodule VutuvWeb.PostLive.Feed do
           diff, so the container is present whenever there is (or just became)
           content. --%>
           <.post_list :if={!@empty?} id="feed-posts" phx-update="stream" data-post-list>
+            <%!-- Three ways a row can render, in precedence order: hidden by a
+            filter, a cached post from another network, or a vutuv post. Named
+            once each in one branch, so no pair of conditions has to be kept
+            complementary by hand. --%>
             <div :for={{dom_id, entry} <- @streams.posts} id={dom_id} class={post_row_class()}>
-              <%!-- A content-filtered post (issue #940) collapses to a line the
-              reader can still open, instead of vanishing (a silently shorter
-              feed confuses and breaks reply threads). --%>
-              <.filtered_placeholder
-                :if={entry[:filtered_by] && entry.post.id not in @revealed_filters}
-                pattern={entry.filtered_by}
-                post_id={entry.post.id}
-              />
-              <.post_thread_entry
-                :if={!entry[:filtered_by] || entry.post.id in @revealed_filters}
-                post={entry.post}
-                viewer={@current_user}
-                viewer_follow={entry[:viewer_follow]}
-                ancestors={entry[:ancestors]}
-                ancestor_engagement={entry[:ancestor_engagement] || %{}}
-                reposted_by={entry.reposted_by}
-                reposters={entry[:reposters]}
-                entry_id={entry.id}
-                conn_or_socket={@socket}
-                engagement={entry.engagement}
-                surface={:flat}
-              />
+              <%= cond do %>
+                <% hidden_by_filter?(entry, @revealed_filters) -> %>
+                  <%!-- A content-filtered post (issue #940) collapses to a line
+                  the reader can still open, instead of vanishing (a silently
+                  shorter feed confuses and breaks reply threads). --%>
+                  <.filtered_placeholder pattern={entry.filtered_by} key={filter_key(entry)} />
+                <% Posts.remote_feed_entry?(entry) -> %>
+                  <%!-- A post by an account the reader follows out there: the
+                  same remote skin the reply cards wear, no action bar
+                  (interactions are #1164-#1166), and its own report control. --%>
+                  <.remote_post_card remote_post={entry.remote_post} viewer={@current_user} />
+                <% true -> %>
+                  <.post_thread_entry
+                    post={entry.post}
+                    viewer={@current_user}
+                    viewer_follow={entry[:viewer_follow]}
+                    ancestors={entry[:ancestors]}
+                    ancestor_engagement={entry[:ancestor_engagement] || %{}}
+                    reposted_by={entry.reposted_by}
+                    reposters={entry[:reposters]}
+                    entry_id={entry.id}
+                    conn_or_socket={@socket}
+                    engagement={entry.engagement}
+                    surface={:flat}
+                  />
+              <% end %>
             </div>
           </.post_list>
 

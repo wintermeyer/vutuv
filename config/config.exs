@@ -172,6 +172,17 @@ config :vutuv, :fediverse_note_refresh, true
 config :vutuv, :fediverse_note_retention_days, 183
 config :vutuv, :fediverse_note_refresh_days, 7
 
+# How long a post by an account a member follows may be held here (issue #1161).
+#
+# The same clock and the same reasoning as the replies above, for the same
+# reason: consent from somebody who never signed up here is not obtainable, so
+# the copy is bounded instead. There is deliberately no refresh knob to match —
+# a followed account's stream is pushed to us continuously, so an edit or a
+# withdrawal arrives on its own, and re-asking about every cached post of every
+# account our members read would be far heavier than the per-reply check.
+# Env-overridable (FEDIVERSE_POST_RETENTION_DAYS).
+config :vutuv, :fediverse_post_retention_days, 183
+
 # How long a post whose picture the AI image scan has not judged yet waits before
 # it federates anyway (issue #1070). The scan normally settles within seconds and
 # releases the post at once, so this is the CEILING, not the usual wait: it is

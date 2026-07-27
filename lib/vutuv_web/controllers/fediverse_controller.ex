@@ -204,6 +204,7 @@ defmodule VutuvWeb.FediverseController do
          :ok <- verify_signature(conn, remote),
          true <- activity["actor"] == remote.id do
       Enum.each(users, &perform(&1, activity, remote))
+      perform_once(activity, remote)
       send_resp(conn, 202, "")
     else
       _ -> send_resp(conn, 401, "")
@@ -337,9 +338,40 @@ defmodule VutuvWeb.FediverseController do
     :ok
   end
 
-  # Outbound-only federation: likes, replies, announces etc. are acknowledged
-  # (so well-behaved servers stop retrying) and dropped.
+  # Everything else is acknowledged (so well-behaved servers stop retrying) and
+  # dropped.
   defp perform(_user, _activity, _remote), do: :ok
+
+  # What a delivery does **once**, whoever it was addressed to (issue #1161).
+  #
+  # A post by an account members here follow is one post, not one per follower:
+  # several members can follow the same account, and until every server uses our
+  # shared inbox the same `Create` arrives once per follower. So the cache is
+  # installation-wide and keyed on the post's own id, and it is written here
+  # rather than inside `perform/3` — which runs per addressed member — so the
+  # work happens once per delivery instead of once per reader.
+  #
+  # Deliberately narrow: only the author's own stream. A `Create` that answers a
+  # member's post is the per-member `record_reply/3` above, and the gates in
+  # `Fediverse.record_remote_post/2` refuse anything else.
+  defp perform_once(%{"type" => "Create"} = activity, remote),
+    do: Fediverse.record_remote_post(activity, remote.id)
+
+  # An author editing or withdrawing a post of theirs we cached. Both are
+  # scoped to that author inside the context, so one server cannot rewrite or
+  # delete another's; the `Delete` arm is deliberately ungated, because an
+  # author taking their words back is what makes storing them defensible.
+  defp perform_once(%{"type" => type} = activity, remote) when type in ~w(Update Delete) do
+    case object_id(activity["object"]) do
+      # The actor's own lifecycle — a renamed account, a deleted one — which is
+      # per-member business and belongs to `perform/3` above, not to the cache.
+      object_uri when object_uri == remote.id -> :ok
+      _object_uri when type == "Update" -> Fediverse.update_remote_post(activity, remote.id)
+      object_uri -> Fediverse.delete_remote_post(remote.id, object_uri)
+    end
+  end
+
+  defp perform_once(_activity, _remote), do: :ok
 
   defp reaction_kind("Like"), do: "like"
   defp reaction_kind("Announce"), do: "announce"

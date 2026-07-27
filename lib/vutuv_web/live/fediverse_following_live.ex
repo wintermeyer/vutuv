@@ -492,13 +492,13 @@ defmodule VutuvWeb.FediverseFollowingLive do
           <% end %>
 
           <%= if @federating? and @total_follows == 0 do %>
-            <%!-- Honest about what #1160 actually ships: the handshake, not the
-                  timeline. "Their posts will show up" would have people follow
-                  five accounts, see nothing anywhere, and conclude it is
-                  broken. --%>
+            <%!-- Says what actually happens now that #1161 has shipped the
+                  timeline half. It said "the next thing we are building" while
+                  the feed source did not exist yet; leaving that in would be a
+                  false sentence on the very page where the follow is made. --%>
             <p class="mt-4 text-sm text-slate-600 dark:text-slate-400" id="no-following">
               {gettext(
-                "You do not follow anybody out there yet. Following an account tells that server you want to read it; showing what they post is the next thing we are building."
+                "You do not follow anybody out there yet. Once you do, what they post appears in your feed among everything else."
               )}
             </p>
           <% end %>
@@ -600,6 +600,17 @@ defmodule VutuvWeb.FediverseFollowingLive do
             <p>
               {gettext(
                 "Who you follow is yours alone. Your profile publishes how many accounts you follow out there, never which ones."
+              )}
+            </p>
+            <%!-- The same promise the replies switch makes on the Fediverse
+                  page (issue #1069), for the same reason: this is where the
+                  member decides, so this is where they have to be told what
+                  gets stored. Leaving it to the privacy page means an
+                  installation whose operator never edits it says nothing at
+                  all. --%>
+            <p>
+              {gettext(
+                "To show their posts we keep a copy here for up to six months. If the author deletes or edits something, ours follows; and when you stop following an account, its posts are deleted here at once."
               )}
             </p>
           </div>

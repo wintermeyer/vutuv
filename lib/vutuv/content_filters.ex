@@ -65,14 +65,21 @@ defmodule Vutuv.ContentFilters do
   end
 
   @doc """
-  Compile `user`'s list into the shape `filtered_pattern/2` matches against:
+  Compile `user`'s list into the shape the matchers below read:
 
-      %{tags: %{"crypto" => "crypto", ...}, keywords: [{"crypto*", ~r/.../}, ...]}
+      %{
+        tags: %{"crypto" => "crypto", ...},
+        keywords: [{"crypto*", ~r/.../}, ...],
+        tag_words: [{"crypto", ~r/.../}, ...]
+      }
 
   Tags are keyed by their normalized (downcased) value so a post tag matches by
   slug or by name; each maps back to the original pattern the placeholder shows.
-  Keywords carry their compiled regex. Returns the empty shape for a member with
-  no filters (or a logged-out visitor), so the caller can skip the work.
+  Keywords carry their compiled regex, and `tag_words` carries the same tag
+  names as whole-word regexes for the surfaces that have only text
+  (`filtered_text/2`). Everything is compiled **here**, once per page, so no
+  matcher builds a regex per post. Returns the empty shape for a member with no
+  filters (or a logged-out visitor), so the caller can skip the work.
   """
   def compile_for(user) do
     filters = list_for_user(user)
@@ -89,7 +96,20 @@ defmodule Vutuv.ContentFilters do
         {pattern, re}
       end
 
-    %{tags: tags, keywords: keywords}
+    %{tags: tags, keywords: keywords, tag_words: tag_words(tags)}
+  end
+
+  @doc """
+  The tag names of a compiled `tags` map as whole-word `{pattern, regex}` pairs.
+
+  Public so a caller assembling a compiled set by hand builds the same shape.
+  Whole-word, so muting `art` does not swallow "particular"; a leading `#` is a
+  word boundary, so it catches the hashtag form too.
+  """
+  def tag_words(tags) do
+    for {normalized, pattern} <- tags, re = compile_pattern(normalized, true), re != nil do
+      {pattern, re}
+    end
   end
 
   @doc "True when the compiled set has at least one filter."
@@ -107,6 +127,22 @@ defmodule Vutuv.ContentFilters do
   def filtered_pattern(post, %{tags: tags, keywords: keywords}) do
     matched_tag(post, tags) || matched_keyword(post, keywords)
   end
+
+  @doc """
+  The pattern of the first filter that hides a piece of **plain text**, or `nil`.
+
+  For content that has no vutuv tags of its own: a post cached from an account
+  on another network (issue #1161). Both kinds of filter are applied to the
+  text, tag filters included — a member who muted "crypto" as a tag did not mean
+  "unless it is written somewhere without a vutuv tag on it", and on a remote
+  post the text is all there is. The tag names come pre-compiled as whole-word
+  regexes (`compile_for/1`), so this matches exactly like the keyword half and
+  builds nothing per post.
+  """
+  def filtered_text(text, %{keywords: keywords, tag_words: tag_words}) when is_binary(text),
+    do: matched_in(text, keywords) || matched_in(text, tag_words)
+
+  def filtered_text(_text, _compiled), do: nil
 
   @doc """
   Compile one keyword/phrase pattern into a case-insensitive regex.
@@ -141,11 +177,15 @@ defmodule Vutuv.ContentFilters do
   end
 
   defp matched_keyword(_post, []), do: nil
+  defp matched_keyword(post, keywords), do: matched_in(post_text(post), keywords)
 
-  defp matched_keyword(post, keywords) do
-    text = post_text(post)
-    Enum.find_value(keywords, fn {pattern, re} -> Regex.match?(re, text) && pattern end)
-  end
+  # The one match loop over a compiled `{pattern, regex}` list, whatever the
+  # patterns came from: the keywords under a post's body, or the tag names under
+  # a remote post's plain text.
+  defp matched_in(_text, []), do: nil
+
+  defp matched_in(text, patterns),
+    do: Enum.find_value(patterns, fn {pattern, re} -> Regex.match?(re, text) && pattern end)
 
   # A whole-word keyword sees the raw body plus the tag names: `\bcrypto\b`
   # matches "crypto" inside `**crypto**` or `#crypto` on its own (the `*` / `#`
