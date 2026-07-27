@@ -68,6 +68,11 @@ defmodule Vutuv.Fediverse.RemotePost do
     field(:received_at, :utc_datetime)
     field(:expires_at, :utc_datetime)
 
+    # When the origin last confirmed this post is still published (issue
+    # #1166). Null until somebody reshares it: the check exists for reshared
+    # copies alone, since nothing else here outlives its ceiling.
+    field(:checked_at, :utc_datetime)
+
     belongs_to(:remote_account, Vutuv.Fediverse.RemoteAccount)
   end
 

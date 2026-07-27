@@ -464,7 +464,22 @@ the resulting ~200px rail width. --%>
       a post reads identically everywhere. --%>
       <.post_list :if={@posts != []} card={false} data-post-list>
         <div :for={entry <- @posts} class={post_row_class()}>
+          <%!-- A post from another network this member reshared (issue #1166)
+          wears its own card, the same one the feed shows it in. --%>
+          <%!-- Read-only here on purpose (`viewer={nil}`): the card's controls
+          are the feed's — like, reshare, mute, report — and this page owns none
+          of those events, so rendering them would give the profile six buttons
+          that kill the LiveView. The place to act on such a post is the feed or
+          the account page, both one click away through the card itself. --%>
+          <.remote_post_card
+            :if={Vutuv.Posts.remote_feed_entry?(entry)}
+            remote_post={entry.remote_post}
+            images={entry[:images] || []}
+            reposted_by={entry.reposted_by}
+            viewer={nil}
+          />
           <.post_thread_entry
+            :if={!Vutuv.Posts.remote_feed_entry?(entry)}
             post={entry.post}
             ancestors={entry[:ancestors]}
             reposted_by={entry.reposted_by}

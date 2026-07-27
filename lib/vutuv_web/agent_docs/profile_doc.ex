@@ -14,6 +14,8 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
@@ -297,13 +299,35 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
 
   defp post_entries(pinned_post, entries) do
     rest =
-      Enum.reject(entries, &(is_nil(&1.reposted_by) and &1.post.id == pinned_post.id))
+      Enum.reject(
+        entries,
+        &(is_nil(&1.reposted_by) and not remote?(&1) and &1.post.id == pinned_post.id)
+      )
 
     [pinned_entry(pinned_post) | Enum.map(rest, &post_entry/1)]
   end
 
+  defp remote?(entry), do: Vutuv.Posts.remote_feed_entry?(entry)
+
   defp pinned_entry(post) do
     %{post: post, reposted_by: nil} |> post_entry() |> Map.put(:pinned, true)
+  end
+
+  # A post from another network this member reshared (issue #1166). It has no
+  # vutuv post and no permalink of ours, so the entry names where it really
+  # lives — the same shape `PostDoc.timeline_entry/1` produces for the feed's
+  # remote entries, and the reason this clause exists at all: without it every
+  # agent-format sibling of a profile with one reshare on it raised.
+  defp post_entry(%{remote_post: %RemotePost{} = remote} = entry) do
+    %{
+      url: RemotePost.origin(remote),
+      published_on: DateTime.to_date(remote.published_at),
+      excerpt: AgentDocs.excerpt(remote.content_text),
+      reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by),
+      pinned: false,
+      network: "fediverse",
+      account: RemoteAccount.display_handle(remote.remote_account)
+    }
   end
 
   defp post_entry(entry) do

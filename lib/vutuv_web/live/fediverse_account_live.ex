@@ -92,6 +92,7 @@ defmodule VutuvWeb.FediverseAccountLive do
     # page. Unlike the feed this page holds its posts in a plain assign, so a
     # set beside them redraws every card on a toggle, which is what we want.
     |> assign(:liked, Fediverse.liked_remote_post_ids(viewer, ids))
+    |> assign(:reposted, Fediverse.reposted_remote_post_ids(viewer, ids))
     |> assign(:more?, more?)
   end
 
@@ -178,11 +179,25 @@ defmodule VutuvWeb.FediverseAccountLive do
   # account's own inbox. Only the reader's own state changes — there is no
   # count on the card, because the real one lives on their server.
   def handle_event("like-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_like(socket, id, &Fediverse.like_remote_post/2)}
+    {:noreply, toggle_remote_act(socket, id, &Fediverse.like_remote_post/2)}
   end
 
   def handle_event("unlike-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_like(socket, id, &Fediverse.unlike_remote_post/2)}
+    {:noreply, toggle_remote_act(socket, id, &Fediverse.unlike_remote_post/2)}
+  end
+
+  # Sharing one of their posts onward (issue #1166), the same act the feed card
+  # offers. Publishing, so it says so — but only when the reshare really
+  # happened, never over the top of a refusal or a second tab's press.
+  def handle_event("repost-remote-post", %{"id" => id}, socket) do
+    {:noreply,
+     toggle_remote_act(socket, id, &Fediverse.repost_remote_post/2,
+       flash: {:reposted, gettext("Reposted. Your followers see it now.")}
+     )}
+  end
+
+  def handle_event("unrepost-remote-post", %{"id" => id}, socket) do
+    {:noreply, toggle_remote_act(socket, id, &Fediverse.unrepost_remote_post/2)}
   end
 
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
@@ -212,11 +227,13 @@ defmodule VutuvWeb.FediverseAccountLive do
     {:noreply, socket |> assign(:address, address) |> assign(:error, nil)}
   end
 
-  # Both directions, one shape (below the last `handle_event/3` clause, so the
-  # group is not split). The like set is re-read rather than nudged, so what the
-  # page draws is what the database says — a second tab that liked the same post
-  # is then not contradicted by this one.
-  defp toggle_like(socket, remote_post_id, action) do
+  # Every act on a card here, one shape (below the last `handle_event/3` clause,
+  # so the group is not split): the heart and the reshare, in both directions.
+  # The marker sets are re-read rather than nudged, so what the page draws is
+  # what the database says — a second tab that liked the same post is then not
+  # contradicted by this one. `:flash` is an `{outcome, message}` the act
+  # announces itself with, and only when that outcome really came back.
+  defp toggle_remote_act(socket, remote_post_id, action, opts \\ []) do
     case Enum.find(socket.assigns.posts, &(&1.id == remote_post_id)) do
       nil ->
         socket
@@ -225,11 +242,16 @@ defmodule VutuvWeb.FediverseAccountLive do
         post = %{post | remote_account: socket.assigns.account}
 
         case action.(socket.assigns.current_user, post) do
-          {:ok, _} -> load_posts(socket)
+          {:ok, outcome} -> socket |> load_posts() |> flash_outcome(opts[:flash], outcome)
           {:error, reason} -> put_flash(socket, :error, like_refusal_message(reason))
         end
     end
   end
+
+  defp flash_outcome(socket, {outcome, message}, outcome),
+    do: put_flash(socket, :info, message)
+
+  defp flash_outcome(socket, _flash, _outcome), do: socket
 
   defp mute_message(true),
     do: gettext("Muted. You still follow them; their posts leave your feed.")
@@ -384,6 +406,7 @@ defmodule VutuvWeb.FediverseAccountLive do
                 remote_post={%{post | remote_account: @account}}
                 images={Map.get(@images, post.id, [])}
                 liked?={MapSet.member?(@liked, post.id)}
+                reposted?={MapSet.member?(@reposted, post.id)}
                 viewer={@current_user}
               />
             </div>

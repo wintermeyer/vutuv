@@ -53,6 +53,7 @@ defmodule Vutuv.Posts do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.PostRepost, as: FediversePostRepost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Mentions
@@ -1628,7 +1629,11 @@ defmodule Vutuv.Posts do
           &feed_post_items(viewer, &1, &2),
           &feed_repost_items(viewer, &1, &2),
           &feed_tag_items(viewer, &1, &2),
-          &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2)
+          &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
+          # Fifth: what people the viewer follows *here* have reshared from
+          # another network (issue #1166) — the one way a member who follows
+          # nobody out there meets that content at all.
+          &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2)
         ],
         limit,
         cursor
@@ -1637,9 +1642,9 @@ defmodule Vutuv.Posts do
     %{page | entries: decorate_feed_entries(page.entries, viewer)}
   end
 
-  # Everything the four sources produce, made ready to render.
+  # Everything the five sources produce, made ready to render.
   #
-  # The fourth source (issue #1161) carries a cached post from another network,
+  # The remote sources (issues #1161, #1166) carry a cached post from another network,
   # which is not a `%Post{}` and has no author here, no thread, no reposters and
   # no engagement. So it is split off, the local pipeline runs on the rest, and
   # the two are merged back through `Vutuv.FeedPage.sort_entries/1` — the same
@@ -1663,7 +1668,21 @@ defmodule Vutuv.Posts do
   defp decorate_remote([], _viewer), do: []
 
   defp decorate_remote(remote, viewer) do
-    remote |> attach_remote_images() |> attach_remote_likes(viewer)
+    remote |> dedupe_remote() |> attach_remote_images() |> attach_remote_likes(viewer)
+  end
+
+  # One card per cached post per page. The same post arrives from two sources
+  # when the reader follows its author (issue #1161) *and* somebody who reshared
+  # it (issue #1166), or from two people who both reshared it — and there is one
+  # cached row behind all of them, so the reader would otherwise see the same
+  # words two or three times. The direct entry wins: it carries the author's own
+  # publication time, which is the honest stamp, and the reader is following
+  # that account precisely to see it first-hand. `collapse_reposts/1` makes the
+  # same call for local posts.
+  defp dedupe_remote(remote) do
+    remote
+    |> Enum.sort_by(&(&1.reposted_by != nil))
+    |> Enum.uniq_by(& &1.remote_post.id)
   end
 
   # Which of the page's remote posts the reader already likes (issue #1164),
@@ -1673,8 +1692,13 @@ defmodule Vutuv.Posts do
   defp attach_remote_likes(remote, viewer) do
     ids = Enum.map(remote, & &1.remote_post.id)
     liked = Vutuv.Fediverse.liked_remote_post_ids(viewer, ids)
+    reposted = Vutuv.Fediverse.reposted_remote_post_ids(viewer, ids)
 
-    Enum.map(remote, &Map.put(&1, :liked?, MapSet.member?(liked, &1.remote_post.id)))
+    Enum.map(remote, fn entry ->
+      entry
+      |> Map.put(:liked?, MapSet.member?(liked, entry.remote_post.id))
+      |> Map.put(:reposted?, MapSet.member?(reposted, entry.remote_post.id))
+    end)
   end
 
   # The pictures of the remote half (issue #1163), read once for the whole page
@@ -2003,7 +2027,17 @@ defmodule Vutuv.Posts do
     |> limit(^limit)
     |> Repo.all()
     |> author_entries(author)
-    |> collapse_threads()
+    |> collapse_profile_threads()
+  end
+
+  # `collapse_threads/1` folds a reply under the post it answers, which only
+  # makes sense for entries carrying a vutuv post. A reshared post from another
+  # network (issue #1166) has none, so it is set aside and merged back — the
+  # same split `decorate_feed_entries/2` makes, for the same reason.
+  defp collapse_profile_threads(entries) do
+    {remote, local} = Enum.split_with(entries, &remote_feed_entry?/1)
+
+    Vutuv.FeedPage.sort_entries(collapse_threads(local) ++ remote)
   end
 
   @doc """
@@ -2415,11 +2449,37 @@ defmodule Vutuv.Posts do
       )
       |> scope_visible(viewer)
 
+    # A third leg (issue #1166): posts from another network this member shared
+    # onward. Same five columns as the others so the union holds, with
+    # `post_id` naming a cached remote post instead of a vutuv one —
+    # `author_entries/2` splits them apart again by `kind`.
+    remote_reposts =
+      from(r in FediversePostRepost,
+        join: rp in RemotePost,
+        on: rp.id == r.remote_post_id,
+        where: r.user_id == ^author_id,
+        # Re-asked rather than trusted: the author can narrow their post after
+        # somebody here reshared it, and a timeline is a public page.
+        where: rp.audience in ^RemotePost.open_audiences(),
+        select: %{
+          kind: type(^"remote_repost", :string),
+          ref_id: r.id,
+          post_id: r.remote_post_id,
+          at: r.inserted_at,
+          on_date:
+            fragment("((? AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')::date", r.inserted_at)
+        }
+      )
+
+    # Everything this member reshared, whichever world it came from: the two
+    # legs answer one question and are always wanted together.
+    shared = union_all(reposts, ^remote_reposts)
+
     case filter do
       :posts -> from(t in subquery(originals))
       :replies -> from(t in subquery(originals))
-      :reposts -> from(t in subquery(reposts))
-      _all -> from(t in subquery(union_all(originals, ^reposts)))
+      :reposts -> from(t in subquery(shared))
+      _all -> from(t in subquery(union_all(originals, ^shared)))
     end
   end
 
@@ -2437,13 +2497,36 @@ defmodule Vutuv.Posts do
   defp scope_original_kind(query, _filter), do: query
 
   defp author_entries(rows, %User{} = author) do
-    posts =
-      from(p in Post, where: p.id in ^Enum.uniq(Enum.map(rows, & &1.post_id)))
-      |> Repo.all()
-      |> Repo.preload(post_preloads())
-      |> Map.new(&{&1.id, &1})
+    {remote_rows, local_rows} = Enum.split_with(rows, &(&1.kind == "remote_repost"))
+    posts = load_author_posts(local_rows)
+    remote_posts = load_remote_reposted(remote_rows)
 
-    for row <- rows, post = posts[row.post_id] do
+    rows
+    |> Enum.map(&author_entry(&1, author, posts, remote_posts))
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp author_entry(%{kind: "remote_repost"} = row, author, _posts, remote_posts) do
+    case remote_posts[row.post_id] do
+      {remote_post, images} ->
+        # The same entry shape the feed's remote sources produce, so one card
+        # renders it and nothing here has to know two vocabularies.
+        %{
+          id: "remote_repost-#{row.ref_id}",
+          post: nil,
+          remote_post: remote_post,
+          images: images,
+          reposted_by: author,
+          at: row.at
+        }
+
+      nil ->
+        nil
+    end
+  end
+
+  defp author_entry(row, author, posts, _remote_posts) do
+    if post = posts[row.post_id] do
       %{
         id: "#{row.kind}-#{row.ref_id}",
         post: post,
@@ -2452,6 +2535,35 @@ defmodule Vutuv.Posts do
       }
     end
   end
+
+  # The two halves of a timeline page, each read in one query and keyed by id:
+  # the vutuv posts its own/repost rows name, and the cached posts from another
+  # network its reshare rows name (issue #1166). Neither runs when its half of
+  # the page is empty, which is the common case on both sides.
+  defp load_author_posts([]), do: %{}
+
+  defp load_author_posts(rows) do
+    from(p in Post, where: p.id in ^row_post_ids(rows))
+    |> Repo.all()
+    |> Repo.preload(post_preloads())
+    |> Map.new(&{&1.id, &1})
+  end
+
+  defp load_remote_reposted([]), do: %{}
+
+  defp load_remote_reposted(rows) do
+    ids = row_post_ids(rows)
+    # With their pictures: a photo-only post from another network is one this
+    # feature explicitly supports (issue #1163), and without them a reshared
+    # one renders as a blank card on a profile.
+    images = Vutuv.Fediverse.list_remote_images(ids)
+
+    from(p in RemotePost, where: p.id in ^ids, preload: [:remote_account])
+    |> Repo.all()
+    |> Map.new(&{&1.id, {&1, Map.get(images, &1.id, [])}})
+  end
+
+  defp row_post_ids(rows), do: rows |> Enum.map(& &1.post_id) |> Enum.uniq()
 
   @doc """
   The direct replies to `post` that `viewer` may see, oldest first — the

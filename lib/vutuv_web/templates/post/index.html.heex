@@ -40,7 +40,20 @@
     answers inline instead of the flat "Replying to @handle" banner. --%>
     <.post_list :if={@posts != []} data-post-list>
       <div :for={entry <- @posts} class={post_row_class()}>
+        <%!-- A post from another network this member reshared (issue #1166)
+        wears its own card, the same one the feed shows it in. --%>
+        <%!-- Read-only (`viewer={nil}`): this is a plain controller page with
+        no LiveView around it, so every phx-click on the card would be a control
+        that visibly does nothing. --%>
+        <.remote_post_card
+          :if={Vutuv.Posts.remote_feed_entry?(entry)}
+          remote_post={entry.remote_post}
+          images={entry[:images] || []}
+          reposted_by={entry.reposted_by}
+          viewer={nil}
+        />
         <.post_thread_entry
+          :if={!Vutuv.Posts.remote_feed_entry?(entry)}
           post={entry.post}
           reposted_by={entry.reposted_by}
           entry_id={entry.id}

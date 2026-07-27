@@ -798,7 +798,7 @@ So: `FEDIVERSE_POST_RETENTION_DAYS` (183) as the ceiling, an upstream
 `Update`/`Delete` honoured at once, purged when the last follow of the author
 ends, gone with the accounts on an instance block.
 
-The feed reads it as a **fourth source** in `Vutuv.Posts.feed_page/2`, merged on
+The feed reads it as the **fourth source** in `Vutuv.Posts.feed_page/2`, merged on
 publication time. `decorate_feed_entries/2` splits the remote entries off before
 the local pipeline (they are not `%Post{}`, have no thread, no reposters and no
 engagement) and merges them back on `at`. A muted follow leaves the feed and
@@ -1005,3 +1005,46 @@ A remote server publishing a post with a 300-character id — legal, accepted at
 our inbox, refused by no changeset — would have raised 22001 the moment a member
 answered it. Widened to `text`; the `handle` stays 255 and the writer truncates,
 since it is cosmetic and composed from two independently capped remote strings.
+
+
+### Sharing one of their posts onward (issue #1166)
+
+`fediverse_post_reposts` is its own table rather than a nullable column on
+`post_reposts`: that table's `post_id` is the spine of six queries and a remote
+reshare has no local post, no author here and no audience lock to hold open.
+What it produces is the **fifth feed source** — posts reshared by people the
+viewer follows *here* — which is the one way a member who follows nobody out
+there meets that content at all, plus a third leg on the profile timeline.
+
+The `Announce` goes to the resharer's own followers and to the original author,
+and it is addressed **exactly as loudly as what it boosts**: an unlisted post is
+announced unlisted-style (followers in `to`, the public collection demoted to
+`cc`), because its author kept it out of public timelines on purpose and a boost
+must never be louder than the thing it boosts. `Undo(Announce)` repeats the
+original's id.
+
+The interesting half is **retention**. A cached post normally dies at its
+six-month ceiling or the moment nobody here follows its author, and a reshared
+one is spared by both sweeps — a reshare is a standing claim that this is worth
+showing, and pulling it out from under the people reading it on a calendar rule
+would be the wrong call. What keeps that honest is not the exemption but
+`refresh_reposted_posts/1` (in the hourly sweeper): it asks the origin whether
+the post is still published, extends the clock when it is, and deletes the copy
+when it is 404/410/403 or has been narrowed — a reshare never keeps alive what
+its author already deleted. The re-fetched document is *applied*, not just
+counted, because for exactly this population an `Update` may never arrive:
+nobody here need follow the author any more.
+
+Two things make the bargain fail safe rather than fail open. The exemption
+**lapses** once verification is more than a month behind, so a member resharing
+faster than the sweep can check (the budget allows 100 an hour) cannot pin an
+unbounded pile of unverified third-party content here — those copies fall back
+to ordinary expiry. And every path that deletes a cached post **withdraws the
+reshares first** (`withdraw_reposts/1` inside `delete_cached_post/1`): the rows
+cascade, the `Announce` on other servers does not, and in the two cases that
+matter most — a member reported it, or its author narrowed it — leaving the
+boost standing would be exactly the amplifying we were asked to stop.
+
+One card per cached post per page: the same post arrives from the fourth source
+(the reader follows its author) and the fifth (somebody reshared it), and the
+direct entry wins, carrying the author's own publication time.

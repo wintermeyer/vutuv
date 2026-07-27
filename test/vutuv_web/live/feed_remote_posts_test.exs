@@ -94,6 +94,72 @@ defmodule VutuvWeb.FeedRemotePostsTest do
       refute has_element?(view, "[data-remote-like='on']")
     end
 
+    test "resharing paints the state and says so, and takes it back", ctx do
+      {:ok, view, _html} = live(ctx.conn, ~p"/feed")
+
+      html = view |> element("[phx-click='repost-remote-post']") |> render_click()
+
+      assert has_element?(view, "[data-remote-repost='on']")
+      # Publishing, unlike the heart: the reader's own feed does not show their
+      # reshare back to them, so a silent button would leave them unsure.
+      assert html =~ "Repostet" or html =~ "Reposted"
+
+      view |> element("[phx-click='unrepost-remote-post']") |> render_click()
+
+      refute has_element?(view, "[data-remote-repost='on']")
+    end
+
+    test "a post reaching the reader twice renders one card", ctx do
+      # The reader follows the author (source 4) and a member who reshared the
+      # same post (source 5). One cached row, one card.
+      sharer = insert(:activated_user, fediverse_followers?: true)
+      {:ok, _} = Vutuv.Fediverse.ensure_actor(sharer)
+      Vutuv.Social.follow(ctx.user, sharer.id)
+      {:ok, :reposted} = Vutuv.Fediverse.repost_remote_post(Repo.reload!(sharer), ctx.post)
+
+      {:ok, view, _html} = live(ctx.conn, ~p"/feed")
+
+      cards =
+        render(view)
+        |> String.split("data-remote-post=\"#{ctx.post.id}\"")
+        |> length()
+        |> Kernel.-(1)
+
+      assert cards == 1
+    end
+
+    test "a frozen member's reshares reach nobody", ctx do
+      sharer = insert(:activated_user, fediverse_followers?: true)
+      {:ok, _} = Vutuv.Fediverse.ensure_actor(sharer)
+      Vutuv.Social.follow(ctx.user, sharer.id)
+      {:ok, :reposted} = Vutuv.Fediverse.repost_remote_post(Repo.reload!(sharer), ctx.post)
+
+      # Carrying a third party's post into other people's feeds is exactly what
+      # an account with an open case must not keep doing.
+      sharer
+      |> Ecto.Changeset.change(frozen_at: NaiveDateTime.utc_now(:second))
+      |> Repo.update!()
+
+      Repo.delete_all(Vutuv.Fediverse.Follow)
+
+      {:ok, view, _html} = live(ctx.conn, ~p"/feed")
+
+      refute has_element?(view, "[data-remote-post='#{ctx.post.id}']")
+    end
+
+    test "a followers-only post offers no reshare at all", ctx do
+      Repo.update_all(Vutuv.Fediverse.RemotePost, set: [audience: "followers"])
+
+      {:ok, view, _html} = live(ctx.conn, ~p"/feed")
+
+      # No control rather than one that refuses: passing on an audience its
+      # author narrowed is not ours to do.
+      assert has_element?(view, "[data-remote-post='#{ctx.post.id}']")
+      refute has_element?(view, "[phx-click='repost-remote-post']")
+      # The heart stays: liking is private and reaches nobody new.
+      assert has_element?(view, "[phx-click='like-remote-post']")
+    end
+
     test "a member who does not federate is told where the switch is", ctx do
       ctx.user |> Ecto.Changeset.change(fediverse_followers?: false) |> Repo.update!()
 

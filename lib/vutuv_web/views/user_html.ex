@@ -11,7 +11,8 @@ defmodule VutuvWeb.UserHTML do
       post_filter_tabs: 1,
       post_list: 1,
       post_row_class: 0,
-      post_thread_entry: 1
+      post_thread_entry: 1,
+      remote_post_card: 1
     ]
 
   import VutuvWeb.UserHelpers

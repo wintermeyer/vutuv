@@ -211,6 +211,11 @@ config :vutuv, :fediverse_outbound_reply_limit, 30
 # like back is never metered.
 config :vutuv, :fediverse_outbound_like_limit, 200
 
+# How many reposts of other networks' posts one member may send per hour (issue
+# #1166). Between the two above: a boost is a publishing act, not a tap, but it
+# is still one press while reading rather than a piece of writing.
+config :vutuv, :fediverse_outbound_boost_limit, 100
+
 # Following accounts on other networks (issue #1160): how many follow requests
 # one member may send per hour, and how many accounts they may follow at all.
 #

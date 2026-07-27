@@ -202,6 +202,11 @@ if config_env() == :prod do
     config :vutuv, :fediverse_outbound_like_limit, String.to_integer(String.trim(limit))
   end
 
+  # The same, for resharing another network's post onward (issue #1166).
+  if limit = System.get_env("FEDIVERSE_OUTBOUND_BOOST_LIMIT") do
+    config :vutuv, :fediverse_outbound_boost_limit, String.to_integer(String.trim(limit))
+  end
+
   # How long a post by an account a member follows may be held here (issue
   # #1161). The promise the privacy page makes about the other half of
   # following: it is deleted when the clock runs out whatever else happens.

@@ -69,11 +69,22 @@ defmodule Vutuv.Fediverse.NoteSweeper do
     log("expired remote reply", Fediverse.expire_due_notes())
     log("expired cached post", Fediverse.expire_due_remote_posts())
     log("cached post of an unfollowed account", Fediverse.purge_unfollowed_remote_posts())
+    # A reposted copy outlives the ceiling, so something has to keep asking
+    # whether its original is still published (issue #1166). Bounded per run.
+    log_refresh(Fediverse.refresh_reposted_posts())
     log("remote account nothing refers to", Fediverse.purge_unreferenced_remote_accounts())
   end
 
   defp log(_what, 0), do: :ok
   defp log(what, count), do: Logger.info("Fediverse sweep: deleted #{count} #{what}(s)")
+
+  defp log_refresh(%{refreshed: 0, deleted: 0}), do: :ok
+
+  defp log_refresh(%{refreshed: refreshed, deleted: deleted}) do
+    Logger.info(
+      "Fediverse sweep: re-checked reposted posts — #{refreshed} still published, #{deleted} gone upstream"
+    )
+  end
 
   defp schedule, do: Process.send_after(self(), :sweep, @interval)
 end

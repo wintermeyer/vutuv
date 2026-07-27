@@ -40,7 +40,7 @@ defmodule Vutuv.Fediverse do
   use Gettext, backend: VutuvWeb.Gettext
 
   import Ecto.Query
-  import Vutuv.Moderation.Query, only: [account_hidden_row: 1]
+  import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
 
   require Logger
 
@@ -62,6 +62,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.NoteEvent
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.PostLike
+  alias Vutuv.Fediverse.PostRepost
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
@@ -1470,6 +1471,72 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  @doc """
+  The fifth feed source (issue #1166): posts from another network that people
+  the viewer follows **here** have reshared.
+
+  This is how a member who follows nobody out there meets that content at all —
+  through somebody here vouching for it — so it is scoped to the reposter, not
+  to any follow of the author. Stamped with the repost time, like a local
+  repost: what is new is the sharing, not the post.
+  """
+  def feed_remote_reposts(%User{id: viewer_id}, fetch_n, cursor) do
+    if enabled?() do
+      from(r in PostRepost,
+        join: p in RemotePost,
+        on: p.id == r.remote_post_id,
+        join: a in RemoteAccount,
+        on: a.id == p.remote_account_id,
+        join: reposter in User,
+        on: reposter.id == r.user_id,
+        where: r.user_id == ^viewer_id or r.user_id in subquery(unmuted_followees(viewer_id)),
+        # A resharer who is not in good standing amplifies nothing. Stricter
+        # than the local repost source, deliberately: that one only asks about
+        # a confirmed address, and carrying a *third party's* post into other
+        # people's feeds is exactly what a frozen or suspended account must not
+        # be able to keep doing while its case is open.
+        where:
+          r.user_id == ^viewer_id or
+            (account_confirmed_row(reposter) and not account_hidden_row(reposter)),
+        # Only ever what the reposter could have shared: the audience gate is
+        # the same one that let them press the button.
+        where: p.audience in ^RemotePost.open_audiences(),
+        order_by: [desc: r.inserted_at, desc: r.id],
+        limit: ^fetch_n,
+        preload: [remote_post: {p, remote_account: a}, user: reposter]
+      )
+      |> remote_reposts_at_or_before(cursor)
+      |> Repo.all()
+      |> Enum.map(&remote_repost_entry/1)
+    else
+      []
+    end
+  end
+
+  # The same rule the local feed uses: a muted follow keeps the relationship and
+  # drops that member's posts out of this feed — including what they reshare.
+  defp unmuted_followees(viewer_id) do
+    from(f in Vutuv.Social.Follow,
+      where: f.follower_id == ^viewer_id and f.muted == false,
+      select: f.followee_id
+    )
+  end
+
+  defp remote_repost_entry(%PostRepost{} = repost) do
+    %{
+      id: "remote-repost-#{repost.id}",
+      post: nil,
+      remote_post: repost.remote_post,
+      reposted_by: repost.user,
+      at: repost.inserted_at
+    }
+  end
+
+  defp remote_reposts_at_or_before(query, nil), do: query
+
+  defp remote_reposts_at_or_before(query, %{at: at}),
+    do: where(query, [r], r.inserted_at <= ^at)
+
   defp remote_feed_entry(%RemotePost{} = post) do
     %{
       id: "remote-#{post.id}",
@@ -1622,8 +1689,34 @@ defmodule Vutuv.Fediverse do
   # `Delete`) quietly did not have it, so a reader who reported a picture was
   # told "our copy was deleted right away" while the bytes stayed on disk.
   defp delete_cached_post(%RemotePost{} = post) do
+    withdraw_reposts(post)
     delete_media_for_posts([post.id])
     Repo.delete(post)
+  end
+
+  # Every reshare of this post is withdrawn before the row goes (issue #1166).
+  # The rows cascade, the `Announce` on other servers does not: without this a
+  # member's boost keeps standing under their name out there after our copy was
+  # deleted — and in the two cases that matter most (a member reported it, or
+  # its author narrowed the audience upstream) that is precisely the amplifying
+  # we were asked to stop. The same shape revocation takes everywhere here.
+  defp withdraw_reposts(%RemotePost{} = post) do
+    account = post_account(post)
+
+    from(r in PostRepost,
+      join: u in User,
+      on: u.id == r.user_id,
+      where: r.remote_post_id == ^post.id,
+      select: u
+    )
+    |> Repo.all()
+    |> Enum.each(fn reposter ->
+      deliver_boost(
+        reposter,
+        %{post | remote_account: account},
+        &Docs.undo_announce_remote_activity/4
+      )
+    end)
   end
 
   # The same, for a query that is about to delete posts: the ids are read out
@@ -1694,6 +1787,13 @@ defmodule Vutuv.Fediverse do
   end
 
   defp delete_unfollowed_posts(query) do
+    # A reshared copy is spared here too (issue #1166), not only at the
+    # ceiling. Its life is tied to the reshare and to the original still being
+    # published — not to anybody's follow — so the last follower of its author
+    # leaving must not pull it out from under the people reading it in the
+    # resharer's feed.
+    query = spare_reposted(query, RemotePost)
+
     # Files first: the rows cascade, bytes on disk do not, and a deletion that
     # leaves a stranger's photograph at rest is not a deletion (issue #1163).
     wipe_media(query)
@@ -2187,6 +2287,22 @@ defmodule Vutuv.Fediverse do
   # a limit, because this is a member action that makes vutuv POST to a server
   # that never followed them.
   @outbound_like_limit 200
+
+  # Reposts a member may send out per hour (issue #1166). Between the two above:
+  # a boost is a publishing act, not a tap, but it is still one press while
+  # reading rather than a piece of writing.
+  @outbound_boost_limit 100
+
+  # How long a reposted cached post may go unverified before its origin is asked
+  # again. A repost is what keeps such a copy alive past the six-month ceiling,
+  # so this is the clock that keeps "cache" honest for exactly those rows.
+  @repost_recheck_days 7
+
+  # How long a reshared copy may go **unverified** before it stops being spared
+  # from the retention sweeps. Comfortably more than one recheck interval, so an
+  # origin that is merely slow or briefly offline never costs anybody their
+  # reshare — but bounded, so a backlog drains itself instead of accumulating.
+  @repost_recheck_stale_days 30
 
   # How long a post with an unvetted picture is held before it federates without
   # it. The ceiling, not the normal wait — see `image_hold_seconds/0`.
@@ -2969,7 +3085,11 @@ defmodule Vutuv.Fediverse do
   # out, whatever else did or did not happen to it.
   defp expire_due(schema, now) do
     now = now || DateTime.utc_now(:second)
-    due = where(schema, [r], r.expires_at <= ^now)
+
+    due =
+      schema
+      |> where([r], r.expires_at <= ^now)
+      |> spare_reposted(schema)
 
     # A cached post takes its pictures' files with it (issue #1163); a reply has
     # none, so this is a no-op for the other caller.
@@ -2978,6 +3098,34 @@ defmodule Vutuv.Fediverse do
     {count, _} = Repo.delete_all(due)
     count
   end
+
+  # A cached post somebody here reposted outlives the ceiling (issue #1166): the
+  # repost is a standing claim that this is worth showing, and pulling it out
+  # from under the people reading it on a calendar rule would be the wrong call.
+  # What keeps that honest is not this exemption but `refresh_reposted_posts/0`,
+  # which asks the origin and deletes the moment the original is gone.
+  defp spare_reposted(query, RemotePost) do
+    # Only while the verification is **current**. The exemption is a promise
+    # that this copy is still wanted *and* still published, and the second half
+    # is only true as long as somebody keeps asking. A member may reshare far
+    # faster than one sweep can re-check (the budget allows 100 an hour, a run
+    # checks a bounded batch), so an exemption that never expired would let one
+    # account pin an unbounded pile of third-party content here forever,
+    # unverified — the exact opposite of the bargain. Falling out of the
+    # exemption when the check falls behind makes the failure mode "expires
+    # like everything else" instead.
+    stale = DateTime.add(DateTime.utc_now(:second), -@repost_recheck_stale_days * 86_400)
+
+    reposted =
+      from(r in PostRepost,
+        where: r.remote_post_id == parent_as(:post).id,
+        where: coalesce(parent_as(:post).checked_at, parent_as(:post).received_at) > ^stale
+      )
+
+    from(p in query, as: :post, where: not exists(reposted))
+  end
+
+  defp spare_reposted(query, _schema), do: query
 
   @doc """
   Which of `notes` should have their origin asked again — the lazy on-view
@@ -3341,6 +3489,149 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  ## Keeping a reposted copy honest (issue #1166)
+
+  @doc "How long a reposted cached post may go unverified before its origin is asked again."
+  def repost_recheck_days, do: @repost_recheck_days
+
+  @doc """
+  Asks the origin of every reposted cached post that is due whether it is still
+  published, and acts on the answer.
+
+  This is what makes the retention exemption above defensible. A repost holds a
+  copy past its six-month ceiling, so something has to keep asking whether it
+  should still be here at all — a cache nobody re-checks is just a copy.
+
+  `200` and still open pushes the ceiling out and re-stamps `checked_at`; `404`,
+  `410` and `403` delete the copy **and its reposts**, because a repost must
+  never keep alive what its author has already deleted or locked away. Anything
+  else changes nothing: a server that stays offline cannot buy indefinite
+  retention, and its outage cannot trigger a mass delete either.
+
+  Bounded per run like every other outbound sweep here.
+  """
+  def refresh_reposted_posts(limit \\ 20) do
+    if enabled?() do
+      limit |> due_reposted_posts() |> Enum.map(&refresh_reposted_post/1) |> refresh_tally()
+    else
+      %{refreshed: 0, deleted: 0, skipped: 0}
+    end
+  end
+
+  @doc "One reposted cached post, verified against its origin. See `refresh_reposted_posts/1`."
+  def refresh_reposted_post(%RemotePost{} = post) do
+    with true <- enabled?(),
+         %User{} = reposter <- any_reposter(post),
+         # An unsigned GET is not a question this can act on: an
+         # authorized-fetch server answers it 403, which `fetch_remote_note/2`
+         # reads as "gone" — and that would delete a perfectly live public post
+         # plus everybody's reshares of it, on nothing but our own missing key.
+         signer when not is_nil(signer) <- signer(reposter) do
+      apply_repost_refresh(post, fetch_remote_note(post.object_uri, signer))
+    else
+      _ -> :skip
+    end
+  end
+
+  defp due_reposted_posts(limit) do
+    cutoff = DateTime.add(DateTime.utc_now(:second), -@repost_recheck_days * 86_400)
+
+    Repo.all(
+      from(p in RemotePost,
+        join: r in PostRepost,
+        on: r.remote_post_id == p.id,
+        where: is_nil(p.checked_at) or p.checked_at <= ^cutoff,
+        distinct: true,
+        # Nulls first: a freshly reshared copy has never been verified at all,
+        # which is the least-known state and the one whose exemption just
+        # began. Postgres sorts NULLs last on ASC, so it would otherwise queue
+        # behind every row we already know about.
+        order_by: [asc_nulls_first: p.checked_at, asc: p.id],
+        limit: ^limit,
+        preload: [:remote_account]
+      )
+    )
+  end
+
+  # Signed as one of the members who reposted it: the fetch has to carry an
+  # actor key for authorized-fetch servers, and a reposter is by definition
+  # somebody with a standing interest in this post still being here.
+  defp any_reposter(%RemotePost{id: id}) do
+    Repo.one(
+      from(r in PostRepost,
+        join: u in User,
+        on: u.id == r.user_id,
+        where: r.remote_post_id == ^id,
+        order_by: [asc: r.id],
+        limit: 1,
+        select: u
+      )
+    )
+  end
+
+  defp apply_repost_refresh(%RemotePost{} = post, {:ok, doc}) do
+    text = remote_text(doc["content"], RemotePost.max_content())
+
+    cond do
+      not doc_public?(doc) ->
+        narrowed_upstream(post)
+
+      # The author emptied it. The same "stop showing this" a narrowing carries,
+      # and the reply refresh beside this makes the same call.
+      text in [nil, ""] and picture_only_doc?(doc) == false ->
+        narrowed_upstream(post)
+
+      true ->
+        now = DateTime.utc_now(:second)
+
+        # The re-fetched text is applied, not discarded. For exactly the
+        # population this exemption keeps alive, an `Update` may never arrive —
+        # nobody here need follow the author any more — so this is the only
+        # channel through which an author's correction reaches our copy.
+        post
+        |> RemotePost.changeset(%{
+          content_text: text || post.content_text,
+          summary: remote_text(doc["summary"], RemotePost.max_summary())
+        })
+        |> Ecto.Changeset.put_change(:checked_at, now)
+        |> Ecto.Changeset.put_change(
+          :expires_at,
+          DateTime.add(now, remote_post_retention_days() * 86_400)
+        )
+        |> Repo.update()
+        |> case do
+          {:ok, _} -> :refreshed
+          {:error, _} -> :skip
+        end
+    end
+  end
+
+  defp apply_repost_refresh(%RemotePost{} = post, {:gone, status}) do
+    Logger.info("fediverse cached post #{post.id} gone upstream (#{status}), deleting")
+    delete_cached_post(post)
+    :deleted
+  end
+
+  defp apply_repost_refresh(%RemotePost{}, _other), do: :skip
+
+  defp picture_only_doc?(doc),
+    do: doc["attachment"] |> List.wrap() |> Enum.any?(&Media.image_attachment?/1)
+
+  defp narrowed_upstream(%RemotePost{} = post) do
+    # The author narrowed or emptied it: the same "stop showing this" a 403
+    # carries, and a boost of it must stop too.
+    delete_cached_post(post)
+    :deleted
+  end
+
+  defp refresh_tally(results) do
+    %{
+      refreshed: Enum.count(results, &(&1 == :refreshed)),
+      deleted: Enum.count(results, &(&1 == :deleted)),
+      skipped: Enum.count(results, &(&1 not in [:refreshed, :deleted]))
+    }
+  end
+
   ## Account migration — move out (issue #986, half 2)
 
   @move_cooldown_days 30
@@ -3647,7 +3938,7 @@ defmodule Vutuv.Fediverse do
     # `on_conflict: :nothing` suppresses the *unique* violation, never this one.
     with %RemotePost{} = post <- reload_remote_post(post),
          :ok <- check_remote_like(user, post) do
-      case insert_post_like(user, post) do
+      case insert_remote_marker(PostLike, user, post, :liked) do
         {:ok, :liked} -> send_like(user, post)
         other -> other
       end
@@ -3668,10 +3959,7 @@ defmodule Vutuv.Fediverse do
         {:ok, :liked}
 
       {:error, _} = capped ->
-        Repo.delete_all(
-          from(l in PostLike, where: l.user_id == ^user.id and l.remote_post_id == ^post.id)
-        )
-
+        delete_remote_marker(PostLike, user, post)
         capped
     end
   end
@@ -3703,12 +3991,7 @@ defmodule Vutuv.Fediverse do
   is simply nothing to send, which `deliver_like/3` handles by finding no actor.
   """
   def unlike_remote_post(%User{} = user, %RemotePost{} = post) do
-    {count, _} =
-      Repo.delete_all(
-        from(l in PostLike, where: l.user_id == ^user.id and l.remote_post_id == ^post.id)
-      )
-
-    if count > 0 do
+    if delete_remote_marker(PostLike, user, post) > 0 do
       deliver_like(user, post, &Docs.undo_like_activity/3)
       {:ok, :unliked}
     else
@@ -3720,16 +4003,15 @@ defmodule Vutuv.Fediverse do
   Which of `post_ids` this member already likes, as a `MapSet` — one query for a
   whole feed page rather than one per card.
   """
-  def liked_remote_post_ids(%User{id: user_id}, post_ids) when is_list(post_ids) do
-    from(l in PostLike,
-      where: l.user_id == ^user_id and l.remote_post_id in ^post_ids,
-      select: l.remote_post_id
-    )
-    |> Repo.all()
-    |> MapSet.new()
-  end
+  def liked_remote_post_ids(%User{} = viewer, post_ids) when is_list(post_ids),
+    do: remote_marker_ids(PostLike, viewer, post_ids)
 
   def liked_remote_post_ids(_viewer, _post_ids), do: MapSet.new()
+
+  ## The kernels both outbound acts on a cached post are built from — the like
+  ## here and the reshare below (issue #1166). The two differ in what they mean
+  ## and who they are addressed to, never in how the marker row is written or
+  ## how the activity is queued, so those three live once.
 
   # The join-row kernel every other engagement toggle here writes through
   # (`Vutuv.Engagement`), for the reason `insert_reaction/3` spells out:
@@ -3738,33 +4020,60 @@ defmodule Vutuv.Fediverse do
   # identical either way, so only the inserted row count is an honest answer.
   # Here that answer decides whether an activity leaves the building. Nothing
   # needs a changeset — both ids come from records the caller already resolved.
-  defp insert_post_like(user, post) do
+  # `written` is what the caller calls a row that really landed.
+  defp insert_remote_marker(schema, user, post, written) do
     case Engagement.insert_if_new(
-           PostLike,
+           schema,
            %{user_id: user.id, remote_post_id: post.id},
            [:user_id, :remote_post_id]
          ) do
-      {:inserted, _row} -> {:ok, :liked}
+      {:inserted, _row} -> {:ok, written}
       :exists -> {:ok, :already}
+    end
+  end
+
+  # The withdrawal half, answering in the same currency: how many rows really
+  # went, so a second tab's press can be told from a real one.
+  defp delete_remote_marker(schema, user, post) do
+    {count, _} =
+      Repo.delete_all(where(schema, [r], r.user_id == ^user.id and r.remote_post_id == ^post.id))
+
+    count
+  end
+
+  # Which of `post_ids` this member has marked — one query per feed page rather
+  # than one per card.
+  defp remote_marker_ids(schema, %User{id: user_id}, post_ids) do
+    from(r in schema,
+      where: r.user_id == ^user_id and r.remote_post_id in ^post_ids,
+      select: r.remote_post_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  # The activity itself, queued to whichever inboxes the act is addressed to
+  # (`inboxes` is handed the post's account, since both answers start there).
+  defp deliver_remote_activity(user, %RemotePost{} = post, builder, inboxes) do
+    with %RemoteAccount{} = account <- post_account(post),
+         # `ever_federated?/1`, never `federated?/1`, for the reason the
+         # revocation paths spell out (issue #1102): a withdrawal happens
+         # exactly when the state that allowed the original act is already
+         # gone. Gating the `Undo` on it would leave the favourite (or the
+         # boost) standing under a member's name on a server they can no
+         # longer reach.
+         true <- ever_federated?(user),
+         [_ | _] = list <- inboxes.(account) do
+      enqueue(user, list, builder.(user, account.actor_uri, post.object_uri))
+    else
+      _ -> :skip
     end
   end
 
   # The author's own inbox, never the shared one: a Like is addressed to one
   # person, and a shared inbox is for what a server fans out to many.
-  defp deliver_like(user, %RemotePost{} = post, builder) do
-    with %RemoteAccount{} = account <- post_account(post),
-         # `ever_federated?/1`, never `federated?/1`, for the reason the
-         # revocation paths spell out (issue #1102): a withdrawal happens
-         # exactly when the state that allowed the original act is already
-         # gone. Gating the `Undo` on it would leave the favourite standing
-         # under a member's name on a server they can no longer reach.
-         true <- ever_federated?(user),
-         inbox when is_binary(inbox) <- account.inbox_uri do
-      enqueue(user, [inbox], builder.(user, account.actor_uri, post.object_uri))
-    else
-      _ -> :skip
-    end
-  end
+  defp deliver_like(user, %RemotePost{} = post, builder),
+    do: deliver_remote_activity(user, post, builder, &List.wrap(&1.inbox_uri))
 
   defp post_account(%RemotePost{remote_account: %RemoteAccount{} = account}), do: account
   defp post_account(%RemotePost{remote_account_id: id}), do: Repo.get(RemoteAccount, id)
@@ -3774,6 +4083,120 @@ defmodule Vutuv.Fediverse do
       %RemoteAccount{actor_uri: uri} -> uri
       _ -> nil
     end
+  end
+
+  ## Sharing one of their posts onward (issue #1166)
+
+  @doc """
+  Whether `user` may repost the cached post `post`, and when not, which gate
+  refused. The `check_remote_post_reply/2` vocabulary, for the same reasons:
+
+    * `:fediverse_disabled`, `:not_federating`, `:moved`, `:instance_blocked`,
+      `:not_visible` — as everywhere else in this subsystem.
+    * `:post_not_public` — a followers-only post. Passing on an audience its
+      author deliberately narrowed is not ours to do, and a boost is the least
+      reversible way to do it: it reaches everybody who follows the reposter,
+      here and out there. So the control does not render, and this refuses if
+      somebody reaches the event anyway.
+  """
+  def check_remote_repost(%User{} = user, %RemotePost{} = post),
+    # Exactly the answer path's gate, and for the same reason: the audience
+    # question first, because no setting of the member's could make a
+    # followers-only post shareable, then everything the like path asks.
+    do: check_remote_post_reply(user, post)
+
+  @doc "Claims one slot from the member's hourly repost budget."
+  def claim_boost_budget(%User{id: user_id}) do
+    case RateLimiter.hit(
+           {:fediverse_outbound_boost, user_id},
+           outbound_boost_limit(),
+           @inbound_window_ms
+         ) do
+      :ok -> :ok
+      _ -> {:error, :boost_capped}
+    end
+  end
+
+  @doc "How many reposts per hour one member may send to other networks."
+  def outbound_boost_limit,
+    do: Application.get_env(:vutuv, :fediverse_outbound_boost_limit, @outbound_boost_limit)
+
+  @doc """
+  The member shares a cached post onward: writes the row and queues a signed
+  `Announce` to their own followers (and the original author).
+
+  `{:ok, :reposted}`, `{:ok, :already}`, or the gate's `{:error, reason}`. Like
+  the heart, the post is re-read first: the row can be gone by the time the
+  button is pressed, and the audience can have narrowed, and neither may be
+  decided from the struct the page rendered with.
+  """
+  def repost_remote_post(%User{} = user, %RemotePost{} = post) do
+    with %RemotePost{} = post <- reload_remote_post(post),
+         :ok <- check_remote_repost(user, post) do
+      case insert_remote_marker(PostRepost, user, post, :reposted) do
+        {:ok, :reposted} -> send_announce(user, post)
+        other -> other
+      end
+    else
+      nil -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc """
+  The member takes the boost back: drops the row and queues the matching
+  `Undo(Announce)`.
+
+  No gate and no budget, like unliking — a withdrawal must not be refusable, and
+  it must go out even once the member has stopped federating (issue #1102), which
+  `deliver_boost/3` handles through `ever_federated?/1`.
+  """
+  def unrepost_remote_post(%User{} = user, %RemotePost{} = post) do
+    if delete_remote_marker(PostRepost, user, post) > 0 do
+      deliver_boost(user, post, &Docs.undo_announce_remote_activity/4)
+      {:ok, :unreposted}
+    else
+      {:ok, :already}
+    end
+  end
+
+  @doc """
+  Which of `post_ids` this member has reposted, as a `MapSet` — one query per
+  feed page rather than one per card.
+  """
+  def reposted_remote_post_ids(%User{} = viewer, post_ids) when is_list(post_ids),
+    do: remote_marker_ids(PostRepost, viewer, post_ids)
+
+  def reposted_remote_post_ids(_viewer, _post_ids), do: MapSet.new()
+
+  # See `send_like/1`: the budget is claimed once the row is really new, and a
+  # refusal rolls it back rather than leaving a boost painted that never left.
+  defp send_announce(user, post) do
+    case claim_boost_budget(user) do
+      :ok ->
+        deliver_boost(user, post, &Docs.announce_remote_activity/4)
+        {:ok, :reposted}
+
+      {:error, _} = capped ->
+        delete_remote_marker(PostRepost, user, post)
+        capped
+    end
+  end
+
+  # An Announce goes to the reposter's own audience — that is the act — plus the
+  # original author, so their server learns of the boost. The one place this
+  # differs from the like beside it (`deliver_like/3`), which is why the rest is
+  # shared.
+  # A boost is addressed exactly as loudly as what it boosts (`audience`), so
+  # resharing an unlisted post never puts it into the public timelines its
+  # author kept it out of.
+  defp deliver_boost(user, %RemotePost{} = post, builder) do
+    deliver_remote_activity(
+      user,
+      post,
+      &builder.(&1, &2, &3, post.audience),
+      fn account -> Enum.uniq(delivery_inboxes(user) ++ List.wrap(account.inbox_uri)) end
+    )
   end
 
   ## Federating posts (called from Vutuv.Posts after commit)

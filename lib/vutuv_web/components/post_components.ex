@@ -1273,6 +1273,16 @@ defmodule VutuvWeb.PostComponents do
     doc: "whether the viewer already likes this post (issue #1164); batched by the caller"
   )
 
+  attr(:reposted?, :boolean,
+    default: false,
+    doc: "whether the viewer has reshared this post (issue #1166); batched by the caller"
+  )
+
+  attr(:reposted_by, :any,
+    default: nil,
+    doc: "the member whose reshare put this card in the reader's feed, or nil"
+  )
+
   def remote_post_card(assigns) do
     post = assigns.remote_post
     account = post.remote_account
@@ -1284,6 +1294,21 @@ defmodule VutuvWeb.PostComponents do
 
     ~H"""
     <article data-remote-post={@remote_post.id} data-audience={@remote_post.audience}>
+      <%!-- Why this card is in the reader's feed at all when they follow nobody
+      out there (issue #1166): somebody here reshared it. The same line a local
+      repost wears, so "X shared this" reads identically whichever world the
+      post came from. --%>
+      <p
+        :if={@reposted_by}
+        class="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400"
+        data-remote-reposted-by={@reposted_by.id}
+      >
+        <.icon_repost class="h-4 w-4 shrink-0" />
+        <.link href={~p"/#{@reposted_by}"} class="min-w-0 truncate hover:text-brand-700">
+          {gettext("Reposted by %{name}", name: full_name(@reposted_by))}
+        </.link>
+      </p>
+
       <div class="flex items-start gap-3">
         <.remote_avatar initials={@initials} src={RemoteAccount.avatar_url(@account)} />
 
@@ -1361,7 +1386,7 @@ defmodule VutuvWeb.PostComponents do
             aria-pressed={to_string(@liked?)}
             data-remote-like={@liked? && "on"}
             class={[
-              "mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
+              "mr-4 mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
               if(@liked?,
                 do: "text-accent",
                 else: "text-slate-600 hover:text-accent dark:text-slate-400"
@@ -1375,6 +1400,30 @@ defmodule VutuvWeb.PostComponents do
             for both ("Gefällt mir"), so the state would have read differently
             per language, and in German not at all. --%>
             <span>{gettext("Like")}</span>
+          </button>
+
+          <%!-- Sharing it onward (issue #1166). Unlike the heart this is a
+          publishing act — everybody who follows the reader here and out there
+          sees it — so it is only offered on an open post: passing on an
+          audience its author narrowed is not ours to do, and a boost is the
+          least reversible way to do it. --%>
+          <button
+            :if={@viewer && RemotePost.open?(@remote_post)}
+            type="button"
+            phx-click={if @reposted?, do: "unrepost-remote-post", else: "repost-remote-post"}
+            phx-value-id={@remote_post.id}
+            aria-pressed={to_string(@reposted?)}
+            data-remote-repost={@reposted? && "on"}
+            class={[
+              "mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
+              if(@reposted?,
+                do: "text-emerald-700 dark:text-emerald-400",
+                else: "text-slate-600 hover:text-emerald-700 dark:text-slate-400"
+              )
+            ]}
+          >
+            <.icon_repost class="h-5 w-5" />
+            <span>{gettext("Repost")}</span>
           </button>
 
           <%!-- A poll's options are shown above, but a vote is not something

@@ -460,6 +460,76 @@ defmodule VutuvWeb.Fediverse.Docs do
   defp like_activity_id(user, object_uri),
     do: actor_url(user) <> "#likes/" <> Base.url_encode64(object_uri, padding: false)
 
+  # The id a member's `Announce` of one remote post carries (issue #1166).
+  # Derived from the pair like `announce_id/3` and `like_activity_id/2`: stable,
+  # so the `Undo` names the very activity it withdraws, and stable across a
+  # repost → un-repost → repost, which a minted-per-row id would not be.
+  defp announce_remote_id(user, object_uri),
+    do: actor_url(user) <> "#announces/" <> Base.url_encode64(object_uri, padding: false)
+
+  @doc """
+  Announce: a member here shares a post from another network with their own
+  followers.
+
+  Public addressing, unlike the `Like` beside it: a boost **is** publishing, and
+  it is meant to be seen — that is the whole act. The original author rides in
+  `cc` so their server learns of the boost the way Mastodon's own does.
+  """
+  def announce_remote_activity(user, author_actor_uri, object_uri, audience \\ "public") do
+    user
+    |> envelope("Announce", announce_remote_id(user, object_uri), object_uri)
+    |> cc_author(author_actor_uri)
+    |> match_audience(user, audience)
+  end
+
+  @doc """
+  Undo(Announce): the member takes the boost back. The wrapped `Announce`
+  repeats the original's id so the other server drops that exact activity.
+  """
+  def undo_announce_remote_activity(user, author_actor_uri, object_uri, audience \\ "public") do
+    id = announce_remote_id(user, object_uri)
+
+    user
+    |> envelope("Undo", id <> "#undo", announce_remote_object(user, id, object_uri))
+    |> cc_author(author_actor_uri)
+    |> match_audience(user, audience)
+  end
+
+  # A boost must never be louder than what it boosts. `envelope/4` addresses
+  # everything public — right for a public original, wrong for an **unlisted**
+  # one, which its author deliberately kept out of public timelines by putting
+  # the public collection in `cc` rather than `to`. Announcing it with
+  # `to: [Public]` would file the reshare as public on every receiving server
+  # and put somebody else's quiet post into the very timelines they avoided.
+  # So the unlisted shape is mirrored exactly: followers in `to`, the public
+  # collection demoted to `cc`.
+  defp match_audience(activity, user, "unlisted") do
+    followers = actor_url(user) <> "/followers"
+
+    activity
+    |> Map.put("to", [followers])
+    |> Map.update!("cc", fn cc -> [@public | Enum.reject(cc, &(&1 == followers))] end)
+  end
+
+  defp match_audience(activity, _user, _public), do: activity
+
+  # The Announce itself, built once for both halves the way `like_object/2` and
+  # `follow_object/3` are: the Undo has to wrap the very activity it withdraws,
+  # and two hand-written copies of one document are two chances to drift apart.
+  defp announce_remote_object(user, id, object_uri) do
+    %{
+      "id" => id,
+      "type" => "Announce",
+      "actor" => actor_url(user),
+      "object" => object_uri
+    }
+  end
+
+  # The original author rides in `cc` beside the member's own followers, so
+  # their server learns of the boost the way Mastodon's own does.
+  defp cc_author(activity, author_actor_uri),
+    do: Map.update!(activity, "cc", &(&1 ++ [author_actor_uri]))
+
   @doc "Accept(Follow): the answer that seals a remote follow."
   def accept_activity(user, follow_object) do
     id = actor_url(user) <> "#accepts/" <> Vutuv.UUIDv7.generate()

@@ -349,11 +349,28 @@ defmodule VutuvWeb.PostLive.Feed do
   # reader's own state is painted — there is no count to update, because vutuv
   # does not know the post's real one.
   def handle_event("like-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_like(socket, id, &Fediverse.like_remote_post/2, true)}
+    {:noreply, toggle_remote_flag(socket, id, :liked?, true, &Fediverse.like_remote_post/2)}
   end
 
   def handle_event("unlike-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_like(socket, id, &Fediverse.unlike_remote_post/2, false)}
+    {:noreply, toggle_remote_flag(socket, id, :liked?, false, &Fediverse.unlike_remote_post/2)}
+  end
+
+  # Sharing a post from another network onward (issue #1166). Unlike the heart
+  # this is a publishing act, so it says so rather than only painting a button:
+  # what changed is who else can now see this, which is not visible from here.
+  def handle_event("repost-remote-post", %{"id" => id}, socket) do
+    {:noreply,
+     toggle_remote_flag(socket, id, :reposted?, true, &Fediverse.repost_remote_post/2,
+       # Only when the act really happened, so a second tab pressing the same
+       # button does not announce a reshare that was already standing.
+       flash: {:reposted, gettext("Reposted. Your followers see it now.")}
+     )}
+  end
+
+  def handle_event("unrepost-remote-post", %{"id" => id}, socket) do
+    {:noreply,
+     toggle_remote_flag(socket, id, :reposted?, false, &Fediverse.unrepost_remote_post/2)}
   end
 
   # "Not this account today": the private, reversible lever beside Report. The
@@ -702,23 +719,35 @@ defmodule VutuvWeb.PostLive.Feed do
   # here yet" message. Caught in a browser, not by the tests — none of them
   # emptied a feed this way.
   defp drop_remote_entry(socket, remote_post_id) do
+    # By each entry's own id, not by a rebuilt one. The same cached post can be
+    # on the page twice — once because the reader follows its author (issue
+    # #1161, `remote-<post id>`) and once because somebody here reshared it
+    # (issue #1166, `remote-repost-<repost id>`) — and a report deletes the row
+    # for everybody, so every row showing it has to go. Guessing the dom id
+    # left the reshared copy on screen until the next reload.
+    going = Enum.filter(socket.assigns.entries, &remote_entry?(&1, remote_post_id))
+
     socket
-    |> update(:entries, &Enum.reject(&1, fn entry -> remote_entry?(entry, remote_post_id) end))
-    |> stream_delete_by_dom_id(:posts, "feed-remote-#{remote_post_id}")
+    |> update(:entries, &(&1 -- going))
+    |> then(fn socket ->
+      Enum.reduce(going, socket, &stream_delete_by_dom_id(&2, :posts, "feed-#{&1.id}"))
+    end)
     |> then(&assign(&1, :empty?, &1.assigns.entries == [] and &1.assigns.pending_posts == []))
   end
 
-  # The heart, one shape for both directions (issue #1164). The entry is
-  # re-inserted into the stream rather than an assign being flipped: a stream
-  # item redraws only when its own entry is handed back, which is also why
-  # `:liked?` rides the entry.
-  defp toggle_remote_like(socket, remote_post_id, action, liked?) do
+  # Both toggles on a remote card, one shape: the heart (issue #1164) and the
+  # reshare (issue #1166). The entry is re-inserted into the stream rather than
+  # an assign being flipped: a stream item redraws only when its own entry is
+  # handed back, which is also why the state rides the entry. `:flash` is an
+  # `{outcome, message}` the act announces itself with when it really happened.
+  defp toggle_remote_flag(socket, remote_post_id, key, value, action, opts \\ []) do
     with %{} = entry <- Enum.find(socket.assigns.entries, &remote_entry?(&1, remote_post_id)),
-         {:ok, _} <- action.(socket.assigns.current_user, entry.remote_post) do
-      updated = Map.put(entry, :liked?, liked?)
+         {:ok, outcome} <- action.(socket.assigns.current_user, entry.remote_post) do
+      updated = Map.put(entry, key, value)
 
       socket
-      |> update(:entries, &replace_remote_entry(&1, remote_post_id, updated))
+      |> flash_outcome(opts[:flash], outcome)
+      |> update(:entries, &replace_remote_entry(&1, updated))
       |> stream_insert(:posts, updated, update_only: true)
     else
       {:error, reason} -> put_flash(socket, :error, like_refusal_message(reason))
@@ -726,8 +755,17 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  defp replace_remote_entry(entries, remote_post_id, updated),
-    do: Enum.map(entries, &if(remote_entry?(&1, remote_post_id), do: updated, else: &1))
+  defp flash_outcome(socket, {outcome, message}, outcome),
+    do: put_flash(socket, :info, message)
+
+  defp flash_outcome(socket, _flash, _outcome), do: socket
+
+  # By the entry's own id, not by the post's. Two entries can carry the same
+  # cached post (a direct one and a reshare), and replacing "every entry with
+  # this post" wrote one identity over both — losing the reshare's id and its
+  # "Reposted by" line, and leaving the stream unable to find either again.
+  defp replace_remote_entry(entries, %{id: id} = updated),
+    do: Enum.map(entries, &if(&1.id == id, do: updated, else: &1))
 
   # "This row is the cached post with that id" — the one predicate the three
   # scans over `:entries` that single a remote post out all read from.
@@ -923,6 +961,8 @@ defmodule VutuvWeb.PostLive.Feed do
                     remote_post={entry.remote_post}
                     images={entry[:images] || []}
                     liked?={entry[:liked?] == true}
+                    reposted?={entry[:reposted?] == true}
+                    reposted_by={entry[:reposted_by]}
                     viewer={@current_user}
                   />
                 <% true -> %>
