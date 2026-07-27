@@ -212,9 +212,19 @@ defmodule VutuvWeb.FediverseFollowingLive do
   defp end_follow_confirm(follow) do
     account = RemoteAccount.label(follow.remote_account)
 
-    if Follow.accepted?(follow),
-      do: gettext("Stop following %{account}?", account: account),
-      else: gettext("Withdraw your follow request to %{account}?", account: account)
+    cond do
+      Follow.moved?(follow) ->
+        gettext(
+          "%{account} moved to another server. Your subscription already went with them — remove this old entry?",
+          account: account
+        )
+
+      Follow.accepted?(follow) ->
+        gettext("Stop following %{account}?", account: account)
+
+      true ->
+        gettext("Withdraw your follow request to %{account}?", account: account)
+    end
   end
 
   # Both middle columns fold away on a phone (`phone_hidden_class/0`), so the

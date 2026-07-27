@@ -51,6 +51,10 @@ defmodule Vutuv.Fediverse.RemoteAccount do
     field(:public_key_pem, :string)
     field(:refreshed_at, :utc_datetime)
 
+    # Where this account went (issue #1168), from a verified inbound `Move`.
+    # The mirror of `users.moved_to`; nil for everybody who has not moved.
+    field(:moved_to, :string)
+
     # The account's picture (issue #1163): the fingerprinted file we stored, the
     # AI gate's verdict on it, and the URL it came from so a re-delivered actor
     # document does not re-download an unchanged picture. Initials stay the
@@ -77,7 +81,8 @@ defmodule Vutuv.Fediverse.RemoteAccount do
       :shared_inbox_uri,
       :public_key_id,
       :public_key_pem,
-      :refreshed_at
+      :refreshed_at,
+      :moved_to
     ])
     |> validate_required([:actor_uri, :host, :inbox_uri])
     |> validate_length(:actor_uri, max: @max_uri, count: :bytes)
@@ -85,6 +90,7 @@ defmodule Vutuv.Fediverse.RemoteAccount do
     |> validate_length(:shared_inbox_uri, max: @max_uri, count: :bytes)
     |> validate_length(:public_key_id, max: @max_uri, count: :bytes)
     |> validate_length(:public_key_pem, max: @max_uri, count: :bytes)
+    |> validate_length(:moved_to, max: @max_uri, count: :bytes)
     |> validate_length(:host, max: @max_display)
     |> validate_length(:handle, max: @max_display)
     |> validate_length(:name, max: @max_display)

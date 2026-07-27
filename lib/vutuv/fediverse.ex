@@ -831,6 +831,12 @@ defmodule Vutuv.Fediverse do
   def accept_remote_follow(%User{} = user, activity, actor_uri) do
     if follow = find_answered_follow(user, activity, actor_uri) do
       follow |> Follow.accept() |> Repo.update()
+
+      # The successor of a move answering yes is what completes the swap: the
+      # husk left behind on the old account goes now, and not before (issue
+      # #1168). A move the successor never answers keeps the record of what the
+      # member had.
+      settle_moved_follows(user, actor_uri)
     end
 
     :ok
@@ -1039,6 +1045,7 @@ defmodule Vutuv.Fediverse do
   """
   def remove_remote_account(actor_uri) when is_binary(actor_uri) do
     accounts = from(a in RemoteAccount, where: a.actor_uri == ^actor_uri)
+    log_account_gone(actor_uri, accounts)
 
     # The rows cascade, the files do not: the account's own picture and every
     # picture on the posts we cached for it have to be swept before the delete
@@ -1143,7 +1150,14 @@ defmodule Vutuv.Fediverse do
     :inserted_at,
     :avatar,
     :avatar_moderation,
-    :avatar_source
+    :avatar_source,
+    # Where the account went (issue #1168). Nothing an actor document carries
+    # sets it, so leaving it out would null a verified move on the next repeat
+    # resolve — one stored reply from the old actor, or one member looking the
+    # old address up — and with it the link the successor's `Accept` follows to
+    # settle the husk, and the guard that keeps a moved account out of the
+    # prune rotation. The same trap the three avatar columns above sit here for.
+    :moved_to
   ]
 
   defp upsert_remote_account(remote) do
@@ -2290,14 +2304,16 @@ defmodule Vutuv.Fediverse do
     due = followers_due_for_prune(now)
     actors = actors_by_user_id(due)
 
-    # Each check is one blocking HTTPS round trip (no DB connection held during
-    # it), so run a few at a time instead of summing every remote's latency.
-    due
-    |> Task.async_stream(&check_follower(&1, actors[&1.user_id], now),
-      max_concurrency: 5,
-      timeout: 30_000,
-      on_timeout: :kill_task
-    )
+    count_pruned(due, &check_follower(&1, actors[&1.user_id], now))
+  end
+
+  # Each check is one blocking HTTPS round trip (no DB connection held during
+  # it), so run a few at a time instead of summing every remote's latency. Both
+  # directions of the rotation (followers here, followed accounts out there)
+  # share the bound, so neither can quietly outgrow the other.
+  defp count_pruned(rows, check) do
+    rows
+    |> Task.async_stream(check, max_concurrency: 5, timeout: 30_000, on_timeout: :kill_task)
     |> Enum.count(&(&1 == {:ok, :pruned}))
   end
 
@@ -2320,17 +2336,21 @@ defmodule Vutuv.Fediverse do
       preload: [:user]
     )
     |> Repo.all()
-    |> spread_across_hosts()
+    |> spread_across_hosts(&(BlockedInstance.normalize_host(&1.actor_uri) || &1.actor_uri))
   end
 
-  defp spread_across_hosts(followers) do
-    followers
-    |> Enum.reduce({[], %{}}, fn follower, {kept, per_host} ->
-      host = BlockedInstance.normalize_host(follower.actor_uri) || follower.actor_uri
+  # One run's fair share, in the order the query asked for (stalest first): the
+  # first @prune_per_host rows of any one server, then the first @prune_batch of
+  # what is left. `host_of` is how a row names its server — parsed out of the
+  # actor URI for a follower, a stored column for a followed account.
+  defp spread_across_hosts(rows, host_of) do
+    rows
+    |> Enum.reduce({[], %{}}, fn row, {kept, per_host} ->
+      host = host_of.(row)
       taken = Map.get(per_host, host, 0)
 
       if taken < @prune_per_host,
-        do: {[follower | kept], Map.put(per_host, host, taken + 1)},
+        do: {[row | kept], Map.put(per_host, host, taken + 1)},
         else: {kept, per_host}
     end)
     |> elem(0)
@@ -3815,19 +3835,36 @@ defmodule Vutuv.Fediverse do
   # alias. A bare/non-https string never reaches the network (fetch_remote_actor
   # would reject it, but a clean :invalid_target message is friendlier).
   defp resolve_move_target(user, target_input) do
-    my_actor = Docs.actor_url(user)
+    case URI.parse(to_string(target_input)) do
+      %URI{scheme: "https", host: h} when is_binary(h) and h != "" ->
+        with {:ok, remote} <- verify_alias(user, target_input, Docs.actor_url(user)),
+             do: {:ok, remote.id}
 
-    with {:input, %URI{scheme: "https", host: h}} when is_binary(h) and h != "" <-
-           {:input, URI.parse(to_string(target_input))},
-         {:fetch, {:ok, remote}} <- {:fetch, fetch_remote_actor(target_input, signer(user))} do
-      cond do
-        remote.id == my_actor -> {:error, :self_target}
-        my_actor in remote.also_known_as -> {:ok, remote.id}
-        true -> {:error, :alias_missing}
-      end
-    else
-      {:input, _} -> {:error, :invalid_target}
-      {:fetch, _} -> {:error, :target_unreachable}
+      _ ->
+        {:error, :invalid_target}
+    end
+  end
+
+  # The one `alsoKnownAs` check, used in both directions. A move is honored only
+  # once the **target's own** actor document names the account it claims to
+  # succeed: outbound that is our member moving away (issue #986), inbound it is
+  # the remote account that announced the `Move` (issue #1168). Without it any
+  # server could hand us a target it liked and walk a subscription — ours or a
+  # member's — somewhere nobody chose.
+  #
+  # `signer` is whose key the fetch is signed with; authorized-fetch instances
+  # refuse an anonymous GET.
+  defp verify_alias(%User{} = signer, target, claimed_uri) do
+    case fetch_remote_actor(target, signer(signer)) do
+      {:ok, remote} ->
+        cond do
+          remote.id == claimed_uri -> {:error, :self_target}
+          claimed_uri in remote.also_known_as -> {:ok, remote}
+          true -> {:error, :alias_missing}
+        end
+
+      _ ->
+        {:error, :target_unreachable}
     end
   end
 
@@ -4207,6 +4244,256 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  # A content-free record that a followed account deleted itself (issue #1168):
+  # which server, how many follows and cached posts went with it, and nothing
+  # about the person. Keeping their actor URI would undo what the deletion is
+  # for; the keyed digest groups a server across events without being reversible
+  # from a database leak. What it buys is that a mass departure — a whole server
+  # closing, a botched migration — is visible in the morning report instead of
+  # being a silent hole in everybody's feed.
+  # A content-free record that a followed account is gone (issue #1168): which
+  # server, how many follows and cached posts went with it, and nothing about
+  # the person — keeping their actor URI would undo what the deletion is for.
+  #
+  # A **log line, not the takedown ledger**, though the shape would fit. That
+  # ledger's own policy is that automatic deletions stay out of it, "because an
+  # expiry sweep, a server block or an upstream `Delete` can remove thousands of
+  # rows at once and would drown the signal" — and this is exactly an upstream
+  # `Delete` and an automatic prune. Its page is headed "taken down by members"
+  # and shows 25 rows; one closing server would push the whole member-takedown
+  # trail off it. What this is for is that a mass departure shows up in the
+  # operator's logs and the morning report instead of being a silent hole in
+  # everybody's feed, and a log line does that without lying about who deleted
+  # what.
+  defp log_account_gone(actor_uri, accounts) do
+    ids = Repo.all(from(a in accounts, select: a.id))
+
+    if ids != [] do
+      follows = Repo.aggregate(from(f in Follow, where: f.remote_account_id in ^ids), :count)
+      posts = Repo.aggregate(from(p in RemotePost, where: p.remote_account_id in ^ids), :count)
+
+      Logger.info(
+        "fediverse followed account gone: host=#{BlockedInstance.normalize_host(actor_uri) || "unknown"} " <>
+          "follows=#{follows} cached_posts=#{posts}"
+      )
+    end
+
+    :ok
+  end
+
+  ## When a followed account moves, dies or vanishes (issue #1168)
+
+  @doc """
+  Re-checks the accounts members follow out there, on the same slow rotation the
+  follower pruner uses in the other direction (issue #1072): at most
+  `prune_batch/0` rows an hour, at most `@prune_per_host` of them from any one
+  server, nothing re-checked inside `prune_recheck_days/0`.
+
+  Two things come out of one request. An account that answers **404 or 410** is
+  gone and is removed with everything hanging off it — that is the silent
+  disappearance nobody announces, and the case a follow would otherwise point at
+  a husk forever. Anything else (a timeout, a 5xx, a 429, a 403) changes
+  nothing but the clock: a server having a bad week must not cost its members
+  their followers here, in either direction.
+
+  And a **200** re-syncs the display name and handle, so a rename surfaces
+  without waiting for an inbound `Update` that some implementations never send.
+
+  Returns how many accounts were removed.
+  """
+  def prune_due_remote_accounts(now \\ DateTime.utc_now(:second)) do
+    if enabled?(), do: do_prune_due_remote_accounts(now), else: 0
+  end
+
+  @doc """
+  The followed accounts due for a re-check: never checked, or last checked
+  longer than `prune_recheck_days/0` ago. Same bounds and same per-host spread
+  as `followers_due_for_prune/1`.
+  """
+  def remote_accounts_due_for_prune(now \\ DateTime.utc_now(:second)) do
+    cutoff = DateTime.add(now, -@prune_recheck_days * 86_400)
+
+    from(a in RemoteAccount,
+      join: f in Follow,
+      on: f.remote_account_id == a.id,
+      where: is_nil(a.refreshed_at) or a.refreshed_at < ^cutoff,
+      # A moved account is not missing, it is elsewhere, and its husk goes when
+      # the successor accepts. Re-fetching it would only delete the record of
+      # what the member had.
+      where: is_nil(a.moved_to),
+      distinct: true,
+      order_by: [asc_nulls_first: a.refreshed_at, asc: a.id],
+      # A wider window than one batch, for the reason the follower pruner gives:
+      # one server with thousands of stale rows would otherwise fill the batch
+      # by itself and the per-host cap would leave the run half empty.
+      limit: ^(@prune_batch * 4)
+    )
+    |> Repo.all()
+    |> spread_across_hosts(& &1.host)
+  end
+
+  defp do_prune_due_remote_accounts(now) do
+    now
+    |> remote_accounts_due_for_prune()
+    |> count_pruned(&check_remote_account(&1, now))
+  end
+
+  defp check_remote_account(%RemoteAccount{} = account, now) do
+    # Any follower at all, whatever state their follow is in: somebody still
+    # waiting for an answer has just as much reason to ask whether the account
+    # is still there.
+    follower = any_follower_of(account, Follow.states())
+
+    case fetch_remote_actor(account.actor_uri, follower && signer(follower)) do
+      {:error, {:http, status}} when status in @gone_statuses ->
+        remove_remote_account(account.actor_uri)
+        :pruned
+
+      # A 200 is also the cheapest rename channel there is: some servers never
+      # send an `Update` of themselves at all. But **only** for a document that
+      # still claims to be this account: the row is looked up by its own actor
+      # URI, so nothing else forces the answer to be about it, and
+      # `remote_account_attrs/1` writes `actor_uri` and `host`. Without this
+      # guard a followed account could quietly become a different one — on a
+      # blocked host, or impersonating somebody whose row we do not hold — and
+      # the member's follow would still be attached to it.
+      {:ok, %{id: id} = remote} when id == account.actor_uri ->
+        account
+        |> RemoteAccount.changeset(remote_account_attrs(remote))
+        |> Repo.update()
+
+        :kept
+
+      # It answered, but about somebody else. Not gone, so not pruned; the clock
+      # moves so the rotation stays polite.
+      {:ok, _other} ->
+        touch_remote_account(account, now)
+
+      _ ->
+        touch_remote_account(account, now)
+    end
+  end
+
+  defp touch_remote_account(%RemoteAccount{} = account, now) do
+    account |> Ecto.Changeset.change(refreshed_at: now) |> Repo.update()
+    :kept
+  end
+
+  @doc """
+  A followed account announced it moved (`Move { actor, target }`).
+
+  The member keeps their subscription without lifting a finger: each follow of
+  the old account is re-pointed at the successor — a fresh `Follow` goes out and
+  the old row is marked `moved` — and the swap completes when the successor
+  accepts. Until then the old row survives, so a move the successor never
+  answers leaves a record of what the member had rather than losing it silently.
+
+  **Nothing happens without verification.** The successor's own actor document
+  must name the old URI in its `alsoKnownAs`, which is exactly the check every
+  other server performs on us when one of our members moves out (issue #986).
+  Without it, any server could redirect the followers of any account it could
+  name — an unverified `Move` is a no-op, deliberately without a word to
+  anybody, since it is somebody else's failed or forged migration.
+
+  Returns `:ok` or `:skip`; the inbox answers 202 either way.
+  """
+  def record_remote_move(activity, actor_uri) when is_binary(actor_uri) do
+    with true <- enabled?(),
+         %RemoteAccount{} = old <- Repo.get_by(RemoteAccount, actor_uri: actor_uri),
+         target when is_binary(target) <- activity_object_id(activity["target"]),
+         :ok <- check_follow_host(target),
+         # The first of them signs the successor fetch: an authorized-fetch
+         # server refuses an anonymous GET, and every follower has an interest
+         # in where this account went.
+         [%Follow{user: %User{} = signer} | _] = follows <- follows_of(old),
+         {:ok, remote} <- verify_alias(signer, target, actor_uri),
+         # Again on the **canonical id the document claims**, for the reason
+         # `resolve_remote_account/2` checks three times on one follow: each hop
+         # can land somewhere else than the last. Without this a followed
+         # account names an innocent decoy as its target, the decoy answers with
+         # an `id` and `inbox` on a blocked host — or on any host it likes — and
+         # we would mint a row for it and queue a member-signed `Follow` at that
+         # inbox. The blocklist would be bypassed and an arbitrary https inbox
+         # would receive our member's signature.
+         :ok <- check_follow_host(remote.id),
+         {:ok, successor} <- upsert_remote_account(remote) do
+      Repo.update(Ecto.Changeset.change(old, moved_to: successor.actor_uri))
+      Enum.each(follows, &repoint_follow(&1, successor))
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  def record_remote_move(_activity, _actor_uri), do: :skip
+
+  defp repoint_follow(%Follow{user: %User{} = user} = follow, %RemoteAccount{} = successor) do
+    # A fresh request to the successor, exactly as if the member had typed the
+    # new address: it is a new relationship on a new server, and that server
+    # gets to decide about it like any other. So it passes the gates a typed
+    # follow passes — a member who is frozen, suspended or has moved out
+    # themselves does not get a signed request sent in their name because
+    # somebody else's server announced a move.
+    case start_follow(user, successor) do
+      :ok ->
+        Repo.update(Ecto.Changeset.change(follow, state: Follow.moved()))
+
+      # Nothing was sent and nothing will answer: the member already follows
+      # the successor, or a gate refused. Leaving a husk here would leave it
+      # forever, since only an `Accept` settles one — so the old follow simply
+      # ends, which is what it now is.
+      :skip ->
+        Repo.delete(follow)
+    end
+  end
+
+  defp start_follow(%User{} = user, %RemoteAccount{} = successor) do
+    with :ok <- check_can_follow(user),
+         :ok <- check_follow_limit(user),
+         {:ok, new_follow} <- insert_remote_follow(user, successor) do
+      enqueue(
+        user,
+        [successor.inbox_uri],
+        Docs.follow_activity(user, successor.actor_uri, new_follow.follow_activity_id)
+      )
+
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  # Every follow of this account, with the member behind it: they are re-pointed
+  # one by one and each outbound `Follow` is signed with its own member's key.
+  defp follows_of(%RemoteAccount{id: id}),
+    do:
+      Repo.all(
+        from(f in Follow,
+          where: f.remote_account_id == ^id,
+          order_by: [asc: f.id],
+          preload: [:user]
+        )
+      )
+
+  # Finishes a move once the successor accepts: the husks left behind
+  # (`state: "moved"`) for accounts that moved *here* are dropped. Called from
+  # the `Accept` path, so the old follow outlives the request exactly as long as
+  # it takes the new server to answer.
+  defp settle_moved_follows(%User{id: user_id}, successor_uri) when is_binary(successor_uri) do
+    moved_from =
+      from(a in RemoteAccount, where: a.moved_to == ^successor_uri, select: a.id)
+
+    Repo.delete_all(
+      from(f in Follow,
+        where:
+          f.user_id == ^user_id and f.state == ^Follow.moved() and
+            f.remote_account_id in subquery(moved_from)
+      )
+    )
+
+    :ok
+  end
+
   ## What a followed account re-shares (issue #1167)
 
   @doc """
@@ -4298,7 +4585,7 @@ defmodule Vutuv.Fediverse do
 
   defp fetch_and_store_announced(%RemoteAccount{} = booster, uri) do
     with :ok <- claim_announce_fetch(uri),
-         %User{} = follower <- any_follower_of(booster),
+         %User{} = follower <- any_follower_of(booster, ["accepted"]),
          key when not is_nil(key) <- signer(follower),
          {:ok, doc} <- fetch_remote_note(uri, key),
          # The same object-type gate the `Create` path applies: a `Video`, an
@@ -4399,15 +4686,17 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  # Somebody here who follows the booster, to sign the fetch with: an
-  # authorized-fetch server refuses an anonymous GET, and a follower is by
-  # definition somebody with an interest in seeing what this account shares.
-  defp any_follower_of(%RemoteAccount{id: id}) do
+  # Somebody here who follows this account, to sign a fetch to its server with:
+  # an authorized-fetch server refuses an anonymous GET, and a follower is by
+  # definition somebody with an interest in the answer. `states` says which
+  # follows count — only a settled one when the question is what the account
+  # shares, any of them when it is whether the account is still there at all.
+  defp any_follower_of(%RemoteAccount{id: id}, states) do
     Repo.one(
       from(f in Follow,
         join: u in User,
         on: u.id == f.user_id,
-        where: f.remote_account_id == ^id and f.state == "accepted",
+        where: f.remote_account_id == ^id and f.state in ^states,
         order_by: [asc: f.id],
         limit: 1,
         select: u

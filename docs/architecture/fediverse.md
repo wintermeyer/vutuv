@@ -1085,3 +1085,53 @@ author** — which is the normal case for a boost, and the reason the copy is he
 at all — so `purge_unfollowed_remote_posts/0` spares a post something still
 holds, exactly as it spares one a member reshared. An `Undo(Announce)` removes
 the boost row and nothing else; the post goes when nothing holds it any more.
+
+### When a followed account moves, dies or vanishes (issue #1168)
+
+Three ways an account a member follows can leave, and one point behind all
+three: a subscription must never quietly point at a husk.
+
+**A move** arrives as `Move { actor, target }`. Everything rests on one check —
+the successor's own actor document must name the old URI in its `alsoKnownAs`,
+which is exactly what every other server demands of us when one of our members
+moves out (issue #986). Without it any server could redirect the followers of
+any account it could name. An unverified `Move` is a no-op, deliberately
+without a word to anybody: it is somebody else's failed or forged migration.
+
+The host is checked **twice**, on the target the activity names and again on the
+canonical id the fetched document claims, for the reason a member-initiated
+follow checks three times: each hop can land somewhere else than the last.
+Skipping the second one let a followed account name an innocent decoy whose
+document then claimed an `id` and `inbox` on a blocked host — a blocklist bypass
+that would also have queued a member-signed `Follow` at an inbox the attacker
+chose.
+
+Verified, each follow is re-pointed: a fresh `Follow` to the successor (through
+the gates a typed follow passes, so a frozen or moved-out member does not get a
+signed request sent in their name) and the old row marked `state: "moved"`. The
+husk lives exactly as long as it takes the successor to answer — an `Accept`
+settles it, and a move nobody answers keeps the record of what the member had
+rather than losing it silently. When nothing was sent and nothing will answer
+(the member already follows the successor, or a gate refused) the old row simply
+ends, because only an `Accept` settles a husk and one that can never come would
+leave it standing forever. `moved_to` is in `@remote_account_keep` for the same
+reason the avatar columns are: one repeat resolve of the old address would
+otherwise null it and strand the swap.
+
+**A deletion** (`Delete` of the actor) cascades the account, its follows, its
+cached posts and everything hanging off them, and leaves a **log line** — host
+and counts, nothing about the person. Deliberately not the takedown ledger:
+that ledger's stated policy is that automatic deletions stay out of it, its page
+is headed "taken down by members" and shows 25 rows, so one closing server would
+push the whole member-takedown trail off it.
+
+**A disappearance** nobody announces is found by asking, on the same slow
+rotation the follower pruner uses in the other direction (30-day recheck, batch
+50, ≤10 per host, hourly). Only `404`/`410` removes; a timeout, a 5xx, a 429 or
+a 403 moves the clock and nothing else, because a server having a bad week must
+not cost its members their followers here, in either direction. A `200` also
+refreshes the display name and handle — the cheapest rename channel there is,
+since some servers never send an `Update` of themselves — but **only** for a
+document that still claims to be this account, or a followed account could
+quietly become a different one on a blocked host with the member's follow still
+attached.

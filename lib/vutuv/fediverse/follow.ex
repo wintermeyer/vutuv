@@ -20,7 +20,13 @@ defmodule Vutuv.Fediverse.Follow do
 
   @requested "requested"
   @accepted "accepted"
-  @states [@requested, @accepted]
+  # The account moved to another server and this follow has been re-pointed at
+  # the successor (issue #1168). The row stays until the successor accepts, so a
+  # move that is never answered leaves a record of what the member had rather
+  # than silently losing it — and `moved` never publishes and never delivers,
+  # which is the whole difference from `accepted`.
+  @moved "moved"
+  @states [@requested, @accepted, @moved]
 
   # The activity id we mint (actor URL + "#follows/" + the row id) is far
   # shorter than this; the cap is the backstop that keeps the unique btree key
@@ -55,7 +61,17 @@ defmodule Vutuv.Fediverse.Follow do
   """
   def accept(%__MODULE__{} = follow), do: changeset(follow, %{state: @accepted})
 
+  @doc "The closed set of states a follow can be in."
+  def states, do: @states
+
   @doc "Whether the other side has confirmed this follow."
   def accepted?(%__MODULE__{state: @accepted}), do: true
   def accepted?(%__MODULE__{}), do: false
+
+  @doc "The state of a follow whose account moved and which has been re-pointed."
+  def moved, do: @moved
+
+  @doc "Whether this follow is a husk left behind by a move."
+  def moved?(%__MODULE__{state: @moved}), do: true
+  def moved?(%__MODULE__{}), do: false
 end

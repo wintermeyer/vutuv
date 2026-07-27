@@ -211,18 +211,32 @@ defmodule VutuvWeb.FediverseComponents do
   A follow that has not been answered reads **"Requested"**, not "Following".
   An account that approves its followers by hand may take days or never answer,
   and showing it as settled would be a lie the member acts on.
+
+  A third state since issue #1168: the account **moved**. The row is a husk —
+  the member's subscription has already been re-pointed at the successor and is
+  waiting for it to answer — so it says so rather than reading as a live follow
+  of an address that no longer posts.
   """
   def follow_state_label(follow) do
-    if Follow.accepted?(follow), do: gettext("Following"), else: gettext("Requested")
+    cond do
+      Follow.moved?(follow) -> gettext("Moved")
+      Follow.accepted?(follow) -> gettext("Following")
+      true -> gettext("Requested")
+    end
   end
 
   @doc "The pill's colours for that state: emerald once settled, calm slate while it waits."
   def follow_state_class(follow) do
-    if Follow.accepted?(follow),
-      do:
-        "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:ring-emerald-800",
-      else:
+    cond do
+      Follow.moved?(follow) ->
+        "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+
+      Follow.accepted?(follow) ->
+        "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:ring-emerald-800"
+
+      true ->
         "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+    end
   end
 
   @doc """
@@ -231,7 +245,14 @@ defmodule VutuvWeb.FediverseComponents do
   Requested row learns that the state badge does not mean anything.
   """
   def end_follow_label(follow) do
-    if Follow.accepted?(follow), do: gettext("Unfollow"), else: gettext("Cancel request")
+    cond do
+      # A husk left by a move was never requested and is not being followed —
+      # the row is a record of where the member's subscription came from, and
+      # what they do to it is put it away.
+      Follow.moved?(follow) -> gettext("Remove")
+      Follow.accepted?(follow) -> gettext("Unfollow")
+      true -> gettext("Cancel request")
+    end
   end
 
   @doc """

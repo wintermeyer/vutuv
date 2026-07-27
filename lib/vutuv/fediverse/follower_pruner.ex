@@ -45,6 +45,14 @@ defmodule Vutuv.Fediverse.FollowerPruner do
         0 -> :ok
         count -> Logger.info("Fediverse follower prune: removed #{count} gone follower(s)")
       end
+
+      # The same rotation pointed the other way (issue #1168): accounts our
+      # members follow, which vanish just as silently as followers do. One
+      # sweep, two directions, so the per-host bounds stay comparable.
+      case Fediverse.prune_due_remote_accounts() do
+        0 -> :ok
+        count -> Logger.info("Fediverse account prune: removed #{count} gone account(s)")
+      end
     rescue
       error -> Logger.error("Fediverse follower prune failed: #{inspect(error)}")
     end

@@ -373,6 +373,13 @@ defmodule VutuvWeb.FediverseController do
   defp perform_once(%{"type" => "Announce"} = activity, remote),
     do: Fediverse.record_remote_boost(activity, remote.id)
 
+  # A followed account telling its followers it moved (issue #1168). Once per
+  # delivery: the swap is per member but the verification of the successor is
+  # one fetch, and every member following this account gets re-pointed by the
+  # same call.
+  defp perform_once(%{"type" => "Move"} = activity, remote),
+    do: Fediverse.record_remote_move(activity, remote.id)
+
   # A followed account taking a boost back (issue #1167). Once per delivery for
   # the same reason the Announce is: one boost row, however many followers. The
   # whole `Undo` goes through, because the row is named by the id of the

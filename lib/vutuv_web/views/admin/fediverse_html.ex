@@ -20,6 +20,7 @@ defmodule VutuvWeb.Admin.FediverseHTML do
     do: gettext("Cached post reported, removed for everyone here")
 
   def note_event_label(%{action: "removed_by_member"}), do: gettext("Removed by the member")
+
   def note_event_label(%{action: "flagged"}), do: gettext("Reported to the origin server")
   def note_event_label(_event), do: gettext("Taken down")
 
