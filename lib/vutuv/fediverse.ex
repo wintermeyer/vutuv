@@ -1,12 +1,12 @@
 defmodule Vutuv.Fediverse do
   @moduledoc """
-  Follow-only ActivityPub federation (outbound).
+  ActivityPub federation.
 
   People on Mastodon and other Fediverse servers can follow a member who
   opted in (`users.fediverse_followers?`, the Fediverse settings page) and
-  receive their **public** posts; nothing federates inbound — no remote
-  posts, likes or replies are stored, only who follows whom and where to
-  deliver. The moving parts:
+  receive their **public** posts; the response to those posts comes back
+  (reactions, replies), and since issue #1160 a member can follow an account
+  out there in return. The moving parts:
 
     * actors — the member's RSA keypair (`Vutuv.Fediverse.Actor`), created
       lazily on opt-in; `VutuvWeb.Fediverse.Docs` renders the documents.
@@ -15,6 +15,11 @@ defmodule Vutuv.Fediverse do
       kept in step with the remote's own Update/Delete; the ones who leave
       without saying so are found by the slow re-check
       (`Vutuv.Fediverse.FollowerPruner`).
+    * follows — the same relationship read from the other end
+      (`Vutuv.Fediverse.Follow` pointing at `Vutuv.Fediverse.RemoteAccount`):
+      a member asks to follow an account elsewhere, we send a signed `Follow`,
+      and the `Accept` that comes back seals it. Both collections are published
+      count-only.
     * deliveries — a DB-backed outbound queue (`Vutuv.Fediverse.Delivery`)
       drained by `Vutuv.Fediverse.Deliverer` with signed POSTs
       (`Vutuv.Fediverse.HttpSignature`), mirroring the webhooks queue.
@@ -44,6 +49,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Deliverer
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.DeliveryFailure
+  alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.Follower
   alias Vutuv.Fediverse.FollowerPrune
   alias Vutuv.Fediverse.HttpSignature
@@ -52,6 +58,8 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.NoteEvent
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.Reaction
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -67,6 +75,12 @@ defmodule Vutuv.Fediverse do
 
   @max_attempts 8
   @max_body_bytes 500_000
+
+  # The window every per-member and per-server budget here is measured over —
+  # the inbound caps, the outbound reply budget, the remote-follow budget. One
+  # hour throughout, so "how much may happen before this bites" is one question
+  # with one answer rather than three.
+  @inbound_window_ms :timer.hours(1)
 
   # Inbound replies (issues #1069 and #1071). Six months is the hard ceiling a
   # confirmed-live note pushes forward and nothing else does; a week is how
@@ -277,51 +291,65 @@ defmodule Vutuv.Fediverse do
 
   # A flat list stops working long before a popular account's follower count
   # does, so the owner's full list is a searched, filtered, sorted, paginated
-  # table (`VutuvWeb.FediverseFollowersLive`) built on the three functions
-  # below. Everything is scoped to the member's own rows first, so the work is
-  # bounded by their following, not by the installation's.
-  @followers_per_page 50
+  # table (`VutuvWeb.FediverseFollowersLive`) built on the functions below.
+  # Everything is scoped to the member's own rows first, so the work is bounded
+  # by their following, not by the installation's.
+  #
+  # The page size, the sortable column names and the param normalization are
+  # deliberately **shared** with the mirror-image browser of the accounts a
+  # member follows out there (`VutuvWeb.FediverseFollowingLive`, issue #1160):
+  # both are the same table of the same relationship read from opposite ends,
+  # so a `?sort=` value has to mean the same thing on either page.
+  @browse_per_page 50
 
   # The sortable columns, by the `?sort=` value a header button sets. None of
   # them is a plain column: "account" sorts by what the row actually shows
   # (display name, else handle, else the actor URI), "server" by the host
   # inside the actor URI.
-  @follower_sort_columns ~w(account server followed)
+  @browse_sort_columns ~w(account server followed)
+
+  # The column a browser sorts by until somebody clicks a header. Named once
+  # here because the URL builder (`VutuvWeb.BrowseTable`) has to leave it out of
+  # a shareable link, and a second literal there would drift.
+  @browse_default_sort "followed"
 
   # How many servers the filter dropdown offers. Beyond that the free-text
   # search is the way in - a select with 400 entries is not a filter.
-  @follower_host_choices 30
+  @browse_host_choices 30
 
-  @doc "The follower-browser page size, shared by the query and the pager."
-  def followers_per_page, do: @followers_per_page
+  @doc "The browser page size, shared by the queries and the pagers."
+  def browse_per_page, do: @browse_per_page
 
-  @doc "The sortable follower-browser columns (the `?sort=` values)."
-  def follower_sort_columns, do: @follower_sort_columns
+  @doc "The sortable browser columns (the `?sort=` values)."
+  def browse_sort_columns, do: @browse_sort_columns
+
+  @doc "The column a browser sorts by when the URL names none."
+  def browse_default_sort, do: @browse_default_sort
 
   @doc """
-  Normalizes raw request params into a validated filter map for the follower
+  Normalizes raw request params into a validated filter map for either Fediverse
   browser: `q` (free-text search, trimmed), `server` (an exact host, lowercased),
   `sort` (a known column, default "followed") and `dir` ("asc"/"desc", default
   per column - newest first for the date, A-Z for the text columns). Anything
   invalid falls back to a safe default, so the params can never reach the query.
   """
-  def follower_filters(params) when is_map(params) do
-    sort = validated_follower_sort(params["sort"])
+  def browse_filters(params) when is_map(params) do
+    sort = validated_browse_sort(params["sort"])
 
     %{
       q: Pages.blank_to_nil(params["q"]),
-      server: params["server"] |> Pages.blank_to_nil() |> normalize_follower_server(),
+      server: params["server"] |> Pages.blank_to_nil() |> normalize_browse_server(),
       sort: sort,
-      dir: validated_follower_dir(params["dir"]) || follower_default_dir(sort)
+      dir: validated_browse_dir(params["dir"]) || browse_default_dir(sort)
     }
   end
 
   @doc """
   The direction a column sorts in when it is picked for the first time: the
-  date newest-first (what a follower list is read for), the text columns A-Z.
+  date newest-first (what a follow list is read for), the text columns A-Z.
   """
-  def follower_default_dir("followed"), do: "desc"
-  def follower_default_dir(_text_column), do: "asc"
+  def browse_default_dir(@browse_default_sort), do: "desc"
+  def browse_default_dir(_text_column), do: "asc"
 
   @doc "How many of the member's remote followers match `filters` (for the pager)."
   def count_followers(%User{id: user_id}, filters \\ %{}) do
@@ -331,10 +359,10 @@ defmodule Vutuv.Fediverse do
   @doc """
   One page of the member's follower browser: filtered, searched, sorted and
   paginated. `opts` may carry `:total` (skip the recount) and `:per_page`
-  (default `followers_per_page/0`).
+  (default `browse_per_page/0`).
   """
   def list_followers_page(%User{id: user_id}, filters, params \\ %{}, opts \\ []) do
-    per_page = Keyword.get(opts, :per_page, @followers_per_page)
+    per_page = Keyword.get(opts, :per_page, @browse_per_page)
     base = followers_base(user_id, filters)
     total = Keyword.get(opts, :total) || Repo.aggregate(base, :count)
 
@@ -349,26 +377,26 @@ defmodule Vutuv.Fediverse do
   follower browser's server filter, and the answer to "where are they coming
   from". Capped at `limit` hosts.
   """
-  def follower_hosts(%User{id: user_id}, limit \\ @follower_host_choices) do
+  def follower_hosts(%User{id: user_id}, limit \\ @browse_host_choices) do
     Repo.all(
       from(f in Follower,
         where: f.user_id == ^user_id,
         group_by: uri_host(f.actor_uri),
         order_by: [desc: count(f.id), asc: uri_host(f.actor_uri)],
         limit: ^limit,
-        select: %{host: uri_host(f.actor_uri), followers: count(f.id)}
+        select: %{host: uri_host(f.actor_uri), count: count(f.id)}
       )
     )
   end
 
-  defp validated_follower_sort(sort) when sort in @follower_sort_columns, do: sort
-  defp validated_follower_sort(_other), do: "followed"
+  defp validated_browse_sort(sort) when sort in @browse_sort_columns, do: sort
+  defp validated_browse_sort(_other), do: @browse_default_sort
 
-  defp validated_follower_dir(dir) when dir in ~w(asc desc), do: dir
-  defp validated_follower_dir(_other), do: nil
+  defp validated_browse_dir(dir) when dir in ~w(asc desc), do: dir
+  defp validated_browse_dir(_other), do: nil
 
-  defp normalize_follower_server(nil), do: nil
-  defp normalize_follower_server(host), do: String.downcase(host)
+  defp normalize_browse_server(nil), do: nil
+  defp normalize_browse_server(host), do: String.downcase(host)
 
   defp followers_base(user_id, filters) do
     from(f in Follower, where: f.user_id == ^user_id)
@@ -384,25 +412,33 @@ defmodule Vutuv.Fediverse do
   defp search_followers(query, nil), do: query
 
   defp search_followers(query, term) do
-    # A pasted "@user@host" is two facts, not one substring - matched against
-    # the handle and the actor URI separately, so the full handle a member
-    # copies out of a Mastodon profile finds the row it names.
-    case term |> String.trim_leading("@") |> String.split("@", parts: 2) do
-      [name, host] when host != "" ->
+    case browse_search_parts(term) do
+      {:handle_and_host, name, host} ->
         where(
           query,
           [f],
-          ilike(f.handle, ^contains(name)) and ilike(f.actor_uri, ^contains(host))
+          ilike(f.handle, ^name) and ilike(f.actor_uri, ^host)
         )
 
-      _one_part ->
-        like = contains(term)
-
+      {:anywhere, like} ->
         where(
           query,
           [f],
           ilike(f.name, ^like) or ilike(f.handle, ^like) or ilike(f.actor_uri, ^like)
         )
+    end
+  end
+
+  # How a browse search term is read, shared by both tables so a pasted handle
+  # is interpreted the same way on either page: a full "@user@host" is two
+  # facts, not one substring - matched against the handle and the server
+  # separately, so the address a member copies out of a Mastodon profile finds
+  # the row it names. Anything else is one substring, matched anywhere.
+  # Both arms come back ready for `ilike/2`.
+  defp browse_search_parts(term) do
+    case term |> String.trim_leading("@") |> String.split("@", parts: 2) do
+      [name, host] when host != "" -> {:handle_and_host, contains(name), contains(host)}
+      _one_part -> {:anywhere, contains(term)}
     end
   end
 
@@ -510,6 +546,554 @@ defmodule Vutuv.Fediverse do
         select: coalesce(f.shared_inbox_uri, f.inbox_uri)
       )
     )
+  end
+
+  @doc """
+  The distinct inboxes of the accounts this member **follows** (issue #1160).
+
+  Deliberately separate from `delivery_inboxes/1` and never used for posts: an
+  account somebody follows never asked to receive their writing. It exists for
+  the one message those servers do have to hear — "this actor is gone" — so a
+  deleted or removed member stops being delivered to from the other side too.
+  """
+  def followed_inboxes(%User{id: user_id}) do
+    Repo.all(
+      from(f in Follow,
+        join: a in RemoteAccount,
+        on: a.id == f.remote_account_id,
+        where: f.user_id == ^user_id,
+        distinct: true,
+        select: coalesce(a.shared_inbox_uri, a.inbox_uri)
+      )
+    )
+  end
+
+  ## Following an account on another network (issue #1160)
+
+  # The other direction of the relationship, and the first time a member's own
+  # action makes vutuv ask a stranger's server for something ongoing. Three
+  # gates bound it, in the order they cost:
+  #
+  #   * the member must federate at all — the Follow is signed with their own
+  #     actor key, so there is no such thing as an actorless follow, and no way
+  #     to make this work "just for reading";
+  #   * an hourly budget (the `claim_reply_budget/1` pattern), so a compromised
+  #     account cannot walk a server's whole member list;
+  #   * a total ceiling, because every accepted follow is a standing invitation
+  #     for another server to deliver here.
+  @max_remote_follows 1_000
+  @remote_follow_limit 30
+
+  @doc "How many accounts on other networks one member may follow in total."
+  def max_remote_follows,
+    do: Application.get_env(:vutuv, :fediverse_max_remote_follows, @max_remote_follows)
+
+  @doc "How many follow requests one member may send per hour."
+  def remote_follow_limit,
+    do: Application.get_env(:vutuv, :fediverse_remote_follow_limit, @remote_follow_limit)
+
+  @doc """
+  A member follows an account on another network: resolve the address, remember
+  the account, and send a signed `Follow`.
+
+  `address` is anything people paste — `@you@server`, `you@server`, or a profile
+  URL — normalized by `Vutuv.Fediverse.RemoteFollow.parse_address/1` and resolved
+  to the account's canonical actor id through WebFinger.
+
+  Returns `{:ok, follow}` with the remote account preloaded, or `{:error, reason}`
+  where reason is one of:
+
+    * `:fediverse_disabled` — the installation switch is off.
+    * `:not_federating` — the member has not switched Fediverse participation on
+      (or their account is not in good standing). **The refusal the member can do
+      something about**, which is why it is named separately: the page turns it
+      into an explanation and a link to `/settings/fediverse` rather than a dead
+      end.
+    * `:moved` — the member redirected their Fediverse followers elsewhere, so
+      this account no longer acts out there.
+    * `:invalid_address` / `:unreachable` / `:no_actor` — from the address parse
+      and the WebFinger lookup (`RemoteFollow`).
+    * `:local_account` — the address names a member of this very installation.
+      Following them is a vutuv follow, not a Fediverse one, and saying so is far
+      more useful than a signed request to ourselves.
+    * `:instance_blocked` — the operator shut that server out.
+    * `:follow_capped` — the hourly budget is spent.
+    * `:follow_limit` — the member is at `max_remote_follows/0`.
+    * `:already_following` — there is a row for this pair already.
+    * `:unreachable_actor` — WebFinger answered but the actor document did not.
+
+  The state the row starts in is `requested`, because that is the truth: an
+  account that approves its followers by hand may never answer, and a page that
+  showed "Following" for a request nobody accepted would be lying.
+  """
+  def follow_remote(%User{} = user, address) do
+    with :ok <- check_can_follow(user),
+         {:ok, {_name, host}} <- RemoteFollow.parse_address(address),
+         :ok <- check_follow_host(host),
+         :ok <- claim_remote_follow_budget(user),
+         :ok <- check_follow_limit(user),
+         {:ok, actor_uri} <- RemoteFollow.resolve_actor(address),
+         :ok <- check_follow_host(actor_uri),
+         {:ok, remote} <- fetch_follow_target(actor_uri, user),
+         :ok <- check_follow_host(remote.id),
+         {:ok, account} <- upsert_remote_account(remote),
+         {:ok, follow} <- insert_remote_follow(user, account) do
+      enqueue(
+        user,
+        [account.inbox_uri],
+        Docs.follow_activity(user, account.actor_uri, follow.follow_activity_id)
+      )
+
+      {:ok, %{follow | remote_account: account}}
+    end
+  end
+
+  @doc """
+  The member takes the follow back: a best-effort `Undo(Follow)` to the other
+  server, then the row goes.
+
+  The row is deleted whether or not the Undo can be sent, because it describes
+  *our* member's intent and they have withdrawn it; a server that never hears
+  about it simply stops being followed the moment we stop accepting its
+  deliveries.
+  """
+  def unfollow_remote(%User{} = user, follow_id) do
+    case get_remote_follow(user, follow_id) do
+      nil ->
+        {:error, :not_found}
+
+      follow ->
+        undo_remote_follow(user, follow)
+        Repo.delete(follow)
+        :ok
+    end
+  end
+
+  @doc """
+  One of the member's own follows, with the remote account preloaded, or nil.
+  Scoped to the member, so an id from somebody else's page resolves to nothing.
+  """
+  def get_remote_follow(%User{id: user_id}, follow_id) do
+    UUIDv7.with_cast(follow_id, fn id ->
+      Repo.one(
+        from(f in Follow,
+          where: f.id == ^id and f.user_id == ^user_id,
+          preload: [:remote_account]
+        )
+      )
+    end)
+  end
+
+  @doc """
+  The other server said yes (`Accept(Follow)`): the follow is live.
+
+  Scoped to the actor that answered, so one server can never seal a follow
+  addressed to another. Idempotent — a redelivered `Accept` writes the same
+  state again.
+  """
+  def accept_remote_follow(%User{} = user, activity, actor_uri) do
+    if follow = find_answered_follow(user, activity, actor_uri) do
+      follow |> Follow.accept() |> Repo.update()
+    end
+
+    :ok
+  end
+
+  @doc """
+  The other server said no (`Reject(Follow)`): the row goes.
+
+  Deliberately a deletion rather than a third state. There is nothing left to
+  show and nothing to retry, and keeping a stranger's refusal on file about a
+  member earns nobody anything. The member sees the account disappear from their
+  list, which is what "they did not accept" looks like.
+  """
+  def reject_remote_follow(%User{} = user, activity, actor_uri) do
+    if follow = find_answered_follow(user, activity, actor_uri), do: Repo.delete(follow)
+
+    :ok
+  end
+
+  @doc """
+  How many accounts on other networks this member follows, whatever state the
+  follow is in — the figure their own settings page shows, because a request
+  they sent is a thing they did.
+  """
+  def remote_follow_count(%User{id: user_id}) do
+    Repo.aggregate(from(f in Follow, where: f.user_id == ^user_id), :count)
+  end
+
+  @doc """
+  How many of those follows the other side has confirmed — the `totalItems` of
+  the count-only `following` collection. Only accepted ones: a request nobody
+  answered is not a relationship, and publishing it would leak what a member
+  tried to do.
+  """
+  def accepted_follow_count(%User{id: user_id}) do
+    Repo.aggregate(
+      from(f in Follow, where: f.user_id == ^user_id and f.state == "accepted"),
+      :count
+    )
+  end
+
+  @doc """
+  Drops every follow of a remote account this member holds, asking each server
+  to forget it first — what switching federation off means for this direction,
+  the mirror of `drop_followers/1`.
+
+  Returns how many rows went.
+  """
+  def drop_remote_follows(%User{} = user) do
+    undo_remote_follows(user, list_remote_follows(user))
+
+    {count, _} = Repo.delete_all(from(f in Follow, where: f.user_id == ^user.id))
+    count
+  end
+
+  @doc "How many of the member's remote follows match `filters` (for the pager)."
+  def count_remote_follows(%User{id: user_id}, filters \\ %{}) do
+    user_id |> remote_follows_base(filters) |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  One page of the member's following browser: filtered, searched, sorted and
+  paginated, with the remote account preloaded. `opts` may carry `:total` (skip
+  the recount) and `:per_page` (default `browse_per_page/0`).
+  """
+  def list_remote_follows_page(%User{id: user_id}, filters, params \\ %{}, opts \\ []) do
+    per_page = Keyword.get(opts, :per_page, @browse_per_page)
+    base = remote_follows_base(user_id, filters)
+    total = Keyword.get(opts, :total) || Repo.aggregate(base, :count)
+
+    base
+    |> order_remote_follows(filters)
+    |> with_remote_account()
+    |> Pages.paginate(params, total, per_page)
+    |> Repo.all()
+  end
+
+  @doc """
+  Every follow this member holds, account preloaded and in no particular order —
+  the whole set rather than a page of it, for the GDPR export.
+  """
+  def list_remote_follows(%User{id: user_id}) do
+    user_id |> remote_follows_base(%{}) |> with_remote_account() |> Repo.all()
+  end
+
+  # The account is already joined and scanned by `remote_follows_base/2`, so the
+  # preload rides that binding instead of costing a second `WHERE id IN (…)`.
+  # Attached here and not in the base, because `count_remote_follows/2`
+  # aggregates the same query and has no use for it.
+  defp with_remote_account(query), do: preload(query, [account: a], remote_account: a)
+
+  @doc """
+  The servers this member follows accounts on, biggest first — the following
+  browser's server filter. Capped at `limit` hosts.
+  """
+  def remote_follow_hosts(%User{id: user_id}, limit \\ @browse_host_choices) do
+    Repo.all(
+      from(f in Follow,
+        join: a in RemoteAccount,
+        on: a.id == f.remote_account_id,
+        where: f.user_id == ^user_id,
+        group_by: a.host,
+        order_by: [desc: count(f.id), asc: a.host],
+        limit: ^limit,
+        select: %{host: a.host, count: count(f.id)}
+      )
+    )
+  end
+
+  @doc """
+  Every member here who follows this remote account, whatever state the follow
+  is in — who an activity from that account concerns.
+  """
+  def remote_follow_users(actor_uri) when is_binary(actor_uri) do
+    Repo.all(
+      from(f in Follow,
+        join: a in RemoteAccount,
+        on: a.id == f.remote_account_id,
+        join: u in User,
+        on: u.id == f.user_id,
+        where: a.actor_uri == ^actor_uri,
+        distinct: true,
+        select: u
+      )
+    )
+  end
+
+  def remote_follow_users(_actor_uri), do: []
+
+  @doc """
+  Re-syncs a stored remote account from a freshly fetched actor document (the
+  inbox's `Update` handler). A no-op for an account nobody here follows: an
+  `Update` is a broadcast, not a request, so it must never mint a row.
+  """
+  def refresh_remote_account(%{id: actor_uri} = remote) when is_binary(actor_uri) do
+    if account = Repo.get_by(RemoteAccount, actor_uri: actor_uri) do
+      account |> RemoteAccount.changeset(remote_account_attrs(remote)) |> Repo.update()
+    end
+
+    :ok
+  end
+
+  def refresh_remote_account(_remote), do: :ok
+
+  @doc """
+  The remote account deleted itself (`Delete` of its own actor): drop the row,
+  and with it — through the cascade — everybody's follow of it.
+
+  Nothing is sent back. The account is gone, so an `Undo(Follow)` would be a
+  POST into a void; and the member's list simply stops showing somebody who no
+  longer exists, which is exactly what happened.
+  """
+  def remove_remote_account(actor_uri) when is_binary(actor_uri) do
+    Repo.delete_all(from(a in RemoteAccount, where: a.actor_uri == ^actor_uri))
+    :ok
+  end
+
+  def remove_remote_account(_actor_uri), do: :ok
+
+  # ── The gates, cheapest first ──────────────────────────────────────────────
+
+  defp check_can_follow(%User{} = user) do
+    cond do
+      not enabled?() -> {:error, :fediverse_disabled}
+      not federated?(user) -> {:error, :not_federating}
+      moved?(user) -> {:error, :moved}
+      true -> :ok
+    end
+  end
+
+  # A block is both ears and mouth shut, and this is the mouth. Checked three
+  # times on one follow — on the typed host, on the resolved actor URL and on
+  # the canonical id the document claims — because each hop can land somewhere
+  # else than the last.
+  defp check_follow_host(uri) do
+    cond do
+      instance_blocked?(uri) -> {:error, :instance_blocked}
+      local_host?(uri) -> {:error, :local_account}
+      true -> :ok
+    end
+  end
+
+  @doc """
+  Whether `uri` (an actor id, a bare host, a `@user@host` address) lives on this
+  very installation. Public because more than the follow gate has to know: the
+  search page offers "follow this account" only for an address that is really
+  somewhere else, and the two must answer the same way or the page offers
+  something `follow_remote/2` then refuses.
+
+  Following a vutuv member is a vutuv follow; saying so beats signing a request
+  to ourselves and waiting for an Accept that our own inbox would have to
+  invent.
+  """
+  def local_host?(uri) do
+    case BlockedInstance.normalize_host(uri) do
+      nil -> false
+      host -> host == String.downcase(VutuvWeb.Endpoint.host())
+    end
+  end
+
+  defp claim_remote_follow_budget(%User{id: user_id}) do
+    case RateLimiter.hit(
+           {:fediverse_remote_follow, user_id},
+           remote_follow_limit(),
+           @inbound_window_ms
+         ) do
+      :ok -> :ok
+      _ -> {:error, :follow_capped}
+    end
+  end
+
+  defp check_follow_limit(%User{} = user) do
+    if remote_follow_count(user) >= max_remote_follows(),
+      do: {:error, :follow_limit},
+      else: :ok
+  end
+
+  # Signed with the member's own key: instances in authorized-fetch mode refuse
+  # an anonymous GET, and this is the one fetch we make on their behalf.
+  defp fetch_follow_target(actor_uri, %User{} = user) do
+    case fetch_remote_actor(actor_uri, signer(user)) do
+      {:ok, remote} -> {:ok, remote}
+      _error -> {:error, :unreachable_actor}
+    end
+  end
+
+  # ── Storage ───────────────────────────────────────────────────────────────
+
+  defp upsert_remote_account(remote) do
+    attrs = remote_account_attrs(remote)
+
+    %RemoteAccount{}
+    |> RemoteAccount.changeset(attrs)
+    |> Repo.insert(
+      # Everything the actor document carries is re-synced, named as "all but the
+      # identity" rather than as a list to keep in step: a column added later
+      # (an avatar, a follower count) must refresh on a repeat follow too, and a
+      # hand-maintained list is exactly what silently stops doing that.
+      on_conflict: {:replace_all_except, [:id, :actor_uri, :inserted_at]},
+      conflict_target: [:actor_uri],
+      # The id is minted in Elixir (UUID v7), so on a conflict the struct would
+      # otherwise carry the id of the row that was NOT written. Reading it back
+      # is what makes the follow point at the account that actually exists.
+      returning: [:id]
+    )
+  end
+
+  defp remote_account_attrs(remote) do
+    %{
+      actor_uri: remote.id,
+      host: BlockedInstance.normalize_host(remote.id) || "unknown",
+      handle: remote.preferred_username,
+      name: remote.name,
+      # The self-description is remote HTML, so it is reduced to text like every
+      # other stranger's words here; nothing they write is ever rendered raw.
+      summary: remote_text(remote.summary, RemoteAccount.max_summary()),
+      inbox_uri: remote.inbox,
+      shared_inbox_uri: remote.shared_inbox,
+      public_key_id: remote.public_key_id,
+      public_key_pem: remote.public_key_pem,
+      refreshed_at: DateTime.utc_now(:second)
+    }
+  end
+
+  defp insert_remote_follow(%User{} = user, %RemoteAccount{} = account) do
+    # The activity id names the row, so the id is minted before the insert
+    # rather than read back after it: an `Accept` finds its follow by this
+    # string and by nothing else.
+    id = UUIDv7.generate()
+
+    %Follow{id: id, user_id: user.id, remote_account_id: account.id}
+    |> Follow.changeset(%{
+      state: "requested",
+      follow_activity_id: Docs.follow_activity_id(user, id)
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, follow} -> {:ok, follow}
+      {:error, _changeset} -> {:error, :already_following}
+    end
+  end
+
+  defp undo_remote_follow(%User{} = user, %Follow{} = follow),
+    do: undo_remote_follows(user, [follow])
+
+  # Best effort, and deliberately gated on `ever_federated?/1` rather than
+  # `federated?/1`: switching federation off is exactly when every follow is
+  # withdrawn, and that is precisely when `federated?/1` turns false — the same
+  # trap `revoke_post/1` documents.
+  #
+  # Takes the whole list rather than one row at a time because leaving the
+  # Fediverse withdraws every follow at once: asked per row, the actor lookup
+  # and the blocklist check would each run once per followed account (two
+  # queries per row, up to `max_remote_follows/0` of them) and each withdrawal
+  # would be its own single-row insert.
+  defp undo_remote_follows(_user, []), do: :ok
+
+  defp undo_remote_follows(%User{} = user, follows) do
+    if enabled?() and ever_federated?(user) do
+      blocked = blocked_hosts()
+
+      follows
+      |> Enum.filter(&deliverable_undo?(&1, blocked))
+      |> Enum.map(fn %Follow{remote_account: account} = follow ->
+        {account.inbox_uri,
+         Docs.undo_follow_activity(user, account.actor_uri, follow.follow_activity_id)}
+      end)
+      |> enqueue_each(user)
+    end
+
+    :ok
+  end
+
+  defp deliverable_undo?(%Follow{remote_account: %RemoteAccount{} = account}, blocked) do
+    not MapSet.member?(blocked, BlockedInstance.normalize_host(account.actor_uri))
+  end
+
+  defp deliverable_undo?(_follow, _blocked), do: false
+
+  defp blocked_hosts do
+    Repo.all(from(b in BlockedInstance, select: b.host)) |> MapSet.new()
+  end
+
+  # The follow an `Accept`/`Reject` answers. Primarily by the activity id we
+  # minted and the other server echoed back; failing that (servers differ in how
+  # faithfully they echo a Follow) by the pair, which is just as safe because
+  # both arms are scoped to the actor that answered.
+  defp find_answered_follow(%User{id: user_id}, activity, actor_uri) when is_binary(actor_uri) do
+    base =
+      from(f in Follow,
+        join: a in RemoteAccount,
+        on: a.id == f.remote_account_id,
+        where: f.user_id == ^user_id and a.actor_uri == ^actor_uri
+      )
+
+    case activity_object_id(activity["object"]) do
+      id when is_binary(id) ->
+        Repo.one(from(f in base, where: f.follow_activity_id == ^id)) || Repo.one(base)
+
+      _ ->
+        Repo.one(base)
+    end
+  end
+
+  defp find_answered_follow(_user, _activity, _actor_uri), do: nil
+
+  # ── The following browser (/settings/fediverse/following) ─────────────────
+
+  defp remote_follows_base(user_id, filters) do
+    from(f in Follow,
+      join: a in RemoteAccount,
+      as: :account,
+      on: a.id == f.remote_account_id,
+      where: f.user_id == ^user_id
+    )
+    |> filter_follow_server(Map.get(filters, :server))
+    |> search_remote_follows(Map.get(filters, :q))
+  end
+
+  defp filter_follow_server(query, nil), do: query
+
+  defp filter_follow_server(query, host),
+    do: where(query, [account: a], a.host == ^host)
+
+  defp search_remote_follows(query, nil), do: query
+
+  defp search_remote_follows(query, term) do
+    case browse_search_parts(term) do
+      {:handle_and_host, name, host} ->
+        where(
+          query,
+          [account: a],
+          ilike(a.handle, ^name) and ilike(a.host, ^host)
+        )
+
+      {:anywhere, like} ->
+        where(
+          query,
+          [account: a],
+          ilike(a.name, ^like) or ilike(a.handle, ^like) or ilike(a.actor_uri, ^like)
+        )
+    end
+  end
+
+  # Same three sorts the follower browser offers, so a `?sort=` value means the
+  # same thing on both pages; the row's own id (UUID v7, arrival order) is the
+  # last key everywhere, so paging stays stable when the visible values tie.
+  defp order_remote_follows(query, filters) do
+    dir = direction(Map.get(filters, :dir))
+
+    case Map.get(filters, :sort) do
+      "account" ->
+        order_by(query, [f, account: a], [{^dir, account_label(a)}, desc: f.id])
+
+      "server" ->
+        order_by(query, [f, account: a], [{^dir, a.host}, desc: f.id])
+
+      _followed ->
+        order_by(query, [f], [{^dir, f.inserted_at}, {^dir, f.id}])
+    end
   end
 
   ## Pruning followers whose account is gone (issue #1072)
@@ -661,7 +1245,6 @@ defmodule Vutuv.Fediverse do
   # `config :vutuv, :fediverse_inbound_caps, {host_limit, actor_limit}`.
   @inbound_host_limit 600
   @inbound_actor_limit 60
-  @inbound_window_ms :timer.hours(1)
 
   # Answers a member may send out to other networks per hour (issue #1070). Set
   # for a person holding a conversation, not for a script: a real exchange is a
@@ -728,14 +1311,23 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  Deletes everything stored from `host`: its remote followers, the replies its
-  members wrote under vutuv posts, the outbound deliveries still queued for it and
-  the records of what was delivered there.
-  Returns `%{followers: n, notes: n, deliveries: n, post_deliveries: n}`.
+  Deletes everything stored from `host`: its remote followers, the accounts its
+  members hold that anybody here follows (and, through the cascade, those
+  follows), the replies its members wrote under vutuv posts, the outbound
+  deliveries still queued for it and the records of what was delivered there.
+  Returns `%{followers: n, remote_accounts: n, notes: n, deliveries: n,
+  post_deliveries: n}`.
   """
   def purge_instance(host) when is_binary(host) do
     {followers, _} =
       Repo.delete_all(from(f in Follower, where: uri_host(f.actor_uri) == ^host))
+
+    # A block cuts both directions (issue #1160): the accounts our members
+    # follow over there go with the ones that follow us, and the follow rows
+    # cascade off them. Nothing is sent — a blocked server is not talked to,
+    # not even to say goodbye.
+    {remote_accounts, _} =
+      Repo.delete_all(from(a in RemoteAccount, where: a.host == ^host))
 
     # A block is also a takedown: text that server's members wrote under our
     # members' posts goes with it (issue #1069), not just the follow rows.
@@ -752,6 +1344,7 @@ defmodule Vutuv.Fediverse do
 
     %{
       followers: followers,
+      remote_accounts: remote_accounts,
       notes: notes,
       deliveries: deliveries,
       post_deliveries: post_deliveries
@@ -831,10 +1424,11 @@ defmodule Vutuv.Fediverse do
       `Announce` a Note URL, a reply its `inReplyTo`. Every URL of ours resolves
       to the member it hangs off.
     * the **remote actor's own lifecycle** (`Update`/`Delete` of itself), which
-      names no local member at all: it is broadcast to everyone following that
-      actor, so the addressees are exactly the members it follows here. This is
-      the case the endpoint is worth having for — one account deletion used to
-      mean one signed delivery per member.
+      names no local member at all: it is broadcast to everyone with a stake in
+      that actor, so the addressees are the members it follows here **and**
+      (issue #1160) the members who follow it. This is the case the endpoint is
+      worth having for — one account deletion used to mean one signed delivery
+      per member.
     * an author's **`Update`/`Delete` of a note they wrote**, which likewise
       names nobody here: the addressees are the members whose posts hold a
       stored copy of it.
@@ -860,9 +1454,12 @@ defmodule Vutuv.Fediverse do
     object = if is_map(activity["object"]), do: activity["object"], else: %{}
     base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
 
+    # `object["actor"]` is what names us in an `Accept`/`Reject` (issue #1160):
+    # the answer wraps the Follow we sent, whose actor is our own member, and
+    # nothing else in the document mentions them.
     (audience_uris(activity) ++
        audience_uris(object) ++
-       [activity["object"], object["object"], object["inReplyTo"]])
+       [activity["object"], object["object"], object["actor"], object["inReplyTo"]])
     |> Enum.filter(&is_binary/1)
     |> Enum.uniq()
     |> Enum.take(@inbox_addressed_cap)
@@ -904,7 +1501,7 @@ defmodule Vutuv.Fediverse do
   defp lifecycle_users(%{"type" => type} = activity, actor_uri)
        when type in ~w(Update Delete) and is_binary(actor_uri) do
     case activity_object_id(activity["object"]) do
-      ^actor_uri -> followed_local_users(actor_uri)
+      ^actor_uri -> followed_local_users(actor_uri) ++ remote_follow_users(actor_uri)
       uri when is_binary(uri) -> note_holding_users(actor_uri, uri)
       _ -> []
     end
@@ -1976,11 +2573,19 @@ defmodule Vutuv.Fediverse do
   def revoke_actor(%User{} = user) do
     with true <- enabled?(),
          true <- ever_federated?(user),
-         [_ | _] = inboxes <- delivery_inboxes(user) do
+         [_ | _] = inboxes <- actor_delete_inboxes(user) do
       enqueue(user, inboxes, Docs.actor_delete_activity(user))
     else
       _ -> :skip
     end
+  end
+
+  # Everybody who has to hear that this actor is gone: the servers that follow
+  # the member (so their copies go) and — since issue #1160 — the servers whose
+  # accounts the member follows, so they stop delivering to an inbox that no
+  # longer answers.
+  defp actor_delete_inboxes(%User{} = user) do
+    (delivery_inboxes(user) ++ followed_inboxes(user)) |> Enum.uniq()
   end
 
   @doc """
@@ -2234,20 +2839,37 @@ defmodule Vutuv.Fediverse do
     enqueue(user, [inbox_uri], Docs.accept_activity(user, follow_object))
   end
 
+  # One document to many inboxes — the usual case, so it is encoded once.
   defp enqueue(user, inboxes, activity, opts \\ []) do
     json = Jason.encode!(activity)
-    now = DateTime.utc_now(:second)
+
+    inboxes |> Enum.map(&{&1, json}) |> insert_deliveries(user, opts)
+  end
+
+  # A different document per inbox: withdrawing every follow a member holds is
+  # N documents to N servers, and queued one at a time that is N inserts and N
+  # nudges instead of one of each.
+  defp enqueue_each(pairs, user) do
+    pairs
+    |> Enum.map(fn {inbox, activity} -> {inbox, Jason.encode!(activity)} end)
+    |> insert_deliveries(user, [])
+  end
+
+  defp insert_deliveries([], _user, _opts), do: :ok
+
+  defp insert_deliveries(pairs, user, opts) do
     stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
-    due = DateTime.add(now, Keyword.get(opts, :delay_seconds, 0))
+    due = DateTime.add(DateTime.utc_now(:second), Keyword.get(opts, :delay_seconds, 0))
+    rebuild_from = Keyword.get(opts, :rebuild_from)
 
     rows =
-      Enum.map(inboxes, fn inbox ->
+      Enum.map(pairs, fn {inbox, json} ->
         %{
           id: Vutuv.UUIDv7.generate(),
           user_id: user.id,
           inbox_uri: inbox,
           activity_json: json,
-          rebuild_from: Keyword.get(opts, :rebuild_from),
+          rebuild_from: rebuild_from,
           attempts: 0,
           next_attempt_at: due,
           inserted_at: stamp,
@@ -2282,7 +2904,7 @@ defmodule Vutuv.Fediverse do
     with true <- enabled?(),
          true <- ever_federated?(user),
          %Actor{} = actor <- get_actor(user),
-         [_ | _] = inboxes <- delivery_inboxes(user) do
+         [_ | _] = inboxes <- actor_delete_inboxes(user) do
       %{
         key_id: Docs.key_id(user),
         private_key_pem: actor.private_key_pem,
@@ -2538,6 +3160,10 @@ defmodule Vutuv.Fediverse do
          # follower row so the display fields can never overflow their column.
          preferred_username: truncate(doc["preferredUsername"]),
          name: truncate(doc["name"]),
+         # The account's own description (issue #1160). Kept raw here — the
+         # caller reduces it to text before it is stored, like every other
+         # stranger's HTML.
+         summary: doc["summary"],
          public_key_id: get_in(doc, ["publicKey", "id"]),
          public_key_pem: get_in(doc, ["publicKey", "publicKeyPem"]),
          # The aliases the remote account claims (issue #986): a Move *to* this

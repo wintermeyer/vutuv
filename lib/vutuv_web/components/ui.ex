@@ -3318,8 +3318,11 @@ defmodule VutuvWeb.UI do
            terms: gettext("block ban mute report abuse harassment stalker")
          ),
          row(:fediverse, gettext("Fediverse"), ~p"/settings/fediverse",
-           hint: gettext("Followers from Mastodon and other networks"),
-           terms: gettext("mastodon activitypub federation follower move migrate")
+           hint: gettext("Follow accounts on Mastodon, and be followed from there"),
+           terms:
+             gettext(
+               "mastodon activitypub federation follower following follow move migrate remote account"
+             )
          )
        ]},
       {gettext("Account"),

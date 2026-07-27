@@ -130,6 +130,9 @@ defmodule VutuvWeb.Router do
     get("/.well-known/webfinger", FediverseController, :webfinger)
     get("/:slug/actor", FediverseController, :actor)
     get("/:slug/actor/followers", FediverseController, :followers)
+    # The accounts the member follows out there (issue #1160), count-only like
+    # the followers collection beside it.
+    get("/:slug/actor/following", FediverseController, :following)
     get("/:slug/actor/outbox", FediverseController, :outbox)
     # The pinned post (issue #1110), at the path other servers already look for.
     get("/:slug/actor/collections/featured", FediverseController, :featured)
@@ -490,6 +493,12 @@ defmodule VutuvWeb.Router do
       # Before /settings/fediverse (the dead settings page) in the router, so
       # this longer path is matched first.
       live("/fediverse/followers", FediverseFollowersLive, :index)
+
+      # The mirror image (issue #1160): the accounts the member follows out
+      # there, with the add-by-address form on top. Same table, same filters,
+      # same paging; the same router note applies, so it sits above the dead
+      # /settings/fediverse page too.
+      live("/fediverse/following", FediverseFollowingLive, :index)
 
       # The member's own account-activity log (issue #1087): what changed on
       # the account, exactly when, from where and how it was confirmed. A

@@ -175,7 +175,7 @@ defmodule VutuvWeb.FediverseFollowersLiveTest do
   describe "paging a long list" do
     setup %{conn: conn} do
       {conn, user} = federating(conn)
-      per_page = Fediverse.followers_per_page()
+      per_page = Fediverse.browse_per_page()
       for n <- 1..(per_page + 3), do: follower(user, handle: "f#{1000 + n}")
 
       {:ok, live, _html} = live(conn, ~p"/settings/fediverse/followers")

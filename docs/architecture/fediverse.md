@@ -674,15 +674,99 @@ gone; it is pure scale work, with no change to what any activity does. Every
 takedown, not just the owner's own delete button, now asks the other servers to
 withdraw the copy (issue #1102, the revocation section above).
 
-## Non-goal: reading other networks inside vutuv
+## Following accounts on other networks (issue #1160)
 
-Members following Fediverse accounts and reading their posts in the vutuv feed
-is **not planned** (decided 2026-07-24). It would mean continuously storing the
-post stream of every followed remote account — a large, permanent pile of
-third-party content with the moderation and retention duties that come with it —
-to rebuild what the clients of those networks already do well. vutuv publishes
-outward and (once the inbound tier lands) shows the response to what its members
-published; it is not a reader for other networks. The existing profile feed of a
-member's *own* linked Mastodon/Bluesky accounts (`Vutuv.SocialFeed`) is a
-different thing: it shows the member's own posts, on their own profile, at their
-own request.
+Until 2026-07-26 this document recorded the opposite: reading other networks
+inside vutuv was a stated non-goal, on the grounds that storing the post stream
+of every followed account rebuilds what those networks' own clients already do
+well. That decision was reversed. The reason it was made — a large, permanent
+pile of third-party content with moderation and retention duties attached — did
+not go away; it became the design brief, and the rest of the #1160–#1168 series
+is where the answers live (a six-month clock on everything cached, the existing
+report and takedown path extended to remote posts, the operator blocklist as
+the floor under all of it).
+
+This section covers the **subscription** half, which is all that #1160 ships:
+who follows whom, and how the handshake works. What arrives afterwards is the
+next issue's problem.
+
+### The two tables
+
+`fediverse_remote_accounts` is one row per remote actor that anybody here
+follows: the actor URI (unique, the identity), the host it lives on, the
+display strings, its inbox pair, its public key and its self-description as
+plain text. One row however many members follow it, so a re-sync, a block purge
+and later its cached posts all have one place to hang off.
+
+`fediverse_follows` is the per-member relationship: member → remote account,
+`state`, the id of the `Follow` we sent, and a `muted` flag with the same
+meaning a local follow's mute has.
+
+It is deliberately the mirror image of `fediverse_followers` (who out there
+follows a member here), down to sharing the browse machinery: `browse_filters/1`,
+`browse_per_page/0` and `VutuvWeb.BrowseTable` serve both tables, so a `?sort=`
+value means the same thing on `/settings/fediverse/followers` and on
+`/settings/fediverse/following`.
+
+### The handshake
+
+`Vutuv.Fediverse.follow_remote/2` takes anything people paste (`@you@server`,
+`you@server`, a profile URL), resolves it to the account's canonical actor id
+through WebFinger (`Vutuv.Fediverse.RemoteFollow.resolve_actor/1` — the same
+SSRF-fenced, size-capped client the outward-facing subscribe dialog uses),
+fetches the actor document through the usual signed GET, upserts the account and
+writes the follow in state `requested`. Then a signed `Follow` goes into the
+delivery queue.
+
+The row says `requested` because that is the truth: an ActivityPub `Follow` is a
+request, and an account that approves followers by hand may take days or never
+answer. The UI shows "Requested" rather than "Following", and the count-only
+`following` collection publishes **accepted** follows only — a request nobody
+answered is not a relationship, and publishing it would leak what a member tried
+to do.
+
+An inbound `Accept` naming our `follow_activity_id` flips the state; a `Reject`
+deletes the row (there is nothing left to show, nothing to retry, and keeping a
+stranger's refusal on file earns nobody anything). Both are scoped to the actor
+that answered, so one server can never settle a follow addressed to another.
+
+### The gates
+
+In the order they cost, because the cheap ones must run before the network is
+touched:
+
+1. **the member must federate** — the `Follow` is signed with their own actor
+   key, so there is no such thing as an actorless follow. A member who has not
+   opted in gets the explanation and the switch, not a redirect.
+2. **the operator blocklist**, checked three times over one follow: on the typed
+   host, on the resolved actor URL and on the canonical id the document claims,
+   because each hop can land somewhere else than the last.
+3. **an address on this very installation** is refused as `:local_account` and
+   answered with a link to that member's profile. Following a vutuv member is a
+   vutuv follow.
+4. **an hourly budget** (`FEDIVERSE_REMOTE_FOLLOW_LIMIT`, the
+   `claim_reply_budget/1` pattern), so a compromised account cannot walk a
+   server's whole member list.
+5. **a total ceiling** (`FEDIVERSE_MAX_REMOTE_FOLLOWS`), because every accepted
+   follow is a standing invitation for another server to deliver here.
+
+### Lifecycle
+
+Unfollowing sends a best-effort `Undo(Follow)` carrying the original activity id
+and deletes the row either way — it describes our member's intent, and they have
+withdrawn it. Switching federation off does that for every follow
+(`drop_remote_follows/1`, the `drop_followers/1` symmetry), gated on
+`ever_federated?/1` rather than `federated?/1` for the reason revocation is: the
+withdrawal happens exactly when the switch is already off.
+
+An inbound `Update` of a remote actor re-syncs the stored account for everybody
+who follows it; its `Delete` removes the account and, through the cascade, every
+follow of it. Blocking an instance purges its accounts the same way it purges
+its followers — a block is both ears and mouth shut, in both directions. And an
+account `Delete` broadcast now also reaches the inboxes of the accounts the
+member followed (`followed_inboxes/1`), so those servers stop delivering to an
+inbox that no longer answers.
+
+The profile feed of a member's *own* linked Mastodon/Bluesky accounts
+(`Vutuv.SocialFeed`) remains a separate, unrelated thing: it shows the member's
+own posts, on their own profile, at their own request.

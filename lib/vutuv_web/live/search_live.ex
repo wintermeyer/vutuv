@@ -20,6 +20,8 @@ defmodule VutuvWeb.SearchLive do
 
   import VutuvWeb.SavedSearchComponents
 
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Search
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.UserHTML
@@ -60,9 +62,28 @@ defmodule VutuvWeb.SearchLive do
      |> assign(:effective_scope, (results && results.parsed.scope) || scope)
      |> assign(:scope_pinned?, (results && results.parsed.scope_pinned?) || false)
      |> assign(:results, results)
+     |> assign(:remote_address, remote_address(q))
      |> assign_needles(results)
      |> assign_people_maps(results)
      |> schedule_record(results)}
+  end
+
+  # A full `@name@server` typed into the search box is not a vutuv query at all
+  # — it is somebody's address on another network, and nothing here will ever
+  # match it (issue #1160). So the page names what it is and offers the one
+  # thing you can do with it. Nothing is resolved here: this is pure string
+  # work, so a search keystroke never becomes an outbound request.
+  defp remote_address(q) do
+    with true <- Fediverse.enabled?(),
+         {:ok, {name, host}} <- RemoteFollow.parse_address(String.trim(q)),
+         # Through the context, so "is this our own installation?" is answered
+         # the same way here as in the follow gate — otherwise this card offers
+         # to follow an address `follow_remote/2` then refuses.
+         false <- Fediverse.local_host?(host) do
+      "@#{name}@#{host}"
+    else
+      _ -> nil
+    end
   end
 
   # What `highlight/2` marks per section. Exact people carry a literal
@@ -303,6 +324,51 @@ defmodule VutuvWeb.SearchLive do
     """
   end
 
+  attr(:address, :string, default: nil)
+  attr(:signed_in?, :boolean, default: false)
+
+  # The result row for an address on another network. It sits above the vutuv
+  # results because it is the *answer* to what was typed, and it renders for a
+  # signed-out visitor too — with the sign-in link instead of the follow one,
+  # since the request has to be signed by a member's own key.
+  defp remote_address_result(%{address: nil} = assigns) do
+    ~H""
+  end
+
+  defp remote_address_result(assigns) do
+    ~H"""
+    <.card id="search-remote-address" class="mt-6">
+      <.section_title>{gettext("An account on another network")}</.section_title>
+      <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+        <span class="font-semibold break-all">{@address}</span>
+      </p>
+      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "That is an address on Mastodon or one of the other networks, so nobody here carries it. You can follow it from vutuv."
+        )}
+      </p>
+      <p class="mt-3">
+        <.link
+          :if={@signed_in?}
+          navigate={~p"/settings/fediverse/following?#{[address: @address]}"}
+          id="search-remote-follow"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+        >
+          {gettext("Follow this account")} ›
+        </.link>
+        <.link
+          :if={!@signed_in?}
+          navigate={~p"/login"}
+          id="search-remote-login"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+        >
+          {gettext("Sign in to follow this account")} ›
+        </.link>
+      </p>
+    </.card>
+    """
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -358,6 +424,8 @@ defmodule VutuvWeb.SearchLive do
       >
         {gettext("Results appear once you have typed at least three letters.")}
       </p>
+
+      <.remote_address_result address={@remote_address} signed_in?={@current_user_id != nil} />
 
       <.card :if={@q == ""} id="search-tips-empty" class="mt-6">
         <.section_title>{gettext("Search Tips")}</.section_title>

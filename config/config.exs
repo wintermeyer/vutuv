@@ -184,6 +184,17 @@ config :vutuv, :fediverse_image_hold_seconds, 90
 # followed them, so it is metered; sized for a conversation, not a script.
 config :vutuv, :fediverse_outbound_reply_limit, 30
 
+# Following accounts on other networks (issue #1160): how many follow requests
+# one member may send per hour, and how many accounts they may follow at all.
+#
+# The hourly budget is the abuse backstop — a compromised account must not be
+# able to walk a whole server's member list — while the ceiling bounds the
+# standing invitation each accepted follow is, since every one of them lets
+# another server deliver here. Both env-overridable
+# (FEDIVERSE_REMOTE_FOLLOW_LIMIT / FEDIVERSE_MAX_REMOTE_FOLLOWS).
+config :vutuv, :fediverse_remote_follow_limit, 30
+config :vutuv, :fediverse_max_remote_follows, 1_000
+
 # Whether the daily GenServer that prunes the account-activity log runs (off in
 # tests, same sandbox reasoning; tests call
 # Vutuv.AccountEvents.delete_expired/0 directly).

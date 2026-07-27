@@ -188,6 +188,18 @@ if config_env() == :prod do
     config :vutuv, :fediverse_outbound_reply_limit, String.to_integer(String.trim(limit))
   end
 
+  # Following accounts on other networks (issue #1160): the hourly follow-request
+  # budget per member, and the total number of accounts one member may follow.
+  # The first bounds a compromised account, the second bounds how many other
+  # servers end up with standing permission to deliver here.
+  if limit = System.get_env("FEDIVERSE_REMOTE_FOLLOW_LIMIT") do
+    config :vutuv, :fediverse_remote_follow_limit, String.to_integer(String.trim(limit))
+  end
+
+  if limit = System.get_env("FEDIVERSE_MAX_REMOTE_FOLLOWS") do
+    config :vutuv, :fediverse_max_remote_follows, String.to_integer(String.trim(limit))
+  end
+
   # How long a post whose picture the AI image scan has not judged yet waits
   # before it federates without it (issue #1070). The ceiling, not the usual
   # wait — the post normally goes out the moment the scan settles. An

@@ -100,6 +100,51 @@ defmodule VutuvWeb.FediverseControllerTest do
     }
   end
 
+  # A follow this member sent to the stubbed remote actor, in state
+  # `requested` — written directly, because `follow_remote/2` would resolve the
+  # address over the network and these tests are about the answer coming back.
+  defp requested_follow(user) do
+    account =
+      Repo.insert!(%Vutuv.Fediverse.RemoteAccount{
+        actor_uri: @remote_actor,
+        host: "social.example",
+        handle: "alice",
+        inbox_uri: @remote_inbox
+      })
+
+    Repo.insert!(%Vutuv.Fediverse.Follow{
+      user_id: user.id,
+      remote_account_id: account.id,
+      state: "requested",
+      follow_activity_id: Docs.actor_url(user) <> "#follows/1"
+    })
+  end
+
+  defp accept_follow(user, follow) do
+    :ok =
+      Fediverse.accept_remote_follow(
+        user,
+        %{"type" => "Accept", "object" => follow.follow_activity_id},
+        @remote_actor
+      )
+  end
+
+  # The answer a remote server sends to a Follow we sent it (issue #1160).
+  defp answer_activity(type, user, follow) do
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => "https://social.example/activities/#{type}",
+      "type" => type,
+      "actor" => @remote_actor,
+      "object" => %{
+        "id" => follow.follow_activity_id,
+        "type" => "Follow",
+        "actor" => Docs.actor_url(user),
+        "object" => @remote_actor
+      }
+    }
+  end
+
   defp existing_follower(user) do
     {:ok, _} =
       Fediverse.add_follower(user, %{
@@ -212,6 +257,40 @@ defmodule VutuvWeb.FediverseControllerTest do
         conn |> recycle() |> get("/#{user.username}/actor/outbox") |> Map.fetch!(:resp_body)
 
       assert Jason.decode!(outbox)["type"] == "OrderedCollection"
+    end
+
+    test "advertises the following collection, count-only and accepted-only (#1160)", %{
+      conn: conn
+    } do
+      user = federated_user()
+
+      actor = conn |> get("/#{user.username}/actor") |> Map.fetch!(:resp_body) |> Jason.decode!()
+      assert actor["following"] == Docs.following_url(user)
+
+      follow = requested_follow(user)
+
+      body =
+        conn
+        |> recycle()
+        |> get("/#{user.username}/actor/following")
+        |> Map.fetch!(:resp_body)
+        |> Jason.decode!()
+
+      assert body["type"] == "OrderedCollection"
+      # A request nobody answered is not a relationship, so it is not published.
+      assert body["totalItems"] == 0
+      refute body["orderedItems"]
+
+      accept_follow(user, follow)
+
+      body =
+        conn
+        |> recycle()
+        |> get("/#{user.username}/actor/following")
+        |> Map.fetch!(:resp_body)
+        |> Jason.decode!()
+
+      assert body["totalItems"] == 1
     end
   end
 
@@ -415,6 +494,48 @@ defmodule VutuvWeb.FediverseControllerTest do
       conn = signed_post(conn, user, follow_activity(user), priv)
 
       assert conn.status == 404
+    end
+  end
+
+  describe "POST /:slug/actor/inbox — Accept and Reject (#1160)" do
+    test "a signed Accept seals the member's own follow", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      follow = requested_follow(user)
+
+      conn = signed_post(conn, user, answer_activity("Accept", user, follow), priv)
+
+      assert conn.status == 202
+      assert Repo.get!(Vutuv.Fediverse.Follow, follow.id).state == "accepted"
+    end
+
+    test "a signed Reject removes it", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      follow = requested_follow(user)
+
+      conn = signed_post(conn, user, answer_activity("Reject", user, follow), priv)
+
+      assert conn.status == 202
+      refute Repo.get(Vutuv.Fediverse.Follow, follow.id)
+    end
+
+    test "an unsigned Accept changes nothing", %{conn: conn} do
+      user = federated_user()
+      follow = requested_follow(user)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> post(
+          "/#{user.username}/actor/inbox",
+          Jason.encode!(answer_activity("Accept", user, follow))
+        )
+
+      assert conn.status == 401
+      assert Repo.get!(Vutuv.Fediverse.Follow, follow.id).state == "requested"
     end
   end
 

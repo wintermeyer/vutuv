@@ -14,6 +14,8 @@ defmodule Vutuv.Export do
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
   alias Vutuv.Chat.{Conversation, Participant}
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Jobs.{JobPostingBookmark, JobPostingLike}
   alias Vutuv.Organizations.{OrganizationBookmark, OrganizationLike}
   alias Vutuv.Posts.{Post, PostBookmark, PostDraft, PostLike, PostRepost}
@@ -30,7 +32,8 @@ defmodule Vutuv.Export do
   # 5: the account-activity log (issue #1087) — what changed on the account,
   #    when, from where and how it was confirmed.
   # 6: composer drafts (issue #1148) — posts the member started but never sent.
-  @schema_version 6
+  # 7: the accounts followed on other networks (issue #1160).
+  @schema_version 7
 
   def build(%User{} = user) do
     user =
@@ -169,8 +172,27 @@ defmodule Vutuv.Export do
       saved_jobs: %{
         bookmarked: saved_jobs(user, JobPostingBookmark),
         liked: saved_jobs(user, JobPostingLike)
-      }
+      },
+      # The accounts the member follows on other networks (issue #1160). Their
+      # own remote followers are deliberately absent: those rows are about other
+      # people, and this export is the member's data.
+      fediverse_following: fediverse_following(user)
     }
+  end
+
+  defp fediverse_following(user) do
+    user
+    |> Fediverse.list_remote_follows()
+    |> Enum.map(fn follow ->
+      %{
+        account: follow.remote_account.actor_uri,
+        handle: RemoteAccount.display_handle(follow.remote_account),
+        server: follow.remote_account.host,
+        state: follow.state,
+        muted: follow.muted,
+        at: follow.inserted_at
+      }
+    end)
   end
 
   # The member's private content filters (issue #940): owner-only data, so it

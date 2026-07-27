@@ -33,6 +33,13 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
           <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
           {gettext("Your public vutuv posts show up in their timelines.")}
         </li>
+        <%!-- The inbound direction (issue #1160). It belongs in the sales pitch
+              and not only in the card below, because the card is the thing you
+              only reach once you have already said yes. --%>
+        <li class="flex gap-2">
+          <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
+          {gettext("You can follow accounts there yourself, straight from vutuv.")}
+        </li>
         <li class="flex gap-2">
           <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
           {gettext("Nothing changes on vutuv itself, and you can switch it off again.")}
@@ -152,6 +159,44 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
           {gettext("All followers")}
         </.card_footer_link>
       <% end %>
+    </.card>
+
+    <%!-- The other direction (issue #1160). Its own card rather than a second
+          heading in the handle card: following somebody out there is a thing
+          you go and do, not a readout of what happened to you, and burying the
+          only way to start it under the follower count would hide it.
+
+          Rendered for EVERY member, not only for one who already federates.
+          Behind the switch it would be invisible to exactly the person the
+          following page's own "here is why you cannot yet, here is the switch"
+          panel was written for. --%>
+    <.card>
+      <.section_title>{gettext("Accounts you follow elsewhere")}</.section_title>
+      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "It works the other way round too: paste somebody's address from Mastodon and friends, and you follow them from here."
+        )}
+      </p>
+
+      <h3
+        :if={Vutuv.Fediverse.federated?(@user) and @following_count > 0}
+        class="mt-4 text-sm font-semibold text-slate-900 dark:text-white"
+      >
+        {ngettext(
+          "You follow %{formatted} account on another network",
+          "You follow %{formatted} accounts on other networks",
+          @following_count,
+          formatted: compact_count(@following_count)
+        )}
+      </h3>
+
+      <.card_footer_link href={~p"/settings/fediverse/following"} id="all-following-link">
+        <%= if @following_count == 0 do %>
+          {gettext("Follow somebody out there")}
+        <% else %>
+          {gettext("Manage who you follow")}
+        <% end %>
+      </.card_footer_link>
     </.card>
 
     <%!-- The two neighbouring topics, as quiet links rather than full cards:

@@ -27,31 +27,31 @@ defmodule Vutuv.FediverseFollowerBrowserTest do
     })
   end
 
-  describe "follower_filters/1" do
+  describe "browse_filters/1" do
     test "falls back to safe defaults and rejects unknown values" do
       assert %{q: nil, server: nil, sort: "followed", dir: "desc"} =
-               Fediverse.follower_filters(%{})
+               Fediverse.browse_filters(%{})
 
       assert %{sort: "followed", dir: "desc"} =
-               Fediverse.follower_filters(%{"sort" => "; drop table", "dir" => "sideways"})
+               Fediverse.browse_filters(%{"sort" => "; drop table", "dir" => "sideways"})
 
-      assert %{q: nil, server: nil} = Fediverse.follower_filters(%{"q" => "  ", "server" => ""})
+      assert %{q: nil, server: nil} = Fediverse.browse_filters(%{"q" => "  ", "server" => ""})
     end
 
     test "a text column defaults to A-Z, the date column to newest first" do
-      assert %{sort: "account", dir: "asc"} = Fediverse.follower_filters(%{"sort" => "account"})
-      assert %{sort: "server", dir: "asc"} = Fediverse.follower_filters(%{"sort" => "server"})
+      assert %{sort: "account", dir: "asc"} = Fediverse.browse_filters(%{"sort" => "account"})
+      assert %{sort: "server", dir: "asc"} = Fediverse.browse_filters(%{"sort" => "server"})
 
       assert %{sort: "followed", dir: "desc"} =
-               Fediverse.follower_filters(%{"sort" => "followed"})
+               Fediverse.browse_filters(%{"sort" => "followed"})
 
       assert %{sort: "account", dir: "desc"} =
-               Fediverse.follower_filters(%{"sort" => "account", "dir" => "desc"})
+               Fediverse.browse_filters(%{"sort" => "account", "dir" => "desc"})
     end
 
     test "a server filter is matched case-insensitively" do
       assert %{server: "mastodon.social"} =
-               Fediverse.follower_filters(%{"server" => "Mastodon.Social"})
+               Fediverse.browse_filters(%{"server" => "Mastodon.Social"})
     end
   end
 
@@ -100,7 +100,7 @@ defmodule Vutuv.FediverseFollowerBrowserTest do
     end
 
     test "narrows to one server and counts it", %{user: user} do
-      filters = Fediverse.follower_filters(%{"server" => "mastodon.social"})
+      filters = Fediverse.browse_filters(%{"server" => "mastodon.social"})
 
       assert Fediverse.count_followers(user, filters) == 2
       assert ["b", "a"] = Enum.map(Fediverse.list_followers_page(user, filters), & &1.handle)
@@ -108,8 +108,8 @@ defmodule Vutuv.FediverseFollowerBrowserTest do
 
     test "follower_hosts/2 lists the member's servers, biggest first", %{user: user} do
       assert [
-               %{host: "mastodon.social", followers: 2},
-               %{host: "infosec.exchange", followers: 1}
+               %{host: "mastodon.social", count: 2},
+               %{host: "infosec.exchange", count: 1}
              ] = Fediverse.follower_hosts(user)
     end
 
@@ -156,7 +156,7 @@ defmodule Vutuv.FediverseFollowerBrowserTest do
         |> Repo.update!()
       end)
 
-      newest_first = Fediverse.list_followers_page(user, Fediverse.follower_filters(%{}))
+      newest_first = Fediverse.list_followers_page(user, Fediverse.browse_filters(%{}))
 
       # "mia" keeps today's stamp, so it leads although "zoe" was inserted first.
       assert Enum.map(newest_first, & &1.handle) == ["mia", "zoe", "abe"]
@@ -185,7 +185,7 @@ defmodule Vutuv.FediverseFollowerBrowserTest do
       user = insert(:activated_user, fediverse_followers?: true)
       for n <- 1..12, do: follower(user, handle: "f#{100 + n}")
 
-      filters = Fediverse.follower_filters(%{})
+      filters = Fediverse.browse_filters(%{})
       assert Fediverse.count_followers(user, filters) == 12
 
       page = fn n ->
@@ -223,7 +223,7 @@ defmodule Vutuv.FediverseFollowerBrowserTest do
 
   defp handles(user, params) do
     user
-    |> Fediverse.list_followers_page(Fediverse.follower_filters(params))
+    |> Fediverse.list_followers_page(Fediverse.browse_filters(params))
     |> Enum.map(& &1.handle)
   end
 

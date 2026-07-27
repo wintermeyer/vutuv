@@ -4,15 +4,17 @@ defmodule VutuvWeb.FediverseController do
 
     * `GET /.well-known/webfinger` — how Mastodon's search turns
       `@handle@host` into an actor URL,
-    * `GET /:slug/actor` (+ `/followers`, `/outbox`,
+    * `GET /:slug/actor` (+ `/followers`, `/following`, `/outbox`,
       `/collections/featured` — the pinned post, issue #1110) — the member's
       machine-readable identity,
     * `POST /:slug/actor/inbox` — receives signed `Follow`/`Undo` activities,
-      the reactions and replies other networks send back (`Like`/`Announce`,
-      issue #1068; `Create(Note)`, issues #1069 and #1071, plus the author's own
-      `Update`/`Delete` of such a note) and the remote actor's own lifecycle
-      (`Update` re-syncs the stored follower, `Delete` of the actor removes it);
-      everything else is acknowledged and dropped,
+      the `Accept`/`Reject` answering a Follow the member sent out (issue
+      #1160), the reactions and replies other networks send back
+      (`Like`/`Announce`, issue #1068; `Create(Note)`, issues #1069 and #1071,
+      plus the author's own `Update`/`Delete` of such a note) and the remote
+      actor's own lifecycle (`Update` re-syncs the stored follower and the
+      stored account, `Delete` of the actor removes both); everything else is
+      acknowledged and dropped,
     * `POST /system/inbox` — the same handling once for the whole installation
       (issue #1073), so a server with many followers here delivers a broadcast
       once and it is fanned out to every member the activity addresses.
@@ -68,23 +70,32 @@ defmodule VutuvWeb.FediverseController do
 
   def followers(conn, %{"slug" => slug}) do
     with_federated_user(conn, slug, fn user ->
-      send_activity_json(conn, %{
-        "@context" => "https://www.w3.org/ns/activitystreams",
-        "id" => Docs.actor_url(user) <> "/followers",
-        "type" => "OrderedCollection",
-        "totalItems" => Fediverse.follower_count(user)
-      })
+      send_activity_json(
+        conn,
+        Docs.count_collection(Docs.followers_url(user), Fediverse.follower_count(user))
+      )
+    end)
+  end
+
+  # The accounts the member follows out there (issue #1160), count-only for the
+  # same reason the followers collection is: who somebody reads is theirs to
+  # know. Only **accepted** follows are counted — a request nobody answered is
+  # not a relationship, and publishing it would leak what a member tried to do.
+  def following(conn, %{"slug" => slug}) do
+    with_federated_user(conn, slug, fn user ->
+      send_activity_json(
+        conn,
+        Docs.count_collection(Docs.following_url(user), Fediverse.accepted_follow_count(user))
+      )
     end)
   end
 
   def outbox(conn, %{"slug" => slug}) do
     with_federated_user(conn, slug, fn user ->
-      send_activity_json(conn, %{
-        "@context" => "https://www.w3.org/ns/activitystreams",
-        "id" => Docs.actor_url(user) <> "/outbox",
-        "type" => "OrderedCollection",
-        "totalItems" => Fediverse.public_post_count(user)
-      })
+      send_activity_json(
+        conn,
+        Docs.count_collection(Docs.outbox_url(user), Fediverse.public_post_count(user))
+      )
     end)
   end
 
@@ -230,6 +241,19 @@ defmodule VutuvWeb.FediverseController do
     :ok
   end
 
+  # The answer to a Follow the member sent out (issue #1160). `Accept` seals it,
+  # `Reject` removes the row. Both are scoped inside the context to the actor
+  # that answered, so one server can never settle a follow addressed to another.
+  defp perform(user, %{"type" => "Accept"} = activity, remote) do
+    Fediverse.accept_remote_follow(user, activity, remote.id)
+    :ok
+  end
+
+  defp perform(user, %{"type" => "Reject"} = activity, remote) do
+    Fediverse.reject_remote_follow(user, activity, remote.id)
+    :ok
+  end
+
   # Somebody on another network favourited (`Like`) or re-shared (`Announce`)
   # one of the member's public posts (issue #1068). Stored as their account
   # address and what they did — no display name, no text, no picture — so the
@@ -275,6 +299,11 @@ defmodule VutuvWeb.FediverseController do
   defp perform(user, %{"type" => "Update"} = activity, remote) do
     if object_id(activity["object"]) == remote.id do
       Fediverse.refresh_follower(user, follower_attrs(remote))
+      # The same document also keeps the account a member here follows current
+      # (issue #1160): a renamed account must not stay listed under the old
+      # handle on either page. Installation-wide, not per member — one row backs
+      # every follow of it.
+      Fediverse.refresh_remote_account(remote)
     else
       Fediverse.update_reply(user, activity, remote.id)
     end
@@ -293,6 +322,10 @@ defmodule VutuvWeb.FediverseController do
   defp perform(user, %{"type" => "Delete"} = activity, remote) do
     if object_id(activity["object"]) == remote.id do
       Fediverse.remove_follower(user, remote.id)
+      # And in the other direction (issue #1160): an account that deleted itself
+      # is nothing anybody here can go on following, so the stored account (and
+      # with it every follow of it) goes too.
+      Fediverse.remove_remote_account(remote.id)
     else
       # Not the actor: the author is withdrawing a note they wrote under one of
       # our members' posts. Honoured at once and unconditionally — an upstream

@@ -13,6 +13,7 @@ defmodule VutuvWeb.Fediverse.Docs do
       /:username/actor                       the actor document (id)
       /:username/actor/inbox                 POST target for Follow/Undo
       /:username/actor/followers             count-only collection
+      /:username/actor/following             count-only collection (issue #1160)
       /:username/actor/outbox                count-only collection
       /:username/actor/collections/featured  the pinned post (issue #1110)
 
@@ -67,6 +68,34 @@ defmodule VutuvWeb.Fediverse.Docs do
   """
   def featured_url(user), do: actor_url(user) <> "/collections/featured"
 
+  @doc "The `followers` collection, served count-only."
+  def followers_url(user), do: actor_url(user) <> "/followers"
+
+  @doc "The `outbox` collection, served count-only."
+  def outbox_url(user), do: actor_url(user) <> "/outbox"
+
+  @doc """
+  The `following` collection (issue #1160): the accounts on other networks this
+  member follows. Served count-only, exactly like `followers` — a remote server
+  needs to know the actor follows *somebody* to render a sensible profile, and
+  nobody needs the names.
+  """
+  def following_url(user), do: actor_url(user) <> "/following"
+
+  @doc """
+  A collection that publishes only how big it is: `followers`, `following` and
+  `outbox` are all served this way, so the shape lives here with every other
+  document rather than three times in the controller that answers them.
+  """
+  def count_collection(id, total) when is_binary(id) do
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => id,
+      "type" => "OrderedCollection",
+      "totalItems" => total
+    }
+  end
+
   @doc """
   The member's Fediverse address without the leading `@`
   (`member@vutuv.de`) — the `acct:` form WebFinger answers under and remote
@@ -94,8 +123,12 @@ defmodule VutuvWeb.Fediverse.Docs do
       "summary" => summary(user),
       "url" => "#{base()}/#{user.username}",
       "inbox" => actor_url <> "/inbox",
-      "outbox" => actor_url <> "/outbox",
-      "followers" => actor_url <> "/followers",
+      "outbox" => outbox_url(user),
+      "followers" => followers_url(user),
+      # Count-only like the followers collection, and for the same reason: who
+      # a member reads is theirs to know (issue #1160). Always advertised, so a
+      # remote server never has to guess whether this actor can follow back.
+      "following" => following_url(user),
       # The installation-wide inbox (issue #1073). The per-member one above is
       # what every server already knows and keeps working forever; this is the
       # offer to deliver a broadcast once for all of them.
@@ -312,6 +345,64 @@ defmodule VutuvWeb.Fediverse.Docs do
     user
     |> envelope(type, note_url <> "##{String.downcase(type)}-featured", note_url)
     |> Map.put("target", featured_url(user))
+  end
+
+  @doc """
+  The id of the `Follow` a member sends, built from the id of the row that
+  records it (issue #1160).
+
+  Minted here beside `#main-key`, `#flags/` and `#accepts/` rather than in the
+  context, so one module owns every fragment scheme our actor URLs carry — even
+  though this is the one id that has to exist *before* its row is inserted,
+  because the `Accept` that comes back finds the follow by this string.
+  """
+  def follow_activity_id(user, follow_id), do: actor_url(user) <> "#follows/" <> follow_id
+
+  @doc """
+  Follow: a member here asks to follow an account on another network (issue
+  #1160).
+
+  `activity_id` is minted by `Vutuv.Fediverse` from the stored follow row and
+  is the join between the two halves of the handshake: the other server echoes
+  it back inside its `Accept` or `Reject`, and that is how the answer finds the
+  row it belongs to.
+
+  Addressed to the target alone, never to the public collection: a follow
+  request is a message to one account, not an announcement. That is also why it
+  carries no `cc` to the member's own followers.
+  """
+  def follow_activity(user, target_actor_uri, activity_id) do
+    user
+    |> follow_object(target_actor_uri, activity_id)
+    |> Map.put("@context", "https://www.w3.org/ns/activitystreams")
+  end
+
+  # The Follow itself, without the JSON-LD context: it is the top-level
+  # document's job, and repeating it on a nested object is noise.
+  defp follow_object(user, target_actor_uri, activity_id) do
+    %{
+      "id" => activity_id,
+      "type" => "Follow",
+      "actor" => actor_url(user),
+      "object" => target_actor_uri,
+      "to" => [target_actor_uri]
+    }
+  end
+
+  @doc """
+  Undo(Follow): the member unfollows again. The wrapped Follow repeats the id
+  the original carried, so the remote server can match it and drop the
+  relationship rather than guess from actor and object.
+  """
+  def undo_follow_activity(user, target_actor_uri, activity_id) do
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => activity_id <> "#undo",
+      "type" => "Undo",
+      "actor" => actor_url(user),
+      "object" => follow_object(user, target_actor_uri, activity_id),
+      "to" => [target_actor_uri]
+    }
   end
 
   @doc "Accept(Follow): the answer that seals a remote follow."

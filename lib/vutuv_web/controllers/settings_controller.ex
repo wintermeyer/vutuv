@@ -292,11 +292,17 @@ defmodule VutuvWeb.SettingsController do
         # be a real delete lever and not a display toggle.
         unless saved.fediverse_replies?, do: Vutuv.Fediverse.drop_notes(saved)
 
-        # Same rule for the followers themselves: leaving deletes the rows about
-        # people on other networks. The actor answers 410 from now on, so those
-        # servers drop the follow at their end too — a kept row would only be a
-        # relationship that no longer exists anywhere.
-        unless saved.fediverse_followers?, do: Vutuv.Fediverse.drop_followers(saved)
+        # Same rule for the relationships themselves: leaving deletes the rows
+        # about people on other networks, in **both** directions (issue #1160).
+        # The actor answers 410 from now on, so the servers that followed the
+        # member drop it at their end too, and every account the member followed
+        # is asked to forget the follow before its row goes — without our actor
+        # there is nothing left to sign a request with, so a kept row either way
+        # would be a relationship that no longer exists anywhere.
+        unless saved.fediverse_followers? do
+          Vutuv.Fediverse.drop_followers(saved)
+          Vutuv.Fediverse.drop_remote_follows(saved)
+        end
       end
     )
   end
@@ -379,10 +385,14 @@ defmodule VutuvWeb.SettingsController do
         "That account could not be reached. Check the address, and that the other server is online."
       )
 
-  # The page only says how many followers there are and links on; the list
-  # itself, searchable and sortable, is `VutuvWeb.FediverseFollowersLive`.
+  # The page only counts each direction and links on; the lists themselves,
+  # searchable and sortable, are `VutuvWeb.FediverseFollowersLive` and
+  # `VutuvWeb.FediverseFollowingLive` (issue #1160).
   defp fediverse_assigns(user) do
-    [follower_count: Vutuv.Fediverse.follower_count(user)]
+    [
+      follower_count: Vutuv.Fediverse.follower_count(user),
+      following_count: Vutuv.Fediverse.remote_follow_count(user)
+    ]
   end
 
   def notifications(conn, _params) do

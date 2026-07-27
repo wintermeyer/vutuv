@@ -27,6 +27,13 @@ defmodule Vutuv.Fediverse.RemoteFollow do
   again after the single redirect hop that is allowed, short timeouts, a hard
   body ceiling that halts the stream rather than buffering, and no retries. The
   caller adds the rate limit and the `:fediverse_enabled` gate.
+
+  Since issue #1160 the same client answers the **other** direction too:
+  `resolve_actor/1` turns a pasted address into the remote account's actor URL
+  (the WebFinger `self` link), which is the first step of a member here
+  following somebody out there. It is the same document, the same fence and the
+  same parser — only a different link is read out of it — so the two directions
+  cannot drift apart on what counts as a valid address.
   """
 
   alias Vutuv.SocialFeed.Http
@@ -46,6 +53,11 @@ defmodule Vutuv.Fediverse.RemoteFollow do
     "http://ostatus.org/spec/1.0#subscribe"
   ]
 
+  # What a WebFinger `self` link's media type looks like when it names the
+  # ActivityPub actor document (issue #1160). Matched by prefix — see
+  # `self_link?/1`.
+  @actor_media_types ["application/activity+json", "application/ld+json"]
+
   @doc """
   The URL of the visitor's own follow dialog for `target_acct` (an `acct:` URI
   without the scheme, e.g. `"member@vutuv.de"`), or an error naming what went
@@ -61,6 +73,51 @@ defmodule Vutuv.Fediverse.RemoteFollow do
       {:ok, String.replace(template, "{uri}", URI.encode_www_form("acct:" <> target_acct))}
     end
   end
+
+  @doc """
+  The **actor URL** behind a pasted address (issue #1160): the `self` link of
+  that account's WebFinger document, which is the id every ActivityPub server
+  knows it by and the address a `Follow` is sent to.
+
+  Deliberately always through WebFinger, even when somebody pasted what looks
+  like an actor URL already: a profile URL (`https://server/@you`) is usually
+  *not* the actor id, the two differ per implementation, and asking the server
+  which id it wants to be known by is the only answer that is not a guess.
+
+  Errors are the same vocabulary `subscribe_url/2` speaks, plus `:no_actor` when
+  the document answers but names no ActivityPub identity (a WebFinger for a
+  mailbox, a server that only speaks OStatus).
+  """
+  def resolve_actor(input) do
+    with {:ok, {user, host}} <- parse_address(input),
+         {:ok, body} <- webfinger(user, host),
+         {:ok, %{"links" => links}} when is_list(links) <- Jason.decode(body),
+         %{"href" => href} when is_binary(href) <-
+           Enum.find(links, %{}, &(is_map(&1) and self_link?(&1))),
+         %URI{scheme: "https", host: h} when is_binary(h) and h != "" <- URI.parse(href) do
+      {:ok, href}
+    else
+      {:error, reason} -> {:error, reason}
+      _no_usable_link -> {:error, :no_actor}
+    end
+  end
+
+  # The `self` link, narrowed to the ActivityPub representation: a WebFinger
+  # document also carries an HTML profile page under other rels, and following
+  # that would point a signed Follow at a web page. The type is matched by
+  # prefix, because the `ld+json` form legitimately carries a
+  # `; profile="…/activitystreams"` parameter; a self link with no type at all
+  # is accepted, since the document it names still has to survive
+  # `Vutuv.Fediverse.fetch_remote_actor/2`, which demands an `id` and an `inbox`.
+  defp self_link?(%{"rel" => "self"} = link) do
+    case link["type"] do
+      nil -> true
+      type when is_binary(type) -> String.starts_with?(type, @actor_media_types)
+      _other -> false
+    end
+  end
+
+  defp self_link?(_link), do: false
 
   @doc """
   The `{user, host}` of a Fediverse address, accepting every form people paste:

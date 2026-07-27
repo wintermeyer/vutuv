@@ -142,7 +142,17 @@ defmodule Vutuv.FediverseBlocklistTest do
       # the replies that server's members wrote under vutuv posts.
       # `post_deliveries` joined with issue #1102: the record of what that server
       # received would only ever address a revocation nobody will deliver.
-      assert purged == %{followers: 1, deliveries: 1, notes: 0, post_deliveries: 0}
+      # `remote_accounts` joined with issue #1160: a block cuts both directions,
+      # so the accounts our members follow over there go too (and their follow
+      # rows cascade off them).
+      assert purged == %{
+               followers: 1,
+               remote_accounts: 0,
+               deliveries: 1,
+               notes: 0,
+               post_deliveries: 0
+             }
+
       assert [%Follower{actor_uri: "https://social.example/users/alice"}] = Repo.all(Follower)
       assert [%Delivery{inbox_uri: "https://social.example/inbox"}] = Repo.all(Delivery)
     end
