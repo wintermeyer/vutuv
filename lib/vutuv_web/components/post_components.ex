@@ -1133,6 +1133,57 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
+  attr(:account, :map, required: true)
+
+  @doc """
+  Why a card is in the reader's feed when they follow neither its author nor
+  anybody here who shared it: an account they **do** follow out there re-shared
+  it (issue #1167).
+
+  The very same line the local reshare wears (`reshare_line/1` below), so
+  "somebody passed this on" reads identically whichever world did the passing.
+  The underlying author keeps their own attribution in the header below — this
+  line names the messenger, never the writer.
+  """
+  def boosted_banner(assigns) do
+    ~H"""
+    <%!-- Name **and** handle, unlike the local line beside it. A display name
+    on a remote account is whatever that server lets somebody type, and this
+    banner is the only thing on the card explaining why a stranger's post is in
+    the reader's feed — "Repostet von Stefan Wintermeyer" with no address would
+    read as the member of that name. Every other surface pairs the two for the
+    same reason. --%>
+    <.reshare_line
+      name={"#{RemoteAccount.label(@account)} (#{RemoteAccount.display_handle(@account)})"}
+      navigate={~p"/system/fediverse/account/#{@account.id}"}
+      data-boosted-by={@account.id}
+    />
+    """
+  end
+
+  attr(:name, :string, required: true)
+  attr(:navigate, :any, default: nil, doc: "in-app destination (a remote account page)")
+  attr(:href, :any, default: nil, doc: "full-navigation destination (a member's profile)")
+  attr(:rest, :global)
+
+  # "Reposted by NAME" over the post it carries: the one markup for both worlds,
+  # a member here resharing a cached post (issue #1166) and an account the
+  # reader follows out there boosting one (issue #1167). Pass whichever of
+  # `navigate` / `href` the destination needs.
+  defp reshare_line(assigns) do
+    ~H"""
+    <p
+      class="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400"
+      {@rest}
+    >
+      <.icon_repost class="h-4 w-4 shrink-0" />
+      <.link navigate={@navigate} href={@href} class="min-w-0 truncate hover:text-brand-700">
+        {gettext("Reposted by %{name}", name: @name)}
+      </.link>
+    </p>
+    """
+  end
+
   attr(:images, :list, default: [])
 
   @doc """
@@ -1283,6 +1334,11 @@ defmodule VutuvWeb.PostComponents do
     doc: "the member whose reshare put this card in the reader's feed, or nil"
   )
 
+  attr(:boosted_by, :any,
+    default: nil,
+    doc: "the followed remote account whose boost put this card here (issue #1167), or nil"
+  )
+
   def remote_post_card(assigns) do
     post = assigns.remote_post
     account = post.remote_account
@@ -1298,16 +1354,14 @@ defmodule VutuvWeb.PostComponents do
       out there (issue #1166): somebody here reshared it. The same line a local
       repost wears, so "X shared this" reads identically whichever world the
       post came from. --%>
-      <p
+      <.reshare_line
         :if={@reposted_by}
-        class="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400"
+        name={full_name(@reposted_by)}
+        href={~p"/#{@reposted_by}"}
         data-remote-reposted-by={@reposted_by.id}
-      >
-        <.icon_repost class="h-4 w-4 shrink-0" />
-        <.link href={~p"/#{@reposted_by}"} class="min-w-0 truncate hover:text-brand-700">
-          {gettext("Reposted by %{name}", name: full_name(@reposted_by))}
-        </.link>
-      </p>
+      />
+
+      <.boosted_banner :if={@boosted_by} account={@boosted_by} />
 
       <div class="flex items-start gap-3">
         <.remote_avatar initials={@initials} src={RemoteAccount.avatar_url(@account)} />

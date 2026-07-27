@@ -724,6 +724,37 @@ defmodule VutuvWeb.FediverseControllerTest do
     end
   end
 
+  describe "POST /:slug/actor/inbox — what a followed account re-shares (#1167)" do
+    test "an Announce of a member's post is a boost, and the Undo takes it back", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      follow = requested_follow(user)
+      accept_follow(user, follow)
+      post = create_post!(user, %{body: "Carried outward."})
+
+      # A boost of a post we wrote ourselves: no fetch of any kind, which is how
+      # members get discovered through the outside network.
+      announce = reaction_activity("Announce", Docs.note_url(user, post.id))
+      conn = signed_post(conn, user, announce, priv)
+
+      assert conn.status == 202
+      assert [boost] = Repo.all(Vutuv.Fediverse.PostBoost)
+      assert boost.post_id == post.id
+      # It counts as a reaction to the member's own post as well: the two say
+      # different things (your post travelled / here it is in their followers'
+      # feeds) and both are true.
+      assert Fediverse.reaction_count(post.id) == 1
+
+      # The withdrawal is an `Undo` wrapping the whole `Announce`, whose own id
+      # is what names the boost row.
+      conn = signed_post(recycle(conn), user, reaction_activity("Undo", announce), priv)
+
+      assert conn.status == 202
+      assert Repo.aggregate(Vutuv.Fediverse.PostBoost, :count) == 0
+    end
+  end
+
   describe "POST /:slug/actor/inbox — replies from other networks (#1069, #1071)" do
     @public "https://www.w3.org/ns/activitystreams#Public"
 

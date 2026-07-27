@@ -1048,3 +1048,40 @@ boost standing would be exactly the amplifying we were asked to stop.
 One card per cached post per page: the same post arrives from the fourth source
 (the reader follows its author) and the fifth (somebody reshared it), and the
 direct entry wins, carrying the author's own publication time.
+
+### What a followed account re-shares (issue #1167)
+
+Much of what any account contributes is boosts, and every one of them used to
+fall through the inbox: an `Announce` only ever counted as a **reaction** to a
+vutuv member's own post, so a followed account resharing a third party was
+invisible to its followers here. `fediverse_post_boosts` is one row per
+(booster, thing boosted), and the thing boosted is one of two.
+
+A **vutuv member's own post** costs nothing: we wrote it, so there is no fetch
+at all, and this is how members get discovered through the outside network. The
+URL is matched against `Endpoint.url()`, not merely parsed for a
+`/:slug/posts/:id` shape — anchoring on the path alone would let any unblocked
+server mint a boost of a local post by announcing a URL of its own.
+
+Everything else is a **dereference**, and it is the one inbound activity that
+makes this installation fetch from a **third** server it has never spoken to, at
+an address that server did not choose. So it is fenced like the outbound
+surfaces: the sender must be followed here with an accepted follow, neither the
+object's host nor its author's host may be blocked, the GET is signed (with the
+key of somebody here who follows the booster), SSRF-checked and size-capped, and
+it is metered **per host** (`FEDIVERSE_ANNOUNCE_FETCH_LIMIT`). Only a public or
+unlisted object is stored — an account boosting somebody else's followers-only
+post does not make it ours to keep. A fetch that fails, is refused or is capped
+drops that boost silently: there is no retry, because a boost is not worth a
+queue.
+
+The author's own account row is resolved too (their actor document fetched once,
+if we do not already hold them), because a card has to name who wrote the thing
+and an actor URI names nobody.
+
+Retention is unchanged: a boosted copy lives under the ordinary six-month clock.
+What the boost buys it is the right to exist while **nobody here follows its
+author** — which is the normal case for a boost, and the reason the copy is here
+at all — so `purge_unfollowed_remote_posts/0` spares a post something still
+holds, exactly as it spares one a member reshared. An `Undo(Announce)` removes
+the boost row and nothing else; the post goes when nothing holds it any more.

@@ -963,9 +963,15 @@ defmodule VutuvWeb.PostLive.Feed do
                     liked?={entry[:liked?] == true}
                     reposted?={entry[:reposted?] == true}
                     reposted_by={entry[:reposted_by]}
+                    boosted_by={entry[:boosted_by]}
                     viewer={@current_user}
                   />
                 <% true -> %>
+                  <%!-- A vutuv member's post that a followed account out there
+                  re-shared (issue #1167). The local card, with the line that
+                  says who passed it on above it — this is how members get
+                  discovered through the outside network. --%>
+                  <.boosted_banner :if={entry[:boosted_by]} account={entry.boosted_by} />
                   <.post_thread_entry
                     post={entry.post}
                     viewer={@current_user}

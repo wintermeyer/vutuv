@@ -207,6 +207,12 @@ if config_env() == :prod do
     config :vutuv, :fediverse_outbound_boost_limit, String.to_integer(String.trim(limit))
   end
 
+  # Inbound, and per host: how many posts announced by a followed account may be
+  # fetched from one server per hour (issue #1167).
+  if limit = System.get_env("FEDIVERSE_ANNOUNCE_FETCH_LIMIT") do
+    config :vutuv, :fediverse_announce_fetch_limit, String.to_integer(String.trim(limit))
+  end
+
   # How long a post by an account a member follows may be held here (issue
   # #1161). The promise the privacy page makes about the other half of
   # following: it is deleted when the clock runs out whatever else happens.

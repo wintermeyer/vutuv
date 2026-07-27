@@ -44,6 +44,7 @@ defmodule Vutuv.Fediverse do
 
   require Logger
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Engagement
@@ -60,6 +61,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Media
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.NoteEvent
+  alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.PostLike
   alias Vutuv.Fediverse.PostRepost
@@ -78,6 +80,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.RemoteMedia
   alias Vutuv.Repo
   alias Vutuv.SearchText
+  alias Vutuv.Social
   alias Vutuv.SocialFeed.Http
   alias Vutuv.UUIDv7
   alias VutuvWeb.Fediverse.Docs
@@ -1463,7 +1466,7 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [remote_account: a]
       )
-      |> remote_posts_at_or_before(cursor)
+      |> utc_at_or_before(cursor, :published_at)
       |> Repo.all()
       |> Enum.map(&remote_feed_entry/1)
     else
@@ -1537,6 +1540,91 @@ defmodule Vutuv.Fediverse do
   defp remote_reposts_at_or_before(query, %{at: at}),
     do: where(query, [r], r.inserted_at <= ^at)
 
+  @doc """
+  The sixth feed source (issue #1167): what the accounts a member follows out
+  there have **re-shared**.
+
+  Scoped to the follow of the *booster*, not of the author — the whole point is
+  that a followed account passes on somebody else's post, usually somebody
+  nobody here follows. Stamped with the boost time: what is new is the sharing.
+
+  Both kinds ride the same source. A boosted **cached post** carries the remote
+  card; a boosted **vutuv post** carries the local one, which is how members get
+  discovered through the outside network.
+  """
+  def feed_remote_boosts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+    if enabled?() do
+      # The author's own follow is consulted too, not only the booster's: a
+      # reader who muted an account out there muted *them*, and somebody else
+      # passing their post on is exactly the back door that would undo it.
+      muted_authors =
+        from(f in Follow,
+          where: f.user_id == ^viewer_id and f.muted == true,
+          select: f.remote_account_id
+        )
+
+      from(b in PostBoost,
+        join: a in RemoteAccount,
+        on: a.id == b.remote_account_id,
+        join: f in Follow,
+        on: f.remote_account_id == a.id,
+        left_join: rp in RemotePost,
+        on: rp.id == b.remote_post_id,
+        where: f.user_id == ^viewer_id and f.muted == false and f.state == "accepted",
+        where: is_nil(rp.id) or rp.remote_account_id not in subquery(muted_authors),
+        order_by: [desc: b.announced_at, desc: b.id],
+        limit: ^fetch_n,
+        # A boosted vutuv post is preloaded with its `denials` rather than its
+        # author: that is what the visibility check below reads, and everything
+        # a card needs is preloaded once for the whole page by `Vutuv.Posts`.
+        preload: [remote_account: a, remote_post: [:remote_account], post: :denials]
+      )
+      |> utc_at_or_before(cursor, :announced_at)
+      |> Repo.all()
+      |> Enum.map(&boost_entry/1)
+      |> Enum.filter(&boost_visible?(&1, viewer))
+    else
+      []
+    end
+  end
+
+  # One entry shape for both kinds. Exactly one of the two references is set on
+  # a row, so which card the feed renders follows from the boost itself
+  # (`Posts.remote_feed_entry?/1` asks for the cached post).
+  defp boost_entry(%PostBoost{} = boost) do
+    %{
+      id: "boost-#{boost.id}",
+      post: boost.post,
+      remote_post: boost.remote_post,
+      boosted_by: boost.remote_account,
+      reposted_by: nil,
+      at: DateTime.to_naive(boost.announced_at)
+    }
+  end
+
+  # Whatever the boost row still points at may have gone since (a reported copy,
+  # a deleted member post), and the audience of a **local** post can have
+  # narrowed after it was boosted — a boost must not be a way around that.
+  # Whatever the boost still points at may have gone or changed since. A remote
+  # post can have been narrowed by an `Update`; a **local** post has to pass the
+  # viewer's own visibility scope in full — a boost must not be a way around a
+  # block, a moderation freeze, an image still with the AI gate or an author
+  # whose account is hidden, all of which `Posts.visible_to?/2` owns and none of
+  # which "is it restricted" answers.
+  defp boost_visible?(%{remote_post: %RemotePost{} = post}, _viewer),
+    do: RemotePost.open?(post)
+
+  defp boost_visible?(%{post: %Post{} = post}, %User{id: viewer_id} = viewer) do
+    # Blocks are the one half `visible_to?/2` does not own — they live in the
+    # feed queries, and this source is the only one that reaches a local post
+    # without going through them. The local repost source spells out why:
+    # a third party's reshare must not carry a blocked author's post into the
+    # viewer's feed, and here the third party is on another server entirely.
+    Posts.visible_to?(post, viewer) and not Social.blocked_between?(viewer_id, post.user_id)
+  end
+
+  defp boost_visible?(_entry, _viewer), do: false
+
   defp remote_feed_entry(%RemotePost{} = post) do
     %{
       id: "remote-#{post.id}",
@@ -1547,11 +1635,15 @@ defmodule Vutuv.Fediverse do
     }
   end
 
-  defp remote_posts_at_or_before(query, nil), do: query
+  # The cursor for a source ordered by a `utc_datetime` column — a followed
+  # account's post by its publication time, a boost by when it was announced.
+  # The merged feed stamps its entries as **naive** UTC (`Vutuv.FeedPage`) while
+  # these columns carry a zone, so the conversion lives here once instead of
+  # once per source.
+  defp utc_at_or_before(query, nil, _field), do: query
 
-  defp remote_posts_at_or_before(query, %{at: at}) do
-    where(query, [p], p.published_at <= ^DateTime.from_naive!(at, "Etc/UTC"))
-  end
+  defp utc_at_or_before(query, %{at: at}, field),
+    do: where(query, [r], field(r, ^field) <= ^DateTime.from_naive!(at, "Etc/UTC"))
 
   @doc "One stored remote picture with its post, or nil."
   def get_remote_image(id) do
@@ -1765,6 +1857,28 @@ defmodule Vutuv.Fediverse do
     )
   end
 
+  # Everything that still holds a cached post whose author nobody follows any
+  # more:
+  #
+  #   * a member here **reshared** it (issue #1166) — `spare_reposted/2`, the
+  #     same exemption (and the same "only while the verification is current"
+  #     rule) the ceiling sweep applies, so the two can never disagree;
+  #   * a followed account **boosted** it (issue #1167) — nobody here follows
+  #     its author, which is the normal case for a boost, and the boost is the
+  #     whole reason the copy exists.
+  #
+  # Neither buys extra time: both only buy the right to live out the ordinary
+  # clock instead of being swept the moment the last follower of the author
+  # walks away. The `:post` alias comes from `spare_reposted/2`, which is why
+  # the boost half is added on top of it rather than beside it.
+  defp spare_held(query) do
+    boosted = from(b in PostBoost, where: b.remote_post_id == parent_as(:post).id)
+
+    query
+    |> spare_reposted(RemotePost)
+    |> where([p], not exists(boosted))
+  end
+
   @doc """
   The same purge, narrowed to the accounts somebody just stopped following.
 
@@ -1792,7 +1906,7 @@ defmodule Vutuv.Fediverse do
     # published — not to anybody's follow — so the last follower of its author
     # leaving must not pull it out from under the people reading it in the
     # resharer's feed.
-    query = spare_reposted(query, RemotePost)
+    query = spare_held(query)
 
     # Files first: the rows cascade, bytes on disk do not, and a deletion that
     # leaves a stranger's photograph at rest is not a deletion (issue #1163).
@@ -2004,12 +2118,13 @@ defmodule Vutuv.Fediverse do
   #
   # Reading the row back by its one unique column answers both questions at
   # once — the struct that really exists, and (by the id) whose insert it was.
-  # A redelivery is `:exists`, which the caller drops, so a post's pictures are
-  # recorded exactly once.
+  # A redelivery is `{:exists, post}`, which the `Create` path drops so a post's
+  # pictures are recorded exactly once, while the announce path (issue #1167)
+  # takes the row it names instead of asking for it a second time.
   defp stored_post({:ok, %RemotePost{id: minted_id}}, uri) do
     case Repo.get_by(RemotePost, object_uri: uri) do
       %RemotePost{id: ^minted_id} = post -> {:ok, post}
-      %RemotePost{} -> :exists
+      %RemotePost{} = post -> {:exists, post}
       nil -> :error
     end
   end
@@ -2303,6 +2418,13 @@ defmodule Vutuv.Fediverse do
   # origin that is merely slow or briefly offline never costs anybody their
   # reshare — but bounded, so a backlog drains itself instead of accumulating.
   @repost_recheck_stale_days 30
+
+  # Dereferences of announced objects per remote host, per hour (issue #1167).
+  # A followed account boosting is the one inbound activity that makes this
+  # installation fetch from a **third** server it never spoke to, on an address
+  # that server did not choose, so it is metered per host: one busy relay must
+  # not be able to walk us through a stranger's whole archive.
+  @announce_fetch_limit 60
 
   # How long a post with an unvetted picture is held before it federates without
   # it. The ceiling, not the normal wait — see `image_hold_seconds/0`.
@@ -4084,6 +4206,257 @@ defmodule Vutuv.Fediverse do
       _ -> nil
     end
   end
+
+  ## What a followed account re-shares (issue #1167)
+
+  @doc """
+  Records an `Announce` from an account somebody here follows.
+
+  Much of what an account contributes is boosts, and until this existed every
+  one of them fell through: an `Announce` only ever counted as a reaction to a
+  member's **own** post, so a followed account resharing a third party was
+  invisible to its followers here.
+
+  Two shapes, and the cheap one is checked first:
+
+    * the announced object is a **vutuv member's** post. No network call at all
+      — we wrote it — and this is how members get discovered through the
+      outside network.
+    * otherwise it is a post on some other server, possibly a **third** one we
+      have never spoken to. Storing it means dereferencing the object, which is
+      a new outbound surface and is fenced like one: the sending actor must be
+      followed here with an accepted follow, neither the object's host nor its
+      author's host may be blocked, the fetch is signed, SSRF-checked,
+      size-capped and metered per host, and only a public or unlisted object is
+      stored at all. A failed fetch drops the `Announce` silently — no retry,
+      because a boost is not worth a queue.
+
+  Returns `:ok` or `:skip`; the inbox answers 202 either way.
+  """
+  def record_remote_boost(activity, actor_uri) when is_binary(actor_uri) do
+    with true <- enabled?(),
+         %RemoteAccount{} = account <- followed_account(actor_uri),
+         uri when is_binary(uri) <- activity_object_id(activity["object"]),
+         false <- instance_blocked?(uri),
+         # The same inbound cap every other recorder here claims. The per-host
+         # fetch budget below only meters the *dereference*, so without this a
+         # boost of a member's own post — or of a post we already hold — is a
+         # free write, and an account that boosts relentlessly is an account
+         # that writes here relentlessly.
+         :ok <- check_inbound_cap(actor_uri),
+         {:ok, target} <- resolve_announced(account, uri) do
+      insert_boost(account, target, activity)
+    else
+      _ -> :skip
+    end
+  end
+
+  def record_remote_boost(_activity, _actor_uri), do: :skip
+
+  @doc """
+  Removes a boost an account took back (`Undo(Announce)`), by the id the
+  original `Announce` carried.
+
+  Scoped to the account that sent the withdrawal, so one server cannot undo
+  another's. The post itself stays: something else may still hold it (a follow
+  of its author, a member's own reshare, another account's boost), and if
+  nothing does the ordinary sweeps take it.
+  """
+  def remove_remote_boost(activity, actor_uri) when is_binary(actor_uri) do
+    with %RemoteAccount{} = account <- followed_account(actor_uri),
+         id when is_binary(id) <- activity_object_id(activity["object"]) do
+      Repo.delete_all(
+        from(b in PostBoost,
+          where: b.remote_account_id == ^account.id and b.activity_id == ^id
+        )
+      )
+    end
+
+    :ok
+  end
+
+  def remove_remote_boost(_activity, _actor_uri), do: :ok
+
+  # A vutuv member's own post first: it costs nothing to recognise and is the
+  # case the whole "discovered through the outside network" argument rests on.
+  defp resolve_announced(%RemoteAccount{} = account, uri) do
+    case local_note_post(uri) do
+      %Post{} = post -> {:ok, post}
+      nil -> fetch_announced(account, uri)
+    end
+  end
+
+  # The announced object as a cached post, fetched if we do not already hold it.
+  # Already holding it is the common case on a busy account and is worth not
+  # asking twice.
+  defp fetch_announced(%RemoteAccount{} = account, uri) do
+    case Repo.get_by(RemotePost, object_uri: uri) do
+      %RemotePost{} = post -> {:ok, post}
+      nil -> fetch_and_store_announced(account, uri)
+    end
+  end
+
+  defp fetch_and_store_announced(%RemoteAccount{} = booster, uri) do
+    with :ok <- claim_announce_fetch(uri),
+         %User{} = follower <- any_follower_of(booster),
+         key when not is_nil(key) <- signer(follower),
+         {:ok, doc} <- fetch_remote_note(uri, key),
+         # The same object-type gate the `Create` path applies: a `Video`, an
+         # `Article` or an `Event` with a `content` field is not a post.
+         %{} = doc <- remote_post_object(doc),
+         author_uri when is_binary(author_uri) <- announced_author(doc),
+         true <- own_object?(uri, doc, author_uri),
+         false <- instance_blocked?(author_uri),
+         audience when is_binary(audience) <- announced_audience(doc),
+         %RemoteAccount{} = author <- announced_author_account(author_uri, key),
+         {:ok, post} <- insert_remote_post(author, doc, audience) do
+      attach_pictures(post, doc)
+      {:ok, post}
+    else
+      # Another delivery stored it while this one was fetching; the row is what
+      # we wanted either way, and its pictures are that delivery's business.
+      {:exists, post} -> {:ok, post}
+      _ -> :skip
+    end
+  end
+
+  # A server may only speak for itself. Nothing else in this subsystem needs
+  # this check, because every other stored post arrives from the actor whose
+  # HTTP signature we verified — this is the one path where a post row is bound
+  # to an account the request did not prove, so the document has to prove it.
+  #
+  # Without it a followed server serves a Note claiming `attributedTo` any actor
+  # it likes, and we store its words under that person's real name, handle and
+  # avatar, visible to every follower of the booster and on the impersonated
+  # account's own page. They could never get it removed either: their genuine
+  # `Delete` names an object URI on their own host, and the row is keyed on the
+  # forger's. Squatting a real post's `id` before it reaches us would poison it
+  # the same way, for the row's whole life.
+  #
+  # Three cheap conditions: the document is the object we asked for, its author
+  # lives on the object's own host, and it does not claim to be one of **ours**
+  # — a local actor URI would make us fetch ourselves and mint a foreign-looking
+  # account row for a member.
+  defp own_object?(uri, doc, author_uri) do
+    object_id = presence(doc["id"]) || uri
+
+    same_host?(uri, object_id) and same_host?(object_id, author_uri) and
+      not local_host?(author_uri)
+  end
+
+  # The author of the boosted post, as an account row. Usually a **third**
+  # server: neither ours nor the booster's, and one we may never have spoken to.
+  # A row already here is used as is — the common case once one of their posts
+  # has been seen — and otherwise their actor document is fetched, because a
+  # card has to name who wrote the thing and an actor URI alone names nobody.
+  defp announced_author_account(author_uri, key) do
+    case Repo.get_by(RemoteAccount, actor_uri: author_uri) do
+      %RemoteAccount{} = account ->
+        account
+
+      nil ->
+        with {:ok, remote} <- fetch_remote_actor(author_uri, key),
+             {:ok, account} <- upsert_remote_account(remote) do
+          account
+        else
+          _ -> nil
+        end
+    end
+  end
+
+  # Public and unlisted only, the same vocabulary everything else here reads.
+  # Anything narrower is dropped unseen: an account boosting a followers-only
+  # post of somebody else's does not make it ours to store.
+  defp announced_audience(doc) do
+    audience = remote_post_audience(doc, doc)
+    if audience in RemotePost.open_audiences(), do: audience
+  end
+
+  defp announced_author(%{"attributedTo" => actor}), do: activity_object_id(actor)
+  defp announced_author(_doc), do: nil
+
+  # A vutuv post URL of any member, not just one — a followed account can boost
+  # anybody here. Anchored on our own base URL, the way `local_username/2`
+  # reads an addressee: a foreign URL that merely copies the `/name/posts/id`
+  # shape names nothing of ours and has to be fetched like any other stranger's.
+  defp local_note_post(uri) do
+    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
+
+    with rest when rest != uri <- String.replace_prefix(uri, base, ""),
+         [username, "posts", post_id] <- String.split(rest, "/"),
+         %User{} = user <- Accounts.get_user_by_username(username),
+         %Post{user_id: user_id} = post when user_id == user.id <-
+           UUIDv7.with_cast(post_id, &Repo.get(Post, &1)),
+         # A member who has not opted into federation is not redistributed on a
+         # remote actor's say-so, and one whose account is frozen, suspended,
+         # deactivated or unconfirmed is not amplified at all. `federated?/1` is
+         # the test every outbound path here already asks.
+         true <- federated?(user),
+         false <- Posts.restricted?(post) do
+      post
+    else
+      _ -> nil
+    end
+  end
+
+  # Somebody here who follows the booster, to sign the fetch with: an
+  # authorized-fetch server refuses an anonymous GET, and a follower is by
+  # definition somebody with an interest in seeing what this account shares.
+  defp any_follower_of(%RemoteAccount{id: id}) do
+    Repo.one(
+      from(f in Follow,
+        join: u in User,
+        on: u.id == f.user_id,
+        where: f.remote_account_id == ^id and f.state == "accepted",
+        order_by: [asc: f.id],
+        limit: 1,
+        select: u
+      )
+    )
+  end
+
+  defp claim_announce_fetch(uri) do
+    # Keyed on the normalised host, like the inbound caps: one server is one
+    # budget however it spells itself.
+    with host when is_binary(host) <- BlockedInstance.normalize_host(uri),
+         :ok <-
+           RateLimiter.hit(
+             {:fediverse_announce_fetch, host},
+             announce_fetch_limit(),
+             @inbound_window_ms
+           ) do
+      :ok
+    else
+      _ -> :capped
+    end
+  end
+
+  @doc "How many announced objects may be dereferenced from one host per hour."
+  def announce_fetch_limit,
+    do: Application.get_env(:vutuv, :fediverse_announce_fetch_limit, @announce_fetch_limit)
+
+  defp insert_boost(%RemoteAccount{} = account, target, activity) do
+    attrs =
+      %{
+        activity_id: activity["id"],
+        announced_at: published_at(activity["published"], DateTime.utc_now(:second))
+      }
+      |> Map.merge(boost_target(target))
+
+    # A bare `DO NOTHING`, with no conflict target: the table's two unique
+    # indexes are partial (one per kind of thing boosted), so naming one would
+    # mean restating its `WHERE` here verbatim and keeping the copy in step with
+    # the migration by hand. A redelivery is the only conflict there is, and the
+    # row it collides with is the one we wanted.
+    %PostBoost{remote_account_id: account.id}
+    |> PostBoost.changeset(attrs)
+    |> Repo.insert(on_conflict: :nothing)
+
+    :ok
+  end
+
+  defp boost_target(%RemotePost{id: id}), do: %{remote_post_id: id}
+  defp boost_target(%Post{id: id}), do: %{post_id: id}
 
   ## Sharing one of their posts onward (issue #1166)
 

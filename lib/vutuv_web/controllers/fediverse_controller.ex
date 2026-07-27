@@ -359,6 +359,32 @@ defmodule VutuvWeb.FediverseController do
   defp perform_once(%{"type" => "Create"} = activity, remote),
     do: Fediverse.record_remote_post(activity, remote.id)
 
+  # A followed account re-sharing somebody else's post (issue #1167). Once per
+  # delivery, like the `Create` above and for the same reason: there is one
+  # cached row and one boost row behind it however many members here follow the
+  # sender, so doing it per addressed member would be N identical writes and N
+  # identical dereferences of a third server's post.
+  #
+  # The two are not exclusive and both run: an `Announce` naming a **member's
+  # own** post is also the reaction path in `perform/3` above, which is what
+  # tells the author their post travelled, while this one is what puts it in
+  # the booster's followers' feeds. Everything else used to fall through
+  # entirely.
+  defp perform_once(%{"type" => "Announce"} = activity, remote),
+    do: Fediverse.record_remote_boost(activity, remote.id)
+
+  # A followed account taking a boost back (issue #1167). Once per delivery for
+  # the same reason the Announce is: one boost row, however many followers. The
+  # whole `Undo` goes through, because the row is named by the id of the
+  # `Announce` it wraps.
+  # An embedded `Announce` is what most implementations wrap, but some send the
+  # bare activity URI instead. Both reach the context, which reads the id off
+  # either shape — matching only the embedded map made the string form fall
+  # through to the catch-all, leaving that boost standing forever.
+  defp perform_once(%{"type" => "Undo", "object" => object} = activity, remote)
+       when is_binary(object) or is_map_key(object, "type"),
+       do: Fediverse.remove_remote_boost(activity, remote.id)
+
   # An author editing or withdrawing a post of theirs we cached. Both are
   # scoped to that author inside the context, so one server cannot rewrite or
   # delete another's; the `Delete` arm is deliberately ungated, because an

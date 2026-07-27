@@ -216,6 +216,12 @@ config :vutuv, :fediverse_outbound_like_limit, 200
 # is still one press while reading rather than a piece of writing.
 config :vutuv, :fediverse_outbound_boost_limit, 100
 
+# How many announced objects may be dereferenced from one remote host per hour
+# (issue #1167). A followed account boosting is the one inbound activity that
+# makes this installation fetch from a THIRD server it never spoke to, on an
+# address that server did not choose, so it is metered per host.
+config :vutuv, :fediverse_announce_fetch_limit, 60
+
 # Following accounts on other networks (issue #1160): how many follow requests
 # one member may send per hour, and how many accounts they may follow at all.
 #

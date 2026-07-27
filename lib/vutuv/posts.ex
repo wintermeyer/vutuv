@@ -1633,7 +1633,11 @@ defmodule Vutuv.Posts do
           # Fifth: what people the viewer follows *here* have reshared from
           # another network (issue #1166) — the one way a member who follows
           # nobody out there meets that content at all.
-          &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2)
+          &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2),
+          # Sixth: what the accounts the viewer follows out there have
+          # re-shared (issue #1167) — a large part of what any account
+          # contributes, and invisible here until now.
+          &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2)
         ],
         limit,
         cursor
@@ -1642,7 +1646,7 @@ defmodule Vutuv.Posts do
     %{page | entries: decorate_feed_entries(page.entries, viewer)}
   end
 
-  # Everything the five sources produce, made ready to render.
+  # Everything the six sources produce, made ready to render.
   #
   # The remote sources (issues #1161, #1166) carry a cached post from another network,
   # which is not a `%Post{}` and has no author here, no thread, no reposters and
@@ -1681,7 +1685,12 @@ defmodule Vutuv.Posts do
   # same call for local posts.
   defp dedupe_remote(remote) do
     remote
-    |> Enum.sort_by(&(&1.reposted_by != nil))
+    # A boost (issue #1167) counts as passed-on too, not as direct: it carries
+    # `reposted_by: nil` because the sharer is a remote account rather than a
+    # member, and sorting on that alone put every boost *ahead* of the real
+    # direct entry — so a reader following an author out there saw their posts
+    # relabelled "Reposted by <whoever boosted them>" the moment anybody did.
+    |> Enum.sort_by(&(&1[:reposted_by] != nil or &1[:boosted_by] != nil))
     |> Enum.uniq_by(& &1.remote_post.id)
   end
 
