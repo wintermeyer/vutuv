@@ -67,6 +67,24 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     refute has_element?(view, "[data-remote-post='#{post.id}'] [data-post-actions]")
   end
 
+  test "the body is formatted: links are clickable, hashtags reach our tag pages", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    # The hashtag grammar is `[A-Za-z0-9_]+`, so the factory's hyphenated name
+    # would not parse; and a tag page only links once it lists somebody.
+    name = "klima#{System.unique_integer([:positive])}"
+    {:ok, user_tag} = Vutuv.Tags.add_user_tag(user, name)
+    tag = Repo.preload(user_tag, :tag).tag
+
+    cached_post(user, %{
+      content_text: "Read this: https://taz.de/Klimaschutzvorgaben/!6199402/ ##{name}"
+    })
+
+    {:ok, _view, html} = live(conn, ~p"/feed")
+
+    assert html =~ ~s(href="https://taz.de/Klimaschutzvorgaben/!6199402/")
+    assert html =~ ~s(href="/tags/#{tag.slug}")
+  end
+
   describe "the heart (issue #1164)" do
     setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

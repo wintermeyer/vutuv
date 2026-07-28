@@ -212,13 +212,25 @@ every endpoint 404s and nothing is delivered.
   sentence with their name on it does), the Note answers one of *their own*
   posts, the post is public, the sender is within its inbound cap, and there is
   text left once the markup is gone. Same 202 whatever it decides.
-  - **Plain text, never HTML.** `Vutuv.RemoteHtml.to_text/2` (shared with the
-    Mastodon profile feed, so remote HTML is reduced exactly one way) drops
-    `<script>`/`<style>` **with their contents**, turns `<br>`/`</p>` into line
-    breaks, strips every remaining tag, decodes the base entities once and
-    clamps. So nothing a stranger wrote is ever rendered `raw`, the agent-format
-    siblings carry the value unchanged, and the cap is well defined. **No avatar
-    is copied**: the card renders initials and links to the origin.
+  - **Stored as plain text, never HTML.** `Vutuv.RemoteHtml.to_text/2` (shared
+    with the Mastodon profile feed, so remote HTML is reduced exactly one way)
+    drops `<script>`/`<style>` **with their contents**, turns `<br>`/`</p>` into
+    line breaks, strips every remaining tag, decodes the base entities once and
+    clamps. So no markup a stranger wrote survives into the database, the
+    agent-format siblings carry the value unchanged, and the cap is well
+    defined. **No avatar is copied**: the card renders initials and links to the
+    origin.
+  - **Shown through `VutuvWeb.Markdown.render_remote/1`** — the same renderer
+    the Mastodon profile feed uses, so remote text reads one way across the app.
+    A post from those networks is largely links, and as raw strings they sat on
+    the card unclickable and wrapping mid-URL; now bare URLs autolink with a
+    truncated display, `#hashtags` reach our tag pages (only where the tag is
+    non-empty) and a `@user@host` handle reaches that remote account. It is the
+    foreign-namespace renderer on purpose: every `<img>` is dropped (a hotlink
+    would leak each reader's IP), and a bare `@mention` stays plain text —
+    over there it names an account in the fediverse, not the vutuv member who
+    happens to share the handle. What is rendered `raw` is our own pipeline's
+    sanitized output, exactly as for a member post.
   - **Audience** (issue #1071), read from `to`/`cc` on both the Create and the
     Note, handling all three spellings of the public collection. Only `"public"`
     is public; `"followers"`, `"direct"` and `"unknown"` render to the addressed

@@ -43,6 +43,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.RemoteMedia
   alias Vutuv.ReviewCover
   alias VutuvWeb.FediverseComponents
+  alias VutuvWeb.Markdown
 
   # How many reposter faces the "Reposted by" avatar stack shows before the
   # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
@@ -161,7 +162,7 @@ defmodule VutuvWeb.PostComponents do
     # simply stays absent for strangers while the author sees it; a preview
     # body carrying inline images switches to the height-based media clamp
     # (`inline_media?` below — a line clamp cannot hold pictures or floats).
-    body_html = VutuvWeb.Markdown.render_post(post.body, post.images)
+    body_html = Markdown.render_post(post.body, post.images)
 
     # Attachments the body references inline render in place; the rest form
     # the gallery (full mode) / the image tile row (preview).
@@ -791,11 +792,14 @@ defmodule VutuvWeb.PostComponents do
       rather than dead. What is there instead is where it came from, a link to
       the original, and the takedown controls.
 
-  The body is escaped **plain text** (`Vutuv.RemoteHtml` reduced it at the
-  inbox), rendered with `whitespace-pre-line` and deliberately *not* run through
-  `VutuvWeb.Markdown`: a stranger's text must not be able to mint links, least
-  of all `@mention` links into local profiles. The "view the original" link
-  carries the reader on when they want the real thing.
+  What is **stored** is plain text (`Vutuv.RemoteHtml` reduced the remote HTML
+  at the inbox, and that does not change). What is **shown** is that text run
+  through `VutuvWeb.Markdown.render_remote/1` — see `remote_body/1` — so the
+  links a post from those networks mostly consists of are clickable instead of
+  sitting there as raw strings. It is the foreign-namespace renderer on purpose:
+  a bare `@mention` stays plain text rather than minting a link into the local
+  profile of whoever shares that handle. The "view the original" link carries
+  the reader on when they want the real thing.
 
   A note its author put behind a content warning renders the warning as a closed
   lid and reveals the text on a click, which is the one thing that author asked
@@ -1070,15 +1074,34 @@ defmodule VutuvWeb.PostComponents do
   attr(:warning, :any, default: nil)
   attr(:text, :string, required: true)
 
-  # `break-words` for the same reason the header has it: this is a stranger's
-  # text, up to 10,000 characters, and nothing stops it being one unbroken
-  # token. A vutuv post body is saved by `.markdown`'s own rule; this one is
-  # outside it.
+  # The body is the stored **plain text** (`Vutuv.RemoteHtml` reduced the remote
+  # HTML at the inbox), formatted for reading by
+  # `VutuvWeb.Markdown.render_remote/1` — the same renderer the Mastodon feed on
+  # the profile uses, so remote text reads one way across the app. What that
+  # buys here is mostly the thing a bare `whitespace-pre-line` paragraph got
+  # wrong: a post on those networks is largely *links*, and they sat on the card
+  # as raw unclickable strings that wrapped mid-URL. Now they autolink with a
+  # truncated display, `#hashtags` reach our tag pages (only where the tag is
+  # non-empty) and a `@user@host` handle reaches that remote account.
+  #
+  # It stays inside a foreign namespace, which is what `render_remote/1` is for
+  # and why the plain renderer is still the wrong one: every `<img>` is dropped
+  # (a hotlink would leak each reader's IP), and a bare `@mention` deliberately
+  # stays plain text — over there it names an account in the fediverse, not the
+  # member here who happens to share the handle. The output is sanitized exactly
+  # like a member post's, so `raw/1` on it is the same `raw/1` every post body
+  # gets.
+  #
+  # `.markdown` carries the wrapper's `overflow-wrap: break-word` for the same
+  # reason the header has `break-words`: this is a stranger's text, up to 10,000
+  # characters, and nothing stops it being one unbroken token.
   #
   # The lid is a real touch target (`min-h-10`) and says both things: "Show"
   # while it is closed, "Hide" once it is open — a lid you cannot shut again is
   # not a lid.
   defp remote_body(assigns) do
+    assigns = assign(assigns, :html, Markdown.render_remote(assigns.text))
+
     ~H"""
     <div
       :if={@warning || presence?(@text)}
@@ -1096,14 +1119,14 @@ defmodule VutuvWeb.PostComponents do
               {gettext("Hide")}
             </span>
           </summary>
-          <p class="mb-0 mt-1.5 whitespace-pre-line break-words text-sm text-slate-700 dark:text-slate-300">
-            {@text}
-          </p>
+          <div class="markdown markdown--post mt-1.5 text-sm text-slate-700 dark:text-slate-300">
+            {Phoenix.HTML.raw(@html)}
+          </div>
         </details>
       <% else %>
-        <p class="mb-0 whitespace-pre-line break-words text-sm text-slate-700 dark:text-slate-300">
-          {@text}
-        </p>
+        <div class="markdown markdown--post text-sm text-slate-700 dark:text-slate-300">
+          {Phoenix.HTML.raw(@html)}
+        </div>
       <% end %>
     </div>
     """

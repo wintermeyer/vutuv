@@ -121,6 +121,33 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       assert html =~ "<details"
     end
 
+    test "its links are clickable, not raw strings", %{post: post} do
+      # A post on those networks is largely links. Stored as plain text, they
+      # used to sit on the card unclickable and wrapping mid-URL.
+      note!(post, content_text: "Worth reading: https://taz.de/Klimaschutzvorgaben/!6199402/")
+
+      {:ok, _view, html} = thread_view(post)
+
+      assert html =~ ~s(href="https://taz.de/Klimaschutzvorgaben/!6199402/")
+      # New tab, and no ranking credit passed to a stranger's link.
+      assert html =~ "noopener"
+    end
+
+    test "a bare @mention stays plain text, it never links a local member", %{post: post} do
+      # Over there `@name` names an account in the fediverse, not the vutuv
+      # member who happens to share the handle — linking it would point the
+      # reader at the wrong person.
+      # A real, mentionable handle: the factory's `user-1` carries a hyphen,
+      # which the mention grammar stops at, so it would prove nothing.
+      member = insert(:activated_user, username: unique_username())
+      note!(post, content_text: "Ask @#{member.username} about it.")
+
+      {:ok, _view, html} = thread_view(post)
+
+      assert html =~ "Ask @#{member.username} about it."
+      refute html =~ ~s(href="/#{member.username}")
+    end
+
     test "a lone post with only a remote reply still renders the conversation", %{post: post} do
       # The single-card shortcut must not swallow the one answer the post got.
       note!(post)
