@@ -2059,23 +2059,42 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  Of `users`, the ids of those who authored a post (replies included) within
-  the last `days` days, as a MapSet. The follow-suggestion surfaces gate on
-  this: a suggestion is a promise that following fills your feed, which a
-  silent account cannot keep. One query for the whole candidate list.
+  The profile card's "Who to follow" candidate pool: the members who posted
+  (replies included) within the last `days` days, ranked by the hearts those
+  in-window posts collected, post count breaking ties - at most `limit` of
+  them, as listing-row `User` structs. A suggestion is a promise that
+  following fills your feed, so the pool is built from demonstrated recent
+  output and the ranking from what readers actually liked about it; a
+  most-followed veteran who went quiet does not qualify. Local hearts only,
+  like the discover rail's ranking (fediverse reactions stay out); no
+  self-like filter is needed since a member cannot like their own post.
   """
-  def recently_posting_ids(users, days) do
+  def top_recent_posters(days, limit) do
+    # Re-imported locally: a scoped `import Mod, only:` replaces the module
+    # import's visible names inside this function, so both macros must appear.
+    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
+
     cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(), -days, :day)
-    ids = Enum.map(users, & &1.id)
+
+    stats =
+      from(p in Post,
+        where: p.inserted_at > ^cutoff,
+        left_join: l in PostLike,
+        on: l.post_id == p.id,
+        group_by: p.user_id,
+        select: %{user_id: p.user_id, hearts: count(l.id), posts: count(p.id, :distinct)}
+      )
 
     Repo.all(
-      from(p in Post,
-        where: p.user_id in ^ids and p.inserted_at > ^cutoff,
-        select: p.user_id,
-        distinct: true
+      from(u in User,
+        join: s in subquery(stats),
+        on: s.user_id == u.id,
+        where: account_confirmed_row(u) and not account_hidden_row(u),
+        order_by: [desc: s.hearts, desc: s.posts, asc: u.first_name, asc: u.id],
+        limit: ^limit,
+        select: struct(u, ^User.listing_fields())
       )
     )
-    |> MapSet.new()
   end
 
   @doc """

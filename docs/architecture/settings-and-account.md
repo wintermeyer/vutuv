@@ -163,11 +163,16 @@ instead of its regular late-rail spot: every other card on a fresh profile
 points inward, and this is the one moment to show that there are people here
 to follow. The placement is sticky per page view — the fifth follow, made from
 the promoted card itself, must not teleport the card away mid-click; the next
-visit demotes it. The card only ever suggests accounts that posted within the
-last three weeks (`Posts.recently_posting_ids/2`,
-`UserProfileLive.@suggested_activity_days`): a suggestion promises that
-following fills your feed, and a silent account cannot keep that promise —
-deliberately strict, so a thin card beats a padded one.
+visit demotes it. The suggestions are the last four weeks' most-hearted
+posters (`Posts.top_recent_posters/2`,
+`UserProfileLive.@suggested_window_days`): members with a post in the window,
+ranked by the local hearts those posts collected (post count breaks ties),
+then thinned by the per-viewer exclusions (owner, viewer, already-followed,
+blocked). Follower totals deliberately play no part — they reward the past,
+while the card's promise is a feed with something in it, which only current,
+liked output can keep. Deliberately strict, so a thin card beats a padded
+one; an installation with no recent posts renders no card, and the checklist
+step then links to the most-followed listing instead.
 
 Work experience is deliberately not on the checklist; its section card keeps its
 own add tile.

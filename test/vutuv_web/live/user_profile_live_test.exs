@@ -255,16 +255,9 @@ defmodule VutuvWeb.UserProfileLiveTest do
       {conn, viewer} = create_and_login_user(conn)
       owner = insert_activated_user()
 
-      # The owner's leading tag drives the topical suggestions: everyone endorsed
-      # for it is a candidate.
-      tag = insert(:tag)
-      insert(:user_tag, user: owner, tag: tag)
-
       already_followed = insert_activated_user()
       not_followed = insert_activated_user()
-      insert(:user_tag, user: already_followed, tag: tag)
-      insert(:user_tag, user: not_followed, tag: tag)
-      # Both pass the recent-activity gate, so the follow edge alone decides.
+      # Both are in the pool (recent posters), so the follow edge alone decides.
       insert(:post, user: already_followed)
       insert(:post, user: not_followed)
       # The viewer already follows one of the two candidates.
@@ -592,23 +585,10 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
-  # Put `candidate` into `owner`'s topical suggestion pool: tag them with
-  # every one of the owner's tags, so whichever tag `first_tag/1` resolves as
-  # the leading one (the three registration tags share an inserted_at second),
-  # the pool contains the candidate. Suggestions additionally require a post
-  # from the last three weeks, so this alone does NOT make them appear.
-  defp tag_to_owner(owner, candidate) do
-    for ut <- Repo.all(from(ut in Tags.UserTag, where: ut.user_id == ^owner.id, preload: :tag)) do
-      insert(:user_tag, user: candidate, tag: ut.tag)
-    end
-
-    candidate
-  end
-
-  # Make `candidate` really appear in the rail: topical pool + the recent post
-  # the activity gate requires.
-  defp suggest_to(owner, candidate) do
-    tag_to_owner(owner, candidate)
+  # Make `candidate` appear in the "Who to follow" pool: the suggestions are
+  # the window's most-hearted recent posters (Posts.top_recent_posters/2), so
+  # one fresh post is the ticket in.
+  defp suggest_to(_owner, candidate) do
     insert(:post, user: candidate)
     candidate
   end
@@ -658,10 +638,7 @@ defmodule VutuvWeb.UserProfileLiveTest do
       # promotion is the owner's onboarding, not a viewer state.
       {conn, _viewer} = create_and_login_user(conn)
       owner = insert_activated_user()
-      tag = insert(:tag)
-      insert(:user_tag, user: owner, tag: tag)
       candidate = insert_activated_user()
-      insert(:user_tag, user: candidate, tag: tag)
       insert(:post, user: candidate)
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
@@ -671,20 +648,20 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute has_element?(view, "#discovery-intro")
     end
 
-    test "only accounts that posted in the last three weeks are suggested", %{conn: conn} do
+    test "only accounts that posted in the last four weeks are suggested", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
 
-      # Three candidates in the topical pool: one with a fresh post, one whose
-      # last post is older than the window, one who never posted.
+      # Three members: one with a fresh post, one whose last post is older
+      # than the window, one who never posted.
       active = suggest_to(owner, insert_activated_user())
-      stale = tag_to_owner(owner, insert_activated_user())
+      stale = insert_activated_user()
 
       insert(:post,
         user: stale,
-        inserted_at: NaiveDateTime.add(NaiveDateTime.utc_now(), -22, :day)
+        inserted_at: NaiveDateTime.add(NaiveDateTime.utc_now(), -30, :day)
       )
 
-      silent = tag_to_owner(owner, insert_activated_user())
+      silent = insert_activated_user()
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 

@@ -45,7 +45,6 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Social.Follow
   alias Vutuv.SocialFeed
   alias Vutuv.Tags
-  alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
   alias VutuvWeb.Fediverse.Docs
@@ -1123,52 +1122,39 @@ defmodule VutuvWeb.UserProfileLive do
       @onboarding_window_seconds
   end
 
-  # The rail's count, and the size of the popularity pool we top up from when the
-  # topical pool is thin.
+  # The rail's count, and how many ranked candidates we draw before the
+  # per-viewer exclusions (self, owner, already-followed, blocked) thin them.
   @recommended_count 6
   @recommended_pool 60
 
-  # A suggested account must have posted within this window: the card promises
-  # that following fills your feed, and a silent account cannot keep that
-  # promise. Strict on purpose - a thin (or empty) card is more honest than
-  # padding it with accounts whose posts nobody will ever see.
-  @suggested_activity_days 21
+  # The candidate window: only members who posted within it are suggested at
+  # all. The card promises that following fills your feed, and a silent
+  # account cannot keep that promise - strict on purpose, a thin (or empty)
+  # card is more honest than padding it with inactive accounts.
+  @suggested_window_days 28
 
-  # The "Who to follow" rail. We suggest members most endorsed for this profile's
-  # leading tag (so the suggestion is topically tied to whoever you're viewing),
-  # falling back to the most-followed members when the profile has no tag. Then we
-  # drop everyone the rail must never suggest: the profile owner, the `viewer`
-  # themselves and — the bug this fixes — anyone the viewer *already follows*
-  # (listing someone you already follow as a suggestion is pointless; the rail
-  # used to come back all "Following" rows). When the topical pool is mostly
-  # already-followed and runs thin, we top it up from the most-followed pool so
-  # the rail still fills with fresh faces. `viewer` is the current user (nil when
+  # The "Who to follow" rail: the window's most-hearted recent posters
+  # (`Posts.top_recent_posters/2` - members who posted in the last
+  # @suggested_window_days days, ranked by the hearts those posts collected),
+  # minus everyone the rail must never suggest: the profile owner, the
+  # `viewer` themselves, anyone the viewer *already follows* (suggesting them
+  # is pointless) and blocked members. `viewer` is the current user (nil when
   # logged out), so a logged-out visitor gets unfiltered suggestions and no
-  # follow state.
+  # follow state. This replaced a most-followed/topical-tag source: follower
+  # totals reward the past, but the card's promise is a feed with something
+  # in it, which only current, liked output can keep.
   defp recommended_users(user, viewer) do
-    topical =
-      case first_tag(user) do
-        nil -> []
-        tag -> Tag.recommended_users(tag)
-      end
-      |> suggestable(user, viewer)
+    candidates = Vutuv.Posts.top_recent_posters(@suggested_window_days, @recommended_pool)
 
-    users =
-      if length(topical) >= @recommended_count do
-        topical
-      else
-        popular = suggestable(Social.most_followed_users(@recommended_pool), user, viewer)
-        Enum.uniq_by(topical ++ popular, & &1.id)
-      end
-
-    Enum.take(users, @recommended_count)
+    candidates
+    |> suggestable(user, viewer)
+    |> Enum.take(@recommended_count)
   end
 
   # Keep only members the rail may suggest: not the profile owner, not the viewer,
   # not anyone the viewer already follows (one batched lookup via `following_map`),
-  # not a member the viewer blocked / who blocked them (the follow would be
-  # refused as :blocked and the suggestion would just reappear) - and only
-  # accounts that posted within the activity window (see @suggested_activity_days).
+  # and not a member the viewer blocked / who blocked them (the follow would be
+  # refused as :blocked and the suggestion would just reappear).
   defp suggestable(candidates, user, viewer) do
     following = following_map(viewer, candidates)
     # `viewer` is nil for a logged-out visitor; a nil id never equals a real UUID,
@@ -1177,25 +1163,9 @@ defmodule VutuvWeb.UserProfileLive do
     viewer_id = viewer && viewer.id
     blocked = if viewer, do: Social.blocked_user_ids(viewer.id), else: MapSet.new()
 
-    kept =
-      Enum.reject(candidates, fn u ->
-        u.id == user.id or u.id == viewer_id or Map.has_key?(following, u.id) or
-          MapSet.member?(blocked, u.id)
-      end)
-
-    # The activity gate last, so its one query only sees the survivors.
-    active = Vutuv.Posts.recently_posting_ids(kept, @suggested_activity_days)
-    Enum.filter(kept, &MapSet.member?(active, &1.id))
-  end
-
-  defp first_tag(user) do
-    Repo.one(
-      from(w in Ecto.assoc(user, :user_tags),
-        join: t in assoc(w, :tag),
-        order_by: w.inserted_at,
-        limit: 1,
-        select: t
-      )
-    )
+    Enum.reject(candidates, fn u ->
+      u.id == user.id or u.id == viewer_id or Map.has_key?(following, u.id) or
+        MapSet.member?(blocked, u.id)
+    end)
   end
 end
