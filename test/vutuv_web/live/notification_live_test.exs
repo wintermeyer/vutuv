@@ -55,7 +55,9 @@ defmodule VutuvWeb.NotificationLiveTest do
                "@#{user.username}"
              )
 
-      settings_url = VutuvWeb.Endpoint.url() <> "/settings/security"
+      # The rename form lives on its own page (/settings/username); the
+      # security page holds sign-in credentials and cannot change a handle.
+      settings_url = VutuvWeb.Endpoint.url() <> "/settings/username"
 
       assert has_element?(
                live,

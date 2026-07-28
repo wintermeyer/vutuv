@@ -743,7 +743,7 @@ defmodule VutuvWeb.NotificationLive.Index do
         before_handle: before_handle,
         between: between,
         tail: tail,
-        settings_url: url(~p"/settings/security")
+        settings_url: url(~p"/settings/username")
       )
 
     ~H"""
