@@ -61,4 +61,25 @@ defmodule VutuvWeb.DetailPagesNoIndexTest do
       assert get_resp_header(conn, "x-robots-tag") == []
     end
   end
+
+  # /login and /search are deliberately NOT robots-blocked (see RobotsTxt):
+  # /login is the redirect target of every login-only URL a crawler stumbles
+  # into, and a robots block on it stranded all those chains as "blocked by
+  # robots.txt" in Search Console. Both pages must therefore be fetchable and
+  # carry the page-level opt-out header so they never surface in results.
+  describe "X-Robots-Tag on the crawlable auth and search pages" do
+    test "GET /login serves with the page-level opt-out", %{conn: conn} do
+      conn = get(conn, "/login")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == @page_level_robots
+    end
+
+    test "GET /search serves with the page-level opt-out", %{conn: conn} do
+      conn = get(conn, "/search")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == @page_level_robots
+    end
+  end
 end

@@ -28,33 +28,30 @@ defmodule VutuvWeb.RobotsTxt do
   # Help yourself to the public stuff: profiles, tags, listings.
   Allow: /
 
-  # ...but these are backstage. No autographs, no peeking.
+  # ...but the admin area is backstage. No autographs, no peeking.
   Disallow: /admin/
-  Disallow: /login
-  Disallow: /logout
-  Disallow: /sessions
-  Disallow: /api/
 
-  # Search results are an endless hall of mirrors; don't get lost in there.
-  Disallow: /search
-
-  # Two things are DELIBERATELY not disallowed here, though both look like
-  # candidates. Blocking either would backfire:
+  # Everything else that must stay out of search is DELIBERATELY not
+  # disallowed, though several paths look like candidates. A Disallow only
+  # stops the fetch: a URL linked from elsewhere still gets indexed as a
+  # bare link, can never be crawled to learn it should drop out, and a
+  # redirect on it can never consolidate. So instead:
   #
-  # 1. The old /users/... URLs. They 301 to the canonical /<slug> profile. A
-  #    crawler that cannot fetch them never sees the redirect, so the stale URL
-  #    is stranded in the index ("indexed, though blocked by robots.txt")
-  #    instead of being consolidated. Leaving them crawlable lets the 301 do
-  #    its job.
+  # 1. Redirects stay crawlable so their 301 can do its job: the old
+  #    /users/... URLs (-> /<slug>), /sessions/new (-> /login) and the
+  #    legacy /api/1.0/users/<slug>/vcard URLs (-> /<slug>.vcf).
   #
-  # 2. The personal profile detail sub-pages (/<slug>/emails, /tags,
-  #    /work_experiences, /followers, ...). They must stay OUT of search, but
-  #    robots.txt is the wrong lever: a Disallow only stops the fetch, so a
-  #    detail URL linked from elsewhere still gets indexed as a bare link and
-  #    can never be crawled to learn it should drop out. They carry a
-  #    page-level `X-Robots-Tag: noindex` instead (VutuvWeb.Plug.NoIndex on the
-  #    :user_pipe pipeline), which reliably de-indexes them once crawled. So we
-  #    keep them crawlable on purpose, precisely so that header is seen.
+  # 2. Pages that must never surface in results carry a page-level
+  #    `X-Robots-Tag: noindex` and stay crawlable precisely so that header
+  #    is seen: the personal profile detail sub-pages (/<slug>/emails,
+  #    /tags, /work_experiences, /followers, ...; VutuvWeb.Plug.NoIndex),
+  #    the RSS feeds, /login and /search. Keeping /login fetchable also
+  #    lets the sign-in redirect behind every login-only URL a crawler
+  #    stumbles into (/posts/<id>/reply, /messages, ...) resolve cleanly
+  #    instead of stranding those URLs as "blocked by robots.txt".
+  #
+  # 3. /api/ is linked nowhere and answers every crawler itself: 404/301
+  #    for the legacy 1.0 paths, 401 for the token-only 2.0 endpoints.
   """
 
   # The AI crawlers named explicitly (the spec's list): training collects

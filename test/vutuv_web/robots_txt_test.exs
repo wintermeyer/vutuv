@@ -52,6 +52,28 @@ defmodule VutuvWeb.RobotsTxtTest do
       refute RobotsTxt.render(:permissive) =~ "Disallow: /users/"
     end
 
+    test "fences off only the admin area; everything else resolves itself" do
+      body = RobotsTxt.render(:permissive)
+
+      assert body =~ "Disallow: /admin/"
+
+      # /login and /search stay crawlable and carry X-Robots-Tag: noindex
+      # instead: /login is the redirect target of every login-only URL a
+      # crawler stumbles into (/posts/:id/reply, /messages, ...), so blocking
+      # it stranded all those chains as "blocked by robots.txt" and kept the
+      # Search Console validation failing.
+      refute body =~ "Disallow: /login"
+      refute body =~ "Disallow: /search"
+
+      # GET /logout does not exist (signing out is a DELETE), /sessions/new is
+      # a 301 that must be crawlable to consolidate, and /api/ answers 401/404
+      # for a crawler by itself — the legacy /api/1.0 vcard URLs 301 to the
+      # canonical /:slug.vcf and must be fetchable for that to happen.
+      refute body =~ "Disallow: /logout"
+      refute body =~ "Disallow: /sessions"
+      refute body =~ "Disallow: /api/"
+    end
+
     test "does not robots-block the per-user detail sub-pages (they carry X-Robots-Tag: noindex)" do
       # /:slug/emails, /:slug/tags, /:slug/work_experiences, ... are kept out of
       # search by the page-level noindex header (VutuvWeb.Plug.NoIndex on the

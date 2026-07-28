@@ -44,7 +44,12 @@ defmodule VutuvWeb.FeedController do
     |> put_resp_content_type("application/rss+xml")
     |> put_resp_header("cache-control", "public, max-age=300")
     |> put_resp_header("content-signal", ContentPolicy.signal_header(noindex?, noai?))
-    |> ContentPolicy.put_robots_header(noindex?, noai?)
+    # The XML document itself is never a search result, so every feed is
+    # noindex — a permissive member's feed used to carry no robots header at
+    # all and got filed by Google as a "duplicate without a canonical" of the
+    # profile. The member's search choice still reaches crawlers through the
+    # Content-Signal above; their AI choice keeps its robots directives.
+    |> ContentPolicy.put_robots_header(true, noai?)
     |> send_resp(200, body)
   end
 end

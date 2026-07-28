@@ -563,6 +563,19 @@ defmodule VutuvWeb.PostControllerTest do
       assert get_resp_header(conn, "x-robots-tag") == []
     end
 
+    test "the reply control is a nofollow link", %{conn: conn} do
+      # /posts/:id/reply requires login, so for a crawler every reply link is
+      # a 302 to /login. rel="nofollow" keeps thousands of per-post reply
+      # URLs (one per public post card) out of the crawl frontier instead of
+      # letting them pile up in Search Console.
+      user = insert_activated_user()
+      post = create_post!(user, %{body: "please answer"})
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      assert html =~ ~r{href="/posts/#{post.id}/reply"[^>]*rel="nofollow"}
+    end
+
     test "an inline-referenced attachment renders in place; the rest stays in the gallery", %{
       conn: conn
     } do

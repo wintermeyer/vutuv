@@ -66,6 +66,14 @@ defmodule VutuvWeb.UrlStructureTest do
       assert redirected_to(get(conn, "/sessions/new"), 301) == "/login"
     end
 
+    test "the legacy /api/1.0 vcard URLs 301 to the canonical /:slug.vcf", %{conn: conn} do
+      # Google still remembers pre-2026 URLs like /api/1.0/users/x.y/vcard.
+      # Now that /api/ is no longer robots-blocked, the 301 consolidates them
+      # onto the vCard sibling of the profile instead of a dead 404.
+      assert redirected_to(get(conn, "/api/1.0/users/gustav.gans/vcard"), 301) ==
+               "/gustav.gans.vcf"
+    end
+
     test "DELETE /logout signs the user out", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       conn = delete(conn, "/logout")
@@ -106,9 +114,13 @@ defmodule VutuvWeb.UrlStructureTest do
     } do
       body = conn |> get("/robots.txt") |> response(200)
 
-      # Backstage paths stay blocked.
-      assert body =~ "Disallow: /login"
-      assert body =~ "Disallow: /search"
+      # Only the admin area stays robots-blocked. /login and /search are
+      # crawlable and carry X-Robots-Tag: noindex instead, so the login
+      # redirects behind signed-in-only pages resolve for crawlers rather
+      # than stranding as "blocked by robots.txt".
+      assert body =~ "Disallow: /admin/"
+      refute body =~ "Disallow: /login"
+      refute body =~ "Disallow: /search"
       assert body =~ "Allow: /"
 
       # The per-user detail sub-pages are NOT robots-blocked: they carry a

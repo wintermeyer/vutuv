@@ -42,11 +42,12 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "User-agent: *"
       assert body =~ "Allow: /"
 
-      # Sensitive or backstage paths must never be indexed.
+      # The one true backstage path; everything else resolves itself (redirects
+      # consolidate, login-only pages 302 to the crawlable, noindex'd /login).
       assert body =~ "Disallow: /admin/"
-      assert body =~ "Disallow: /login"
-      assert body =~ "Disallow: /sessions"
-      assert body =~ "Disallow: /api/"
+      refute body =~ "Disallow: /login"
+      refute body =~ "Disallow: /sessions"
+      refute body =~ "Disallow: /api/"
 
       # Personal profile detail pages (phone numbers, emails, addresses, …) are
       # kept out of search by the page-level X-Robots-Tag: noindex header

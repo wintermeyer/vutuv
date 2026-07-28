@@ -53,8 +53,28 @@ never be crawled to learn it should drop out — which is exactly how these URLs
 piled up under Google's "indexed, though blocked by robots.txt" report. For the
 same reason the legacy `/users/…` URLs (which 301 to the canonical `/:slug`)
 stay crawlable: blocking a redirect strands the old URL instead of letting the
-301 consolidate it. So `robots.txt` blocks only genuinely private, crawl-trap
-paths (`/admin/`, `/login`, `/sessions`, `/api/`, `/search`).
+301 consolidate it. So `robots.txt` blocks only `/admin/`.
+
+Everything else resolves itself and is deliberately crawlable too, because any
+`Disallow` beyond `/admin/` kept re-filling that Search Console bucket (and a
+failed "validate fix" pass there emails the operator):
+
+- `/login` and `/search` serve `X-Robots-Tag: noindex` via the `:noindex_pipe`
+  in the router. `/login` matters doubly: it is the redirect target of every
+  login-only URL a crawler stumbles into (`/posts/:id/reply`, `/messages`, …),
+  so it must be fetchable for those chains to resolve. The reply links on
+  post cards additionally carry `rel="nofollow"`, so the per-post reply URLs
+  rarely enter the crawl frontier at all.
+- The RSS feeds (`/posts/feed.xml`, `/:slug/posts/feed.xml`) are always
+  `noindex` — Google filed a permissive member's feed as a "duplicate without
+  a user-selected canonical" of their profile.
+- `/sessions/new` is a 301 to `/login`; the pre-2026 API vCard URLs
+  (`/api/1.0/users/:slug/vcard`) 301 to `/:slug.vcf`
+  (`VutuvWeb.LegacyRedirectController`). Redirects must be crawlable.
+- The rest of `/api/` answers crawlers itself: 404 for retired 1.0 paths,
+  401 for the token-only 2.0 endpoints; nothing links it, nothing indexes it.
+- `GET /logout` does not exist (signing out is a `DELETE`), so a `Disallow`
+  for it fenced off nothing.
 
 Existing members were migrated as AI-opted-out (they were never asked) and can
 opt in on the edit form.

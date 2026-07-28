@@ -28,6 +28,11 @@ defmodule VutuvWeb.LegacyRedirectController do
 
   def login(conn, _params), do: permanent(conn, "/login")
 
+  # The pre-2026 API served a public vCard at /api/1.0/users/:slug/vcard;
+  # search engines still hold such URLs. The profile's vCard sibling is the
+  # canonical successor.
+  def api_vcard(conn, %{"slug" => slug}), do: permanent(conn, "/" <> encode(slug) <> ".vcf")
+
   def search(conn, _params), do: permanent(conn, "/search")
 
   def search_query(conn, %{"id" => id}), do: permanent(conn, search_path(id))

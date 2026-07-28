@@ -285,7 +285,16 @@ defmodule VutuvWeb.Router do
     # "session": POST /login handles both PIN steps, DELETE /logout signs out.
     # /login/resend mails a fresh PIN; /login/cancel abandons a pending login so
     # the visitor is no longer pinned to the PIN-entry form.
-    get("/login", SessionController, :new)
+    #
+    # The sign-in page is crawlable but noindex'd (see VutuvWeb.RobotsTxt): it
+    # is the redirect target of every login-only URL a crawler stumbles into,
+    # so it must be fetchable for those chains to resolve — a robots block here
+    # stranded them all as "blocked by robots.txt" in Search Console.
+    scope "/" do
+      pipe_through(:noindex_pipe)
+      get("/login", SessionController, :new)
+    end
+
     post("/login", SessionController, :create)
     post("/login/resend", SessionController, :resend)
     post("/login/cancel", SessionController, :cancel)
@@ -438,6 +447,9 @@ defmodule VutuvWeb.Router do
     get("/search_queries/:id", LegacyRedirectController, :search_query)
     get("/users/:slug", LegacyRedirectController, :user)
     get("/users/:slug/*rest", LegacyRedirectController, :user_subpage)
+    # The pre-2026 API's public vCard URL, which search engines still
+    # remember; consolidates onto the profile's vCard sibling.
+    get("/api/1.0/users/:slug/vcard", LegacyRedirectController, :api_vcard)
   end
 
   # Incremental LiveView surface. `InitAssigns` assigns `:current_user` from the
@@ -449,8 +461,16 @@ defmodule VutuvWeb.Router do
       pipe_through(:browser)
 
       live("/notifications", NotificationLive.Index, :index)
+
       # Search-as-you-type ("search" is a reserved slug; open to visitors).
-      live("/search", SearchLive, :index)
+      # Crawlable but noindex'd (see VutuvWeb.RobotsTxt): search results are
+      # an endless hall of mirrors no index should mirror again, but a robots
+      # block would strand externally linked /search URLs in the index.
+      scope "/" do
+        pipe_through(:noindex_pipe)
+        live("/search", SearchLive, :index)
+      end
+
       live("/messages", MessageLive.Index, :index)
       # The profile "Message" button: open my conversation with that member
       # (find-or-create), then land in the thread.

@@ -117,6 +117,21 @@ defmodule VutuvWeb.FeedControllerTest do
       assert get(build_conn(), "/sleepy_member/posts/feed.xml").status == 404
     end
 
+    # The XML document itself is never a search result: every feed is served
+    # noindex so Google does not file it as a "duplicate without a canonical"
+    # of the profile (which is exactly what Search Console reported for
+    # member feeds). The member's choices still flow into the Content-Signal
+    # header and, for the AI axis, into the robots directives.
+    test "a permissive member's feed is still marked noindex" do
+      create_post!(insert_activated_user(username: "open_author"), %{"body" => "Open words"})
+
+      conn = get(build_conn(), "/open_author/posts/feed.xml")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+      assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=yes, ai-input=yes"]
+    end
+
     test "a noindexed member's feed serves, marked noindex, AI choice intact" do
       quiet = insert_activated_user(username: "quiet_author", noindex?: true, noai?: false)
       create_post!(quiet, %{"body" => "Quiet words"})
@@ -128,14 +143,14 @@ defmodule VutuvWeb.FeedControllerTest do
       assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=no, ai-input=yes"]
     end
 
-    test "an AI-opted-out member's feed serves with the noai directives" do
+    test "an AI-opted-out member's feed combines noindex with the noai directives" do
       human = insert_activated_user(username: "human_author", noindex?: false, noai?: true)
       create_post!(human, %{"body" => "For people"})
 
       conn = get(build_conn(), "/human_author/posts/feed.xml")
 
       assert conn.status == 200
-      assert get_resp_header(conn, "x-robots-tag") == ["noai, noimageai"]
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
       assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=yes, ai-input=no"]
     end
   end
@@ -152,6 +167,8 @@ defmodule VutuvWeb.FeedControllerTest do
       assert conn.resp_body =~ mine.id
       assert conn.resp_body =~ theirs.id
       assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=yes, ai-input=yes"]
+      # The XML document itself never belongs in a search index.
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
     end
 
     # The aggregate feed carries one all-yes Content-Signal and cannot

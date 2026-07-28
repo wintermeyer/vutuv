@@ -4014,7 +4014,10 @@ defmodule VutuvWeb.PostComponents do
 
   # The reply control is a navigation, not a toggle: it leads to the reply page
   # (which requires login itself). Restricted posts cannot be answered,
-  # mirroring the disabled repost button.
+  # mirroring the disabled repost button. rel="nofollow" because for a crawler
+  # every reply URL is just a 302 to /login — without it, every public post
+  # card feeds one useless URL into the crawl frontier, which piled up as
+  # "blocked by robots.txt" noise in Search Console.
   attr(:id, :string, required: true)
   attr(:post_id, :any, required: true)
   attr(:count, :integer, required: true)
@@ -4026,6 +4029,7 @@ defmodule VutuvWeb.PostComponents do
       :if={!@disabled}
       id={@id}
       href={~p"/posts/#{@post_id}/reply"}
+      rel="nofollow"
       aria-label={gettext("Reply")}
       title={gettext("Reply")}
       class={[
