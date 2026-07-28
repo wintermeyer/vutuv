@@ -115,7 +115,7 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
     # The owner's onboarding nudge: a few high-impact steps, shown only while
     # something is still undone, and gone once the profile is complete. It is
     # owner-only (a visitor never sees it). Since sign-up requires three tags,
-    # the tag step arrives already checked: the list opens at 1/4, visible
+    # the tag step arrives already checked: the list opens at 1/5, visible
     # progress instead of a wall of zeros.
 
     test "a new owner sees the checklist with the tag step already done", %{conn: conn} do
@@ -129,8 +129,9 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       assert checklist =~ "Add a profile photo"
       assert checklist =~ "Add a tagline"
       assert checklist =~ "Write your first post"
+      assert checklist =~ "Follow 5 members"
       # The registration tags already check the first step off.
-      assert checklist =~ "1/4"
+      assert checklist =~ "1/5"
     end
 
     # The checklist leads to photo / tagline / first post; work experience is
@@ -165,6 +166,8 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
         Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg", headline: "Builder of things"))
 
       insert(:post, user: user)
+      # The follow step completes at five followed members.
+      for _ <- 1..5, do: insert(:follow, follower: user, followee: insert_activated_user())
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 

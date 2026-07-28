@@ -68,6 +68,50 @@ defmodule VutuvWeb.UserHTML do
     """
   end
 
+  @doc """
+  The profile's "Who to follow" card. Its home is late in the rail (the
+  member's own detail cards lead); for the owner still following fewer than
+  five members (`@promote_discovery?` in `UserProfileLive`) the profile
+  renders it at the top of the rail instead, `promoted`: marker attribute,
+  an intro line saying why following matters, and no late-rail order classes.
+  A brand-new member otherwise never learns that there are people here to
+  follow — every other card on their fresh profile points inward. The two
+  call sites are mutually exclusive, so the DOM id stays unique.
+  """
+  attr(:promoted, :boolean, default: false)
+  attr(:recommended_users, :list, required: true)
+  attr(:current_user, :any, required: true)
+  attr(:current_user_id, :any, required: true)
+  attr(:work_info_by_id, :map, required: true)
+  attr(:following_by_id, :map, required: true)
+
+  def who_to_follow_card(assigns) do
+    ~H"""
+    <.card
+      :if={@recommended_users != []}
+      id="profile-who-to-follow"
+      class={if(@promoted, do: "scroll-mt-24", else: "scroll-mt-24 order-1 md:order-none")}
+      data-promoted={@promoted}
+    >
+      <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
+      <p :if={@promoted} id="discovery-intro" class="-mt-2 mb-4 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("Your feed shows the posts of members you follow. Follow a few to fill it.")}
+      </p>
+      <ul class="space-y-4">
+        <.user_row
+          :for={user <- @recommended_users}
+          user={user}
+          current_user={@current_user}
+          current_user_id={@current_user_id}
+          work_info_by_id={@work_info_by_id}
+          following_by_id={@following_by_id}
+          live?
+        />
+      </ul>
+    </.card>
+    """
+  end
+
   # Work line for a user row; falls back to a non-breaking space so an empty
   # line still reserves its height and rows stay a uniform two-line height.
   defp work_line(work_info_by_id, user_id) do

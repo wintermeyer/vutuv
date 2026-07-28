@@ -959,6 +959,21 @@ the resulting ~200px rail width. --%>
   cards join the single flex column and can interleave with the main column's;
   a real box again at md+. --%>
   <aside class="contents md:block md:space-y-6">
+    <%!-- Discovery leads the rail while the owner still follows fewer than
+    five members (@promote_discovery?): a fresh account otherwise never learns
+    that there are people here to follow. Above the threshold the card keeps
+    its regular spot further down. Sticky per page view: the fifth follow must
+    not teleport the card away mid-click (see UserProfileLive). --%>
+    <.who_to_follow_card
+      :if={@promote_discovery?}
+      promoted
+      recommended_users={@recommended_users}
+      current_user={@current_user}
+      current_user_id={@current_user_id}
+      work_info_by_id={@work_info_by_id}
+      following_by_id={@following_by_id}
+    />
+
     <%!-- General info leads the rail: who the person is (gender + birthday).
     The headline already lives in the header. The birthday obeys the member's
     chosen granularity (birthdate_mode/1): full date + age, age only, day and
@@ -1435,25 +1450,17 @@ the resulting ~200px rail width. --%>
 
     <%!-- "Who to follow" comes after the profile's own details (contact, info,
     links): the member's own card leads, discovery of other people follows.
-    `order-1` groups it with Followers / Following at the end on a phone. --%>
-    <.card
-      :if={@recommended_users != []}
-      id="profile-who-to-follow"
-      class="order-1 md:order-none"
-    >
-      <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
-      <ul class="space-y-4">
-        <.user_row
-          :for={user <- @recommended_users}
-          user={user}
-          current_user={@current_user}
-          current_user_id={@current_user_id}
-          work_info_by_id={@work_info_by_id}
-          following_by_id={@following_by_id}
-          live?
-        />
-      </ul>
-    </.card>
+    The under-five-follows owner instead gets it promoted at the top of the
+    rail (the copy above; the two :ifs are mutually exclusive). `order-1`
+    groups it with Followers / Following at the end on a phone. --%>
+    <.who_to_follow_card
+      :if={!@promote_discovery?}
+      recommended_users={@recommended_users}
+      current_user={@current_user}
+      current_user_id={@current_user_id}
+      work_info_by_id={@work_info_by_id}
+      following_by_id={@following_by_id}
+    />
 
     <%!-- The formatted CV / Lebenslauf downloads (issue #841), for every
     viewer: the documents carry only data the viewer can already see, so the
