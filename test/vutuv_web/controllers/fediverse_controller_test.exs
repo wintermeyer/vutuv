@@ -193,6 +193,30 @@ defmodule VutuvWeb.FediverseControllerTest do
                  "/authorize_interaction?uri={uri}"
     end
 
+    # The asking server writes the resource, and not every one writes it the way
+    # Mastodon does (which strips a leading @ and lowercases the host before it
+    # asks). A 404 here means the whole remote-follow flow dead-ends before it
+    # starts, so the tolerant reading is the right one: none of these spellings
+    # is ambiguous about who is meant.
+    test "reads the spellings other servers send", %{conn: conn} do
+      user = federated_user()
+
+      for resource <- [
+            "acct:@#{user.username}@#{host()}",
+            "acct:#{user.username}@#{String.upcase(host())}",
+            "#{String.trim_trailing(VutuvWeb.Endpoint.url(), "/")}/@#{user.username}",
+            "#{String.trim_trailing(VutuvWeb.Endpoint.url(), "/")}/#{user.username}/"
+          ] do
+        conn =
+          get(
+            recycle(conn),
+            "/.well-known/webfinger?resource=#{URI.encode_www_form(resource)}"
+          )
+
+        assert json_response(conn, 200)["subject"] == "acct:#{user.username}@#{host()}"
+      end
+    end
+
     test "404s for members without the opt-in, unknown handles and foreign hosts",
          %{conn: conn} do
       plain = insert(:activated_user)

@@ -52,7 +52,12 @@ every endpoint 404s and nothing is delivered.
   still holds.
 - **Discovery**: `GET /.well-known/webfinger?resource=acct:handle@host`
   answers with the actor URL — how Mastodon's search resolves
-  `@handle@vutuv.de`. The profile URL itself answers an
+  `@handle@vutuv.de`. The `resource` is read **tolerantly**, because the asking
+  server writes it and they do not all write it alike: a leading `@` on the
+  handle, any case in the handle or the (DNS, therefore case-free) host, the
+  profile URL `https://vutuv.de/@handle` and a trailing slash all resolve. A
+  404 there dead-ends the whole remote-follow flow before it starts, and none
+  of those spellings is ambiguous about who is meant. The profile URL itself answers an
   `Accept: application/activity+json` with the actor document (the `:browser`
   pipeline accepts `activity+json` for exactly this), and the profile HTML
   head advertises `<link rel="alternate" type="application/activity+json">`.

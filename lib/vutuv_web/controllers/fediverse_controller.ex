@@ -34,6 +34,7 @@ defmodule VutuvWeb.FediverseController do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.HttpSignature
+  alias Vutuv.Handles
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.RawBodyReader
 
@@ -533,10 +534,16 @@ defmodule VutuvWeb.FediverseController do
 
   # acct:handle@host (the WebFinger form Mastodon uses), or the profile /
   # actor URL pasted directly.
+  #
+  # Read tolerantly, because the asking server writes this string and not all of
+  # them write it the way Mastodon does: a leading `@` on the handle is common,
+  # and a host is a DNS name, so its case carries no meaning. A 404 here
+  # dead-ends the whole remote-follow flow before it starts, and none of the
+  # accepted spellings is ambiguous about who is meant.
   defp resolve_resource("acct:" <> acct) do
-    with [handle, host] <- String.split(acct, "@", parts: 2),
-         true <- host == VutuvWeb.Endpoint.host() do
-      Accounts.get_user_by_username(String.downcase(handle))
+    with [handle, host] <- acct |> String.trim_leading("@") |> String.split("@", parts: 2),
+         true <- String.downcase(String.trim(host)) == VutuvWeb.Endpoint.host() do
+      Accounts.get_user_by_username(Handles.normalize(handle))
     else
       _ -> nil
     end
@@ -546,8 +553,17 @@ defmodule VutuvWeb.FediverseController do
     base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
 
     case String.replace_prefix(url, base, "") do
-      ^url -> nil
-      rest -> rest |> String.trim_trailing("/actor") |> Accounts.get_user_by_username()
+      ^url ->
+        nil
+
+      rest ->
+        # `https://host/@handle` is the profile URL Mastodon itself shows, so it
+        # is what somebody pastes; the trailing slash is what a browser adds.
+        rest
+        |> String.trim_trailing("/")
+        |> String.trim_trailing("/actor")
+        |> Handles.normalize()
+        |> Accounts.get_user_by_username()
     end
   end
 
