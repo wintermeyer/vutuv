@@ -23,10 +23,34 @@ frozen/suspended/deactivated). On top sits the installation-wide switch
 `:fediverse_enabled` (`FEDIVERSE_ENABLED=false` for intranets): off means
 every endpoint 404s and nothing is delivered.
 
+**The question is asked twice, and once is at sign-up.** The `/settings`
+switch alone reaches only the people who go looking for it, so the sign-up
+form carries the same question as a labelled checkbox — **pre-ticked**, because
+most people who join want the connection, with three lines of explanation
+beside it and one click to take it back (`VutuvWeb.PageController.index/2`
+primes it on the changeset; the box is left out entirely where
+`:fediverse_enabled` is off). **That one box sets all three switches**
+(`expand_fediverse_choice/1`): participation, `fediverse_reactions?` *and*
+`fediverse_replies?` — which is why it is the only box on that form carrying an
+explanation, and why the explanation names the reply storage and its six-month
+limit. Ticking it consents to holding text written by people who never signed
+up here, so the sentence has to say so; the `/settings/fediverse` switch, whose
+wording promises none of that, still leaves replies off. Unticking sets
+participation to false and leaves the other two at their schema defaults, so a
+later yes on the settings page lands on that page's own defaults.
+That path cannot mint the keypair the way the settings page does — at sign-up
+the address is unconfirmed, so nothing may federate yet and a key per
+unconfirmed registration is work for the sweeper — so **confirmation mints it**
+(`Vutuv.Accounts.activate_user/1`, guarded by `federated?/1`). That is the
+moment `federated?/1` turns true, and it has to be: the delivery worker deletes
+every activity of a member it finds no key for, silently.
+
 ## The moving parts
 
 - **Actor** (`Vutuv.Fediverse.Actor`): the member's RSA-2048 keypair
-  (`Vutuv.Fediverse.Keys`), created lazily on opt-in. The documents are built
+  (`Vutuv.Fediverse.Keys`), created lazily — on opt-in from `/settings`, on the
+  PIN confirmation of a sign-up that opted in, and on the first fetch of the
+  actor document, whichever comes first. The documents are built
   by `VutuvWeb.Fediverse.Docs`; URLs hang off the member so no root slug is
   burned: `/:username/actor` (id), `.../inbox`, `.../followers` and
   `.../outbox` (count-only collections) and `.../collections/featured` (the

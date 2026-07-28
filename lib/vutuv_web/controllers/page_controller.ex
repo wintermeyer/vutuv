@@ -4,6 +4,7 @@ defmodule VutuvWeb.PageController do
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:index])
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.LandingExperiment
@@ -24,12 +25,27 @@ defmodule VutuvWeb.PageController do
     # the form's controls only - the User/Email schemas keep their own defaults
     # for every other code path, so an address created without an explicit
     # choice still stays private.
+    #
+    # The Fediverse box is pre-checked the same way: most people who join want
+    # the connection to Mastodon and friends, and sign-up is the one moment
+    # every member passes through, while the switch on /settings/fediverse is
+    # one hardly anybody goes looking for. It stays a visible question with a
+    # line of explanation next to it, and unticking it is one click. Primed to
+    # `false` where the installation federates nothing at all
+    # (FEDIVERSE_ENABLED=false, intranets), which is also where the template
+    # leaves the whole question out.
+    #
+    # One question, all three switches: a ticked box is expanded by
+    # `expand_fediverse_choice/1` below into taking part *plus* the reactions
+    # and replies that come back, because that is what "take part" means to
+    # somebody reading it, and the box's own text says so.
     changeset =
       %User{
         gender: prefill_gender(prefill["gender"]),
         first_name: presence(prefill["first_name"]),
         last_name: presence(prefill["last_name"]),
-        tag_list: presence(prefill["tags"])
+        tag_list: presence(prefill["tags"]),
+        fediverse_followers?: Fediverse.enabled?()
       }
       |> User.changeset()
       |> Ecto.Changeset.put_assoc(:emails, [
@@ -130,6 +146,8 @@ defmodule VutuvWeb.PageController do
   end
 
   def new_registration(conn, %{"user" => user_params}) do
+    user_params = expand_fediverse_choice(user_params)
+
     # Extract defensively: a malformed "emails" param (not the nested
     # %{"0" => %{"value" => …}} the form produces) must reach register_user/2
     # as a plain error changeset, not crash on chained Access indexing.
@@ -168,6 +186,26 @@ defmodule VutuvWeb.PageController do
         end
     end
   end
+
+  # The sign-up form asks about the Fediverse once; `/settings/fediverse` has
+  # three switches. Ticking the box means the whole thing, so it sets all three:
+  # taking part, the reactions that come back, and the replies people write out
+  # there. That is why the box's own text has to name the reply storage and its
+  # six-month limit — a consent may only cover what it says out loud, and one of
+  # these three keeps a stranger's words on our server.
+  #
+  # Unticking sets participation to false and leaves the other two alone, at
+  # their schema defaults (reactions on, replies off). They mean nothing while
+  # nobody federates, and if the member later switches participation on from
+  # `/settings/fediverse` — where the switch promises no reply storage — they
+  # land on exactly the defaults that page argues for, rather than on a silent
+  # echo of a box they unticked at sign-up.
+  defp expand_fediverse_choice(%{"fediverse_followers?" => value} = params)
+       when value in [true, "true", "1", "on"] do
+    Map.merge(params, %{"fediverse_reactions?" => "true", "fediverse_replies?" => "true"})
+  end
+
+  defp expand_fediverse_choice(params), do: params
 
   defp handle_post_registration_login(conn, email) do
     # The account was just created, so login_by_email/2 always mails the PIN

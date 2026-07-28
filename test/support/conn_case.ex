@@ -120,6 +120,19 @@ defmodule VutuvWeb.ConnCase do
         token
       end
 
+      # True when the <input type="checkbox" name=name> in `html` is rendered
+      # checked, regardless of attribute order. The assertion a form's default
+      # state needs: a box that submits "true" only because it is pre-ticked is
+      # a different product decision from one the member has to find and click.
+      defp checkbox_checked?(html, name) do
+        regex = ~r/<input(?=[^>]*\btype="checkbox")(?=[^>]*\bname="#{Regex.escape(name)}")[^>]*>/
+
+        case Regex.run(regex, html) do
+          [tag] -> tag =~ "checked"
+          _ -> false
+        end
+      end
+
       # ── /api/2.0 helpers (shared by every API test file) ──
 
       defp authed(conn, token) do

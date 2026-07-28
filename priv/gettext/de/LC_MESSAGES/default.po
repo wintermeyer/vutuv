@@ -18341,3 +18341,14 @@ msgid "That link points at a single post. You can follow its author, %{account},
 msgstr ""
 "Dieser Link zeigt auf einen einzelnen Beitrag. Von hier aus können Sie dem "
 "Konto dahinter folgen: %{account}."
+
+#: lib/vutuv_web/templates/page/index.html.heex:176
+#, elixir-autogen, elixir-format
+msgid "People on Mastodon and other independent networks can then follow this profile, and your public posts appear there. What they answer or share comes back and is shown under your posts, by their account address. A reply from there is stored here for up to six months. You can switch all of it off again at any time."
+msgstr ""
+"Menschen auf Mastodon und in anderen unabhängigen Netzwerken können diesem "
+"Profil dann folgen, und Ihre öffentlichen Beiträge erscheinen dort. Was von "
+"dort geantwortet oder geteilt wird, kommt zurück und erscheint unter Ihren "
+"Beiträgen, mit der Adresse des jeweiligen Kontos. Eine Antwort von dort "
+"speichern wir dafür bis zu sechs Monate. Alles davon lässt sich jederzeit "
+"wieder abschalten."

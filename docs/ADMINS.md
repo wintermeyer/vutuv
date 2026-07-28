@@ -117,9 +117,9 @@ Everything else has a default (the vutuv.de production value):
 | `POST_EDIT_WINDOW_MINUTES` | `30` | How long a post stays editable after publishing. Editing also closes with the first like, repost or reply, whatever this value says (an edit would silently rewrite what somebody else endorsed); deleting is never blocked. Raise it for a closed community where posts get little immediate engagement |
 | `POST_DRAFT_RETENTION_DAYS` | `30` | How long the composer keeps a post somebody started and never sent, counted from the last change. Drafts are stored so a page reload cannot eat them, which means unpublished text of your members sits in your database — this is the retention promise your privacy page should quote. A draft is dropped the moment its post is sent, and any photo attached to it goes with it |
 | `LANDING_HEADLINE_EXPERIMENT` | `true` | `false` stops the split test on the start page's founder quote: every visitor sees the same headline and nothing is counted. Leave it on and read the result at `/admin/experiments`, or turn it off if your start page copy is your own and you do not want it to vary. Only aggregate counters are stored, never a visitor, and the test sets no cookie of its own |
-| `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
+| `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered, and the sign-up form drops the Fediverse question) — set it on intranet installations |
 | `FEDIVERSE_INBOUND_CAPS` | `600,60` | `host,actor`: how many rows one remote server, and one remote account, may store here per hour. Anything past the budget is dropped for that hour. The floor under the operator blocklist at `/admin/fediverse`, since it also bounds servers nobody has blocked yet |
-| `FEDIVERSE_NOTE_RETENTION_DAYS` | `183` | How long a reply written on another network may be held here at the very most, in days. It is deleted when the clock runs out whatever else happens, so this is the promise your privacy page can make. Only applies once a member switches replies on (off by default) |
+| `FEDIVERSE_NOTE_RETENTION_DAYS` | `183` | How long a reply written on another network may be held here at the very most, in days. It is deleted when the clock runs out whatever else happens, so this is the promise your privacy page can make. Applies once a member has replies on — which the ticked Fediverse box at sign-up does, and the settings switch on its own does not |
 | `FEDIVERSE_NOTE_REFRESH_DAYS` | `7` | How stale a stored reply may get before vutuv asks its origin server whether it is still published there. Still there means the text is refreshed and the retention clock starts again; gone (or locked away) means it is deleted at once; unreachable changes nothing. Replies sent to a member privately are never re-checked |
 | `FEDIVERSE_OUTBOUND_REPLY_LIMIT` | `30` | How many answers to other networks one member may send per hour. This is the one place a member's own action makes your installation POST to a server that never followed them, so it is metered: the budget is the backstop against a compromised account relaying. Sized for somebody holding a conversation, so it only ever bites automation. Answering is only possible where a reply from that server already sits on a vutuv post, so the targets are always people who wrote here first |
 | `FEDIVERSE_OUTBOUND_LIKE_LIMIT` | `200` | How many likes of posts on other networks one member may send per hour. A separate, far larger budget than the reply limit above, because the two are nothing alike in frequency: a like is one tap while reading, so a limit sized for writing prose would refuse ordinary reading. It is still a limit, because this too makes your installation POST to a server that never followed the member. Taking a like back is never metered: a withdrawal must not be refusable |
@@ -510,6 +510,25 @@ is not a vetted party. Your levers live at **`/admin` → Fediverse**
 (`/admin/fediverse`); the whole screen is gone on an installation with
 `FEDIVERSE_ENABLED=false`.
 
+**Who federates, and what your privacy page has to say.** Each member decides
+for themselves, and they are asked twice: the sign-up form carries the question
+as a labelled checkbox that is **ticked by default** (with the explanation
+beside it, and one click to untick), and `/settings/fediverse` turns it off
+again at any time. That single box is the coarse "yes to all of it" and sets
+**all three** switches of the settings page — taking part, showing the
+reactions that come back, **and showing and storing the replies** people write
+on other networks — which is why its text spells the reply storage and its
+six-month limit out. So on an installation with `FEDIVERSE_ENABLED=true` expect
+most new accounts to federate from their first day, and to hold third-party
+replies; nothing leaves the building before the sign-up PIN confirms the
+address, and the three switches can be separated again at any time on the
+settings page. If holding a stranger's text is not acceptable on your
+installation, the only lever today is `FEDIVERSE_ENABLED=false`, which turns
+federation off entirely. **Your privacy page has to describe the choice the way
+it is actually offered** — presented at registration, pre-selected, covering
+reactions and replies, and revocable in the settings. It is per-installation
+content, edited at `/admin` → Legal pages, not shipped in the code.
+
 - **Blocklist.** Enter a server name (`mastodon.example` — a full address or an
   `@user@server` handle works too, only the server part is kept). From then on
   everything that server sends is dropped **before** its signature is checked
@@ -537,8 +556,10 @@ is not a vetted party. Your levers live at **`/admin` → Fediverse**
   address), and when — keeping a stranger's words after deleting their reply
   would make the deletion untrue.
 
-**Replies from other networks.** Off by default and switched on per member on
-their own Fediverse settings page. Once on, an answer written on another server
+**Replies from other networks.** Switched on per member, either by the ticked
+Fediverse box at sign-up (which covers all three switches, see above) or on
+their own Fediverse settings page, where the switch alone starts off. Once on,
+an answer written on another server
 under one of their public posts is stored here as **plain text** (never HTML,
 and no copy of the author's picture) and shown in the conversation, clearly
 marked as coming from elsewhere and linking to the original. A reply addressed
@@ -564,8 +585,9 @@ at all — they never signed up here and cannot practically be asked:
   tell that server we are holding it.
 
 If you run an installation where holding third-party text is not acceptable at
-all, leave it as it is: members have to switch it on themselves, and
-`FEDIVERSE_ENABLED=false` turns the whole of federation off.
+all, `FEDIVERSE_ENABLED=false` (which turns the whole of federation off) is the
+lever — the sign-up box switches replies on along with everything else, so
+expect most new accounts to hold them.
 
 **Answering those replies.** A member who takes part in the Fediverse can answer
 a **public** reply that came from another network, from the reply's own card in the

@@ -399,6 +399,18 @@ defmodule Vutuv.Accounts do
       )
 
     MemberCounter.increment()
+
+    # The sign-up form's Fediverse box is the second way a member can be opted
+    # in, and unlike /settings/fediverse it cannot mint the actor keypair
+    # itself: at sign-up the address is unconfirmed, so nothing may federate
+    # yet, and a keypair per unconfirmed registration would be work done for
+    # `delete_unconfirmed_registrations/1` to throw away. Confirmation is the
+    # moment `Fediverse.federated?/1` turns true, so it is the moment the
+    # signing key has to exist — the delivery worker deletes every activity of
+    # a member it finds no key for (the first remote Follow they send, say)
+    # without a word to anyone.
+    if Vutuv.Fediverse.federated?(activated), do: Vutuv.Fediverse.ensure_actor(activated)
+
     activated
   end
 

@@ -130,13 +130,14 @@
       </.inputs_for>
     </div>
 
-    <%!-- Group 3: privacy. Positive, opt-in phrasing to match the email
-          checkbox above, and checked by default. Both fields are inverted:
-          the box reads positively ("Allow ...") while the underlying
-          `noindex?` / `noai?` flags are negative, so a checked box submits
-          "false" (allow). The SEO question (search engines) and the GEO
-          question (AI agents / LLMs) are asked separately, since a member may
-          say yes to one and no to the other. --%>
+    <%!-- Group 3: reach. Positive, opt-in phrasing to match the email
+          checkbox above, and every box checked by default. The first two
+          fields are inverted: the box reads positively ("Allow ...") while the
+          underlying `noindex?` / `noai?` flags are negative, so a checked box
+          submits "false" (allow). The SEO question (search engines), the GEO
+          question (AI agents / LLMs) and the Fediverse question (other social
+          networks) are asked separately, since a member may say yes to one and
+          no to the next. --%>
     <div class="space-y-3 border-t border-slate-200 pt-6 dark:border-slate-800">
       <label class={check_label_class}>
         <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
@@ -149,6 +150,39 @@
         <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
         <span>{gettext("Allow AI agents and LLMs to use your profile")} (GEO)</span>
         <%= error_tag f, :noai? %>
+      </label>
+      <%!-- The third "who may reach this profile" question (Vutuv.Fediverse),
+            and the one that is NOT inverted: checked means taking part.
+            Pre-checked by the controller, because most people who join want it
+            and this is the only moment they are asked; /settings/fediverse
+            takes it back at any time. The label is deliberately the same
+            sentence as the switch on that page, so the member recognizes the
+            thing they are looking for later.
+
+            One box, all three of that page's switches (see
+            PageController.expand_fediverse_choice/1) — which is exactly why
+            this box carries three lines of explanation where the other two
+            carry none. It is the only choice on this form that is not just
+            about the member's own data: ticking it means answers written by
+            people who never signed up here are stored on our server, so the
+            text has to say that, and say for how long, before the tick counts
+            as consent to it. Left out entirely where the installation
+            federates nothing (FEDIVERSE_ENABLED=false, intranets). --%>
+      <label :if={Vutuv.Fediverse.enabled?()} class={check_label_class}>
+        <%= checkbox f, :fediverse_followers?, class: checkbox_class() %>
+        <span>
+          {gettext("Take part in the Fediverse")}
+          <%!-- `font-normal` is not decoration: components.css sets every
+                <label> bold, which the three box labels want and this helper
+                line does not - without it the explanation shouts as loudly as
+                the choice it explains. --%>
+          <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
+            {gettext(
+              "People on Mastodon and other independent networks can then follow this profile, and your public posts appear there. What they answer or share comes back and is shown under your posts, by their account address. A reply from there is stored here for up to six months. You can switch all of it off again at any time."
+            )}
+          </span>
+        </span>
+        <%= error_tag f, :fediverse_followers? %>
       </label>
     </div>
 

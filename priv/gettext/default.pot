@@ -17554,3 +17554,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "That link points at a single post. You can follow its author, %{account}, from here."
 msgstr ""
+
+#: lib/vutuv_web/templates/page/index.html.heex:176
+#, elixir-autogen, elixir-format
+msgid "People on Mastodon and other independent networks can then follow this profile, and your public posts appear there. What they answer or share comes back and is shown under your posts, by their account address. A reply from there is stored here for up to six months. You can switch all of it off again at any time."
+msgstr ""

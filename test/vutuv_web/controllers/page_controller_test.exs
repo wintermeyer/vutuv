@@ -675,16 +675,8 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
-  # True when the <input type="checkbox" name=name> in `html` is checked,
-  # regardless of attribute order.
-  defp checkbox_checked?(html, name) do
-    regex = ~r/<input(?=[^>]*\btype="checkbox")(?=[^>]*\bname="#{Regex.escape(name)}")[^>]*>/
-
-    case Regex.run(regex, html) do
-      [tag] -> tag =~ "checked"
-      _ -> false
-    end
-  end
+  # `checkbox_checked?/2` is shared with the other form tests and lives in
+  # VutuvWeb.ConnCase.
 
   # True when the <input type="radio" name=name value=value> in `html` is
   # checked, regardless of attribute order.
