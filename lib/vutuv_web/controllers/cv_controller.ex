@@ -28,6 +28,8 @@ defmodule VutuvWeb.CVController do
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.CV
 
+  plug(:noindex)
+
   @content_types %{
     "html" => "text/html",
     "tex" => "application/x-tex",
@@ -40,7 +42,6 @@ defmodule VutuvWeb.CVController do
     user = conn.assigns[:user]
 
     conn
-    |> ContentPolicy.put_robots_header(user.noindex?, user.noai?)
     |> put_layout(html: false)
     |> live_render(VutuvWeb.CVLive,
       session: Map.put(ControllerHelpers.live_render_session(conn), "profile_user_id", user.id)
@@ -75,6 +76,16 @@ defmodule VutuvWeb.CVController do
 
   # A comma-separated list of hide-keys (identity fields / section keys /
   # entry ids); only ever removes data, so no validation beyond splitting.
+  # The profile is the page a name search should find. Every CV surface —
+  # builder, print view, downloads — shows the same data as a tool, so all
+  # three actions are served `X-Robots-Tag: noindex` (forced; the member's
+  # own AI axis rides along) and stay crawlable precisely so the header is
+  # seen — the same noindex-not-Disallow doctrine as the profile detail
+  # sub-pages and the RSS feeds (see VutuvWeb.RobotsTxt).
+  defp noindex(conn, _opts) do
+    ContentPolicy.put_robots_header(conn, true, conn.assigns[:user].noai?)
+  end
+
   defp parse_hide(params) do
     (params["hide"] || "")
     |> String.split(",", trim: true)

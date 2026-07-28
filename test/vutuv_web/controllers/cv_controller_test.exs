@@ -398,5 +398,31 @@ defmodule VutuvWeb.CVControllerTest do
       assert conn |> recycle() |> get(~p"/#{owner}/cv/download/docx") |> response(200)
       assert conn |> recycle() |> get(~p"/#{owner}/cv/print") |> response(200)
     end
+
+    # The profile is the page a name search should find; the CV builder, the
+    # print view and the downloads show the same data as a tool, so they must
+    # never compete with the profile in the index. They stay crawlable (no
+    # robots.txt block, see VutuvWeb.RobotsTxt) precisely so this header is
+    # seen and Google can drop already-known CV URLs.
+    test "every CV surface is noindex for a permissive member", %{conn: conn} do
+      owner = seed_profile(insert(:activated_user))
+
+      for path <- [~p"/#{owner}/cv", ~p"/#{owner}/cv/print", ~p"/#{owner}/cv/download/html"] do
+        result = get(conn, path)
+
+        assert result.status == 200
+
+        assert get_resp_header(result, "x-robots-tag") == ["noindex"],
+               "expected X-Robots-Tag: noindex on #{path}"
+      end
+    end
+
+    test "a member's AI opt-out still rides on the CV's noindex", %{conn: conn} do
+      owner = :activated_user |> insert(noai?: true) |> seed_profile()
+
+      result = get(conn, ~p"/#{owner}/cv")
+
+      assert get_resp_header(result, "x-robots-tag") == ["noindex, noai, noimageai"]
+    end
   end
 end
