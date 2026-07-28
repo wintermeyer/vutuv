@@ -262,9 +262,11 @@ defmodule VutuvWeb.ListingBatchingTest do
       insert(:follow, follower: insert_activated_user(), followee: owner)
       insert(:follow, follower: insert_activated_user(), followee: owner)
 
-      # A second member so the rail still has someone genuine to recommend.
+      # A second member so the rail still has someone genuine to recommend
+      # (with a recent post, since suggestions require one).
       other = insert_activated_user(first_name: "Somebody")
       insert(:follow, follower: insert_activated_user(), followee: other)
+      insert(:post, user: other)
 
       conn = get(conn, ~p"/#{owner}")
       assert html_response(conn, 200)

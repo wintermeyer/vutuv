@@ -163,7 +163,11 @@ instead of its regular late-rail spot: every other card on a fresh profile
 points inward, and this is the one moment to show that there are people here
 to follow. The placement is sticky per page view — the fifth follow, made from
 the promoted card itself, must not teleport the card away mid-click; the next
-visit demotes it.
+visit demotes it. The card only ever suggests accounts that posted within the
+last three weeks (`Posts.recently_posting_ids/2`,
+`UserProfileLive.@suggested_activity_days`): a suggestion promises that
+following fills your feed, and a silent account cannot keep that promise —
+deliberately strict, so a thin card beats a padded one.
 
 Work experience is deliberately not on the checklist; its section card keeps its
 own add tile.

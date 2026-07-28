@@ -2059,6 +2059,26 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  Of `users`, the ids of those who authored a post (replies included) within
+  the last `days` days, as a MapSet. The follow-suggestion surfaces gate on
+  this: a suggestion is a promise that following fills your feed, which a
+  silent account cannot keep. One query for the whole candidate list.
+  """
+  def recently_posting_ids(users, days) do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(), -days, :day)
+    ids = Enum.map(users, & &1.id)
+
+    Repo.all(
+      from(p in Post,
+        where: p.user_id in ^ids and p.inserted_at > ^cutoff,
+        select: p.user_id,
+        distinct: true
+      )
+    )
+    |> MapSet.new()
+  end
+
+  @doc """
   Maps a raw filter string (a phx-value or `?type=` query param) to one of the
   timeline filters `author_posts_page/5` / `profile_posts/3` / `count_author_posts/3`
   understand, defaulting to `:all` for anything unrecognised (issue #945).

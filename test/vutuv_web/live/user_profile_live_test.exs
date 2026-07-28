@@ -264,6 +264,9 @@ defmodule VutuvWeb.UserProfileLiveTest do
       not_followed = insert_activated_user()
       insert(:user_tag, user: already_followed, tag: tag)
       insert(:user_tag, user: not_followed, tag: tag)
+      # Both pass the recent-activity gate, so the follow edge alone decides.
+      insert(:post, user: already_followed)
+      insert(:post, user: not_followed)
       # The viewer already follows one of the two candidates.
       insert(:follow, follower: viewer, followee: already_followed)
 
@@ -589,15 +592,24 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
-  # Make `candidate` appear in `owner`'s "Who to follow" rail: tag them with
+  # Put `candidate` into `owner`'s topical suggestion pool: tag them with
   # every one of the owner's tags, so whichever tag `first_tag/1` resolves as
   # the leading one (the three registration tags share an inserted_at second),
-  # the topical suggestion pool contains the candidate.
-  defp suggest_to(owner, candidate) do
+  # the pool contains the candidate. Suggestions additionally require a post
+  # from the last three weeks, so this alone does NOT make them appear.
+  defp tag_to_owner(owner, candidate) do
     for ut <- Repo.all(from(ut in Tags.UserTag, where: ut.user_id == ^owner.id, preload: :tag)) do
       insert(:user_tag, user: candidate, tag: ut.tag)
     end
 
+    candidate
+  end
+
+  # Make `candidate` really appear in the rail: topical pool + the recent post
+  # the activity gate requires.
+  defp suggest_to(owner, candidate) do
+    tag_to_owner(owner, candidate)
+    insert(:post, user: candidate)
     candidate
   end
 
@@ -650,12 +662,38 @@ defmodule VutuvWeb.UserProfileLiveTest do
       insert(:user_tag, user: owner, tag: tag)
       candidate = insert_activated_user()
       insert(:user_tag, user: candidate, tag: tag)
+      insert(:post, user: candidate)
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
       assert has_element?(view, "#profile-who-to-follow")
       refute has_element?(view, ~s(#profile-who-to-follow[data-promoted]))
       refute has_element?(view, "#discovery-intro")
+    end
+
+    test "only accounts that posted in the last three weeks are suggested", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+
+      # Three candidates in the topical pool: one with a fresh post, one whose
+      # last post is older than the window, one who never posted.
+      active = suggest_to(owner, insert_activated_user())
+      stale = tag_to_owner(owner, insert_activated_user())
+
+      insert(:post,
+        user: stale,
+        inserted_at: NaiveDateTime.add(NaiveDateTime.utc_now(), -22, :day)
+      )
+
+      silent = tag_to_owner(owner, insert_activated_user())
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # A suggestion is a promise that following fills your feed; only the
+      # recently posting account can keep it.
+      rail = "#profile-who-to-follow"
+      assert has_element?(view, ~s(#{rail} a[href="/#{active.username}"]))
+      refute has_element?(view, ~s(#{rail} a[href="/#{stale.username}"]))
+      refute has_element?(view, ~s(#{rail} a[href="/#{silent.username}"]))
     end
 
     test "the fifth follow ticks the checklist live but leaves the card in place",

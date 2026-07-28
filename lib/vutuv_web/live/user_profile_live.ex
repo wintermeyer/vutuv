@@ -1128,6 +1128,12 @@ defmodule VutuvWeb.UserProfileLive do
   @recommended_count 6
   @recommended_pool 60
 
+  # A suggested account must have posted within this window: the card promises
+  # that following fills your feed, and a silent account cannot keep that
+  # promise. Strict on purpose - a thin (or empty) card is more honest than
+  # padding it with accounts whose posts nobody will ever see.
+  @suggested_activity_days 21
+
   # The "Who to follow" rail. We suggest members most endorsed for this profile's
   # leading tag (so the suggestion is topically tied to whoever you're viewing),
   # falling back to the most-followed members when the profile has no tag. Then we
@@ -1160,8 +1166,9 @@ defmodule VutuvWeb.UserProfileLive do
 
   # Keep only members the rail may suggest: not the profile owner, not the viewer,
   # not anyone the viewer already follows (one batched lookup via `following_map`),
-  # and not a member the viewer blocked / who blocked them (the follow would be
-  # refused as :blocked and the suggestion would just reappear).
+  # not a member the viewer blocked / who blocked them (the follow would be
+  # refused as :blocked and the suggestion would just reappear) - and only
+  # accounts that posted within the activity window (see @suggested_activity_days).
   defp suggestable(candidates, user, viewer) do
     following = following_map(viewer, candidates)
     # `viewer` is nil for a logged-out visitor; a nil id never equals a real UUID,
@@ -1170,10 +1177,15 @@ defmodule VutuvWeb.UserProfileLive do
     viewer_id = viewer && viewer.id
     blocked = if viewer, do: Social.blocked_user_ids(viewer.id), else: MapSet.new()
 
-    Enum.reject(candidates, fn u ->
-      u.id == user.id or u.id == viewer_id or Map.has_key?(following, u.id) or
-        MapSet.member?(blocked, u.id)
-    end)
+    kept =
+      Enum.reject(candidates, fn u ->
+        u.id == user.id or u.id == viewer_id or Map.has_key?(following, u.id) or
+          MapSet.member?(blocked, u.id)
+      end)
+
+    # The activity gate last, so its one query only sees the survivors.
+    active = Vutuv.Posts.recently_posting_ids(kept, @suggested_activity_days)
+    Enum.filter(kept, &MapSet.member?(active, &1.id))
   end
 
   defp first_tag(user) do
