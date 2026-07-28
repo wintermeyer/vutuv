@@ -554,7 +554,8 @@ defmodule VutuvWeb.FediverseController do
   defp resolve_resource(_), do: nil
 
   defp jrd(user) do
-    profile_url = "#{String.trim_trailing(VutuvWeb.Endpoint.url(), "/")}/#{user.username}"
+    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/")
+    profile_url = "#{base}/#{user.username}"
 
     %{
       "subject" => "acct:#{user.username}@#{VutuvWeb.Endpoint.host()}",
@@ -565,6 +566,16 @@ defmodule VutuvWeb.FediverseController do
           "rel" => "http://webfinger.net/rel/profile-page",
           "type" => "text/html",
           "href" => profile_url
+        },
+        # Where this member confirms a follow they started on somebody else's
+        # server (`VutuvWeb.AuthorizeInteractionController`). Without this link
+        # a remote server has to guess: Mastodon guesses exactly this path, but
+        # others simply tell the visitor that vutuv offers no follow dialog. The
+        # `{uri}` placeholder is the object they were looking at and must stay
+        # unencoded — the other server fills it in.
+        %{
+          "rel" => "http://ostatus.org/schema/1.0/subscribe",
+          "template" => "#{base}/authorize_interaction?uri={uri}"
         }
       ]
     }

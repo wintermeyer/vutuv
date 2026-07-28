@@ -293,6 +293,16 @@ defmodule VutuvWeb.Router do
     scope "/" do
       pipe_through(:noindex_pipe)
       get("/login", SessionController, :new)
+
+      # The Fediverse's remote-interaction endpoint (see
+      # VutuvWeb.AuthorizeInteractionController): another server sends a member
+      # of this installation here when they pressed Follow on an account out
+      # there. Our WebFinger document names this path as its subscribe
+      # template, and Mastodon guesses it anyway for a server that names none,
+      # so it is a root word (reserved in Vutuv.Accounts.ReservedSlugs) rather
+      # than a /system/ page. noindex: it is a redirect for one visitor, never
+      # a page.
+      get("/authorize_interaction", AuthorizeInteractionController, :show)
     end
 
     post("/login", SessionController, :create)

@@ -24,8 +24,12 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   # directories, tools) go under the already-reserved /system/ prefix instead
   # of claiming another root word — see CLAUDE.md; the member directory
   # (/system/members) set the pattern, freeing "members" as a handle again.
+  # `authorize_interaction` is the one root word here that another project
+  # chose for us: it is the remote-interaction path Mastodon guesses at when a
+  # server's WebFinger document names no subscribe template, so it has to
+  # answer at the root (see VutuvWeb.AuthorizeInteractionController).
   @route_slugs ~w(
-    about access_tokens account_deletion admin ads api assets avatars benutzername blocks blog bookmarks
+    about access_tokens account_deletion admin ads api assets authorize_interaction avatars benutzername blocks blog bookmarks
     organizations organization_images community connected_apps connections contact covers css datenschutzerklaerung dev developers
     edit emails favicon.ico feed follow_back
     follows fonts groups health help images impressum jobs js legal likes listings live

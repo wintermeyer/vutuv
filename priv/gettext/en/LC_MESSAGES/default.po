@@ -2508,7 +2508,7 @@ msgstr ""
 msgid "Welcome to vutuv!"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4046
+#: lib/vutuv_web/components/post_components.ex:4050
 #, elixir-autogen, elixir-format
 msgid "Only public posts can be answered."
 msgstr ""
@@ -2521,8 +2521,8 @@ msgstr ""
 
 #: lib/vutuv_web/components/post_components.ex:898
 #: lib/vutuv_web/components/post_components.ex:1508
-#: lib/vutuv_web/components/post_components.ex:4029
-#: lib/vutuv_web/components/post_components.ex:4030
+#: lib/vutuv_web/components/post_components.ex:4033
+#: lib/vutuv_web/components/post_components.ex:4034
 #: lib/vutuv_web/live/notification_live/index.ex:917
 #: lib/vutuv_web/live/post_live/reply.ex:35
 #, elixir-autogen, elixir-format
@@ -17536,4 +17536,19 @@ msgstr ""
 #: lib/vutuv_web/live/fediverse_following_live.ex:217
 #, elixir-autogen, elixir-format
 msgid "%{account} moved to another server. Your subscription already went with them — remove this old entry?"
+msgstr ""
+
+#: lib/vutuv_web/controllers/authorize_interaction_controller.ex:50
+#, elixir-autogen, elixir-format
+msgid "Please sign in first, then you can follow that account from your vutuv account."
+msgstr ""
+
+#: lib/vutuv_web/controllers/authorize_interaction_controller.ex:71
+#, elixir-autogen, elixir-format
+msgid "That link did not name a Fediverse account we can read."
+msgstr ""
+
+#: lib/vutuv_web/controllers/authorize_interaction_controller.ex:115
+#, elixir-autogen, elixir-format
+msgid "That link points at a single post. You can follow its author, %{account}, from here."
 msgstr ""

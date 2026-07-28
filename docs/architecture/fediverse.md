@@ -505,6 +505,40 @@ own redirect following would skip that second check), short timeouts, no
 retries, and a body ceiling that halts the stream rather than buffering. Every
 failure lands back on the profile with a plain-language flash naming the server,
 and the handle is right there to copy, so there is always a way through.
+
+### The same door from the other side: `/authorize_interaction`
+
+The template above is what *other* servers read out of *our* WebFinger document,
+and until v7.186.0 vutuv published none — so a member who pressed Follow on
+Mastodon and typed `@them@vutuv.de` was sent to Mastodon's fallback guess,
+`https://vutuv.de/authorize_interaction?uri=…`, and met a 404. Two halves fix
+that, and both are needed: `VutuvWeb.FediverseController`'s WebFinger document
+now names the template (implementations without Mastodon's fallback otherwise
+report that vutuv offers no follow dialog at all), and
+`VutuvWeb.AuthorizeInteractionController` answers that path.
+
+The word is a **root** route with a `Vutuv.Accounts.ReservedSlugs` entry rather
+than a `/system/` page, which is the exception the CLAUDE.md rule allows for:
+Mastodon hardcodes the path as its fallback, so it is spent whether we
+advertise it or not.
+
+What arrives in `uri` is whatever the visitor was looking at, in whatever
+spelling that server prefers — a profile URL, an `acct:` URI, a bare handle, or
+a link to a **single post** (Mastodon sends those here for a reply or a boost).
+All of them are read by `RemoteFollow.parse_address/1`, so an address means the
+same thing here as in the follow box; a post URL is reduced to its author's URL
+and parsed by the same function rather than by a second copy of its rules.
+
+It **follows nothing**. The arrival is a `GET` from another site, so acting on
+it would let any page on the web make a signed-in member send a signed `Follow`
+to a server of its choosing simply by linking here. The resolved address is
+handed to the follow box on `/settings/fediverse/following` instead — the same
+`?address=` prefill the search page uses, for the same reason it prefills rather
+than acts. A signed-out visitor is bounced through `/login` with the
+`:login_return_to` marker the OAuth consent screen uses, so the PIN round trip
+lands them back on this URL. The installation switch is checked first: an
+endpoint this vutuv does not run 404s instead of first asking anyone to sign in.
+
 ## Revocation: a takedown has to leave the building
 
 Until issue #1102 only one path federated a `Delete`: the owner pressing delete

@@ -173,6 +173,26 @@ defmodule VutuvWeb.FediverseControllerTest do
       assert href == Docs.actor_url(user)
     end
 
+    # Without this link a remote server guesses where our members confirm a
+    # follow. Mastodon's guess happens to be the path we serve, but Pleroma and
+    # friends simply report "that server offers no follow dialog", so the
+    # template is what makes following from another network work at all.
+    test "publishes the remote-follow (subscribe) template", %{conn: conn} do
+      user = federated_user()
+
+      conn = get(conn, "/.well-known/webfinger?resource=acct:#{user.username}@#{host()}")
+
+      assert %{"template" => template} =
+               Enum.find(
+                 json_response(conn, 200)["links"],
+                 &(&1["rel"] == "http://ostatus.org/schema/1.0/subscribe")
+               )
+
+      assert template ==
+               String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <>
+                 "/authorize_interaction?uri={uri}"
+    end
+
     test "404s for members without the opt-in, unknown handles and foreign hosts",
          %{conn: conn} do
       plain = insert(:activated_user)

@@ -2559,7 +2559,7 @@ msgstr "Entfolgen"
 msgid "Welcome to vutuv!"
 msgstr "Willkommen bei vutuv!"
 
-#: lib/vutuv_web/components/post_components.ex:4046
+#: lib/vutuv_web/components/post_components.ex:4050
 #, elixir-autogen, elixir-format
 msgid "Only public posts can be answered."
 msgstr "Nur öffentliche Beiträge können beantwortet werden."
@@ -2572,8 +2572,8 @@ msgstr "Antworten"
 
 #: lib/vutuv_web/components/post_components.ex:898
 #: lib/vutuv_web/components/post_components.ex:1508
-#: lib/vutuv_web/components/post_components.ex:4029
-#: lib/vutuv_web/components/post_components.ex:4030
+#: lib/vutuv_web/components/post_components.ex:4033
+#: lib/vutuv_web/components/post_components.ex:4034
 #: lib/vutuv_web/live/notification_live/index.ex:917
 #: lib/vutuv_web/live/post_live/reply.ex:35
 #, elixir-autogen, elixir-format
@@ -18322,3 +18322,22 @@ msgid "%{account} moved to another server. Your subscription already went with t
 msgstr ""
 "%{account} ist auf einen anderen Server umgezogen. Ihr Abonnement ist bereits "
 "mitgegangen — diesen alten Eintrag entfernen?"
+
+#: lib/vutuv_web/controllers/authorize_interaction_controller.ex:50
+#, elixir-autogen, elixir-format
+msgid "Please sign in first, then you can follow that account from your vutuv account."
+msgstr ""
+"Bitte melden Sie sich zuerst an, danach können Sie diesem Konto mit Ihrem "
+"vutuv-Konto folgen."
+
+#: lib/vutuv_web/controllers/authorize_interaction_controller.ex:71
+#, elixir-autogen, elixir-format
+msgid "That link did not name a Fediverse account we can read."
+msgstr "In diesem Link steckt keine Fediverse-Adresse, die wir lesen können."
+
+#: lib/vutuv_web/controllers/authorize_interaction_controller.ex:115
+#, elixir-autogen, elixir-format
+msgid "That link points at a single post. You can follow its author, %{account}, from here."
+msgstr ""
+"Dieser Link zeigt auf einen einzelnen Beitrag. Von hier aus können Sie dem "
+"Konto dahinter folgen: %{account}."
