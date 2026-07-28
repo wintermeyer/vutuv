@@ -89,8 +89,12 @@ defmodule Vutuv.FediverseRemoteFollowsTest do
     user
   end
 
+  # Ordered by id (UUID v7, so id order is creation order): without an
+  # order_by, Postgres returns the rows in arbitrary order, and the
+  # "[follow, undo]" assertion below flaked on CI when the two came back
+  # reversed.
   defp deliveries(user) do
-    Repo.all(from(d in Delivery, where: d.user_id == ^user.id))
+    Repo.all(from(d in Delivery, where: d.user_id == ^user.id, order_by: d.id))
     |> Enum.map(&Jason.decode!(&1.activity_json))
   end
 
