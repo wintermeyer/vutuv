@@ -1567,6 +1567,60 @@ ul.thumbs li .text .url a {
   top: 0.5em;
 }
 
+/* A fence that also names its file (issue #1137) gets a real header bar
+   instead of the floating corner label: `.codeblock__file` holds the name the
+   author gave, `.codeblock__lang` the language that would otherwise sit in the
+   corner. Both are text the server rendered, not `content: attr(…)` — a file
+   name is part of what the snippet says, and the same HTML travels to RSS,
+   mail and the fediverse, where a CSS-only label would simply vanish.
+
+   The name may be a long path, so it wraps rather than being cut: on a phone
+   the last segments are usually the ones that matter and hiding them would
+   defeat the point. The language stays on one line beside it. */
+.markdown .codeblock--titled::after { content: none; }
+.markdown .codeblock--titled pre { padding-top: 0.75em; }
+.markdown .codeblock--titled pre.diff-block { padding-top: 0.75em; }
+.markdown .codeblock--titled pre { border-radius: 0 0 8px 8px; }
+.codeblock__title {
+  align-items: baseline;
+  background: #e2e8f0;
+  border-radius: 8px 8px 0 0;
+  color: #334155;
+  display: flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78em;
+  gap: 0.75em;
+  padding: 0.5em 0.9em;
+}
+/* The document glyph says "this is a file", so the bar is not read as a
+   caption. Decoration only: the name itself is right beside it. Drawn as a
+   mask over `currentcolor` rather than a coloured background-image, so it
+   follows the bar's text colour into dark mode instead of needing a second
+   copy of the SVG down there. */
+.codeblock__file::before {
+  background: currentcolor;
+  content: "";
+  display: inline-block;
+  height: 0.95em;
+  margin-right: 0.4em;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/%3E%3Cpath d='M14 2v6h6'/%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: 0.75;
+  vertical-align: -0.1em;
+  width: 0.95em;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/%3E%3Cpath d='M14 2v6h6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.codeblock__file {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.codeblock__lang {
+  color: #475569;
+  flex: none;
+  font-size: 0.9em;
+  margin-left: auto;
+}
+
 /* The token colours. Six hues is more than the brand/accent/slate palette
    carries, and deliberately so: telling a comment from a string from a keyword
    is the whole point of highlighting, and every one of them is picked to clear
@@ -2254,8 +2308,12 @@ html.lightbox-open { overflow: hidden; }
     background: rgb(59 130 246 / 0.16);
     box-shadow: 0 0 0 4px rgb(59 130 246 / 0.16);
   }
-  /* Code-block language label + token colours (light values above). */
+  /* Code-block language label, file-name bar + token colours (light values
+     above). The bar's glyph is a mask over `currentcolor`, so it needs no
+     dark copy of its own. */
   .markdown .codeblock::after { background: #334155; color: #cbd5e1; }
+  .codeblock__title { background: #334155; color: #e2e8f0; }
+  .codeblock__lang { color: #cbd5e1; }
   .markdown .hl-com { color: #94a3b8; }
   .markdown .hl-str { color: #6ee7b7; }
   .markdown .hl-num { color: #fcd34d; }

@@ -280,6 +280,8 @@ defmodule VutuvWeb.PageController do
   - `/listings/most_followed_users` — the most followed members
   - `/system/members` — the member directory: everyone open to search engines,
     filed by last-name initial at `/system/members/<a-z|other>`
+  - `/system/markdown` — what members may write in a post: the Markdown
+    reference, also raw at `/system/markdown.md` (`?lang=de` for German)
   - `/organizations` — the verified organization directory; one organization at `/organizations/<slug>`
   - `/jobs` — the public job board: open positions, filterable, newest first
   - `/jobs/<slug>` — a job posting: role, location, pay range, tags and how to apply

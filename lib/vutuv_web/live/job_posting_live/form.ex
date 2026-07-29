@@ -486,6 +486,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
             label={gettext("Job description")}
             placeholder={gettext("Describe the role. Markdown is supported.")}
             rows={10}
+            help
           />
           {error_tag(@form, :description)}
 

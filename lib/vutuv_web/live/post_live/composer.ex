@@ -1855,6 +1855,7 @@ defmodule VutuvWeb.PostLive.Composer do
         placeholder={gettext("What's new? Markdown is supported.")}
         rows={if(@post, do: 10, else: 3)}
         images
+        help
       />
 
       <p :if={String.length(@body) > Post.max_body_length() - 2000} class="mt-1 text-xs text-slate-600 dark:text-slate-400">

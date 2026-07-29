@@ -51,10 +51,46 @@ left exactly as they were.
 
 A ```` ```diff ```` fence is the one language whose **body** is not tokenized
 here: it gets the label and nothing else (`family: :none`), because
-`highlight_diff_blocks/1` runs right after and turns it into real added /
+`VutuvWeb.CodeHighlight.Diff` runs right after and turns it into real added /
 removed rows (issue #1108, below). That is why the order in `render_pipeline/2`
 is `CodeHighlight.render/1` first — the diff renderer then still finds a plain
 `<pre><code class="language-diff">` sitting inside the labelled wrapper.
+
+### What else a fence may say
+
+The info string may carry two more facts, each written either after a colon or
+as an attribute (issues #1137 and #1138):
+
+    ```php:config/app.php          ```php title="config/app.php"
+    ```diff:php                    ```diff lang="php"
+
+A **title** names the file the snippet comes from and renders as a real header
+bar above the code — a real element, not a CSS label, because a file name is
+part of what the snippet says and the same HTML travels to RSS, mail and the
+fediverse, where our stylesheet does not. A **`lang`** on a `diff` fence names
+the language the diff is written in, so the rows get both the added/removed
+tint and the token colours; without it a diff is the one block that stays grey
+however well we know its language.
+
+`VutuvWeb.CodeHighlight.Fences` owns that grammar, and the short form is the
+one that gets stored, because two links in the chain understand a single word
+and nothing more:
+
+* **Earmark** does not ignore the rest of an info string, it stops seeing a
+  fence at all — the whole block collapses into one run of inline code. So
+  ` ```js react ` had always rendered as garbage, not just the new syntaxes.
+  `Fences.normalize/1` folds the info string into one canonical word
+  (`language[:sub][!percent-encoded-title]`) before Earmark sees the line, and
+  `Fences.parse/1` reads all three facts back off the `class` afterwards.
+* **Milkdown** keeps a code block's first word as its `language` attribute and
+  serializes only that, so an attribute-form title would be destroyed the
+  moment a post is re-opened in the composer. `rewriteFenceInfo` in
+  `assets/js/markdown_editor.js` folds it into the colon form on the way in,
+  the same shape of guard the footnote transforms are.
+
+`/system/markdown` documents all of this for members, and renders its own
+examples through the same code (`VutuvWeb.HelpController`), so the page cannot
+describe a feature the renderer has stopped supporting.
 
 ### Footnotes
 

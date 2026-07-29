@@ -35,6 +35,7 @@ defmodule Vutuv.Sitemap do
                   "/nutzungsbedingungen",
                   "/listings/most_followed_users",
                   "/system/members",
+                  "/system/markdown",
                   "/organizations",
                   "/jobs",
                   "/ads",

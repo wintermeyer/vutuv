@@ -11,6 +11,14 @@ defmodule VutuvWeb.CodeHighlight do
   Everything the browser needs is the `.codeblock` / `.hl-*` rules in
   `assets/css/components.css`.
 
+  A fence may also name the **file the snippet comes from** (issue #1137) —
+  ` ```php:config/app.php ` or ` ```php title="config/app.php" ` — and that
+  title is rendered as a real header bar above the code, not as a CSS label:
+  a file name is information the reader needs, and the same HTML goes out over
+  RSS, mail and the fediverse, where none of our stylesheet applies. The
+  language name stays in that bar's right-hand corner when there is one, and in
+  its own floating corner label otherwise.
+
   ## Why it runs on the HTML and not on the Markdown
 
   `VutuvWeb.Markdown` sanitizes the rendered HTML, and the sanitizer allows a
@@ -19,7 +27,8 @@ defmodule VutuvWeb.CodeHighlight do
   the scrubber and builds its own markup from parts it controls. Nothing
   user-written reaches an attribute — the label and the `language-*` class come
   from `VutuvWeb.CodeHighlight.Languages` for a known language, and from a
-  `[a-z0-9+#._-]` slice of the fence word otherwise.
+  `[a-z0-9+#._-]` slice of the fence word otherwise; the title is escaped both
+  as text and, for `data-title`, as an attribute value.
 
   The code text is escaped when it arrives, so highlighting has to decode it,
   tokenize, and escape each token again. `decode/1` only accepts a block it can
@@ -33,13 +42,13 @@ defmodule VutuvWeb.CodeHighlight do
   untouched, so the common case costs one `String.contains?/2`.
   """
 
+  alias VutuvWeb.CodeHighlight.Fences
   alias VutuvWeb.CodeHighlight.Languages
   alias VutuvWeb.CodeHighlight.Lexer
 
   @block ~r{<pre><code([^>]*)>(.*?)</code></pre>}s
   @class ~r{class="([^"]*)"}
   @max_bytes 20_000
-  @max_word 24
 
   @css %{
     comment: "com",
@@ -69,50 +78,73 @@ defmodule VutuvWeb.CodeHighlight do
   def render(html), do: html
 
   defp block(whole, attrs, body) do
-    case fence_word(attrs) do
+    case fence_facts(attrs) do
       nil -> whole
-      word -> code_block(word, body)
+      facts -> code_block(facts, body)
     end
   end
 
-  defp code_block(word, body) do
+  defp code_block({word, sub, title}, body) do
     config = Languages.get(word)
     label = (config && config.label) || word
 
-    ~s(<div class="codeblock" data-language="#{attr(label)}">) <>
-      ~s(<pre><code class="language-#{attr(Languages.slug(word))}">) <>
+    ~s(<div class="#{wrapper_class(title)}" data-language="#{attr(label)}"#{title_attr(title)}>) <>
+      title_bar(title, label) <>
+      ~s(<pre><code class="#{code_class(word, sub)}">) <>
       highlight(body, config) <>
       ~s(</code></pre></div>)
   end
 
-  # The fence word this block should be labelled with, or nil when it should be
-  # left alone (no info string, or one of the "no language" markers).
-  defp fence_word(attrs) do
+  # The title is a real element, so it survives every surface that drops our
+  # CSS; `data-title` beside it is what a test (and any later JS) reads without
+  # having to parse the bar. The language keeps its corner label only when
+  # there is no bar to name it in.
+  defp title_bar(nil, _label), do: ""
+
+  defp title_bar(title, label) do
+    ~s(<div class="codeblock__title"><span class="codeblock__file">#{attr(title)}</span>) <>
+      ~s(<span class="codeblock__lang">#{attr(label)}</span></div>)
+  end
+
+  defp wrapper_class(nil), do: "codeblock"
+  defp wrapper_class(_title), do: "codeblock codeblock--titled"
+
+  defp title_attr(nil), do: ""
+  defp title_attr(title), do: ~s( data-title="#{attr(title)}")
+
+  # A diff block carries both languages: `language-diff` is what
+  # `VutuvWeb.Markdown.highlight_diff_blocks/1` keys on, `language-<sub>` what
+  # it colours the rows with (issue #1138).
+  defp code_class(word, nil), do: "language-" <> attr(Languages.slug(word))
+
+  defp code_class(word, sub),
+    do: code_class(word, nil) <> " language-" <> attr(Languages.slug(sub))
+
+  # What this block should be labelled with, or nil when it should be left
+  # alone (no info string, or one of the "no language" markers).
+  defp fence_facts(attrs) do
     with [_whole, class] <- Regex.run(@class, attrs),
-         word when word != "" <- normalize(class),
+         {word, sub, title} when is_binary(word) <- Fences.parse(class),
          false <- Languages.plain?(word) do
-      word
+      {word, sub, title}
     else
       _no_language -> nil
     end
   end
 
-  # ```` ```js:app.js ````, ```` ```{.python} ```` and ```` ```language-sql ````
-  # all name one language; keep the first word and strip the decoration around
-  # it, then reduce what is left to a charset that is safe in both an attribute
-  # value and a class name.
-  defp normalize(class) do
-    class
-    |> String.split([" ", "\t", ":", ",", ";"], parts: 2)
-    |> hd()
-    |> String.trim("{")
-    |> String.trim("}")
-    |> String.trim_leading(".")
-    |> String.downcase()
-    |> String.replace_prefix("language-", "")
-    |> String.replace(~r/[^a-z0-9+#._-]/, "")
-    |> String.slice(0, @max_word)
-  end
+  @doc """
+  Colour one already-escaped run of code the way `render/1` colours a block
+  body: decode, tokenize, escape each token again.
+
+  Public for `VutuvWeb.Markdown.highlight_diff_blocks/1`, which colours a diff
+  **row by row** — the marker has to come off first, and a row is the unit that
+  gets its own added / removed tint. A construct that spans several lines (a
+  block comment, a triple-quoted string) is therefore not carried from one row
+  to the next, which is the right trade for a diff: a hunk is a fragment, and
+  its first line is as likely to be the middle of such a construct as its
+  start.
+  """
+  def highlight_escaped(escaped, config), do: highlight(escaped, config)
 
   defp highlight(body, nil), do: body
   # `family: :none` means "labelled, body not ours" — the `diff` fence, whose
@@ -121,40 +153,52 @@ defmodule VutuvWeb.CodeHighlight do
 
   defp highlight(body, config) do
     with true <- byte_size(body) <= @max_bytes,
-         {:ok, code} <- decode(body) do
+         {:ok, code, quotes} <- decode(body) do
       code
       |> Lexer.tokens(config)
-      |> Enum.map(&span/1)
+      |> Enum.map(&span(&1, quotes))
       |> IO.iodata_to_binary()
     else
       _too_big_or_unfamiliar -> body
     end
   end
 
-  defp span({nil, text}), do: encode(text)
+  defp span({nil, text}, quotes), do: encode(text, quotes)
 
-  defp span({class, text}),
-    do: [~s(<span class="hl-), @css[class], ~s(">), encode(text), "</span>"]
+  defp span({class, text}, quotes),
+    do: [~s(<span class="hl-), @css[class], ~s(">), encode(text, quotes), "</span>"]
 
-  # Earmark escapes exactly these three characters in a code block, so decoding
-  # them is enough — and re-encoding has to reproduce the input to prove it.
-  # Anything else (a `&nbsp;`, a numeric entity) fails the check and the block
-  # is left as it is.
+  # A code block reaches us escaped, and the two renderers that feed this module
+  # escape it slightly differently: `Earmark.as_html!` (posts) leaves a `"`
+  # alone, while `Earmark.as_ast` + `Transform` (the docs and legal pages)
+  # writes it as `&quot;`. Which one it was is read off the block itself and
+  # threaded back into `encode/2`, because the safety rule here is not an entity
+  # list but a round trip: re-encoding has to reproduce the input byte for byte,
+  # or the block is left exactly as it was rather than risk mangling someone's
+  # snippet. Anything else (a `&nbsp;`, another numeric entity) fails that check.
+  #
+  # Missing the `&quot;` spelling used to fail it for every documentation block
+  # containing a double quote, which is most of them — a `curl -H "…"` line lost
+  # its colours while the same snippet in a post kept them.
   defp decode(escaped) do
+    quotes = String.contains?(escaped, "&quot;")
+
     code =
       escaped
       |> String.replace("&lt;", "<")
       |> String.replace("&gt;", ">")
+      |> then(&if quotes, do: String.replace(&1, "&quot;", "\""), else: &1)
       |> String.replace("&amp;", "&")
 
-    if encode(code) == escaped, do: {:ok, code}, else: :error
+    if encode(code, quotes) == escaped, do: {:ok, code, quotes}, else: :error
   end
 
-  defp encode(code) do
+  defp encode(code, quotes) do
     code
     |> String.replace("&", "&amp;")
     |> String.replace("<", "&lt;")
     |> String.replace(">", "&gt;")
+    |> then(&if quotes, do: String.replace(&1, "\"", "&quot;"), else: &1)
   end
 
   defp attr(value), do: value |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()

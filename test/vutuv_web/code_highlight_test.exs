@@ -182,6 +182,29 @@ defmodule VutuvWeb.CodeHighlightTest do
       assert CodeHighlight.render(html) =~ ~s(a &nbsp; b)
       refute CodeHighlight.render(html) =~ "hl-"
     end
+
+    test "highlights a block whose quotes arrive as &quot; and writes them back that way" do
+      # `Earmark.as_ast` + `Transform` — the developer docs and the legal pages
+      # — escapes a double quote, `as_html!` (posts) does not. Reading only the
+      # second spelling used to fail the round-trip check for every doc block
+      # containing a quote, which is most of them, so a `curl -H "…"` line lost
+      # its colours while the same snippet in a post kept them.
+      html =
+        CodeHighlight.render(
+          ~s(<pre><code class="bash"># fetch\ncurl -H &quot;Accept: text/plain&quot; /x</code></pre>)
+        )
+
+      assert html =~ ~s(<span class="hl-com"># fetch</span>)
+      assert html =~ ~s(<span class="hl-str">&quot;Accept: text/plain&quot;</span>)
+      refute html =~ ~s(&amp;quot;)
+    end
+
+    test "a block mixing both quote spellings is left alone rather than rewritten" do
+      html = ~s(<pre><code class="elixir">a &quot;x&quot; b "y"</code></pre>)
+
+      assert CodeHighlight.render(html) =~ ~s(a &quot;x&quot; b "y")
+      refute CodeHighlight.render(html) =~ "hl-"
+    end
   end
 
   # The code text with every tag removed, so a test can assert that highlighting

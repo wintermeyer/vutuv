@@ -7,11 +7,19 @@ defmodule VutuvWeb.DevDocMarkdown do
 
   The docs are trusted repo content (not user input), so Earmark runs directly
   here rather than through the `VutuvWeb.Markdown` sanitizer used for posts.
-  Fenced code blocks get the same server-side language label and colouring the
-  posts do (`VutuvWeb.CodeHighlight`).
+  Fenced code blocks get everything a post's do: the info string may name a
+  file as well as a language (`VutuvWeb.CodeHighlight.Fences`), the block is
+  labelled and coloured (`VutuvWeb.CodeHighlight`), and a ```` ```diff ```` fence
+  renders as real added / removed rows (`VutuvWeb.CodeHighlight.Diff`).
+  Footnotes work here too (`VutuvWeb.Markdown.Footnotes`), so a repo-authored
+  page and a member's post read the same way — which is what lets the Markdown
+  help page render its own examples instead of describing them.
   """
 
   alias VutuvWeb.CodeHighlight
+  alias VutuvWeb.CodeHighlight.Diff
+  alias VutuvWeb.CodeHighlight.Fences
+  alias VutuvWeb.Markdown.Footnotes
 
   @headings ~w(h1 h2 h3 h4 h5 h6)
 
@@ -26,12 +34,15 @@ defmodule VutuvWeb.DevDocMarkdown do
   semantics.
   """
   def to_html(markdown, opts \\ []) when is_binary(markdown) do
-    {:ok, ast, _messages} = Earmark.as_ast(markdown, opts)
+    {prepared, footnotes} = markdown |> Fences.normalize() |> Footnotes.prepare()
+    {:ok, ast, _messages} = Earmark.as_ast(prepared, opts)
 
     ast
     |> add_heading_ids()
     |> Earmark.Transform.transform()
     |> CodeHighlight.render()
+    |> Diff.render()
+    |> Footnotes.inject(footnotes)
   end
 
   @doc """

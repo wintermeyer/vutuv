@@ -7,7 +7,10 @@ defmodule VutuvWeb.DevDocControllerTest do
     response = conn |> get(~p"/developers") |> html_response(200)
     assert response =~ "vutuv API"
     assert response =~ "curl"
-    assert response =~ "/api/2.0/me"
+    # Stripped of tags, because the code in these blocks is highlighted: the
+    # `2.0` of the URL is a number to the lexer and rides in its own `<span>`,
+    # so the path is not one contiguous run of characters in the HTML.
+    assert text_of(response) =~ "/api/2.0/me"
 
     for page <- ["authentication", "reference"] do
       response = conn |> get("/developers/#{page}") |> html_response(200)
@@ -171,6 +174,8 @@ defmodule VutuvWeb.DevDocControllerTest do
     assert body =~ "/developers/cookbook.md"
     assert body =~ "/developers/data-model.md"
   end
+
+  defp text_of(html), do: String.replace(html, ~r/<[^>]*>/, "")
 
   # Every dev-doc slug, including the overview ("index"). doc_pages/0 is the
   # registry minus index, so prepend it.

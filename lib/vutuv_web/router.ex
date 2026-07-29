@@ -201,6 +201,12 @@ defmodule VutuvWeb.Router do
     get("/system/members", DirectoryController, :index)
     get("/system/members/:letter", DirectoryController, :show)
 
+    # How to format a post: the member-facing Markdown reference, in the
+    # reader's language, with the raw file under `/system/markdown.md`. Public
+    # (a member reads it before they have written anything) and under /system/
+    # like the directory, so it burns no root path word.
+    get("/system/markdown", HelpController, :markdown)
+
     # Username-independent profile permalink (issue #904): keyed on the member's
     # never-changing UUID v7 id, it 302-redirects to their current /:username, so
     # a link built from it survives every rename. Under /system/ so it does not

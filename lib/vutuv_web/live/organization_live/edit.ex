@@ -271,7 +271,9 @@ defmodule VutuvWeb.OrganizationLive.Edit do
           <label class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
             {gettext("Description")}
           </label>
-          <p class="text-xs text-slate-600 dark:text-slate-400">{gettext("Markdown is supported")}</p>
+          <p class="text-xs text-slate-600 dark:text-slate-400">
+            {gettext("Markdown is supported")} <.markdown_help_link />
+          </p>
           <.markdown_editor
             id="organization-description"
             name="organization[description]"

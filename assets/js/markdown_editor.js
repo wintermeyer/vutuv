@@ -448,9 +448,64 @@ export const MarkdownEditor = {
   // back unescaped. It changes nothing a reader sees — the server leaves a
   // reference with no definition as typed — so it would take writing the escape
   // AND a matching definition to notice, which is asking for a footnote anyway.
+  // A code fence may name the file a snippet comes from and, for a diff, the
+  // language inside it (issues #1137 and #1138) — either after a colon or as an
+  // attribute:
+  //
+  //   ```php:config/app.php        ```php title="config/app.php"
+  //   ```diff:php                  ```diff lang="php"
+  //
+  // Milkdown's code_block node has room for exactly ONE word (it stores the
+  // info string's first word as `language` and serializes only that back), so
+  // the attribute form would be silently destroyed the moment a post is
+  // re-opened in the composer — the same shape of loss the footnote transforms
+  // above exist to prevent. Fold it into the colon form on the way IN, which
+  // Milkdown carries through untouched. The member sees their fence rewritten
+  // to the short form once, and vutuv renders both.
+  rewriteFenceInfo(md) {
+    let open = null
+    return md
+      .split("\n")
+      .map((line) => {
+        const match = line.match(/^([ \t]{0,3})(`{3,}|~{3,})(.*)$/)
+        if (!match) return line
+        const [, indent, marker, info] = match
+        if (open) {
+          if (marker[0] === open.char && marker.length >= open.length && !info.trim()) open = null
+          return line
+        }
+        open = { char: marker[0], length: marker.length }
+        return indent + marker + this.fenceInfoWord(info)
+      })
+      .join("\n")
+  },
+
+  fenceInfoWord(info) {
+    if (!/(?:^|\s)(?:title|lang)\s*=/i.test(info)) return info
+    const attr = (key) =>
+      (info.match(
+        new RegExp(`(?:^|\\s)${key}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|(\\S+))`, "i")
+      ) || []).slice(1).find((value) => value !== undefined)
+    const word =
+      info
+        .replace(/(?:^|\s)(?:title|lang)\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi, " ")
+        .trim()
+        .split(/\s+/)[0] || ""
+    const language = word.split(":")[0]
+    // A diff's colon segment is the language inside it, everything else's is
+    // the file name — the same rule the server reads the short form by.
+    const diff = /^(diff|patch|udiff)$/i.test(language)
+    // A fence info string may hold no space, so a title that has one keeps it
+    // as `%20` — which is exactly what the server decodes it back from.
+    const rest = (diff ? attr("lang") : attr("title")) || ""
+    return rest ? `${language}:${rest.replace(/\s/g, "%20")}` : word
+  },
+
   escapeFootnotes(md) {
-    return this.mapOutsideFences(md, (part) =>
-      part.replace(/(?<!\\)\[\^([^\]\s]{1,64})\]/g, "\\[^$1]")
+    return this.rewriteFenceInfo(
+      this.mapOutsideFences(md, (part) =>
+        part.replace(/(?<!\\)\[\^([^\]\s]{1,64})\]/g, "\\[^$1]")
+      )
     )
   },
 

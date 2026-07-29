@@ -215,6 +215,14 @@ defmodule VutuvWeb.UI do
         "organization and job bodies stay image-free"
   )
 
+  attr(:help, :boolean,
+    default: false,
+    doc:
+      "render the quiet `/system/markdown` link under the editor. On the post " <>
+        "composer, where a member writes prose; off in the message composer, " <>
+        "whose panel has no room for a second line"
+  )
+
   attr(:class, :string, default: nil)
   attr(:rest, :global)
 
@@ -358,7 +366,40 @@ defmodule VutuvWeb.UI do
         placeholder={@placeholder}
         class="mde__source"
       >{@value}</textarea>
+
+      <p :if={@help} class="mt-1 text-right">
+        <.markdown_help_link />
+      </p>
     </div>
+    """
+  end
+
+  @doc """
+  The quiet link to `/system/markdown`, the page that shows what a member may
+  write and what it will look like.
+
+  One component rather than a sentence per form: the wording, the target and
+  the muted styling are the same wherever somebody writes prose, and the page
+  is the only place the syntax is documented, so a form that has a "Markdown is
+  supported" hint but no way to find out what that means is a dead end. Opens
+  in a new tab, since the reader is in the middle of writing something.
+  """
+  attr(:class, :string, default: nil)
+
+  def markdown_help_link(assigns) do
+    ~H"""
+    <.link
+      href="/system/markdown"
+      target="_blank"
+      rel="noopener"
+      class={[
+        "text-xs font-medium text-slate-600 hover:text-brand-700",
+        "dark:text-slate-400 dark:hover:text-brand-300",
+        @class
+      ]}
+    >
+      {gettext("Markdown help")}
+    </.link>
     """
   end
 
