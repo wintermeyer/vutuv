@@ -36,7 +36,12 @@ defmodule VutuvWeb.GermanCatalogTest do
     "lib/vutuv_web/live/post_live/composer.ex",
     "lib/vutuv_web/components/post_components.ex",
     "lib/vutuv/posts/photo_license.ex",
-    "lib/vutuv_web/live/tag_new_live.ex"
+    "lib/vutuv_web/live/tag_new_live.ex",
+    # The rename confirmation. Joined the list when its copy was reworked to say
+    # plainly that nothing has changed yet: the merge that added those labels
+    # fuzzy-filled "Now" with "Nein" (No) and "Not yours yet." with "Noch keine
+    # Reposts.", which is precisely the failure this test exists to fail on.
+    "lib/vutuv_web/templates/username/confirm.html.heex"
   ]
 
   # `gettext("…")` / `ngettext("…", …)` with a plain literal. A string built at

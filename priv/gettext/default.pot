@@ -125,7 +125,7 @@ msgstr ""
 #: lib/vutuv_web/templates/user/edit.html.heex:103
 #: lib/vutuv_web/templates/user/edit.html.heex:407
 #: lib/vutuv_web/templates/user/edit.html.heex:442
-#: lib/vutuv_web/templates/username/confirm.html.heex:134
+#: lib/vutuv_web/templates/username/confirm.html.heex:182
 #, elixir-autogen
 msgid "Cancel"
 msgstr ""
@@ -809,7 +809,7 @@ msgstr ""
 #: lib/vutuv_web/templates/social_media_account/card_list.html.heex:5
 #: lib/vutuv_web/templates/social_media_account/show.html.heex:21
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:26
-#: lib/vutuv_web/templates/username/confirm.html.heex:14
+#: lib/vutuv_web/templates/username/confirm.html.heex:24
 #: lib/vutuv_web/templates/username/new.html.heex:10
 #, elixir-autogen
 msgid "Username"
@@ -1679,8 +1679,8 @@ msgid "Close"
 msgstr ""
 
 #: lib/vutuv_web/templates/email/confirm.html.heex:9
-#: lib/vutuv_web/templates/username/confirm.html.heex:15
-#: lib/vutuv_web/templates/username/confirm.html.heex:83
+#: lib/vutuv_web/templates/username/confirm.html.heex:25
+#: lib/vutuv_web/templates/username/confirm.html.heex:131
 #, elixir-autogen, elixir-format
 msgid "Confirm"
 msgstr ""
@@ -5379,7 +5379,7 @@ msgstr ""
 #: lib/vutuv_web/templates/export/index.html.heex:11
 #: lib/vutuv_web/templates/login_code/index.html.heex:4
 #: lib/vutuv_web/templates/totp/new.html.heex:4
-#: lib/vutuv_web/templates/username/confirm.html.heex:13
+#: lib/vutuv_web/templates/username/confirm.html.heex:23
 #: lib/vutuv_web/views/settings_html.ex:171
 #, elixir-autogen, elixir-format
 msgid "Settings"
@@ -15917,8 +15917,6 @@ msgid "This confirmation expired. Please start again."
 msgstr ""
 
 #: lib/vutuv/notifications/emailer.ex:226
-#: lib/vutuv_web/controllers/username_controller.ex:402
-#: lib/vutuv_web/templates/username/confirm.html.heex:11
 #, elixir-autogen, elixir-format
 msgid "Confirm your new username"
 msgstr ""
@@ -15943,52 +15941,37 @@ msgstr ""
 msgid "Your authenticator app or one-time code list, or a PIN we email you."
 msgstr ""
 
-#: lib/vutuv_web/templates/username/confirm.html.heex:20
-#, elixir-autogen, elixir-format
-msgid "What will change"
-msgstr ""
-
-#: lib/vutuv_web/templates/username/confirm.html.heex:34
-#, elixir-autogen, elixir-format
-msgid "Your current profile address stops working, and anyone can claim the handle you leave behind. Mentions of your old handle in posts are rewritten to the new one."
-msgstr ""
-
-#: lib/vutuv_web/templates/username/confirm.html.heex:43
+#: lib/vutuv_web/templates/username/confirm.html.heex:91
 #, elixir-autogen, elixir-format
 msgid "Pick a different username"
 msgstr ""
 
-#: lib/vutuv_web/templates/username/confirm.html.heex:49
+#: lib/vutuv_web/templates/username/confirm.html.heex:97
 #, elixir-autogen, elixir-format
 msgid "Confirm it is you"
 msgstr ""
 
-#: lib/vutuv_web/templates/username/confirm.html.heex:51
-#, elixir-autogen, elixir-format
-msgid "Your username is your public identity here, so we ask you to confirm the change once."
-msgstr ""
-
-#: lib/vutuv_web/templates/username/confirm.html.heex:66
+#: lib/vutuv_web/templates/username/confirm.html.heex:114
 #, elixir-autogen, elixir-format
 msgid "That passkey could not be verified. Please try again."
 msgstr ""
 
-#: lib/vutuv_web/templates/username/confirm.html.heex:69
+#: lib/vutuv_web/templates/username/confirm.html.heex:117
 #, elixir-autogen, elixir-format
 msgid "Confirm with your passkey"
 msgstr ""
 
-#: lib/vutuv_web/templates/username/confirm.html.heex:94
+#: lib/vutuv_web/templates/username/confirm.html.heex:142
 #, elixir-autogen, elixir-format
 msgid "This browser does not support passkeys. Use a code below instead."
 msgstr ""
 
-#: lib/vutuv_web/templates/username/confirm.html.heex:129
+#: lib/vutuv_web/templates/username/confirm.html.heex:177
 #, elixir-autogen, elixir-format
 msgid "Enter your code"
 msgstr ""
 
-#: lib/vutuv_web/templates/username/confirm.html.heex:135
+#: lib/vutuv_web/templates/username/confirm.html.heex:183
 #, elixir-autogen, elixir-format
 msgid "Change my username"
 msgstr ""
@@ -17671,4 +17654,65 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/text.ex:502
 #, elixir-autogen, elixir-format
 msgid "verified profile"
+msgstr ""
+
+#: lib/vutuv_web/templates/username/confirm.html.heex:67
+#, elixir-autogen, elixir-format
+msgid "After you confirm"
+msgstr ""
+
+#: lib/vutuv_web/templates/username/confirm.html.heex:50
+#, elixir-autogen, elixir-format
+msgid "Before and after"
+msgstr ""
+
+#: lib/vutuv_web/controllers/username_controller.ex:402
+#: lib/vutuv_web/templates/username/confirm.html.heex:21
+#, elixir-autogen, elixir-format
+msgid "Change your username?"
+msgstr ""
+
+#: lib/vutuv_web/templates/username/confirm.html.heex:76
+#, elixir-autogen, elixir-format
+msgid "Not yours yet."
+msgstr ""
+
+#: lib/vutuv_web/templates/username/confirm.html.heex:40
+#, elixir-autogen, elixir-format
+msgid "Nothing has changed yet."
+msgstr ""
+
+#: lib/vutuv_web/templates/username/confirm.html.heex:56
+#, elixir-autogen, elixir-format
+msgid "Now"
+msgstr ""
+
+#: lib/vutuv_web/templates/username/confirm.html.heex:82
+#, elixir-autogen, elixir-format
+msgid "Once you confirm, your current profile address stops working, and anyone can claim the handle you leave behind. Mentions of your old handle in posts are rewritten to the new one."
+msgstr ""
+
+#: lib/vutuv_web/views/username_html.ex:28
+#, elixir-autogen, elixir-format
+msgid "You are still @%{handle}. The new name only takes effect once you confirm below."
+msgstr ""
+
+#: lib/vutuv_web/views/username_html.ex:22
+#, elixir-autogen, elixir-format
+msgid "You are still @%{handle}. The new name only takes effect once you confirm with the PIN below."
+msgstr ""
+
+#: lib/vutuv_web/templates/username/confirm.html.heex:62
+#, elixir-autogen, elixir-format
+msgid "Your profile address, unchanged."
+msgstr ""
+
+#: lib/vutuv_web/views/username_html.ex:51
+#, elixir-autogen, elixir-format
+msgid "Your username is your public identity here. It changes only once you enter a valid code below."
+msgstr ""
+
+#: lib/vutuv_web/views/username_html.ex:45
+#, elixir-autogen, elixir-format
+msgid "Your username is your public identity here. It changes only once you confirm with your passkey or a valid code below."
 msgstr ""

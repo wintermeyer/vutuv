@@ -1,14 +1,24 @@
 <%!-- Step 2 of a rename (issue #1086): prove it is you.
 
-One page, one job. The top card states plainly what is about to happen; the
-bottom card holds every way this member can confirm it, strongest first. A
-member with only an email address and only one of those never sees a choice at
-all - the PIN is already in their inbox by the time this renders, so the page
-reads as "type the number we sent you". --%>
+One page, one job. The top card states plainly that the rename has NOT happened
+yet and what it will do; the bottom card holds every way this member can confirm
+it, strongest first. A member with only an email address and only one of those
+never sees a choice at all - the PIN is already in their inbox by the time this
+renders, so the page reads as "type the number we sent you".
+
+The top card is written against one specific misreading. It used to open with an
+h1 calling the pending handle "your new username" and a diff whose OLD half was
+`line-through`, under a heading "What will change" - three signals that all say
+"done", on a page whose entire point is that nothing is done. Stefan read his own
+rename as finished and the PIN as paperwork. So: the first thing in the card is
+the flat statement that nothing changed and which handle he still holds, the two
+states are LABELLED ("Now" / "After you confirm") instead of being a diff the
+reader has to interpret, and no strikethrough appears anywhere - a struck-through
+handle is the single most misleading pixel this page can render. --%>
 <.settings_shell
   user={@user}
   active={:username}
-  title={gettext("Confirm your new username")}
+  title={gettext("Change your username?")}
   crumbs={[
     {gettext("Settings"), ~p"/settings"},
     {gettext("Username"), ~p"/settings/username"},
@@ -17,22 +27,61 @@ reads as "type the number we sent you". --%>
 >
   <div class="space-y-6">
     <.card>
-      <.section_title>{gettext("What will change")}</.section_title>
-      <p class="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <span class="rounded-lg bg-slate-100 px-2 py-1 font-mono text-slate-600 line-through dark:bg-slate-800 dark:text-slate-400">
-          @{@user.username}
-        </span>
-        <span aria-hidden="true" class="text-slate-400">&rarr;</span>
-        <span
-          id="pending-username"
-          class="rounded-lg bg-brand-50 px-2 py-1 font-mono font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-        >
-          @{@new_username}
-        </span>
-      </p>
+      <%!-- `role="status"` so a screen reader is told the state, not just shown
+      it. Deliberately brand tint, not the amber reserved for moderation: this is
+      a state, not a warning. Its headline is a step LARGER than the body text
+      around it, because the failure mode being fixed is "did not read it". --%>
+      <div
+        id="rename-pending-notice"
+        role="status"
+        class="rounded-xl bg-brand-50 p-4 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:ring-brand-800"
+      >
+        <p class="text-base font-semibold text-brand-800 dark:text-brand-100">
+          {gettext("Nothing has changed yet.")}
+        </p>
+        <p class="mt-1 text-sm leading-relaxed text-brand-800 dark:text-brand-100">
+          {pending_notice_line(@options, @user.username)}
+        </p>
+      </div>
+
+      <.section_title class="mt-6">{gettext("Before and after")}</.section_title>
+      <%!-- Two labelled cells, not a diff: each states its own time and status,
+      so neither has to be inferred from a glyph. Stacks on a phone. --%>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        <div class="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+            {gettext("Now")}
+          </p>
+          <p class="mt-1 font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">
+            @{@user.username}
+          </p>
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("Your profile address, unchanged.")}
+          </p>
+        </div>
+        <div class="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+            {gettext("After you confirm")}
+          </p>
+          <%!-- Same slate as the current handle on purpose. Brand blue here read
+          as a link (the real one, "Pick a different username", sits just below in
+          that colour) and, worse, tinted the pending name as the live one. The
+          two cells carry equal weight; their labels do the distinguishing. --%>
+          <p
+            id="pending-username"
+            class="mt-1 font-mono text-sm font-semibold text-slate-900 dark:text-slate-100"
+          >
+            @{@new_username}
+          </p>
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("Not yours yet.")}
+          </p>
+        </div>
+      </div>
+
       <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
         {gettext(
-          "Your current profile address stops working, and anyone can claim the handle you leave behind. Mentions of your old handle in posts are rewritten to the new one."
+          "Once you confirm, your current profile address stops working, and anyone can claim the handle you leave behind. Mentions of your old handle in posts are rewritten to the new one."
         )}
       </p>
       <p class="mt-3 text-sm">
@@ -48,10 +97,43 @@ reads as "type the number we sent you". --%>
     <.card>
       <.section_title>{gettext("Confirm it is you")}</.section_title>
       <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-        {gettext(
-          "Your username is your public identity here, so we ask you to confirm the change once."
-        )}
+        {confirm_intro_line(@options)}
       </p>
+
+      <%!-- "We sent a PIN to <address>" is the INSTRUCTION on this card - go and
+      open that inbox - so once a PIN is really in flight it is a notice above
+      the field, not a caption under it. It was the muted `.editform__hint`
+      first, then semibold in the same spot, and Stefan reported it as buried
+      both times: weight alone could not fix it, because anything below the input
+      reads as a footnote you skip on your way to the button. Above the field it
+      is read before typing, and the envelope plus the panel give it a shape the
+      eye catches. Same brand tint as the "Nothing has changed yet" notice on
+      purpose - both are "here is the state of things", one vocabulary. --%>
+      <div
+        :if={@pin_email}
+        id="pin-sent-notice"
+        role="status"
+        class="mt-4 flex items-start gap-3 rounded-xl bg-brand-50 p-4 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:ring-brand-800"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          aria-hidden="true"
+          class="mt-0.5 h-6 w-6 shrink-0 text-brand-700 dark:text-brand-100"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
+          />
+        </svg>
+        <p class="text-base font-semibold leading-relaxed text-brand-800 dark:text-brand-100">
+          {code_field_hint(@options, @pin_email)}
+        </p>
+      </div>
 
       <%!-- The passkey path, for members who enrolled one. Hidden until app.js
       confirms the browser supports WebAuthn; the ceremony only stamps the
@@ -128,7 +210,13 @@ reads as "type the number we sent you". --%>
             autocapitalize: "none",
             placeholder: gettext("Enter your code")
           ) %>
-          <p class="editform__hint">{code_field_hint(@options, @pin_email)}</p>
+          <%!-- Only while nothing has been mailed: then this line genuinely is a
+          hint about what the field accepts. The moment a PIN names a real
+          address it moves up into `#pin-sent-notice` above the field, so it is
+          never rendered twice. --%>
+          <p :if={!@pin_email} class="editform__hint">
+            {code_field_hint(@options, @pin_email)}
+          </p>
         </div>
         <div class="editform__actions">
           <%= link(gettext("Cancel"), to: ~p"/settings/username", class: "button button--cancel") %>

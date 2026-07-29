@@ -57,6 +57,52 @@ defmodule VutuvWeb.UsernameConfirmationTest do
       assert Repo.get(User, user.id).username == old_handle
     end
 
+    test "the page leads with the fact that nothing has changed yet", %{conn: conn} do
+      # The page used to present the rename as done: an h1 calling the pending
+      # handle "your new username", and the old one struck through above a
+      # section headed "What will change". Strikethrough is the universal "this
+      # is gone" mark, so at a glance the member read the rename as finished and
+      # the PIN as paperwork — reported by Stefan against his own account, which
+      # is exactly how a confirmation step gets ignored.
+      {conn, user} = create_and_login_user(conn)
+
+      html = conn |> start_rename() |> html_response(200)
+
+      # The reassurance is on the page, before any of the consequence prose, and
+      # it names the handle the member still holds AND the factor that will
+      # actually commit the rename — this member has only email, so: the PIN.
+      assert html =~ "Nothing has changed yet"
+      assert html =~ "You are still @#{user.username}"
+      assert html =~ "once you confirm with the PIN below"
+
+      # Both states are labelled, so neither chip has to be read as a diff.
+      assert html =~ "Before and after"
+      assert html =~ "Now"
+      assert html =~ "After you confirm"
+
+      assert Repo.get(User, user.id).username == user.username
+    end
+
+    test "the handle the member still holds is never struck through", %{conn: conn} do
+      # `line-through` on the current handle is what said "already gone". Its
+      # absence is the load-bearing part of the fix, so assert it directly —
+      # a future restyle that reinstates the strikethrough must fail here.
+      {conn, _user} = create_and_login_user(conn)
+
+      html = conn |> start_rename() |> html_response(200)
+
+      refute html =~ "line-through"
+    end
+
+    test "the heading does not call the pending handle the member's username", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      html = conn |> start_rename() |> html_response(200)
+
+      assert html =~ "Change your username?"
+      refute html =~ "Confirm your new username"
+    end
+
     test "an invalid handle never reaches the confirmation and mails nothing", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       flush_emails()
@@ -83,6 +129,44 @@ defmodule VutuvWeb.UsernameConfirmationTest do
   end
 
   describe "the email PIN (the floor everybody has)" do
+    test "where the PIN went is a notice above the field, rendered once", %{conn: conn} do
+      # "We sent a PIN to <address>" is the instruction on this card, not a
+      # caption. It lived under the input as the muted `.editform__hint` and then
+      # as a semibold line in the same spot; Stefan reported it as buried both
+      # times, because anything below the input is read as a footnote on the way
+      # to the button. It is now `#pin-sent-notice` ABOVE the field — and the
+      # hint copy under the field is dropped in that state, so the same sentence
+      # can never appear twice.
+      {conn, user} = create_and_login_user(conn)
+      email = Accounts.first_email_value(user)
+
+      html = conn |> start_rename() |> html_response(200)
+
+      assert html =~ ~s(id="pin-sent-notice")
+      assert html =~ email
+
+      occurrences = html |> String.split("We sent a PIN to") |> length() |> Kernel.-(1)
+      assert occurrences == 1
+
+      # The notice sits before the input in the document, which is what makes it
+      # read as a step rather than a caption.
+      [before_field, _] = String.split(html, ~s(name="username_confirmation[code]"), parts: 2)
+      assert before_field =~ "pin-sent-notice"
+    end
+
+    test "with no PIN in flight there is no sent-notice, just the field hint", %{conn: conn} do
+      # A member with an authenticator app is deliberately not mailed unasked, so
+      # claiming we sent one would send them to an empty inbox.
+      {conn, user} = create_and_login_user(conn)
+      totp_user(user)
+
+      html = conn |> start_rename() |> html_response(200)
+
+      refute html =~ ~s(id="pin-sent-notice")
+      refute html =~ "We sent a PIN to"
+      assert html =~ "editform__hint"
+    end
+
     test "one address and no other factor: the PIN is already on its way", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       email = Accounts.first_email_value(user)
@@ -285,6 +369,22 @@ defmodule VutuvWeb.UsernameConfirmationTest do
       assert Repo.get(User, user.id).username == "brand_new"
     end
 
+    test "a member with an authenticator app is not told to confirm with a PIN", %{conn: conn} do
+      # The notice names the PIN only when an emailed PIN is the member's only
+      # way in. Telling a member holding an authenticator app to "confirm with
+      # the PIN below" would send them hunting for mail we deliberately never
+      # sent (`start_confirmation` mails nothing to a member with a faster
+      # factor), which is the same untrue-page failure the notice exists to fix.
+      {conn, user} = create_and_login_user(conn)
+      totp_user(user)
+
+      html = conn |> start_rename() |> html_response(200)
+
+      assert html =~ "Nothing has changed yet"
+      assert html =~ "once you confirm below"
+      refute html =~ "once you confirm with the PIN below"
+    end
+
     test "a one-time list code confirms the rename too", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       [code | _] = LoginCodes.generate_list_codes(user)
@@ -330,6 +430,25 @@ defmodule VutuvWeb.UsernameConfirmationTest do
   end
 
   describe "passkey confirmation" do
+    test "the card's opening line names the passkey instead of pointing at the field", %{
+      conn: conn
+    } do
+      # Every other factor is typed into the code field, so "enter a valid code
+      # below" is true for almost everyone — but a passkey is a button and
+      # nothing is typed, so that wording sends a passkey holder looking for a
+      # field they never have to touch.
+      {conn, user} = create_and_login_user(conn)
+
+      conn = start_rename(conn)
+      assert html_response(conn, 200) =~ "It changes only once you enter a valid code below"
+
+      insert(:user_credential, user: user)
+      html = conn |> recycle() |> get(~p"/settings/username/confirm") |> html_response(200)
+
+      assert html =~ "confirm with your passkey or a valid code below"
+      refute html =~ "It changes only once you enter a valid code below"
+    end
+
     test "the button is offered only to members who enrolled one", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
@@ -442,10 +561,28 @@ defmodule VutuvWeb.UsernameConfirmationTest do
         |> post(~p"/settings/username", user: %{"username" => "neuer_name"})
         |> html_response(200)
 
-      assert html =~ "Was sich ändert"
+      assert html =~ "Noch hat sich nichts geändert"
+      assert html =~ "Sie sind weiterhin @"
+      assert html =~ "Vorher und nachher"
       assert html =~ "Bestätigen Sie, dass Sie es sind"
       assert html =~ "Benutzernamen jetzt ändern"
-      refute html =~ "What will change"
+      refute html =~ "Nothing has changed yet"
+
+      # The two state labels, asserted by name. `mix gettext.extract --merge`
+      # fuzzy-matched these against unrelated existing entries when they were
+      # added and produced real nonsense: "Now" came out as "Nein" (No), "Not
+      # yours yet." as "Noch keine Reposts." Fuzzy entries carry a flag but no
+      # build failure, so only an assertion on the rendered German catches a
+      # re-merge doing it again.
+      assert html =~ "Jetzt"
+      assert html =~ "Nach der Bestätigung"
+      assert html =~ "Gehört Ihnen noch nicht."
+      refute html =~ "Nein"
+      refute html =~ "Noch keine Reposts"
+
+      # The notice names the factor, not just "confirm below" (Stefan, on the
+      # rendered page): this member has only email, so it is the PIN.
+      assert html =~ "unten per PIN bestätigen"
     end
 
     test "the PIN email is German for a German member", %{conn: conn} do

@@ -399,7 +399,7 @@ defmodule VutuvWeb.UsernameController do
       new_username: pending_handle(conn),
       pin_email: get_session(conn, @pin_email_key),
       options: options,
-      page_title: gettext("Confirm your new username")
+      page_title: gettext("Change your username?")
     )
   end
 

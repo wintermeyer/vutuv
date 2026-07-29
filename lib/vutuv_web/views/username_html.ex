@@ -5,6 +5,54 @@ defmodule VutuvWeb.UsernameHTML do
   embed_templates("../templates/username/*")
 
   @doc """
+  The second line of the "nothing has changed yet" notice: which handle the
+  member still holds, and what will actually make the rename happen.
+
+  It names the **PIN** only when an emailed PIN is genuinely the only way in
+  (`email_only?` — no passkey, no authenticator app, no code list). Saying "per
+  PIN" to a member holding a passkey would send them looking for mail that is
+  not coming, which is the same "the page tells you something untrue" failure
+  this notice exists to fix; they get the factor-neutral wording and the card
+  below shows their actual options.
+  """
+  def pending_notice_line(options, handle)
+
+  def pending_notice_line(%{email_only?: true}, handle) do
+    gettext(
+      "You are still @%{handle}. The new name only takes effect once you confirm with the PIN below.",
+      handle: handle
+    )
+  end
+
+  def pending_notice_line(_options, handle) do
+    gettext("You are still @%{handle}. The new name only takes effect once you confirm below.",
+      handle: handle
+    )
+  end
+
+  @doc """
+  The confirmation card's opening line: why we are asking, and what will end the
+  wait for THIS member.
+
+  Every factor but one is typed into the code field (emailed PIN, authenticator
+  app, one-time list code), so "enter a valid code below" is true for almost
+  everybody. A **passkey** is the exception — it is a button, nothing is typed —
+  so a member holding one is told about it rather than being pointed at a field
+  they do not have to touch.
+  """
+  def confirm_intro_line(%{passkey?: true}) do
+    gettext(
+      "Your username is your public identity here. It changes only once you confirm with your passkey or a valid code below."
+    )
+  end
+
+  def confirm_intro_line(_options) do
+    gettext(
+      "Your username is your public identity here. It changes only once you enter a valid code below."
+    )
+  end
+
+  @doc """
   Labels the one confirmation-code field for whatever this member actually has.
 
   The field takes an emailed PIN, an authenticator-app code or a one-time list
