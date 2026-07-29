@@ -12,7 +12,7 @@ defmodule VutuvWeb.Markdown.Footnotes do
       [^1]: Die Anmerkung dazu.
 
   renders the reference as a superscript `[1]` linked to a numbered note list
-  at the end of the body, and each note links back to where it was cited.
+  at the end of the body. The jump is one-way on purpose — see `note_list/2`.
 
   **Why this is not Earmark's `footnotes: true`.** Earmark can do footnotes, but
   it wires reference and note together with `id="fn:1"` / `class="footnote"` —
@@ -44,8 +44,6 @@ defmodule VutuvWeb.Markdown.Footnotes do
   the patterns below is the rendering-side guard for anything stored before
   that, the same deal `Vutuv.Mentions` makes for an escaped `@handle`.
   """
-  use Gettext, backend: VutuvWeb.Gettext
-
   alias VutuvWeb.Markdown
 
   # A label is one whitespace-free run inside `[^…]`. Length-capped so a
@@ -62,15 +60,6 @@ defmodule VutuvWeb.Markdown.Footnotes do
   # Cheap substring guard: a body with no `[^` anywhere skips every pass below.
   # The escaped form `\[^1]` contains it too, so this misses nothing.
   @sigil "[^"
-
-  # The back-link glyph, U+21A9 followed by U+FE0E — the **text** variation
-  # selector, and it is not optional. Bare, U+21A9 has emoji presentation by
-  # default on macOS and iOS, so the quiet little arrow came out as a filled grey
-  # keycap that read as a button sitting in the middle of the note list (caught in
-  # the browser, not by any test). U+FE0E pins it to the text glyph, which then
-  # inherits the link colour and the surrounding type size like any other
-  # character.
-  @backref_glyph "&#8617;&#xFE0E;"
 
   @doc "How many notes one body may carry."
   def max_footnotes, do: @max_footnotes
@@ -291,26 +280,29 @@ defmodule VutuvWeb.Markdown.Footnotes do
   # follows ("Satz1"). Brackets survive tag-stripping, so the citation still
   # reads as one everywhere this HTML travels.
   defp reference_html(nonce, number) do
-    ~s(<sup class="footnote-ref" id="#{ref_id(nonce, number)}">) <>
-      ~s(<a href="##{note_id(nonce, number)}">[#{number}]</a></sup>)
+    ~s(<sup class="footnote-ref"><a href="##{note_id(nonce, number)}">[#{number}]</a></sup>)
   end
 
+  # **No back-link from a note to its citation**, deliberately, and it was there
+  # for one afternoon: a `↩` at the end of every note is the only thing in the
+  # list that is not content, and it read as a stray line-break character rather
+  # than as a control (that is exactly what it was reported as). The convention
+  # comes from books and wikis, where the reader has scrolled a long way; on a
+  # short-form post the citation is a few lines up, and clicking it pushes a
+  # history entry, so the browser's own Back — including the phone's back gesture
+  # — already returns the reader to their exact position. The arrow bought
+  # nothing and cost a mark in every single note.
   defp note_list(_nonce, []), do: ""
 
   defp note_list(nonce, notes) do
-    label = gettext("Back to the text")
-
     items =
       Enum.map_join(notes, "", fn {number, body} ->
-        ~s(<li id="#{note_id(nonce, number)}">#{body} ) <>
-          ~s(<a class="footnote-backref" href="##{ref_id(nonce, number)}" ) <>
-          ~s(aria-label="#{label}" title="#{label}">#{@backref_glyph}</a></li>)
+        ~s(<li id="#{note_id(nonce, number)}">#{body}</li>)
       end)
 
     ~s(<div class="footnotes"><ol>#{items}</ol></div>)
   end
 
-  defp ref_id(nonce, number), do: "fnref-#{nonce}-#{number}"
   defp note_id(nonce, number), do: "fn-#{nonce}-#{number}"
 
   # A body that ends inside an unclosed code fence swallows the appended

@@ -65,7 +65,11 @@ A body may annotate itself (issue #1147):
     [^1]: Die Anmerkung dazu.
 
 The reference renders as a superscript `[1]` linked to a numbered note list at
-the end of the body, each note linking back to where it was cited.
+the end of the body. The jump is **one-way**: a note carries no back-link. One
+shipped for an afternoon and was read as stray line-break characters — it is the
+only mark in the list that is not content, the convention comes from books and
+wikis where the reader has scrolled far, and clicking a citation pushes a history
+entry, so the browser's own Back already returns the reader to their exact spot.
 `VutuvWeb.Markdown.Footnotes` owns it, and it works the way the inline-image and
 `diff` steps do, for the same reason: the syntax becomes unguessable plain-text
 markers *before* Earmark, and the real markup is built from known-safe parts

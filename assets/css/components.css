@@ -1213,9 +1213,8 @@ ul.thumbs li .text .url a {
    The note list is deliberately quiet: an apparatus below the text, set one
    size down and separated by a hairline, never a second voice in the post. */
 .footnote-ref { font-weight: 600; }
-/* The reference and the note are both scroll targets, and the app shell's top
-   bar is sticky — without this the browser parks either one underneath it. */
-.footnote-ref,
+/* The note is a scroll target and the app shell's top bar is sticky — without
+   this the browser parks the jumped-to note underneath it. */
 .footnotes li { scroll-margin-top: 6rem; }
 .footnotes {
   margin-top: 1.25em;
@@ -1234,21 +1233,11 @@ ul.thumbs li .text .url a {
   border-radius: 4px;
   box-shadow: 0 0 0 4px #eff6ff;
 }
-/* The back-link is an icon link, not prose: no underline (an underline under a
-   lone arrow reads as a typo, and the glyph plus its aria-label already carry
-   the meaning without relying on colour), and a finger-sized hit area on a phone
-   without pushing the line apart (inline-block + padding). Both selectors are
-   needed: `.markdown a` (0,1,1) sets the prose underline and would out-rank a
-   bare `.footnote-backref` (0,1,0), while a note in a chat bubble is not wrapped
-   in `.markdown` at all. */
-.footnote-backref,
-.markdown .footnote-backref {
-  text-decoration: none;
-  display: inline-block;
-  padding: 0 0.5em;
-  min-width: 1.5em;
-  line-height: 1.6;
-}
+/* There is deliberately no back-link from a note to its citation, hence no
+   `.footnote-backref` rule to go with one: the `↩` was the only mark in the list
+   that was not content, and it read as a stray line-break character rather than
+   as a control. The browser's own Back makes the trip (the reasoning lives in
+   VutuvWeb.Markdown.Footnotes.note_list/2). */
 
 /* The clamped preview body (feed / profile Beiträge). Replaces a fixed
    `line-clamp-6`: the line budget is a per-reader, per-breakpoint preference,

@@ -16,11 +16,6 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
   defp render_post(text), do: text |> Markdown.render_post([]) |> Phoenix.HTML.safe_to_string()
 
   # The anchor ids carry a per-render nonce, so tests match the shape.
-  defp ref_id(html) do
-    [_, id] = Regex.run(~r/id="(fnref-[0-9A-F]+-1)"/, html)
-    id
-  end
-
   defp note_id(html) do
     [_, id] = Regex.run(~r/id="(fn-[0-9A-F]+-1)"/, html)
     id
@@ -35,9 +30,8 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
       assert html =~ ~s(class="footnotes")
       assert html =~ "Die Anmerkung."
 
-      # The reference points at the note and the note points back.
+      # The reference points at the note.
       assert html =~ ~s(href="##{note_id(html)}")
-      assert html =~ ~s(href="##{ref_id(html)}")
     end
 
     test "the definition line is lifted out of the prose" do
@@ -76,12 +70,17 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
       assert length(Regex.scan(~r/<li id="fn-/, html)) == 1
     end
 
-    test "the back-link arrow is pinned to its text glyph, not the emoji" do
-      # Bare U+21A9 defaults to emoji presentation on macOS/iOS and rendered as a
-      # filled grey keycap that read as a button in the middle of the note list.
+    test "a note carries nothing but its own text — no back-link" do
+      # A `↩` at the end of every note was the only thing in the list that was
+      # not content, and it read as a stray line-break character rather than as a
+      # control. The browser's own Back already returns the reader to the
+      # citation, so the note stops at its text.
       html = render("Satz[^1].\n\n[^1]: Die Anmerkung.")
 
-      assert html =~ "&#8617;&#xFE0E;"
+      refute html =~ "footnote-backref"
+      refute html =~ "&#8617;"
+      refute html =~ "fnref-"
+      assert html =~ ~r{<li id="fn-[0-9A-F]+-1">Die Anmerkung.</li>}
     end
 
     test "a note body renders Markdown and links" do
@@ -98,11 +97,11 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
       assert html =~ ~s(href="https://example.com/quelle")
     end
 
-    test "the footnote anchors stay in the same tab" do
+    test "the footnote anchor stays in the same tab" do
       html = render("Satz[^1].\n\n[^1]: Die Anmerkung.")
 
       refs = Regex.scan(~r/<a [^>]*href="#[^"]*"[^>]*>/, html)
-      assert length(refs) == 2
+      assert length(refs) == 1
 
       for [tag] <- refs do
         refute tag =~ "target=", "an in-page footnote anchor must not open a new tab"
