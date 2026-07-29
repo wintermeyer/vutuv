@@ -11,7 +11,7 @@ defmodule Vutuv.AccountsTest do
     "emails" => %{"0" => %{"value" => "test@example.com"}},
     "first_name" => "Test",
     "last_name" => "User",
-    "tag_list" => "Elixir Cooking Origami"
+    "tag_list" => "Elixir, Cooking, Origami"
   }
 
   defp build_conn do
@@ -95,8 +95,8 @@ defmodule Vutuv.AccountsTest do
     test "the multi-tag sign-up keeps the entered casing (never downcases)" do
       conn = build_conn()
       # Internal capitals a downcase would visibly destroy, entered as the
-      # comma- and space-separated batch the sign-up field accepts.
-      attrs = Map.put(@valid_registration, "tag_list", "TypeScript, PostgreSQL WebAssembly")
+      # comma-separated batch the sign-up field accepts.
+      attrs = Map.put(@valid_registration, "tag_list", "TypeScript, PostgreSQL, WebAssembly")
 
       assert {:ok, %User{} = user} = Accounts.register_user(conn, attrs)
 
@@ -114,7 +114,7 @@ defmodule Vutuv.AccountsTest do
       assert {:ok, %User{} = user} =
                Accounts.register_user(
                  conn,
-                 Map.put(@valid_registration, "tag_list", "Elixir Cooking Origami")
+                 Map.put(@valid_registration, "tag_list", "Elixir, Cooking, Origami")
                )
 
       assert user.user_tags |> Enum.map(& &1.tag.name) |> Enum.sort() ==
@@ -123,7 +123,7 @@ defmodule Vutuv.AccountsTest do
 
     test "rejects a registration with fewer than three tags" do
       conn = build_conn()
-      attrs = Map.put(@valid_registration, "tag_list", "Elixir Cooking")
+      attrs = Map.put(@valid_registration, "tag_list", "Elixir, Cooking")
 
       assert {:error, changeset} = Accounts.register_user(conn, attrs)
       assert "Please enter at least 3 different tags." in errors_on(changeset).tag_list
@@ -140,7 +140,7 @@ defmodule Vutuv.AccountsTest do
 
     test "a differently-cased duplicate counts as one tag" do
       conn = build_conn()
-      attrs = Map.put(@valid_registration, "tag_list", "Elixir elixir ELIXIR Cooking")
+      attrs = Map.put(@valid_registration, "tag_list", "Elixir, elixir, ELIXIR, Cooking")
 
       assert {:error, changeset} = Accounts.register_user(conn, attrs)
       assert "Please enter at least 3 different tags." in errors_on(changeset).tag_list
@@ -149,7 +149,7 @@ defmodule Vutuv.AccountsTest do
     test "rejects a registration over the tag ceiling" do
       conn = build_conn()
       max = Vutuv.Tags.max_user_tags()
-      too_many = Enum.map_join(1..(max + 1), " ", &"Skill#{&1}")
+      too_many = Enum.map_join(1..(max + 1), ", ", &"Skill#{&1}")
       attrs = Map.put(@valid_registration, "tag_list", too_many)
 
       assert {:error, changeset} = Accounts.register_user(conn, attrs)
@@ -162,7 +162,7 @@ defmodule Vutuv.AccountsTest do
       # per-tag failures, so the form has to catch this up front — otherwise
       # the account is created with the tag silently missing.
       conn = build_conn()
-      attrs = Map.put(@valid_registration, "tag_list", "Elixir Cooking www.example-shop.com")
+      attrs = Map.put(@valid_registration, "tag_list", "Elixir, Cooking, www.example-shop.com")
 
       assert {:error, changeset} = Accounts.register_user(conn, attrs)
 
@@ -175,7 +175,7 @@ defmodule Vutuv.AccountsTest do
 
     test "rejects a registration whose tag list holds a punctuation-only tag" do
       conn = build_conn()
-      attrs = Map.put(@valid_registration, "tag_list", "Elixir Kochen ???")
+      attrs = Map.put(@valid_registration, "tag_list", "Elixir, Kochen, ???")
 
       assert {:error, changeset} = Accounts.register_user(conn, attrs)
 
@@ -187,7 +187,7 @@ defmodule Vutuv.AccountsTest do
     test "accepts a registration exactly at the tag ceiling" do
       conn = build_conn()
       max = Vutuv.Tags.max_user_tags()
-      exactly = Enum.map_join(1..max, " ", &"Skill#{&1}")
+      exactly = Enum.map_join(1..max, ", ", &"Skill#{&1}")
       attrs = Map.put(@valid_registration, "tag_list", exactly)
 
       assert {:ok, user} = Accounts.register_user(conn, attrs)

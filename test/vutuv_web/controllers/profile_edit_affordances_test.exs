@@ -155,7 +155,7 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       # The registration fixture's alphabetically first tag (the hint picks
       # the most-endorsed tag, slug as tiebreaker — so alpha-tag-… wins).
-      [first_tag | _] = String.split(@registration_tags)
+      [first_tag | _] = Vutuv.Tags.parse_tag_names(@registration_tags)
       assert completion_text(html) =~ "For example, a thought on ##{first_tag}."
     end
 

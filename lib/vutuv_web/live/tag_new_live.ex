@@ -1,14 +1,13 @@
 defmodule VutuvWeb.TagNewLive do
   @moduledoc """
-  The add-tag form (GET /settings/tags/new) is a LiveView so the member sees,
-  while typing, exactly which tags a submit will attach (issue #848, variant
-  one): the input separates on commas and spaces, a quoted phrase stays one
-  multi-word tag, a leading `#` is stripped, and each name is matched
-  case-insensitively against the existing global tags, whose stored display
-  name wins (`Vutuv.Tags.preview_tag_names/1`). That makes the non-obvious tag
-  rules visible before the submit: a camel-case variant of an existing
-  lowercase tag previews as the lowercase chip the profile will actually show,
-  and `"Ruby on Rails"` previews as one chip.
+  The add-tag form (GET /settings/tags/new) shows, while typing, exactly which
+  tags a submit will attach (issue #848). Two halves do that: the shared
+  `<.tag_input>` pill box turns each comma-finished tag into a removable pill,
+  so where one tag ends and the next begins is visible in the field itself; and
+  the server preview below it speaks only when the outcome differs from those
+  pills — an existing tag matched case-insensitively contributes its own stored
+  display name (typing `AhmetSun` when `ahmetsun` exists), and a name the save
+  would refuse drops out (`Vutuv.Tags.preview_tag_names/1`).
 
   Submitting saves over the socket through the same `Vutuv.Tags.add_user_tag/2`
   chokepoint the retired controller create action used: a single tag keeps the
@@ -53,23 +52,28 @@ defmodule VutuvWeb.TagNewLive do
           <label for={@form[:value].id}>{gettext("Tags")}</label>
           <p class="editform__hint">
             💡 <strong>{gettext("Tip:")}</strong> {gettext(
-              "Separate tags with a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\"."
+              "Separate tags with a comma. A tag may be several words long, like Ruby on Rails."
             )}
           </p>
-          <input
-            type="text"
-            id={@form[:value].id}
+          <.tag_input
+            id="tag-input"
+            field_id={@form[:value].id}
             name={@form[:value].name}
             value={@form[:value].value}
-            placeholder={gettext("PHP, JavaScript, \"Ruby on Rails\"")}
-            autocomplete="off"
+            placeholder={gettext("PHP, JavaScript, Ruby on Rails")}
+            invalid?={@changeset != nil}
             phx-debounce="150"
           />
           {@changeset && error_tag(@changeset, :user_id_tag_id)}
           {@changeset && error_tag(@changeset, :tag_id)}
         </div>
 
-        <div :if={@preview != []} id="tag-preview" class="editform__field">
+        <%!-- The pills in the box already show what each tag is, so this says
+        only what they cannot: which of them will be spelled differently once
+        saved (an existing tag keeps the spelling its first writer chose) and
+        which will be dropped as unusable. When the two agree it stays away
+        rather than repeating the box back at the member. --%>
+        <div :if={@preview != [] and @preview != @typed} id="tag-preview" class="editform__field">
           <h2 class="card__label">{gettext("Preview")}</h2>
           <p class="editform__hint">{gettext("This will create the following tags:")}</p>
           <div class="mt-2 flex flex-wrap gap-2">
@@ -144,5 +148,8 @@ defmodule VutuvWeb.TagNewLive do
     socket
     |> assign(:form, to_form(%{"value" => value}, as: :tag_param))
     |> assign(:preview, Tags.preview_tag_names(value))
+    # What the pill box shows: the typed names, deduplicated the way a save
+    # dedupes them. The preview block renders only where the two differ.
+    |> assign(:typed, value |> Tags.parse_tag_names() |> Enum.uniq_by(&String.downcase/1))
   end
 end

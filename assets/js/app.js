@@ -17,6 +17,10 @@ import { csrfToken, onReady, once, request, reducedMotion } from "./util"
 // The Milkdown WYSIWYG Markdown editor shared by the post + message composers
 // (VutuvWeb.UI.markdown_editor/1); registered as the MarkdownEditor hook below.
 import { MarkdownEditor } from "./markdown_editor"
+// The tag pill box shared by every field that takes a batch of tags
+// (VutuvWeb.UI.tag_input/1); registered as the TagInput hook below and swept
+// over classic pages further down. See tag_input.js.
+import { TagInput, enhanceTagInput } from "./tag_input"
 // The photo lightbox on the post permalink (self-contained page-level
 // enhancement, deliberately outside every LiveView root; see lightbox.js).
 import "./lightbox"
@@ -232,10 +236,12 @@ document.addEventListener(
 )
 
 // Hooks. MarkdownEditor is the Milkdown WYSIWYG composer (posts + messages).
-// LocalTime localizes timestamps (see above). ScrollBottom keeps a chat thread
-// pinned to its newest message.
+// TagInput is the pill box on every tag field (see the sweep below, which
+// serves the same component on classic pages). LocalTime localizes timestamps
+// (see above). ScrollBottom keeps a chat thread pinned to its newest message.
 const Hooks = {
   MarkdownEditor,
+  TagInput,
   LocalTime: {
     mounted() {
       localizeTime(this.el)
@@ -1194,6 +1200,16 @@ function setupCharCounters() {
   document.querySelectorAll("[data-char-counter]").forEach(wireCharCounter)
 }
 onReady(setupCharCounters)
+
+// The tag pill box (VutuvWeb.UI.tag_input/1) on classic controller pages — the
+// sign-up landing page and the invitation form. Inside a LiveView the same
+// element carries phx-hook="TagInput" and is enhanced there instead;
+// enhanceTagInput is idempotent, so whichever arrives first wins and the other
+// finds the box already built.
+function setupTagInputs() {
+  document.querySelectorAll("[data-tag-input]").forEach(enhanceTagInput)
+}
+onReady(setupTagInputs)
 
 // Reveal the "Jobsuche" details panel only once an employment status is chosen
 // (issue #928, see user/edit.html.heex). A member who leaves the status at "Not

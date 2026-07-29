@@ -3672,10 +3672,9 @@ defmodule Vutuv.Posts do
 
   defp parse_tag_values(nil), do: []
 
-  # The composer field shares the tags-page tokenizer: an unquoted comma or
-  # space separates ("elixir Phoenix, Ecto" is three tags) while a quoted
-  # phrase stays one multi-word tag ("Ruby on Rails"). Delegates to the list
-  # head below for the dedupe + cap.
+  # The composer field shares the tags-page tokenizer: only a comma separates
+  # ("Elixir, Ruby on Rails" is two tags), so a multi-word tag needs no
+  # quoting. Delegates to the list head below for the dedupe + cap.
   defp parse_tag_values(values) when is_binary(values),
     do: values |> Tags.parse_tag_names() |> parse_tag_values()
 

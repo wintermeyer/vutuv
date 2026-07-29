@@ -10,7 +10,7 @@ defmodule Vutuv.Accounts.MemberCounterTest do
     "emails" => %{"0" => %{"value" => "counted@example.com"}},
     "first_name" => "Counted",
     "last_name" => "Member",
-    "tag_list" => "Elixir Cooking Origami"
+    "tag_list" => "Elixir, Cooking, Origami"
   }
 
   defp build_conn do

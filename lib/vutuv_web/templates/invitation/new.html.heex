@@ -62,11 +62,16 @@
 
         <div>
           {label(f, :tag_list, gettext("Tags"), class: label_class)}
-          {text_input(f, :tag_list,
-            class: input_class(f, :tag_list),
-            placeholder: gettext("e.g. JavaScript, Cooking, Origami"),
-            "aria-invalid": f.errors[:tag_list] && "true"
-          )}
+          <.tag_input
+            id="invitation-tags"
+            field_id={f[:tag_list].id}
+            name={f[:tag_list].name}
+            value={f[:tag_list].value || ""}
+            placeholder={gettext("e.g. JavaScript, Cooking, Origami")}
+            field_class={input_class(f, :tag_list)}
+            invalid?={f.errors[:tag_list] != nil}
+            aria-invalid={f.errors[:tag_list] && "true"}
+          />
           <p :if={!f.errors[:tag_list]} class={hint_class}>
             {gettext("Optional. They can adjust these when they sign up.")}
           </p>

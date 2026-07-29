@@ -28,11 +28,15 @@ defmodule VutuvWeb.GermanCatalogTest do
 
   @catalog "priv/gettext/de/LC_MESSAGES/default.po"
 
-  # Sources whose user-facing strings must be fully translated.
+  # Sources whose user-facing strings must be fully translated. `ui.ex` cannot
+  # join as it stands: the scan is textual, so the `gettext("Add entry")` in
+  # `card_menu/1`'s @doc EXAMPLE reads as a live string and fails the build for
+  # a label nothing renders.
   @covered [
     "lib/vutuv_web/live/post_live/composer.ex",
     "lib/vutuv_web/components/post_components.ex",
-    "lib/vutuv/posts/photo_license.ex"
+    "lib/vutuv/posts/photo_license.ex",
+    "lib/vutuv_web/live/tag_new_live.ex"
   ]
 
   # `gettext("…")` / `ngettext("…", …)` with a plain literal. A string built at

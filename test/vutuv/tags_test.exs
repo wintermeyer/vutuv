@@ -298,34 +298,31 @@ defmodule Vutuv.TagsTest do
   end
 
   describe "parse_tag_names/1" do
-    test "an unquoted comma or space still separates tags" do
-      assert Tags.parse_tag_names("Elixir, Phoenix Go") == ["Elixir", "Phoenix", "Go"]
+    test "a comma separates tags" do
+      assert Tags.parse_tag_names("Elixir, Phoenix, Go") == ["Elixir", "Phoenix", "Go"]
     end
 
-    test "an unquoted run of words is one tag per word" do
-      assert Tags.parse_tag_names("Ruby on Rails") == ["Ruby", "on", "Rails"]
+    test "a space does not separate: a run of words is one multi-word tag" do
+      assert Tags.parse_tag_names("Ruby on Rails") == ["Ruby on Rails"]
     end
 
-    test "a quoted phrase is kept as one multi-word tag" do
+    test "quotes are no longer needed to group, and are tolerated" do
       assert Tags.parse_tag_names(~s("Ruby on Rails")) == ["Ruby on Rails"]
+      assert Tags.parse_tag_names(~s("Ruby on Rails)) == ["Ruby on Rails"]
     end
 
-    test "quoted phrases mix with bare tags in typed order" do
-      assert Tags.parse_tag_names(~s(Elixir, "Ruby on Rails", "Node JS" Go)) ==
-               ["Elixir", "Ruby on Rails", "Node JS", "Go"]
-    end
-
-    test "typographic quotes from mobile keyboards group too" do
+    test "typographic quotes from mobile keyboards are dropped too" do
       assert Tags.parse_tag_names("“Ruby on Rails”, „Node JS“") ==
                ["Ruby on Rails", "Node JS"]
     end
 
-    test "an unbalanced quote degrades to word splitting" do
-      assert Tags.parse_tag_names(~s("Ruby on Rails)) == ["Ruby", "on", "Rails"]
+    test "a line break separates too, so a pasted list works" do
+      assert Tags.parse_tag_names("Ruby on Rails\nElixir\r\nGo") ==
+               ["Ruby on Rails", "Elixir", "Go"]
     end
 
-    test "collapses runs of whitespace inside a quoted tag" do
-      assert Tags.parse_tag_names(~s("Ruby   on  Rails")) == ["Ruby on Rails"]
+    test "collapses runs of whitespace inside a multi-word tag" do
+      assert Tags.parse_tag_names("Ruby   on  Rails") == ["Ruby on Rails"]
     end
 
     test "trims padding and drops empty segments" do
@@ -347,6 +344,17 @@ defmodule Vutuv.TagsTest do
 
     test "parse_tag_names strips a leading # and splits the hashtag forms" do
       assert Tags.parse_tag_names("#Elixir, #Phoenix #Go") == ["Elixir", "Phoenix", "Go"]
+    end
+
+    test "a # starting a word begins a new tag, even without a comma" do
+      # The one exception to comma-only splitting: pasted hashtags are their own
+      # separator, so a copied "#Elixir #Phoenix" is two tags rather than one.
+      assert Tags.parse_tag_names("Machine Learning #KI") == ["Machine Learning", "KI"]
+    end
+
+    test "a # inside a word is part of the name, so C# stays one tag" do
+      assert Tags.parse_tag_names("C#, F#") == ["C#", "F#"]
+      assert Tags.parse_tag_names("C# and F#") == ["C# and F#"]
     end
 
     test "parse_tag_names drops a bare # that normalizes to nothing" do
@@ -387,7 +395,7 @@ defmodule Vutuv.TagsTest do
     # `create_or_link_tag/2` links.
 
     test "keeps a fresh name exactly as typed" do
-      assert Tags.preview_tag_names("WebAssembly Rust") == ["WebAssembly", "Rust"]
+      assert Tags.preview_tag_names("WebAssembly, Rust") == ["WebAssembly", "Rust"]
     end
 
     test "an existing tag wins with its stored display name" do
@@ -401,7 +409,7 @@ defmodule Vutuv.TagsTest do
     end
 
     test "collapses case-insensitive duplicates, keeping the first spelling" do
-      assert Tags.preview_tag_names("php PHP php Go") == ["php", "Go"]
+      assert Tags.preview_tag_names("php, PHP, php, Go") == ["php", "Go"]
     end
 
     test "strips the hashtag form and blank segments" do

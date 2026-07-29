@@ -1,12 +1,14 @@
 defmodule VutuvWeb.TagNewLiveTest do
   @moduledoc """
   The add-tag form (/settings/tags/new) is a LiveView: while the member types
-  it previews exactly which tags a submit will attach (issue #848). An unquoted
-  comma or space separates, a quoted phrase is one multi-word tag, a leading `#`
-  is stripped, and each name is matched case-insensitively against the existing
-  global tags, whose stored display name wins. Submitting goes over the socket
-  (the dead new/create controller actions are gone), so these tests also cover
-  what user_tag_controller_test's create tests used to.
+  it shows exactly which tags a submit will attach (issue #848). Only a comma
+  separates, so a multi-word tag needs no quoting, and the shared `<.tag_input>`
+  pill box makes that visible in the field itself. The server preview below it
+  therefore speaks only where the outcome differs from what was typed: an
+  existing tag matched case-insensitively contributes its own stored display
+  name, and a name the save would refuse drops out. Submitting goes over the
+  socket (the dead new/create controller actions are gone), so these tests also
+  cover what user_tag_controller_test's create tests used to.
   """
   use VutuvWeb.ConnCase
 
@@ -44,12 +46,19 @@ defmodule VutuvWeb.TagNewLiveTest do
     end
 
     test "explains the separator rule as a tip above the input", %{html: html} do
-      assert html =~ "Separate tags with a comma or a space."
+      assert html =~ "Separate tags with a comma."
       # The tip moved above the input (issue #848, variant one): the hint
       # paragraph must come before the <input> in source order.
-      {tip_at, _} = :binary.match(html, "Separate tags with a comma or a space.")
+      {tip_at, _} = :binary.match(html, "Separate tags with a comma.")
       {input_at, _} = :binary.match(html, ~s(id="tag_param_value"))
       assert tip_at < input_at
+    end
+
+    test "renders the shared pill box around the field", %{live: live} do
+      # The pills are built client-side inside this root, so what the server
+      # owes is the widget root and the plain input the enhancement wraps.
+      assert has_element?(live, "#tag-input[data-tag-input]")
+      assert has_element?(live, "#tag-input input[data-tag-input-field]#tag_param_value")
     end
 
     test "shows no preview while nothing is typed", %{html: html} do
@@ -64,19 +73,14 @@ defmodule VutuvWeb.TagNewLiveTest do
       {:ok, live: live, user: user}
     end
 
-    test "splits the input on commas and spaces into one chip per tag", %{live: live} do
-      assert preview(live, "lorem ipsum, dolor-sit") == ["lorem", "ipsum", "dolor-sit"]
-      assert render(live) =~ "This will create the following tags:"
-    end
+    test "stays away while the pills already say the outcome", %{live: live} do
+      # A fresh tag is stored exactly as typed, so a preview here would only
+      # repeat the box back at the member.
+      live
+      |> form("#tag-form", tag_param: %{value: "WebAssembly, Ruby on Rails"})
+      |> render_change()
 
-    test "previews a quoted phrase as one multi-word chip", %{live: live} do
-      assert preview(live, ~s(Elixir, "Ruby on Rails")) == ["Elixir", "Ruby on Rails"]
-    end
-
-    test "a brand-new tag previews exactly as typed", %{live: live} do
-      # Display names keep the entered casing (only the slug is lowercased),
-      # so the honest preview for a fresh tag is the typed spelling.
-      assert preview(live, "WebAssembly") == ["WebAssembly"]
+      refute render(live) =~ ~s(id="tag-preview")
     end
 
     test "an existing tag previews with its stored display name", %{live: live} do
@@ -87,18 +91,24 @@ defmodule VutuvWeb.TagNewLiveTest do
       insert(:tag, name: "ahmetsun", slug: "ahmetsun")
       insert(:tag, name: "CLAUDE", slug: "claude")
 
-      assert preview(live, "AhmetSun claude") == ["ahmetsun", "CLAUDE"]
+      assert preview(live, "AhmetSun, claude") == ["ahmetsun", "CLAUDE"]
+      assert render(live) =~ "This will create the following tags:"
     end
 
-    test "strips the leading # of the hashtag form", %{live: live} do
-      assert preview(live, "#Elixir") == ["Elixir"]
+    test "a space no longer splits, so a multi-word tag stays one chip", %{live: live} do
+      insert(:tag, name: "ruby on rails", slug: "ruby-on-rails")
+
+      assert preview(live, "Ruby on Rails") == ["ruby on rails"]
     end
 
     test "collapses case-insensitive duplicates into one chip", %{live: live} do
-      assert preview(live, "php PHP php") == ["php"]
+      insert(:tag, name: "PHP", slug: "php")
+
+      assert preview(live, "php, PHP, php") == ["PHP"]
     end
 
     test "clearing the input removes the preview again", %{live: live} do
+      insert(:tag, name: "elixir", slug: "elixir")
       preview(live, "Elixir")
 
       live
@@ -128,12 +138,14 @@ defmodule VutuvWeb.TagNewLiveTest do
       assert tag_count(user) == base + 1
     end
 
-    test "adds several comma- or space-separated tags at once", %{
+    test "adds several comma-separated tags at once", %{
       live: live,
       user: user,
       base: base
     } do
-      live |> form("#tag-form", tag_param: %{value: "Elixir, Phoenix  Ruby"}) |> render_submit()
+      live
+      |> form("#tag-form", tag_param: %{value: "Elixir, Phoenix, Ruby on Rails"})
+      |> render_submit()
 
       flash = assert_redirect(live, ~p"/settings/tags")
       assert flash["info"] == "Added 3 tags."
@@ -145,9 +157,9 @@ defmodule VutuvWeb.TagNewLiveTest do
       user: user,
       base: base
     } do
-      # "php PHP" previews as one chip, so the submit must attach one tag —
-      # not report the second spelling as a failed duplicate.
-      live |> form("#tag-form", tag_param: %{value: "php PHP"}) |> render_submit()
+      # "php, PHP" is one tag, so the submit must attach one — not report the
+      # second spelling as a failed duplicate.
+      live |> form("#tag-form", tag_param: %{value: "php, PHP"}) |> render_submit()
 
       flash = assert_redirect(live, ~p"/settings/tags")
       assert flash["info"] == "User tag created successfully."
@@ -195,8 +207,8 @@ defmodule VutuvWeb.TagNewLiveTest do
     test "previews no chip for a name the save would refuse", %{live: live} do
       # The preview's promise is "these tags will be created", so it must not
       # offer one add_user_tag/2 turns down a moment later.
-      assert preview(live, "https://www.example-shop.com/ Elixir") == ["Elixir"]
-      assert preview(live, "??? Elixir") == ["Elixir"]
+      assert preview(live, "https://www.example-shop.com/, Elixir") == ["Elixir"]
+      assert preview(live, "???, Elixir") == ["Elixir"]
     end
 
     test "shows the web-address error inline instead of attaching a URL tag", %{

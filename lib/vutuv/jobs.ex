@@ -476,7 +476,7 @@ defmodule Vutuv.Jobs do
   end
 
   # Resolve free-typed names to tag ids through the Tags chokepoints, honoring
-  # the space/quote tokenizer and excluding honor tags (admin-only badges).
+  # the comma tokenizer and excluding honor tags (admin-only badges).
   defp resolve_tag_ids(value) do
     value
     |> Vutuv.Tags.parse_tag_names()

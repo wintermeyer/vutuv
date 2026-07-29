@@ -554,6 +554,111 @@ body.stretch main {
    (one class + element) would out-rank a single class. */
 .editform__hint.editform__hint--ok { color: var(--color-brand-500); }
 .editform__hint.editform__hint--error { color: #dc2626; }
+/* The tag pill box (<.tag_input>, assets/js/tag_input.js). A comma is the only
+   thing that separates two tags, so each finished tag becomes a pill with its
+   own ✕ and the seam is visible instead of merely documented. Styled here
+   rather than with utilities because the same component sits on classic
+   `.editform` pages and on kit pages, and the box has to read as one input on
+   both: it reproduces `VutuvWeb.UI.input_class/0` (and the identical classic
+   recipe above), down to the two-part brand focus treatment — which it takes on
+   :focus-within, since the element the member actually types in is a borderless
+   child. Without JS the plain <input> shows through instead and nothing here
+   applies. */
+.tag-input__box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  cursor: text;
+}
+.tag-input__box:focus-within {
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.4);
+}
+.editform__field--error .tag-input__box,
+.tag-input--error .tag-input__box {
+  border-color: #ef4444;
+}
+/* One committed tag. The brand tint is the `<.chip>` language, so a pill in the
+   box and the tag it becomes on the profile read as the same thing. */
+.tag-input__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  max-width: 100%;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0.125rem 0.125rem 0.125rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.tag-input__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The ✕ is the whole point of the pill (a tag you can take back), so it is a
+   real finger-sized target, not a 12px glyph. */
+.tag-input__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tag-input__remove:hover {
+  background: #dbeafe;
+}
+.tag-input__remove:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: -2px;
+}
+/* The tag being typed. It has to disappear into the box, so it drops the input
+   chrome entirely and grows to fill the rest of the row. */
+.tag-input__entry {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0.2rem 0.25rem;
+  font-size: inherit;
+  line-height: inherit;
+}
+.tag-input__entry:focus {
+  outline: none;
+}
+/* The classic `.editform input` recipe above would put a border and a white
+   slab back on the entry; it is inside the box, so it must stay bare. */
+.editform .tag-input__entry[type="text"] {
+  border: 0;
+  background: transparent;
+  padding: 0.2rem 0.25rem;
+  width: auto;
+}
+.editform .tag-input__entry[type="text"]:focus {
+  border: 0;
+  box-shadow: none;
+}
 /* The changeset-error banner (<.form_error>): a compact status strip — warning
    icon beside one sentence — rather than a padded paragraph box. */
 .alert,
@@ -2027,6 +2132,19 @@ html.lightbox-open { overflow: hidden; }
     border-color: #334155;
     color: #f1f5f9;
   }
+  /* The tag pill box. Same surface as the inputs above, so it keeps reading as
+     one field; the pills take the dark `<.chip>` tint. */
+  .tag-input__box {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f1f5f9;
+  }
+  .tag-input__pill {
+    background: rgb(30 58 138 / 0.4);
+    color: #dbeafe;
+  }
+  .tag-input__remove:hover { background: rgb(30 58 138 / 0.7); }
+  .editform .tag-input__entry[type="text"] { background: transparent; }
   hr { background: #1e293b; }
   /* Element defaults ported from legacy (light values above). */
   label { color: #cbd5e1; }

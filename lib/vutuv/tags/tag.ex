@@ -147,7 +147,7 @@ defmodule Vutuv.Tags.Tag do
   multi-word value links to the existing spaced tag (case-insensitively) or
   creates it fresh, exactly like a single-word one. Callers that accept a batch
   (sign-up, the tags page, the post composer) tokenize their input first with
-  `Vutuv.Tags.parse_tag_names/1`, which honours quotes; the JSON API reaches
+  `Vutuv.Tags.parse_tag_names/1`, which splits on commas only; the JSON API reaches
   here with a single already-whole name.
 
   A value that names no topic is refused outright, before the lookup: one that

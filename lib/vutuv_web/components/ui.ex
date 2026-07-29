@@ -100,6 +100,81 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The shared **tag pill box** — one component for every field where a member
+  types a batch of tags: the add-tag form, the sign-up landing page, the
+  invitation form, the post composer and both job-posting tag fields (DRY).
+
+  A comma, and nothing else, separates two tags (`Vutuv.Tags.parse_tag_names/1`).
+  A plain text box shows no seam between one tag and the next, so members read
+  the space as a separator too and created tags they never meant to. Here each
+  finished tag turns into a pill the moment its comma is typed, and every pill
+  carries its own ✕ — the rule is visible in the box rather than explained in a
+  hint below it.
+
+  Progressive enhancement, not a widget: this renders one ordinary
+  `<input type="text">` holding the comma-joined value, which **is** the feature
+  with JS off. `assets/js/tag_input.js` then switches that input to `hidden`
+  (it stays the form field, so nothing about the request or the server changes),
+  builds the pill box beside it and mirrors every change back — including the
+  half-typed tail, so a submit mid-word keeps that word.
+
+  It works on both page styles from one call: inside a LiveView the `TagInput`
+  hook enhances it, on a classic controller page the `[data-tag-input]` sweep in
+  `app.js` does. The root is `phx-update="ignore"` because the pills are the
+  client's, while its attributes still patch — which is how a server-driven
+  value change reaches the box: `data-value` mirrors `@value` and the hook
+  re-seeds the pills from it (a restored draft, the composer clearing after a
+  post), ignoring the echo of what it sent itself.
+
+  `field_class` styles the no-JS input (`input_class/0` on a kit page, nothing on
+  a classic `.editform` page, which styles its inputs centrally); the enhanced
+  box reproduces that same look from `components.css`. Pass `field_id` when a
+  `<label for=…>` or an `error_tag/2` span points at the field — the JS moves
+  that id onto the box the member types in, so the label keeps working.
+  """
+  attr(:id, :string, required: true, doc: "DOM id of the widget root")
+  attr(:name, :string, required: true, doc: "the form field name, e.g. user[tag_list]")
+  attr(:field_id, :string, default: nil, doc: "id of the input; defaults to <id>-field")
+  attr(:value, :string, default: "")
+  attr(:placeholder, :string, default: "")
+  attr(:field_class, :any, default: nil, doc: "class for the plain (no-JS) input")
+  attr(:invalid?, :boolean, default: false, doc: "mark the box as failed validation")
+  attr(:class, :any, default: nil)
+  attr(:rest, :global, doc: "lands on the field (phx-debounce, aria-describedby, …)")
+
+  def tag_input(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={["tag-input", @invalid? && "tag-input--error", @class]}
+      phx-hook="TagInput"
+      phx-update="ignore"
+      data-tag-input
+      data-value={@value}
+      data-more-placeholder={gettext("Add another tag")}
+      data-remove-label={remove_tag_label()}
+    >
+      <input
+        type="text"
+        id={@field_id || "#{@id}-field"}
+        name={@name}
+        value={@value}
+        placeholder={@placeholder}
+        class={@field_class}
+        autocomplete="off"
+        data-tag-input-field
+        {@rest}
+      />
+    </div>
+    """
+  end
+
+  # The ✕ button's accessible name. The `%{name}` deliberately survives
+  # translation: the JS fills the tag in, so a screen reader announces "Remove
+  # the tag Elixir" rather than fifteen identical "Remove" buttons.
+  defp remove_tag_label, do: gettext("Remove the tag %{name}", name: "%{name}")
+
+  @doc """
   The shared **Milkdown WYSIWYG Markdown editor** — one component for the post
   composer and the message composer (DRY). It is a rich-text surface over a
   plain-Markdown store: the real form field is the `<textarea name={@name}>`

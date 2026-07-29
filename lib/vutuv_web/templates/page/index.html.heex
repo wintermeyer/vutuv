@@ -86,14 +86,23 @@
         </div>
       </div>
       <div>
-        <%= text_input f, :tag_list, class: input_class(f, :tag_list), placeholder: gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)"), "aria-invalid": f.errors[:tag_list] && "true" %>
+        <.tag_input
+          id="signup-tags"
+          field_id={f[:tag_list].id}
+          name={f[:tag_list].name}
+          value={f[:tag_list].value || ""}
+          placeholder={gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)")}
+          field_class={input_class(f, :tag_list)}
+          invalid?={f.errors[:tag_list] != nil}
+          aria-invalid={f.errors[:tag_list] && "true"}
+        />
         <%!-- Tags are how members are found, so sign-up asks for at least
               three (enforced by the registration changeset). On a failed
               submit the specific error replaces the hint — the two would say
               nearly the same thing, and one clear line beats a red-on-grey
               stack. The input itself turns red via input_class/2. --%>
         <%= error_tag f, :tag_list %>
-        <p :if={!f.errors[:tag_list]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\".")}</p>
+        <p :if={!f.errors[:tag_list]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by commas. A tag may be several words long, like Ruby on Rails.")}</p>
       </div>
     </div>
 

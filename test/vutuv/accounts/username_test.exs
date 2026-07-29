@@ -147,7 +147,7 @@ defmodule Vutuv.Accounts.SlugTest do
         Vutuv.Accounts.register_user(conn, %{
           "first_name" => "Tags",
           "emails" => %{"0" => %{"value" => "tags@example.com"}},
-          "tag_list" => "Elixir#{n} Cooking#{n} Origami#{n}"
+          "tag_list" => "Elixir#{n}, Cooking#{n}, Origami#{n}"
         })
 
       assert user.username =~ ~r/^tags_[0-9a-f]{8}$/

@@ -508,17 +508,27 @@ defmodule VutuvWeb.JobPostingLive.Form do
         <.card class="space-y-4">
           <.section_title>{gettext("Tags")}</.section_title>
           <p class="text-xs text-slate-600 dark:text-slate-400">
-            {gettext("Tags match your posting to members. Separate with commas; quote multi-word tags like \"Ruby on Rails\".")}
+            {gettext("Tags match your posting to members. Separate them with commas; a tag may be several words long, like Ruby on Rails.")}
           </p>
           <div>
             <label class="mb-1 block text-sm font-medium" for="job_posting_required_tags">{gettext("Required")}</label>
-            <input type="text" name="job_posting[required_tags]" id="job_posting_required_tags"
-              value={@required_tags} class={input_class()} />
+            <.tag_input
+              id="job-required-tags"
+              field_id="job_posting_required_tags"
+              name="job_posting[required_tags]"
+              value={@required_tags}
+              field_class={input_class()}
+            />
           </div>
           <div>
             <label class="mb-1 block text-sm font-medium" for="job_posting_nice_to_have_tags">{gettext("Nice to have")}</label>
-            <input type="text" name="job_posting[nice_to_have_tags]" id="job_posting_nice_to_have_tags"
-              value={@nice_tags} class={input_class()} />
+            <.tag_input
+              id="job-nice-tags"
+              field_id="job_posting_nice_to_have_tags"
+              name="job_posting[nice_to_have_tags]"
+              value={@nice_tags}
+              field_class={input_class()}
+            />
           </div>
         </.card>
 

@@ -39,8 +39,8 @@ defmodule VutuvWeb.ConnCase do
       # usable in module attributes.
       registration_tags_mod_id = :erlang.phash2(__MODULE__, 4_294_967_296)
 
-      @registration_tags "alpha-tag-#{registration_tags_mod_id} " <>
-                           "beta-tag-#{registration_tags_mod_id} " <>
+      @registration_tags "alpha-tag-#{registration_tags_mod_id}, " <>
+                           "beta-tag-#{registration_tags_mod_id}, " <>
                            "gamma-tag-#{registration_tags_mod_id}"
 
       # Per-call unique sign-up attrs. The email, name and the handle generated

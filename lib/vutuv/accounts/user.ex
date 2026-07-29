@@ -757,7 +757,7 @@ defmodule Vutuv.Accounts.User do
   @min_registration_tags 3
 
   # Counts exactly what Accounts.register_user/3 later materializes as tags:
-  # the tag_list split on commas/spaces (Vutuv.Tags.parse_tag_names/1), then
+  # the tag_list split on commas (Vutuv.Tags.parse_tag_names/1), then
   # case-insensitively de-duplicated, so a padded "Go, go, GO" is one tag,
   # not three.
   defp distinct_tag_names(changeset) do

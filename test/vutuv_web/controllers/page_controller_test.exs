@@ -488,13 +488,13 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "border-red-400"
       # The hint yields to the specific error instead of stacking under it.
       assert body =~ "Please enter at least 3 different tags."
-      refute body =~ "At least three tags, separated by a comma or a space."
+      refute body =~ "At least three tags, separated by commas."
     end
 
     test "a fresh form shows the hint and no error chrome", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert body =~ "At least three tags, separated by a comma or a space."
+      assert body =~ "At least three tags, separated by commas."
       refute body =~ "Please check the fields marked in red."
       refute body =~ ~s(aria-invalid="true")
       refute body =~ "border-red-400"
@@ -516,18 +516,18 @@ defmodule VutuvWeb.PageControllerTest do
       refute user_by_email("duplicated@example.com")
     end
 
-    # An unquoted run of words is not an error: each word (and each
-    # comma-separated segment) becomes its own tag. A quoted phrase is kept
-    # whole (see the next test and Vutuv.Tags.parse_tag_names/1).
-    test "splits a space-separated tag list into one tag per word", %{conn: conn} do
-      javascript = unique_tag_name("JavaScript")
-      go = unique_tag_name("Go")
-      hunde = unique_tag_name("Hunde")
+    # A space does not separate tags: only a comma does, so a multi-word tag
+    # arrives whole without any quoting.
+    test "a space does not split a tag list at sign-up", %{conn: conn} do
+      n = System.unique_integer([:positive])
+      rails = "Ruby on Rails #{n}"
+      dogs = "Hunde und Katzen #{n}"
+      go = "Go#{n}"
 
       attrs =
         Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "spaced@example.com"}},
-          "tag_list" => "#{javascript} #{go} #{hunde}"
+          "tag_list" => "#{rails}, #{dogs}, #{go}"
         })
 
       post(conn, ~p"/new_registration", user: attrs)
@@ -536,10 +536,10 @@ defmodule VutuvWeb.PageControllerTest do
 
       assert user.user_tags
              |> Enum.map(& &1.tag.name)
-             |> Enum.sort() == Enum.sort([javascript, go, hunde])
+             |> Enum.sort() == Enum.sort([rails, dogs, go])
     end
 
-    test "keeps a quoted multi-word tag whole at sign-up", %{conn: conn} do
+    test "quotes are still tolerated around a multi-word tag", %{conn: conn} do
       n = System.unique_integer([:positive])
       rails = "Ruby on Rails #{n}"
       elixir = "Elixir#{n}"
@@ -610,7 +610,7 @@ defmodule VutuvWeb.PageControllerTest do
     @taken_attrs %{
       "emails" => %{"0" => %{"value" => "taken@example.com"}},
       "first_name" => "Mallory",
-      "tag_list" => "Phishing Probing Poking"
+      "tag_list" => "Phishing, Probing, Poking"
     }
 
     setup %{conn: conn} do
@@ -695,7 +695,7 @@ defmodule VutuvWeb.PageControllerTest do
   # locks would convoy and deadlock (Postgres 40P01).
   defp registration_tags do
     n = System.unique_integer([:positive])
-    "Elixir#{n} Cooking#{n} Origami#{n}"
+    "Elixir#{n}, Cooking#{n}, Origami#{n}"
   end
 
   defp valid_attrs do

@@ -3,10 +3,10 @@ defmodule Vutuv.Tags do
   The Tags context: adding tags to users (one name or a batch of them, the path
   registration and the tags page share) and user tag endorsements.
 
-  Tags may contain spaces ("Ruby on Rails"). When a member types a batch, an
-  unquoted comma or space still separates tags, so `"Elixir, Phoenix Go"` is
-  three tags; a multi-word tag is grouped with quotes, so `"Elixir "Ruby on
-  Rails""` is two. `parse_tag_names/1` is the single tokenizer for that rule.
+  Tags may contain spaces ("Ruby on Rails"). When a member types a batch, only
+  a **comma** separates tags — a space does not — so `"Elixir, Ruby on Rails"`
+  is two tags and needs no quoting. `parse_tag_names/1` is the single tokenizer
+  for that rule.
   """
 
   import Ecto.Query
@@ -31,49 +31,42 @@ defmodule Vutuv.Tags do
   # the sign-up form validates the same ceiling up front.
   @max_user_tags 15
 
-  # Matches one token: either a `"…"` quoted phrase (capturing its inside, which
-  # may hold spaces) or a run of non-space, non-comma characters. Tried
-  # left-to-right at each position, so a well-formed `"…"` is always taken whole
-  # before the bare alternative can nibble at it.
-  @token_regex ~r/"([^"]*)"|[^\s,]+/
-  # Curly/German/guillemet quotes a phone keyboard autocorrects to, folded to a
-  # straight `"` so grouping works no matter which quote the member typed.
-  @fancy_quotes ~r/[\x{201C}\x{201D}\x{201E}\x{201F}\x{00AB}\x{00BB}]/u
+  # What separates two tags: a comma, or a line break so a pasted list of tags
+  # arrives as a list rather than as one giant name.
+  @separators ~r/[,\r\n]+/
+  # A `#` that starts a word begins a new tag, so a pasted run of hashtags
+  # ("#Elixir #Phoenix") still splits. Rewritten to a comma before the split;
+  # `#` *inside* a word is untouched, so `C#` and `F#` stay whole.
+  @hashtag_start ~r/\s+#/u
+  # Straight, curly, German and guillemet quotes. Quoting used to be how a
+  # multi-word tag was grouped; multi-word is the default now, so a quote
+  # carries no meaning and is simply dropped from the name — members who
+  # learned the old habit keep getting what they meant.
+  @quotes ~r/["\x{201C}\x{201D}\x{201E}\x{201F}\x{00AB}\x{00BB}]/u
 
   @doc """
-  Tokenizes a tag string into clean names. An unquoted comma or run of
-  whitespace separates tags, and a `"…"` quoted phrase is kept as one
-  multi-word tag: `~s(PHP, "Ruby on Rails" Go)` → `["PHP", "Ruby on Rails",
-  "Go"]`, while the same words unquoted (`"Ruby on Rails"`) stay one tag per
-  word. Curly and German quotes are accepted too; an unbalanced quote degrades
-  to word splitting rather than swallowing the rest of the line. A leading `#`
-  (the hashtag form) is stripped from each token and interior whitespace is
-  collapsed (`Tag.normalize_value/1`), so `"#Elixir #Phoenix"` →
-  `["Elixir", "Phoenix"]` and a bare `"#"` drops out. Safe to call with `nil`
-  (returns `[]`).
+  Tokenizes a tag string into clean names. **Only a comma separates tags** — a
+  space does not — so `"PHP, Ruby on Rails, Go"` is three tags and a
+  multi-word tag needs no quoting: `"Ruby on Rails"` is one tag. A line break
+  separates too (a pasted list), and a `#` that starts a word begins a new tag
+  so a run of hashtags still splits; a `#` inside a word is part of the name
+  (`C#`). Quotes are stripped wherever they appear.
+
+  Each token then goes through `Tag.normalize_value/1`: a leading `#` (the
+  hashtag form) is stripped and interior whitespace collapsed, so
+  `"#Elixir, #Phoenix"` → `["Elixir", "Phoenix"]` and a bare `"#"` drops out.
+  Safe to call with `nil` (returns `[]`).
   """
   def parse_tag_names(value) when is_binary(value) do
     value
-    |> String.replace(@fancy_quotes, "\"")
-    |> then(&Regex.scan(@token_regex, &1))
-    |> Enum.map(&token_from_match/1)
+    |> String.replace(@quotes, "")
+    |> String.replace(@hashtag_start, ",#")
+    |> String.split(@separators)
     |> Enum.map(&Tag.normalize_value/1)
     |> Enum.reject(&(&1 == ""))
   end
 
   def parse_tag_names(_), do: []
-
-  # A quoted match arrives as `["\"phrase\"", "phrase"]` (full then the inner
-  # capture); a bare match as `["token", ""]`. Use the capture only for a real
-  # `"…"` pair (starts and ends with a quote), and strip any stray quote from a
-  # bare token so an unbalanced `"` can never end up in a stored name.
-  defp token_from_match([full | rest]) do
-    token = if quoted?(full), do: List.first(rest) || "", else: full
-    String.replace(token, "\"", "")
-  end
-
-  defp quoted?(full),
-    do: String.starts_with?(full, "\"") and String.ends_with?(full, "\"") and byte_size(full) >= 2
 
   @doc """
   The display names a submit of `value` on the add-tag form will actually

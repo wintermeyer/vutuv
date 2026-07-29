@@ -2375,7 +2375,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/post_live/composer.ex:1523
 #, elixir-autogen, elixir-format
-msgid "Tags, comma- or space-separated (max. %{max})"
+msgid "Tags, separated by commas (max. %{max})"
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/composer.ex:2214
@@ -10649,17 +10649,17 @@ msgstr ""
 
 #: lib/vutuv_web/templates/page/index.html.heex:96
 #, elixir-autogen, elixir-format
-msgid "At least three tags, separated by a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\"."
+msgid "At least three tags, separated by commas. A tag may be several words long, like Ruby on Rails."
 msgstr ""
 
 #: lib/vutuv_web/live/tag_new_live.ex:64
 #, elixir-autogen, elixir-format
-msgid "PHP, JavaScript, \"Ruby on Rails\""
+msgid "PHP, JavaScript, Ruby on Rails"
 msgstr ""
 
 #: lib/vutuv_web/live/tag_new_live.ex:55
 #, elixir-autogen, elixir-format
-msgid "Separate tags with a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\"."
+msgid "Separate tags with a comma. A tag may be several words long, like Ruby on Rails."
 msgstr ""
 
 #: lib/vutuv_web/views/work_experience_html.ex:426
@@ -12615,7 +12615,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:511
 #, elixir-autogen, elixir-format
-msgid "Tags match your posting to members. Separate with commas; quote multi-word tags like \"Ruby on Rails\"."
+msgid "Tags match your posting to members. Separate them with commas; a tag may be several words long, like Ruby on Rails."
 msgstr ""
 
 #: lib/vutuv/jobs/job_posting.ex:152
@@ -17581,4 +17581,14 @@ msgstr ""
 #: lib/vutuv_web/markdown/footnotes.ex:290
 #, elixir-autogen, elixir-format
 msgid "Back to the text"
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex:154
+#, elixir-autogen, elixir-format
+msgid "Add another tag"
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex:175
+#, elixir-autogen, elixir-format
+msgid "Remove the tag %{name}"
 msgstr ""

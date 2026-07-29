@@ -98,7 +98,7 @@ defmodule VutuvWeb.SessionControllerTest do
       attrs = %{
         "emails" => %{"0" => %{"value" => "busy@example.com"}},
         "first_name" => "Busy",
-        "tag_list" => "Elixir Cooking Origami"
+        "tag_list" => "Elixir, Cooking, Origami"
       }
 
       {:ok, me} = Accounts.register_user(conn, attrs)
@@ -200,7 +200,7 @@ defmodule VutuvWeb.SessionControllerTest do
   @pending_attrs %{
     "emails" => %{"0" => %{"value" => "pending@example.com"}},
     "first_name" => "Pending",
-    "tag_list" => "Elixir Cooking Origami"
+    "tag_list" => "Elixir, Cooking, Origami"
   }
 
   describe "POST /login/resend" do

@@ -59,7 +59,7 @@ defmodule Vutuv.HandlesTest do
           "emails" => %{"0" => %{"value" => "reg@example.com"}},
           "first_name" => "Reg",
           "last_name" => "Ister",
-          "tag_list" => "Elixir#{n} Cooking#{n} Origami#{n}"
+          "tag_list" => "Elixir#{n}, Cooking#{n}, Origami#{n}"
         })
 
       handle = Repo.get_by(Handle, user_id: user.id)

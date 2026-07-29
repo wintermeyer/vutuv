@@ -695,6 +695,39 @@ profile's Tags card always offers a visitor the "All tags" footer link — not
 only once the card is truncated, which with the 15-tag cap it never is. The
 owner's footer stays the "Manage" bridge into `/settings/tags`.
 
+## Typing a batch of tags: a comma, and pills
+
+`Vutuv.Tags.parse_tag_names/1` is the single tokenizer for every field that
+takes several tags at once (the add-tag form, sign-up, invitations, the post
+composer, both job-posting fields). **Only a comma separates two tags**, so a
+multi-word tag is simply typed out: `PHP, Ruby on Rails` is two tags. A line
+break separates as well, so a pasted list arrives as a list, and a `#` that
+starts a word begins a new tag, so a pasted run of hashtags still splits while
+`C#` stays whole. Quotes carry no meaning any more and are dropped from the
+name; they used to be how a multi-word tag was grouped, and members who learned
+that habit keep getting what they mean.
+
+Space used to separate too. It read as an implementation detail to whoever wrote
+it and as a trap to everyone else: a plain text box shows no seam between one
+tag and the next, so "Ruby on Rails" quietly became three tags and nobody found
+out until their profile showed them. The rule is now visible instead of
+documented, through the shared `<.tag_input>` pill box: each finished tag turns
+into a pill the moment its comma is typed, and every pill carries its own ✕.
+
+That box is progressive enhancement, not a widget. The server renders one
+ordinary `<input type="text">` holding the comma-joined value — with JS off that
+input *is* the feature, and the request is identical either way.
+`assets/js/tag_input.js` switches it to `hidden` (it stays the form field),
+builds the pill box beside it and mirrors every change back, including the
+half-typed tail, so a submit mid-word keeps that word. One component serves both
+page styles: inside a LiveView the `TagInput` hook enhances it, on a classic
+controller page the `[data-tag-input]` sweep in `app.js` does. The root is
+`phx-update="ignore"` (the pills belong to the client) while its attributes
+still patch, which is how a server-driven change reaches the box — `data-value`
+mirrors the assign, and the hook re-seeds from it while ignoring the echo of
+what it sent itself. `test/vutuv_web/tag_input_test.exs` fails the build if a
+surface drifts back to a bare text input.
+
 ## A tag has to name something
 
 Two shapes of tag name are refused, both by `Vutuv.Tags.Tag`: a **web address**

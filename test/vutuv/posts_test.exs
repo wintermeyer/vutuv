@@ -162,23 +162,22 @@ defmodule Vutuv.PostsTest do
                Posts.create_post(author, %{body: "x", image_ids: Enum.map(images, & &1.id)})
     end
 
-    test "creates tags from a comma- or space-separated list, reusing tags case-insensitively" do
+    test "creates tags from a comma-separated list, reusing tags case-insensitively" do
       name = unique_tag_name("Elixir")
       slug = String.downcase(name)
       existing = insert(:tag, name: name, slug: slug)
 
-      # An unquoted comma and space both still split, so "Phoenix Ecto" is two
-      # tags; a quoted phrase stays one multi-word tag.
-      post = create_post!(user(), %{body: "tagged", tags: "#{slug}, Phoenix Ecto"})
+      # Only a comma splits, so "Phoenix Ecto" would be one tag; these are two.
+      post = create_post!(user(), %{body: "tagged", tags: "#{slug}, Phoenix, Ecto"})
 
       tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
       assert tag_names == Enum.sort(["Ecto", name, "Phoenix"])
       assert Enum.any?(post.tags, &(&1.id == existing.id))
     end
 
-    test "keeps a quoted phrase as one multi-word post tag" do
+    test "keeps a run of words as one multi-word post tag" do
       name = unique_tag_name("Elixir")
-      post = create_post!(user(), %{body: "tagged", tags: ~s(#{name}, "Ruby on Rails")})
+      post = create_post!(user(), %{body: "tagged", tags: "#{name}, Ruby on Rails"})
 
       tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
       assert tag_names == Enum.sort([name, "Ruby on Rails"])

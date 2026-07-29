@@ -62,9 +62,9 @@ defmodule Vutuv.Accounts do
       {:ok, %{user: user}} ->
         # The sign-up form's "Your tags" field (the virtual `tag_list`): turn
         # it into real user tags now that the user row exists. The field is
-        # split on both commas and spaces (`parse_tag_names/1`), so a member who
-        # types "JavaScript Go Hunde" gets three separate tags rather than one
-        # merged one; case-insensitive de-duplication then drops a repeated tag
+        # split on commas only (`parse_tag_names/1`), so a member who types
+        # "Ruby on Rails, Go" gets those two tags and not four;
+        # case-insensitive de-duplication then drops a repeated tag
         # ("Go, go") before it can trip the unique constraint, so no per-tag
         # insert error is silently swallowed here. The insert above only
         # succeeds when this same parse+dedup yields at least three tags

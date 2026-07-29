@@ -1515,16 +1515,15 @@ defmodule VutuvWeb.PostLive.Composer do
           </div>
 
           <%!-- Tags get their own full-width row. --%>
-          <input
-            type="text"
+          <.tag_input
+            id={"#{@id}-tags"}
             name="post[tags]"
             value={@tags_value}
             placeholder={
-              gettext("Tags, comma- or space-separated (max. %{max})",
-                max: Posts.max_tags_per_post()
-              )
+              gettext("Tags, separated by commas (max. %{max})", max: Posts.max_tags_per_post())
             }
-            class={[input_class(), "mt-3"]}
+            field_class={input_class()}
+            class="mt-3"
           />
 
           <%!-- The review sidecar (book/film review, Vutuv.Posts.PostReview).
