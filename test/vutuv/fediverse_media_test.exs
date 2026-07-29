@@ -253,17 +253,21 @@ defmodule Vutuv.FediverseMediaTest do
       })
     end
 
-    test "a picture is exactly as visible as its post", %{account: acc, user: user} do
-      public = cached_post(acc)
-      private = cached_post(acc, %{audience: "followers"})
+    test "a picture is exactly as readable as its post", %{account: acc, user: user} do
+      public = %RemoteImage{remote_post: cached_post(acc)}
+      private = %RemoteImage{remote_post: cached_post(acc, %{audience: "followers"})}
 
       stranger = insert(:activated_user)
       follow(user, acc, "requested")
 
-      assert Fediverse.remote_post_visible?(public, user)
+      assert Fediverse.remote_image_visible?(public, user)
       # A request nobody answered does not open the author's restricted posts.
-      refute Fediverse.remote_post_visible?(private, user)
-      refute Fediverse.remote_post_visible?(public, stranger)
+      refute Fediverse.remote_image_visible?(private, user)
+      # An open post is readable by any signed-in member, which is what the
+      # account page already shows: a picture on it must not be stricter than
+      # the text beside it. A boost or a repost reaches such a reader too.
+      assert Fediverse.remote_image_visible?(public, stranger)
+      refute Fediverse.remote_image_visible?(private, stranger)
     end
   end
 

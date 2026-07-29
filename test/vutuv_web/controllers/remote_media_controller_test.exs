@@ -4,13 +4,20 @@ defmodule VutuvWeb.RemoteMediaControllerTest do
 
   It is the whole access control for those files, so every refusal it makes is
   tested here rather than asserted in a moduledoc: a signed-out request, a
-  reader who does not follow the author, a follow the author never accepted, a
-  picture the AI gate has not cleared, and a URL whose version segment names
-  bytes we no longer store. An unguessable URL is not an access control.
+  followers-only post without an accepted follow, a picture the AI gate has not
+  cleared, and a URL whose version segment names bytes we no longer store. An
+  unguessable URL is not an access control.
+
+  And every *admission*, because the first version of this proxy asked for the
+  viewer's own follow of the author and so 404ed every picture on a boosted or
+  reshared post — a photo post out of the feed came out as broken images. The
+  ways a cached post legitimately reaches a reader are covered one by one below.
   """
   use VutuvWeb.ConnCase, async: true
 
   alias Vutuv.Fediverse.Follow
+  alias Vutuv.Fediverse.PostBoost
+  alias Vutuv.Fediverse.PostRepost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
@@ -81,6 +88,24 @@ defmodule VutuvWeb.RemoteMediaControllerTest do
   defp media_url(%RemoteAccount{} = account),
     do: RemoteMedia.avatar_url(account.id, account.avatar)
 
+  defp other_account do
+    Repo.insert!(%RemoteAccount{
+      actor_uri: "https://other.example/users/them#{System.unique_integer([:positive])}",
+      host: "other.example",
+      handle: "booster",
+      inbox_uri: "https://other.example/inbox"
+    })
+  end
+
+  defp boost(booster, post) do
+    Repo.insert!(%PostBoost{
+      remote_account_id: booster.id,
+      remote_post_id: post.id,
+      activity_id: "https://other.example/a/#{System.unique_integer([:positive])}",
+      announced_at: DateTime.utc_now(:second)
+    })
+  end
+
   defp follow(user, account, state) do
     Repo.insert!(%Follow{
       user_id: user.id,
@@ -109,8 +134,17 @@ defmodule VutuvWeb.RemoteMediaControllerTest do
       assert get(ctx.out, media_url(image)).status == 404
     end
 
-    test "is not served to a signed-in member who follows nobody here", ctx do
+    test "an open post's picture is served to any signed-in member", ctx do
+      # The account page already shows them the post itself, and a boost or a
+      # member's repost carries it into a feed without any follow of the author,
+      # so the picture must not be stricter than the text beside it.
       image = picture(remote_post(ctx.account))
+
+      assert get(ctx.conn, media_url(image)).status == 200
+    end
+
+    test "a followers-only post's picture is not, without a follow", ctx do
+      image = picture(remote_post(ctx.account, "followers"))
 
       assert get(ctx.conn, media_url(image)).status == 404
     end
@@ -141,6 +175,34 @@ defmodule VutuvWeb.RemoteMediaControllerTest do
       Repo.update!(change(image, file: nil, moderation: "rejected"))
 
       assert get(ctx.conn, stale).status == 404
+    end
+
+    test "is served when a followed account boosted the post", ctx do
+      # The normal boost (issue #1167): the reader follows the booster, nobody
+      # here follows the author, and the feed shows them the card all the same.
+      image = picture(remote_post(ctx.account))
+      booster = other_account()
+      boost(booster, %RemotePost{id: image.remote_post_id})
+      follow(ctx.user, booster, "accepted")
+
+      assert get(ctx.conn, media_url(image)).status == 200
+    end
+
+    test "a boost does not widen a followers-only post", ctx do
+      image = picture(remote_post(ctx.account, "followers"))
+      booster = other_account()
+      boost(booster, %RemotePost{id: image.remote_post_id})
+      follow(ctx.user, booster, "accepted")
+
+      assert get(ctx.conn, media_url(image)).status == 404
+    end
+
+    test "is served when a member here reshared the post", ctx do
+      # Issue #1166: the reposter is the reason the reader sees it at all.
+      image = picture(remote_post(ctx.account))
+      Repo.insert!(%PostRepost{user_id: ctx.user.id, remote_post_id: image.remote_post_id})
+
+      assert get(ctx.conn, media_url(image)).status == 200
     end
 
     test "and so does a made-up version segment", ctx do

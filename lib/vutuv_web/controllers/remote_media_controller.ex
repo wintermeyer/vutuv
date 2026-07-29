@@ -6,9 +6,12 @@ defmodule VutuvWeb.RemoteMediaController do
   Everything is re-checked per request, because a picture URL is the one thing
   a reader can hand to somebody else:
 
-    * **who may see it.** A post picture is only served to a member the post
-      itself reaches (`Vutuv.Fediverse.remote_post_visible?/2`) — so a
-      followers-only post's photograph is no more public than its text.
+    * **who may see it.** A post picture is served to exactly the members who
+      may read the post itself (`Vutuv.Fediverse.remote_image_visible?/2`) — so
+      a followers-only post's photograph is no more public than its text, and
+      an open one's is no *less* readable than its text either, however the
+      reader met it (their own follow, a boost, a member's repost, the account
+      page).
     * **the AI gate.** An unreleased picture never leaves this proxy, which is
       why there is no quarantine tree for these files.
     * **the exact stored file.** The URL's version segment is the

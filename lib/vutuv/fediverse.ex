@@ -1665,38 +1665,28 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  Whether `viewer` may see a cached picture: exactly whether they may see the
-  post it hangs off.
+  Whether `viewer` may see a cached picture: exactly whether they may **read**
+  the post it hangs off (`remote_post_readable?/2`).
 
   A picture URL is the one thing a reader can hand to somebody else, so the
   proxy re-asks this per request rather than trusting that a card rendered it.
+
+  **Readable, not "would it reach them unprompted".** This used to ask for the
+  viewer's own follow of the *author*, which is only one of the four ways a
+  cached post is shown. A **boost** (issue #1167) and a member's **repost**
+  (issue #1166) both carry a post to readers who follow nobody but the sharer —
+  that is their entire purpose, and the purge even spares such a copy for it —
+  and the account page (`account_posts/2`) shows any open post to any signed-in
+  member. So the card rendered and every picture on it 404ed: a boosted photo
+  post came out as a row of broken images. Each of those surfaces is a subset of
+  "readable" (all three require an open audience, or the viewer's own accepted
+  follow), so asking the read question covers them with nothing left to widen —
+  a followers-only post still needs the viewer's own accepted follow.
   """
   def remote_image_visible?(%RemoteImage{remote_post: %RemotePost{} = post}, viewer),
-    do: remote_post_visible?(post, viewer)
+    do: remote_post_readable?(post, viewer)
 
   def remote_image_visible?(_image, _viewer), do: false
-
-  @doc """
-  Whether `viewer` may see a cached post: they follow its author (not muted —
-  a mute is about the feed, not about access), and for a followers-only post
-  that follow is accepted.
-
-  The read half of what `feed_remote_posts/3` and `account_posts/2` enforce in
-  SQL, for the one caller that has a post in hand rather than a query.
-  """
-  def remote_post_visible?(%RemotePost{} = post, %User{id: viewer_id}) do
-    Repo.exists?(
-      from(f in Follow,
-        where: f.user_id == ^viewer_id and f.remote_account_id == ^post.remote_account_id,
-        # The feed's vocabulary (`RemotePost.open?/1`), not a negated literal,
-        # for the reason `account_posts/2` spells out: a fourth audience value
-        # must not open here and close there.
-        where: ^RemotePost.open?(post) or f.state == "accepted"
-      )
-    )
-  end
-
-  def remote_post_visible?(_post, _viewer), do: false
 
   @doc """
   Every picture recorded for `post_ids`, grouped by post id, in the author's
@@ -4035,10 +4025,16 @@ defmodule Vutuv.Fediverse do
   any signed-in member (that is what the account page shows), and a
   followers-only one needs their own accepted follow.
 
-  The read half of what `account_posts/2` enforces in SQL, for a caller holding
-  a post rather than a query. `remote_post_visible?/2` beside it answers the
-  narrower feed question ("would this reach them unprompted"), which also
-  requires a follow — the two are different questions and must not be merged.
+  The read half of what `account_posts/2` enforces in SQL, for the callers
+  holding a post rather than a query: the reply gate above and the picture proxy
+  (`remote_image_visible?/2`).
+
+  Deliberately **not** the narrower feed question ("would this reach them
+  unprompted"), which a follow of the author answers. Every surface that renders
+  a cached post — the feed's own source, a boost, a member's repost, the account
+  page — is a subset of this one, so a gate built from the feed question denies
+  the other three; that is what broke the pictures on boosted posts. Keep new
+  read-side callers on this function.
   """
   def remote_post_readable?(%RemotePost{} = post, %User{id: viewer_id}) do
     RemotePost.open?(post) or
