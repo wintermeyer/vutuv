@@ -24,6 +24,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
   alias Vix.Vips.MutableImage
   alias Vutuv.Posts
+  alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Repo
@@ -867,6 +868,237 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       post = only_post(user)
       assert Enum.sort(Enum.map(post.images, & &1.id)) == Enum.sort([first.id, second.id])
+    end
+  end
+
+  describe "the bento workshop" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, live: open_composer(conn), user: user}
+    end
+
+    test "appears with the second photo: live preview, pattern chips, swap hint", %{
+      live: live,
+      user: user
+    } do
+      upload_photo!(live, user)
+      refute has_element?(live, "[data-bento-editor]")
+
+      upload_photo!(live, user)
+      assert has_element?(live, "[data-bento-editor]")
+      assert has_element?(live, "[data-bento-preview]")
+      # The Auto chip leads and is the state in force…
+      assert has_element?(live, ~s([data-bento-pattern="auto"][aria-pressed="true"]))
+      # …beside the two-photo arrangements from the catalog.
+      for variant <- GalleryLayout.variants(2) do
+        assert has_element?(live, ~s([data-bento-pattern="#{variant.name}"]))
+      end
+    end
+
+    test "tap-tap swaps two photos, and the swapped order is what saves", %{
+      live: live,
+      user: user
+    } do
+      first = upload_photo!(live, user)
+      second = upload_photo!(live, user)
+
+      live |> element(~s([data-bento-tile="#{first.id}"])) |> render_click()
+      assert has_element?(live, ~s([data-bento-tile="#{first.id}"] [data-bento-swap-marked]))
+
+      live |> element(~s([data-bento-tile="#{second.id}"])) |> render_click()
+      refute has_element?(live, "[data-bento-swap-marked]")
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Swapped."}}) |> render_submit()
+      post = only_post(user)
+      assert Enum.map(post.images, & &1.id) == [second.id, first.id]
+    end
+
+    test "tapping the marked photo again unmarks it", %{live: live, user: user} do
+      first = upload_photo!(live, user)
+      _second = upload_photo!(live, user)
+
+      live |> element(~s([data-bento-tile="#{first.id}"])) |> render_click()
+      live |> element(~s([data-bento-tile="#{first.id}"])) |> render_click()
+
+      refute has_element?(live, "[data-bento-swap-marked]")
+    end
+
+    test "a pattern chip sets the arrangement and the save stores it", %{
+      live: live,
+      user: user
+    } do
+      upload_photo!(live, user)
+      upload_photo!(live, user)
+
+      live |> element(~s([data-bento-pattern="stack"])) |> render_click()
+      assert has_element?(live, ~s([data-bento-pattern="stack"][aria-pressed="true"]))
+      refute has_element?(live, ~s([data-bento-pattern="auto"][aria-pressed="true"]))
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Arranged."}}) |> render_submit()
+      assert only_post(user).gallery_layout == "stack"
+    end
+
+    test "Auto stays the default and stores no arrangement", %{live: live, user: user} do
+      upload_photo!(live, user)
+      upload_photo!(live, user)
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Auto."}}) |> render_submit()
+      assert only_post(user).gallery_layout == nil
+    end
+
+    test "the chosen arrangement rides the draft and comes back on reload", %{
+      conn: conn,
+      live: live,
+      user: user
+    } do
+      upload_photo!(live, user)
+      upload_photo!(live, user)
+
+      live |> element(~s([data-bento-pattern="stack"])) |> render_click()
+      assert %Posts.PostDraft{layout: "stack"} = Posts.get_draft(user)
+
+      # A reload rebuilds the composer from the stored draft (issue #1148);
+      # the arrangement must come back with the photos. The feed re-opens the
+      # composer over a held draft by itself, so there is no pill to click.
+      {:ok, reopened, _html} = live(conn, ~p"/feed")
+      assert has_element?(reopened, ~s([data-bento-pattern="stack"][aria-pressed="true"]))
+    end
+  end
+
+  describe "the ratio crop" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{live: open_composer(conn), user: user}
+    end
+
+    test "the crop verdict re-derives the photo and marks the tile", %{live: live, user: user} do
+      image = upload_photo!(live, user)
+      refute render(live) =~ "data-photo-cropped"
+
+      live
+      |> element("#composer-images")
+      |> render_hook("photo-crop", %{"id" => image.id, "crop" => "0,0,0.5,0.5"})
+
+      cropped = reload(image)
+      assert cropped.crop == "0.0000,0.0000,0.5000,0.5000"
+      # The fixture is 90×60, so the half-crop serves 45×30.
+      assert {cropped.width, cropped.height} == {45, 30}
+
+      html = render(live)
+      # The tile now shows the cropped picture (crop-keyed cache buster)…
+      assert html =~ "feed.avif?v="
+      # …and says a crop is in force.
+      assert has_element?(live, ~s([data-photo-cropped="#{image.id}"]))
+    end
+
+    test "an empty crop resets to the whole photo", %{live: live, user: user} do
+      image = upload_photo!(live, user)
+
+      live
+      |> element("#composer-images")
+      |> render_hook("photo-crop", %{"id" => image.id, "crop" => "0,0,0.5,0.5"})
+
+      live
+      |> element("#composer-images")
+      |> render_hook("photo-crop", %{"id" => image.id, "crop" => ""})
+
+      reset = reload(image)
+      assert reset.crop == nil
+      assert {reset.width, reset.height} == {90, 60}
+      refute render(live) =~ "data-photo-cropped"
+    end
+
+    test "another member's photo cannot be cropped through this composer", %{
+      live: live,
+      user: user
+    } do
+      _own = upload_photo!(live, user)
+      other = insert(:user, email_confirmed?: true)
+      foreign = pending_image!(other)
+
+      live
+      |> element("#composer-images")
+      |> render_hook("photo-crop", %{"id" => foreign.id, "crop" => "0,0,0.5,0.5"})
+
+      assert reload(foreign).crop == nil
+    end
+
+    test "the exact-file choice is disabled and explained once cropped", %{
+      live: live,
+      user: user
+    } do
+      image = upload_photo!(live, user)
+      _second = upload_photo!(live, user)
+
+      live
+      |> element("#composer-images")
+      |> render_hook("photo-crop", %{"id" => image.id, "crop" => "0,0,0.5,0.5"})
+
+      open_panel(live, image)
+      toggle(live, image, "download_original")
+
+      assert has_element?(
+               live,
+               ~s(input[phx-value-id="#{image.id}"][phx-value-exact="true"][disabled])
+             )
+
+      assert has_element?(live, "[data-photo-crop-download-note]")
+    end
+
+    test "each tile offers the crop dot wired to the author-only workbench", %{
+      live: live,
+      user: user
+    } do
+      image = upload_photo!(live, user)
+
+      assert has_element?(
+               live,
+               ~s([data-photo-crop="#{image.id}"][data-crop-src="/post_images/#{image.token}/source.avif"])
+             )
+    end
+  end
+
+  describe "drop anywhere" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{live: open_composer(conn), user: user}
+    end
+
+    test "the whole form is the drop zone, from the first drag on", %{live: live} do
+      # The zone and its overlay exist before any photo is attached.
+      assert has_element?(live, "#composer-form[data-composer-dropzone][phx-drop-target]")
+      assert has_element?(live, "#composer-form [data-drop-overlay]")
+    end
+
+    test "the photo grid carries no drop target of its own", %{live: live, user: user} do
+      upload_photo!(live, user)
+
+      # A nested second zone would steal the active state from the overlay.
+      refute has_element?(live, "#composer-images[phx-drop-target]")
+    end
+  end
+
+  # The German render, asserted by name: short labels like "Auto" are exactly
+  # what `gettext.extract --merge` fuzzy-fills with a neighbour's translation
+  # ("Autor(en)"), and nothing else fails the build on that.
+  describe "the German copy" do
+    test "the workshop's labels render in German", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # The login helper has already sent a response; recycle keeps the
+      # session cookies and lets the next request carry the German header.
+      conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
+      live = open_composer(conn)
+
+      upload_photo!(live, user)
+      upload_photo!(live, user)
+
+      html = render(live)
+      assert html =~ "Automatisch"
+      assert html =~ "Galerie-Vorschau"
+      assert html =~ "Tippen Sie zwei Fotos an, um sie zu tauschen."
+      assert html =~ "Foto zuschneiden"
+      assert html =~ "Nebeneinander"
+      assert html =~ "Fotos hier ablegen, um sie hinzuzufügen"
     end
   end
 end

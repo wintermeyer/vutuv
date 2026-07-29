@@ -60,6 +60,14 @@ defmodule Vutuv.Posts.PostImage do
     field(:content_type, :string)
     field(:size_bytes, :integer)
 
+    # The author's ratio crop as `"x,y,w,h"` fractions of the EXIF-rotated
+    # original (`Vutuv.Uploads.Crop`), written by `Vutuv.Posts.crop_image/2`
+    # alongside the re-derive, never cast from user params directly. While it
+    # is set, `width`/`height` are the **cropped** dimensions (they describe
+    # what is served) and the uncropped picture leaves the server on no path
+    # but the author-only crop workbench (`Vutuv.PostImageStore.source_path/1`).
+    field(:crop, :string)
+
     # The whitelisted camera facts (Vutuv.Uploads.Exif), parsed at upload and
     # never cast from user params — they describe the file, not the author's
     # opinion of it.
@@ -158,10 +166,25 @@ defmodule Vutuv.Posts.PostImage do
     16 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end
 
+  @doc "Whether the author cropped this photo (the served frame ≠ the upload)."
+  def cropped?(%__MODULE__{crop: crop}), do: is_binary(crop) and crop != ""
+
   @doc "Root-relative proxy URL for a version of this image."
-  def url(%__MODULE__{token: token}, version) when version in @versions do
-    "#{token_prefix(token)}#{version}#{Spec.served_ext()}"
+  def url(%__MODULE__{token: token} = image, version) when version in @versions do
+    "#{token_prefix(token)}#{version}#{Spec.served_ext()}#{crop_buster(image)}"
   end
+
+  # The proxy serves every version under an immutable-cache header, so a
+  # re-crop (which overwrites the files in place) must change the URL or every
+  # browser that saw the old frame keeps it for a year. The buster is a short
+  # hash of the crop, so the same crop always names the same URL and an
+  # uncropped photo keeps its historical bare one.
+  defp crop_buster(%__MODULE__{crop: crop}) when is_binary(crop) and crop != "" do
+    "?v=" <>
+      (:sha256 |> :crypto.hash(crop) |> Base.url_encode64(padding: false) |> binary_part(0, 8))
+  end
+
+  defp crop_buster(%__MODULE__{}), do: ""
 
   @doc """
   Root-relative proxy URL of the **original download**, or `nil` when the
@@ -170,8 +193,8 @@ defmodule Vutuv.Posts.PostImage do
   download in its `Content-Disposition`, so the URL cannot be used to probe
   which format somebody uploaded.
   """
-  def download_url(%__MODULE__{download_original: true, token: token}),
-    do: "#{token_prefix(token)}original.orig"
+  def download_url(%__MODULE__{download_original: true, token: token} = image),
+    do: "#{token_prefix(token)}original.orig#{crop_buster(image)}"
 
   def download_url(%__MODULE__{}), do: nil
 
@@ -180,7 +203,8 @@ defmodule Vutuv.Posts.PostImage do
   `VutuvWeb.OpenGraph`) — derived on the fly by the proxy, not a stored
   version (`Vutuv.PostImageStore.og_jpeg/1`).
   """
-  def og_url(%__MODULE__{token: token}), do: "#{token_prefix(token)}og.jpg"
+  def og_url(%__MODULE__{token: token} = image),
+    do: "#{token_prefix(token)}og.jpg#{crop_buster(image)}"
 
   @doc "URLs for every served version as a `%{version => url}` map."
   def urls(%__MODULE__{} = image) do
@@ -189,11 +213,16 @@ defmodule Vutuv.Posts.PostImage do
 
   @doc """
   Every URL form that may reference this version in a stored post body: the
-  canonical URL plus the pre-AVIF `.webp` form old bodies still carry.
-  Transitional — remove together with `Vutuv.Uploads.Spec.legacy_exts/0`.
+  canonical URL, the bare (buster-less) form a body stored before the photo
+  was cropped still carries, plus the pre-AVIF `.webp` form old bodies still
+  carry (transitional — remove together with `Vutuv.Uploads.Spec.legacy_exts/0`).
   """
   def url_forms(%__MODULE__{token: token} = image, version) when version in @versions do
-    [url(image, version), "#{token_prefix(token)}#{version}.webp"]
+    Enum.uniq([
+      url(image, version),
+      "#{token_prefix(token)}#{version}#{Spec.served_ext()}",
+      "#{token_prefix(token)}#{version}.webp"
+    ])
   end
 
   @doc """

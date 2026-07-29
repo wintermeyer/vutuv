@@ -11,6 +11,9 @@ import "./webauthn"
 // Avatar/cover crop modal on the profile editor (self-contained progressive
 // enhancement of the two file inputs; see image_crop.js).
 import "./image_crop"
+// Ratio crop dialog for post photos, opened from the composer's photo tiles
+// by the PhotoStrip hook below (see photo_crop.js).
+import { openPhotoCropper } from "./photo_crop"
 // Shared plumbing (CSRF token, page lifecycle, "wire once" guard, CSRF fetch,
 // reduced-motion) reused by every classic-page enhancement below.
 import { csrfToken, onReady, once, request, reducedMotion } from "./util"
@@ -484,6 +487,27 @@ const Hooks = {
       this.dragging = null
       const strip = this.el
       const tiles = () => [...strip.querySelectorAll("[data-photo-tile]")]
+
+      // The tiles' crop dots open the ratio crop dialog (photo_crop.js); the
+      // dialog's verdict goes to the composer LiveComponent, which re-derives
+      // the served versions and re-renders the tile. pushEventTo(this.el, …),
+      // not pushEvent — same reason as the reorder push below.
+      strip.addEventListener("click", (e) => {
+        const button = e.target.closest("[data-photo-crop]")
+        if (!button) return
+        e.preventDefault()
+        const labels = {
+          title: strip.dataset.cropTitle || "Crop photo",
+          hint: strip.dataset.cropHint || "Pick a shape, then drag and zoom.",
+          save: strip.dataset.cropSave || "Apply crop",
+          cancel: strip.dataset.cropCancel || "Cancel",
+          reset: strip.dataset.cropReset || "Whole photo",
+          zoom: strip.dataset.cropZoom || "Zoom",
+        }
+        openPhotoCropper(button, labels, (crop) => {
+          this.pushEventTo(this.el, "photo-crop", { id: button.dataset.photoCrop, crop })
+        })
+      })
 
       const nearest = (x, y) =>
         tiles()

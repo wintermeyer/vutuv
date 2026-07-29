@@ -35,6 +35,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Isbn
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
+  alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
@@ -2327,6 +2328,7 @@ defmodule VutuvWeb.PostComponents do
                 mode={:preview}
                 permalink={@permalink}
                 license={@post.license}
+                layout={@post.gallery_layout}
               />
             <% true -> %>
               <.post_gallery
@@ -2614,6 +2616,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:mode, :atom, required: true, values: [:preview, :full])
   attr(:permalink, :string, required: true)
   attr(:license, :string, default: nil, doc: "the post's license, for the lightbox panel")
+  attr(:layout, :string, default: nil, doc: "the post's chosen bento arrangement; nil = auto")
 
   defp post_gallery(%{mode: :preview} = assigns), do: mosaic(assigns)
 
@@ -2688,9 +2691,10 @@ defmodule VutuvWeb.PostComponents do
   # them as stray `mode="preview" license="arr"` attributes on the anchor.
   attr(:gallery, :list, required: true)
   attr(:permalink, :string, required: true)
+  attr(:layout, :string, default: nil)
 
   def mosaic(assigns) do
-    layout = mosaic_layout(assigns.gallery)
+    layout = mosaic_layout(assigns.gallery, assigns.layout)
 
     assigns = assigns |> assign(:cells, layout.cells) |> assign(:frame, layout.aspect)
 
@@ -2739,17 +2743,21 @@ defmodule VutuvWeb.PostComponents do
   and how many further photos it stands for (`more`, non-zero on the last tile
   only).
 
+  `layout` names a `Vutuv.Posts.GalleryLayout` variant the author chose in the
+  composer; `nil` (and any name unavailable at this count) keeps the automatic
+  orientation-driven choice the mosaic always made.
+
   Public so `mosaic_layout_test.exs` can check the geometry directly — the
   arrangement is the feature, and it is much easier to get wrong than to see
   wrong.
   """
-  def mosaic_layout(gallery) do
+  def mosaic_layout(gallery, layout \\ nil) do
     shown = Enum.take(gallery, @mosaic_tiles)
     more = length(gallery) - length(shown)
     hero = List.first(shown)
     tall? = hero && PostImage.orientation(hero) == :portrait
 
-    {aspect, areas} = mosaic_shape(length(shown), tall?)
+    {aspect, areas} = mosaic_shape(length(shown), tall?, layout)
 
     cells =
       shown
@@ -2762,76 +2770,26 @@ defmodule VutuvWeb.PostComponents do
     %{aspect: aspect, cells: cells}
   end
 
-  # The arrangements, on a 12×6 grid (`row-start / col-start / row-end /
-  # col-end`). Twelve columns divide by two, three, four and six, which is
-  # every split these layouts need; six rows do the same vertically. A coarser
-  # grid was tried first and could not express the tall-hero five-photo case
-  # without cropping the hero the wrong way.
-  #
-  # **What is tuned here is the hero cell, not the frame.** A cell's aspect is
+  # The arrangements live in `Vutuv.Posts.GalleryLayout` — a named catalog on
+  # the shared 12×6 grid, so the composer can offer them as a choice. What is
+  # tuned there is the hero cell, not the frame: a cell's aspect is
   # `frame_ratio × (cell_cols / 12) ÷ (cell_rows / 6)`, so the frame and the
   # hero's own tile pull in opposite directions — a portrait hero wants a
   # *wider* frame when its tile is narrow and full-height. That is the whole
-  # "aspect-aware" claim and the reason each count carries a portrait and a
-  # landscape variant instead of one compromise that crops both.
+  # "aspect-aware" claim, and it holds for a chosen arrangement too: the
+  # variant names where the tiles sit, the frame still follows the hero.
   # `mosaic_layout_test.exs` asserts the resulting hero-cell shape.
+  defp mosaic_shape(count, tall?, layout) when count >= 2 do
+    variant =
+      GalleryLayout.variant(count, layout) || GalleryLayout.auto_variant(count, tall?)
 
-  # Two photos sit side by side either way (stacking a pair makes a card twice
-  # as tall as it is wide); only the frame differs, which is what decides
-  # whether the pair reads as two portraits or two landscapes.
-  defp mosaic_shape(2, tall?) do
-    {if(tall?, do: "7 / 5", else: "14 / 5"), ["1 / 1 / 7 / 7", "1 / 7 / 7 / 13"]}
-  end
-
-  # A portrait hero takes the left two thirds full height, with two stacked
-  # beside it; a landscape hero takes the top two thirds full width, with two
-  # side by side below.
-  defp mosaic_shape(3, true) do
-    {"6 / 5", ["1 / 1 / 7 / 9", "1 / 9 / 4 / 13", "4 / 9 / 7 / 13"]}
-  end
-
-  defp mosaic_shape(3, false) do
-    {"1 / 1", ["1 / 1 / 5 / 13", "5 / 1 / 7 / 7", "5 / 7 / 7 / 13"]}
-  end
-
-  # Four photos are the one count with a symmetric answer: a 2×2 grid, where
-  # every cell inherits the frame's aspect exactly, so all four crop equally
-  # little.
-  defp mosaic_shape(4, tall?) do
-    {if(tall?, do: "4 / 5", else: "3 / 2"),
-     ["1 / 1 / 4 / 7", "1 / 7 / 4 / 13", "4 / 1 / 7 / 7", "4 / 7 / 7 / 13"]}
-  end
-
-  # Five, portrait hero: the hero fills the left half top to bottom and the
-  # other four sit in a 2×2 beside it, so all five tiles come out portrait.
-  defp mosaic_shape(5, true) do
-    {"7 / 5",
-     [
-       "1 / 1 / 7 / 7",
-       "1 / 7 / 4 / 10",
-       "1 / 10 / 4 / 13",
-       "4 / 7 / 7 / 10",
-       "4 / 10 / 7 / 13"
-     ]}
-  end
-
-  # Five, landscape hero: the hero over two thirds of both axes, two stacked
-  # at its right and two across the bottom.
-  defp mosaic_shape(5, false) do
-    {"3 / 2",
-     [
-       "1 / 1 / 5 / 9",
-       "1 / 9 / 3 / 13",
-       "3 / 9 / 5 / 13",
-       "5 / 1 / 7 / 5",
-       "5 / 5 / 7 / 13"
-     ]}
+    {GalleryLayout.frame(variant, tall? == true), variant.areas}
   end
 
   # A single tile (and the defensive zero case) simply fills the frame; the
   # post card routes one photo to its own full-width treatment before it ever
   # gets here.
-  defp mosaic_shape(_count, tall?) do
+  defp mosaic_shape(_count, tall?, _layout) do
     {if(tall?, do: "4 / 5", else: "3 / 2"), ["1 / 1 / 7 / 13"]}
   end
 

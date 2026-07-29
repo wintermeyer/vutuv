@@ -191,6 +191,11 @@ const imageFileCapture = (hook) =>
               const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
               hook.captureFiles(files, coords ? coords.pos : view.state.selection.head)
               event.preventDefault()
+              // The composer form around this editor is itself a LiveView
+              // drop target now; without this the same drop would bubble to
+              // LiveView's window listener and the files would upload twice
+              // (once inline here, once as plain attachments).
+              event.stopPropagation()
               return true
             },
             paste: (view, event) => {

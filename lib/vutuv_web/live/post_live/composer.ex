@@ -58,6 +58,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
+  alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDraft
@@ -153,6 +154,13 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:photos, photo_state(images))
     # Which photo's panel is open; nil = none, which is the whole hobby flow.
     |> assign(:open_photo, nil)
+    # The chosen bento arrangement (Vutuv.Posts.GalleryLayout); nil = auto.
+    |> assign(:layout, (post && post.gallery_layout) || nil)
+    # The first half of a tap-tap swap in the bento preview: the id of the
+    # photo tapped first, highlighted until its partner (or the same photo
+    # again, to cancel) is tapped. Event-driven on purpose — tap-tap needs no
+    # drag, so it works the same on a phone and a desktop.
+    |> assign(:swap_photo, nil)
     |> assign(:license, initial_license(post, socket.assigns.current_user))
     |> assign(:preset, preset)
     |> assign(:deny_wildcards, wildcards)
@@ -225,6 +233,7 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:images, images)
       |> assign(:photos, photo_state_from_draft(draft, images))
       |> assign(:license, PhotoLicense.cast(draft.license || assigns.license))
+      |> assign(:layout, GalleryLayout.cast(draft.layout))
       |> assign(:restored_draft?, true)
     else
       _no_draft -> socket
@@ -300,7 +309,8 @@ defmodule VutuvWeb.PostLive.Composer do
         "license" => assigns.license,
         "review" => assigns.review,
         "image_ids" => Enum.map(assigns.images, & &1.id),
-        "photos" => Map.new(assigns.photos, fn {id, settings} -> {id, stringify(settings)} end)
+        "photos" => Map.new(assigns.photos, fn {id, settings} -> {id, stringify(settings)} end),
+        "layout" => assigns.layout
       })
     end
 
@@ -360,6 +370,36 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp open_photo(_images, nil), do: nil
   defp open_photo(images, id), do: Enum.find(images, &(&1.id == id))
+
+  # Applies (or clears) one photo's crop and swaps the updated row into the
+  # list, so the re-render shows the freshly cropped tile.
+  defp apply_photo_crop(socket, image, crop) do
+    case Posts.crop_image(image, crop) do
+      {:ok, updated} ->
+        images =
+          Enum.map(socket.assigns.images, &if(&1.id == updated.id, do: updated, else: &1))
+
+        socket |> assign(:images, images) |> assign(:error, nil)
+
+      {:error, _reason} ->
+        assign(socket, :error, gettext("The photo could not be cropped."))
+    end
+  end
+
+  # Trades the positions of two photos (the bento preview's tap-tap swap).
+  # Unknown ids leave the list untouched — a tile can go stale between taps.
+  defp swap_images(images, first_id, second_id) do
+    first = Enum.find_index(images, &(&1.id == first_id))
+    second = Enum.find_index(images, &(&1.id == second_id))
+
+    if first && second do
+      images
+      |> List.replace_at(first, Enum.at(images, second))
+      |> List.replace_at(second, Enum.at(images, first))
+    else
+      images
+    end
+  end
 
   ## The post-wide download answer (issue #1104 follow-up)
 
@@ -739,6 +779,50 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, socket |> assign(:images, reordered ++ missing) |> schedule_draft_save()}
   end
 
+  # The bento preview's tap-tap swap: the first tap marks a photo, the second
+  # trades the two places (tapping the marked photo again unmarks it). Chosen
+  # over drag because it needs no pointer gymnastics on a phone and stays a
+  # plain pair of clicks in a test.
+  def handle_event("mosaic-swap", %{"id" => id}, socket) do
+    case socket.assigns.swap_photo do
+      nil ->
+        {:noreply, assign(socket, :swap_photo, id)}
+
+      ^id ->
+        {:noreply, assign(socket, :swap_photo, nil)}
+
+      other_id ->
+        {:noreply,
+         socket
+         |> assign(:images, swap_images(socket.assigns.images, other_id, id))
+         |> assign(:swap_photo, nil)
+         |> schedule_draft_save()}
+    end
+  end
+
+  # The bento pattern chips ("Muster"). "" is the Auto chip; an unknown name
+  # (a stale chip after photos were removed) falls back to auto the same way.
+  def handle_event("mosaic-pattern", %{"name" => name}, socket) do
+    {:noreply,
+     socket
+     |> assign(:layout, GalleryLayout.cast(name))
+     |> schedule_draft_save()}
+  end
+
+  # The crop dialog's verdict (assets/js/photo_crop.js): ratio-crop fractions,
+  # or "" for "show the whole photo again". The heavy lifting — re-deriving
+  # every served version from the kept original — is `Posts.crop_image/2`;
+  # the re-render then swaps the tile to the freshly cropped picture (the
+  # URL carries a crop-keyed cache buster). Only a photo this composer holds
+  # can be cropped, which is what makes the id trustworthy: everything in
+  # `@images` belongs to the author.
+  def handle_event("photo-crop", %{"id" => id, "crop" => crop}, socket) do
+    case Enum.find(socket.assigns.images, &(&1.id == id)) do
+      nil -> {:noreply, socket}
+      image -> {:noreply, apply_photo_crop(socket, image, crop)}
+    end
+  end
+
   def handle_event("remove-image", %{"id" => id}, socket) do
     case Enum.find(socket.assigns.images, &(&1.id == id)) do
       nil ->
@@ -758,6 +842,7 @@ defmodule VutuvWeb.PostLive.Composer do
            :open_photo,
            if(socket.assigns.open_photo == id, do: nil, else: socket.assigns.open_photo)
          )
+         |> update(:swap_photo, &if(&1 == id, do: nil, else: &1))
          |> schedule_draft_save()}
     end
   end
@@ -811,7 +896,10 @@ defmodule VutuvWeb.PostLive.Composer do
       # the hidden kind ("") arrives, which removes a stored review on save.
       review: params["review"] || %{"kind" => ""},
       denials: denials_payload(socket.assigns),
-      image_ids: Enum.map(socket.assigns.images, & &1.id)
+      image_ids: Enum.map(socket.assigns.images, & &1.id),
+      # Event-driven like the person denials (the chips are buttons, not form
+      # fields), so the assign is the truth; "" clears back to automatic.
+      layout: socket.assigns.layout || ""
     }
 
     socket.assigns
@@ -972,6 +1060,8 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:images, [])
     |> assign(:photos, %{})
     |> assign(:open_photo, nil)
+    |> assign(:layout, nil)
+    |> assign(:swap_photo, nil)
     |> assign(:photo_details_open?, false)
     |> assign(:error, nil)
   end
@@ -1186,7 +1276,16 @@ defmodule VutuvWeb.PostLive.Composer do
     # Read off the per-photo state rather than kept beside it, so the select
     # and the panel can never disagree about what is in force.
     assigns =
-      assign(assigns, :download_choice, download_selection(assigns.photos, assigns.images))
+      assigns
+      |> assign(:download_choice, download_selection(assigns.photos, assigns.images))
+      # The live bento preview: the very arrangement the feed will show,
+      # computed from the same function the post card renders with — the
+      # preview and the published mosaic can never disagree.
+      |> assign(
+        :bento,
+        length(assigns.images) > 1 &&
+          PostComponents.mosaic_layout(assigns.images, assigns.layout)
+      )
 
     ~H"""
     <div id={@id}>
@@ -1227,13 +1326,32 @@ defmodule VutuvWeb.PostLive.Composer do
           </div>
         </div>
 
+        <%!-- The whole composer is the drop zone: photos land here from the
+        first drag, not only once a grid exists. LiveView stamps
+        `phx-drop-target-active` on this form while files hover it, which is
+        what reveals the overlay below (components.css owns the display, so
+        no competing utilities). A drop into the prose editor is different on
+        purpose: the editor swallows it and inserts the picture inline at the
+        drop point. --%>
         <.form
           for={to_form(%{}, as: :post)}
           id={"#{@id}-form"}
           phx-submit="save"
           phx-change="validate"
           phx-target={@myself}
+          phx-drop-target={@uploads.images.ref}
+          data-composer-dropzone
+          class="relative"
         >
+          <div
+            data-drop-overlay
+            class="pointer-events-none absolute -inset-2 z-10 items-center justify-center rounded-2xl border-2 border-dashed border-brand-500 bg-brand-50/90 dark:border-brand-400 dark:bg-brand-900/80"
+          >
+            <p class="flex items-center gap-2 text-base font-semibold text-brand-700 dark:text-brand-100">
+              <.camera_icon class="h-6 w-6" />
+              {gettext("Drop photos to add them")}
+            </p>
+          </div>
           <%!-- Header row, feed compose only: "Discard draft" (while there is
           something to lose) and the corner ✕ that merely collapses the
           composer. The ✕ carries no phx-target: the event bubbles up to the
@@ -1286,13 +1404,25 @@ defmodule VutuvWeb.PostLive.Composer do
           the only layout control there is. Each tile carries a DOM id so
           morphdom keys it: a drag has already moved the node when the
           server's re-render arrives, and the patch then just settles it. --%>
+          <%!-- No phx-drop-target of its own: the whole form is the drop
+          zone now, and nesting a second one would steal the active state
+          from the overlay. The data-crop-* attributes carry the crop
+          dialog's translated copy (assets/js/photo_crop.js), server-worded
+          like the lightbox labels. --%>
           <div
             :if={@images != []}
             id={"#{@id}-images"}
             phx-hook="PhotoStrip"
             phx-target={@myself}
-            phx-drop-target={@uploads.images.ref}
             class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"
+            data-crop-title={gettext("Crop photo")}
+            data-crop-hint={
+              gettext("Pick a shape, then drag and zoom. The framed part is what the post shows.")
+            }
+            data-crop-save={gettext("Apply crop")}
+            data-crop-cancel={gettext("Cancel")}
+            data-crop-reset={gettext("Whole photo")}
+            data-crop-zoom={gettext("Zoom")}
           >
             <div
               :for={{image, index} <- Enum.with_index(@images)}
@@ -1373,6 +1503,114 @@ defmodule VutuvWeb.PostLive.Composer do
           >
             {gettext("Drag to reorder. The first photo leads the gallery.")}
           </p>
+
+          <%!-- The bento workshop (only with something to arrange): the very
+          mosaic the feed will show, live. Tap two tiles to swap the photos;
+          the chips switch the arrangement ("Muster") — each chip is that
+          arrangement's real geometry in miniature, drawn from the same
+          catalog the mosaic renders from. "Auto" keeps the orientation-aware
+          choice and stays the default. --%>
+          <div :if={@bento} class="mt-4" data-bento-editor>
+            <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                {gettext("Gallery preview")}
+              </span>
+              <span class="text-xs text-slate-600 dark:text-slate-400">
+                {gettext("Tap two photos to swap them.")}
+              </span>
+            </div>
+
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                phx-click="mosaic-pattern"
+                phx-value-name=""
+                phx-target={@myself}
+                aria-pressed={to_string(is_nil(@layout))}
+                data-bento-pattern="auto"
+                class={[
+                  "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold ring-1",
+                  (is_nil(@layout) &&
+                     "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+                    "text-slate-700 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
+                ]}
+              >
+                {gettext("Auto")}
+              </button>
+
+              <button
+                :for={variant <- GalleryLayout.variants(min(length(@images), 5))}
+                type="button"
+                phx-click="mosaic-pattern"
+                phx-value-name={variant.name}
+                phx-target={@myself}
+                aria-pressed={to_string(@layout == variant.name)}
+                aria-label={layout_label(variant.name)}
+                title={layout_label(variant.name)}
+                data-bento-pattern={variant.name}
+                class={[
+                  "h-10 w-14 shrink-0 rounded-lg p-1.5",
+                  (@layout == variant.name &&
+                     "bg-brand-50 ring-2 ring-brand-500 dark:bg-brand-900/40") ||
+                    "ring-1 ring-slate-300 hover:bg-slate-100 dark:ring-slate-700 dark:hover:bg-slate-800"
+                ]}
+              >
+                <span
+                  class="grid h-full w-full gap-0.5"
+                  style="grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr)"
+                >
+                  <span
+                    :for={area <- variant.areas}
+                    style={"grid-area: #{area}"}
+                    class={[
+                      "rounded-[2px]",
+                      (@layout == variant.name && "bg-brand-500") ||
+                        "bg-slate-400 dark:bg-slate-500"
+                    ]}
+                  />
+                </span>
+              </button>
+            </div>
+
+            <div
+              class="mt-2 grid gap-1 overflow-hidden rounded-lg"
+              style={"aspect-ratio: #{@bento.aspect}; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); max-height: 44rem"}
+              data-bento-preview
+            >
+              <button
+                :for={cell <- @bento.cells}
+                type="button"
+                phx-click="mosaic-swap"
+                phx-value-id={cell.image.id}
+                phx-target={@myself}
+                style={"grid-area: #{cell.area}"}
+                aria-pressed={to_string(@swap_photo == cell.image.id)}
+                aria-label={gettext("Swap this photo with another")}
+                title={gettext("Swap this photo with another")}
+                data-bento-tile={cell.image.id}
+                class="relative cursor-pointer overflow-hidden bg-slate-100 ring-1 ring-slate-200 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-800"
+              >
+                <img
+                  src={PostImage.url(cell.image, "feed")}
+                  alt=""
+                  class="h-full w-full object-cover"
+                />
+                <span
+                  :if={@swap_photo == cell.image.id}
+                  class="absolute inset-0 flex items-center justify-center bg-brand-600/50 text-3xl font-semibold text-white"
+                  data-bento-swap-marked
+                >
+                  ⇄
+                </span>
+                <span
+                  :if={cell.more > 0}
+                  class="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-900/55 text-2xl font-semibold text-white"
+                >
+                  +{compact_count(cell.more)}
+                </span>
+              </button>
+            </div>
+          </div>
 
           <%!-- In-flight uploads --%>
           <div :for={entry <- @uploads.images.entries} class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
@@ -1925,6 +2163,18 @@ defmodule VutuvWeb.PostLive.Composer do
           {gettext("Cover")}
         </span>
 
+        <%!-- Says a crop is in force — the tile already shows the cropped
+        frame, but a small mark answers "why is my picture suddenly square"
+        at a glance and points at the button that undoes it. --%>
+        <span
+          :if={PostImage.cropped?(@image)}
+          title={gettext("Cropped")}
+          data-photo-cropped={@image.id}
+          class="flex items-center rounded bg-slate-900/70 px-1.5 py-0.5 text-white"
+        >
+          <.crop_icon class="h-3 w-3" />
+        </span>
+
         <%!-- The alt-text nudge: amber while a photo has no description, so
         the gap is visible without blocking anything. --%>
         <span
@@ -1947,6 +2197,23 @@ defmodule VutuvWeb.PostLive.Composer do
         class={["absolute right-1 top-1", tile_dot_class()]}
       >
         ✕
+      </button>
+
+      <%!-- The crop dot: opens the ratio-crop dialog (photo_crop.js via the
+      PhotoStrip hook — no phx-click; the JS pushes `photo-crop` once the
+      author decides). Bottom-center, between the two reorder corners. The
+      dialog loads the author-only `source` workbench, so a photo that is
+      already cropped still shows its whole frame to re-crop from. --%>
+      <button
+        type="button"
+        data-photo-crop={@image.id}
+        data-crop-src={"/post_images/#{@image.token}/source.avif"}
+        data-crop-value={@image.crop}
+        aria-label={gettext("Crop photo")}
+        title={gettext("Crop photo")}
+        class={["absolute bottom-1 left-1/2 -translate-x-1/2", tile_dot_class()]}
+      >
+        <.crop_icon class="h-4 w-4" />
       </button>
 
       <%!-- Reorder, only when there is an order: the end positions simply
@@ -1993,6 +2260,41 @@ defmodule VutuvWeb.PostLive.Composer do
        do: "aspect-ratio: #{width} / #{height}"
 
   defp natural_ratio(_image), do: nil
+
+  # The chip labels for the bento arrangements — the human words for the
+  # catalog names in `Vutuv.Posts.GalleryLayout` (which stay English slugs in
+  # the DB, like the licence keys).
+  defp layout_label("pair"), do: gettext("Side by side")
+  defp layout_label("lead-left"), do: gettext("Big photo left")
+  defp layout_label("lead-right"), do: gettext("Big photo right")
+  defp layout_label("stack"), do: gettext("Stacked")
+  defp layout_label("hero-left"), do: gettext("Cover left")
+  defp layout_label("hero-top"), do: gettext("Cover on top")
+  defp layout_label("hero-right"), do: gettext("Cover right")
+  defp layout_label("columns"), do: gettext("Columns")
+  defp layout_label("grid"), do: gettext("Grid")
+  defp layout_label("mosaic"), do: gettext("Mosaic")
+  defp layout_label(name), do: name
+
+  # The crop-mark glyph (two overlapping right angles, the classic crop
+  # symbol) for the tile's crop dot and the "cropped" badge.
+  attr(:class, :string, default: "h-4 w-4")
+
+  defp crop_icon(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.8"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M6 2v14a2 2 0 0 0 2 2h14" />
+      <path stroke-linecap="round" stroke-linejoin="round" d="M18 22V8a2 2 0 0 0-2-2H2" />
+    </svg>
+    """
+  end
 
   # The outline camera glyph (heroicons "camera") for the dropzone and the
   # add-more tile — an SVG rather than the 📷 emoji so it takes the text
@@ -2059,6 +2361,7 @@ defmodule VutuvWeb.PostLive.Composer do
     assigns =
       assigns
       |> assign(:cleanable?, Vutuv.PostImageStore.cleanable?(assigns.image))
+      |> assign(:cropped?, PostImage.cropped?(assigns.image))
 
     ~H"""
     <div
@@ -2144,6 +2447,7 @@ defmodule VutuvWeb.PostLive.Composer do
                 type="radio"
                 name={"photo[#{@image.id}][exact]"}
                 checked={@settings.download_exact}
+                disabled={@cropped?}
                 phx-click="photo-exact"
                 phx-value-id={@image.id}
                 phx-value-exact="true"
@@ -2157,6 +2461,19 @@ defmodule VutuvWeb.PostLive.Composer do
                 </span>
               </span>
             </label>
+
+            <%!-- A cropped photo's upload still shows what the author cut
+            away, so the exact file is off the table (the server enforces it;
+            this says why the radio is greyed out). --%>
+            <p
+              :if={@cropped?}
+              class="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+              data-photo-crop-download-note
+            >
+              {gettext(
+                "This photo is cropped: downloads hand out the cropped picture, and the untouched upload stays private."
+              )}
+            </p>
 
             <%!-- The warning that makes the choice informed. It appears at the
             moment the exact file is selected on a photo that carries a

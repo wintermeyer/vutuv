@@ -81,6 +81,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Social.Follow
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
+  alias Vutuv.Uploads.Crop
   alias Vutuv.UUIDv7
   alias Vutuv.WebAddress
 
@@ -441,13 +442,21 @@ defmodule Vutuv.Posts do
 
   # The license key is only put through when the caller sent one, so the API's
   # partial PATCH (and every non-photo save path) leaves a stored license
-  # alone instead of resetting it to the default.
+  # alone instead of resetting it to the default. The bento layout follows the
+  # same rule — absent key = untouched; a sent "" clears back to automatic
+  # (`GalleryLayout.cast/1` in the changeset maps it to nil).
   defp post_params(attrs) do
     params = %{body: to_string(fetch(attrs, :body) || "")}
 
-    case fetch(attrs, :license) do
+    params =
+      case fetch(attrs, :license) do
+        nil -> params
+        license -> Map.put(params, :license, license)
+      end
+
+    case fetch(attrs, :layout) do
       nil -> params
-      license -> Map.put(params, :license, license)
+      layout -> Map.put(params, :gallery_layout, layout)
     end
   end
 
@@ -3431,6 +3440,7 @@ defmodule Vutuv.Posts do
     image
     |> PostImage.settings_changeset(params)
     |> force_exact_when_uncleanable(image)
+    |> block_exact_when_cropped(image)
     |> Repo.update()
   end
 
@@ -3444,6 +3454,49 @@ defmodule Vutuv.Posts do
       changeset
     end
   end
+
+  # The mirror-image guard, and the stronger one (it runs last): once a crop
+  # exists, the upload shows what the author cut away, so "the file exactly as
+  # I uploaded it" is off the table however the settings arrive. The download
+  # route fails closed the same way — this just keeps the stored row honest.
+  defp block_exact_when_cropped(changeset, image) do
+    if PostImage.cropped?(image) do
+      Ecto.Changeset.put_change(changeset, :download_exact, false)
+    else
+      changeset
+    end
+  end
+
+  @doc """
+  Applies the author's ratio crop to a photo — or removes it (`nil` /
+  full-frame) — re-deriving every served version from the kept original
+  (`Vutuv.PostImageStore.apply_crop/2`) and persisting the fractions so the
+  Regenerator re-applies them. `width`/`height` become the served (cropped)
+  dimensions, which is what the mosaic and the `<img>` attributes describe.
+
+  The exact-file download drops with the crop: the upload still shows what
+  the author just cut out of the frame, so it must no longer leave the
+  server (the composer's copy says so too).
+  """
+  def crop_image(%PostImage{} = image, crop_param) do
+    crop = Crop.normalize(crop_param)
+
+    case PostImageStore.apply_crop(image, crop) do
+      {:ok, dimensions} ->
+        image
+        |> Ecto.Changeset.change(Map.put(dimensions, :crop, crop))
+        |> drop_exact_for_crop(crop)
+        |> Repo.update()
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp drop_exact_for_crop(changeset, nil), do: changeset
+
+  defp drop_exact_for_crop(changeset, _crop),
+    do: Ecto.Changeset.put_change(changeset, :download_exact, false)
 
   @doc """
   The photo license a member's composer should pre-select: their last pick,
@@ -3670,7 +3723,8 @@ defmodule Vutuv.Posts do
         changeset
         |> Repo.insert(
           on_conflict:
-            {:replace, [:body, :tags, :license, :review, :image_ids, :photos, :updated_at]},
+            {:replace,
+             [:body, :tags, :license, :review, :image_ids, :photos, :layout, :updated_at]},
           conflict_target: draft_conflict_target(context)
         )
         |> case do

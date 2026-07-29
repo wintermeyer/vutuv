@@ -51,6 +51,7 @@ defmodule Vutuv.PostImageStore do
   alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.Operation
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Uploads.Crop
   alias Vutuv.Uploads.Exif
   alias Vutuv.Uploads.MetadataStrip
   alias Vutuv.Uploads.Originals
@@ -140,9 +141,9 @@ defmodule Vutuv.PostImageStore do
          :ok <- write_derived_versions(rotated, dir) do
       :ok = Originals.store(storage_dir(token), path, ext)
       # A re-store under the same token must not leave the previous upload's
-      # cleaned copy behind for the download route to serve — whatever
-      # extension that one had.
-      clear_cleaned(token)
+      # cached derivatives behind for the routes to serve: the cleaned copy,
+      # the cropped download and the crop workbench all describe the old file.
+      clear_original_derivatives(token)
 
       {:ok,
        Map.merge(camera, %{
@@ -160,19 +161,54 @@ defmodule Vutuv.PostImageStore do
   end
 
   @doc """
+  Applies (or, with `nil`, removes) the author's crop: re-derives every served
+  version from the kept original with `Vutuv.Uploads.Crop` applied, exactly the
+  way `Vutuv.Uploads.store/3` does it for avatars and covers. Returns
+  `{:ok, %{width:, height:}}` — the **served** dimensions, which the caller
+  persists next to the crop — or `{:error, reason}`.
+
+  The original itself is untouched: it is what every later re-derive (and
+  re-crop) starts from. The cached cropped download is dropped, since it
+  described the previous crop; the uncropped `source` workbench stays valid.
+  """
+  def apply_crop(%PostImage{token: token}, crop_string) do
+    case Originals.path(storage_dir(token)) do
+      nil ->
+        {:error, :missing_original}
+
+      original ->
+        dir = dir(token)
+        File.mkdir_p!(dir)
+
+        with {:ok, rotated} <- Spec.open_rotated(original),
+             {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(crop_string)),
+             :ok <- write_derived_versions(cropped, dir) do
+          clear_cropped_download(token)
+          {:ok, %{width: Image.width(cropped), height: Image.height(cropped)}}
+        end
+    end
+  end
+
+  @doc """
   Re-derives every served version from the original per the current
   `Vutuv.Uploads.Spec` — see `Vutuv.Uploads.regenerate_from_original/3`,
   which this configures with the post-image layout (the legacy original
   lived inside the token dir itself). Used by `Vutuv.Uploads.Regenerator`.
+  Re-applies the row's persisted crop, so a regeneration never silently
+  un-crops what the author framed.
   """
-  def regenerate(%PostImage{token: token}, opts \\ []) do
+  def regenerate(%PostImage{token: token} = image, opts \\ []) do
     dir = dir(token)
 
     Vutuv.Uploads.regenerate_from_original(storage_dir(token), dir,
       canonical: canonical_filenames(),
       stale_glob: "*",
       legacy_candidates: [Path.join(dir, "original.*")],
-      derive: &write_derived_versions(&1, dir),
+      derive: fn rotated ->
+        with {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(image.crop)) do
+          write_derived_versions(cropped, dir)
+        end
+      end,
       opts: opts
     )
   end
@@ -214,9 +250,10 @@ defmodule Vutuv.PostImageStore do
   enforces too). `:error` when nothing usable is on disk.
   """
   def og_jpeg(%PostImage{token: token} = image) do
-    with path when not is_nil(path) <- og_source(image, token),
+    with {kind, path} <- og_source(image, token),
          {:ok, rotated} <- Spec.open_rotated(path),
-         {:ok, capped} <- Image.thumbnail(rotated, "#{@og_width}", resize: :down),
+         {:ok, framed} <- og_frame(kind, image, rotated),
+         {:ok, capped} <- Image.thumbnail(framed, "#{@og_width}", resize: :down),
          {:ok, data} <- Operation.jpegsave_buffer(capped, keep: [], Q: 80) do
       {:ok, data}
     else
@@ -225,8 +262,17 @@ defmodule Vutuv.PostImageStore do
   end
 
   defp og_source(image, token) do
-    Originals.path(storage_dir(token)) || version_path(image, "large")
+    cond do
+      path = Originals.path(storage_dir(token)) -> {:original, path}
+      path = version_path(image, "large") -> {:version, path}
+      true -> nil
+    end
   end
+
+  # The original is uncropped, so the author's crop must be re-applied before
+  # the preview JPEG is cut; a served version already carries it.
+  defp og_frame(:original, image, rotated), do: Crop.apply_to(rotated, Crop.parse(image.crop))
+  defp og_frame(:version, _image, rotated), do: {:ok, rotated}
 
   @doc """
   The path nginx resolves inside its `internal` alias location (production
@@ -290,6 +336,18 @@ defmodule Vutuv.PostImageStore do
     end
   end
 
+  # A cropped photo's download is a **full-resolution crop**, whatever the
+  # exact-file flag says: the author cut something out of the frame, so the
+  # upload (which still shows it) must not leave on this path — the same
+  # fail-closed posture as the uncleanable case, checked before the exact
+  # clause so a stale flag cannot open the wider file. Re-encoded (there is
+  # no lossless crop), metadata-free like every derived version, cached
+  # beside the original and dropped on re-crop.
+  defp download_file(%PostImage{crop: crop} = image, original, _ext)
+       when is_binary(crop) and crop != "" do
+    cropped_download(image, original)
+  end
+
   defp download_file(%PostImage{download_exact: true}, original, ext), do: {original, ext}
 
   defp download_file(%PostImage{token: token}, original, ext) do
@@ -318,15 +376,81 @@ defmodule Vutuv.PostImageStore do
     end
   end
 
+  # The full-resolution cropped download, derived once and cached in the
+  # private originals tree (like the cleaned copy). JPEG on purpose: it is a
+  # handed-over file, and JPEG opens everywhere the AVIF versions might not.
+  @cropped_download_quality 92
+
+  defp cropped_download(%PostImage{token: token, crop: crop}, original) do
+    dest = Path.join(Originals.dir(storage_dir(token)), "cropped.jpg")
+
+    if File.exists?(dest) do
+      {dest, ".jpg"}
+    else
+      write_cropped_download(original, crop, dest)
+    end
+  end
+
+  defp write_cropped_download(original, crop, dest) do
+    with {:ok, rotated} <- Spec.open_rotated(original),
+         {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(crop)),
+         {:ok, data} <-
+           Operation.jpegsave_buffer(cropped, keep: [], Q: @cropped_download_quality) do
+      File.mkdir_p!(Path.dirname(dest))
+      # Write beside the target and rename, so two concurrent downloads can
+      # never serve a half-written file (the cleaned copy's pattern).
+      temp = "#{dest}.#{System.unique_integer([:positive])}"
+      File.write!(temp, data)
+      File.rename!(temp, dest)
+      {dest, ".jpg"}
+    else
+      _ -> nil
+    end
+  end
+
+  @doc """
+  The author-only **crop workbench** image: the uncropped picture at the feed
+  version's size, derived on demand from the kept original and cached in the
+  private originals tree. This is what the composer's crop dialog loads —
+  every *served* version stops showing the full frame the moment a crop
+  exists, and the dialog needs the full frame to move the crop on. Only
+  `VutuvWeb.PostImageController` serves it, to the photo's author alone.
+  Returns the on-disk path, or `nil` when no original exists.
+  """
+  def source_path(%PostImage{token: token}) do
+    dest = Path.join(Originals.dir(storage_dir(token)), "source#{Spec.served_ext()}")
+
+    if File.exists?(dest) do
+      dest
+    else
+      write_source(token, dest)
+    end
+  end
+
+  defp write_source(token, dest) do
+    with original when not is_nil(original) <- Originals.path(storage_dir(token)),
+         {:ok, rotated} <- Spec.open_rotated(original),
+         temp = "#{dest}.#{System.unique_integer([:positive])}",
+         :ok <- File.mkdir_p(Path.dirname(dest)),
+         :ok <- Spec.write_derived(Spec.version(:post_image, :feed), rotated, temp) do
+      File.rename!(temp, dest)
+      dest
+    else
+      _ -> nil
+    end
+  end
+
   @doc """
   Whether a cleaned copy can be produced for this photo at all — what the
   composer asks before it offers the choice, so an author is never promised a
-  file the download route would then refuse.
+  file the download route would then refuse. A cropped photo is always
+  cleanable: its download is a re-encoded derivative that never carried
+  metadata in the first place.
   """
-  def cleanable?(%PostImage{token: token}) do
+  def cleanable?(%PostImage{token: token} = image) do
     case Originals.path(storage_dir(token)) do
       nil -> false
-      original -> MetadataStrip.supported?(Path.extname(original))
+      original -> PostImage.cropped?(image) or MetadataStrip.supported?(Path.extname(original))
     end
   end
 
@@ -338,10 +462,21 @@ defmodule Vutuv.PostImageStore do
     Path.join(Originals.dir(storage_dir(token)), "cleaned#{ext}")
   end
 
-  defp clear_cleaned(token) do
+  # Everything cached beside the original that merely *describes* it: the
+  # cleaned copy, the cropped download and the crop workbench. Cleared when
+  # the original itself is replaced (re-store).
+  defp clear_original_derivatives(token) do
     storage_dir(token)
     |> Originals.dir()
-    |> Path.join("cleaned.*")
+    |> Path.join("{cleaned,cropped,source}.*")
+    |> Path.wildcard()
+    |> Enum.each(&File.rm/1)
+  end
+
+  defp clear_cropped_download(token) do
+    storage_dir(token)
+    |> Originals.dir()
+    |> Path.join("cropped.*")
     |> Path.wildcard()
     |> Enum.each(&File.rm/1)
   end

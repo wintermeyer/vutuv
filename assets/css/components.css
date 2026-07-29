@@ -2338,6 +2338,14 @@ html.lightbox-open { overflow: hidden; }
   .lightbox__image { max-height: calc(100vh - 12rem); }
 }
 
+/* The post composer's whole-form drop zone. LiveView stamps
+   `phx-drop-target-active` on the element carrying phx-drop-target while
+   files hover it; these two rules own the overlay's display (the markup
+   carries no competing display utility — the #880 lesson), everything else
+   about its look is utilities on the overlay itself. */
+[data-composer-dropzone] [data-drop-overlay] { display: none; }
+[data-composer-dropzone].phx-drop-target-active [data-drop-overlay] { display: flex; }
+
 @media (prefers-color-scheme: dark) {
   .profile-header__manage {
     color: #93c5fd;

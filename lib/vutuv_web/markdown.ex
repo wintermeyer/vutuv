@@ -798,6 +798,9 @@ defmodule VutuvWeb.Markdown do
     |> Regex.scan(text)
     |> Enum.reduce({text, []}, fn [full, alt, src], {text, replacements} ->
       {base, alignment} = split_alignment(src)
+      # A crop cache-buster (`?v=<hash>`) is not identity: a body stored under
+      # an earlier crop must keep resolving to the image, at its current URL.
+      base = String.replace(base, ~r/\?v=[A-Za-z0-9_-]+\z/, "")
 
       case Map.get(allowed, base) do
         nil ->

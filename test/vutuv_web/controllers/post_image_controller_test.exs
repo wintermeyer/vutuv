@@ -366,6 +366,56 @@ defmodule VutuvWeb.PostImageControllerTest do
     end
   end
 
+  # The crop workbench (source.avif): the uncropped picture the composer's
+  # crop dialog positions the frame on. Author-only — for everyone else the
+  # full frame is exactly what a crop took away.
+  describe "the source workbench" do
+    defp decode_dims(conn) do
+      {:ok, img} = Image.from_binary(conn.resp_body)
+      {Image.width(img), Image.height(img)}
+    end
+
+    test "shows the author the full frame even while the served versions are cropped", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      {author_conn, uploader} = create_and_login_user(conn)
+      image = pending_image!(uploader, tmp)
+      {:ok, cropped} = Posts.crop_image(image, "0,0,0.5,0.5")
+
+      source = get(author_conn, "/post_images/#{cropped.token}/source.avif")
+      assert source.status == 200
+      assert get_resp_header(source, "content-type") |> hd() =~ "image/avif"
+      # The fixture is 64×64; the crop halves the served frame to 32×32 while
+      # the workbench keeps the whole picture.
+      assert decode_dims(source) == {64, 64}
+
+      served = get(author_conn, "/post_images/#{cropped.token}/feed.avif")
+      assert decode_dims(served) == {32, 32}
+    end
+
+    test "is 404 for everyone but the author, even on a public post", %{conn: conn, tmp: tmp} do
+      {author_conn, author} = create_and_login_user(conn)
+      image = pending_image!(author, tmp)
+      {:ok, post} = Posts.create_post(author, %{body: "pic", image_ids: [image.id]})
+      image = Repo.get!(Vutuv.Posts.PostImage, image.id)
+
+      assert get(author_conn, "/post_images/#{image.token}/source.avif").status == 200
+
+      other_conn = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
+      {other_conn, _other} = create_and_login_user(other_conn, @other_login_attrs)
+      # The post (and its served images) are public…
+      assert get(other_conn, "/post_images/#{image.token}/feed.avif").status == 200
+      # …the workbench is not.
+      assert get(other_conn, "/post_images/#{image.token}/source.avif").status == 404
+
+      anonymous = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
+      assert get(anonymous, "/post_images/#{image.token}/source.avif").status == 404
+
+      assert post.user_id == author.id
+    end
+  end
+
   describe "production serving mode" do
     test "answers with X-Accel-Redirect instead of the file", %{conn: conn, tmp: tmp} do
       Application.put_env(:vutuv, :post_image_serving, :accel_redirect)

@@ -14,12 +14,13 @@ defmodule Vutuv.MarkdownContent do
 
   # The one src form a post body may embed: a served version of an uploaded
   # post image (`Vutuv.Posts.PostImage.url/2`, incl. the legacy pre-AVIF
-  # `.webp` form old bodies carry), optionally with an alignment fragment
+  # `.webp` form old bodies carry), optionally with the crop cache-buster a
+  # cropped photo's URL carries (`?v=<hash>`) and an alignment fragment
   # (`#left` / `#right` / `#center`; no fragment = full width). Whether the
   # token really belongs to this post's author is enforced at render time
   # (`VutuvWeb.Markdown.render_post/2` only inlines the post's own
   # attachments), so a foreign token stores but never displays.
-  @own_upload_src ~r{\A/post_images/[A-Za-z0-9_-]+/(thumb|feed|large)\.(avif|webp)(#(left|right|center))?\z}
+  @own_upload_src ~r{\A/post_images/[A-Za-z0-9_-]+/(thumb|feed|large)\.(avif|webp)(\?v=[A-Za-z0-9_-]+)?(#(left|right|center))?\z}
 
   @doc """
   Reject a body that embeds an image. Code samples are exempt: `![](x)` inside a

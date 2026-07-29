@@ -37,10 +37,13 @@ defmodule VutuvWeb.PostImageController do
   # "og.jpg" is the link-preview JPEG (og:image), derived on the fly rather
   # than stored; "original.orig" is the author-enabled full-resolution
   # download (issue #1104), which `serve/3` gates on that photo's own
-  # `download_original` flag. Everything else resolves through the shared
-  # whitelist parser, which never resolves a stored filename.
+  # `download_original` flag; "source.avif" is the author-only uncropped
+  # workbench the composer's crop dialog loads. Everything else resolves
+  # through the shared whitelist parser, which never resolves a stored
+  # filename.
   defp parse_version("og.jpg"), do: :og
   defp parse_version("original.orig"), do: :download
+  defp parse_version("source.avif"), do: :source
 
   defp parse_version(version_file),
     do: ImageProxy.parse_version(version_file, PostImage.versions())
@@ -91,6 +94,26 @@ defmodule VutuvWeb.PostImageController do
           ~s(attachment; filename="#{filename(image, ext)}")
         )
         |> send_file(200, path)
+    end
+  end
+
+  # The crop workbench: the uncropped picture at feed size, which every
+  # *served* version stops being the moment a crop exists. Author-only — for
+  # everyone else the full frame is exactly what the crop took away — and 404
+  # like everything here, so an outsider cannot tell a guarded workbench from
+  # a nonexistent one. Sent directly (no X-Accel): the file lives in the
+  # private originals tree, which nginx must never learn to resolve.
+  defp serve(conn, image, :source) do
+    viewer = conn.assigns[:current_user]
+
+    with true <- viewer != nil and viewer.id == image.user_id,
+         path when not is_nil(path) <- Vutuv.PostImageStore.source_path(image) do
+      conn
+      |> ImageProxy.put_cache_control()
+      |> put_resp_content_type("image/avif")
+      |> send_file(200, path)
+    else
+      _ -> ImageProxy.not_found(conn)
     end
   end
 

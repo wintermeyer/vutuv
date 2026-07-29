@@ -10,6 +10,7 @@ defmodule VutuvWeb.MosaicLayoutTest do
   """
   use ExUnit.Case, async: true
 
+  alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PostImage
   alias VutuvWeb.PostComponents
 
@@ -119,6 +120,56 @@ defmodule VutuvWeb.MosaicLayoutTest do
       wide = PostComponents.mosaic_layout(List.duplicate(landscape(), 3))
 
       assert squarish.aspect == wide.aspect
+    end
+  end
+
+  describe "a chosen arrangement (posts.gallery_layout)" do
+    test "selects the named variant's tiles instead of the automatic ones" do
+      gallery = List.duplicate(landscape(), 3)
+      columns = PostComponents.mosaic_layout(gallery, "columns")
+      auto = PostComponents.mosaic_layout(gallery)
+
+      assert Enum.map(columns.cells, & &1.area) ==
+               ["1 / 1 / 7 / 5", "1 / 5 / 7 / 9", "1 / 9 / 7 / 13"]
+
+      refute Enum.map(auto.cells, & &1.area) == Enum.map(columns.cells, & &1.area)
+    end
+
+    test "every variant of every count still tiles the grid exactly" do
+      for count <- 2..5,
+          variant <- GalleryLayout.variants(count),
+          gallery <- [List.duplicate(landscape(), count), List.duplicate(portrait(), count)] do
+        layout = PostComponents.mosaic_layout(gallery, variant.name)
+
+        assert length(layout.cells) == count
+        cells = covered(layout)
+        assert length(cells) == length(Enum.uniq(cells))
+        assert length(cells) == @cols * @rows
+      end
+    end
+
+    test "a name unavailable at this count falls back to the automatic arrangement" do
+      gallery = List.duplicate(landscape(), 4)
+
+      assert PostComponents.mosaic_layout(gallery, "columns") ==
+               PostComponents.mosaic_layout(gallery)
+    end
+
+    test "the frame still follows the hero's orientation within a chosen arrangement" do
+      tall = PostComponents.mosaic_layout(List.duplicate(portrait(), 3), "hero-left")
+      wide = PostComponents.mosaic_layout(List.duplicate(landscape(), 3), "hero-left")
+
+      assert Enum.map(tall.cells, & &1.area) == Enum.map(wide.cells, & &1.area)
+      assert tall.aspect != wide.aspect
+      assert hero_aspect(tall) < 1.0
+      assert hero_aspect(wide) > 1.0
+    end
+
+    test "an overlong gallery folds into the count-five variant" do
+      layout = PostComponents.mosaic_layout(List.duplicate(landscape(), 8), "hero-top")
+
+      assert length(layout.cells) == 5
+      assert List.last(layout.cells).more == 3
     end
   end
 
