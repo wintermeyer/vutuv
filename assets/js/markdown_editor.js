@@ -60,7 +60,13 @@ import {
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
 
 // The gfm bits we want, minus task lists (extendListItemSchemaForTask +
-// wrapInTaskListInputRule) and footnotes, which the server doesn't render.
+// wrapInTaskListInputRule), which the server renders as literal "[ ]" text, and
+// minus footnotes. The server DOES render footnotes (issue #1147), but from the
+// Markdown source: `[^1]` and its `[^1]: note` line stay ordinary text in the
+// editor, the way a member typing them expects, and the whole feature costs the
+// composer two string transforms instead of a node type, a keymap and an input
+// rule that could corrupt a body on a round trip. See escapeFootnotes /
+// canonicalizeFootnotes below for the two things that DO have to happen.
 // remarkGFMPlugin is what teaches the Markdown parser/serializer about `~~`
 // strikethrough and `| pipe |` tables, so it has to stay.
 const strikethrough = [
@@ -253,7 +259,7 @@ export const MarkdownEditor = {
     let editor = Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, this.mountEl)
-        ctx.set(defaultValueCtx, this.source.value)
+        ctx.set(defaultValueCtx, this.escapeFootnotes(this.source.value))
         ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
           if (this.syncing) return
           this.writeSource(this.normalizeMarkdown(markdown))
@@ -354,18 +360,23 @@ export const MarkdownEditor = {
   // text typed in source mode. Mirrors `strip_break_artifacts` in
   // VutuvWeb.Markdown, the rendering-side guard.
   normalizeMarkdown(md) {
-    return md
-      .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
-      .map((part, i) =>
-        i % 2 === 1
-          ? part
-          : this.canonicalizeMentions(this.canonicalizeUrls(part))
-              .replace(/<br\s*\/?>/gi, "")
-              .replace(/\n{3,}/g, "\n\n")
-      )
-      .join("")
+    return this.mapOutsideFences(md, (part) =>
+      this.canonicalizeFootnotes(this.canonicalizeMentions(this.canonicalizeUrls(part)))
+        .replace(/<br\s*\/?>/gi, "")
+        .replace(/\n{3,}/g, "\n\n")
+    )
       .replace(/^\n+/, "")
       .replace(/\n+$/, "\n")
+  },
+
+  // Apply `fn` to the parts of a Markdown string that are not a fenced code
+  // block, so a code sample keeps its exact characters. Mirrors
+  // VutuvWeb.Markdown.split_code_regions/1 on the server.
+  mapOutsideFences(md, fn) {
+    return md
+      .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
+      .map((part, i) => (i % 2 === 1 ? part : fn(part)))
+      .join("")
   },
 
   // vutuv stores plain Markdown with **bare, unescaped** URLs — the server
@@ -413,6 +424,40 @@ export const MarkdownEditor = {
     )
   },
 
+  // vutuv stores **bare** footnote syntax — `Satz[^1].` plus a `[^1]: note`
+  // line — and renders it server-side (VutuvWeb.Markdown.Footnotes). The editor
+  // has no footnote node: those stay ordinary text, which is exactly what a
+  // member typing them expects to see. Two things do have to be papered over,
+  // both from remark and both silent:
+  //
+  //   * `[` is escaped in phrasing content, so the editor would store `\[^1]`
+  //     and the renderer would no longer recognize the footnote; and
+  //   * a definition whose body is a bare URL — `[^1]: https://example.com`, the
+  //     single most natural footnote there is — parses as a CommonMark LINK
+  //     REFERENCE DEFINITION, a node the commonmark preset has no schema for,
+  //     so re-opening such a post in the composer would drop the line entirely.
+  //
+  // Both are fixed by the same pair of mirrored transforms: escape `[^…]` on the
+  // way IN (remark then sees an escaped bracket, never a link definition, and
+  // renders the text as the plain `[^1]` the member typed), unescape it on the
+  // way OUT. The backslash is never visible and never stored. Same shape as
+  // canonicalizeUrls / canonicalizeMentions above, and the server tolerates the
+  // escape too, as the guard for bodies stored before this existed.
+  //
+  // The one thing this gives up: a deliberately escaped, literal `\[^x]` comes
+  // back unescaped. It changes nothing a reader sees — the server leaves a
+  // reference with no definition as typed — so it would take writing the escape
+  // AND a matching definition to notice, which is asking for a footnote anyway.
+  escapeFootnotes(md) {
+    return this.mapOutsideFences(md, (part) =>
+      part.replace(/(?<!\\)\[\^([^\]\s]{1,64})\]/g, "\\[^$1]")
+    )
+  },
+
+  canonicalizeFootnotes(md) {
+    return md.replace(/\\(\[\^[^\]\s]{1,64}\])/g, "$1")
+  },
+
   // ProseMirror offers no place to put the cursor after a trailing block that
   // owns its content: click below a blockquote, a table or a code block and the
   // cursor lands INSIDE it. That is fatal for a seeded quote (issue #1114) — the
@@ -436,7 +481,7 @@ export const MarkdownEditor = {
   setEditorMarkdown(markdown) {
     if (!this.editor) return
     this.syncing = true
-    this.editor.action(replaceAll(markdown || ""))
+    this.editor.action(replaceAll(this.escapeFootnotes(markdown || "")))
     this.syncing = false
   },
 

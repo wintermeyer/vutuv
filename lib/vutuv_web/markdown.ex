@@ -29,6 +29,7 @@ defmodule VutuvWeb.Markdown do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Tags
   alias VutuvWeb.CodeHighlight
+  alias VutuvWeb.Markdown.Footnotes
   alias VutuvWeb.UserHelpers
 
   @url_display_max 40
@@ -342,8 +343,13 @@ defmodule VutuvWeb.Markdown do
   # every ~80-column wrap into a visible break (a wall of stray `<br>`s next to
   # long links); `breaks: false` reflows them into flowing paragraphs.
   defp render_pipeline(text, opts \\ []) do
-    text
-    |> strip_break_artifacts()
+    # Footnotes bracket the whole pipeline: the syntax becomes plain-text markers
+    # before Earmark sees it, and the real markup is built after the scrubber has
+    # run (it allows `id` on no tag and `class` only on `<code>`, so the anchors
+    # could not survive being emitted any earlier) — see `Footnotes`.
+    {prepared, footnotes} = text |> strip_break_artifacts() |> Footnotes.prepare()
+
+    prepared
     |> String.replace("<", "&lt;")
     |> autolink_bare_urls()
     |> Earmark.as_html!(breaks: Keyword.get(opts, :breaks, true), pure_links: false)
@@ -357,6 +363,7 @@ defmodule VutuvWeb.Markdown do
     # `<pre><code class="language-diff">` inside the labelled wrapper.
     |> CodeHighlight.render()
     |> highlight_diff_blocks()
+    |> Footnotes.inject(footnotes)
   end
 
   ## Fenced `diff` blocks
@@ -482,13 +489,20 @@ defmodule VutuvWeb.Markdown do
   fenced code block — then rendered like `render_post/2`. Returns
   `{safe_html, truncated?}`; pair the flag with a "Read more" link and a
   CSS line-clamp for visual consistency.
+
+  Footnote definitions are taken out before the cut and the ones the surviving
+  text still cites are put back after it: they live at the end of a body, so
+  cutting them away would strand every reference above as literal `[^1]` source.
+  The budget is therefore spent on prose alone, and a note whose paragraph was
+  cut goes with it.
   """
   def render_preview(text, images, opts \\ [])
 
   def render_preview(text, images, opts) when is_binary(text) do
     limit = Keyword.get(opts, :limit, @preview_limit)
-    {snippet, truncated?} = truncate_markdown(text, limit)
-    {render_post(snippet, images), truncated?}
+    {prose, definitions} = Footnotes.split_definitions(text)
+    {snippet, truncated?} = truncate_markdown(prose, limit)
+    {render_post(Footnotes.reattach(snippet, definitions), images), truncated?}
   end
 
   def render_preview(_, _images, _opts), do: {Phoenix.HTML.raw(""), false}
@@ -515,22 +529,40 @@ defmodule VutuvWeb.Markdown do
     end)
   end
 
-  # Applies `fun` to the parts of a Markdown source that are not code. Fenced
-  # blocks are matched before inline spans, so a URL on a line inside ``` is
-  # left alone rather than being caught by the inline-span alternative. A body
-  # with no backtick and no `~~~` skips the split entirely.
-  defp map_outside_code(text, fun) do
+  @doc """
+  Splits a Markdown source into `{:text, chunk}` / `{:code, chunk}` parts, in
+  order, so a pass can be applied to the prose while leaving code verbatim.
+
+  Fenced blocks are matched before inline spans, so a line inside ``` is never
+  caught by the inline-span alternative. A body with no backtick and no `~~~` is
+  one text chunk and skips the split entirely.
+
+  Public for `VutuvWeb.Markdown.Footnotes`, which needs the parts themselves
+  (it collects definitions, numbers the references and rewrites in three passes
+  over the same split) rather than the single-pass `map_outside_code/2`.
+  """
+  def split_code_regions(text) do
     if String.contains?(text, ["`", "~~~"]) do
       @code_region
       |> Regex.split(text, include_captures: true)
       |> Enum.with_index()
-      |> Enum.map_join("", fn
-        {chunk, index} when rem(index, 2) == 0 -> fun.(chunk)
-        {code, _index} -> code
+      |> Enum.map(fn
+        {chunk, index} when rem(index, 2) == 0 -> {:text, chunk}
+        {code, _index} -> {:code, code}
       end)
     else
-      fun.(text)
+      [{:text, text}]
     end
+  end
+
+  # Applies `fun` to the parts of a Markdown source that are not code.
+  defp map_outside_code(text, fun) do
+    text
+    |> split_code_regions()
+    |> Enum.map_join("", fn
+      {:text, chunk} -> fun.(chunk)
+      {:code, code} -> code
+    end)
   end
 
   # "…wiki/Elixir_(programming_language)), see!" — sentence punctuation and any
@@ -644,9 +676,19 @@ defmodule VutuvWeb.Markdown do
   external links open in a new tab without leaking the referrer. Safe to run
   post-sanitization: every remaining `<a>` came out of the scrubber. Shared with
   `VutuvWeb.EmailMarkdown`.
+
+  A **same-page** `href="#…"` is left alone: sending a reader to a second tab to
+  reach an anchor on the page they are already looking at is never what they
+  meant. That is what the footnote reference and its back-link are
+  (`VutuvWeb.Markdown.Footnotes`), and it was already the right answer for a
+  hand-typed `[x](#y)`.
   """
   def open_links_in_new_tab(html) do
-    String.replace(html, "<a href", ~s(<a target="_blank" rel="noopener noreferrer" href))
+    String.replace(
+      html,
+      ~r/<a href="(?!#)/,
+      ~s(<a target="_blank" rel="noopener noreferrer" href=")
+    )
   end
 
   @doc """

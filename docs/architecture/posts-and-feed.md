@@ -56,6 +56,49 @@ removed rows (issue #1108, below). That is why the order in `render_pipeline/2`
 is `CodeHighlight.render/1` first — the diff renderer then still finds a plain
 `<pre><code class="language-diff">` sitting inside the labelled wrapper.
 
+### Footnotes
+
+A body may annotate itself (issue #1147):
+
+    Ein Satz mit Anmerkung[^1].
+
+    [^1]: Die Anmerkung dazu.
+
+The reference renders as a superscript `[1]` linked to a numbered note list at
+the end of the body, each note linking back to where it was cited.
+`VutuvWeb.Markdown.Footnotes` owns it, and it works the way the inline-image and
+`diff` steps do, for the same reason: the syntax becomes unguessable plain-text
+markers *before* Earmark, and the real markup is built from known-safe parts
+*after* the scrubber, which allows `id` on no tag and `class` only on `<code>`.
+Earmark's own `footnotes: true` is therefore no use here — its links would
+survive with every one of their targets stripped, and its ids (`fn:1`) are
+global, so twenty feed cards would all claim the same anchor. Ours carry a
+per-render nonce.
+
+The rules are strict on purpose. A definition is a **single line from column 0**;
+notes are numbered by **first reference**, not by definition order; a label cited
+twice shares one note; code is sample text; and at most 50 notes per body.
+**Half-typed syntax stays exactly as typed** — a reference with no definition and
+a definition nobody cites both render literally, so nothing a member wrote ever
+disappears without a trace.
+
+`render_preview/3` takes the definitions out *before* the ~1000-character cut and
+puts back the ones the surviving text still cites: they live at the end of a
+body, so cutting them off would strand every reference above as literal source.
+The brackets in `[1]` are load-bearing, not decoration — Mastodon and most feed
+readers drop `<sup>`, and without them the number would fuse into the word it
+follows.
+
+The composer has **no footnote node**: `[^1]` stays ordinary text in the WYSIWYG,
+which is what a member typing it expects to see. Two remark behaviours have to be
+papered over in the hook, both silent — it escapes `[` in prose, and it parses
+`[^1]: https://example.com` (the most natural footnote there is) as a CommonMark
+link reference definition, a node the commonmark preset cannot render, so
+re-opening such a post would drop the line. `escapeFootnotes` on the way in and
+`canonicalizeFootnotes` on the way out fix both; the backslash is never visible
+and never stored. `VutuvWeb.Markdown.Footnotes` also reads through the escape, as
+the guard for bodies stored before that existed.
+
 Everything post-related lives under `/:slug/posts`: the author archive
 (`/:slug/posts`, scopable to a year/month/day — `/:slug/posts/2026/06`), and
 permalinks keyed by the post's UUID v7: `/:slug/posts/:id` (non-canonical casing
