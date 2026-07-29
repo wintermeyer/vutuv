@@ -330,6 +330,15 @@ defmodule VutuvWeb.MessageLiveTest do
 
       assert has_element?(watcher, "#typing-bubble")
       assert render(watcher) =~ "is typing"
+      # The bubble sits inside a wrapper that is always rendered, in both
+      # states. Without it the bubble's own element comes and goes right above
+      # the composer as the other side types, morphdom relocates the message
+      # form to put the siblings back in order, and re-parenting the editor's
+      # `contenteditable` blurs it — the watcher's caret would be thrown out of
+      # their half-written answer by the other person's typing.
+      assert has_element?(watcher, "#typing-slot #typing-bubble")
+      refute has_element?(typer, "#typing-bubble")
+      assert has_element?(typer, "#typing-slot")
     end
   end
 

@@ -1195,22 +1195,36 @@ defmodule VutuvWeb.PostLive.Composer do
         just now (issue #1148) — without it a restored draft is indistinguishable
         from a composer someone else left open. It sits above the form, not
         inside it, so nothing it holds is ever submitted, and it steps aside as
-        soon as the member edits anything. --%>
-        <div
-          :if={@restored_draft?}
-          id={"#{@id}-restored"}
-          data-draft-restored
-          class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-900/40 dark:text-brand-100"
-        >
-          <span>{gettext("Picked up where you left off.")}</span>
-          <button
-            type="button"
-            phx-click="discard-draft"
-            phx-target={@myself}
-            class="font-semibold underline underline-offset-2 hover:text-brand-900 dark:hover:text-white"
+        soon as the member edits anything.
+
+        The empty wrapper is load-bearing, do not fold it away: it keeps the
+        card's child list the same shape whether or not the notice shows. Put
+        the `:if` back on a direct child of the card and the notice's own
+        element appears and disappears there — whereupon morphdom stops
+        matching the following siblings one-to-one and RELOCATES the form
+        (removeChild + insertBefore) to restore the order. Re-parenting a
+        `contenteditable` blurs it, so the Milkdown caret is thrown out of the
+        editor mid-sentence and the keystrokes after it land nowhere: the
+        "jumping cursor". LiveView cannot save us, its post-patch
+        `DOM.restoreFocus` covers `<input>`/`<textarea>` only. With the wrapper
+        the patch only swaps a child *inside* it, and the form stays put. --%>
+        <div id={"#{@id}-notice"}>
+          <div
+            :if={@restored_draft?}
+            id={"#{@id}-restored"}
+            data-draft-restored
+            class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-900/40 dark:text-brand-100"
           >
-            {gettext("Discard draft")}
-          </button>
+            <span>{gettext("Picked up where you left off.")}</span>
+            <button
+              type="button"
+              phx-click="discard-draft"
+              phx-target={@myself}
+              class="font-semibold underline underline-offset-2 hover:text-brand-900 dark:hover:text-white"
+            >
+              {gettext("Discard draft")}
+            </button>
+          </div>
         </div>
 
         <.form

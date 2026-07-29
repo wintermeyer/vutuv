@@ -70,6 +70,31 @@ defmodule VutuvWeb.ComposerDraftTest do
       refute has_element?(reloaded, "[data-draft-restored]")
     end
 
+    test "the notice steps aside without restructuring the card around the form", %{conn: conn} do
+      # The notice lives in a wrapper that is always rendered, so the card's
+      # child list keeps its shape when the notice goes. With the `:if` on a
+      # direct child of the card instead, morphdom relocates the form to put
+      # the siblings back in order, and re-parenting the editor's
+      # `contenteditable` blurs it: the caret is thrown out of the composer
+      # mid-sentence and every keystroke after it is lost. Assert the wrapper
+      # is there in both states so nobody folds it away as dead markup.
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+      assert html =~ ~s(id="composer-notice")
+      refute has_element?(live, "[data-draft-restored]")
+
+      type(live, %{"body" => "Ein halber Gedanke"})
+
+      {:ok, reloaded, _html} = live(recycle(conn), ~p"/feed")
+      assert has_element?(reloaded, "#composer-notice [data-draft-restored]")
+
+      html = type(reloaded, %{"body" => "Ein halber Gedanke, weitergeschrieben"})
+
+      assert html =~ ~s(id="composer-notice")
+      refute html =~ "data-draft-restored"
+    end
+
     test "emptying the composer removes the draft", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 

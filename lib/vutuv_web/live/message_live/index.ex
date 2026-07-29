@@ -690,14 +690,27 @@ defmodule VutuvWeb.MessageLive.Index do
           </div>
         </div>
 
-        <%!-- WhatsApp-style typing bubble: animated dots while the other side writes --%>
-        <div :if={typing_label(@typing_tokens)} id="typing-bubble" class="px-4 pb-2">
-          <div class="inline-flex items-center gap-1 rounded-2xl bg-slate-100 px-4 py-3 dark:bg-slate-800">
-            <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></span>
-            <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></span>
-            <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></span>
+        <%!-- WhatsApp-style typing bubble: animated dots while the other side
+        writes. The empty wrapper is load-bearing, do not fold it away: the
+        bubble comes and goes with the *other* person's typing, i.e. while you
+        are writing your own answer below it. With the `:if` on a direct child
+        of this column, that element appears and disappears between the message
+        list and the composer — and morphdom then relocates the message form
+        (removeChild + insertBefore) to put the siblings back in order.
+        Re-parenting a `contenteditable` blurs it, so the Milkdown caret is
+        thrown out of the composer mid-word and the next keystrokes land
+        nowhere (LiveView's post-patch `DOM.restoreFocus` only covers
+        `<input>`/`<textarea>`). Inside a wrapper that always renders, the
+        patch swaps a child *within* it and the form stays put. --%>
+        <div id="typing-slot">
+          <div :if={typing_label(@typing_tokens)} id="typing-bubble" class="px-4 pb-2">
+            <div class="inline-flex items-center gap-1 rounded-2xl bg-slate-100 px-4 py-3 dark:bg-slate-800">
+              <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></span>
+              <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></span>
+              <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></span>
+            </div>
+            <p class="mt-1 text-xs italic text-slate-600 dark:text-slate-400">{typing_label(@typing_tokens)}</p>
           </div>
-          <p class="mt-1 text-xs italic text-slate-600 dark:text-slate-400">{typing_label(@typing_tokens)}</p>
         </div>
 
         <div
