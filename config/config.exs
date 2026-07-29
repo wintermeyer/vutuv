@@ -416,6 +416,22 @@ config :vutuv, :verify_user_links, true
 # also a no-op when :verify_user_links is off.
 config :vutuv, :recheck_user_links, true
 
+# Verified social-media handles: whether a member may prove a listed account is
+# really theirs and earn the same small verified mark. Only Bluesky can be
+# proved today — its profile bio must carry the member's vutuv profile URL,
+# since the network has no rel=me. On = the /settings/social_media_accounts
+# verify page offers the proof and re-checks it periodically; off = disabled on
+# this installation (no outbound calls), so no new account can be verified
+# (existing marks keep working). Runtime override: VERIFY_SOCIAL_ACCOUNTS=false.
+# Tests turn it off and stub HTTP per test via :bluesky_req_options.
+config :vutuv, :verify_social_accounts, true
+
+# Whether the hourly GenServer that re-checks verified social accounts runs (off
+# in tests, where it would touch the SQL sandbox from outside; tests call
+# Vutuv.Profiles.SocialAccountVerification.recheck/1 directly). The re-check
+# itself is also a no-op when :verify_social_accounts is off.
+config :vutuv, :recheck_social_accounts, true
+
 # The most invitations a single member may send in one Berlin calendar day
 # (see Vutuv.Invitations) — the abuse guard on outbound invite email, which
 # protects the installation's sender reputation. Tune it per installation

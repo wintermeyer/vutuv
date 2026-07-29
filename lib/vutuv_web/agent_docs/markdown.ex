@@ -781,10 +781,16 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # The provider labels the link — the same [label](url) form as the Links
   # section. A provider without a canonical URL scheme (Snapchat) carries
   # only the account name, so there is no link to offer.
-  defp social_line(%{provider: provider, url: "http" <> _ = url}),
-    do: "- [#{provider}](#{md_url(url)})"
+  defp social_line(%{provider: provider, url: "http" <> _ = url} = account),
+    do: "- [#{provider}](#{md_url(url)})" <> verified_profile_suffix(account)
 
-  defp social_line(%{provider: provider, url: value}), do: "- #{provider}: #{value}"
+  defp social_line(%{provider: provider, url: value} = account),
+    do: "- #{provider}: #{value}" <> verified_profile_suffix(account)
+
+  # A verified social account (proved to be the member's own) carries the same
+  # marker its verified mark shows on the profile card.
+  defp verified_profile_suffix(%{verified: true}), do: " (#{gettext("verified profile")})"
+  defp verified_profile_suffix(_account), do: ""
 
   # A messenger: the provider, its contact (a phone number or handle), and the
   # deep link that opens the app at that contact. Session has no web link, so it

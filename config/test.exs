@@ -122,6 +122,14 @@ config :vutuv, :verify_organization_domains, false
 config :vutuv, :recheck_user_links, false
 config :vutuv, :verify_user_links, false
 
+# Verified social-media handles: same story. The hourly re-check GenServer stays
+# off (tests call Vutuv.Profiles.SocialAccountVerification.recheck/1 directly);
+# verification is off so the suite never hits the real Bluesky AppView, and the
+# verification tests flip :verify_social_accounts on per-test and stub via
+# :bluesky_req_options.
+config :vutuv, :recheck_social_accounts, false
+config :vutuv, :verify_social_accounts, false
+
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true
 

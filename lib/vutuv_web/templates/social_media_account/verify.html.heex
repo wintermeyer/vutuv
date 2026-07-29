@@ -1,0 +1,86 @@
+<%!-- Owner-only "prove this account is yours" page (classic settings page). One
+proof: the account's own profile description must carry the member's vutuv
+profile URL. Bluesky has no rel=me, so the bio is the one field only the
+account holder can write. On success the account earns the verified mark shown
+on the profile card + section pages. --%>
+<.settings_shell user={@user} active={:social} title={gettext("Verify profile")}>
+  <.card class="space-y-4">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {@social_media_account.provider}
+      </span>
+      <span class="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">
+        {@social_media_account.value}
+      </span>
+      <.verified_mark
+        :if={@social_media_account.verified_at}
+        title={gettext("Verified profile")}
+      />
+    </div>
+
+    <p
+      :if={@social_media_account.verified_at}
+      class="text-sm text-emerald-700 dark:text-emerald-300"
+    >
+      {gettext("Verified. Run the check again below to refresh it.")}
+    </p>
+    <p
+      :if={!@social_media_account.verified_at && @verifiable?}
+      class="text-sm text-slate-600 dark:text-slate-400"
+    >
+      {gettext("Prove this profile is yours by linking back to vutuv from it. It then shows a verified mark.")}
+    </p>
+  </.card>
+
+  <%!-- A network with no proof (LinkedIn, a code forge, ...). The page is
+  reachable by URL, so it must say plainly why there is nothing to do here. --%>
+  <div
+    :if={!@verifiable?}
+    class="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-400"
+  >
+    {gettext("%{provider} profiles cannot be verified yet. Only Bluesky offers a profile description we can check.",
+      provider: @social_media_account.provider
+    )}
+  </div>
+
+  <div
+    :if={@verifiable? && !@enabled?}
+    class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+  >
+    {gettext("Profile verification is disabled on this installation.")}
+  </div>
+
+  <.card :if={@verifiable? && @enabled?} class="mt-4 space-y-3">
+    <.section_title>{gettext("Link back from your profile description")}</.section_title>
+    <p class="text-sm text-slate-700 dark:text-slate-300">
+      {gettext("Add this address to your Bluesky profile description (your bio), then run the check:")}
+    </p>
+    <code
+      phx-no-curly-interpolation
+      class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+    ><%= @profile_url %></code>
+    <p class="text-xs text-slate-600 dark:text-slate-400">
+      {gettext("The rest of your description can say whatever you like. We only look for this address.")}
+    </p>
+
+    <.form
+      :let={_f}
+      for={%{}}
+      as={:verify}
+      action={~p"/settings/social_media_accounts/#{@social_media_account}/verify"}
+      method="post"
+      id="verify-social-media-account"
+    >
+      <.button type="submit">{gettext("Run the check")}</.button>
+    </.form>
+  </.card>
+
+  <div class="mt-6">
+    <.link
+      navigate={~p"/settings/social_media_accounts"}
+      class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+    >
+      ← {gettext("Back to Profiles")}
+    </.link>
+  </div>
+</.settings_shell>

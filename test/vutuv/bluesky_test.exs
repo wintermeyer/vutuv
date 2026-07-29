@@ -157,6 +157,30 @@ defmodule Vutuv.BlueskyTest do
       assert {:ok, %Feed{name: @handle}} = Bluesky.fetch_posts(@handle)
     end
 
+    test "the follower count rides the feed, from the profile call we already make" do
+      serve([item()], profile: %{"followersCount" => 1234})
+
+      assert {:ok, %Feed{followers: 1234}} = Bluesky.fetch_posts(@handle)
+
+      # Still exactly two requests: the count comes out of getProfile.
+      assert_receive {:req, "/xrpc/app.bsky.actor.getProfile", _}
+      assert_receive {:req, "/xrpc/app.bsky.feed.getAuthorFeed", _}
+      refute_receive {:req, _, _}
+    end
+
+    test "a missing or nonsensical follower count is nil, never a crash or a zero" do
+      serve([item()])
+      assert {:ok, %Feed{followers: nil}} = Bluesky.fetch_posts(@handle)
+
+      # A sparse AppView answer must not turn into a rendered "0".
+      serve([item()], profile: %{"followersCount" => "many"})
+      assert {:ok, %Feed{followers: nil}} = Bluesky.fetch_posts(@handle)
+
+      # Zero followers is a real answer and stays one.
+      serve([item()], profile: %{"followersCount" => 0})
+      assert {:ok, %Feed{followers: 0}} = Bluesky.fetch_posts(@handle)
+    end
+
     test "runaway text is capped" do
       serve([item(%{"text" => String.duplicate("a", 900)})])
 

@@ -55,6 +55,7 @@ defmodule Vutuv.Mastodon do
          handle: handle,
          url: meta.url,
          avatar: Http.fetch_avatar(meta.avatar_url, @req_options),
+         followers: meta.followers,
          posts: posts
        }}
     end
@@ -112,7 +113,8 @@ defmodule Vutuv.Mastodon do
       id: to_string(account["id"]),
       name: name,
       url: Post.presence(account["url"]) || "https://#{instance}/@#{user}",
-      avatar_url: Post.presence(account["avatar_static"]) || Post.presence(account["avatar"])
+      avatar_url: Post.presence(account["avatar_static"]) || Post.presence(account["avatar"]),
+      followers: Feed.follower_count(account["followers_count"])
     }
   end
 

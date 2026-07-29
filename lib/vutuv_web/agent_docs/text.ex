@@ -496,10 +496,17 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "* #{email.type}: #{email.value}"
-  defp entry_line("social_media_accounts", account), do: "* #{account.provider}: #{account.url}"
+  defp entry_line("social_media_accounts", account), do: social_line(account)
   defp entry_line("messengers", messenger), do: messenger_line(messenger)
   defp entry_line("phone_numbers", phone), do: "* #{phone.type}: #{phone.value}"
   defp entry_line("addresses", address), do: "* " <> Markdown.address_line(address)
+
+  # A verified social account (proved to be the member's own) carries the same
+  # marker its verified mark shows on the profile card.
+  defp social_line(%{verified: true} = account),
+    do: "* #{account.provider}: #{account.url} (#{gettext("verified profile")})"
+
+  defp social_line(account), do: "* #{account.provider}: #{account.url}"
 
   # A messenger: provider, contact (phone number or handle), and its deep link
   # in parentheses (absent for Session, which has no web link).

@@ -337,8 +337,18 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   end
 
   @doc false
-  def social_entry(account),
-    do: %{id: account.id, provider: account.provider, url: SocialMediaAccount.url(account)}
+  def social_entry(account) do
+    %{
+      id: account.id,
+      provider: account.provider,
+      url: SocialMediaAccount.url(account),
+      # Whether the member proved this account is really theirs
+      # (Vutuv.Profiles.SocialAccountVerification) — the same fact the profile
+      # card's verified mark shows, and the method that proved it.
+      verified: not is_nil(account.verified_at),
+      verified_method: account.verification_method
+    }
+  end
 
   @doc false
   # `contact` is the human-readable address (a spaced phone number or the bare

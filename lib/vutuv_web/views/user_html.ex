@@ -19,6 +19,7 @@ defmodule VutuvWeb.UserHTML do
 
   alias Vutuv.CodeStats
   alias Vutuv.Profiles.SocialMediaAccount
+  alias Vutuv.SocialFeed.Feed
 
   embed_templates("../templates/user/*")
 
@@ -413,6 +414,7 @@ defmodule VutuvWeb.UserHTML do
   """
   attr(:accounts, :list, required: true)
   attr(:social_feed_loading, :any, required: true)
+  attr(:social_feeds, :map, default: %{})
 
   def social_media_accounts(assigns) do
     social = Enum.reject(assigns.accounts, &CodeStats.code_provider?(&1.provider))
@@ -429,12 +431,14 @@ defmodule VutuvWeb.UserHTML do
         label={@split? && gettext("Social networks")}
         accounts={@social}
         social_feed_loading={@social_feed_loading}
+        social_feeds={@social_feeds}
       />
       <.social_media_group
         :if={@code != []}
         label={@split? && gettext("Code & repositories")}
         accounts={@code}
         social_feed_loading={@social_feed_loading}
+        social_feeds={@social_feeds}
       />
     </div>
     """
@@ -444,10 +448,12 @@ defmodule VutuvWeb.UserHTML do
   # subheading (`false` = no heading, a lone bucket) above one compact line
   # per account (brand glyph + handle; the provider name is dropped since the
   # icon carries it). The loading spinner rides accounts whose inline social
-  # feed (Mastodon, Bluesky) is still being fetched in the background.
+  # feed (Mastodon, Bluesky) is still being fetched in the background, and the
+  # follower count rides the fetched feed once it arrives.
   attr(:label, :any, default: false)
   attr(:accounts, :list, required: true)
   attr(:social_feed_loading, :any, required: true)
+  attr(:social_feeds, :map, default: %{})
 
   defp social_media_group(assigns) do
     ~H"""
@@ -469,6 +475,17 @@ defmodule VutuvWeb.UserHTML do
               class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
             />
             <span class="truncate font-medium">{social_handle(account)}</span>
+            <%!-- The member proved this account is theirs
+            (Vutuv.Profiles.SocialAccountVerification) — same emerald mark a
+            verified webpage link gets, shown to every viewer. --%>
+            <.verified_mark
+              :if={account.verified_at}
+              title={gettext("Verified profile")}
+              class="shrink-0"
+            />
+            <.social_follower_count followers={
+              Map.get(@social_feeds, {account.provider, account.value})
+            } />
             <span
               :if={MapSet.member?(@social_feed_loading, {account.provider, account.value})}
               data-feed-loading
@@ -491,6 +508,35 @@ defmodule VutuvWeb.UserHTML do
     </div>
     """
   end
+
+  # The account's follower count as the remote network reports it, taken off
+  # the feed the cache already holds (`Vutuv.SocialFeed.Feed`) — so it costs
+  # neither a request nor a query. Renders **nothing** unless there is a real
+  # number: a feed not fetched yet, a network that offered no count, and a
+  # provider with no feed at all (LinkedIn, a code forge) must all stay silent
+  # rather than claim "0 followers".
+  attr(:followers, :any, required: true)
+
+  defp social_follower_count(%{followers: %Feed{followers: count}} = assigns)
+       when is_integer(count) do
+    assigns = assign(assigns, count: count)
+
+    ~H"""
+    <span
+      data-social-followers
+      class="shrink-0 text-xs text-slate-600 dark:text-slate-400"
+    >
+      <%!-- The formatted figure rides its own placeholder: ngettext auto-binds
+      %{count} to the raw integer, which a `count:` binding cannot override,
+      so `%{count}` here would print 60023 instead of 60K. --%>
+      {ngettext("%{formatted} follower", "%{formatted} followers", @count,
+        formatted: compact_count(@count)
+      )}
+    </span>
+    """
+  end
+
+  defp social_follower_count(assigns), do: ~H""
 
   @doc """
   Wraps a social-media entry in an outbound link (`target=_blank`, `rel="me

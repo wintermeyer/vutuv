@@ -1,6 +1,7 @@
 defmodule VutuvWeb.SocialMediaAccountController do
   use VutuvWeb, :controller
   alias Vutuv.CodeStats
+  alias Vutuv.Profiles.SocialAccountVerification, as: Verification
   alias Vutuv.Profiles.SocialMediaAccount
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
@@ -138,6 +139,66 @@ defmodule VutuvWeb.SocialMediaAccountController do
       redirect_to: ~p"/settings/social_media_accounts"
     )
   end
+
+  # "This account is really mine": the instructions page. A member puts their
+  # vutuv profile URL in the account's bio and comes back here to have it
+  # checked, so an immediate check on save would be pointless — the bio has not
+  # been edited yet at that moment.
+  def verify(conn, %{"id" => id}) do
+    account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
+    user = conn.assigns[:user]
+
+    render(conn, "verify.html",
+      user: user,
+      social_media_account: account,
+      enabled?: Verification.enabled?(),
+      verifiable?: Verification.verifiable?(account),
+      profile_url: Verification.expected_url(user),
+      page_title: gettext("Verify profile")
+    )
+  end
+
+  def run_verify(conn, %{"id" => id}) do
+    account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
+
+    conn
+    |> verify_result(Verification.verify(account, conn.assigns[:user]))
+    |> redirect(to: verify_path(account))
+  end
+
+  defp verify_result(conn, {:ok, _updated}) do
+    put_flash(conn, :info, gettext("Profile verified. It now shows a verified mark."))
+  end
+
+  defp verify_result(conn, {:error, :disabled}) do
+    put_flash(
+      conn,
+      :error,
+      gettext("Profile verification is disabled on this installation.")
+    )
+  end
+
+  defp verify_result(conn, {:error, :unsupported}) do
+    put_flash(conn, :error, gettext("This network cannot be verified."))
+  end
+
+  defp verify_result(conn, {:error, :unreachable}) do
+    put_flash(
+      conn,
+      :error,
+      gettext("We could not reach the network just now. Please try again in a moment.")
+    )
+  end
+
+  defp verify_result(conn, {:error, :not_found}) do
+    put_flash(
+      conn,
+      :error,
+      gettext("We could not find the link in your profile description yet. Please try again.")
+    )
+  end
+
+  defp verify_path(account), do: ~p"/settings/social_media_accounts/#{account}/verify"
 
   defp user_with_social_media_accounts(conn),
     do:

@@ -11,15 +11,31 @@
     <%= for account <- @social_media_accounts do %>
     <tr>
       <td>
-        <%= Vutuv.Profiles.SocialMediaAccount.social_media_link account %>
+        <span class="inline-flex items-center gap-1.5">
+          <%= Vutuv.Profiles.SocialMediaAccount.social_media_link account %>
+          <%!-- The member proved this account is theirs
+          (Vutuv.Profiles.SocialAccountVerification) — shown to every viewer,
+          like the verified-webpage mark on a profile link. --%>
+          <.verified_mark :if={account.verified_at} title={gettext("Verified profile")} />
+        </span>
       </td>
       <td><%= account.provider %></td>
       <td class="text-right">
-        <.row_actions
-          :if={@as_owner?}
-          edit_to={~p"/settings/social_media_accounts/#{account}/edit"}
-          delete_to={~p"/settings/social_media_accounts/#{account}"}
-        />
+        <div :if={@as_owner?} class="flex items-center justify-end gap-4 text-sm font-semibold">
+          <%!-- Only the networks with a proof offer the affordance, so a
+          LinkedIn row does not advertise a page that can only say no. --%>
+          <.link
+            :if={Vutuv.Profiles.SocialAccountVerification.verifiable?(account)}
+            href={~p"/settings/social_media_accounts/#{account}/verify"}
+            class="text-brand-600 hover:text-brand-700"
+          >
+            <%= if account.verified_at, do: gettext("Verified"), else: gettext("Verify") %>
+          </.link>
+          <.row_actions
+            edit_to={~p"/settings/social_media_accounts/#{account}/edit"}
+            delete_to={~p"/settings/social_media_accounts/#{account}"}
+          />
+        </div>
       </td>
     </tr>
 <% end %>

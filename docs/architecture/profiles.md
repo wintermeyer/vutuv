@@ -973,6 +973,51 @@ deactivated for good until the member re-saves the handle; members switch the
 whole card off on the Privacy settings page (`show_mastodon_feed?`, which
 predates Bluesky and gates both networks).
 
+The account row also carries the **follower count** the remote network reports.
+Both clients read it out of the account call they already make (Bluesky's
+`app.bsky.actor.getProfile`, Mastodon's `/api/v1/accounts/lookup`) and hand it
+over on `%Vutuv.SocialFeed.Feed{}`, so it costs no extra request; it renders
+through `compact_count/1` like every other count in the app. A network that
+offered no usable number leaves it `nil` and the row shows **nothing** — an
+absent count must never render as a misleading `0`.
+
+## Verified social-media handles
+
+A listed handle is a claim, not a fact: anyone can type anyone's handle into the
+form. A member can therefore **prove** an account is theirs and earn the same
+small emerald mark a verified webpage link gets
+(`Vutuv.Profiles.SocialAccountVerification`, the social twin of
+`Vutuv.Profiles.LinkVerification`).
+
+Only **Bluesky** can be proved today: its profile description (the bio) must
+carry the member's vutuv profile URL, which is the one field only the account
+holder can write — the network has no `rel="me"`. The URL is matched as a whole
+address, so a bio linking to `/alicexyz` never verifies the member `alice`.
+The columns on `social_media_accounts` are deliberately provider-agnostic
+(`verification_method`, `verified_at`, `last_checked_at`, `grace_deadline_at`),
+so a second network is one clause rather than another migration.
+
+The state is written **only** through
+`SocialMediaAccount.verification_changeset/2` and never cast from a form — a
+member who could post `verified_at` would be granting themselves the mark. And
+editing the handle clears it, which is a correctness rule rather than
+housekeeping: the proof was read from the *old* account, so keeping the mark
+would vouch for one nobody ever checked.
+
+The owner proves it at `/settings/social_media_accounts/:id/verify` (an
+instructions page plus the POST that runs the check — an immediate check on save
+would be pointless, since the bio has not been edited at that moment). Verified
+accounts are re-checked weekly by
+`Vutuv.Profiles.SocialAccountRecheckSweeper`, with a seven-day grace window
+before the mark drops. A **network error is not a lost proof**: an unreachable
+AppView leaves both the mark and the window untouched, because it says nothing
+about the bio — only a successful fetch that finds no URL opens the window.
+
+Gated by `:verify_social_accounts` (env `VERIFY_SOCIAL_ACCOUNTS=false`), so an
+air-gapped installation hides a check that could never succeed. The agent-format
+siblings carry the same fact (`SectionDocs.social_entry/1` adds `verified`,
+md/text show "(verified profile)").
+
 ## Code-forge statistics ("Code" card, issue #922)
 
 A profile that lists a **GitHub, GitLab or Codeberg** account gets a **"Code"

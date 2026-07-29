@@ -34,7 +34,7 @@ defmodule VutuvWeb.UserProfileBlueskyTest do
 
   # Serves a one-post Bluesky feed (display name "Alice Himmel", a PNG
   # avatar) and reports every request as `{:req, path}`.
-  defp serve_one_post(handle, text) do
+  defp serve_one_post(handle, text, profile_extra \\ %{}) do
     test_pid = self()
 
     stub_bluesky(fn conn ->
@@ -45,13 +45,18 @@ defmodule VutuvWeb.UserProfileBlueskyTest do
           Plug.Conn.send_resp(
             conn,
             200,
-            Jason.encode!(%{
-              "did" => "did:plc:abc",
-              "handle" => handle,
-              "displayName" => "Alice Himmel",
-              "avatar" => "https://cdn.example/img/avatar/alice.jpg",
-              "labels" => []
-            })
+            Jason.encode!(
+              Map.merge(
+                %{
+                  "did" => "did:plc:abc",
+                  "handle" => handle,
+                  "displayName" => "Alice Himmel",
+                  "avatar" => "https://cdn.example/img/avatar/alice.jpg",
+                  "labels" => []
+                },
+                profile_extra
+              )
+            )
           )
 
         "/xrpc/app.bsky.feed.getAuthorFeed" ->
@@ -132,6 +137,43 @@ defmodule VutuvWeb.UserProfileBlueskyTest do
       # The plain account row keeps its profile link next to the posts.
       profile_url = "https://bsky.app/profile/#{handle}"
       assert has_element?(view, ~s(#profile-social-media a[href="#{profile_url}"]))
+    end
+
+    test "the account row shows the follower count, formatted", %{conn: conn} do
+      handle = unique_handle()
+      owner = owner_with_bluesky(handle)
+      serve_one_post(handle, "Hello", %{"followersCount" => 482})
+
+      assert {:ok, _} = warm_cache("Bluesky", handle)
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      row = view |> element(~s(#profile-social-media [data-social-followers])) |> render()
+      assert row =~ "482"
+    end
+
+    test "a big follower count is compacted, and no count renders none", %{conn: conn} do
+      big_handle = unique_handle()
+      big_owner = owner_with_bluesky(big_handle)
+      serve_one_post(big_handle, "Hello", %{"followersCount" => 60_023})
+
+      assert {:ok, _} = warm_cache("Bluesky", big_handle)
+      {:ok, big_view, _} = live(conn, ~p"/#{big_owner}")
+
+      # compact_count/1, never the run-together integer.
+      row = big_view |> element(~s(#profile-social-media [data-social-followers])) |> render()
+      assert row =~ "60K"
+      refute row =~ "60023"
+
+      # An account the network gave no count for shows no follower element at
+      # all — an absent number must not render as "0 followers".
+      quiet_handle = unique_handle()
+      quiet_owner = owner_with_bluesky(quiet_handle)
+      serve_one_post(quiet_handle, "Hello")
+
+      assert {:ok, _} = warm_cache("Bluesky", quiet_handle)
+      {:ok, quiet_view, _} = live(conn, ~p"/#{quiet_owner}")
+
+      refute has_element?(quiet_view, ~s(#profile-social-media [data-social-followers]))
     end
 
     test "Mastodon and Bluesky posts merge newest-first into one card", %{conn: conn} do

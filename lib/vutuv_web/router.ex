@@ -1081,6 +1081,12 @@ defmodule VutuvWeb.Router do
 
     get("/social_media_accounts", SocialMediaAccountController, :manage)
 
+    # "This account is really mine" verification: the owner-only page that shows
+    # the bio-proof instructions, and the POST that runs the check. Only Bluesky
+    # can be proved today (Vutuv.Profiles.SocialAccountVerification).
+    get("/social_media_accounts/:id/verify", SocialMediaAccountController, :verify)
+    post("/social_media_accounts/:id/verify", SocialMediaAccountController, :run_verify)
+
     resources("/social_media_accounts", SocialMediaAccountController,
       only: [:new, :create, :edit, :update, :delete],
       as: :settings_social_media_account

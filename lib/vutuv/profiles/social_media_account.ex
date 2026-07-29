@@ -29,6 +29,15 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     # refreshed when a profile view finds the snapshot older than 7 days.
     field(:code_stats, :map)
     field(:code_stats_fetched_at, :utc_datetime)
+    # "This account is really mine" state (Vutuv.Profiles.SocialAccountVerification),
+    # the social twin of the verified-webpage mark on Vutuv.Profiles.Url. Written
+    # only through verification_changeset/2 and NEVER cast from user params —
+    # a member who could set verified_at would be granting themselves the mark.
+    # changeset/2 clears all four when the handle changes (see reset_fetch_state/1).
+    field(:verification_method, :string)
+    field(:verified_at, :naive_datetime)
+    field(:last_checked_at, :naive_datetime)
+    field(:grace_deadline_at, :naive_datetime)
 
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
@@ -122,11 +131,24 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     |> reset_fetch_state()
   end
 
+  @doc """
+  The only way the verification state is written (`Vutuv.Profiles.SocialAccountVerification`
+  owns every call). Kept apart from `changeset/2` on purpose: these fields are
+  a claim the *server* makes after checking a proof, so they must never ride a
+  form submission.
+  """
+  def verification_changeset(model, params) do
+    cast(model, params, ~w(verification_method verified_at last_checked_at grace_deadline_at)a)
+  end
+
   # A changed handle is a different remote account, so any accumulated fetch
   # backoff or permanent deactivation no longer applies — the member fixing a
   # typo (or re-saving the row) re-enables the Mastodon feed. The code-stats
   # snapshot belongs to the old account, so it is dropped too (Vutuv.CodeStats
-  # fetches the new handle's snapshot in the background after save).
+  # fetches the new handle's snapshot in the background after save). The
+  # verified mark goes for the same reason, and here it is a correctness rule
+  # rather than housekeeping: the proof was found in the OLD account's profile,
+  # so keeping the mark would vouch for an account nobody ever checked.
   defp reset_fetch_state(changeset) do
     if get_change(changeset, :value) do
       change(changeset,
@@ -134,7 +156,11 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
         fetch_retry_at: nil,
         fetch_disabled_at: nil,
         code_stats: nil,
-        code_stats_fetched_at: nil
+        code_stats_fetched_at: nil,
+        verification_method: nil,
+        verified_at: nil,
+        last_checked_at: nil,
+        grace_deadline_at: nil
       )
     else
       changeset

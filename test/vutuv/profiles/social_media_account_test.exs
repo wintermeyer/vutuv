@@ -319,4 +319,68 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert SocialMediaAccount.social_media_link(account) == ""
     end
   end
+
+  describe "verification state" do
+    test "changeset/2 never casts it — a member cannot set their own mark" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Bluesky",
+          value: "alice.bsky.social",
+          verified_at: ~N[2026-07-29 10:00:00],
+          verification_method: "bluesky_bio"
+        })
+
+      assert changeset.valid?
+      refute Map.has_key?(changeset.changes, :verified_at)
+      refute Map.has_key?(changeset.changes, :verification_method)
+    end
+
+    test "verification_changeset/2 is the way in" do
+      changeset =
+        SocialMediaAccount.verification_changeset(%SocialMediaAccount{}, %{
+          verification_method: "bluesky_bio",
+          verified_at: ~N[2026-07-29 10:00:00],
+          last_checked_at: ~N[2026-07-29 10:00:00],
+          grace_deadline_at: nil
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :verification_method) == "bluesky_bio"
+      assert Ecto.Changeset.get_change(changeset, :verified_at) == ~N[2026-07-29 10:00:00]
+    end
+
+    test "a changed handle drops the mark: it proves a different account" do
+      verified = %SocialMediaAccount{
+        provider: "Bluesky",
+        value: "alice.bsky.social",
+        verification_method: "bluesky_bio",
+        verified_at: ~N[2026-07-29 10:00:00],
+        last_checked_at: ~N[2026-07-29 10:00:00],
+        grace_deadline_at: ~N[2026-08-05 10:00:00]
+      }
+
+      changeset =
+        SocialMediaAccount.changeset(verified, %{provider: "Bluesky", value: "bob.bsky.social"})
+
+      assert Ecto.Changeset.get_field(changeset, :verified_at) == nil
+      assert Ecto.Changeset.get_field(changeset, :verification_method) == nil
+      assert Ecto.Changeset.get_field(changeset, :last_checked_at) == nil
+      assert Ecto.Changeset.get_field(changeset, :grace_deadline_at) == nil
+    end
+
+    test "re-saving the same handle keeps the mark" do
+      verified = %SocialMediaAccount{
+        provider: "Bluesky",
+        value: "alice.bsky.social",
+        verification_method: "bluesky_bio",
+        verified_at: ~N[2026-07-29 10:00:00]
+      }
+
+      changeset =
+        SocialMediaAccount.changeset(verified, %{provider: "Bluesky", value: "alice.bsky.social"})
+
+      assert Ecto.Changeset.get_field(changeset, :verified_at) == ~N[2026-07-29 10:00:00]
+      assert Ecto.Changeset.get_field(changeset, :verification_method) == "bluesky_bio"
+    end
+  end
 end

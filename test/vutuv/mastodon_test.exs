@@ -139,6 +139,28 @@ defmodule Vutuv.MastodonTest do
       assert {:ok, %Feed{name: "Alice (Live 10:30:45)"}} = Mastodon.fetch_posts(@handle)
     end
 
+    test "the follower count rides the feed, from the lookup we already make" do
+      serve([status(%{})], lookup: %{"followers_count" => 87})
+
+      assert {:ok, %Feed{followers: 87}} = Mastodon.fetch_posts(@handle)
+
+      # Still exactly two requests: the count comes out of the lookup.
+      assert_receive {:req, "/api/v1/accounts/lookup", _}
+      assert_receive {:req, "/api/v1/accounts/42/statuses", _}
+      refute_receive {:req, _, _}
+    end
+
+    test "a missing or nonsensical follower count is nil, never a crash or a zero" do
+      serve([status(%{})])
+      assert {:ok, %Feed{followers: nil}} = Mastodon.fetch_posts(@handle)
+
+      serve([status(%{})], lookup: %{"followers_count" => "many"})
+      assert {:ok, %Feed{followers: nil}} = Mastodon.fetch_posts(@handle)
+
+      serve([status(%{})], lookup: %{"followers_count" => 0})
+      assert {:ok, %Feed{followers: 0}} = Mastodon.fetch_posts(@handle)
+    end
+
     test "keeps only public and unlisted statuses, at most three" do
       serve([
         status(%{"id" => "1", "visibility" => "private"}),

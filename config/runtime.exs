@@ -400,6 +400,14 @@ if config_env() == :prod do
     config :vutuv, :verify_user_links, false
   end
 
+  # Verified social-media handles. VERIFY_SOCIAL_ACCOUNTS=false disables the
+  # Bluesky bio proof (and its periodic re-check), so no new account can be
+  # verified — for installations that must not call out (intranets). Existing
+  # verified marks keep working.
+  if System.get_env("VERIFY_SOCIAL_ACCOUNTS") == "false" do
+    config :vutuv, :verify_social_accounts, false
+  end
+
   # The per-member daily cap on outbound invitations (see Vutuv.Invitations).
   if invitation_daily_cap = System.get_env("INVITATION_DAILY_CAP") do
     config :vutuv, :invitation_daily_cap, String.to_integer(invitation_daily_cap)

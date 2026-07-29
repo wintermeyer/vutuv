@@ -19,5 +19,13 @@
   <h2 class="card__label"><%= gettext("Provider") %></h2>
   <p><%= @social_media_account.provider %></p>
   <h2 class="card__label"><%= gettext("Username") %></h2>
-  <p><%= Vutuv.Profiles.SocialMediaAccount.social_media_link(@social_media_account) %></p>
+  <p>
+    <span class="inline-flex items-center gap-1.5">
+      <%= Vutuv.Profiles.SocialMediaAccount.social_media_link(@social_media_account) %>
+      <.verified_mark
+        :if={@social_media_account.verified_at}
+        title={gettext("Verified profile")}
+      />
+    </span>
+  </p>
 </.card_section>

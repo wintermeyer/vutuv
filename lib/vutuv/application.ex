@@ -91,6 +91,10 @@ defmodule Vutuv.Application do
         optional_child(:resume_stuck_broadcasts, Vutuv.Newsletters.BroadcastResumer) ++
         optional_child(:recheck_organization_domains, Vutuv.Organizations.DomainRecheckSweeper) ++
         optional_child(:recheck_user_links, Vutuv.Profiles.LinkRecheckSweeper) ++
+        optional_child(
+          :recheck_social_accounts,
+          Vutuv.Profiles.SocialAccountRecheckSweeper
+        ) ++
         optional_child(:jobs_sweeper, Vutuv.Jobs.Sweeper) ++
         optional_child(:saved_search_alerts, Vutuv.SavedSearches.AlertSweeper)
 

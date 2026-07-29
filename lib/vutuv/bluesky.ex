@@ -56,7 +56,7 @@ defmodule Vutuv.Bluesky do
   """
   def fetch_posts(handle) do
     with {:ok, handle} <- normalize_handle(handle),
-         {:ok, meta} <- fetch_profile(handle) do
+         {:ok, meta} <- fetch_profile_by(handle) do
       build_feed(handle, meta)
     end
   rescue
@@ -71,6 +71,7 @@ defmodule Vutuv.Bluesky do
       handle: handle,
       url: "https://bsky.app/profile/#{handle}",
       avatar: nil,
+      followers: meta.followers,
       posts: []
     }
 
@@ -98,7 +99,22 @@ defmodule Vutuv.Bluesky do
 
   defp normalize_handle(_handle), do: {:error, :gone}
 
-  defp fetch_profile(handle) do
+  @doc """
+  The account itself, without its posts: `{:ok, meta}` with the display name,
+  avatar URL, follower count, profile description (the bio) and the
+  logged-out-visibility label, or the same classified
+  `{:error, :gone | :transient}` `fetch_posts/1` speaks.
+
+  Public because the handle proof (`Vutuv.Profiles.SocialAccountVerification`)
+  reads the bio and wants nothing else — one call, no author feed. Both callers
+  share this function so the fixed AppView host and the handle-format guard
+  stay defined in exactly one place.
+  """
+  def fetch_profile(handle) do
+    with {:ok, handle} <- normalize_handle(handle), do: fetch_profile_by(handle)
+  end
+
+  defp fetch_profile_by(handle) do
     url = @appview <> "/xrpc/app.bsky.actor.getProfile?actor=" <> URI.encode_www_form(handle)
 
     case Http.get(url, @req_options) do
@@ -123,6 +139,8 @@ defmodule Vutuv.Bluesky do
     %{
       name: Post.presence(profile["displayName"]) || handle,
       avatar_url: Post.presence(profile["avatar"]),
+      followers: Feed.follower_count(profile["followersCount"]),
+      description: to_string(profile["description"]),
       hidden_when_logged_out?: has_label?(profile["labels"], "!no-unauthenticated")
     }
   end
