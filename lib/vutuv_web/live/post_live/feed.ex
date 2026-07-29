@@ -155,6 +155,11 @@ defmodule VutuvWeb.PostLive.Feed do
     socket
     |> assign(:recommended_users, users)
     |> assign(:work_info_by_id, UserHelpers.work_information_map(users, 60))
+    # The two-line samples under each row: a name and a job title say who
+    # someone is, not what they write about, and the rail is asking the viewer
+    # to bet on the latter. Redrawn with the slate, so a reshuffle (or a follow
+    # dropping a row) brings the new members' posts with it.
+    |> assign(:suggested_posts_by_id, Posts.recent_posts_by_authors(users, user))
     # Every suggestion is by construction someone the viewer does not follow, so
     # the follow buttons all render the "Follow" state from an empty map.
     |> assign(:following_by_id, %{})
@@ -1050,7 +1055,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
           <.card :if={@recommended_users != []} id="who-to-follow">
             <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
-            <ul class="space-y-4">
+            <ul class="space-y-5">
               <.user_row
                 :for={user <- @recommended_users}
                 user={user}
@@ -1058,6 +1063,7 @@ defmodule VutuvWeb.PostLive.Feed do
                 current_user_id={@current_user.id}
                 work_info_by_id={@work_info_by_id}
                 following_by_id={@following_by_id}
+                posts={Map.get(@suggested_posts_by_id, user.id, [])}
                 live?
               />
             </ul>

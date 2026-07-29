@@ -1298,6 +1298,37 @@ ul.thumbs li .text .url a {
   line-height: inherit;
 }
 
+/* The post excerpts under a suggested profile in the "Who to follow" rail.
+   The three-line twin of `.notif-clamp` above, and a height clamp for the same
+   reason: the excerpt is formatted Markdown (so a stray heading or list is a
+   block child, which a `-webkit-box` clamps unreliably), and its block margins
+   and type size have to be neutralized or the box shows one line less and a
+   sliver. The budget is fixed here — the rail teases a post rather than
+   quoting one, so there is no per-reader line preference to feed in.
+
+   The call site pairs this with `leading-5`, and that is load-bearing, not
+   decoration: `1lh` resolves against the *container's* line-height, so with
+   Tailwind's unitless `text-sm` ratio the box and the line boxes inside it are
+   only equal while both compute from the same font-size. Anything that scales
+   the text without scaling the box — a browser minimum-font-size setting, a
+   page zoom quirk — then grows the line boxes past `1lh` and the clamp cuts a
+   line **through the middle of its glyphs**. Inheriting an absolute
+   line-height instead makes every line box exactly `1lh` by construction, so
+   N lines are always N whole lines. */
+.teaser-clamp {
+  display: flow-root;
+  overflow: hidden;
+  max-height: calc(3 * 1lh);
+}
+.teaser-clamp.markdown > *,
+.teaser-clamp.markdown li {
+  margin-block: 0;
+}
+.teaser-clamp.markdown * {
+  font-size: inherit;
+  line-height: inherit;
+}
+
 /* Truncated feed/profile post preview: fade the clamp into the card so the cut
    reads as intentional, then a quiet muted "Read more" sits under it (see
    VutuvWeb.PostComponents). The fade shows only when the body is really clamped

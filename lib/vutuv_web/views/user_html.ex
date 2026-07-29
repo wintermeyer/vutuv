@@ -18,8 +18,10 @@ defmodule VutuvWeb.UserHTML do
   import VutuvWeb.UserHelpers
 
   alias Vutuv.CodeStats
+  alias Vutuv.Posts.PostImage
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.SocialFeed.Feed
+  alias VutuvWeb.Markdown
 
   embed_templates("../templates/user/*")
 
@@ -28,12 +30,19 @@ defmodule VutuvWeb.UserHTML do
   the profile page's "Who to follow" rail and the follower/following preview
   cards. Callers pass the page-wide `work_info_by_id` / `following_by_id`
   maps (one query each) so a row never queries on its own.
+
+  `posts` (the suggestion rails, from `Vutuv.Posts.recent_posts_by_authors/3`)
+  adds that member's latest posts under the row, each cut to two lines: a name
+  and a job title say who someone is, not what they write about, and following
+  is a bet on the latter. The preview rows leave it empty — a follower list is
+  about the relationship, not about reading.
   """
   attr(:user, Vutuv.Accounts.User, required: true)
   attr(:current_user, :any, required: true)
   attr(:current_user_id, :any, required: true)
   attr(:work_info_by_id, :map, required: true)
   attr(:following_by_id, :map, required: true)
+  attr(:posts, :list, default: [])
   # Search match marker(s): substring(s) of the name to wrap in a brand <mark>
   # (string or list, see `VutuvWeb.UI.highlight/2`). nil renders plainly.
   attr(:highlight, :any, default: nil)
@@ -44,29 +53,110 @@ defmodule VutuvWeb.UserHTML do
 
   def user_row(assigns) do
     ~H"""
-    <li class="flex items-center gap-3">
-      <.link href={~p"/#{@user}"} class="shrink-0">
-        <.avatar user={@user} size="sm" alt={"Avatar of #{full_name(@user)}"} />
-      </.link>
-      <div class="min-w-0 text-sm">
-        <.link href={~p"/#{@user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{highlight(full_name(@user), @highlight)}</.link>
-        <%!-- Always render a line (non-breaking space when empty) so rows keep a
-        uniform height and the side-by-side follower/following cards stay aligned.
-        Pin text-sm + mb-0 so the legacy global `p` default (15px font, 15px bottom
-        margin) doesn't enlarge the line or wedge dead space under it, which would
-        push the avatar off-centre against the name/work-line group. --%>
-        <p class="mb-0 truncate text-sm text-slate-600 dark:text-slate-400">{work_line(@work_info_by_id, @user.id)}</p>
+    <li class="space-y-2">
+      <div class="flex items-center gap-3">
+        <.link href={~p"/#{@user}"} class="shrink-0">
+          <.avatar user={@user} size="sm" alt={"Avatar of #{full_name(@user)}"} />
+        </.link>
+        <div class="min-w-0 text-sm">
+          <.link href={~p"/#{@user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{highlight(full_name(@user), @highlight)}</.link>
+          <%!-- Always render a line (non-breaking space when empty) so rows keep a
+          uniform height and the side-by-side follower/following cards stay aligned.
+          Pin text-sm + mb-0 so the legacy global `p` default (15px font, 15px bottom
+          margin) doesn't enlarge the line or wedge dead space under it, which would
+          push the avatar off-centre against the name/work-line group. --%>
+          <p class="mb-0 truncate text-sm text-slate-600 dark:text-slate-400">{work_line(@work_info_by_id, @user.id)}</p>
+        </div>
+        <.follow_button
+          :if={@current_user && not same_user?(@current_user, @user)}
+          variant="text"
+          follower_id={@current_user_id}
+          followee_id={@user.id}
+          follow_id={Map.get(@following_by_id, @user.id)}
+          live?={@live?}
+        />
       </div>
-      <.follow_button
-        :if={@current_user && not same_user?(@current_user, @user)}
-        variant="text"
-        follower_id={@current_user_id}
-        followee_id={@user.id}
-        follow_id={Map.get(@following_by_id, @user.id)}
-        live?={@live?}
-      />
+      <%!-- The member's latest posts. Each is its own tinted, tappable tile
+      rather than another muted paragraph: a run of same-weight grey lines
+      reads as a wall of text, and nothing in it says "these are posts, and
+      they are worth opening". The tile gives each one a surface that lifts on
+      hover, its lead photo, when it was written and how it was received —
+      which together are what makes an account look alive and worth following.
+      The photo sits on the **right**: only some posts have one, and a leading
+      thumbnail would indent those tiles' text while the others start at the
+      card edge, so the reader's eye has no straight left margin to run down. --%>
+      <ul :if={@posts != []} data-suggested-posts={@user.id} class="space-y-1.5">
+        <li
+          :for={post <- @posts}
+          class="relative rounded-xl bg-slate-50 p-2.5 transition hover:bg-brand-50 dark:bg-slate-800/60 dark:hover:bg-brand-900/30"
+        >
+          <%!-- Stretched link, the same arrangement the feed's "Suggested
+          posts" card and the /notifications quotes use: the excerpt is
+          formatted Markdown and carries its own links (@mentions, #hashtags,
+          URLs), so the tile cannot be one big <a> — that would nest anchors.
+          The whole tile opens the post, while the body's own links sit above
+          the stretched link (relative + z-20) and keep their targets. --%>
+          <.link
+            href={~p"/#{@user}/posts/#{post.id}"}
+            aria-label={gettext("View post")}
+            class="absolute inset-0 z-10"
+          >
+          </.link>
+          <div class="flex items-start gap-3">
+            <div class="min-w-0 flex-1">
+              <%!-- The body goes through the same pipeline as every other post
+              preview, so it reads here the way it does in the feed. The rail
+              column is narrow, so hyphenation is on at both breakpoints (long
+              German compounds), like the "Suggested posts" card. --%>
+              <div
+                class="markdown markdown--post teaser-clamp text-sm leading-5 text-slate-700 dark:text-slate-200 [&_a]:relative [&_a]:z-20"
+                style="--post-hyphens-desktop:auto;--post-hyphens-mobile:auto"
+              >
+                {post_teaser(post.body)}
+              </div>
+              <p class="mb-0 mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <.post_time at={post.inserted_at} />
+                <%!-- Social proof, and only when there is any: a "0" beside
+                every post would say the opposite of what the rail is for. --%>
+                <span
+                  :if={post.likes > 0}
+                  data-teaser-likes={post.likes}
+                  class="inline-flex items-center gap-1"
+                >
+                  <.icon_heart class="h-3.5 w-3.5" />{compact_count(post.likes)}
+                </span>
+              </p>
+            </div>
+            <img
+              :if={post.image}
+              src={PostImage.url(post.image, "thumb")}
+              alt=""
+              loading="lazy"
+              class="h-14 w-14 shrink-0 rounded-lg object-cover"
+            />
+          </div>
+        </li>
+      </ul>
     </li>
     """
+  end
+
+  # How much of a post body reaches the rail: the source is block-cut at this
+  # budget so an essay-length post is neither parsed nor shipped in full just
+  # to show its opening two lines.
+  @teaser_source_chars 400
+
+  # The teaser body, rendered through the exact same Markdown pipeline as any
+  # other post preview (`VutuvWeb.Markdown.render_preview/3` → `render_post/2`),
+  # so bold, links, @mentions and #hashtags read here the way they do in the
+  # feed — a fully-qualified `@user@host` is a link to that remote account
+  # rather than bare text. Images are deliberately not passed: a teaser is text,
+  # and the post's lead photo rides beside it as the thumbnail. The visible cut
+  # is the two-line `.teaser-clamp` height clamp on the wrapper, so the
+  # truncation flag is dropped here.
+  defp post_teaser(body) do
+    {html, _truncated?} = Markdown.render_preview(body, [], limit: @teaser_source_chars)
+    html
   end
 
   @doc """
@@ -85,6 +175,10 @@ defmodule VutuvWeb.UserHTML do
   attr(:current_user_id, :any, required: true)
   attr(:work_info_by_id, :map, required: true)
   attr(:following_by_id, :map, required: true)
+  # `%{user_id => [post]}` from `Vutuv.Posts.recent_posts_by_authors/3` — the
+  # two-line samples under each suggestion. Defaults to none, so a caller that
+  # doesn't load them still renders the plain rows.
+  attr(:posts_by_id, :map, default: %{})
 
   def who_to_follow_card(assigns) do
     ~H"""
@@ -98,7 +192,7 @@ defmodule VutuvWeb.UserHTML do
       <p :if={@promoted} id="discovery-intro" class="-mt-2 mb-4 text-sm text-slate-600 dark:text-slate-400">
         {gettext("Your feed shows the posts of members you follow. Follow a few to fill it.")}
       </p>
-      <ul class="space-y-4">
+      <ul class="space-y-5">
         <.user_row
           :for={user <- @recommended_users}
           user={user}
@@ -106,6 +200,7 @@ defmodule VutuvWeb.UserHTML do
           current_user_id={@current_user_id}
           work_info_by_id={@work_info_by_id}
           following_by_id={@following_by_id}
+          posts={Map.get(@posts_by_id, user.id, [])}
           live?
         />
       </ul>

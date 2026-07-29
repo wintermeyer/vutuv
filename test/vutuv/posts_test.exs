@@ -1204,6 +1204,176 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "recent_posts_by_authors/3" do
+    # The rail only shows posts that landed, so every fixture here is liked
+    # once — an unliked post is the subject of its own tests below.
+    defp teased!(author, body) do
+      author |> create_post!(%{body: body}) |> liked!(1)
+    end
+
+    test "returns each author's newest posts, newest first, keyed by author" do
+      viewer = user()
+      one = user()
+      two = user()
+
+      oldest = teased!(one, "oldest")
+      backdate_post!(oldest, 120)
+      middle = teased!(one, "middle")
+      backdate_post!(middle, 60)
+      newest = teased!(one, "newest")
+      solo = teased!(two, "just the one")
+
+      found = Posts.recent_posts_by_authors([one, two], viewer)
+
+      assert Enum.map(found[one.id], & &1.id) == [newest.id, middle.id]
+      assert Enum.map(found[two.id], & &1.id) == [solo.id]
+    end
+
+    test "leaves out a post nobody liked" do
+      viewer = user()
+      author = user()
+
+      create_post!(author, %{body: "nobody cared"})
+
+      assert Posts.recent_posts_by_authors([author], viewer) == %{}
+    end
+
+    test "an unliked newer post does not eat a slot from the liked ones" do
+      viewer = user()
+      author = user()
+
+      older = teased!(author, "the one that landed")
+      backdate_post!(older, 120)
+      liked = teased!(author, "and this one too")
+      backdate_post!(liked, 60)
+      # Newest of the three, but nobody liked it: it must not push a liked
+      # post out of the two slots (the bar applies before the ranking).
+      create_post!(author, %{body: "silence"})
+
+      assert Enum.map(Posts.recent_posts_by_authors([author], viewer)[author.id], & &1.id) ==
+               [liked.id, older.id]
+    end
+
+    test "a favourite from another network clears the bar on its own" do
+      viewer = user()
+      author = user()
+      post = create_post!(author, %{body: "landed on mastodon"})
+
+      Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: post.id,
+        actor_uri: "https://remote.example/users/bob",
+        handle: "bob",
+        kind: "like",
+        received_at: DateTime.utc_now(:second)
+      })
+
+      assert [%{id: id, likes: 1}] = Posts.recent_posts_by_authors([author], viewer)[author.id]
+      assert id == post.id
+    end
+
+    test "carries what the teaser shows: body, date, likes and the first photo" do
+      viewer = user()
+      author = user()
+      post = teased!(author, "**Elixir** in production")
+      insert(:post_image, post: post, user: author, position: 1, alt: "second")
+      cover = insert(:post_image, post: post, user: author, position: 0, alt: "cover")
+
+      assert [teaser] = Posts.recent_posts_by_authors([author], viewer)[author.id]
+      assert teaser.body == "**Elixir** in production"
+      assert teaser.inserted_at == post.inserted_at
+      assert teaser.likes == 1
+      # The post's own first photo, so the rail shows what the reader would see
+      # at the top of the post itself.
+      assert teaser.image.id == cover.id
+    end
+
+    test "counts favourites from other networks in the like tally" do
+      viewer = user()
+      author = user()
+      post = teased!(author, "reached the fediverse")
+
+      Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: post.id,
+        actor_uri: "https://remote.example/users/alice",
+        handle: "alice",
+        kind: "like",
+        received_at: DateTime.utc_now(:second)
+      })
+
+      assert [%{likes: 2}] = Posts.recent_posts_by_authors([author], viewer)[author.id]
+    end
+
+    test "skips a photo still waiting for the image scan" do
+      viewer = user()
+      author = user()
+      post = teased!(author, "photo pending")
+      insert(:post_image, post: post, user: author, moderation: "pending")
+
+      assert [%{image: nil}] = Posts.recent_posts_by_authors([author], viewer)[author.id]
+    end
+
+    test "honours per_author" do
+      viewer = user()
+      author = user()
+
+      for n <- 1..4 do
+        post = teased!(author, "post #{n}")
+        backdate_post!(post, 100 - n)
+      end
+
+      found = Posts.recent_posts_by_authors([author], viewer, per_author: 3)
+      assert length(found[author.id]) == 3
+    end
+
+    test "leaves out replies, so an excerpt never quotes half a conversation" do
+      viewer = user()
+      author = user()
+      parent = create_post!(user(), %{body: "the question"})
+      {:ok, reply} = Posts.create_reply(author, parent, %{body: "the answer"})
+      # Liked, so only the "no replies" rule can be what keeps it out.
+      liked!(reply, 1)
+      own = teased!(author, "own post")
+
+      assert Enum.map(Posts.recent_posts_by_authors([author], viewer)[author.id], & &1.id) ==
+               [own.id]
+    end
+
+    test "leaves out bodyless photo posts, which have no excerpt to show" do
+      viewer = user()
+      author = user()
+      :post |> insert(user: author, body: "") |> liked!(1)
+
+      assert Posts.recent_posts_by_authors([author], viewer) == %{}
+    end
+
+    test "shows only what the viewer may see" do
+      viewer = user()
+      author = user()
+
+      author
+      |> create_post!(%{body: "not for you", denials: [%{"denied_user_id" => viewer.id}]})
+      |> liked!(1)
+
+      open = teased!(author, "for everyone")
+
+      assert Enum.map(Posts.recent_posts_by_authors([author], viewer)[author.id], & &1.id) ==
+               [open.id]
+
+      # A logged-out visitor sees the profile rail too, and any restriction at
+      # all keeps a post out of the anonymous view.
+      assert Enum.map(Posts.recent_posts_by_authors([author], nil)[author.id], & &1.id) ==
+               [open.id]
+    end
+
+    test "leaves out an author with nothing to show, and returns %{} for no authors" do
+      viewer = user()
+      silent = user()
+
+      assert Posts.recent_posts_by_authors([silent], viewer) == %{}
+      assert Posts.recent_posts_by_authors([], viewer) == %{}
+    end
+  end
+
   describe "author_posts_page/4 with reposts" do
     test "pages posts and reposts together and scopes the period by event date" do
       author = user()

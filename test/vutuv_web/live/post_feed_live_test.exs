@@ -695,6 +695,24 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, ~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
     end
 
+    test "previews each suggestion's latest posts under the row", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      popular = other_user(first_name: "Pop", last_name: "Ular")
+      insert(:follow, follower: other_user(), followee: popular)
+      # Ids are UUID v7, so insert order is post order. Each post needs a like
+      # to clear the rail's bar.
+      old = insert(:post, user: popular, body: "What I wrote last week")
+      recent = insert(:post, user: popular, body: "What I am working on")
+      for post <- [old, recent], do: :ok = Vutuv.Posts.like_post(other_user(), post)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      samples = ~s(#who-to-follow [data-suggested-posts="#{popular.id}"])
+      assert has_element?(live, ~s(#{samples} a[href="/#{popular.username}/posts/#{recent.id}"]))
+      assert has_element?(live, ~s(#{samples} a[href="/#{popular.username}/posts/#{old.id}"]))
+      assert render(live) =~ "What I am working on"
+    end
+
     test "does not suggest members the viewer already follows", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       already = other_user(first_name: "Al", last_name: "Ready")

@@ -14,6 +14,7 @@ defmodule VutuvWeb.UserProfileLiveTest do
 
   alias Vutuv.Accounts
   alias Vutuv.Posts
+  alias Vutuv.Posts.PostImage
   alias Vutuv.Social
   alias Vutuv.Tags
 
@@ -593,6 +594,96 @@ defmodule VutuvWeb.UserProfileLiveTest do
     candidate
   end
 
+  describe "'Who to follow' post samples" do
+    # A post the rail may tease: it needs at least one like to clear the bar.
+    defp liked_post(author, body) do
+      post = insert(:post, user: author, body: body)
+      :ok = Vutuv.Posts.like_post(insert_activated_user(), post)
+      post
+    end
+
+    test "a suggestion previews its two newest posts, older ones stay out", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      candidate = insert_activated_user()
+      # Ids are UUID v7, so insert order is post order: the last two are the
+      # newest and the first must not make the cut.
+      # Only liked posts are teased, so each fixture gets one.
+      oldest = liked_post(candidate, "Ancient history")
+      middle = liked_post(candidate, "Second thoughts")
+      newest = liked_post(candidate, "Fresh off the press")
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      samples = ~s(#profile-who-to-follow [data-suggested-posts="#{candidate.id}"])
+      sample = fn post -> ~s(#{samples} a[href="/#{candidate.username}/posts/#{post.id}"]) end
+
+      assert has_element?(view, sample.(newest))
+      assert has_element?(view, sample.(middle))
+      refute has_element?(view, sample.(oldest))
+
+      assert render(view) =~ "Fresh off the press"
+    end
+
+    test "a sample shows its photo, its date and its like count", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      candidate = insert_activated_user()
+      post = liked_post(candidate, "Vom Wochenende")
+      image = insert(:post_image, post: post, user: candidate)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      samples = ~s([data-suggested-posts="#{candidate.id}"])
+      thumb = PostImage.url(image, "thumb")
+
+      assert has_element?(view, ~s(#{samples} img[src="#{thumb}"]))
+      # When it was written and how it was received: what makes an account
+      # look alive rather than like a wall of grey text.
+      assert has_element?(view, ~s(#{samples} time))
+      assert has_element?(view, ~s(#{samples} [data-teaser-likes="1"]))
+      assert render(view) =~ "Vom Wochenende"
+    end
+
+    test "a sample is formatted Markdown, with its handles linked", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      candidate = insert_activated_user()
+      # A handle is [A-Za-z0-9_] only, so the factory's hyphenated default
+      # would not parse as a mention. Unique, since this file is async.
+      mentioned = insert_activated_user(username: "railfan#{System.unique_integer([:positive])}")
+
+      liked_post(
+        candidate,
+        "**Fett** und @#{mentioned.username} und @hostsharing@geno.social"
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      samples = ~s([data-suggested-posts="#{candidate.id}"])
+      # The same rendering the feed gives a post: markers become markup, a
+      # local handle links to that profile and a fully-qualified one to the
+      # remote account.
+      assert has_element?(view, ~s(#{samples} strong), "Fett")
+      assert has_element?(view, ~s(#{samples} a.mention[href="/#{mentioned.username}"]))
+      assert has_element?(view, ~s(#{samples} a[href="https://geno.social/@hostsharing"]))
+
+      # Those links live *inside* the tile whose whole surface opens the post,
+      # so the permalink has to be a stretched sibling — an <a> wrapping the
+      # body would nest anchors and break every link in it.
+      assert has_element?(view, ~s(#{samples} a.absolute.inset-0))
+    end
+
+    test "a suggestion with nothing to show keeps the plain row", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      # A bodyless photo post makes them a suggestion but has no excerpt.
+      candidate = insert_activated_user()
+      insert(:post, user: candidate, body: "")
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      assert has_element?(view, ~s(#profile-who-to-follow a[href="/#{candidate.username}"]))
+      refute has_element?(view, ~s([data-suggested-posts="#{candidate.id}"]))
+    end
+  end
+
   describe "'Who to follow' promotion while the owner follows fewer than five members" do
     test "the owner's rail leads with the promoted card", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
@@ -764,8 +855,10 @@ defmodule VutuvWeb.UserProfileLiveTest do
       html = view |> tab("posts") |> render_click()
 
       assert html =~ "my own post"
-      refute html =~ "my reply here"
-      refute html =~ "worth resharing"
+      # Scoped to the Posts card: the reposted stranger is also a "Who to
+      # follow" suggestion, and that rail quotes their latest posts.
+      refute has_element?(view, "#profile-posts", "my reply here")
+      refute has_element?(view, "#profile-posts", "worth resharing")
     end
 
     test "'Reposts' narrows to reposts", %{conn: conn, owner: owner} do
@@ -819,7 +912,9 @@ defmodule VutuvWeb.UserProfileLiveTest do
       html = view |> tab("replies") |> render_click()
 
       assert html =~ "No replies yet."
-      refute html =~ "shared only"
+      # Scoped to the Posts card, as above: the stranger whose post was
+      # reposted is a suggestion in the rail, which quotes their posts.
+      refute has_element?(view, "#profile-posts", "shared only")
       # The tabs stay reachable so the reader can switch back.
       assert has_element?(view, "#profile-post-filter")
     end

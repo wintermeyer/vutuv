@@ -651,6 +651,14 @@ defmodule VutuvWeb.UserProfileLive do
     # JSON-LD Person markup below.
     |> assign(:work_info, profile_headline(user, header_job, 60))
     |> assign(:recommended_users, recommended_users)
+    # The two-line samples under each suggestion. Drawn once with the slate
+    # itself: the rail's membership is fixed for the page view (a follow only
+    # flips that row's button), so re-drawing them on every refresh would cost
+    # a query to render the same lines.
+    |> assign(
+      :suggested_posts_by_id,
+      Vutuv.Posts.recent_posts_by_authors(recommended_users, current_user)
+    )
     |> assign(:totals, totals)
     # Builds the social slice (counts, header pill state, follow previews); reads
     # :current_user / :recommended_users set above, so it goes last.

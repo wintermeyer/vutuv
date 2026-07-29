@@ -2429,6 +2429,128 @@ defmodule Vutuv.Posts do
     from(c in Follow, where: c.follower_id == ^viewer_id and c.muted, select: c.followee_id)
   end
 
+  # How many posts a suggested profile previews by default, and the quality bar
+  # each one has to clear.
+  @posts_per_author 2
+  @posts_min_likes 1
+
+  @doc """
+  The newest posts of each of `authors`, as `%{author_id => [teaser]}`, newest
+  first — what the "Who to follow" rows preview so a member can tell what an
+  account actually writes about before following it.
+
+  A teaser is `%{id:, body:, inserted_at:, likes:, image:}`: enough for the
+  rail to render each post as a post rather than as a paragraph of grey text —
+  when it was written, how it was received (own likes **and** favourites from
+  other networks, folded into one figure like `shown_counts/1`) and its lead
+  photo (`nil` when there is none, or while the image scan still holds it).
+
+  Scoped to what `viewer` may see (`nil` for a logged-out visitor, who gets the
+  anonymous view). Three kinds of post never make it in. **Replies**: two lines
+  of an answer to a stranger's post say nothing about the account. **Bodyless
+  photo posts**: no excerpt to show. And **anything nobody liked** — the rail
+  is asking a member to bet their feed on a stranger, so it shows the posts
+  that landed (at least #{@posts_min_likes} like), not merely the last ones
+  typed. An author with nothing that clears the bar is simply absent from the
+  map, so a caller reads it with `Map.get(map, id, [])` and renders the plain
+  row.
+
+  Two queries for the whole card, never one per suggested member: the bar is
+  applied *before* a window function ranks what is left (an unliked post must
+  not eat one of the `per_author` slots, default #{@posts_per_author}), then
+  one pass fetches those posts' photos.
+  """
+  def recent_posts_by_authors(authors, viewer, opts \\ []) do
+    per_author = Keyword.get(opts, :per_author, @posts_per_author)
+    min_likes = Keyword.get(opts, :min_likes, @posts_min_likes)
+    author_ids = authors |> Enum.map(&author_id/1) |> Enum.uniq()
+
+    if author_ids == [],
+      do: %{},
+      else: fetch_recent_posts(author_ids, viewer, per_author, min_likes)
+  end
+
+  defp author_id(%User{id: id}), do: id
+  defp author_id(id) when is_binary(id), do: id
+
+  defp fetch_recent_posts(author_ids, viewer, per_author, min_likes) do
+    candidates =
+      from(p in Post, as: :post)
+      |> join(:left, [post: p], r in assoc(p, :reply_ref), as: :reply_ref)
+      |> where([post: p], p.user_id in ^author_ids and p.body != "")
+      |> where([reply_ref: r], is_nil(r.id))
+      |> scope_visible(viewer)
+      |> select([post: p], %{
+        id: p.id,
+        user_id: p.user_id,
+        body: p.body,
+        inserted_at: p.inserted_at,
+        # One like figure per post, vutuv's own plus the favourites other
+        # networks sent (issue #1068) — the same folding `shown_counts/1` does
+        # for the card, so the rail can't quote a different number than the
+        # post it links to, and the bar below can't mean something else than
+        # the heart the reader sees.
+        likes:
+          fragment(
+            """
+            (SELECT count(*) FROM post_likes l WHERE l.post_id = ?)
+            + (SELECT count(*) FROM fediverse_reactions fr
+                 WHERE fr.post_id = ? AND fr.kind = 'like')
+            """,
+            p.id,
+            p.id
+          )
+      })
+
+    ranked =
+      from(c in subquery(candidates),
+        where: c.likes >= ^min_likes,
+        select: %{
+          id: c.id,
+          user_id: c.user_id,
+          body: c.body,
+          inserted_at: c.inserted_at,
+          likes: c.likes,
+          rank: over(row_number(), partition_by: c.user_id, order_by: [desc: c.id])
+        }
+      )
+
+    teasers =
+      from(r in subquery(ranked),
+        where: r.rank <= ^per_author,
+        order_by: [asc: r.rank],
+        select: %{
+          id: r.id,
+          user_id: r.user_id,
+          body: r.body,
+          inserted_at: r.inserted_at,
+          likes: r.likes
+        }
+      )
+      |> Repo.all()
+
+    images = teaser_images(Enum.map(teasers, & &1.id))
+
+    teasers
+    |> Enum.map(&Map.put(&1, :image, Map.get(images, &1.id)))
+    |> Enum.group_by(& &1.user_id)
+  end
+
+  # The lead photo of each teased post, as `%{post_id => %PostImage{}}`. Only
+  # images the AI scan has released can be shown: the proxy 404s on the rest,
+  # so a held photo must leave the rail thumbnail-less rather than broken.
+  defp teaser_images([]), do: %{}
+
+  defp teaser_images(post_ids) do
+    from(i in PostImage,
+      where: i.post_id in ^post_ids,
+      order_by: [asc: i.position, asc: i.id]
+    )
+    |> Repo.all()
+    |> Enum.filter(&ImageScans.released?(&1.moderation))
+    |> Enum.reduce(%{}, fn image, acc -> Map.put_new(acc, image.post_id, image) end)
+  end
+
   @doc """
   One offset page of `author`'s timeline visible to `viewer` — the author
   archive at `/:slug/posts` (browse-style pagination, like followers/tags).
