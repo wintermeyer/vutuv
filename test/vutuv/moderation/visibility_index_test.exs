@@ -1,7 +1,8 @@
 defmodule Vutuv.Moderation.VisibilityIndexTest do
   @moduledoc """
-  Guards `users_visible_index` (migration
-  `20260725170422_add_users_visibility_partial_index`) against drift.
+  Guards `users_visible_covering_index` (migrations
+  `20260725170422_add_users_visibility_partial_index` +
+  `20260730153109_cover_visible_users_index`) against drift.
 
   The partial index spells the public-visibility gate a second time, in SQL,
   so Postgres can serve the ~55 query sites that filter on
@@ -23,7 +24,7 @@ defmodule Vutuv.Moderation.VisibilityIndexTest do
 
   alias Vutuv.Accounts.User
 
-  @index "users_visible_index"
+  @index "users_visible_covering_index"
 
   test "the visibility gate is still covered by #{@index}" do
     query = from(u in User, where: account_confirmed_row(u) and not account_hidden_row(u))

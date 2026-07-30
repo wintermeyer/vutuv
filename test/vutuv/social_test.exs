@@ -165,6 +165,35 @@ defmodule Vutuv.SocialTest do
     end
   end
 
+  describe "follow_edges_between/2" do
+    test "both directional edges in one query" do
+      a = insert(:user, email_confirmed?: true)
+      b = insert(:user, email_confirmed?: true)
+
+      {:ok, outbound} = Social.follow(a.id, b.id)
+
+      {edges, queries} =
+        Vutuv.QueryCounter.count_queries(fn -> Social.follow_edges_between(a.id, b.id) end)
+
+      assert queries == 1
+      assert edges == %{outbound: %{id: outbound.id, muted?: false}, inbound: nil}
+
+      {:ok, inbound} = Social.follow(b.id, a.id)
+
+      assert %{outbound: %{id: _}, inbound: %{id: inbound_id, muted?: false}} =
+               Social.follow_edges_between(a.id, b.id)
+
+      assert inbound_id == inbound.id
+    end
+
+    test "no edges means two nils" do
+      a = insert(:user, email_confirmed?: true)
+      b = insert(:user, email_confirmed?: true)
+
+      assert Social.follow_edges_between(a.id, b.id) == %{outbound: nil, inbound: nil}
+    end
+  end
+
   describe "follows_page/3" do
     test "lists no moderation-hidden people" do
       user = insert(:user, email_confirmed?: true)

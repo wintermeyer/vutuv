@@ -37,6 +37,33 @@ defmodule VutuvWeb.UserProfilePerfTest do
            "expected the profile to batch engagement into one query, got #{engagement_queries}"
   end
 
+  test "all profile counts run as one union query", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    {:ok, _} = Posts.create_post(user, %{body: "counted post"})
+
+    # The merged counts union is the only statement that counts both a profile
+    # section (user_tags) and the social graph (follows) in one query; the
+    # section totals, the three social counts and the posts total used to be
+    # three separate round trips per mount.
+    {conn, union_queries} =
+      Vutuv.QueryCounter.count_queries(
+        fn -> get(conn, ~p"/#{user.username}") end,
+        matching: ~r/FROM "user_tags"[\s\S]*UNION ALL[\s\S]*FROM "follows"/
+      )
+
+    assert html_response(conn, 200) =~ "counted post"
+    assert union_queries == 1
+
+    # And the standalone count shapes it replaced are gone from the mount.
+    {conn, standalone_social_counts} =
+      Vutuv.QueryCounter.count_queries(
+        fn -> recycle(conn) |> get(~p"/#{user.username}") end,
+        matching: ~r/^SELECT count\(f0\."id"\) FROM "follows"/
+      )
+
+    assert standalone_social_counts == 0
+  end
+
   test "profile query count does not grow with post count", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 

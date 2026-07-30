@@ -2074,6 +2074,18 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  `count_author_posts/3` as a tagged `%{kind: "posts_total", total:}` count
+  query, for a caller folding it into a wider union — the profile mounts fold
+  it into their single per-mount counts query (with the section and social
+  count arms) instead of running it as its own round trip.
+  """
+  def author_timeline_count_query(%User{} = author, viewer, filter \\ :all) do
+    from(s in subquery(author_timeline_query(author, viewer, filter)),
+      select: %{kind: type(^"posts_total", :string), total: count()}
+    )
+  end
+
+  @doc """
   The profile card's "Who to follow" candidate pool: the members who posted
   (replies included) within the last `days` days, ranked by the hearts those
   in-window posts collected, post count breaking ties - at most `limit` of

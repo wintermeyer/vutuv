@@ -152,6 +152,20 @@ defmodule Vutuv.Social do
     }
   end
 
+  @doc """
+  The three tagged count queries behind `social_counts/1`, for a caller that
+  folds them into a wider union instead of running them alone — the profile
+  mounts fold them into their single per-mount counts query. Each arm selects
+  `%{kind:, total:}` with kinds `"followers"` / `"followees"` / `"connections"`.
+  """
+  def profile_count_queries(user_id) do
+    [
+      follower_count_query(user_id),
+      followee_count_query(user_id),
+      connection_count_query(user_id)
+    ]
+  end
+
   # The tagged single-count queries behind both the single accessors and
   # `social_counts/1`'s union (a union's arms must share one select shape, so
   # the singles carry the tag too and read `.total` off the one row).
@@ -251,6 +265,28 @@ defmodule Vutuv.Social do
         select: %{id: c.id, muted?: c.muted}
       )
     )
+  end
+
+  @doc """
+  Both directional follow edges between two members in one round trip, as
+  `%{outbound:, inbound:}` — `outbound` the `a → b` edge and `inbound` the
+  `b → a` edge, each `%{id:, muted?:}` or `nil`. The profile header resolves
+  its whole relationship pill (follow id, mute state, follows-you, vernetzt)
+  from exactly these two edges, so it reads them together instead of running
+  `follow_edge/2` twice per mount.
+  """
+  def follow_edges_between(a_id, b_id) do
+    edges =
+      from(c in Follow,
+        where:
+          (c.follower_id == ^a_id and c.followee_id == ^b_id) or
+            (c.follower_id == ^b_id and c.followee_id == ^a_id),
+        select: {c.follower_id, %{id: c.id, muted?: c.muted}}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    %{outbound: Map.get(edges, a_id), inbound: Map.get(edges, b_id)}
   end
 
   @doc """
