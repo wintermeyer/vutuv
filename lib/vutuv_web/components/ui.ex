@@ -236,6 +236,11 @@ defmodule VutuvWeb.UI do
       data-mde-submit={@submit_on}
       data-mde-images={@images && "1"}
       data-mde-link-prompt={gettext("Link URL")}
+      data-emoji-title={gettext("Emoji")}
+      data-emoji-search={gettext("Search emoji")}
+      data-emoji-close={gettext("Close")}
+      data-emoji-empty={gettext("No emoji found.")}
+      data-emoji-groups={emoji_group_labels()}
       class={["mde", @compact && "mde--compact", @class]}
       {@rest}
     >
@@ -248,14 +253,14 @@ defmodule VutuvWeb.UI do
             <.mde_button cmd="em" title={gettext("Italic")}>
               <span class="font-serif italic">I</span>
             </.mde_button>
-            <.mde_button cmd="strike" title={gettext("Strikethrough")}>
-              <span class="line-through">S</span>
-            </.mde_button>
-            <.mde_button cmd="code" title={gettext("Inline code")}>
-              <.mde_icon d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25" />
-            </.mde_button>
             <.mde_button cmd="link" title={gettext("Link")}>
               <.mde_icon d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+            </.mde_button>
+            <%!-- Emoji: offered on every editor, posts and DMs alike. The button
+            stays in the first group so it is one tap away on a phone, where the
+            secondary groups are collapsed behind the chevron. --%>
+            <.mde_button cmd="emoji" title={gettext("Emoji")}>
+              <.mde_icon d="M12 21.75a9.75 9.75 0 1 0 0-19.5 9.75 9.75 0 0 0 0 19.5ZM8.4 14.4a4.5 4.5 0 0 0 7.2 0M9 9.75h.008v.008H9zM15 9.75h.008v.008H15z" />
             </.mde_button>
             <.mde_button :if={@images} cmd="image" title={gettext("Insert image")}>
               <.mde_icon d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Z" />
@@ -299,6 +304,22 @@ defmodule VutuvWeb.UI do
           </button>
 
           <div class="mde__more-row">
+            <span class="mde__sep" aria-hidden="true"></span>
+
+            <%!-- Strikethrough and inline code live HERE, not in the first group:
+            on a phone the top row is the scarce resource, and these two are used
+            far less often than link / emoji / photo. They are the first thing the
+            chevron reveals, and on sm+ they simply read as their own cluster
+            between the always-visible marks and the block controls. --%>
+            <div class="mde__group">
+              <.mde_button cmd="strike" title={gettext("Strikethrough")}>
+                <span class="line-through">S</span>
+              </.mde_button>
+              <.mde_button cmd="code" title={gettext("Inline code")}>
+                <.mde_icon d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25" />
+              </.mde_button>
+            </div>
+
             <span class="mde__sep" aria-hidden="true"></span>
 
             <div class="mde__group">
@@ -439,6 +460,28 @@ defmodule VutuvWeb.UI do
       <path d={@d} />
     </svg>
     """
+  end
+
+  # The emoji picker's group tabs, as "key:Label|key:Label" for the JS to parse
+  # (`data-emoji-groups`). The keys are the groups of `EMOJI_GROUPS` in
+  # `assets/js/emoji_data.js`; the labels are the only translated words in the
+  # picker, since the emoji themselves are named by their language-neutral
+  # shortcode. A group in the dataset with no label here would render its bare
+  # key — `markdown_editor_test.exs` fails the build on that drift.
+  # A label may not contain a "|" (the pair separator); a ":" is fine, the JS
+  # splits on the first one only.
+  defp emoji_group_labels do
+    [
+      {"smileys", gettext("Smileys")},
+      {"people", gettext("People")},
+      {"nature", gettext("Animals & nature")},
+      {"food", gettext("Food & drink")},
+      {"activity", gettext("Activities")},
+      {"travel", gettext("Travel & places")},
+      {"objects", gettext("Objects")},
+      {"symbols", gettext("Symbols")}
+    ]
+    |> Enum.map_join("|", fn {key, label} -> "#{key}:#{label}" end)
   end
 
   @doc """

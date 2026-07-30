@@ -1840,6 +1840,19 @@ ul.thumbs li .text .url a {
 @media (width < 40rem) {
   .mde__toolbar .mde__sep { display: none; }
   .mde__more-toggle { display: inline-flex; }
+  /* Finger-sized toolbar targets on a phone (the desktop 1.9rem is a mouse
+     target). The gap goes to zero so the top row still fits across a narrow
+     screen: the buttons themselves are what has to grow, not the spacing.
+     2.25rem, not the 2.5rem the touch-target rule asks for, is arithmetic
+     rather than preference: the eight controls a phone shows (B, I, link,
+     emoji, photo, the chevron, MD, full screen) get 295px of toolbar inside a
+     390px viewport once the page gutter, the card padding, the frame border and
+     the toolbar padding are paid for, and 8 x 2.5rem is 320px. So 2.5rem would
+     buy 4px of finger and cost a whole wrapped row on every phone. Below 390px
+     (an SE, a small Android) it still wraps, which is the accepted floor:
+     shrinking further to chase it would put us under 32px. */
+  .mde__toolbar { gap: 0; }
+  .mde__btn { min-width: 2.25rem; height: 2.25rem; padding: 0 0.2rem; }
   .mde__toolbar:not(.is-open) .mde__more-row { display: none; }
   .mde__toolbar.is-open .mde__more-row {
     order: 2;
@@ -2013,6 +2026,168 @@ body.mde-fullscreen-lock { overflow: hidden; }
 }
 .mde[data-mde-fullscreen="1"] .mde__mount { flex: 1 1 auto; overflow-y: auto; max-height: none; }
 .mde[data-mde-fullscreen="1"] .mde__source { flex: 1 1 auto; }
+
+/* The composer's emoji picker (issue #1197, assets/js/emoji_picker.js).
+   One panel per page, appended to <body> so no LiveView patch can take it
+   away. z-index sits above the editor's own full-page mode (60) and below the
+   lightbox (100). Desktop: a popover the JS pins under the toolbar button.
+   Mobile: a bottom sheet — the geometry below is why the JS clears its inline
+   top/left under 40rem, since an inline style would win over these rules. */
+.emoji-picker {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  width: 20rem;
+  max-height: 21rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.18), 0 8px 10px -6px rgb(15 23 42 / 0.1);
+}
+.emoji-picker[hidden] { display: none; }
+.emoji-picker__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  background: rgb(15 23 42 / 0.35);
+}
+.emoji-picker__backdrop[hidden] { display: none; }
+
+.emoji-picker__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+/* Reproduces UI.input_class/0's two-part focus treatment (brand border + 3px
+   halo) — keep it in step with the .editform and kit-form inputs. */
+.emoji-picker__search {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 2.25rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0 0.625rem;
+  font-size: 0.875rem;
+  color: #1e293b;
+  appearance: none;
+}
+.emoji-picker__search:focus {
+  border-color: #3b82f6;
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.4);
+}
+.emoji-picker__close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  color: #475569;
+  cursor: pointer;
+}
+.emoji-picker__close svg { width: 1.1rem; height: 1.1rem; }
+.emoji-picker__close:hover { background: #f1f5f9; color: #0f172a; }
+
+.emoji-picker__tabs {
+  display: flex;
+  gap: 0.125rem;
+  padding: 0.375rem 0.5rem;
+  overflow-x: auto;
+  border-bottom: 1px solid #f1f5f9;
+  scrollbar-width: none;
+}
+.emoji-picker__tabs::-webkit-scrollbar { display: none; }
+.emoji-picker__tab {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  /* An emoji glyph is the tab's whole label, so it must not be dimmed into
+     illegibility — the inactive state is a plain background, not a fade. */
+  opacity: 0.75;
+}
+.emoji-picker__tab:hover { background: #f1f5f9; opacity: 1; }
+.emoji-picker__tab[aria-pressed="true"] {
+  background: #dbeafe;
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px #93c5fd;
+}
+
+.emoji-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.125rem;
+  padding: 0.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.emoji-picker__grid[hidden] { display: none; }
+.emoji-picker__emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 0.5rem;
+  /* Emoji render through the platform's colour font; naming it keeps a stray
+     inherited family from falling back to a monochrome glyph. */
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.emoji-picker__emoji:hover,
+.emoji-picker__emoji:focus-visible {
+  background: #dbeafe;
+  outline: none;
+}
+.emoji-picker__empty {
+  margin: 0;
+  padding: 1.25rem 1rem;
+  color: #475569;
+  font-size: 0.875rem;
+  text-align: center;
+}
+.emoji-picker__empty[hidden] { display: none; }
+
+/* Phones: a bottom sheet with finger-sized targets. `dvh` so the height follows
+   the visual viewport when the on-screen keyboard opens (the JS deliberately
+   does not focus the search field here, exactly so the keyboard stays down
+   until the member asks for it). */
+@media (width < 40rem) {
+  body.emoji-picker-open { overflow: hidden; }
+  .emoji-picker {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto;
+    max-height: 60dvh;
+    border-width: 1px 0 0;
+    border-radius: 1rem 1rem 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .emoji-picker__close { display: flex; }
+  .emoji-picker__head { padding: 0.625rem 0.75rem; }
+  .emoji-picker__search { height: 2.5rem; font-size: 1rem; }
+  .emoji-picker__tabs { gap: 0.25rem; padding: 0.5rem 0.75rem; }
+  .emoji-picker__tab { width: 2.5rem; height: 2.5rem; font-size: 1.25rem; }
+  .emoji-picker__grid {
+    grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem 0.75rem;
+  }
+  .emoji-picker__emoji { font-size: 1.6rem; }
+}
 
 /* The turning hourglass shown while a photo waits for the AI image scan
    (issue #1104, VutuvWeb.PostComponents.hourglass/1). It turns slowly and
@@ -2356,6 +2531,32 @@ html.lightbox-open { overflow: hidden; }
   .mde .ProseMirror th, .mde .ProseMirror td { border-color: #334155; }
   .mde .ProseMirror th { background: #1e293b; }
   .mde[data-mde-fullscreen="1"] { background: #0b1220; }
+
+  /* Emoji picker (issue #1197). */
+  .emoji-picker {
+    border-color: #334155;
+    background: #0f172a;
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+  }
+  .emoji-picker__backdrop { background: rgb(2 6 23 / 0.6); }
+  .emoji-picker__head,
+  .emoji-picker__tabs { border-color: #1e293b; }
+  .emoji-picker__search {
+    border-color: #334155;
+    background: #1e293b;
+    color: #f1f5f9;
+  }
+  .emoji-picker__search:focus { border-color: #3b82f6; }
+  .emoji-picker__close { color: #cbd5e1; }
+  .emoji-picker__close:hover { background: #1e293b; color: #f1f5f9; }
+  .emoji-picker__tab:hover { background: #1e293b; }
+  .emoji-picker__tab[aria-pressed="true"] {
+    background: #1e3a8a;
+    box-shadow: inset 0 0 0 1px #3b82f6;
+  }
+  .emoji-picker__emoji:hover,
+  .emoji-picker__emoji:focus-visible { background: #1e3a8a; }
+  .emoji-picker__empty { color: #94a3b8; }
 }
 
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a

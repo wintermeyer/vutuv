@@ -21,7 +21,9 @@ The composer is the shared **Milkdown WYSIWYG Markdown editor**
 composer uses); Cmd/Ctrl+Enter sends. Messages are stored and rendered as
 Markdown (`VutuvWeb.Markdown.render/1`), unchanged by the editor. The `typing`
 handler keeps the draft body in the form so the editor clears after a send; see
-`.claude/rules/design.md` for the component.
+`.claude/rules/design.md` for the component. Emoji come with it (issue #1197):
+the 🙂 toolbar button's picker and the `:tada:` type-through both work here, and
+both store the emoji **character**, so a message needs no rendering change.
 
 Because the stored body is Markdown **source**, every place that shows a message
 outside the thread must flatten it or it prints the markers themselves. The

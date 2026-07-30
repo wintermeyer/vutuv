@@ -66,6 +66,84 @@ defmodule VutuvWeb.MarkdownEditorTest do
     refute html =~ "checkbox"
   end
 
+  test "the emoji picker button and its labels ride the toolbar (issue #1197)" do
+    html = editor()
+
+    # The picker is offered on every editor, posts and DMs alike — an emoji in a
+    # direct message is the most natural use there is.
+    assert html =~ ~s(data-mde-cmd="emoji")
+
+    # Every word the picker shows comes from the server, because the server is
+    # the only side that knows the reader's language (same deal as the
+    # lightbox's data-label-*). The JS supplies no fallback copy of its own.
+    for attr <- ~w(data-emoji-title data-emoji-search data-emoji-close
+                   data-emoji-empty data-emoji-groups) do
+      assert html =~ attr, "missing picker label attribute: #{attr}"
+    end
+  end
+
+  test "the phone's top row keeps only the frequent controls" do
+    html = editor(%{images: true})
+
+    # The top row is the scarce resource on a phone (Stefan, 2026-07-30: the
+    # emoji button pushed the toolbar onto two lines). Bold, italic, link, emoji
+    # and photo stay up there; strikethrough and inline code moved behind the
+    # chevron, into `.mde__more-row` — which is what these index comparisons
+    # assert, since a "tidy-up" that moves them back would silently cost the
+    # phone a whole toolbar row again.
+    more_row = :binary.match(html, "mde__more-row") |> elem(0)
+
+    for cmd <- ~w(strong em link emoji image) do
+      {at, _} = :binary.match(html, ~s(data-mde-cmd="#{cmd}"))
+      assert at < more_row, "#{cmd} belongs in the always-visible first group"
+    end
+
+    for cmd <- ~w(strike code h1 blockquote bullet_list table hr) do
+      {at, _} = :binary.match(html, ~s(data-mde-cmd="#{cmd}"))
+      assert at > more_row, "#{cmd} belongs behind the chevron, not in the top row"
+    end
+  end
+
+  test "the group labels cover every group the dataset ships" do
+    html = editor()
+
+    labels =
+      Regex.run(~r/data-emoji-groups="([^"]*)"/, html, capture: :all_but_first)
+      |> hd()
+      |> String.split("|")
+      |> Enum.map(&(&1 |> String.split(":", parts: 2) |> hd()))
+
+    # The keys of the EMOJI object in assets/js/emoji_data.js. A group added
+    # there without a gettext label here would render its bare key at the
+    # reader — this is the drift guard for that.
+    data = File.read!("assets/js/emoji_data.js")
+
+    groups =
+      ~r/^  (\w+): \[$/m
+      |> Regex.scan(data, capture: :all_but_first)
+      |> List.flatten()
+
+    assert groups != [], "could not read the groups out of emoji_data.js"
+
+    for group <- groups do
+      assert group in labels, "emoji group #{group} has no label in markdown_editor/1"
+    end
+
+    assert Enum.sort(labels) == Enum.sort(groups)
+  end
+
+  test "the picker labels are translated (a German member picks emoji too)" do
+    Gettext.put_locale(VutuvWeb.Gettext, "de")
+    on_exit(fn -> Gettext.put_locale(VutuvWeb.Gettext, "en") end)
+
+    html = editor()
+
+    assert html =~ ~s(data-emoji-title="Emoji")
+    assert html =~ ~s(data-emoji-search="Emoji suchen")
+    assert html =~ "Smileys"
+    refute html =~ "Search emoji"
+  end
+
   test "power users get a WYSIWYG/source toggle and a full-screen control" do
     html = editor()
     assert html =~ ~s(data-mde-cmd="mode")

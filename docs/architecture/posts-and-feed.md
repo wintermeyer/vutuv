@@ -177,6 +177,14 @@ message composer). It edits Markdown *source* in place — the field stays a
 downstream (`VutuvWeb.Markdown`, the `.md`/`.txt`/`.json`/`.xml` siblings)
 changes. See `.claude/rules/design.md` for the component and its gotchas.
 
+**Emoji** (issue #1197) are picked from the 🙂 toolbar button's picker or typed as
+a shortcode (`:tada:` becomes 🎉 on the closing colon, aliases included). What a
+body stores is the emoji **character**, never the shortcode, so this is a
+client-side feature end to end: `assets/js/emoji_data.js` holds the table,
+`emoji_picker.js` the panel, and no server code takes part — a character is
+already correct in the HTML page, every agent-format sibling, RSS, mail and the
+fediverse. Both surfaces work in the message composer too.
+
 **A post appears at most once.** When several followed members repost the same
 post — or the viewer already follows its author, so it would also show as its
 own original — the entries collapse onto the newest event

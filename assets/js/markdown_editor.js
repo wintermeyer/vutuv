@@ -58,6 +58,9 @@ import {
   TextSelection,
 } from "@milkdown/kit/prose/state"
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
+import { inputRules, InputRule } from "@milkdown/kit/prose/inputrules"
+import { emojiForShortcode, SHORTCODE_AT_CARET } from "./emoji_data.js"
+import { openPicker, closePicker, closePickerFor, pickerOpen } from "./emoji_picker.js"
 
 // The gfm bits we want, minus task lists (extendListItemSchemaForTask +
 // wrapInTaskListInputRule), which the server renders as literal "[ ]" text, and
@@ -205,6 +208,27 @@ const imageFileCapture = (hook) =>
 const imageFiles = (transfer) =>
   Array.from(transfer?.files || []).filter((f) => f.type.startsWith("image/"))
 
+// Type-through: the moment the closing colon of a known shortcode is typed,
+// `:tada:` becomes 🎉 (issue #1197). What lands in the body is the CHARACTER —
+// vutuv stores no shortcodes, so the emoji is already right in the HTML page, the
+// .md/.txt/.json/.xml siblings, RSS, mail and the fediverse alike. An unknown
+// name returns null and stays exactly as typed, which is what someone writing
+// about `:hover` states or a `key: value:` line expects.
+//
+// An InputRule rather than a keystroke listener, so a single undo puts the
+// shortcode back, the way undo works for every other rule in the editor.
+const emojiInputRule = () =>
+  $prose(() =>
+    inputRules({
+      rules: [
+        new InputRule(SHORTCODE_AT_CARET, (state, match, start, end) => {
+          const char = emojiForShortcode(match[1])
+          return char ? state.tr.insertText(char, start, end) : null
+        }),
+      ],
+    })
+  )
+
 // Toolbar button (data-mde-cmd) -> Milkdown command. Each returns the command
 // key + optional payload; `link` is special-cased (it needs a URL).
 const COMMANDS = {
@@ -271,6 +295,7 @@ export const MarkdownEditor = {
       .use(history)
       .use(placeholder(placeholderText))
       .use(imagePolicy(this.imagesEnabled))
+      .use(emojiInputRule())
 
     if (this.imagesEnabled) {
       editor = editor.use(imageSelectionWatch(this)).use(imageFileCapture(this))
@@ -283,6 +308,7 @@ export const MarkdownEditor = {
     this.applyState()
     this.wireToolbar()
     this.wireSubmitShortcut()
+    this.wireSourceEmoji()
   },
 
   // Last look at the DOM before morphdom patches it: a manual resize lives in
@@ -326,6 +352,10 @@ export const MarkdownEditor = {
 
   destroyed() {
     this.editor?.destroy()
+    // The picker lives on <body>, outside every LiveView root, so it would
+    // outlive the editor it belongs to (and its onPick closure would hold on to
+    // a destroyed hook).
+    closePickerFor(this.root)
     // Drop the fullscreen Escape listener if we were destroyed mid-fullscreen
     // (e.g. navigated away with the editor open) — otherwise it survives on
     // `document` and its closure retains the whole editor.
@@ -550,12 +580,81 @@ export const MarkdownEditor = {
     if (name === "toggle-toolbar") return this.toggleToolbar()
     if (name === "link") return this.runLink()
     if (name === "image") return this.pickImage()
+    if (name === "emoji") return this.toggleEmojiPicker()
     if (name.startsWith("img-")) return this.setImageAlignment(name.slice(4))
     const spec = COMMANDS[name]
     if (!spec || !this.editor) return
     const [command, payload] = spec
     this.editor.action(callCommand(command.key, payload))
     this.focusEditor()
+  },
+
+  // --- emoji (issue #1197) ---
+
+  // The 🙂 toolbar button. A second press closes again, so the button reads as
+  // the toggle it looks like.
+  toggleEmojiPicker() {
+    if (pickerOpen()) return closePicker()
+
+    openPicker({
+      anchor: this.toolbar.querySelector('[data-mde-cmd="emoji"]'),
+      labels: this.root.dataset,
+      onPick: (char) => this.insertEmoji(char),
+      // Hand the caret back to whichever surface is showing, so the member
+      // carries on typing where they left off.
+      onClose: () => (this.mode === "source" ? this.source.focus() : this.focusEditor()),
+    })
+  },
+
+  // Put the character in at the cursor. Deliberately does NOT take focus: on a
+  // desktop the panel stays open for a second pick and to keep the search field
+  // typeable, so focus is restored once, when the panel closes.
+  insertEmoji(char) {
+    if (!this.editor || this.mode === "source") return this.insertEmojiSource(char)
+
+    this.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      // insertText at the live selection (not a position remembered when the
+      // panel opened), so picking three in a row lines them up in order.
+      view.dispatch(view.state.tr.insertText(char))
+    })
+  },
+
+  insertEmojiSource(char) {
+    const at = this.source.selectionStart ?? this.source.value.length
+    const value = this.source.value
+    this.source.value = `${value.slice(0, at)}${char}${value.slice(at)}`
+    // A blurred textarea keeps its selection, so moving the caret past what we
+    // inserted is what makes a second pick land after the first.
+    this.source.setSelectionRange(at + char.length, at + char.length)
+    this.source.dispatchEvent(new Event("input", { bubbles: true }))
+  },
+
+  // The source textarea gets the same type-through as the prose. The WYSIWYG
+  // path is a ProseMirror InputRule (emojiInputRule); this is its twin for
+  // people writing raw Markdown, so `:tada:` behaves the same in both surfaces.
+  // No loop risk: after the swap the text before the caret ends in the emoji,
+  // which cannot match the shortcode pattern again.
+  wireSourceEmoji() {
+    this.source.addEventListener("input", () => {
+      // Source mode only. In WYSIWYG the textarea is a mirror written by
+      // writeSource(), which fires this same `input` event with the caret parked
+      // at the end of the value — acting on that would rewrite the form field
+      // while the prose still showed the shortcode.
+      if (this.mode !== "source") return
+      const at = this.source.selectionStart
+      if (at === null) return
+      const match = SHORTCODE_AT_CARET.exec(this.source.value.slice(0, at))
+      if (!match) return
+      const char = emojiForShortcode(match[1])
+      if (!char) return
+
+      const start = at - match[0].length
+      const value = this.source.value
+      this.source.value = `${value.slice(0, start)}${char}${value.slice(at)}`
+      this.source.setSelectionRange(start + char.length, start + char.length)
+      this.source.dispatchEvent(new Event("input", { bubbles: true }))
+    })
   },
 
   // --- inline images (post composer only) ---
