@@ -346,11 +346,12 @@ back when it opens.
 member per *composer context* — three partial unique indexes enforce that:
 at most one new-post draft, at most one per post being answered, at most one
 per remote reply being answered. The row mirrors the composer's own fields
-rather than a post: `body` and `tags` are the raw strings in the form, `review`
-is the book/film panel's values, `photos` the per-photo alt/caption/switch
-panel, and `image_ids` names the still-pending `post_images` rows in the
-author's order (the first photo leads the mosaic, so the order **is** the
-layout, which is why it is an array and not a join table).
+rather than a post: `body` and `tags` are the raw strings in the form, `photos`
+the per-photo alt/caption/switch panel, and `image_ids` names the still-pending
+`post_images` rows in the author's order (the first photo leads the mosaic, so
+the order **is** the layout, which is why it is an array and not a join table).
+The `review` column (the retired book/film panel's values) is unused since the
+review form went and gets dropped in a later deploy, like `mode`.
 
 **When it is written.** From every handler that changes the content, debounced
 through `send_update_after/3` to the component itself — so no host LiveView
@@ -686,8 +687,7 @@ single photo it was two dead arrows plus a ⚙ the picture-tap covers. What
 remains on the tile: a remove dot top-right and the crop dot bottom-center.
 Reordering is **pointer drag on the tile itself** — mouse and touch alike
 (hold a tile briefly on touch to lift it; the ◀ ▶ arrow dots that used to be
-the touch path are gone, on Stefan's ask). The book/film review triggers are
-always available (a book review may well carry a photo of the book); the
+the touch path are gone, on Stefan's ask). The
 licence and download pair folds behind the **"Photo details" row** (see
 below). The cover badge appears only from the second photo on, and the amber
 ALT nudge only while a photo has **neither** caption nor alt.
@@ -991,10 +991,13 @@ changes) and an optional `medium` (book:
 print/ebook/audiobook,
 movie: cinema/streaming/disc — "I listened to the audiobook"). The body stays
 plain Markdown; *"this post is a book review"* is simply *"the post has a
-review row"*, never body parsing. The composer's 📖/🎬 triggers open the panel;
-the hidden `kind` field always submits, so closing the panel deletes a stored
-review on save, while attrs without a `:review` key (the API's partial PATCH)
-leave it untouched.
+review row"*, never body parsing. **The composer's review form (the 📖/🎬
+triggers, the panel, the ISBN prefill lookup) was removed 2026-07-30** — no
+new reviews can be created from the UI, but every stored review keeps
+rendering, and the cover/edition background pass keeps serving existing cards.
+The changeset seam is what makes that safe: attrs without a `:review` key
+leave a stored review untouched, which is exactly what the composer's edit
+path now submits.
 
 Every surface that renders the post adds the **review card**
 (`VutuvWeb.PostComponents.review_card/1`). It reads top to bottom the way a

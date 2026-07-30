@@ -302,15 +302,6 @@ defmodule VutuvWeb.PhotoComposerTest do
       refute has_element?(live, ~s([phx-click="photo-move"]))
     end
 
-    test "the review triggers stay available with photos attached", %{conn: conn, user: user} do
-      # A book review may well carry a photo of the book; with the tabs gone
-      # there is no arrangement left that hides the triggers.
-      live = open_composer(conn)
-      upload_photo!(live, user)
-
-      assert has_element?(live, ~s(button[phx-click="review-kind"][phx-value-kind="book"]))
-    end
-
     test "the alt nudge shows only while a photo has neither caption nor description", %{
       conn: conn,
       user: user

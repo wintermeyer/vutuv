@@ -3742,7 +3742,7 @@ defmodule Vutuv.Posts do
         |> Repo.insert(
           on_conflict:
             {:replace,
-             [:body, :tags, :license, :review, :image_ids, :photos, :layout, :fill?, :updated_at]},
+             [:body, :tags, :license, :image_ids, :photos, :layout, :fill?, :updated_at]},
           conflict_target: draft_conflict_target(context)
         )
         |> case do

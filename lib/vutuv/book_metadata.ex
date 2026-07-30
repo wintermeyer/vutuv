@@ -1,16 +1,13 @@
 defmodule Vutuv.BookMetadata do
   @moduledoc """
-  ISBN → book facts from Open Library's keyless APIs (no auth, no account),
-  in two flavours for two callers:
+  ISBN → book facts from Open Library's keyless APIs (no auth, no account).
 
-    * `lookup/1` — one request to the books API, the **composer's** review
-      panel prefills its form from it (title, author, year); the author can
-      overwrite everything.
-    * `edition_details/1` — the *edition* record, which is where Open Library
-      actually keeps `number_of_pages` and the publisher (the books API often
-      answers without them). `Vutuv.Posts.ReviewCovers` stores those two on
-      the review while it fetches the cover, since the form has no field for
-      them.
+  `edition_details/1` reads the *edition* record, which is where Open Library
+  keeps `number_of_pages` and the publisher. `Vutuv.Posts.ReviewCovers` stores
+  those two on a review sidecar (`Vutuv.Posts.PostReview`) while it fetches the
+  cover — the background pass that keeps existing review posts' cards complete.
+  (The composer's review form, whose ISBN lookup used to prefill title, author
+  and year from the books API, was removed 2026-07-30.)
 
   An edition with no page count of its own — an audiobook, a scan — borrows
   the count from the **other editions of the same work**: a reader asking how
@@ -18,8 +15,7 @@ defmodule Vutuv.BookMetadata do
   say "190 pages" and mark it as the print edition's.
 
   An installation with `:fetch_book_metadata` off (air-gapped intranets)
-  types the fields by hand; the lookup button then never renders and nothing
-  is fetched. Tests stub HTTP via `:book_metadata_req_options` (a `plug:`
+  fetches nothing. Tests stub HTTP via `:book_metadata_req_options` (a `plug:`
   seam, like the social-feed clients).
   """
 
@@ -40,15 +36,6 @@ defmodule Vutuv.BookMetadata do
   def enabled?, do: Application.get_env(:vutuv, :fetch_book_metadata, true)
 
   @doc """
-  Looks the normalized ISBN-13 up on Open Library's books API. Returns
-  `{:ok, %{title: …, creator: …, year: …}}` (each value may be nil except
-  the title) or `:error` (unknown ISBN, network trouble, flag off).
-  """
-  def lookup(isbn) when is_binary(isbn) do
-    if enabled?(), do: request(isbn), else: :error
-  end
-
-  @doc """
   The edition facts behind an ISBN: `{:ok, %{pages: …, publisher: …}}`, both
   possibly nil, or `:error` (unknown ISBN, network trouble, flag off).
 
@@ -59,32 +46,6 @@ defmodule Vutuv.BookMetadata do
   def edition_details(isbn) when is_binary(isbn) do
     if enabled?(), do: fetch_edition(isbn), else: :error
   end
-
-  defp request(isbn) do
-    [
-      url: "https://openlibrary.org/api/books",
-      params: [bibkeys: "ISBN:#{isbn}", format: "json", jscmd: "data"],
-      receive_timeout: 5_000,
-      retry: false
-    ]
-    |> Keyword.merge(Application.get_env(:vutuv, @req_options_key, []))
-    |> Req.get()
-    |> case do
-      {:ok, %Req.Response{status: 200, body: %{} = body}} -> parse(body["ISBN:#{isbn}"])
-      _other -> :error
-    end
-  end
-
-  defp parse(%{"title" => title} = data) when is_binary(title) and title != "" do
-    {:ok,
-     %{
-       title: title,
-       creator: authors(data["authors"]),
-       year: year(data["publish_date"])
-     }}
-  end
-
-  defp parse(_missing), do: :error
 
   defp fetch_edition(isbn) do
     case get_json("https://openlibrary.org/isbn/#{isbn}.json") do
@@ -127,9 +88,7 @@ defmodule Vutuv.BookMetadata do
 
   # The background pass can afford to wait (and to try again): it runs off the
   # request path, and a lookup lost to one slow answer leaves the card
-  # silently without its facts until somebody edits the post. The composer's
-  # `lookup/1` above keeps its short, no-retry budget — a member is watching
-  # that one.
+  # silently without its facts until somebody edits the post.
   defp get_json(url) do
     [url: url, receive_timeout: 15_000, retry: :transient, max_retries: 1]
     |> Keyword.merge(Application.get_env(:vutuv, @req_options_key, []))
@@ -139,15 +98,6 @@ defmodule Vutuv.BookMetadata do
       _other -> :error
     end
   end
-
-  defp authors(authors) when is_list(authors) do
-    case authors |> Enum.map(& &1["name"]) |> Enum.reject(&(&1 in [nil, ""])) do
-      [] -> nil
-      names -> Enum.join(names, ", ")
-    end
-  end
-
-  defp authors(_other), do: nil
 
   # Open Library lists an edition's publishers as plain strings (the edition
   # record) or as `%{"name" => …}` maps (the books API); the card names the
@@ -170,16 +120,4 @@ defmodule Vutuv.BookMetadata do
 
   defp pages(count) when is_integer(count) and count > 0 and count <= @pages_max, do: count
   defp pages(_other), do: nil
-
-  # publish_date is free text ("March 2009", "1998"): the year is enough.
-  defp year(date) when is_binary(date) do
-    with [year] <- Regex.run(~r/\b(1\d{3}|2\d{3})\b/, date, capture: :first),
-         {int, ""} <- Integer.parse(year) do
-      int
-    else
-      _ -> nil
-    end
-  end
-
-  defp year(_other), do: nil
 end

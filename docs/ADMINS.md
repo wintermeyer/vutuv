@@ -132,7 +132,7 @@ Everything else has a default (the vutuv.de production value):
 | `FEDIVERSE_MAX_REMOTE_FOLLOWS` | `1000` | How many accounts on other networks one member may follow in total. Every accepted follow is a standing invitation for that server to deliver here, so this is the ceiling on how much inbound traffic one member can subscribe your installation to. Raise it for a small, trusted installation; lower it if inbound volume is the concern |
 | `FEDIVERSE_IMAGE_HOLD_SECONDS` | `90` | How long a post whose picture the AI image scan has not judged yet waits before it federates **without** the picture. This is a ceiling, not the usual wait: the post goes out the moment the scan settles, normally within seconds. It only bites when the scanner is down, and then the choice is "the post without its picture" over "no post at all". Raise it if you run image moderation on slow hardware; irrelevant when `MODERATE_IMAGES` is off |
 | `ACCOUNT_EVENT_RETENTION_DAYS` | `365` | How long the **account-activity log** keeps an event, in days (see `docs/architecture/account-activity.md`). It records what changed on an account, when, from which coarse device (never an IP address), and how it was confirmed, so it is personal data with a clock on it: a year covers the "this happened months ago and I only noticed now" support case without becoming a permanent movement profile. The daily sweeper deletes anything older |
-| `FETCH_BOOK_METADATA` | `true` | `false` turns the catalogue lookups behind post **book reviews** off (the composer's ISBN → title/author/year prefill, the cover image, page count and publisher from Open Library, and an audiobook's running time). The review feature itself keeps working — members type the fields by hand and the card renders without a cover or those details. Set it on installations that must not call out (intranets) |
+| `FETCH_BOOK_METADATA` | `true` | `false` turns the catalogue lookups behind post **book reviews** off (the cover image, page count and publisher from Open Library, and an audiobook's running time). New reviews can no longer be created (the composer's review form was removed), but existing review posts keep rendering their card — with the flag off it shows no cover and none of those details. Set it on installations that must not call out (intranets) |
 | `DNB_SRU_URL` | `https://services.dnb.de/sru/dnb` | Where an **audiobook's running time** is looked up by ISBN: an SRU endpoint answering MARC21-xml (the Deutsche Nationalbibliothek by default — Open Library records no durations). Point it at another catalogue's SRU endpoint, or set it **empty** (`DNB_SRU_URL=`) to switch that one lookup off while the rest of the book metadata keeps working |
 | `AMAZON_DOMAIN` | `www.amazon.de` | The store a book review card's shop link points at (`https://<domain>/dp/<isbn10>`). Set your regional store (`www.amazon.com`, …) — or an **empty** value (`AMAZON_DOMAIN=`) to remove the shop link entirely |
 | `AMAZON_AFFILIATE_TAG` | – | Optional Amazon affiliate tag appended to book review shop links as `?tag=` |
@@ -324,11 +324,11 @@ vutuv runs fine without internet access:
   `:generate_screenshots` (profile link-preview screenshots **and** the
   auto-screenshot for single-link posts — these fetch the linked page and run
   headless Chromium).
-- Set `FETCH_BOOK_METADATA=false`: the book-review ISBN lookup, the cover
-  fetch and the page-count/publisher lookup call Open Library, and an
-  audiobook's running time is read from a library catalogue (`DNB_SRU_URL`).
-  Book and film reviews keep working — the fields are typed by hand and the
-  card renders without a cover and without those details.
+- Set `FETCH_BOOK_METADATA=false`: the cover fetch and the
+  page-count/publisher lookup behind book-review posts call Open Library, and
+  an audiobook's running time is read from a library catalogue (`DNB_SRU_URL`).
+  Existing book and film review posts keep rendering — the card just shows no
+  cover and none of those details.
 - AI image moderation works **fully offline** — Ollama is local inference, no
   cloud involved. Install Ollama on the server, pull the vision model once
   while you still have internet access (`ollama pull qwen3-vl:8b`), and keep
@@ -426,7 +426,8 @@ Worth knowing as an operator:
 - **Your call, your risk.** Whether that quotation argument holds in your
   jurisdiction is your decision as the operator, not vutuv's. If you would
   rather not host third-party covers at all, set `FETCH_BOOK_METADATA=false`:
-  reviews keep working and the card renders a neutral 📖/🎬 tile instead.
+  existing reviews keep rendering and the card shows a neutral 📖/🎬 tile
+  instead.
 
 Note: `bin/vutuv eval` is the supported console entry point; `rpc`/`remote`
 need distribution, which the reference setup disables.

@@ -32,40 +32,6 @@ defmodule Vutuv.BookMetadataTest do
     )
   end
 
-  describe "lookup/1 (the composer's prefill)" do
-    test "parses title, authors and year from the Open Library answer" do
-      stub(%{
-        "ISBN:#{@isbn}" => %{
-          "title" => "Refactoring",
-          "authors" => [%{"name" => "Martin Fowler"}, %{"name" => "Kent Beck"}],
-          "publish_date" => "November 2018"
-        }
-      })
-
-      assert {:ok, %{title: "Refactoring", creator: "Martin Fowler, Kent Beck", year: 2018}} =
-               BookMetadata.lookup(@isbn)
-    end
-
-    test "missing optional fields come back nil" do
-      stub(%{"ISBN:#{@isbn}" => %{"title" => "Nur Titel"}})
-
-      assert {:ok, %{title: "Nur Titel", creator: nil, year: nil}} = BookMetadata.lookup(@isbn)
-    end
-
-    test "an unknown ISBN is :error" do
-      stub(%{})
-
-      assert :error = BookMetadata.lookup(@isbn)
-    end
-
-    test "with the fetch flag off nothing is looked up" do
-      Application.put_env(:vutuv, :fetch_book_metadata, false)
-      stub(%{"ISBN:#{@isbn}" => %{"title" => "Nie geholt"}})
-
-      assert :error = BookMetadata.lookup(@isbn)
-    end
-  end
-
   describe "edition_details/1" do
     test "reads page count and publisher from the edition record" do
       # The edition record — not the books API — is where Open Library keeps
