@@ -846,7 +846,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   end
 
   test "post archive: entries and total in every format", %{post: post} do
-    rendered = formats_for("/drift_tester/posts")
+    # No XML document on the unscoped archive: `/:slug/posts.xml` is the
+    # natural feed-URL guess, so it 301s to the RSS feed instead (covered in
+    # feed_controller_test.exs) — the drift contract here is md/txt/json.
+    rendered = formats_for("/drift_tester/posts") |> Map.delete(:xml)
 
     for fact <- ["Greta Gradient", "Suspension bridges are underrated."],
         do: assert_fact_everywhere(rendered, fact)

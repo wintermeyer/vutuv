@@ -167,6 +167,48 @@ defmodule VutuvWeb.FeedControllerTest do
     end
   end
 
+  # `/:slug/posts.xml` is what people (and feed readers) guess for "this
+  # member's posts as XML" — the W3C feed validator was pointed there and
+  # choked on the generic <post_archive> agent document. The unscoped
+  # archive's `.xml` sibling therefore hands the reader the real feed;
+  # the other agent formats and the period-scoped archives are untouched.
+  describe "GET /:slug/posts.xml" do
+    test "redirects permanently to the RSS feed" do
+      conn = get(build_conn(), "/feed_author/posts.xml")
+
+      assert redirected_to(conn, 301) == "/feed_author/posts/feed.xml"
+    end
+
+    test "Accept: application/xml on the archive lands on the feed too" do
+      conn =
+        build_conn()
+        |> put_req_header("accept", "application/xml")
+        |> get("/feed_author/posts")
+
+      assert redirected_to(conn, 301) == "/feed_author/posts/feed.xml"
+    end
+
+    test "the other agent formats still serve the archive document", %{author: author} do
+      create_post!(author, %{"body" => "Archived words"})
+
+      for extension <- [".md", ".txt", ".json"] do
+        conn = get(build_conn(), "/feed_author/posts" <> extension)
+
+        assert conn.status == 200
+        assert conn.resp_body =~ "Archived words"
+      end
+    end
+
+    test "a period-scoped archive keeps its XML document", %{author: author} do
+      post = create_post!(author, %{"body" => "Dated entry"})
+
+      conn = get(build_conn(), "/feed_author/posts/#{post.published_on.year}.xml")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "<post_archive>"
+    end
+  end
+
   describe "GET /posts/feed.xml" do
     test "collects the latest public posts across members", %{author: author} do
       other = insert_activated_user(username: "second_author")

@@ -104,7 +104,10 @@ are engagement rows and never `Post` rows, and replies are filtered by the
 archive's `:posts` predicate in `Vutuv.Posts.recent_public_posts/2` — while
 the site-wide firehose deliberately keeps replies; besides the invisible
 `<link rel="alternate">` autodiscovery the profile's "Other formats" card
-shows a visible RSS chip via its `rss_path` attr), robots.txt names the AI
+shows a visible RSS chip via its `rss_path` attr. `/:slug/posts.xml` — the
+URL readers guess for "posts as XML" — 301s to the member feed instead of
+serving the generic `<post_archive>` agent document, which a feed validator
+rejects; the period-scoped archives keep their XML sibling), robots.txt names the AI
 crawlers and declares draft
 `Content-Signal` directives from the one policy source
 (`VutuvWeb.ContentPolicy`, config `:ai_crawler_policy` — flips robots.txt and

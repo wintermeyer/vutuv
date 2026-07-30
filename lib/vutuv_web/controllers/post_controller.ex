@@ -69,9 +69,19 @@ defmodule VutuvWeb.PostController do
           page_title: "#{VutuvWeb.UserHelpers.full_name(author)} · #{gettext("Posts")}"
         )
 
+      {{:ok, nil, _period_label}, :xml} ->
+        # `/:slug/posts.xml` is the URL readers (and the W3C feed validator)
+        # guess for "posts as XML", and the generic <post_archive> document
+        # there validates as no feed at all — so the unscoped archive's XML
+        # sibling is a permanent redirect to the member's RSS feed. The
+        # period-scoped archives below keep the agent XML document.
+        conn
+        |> put_status(:moved_permanently)
+        |> redirect(to: VutuvWeb.Feeds.user_feed_path(author))
+
       {{:ok, period, period_label}, format} ->
         # Agent-format siblings always render the plain archive (no ?type=), so
-        # the .md/.txt/.json/.xml stay one canonical document (drift test).
+        # the .md/.txt/.json stay one canonical document (drift test).
         {posts, total} = Posts.author_posts_page(author, nil, params, period)
         doc = PostDoc.build_archive(author, conn.request_path, posts, total, period_label)
         AgentDocs.send_doc(conn, format, doc)
