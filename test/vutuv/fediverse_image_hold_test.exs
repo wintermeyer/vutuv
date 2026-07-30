@@ -144,9 +144,17 @@ defmodule Vutuv.FediverseImageHoldTest do
 
       assert :ok == Fediverse.federate_new_post(post)
 
+      after_the_call = DateTime.utc_now(:second)
+
       assert [%Delivery{next_attempt_at: due}] = Repo.all(Delivery)
-      assert DateTime.diff(due, before) <= 5
-      assert DateTime.diff(due, before) > 0
+      # The code stamps `DateTime.utc_now(:second) + hold` somewhere between
+      # the two clock reads above, so the due time is bracketed by them. A
+      # single-sided `diff(due, before) <= 5` flakes whenever the wall clock
+      # crosses a second boundary inside the call (read 6 on a loaded CI
+      # runner, 2026-07-30) — and the bracket is also the stronger claim: the
+      # wait IS the configured hold, not merely at most it.
+      assert DateTime.diff(due, before) >= 5
+      assert DateTime.diff(due, after_the_call) <= 5
     end
 
     test "defaults to 90 seconds" do
