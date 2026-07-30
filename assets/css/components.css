@@ -1259,134 +1259,128 @@ ul.thumbs li .text .url a {
   }
 }
 
-/* The post a /notifications row quotes (the liked post, the reply). Same idea
-   as `.post-clamp`, one breakpoint-independent budget: the line count is a
-   per-reader preference (Vutuv.Prefs `:notification_post_lines`) fed in through
-   the `--notif-clamp` custom property the quote sets inline, and the fallback
-   here is the shipped default, so a reader on that value carries no inline
-   style. The server also cuts the quote to the same number of source lines, so
-   a hidden post body never reaches the DOM.
+/* ---------- Excerpt clamps: one mechanism, two budgets ----------
+   Two places quote a post as a few lines of formatted Markdown and cut the
+   rest: the post a /notifications row quotes (`.notif-clamp`, cut to the
+   reader's `:notification_post_lines` preference, fed in as `--notif-clamp`
+   inline with the shipped default as the fallback here) and the post teasers
+   under a suggested profile in the "Who to follow" rail (`.teaser-clamp`, a
+   fixed three lines — a rail teases rather than quotes, so there is no
+   preference to feed in). Only the budget differs, so everything else is one
+   shared set of rules: they broke separately once and were fixed separately
+   twice, which is exactly the cost of keeping them apart.
 
-   Clamped by height, like `.post-clamp--wrap`, not by `-webkit-line-clamp`:
-   the quote is formatted Markdown now, so its content is block children
-   (paragraphs, lists) and a `-webkit-box` clamps those unreliably.
+   Both cut by HEIGHT rather than with `-webkit-line-clamp`, because a rendered
+   post body is block content (paragraphs, lists, blockquotes) and a
+   `-webkit-box` clamps block children unreliably. That makes the cut pure
+   arithmetic — box height must be a whole number of line boxes — and the three
+   numbers it rests on all live here, never in utilities at the call site: a
+   `text-*` swapped in the markup would silently leave the box at 2.5 lines.
 
-   The whole arithmetic — type size, line height, box height — lives here and
-   not in utilities at the call site, and it is spelled in one absolute unit
-   rather than in `lh`; see the `.teaser-clamp` note below for what the `lh`
-   unit did in Safari. The count is always a real number of lines (the
-   preference runs 1..50), so the calc always resolves. */
-.notif-clamp {
-  --notif-line: 1.25rem;
-  display: flow-root;
-  font-size: 0.875rem;
-  line-height: var(--notif-line);
-  max-height: calc(var(--notif-clamp, 5) * var(--notif-line));
-  overflow: hidden;
-}
-
-/* A quote is a compact excerpt, and the budget above is counted in line boxes:
-   the block spacing `.markdown` gives a post body would eat into it, so a
-   reader who asked for 5 lines would be shown 4 and a bit. Spend the height on
-   text instead — the blocks still read apart through the list markers and their
-   indentation. Both selectors name `.markdown` as well, because `.markdown p`
-   is class+element and would otherwise outrank a bare `.notif-clamp > *`. */
-.notif-clamp.markdown > *,
-.notif-clamp.markdown li {
-  margin-block: 0;
-}
-/* For the same reason every line box inside the quote has to be exactly the
-   line the budget counts in, and a line box is font-size × line-height. The
-   legacy element default `p { font-size: 15px }` is enough to break that on its
-   own: a paragraph one pixel larger renders a taller line, five of them
-   overflow a five-line box, and the last one gets shaved. Hand the whole
-   excerpt one type size — it is five lines of quoted text, not a document. */
-.notif-clamp.markdown * {
-  font-size: inherit;
-  line-height: inherit;
-}
-
-/* The post excerpts under a suggested profile in the "Who to follow" rail.
-   The three-line twin of `.notif-clamp` above, and a height clamp for the same
-   reason: the excerpt is formatted Markdown (so a stray heading or list is a
-   block child, which a `-webkit-box` clamps unreliably), and its block margins
-   and type size have to be neutralized or the box shows one line less and a
-   sliver. The budget is fixed here — the rail teases a post rather than
-   quoting one, so there is no per-reader line preference to feed in.
-
-   Three numbers have to agree for the cut to land between two lines and not
-   through one: the type size, the line height and the box height. All three
-   are set here, in one absolute unit, and the markup deliberately carries no
-   `text-*` / `leading-*` utility that could redefine one of them behind the
-   stylesheet's back.
-
-   In particular the box height is **not** written in `lh`. That unit reads as
-   the obvious way to say "three lines of my own text", and it is not portable:
-   WebKit resolves `lh` before the element's own line-height is applied and so
-   falls back to the *inherited* one (webkit.org/b/267185 — "it's getting the
-   line-height of the parent element instead of the current one"). Here that is
-   the 24px the surrounding card passes down rather than the teaser's own 20px,
-   so `calc(3 * 1lh)` is 72px in Safari against Chrome's intended 60px: three
-   whole lines fit, and the extra 12px let a strip of the fourth peek in,
-   sliced through the middle of its letters (reported 2026-07-30). Counting the
-   box in the same rem length the line height is set to cannot come apart that
-   way, in any engine. */
+   The box is deliberately **not** counted in `lh`. That unit reads as the
+   obvious way to say "N lines of my own text" and is not portable: WebKit
+   resolves it before the element's own line-height is applied and falls back
+   to the *inherited* one (webkit.org/b/267185 — "it's getting the line-height
+   of the parent element instead of the current one"). With the surrounding
+   card passing down 24px and the excerpt itself at 20px, `calc(3 * 1lh)` came
+   out as 72px in Safari against Chrome's intended 60px: three whole lines fit,
+   and the extra 12px let a strip of the fourth peek in, sliced through the
+   middle of its letters (reported 2026-07-30). */
+.notif-clamp,
 .teaser-clamp {
-  --teaser-line: 1.25rem;
+  --clamp-line: 1.25rem;
   display: flow-root;
   font-size: 0.875rem;
-  line-height: var(--teaser-line);
-  max-height: calc(3 * var(--teaser-line));
+  line-height: var(--clamp-line);
   overflow: hidden;
   position: relative;
 }
-.teaser-clamp.markdown > *,
-.teaser-clamp.markdown li {
-  margin-block: 0;
+.notif-clamp {
+  max-height: calc(var(--notif-clamp, 5) * var(--clamp-line));
 }
+.teaser-clamp {
+  max-height: calc(3 * var(--clamp-line));
+}
+
+/* Everything inside an excerpt has to contribute whole line boxes and nothing
+   else, or the box stops being a multiple of them and the last line is cut
+   through the middle. So the spacing and the type size of every DESCENDANT are
+   neutralised — descendant, not child: a quoted post that opens with a `>`
+   blockquote nests its paragraph one level deeper, where `.markdown p`'s
+   `margin-bottom: 0.75em` survived a `> *` rule and pushed every following line
+   down by half a line (measured on /notifications 2026-07-30: lines at 1.5 /
+   21.5 / 41.5 / **72** / 92 inside a 100px box, so the fifth was sliced). Block
+   padding goes the same way, since a `<pre>` brings its own.
+
+   The type size matters for the same arithmetic: a line box is font-size x
+   line-height, and the legacy element default `p { font-size: 15px }` alone
+   renders a taller line than the budget counts. Hand the whole excerpt one
+   size — it is a few lines of quoted text, not a document.
+
+   The selectors name `.markdown` too, because `.markdown p` is class+element
+   and would otherwise outrank a bare `.notif-clamp *`. */
+.notif-clamp.markdown *,
 .teaser-clamp.markdown * {
   font-size: inherit;
   line-height: inherit;
+  margin-block: 0;
+  padding-block: 0;
 }
-
-/* The tinted tile one teaser sits in. Its background lives here rather than in
-   utilities at the call site because the ellipsis below has to blend into
-   exactly this colour, hover and dark mode included — one custom property, so
-   the two can't drift. The dark values are the flattened result of what the
-   tile used to be (slate-800 at 60% / brand-900 at 30% over the slate-900
-   card): a translucent tile would show through the ellipsis's own blend and
-   paint a darker patch over the text it is meant to cover. `position` is the
-   containing block for the stretched permalink the tile carries. */
-.teaser-tile {
-  --teaser-bg: #f8fafc;
-  background-color: var(--teaser-bg);
-  border-radius: 0.75rem;
-  padding: 0.625rem;
-  position: relative;
-  transition: background-color 150ms ease;
-}
-.teaser-tile:hover {
-  --teaser-bg: #eff6ff;
+/* With that padding gone the code-block language chip would sit on top of the
+   first line of code. An excerpt is not the place for it anyway. */
+.notif-clamp .codeblock::after,
+.teaser-clamp .codeblock::after {
+  content: none;
 }
 
 /* A height clamp cuts silently — `-webkit-line-clamp` paints an ellipsis, this
-   does not — so a teaser would simply stop mid-sentence. Draw the "…" over the
-   end of the last visible line, on a short blend into the tile so the cut-off
-   word fades into it instead of colliding with it.
+   does not — so an excerpt would simply stop mid-sentence. Draw the "…" over
+   the end of the last visible line, on a short blend into the surface it sits
+   on, so the cut-off word fades into it instead of colliding with it.
 
-   Gated on `.is-clamped`, which app.js only sets once the body really
-   overflows (the same `[data-clamp-body]` measurement the feed's post previews
-   use): whether three lines are enough depends on the column width and the
-   font, so the server cannot know it, and an unconditional ellipsis would sit
-   behind every short teaser that was never cut. */
-.teaser-tile.is-clamped .teaser-clamp::after {
-  background: linear-gradient(to right, transparent, var(--teaser-bg) 1.25rem);
+   Gated on `.is-clamped`, which app.js sets only once the body really overflows
+   (the `[data-clamp-body]` measurement the feed's post previews already use):
+   whether the budget was enough depends on column width and font, so the server
+   cannot know it, and an unconditional ellipsis would sit behind every short
+   excerpt that was never cut — the shape of issue #880. The blend colour comes
+   from `--clamp-bg`, which each surface sets for itself (see `.teaser-tile`
+   below and `[data-notification-row]`), because it changes with hover, with the
+   unread state and with dark mode. */
+.is-clamped .notif-clamp::after,
+.is-clamped .teaser-clamp::after {
+  background: linear-gradient(to right, transparent, var(--clamp-bg, #fff) 1.25rem);
   bottom: 0;
   content: "…";
   padding-left: 2rem;
   pointer-events: none;
   position: absolute;
   right: 0;
+}
+
+/* The surfaces the two excerpts sit on, each naming the colour its ellipsis
+   blends into. A /notifications row is the card itself, tinted while unread;
+   the tile under a suggested profile carries its own tint and lifts on hover.
+   The tile's dark values are the flattened result of what it used to be
+   (slate-800 at 60% / brand-900 at 30% over the slate-900 card): a translucent
+   surface would show through the ellipsis's own blend and paint a darker patch
+   over the very text it covers. `position` on the tile is the containing block
+   for the stretched permalink it carries. */
+[data-notification-row] {
+  --clamp-bg: #fff;
+}
+[data-notification-row][data-unread] {
+  --clamp-bg: #f5faff;
+}
+.teaser-tile {
+  --clamp-bg: #f8fafc;
+  background-color: var(--clamp-bg);
+  border-radius: 0.75rem;
+  padding: 0.625rem;
+  position: relative;
+  transition: background-color 150ms ease;
+}
+.teaser-tile:hover {
+  --clamp-bg: #eff6ff;
 }
 
 /* Truncated feed/profile post preview: fade the clamp into the card so the cut
@@ -2563,12 +2557,14 @@ html.lightbox-open { overflow: hidden; }
   .post-preview.is-clamped:not(.is-expanded) .post-preview__more {
     background: linear-gradient(to right, transparent, #0f172a 1.5rem);
   }
-  /* The suggested-post tile (light values above). Opaque on purpose: these are
-     the old translucent tints flattened over the slate-900 card, so the
-     ellipsis can blend into the same colour without stacking a second layer of
-     transparency over the text it covers. */
-  .teaser-tile { --teaser-bg: #182234; }
-  .teaser-tile:hover { --teaser-bg: #111b37; }
+  /* The two surfaces an excerpt's ellipsis blends into (light values above).
+     Opaque on purpose: these are the translucent tints flattened over the
+     slate-900 card, so the blend does not stack a second layer of transparency
+     over the very text it covers. */
+  [data-notification-row] { --clamp-bg: #0f172a; }
+  [data-notification-row][data-unread] { --clamp-bg: #101930; }
+  .teaser-tile { --clamp-bg: #182234; }
+  .teaser-tile:hover { --clamp-bg: #111b37; }
   /* Markdown bodies (light values above). */
   .markdown blockquote { border-color: #334155; color: #94a3b8; }
   .markdown code { background: #1e293b; }

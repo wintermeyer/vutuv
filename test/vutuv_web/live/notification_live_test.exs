@@ -556,6 +556,26 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute html =~ "--notif-clamp"
     end
 
+    test "a quote is wired to reveal the truncation ellipsis", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      body = Enum.map_join(1..7, "\n", &"Line #{&1}")
+      post = insert(:post, user: user, body: body)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The server cuts the quote to the reader's line budget, but whether those
+      # lines still overflow the box depends on column width and font — only the
+      # browser knows. The quote therefore carries the same two markers the
+      # feed's post previews use: app.js measures `[data-clamp-body]` and puts
+      # `is-clamped` on `[data-post-preview]`, which is what paints the "…"
+      # (the shared excerpt-clamp rules in components.css). The hook re-measures
+      # after a patch, since rows stream in.
+      assert has_element?(live, ~s([data-post-preview][phx-hook="PostPreviewClamp"]))
+      assert has_element?(live, ~s([data-post-preview] .notif-clamp[data-clamp-body]))
+    end
+
     test "the reader's own line count cuts the quote, server-side and in the CSS clamp", %{
       conn: conn
     } do

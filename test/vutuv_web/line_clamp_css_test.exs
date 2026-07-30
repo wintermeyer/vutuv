@@ -43,12 +43,26 @@ defmodule VutuvWeb.LineClampCssTest do
 
   defp components_css, do: File.read!(@components_css)
 
-  # The declarations of `.<class> { … }` itself (not the compound
-  # `.<class>.markdown *` helpers, which the trailing `\s*\{` excludes).
-  defp rule_body(class) do
-    case Regex.run(~r/\.#{Regex.escape(class)}\s*\{([^}]*)\}/, components_css()) do
-      [_, body] -> body
-      nil -> flunk("components.css has no `.#{class} { … }` rule")
+  # `{selector, declarations}` for every rule in the stylesheet, comments
+  # stripped first so a rule's preceding comment can't end up inside its
+  # selector. A rule nested in an `@media` block is matched by its own
+  # selector (the media condition ends at the brace the regex cannot cross).
+  defp rules do
+    components_css()
+    |> String.replace(~r|/\*.*?\*/|s, "")
+    |> then(&Regex.scan(~r/([^{}]+)\{([^{}]*)\}/, &1))
+    |> Enum.map(fn [_, selector, body] -> {String.trim(selector), body} end)
+  end
+
+  defp selectors(selector), do: selector |> String.split(",") |> Enum.map(&String.trim/1)
+
+  # Everything declared for the bare `.<class>` selector, joined — a shared base
+  # rule (`.notif-clamp, .teaser-clamp { … }`) counts for both classes, which is
+  # the point: the two clamps are one mechanism with two budgets.
+  defp declarations(class) do
+    case Enum.filter(rules(), fn {sel, _} -> ".#{class}" in selectors(sel) end) do
+      [] -> flunk("components.css declares nothing for a bare `.#{class}` selector")
+      matched -> Enum.map_join(matched, "\n", fn {_, body} -> body end)
     end
   end
 
@@ -65,7 +79,7 @@ defmodule VutuvWeb.LineClampCssTest do
     @clamp clamp
 
     test "#{clamp.label} clamps in one absolute unit, never `lh`" do
-      body = rule_body(@clamp.class)
+      body = declarations(@clamp.class)
 
       refute body =~ ~r/\d\s*lh\b/,
              "`.#{@clamp.class}` must not size its clamp with the `lh` unit: Safari " <>
@@ -106,29 +120,81 @@ defmodule VutuvWeb.LineClampCssTest do
                  "`#{list}` re-declares it, which breaks the box-height arithmetic"
       end
     end
+
+    # The budget is counted in line boxes, so everything inside the clamp has to
+    # contribute whole lines and nothing else. Zeroing the spacing of the DIRECT
+    # children only is not enough: a quoted post that opens with a `>` blockquote
+    # nests its paragraph one level deeper, that `<p>` keeps `.markdown p`'s
+    # `margin-bottom: 0.75em`, and the 10.5px push every following line down by
+    # half a line — so the box ends mid-letter (measured on /notifications
+    # 2026-07-30: lines at 1.5 / 21.5 / 41.5 / **72** / 92 in a 100px box). Same
+    # for block padding, which a `<pre>` brings along.
+    test "#{clamp.label} neutralises spacing at every depth, not just for its children" do
+      neutralisers =
+        Enum.filter(rules(), fn {sel, _} ->
+          Enum.any?(selectors(sel), &(&1 =~ ~r/\.#{Regex.escape(@clamp.class)}\b.*\s\*$/))
+        end)
+
+      assert neutralisers != [],
+             "components.css must have a `.#{@clamp.class}…  *` rule (a DESCENDANT " <>
+               "selector, not `> *`), or nested blocks keep their margins"
+
+      body = Enum.map_join(neutralisers, "\n", fn {_, decls} -> decls end)
+
+      for property <- ["margin-block", "padding-block"] do
+        assert body =~ ~r/#{property}:\s*0/,
+               "the `.#{@clamp.class}` descendant rule must zero `#{property}`: a " <>
+                 "paragraph inside a blockquote (or a padded `<pre>`) otherwise shifts " <>
+                 "every line below it and the clamp cuts through the middle of one"
+      end
+    end
   end
 
   # A height clamp cuts silently: unlike `-webkit-line-clamp` it paints no
-  # ellipsis, so a teaser just stops mid-sentence. The "…" is therefore drawn
-  # by the stylesheet, over the last visible line, on a blend of the tile's own
-  # background — and it must be **gated on `is-clamped`**, the class app.js
-  # sets only when the body really overflows. An unconditional `::after` would
-  # put a "…" behind every short teaser that never got cut (the shape of issue
-  # #880, where a "Read more" showed on posts that were fully visible).
-  test "the teaser's truncation ellipsis is painted only while the body is clamped" do
-    css = components_css()
+  # ellipsis, so an excerpt just stops mid-sentence. The "…" is therefore drawn
+  # by the stylesheet, over the last visible line, on a blend of whatever
+  # surface the excerpt sits on — and it must be **gated on `is-clamped`**, the
+  # class app.js sets only when the body really overflows. An unconditional
+  # `::after` would put a "…" behind every short excerpt that was never cut
+  # (the shape of issue #880, where "Read more" showed on fully visible posts).
+  test "both clamps paint the same truncation ellipsis, only while clamped" do
+    ellipsis =
+      Enum.filter(rules(), fn {_, decls} -> decls =~ ~s(content: "…") end)
 
-    assert [_, selector] = Regex.run(~r/(\.teaser[^{}]*::after)\s*\{[^}]*content:\s*"…"/, css),
-           ~s(components.css must paint a `content: "…"` on the teaser clamp — ) <>
-             "a height clamp shows no ellipsis of its own"
+    assert ellipsis != [],
+           ~s(components.css must paint a `content: "…"` at the end of a clamped ) <>
+             "excerpt — a height clamp shows no ellipsis of its own"
 
-    assert selector =~ "is-clamped",
-           "the ellipsis selector (`#{selector}`) must require `is-clamped`, or a short " <>
-             "teaser that was never cut gets a \"…\" too"
+    assert length(ellipsis) == 1,
+           "the ellipsis belongs in ONE rule shared by both clamps, not one per clamp"
 
-    assert css =~ ~r/\.teaser-tile[^{}]*\{[^}]*--teaser-bg:/,
-           "`.teaser-tile` must define `--teaser-bg`: the ellipsis blends the end of the " <>
-             "last line into the tile's background, and that colour changes on hover and " <>
-             "in dark mode, so both sides have to read the same custom property"
+    [{selector, decls}] = ellipsis
+    parts = selectors(selector)
+
+    for class <- Enum.map(@clamps, & &1.class) do
+      assert Enum.any?(parts, &String.contains?(&1, class)),
+             "`.#{class}` must be covered by the shared ellipsis rule (`#{selector}`): " <>
+               "both excerpts are cut the same way, so they say so the same way"
+    end
+
+    for part <- parts do
+      assert part =~ "is-clamped",
+             "every half of the ellipsis selector must require `is-clamped` (`#{part}` " <>
+               "does not), or an excerpt that was never cut gets a \"…\" too"
+    end
+
+    assert [_, bg_var] = Regex.run(~r/linear-gradient\(.*?var\((--[a-z-]+)[,)]/, decls),
+           "the ellipsis must blend into a custom property, not a fixed colour: it sits " <>
+             "on a tile or a notification row whose background changes with hover, " <>
+             "unread state and dark mode"
+
+    for surface <- [".teaser-tile", "[data-notification-row]"] do
+      assert Enum.any?(rules(), fn {sel, decls} ->
+               Enum.any?(selectors(sel), &String.starts_with?(&1, surface)) and
+                 decls =~ "#{bg_var}:"
+             end),
+             "`#{surface}` must define `#{bg_var}`, or the blend behind the \"…\" is " <>
+               "painted in the wrong colour on that surface"
+    end
   end
 end

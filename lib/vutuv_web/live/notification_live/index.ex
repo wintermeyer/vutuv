@@ -439,7 +439,7 @@ defmodule VutuvWeb.NotificationLive.Index do
         cut to the reader's line budget (:notification_post_lines). --%>
         <.quoted_post
           :if={@group.kind == "like" and @n[:post_preview]}
-          data-post-preview="true"
+          id={"quote-#{@group.id}"}
           href={~p"/#{@current_user}/posts/#{@n.post_id}"}
           html={@n.post_preview.html}
           quote_lines={@quote_lines}
@@ -450,7 +450,7 @@ defmodule VutuvWeb.NotificationLive.Index do
         lives under the post's own author, not under the reader. --%>
         <.quoted_post
           :if={@group.kind == "mention" and @n[:post_preview]}
-          data-post-preview="true"
+          id={"quote-#{@group.id}"}
           href={~p"/#{@n.post_preview.post.user}/posts/#{@n.post_preview.post.id}"}
           html={@n.post_preview.html}
           quote_lines={@quote_lines}
@@ -475,6 +475,7 @@ defmodule VutuvWeb.NotificationLive.Index do
           </.link>
           <.quoted_post
             :if={@n[:reply_preview]}
+            id={"quote-reply-#{@group.id}"}
             data-reply-preview="true"
             href={~p"/#{@n.reply_preview.post.user}/posts/#{@n.reply_preview.post.id}"}
             html={@n.reply_preview.html}
@@ -498,14 +499,20 @@ defmodule VutuvWeb.NotificationLive.Index do
           </p>
           <%!-- The same solid quote rail the local reply quotes wear — the row's
           wording already says it came from another network, so the quote needs
-          no dashed variant of its own. --%>
+          no dashed variant of its own. Marked for the clamp measurement like
+          those quotes too, so a remote reply that runs past the reader's line
+          budget also ends in a "…". --%>
           <div
+            id={"quote-remote-#{@group.id}"}
+            phx-hook="PostPreviewClamp"
+            data-post-preview
             data-remote-reply-preview="true"
             class="border-l-2 border-slate-200 pl-2.5 dark:border-slate-700"
           >
             <%!-- No `text-*` / `leading-*` here: `.notif-clamp` owns the type
             size and line height, since its box height is counted in them. --%>
             <p
+              data-clamp-body
               class="notif-clamp mb-0 whitespace-pre-line text-slate-600 dark:text-slate-400"
               {clamp_attrs(@quote_lines)}
             >{@n.note_text}</p>
@@ -587,6 +594,14 @@ defmodule VutuvWeb.NotificationLive.Index do
   # `<a>` is invalid: the prose falls through to the stretched link, so a click
   # anywhere still opens the post, while a mention/hashtag/URL keeps its own
   # target. The feed's "Suggested posts" rail is arranged the same way.
+  # `id` is what lets the clamp measurement re-run after a patch: the row is
+  # marked `data-post-preview` and the body `data-clamp-body`, the same pair the
+  # feed's post previews use, so app.js measures the quote and sets `is-clamped`
+  # on the wrapper — which is what paints the "…" that says the quote goes on
+  # (see the excerpt-clamp block in components.css). Whether the reader's line
+  # budget was enough depends on column width and font, so only the browser can
+  # decide it.
+  attr(:id, :string, required: true)
   attr(:href, :string, required: true)
   attr(:html, :any, required: true)
   attr(:quote_lines, :integer, required: true)
@@ -596,6 +611,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp quoted_post(assigns) do
     ~H"""
     <div
+      id={@id}
+      phx-hook="PostPreviewClamp"
+      data-post-preview
       class={[
         "relative border-l-2 border-slate-200 pl-2.5 transition-colors hover:border-brand-400",
         "dark:border-slate-700 dark:hover:border-brand-500",
@@ -608,6 +626,7 @@ defmodule VutuvWeb.NotificationLive.Index do
       reader's line budget is a box height counted in them, so a `text-*` here
       would cut the quote mid-letter. --%>
       <div
+        data-clamp-body
         class="markdown markdown--post notif-clamp text-slate-600 dark:text-slate-400 [&_a]:relative [&_a]:z-20"
         {clamp_attrs(@quote_lines)}
       >
