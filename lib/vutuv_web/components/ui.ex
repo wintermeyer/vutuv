@@ -591,7 +591,7 @@ defmodule VutuvWeb.UI do
       </p>
       <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         <.form for={%{}} action={~p"/login/resend"} method="post" id="resend-pin-form">
-          <button type="submit" class="font-semibold text-brand-600 hover:text-brand-700">
+          <button type="submit" class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
             {gettext("Resend PIN")}
           </button>
         </.form>
@@ -2013,7 +2013,7 @@ defmodule VutuvWeb.UI do
     ~H"""
     <%= button to: ~p"/follows/#{@follow_id}/mute", method: :put,
           title: mute_label(@muted?), aria: [label: mute_label(@muted?)],
-          class: save_toggle_class(:bookmark, @muted?) do %>
+          class: save_toggle_class(@muted?) do %>
       <.icon_bell_slash />
     <% end %>
     """
@@ -2036,84 +2036,18 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  @doc """
-  The profile header's **bookmark this member** toggle — the private, silent
-  save (no follow/connection, no notification; see `Vutuv.Social`). Owns the
-  `~p"/user_bookmarks…"` route shapes (POST to save, CSRF DELETE to remove,
-  branched on `saved?`). A square icon button matching the header controls; the
-  solid bookmark marks the saved state. Keep the logged-in / not-owner /
-  not-blocked guard on the `:if` at the call site.
-  """
-  attr(:saved?, :boolean, required: true)
-  attr(:target_id, :any, required: true)
-
-  def user_bookmark_button(%{saved?: true} = assigns) do
-    ~H"""
-    <%= button to: ~p"/user_bookmarks/#{@target_id}", method: :delete,
-          title: gettext("Remove bookmark"), aria: [label: gettext("Remove bookmark")],
-          class: save_toggle_class(:bookmark, true) do %>
-      <.icon_bookmark filled?={true} />
-    <% end %>
-    """
-  end
-
-  def user_bookmark_button(assigns) do
-    ~H"""
-    <%= button to: ~p"/user_bookmarks?#{[user_bookmark: %{target_user_id: @target_id}]}", method: :post,
-          title: gettext("Bookmark"), aria: [label: gettext("Bookmark")],
-          class: save_toggle_class(:bookmark, false) do %>
-      <.icon_bookmark filled?={false} />
-    <% end %>
-    """
-  end
-
-  @doc """
-  The profile header's **like this member** toggle — the counterpart to
-  `<.user_bookmark_button>`, owning the `~p"/user_likes…"` route shapes. Same
-  private, silent save; the solid heart marks the liked state. Guard at the
-  call site like the bookmark toggle.
-  """
-  attr(:saved?, :boolean, required: true)
-  attr(:target_id, :any, required: true)
-
-  def user_like_button(%{saved?: true} = assigns) do
-    ~H"""
-    <%= button to: ~p"/user_likes/#{@target_id}", method: :delete,
-          title: gettext("Unlike"), aria: [label: gettext("Unlike")],
-          class: save_toggle_class(:like, true) do %>
-      <.icon_heart filled?={true} />
-    <% end %>
-    """
-  end
-
-  def user_like_button(assigns) do
-    ~H"""
-    <%= button to: ~p"/user_likes?#{[user_like: %{target_user_id: @target_id}]}", method: :post,
-          title: gettext("Like"), aria: [label: gettext("Like")],
-          class: save_toggle_class(:like, false) do %>
-      <.icon_heart filled?={false} />
-    <% end %>
-    """
-  end
-
-  # Square icon-toggle styling for the two profile save controls, sized to sit
-  # beside the header's text buttons. The active fill keeps each control's own
-  # colour — coral for a like, brand for a bookmark — matching the post action
-  # bar; inactive is the calm secondary outline.
-  defp save_toggle_class(kind, active?) do
+  # Square icon-toggle styling for the mute control, sized to sit beside the
+  # header's text buttons. The active fill is the brand tint, matching the post
+  # action bar's bookmark; inactive is the calm secondary outline.
+  defp save_toggle_class(active?) do
     base =
       "inline-flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-inset transition"
 
     state =
-      cond do
-        active? and kind == :like ->
-          "text-accent bg-accent/10 ring-accent/30 hover:bg-accent/20"
-
-        active? ->
-          "text-brand-600 bg-brand-50 ring-brand-200 hover:bg-brand-100 dark:text-brand-300 dark:bg-brand-900/30 dark:ring-brand-900/50"
-
-        true ->
-          "text-slate-500 ring-slate-200 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:ring-slate-700 dark:hover:bg-slate-800"
+      if active? do
+        "text-brand-600 bg-brand-50 ring-brand-200 hover:bg-brand-100 dark:text-brand-300 dark:bg-brand-900/30 dark:ring-brand-900/50"
+      else
+        "text-slate-500 ring-slate-200 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:ring-slate-700 dark:hover:bg-slate-800"
       end
 
     [base, state] |> Enum.join(" ")
@@ -3141,7 +3075,7 @@ defmodule VutuvWeb.UI do
       @align == :end && "justify-end",
       @class
     ]}>
-      <.link :if={@edit_to} href={@edit_to} class="text-brand-600 hover:text-brand-700">
+      <.link :if={@edit_to} href={@edit_to} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
         {gettext("Edit")}
       </.link>
       <.link

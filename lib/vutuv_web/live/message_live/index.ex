@@ -569,7 +569,7 @@ defmodule VutuvWeb.MessageLive.Index do
           <p>{gettext("No conversations yet.")}</p>
           <p class="mt-1">{gettext("Open someone's profile to message them.")}</p>
           <p class="mt-2">
-            <.link navigate={~p"/search"} class="font-semibold text-brand-600 hover:text-brand-700">
+            <.link navigate={~p"/search"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
               {gettext("Find members")}
             </.link>
           </p>
@@ -632,7 +632,7 @@ defmodule VutuvWeb.MessageLive.Index do
         </header>
 
         <div :if={@more?} class="border-b border-slate-200 py-2 text-center dark:border-slate-800">
-          <button id="load-older" phx-click="load-older" class="text-sm font-semibold text-brand-600 hover:text-brand-700">
+          <button id="load-older" phx-click="load-older" class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
             {gettext("Load older messages")}
           </button>
         </div>

@@ -608,7 +608,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                 <td class="text-right">
                   <.link
                     navigate={~p"/admin/newsletter_groups/#{group.id}/edit"}
-                    class="font-semibold text-brand-600 hover:text-brand-700"
+                    class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                   >
                     {gettext("Edit")}
                   </.link>

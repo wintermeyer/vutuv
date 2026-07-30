@@ -48,6 +48,9 @@ defmodule Vutuv.Application do
         # rails and the public listing. Starts after the Repo (it seeds the
         # snapshot from it).
         Vutuv.Social.PopularUsers,
+        # Snapshots the "who to follow" recent-poster pool the profile rail
+        # draws from — same deal as PopularUsers. Starts after the Repo.
+        Vutuv.Posts.TopPosters,
         # Fans a :day_changed broadcast out at Berlin midnight so open pages
         # re-render "today"/"Gestern" post timestamps. Needs PubSub only.
         Vutuv.DayClock,

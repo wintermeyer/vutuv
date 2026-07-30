@@ -204,7 +204,7 @@ defmodule VutuvWeb.SectionReorderLive do
         <.link
           :if={is_nil(@entry.verified_at)}
           navigate={~p"/settings/links/#{@entry}/verify"}
-          class="font-semibold text-brand-600 hover:text-brand-700"
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {gettext("Verify this is your page")} →
         </.link>

@@ -105,7 +105,7 @@
     <p class="mt-4">
       <.link
         navigate={~p"/admin/newsletters/#{@newsletter}/clicks"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         id="view-clicks"
       >
         {gettext("Full click log")} ›
@@ -172,7 +172,7 @@
         href="/sent_emails"
         target="_blank"
         rel="noopener"
-        class="font-semibold text-brand-600 hover:text-brand-700"
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         id="dev-mailbox-link"
       >
         {gettext("open the dev email inbox")} ›
@@ -186,7 +186,7 @@
       <h1>{gettext("Send")}</h1>
       <.link
         navigate={~p"/admin/newsletter_groups"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
         {gettext("Manage audiences")} ›
       </.link>
@@ -209,7 +209,7 @@
         <div class="mt-2">
           <.link
             navigate={~p"/admin/newsletters/#{@newsletter}/send"}
-            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {gettext("Watch progress")} ›
           </.link>

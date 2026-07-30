@@ -17,7 +17,7 @@ defmodule VutuvWeb.Admin.AdHTML do
     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
       <%= if @ad.user do %>
         {gettext("Booked by")}
-        <.link href={~p"/#{@ad.user}"} class="font-semibold text-brand-600 hover:text-brand-700">
+        <.link href={~p"/#{@ad.user}"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
           @{@ad.user.username}
         </.link>
       <% else %>

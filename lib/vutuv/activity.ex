@@ -91,130 +91,134 @@ defmodule Vutuv.Activity do
     latest_event_at(user_id) || NaiveDateTime.utc_now(:second)
   end
 
-  # One round trip instead of nine: every event source contributes its MAX as
-  # a UNION ALL arm and the outer query takes the greatest. The arms mirror
-  # the per-kind event queries below; keep them in sync.
+  # One round trip instead of one per kind: every kind's MAX arm(s) — declared
+  # in the `kind_specs/3` registry, so no kind can be forgotten — join a
+  # UNION ALL and the outer query takes the greatest. A kind the marker cannot
+  # see never clears its badge (the bug behind #980, #930 and v7.200.1), which
+  # is why the arms come from the registry and nowhere else.
   defp latest_event_at(user_id) do
-    follower_max =
-      from(c in Follow, where: c.followee_id == ^user_id, select: %{ts: max(c.inserted_at)})
+    [first | rest] = for spec <- kind_specs(user_id), arm <- spec.max_arms, do: arm
 
-    endorsement_max =
-      from(e in UserTagEndorsement,
-        join: ut in assoc(e, :user_tag),
-        where: ut.user_id == ^user_id and e.user_id != ^user_id,
-        select: %{ts: max(e.inserted_at)}
-      )
-
-    # "Became vernetzt" events are derived from mutual follows: the pair's
-    # timestamp is the later of the two follow times (GREATEST), matching
-    # connection_items/3 below.
-    connection_max =
-      from(out in Follow,
-        join: back in Follow,
-        on: back.follower_id == out.followee_id and back.followee_id == out.follower_id,
-        where: out.follower_id == ^user_id,
-        select: %{ts: max(fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at))}
-      )
-
-    reply_max =
-      from(r in PostReply,
-        join: reply in assoc(r, :post),
-        where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
-        select: %{ts: max(r.inserted_at)}
-      )
-
-    thread_max = select(thread_replies(user_id), [thread_ref: r], %{ts: max(r.inserted_at)})
-
-    mention_max = select(mention_events(user_id), [mention: m], %{ts: max(m.inserted_at)})
-
-    # Replies and reactions from other networks (issues #1069/#1068). Without
-    # these arms the marker ignores them, so when the newest event is a remote
-    # one the marker lands before it and its badge never clears: /notifications
-    # empties the bell, the next recount on /feed fills it again. `received_at`
-    # is a :utc_datetime, but its column is the same timestamp family as the
-    # inserted_at arms, so the union stays type-consistent.
-    fediverse_reply_max =
-      user_id
-      |> fediverse_reply_events()
-      |> select([note: n], %{ts: max(n.received_at)})
-
-    fediverse_reaction_max =
-      user_id
-      |> fediverse_reaction_events()
-      |> select([note: r], %{ts: max(r.received_at)})
-
-    # No self-like filter needed: a member cannot like their own post
-    # (enforced in Posts.like_post/2, issue #1030).
-    like_max =
-      from(l in PostLike,
-        join: p in assoc(l, :post),
-        where: p.user_id == ^user_id,
-        select: %{ts: max(l.inserted_at)}
-      )
-
-    moderation_max =
-      Vutuv.Moderation.owner_notified_cases_query(user_id)
-      |> select([c], %{ts: max(c.inserted_at)})
-
-    image_rejected_max =
-      ImageScans.rejected_scans_query(user_id)
-      |> select([s], %{ts: max(s.inserted_at)})
-
-    severances = Vutuv.Moderation.reporter_severances_query(user_id)
-    severance_max = select(severances, [s], %{ts: max(s.inserted_at)})
-    severance_restore_max = select(severances, [s], %{ts: max(s.restored_at)})
-
-    # Mirror count_organization_roles/2 (issue #930): without this arm the read
-    # marker ignores an org-role grant, so its unread badge never clears.
-    organization_role_max =
-      from(r in OrganizationRole,
-        where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
-        select: %{ts: max(r.inserted_at)}
-      )
-
-    handle_change_max =
-      from(n in HandleChangeNotification,
-        where: n.recipient_id == ^user_id,
-        select: %{ts: max(n.inserted_at)}
-      )
-
-    # New CV entries of the people this member follows (issue #980). Without
-    # this arm the marker ignores them, so their unread badge never clears.
-    cv_update_max =
-      user_id
-      |> CvUpdates.feed_query()
-      |> select([e], %{ts: max(e.inserted_at)})
-
-    # The "this is your username" welcome note (see username_items/3). Without
-    # this arm the read marker would ignore it, and a kind the marker ignores
-    # never clears its badge — the same bug every other kind once had.
-    username_max =
-      from(u in User,
-        where: u.id == ^user_id,
-        select: %{ts: max(u.welcome_notified_at)}
-      )
-
-    union =
-      follower_max
-      |> union_all(^endorsement_max)
-      |> union_all(^connection_max)
-      |> union_all(^reply_max)
-      |> union_all(^thread_max)
-      |> union_all(^mention_max)
-      |> union_all(^fediverse_reply_max)
-      |> union_all(^fediverse_reaction_max)
-      |> union_all(^like_max)
-      |> union_all(^moderation_max)
-      |> union_all(^image_rejected_max)
-      |> union_all(^severance_max)
-      |> union_all(^severance_restore_max)
-      |> union_all(^organization_role_max)
-      |> union_all(^handle_change_max)
-      |> union_all(^cv_update_max)
-      |> union_all(^username_max)
+    union = Enum.reduce(rest, first, fn arm, acc -> union_all(acc, ^arm) end)
 
     from(t in subquery(union), select: max(t.ts))
     |> Repo.one()
+  end
+
+  # The read-marker MAX arms, one `%{ts: ...}` query per event family. Each
+  # mirrors the filters of its kind's items/count queries below.
+
+  defp follower_max(user_id),
+    do: from(c in Follow, where: c.followee_id == ^user_id, select: %{ts: max(c.inserted_at)})
+
+  defp endorsement_max(user_id) do
+    from(e in UserTagEndorsement,
+      join: ut in assoc(e, :user_tag),
+      where: ut.user_id == ^user_id and e.user_id != ^user_id,
+      select: %{ts: max(e.inserted_at)}
+    )
+  end
+
+  # "Became vernetzt" events are derived from mutual follows: the pair's
+  # timestamp is the later of the two follow times (GREATEST), matching
+  # connection_items/3 below.
+  defp connection_max(user_id) do
+    from(out in Follow,
+      join: back in Follow,
+      on: back.follower_id == out.followee_id and back.followee_id == out.follower_id,
+      where: out.follower_id == ^user_id,
+      select: %{ts: max(fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at))}
+    )
+  end
+
+  defp reply_max(user_id) do
+    from(r in PostReply,
+      join: reply in assoc(r, :post),
+      where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
+      select: %{ts: max(r.inserted_at)}
+    )
+  end
+
+  defp thread_max(user_id),
+    do: select(thread_replies(user_id), [thread_ref: r], %{ts: max(r.inserted_at)})
+
+  defp mention_max(user_id),
+    do: select(mention_events(user_id), [mention: m], %{ts: max(m.inserted_at)})
+
+  # Replies and reactions from other networks (issues #1069/#1068).
+  # `received_at` is a :utc_datetime, but its column is the same timestamp
+  # family as the inserted_at arms, so the union stays type-consistent.
+  defp fediverse_reply_max(user_id) do
+    user_id
+    |> fediverse_reply_events()
+    |> select([note: n], %{ts: max(n.received_at)})
+  end
+
+  defp fediverse_reaction_max(user_id) do
+    user_id
+    |> fediverse_reaction_events()
+    |> select([note: r], %{ts: max(r.received_at)})
+  end
+
+  # No self-like filter needed: a member cannot like their own post
+  # (enforced in Posts.like_post/2, issue #1030).
+  defp like_max(user_id) do
+    from(l in PostLike,
+      join: p in assoc(l, :post),
+      where: p.user_id == ^user_id,
+      select: %{ts: max(l.inserted_at)}
+    )
+  end
+
+  defp moderation_max(user_id) do
+    Vutuv.Moderation.owner_notified_cases_query(user_id)
+    |> select([c], %{ts: max(c.inserted_at)})
+  end
+
+  defp image_rejected_max(user_id) do
+    ImageScans.rejected_scans_query(user_id)
+    |> select([s], %{ts: max(s.inserted_at)})
+  end
+
+  defp severance_max(user_id) do
+    Vutuv.Moderation.reporter_severances_query(user_id)
+    |> select([s], %{ts: max(s.inserted_at)})
+  end
+
+  # MAX skips NULLs, so rows not (yet) restored contribute nothing here.
+  defp severance_restore_max(user_id) do
+    Vutuv.Moderation.reporter_severances_query(user_id)
+    |> select([s], %{ts: max(s.restored_at)})
+  end
+
+  defp organization_role_max(user_id) do
+    from(r in OrganizationRole,
+      where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
+      select: %{ts: max(r.inserted_at)}
+    )
+  end
+
+  defp handle_change_max(user_id) do
+    from(n in HandleChangeNotification,
+      where: n.recipient_id == ^user_id,
+      select: %{ts: max(n.inserted_at)}
+    )
+  end
+
+  # New CV entries of the people this member follows (issue #980).
+  defp cv_update_max(user_id) do
+    user_id
+    |> CvUpdates.feed_query()
+    |> select([e], %{ts: max(e.inserted_at)})
+  end
+
+  # The "this is your username" welcome note (see username_items/3), keyed on
+  # welcome_notified_at; MAX skips the NULL of a not-yet-welcomed account.
+  defp username_max(user_id) do
+    from(u in User,
+      where: u.id == ^user_id,
+      select: %{ts: max(u.welcome_notified_at)}
+    )
   end
 
   @doc """
@@ -641,34 +645,140 @@ defmodule Vutuv.Activity do
     page = Keyword.get(opts, :page)
 
     sources =
-      for {kind, source} <- kind_sources(user_id), kinds == nil or kind in kinds, do: source
+      for spec <- kind_specs(user_id), kinds == nil or spec.kind in kinds, do: spec.items
 
     if page,
       do: Vutuv.FeedPage.paginate_offset(sources, limit, (max(page, 1) - 1) * limit),
       else: Vutuv.FeedPage.paginate(sources, limit, Keyword.get(opts, :cursor))
   end
 
-  # Every feed source keyed by the kind string its items carry, so `kinds:`
-  # can pick the subset to query. `report_protection` covers both the severed
-  # and the restored entry (one source emits them together).
-  defp kind_sources(user_id) do
+  # THE registry of notification kinds. Every kind declares all three of its
+  # derivations here — read-marker MAX arm(s), feed source, count query(ies) —
+  # so a kind can no longer join one structure and silently miss another,
+  # which is exactly the badge-never-clears bug that shipped three times
+  # (#980, #930, v7.200.1). `latest_event_at/1`, `notifications_page/2` and
+  # `total_count/4` all read from this table and nowhere else.
+  #
+  #   * `max_arms` — `%{ts: ...}` MAX queries unioned into the read marker.
+  #   * `items` — the feed source (a `Vutuv.FeedPage` fetch fun) keyed by the
+  #     kind string its items carry, so `kinds:` can pick the subset to query.
+  #     Entry order is the merge's tie-break order for same-second events
+  #     (the merge sort is stable), so treat it as part of the interface.
+  #   * `counts` — count queries summed into the badge tally, bounded by the
+  #     same `read_at` the marker wrote.
+  #
+  # Deliberate per-kind asymmetries, kept as they were:
+  #
+  #   * `report_protection` is ONE source emitting two event families
+  #     (severed / restored) with different timestamp columns — so two max
+  #     arms and two counts. That is why both list-valued keys are lists.
+  #   * `unread?` (drop events about posts the member already engaged with,
+  #     `mark_post_seen/2`) only reaches reply / thread / mention — the kinds
+  #     whose subject is somebody else's post (`subject_post_id/1`); every
+  #     other kind ignores it.
+  #   * `cv_update` counts sittings, not rows: its read-marker filter lives
+  #     inside the grouped query (`CvUpdates.count_query/2`), not in `since/2`.
+  #   * The fediverse kinds key on `received_at` (a :utc_datetime), `username`
+  #     on `welcome_notified_at`, `connection` on the GREATEST of the two
+  #     follow times — each per-kind helper owns its own boundary comparison.
+  defp kind_specs(user_id, read_at \\ nil, unread? \\ false) do
     [
-      {"follower", &follower_items(user_id, &1, &2)},
-      {"endorsement", &endorsement_items(user_id, &1, &2)},
-      {"connection", &connection_items(user_id, &1, &2)},
-      {"reply", &reply_items(user_id, &1, &2)},
-      {"thread", &thread_items(user_id, &1, &2)},
-      {"mention", &mention_items(user_id, &1, &2)},
-      {"fediverse_reply", &fediverse_reply_items(user_id, &1, &2)},
-      {"fediverse_reaction", &fediverse_reaction_items(user_id, &1, &2)},
-      {"like", &like_items(user_id, &1, &2)},
-      {"organization_role", &organization_role_items(user_id, &1, &2)},
-      {"moderation", &moderation_items(user_id, &1, &2)},
-      {"image_rejected", &image_rejected_items(user_id, &1, &2)},
-      {"report_protection", &report_protection_items(user_id, &1, &2)},
-      {"handle_change", &handle_change_items(user_id, &1, &2)},
-      {"cv_update", &cv_update_items(user_id, &1, &2)},
-      {"username", &username_items(user_id, &1, &2)}
+      %{
+        kind: "follower",
+        max_arms: [follower_max(user_id)],
+        items: &follower_items(user_id, &1, &2),
+        counts: [count_followers(user_id, read_at)]
+      },
+      %{
+        kind: "endorsement",
+        max_arms: [endorsement_max(user_id)],
+        items: &endorsement_items(user_id, &1, &2),
+        counts: [count_endorsements(user_id, read_at)]
+      },
+      %{
+        kind: "connection",
+        max_arms: [connection_max(user_id)],
+        items: &connection_items(user_id, &1, &2),
+        counts: [count_connections(user_id, read_at)]
+      },
+      %{
+        kind: "reply",
+        max_arms: [reply_max(user_id)],
+        items: &reply_items(user_id, &1, &2),
+        counts: [count_replies(user_id, read_at, unread?)]
+      },
+      %{
+        kind: "thread",
+        max_arms: [thread_max(user_id)],
+        items: &thread_items(user_id, &1, &2),
+        counts: [count_thread_replies(user_id, read_at, unread?)]
+      },
+      %{
+        kind: "mention",
+        max_arms: [mention_max(user_id)],
+        items: &mention_items(user_id, &1, &2),
+        counts: [count_mentions(user_id, read_at, unread?)]
+      },
+      %{
+        kind: "fediverse_reply",
+        max_arms: [fediverse_reply_max(user_id)],
+        items: &fediverse_reply_items(user_id, &1, &2),
+        counts: [count_fediverse_replies(user_id, read_at)]
+      },
+      %{
+        kind: "fediverse_reaction",
+        max_arms: [fediverse_reaction_max(user_id)],
+        items: &fediverse_reaction_items(user_id, &1, &2),
+        counts: [count_fediverse_reactions(user_id, read_at)]
+      },
+      %{
+        kind: "like",
+        max_arms: [like_max(user_id)],
+        items: &like_items(user_id, &1, &2),
+        counts: [count_likes(user_id, read_at)]
+      },
+      %{
+        kind: "organization_role",
+        max_arms: [organization_role_max(user_id)],
+        items: &organization_role_items(user_id, &1, &2),
+        counts: [count_organization_roles(user_id, read_at)]
+      },
+      %{
+        kind: "moderation",
+        max_arms: [moderation_max(user_id)],
+        items: &moderation_items(user_id, &1, &2),
+        counts: [count_moderation(user_id, read_at)]
+      },
+      %{
+        kind: "image_rejected",
+        max_arms: [image_rejected_max(user_id)],
+        items: &image_rejected_items(user_id, &1, &2),
+        counts: [count_image_rejections(user_id, read_at)]
+      },
+      %{
+        kind: "report_protection",
+        max_arms: [severance_max(user_id), severance_restore_max(user_id)],
+        items: &report_protection_items(user_id, &1, &2),
+        counts: [count_severances(user_id, read_at), count_severance_restores(user_id, read_at)]
+      },
+      %{
+        kind: "handle_change",
+        max_arms: [handle_change_max(user_id)],
+        items: &handle_change_items(user_id, &1, &2),
+        counts: [count_handle_changes(user_id, read_at)]
+      },
+      %{
+        kind: "cv_update",
+        max_arms: [cv_update_max(user_id)],
+        items: &cv_update_items(user_id, &1, &2),
+        counts: [count_cv_updates(user_id, read_at)]
+      },
+      %{
+        kind: "username",
+        max_arms: [username_max(user_id)],
+        items: &username_items(user_id, &1, &2),
+        counts: [count_username(user_id, read_at)]
+      }
     ]
   end
 
@@ -718,6 +828,13 @@ defmodule Vutuv.Activity do
   """
   def unread_notification_count(nil), do: 0
 
+  # A caller already holding the freshly loaded `%User{}` (the shell's connected
+  # mount, the API poll) skips the marker read; the id clause below re-reads the
+  # marker and stays the right one for recounts, where the marker may have moved
+  # since the struct was loaded.
+  def unread_notification_count(%User{id: user_id, notifications_read_at: read_at}),
+    do: total_count(user_id, read_at, nil, true)
+
   def unread_notification_count(user_id) do
     read_at = Repo.one(from(u in User, where: u.id == ^user_id, select: u.notifications_read_at))
     total_count(user_id, read_at, nil, true)
@@ -730,8 +847,9 @@ defmodule Vutuv.Activity do
   # strict `> read_at` unread filter and the GREATEST-anchored mutuality
   # timestamp are unchanged — only the round trips collapse.
   #
-  # `kinds` picks the subset to count, mirroring `kind_sources/1`; the sum is
-  # built with dynamics so the filtered case stays one query too.
+  # `kinds` picks the subset to count via the registry (`kind_specs/3`), so a
+  # filter narrows the feed and its total the same way; the sum is built with
+  # dynamics so the filtered case stays one query too.
   #
   # `unread?` additionally drops the events whose post the member has already
   # engaged with (`mark_post_seen/2`). It is deliberately not derived from
@@ -739,8 +857,9 @@ defmodule Vutuv.Activity do
   # who still wants the per-post exceptions applied.
   defp total_count(user_id, read_at, kinds, unread?) do
     counts =
-      for {kind, count} <- kind_counts(user_id, read_at, unread?),
-          kinds == nil or kind in kinds,
+      for spec <- kind_specs(user_id, read_at, unread?),
+          kinds == nil or spec.kind in kinds,
+          count <- spec.counts,
           do: count
 
     case counts do
@@ -755,32 +874,6 @@ defmodule Vutuv.Activity do
 
         Repo.one(from(s in subquery(first), select: ^sum))
     end
-  end
-
-  # Every count query keyed by the kind string of the source it counts — the
-  # count-side twin of `kind_sources/1`, so a `kinds:` filter narrows the feed
-  # and its total the same way. `report_protection` is two queries (severed and
-  # restored), matching the one source that emits both.
-  defp kind_counts(user_id, read_at, unread?) do
-    [
-      {"follower", count_followers(user_id, read_at)},
-      {"endorsement", count_endorsements(user_id, read_at)},
-      {"connection", count_connections(user_id, read_at)},
-      {"reply", count_replies(user_id, read_at, unread?)},
-      {"thread", count_thread_replies(user_id, read_at, unread?)},
-      {"mention", count_mentions(user_id, read_at, unread?)},
-      {"fediverse_reply", count_fediverse_replies(user_id, read_at)},
-      {"fediverse_reaction", count_fediverse_reactions(user_id, read_at)},
-      {"like", count_likes(user_id, read_at)},
-      {"organization_role", count_organization_roles(user_id, read_at)},
-      {"cv_update", count_cv_updates(user_id, read_at)},
-      {"moderation", count_moderation(user_id, read_at)},
-      {"image_rejected", count_image_rejections(user_id, read_at)},
-      {"report_protection", count_severances(user_id, read_at)},
-      {"report_protection", count_severance_restores(user_id, read_at)},
-      {"handle_change", count_handle_changes(user_id, read_at)},
-      {"username", count_username(user_id, read_at)}
-    ]
   end
 
   # The actor join deliberately happens **after** the order/limit, via a

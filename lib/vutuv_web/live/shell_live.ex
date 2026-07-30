@@ -130,7 +130,7 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:user_avatar, Vutuv.Avatar.user_url(user, :thumb))
     |> assign(:user_admin?, user.admin?)
     |> assign_shell_defaults(path)
-    |> maybe_start_counts(user_id, path)
+    |> maybe_start_counts(user, path)
     |> maybe_start_new_members()
     |> maybe_start_presence(user_id, user.show_online_status?)
     |> push_badge()
@@ -169,18 +169,18 @@ defmodule VutuvWeb.ShellLive do
   # render) and only for a logged-in member. When the shell mounts ON the
   # messages/notifications page itself that badge starts at zero (initial_count),
   # since the page's own read-broadcast can race the shell's subscribe.
-  defp maybe_start_counts(socket, nil, _path), do: socket
-
-  defp maybe_start_counts(socket, user_id, path) do
+  defp maybe_start_counts(socket, %User{} = user, path) do
     if connected?(socket) do
       socket
       |> assign(
         :messages_count,
-        initial_count(path, "/messages", user_id, &Vutuv.Chat.unread_conversations_count/1)
+        initial_count(path, "/messages", user.id, &Vutuv.Chat.unread_conversations_count/1)
       )
       |> assign(
+        # The full struct, so the count skips the read-marker re-read the
+        # id-based recount path pays.
         :notifications_count,
-        initial_count(path, "/notifications", user_id, &Activity.unread_notification_count/1)
+        initial_count(path, "/notifications", user, &Activity.unread_notification_count/1)
       )
     else
       socket
@@ -232,11 +232,11 @@ defmodule VutuvWeb.ShellLive do
     push_event(socket, "presence:set", %{online: online})
   end
 
-  defp initial_count(path, route, user_id, counter) do
+  defp initial_count(path, route, subject, counter) do
     # Match the route boundary, not a raw prefix: a profile whose slug merely
     # begins with "messages"/"notifications" (e.g. /messagesanna) must not zero
     # the badge as if the member were sitting on that page.
-    if on_route?(path, route), do: 0, else: counter.(user_id)
+    if on_route?(path, route), do: 0, else: counter.(subject)
   end
 
   # True when the current path is `route` or a subpath of it — a route-boundary

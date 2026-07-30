@@ -187,7 +187,7 @@ lands here). --%>
         trimmed enough — the server still validates the cap (error_tag below).
         The number is language-neutral; only the static "characters" word is
         translated, and it never pluralizes in the "N/255" form. --%>
-        <div data-char-counter data-max="255">
+        <div data-char-counter data-max={Vutuv.Accounts.User.headline_max_length()}>
           <%= label f, :headline, gettext("Tagline"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
           <%= textarea f, :headline, rows: 3, class: input_class(), data: [char_count_input: true] %>
           <div class="mt-1 flex items-start justify-between gap-3">

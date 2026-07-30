@@ -16,7 +16,7 @@ defmodule Vutuv.Organizations do
   import Ecto.Query, warn: false
   import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
   import Vutuv.Organizations.Query, only: [organization_public_row: 1]
-  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
+  import Vutuv.SearchText, only: [contains: 1, normalize_search: 1]
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
@@ -234,7 +234,7 @@ defmodule Vutuv.Organizations do
     if String.length(trimmed) < 2 do
       []
     else
-      like = "%" <> escape_like(trimmed) <> "%"
+      like = contains(trimmed)
 
       Repo.all(
         from(u in User,
@@ -1367,7 +1367,7 @@ defmodule Vutuv.Organizations do
 
   # Case-insensitive match on name, city OR any alias, LIKE wildcards escaped.
   defp name_or_city_ilike(query, term) do
-    pattern = "%" <> escape_like(term) <> "%"
+    pattern = contains(term)
 
     from(c in query,
       where:
@@ -1450,7 +1450,7 @@ defmodule Vutuv.Organizations do
   defp admin_status_filter(query, _all), do: query
 
   defp admin_search(query, term) do
-    pattern = "%" <> escape_like(term) <> "%"
+    pattern = contains(term)
 
     from(c in query,
       where:

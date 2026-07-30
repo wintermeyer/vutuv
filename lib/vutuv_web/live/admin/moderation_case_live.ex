@@ -149,7 +149,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                 {full_name(@case.owner)}
               </p>
               <p class="text-sm">
-                <a href={~p"/#{@case.owner}"} class="font-semibold text-brand-600 hover:text-brand-700">
+                <a href={~p"/#{@case.owner}"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                   @{@case.owner.username}
                 </a>
                 <span class={[
@@ -205,7 +205,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
             )}
           </p>
           <p class="mt-2">
-            <a href={~p"/#{@case.owner}"} class="text-sm font-semibold text-brand-600 hover:text-brand-700">
+            <a href={~p"/#{@case.owner}"} class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
               {gettext("Open the profile")} ›
             </a>
           </p>
@@ -214,7 +214,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
         <p :if={@case.content_type == "job_posting" && @content} class="mt-3">
           <a
             href={~p"/jobs/#{@content.slug}"}
-            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {gettext("Open the job posting")} ›
           </a>
@@ -281,7 +281,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
               <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
                 {category_label(report.category)}
               </span>
-              <a href={~p"/#{report.reporter}"} class="ml-1 font-semibold text-brand-600 hover:text-brand-700">
+              <a href={~p"/#{report.reporter}"} class="ml-1 font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                 @{report.reporter.username}
               </a>
               <% stats = @reporter_stats[report.id] %>

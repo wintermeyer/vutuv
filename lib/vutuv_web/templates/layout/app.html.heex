@@ -51,7 +51,11 @@ pages `phx-click="lv:clear-flash"` also clears the server-side flash. --%>
 navigation and the content. Only dead pages get the assign (see
 VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
 <%= if assigns[:ad_banner] do %>
-  <.ad_banner banner={@ad_banner} />
+  <%!-- The plug's assign is only the eligibility marker; what the banner
+  shows is resolved here, at render time, so a response that never renders
+  the layout (agent formats, redirects, LiveView dispatches) never pays the
+  banner query. --%>
+  <.ad_banner banner={Vutuv.Ads.current_banner()} />
 <% end %>
 
 <%!-- pb-24 clears the fixed mobile tab bar on normal pages. The full-screen

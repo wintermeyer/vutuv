@@ -285,7 +285,7 @@ defmodule VutuvWeb.Admin.JobLive do
                     type="button"
                     phx-click="select"
                     phx-value-id={posting.id}
-                    class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+                    class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                   >
                     {gettext("Details")} ›
                   </button>
@@ -316,7 +316,7 @@ defmodule VutuvWeb.Admin.JobLive do
         <div class="min-w-0">
           <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100">{@detail.posting.title}</h2>
           <p class="text-sm text-slate-600 dark:text-slate-400">
-            <.link navigate={~p"/jobs/#{@detail.posting.slug}"} class="text-brand-600 hover:text-brand-700">
+            <.link navigate={~p"/jobs/#{@detail.posting.slug}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
               /jobs/{@detail.posting.slug}
             </.link>
           </p>
@@ -331,7 +331,7 @@ defmodule VutuvWeb.Admin.JobLive do
           <dt class="card__label">{gettext("Poster")}</dt>
           <dd class="mt-1 text-sm text-slate-700 dark:text-slate-300">
             <p :if={@detail.posting.user}>
-              <.link navigate={~p"/#{@detail.posting.user.username}"} class="text-brand-600 hover:text-brand-700">
+              <.link navigate={~p"/#{@detail.posting.user.username}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                 @{@detail.posting.user.username}
               </.link>
               <span class="text-slate-500">{member_name(@detail.posting.user)}</span>
@@ -346,7 +346,7 @@ defmodule VutuvWeb.Admin.JobLive do
             <p :if={@detail.posting.organization}>
               <.link
                 navigate={~p"/organizations/#{@detail.posting.organization.slug}"}
-                class="text-brand-600 hover:text-brand-700"
+                class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
                 {@detail.posting.organization.name}
               </.link>
@@ -445,7 +445,7 @@ defmodule VutuvWeb.Admin.JobLive do
             </span>
             <.link
               navigate={~p"/admin/moderation/#{mod_case.id}"}
-              class="font-semibold text-brand-600 hover:text-brand-700"
+              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             >
               {gettext("Open case")} ›
             </.link>

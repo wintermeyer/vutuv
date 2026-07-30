@@ -62,6 +62,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
+  alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Markdown
   alias VutuvWeb.NotificationLive.Groups
   alias VutuvWeb.UserHelpers
@@ -89,7 +90,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     # highlights - and its badge count, both captured *before* this visit
     # advances the marker below.
     read_marker = user.notifications_read_at
-    new_count = if connected?(socket), do: Activity.unread_notification_count(user.id), else: 0
+    new_count = if connected?(socket), do: Activity.unread_notification_count(user), else: 0
 
     if connected?(socket) do
       Activity.subscribe(user.id)
@@ -195,8 +196,36 @@ defmodule VutuvWeb.NotificationLive.Index do
   # One numbered page of the feed under the active filter, plus the filtered
   # total the pager windows over. Both are one query per source / one query in
   # total, and both run on the static mount as well: the pager is part of the
-  # page, so a no-JS visitor and the first paint must carry it.
+  # page, so a no-JS visitor and the first paint must carry it. The static
+  # pass stashes what it computed and the connected mount's handle_params —
+  # moments later, same viewer, same URL — takes it instead of re-running the
+  # same queries (`VutuvWeb.Live.MountHandoff`). The subject carries the
+  # filter and the *requested* page, so a patch to another tab or page can
+  # never reuse a stale stash; any miss (expired, consumed, a patch, a
+  # reconnect) falls back to the plain full load. The visit's mark-read write
+  # lives in mount, not here, so the handoff leaves it at exactly once.
   defp load_page(socket) do
+    viewer_id = socket.assigns.current_user.id
+    subject = {:notifications, socket.assigns.filter, socket.assigns.page}
+
+    if connected?(socket) do
+      case MountHandoff.take(viewer_id, subject) do
+        {:ok, payload} -> apply_page(socket, payload)
+        :error -> apply_page(socket, page_payload(socket))
+      end
+    else
+      payload = page_payload(socket)
+      MountHandoff.stash(viewer_id, subject, payload)
+      apply_page(socket, payload)
+    end
+  end
+
+  # Everything one page load computes, as data — what the dead render hands
+  # the connected mount through the single-use stash. A payload map rather
+  # than an assigns diff because :page is corrected here (a ?page= past the
+  # end falls back), and a diff against the pre-existing raw value would lose
+  # that correction on the connected side.
+  defp page_payload(socket) do
     user = socket.assigns.current_user
     kinds = @filters[socket.assigns.filter]
 
@@ -208,10 +237,16 @@ defmodule VutuvWeb.NotificationLive.Index do
 
     feed = Activity.notifications_page(user.id, limit: @page_size, kinds: kinds, page: page)
 
+    %{
+      page: page,
+      total: total,
+      items: feed.entries |> with_seen_flags(user) |> with_post_previews(user)
+    }
+  end
+
+  defp apply_page(socket, payload) do
     socket
-    |> assign(:page, page)
-    |> assign(:total, total)
-    |> assign(:items, feed.entries |> with_seen_flags(user) |> with_post_previews(user))
+    |> assign(payload)
     |> assign_sections()
   end
 

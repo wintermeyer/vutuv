@@ -162,9 +162,7 @@ defmodule Vutuv.Posts.PostImage do
     do: image.show_camera_info and camera_info?(image)
 
   @doc "A fresh unguessable URL token (~128 bits, URL-safe)."
-  def gen_token do
-    16 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
-  end
+  defdelegate gen_token, to: Vutuv.Uploads
 
   @doc "Whether the author cropped this photo (the served frame ≠ the upload)."
   def cropped?(%__MODULE__{crop: crop}), do: is_binary(crop) and crop != ""

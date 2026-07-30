@@ -21,6 +21,12 @@ defmodule Vutuv.Moderation.Report do
 
   def categories, do: @categories
 
+  @doc """
+  The note's character cap — the changeset's `validate_length` and the form's
+  `maxlength` both read it, so they cannot disagree.
+  """
+  def max_note_length, do: @max_note_length
+
   @doc "The report categories offered for a given content type (wire string)."
   def categories_for("job_posting"), do: @job_categories
   def categories_for(_type), do: @categories

@@ -27,6 +27,7 @@ defmodule VutuvWeb.Markdown do
   """
 
   alias Vutuv.Accounts
+  alias Vutuv.Fediverse
   alias Vutuv.Posts.PostImage
   alias Vutuv.Tags
   alias VutuvWeb.CodeHighlight
@@ -546,10 +547,8 @@ defmodule VutuvWeb.Markdown do
   @two_dir_hosts ~w(github.com)
 
   defp keep_two_dirs?(host) do
-    host in @two_dir_hosts or host == own_host()
+    host in @two_dir_hosts or Fediverse.local_host?(host)
   end
-
-  defp own_host, do: String.replace_prefix(VutuvWeb.Endpoint.host(), "www.", "")
 
   # Keep the host plus up to `keep` leading path directories; a deeper, non-empty
   # segment collapses into a trailing `/…`. A lone trailing slash (or any empty
@@ -785,6 +784,13 @@ defmodule VutuvWeb.Markdown do
     text |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
   end
 
+  @doc """
+  A per-render hex nonce for collision-proof plain-text markers (the inline
+  post-image markers here, the footnote markers in `VutuvWeb.Markdown.Footnotes`):
+  an author cannot type a literal marker that collides with a generated one.
+  """
+  def marker_nonce, do: Base.encode16(:crypto.strong_rand_bytes(6))
+
   ## Inline post images
 
   # Swaps every allowed `![alt](url)` for a plain-text marker and returns the
@@ -792,7 +798,7 @@ defmodule VutuvWeb.Markdown do
   # so an author cannot type a literal marker that collides with a real one.
   defp extract_inline_images(text, images) do
     allowed = allowed_srcs(images)
-    nonce = Base.encode16(:crypto.strong_rand_bytes(6))
+    nonce = marker_nonce()
 
     @inline_image
     |> Regex.scan(text)

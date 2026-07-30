@@ -29,7 +29,7 @@ defmodule Vutuv.Jobs do
   """
 
   import Ecto.Query
-  import Vutuv.SearchText, only: [escape_like: 1]
+  import Vutuv.SearchText, only: [contains: 1, escape_like: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
@@ -964,11 +964,11 @@ defmodule Vutuv.Jobs do
   """
   def board_filters(raw, viewer) when is_map(raw) do
     %{
-      q: presence(raw["q"]),
+      q: normalize_search(raw["q"]),
       tags: parse_board_tags(raw["tag"]),
       workplace: parse_workplace(raw["workplace"]),
       employment: parse_employment(raw["employment"]),
-      near: presence(raw["near"]),
+      near: normalize_search(raw["near"]),
       radius: parse_radius(raw["radius"]),
       country: parse_country(raw["country"]),
       my_tags?: raw["my_tags"] in ["1", "true", "on"]
@@ -1174,8 +1174,8 @@ defmodule Vutuv.Jobs do
   # a remote posting stays in whenever its applicant countries include the
   # searched country, so "near me OR remote for me" is answered in one pass.
   defp filter_location(query, near, radius, country) do
-    near = presence(near)
-    country = presence(country)
+    near = normalize_search(near)
+    country = normalize_search(country)
 
     cond do
       is_nil(near) and is_nil(country) ->
@@ -1373,15 +1373,6 @@ defmodule Vutuv.Jobs do
     |> Repo.all()
   end
 
-  defp presence(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp presence(value), do: value
-
   # --- admin dashboard (#934) -----------------------------------------------
 
   @admin_per_page 25
@@ -1429,7 +1420,7 @@ defmodule Vutuv.Jobs do
   """
   def admin_jobs_page(opts \\ []) do
     today = BerlinTime.today()
-    search = presence(opts[:search])
+    search = normalize_search(opts[:search])
 
     query =
       from(p in JobPosting)
@@ -1506,7 +1497,7 @@ defmodule Vutuv.Jobs do
   defp admin_report_filter(query, _), do: query
 
   defp admin_search(query, term) do
-    pattern = "%" <> escape_like(term) <> "%"
+    pattern = contains(term)
 
     from(p in query,
       where:

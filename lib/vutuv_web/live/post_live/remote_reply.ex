@@ -27,6 +27,7 @@ defmodule VutuvWeb.PostLive.RemoteReply do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
+  alias VutuvWeb.Live.InitAssigns
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
@@ -38,7 +39,7 @@ defmodule VutuvWeb.PostLive.RemoteReply do
     if note && visible?(note, viewer) do
       {:ok, assign_gate(socket, note, viewer)}
     else
-      {:ok, not_found(socket)}
+      {:ok, InitAssigns.not_found(socket)}
     end
   end
 
@@ -72,12 +73,6 @@ defmodule VutuvWeb.PostLive.RemoteReply do
         |> put_flash(:error, answer_refusal_message(reason))
         |> redirect(to: Posts.path(socket.assigns.post))
     end
-  end
-
-  defp not_found(socket) do
-    socket
-    |> put_flash(:error, gettext("Sorry, that page could not be found."))
-    |> redirect(to: ~p"/")
   end
 
   @impl true

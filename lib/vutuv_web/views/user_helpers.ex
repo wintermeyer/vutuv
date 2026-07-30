@@ -2,6 +2,13 @@ defmodule VutuvWeb.UserHelpers do
   @moduledoc false
 
   use Gettext, backend: VutuvWeb.Gettext
+  # For the shared pin-to-headline function components below (issue #833/#882).
+  use Phoenix.Component
+
+  use Phoenix.VerifiedRoutes,
+    endpoint: VutuvWeb.Endpoint,
+    router: VutuvWeb.Router,
+    statics: ~w(assets fonts images favicon.ico)
 
   import Ecto.Query
   import Ecto, only: [assoc: 2]
@@ -296,6 +303,86 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   defp truncate_headline(line, _len), do: line
+
+  @doc """
+  The CV entry (work experience or education) a member pinned as their profile
+  headline, found in the already-loaded list, or nil when they use the
+  automatic resolution. `id` is the member's `users.profile_work_experience_id`
+  (issue #833) or `users.profile_education_id` (issue #882). The headline is
+  ONE mutually exclusive slot — `Vutuv.Accounts.pin_profile_work_experience/2`
+  and `Vutuv.Accounts.pin_profile_education/2` each clear the other kind's pin
+  in the same write — so both management lists resolve their marker through
+  this single helper.
+  """
+  def pinned_entry(_entries, nil), do: nil
+  def pinned_entry(entries, id), do: Enum.find(entries, &(&1.id == id))
+
+  @doc """
+  The star that marks (and toggles) which entry supplies the profile headline
+  on the management lists (issues #833 + #882): solid when this entry is the
+  pinned one, outline as the "pin this one instead" affordance otherwise. One
+  path renders both, colour and fill come from the caller's classes.
+  """
+  attr(:filled, :boolean, default: false)
+  attr(:class, :string, default: "h-4 w-4")
+
+  def pin_star(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      viewBox="0 0 20 20"
+      fill={if(@filled, do: "currentColor", else: "none")}
+      stroke="currentColor"
+      stroke-width={if(@filled, do: "0", else: "1.5")}
+      aria-hidden="true"
+    >
+      <path
+        stroke-linejoin="round"
+        d="M10 1.75l2.6 5.27 5.82.846-4.21 4.104.994 5.796L10 15.1l-5.204 2.736.994-5.796L1.58 7.866l5.82-.846L10 1.75z"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
+  The owner's per-entry "pin to the profile headline" control, shared by the
+  work-experience timeline (issue #833) and the education list (issue #882):
+  the solid-star "Shown at the top of your profile" marker when this entry
+  holds the headline, else the outlined pill that PUTs the pin. The headline
+  is one mutually exclusive slot across both kinds — pinning either clears the
+  other (see `Vutuv.Accounts.pin_profile_work_experience/2` /
+  `Vutuv.Accounts.pin_profile_education/2`) — which is why the two template
+  families render this one control instead of drifting copies.
+  """
+  attr(:kind, :atom, required: true, values: [:work, :education])
+  attr(:entry, :any, required: true)
+  attr(:pinned_id, :any, default: nil)
+
+  def headline_pin_controls(assigns) do
+    ~H"""
+    <div class="mt-2">
+      <span
+        :if={@pinned_id == @entry.id}
+        class="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 dark:text-brand-400"
+      >
+        <.pin_star filled class="h-4 w-4" />
+        {gettext("Shown at the top of your profile")}
+      </span>
+      <.link
+        :if={@pinned_id != @entry.id}
+        href={headline_pin_path(@kind, @entry)}
+        method="put"
+        class="inline-flex items-center gap-1 rounded-full border border-brand-600 px-3 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/40"
+      >
+        <.pin_star class="h-4 w-4" />
+        {gettext("Show at top of profile")}
+      </.link>
+    </div>
+    """
+  end
+
+  defp headline_pin_path(:work, entry), do: ~p"/settings/work_experiences/#{entry}/pin"
+  defp headline_pin_path(:education, entry), do: ~p"/settings/educations/#{entry}/pin"
 
   @doc """
   The profile page's meta description: the current work line, optionally

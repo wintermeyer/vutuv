@@ -254,6 +254,33 @@ defmodule VutuvWeb.AgentFormatTest do
     end
   end
 
+  describe "the profile counts" do
+    test "the one-union counts match the four single count queries" do
+      # The doc builder folds followers/following/connections/posts into one
+      # union round trip (`ProfileDoc.profile_counts/2`); this pins the tagged
+      # arms to the numbers the four single queries used to answer.
+      member = insert_activated_user()
+      mutual = insert_activated_user()
+      fan = insert_activated_user()
+
+      # fan and mutual follow the member; the member follows mutual back, so
+      # that pair is vernetzt — followers 2, following 1, connections 1.
+      {:ok, _} = Vutuv.Social.follow(fan, member.id)
+      {:ok, _} = Vutuv.Social.follow(mutual, member.id)
+      {:ok, _} = Vutuv.Social.follow(member, mutual.id)
+      {:ok, _} = Vutuv.Posts.create_post(member, %{body: "Zahlen bitte."})
+
+      doc = Jason.decode!(get(build_conn(), "/#{member.username}.json").resp_body)
+
+      assert doc["counts"] == %{
+               "followers" => 2,
+               "following" => 1,
+               "connections" => 1,
+               "posts" => 1
+             }
+    end
+  end
+
   describe "anonymous-view enforcement" do
     test "a moderation-hidden account has no agent documents, even for its owner", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)

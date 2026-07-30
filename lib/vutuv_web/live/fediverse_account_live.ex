@@ -46,6 +46,7 @@ defmodule VutuvWeb.FediverseAccountLive do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
+  alias VutuvWeb.Live.InitAssigns
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -70,10 +71,7 @@ defmodule VutuvWeb.FediverseAccountLive do
          |> load_posts()}
 
       _ ->
-        {:ok,
-         socket
-         |> put_flash(:error, gettext("Sorry, that page could not be found."))
-         |> redirect(to: ~p"/feed")}
+        {:ok, InitAssigns.not_found(socket, ~p"/feed")}
     end
   end
 

@@ -2327,7 +2327,7 @@ defmodule VutuvWeb.PostLive.Composer do
           phx-click="insert-inline"
           phx-value-id={@image.id}
           phx-target={@myself}
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           ↳ {gettext("Insert into text")}
         </button>
@@ -2339,7 +2339,7 @@ defmodule VutuvWeb.PostLive.Composer do
           phx-click="photo-apply-all"
           phx-value-id={@image.id}
           phx-target={@myself}
-          class="ml-auto text-sm font-semibold text-brand-600 hover:text-brand-700"
+          class="ml-auto text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           data-photo-apply-all
         >
           {gettext("Apply these settings to all photos")}

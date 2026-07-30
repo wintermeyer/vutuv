@@ -1652,7 +1652,7 @@ defmodule VutuvWeb.PostComponents do
         <.link
           :if={@back_href}
           href={@back_href}
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {@back_label}
         </.link>
@@ -2563,7 +2563,7 @@ defmodule VutuvWeb.PostComponents do
           aria-controls={@body_id}
           data-label-more={gettext("Read more")}
           data-label-less={gettext("Show less")}
-          class="post-preview__more text-sm font-medium text-brand-600 hover:text-brand-700"
+          class="post-preview__more text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {gettext("Read more")}
         </button>
@@ -3093,7 +3093,7 @@ defmodule VutuvWeb.PostComponents do
 
   # The pushpin marking the post a member showcases on their profile (issue
   # #1110). Private to this module by convention: the pin is a post idea, and
-  # the profile job pin has its own star (`WorkExperienceHTML.pin_star/1`).
+  # the profile headline pin has its own star (`VutuvWeb.UserHelpers.pin_star/1`).
   attr(:class, :string, default: "h-5 w-5")
 
   defp icon_pin(assigns) do
@@ -3476,7 +3476,7 @@ defmodule VutuvWeb.PostComponents do
   # Open Library page, the store link — so they read as one consistent link
   # (brand blue, no underline) instead of a mix.
   defp review_link_class,
-    do: "text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-200"
+    do: "text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
 
   # The credited source of a fetched cover: the book's own Open Library page
   # when we have the ISBN it was fetched by, else the site itself.

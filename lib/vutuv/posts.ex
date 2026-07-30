@@ -49,11 +49,12 @@ defmodule Vutuv.Posts do
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
-  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
+  import Vutuv.SearchText, only: [contains: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.PostRepost, as: FediversePostRepost
+  alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Mentions
@@ -77,6 +78,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
+  alias Vutuv.Posts.TopPosters
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
   alias Vutuv.Tags
@@ -991,10 +993,10 @@ defmodule Vutuv.Posts do
     Repo.exists?(from(r in PostReply, where: r.parent_post_id == ^post_id))
   end
 
-  @doc "Whether any likes of this post exist (the edit lock, like reposts)."
-  def has_likes?(%Post{id: id}), do: has_likes?(id)
+  # Whether any likes of this post exist (the edit lock, like reposts).
+  defp has_likes?(%Post{id: id}), do: has_likes?(id)
 
-  def has_likes?(post_id) when is_binary(post_id) do
+  defp has_likes?(post_id) when is_binary(post_id) do
     Repo.exists?(from(l in PostLike, where: l.post_id == ^post_id))
   end
 
@@ -1538,7 +1540,7 @@ defmodule Vutuv.Posts do
   end
 
   defp filter_posts_by_tag(query, tag, false) do
-    infix = "%" <> escape_like(tag) <> "%"
+    infix = contains(tag)
 
     sub =
       from(pt in PostTag,
@@ -2092,11 +2094,24 @@ defmodule Vutuv.Posts do
   them, as listing-row `User` structs. A suggestion is a promise that
   following fills your feed, so the pool is built from demonstrated recent
   output and the ranking from what readers actually liked about it; a
-  most-followed veteran who went quiet does not qualify. Local hearts only,
-  like the discover rail's ranking (fediverse reactions stay out); no
-  self-like filter is needed since a member cannot like their own post.
+  most-followed veteran who went quiet does not qualify. Local hearts only
+  (this ranks authors, not a shown per-post count, so folded fediverse
+  reactions stay out); no self-like filter is needed since a member cannot
+  like their own post.
+
+  Viewer-independent, so it is served from the `Vutuv.Posts.TopPosters`
+  snapshot when that can answer (10-minute freshness, the
+  `Vutuv.Social.PopularUsers` deal) and computed live on a miss.
   """
   def top_recent_posters(days, limit) do
+    case TopPosters.top(days, limit) do
+      {:ok, users} -> users
+      :miss -> compute_top_recent_posters(days, limit)
+    end
+  end
+
+  @doc false
+  def compute_top_recent_posters(days, limit) do
     # Re-imported locally: a scoped `import Mod, only:` replaces the module
     # import's visible names inside this function, so both macros must appear.
     import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
@@ -2367,15 +2382,19 @@ defmodule Vutuv.Posts do
 
   # The like counts the rail ranks on, rolled up once for the whole table
   # (likes are far rarer than posts, so this beats a correlated count per
-  # candidate row). No self-like filter is needed: a member cannot like their
-  # own post (enforced in `like_post/2`, issue #1030), so every like is by
-  # someone other than the author.
+  # candidate row). One figure per post: vutuv's own likes plus the favourites
+  # other networks sent (issue #1068) — the same folding `shown_counts/1` and
+  # `fetch_recent_posts/4` do, so the rail's bar can never mean something else
+  # than the heart the reader sees beside the post. No self-like filter is
+  # needed: a member cannot like their own post (enforced in `like_post/2`,
+  # issue #1030), so every like is by someone other than the author.
   defp discover_like_counts do
-    from(l in PostLike,
-      join: p in Post,
-      on: p.id == l.post_id,
-      group_by: l.post_id,
-      select: %{post_id: l.post_id, likes: count(l.id)}
+    local = from(l in PostLike, select: %{post_id: l.post_id})
+    remote = from(r in Reaction, where: r.kind == "like", select: %{post_id: r.post_id})
+
+    from(x in subquery(union_all(local, ^remote)),
+      group_by: x.post_id,
+      select: %{post_id: x.post_id, likes: count(x.post_id)}
     )
   end
 
@@ -3138,12 +3157,10 @@ defmodule Vutuv.Posts do
     Map.put(entry, :children, children)
   end
 
-  @doc """
-  `posts` in reading order: `thread_forest/1` walked depth-first, so every
-  reply directly follows the post it answers and a branch's answers stay
-  together instead of being interleaved by the clock.
-  """
-  def thread_order(posts) do
+  # `posts` in reading order: `thread_forest/1` walked depth-first, so every
+  # reply directly follows the post it answers and a branch's answers stay
+  # together instead of being interleaved by the clock.
+  defp thread_order(posts) do
     posts |> Enum.map(&%{post: &1}) |> thread_forest() |> flatten_forest()
   end
 
@@ -3237,7 +3254,7 @@ defmodule Vutuv.Posts do
   defp filter_engaged_search(query, nil), do: query
 
   defp filter_engaged_search(query, term) do
-    pattern = "%" <> escape_like(term) <> "%"
+    pattern = contains(term)
 
     from([p, author: a] in query,
       where: ilike(p.body, ^pattern) or name_ilike(a.first_name, a.last_name, ^pattern)
@@ -3697,8 +3714,8 @@ defmodule Vutuv.Posts do
   # forgotten writing. Per installation: POST_DRAFT_RETENTION_DAYS.
   @default_draft_max_age_days 30
 
-  @doc "How many days an untouched draft is kept."
-  def draft_max_age_days,
+  # How many days an untouched draft is kept.
+  defp draft_max_age_days,
     do: Application.get_env(:vutuv, :post_draft_retention_days, @default_draft_max_age_days)
 
   @doc """
@@ -3852,7 +3869,7 @@ defmodule Vutuv.Posts do
     if String.length(term) < 2 do
       []
     else
-      pattern = "%" <> escape_like(term) <> "%"
+      pattern = contains(term)
 
       Repo.all(
         from(u in User,
@@ -3979,12 +3996,11 @@ defmodule Vutuv.Posts do
     broadcast_post_followers_event(post_id, :post_screenshot_ready)
   end
 
-  @doc """
-  The counterpart to `broadcast_screenshot_ready/1`: the author removed a post's
-  auto link screenshot, so open feeds/profiles drop it from the card with no
-  reload. Fans out to the same recipients (author topic + followers' feeds).
-  """
-  def broadcast_screenshot_removed(post_id) when is_binary(post_id) do
+  # The counterpart to `broadcast_screenshot_ready/1`: the author removed a
+  # post's auto link screenshot, so open feeds/profiles drop it from the card
+  # with no reload. Fans out to the same recipients (author topic + followers'
+  # feeds).
+  defp broadcast_screenshot_removed(post_id) when is_binary(post_id) do
     broadcast_post_followers_event(post_id, :post_screenshot_removed)
   end
 

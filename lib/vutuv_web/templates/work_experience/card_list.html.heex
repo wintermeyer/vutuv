@@ -19,7 +19,7 @@ hidden in the Public preview. --%>
   class="mb-5 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400"
 >
   <%= cond do %>
-    <% pinned = pinned_job(@work_experience, @profile_work_experience_id) -> %>
+    <% pinned = pinned_entry(@work_experience, @profile_work_experience_id) -> %>
       <.pin_star filled class="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" />
       <span>
         {gettext("%{job} shows at the top of your profile.",

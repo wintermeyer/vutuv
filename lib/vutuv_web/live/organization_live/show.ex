@@ -244,7 +244,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
                   href={@organization.website_url}
                   rel="nofollow noopener"
                   target="_blank"
-                  class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+                  class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
                   {display_url(@organization.website_url)}
                 </a>
@@ -258,21 +258,21 @@ defmodule VutuvWeb.OrganizationLive.Show do
                 <.link
                   :if={@can_edit?}
                   navigate={~p"/organizations/#{@organization.slug}/edit"}
-                  class="font-semibold text-brand-600 hover:text-brand-700"
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
                   {gettext("Edit")}
                 </.link>
                 <.link
                   :if={@owner?}
                   navigate={~p"/organizations/#{@organization.slug}/roles"}
-                  class="font-semibold text-brand-600 hover:text-brand-700"
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
                   {gettext("Team")}
                 </.link>
                 <.link
                   :if={@owner?}
                   navigate={~p"/organizations/#{@organization.slug}/domains"}
-                  class="font-semibold text-brand-600 hover:text-brand-700"
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
                   {gettext("Domains")}
                 </.link>

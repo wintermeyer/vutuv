@@ -20,6 +20,8 @@ defmodule Vutuv.Fediverse.Handle do
   host is shown instead, because the host is always true.
   """
 
+  alias Vutuv.SearchText
+
   # Shaped like a name at all: one path segment, no whitespace, no separators,
   # and short enough not to be a wall of text in a chip.
   @username ~r/^[A-Za-z0-9_.-]{1,64}$/
@@ -31,7 +33,7 @@ defmodule Vutuv.Fediverse.Handle do
   — for a URI we cannot even parse a host out of — to the stored handle or nil.
   """
   def display(handle, actor_uri) do
-    case {present(handle) || derive(actor_uri), host(actor_uri)} do
+    case {SearchText.normalize_search(handle) || derive(actor_uri), host(actor_uri)} do
       {nil, nil} -> nil
       {name, nil} -> "@" <> name
       {nil, host} -> "@" <> host
@@ -68,13 +70,4 @@ defmodule Vutuv.Fediverse.Handle do
   defp username(candidate) do
     if Regex.match?(@username, candidate), do: candidate
   end
-
-  defp present(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp present(_value), do: nil
 end

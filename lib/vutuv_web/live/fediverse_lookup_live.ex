@@ -303,7 +303,7 @@ defmodule VutuvWeb.FediverseLookupLive do
               <.link
                 navigate={elem(@refusal_link, 0)}
                 id="lookup-refusal-link"
-                class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+                class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
                 {elem(@refusal_link, 1)} ›
               </.link>
@@ -417,7 +417,7 @@ defmodule VutuvWeb.FediverseLookupLive do
             <.link
               navigate={~p"/settings/fediverse/following"}
               id="following-link"
-              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             >
               {gettext("Accounts you follow elsewhere")} ›
             </.link>

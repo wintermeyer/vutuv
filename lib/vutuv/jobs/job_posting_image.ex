@@ -46,9 +46,7 @@ defmodule Vutuv.Jobs.JobPostingImage do
   end
 
   @doc "A fresh unguessable URL token (~128 bits, URL-safe)."
-  def gen_token do
-    16 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
-  end
+  defdelegate gen_token, to: Vutuv.Uploads
 
   @doc "Root-relative proxy URL for a version of this image."
   def url(%__MODULE__{token: token}, version) when version in @versions do

@@ -145,7 +145,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
             </div>
 
             <div class="flex flex-wrap gap-2 text-sm">
-              <.link navigate={~p"/jobs/#{posting.slug}/edit"} class="font-semibold text-brand-600 hover:text-brand-700">
+              <.link navigate={~p"/jobs/#{posting.slug}/edit"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                 {gettext("Edit")}
               </.link>
               <button
@@ -164,7 +164,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
                 type="button"
                 phx-click="repost"
                 phx-value-id={posting.id}
-                class="font-semibold text-brand-600 hover:text-brand-700"
+                class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
                 {gettext("Repost")}
               </button>

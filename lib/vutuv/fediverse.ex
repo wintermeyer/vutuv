@@ -461,7 +461,7 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  defp contains(term), do: "%" <> SearchText.escape_like(String.trim_leading(term, "@")) <> "%"
+  defp contains(term), do: SearchText.contains(String.trim_leading(term, "@"))
 
   # The row's own id (UUID v7, so arrival order) is the last key of every sort,
   # so offset pagination stays stable across pages when the visible values tie
@@ -513,13 +513,11 @@ defmodule Vutuv.Fediverse do
     }
   end
 
-  @doc """
-  Members in good standing who opted in — the SQL mirror of `federated?/1`.
-  The good-standing arm delegates to `Vutuv.Moderation.Query.account_hidden_row/1`
-  (the one spelling of frozen/deactivated/suspended), so a changed suspension
-  boundary is edited in one place instead of drifting from `federated?/1` here.
-  """
-  def federating_member_count do
+  # Members in good standing who opted in — the SQL mirror of `federated?/1`.
+  # The good-standing arm delegates to `Vutuv.Moderation.Query.account_hidden_row/1`
+  # (the one spelling of frozen/deactivated/suspended), so a changed suspension
+  # boundary is edited in one place instead of drifting from `federated?/1` here.
+  defp federating_member_count do
     Repo.aggregate(
       from(u in User,
         where: u.fediverse_followers? and u.email_confirmed? and not account_hidden_row(u)
@@ -572,15 +570,13 @@ defmodule Vutuv.Fediverse do
     )
   end
 
-  @doc """
-  The distinct inboxes of the accounts this member **follows** (issue #1160).
-
-  Deliberately separate from `delivery_inboxes/1` and never used for posts: an
-  account somebody follows never asked to receive their writing. It exists for
-  the one message those servers do have to hear — "this actor is gone" — so a
-  deleted or removed member stops being delivered to from the other side too.
-  """
-  def followed_inboxes(%User{id: user_id}) do
+  # The distinct inboxes of the accounts this member **follows** (issue #1160).
+  #
+  # Deliberately separate from `delivery_inboxes/1` and never used for posts: an
+  # account somebody follows never asked to receive their writing. It exists for
+  # the one message those servers do have to hear — "this actor is gone" — so a
+  # deleted or removed member stops being delivered to from the other side too.
+  defp followed_inboxes(%User{id: user_id}) do
     Repo.all(
       from(f in Follow,
         join: a in RemoteAccount,
@@ -807,11 +803,9 @@ defmodule Vutuv.Fediverse do
     Repo.get_by(Follow, user_id: user_id, remote_account_id: account_id)
   end
 
-  @doc """
-  One of the member's own follows, with the remote account preloaded, or nil.
-  Scoped to the member, so an id from somebody else's page resolves to nothing.
-  """
-  def get_remote_follow(%User{id: user_id}, follow_id) do
+  # One of the member's own follows, with the remote account preloaded, or nil.
+  # Scoped to the member, so an id from somebody else's page resolves to nothing.
+  defp get_remote_follow(%User{id: user_id}, follow_id) do
     UUIDv7.with_cast(follow_id, fn id ->
       Repo.one(
         from(f in Follow,
@@ -1111,6 +1105,28 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  @doc """
+  The path segments of one of **our own** URLs, or nil for any other server's.
+
+  The whole-URL counterpart of `local_host?/1` (issue #1211): parse, ask
+  whether the host is ours — so the `www.`/`http`/port/case spellings of the
+  same page all count — and hand back the path split on `/` with empty
+  segments dropped, so a trailing slash never changes the answer (the query
+  and the fragment are not in `path` at all). Every "which record does this
+  URL of ours name" reader pattern-matches these segments instead of
+  prefix-matching `Endpoint.url()`, which misses every alternate spelling.
+  """
+  def local_path(url) when is_binary(url) do
+    with true <- local_host?(url),
+         %URI{path: path} <- URI.parse(url) do
+      String.split(path || "", "/", trim: true)
+    else
+      _ -> nil
+    end
+  end
+
+  def local_path(_), do: nil
+
   # `www.` is not another installation. Serving a site at both the apex and its
   # `www.` alias is the oldest convention on the web, and every caller here asks
   # "is this us", never "is this byte-identical to the configured host" — so an
@@ -1379,9 +1395,6 @@ defmodule Vutuv.Fediverse do
   def remote_post_retention_days,
     do: Application.get_env(:vutuv, :fediverse_post_retention_days, @remote_post_retention_days)
 
-  @doc "How many cached posts one member may report per day."
-  def remote_post_report_limit, do: @remote_post_report_limit
-
   @doc """
   Stores a post a followed account published (`Create(Note)` / `Create(Question)`).
 
@@ -1604,15 +1617,16 @@ defmodule Vutuv.Fediverse do
         where: is_nil(rp.id) or rp.remote_account_id not in subquery(muted_authors),
         order_by: [desc: b.announced_at, desc: b.id],
         limit: ^fetch_n,
-        # A boosted vutuv post is preloaded with its `denials` rather than its
-        # author: that is what the visibility check below reads, and everything
+        # A boosted vutuv post carries `denials` (the card's 🔒 marker reads
+        # them) and its author (`filter_visible_boosts/2`'s moderation check
+        # reads the struct instead of re-fetching the user per row); the rest
         # a card needs is preloaded once for the whole page by `Vutuv.Posts`.
-        preload: [remote_account: a, remote_post: [:remote_account], post: :denials]
+        preload: [remote_account: a, remote_post: [:remote_account], post: [:denials, :user]]
       )
       |> utc_at_or_before(cursor, :announced_at)
       |> Repo.all()
       |> Enum.map(&boost_entry/1)
-      |> Enum.filter(&boost_visible?(&1, viewer))
+      |> filter_visible_boosts(viewer)
     else
       []
     end
@@ -1632,28 +1646,74 @@ defmodule Vutuv.Fediverse do
     }
   end
 
-  # Whatever the boost row still points at may have gone since (a reported copy,
-  # a deleted member post), and the audience of a **local** post can have
-  # narrowed after it was boosted — a boost must not be a way around that.
   # Whatever the boost still points at may have gone or changed since. A remote
-  # post can have been narrowed by an `Update`; a **local** post has to pass the
-  # viewer's own visibility scope in full — a boost must not be a way around a
-  # block, a moderation freeze, an image still with the AI gate or an author
-  # whose account is hidden, all of which `Posts.visible_to?/2` owns and none of
-  # which "is it restricted" answers.
-  defp boost_visible?(%{remote_post: %RemotePost{} = post}, _viewer),
-    do: RemotePost.open?(post)
+  # post can have been narrowed by an `Update` (`RemotePost.open?/1`, answered
+  # in memory); a **local** post has to pass the viewer's own visibility rules
+  # in full — a boost must not be a way around an audience restriction, a
+  # moderation freeze, an image still with the AI gate or an author whose
+  # account is hidden. Blocks are the one half post visibility does not own —
+  # they live in the feed queries, and this source is the only one that reaches
+  # a local post without going through them (a third party's reshare must not
+  # carry a blocked author's post into the viewer's feed, and here the third
+  # party is on another server entirely).
+  #
+  # Both local checks are resolved for the whole page at once instead of per
+  # row: one `Posts.scope_visible/2` id-set query (the SQL twin of
+  # `Posts.visible_to?/2`) plus one blocked-pairs query, where the per-row
+  # `visible_to?/2` + `blocked_between?/2` pair used to cost up to three
+  # queries for every boosted member post on the page. The one arm the scope
+  # does not carry is `visible_to?/2`'s admin bypass — an admin may see a
+  # moderation-hidden post — so that arm stays as the in-memory
+  # `Posts.moderation_hidden?/1` check (the author rides the preload above,
+  # so it costs no query).
+  defp filter_visible_boosts(entries, %User{id: viewer_id} = viewer) do
+    local_posts = for %{post: %Post{} = post} <- entries, do: post
+    visible_ids = visible_boost_post_ids(local_posts, viewer)
+    blocked_author_ids = blocked_boost_author_ids(local_posts, viewer_id)
 
-  defp boost_visible?(%{post: %Post{} = post}, %User{id: viewer_id} = viewer) do
-    # Blocks are the one half `visible_to?/2` does not own — they live in the
-    # feed queries, and this source is the only one that reaches a local post
-    # without going through them. The local repost source spells out why:
-    # a third party's reshare must not carry a blocked author's post into the
-    # viewer's feed, and here the third party is on another server entirely.
-    Posts.visible_to?(post, viewer) and not Social.blocked_between?(viewer_id, post.user_id)
+    Enum.filter(entries, fn
+      %{remote_post: %RemotePost{} = post} ->
+        RemotePost.open?(post)
+
+      %{post: %Post{} = post} ->
+        (MapSet.member?(visible_ids, post.id) or
+           (viewer.admin? == true and Posts.moderation_hidden?(post))) and
+          not MapSet.member?(blocked_author_ids, post.user_id)
+
+      _entry ->
+        false
+    end)
   end
 
-  defp boost_visible?(_entry, _viewer), do: false
+  defp visible_boost_post_ids([], _viewer), do: MapSet.new()
+
+  defp visible_boost_post_ids(posts, viewer) do
+    ids = Enum.map(posts, & &1.id)
+
+    from(p in Post, where: p.id in ^ids, select: p.id)
+    |> Posts.scope_visible(viewer)
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  # The authors among the page's boosted member posts that stand in a block
+  # with the viewer, either direction — the set form of
+  # `Social.blocked_between?/2`. Every returned row names the viewer on one
+  # side, so the counterpart is always the author.
+  defp blocked_boost_author_ids([], _viewer_id), do: MapSet.new()
+
+  defp blocked_boost_author_ids(posts, viewer_id) do
+    author_ids = posts |> Enum.map(& &1.user_id) |> Enum.uniq()
+
+    viewer_id
+    |> Social.blocks_involving()
+    |> where([b], b.blocker_id in ^author_ids or b.blocked_id in ^author_ids)
+    |> select([b], {b.blocker_id, b.blocked_id})
+    |> Repo.all()
+    |> MapSet.new(fn {blocker_id, blocked_id} ->
+      if blocker_id == viewer_id, do: blocked_id, else: blocker_id
+    end)
+  end
 
   defp remote_feed_entry(%RemotePost{} = post) do
     %{
@@ -1744,7 +1804,7 @@ defmodule Vutuv.Fediverse do
   report about it in a member's name would put them in a message to strangers
   they never asked to send. Deleting our copy is the whole action.
 
-  Rate limited per reporter (`remote_post_report_limit/0` a day).
+  Rate limited per reporter (`@remote_post_report_limit` a day).
   """
   def report_remote_post(post_id, %User{} = reporter) do
     case RateLimiter.hit(
@@ -1779,17 +1839,15 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  @doc """
-  Deletes the stored files of the pictures on `post_ids`, before their rows go.
-
-  The rows cascade with their post, but files do not: a deletion that leaves
-  bytes at rest is not a deletion, so every path that removes cached posts goes
-  through here first — the bulk sweeps (expiry, the unfollow purge, an instance
-  block, a deleted account) call it via `wipe_media/1`, and every single-post
-  delete goes through `delete_cached_post/1`, which is the one place a post row
-  is removed.
-  """
-  def delete_media_for_posts(post_ids) when is_list(post_ids) do
+  # Deletes the stored files of the pictures on `post_ids`, before their rows go.
+  #
+  # The rows cascade with their post, but files do not: a deletion that leaves
+  # bytes at rest is not a deletion, so every path that removes cached posts goes
+  # through here first — the bulk sweeps (expiry, the unfollow purge, an instance
+  # block, a deleted account) call it via `wipe_media/1`, and every single-post
+  # delete goes through `delete_cached_post/1`, which is the one place a post row
+  # is removed.
+  defp delete_media_for_posts(post_ids) when is_list(post_ids) do
     from(i in RemoteImage, where: i.remote_post_id in ^post_ids, select: i.id)
     |> Repo.all()
     |> Enum.each(&RemoteMedia.delete_post_image/1)
@@ -1942,8 +2000,8 @@ defmodule Vutuv.Fediverse do
     count
   end
 
-  @doc "How many cached posts are stored across the installation."
-  def remote_post_total, do: Repo.aggregate(RemotePost, :count)
+  # How many cached posts are stored across the installation.
+  defp remote_post_total, do: Repo.aggregate(RemotePost, :count)
 
   # How many of an account's cached posts the account page shows. It is a
   # preview — "what do they actually post", the thing that decides a follow —
@@ -2025,12 +2083,10 @@ defmodule Vutuv.Fediverse do
     )
   end
 
-  @doc """
-  What each remote server has stored here as cached posts, biggest first — the
-  third column of the operator's `/admin/fediverse` picture, beside the follower
-  and reply volumes. Capped at `limit` hosts.
-  """
-  def remote_post_hosts(limit \\ 20) do
+  # What each remote server has stored here as cached posts, biggest first —
+  # the third column of the operator's `/admin/fediverse` picture, beside the
+  # follower and reply volumes. Capped at `limit` hosts.
+  defp remote_post_hosts(limit) do
     Repo.all(
       from(p in RemotePost,
         join: a in RemoteAccount,
@@ -2105,7 +2161,7 @@ defmodule Vutuv.Fediverse do
   defp insert_remote_post(%RemoteAccount{} = account, object, audience) do
     received = DateTime.utc_now(:second)
 
-    with uri when is_binary(uri) <- presence(object["id"]),
+    with uri when is_binary(uri) <- SearchText.normalize_search(object["id"]),
          # Text, or a picture, or both. A picture-only post used to be dropped
          # for having nothing to show; since issue #1163 the picture IS what it
          # has, so an empty body only disqualifies a post that carries no
@@ -2118,7 +2174,7 @@ defmodule Vutuv.Fediverse do
         Map.merge(remote_post_attrs(object, text, audience), %{
           object_uri: uri,
           in_reply_to_uri: object["inReplyTo"],
-          origin_url: presence(object["url"]),
+          origin_url: SearchText.normalize_search(object["url"]),
           kind: remote_post_kind(object),
           published_at: published_at(object["published"], received),
           received_at: received,
@@ -2183,10 +2239,13 @@ defmodule Vutuv.Fediverse do
       |> poll_options()
       |> Enum.map_join("\n", &("• " <> &1))
 
-    [remote_text(object["content"], RemotePost.max_content()), presence(options)]
+    [
+      remote_text(object["content"], RemotePost.max_content()),
+      SearchText.normalize_search(options)
+    ]
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n\n")
-    |> presence()
+    |> SearchText.normalize_search()
   end
 
   defp remote_post_text(object), do: remote_text(object["content"], RemotePost.max_content())
@@ -2213,7 +2272,7 @@ defmodule Vutuv.Fediverse do
     options =
       for option <- List.wrap(object["oneOf"]) ++ List.wrap(object["anyOf"]),
           is_map(option),
-          name = presence(option["name"]),
+          name = SearchText.normalize_search(option["name"]),
           do: name
 
     Enum.take(options, 20)
@@ -2716,7 +2775,6 @@ defmodule Vutuv.Fediverse do
 
   defp addressed_users(activity) do
     object = if is_map(activity["object"]), do: activity["object"], else: %{}
-    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
 
     # `object["actor"]` is what names us in an `Accept`/`Reject` (issue #1160):
     # the answer wraps the Follow we sent, whose actor is our own member, and
@@ -2727,7 +2785,7 @@ defmodule Vutuv.Fediverse do
     |> Enum.filter(&is_binary/1)
     |> Enum.uniq()
     |> Enum.take(@inbox_addressed_cap)
-    |> Enum.flat_map(&local_username(&1, base))
+    |> Enum.flat_map(&local_username/1)
     |> users_by_username()
   end
 
@@ -2745,10 +2803,12 @@ defmodule Vutuv.Fediverse do
 
   # The member an actor or Note URL of ours hangs off, as a username. Anything
   # else — a foreign host, the public collection, a malformed URI — is a miss.
-  defp local_username(uri, base) do
-    case String.replace_prefix(uri, base, "") do
-      ^uri -> []
-      rest -> rest |> String.split("/") |> username_from_segments()
+  # Read through `local_path/1`, so the `www.`/`http` spellings a remote server
+  # may have learned for the same member still deliver (issue #1211).
+  defp local_username(uri) do
+    case local_path(uri) do
+      nil -> []
+      segments -> username_from_segments(segments)
     end
   end
 
@@ -2955,14 +3015,15 @@ defmodule Vutuv.Fediverse do
   defp truncate_handle(handle) when is_binary(handle), do: String.slice(handle, 0, 255)
   defp truncate_handle(_handle), do: nil
 
-  # The post behind an activity's `object`, but only when it is a Note URL we
-  # serve for *this* member. A URL naming somebody else's post, a foreign host,
+  # The post behind an activity's `object`, but only when it is a Note URL of
+  # ours naming *this* member's post. Ownership is checked on the row's own
+  # `user_id` — the id names the post, and the handle beside it goes stale on a
+  # rename — and `local_path/1` reads the URL, so the `www.`/`http` spellings
+  # count too (issue #1211). A URL naming somebody else's post, a foreign host,
   # or a malformed id is a miss (nil), never a raise.
   defp resolve_own_note(user, object) do
-    prefix = Docs.note_url(user, "")
-
     with uri when is_binary(uri) <- activity_object_id(object),
-         post_id when post_id != uri <- String.replace_prefix(uri, prefix, ""),
+         [_username, "posts", post_id] <- local_path(uri),
          %Post{user_id: user_id} = post when user_id == user.id <-
            UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
       post
@@ -3354,11 +3415,10 @@ defmodule Vutuv.Fediverse do
     :ok
   end
 
-  @doc """
-  What each remote server has stored here as replies, biggest first — the other
-  half of the operator's `/admin/fediverse` picture beside `inbound_hosts/1`.
-  """
-  def note_hosts(limit \\ 20) do
+  # What each remote server has stored here as replies, biggest first — the
+  # other half of the operator's `/admin/fediverse` picture beside
+  # `inbound_hosts/1`.
+  defp note_hosts(limit) do
     Repo.all(
       from(n in Note,
         group_by: uri_host(n.actor_uri),
@@ -3378,9 +3438,6 @@ defmodule Vutuv.Fediverse do
   def recent_note_events(limit \\ 25) do
     Repo.all(from(e in NoteEvent, order_by: [desc: e.id], limit: ^limit))
   end
-
-  @doc "How many remote replies are stored across the installation."
-  def note_total, do: Repo.aggregate(Note, :count)
 
   # An activity delivers what it claims, or it is dropped: a Create whose object
   # is a bare id is not worth an outbound request to a stranger's server.
@@ -3409,7 +3466,7 @@ defmodule Vutuv.Fediverse do
         |> Note.changeset(%{
           object_uri: uri,
           actor_uri: actor.uri,
-          origin_url: presence(object["url"]),
+          origin_url: SearchText.normalize_search(object["url"]),
           in_reply_to_uri: object["inReplyTo"],
           inbox_uri: own_inbox(actor),
           handle: actor.handle,
@@ -3448,7 +3505,15 @@ defmodule Vutuv.Fediverse do
 
   def own_inbox(_actor), do: nil
 
-  defp same_host?(a, b) when is_binary(a) and is_binary(b) do
+  @doc """
+  Whether `b` is an `https` URL on the same host as `a` — the anti-spoofing
+  predicate behind "an actor only speaks for its own host": an inbox, a keyId
+  or any other URL a remote document names for itself must live on the host of
+  the actor naming it, or an attacker-controlled host could serve documents
+  claiming somebody else's identity. The `https` pin sits on `b`, the URL that
+  gets fetched or delivered to.
+  """
+  def same_host?(a, b) when is_binary(a) and is_binary(b) do
     case {URI.parse(a), URI.parse(b)} do
       {%URI{host: host}, %URI{host: host, scheme: "https"}} when is_binary(host) and host != "" ->
         true
@@ -3458,7 +3523,7 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  defp same_host?(_a, _b), do: false
+  def same_host?(_a, _b), do: false
 
   # How the note was addressed, read from `to`/`cc` on **both** the Create and
   # the Note (servers put the audience on either). Only the public collection
@@ -3479,18 +3544,10 @@ defmodule Vutuv.Fediverse do
 
   defp remote_text(nil, _max), do: nil
 
-  defp remote_text(html, max) when is_binary(html), do: presence(RemoteHtml.to_text(html, max))
+  defp remote_text(html, max) when is_binary(html),
+    do: SearchText.normalize_search(RemoteHtml.to_text(html, max))
 
   defp remote_text(_html, _max), do: nil
-
-  defp presence(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp presence(_), do: nil
 
   # The nil UUID can never match a row: "not the author" without a NULL arm,
   # the same trick `Vutuv.Posts.engagement_viewer_id/1` uses.
@@ -3653,9 +3710,6 @@ defmodule Vutuv.Fediverse do
   end
 
   ## Keeping a reposted copy honest (issue #1166)
-
-  @doc "How long a reposted cached post may go unverified before its origin is asked again."
-  def repost_recheck_days, do: @repost_recheck_days
 
   @doc """
   Asks the origin of every reposted cached post that is due whether it is still
@@ -3989,14 +4043,21 @@ defmodule Vutuv.Fediverse do
 
   Consuming, so only the write path calls it.
   """
-  def claim_reply_budget(%User{id: user_id}) do
-    case RateLimiter.hit(
-           {:fediverse_outbound_reply, user_id},
-           outbound_reply_limit(),
-           @inbound_window_ms
-         ) do
+  def claim_reply_budget(%User{id: user_id}),
+    do:
+      claim_outbound_budget(
+        user_id,
+        :fediverse_outbound_reply,
+        outbound_reply_limit(),
+        :reply_capped
+      )
+
+  # The one spelling of "one slot from an hourly outbound budget" behind the
+  # reply/like/boost claims, so the window and the refusal shape stay uniform.
+  defp claim_outbound_budget(user_id, key, limit, error) do
+    case RateLimiter.hit({key, user_id}, limit, @inbound_window_ms) do
       :ok -> :ok
-      _ -> {:error, :reply_capped}
+      _ -> {:error, error}
     end
   end
 
@@ -4080,24 +4141,20 @@ defmodule Vutuv.Fediverse do
 
   def remote_post_readable?(_post, _viewer), do: false
 
-  @doc """
-  Claims one slot from the member's hourly like budget. `:ok`, or
-  `{:error, :like_capped}`.
-
-  Consuming, so only the write path calls it — and only the **like** path: an
-  unlike is a withdrawal, and refusing to let somebody take a like back because
-  they have been busy would be an odd shape of limit.
-  """
-  def claim_like_budget(%User{id: user_id}) do
-    case RateLimiter.hit(
-           {:fediverse_outbound_like, user_id},
-           outbound_like_limit(),
-           @inbound_window_ms
-         ) do
-      :ok -> :ok
-      _ -> {:error, :like_capped}
-    end
-  end
+  # Claims one slot from the member's hourly like budget. `:ok`, or
+  # `{:error, :like_capped}`.
+  #
+  # Consuming, so only the write path calls it — and only the **like** path: an
+  # unlike is a withdrawal, and refusing to let somebody take a like back
+  # because they have been busy would be an odd shape of limit.
+  defp claim_like_budget(%User{id: user_id}),
+    do:
+      claim_outbound_budget(
+        user_id,
+        :fediverse_outbound_like,
+        outbound_like_limit(),
+        :like_capped
+      )
 
   @doc "How many likes per hour one member may send to other networks."
   def outbound_like_limit,
@@ -4652,7 +4709,7 @@ defmodule Vutuv.Fediverse do
   # — a local actor URI would make us fetch ourselves and mint a foreign-looking
   # account row for a member.
   defp own_object?(uri, doc, author_uri) do
-    object_id = presence(doc["id"]) || uri
+    object_id = SearchText.normalize_search(doc["id"]) || uri
 
     same_host?(uri, object_id) and same_host?(object_id, author_uri) and
       not local_host?(author_uri)
@@ -4690,14 +4747,14 @@ defmodule Vutuv.Fediverse do
   defp announced_author(_doc), do: nil
 
   # A vutuv post URL of any member, not just one — a followed account can boost
-  # anybody here. Anchored on our own base URL, the way `local_username/2`
-  # reads an addressee: a foreign URL that merely copies the `/name/posts/id`
-  # shape names nothing of ours and has to be fetched like any other stranger's.
+  # anybody here. Anchored on `local_path/1`, the way `local_username/1` reads
+  # an addressee (so the `www.`/`http` spellings count): a foreign URL that
+  # merely copies the `/name/posts/id` shape names nothing of ours and has to
+  # be fetched like any other stranger's. Unlike `local_lookup_post/1` this one
+  # deliberately requires the handle and the id to agree — it decides whether a
+  # member's post may be redistributed on a remote actor's say-so.
   defp local_note_post(uri) do
-    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
-
-    with rest when rest != uri <- String.replace_prefix(uri, base, ""),
-         [username, "posts", post_id] <- String.split(rest, "/"),
+    with [username, "posts", post_id] <- local_path(uri),
          %User{} = user <- Accounts.get_user_by_username(username),
          %Post{user_id: user_id} = post when user_id == user.id <-
            UUIDv7.with_cast(post_id, &Repo.get(Post, &1)),
@@ -4905,12 +4962,7 @@ defmodule Vutuv.Fediverse do
   # say-so, where this only decides where to send a reader who is already here.
   # What they may see when they arrive is the permalink's own business.
   defp local_lookup_post(url) do
-    with true <- local_host?(url),
-         # The query and the fragment are not part of `path`, so a tracking
-         # parameter falls away by itself. `trim: true` drops the leading and a
-         # trailing empty segment in one go.
-         %URI{path: path} when is_binary(path) <- URI.parse(url),
-         [_username, "posts", post_id] <- String.split(path, "/", trim: true),
+    with [_username, "posts", post_id] <- local_path(url),
          %Post{} = post <- UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
       # With its author attached: the caller's next move is `Posts.path/1`.
       Repo.preload(post, :user)
@@ -5028,7 +5080,7 @@ defmodule Vutuv.Fediverse do
   # pasted URL — which is the point: the day that check changes, this one is
   # still asking the question the operator's block means.
   defp check_lookup_hosts(doc, url, author_uri) do
-    object_id = presence(doc["id"]) || url
+    object_id = SearchText.normalize_search(doc["id"]) || url
 
     if instance_blocked?(object_id) or instance_blocked?(author_uri),
       do: {:error, :instance_blocked},
@@ -5101,17 +5153,15 @@ defmodule Vutuv.Fediverse do
     # followers-only post shareable, then everything the like path asks.
     do: check_remote_post_reply(user, post)
 
-  @doc "Claims one slot from the member's hourly repost budget."
-  def claim_boost_budget(%User{id: user_id}) do
-    case RateLimiter.hit(
-           {:fediverse_outbound_boost, user_id},
-           outbound_boost_limit(),
-           @inbound_window_ms
-         ) do
-      :ok -> :ok
-      _ -> {:error, :boost_capped}
-    end
-  end
+  # Claims one slot from the member's hourly repost budget.
+  defp claim_boost_budget(%User{id: user_id}),
+    do:
+      claim_outbound_budget(
+        user_id,
+        :fediverse_outbound_boost,
+        outbound_boost_limit(),
+        :boost_capped
+      )
 
   @doc "How many reposts per hour one member may send to other networks."
   def outbound_boost_limit,
@@ -5354,8 +5404,8 @@ defmodule Vutuv.Fediverse do
     Repo.all(from(f in DeliveryFailure, order_by: [desc: f.id], limit: ^limit))
   end
 
-  @doc "How many takedowns gave up without arriving."
-  def delivery_failure_count, do: Repo.aggregate(DeliveryFailure, :count)
+  # How many takedowns gave up without arriving.
+  defp delivery_failure_count, do: Repo.aggregate(DeliveryFailure, :count)
 
   # Where a post's copies are, as `[{published_note_id, inboxes}]`. Grouped by
   # the id rather than flattened, because an `Update` sent after a rename

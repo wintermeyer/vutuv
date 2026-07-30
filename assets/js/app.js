@@ -108,7 +108,7 @@ function togglePreviewExpand(preview, btn) {
     preview.classList.toggle("is-clamped", !expanding)
   }
 
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (reducedMotion()) {
     flip()
     return
   }

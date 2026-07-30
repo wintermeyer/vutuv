@@ -1095,6 +1095,32 @@ defmodule VutuvWeb.UserProfileLive do
     end
   end
 
+  # THE single source of the per-section preview caps: preload_user_for_show/2
+  # limits its preloads with it and user/show.html.heex reads the same numbers
+  # for its `preview={...}` / "more than the preview" checks, so the queries
+  # and the template can never disagree. :experience rides along too — its
+  # preload is deliberately unlimited (see below) and the cap is applied
+  # in memory by WorkExperienceHTML.grouped_clusters/3, reached through the
+  # delegating WorkExperienceHTML.profile_preview_limit/0.
+  @preview_limits %{
+    experience: 10,
+    educations: 3,
+    languages: 6,
+    qualifications: 8,
+    phone_numbers: 3,
+    links: 3,
+    addresses: 3,
+    followers: 3,
+    following: 3
+  }
+
+  @doc """
+  How many entries a profile section card previews before its footer switches
+  to "View All (N)" — one number per section, shared by this LiveView's
+  preloads and the `preview={...}` checks in `user/show.html.heex`.
+  """
+  def preview_limit(section), do: Map.fetch!(@preview_limits, section)
+
   defp preload_user_for_show(user, owner?) do
     user
     |> Repo.preload(
@@ -1103,36 +1129,40 @@ defmodule VutuvWeb.UserProfileLive do
       user_tags: user_tags_query(),
       # Deliberately unlimited: the header-job pick must see every role (a
       # pinned one can sit outside the newest three; see load_profile). The
-      # Experience card takes its top 3 in memory; rows per member are few.
+      # Experience card takes its preview_limit(:experience) top roles in
+      # memory; rows per member are few.
       # display_preloads: the verified organization page (issue #931) and the
       # cited credential (issue #858) ride along for the Experience card.
       work_experiences:
         {WorkExperience.order_by_date(WorkExperience), WorkExperience.display_preloads()},
       educations:
-        from(e in Education, limit: 3)
+        from(e in Education, limit: ^preview_limit(:educations))
         |> Education.order_by_date(),
-      languages: Language.ordered() |> limit(6),
+      languages: Language.ordered() |> limit(^preview_limit(:languages)),
       # visible_to(owner?) hides expired credentials from visitors in SQL (the
       # same scope the section page, CV and agent docs use), so the card renders
       # what is loaded — no in-memory filter, and limit-after-filter is correct.
       # citing_jobs_preload: the jobs earned with each credential ride along
       # for the usage badges (issue #1005).
       qualifications:
-        {Qualification.visible_to(owner?) |> Qualification.ordered() |> limit(8),
-         Qualification.citing_jobs_preload()},
-      phone_numbers: PhoneNumber.ordered() |> limit(3),
-      urls: Url.ordered() |> limit(3),
-      addresses: Address.ordered() |> limit(3),
-      inbound_follows: {Follow.latest(3, :follower), [:follower]},
-      outbound_follows: {Follow.latest(3, :followee), [:followee]}
+        {Qualification.visible_to(owner?)
+         |> Qualification.ordered()
+         |> limit(^preview_limit(:qualifications)), Qualification.citing_jobs_preload()},
+      phone_numbers: PhoneNumber.ordered() |> limit(^preview_limit(:phone_numbers)),
+      urls: Url.ordered() |> limit(^preview_limit(:links)),
+      addresses: Address.ordered() |> limit(^preview_limit(:addresses)),
+      inbound_follows: {Follow.latest(preview_limit(:followers), :follower), [:follower]},
+      outbound_follows: {Follow.latest(preview_limit(:following), :followee), [:followee]}
     )
   end
 
   # The visible-tag preload, shared by the initial load and the live refresh:
   # up to 30 tags (honor tags first, then most-endorsed), each with only its
   # visible endorsers (and the endorser preloaded for the roster), so a hidden
-  # account can't inflate the count (issue #783). Keep this cap in sync with the
-  # `preview={30}` the Tags card's manage_footer uses in show.html.heex.
+  # account can't inflate the count (issue #783). The 30 is a defensive bound
+  # only, not a preview cap: members hold at most Vutuv.Tags.max_user_tags/0
+  # (15) tags, and the Tags card's footer always links to /:slug/tags instead
+  # of truncating on a preview threshold.
   defp user_tags_query do
     UserTag.ordered_by_endorsements()
     |> limit(30)

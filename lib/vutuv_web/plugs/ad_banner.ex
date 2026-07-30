@@ -9,13 +9,17 @@ defmodule VutuvWeb.Plug.AdBanner do
   so no banner serves anywhere.
 
   The cap counts **sightings, not attempts**: the plug only assigns
-  `:ad_banner` here, and the `before_send` hook marks the hour as used only
-  when the rendered page actually contains the banner (the `id="vutuv-ad"`
+  `:ad_banner` here (a bare eligibility marker — the layout resolves what the
+  banner shows at render time, so a page that never renders it never pays the
+  banner query), and the `before_send` hook marks the hour as used only when
+  the rendered page actually contains the banner (the `id="vutuv-ad"`
   marker). A redirect, a 404, an agent-format document or a LiveView page
   (whose layout renders from the socket, without conn assigns) therefore
-  never burns the visitor's slot. Writing the session in `before_send`
-  works because callbacks run last-registered-first, so the timestamp lands
-  before `Plug.Session` serializes the cookie.
+  never burns the visitor's slot — and for a LiveView dispatch the hook skips
+  the body scan outright, since the banner structurally cannot be in it.
+  Writing the session in `before_send` works because callbacks run
+  last-registered-first, so the timestamp lands before `Plug.Session`
+  serializes the cookie.
 
   The banner's ✕ control dismisses ads for the rest of the (Berlin) day:
   app.js writes a plain client-side cookie naming that day, and any request
@@ -50,7 +54,7 @@ defmodule VutuvWeb.Plug.AdBanner do
       conn
     else
       conn
-      |> assign(:ad_banner, Vutuv.Ads.current_banner())
+      |> assign(:ad_banner, true)
       |> register_before_send(&mark_seen/1)
     end
   end
@@ -89,12 +93,17 @@ defmodule VutuvWeb.Plug.AdBanner do
   end
 
   defp mark_seen(conn) do
-    if conn.status == 200 and banner_in_body?(conn) do
+    if conn.status == 200 and not live_view_route?(conn) and banner_in_body?(conn) do
       put_session(conn, :ad_seen_at, System.system_time(:second))
     else
       conn
     end
   end
+
+  # A LiveView page's layout renders from socket assigns, so the banner can
+  # never be in its response body — skip the whole-body scan instead of
+  # running it on every visit to /messages, /notifications and friends.
+  defp live_view_route?(conn), do: Map.has_key?(conn.private, :phoenix_live_view)
 
   defp banner_in_body?(%Plug.Conn{resp_body: body}) when not is_nil(body) do
     body |> IO.iodata_to_binary() |> String.contains?(@marker)

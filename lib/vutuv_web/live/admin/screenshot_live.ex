@@ -122,7 +122,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                 />
               </a>
               <p class="mt-2 truncate text-sm">
-                <.link navigate={Posts.path(ps.post)} class="font-semibold text-brand-600 hover:text-brand-700">
+                <.link navigate={Posts.path(ps.post)} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                   {gettext("Post by %{name}", name: full_name(ps.post.user))}
                 </.link>
               </p>

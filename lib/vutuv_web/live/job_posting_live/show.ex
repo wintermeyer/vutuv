@@ -174,10 +174,10 @@ defmodule VutuvWeb.JobPostingLive.Show do
       <aside class="space-y-4">
         <.card :if={@owner?} class="space-y-2 text-sm">
           <p class="font-semibold text-slate-900 dark:text-slate-100">{gettext("Your posting")}</p>
-          <.link navigate={~p"/jobs/#{@posting.slug}/edit"} class="block text-brand-600 hover:text-brand-700">
+          <.link navigate={~p"/jobs/#{@posting.slug}/edit"} class="block text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
             {gettext("Edit")}
           </.link>
-          <.link navigate={~p"/jobs/mine"} class="block text-brand-600 hover:text-brand-700">
+          <.link navigate={~p"/jobs/mine"} class="block text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
             {gettext("My postings")}
           </.link>
         </.card>

@@ -58,6 +58,7 @@ defmodule Vutuv.Moderation do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
+  alias Vutuv.SearchText
 
   @owner_deadline_hours 72
   @strike_ttl_days 365
@@ -1288,19 +1289,10 @@ defmodule Vutuv.Moderation do
       user_id: user.id,
       actor_id: admin.id,
       action: action,
-      reason: presence(reason)
+      reason: SearchText.normalize_search(reason)
     })
 
     :ok
-  end
-
-  defp presence(nil), do: nil
-
-  defp presence(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
   end
 
   @doc "How many accounts are currently in the moderation freezer (`frozen_at` set)."

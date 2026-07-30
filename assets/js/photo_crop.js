@@ -1,5 +1,6 @@
 // Ratio crop dialog for post photos — the composer's sibling of the avatar
-// crop modal (image_crop.js), with two differences that matter:
+// crop modal (image_crop.js; the stage geometry both dialogs share lives in
+// crop_stage.js), with two differences that matter:
 //
 //   * It crops a photo that is ALREADY uploaded (post images upload eagerly),
 //     so the picture comes from the author-only `source` workbench URL — the
@@ -19,6 +20,8 @@
 // the real work server-side (Vutuv.Posts.crop_image/2). Cancel and Escape
 // change nothing. Labels arrive translated via data-* attributes, like the
 // lightbox's.
+
+import { bindEscape, buildStage, createCropStage, cropString, el } from "./crop_stage"
 
 const MAX_ZOOM = 4
 
@@ -49,94 +52,53 @@ export function openPhotoCropper(button, labels, onSave) {
 }
 
 function openDialog(bitmap, stored, labels, onSave) {
-  // ── State (geometry in CSS pixels of the stage) ──
-  // aspect: the frame's shape (a RATIOS value). scale: image px -> stage px;
-  // coverScale is the object-cover fit, the zoom floor, so the frame is
-  // always fully covered and every fraction stays in 0..1.
-  let aspect = initialAspect(bitmap, stored)
-  let stageW = 0
-  let stageH = 0
-  let coverScale = 1
-  let scale = 1
-  let offsetX = 0
-  let offsetY = 0
-
+  const aspect = initialAspect(bitmap, stored)
   const ui = buildDialog(labels, stored != null, aspect)
   document.body.appendChild(ui.overlay)
 
-  const ctx = ui.canvas.getContext("2d")
-  const dpr = window.devicePixelRatio || 1
-
-  layout()
+  // st owns the stage geometry — layout, cover-fit zoom floor, offsets and
+  // the crop-fraction math (see crop_stage.js). The frame's shape starts at
+  // the preselected chip's ratio and follows the chip row via st.aspect.
+  const st = createCropStage({
+    overlay: ui.overlay,
+    stage: ui.stage,
+    canvas: ui.canvas,
+    zoom: ui.zoom,
+    bitmap,
+    aspect,
+    // Tighter height budget than the avatar modal's 0.55: the chip row needs
+    // the room, and a 9:16 frame would push the buttons off a phone screen.
+    maxHFactor: 0.5,
+  })
   if (stored) applyStored(stored)
-  window.addEventListener("resize", layout)
-
-  // Size the stage to the dialog width within a viewport-height budget (a
-  // 9:16 frame would otherwise push the buttons off a phone screen), then
-  // recompute the cover fit and start centered at the current zoom.
-  function layout() {
-    const maxH = Math.max(160, window.innerHeight * 0.5)
-    const parent = ui.stage.parentElement
-    const cs = getComputedStyle(parent)
-    stageW = parent.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-    stageH = Math.round(stageW / aspect)
-    if (stageH > maxH) {
-      stageH = Math.round(maxH)
-      stageW = Math.round(stageH * aspect)
-    }
-    ui.stage.style.width = `${stageW}px`
-    ui.stage.style.height = `${stageH}px`
-    ui.canvas.width = Math.round(stageW * dpr)
-    ui.canvas.height = Math.round(stageH * dpr)
-    ui.canvas.style.width = `${stageW}px`
-    ui.canvas.style.height = `${stageH}px`
-
-    coverScale = Math.max(stageW / bitmap.width, stageH / bitmap.height)
-    scale = coverScale * (parseFloat(ui.zoom.value) || 1)
-    offsetX = (stageW - bitmap.width * scale) / 2
-    offsetY = (stageH - bitmap.height * scale) / 2
-    clampOffsets()
-    draw()
-  }
 
   // Re-establish a stored crop: zoom so the stored width fills the frame,
   // then place its corner. Approximate on purpose — the stored shape came
   // from this same chip row, so the frame ratio matches within rounding and
   // the clamps absorb the rest.
   function applyStored({ x, y, w }) {
-    const targetScale = clamp(stageW / (w * bitmap.width), coverScale, coverScale * MAX_ZOOM)
-    ui.zoom.value = String(targetScale / coverScale)
-    scale = targetScale
-    offsetX = -x * bitmap.width * scale
-    offsetY = -y * bitmap.height * scale
-    clampOffsets()
-    draw()
-  }
-
-  function draw() {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, stageW, stageH)
-    ctx.drawImage(bitmap, offsetX, offsetY, bitmap.width * scale, bitmap.height * scale)
-  }
-
-  function clampOffsets() {
-    offsetX = Math.min(0, Math.max(stageW - bitmap.width * scale, offsetX))
-    offsetY = Math.min(0, Math.max(stageH - bitmap.height * scale, offsetY))
+    const targetScale = clamp(st.stageW / (w * bitmap.width), st.coverScale, st.coverScale * MAX_ZOOM)
+    ui.zoom.value = String(targetScale / st.coverScale)
+    st.scale = targetScale
+    st.offsetX = -x * bitmap.width * st.scale
+    st.offsetY = -y * bitmap.height * st.scale
+    st.clampOffsets()
+    st.draw()
   }
 
   // ── Zoom: keep a focal point fixed while scaling ──
   function zoomAt(cx, cy, nextScale) {
-    nextScale = clamp(nextScale, coverScale, coverScale * MAX_ZOOM)
-    offsetX = cx - ((cx - offsetX) / scale) * nextScale
-    offsetY = cy - ((cy - offsetY) / scale) * nextScale
-    scale = nextScale
-    ui.zoom.value = String(scale / coverScale)
-    clampOffsets()
-    draw()
+    nextScale = clamp(nextScale, st.coverScale, st.coverScale * MAX_ZOOM)
+    st.offsetX = cx - ((cx - st.offsetX) / st.scale) * nextScale
+    st.offsetY = cy - ((cy - st.offsetY) / st.scale) * nextScale
+    st.scale = nextScale
+    ui.zoom.value = String(st.scale / st.coverScale)
+    st.clampOffsets()
+    st.draw()
   }
 
   ui.zoom.addEventListener("input", () => {
-    zoomAt(stageW / 2, stageH / 2, coverScale * (parseFloat(ui.zoom.value) || 1))
+    zoomAt(st.stageW / 2, st.stageH / 2, st.coverScale * (parseFloat(ui.zoom.value) || 1))
   })
 
   ui.stage.addEventListener(
@@ -144,7 +106,7 @@ function openDialog(bitmap, stored, labels, onSave) {
     (e) => {
       e.preventDefault()
       const step = e.deltaY < 0 ? 1.08 : 1 / 1.08
-      zoomAt(stageW / 2, stageH / 2, scale * step)
+      zoomAt(st.stageW / 2, st.stageH / 2, st.scale * step)
     },
     { passive: false }
   )
@@ -152,12 +114,12 @@ function openDialog(bitmap, stored, labels, onSave) {
   // ── Ratio chips: reshape the frame, restart centered at cover fit ──
   ui.chips.forEach((chip) => {
     chip.addEventListener("click", () => {
-      aspect = parseFloat(chip.dataset.ratio)
+      st.aspect = parseFloat(chip.dataset.ratio)
       ui.chips.forEach((c) => c.setAttribute("aria-pressed", String(c === chip)))
       ui.chips.forEach((c) => c.classList.toggle("bg-brand-600", c === chip))
       ui.chips.forEach((c) => c.classList.toggle("text-white", c === chip))
       ui.zoom.value = "1"
-      layout()
+      st.layout()
     })
   })
 
@@ -181,14 +143,14 @@ function openDialog(bitmap, stored, labels, onSave) {
       if (pinchDistance > 0 && distance > 0) {
         const stageBox = ui.stage.getBoundingClientRect()
         const mid = pointerMidpoint()
-        zoomAt(mid.x - stageBox.left, mid.y - stageBox.top, scale * (distance / pinchDistance))
+        zoomAt(mid.x - stageBox.left, mid.y - stageBox.top, st.scale * (distance / pinchDistance))
       }
       pinchDistance = distance
     } else if (pointers.size === 1) {
-      offsetX += e.clientX - prev.x
-      offsetY += e.clientY - prev.y
-      clampOffsets()
-      draw()
+      st.offsetX += e.clientX - prev.x
+      st.offsetY += e.clientY - prev.y
+      st.clampOffsets()
+      st.draw()
     }
   })
 
@@ -209,40 +171,25 @@ function openDialog(bitmap, stored, labels, onSave) {
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
   }
 
-  // ── Finish ──
-  function cleanup() {
-    window.removeEventListener("resize", layout)
-    ui.overlay.remove()
-    bitmap.close && bitmap.close()
-  }
-
+  // ── Finish ── (st.destroy is the whole teardown: resize unbind, overlay,
+  // bitmap — see crop_stage.js)
   function apply() {
-    const x = clamp01(-offsetX / scale / bitmap.width)
-    const y = clamp01(-offsetY / scale / bitmap.height)
-    const w = clamp01(stageW / scale / bitmap.width)
-    const h = clamp01(stageH / scale / bitmap.height)
-    onSave(`${round4(x)},${round4(y)},${round4(w)},${round4(h)}`)
-    cleanup()
+    onSave(cropString(st.fractions()))
+    st.destroy()
   }
 
   ui.save.addEventListener("click", apply)
-  ui.cancel.addEventListener("click", cleanup)
+  ui.cancel.addEventListener("click", st.destroy)
   if (ui.reset) {
     ui.reset.addEventListener("click", () => {
       onSave("")
-      cleanup()
+      st.destroy()
     })
   }
   ui.overlay.addEventListener("click", (e) => {
-    if (e.target === ui.overlay) cleanup()
+    if (e.target === ui.overlay) st.destroy()
   })
-  document.addEventListener("keydown", function onKey(e) {
-    if (!document.body.contains(ui.overlay)) {
-      document.removeEventListener("keydown", onKey)
-    } else if (e.key === "Escape") {
-      cleanup()
-    }
-  })
+  bindEscape(ui.overlay, st.destroy)
 }
 
 // The chip preselected when the dialog opens: the stored crop's shape, else
@@ -299,13 +246,7 @@ function buildDialog(labels, resettable, activeAspect) {
     return chip
   })
 
-  const stage = el(
-    "div",
-    "relative mx-auto mt-3 touch-none select-none overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
-  )
-  const canvas = el("canvas", "block h-full w-full cursor-grab active:cursor-grabbing")
-  const frame = el("div", "pointer-events-none absolute inset-0 rounded-lg ring-2 ring-white/70")
-  stage.append(canvas, frame)
+  const { stage, canvas } = buildStage()
 
   const zoom = el("input", "mt-3 block w-full accent-brand-600")
   zoom.type = "range"
@@ -345,13 +286,4 @@ function buildDialog(labels, resettable, activeAspect) {
   return { overlay, dialog, stage, canvas, zoom, chips, save, cancel, reset }
 }
 
-function el(tag, className, text) {
-  const node = document.createElement(tag)
-  if (className) node.className = className
-  if (text != null) node.textContent = text
-  return node
-}
-
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
-const clamp01 = (v) => Math.min(1, Math.max(0, v))
-const round4 = (v) => Math.round(v * 10000) / 10000

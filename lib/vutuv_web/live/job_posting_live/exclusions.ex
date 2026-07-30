@@ -168,7 +168,7 @@ defmodule VutuvWeb.JobPostingLive.Exclusions do
         <.link
           :if={@organization}
           navigate={~p"/organizations/#{@organization.slug}/exclusions"}
-          class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+          class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {gettext("Manage the organization's default list")} →
         </.link>

@@ -88,7 +88,7 @@ do. --%>
             href={@user.moved_to}
             target="_blank"
             rel="nofollow noopener noreferrer"
-            class="break-all font-medium text-brand-600 hover:text-brand-700 dark:text-brand-300"
+            class="break-all font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >{@user.moved_to}</a>
         </p>
         <p :if={@user.moved_at} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
@@ -162,7 +162,7 @@ do. --%>
     <p class="text-sm">
       <.link
         navigate={~p"/settings/fediverse"}
-        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
         ‹ {gettext("Back to Fediverse settings")}
       </.link>

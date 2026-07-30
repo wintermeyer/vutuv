@@ -182,7 +182,7 @@ defmodule VutuvWeb.Admin.NewsletterBroadcastLive do
             <div class="mt-4">
               <.link
                 navigate={~p"/admin/newsletters/#{@newsletter}"}
-                class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+                class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
                 {gettext("View the delivery log")} ›
               </.link>

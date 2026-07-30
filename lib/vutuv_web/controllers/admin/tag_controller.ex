@@ -43,7 +43,7 @@ defmodule VutuvWeb.Admin.TagController do
   defp search_tags(""), do: from(t in Tag)
 
   defp search_tags(query) do
-    infix = "%" <> SearchText.escape_like(query) <> "%"
+    infix = SearchText.contains(query)
     from(t in Tag, where: ilike(t.name, ^infix) or ilike(t.slug, ^infix))
   end
 

@@ -301,7 +301,7 @@ defmodule VutuvWeb.JobBoardLive do
         <.link
           :if={not any_filters?(@params) && @current_user}
           navigate={~p"/jobs/new"}
-          class="mt-3 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+          class="mt-3 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {gettext("Post the first one")}
         </.link>

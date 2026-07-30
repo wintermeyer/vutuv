@@ -76,33 +76,15 @@ defmodule VutuvWeb.FediverseFollowersLive do
 
   # ── Events (every one just rewrites the URL; handle_params reloads) ──
 
+  # The four browse events ("filter", "sort", "filter_server", "clear") are
+  # `VutuvWeb.BrowseTable`'s, shared with the mirror-image following browser;
+  # the route literal is the one thing this page keeps.
   @impl true
-  # Replaced, not pushed: the search box fires per burst of typing, and on a
-  # phone the back gesture is the way out of a page. Pushing would make leaving
-  # take one press per search term.
-  def handle_event("filter", params, socket) do
-    {:noreply, patch(socket, %{"q" => params["q"], "server" => params["server"]}, replace: true)}
+  def handle_event(event, params, socket) do
+    handle_browse_event(event, params, socket, &browse_path/1)
   end
 
-  def handle_event("sort", %{"col" => col}, socket) do
-    {:noreply, patch(socket, %{"sort" => col, "dir" => next_dir(socket.assigns.filters, col)})}
-  end
-
-  # A server name in a row is a filter you can click: at ten thousand followers
-  # "show me everyone else from this server" is the question the list raises.
-  def handle_event("filter_server", %{"host" => host}, socket) do
-    {:noreply, patch(socket, %{"server" => host})}
-  end
-
-  def handle_event("clear", _params, socket) do
-    {:noreply, push_patch(socket, to: ~p"/settings/fediverse/followers")}
-  end
-
-  # The current view with `overrides` applied, as a URL.
-  defp patch(socket, overrides, opts \\ []) do
-    query = build_query(socket.assigns.filters, overrides)
-    push_patch(socket, [to: ~p"/settings/fediverse/followers?#{query}"] ++ opts)
-  end
+  defp browse_path(query), do: ~p"/settings/fediverse/followers?#{query}"
 
   # The three columns. The Server column folds away below `sm`
   # (`phone_hidden_class/0`), so the two facts a phone reader came for - who,
@@ -132,12 +114,7 @@ defmodule VutuvWeb.FediverseFollowersLive do
         <.card>
           <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <.section_title>{gettext("Followers from other networks")}</.section_title>
-            <span
-              id="follower-total"
-              class="rounded-full bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-            >
-              {delimited_count(@total_followers)}
-            </span>
+            <.count_pill id="follower-total" count={@total_followers} />
           </div>
           <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
             {gettext(

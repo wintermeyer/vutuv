@@ -90,7 +90,7 @@ defmodule VutuvWeb.LayoutHTML do
         <% :house -> %>
           <p class="mb-0 min-w-0 text-sm text-slate-700 dark:text-slate-300">
             {gettext("This spot is free today. One day, one ad, every visitor.")}
-            <.link href={~p"/ads"} class="font-semibold text-brand-600 hover:text-brand-700">
+            <.link href={~p"/ads"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
               {gettext("Book your ad")}
             </.link>
           </p>

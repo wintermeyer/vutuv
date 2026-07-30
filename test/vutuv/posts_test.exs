@@ -1009,6 +1009,31 @@ defmodule Vutuv.PostsTest do
       assert found.user.id == author.id
     end
 
+    test "fediverse favourites count toward the like bar like the card's own number" do
+      viewer = user(locale: "de")
+
+      # A properly liked decoy keeps the liked draw non-empty, so the
+      # all-or-nothing recency fallback can't mask a post that misses the bar.
+      liked_post!(user(locale: "de"), %{body: "voll beliebt"})
+
+      author = user(locale: "de")
+      post = author |> create_post!(%{body: "entdecke mich"}) |> liked!(1)
+
+      # One local like + one remote favourite is the same folded figure the
+      # card shows (`shown_counts/1`), so the rail's quality bar must not
+      # read a smaller number than the heart beside the post.
+      Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: post.id,
+        actor_uri: "https://social.example/users/fan",
+        handle: "fan",
+        kind: "like",
+        received_at: DateTime.utc_now(:second)
+      })
+
+      ids = Posts.discover_posts(viewer, limit: 5) |> Enum.map(& &1.id)
+      assert post.id in ids
+    end
+
     test "fills the card with strangers before it reaches for a followed author" do
       viewer = user()
       followed = user()

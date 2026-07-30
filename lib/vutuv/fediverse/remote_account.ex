@@ -23,6 +23,7 @@ defmodule Vutuv.Fediverse.RemoteAccount do
   use VutuvWeb, :model
 
   alias Vutuv.Fediverse.Handle
+  alias Vutuv.SearchText
 
   # Remote URIs are unbounded in theory; cap generously (they are `text`
   # columns) so a hostile payload cannot store megabytes. actor_uri carries a
@@ -134,15 +135,6 @@ defmodule Vutuv.Fediverse.RemoteAccount do
   something rather than as a gap.
   """
   def label(%__MODULE__{} = account) do
-    presence(account.name) || display_handle(account) || account.actor_uri
+    SearchText.normalize_search(account.name) || display_handle(account) || account.actor_uri
   end
-
-  defp presence(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp presence(_value), do: nil
 end

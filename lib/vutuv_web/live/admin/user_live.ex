@@ -16,6 +16,7 @@ defmodule VutuvWeb.Admin.UserLive do
   use VutuvWeb, :live_view
 
   import VutuvWeb.Admin.MemberBadges, only: [status_badges: 1, badge_class: 1]
+  import VutuvWeb.BrowseTable
   import VutuvWeb.UserHelpers, only: [member_name: 1]
 
   alias Vutuv.AccountEvents
@@ -48,26 +49,17 @@ defmodule VutuvWeb.Admin.UserLive do
 
   @impl true
   def handle_event("filter", params, socket) do
-    query =
-      build_query(socket.assigns.filters, %{
-        "q" => params["q"],
-        "reg" => params["reg"],
-        "flag" => params["flag"]
-      })
-
-    {:noreply, push_patch(socket, to: ~p"/admin/users?#{query}")}
+    {:noreply,
+     patch(socket, %{"q" => params["q"], "reg" => params["reg"], "flag" => params["flag"]})}
   end
 
   def handle_event("sort", %{"col" => col}, socket) do
-    filters = socket.assigns.filters
-    dir = if filters.sort == col and filters.dir == "asc", do: "desc", else: "asc"
-    query = build_query(filters, %{"sort" => col, "dir" => dir})
-    {:noreply, push_patch(socket, to: ~p"/admin/users?#{query}")}
+    dir = next_dir(socket.assigns.filters, browse_config(), col)
+    {:noreply, patch(socket, %{"sort" => col, "dir" => dir})}
   end
 
   def handle_event("page", %{"page" => page}, socket) do
-    query = build_query(socket.assigns.filters, %{"page" => to_string(page)})
-    {:noreply, push_patch(socket, to: ~p"/admin/users?#{query}")}
+    {:noreply, patch(socket, %{"page" => to_string(page)})}
   end
 
   def handle_event("clear", _params, socket) do
@@ -135,31 +127,25 @@ defmodule VutuvWeb.Admin.UserLive do
 
   # ── Helpers ──
 
-  # The values `admin_user_filters/1` falls back to, kept OUT of the URL so a
-  # shareable link carries only what actually deviates from the default view.
-  @query_defaults %{
-    "reg" => "pin",
-    "flag" => "all",
-    "sort" => "joined",
-    "dir" => "desc",
-    "page" => "1"
-  }
+  defp patch(socket, overrides) do
+    query = build_query(socket.assigns.filters, browse_config(), overrides)
+    push_patch(socket, to: ~p"/admin/users?#{query}")
+  end
 
-  # The query map for a push_patch: the current filters with `overrides` applied,
-  # then blanks and defaults dropped — so the default view is a bare
-  # `/admin/users` and a filtered/sorted view is a clean, shareable URL. `page`
-  # is omitted unless overridden, so any filter/sort change resets to page 1.
-  defp build_query(filters, overrides) do
-    %{
-      "q" => filters.q,
-      "reg" => filters.reg,
-      "flag" => filters.flag,
-      "sort" => filters.sort,
-      "dir" => filters.dir
-    }
-    |> Map.merge(overrides)
-    |> Enum.reject(fn {key, value} -> value in [nil, ""] or @query_defaults[key] == value end)
-    |> Map.new()
+  # What the shared browse machinery (`VutuvWeb.BrowseTable`) needs to know
+  # about this page. `defaults` names the values `admin_user_filters/1` falls
+  # back to, kept OUT of the URL so a shareable link carries only what actually
+  # deviates from the default view. The two direction funs differ on purpose:
+  # a freshly clicked column sorts A-Z, while a URL naming no direction means
+  # newest-first (the default landing).
+  defp browse_config do
+    browse_config(
+      filter_keys: [:q, :reg, :flag],
+      defaults: %{"reg" => "pin", "flag" => "all"},
+      default_sort: "joined",
+      default_dir: fn _column -> "asc" end,
+      url_default_dir: fn _sort -> "desc" end
+    )
   end
 
   # The sortable columns, by `?sort=` value → header label.
@@ -170,17 +156,6 @@ defmodule VutuvWeb.Admin.UserLive do
       {"joined", gettext("Joined")}
     ]
   end
-
-  defp sort_caret(filters, column) do
-    cond do
-      filters.sort != column -> ""
-      filters.dir == "asc" -> " ▲"
-      true -> " ▼"
-    end
-  end
-
-  # Any filter narrowing the default view (drives the empty-state copy + Clear).
-  defp filtered?(filters), do: filters.q != nil or filters.reg != "pin" or filters.flag != "all"
 
   @impl true
   def render(assigns) do
@@ -200,7 +175,7 @@ defmodule VutuvWeb.Admin.UserLive do
             </span>
           </h1>
           <button
-            :if={filtered?(@filters)}
+            :if={filtered?(@filters, browse_config())}
             type="button"
             phx-click="clear"
             id="clear-filters"
@@ -223,7 +198,7 @@ defmodule VutuvWeb.Admin.UserLive do
             href="/sent_emails"
             target="_blank"
             rel="noopener"
-            class="font-semibold text-brand-600 hover:text-brand-700"
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             id="dev-mailbox-link"
           >
             {gettext("open the dev email inbox")} ›
@@ -304,10 +279,10 @@ defmodule VutuvWeb.Admin.UserLive do
           </div>
         </form>
 
-        <p :if={@users == [] and filtered?(@filters)} class="card__empty">
+        <p :if={@users == [] and filtered?(@filters, browse_config())} class="card__empty">
           {gettext("No members match your filters.")}
         </p>
-        <p :if={@users == [] and not filtered?(@filters)} class="card__empty">
+        <p :if={@users == [] and not filtered?(@filters, browse_config())} class="card__empty">
           {gettext("Nothing here yet.")}
         </p>
 
@@ -315,16 +290,12 @@ defmodule VutuvWeb.Admin.UserLive do
           <table class="pure-table">
             <thead>
               <tr>
-                <th :for={{col, label} <- sortable_columns()}>
-                  <button
-                    type="button"
-                    phx-click="sort"
-                    phx-value-col={col}
-                    class="font-semibold text-slate-700 hover:text-brand-700 dark:text-slate-200"
-                  >
-                    {label}{sort_caret(@filters, col)}
-                  </button>
-                </th>
+                <.sort_header
+                  :for={{col, label} <- sortable_columns()}
+                  col={col}
+                  label={label}
+                  filters={@filters}
+                />
                 <th>{gettext("Status")}</th>
                 <th></th>
               </tr>
@@ -338,7 +309,7 @@ defmodule VutuvWeb.Admin.UserLive do
                   </.link>
                 </td>
                 <td class="breakwrap">
-                  <.link navigate={~p"/#{user}"} class="text-brand-600 hover:text-brand-700">
+                  <.link navigate={~p"/#{user}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                     @{user.username}
                   </.link>
                 </td>

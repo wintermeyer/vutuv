@@ -79,7 +79,7 @@ defmodule VutuvWeb.SavedSearchComponents do
     <div id={@id} class={@class}>
       <p :if={@saved?} id={"#{@id}-done"} class="text-sm text-slate-600 dark:text-slate-400">
         {gettext("Search saved.")}
-        <.link navigate={~p"/settings/saved_searches"} class="font-semibold text-brand-600 hover:text-brand-700">
+        <.link navigate={~p"/settings/saved_searches"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
           {gettext("Manage your saved searches")}
         </.link>
       </p>

@@ -25,7 +25,7 @@ defmodule VutuvWeb.ApiV2.NotificationController do
         Map.merge(
           %{
             type: "notifications",
-            unread: Activity.unread_notification_count(me.id),
+            unread: Activity.unread_notification_count(me),
             notifications: Enum.map(page.entries, &entry/1)
           },
           ApiV2.page_fields(page)

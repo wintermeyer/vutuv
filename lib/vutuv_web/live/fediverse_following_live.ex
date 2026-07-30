@@ -126,7 +126,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
          |> assign_error(nil)
          |> assign_totals()
          |> put_flash(:info, follow_sent_message(follow))
-         |> patch(%{})}
+         |> patch_browse(%{}, &browse_path/1)}
 
       {:error, reason} ->
         {:noreply, socket |> assign(:address, address) |> assign_error(reason, address)}
@@ -153,29 +153,14 @@ defmodule VutuvWeb.FediverseFollowingLive do
     end
   end
 
-  # Replaced, not pushed: the search box is debounced but still fires per burst
-  # of typing, and on a phone the back gesture is the way out of a page. Pushing
-  # would make leaving take one press per search term.
-  def handle_event("filter", params, socket) do
-    {:noreply, patch(socket, %{"q" => params["q"], "server" => params["server"]}, replace: true)}
+  # The four browse events ("filter", "sort", "filter_server", "clear") are
+  # `VutuvWeb.BrowseTable`'s, shared with the mirror-image follower browser;
+  # the route literal is the one thing this page keeps.
+  def handle_event(event, params, socket) do
+    handle_browse_event(event, params, socket, &browse_path/1)
   end
 
-  def handle_event("sort", %{"col" => col}, socket) do
-    {:noreply, patch(socket, %{"sort" => col, "dir" => next_dir(socket.assigns.filters, col)})}
-  end
-
-  def handle_event("filter_server", %{"host" => host}, socket) do
-    {:noreply, patch(socket, %{"server" => host})}
-  end
-
-  def handle_event("clear", _params, socket) do
-    {:noreply, push_patch(socket, to: ~p"/settings/fediverse/following")}
-  end
-
-  defp patch(socket, overrides, opts \\ []) do
-    query = build_query(socket.assigns.filters, overrides)
-    push_patch(socket, [to: ~p"/settings/fediverse/following?#{query}"] ++ opts)
-  end
+  defp browse_path(query), do: ~p"/settings/fediverse/following?#{query}"
 
   # The refusal, plus the one thing a refusal sometimes needs beyond a sentence:
   # the member of this very vutuv the address turned out to name. Resolved here
@@ -262,13 +247,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
         <.card>
           <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <.section_title>{gettext("Accounts you follow elsewhere")}</.section_title>
-            <span
-              :if={@federating?}
-              id="following-total"
-              class="rounded-full bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-            >
-              {delimited_count(@total_follows)}
-            </span>
+            <.count_pill :if={@federating?} id="following-total" count={@total_follows} />
           </div>
           <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
             {gettext(
@@ -296,7 +275,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
                   :if={@error == :local_account and @local_member}
                   navigate={~p"/#{@local_member}"}
                   id="local-member-link"
-                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300"
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
                   {gettext("Open their profile")} ›
                 </.link>
@@ -304,7 +283,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
                   :if={@error == :local_account and is_nil(@local_member)}
                   navigate={~p"/search?#{[q: @address]}"}
                   id="local-member-search"
-                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300"
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
                   {gettext("Search for them here")} ›
                 </.link>
@@ -450,7 +429,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
               <.link
                 navigate={~p"/system/fediverse/lookup"}
                 id="fediverse-lookup-link"
-                class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+                class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
                 {gettext("Look up a post by its address")} ›
               </.link>

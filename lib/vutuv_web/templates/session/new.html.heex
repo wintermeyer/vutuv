@@ -40,7 +40,7 @@
 
   <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
     {gettext("No account yet?")}
-    <a href={~p"/"} class="font-semibold text-brand-600 hover:text-brand-700">{gettext("Sign up here.")}</a>
+    <a href={~p"/"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Sign up here.")}</a>
   </p>
 
   <%= if dev_mailbox?() do %>
@@ -49,7 +49,7 @@
         href="/sent_emails"
         target="_blank"
         rel="noopener"
-        class="font-semibold text-brand-600 hover:text-brand-700"
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
         Open the dev email inbox
       </a>

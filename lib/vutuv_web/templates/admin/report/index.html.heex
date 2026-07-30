@@ -14,7 +14,7 @@
       <div class="flex items-center gap-4">
         <.link
           href={~p"/admin/reports?#{%{date: Date.to_iso8601(Date.add(@date, -1))}}"}
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           id="report-prev-day"
         >
           ‹ {gettext("Previous day")}
@@ -22,7 +22,7 @@
         <.link
           :if={Date.compare(@date, @today) == :lt}
           href={~p"/admin/reports?#{%{date: Date.to_iso8601(Date.add(@date, 1))}}"}
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           id="report-next-day"
         >
           {gettext("Next day")} ›
@@ -76,7 +76,7 @@
             <.link
               :if={entry.path}
               href={entry.path}
-              class="font-semibold text-brand-600 hover:text-brand-700"
+              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             >
               {entry.primary}
             </.link>

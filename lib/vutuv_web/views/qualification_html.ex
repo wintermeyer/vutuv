@@ -232,7 +232,7 @@ defmodule VutuvWeb.QualificationHTML do
       <div class="min-w-0 text-sm">
         <a
           href={document_url(@user, @qualification, dl: true)}
-          class="font-semibold text-brand-600 hover:text-brand-700"
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {gettext("Download")}
         </a>
@@ -314,7 +314,7 @@ defmodule VutuvWeb.QualificationHTML do
         href={@qualification.url}
         target="_blank"
         rel="nofollow noopener noreferrer"
-        class="mt-0.5 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700"
+        class="mt-0.5 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
         {gettext("Proof")}
         <span aria-hidden="true">↗</span>

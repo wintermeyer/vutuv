@@ -403,6 +403,14 @@ defmodule Vutuv.Accounts.User do
   # employment_statuses/0, the edit form's select options
   # (VutuvWeb.UserHelpers.employment_status_options/0), so the form can never
   # offer a value the changeset would reject.
+  @headline_max_length 255
+
+  @doc """
+  The tagline's character cap — the changeset's `validate_length` and the edit
+  form's live counter (`data-max`) both read it, so they cannot disagree.
+  """
+  def headline_max_length, do: @headline_max_length
+
   @employment_statuses ~w(open looking)
 
   def employment_statuses, do: @employment_statuses
@@ -556,7 +564,7 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:name_pronunciation, max: 255)
     |> validate_name_pronunciation()
     |> validate_length(:gender, max: 50)
-    |> validate_length(:headline, max: 255)
+    |> validate_length(:headline, max: @headline_max_length)
     # The tagline may only mention handles that exist (relaxed for the import).
     |> Mentions.validate_mentions_exist(:headline)
     |> validate_headline_not_link_only()

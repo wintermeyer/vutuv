@@ -28,23 +28,11 @@ defmodule Vutuv.JobPostingImageStore do
   size_bytes:}}` (post-rotation dimensions) or `{:error, :invalid_file}`.
   """
   def store(path, filename, token) do
-    ext = filename |> Path.extname() |> String.downcase()
+    dir = dir(token)
 
-    if ext in extension_whitelist() do
-      dir = dir(token)
-      File.mkdir_p!(dir)
-
-      case write_versions(path, ext, dir, token) do
-        {:ok, meta} ->
-          {:ok, Map.merge(meta, %{content_type: MIME.from_path(filename)})}
-
-        {:error, _reason} ->
-          File.rm_rf(dir)
-          {:error, :invalid_file}
-      end
-    else
-      {:error, :invalid_file}
-    end
+    Vutuv.Uploads.store_upload(filename, extension_whitelist(), dir, fn ext ->
+      write_versions(path, ext, dir, token)
+    end)
   end
 
   defp write_versions(path, ext, dir, token) do

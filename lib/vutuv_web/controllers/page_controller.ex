@@ -5,6 +5,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
+  alias Vutuv.SearchText
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.LandingExperiment
@@ -42,14 +43,18 @@ defmodule VutuvWeb.PageController do
     changeset =
       %User{
         gender: prefill_gender(prefill["gender"]),
-        first_name: presence(prefill["first_name"]),
-        last_name: presence(prefill["last_name"]),
-        tag_list: presence(prefill["tags"]),
+        first_name: SearchText.normalize_search(prefill["first_name"]),
+        last_name: SearchText.normalize_search(prefill["last_name"]),
+        tag_list: SearchText.normalize_search(prefill["tags"]),
         fediverse_followers?: Fediverse.enabled?()
       }
       |> User.changeset()
       |> Ecto.Changeset.put_assoc(:emails, [
-        %Email{public?: true, email_type: "Personal", value: presence(prefill["email"])}
+        %Email{
+          public?: true,
+          email_type: "Personal",
+          value: SearchText.normalize_search(prefill["email"])
+        }
       ])
 
     prefetch = "/listings/most_followed_users"
@@ -381,15 +386,4 @@ defmodule VutuvWeb.PageController do
   # keep the form's own "male" default.
   defp prefill_gender(gender) when gender in ["male", "female", "other"], do: gender
   defp prefill_gender(_), do: "male"
-
-  # Trim a prefill param down to its content, or nil when blank/absent, so an
-  # empty query value leaves the field empty rather than pre-filling "".
-  defp presence(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp presence(_), do: nil
 end

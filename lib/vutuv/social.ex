@@ -12,7 +12,7 @@ defmodule Vutuv.Social do
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
-  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
+  import Vutuv.SearchText, only: [contains: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.AccountEvents
   alias Vutuv.Accounts.User
@@ -805,7 +805,7 @@ defmodule Vutuv.Social do
   defp filter_saved_search(query, nil), do: query
 
   defp filter_saved_search(query, term) do
-    pattern = "%" <> escape_like(term) <> "%"
+    pattern = contains(term)
 
     from([target: t] in query,
       where:

@@ -10,6 +10,8 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   test (`agent_docs_drift_test.exs`) will remind you.
   """
 
+  import Ecto.Query, only: [union_all: 2]
+
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
@@ -136,12 +138,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       gender: public_gender(user),
       member_since: NaiveDateTime.to_date(user.inserted_at),
       avatar_url: avatar_url(user),
-      counts: %{
-        followers: Vutuv.Social.follower_count(user),
-        following: Vutuv.Social.followee_count(user),
-        connections: Vutuv.Social.connection_count(user),
-        posts: Vutuv.Posts.count_author_posts(user, viewer)
-      },
+      counts: profile_counts(user, viewer),
       tags: Enum.map(user.user_tags, &SectionDocs.tag_entry/1),
       work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
       educations: Enum.map(user.educations, &SectionDocs.education_entry/1),
@@ -175,6 +172,33 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     })
     |> Map.merge(birthday_fields(user))
     |> maybe_include_photo(user, opts)
+  end
+
+  # The four header counts in ONE round trip instead of four: the three
+  # social-graph arms (`Vutuv.Social.profile_count_queries/1`) plus the
+  # viewer-scoped posts arm (`Vutuv.Posts.author_timeline_count_query/2`) —
+  # the same tagged count queries the HTML profile folds into its per-mount
+  # union (`VutuvWeb.UserProfileLive.profile_counts/2`), so the numbers cannot
+  # drift from the page. The agent formats are a crawler-heavy surface, so the
+  # doc pays one counts query per request too. Each arm always returns exactly
+  # one row (0 when empty).
+  defp profile_counts(user, viewer) do
+    [first | rest] =
+      Vutuv.Social.profile_count_queries(user.id) ++
+        [Vutuv.Posts.author_timeline_count_query(user, viewer)]
+
+    counts =
+      rest
+      |> Enum.reduce(first, fn arm, acc -> union_all(acc, ^arm) end)
+      |> Repo.all()
+      |> Map.new(fn %{kind: kind, total: total} -> {kind, total} end)
+
+    %{
+      followers: Map.get(counts, "followers", 0),
+      following: Map.get(counts, "followees", 0),
+      connections: Map.get(counts, "connections", 0),
+      posts: Map.get(counts, "posts_total", 0)
+    }
   end
 
   # The birthday facts, gated by the member's birthdate_visibility setting so

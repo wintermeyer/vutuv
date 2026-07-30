@@ -34,8 +34,9 @@ defmodule Vutuv.Posts.ReviewCovers do
 
   @req_options_key :book_covers_req_options
 
-  @doc "Whether this installation fetches book metadata/covers at all."
-  def enabled?, do: Application.get_env(:vutuv, :fetch_book_metadata, true)
+  # Whether this installation fetches book metadata/covers at all — the
+  # `:fetch_book_metadata` flag has one reader, `BookMetadata.enabled?/0`.
+  defp enabled?, do: BookMetadata.enabled?()
 
   @doc "Removes a review's stored cover files (post deletion, moderation)."
   defdelegate delete_files(review), to: ReviewCover

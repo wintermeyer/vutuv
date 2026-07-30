@@ -205,7 +205,7 @@ defmodule VutuvWeb.FediverseComponents do
 
   defp refusal_link,
     do:
-      "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+      "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
 
   @doc """
   A follow that has not been answered reads **"Requested"**, not "Following".

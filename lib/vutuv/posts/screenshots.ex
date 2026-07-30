@@ -30,6 +30,7 @@ defmodule Vutuv.Posts.Screenshots do
 
   import Ecto.Query
 
+  alias Vutuv.Fediverse
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
@@ -127,18 +128,13 @@ defmodule Vutuv.Posts.Screenshots do
   defp trim_trailing_punctuation(url), do: String.replace(url, ~r/[)\]}.,;:!?'"]+$/u, "")
 
   # True when `url` points at this installation's own `/settings`, `/admin` or
-  # `/system` area. The host is derived from the endpoint (never a literal
-  # `vutuv.de`), so the skip is correct on any third-party installation; `www.`
-  # is stripped from both sides so the two forms compare equal.
+  # `/system` area. `Fediverse.local_host?/1` is the one "is this us" test
+  # (endpoint-derived host, `www.` and case folded), so the skip is correct on
+  # any third-party installation.
   defp own_internal_url?(url) do
     uri = URI.parse(url)
-    own_host?(uri.host) and internal_path?(uri.path)
+    Fediverse.local_host?(uri.host) and internal_path?(uri.path)
   end
-
-  defp own_host?(nil), do: false
-  defp own_host?(host), do: strip_www(host) == strip_www(VutuvWeb.Endpoint.host())
-
-  defp strip_www(host), do: host |> String.downcase() |> String.replace_prefix("www.", "")
 
   defp internal_path?(nil), do: false
 

@@ -86,7 +86,7 @@ defmodule VutuvWeb.Markdown.Footnotes do
     if map_size(numbers) == 0 do
       {text, nil}
     else
-      nonce = Base.encode16(:crypto.strong_rand_bytes(6))
+      nonce = Markdown.marker_nonce()
       {rewrite(chunks, definitions, numbers, nonce), %{nonce: nonce}}
     end
   end

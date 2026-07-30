@@ -14,6 +14,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
 
   alias Vutuv.Organizations
   alias Vutuv.Pages
+  alias Vutuv.SearchText
   alias VutuvWeb.Live.InitAssigns
 
   # Embedded via live_render (off-router), so the URL query is not available as
@@ -22,7 +23,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
 
-    search = clean(session["q"])
+    search = SearchText.normalize_search(session["q"])
 
     socket =
       socket
@@ -35,7 +36,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
 
   @impl true
   def handle_event("search", %{"q" => q}, socket) do
-    {:noreply, socket |> assign(:search, q) |> load(clean(q), 1)}
+    {:noreply, socket |> assign(:search, q) |> load(SearchText.normalize_search(q), 1)}
   end
 
   @impl true
@@ -43,15 +44,6 @@ defmodule VutuvWeb.OrganizationLive.Index do
 
   defp load(socket, search, page) do
     assign(socket, :result, Organizations.directory_page(search: search, page: page))
-  end
-
-  defp clean(nil), do: nil
-
-  defp clean(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
   end
 
   # Real anchors carrying the current search so pagination is link-walk crawlable.
@@ -104,7 +96,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
           </p>
           <.link
             navigate={~p"/organizations/new"}
-            class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+            class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {gettext("Add your organization")}
           </.link>

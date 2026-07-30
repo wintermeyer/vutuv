@@ -8,5 +8,6 @@ defmodule VutuvWeb.DevDocHTML do
     do:
       "text-slate-900 underline decoration-brand-500 decoration-2 underline-offset-8 dark:text-slate-100"
 
-  def nav_class(false = _active), do: "text-brand-600 hover:text-brand-700"
+  def nav_class(false = _active),
+    do: "text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
 end

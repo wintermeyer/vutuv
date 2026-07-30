@@ -14,6 +14,7 @@ defmodule Vutuv.FediverseRemotePostsTest do
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
+  alias VutuvWeb.Fediverse.Docs
 
   @actor "https://social.example/users/them"
   @public "https://www.w3.org/ns/activitystreams#Public"
@@ -587,6 +588,25 @@ defmodule Vutuv.FediverseRemotePostsTest do
       # Without this the shared inbox resolves nobody, signs its actor fetch
       # anonymously, and an authorized-fetch server refuses it — losing the post.
       assert [%{id: found}] = Fediverse.inbox_recipients(create_activity(), @actor)
+      assert found == user.id
+    end
+
+    test "an addressee spelled with the www. alias still names the member" do
+      user = member()
+
+      # A remote server echoes back whatever spelling it learned for our
+      # member's actor URL; `www.` is us (issue #1211), so a delivery addressed
+      # this way must not silently resolve to nobody and drop with a 202.
+      www_actor =
+        user
+        |> Docs.actor_url()
+        |> URI.parse()
+        |> then(&%{&1 | host: "www." <> &1.host})
+        |> URI.to_string()
+
+      activity = %{"type" => "Create", "to" => [www_actor], "object" => %{}}
+
+      assert [%{id: found}] = Fediverse.inbox_recipients(activity, @actor)
       assert found == user.id
     end
   end

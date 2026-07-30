@@ -28,6 +28,8 @@ defmodule VutuvWeb.AccountActivityLive do
   import VutuvWeb.AccountEventText,
     only: [event_label: 1, detail: 1, factor_label: 1, by_someone_else?: 1]
 
+  import VutuvWeb.BrowseTable
+
   alias Vutuv.AccountEvents
   alias Vutuv.Pages
 
@@ -71,8 +73,7 @@ defmodule VutuvWeb.AccountActivityLive do
   end
 
   def handle_event("sort", %{"col" => col}, socket) do
-    filters = socket.assigns.filters
-    dir = if filters.sort == col, do: flip(filters.dir), else: AccountEvents.default_dir(col)
+    dir = next_dir(socket.assigns.filters, browse_config(), col)
     {:noreply, patch(socket, %{"sort" => col, "dir" => dir})}
   end
 
@@ -80,46 +81,22 @@ defmodule VutuvWeb.AccountActivityLive do
     {:noreply, push_patch(socket, to: ~p"/settings/activity")}
   end
 
-  defp flip("asc"), do: "desc"
-  defp flip(_desc), do: "asc"
-
   defp patch(socket, overrides) do
-    query = build_query(socket.assigns.filters, overrides)
+    query = build_query(socket.assigns.filters, browse_config(), overrides)
     push_patch(socket, to: ~p"/settings/activity?#{query}")
   end
 
-  # Blanks and defaults are left out, so the default view is a bare
-  # /settings/activity and a filtered one is a clean, shareable URL.
-  defp build_query(filters, overrides \\ %{}) do
-    %{"q" => filters.q, "kind" => filters.kind, "sort" => filters.sort, "dir" => filters.dir}
-    |> Map.merge(overrides)
-    |> drop_defaults()
+  # What the shared browse machinery (`VutuvWeb.BrowseTable`) needs to know
+  # about this page: the filter vocabulary and the sort defaults, so blanks and
+  # defaults are left out of the URL and the default view stays a bare
+  # /settings/activity.
+  defp browse_config do
+    browse_config(
+      filter_keys: [:q, :kind],
+      default_sort: "time",
+      default_dir: &AccountEvents.default_dir/1
+    )
   end
-
-  defp drop_defaults(query) do
-    sort = query["sort"] || "time"
-
-    query
-    |> Enum.reject(fn
-      {_key, value} when value in [nil, ""] -> true
-      {"sort", "time"} -> true
-      {"dir", dir} -> dir == AccountEvents.default_dir(sort)
-      {"page", "1"} -> true
-      {_key, _value} -> false
-    end)
-    |> Map.new()
-  end
-
-  # Any narrowing of the full log — what "Clear" and the empty state key on. A
-  # sort is not a filter: it hides nothing.
-  defp filtered?(filters), do: filters.q != nil or filters.kind != nil
-
-  # The "Device" column folds away below `sm`: the device also rides under the
-  # sentence on a phone, and keeping the column would push the timestamp — the
-  # fact the page exists for — off the card edge.
-  @source_column_class "hidden sm:table-cell"
-
-  defp source_column_class, do: @source_column_class
 
   defp columns do
     [
@@ -127,23 +104,6 @@ defmodule VutuvWeb.AccountActivityLive do
       {"kind", gettext("What happened"), nil}
     ]
   end
-
-  defp sort_caret(filters, column) do
-    cond do
-      filters.sort != column -> ""
-      filters.dir == "asc" -> " ▲"
-      true -> " ▼"
-    end
-  end
-
-  defp aria_sort(%{sort: column, dir: "asc"}, column), do: "ascending"
-  defp aria_sort(%{sort: column}, column), do: "descending"
-  defp aria_sort(_filters, _column), do: "none"
-
-  defp range_first(page, per_page, total) when total > 0, do: (page - 1) * per_page + 1
-  defp range_first(_page, _per_page, _total), do: 0
-
-  defp range_last(page, per_page, total), do: min(page * per_page, total)
 
   @impl true
   def render(assigns) do
@@ -158,12 +118,7 @@ defmodule VutuvWeb.AccountActivityLive do
         <.card>
           <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <.section_title>{gettext("Account activity")}</.section_title>
-            <span
-              id="activity-total"
-              class="rounded-full bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-            >
-              {delimited_count(@total)}
-            </span>
+            <.count_pill id="activity-total" count={@total} />
           </div>
           <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
             {gettext(
@@ -171,7 +126,7 @@ defmodule VutuvWeb.AccountActivityLive do
             )}
           </p>
 
-          <%= if @total == 0 and not filtered?(@filters) do %>
+          <%= if @total == 0 and not filtered?(@filters, browse_config()) do %>
             <p class="mt-4 text-sm text-slate-600 dark:text-slate-400" id="no-activity">
               {gettext(
                 "Nothing here yet. The next time you sign in or change a setting, it will be listed here."
@@ -225,7 +180,7 @@ defmodule VutuvWeb.AccountActivityLive do
                 </select>
               </div>
               <button
-                :if={filtered?(@filters)}
+                :if={filtered?(@filters, browse_config())}
                 type="button"
                 phx-click="clear"
                 id="clear-filters"
@@ -247,22 +202,18 @@ defmodule VutuvWeb.AccountActivityLive do
               <table class="pure-table">
                 <thead>
                   <tr>
-                    <th
+                    <.sort_header
                       :for={{col, header, class} <- columns()}
-                      aria-sort={aria_sort(@filters, col)}
+                      col={col}
+                      label={header}
                       class={class}
-                    >
-                      <button
-                        type="button"
-                        phx-click="sort"
-                        phx-value-col={col}
-                        id={"sort-#{col}"}
-                        class="font-semibold text-slate-700 hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-300"
-                      >
-                        {header}{sort_caret(@filters, col)}
-                      </button>
-                    </th>
-                    <th class={source_column_class()}>{gettext("Device")}</th>
+                      filters={@filters}
+                    />
+                    <%!-- The "Device" column folds away below `sm`: the device
+                    also rides under the sentence on a phone, and keeping the
+                    column would push the timestamp — the fact the page exists
+                    for — off the card edge. --%>
+                    <th class={phone_hidden_class()}>{gettext("Device")}</th>
                     <th><span class="sr-only">{gettext("Was this you?")}</span></th>
                   </tr>
                 </thead>
@@ -311,7 +262,7 @@ defmodule VutuvWeb.AccountActivityLive do
                         {event.device}
                       </span>
                     </td>
-                    <td class={[source_column_class(), "align-top text-slate-600 dark:text-slate-400"]}>
+                    <td class={[phone_hidden_class(), "align-top text-slate-600 dark:text-slate-400"]}>
                       {event.device}
                     </td>
                     <td class="whitespace-nowrap align-top text-right">
@@ -327,20 +278,14 @@ defmodule VutuvWeb.AccountActivityLive do
               </table>
             </div>
 
-            <p :if={@events != []} class="mt-3 text-xs text-slate-600 dark:text-slate-400">
-              {gettext("Showing %{first}-%{last} of %{total}.",
-                first: delimited_count(range_first(@page, @per_page, @total)),
-                last: delimited_count(range_last(@page, @per_page, @total)),
-                total: delimited_count(@total)
-              )}
-            </p>
-
-            <.pager
-              params={%{"page" => @page}}
-              total={@total}
+            <.browse_footer
+              :if={@events != []}
+              page={@page}
               per_page={@per_page}
+              total={@total}
               path={~p"/settings/activity"}
-              query={build_query(@filters)}
+              filters={@filters}
+              config={browse_config()}
             />
           <% end %>
         </.card>

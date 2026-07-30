@@ -6,7 +6,7 @@ defmodule Vutuv.Accounts do
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_confirmed_row: 1]
-  import Vutuv.SearchText, only: [escape_like: 1, name_ilike: 3, normalize_search: 1]
+  import Vutuv.SearchText, only: [contains: 1, name_ilike: 3, normalize_search: 1]
   require Logger
 
   # Enables the bare `gettext/1` macro for the PIN / status strings below.
@@ -2111,8 +2111,8 @@ defmodule Vutuv.Accounts do
   @doc "The member-browser page size, shared by the query and the pager."
   def admin_users_per_page, do: @admin_users_per_page
 
-  @doc "The sortable member-browser columns (the `?sort=` values)."
-  def admin_user_sort_columns, do: Map.keys(@admin_user_sort_columns)
+  # The sortable member-browser columns (the `?sort=` values).
+  defp admin_user_sort_columns, do: Map.keys(@admin_user_sort_columns)
 
   @doc """
   Normalizes raw request params into a validated filter map for the member
@@ -2189,7 +2189,7 @@ defmodule Vutuv.Accounts do
 
   defp search_members(query, term) do
     # A typed "@handle" is just the username; drop the leading @ so it matches.
-    like = "%" <> escape_like(String.trim_leading(term, "@")) <> "%"
+    like = contains(String.trim_leading(term, "@"))
 
     # Admins routinely need to find an account by its email address (support,
     # moderation). Matched server-side via a subquery — the address is never

@@ -47,6 +47,7 @@ defmodule VutuvWeb.PostLive.Thread do
   alias Vutuv.Posts
   alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.PostLive.ActionsComponent
 
   @impl true
@@ -62,9 +63,51 @@ defmodule VutuvWeb.PostLive.Thread do
       |> assign(:reply_budget, defaults.replies)
       |> assign(:subscribed_ids, MapSet.new())
       |> assign(:notice, nil)
-      |> load_window()
+      |> mount_window()
 
     {:ok, socket}
+  end
+
+  # The dead render computes the window and stashes it; the connected mount —
+  # moments later, same authenticated viewer, same post — takes it and skips
+  # re-running the same queries (`VutuvWeb.Live.MountHandoff`). Any miss
+  # (anonymous viewer, expired, already consumed, a reconnect after a blip or
+  # deploy) falls back to the plain full load, so the handoff is a fast path,
+  # never a requirement. The expanders and the PubSub-driven re-windows keep
+  # calling `load_window/1` directly — only the mount pair shares work.
+  defp mount_window(socket) do
+    viewer_id = socket.assigns.current_user && socket.assigns.current_user.id
+    subject = {:thread, socket.assigns.post_id}
+
+    if connected?(socket) do
+      case MountHandoff.take(viewer_id, subject) do
+        {:ok, payload} -> apply_handoff(socket, payload)
+        :error -> load_window(socket)
+      end
+    else
+      before_keys = Map.keys(socket.assigns)
+      socket = load_window(socket)
+      # Exactly the assigns load_window added — diffed, not listed, so an
+      # assign added to load_window later rides the handoff automatically.
+      MountHandoff.stash(viewer_id, subject, Map.drop(socket.assigns, before_keys))
+      socket
+    end
+  end
+
+  # Apply the dead render's assigns, then do the connected-only work the dead
+  # pass deliberately left out: one counter subscription per shown card and
+  # the remote replies' fire-and-forget freshness check — the same calls
+  # load_window makes on a connected socket.
+  defp apply_handoff(socket, %{window: nil} = payload), do: assign(socket, payload)
+
+  defp apply_handoff(socket, payload) do
+    payload.remote_replies |> Map.values() |> List.flatten() |> Fediverse.refresh_async()
+
+    ids = payload.window |> window_posts() |> Enum.map(& &1.id)
+
+    socket
+    |> assign(payload)
+    |> subscribe_shown(ids)
   end
 
   @impl true

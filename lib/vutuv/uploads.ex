@@ -599,6 +599,44 @@ defmodule Vutuv.Uploads do
   defp valid_extension?(file_name), do: valid_extension?(file_name, @extension_whitelist)
 
   @doc """
+  A fresh unguessable URL token (~128 bits, URL-safe Base64) for the
+  token-keyed uploaders (`Vutuv.PostImageStore`, `Vutuv.OrganizationImageStore`,
+  `Vutuv.JobPostingImageStore`): the token is both the proxy's lookup key and
+  the on-disk directory name, never the row id.
+  """
+  def gen_token do
+    16 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+  end
+
+  @doc """
+  The `store/3` scaffold shared by the token-keyed uploaders
+  (`Vutuv.PostImageStore`, `Vutuv.OrganizationImageStore`,
+  `Vutuv.JobPostingImageStore`): checks `filename` against `whitelist`
+  (a miss returns `{:error, :invalid_file}` without touching the disk),
+  creates `dir`, and calls `write_fun.(ext)` — `ext` is the downcased
+  extension — to write the derived versions and the original. `{:ok, meta}`
+  comes back with the upload's `content_type` merged in; `{:error, _}`
+  removes the fresh `dir` again and collapses to `{:error, :invalid_file}`.
+  """
+  def store_upload(filename, whitelist, dir, write_fun) do
+    if valid_extension?(filename, whitelist) do
+      ext = filename |> Path.extname() |> String.downcase()
+      File.mkdir_p!(dir)
+
+      case write_fun.(ext) do
+        {:ok, meta} ->
+          {:ok, Map.merge(meta, %{content_type: MIME.from_path(filename)})}
+
+        {:error, _reason} ->
+          File.rm_rf(dir)
+          {:error, :invalid_file}
+      end
+    else
+      {:error, :invalid_file}
+    end
+  end
+
+  @doc """
   The one regeneration driver (used by every uploader's `regenerate/2`, which
   `Vutuv.Uploads.Regenerator` calls per DB row): adopts a legacy public
   original into the private tree, re-derives all served versions per the

@@ -352,7 +352,7 @@ defmodule VutuvWeb.SearchLive do
           :if={@signed_in?}
           navigate={~p"/settings/fediverse/following?#{[address: @address]}"}
           id="search-remote-follow"
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {gettext("Follow this account")} ›
         </.link>
@@ -360,7 +360,7 @@ defmodule VutuvWeb.SearchLive do
           :if={!@signed_in?}
           navigate={~p"/login"}
           id="search-remote-login"
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {gettext("Sign in to follow this account")} ›
         </.link>

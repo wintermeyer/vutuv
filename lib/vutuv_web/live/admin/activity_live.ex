@@ -29,6 +29,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
   import VutuvWeb.AccountEventText,
     only: [event_label: 1, detail: 1, factor_label: 1, by_someone_else?: 1]
 
+  import VutuvWeb.BrowseTable
   import VutuvWeb.UserHelpers, only: [member_name: 1]
 
   alias Vutuv.AccountEvents
@@ -87,8 +88,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
   end
 
   def handle_event("sort", %{"col" => col}, socket) do
-    filters = socket.assigns.filters
-    dir = if filters.sort == col, do: flip(filters.dir), else: AccountEvents.default_dir(col)
+    dir = next_dir(socket.assigns.filters, browse_config(), col)
     {:noreply, patch(socket, %{"sort" => col, "dir" => dir})}
   end
 
@@ -121,42 +121,21 @@ defmodule VutuvWeb.Admin.ActivityLive do
     end
   end
 
-  defp flip("asc"), do: "desc"
-  defp flip(_desc), do: "asc"
-
   defp patch(socket, overrides) do
-    query = build_query(socket.assigns.filters, overrides)
+    query = build_query(socket.assigns.filters, browse_config(), overrides)
     push_patch(socket, to: ~p"/admin/activity?#{query}")
   end
 
-  defp build_query(filters, overrides \\ %{}) do
-    %{
-      "q" => filters.q,
-      "kind" => filters.kind,
-      "member" => filters.member,
-      "sort" => filters.sort,
-      "dir" => filters.dir
-    }
-    |> Map.merge(overrides)
-    |> drop_defaults()
+  # What the shared browse machinery (`VutuvWeb.BrowseTable`) needs to know
+  # about this page: the member page's filter vocabulary plus `member`, and the
+  # same sort defaults.
+  defp browse_config do
+    browse_config(
+      filter_keys: [:q, :kind, :member],
+      default_sort: "time",
+      default_dir: &AccountEvents.default_dir/1
+    )
   end
-
-  defp drop_defaults(query) do
-    sort = query["sort"] || "time"
-
-    query
-    |> Enum.reject(fn
-      {_key, value} when value in [nil, ""] -> true
-      {"sort", "time"} -> true
-      {"dir", dir} -> dir == AccountEvents.default_dir(sort)
-      {"page", "1"} -> true
-      {_key, _value} -> false
-    end)
-    |> Map.new()
-  end
-
-  defp filtered?(filters),
-    do: filters.q != nil or filters.kind != nil or filters.member != nil
 
   defp columns do
     [
@@ -165,23 +144,6 @@ defmodule VutuvWeb.Admin.ActivityLive do
       {"kind", gettext("What happened")}
     ]
   end
-
-  defp sort_caret(filters, column) do
-    cond do
-      filters.sort != column -> ""
-      filters.dir == "asc" -> " ▲"
-      true -> " ▼"
-    end
-  end
-
-  defp aria_sort(%{sort: column, dir: "asc"}, column), do: "ascending"
-  defp aria_sort(%{sort: column}, column), do: "descending"
-  defp aria_sort(_filters, _column), do: "none"
-
-  defp range_first(page, per_page, total) when total > 0, do: (page - 1) * per_page + 1
-  defp range_first(_page, _per_page, _total), do: 0
-
-  defp range_last(page, per_page, total), do: min(page * per_page, total)
 
   @impl true
   def render(assigns) do
@@ -260,7 +222,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
             </select>
           </div>
           <button
-            :if={filtered?(@filters)}
+            :if={filtered?(@filters, browse_config())}
             type="button"
             phx-click="clear"
             id="clear-filters"
@@ -271,7 +233,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
         </form>
 
         <p :if={@events == []} class="card__empty" id="no-activity">
-          <%= if filtered?(@filters) do %>
+          <%= if filtered?(@filters, browse_config()) do %>
             {gettext("Nothing matches that. Try a shorter search, or clear the filters.")}
           <% else %>
             {gettext("No account activity has been recorded yet.")}
@@ -282,17 +244,12 @@ defmodule VutuvWeb.Admin.ActivityLive do
           <table class="pure-table">
             <thead>
               <tr>
-                <th :for={{col, header} <- columns()} aria-sort={aria_sort(@filters, col)}>
-                  <button
-                    type="button"
-                    phx-click="sort"
-                    phx-value-col={col}
-                    id={"sort-#{col}"}
-                    class="font-semibold text-slate-700 hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-300"
-                  >
-                    {header}{sort_caret(@filters, col)}
-                  </button>
-                </th>
+                <.sort_header
+                  :for={{col, header} <- columns()}
+                  col={col}
+                  label={header}
+                  filters={@filters}
+                />
                 <th>{gettext("Device")}</th>
               </tr>
             </thead>
@@ -353,20 +310,14 @@ defmodule VutuvWeb.Admin.ActivityLive do
           </table>
         </div>
 
-        <p :if={@events != []} class="mt-3 text-xs text-slate-600 dark:text-slate-400">
-          {gettext("Showing %{first}-%{last} of %{total}.",
-            first: delimited_count(range_first(@page, @per_page, @total)),
-            last: delimited_count(range_last(@page, @per_page, @total)),
-            total: delimited_count(@total)
-          )}
-        </p>
-
-        <.pager
-          params={%{"page" => @page}}
-          total={@total}
+        <.browse_footer
+          :if={@events != []}
+          page={@page}
           per_page={@per_page}
+          total={@total}
           path={~p"/admin/activity"}
-          query={build_query(@filters)}
+          filters={@filters}
+          config={browse_config()}
         />
       </section>
     </div>

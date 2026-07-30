@@ -16,6 +16,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Profiles.SocialMediaAccount
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.FediverseController
   alias VutuvWeb.RateLimit
@@ -97,12 +98,7 @@ defmodule VutuvWeb.UserController do
     |> VutuvWeb.ContentPolicy.put_robots_header(user.noindex?, user.noai?)
     |> put_layout(html: false)
     |> live_render(VutuvWeb.UserProfileLive,
-      session: %{
-        "profile_user_id" => user.id,
-        "locale" => conn.assigns[:locale],
-        "request_path" => conn.request_path,
-        "user_id" => conn.assigns[:current_user_id]
-      }
+      session: Map.put(ControllerHelpers.live_render_session(conn), "profile_user_id", user.id)
     )
   end
 

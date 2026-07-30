@@ -7,6 +7,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Profiles.WorkExperience
+  alias VutuvWeb.UserProfileLive
 
   @doc """
   The `{label, value}` options for the start/end month selects on the
@@ -107,15 +108,16 @@ defmodule VutuvWeb.WorkExperienceHTML do
     for kind <- WorkExperience.kinds(), kind_blocks = groups[kind], do: {kind, kind_blocks}
   end
 
-  @profile_preview_roles 10
-
   @doc """
   How many roles the profile Experience card previews before truncating with an
   "Alle anzeigen" link; the section page (`/:slug/work_experiences`) shows all.
   Shared by the preview call and the `manage_footer` "View All" threshold so the
-  two can never disagree.
+  two can never disagree. The number itself lives in the profile's per-section
+  cap map (`VutuvWeb.UserProfileLive.preview_limit/1`) with every other
+  section's — this stays the view-side accessor the template and the
+  `grouped_clusters/3` docs point at.
   """
-  def profile_preview_limit, do: @profile_preview_roles
+  def profile_preview_limit, do: UserProfileLive.preview_limit(:experience)
 
   # Cap the number of *displayed* roles at `limit` (nil = no cap), truncating the
   # block that straddles the cap and dropping the blocks past it. A truncated
@@ -437,41 +439,6 @@ defmodule VutuvWeb.WorkExperienceHTML do
   defp circle_rem(months, max_months), do: 1.6 + :math.sqrt(months / max_months) * (4.0 - 1.6)
 
   @doc """
-  The member's pinned profile job title (issue #833), found in the already-
-  loaded list, or nil when they use the automatic heuristic. `id` is a
-  member's `users.profile_work_experience_id`.
-  """
-  def pinned_job(_work_experiences, nil), do: nil
-  def pinned_job(work_experiences, id), do: Enum.find(work_experiences, &(&1.id == id))
-
-  @doc """
-  The star that marks (and toggles) which work experience supplies the profile
-  job title on the management list (issue #833): solid when this role is the
-  pinned one, outline as the "pin this one instead" affordance otherwise. One
-  path renders both, colour and fill come from the caller's classes.
-  """
-  attr(:filled, :boolean, default: false)
-  attr(:class, :string, default: "h-4 w-4")
-
-  def pin_star(assigns) do
-    ~H"""
-    <svg
-      class={@class}
-      viewBox="0 0 20 20"
-      fill={if(@filled, do: "currentColor", else: "none")}
-      stroke="currentColor"
-      stroke-width={if(@filled, do: "0", else: "1.5")}
-      aria-hidden="true"
-    >
-      <path
-        stroke-linejoin="round"
-        d="M10 1.75l2.6 5.27 5.82.846-4.21 4.104.994 5.796L10 15.1l-5.204 2.736.994-5.796L1.58 7.866l5.82-.846L10 1.75z"
-      />
-    </svg>
-    """
-  end
-
-  @doc """
   One timeline block from `grouped_clusters/2`, shared by the
   section page (`work_experience/card_list`) and the profile Experience card so
   the clustering can never drift between them.
@@ -656,7 +623,9 @@ defmodule VutuvWeb.WorkExperienceHTML do
 
   @doc """
   The owner's pin (issue #833) + Edit/Delete controls under one role, shared by
-  the single-role and nested-role branches of `experience_block/1`.
+  the single-role and nested-role branches of `experience_block/1`. The pin is
+  the shared `VutuvWeb.UserHelpers.headline_pin_controls/1` — one control for
+  both headline kinds (the education list renders the same component).
   """
   attr(:user, :any, required: true)
   attr(:job, :any, required: true)
@@ -664,24 +633,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
 
   def role_owner_controls(assigns) do
     ~H"""
-    <div class="mt-2">
-      <span
-        :if={@profile_work_experience_id == @job.id}
-        class="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 dark:text-brand-400"
-      >
-        <.pin_star filled class="h-4 w-4" />
-        {gettext("Shown at the top of your profile")}
-      </span>
-      <.link
-        :if={@profile_work_experience_id != @job.id}
-        href={~p"/settings/work_experiences/#{@job}/pin"}
-        method="put"
-        class="inline-flex items-center gap-1 rounded-full border border-brand-600 px-3 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/40"
-      >
-        <.pin_star class="h-4 w-4" />
-        {gettext("Show at top of profile")}
-      </.link>
-    </div>
+    <.headline_pin_controls kind={:work} entry={@job} pinned_id={@profile_work_experience_id} />
     <.row_actions
       align={:start}
       class="mt-2"

@@ -201,7 +201,13 @@ defmodule VutuvWeb.FediverseController do
 
     with {:ok, key_id} <- signature_key_id(conn),
          {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, signer(users)),
-         true <- same_authority?(key_id, remote.id),
+         # The signing keyId must be served by the same host as the actor id it
+         # names — without this an attacker-controlled host can serve a key
+         # document claiming `id: "https://good.example/alice"`, spoofing
+         # Follow/Undo as any actor. `Fediverse.same_host?/2` is the one
+         # spelling of that predicate (it also guards an actor's inbox) and
+         # additionally pins the keyId to https and refuses an empty host.
+         true <- Fediverse.same_host?(remote.id, key_id),
          :ok <- verify_signature(conn, remote),
          true <- activity["actor"] == remote.id do
       Enum.each(users, &perform(&1, activity, remote))
@@ -211,16 +217,6 @@ defmodule VutuvWeb.FediverseController do
       _ -> send_resp(conn, 401, "")
     end
   end
-
-  # The signing keyId must be served by the same host as the actor id it names.
-  # Without this an attacker-controlled host can serve a key document claiming
-  # `id: "https://good.example/alice"`, spoofing Follow/Undo as any actor.
-  defp same_authority?(key_id, actor_id) when is_binary(key_id) and is_binary(actor_id) do
-    key_host = URI.parse(key_id).host
-    not is_nil(key_host) and key_host == URI.parse(actor_id).host
-  end
-
-  defp same_authority?(_key_id, _actor_id), do: false
 
   # What one addressed member does with an activity. Deliberately returns
   # nothing the caller uses: the answer is the same 202 whatever any of these
@@ -542,7 +538,9 @@ defmodule VutuvWeb.FediverseController do
   # accepted spellings is ambiguous about who is meant.
   defp resolve_resource("acct:" <> acct) do
     with [handle, host] <- acct |> String.trim_leading("@") |> String.split("@", parts: 2),
-         true <- String.downcase(String.trim(host)) == VutuvWeb.Endpoint.host() do
+         # `local_host?/1` folds case, port and the `www.` alias — a member
+         # pastes whatever spelling their browser showed them (issue #1211).
+         true <- Fediverse.local_host?(host) do
       Accounts.get_user_by_username(Handles.normalize(handle))
     else
       _ -> nil
@@ -550,20 +548,13 @@ defmodule VutuvWeb.FediverseController do
   end
 
   defp resolve_resource(url) when is_binary(url) do
-    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
-
-    case String.replace_prefix(url, base, "") do
-      ^url ->
-        nil
-
-      rest ->
-        # `https://host/@handle` is the profile URL Mastodon itself shows, so it
-        # is what somebody pastes; the trailing slash is what a browser adds.
-        rest
-        |> String.trim_trailing("/")
-        |> String.trim_trailing("/actor")
-        |> Handles.normalize()
-        |> Accounts.get_user_by_username()
+    # `https://host/@handle` is the profile URL Mastodon itself shows, so it is
+    # what somebody pastes; the trailing slash a browser adds falls away in
+    # `local_path/1`, which also accepts the `www.`/`http` spellings.
+    case Fediverse.local_path(url) do
+      [handle] -> Accounts.get_user_by_username(Handles.normalize(handle))
+      [handle, "actor"] -> Accounts.get_user_by_username(Handles.normalize(handle))
+      _ -> nil
     end
   end
 

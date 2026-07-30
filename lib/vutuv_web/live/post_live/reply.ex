@@ -20,6 +20,7 @@ defmodule VutuvWeb.PostLive.Reply do
   import VutuvWeb.PostComponents
 
   alias Vutuv.Posts
+  alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Markdown
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
@@ -36,10 +37,7 @@ defmodule VutuvWeb.PostLive.Reply do
        |> assign(:parent, parent)
        |> assign(:initial_body, Markdown.blockquote(params["quote"]))}
     else
-      {:ok,
-       socket
-       |> put_flash(:error, gettext("Sorry, that page could not be found."))
-       |> redirect(to: ~p"/")}
+      {:ok, InitAssigns.not_found(socket)}
     end
   end
 
@@ -74,7 +72,7 @@ defmodule VutuvWeb.PostLive.Reply do
 
         <.link
           href={Posts.path(@parent)}
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {gettext("Back to the post")}
         </.link>

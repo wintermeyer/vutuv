@@ -260,7 +260,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
                     type="button"
                     phx-click="select"
                     phx-value-id={organization.id}
-                    class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+                    class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                   >
                     {gettext("Details")} ›
                   </button>
@@ -290,7 +290,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
         <div class="min-w-0">
           <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100">{@detail.organization.name}</h2>
           <p class="text-sm text-slate-600 dark:text-slate-400">
-            <.link navigate={"/organizations/#{@detail.organization.slug}"} class="text-brand-600 hover:text-brand-700">
+            <.link navigate={"/organizations/#{@detail.organization.slug}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
               /organizations/{@detail.organization.slug}
             </.link>
           </p>
@@ -321,7 +321,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
           <dt class="card__label">{gettext("Team")}</dt>
           <dd class="mt-1 space-y-1 text-sm text-slate-700 dark:text-slate-300">
             <p :for={role <- @detail.roles}>
-              <.link navigate={"/#{role.user.username}"} class="text-brand-600 hover:text-brand-700">@{role.user.username}</.link>
+              <.link navigate={"/#{role.user.username}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">@{role.user.username}</.link>
               <span class="text-xs text-slate-500">{role_label(role.role)}</span>
             </p>
             <p :if={@detail.claimed_by} class="text-xs text-slate-500">

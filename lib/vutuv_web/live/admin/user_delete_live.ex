@@ -155,7 +155,7 @@ defmodule VutuvWeb.Admin.UserDeleteLive do
                   </.link>
                 </td>
                 <td class="breakwrap">
-                  <.link navigate={~p"/#{user}"} class="text-brand-600 hover:text-brand-700">
+                  <.link navigate={~p"/#{user}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                     @{user.username}
                   </.link>
                 </td>

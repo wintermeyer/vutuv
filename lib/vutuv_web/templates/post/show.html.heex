@@ -14,12 +14,11 @@
     socket on demand — so the page stays a page, not the whole archive. --%>
     {live_render(@conn, VutuvWeb.PostLive.Thread,
       id: "post-thread-live",
-      session: %{
-        "post_id" => @post.id,
-        "auto_scroll" => @auto_scroll?,
-        "locale" => @locale,
-        "request_path" => @conn.request_path
-      }
+      session:
+        Map.merge(VutuvWeb.ControllerHelpers.live_render_session(@conn), %{
+          "post_id" => @post.id,
+          "auto_scroll" => @auto_scroll?
+        })
     )}
 
     <%!-- The deny list is the author's private configuration — never shown

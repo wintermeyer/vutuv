@@ -36,7 +36,7 @@ defmodule VutuvWeb.Admin.ModerationLive do
           <h1>{gettext("Open cases")} ({compact_count(length(@cases))})</h1>
           <a
             href={~p"/admin/moderation/reporters"}
-            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {gettext("Reporter track records")} ›
           </a>
@@ -84,7 +84,7 @@ defmodule VutuvWeb.Admin.ModerationLive do
                 <td class="text-right">
                   <a
                     href={~p"/admin/moderation/#{case_record.id}"}
-                    class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+                    class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                   >
                     {gettext("Review")} ›
                   </a>

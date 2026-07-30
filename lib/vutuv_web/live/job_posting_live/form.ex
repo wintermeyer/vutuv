@@ -499,7 +499,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
                   class="absolute -right-2 -top-2 rounded-full bg-slate-800 px-1.5 text-xs text-white">×</button>
               </li>
             </ul>
-            <label class="mt-2 inline-block cursor-pointer text-sm font-semibold text-brand-600 hover:text-brand-700">
+            <label class="mt-2 inline-block cursor-pointer text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
               <.live_file_input upload={@uploads.images} class="sr-only" />
               📷 {gettext("Add images")}
             </label>
@@ -583,7 +583,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
           </div>
 
           <div :if={@posting.id} class="border-t border-slate-100 pt-4 dark:border-slate-800">
-            <.link navigate={~p"/jobs/#{@posting.slug}/exclusions"} class="text-sm font-semibold text-brand-600 hover:text-brand-700">
+            <.link navigate={~p"/jobs/#{@posting.slug}/exclusions"} class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
               {gettext("Hide from specific viewers (competitors, your own staff, a person) →")}
             </.link>
             <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">

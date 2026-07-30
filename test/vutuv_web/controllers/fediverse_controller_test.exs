@@ -204,8 +204,12 @@ defmodule VutuvWeb.FediverseControllerTest do
       for resource <- [
             "acct:@#{user.username}@#{host()}",
             "acct:#{user.username}@#{String.upcase(host())}",
+            # `www.` is us (issue #1211): a member pastes the alias spelling,
+            # and the asking server forwards whatever was pasted.
+            "acct:#{user.username}@www.#{host()}",
             "#{String.trim_trailing(VutuvWeb.Endpoint.url(), "/")}/@#{user.username}",
-            "#{String.trim_trailing(VutuvWeb.Endpoint.url(), "/")}/#{user.username}/"
+            "#{String.trim_trailing(VutuvWeb.Endpoint.url(), "/")}/#{user.username}/",
+            "https://www.#{host()}/#{user.username}/actor"
           ] do
         conn =
           get(

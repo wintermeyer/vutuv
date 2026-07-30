@@ -1,18 +1,19 @@
 defmodule VutuvWeb.BrowseTable do
   @moduledoc """
-  The shared machinery behind the two Fediverse relationship tables: the
-  member's remote **followers** (`VutuvWeb.FediverseFollowersLive`) and the
-  accounts they **follow** out there (`VutuvWeb.FediverseFollowingLive`, issue
-  #1160).
+  The shared machinery behind the browse/table LiveViews: the two Fediverse
+  relationship tables (`VutuvWeb.FediverseFollowersLive` and
+  `VutuvWeb.FediverseFollowingLive`, issue #1160), the member's own
+  account-activity log (`VutuvWeb.AccountActivityLive`), its admin twin
+  (`VutuvWeb.Admin.ActivityLive`) and the admin member browser
+  (`VutuvWeb.Admin.UserLive`).
 
-  They are the same relationship read from opposite ends, so they behave
-  identically: search, a server filter, sortable column headers and numbered
-  paging, all of it in the **URL** (`push_patch`) so a particular view is
-  shareable and the back button restores it. That behaviour lives here rather
-  than twice, which is also what keeps a `?sort=` value meaning the same thing
-  on both pages — and it is the markup as much as the query string, since a
-  copied `<select>` is exactly how the "current filter always shows" fallback
-  would end up fixed on one page only.
+  They all behave the same way: search, filters, sortable column headers and
+  numbered paging, all of it in the **URL** (`push_patch`) so a particular view
+  is shareable and the back button restores it. That behaviour lives here
+  rather than five times, which is also what keeps a `?sort=` value meaning
+  the same thing on every page. What differs per page — the filter vocabulary
+  and the sort defaults — is named once in a `browse_config/1` map and handed
+  to `build_query/3`, `filtered?/2` and `next_dir/3`.
 
   What stays with each page is what genuinely differs: which rows it loads,
   which columns it shows, and what a row lets you do.
@@ -21,9 +22,53 @@ defmodule VutuvWeb.BrowseTable do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
+  import Phoenix.LiveView, only: [push_patch: 2]
   import VutuvWeb.UI
 
   alias Vutuv.Fediverse
+
+  @doc """
+  Names what differs between the browse pages, so the URL machinery below can
+  be shared:
+
+    * `:filter_keys` — the filter fields (atoms) the page's filter map carries
+      beside `sort`/`dir`; each rides the URL under its own name.
+    * `:defaults` — per-key default values (string keys) a shareable URL
+      leaves out, for filters whose default is not blank (the member browser's
+      `reg=pin`). Blank (`nil`/`""`) values are always left out.
+    * `:default_sort` — the column the page sorts by until somebody clicks a
+      header.
+    * `:default_dir` — the direction a freshly clicked column sorts in, as a
+      fun of the column.
+    * `:url_default_dir` — the direction the page's filter parser assumes when
+      the URL names none (so it is dropped from the query string). Defaults to
+      `:default_dir`; the member browser is the one page where the two differ
+      (a fresh column sorts A-Z, a bare URL means newest-first).
+  """
+  def browse_config(opts) do
+    default_dir = Keyword.fetch!(opts, :default_dir)
+
+    %{
+      filter_keys: Keyword.fetch!(opts, :filter_keys),
+      defaults: Keyword.get(opts, :defaults, %{}),
+      default_sort: Keyword.fetch!(opts, :default_sort),
+      default_dir: default_dir,
+      url_default_dir: Keyword.get(opts, :url_default_dir, default_dir)
+    }
+  end
+
+  @doc """
+  The config for the two Fediverse relationship tables. They are the same
+  relationship read from opposite ends, so they share everything down to the
+  filter vocabulary — and `Vutuv.Fediverse` owns the sort defaults.
+  """
+  def fediverse_config do
+    browse_config(
+      filter_keys: [:q, :server],
+      default_sort: Fediverse.browse_default_sort(),
+      default_dir: &Fediverse.browse_default_dir/1
+    )
+  end
 
   @doc """
   The current view as a URL query map, with `overrides` applied.
@@ -32,28 +77,24 @@ defmodule VutuvWeb.BrowseTable do
   filtered one is a clean, shareable URL. `page` is dropped unless it is
   overridden, so any filter or sort change goes back to page 1.
   """
-  def build_query(filters, overrides \\ %{}) do
-    %{
-      "q" => filters.q,
-      "server" => filters.server,
-      "sort" => filters.sort,
-      "dir" => filters.dir
-    }
+  def build_query(filters, config, overrides \\ %{}) do
+    config.filter_keys
+    |> Map.new(&{Atom.to_string(&1), Map.fetch!(filters, &1)})
+    |> Map.merge(%{"sort" => filters.sort, "dir" => filters.dir})
     |> Map.merge(overrides)
-    |> drop_defaults()
+    |> drop_defaults(config)
   end
 
-  defp drop_defaults(query) do
-    default_sort = Fediverse.browse_default_sort()
-    sort = query["sort"] || default_sort
+  defp drop_defaults(query, config) do
+    sort = query["sort"] || config.default_sort
 
     query
     |> Enum.reject(fn
       {_key, value} when value in [nil, ""] -> true
-      {"sort", ^default_sort} -> true
-      {"dir", dir} -> dir == Fediverse.browse_default_dir(sort)
+      {"sort", value} -> value == config.default_sort
+      {"dir", value} -> value == config.url_default_dir.(sort)
       {"page", "1"} -> true
-      {_key, _value} -> false
+      {key, value} -> Map.get(config.defaults, key) == value
     end)
     |> Map.new()
   end
@@ -62,29 +103,33 @@ defmodule VutuvWeb.BrowseTable do
   Any narrowing of the full list — what the empty state keys on. A sort is not a
   filter: it hides nothing.
   """
-  def filtered?(filters), do: filters.q != nil or filters.server != nil
+  def filtered?(filters, config) do
+    Enum.any?(config.filter_keys, fn key ->
+      Map.fetch!(filters, key) != Map.get(config.defaults, Atom.to_string(key))
+    end)
+  end
 
   # Whether the view differs from a fresh page load at all, filter or sort.
   #
-  # The reset control keys on this rather than on `filtered?/1`, because on a
+  # The reset control keys on this rather than on `filtered?/2`, because on a
   # phone the sortable columns other than Account are folded away: tap Account
   # once and the only control that could put the default order back would not
   # render, since a sort narrows nothing. That is a trap you cannot leave
   # without editing the URL.
-  defp default_view?(filters) do
-    not filtered?(filters) and
-      filters.sort == Fediverse.browse_default_sort() and
-      filters.dir == Fediverse.browse_default_dir(filters.sort)
+  defp default_view?(filters, config) do
+    not filtered?(filters, config) and
+      filters.sort == config.default_sort and
+      filters.dir == config.url_default_dir.(filters.sort)
   end
 
   @doc """
   The direction a click on `column` should sort in: the other way round when it
   is already the active column, else that column's own default.
   """
-  def next_dir(filters, column) do
+  def next_dir(filters, config, column) do
     if filters.sort == column,
       do: flip(filters.dir),
-      else: Fediverse.browse_default_dir(column)
+      else: config.default_dir.(column)
   end
 
   # The direction a column flips to when its header is clicked again.
@@ -97,6 +142,46 @@ defmodule VutuvWeb.BrowseTable do
   defp aria_sort(_filters, _column), do: "none"
 
   @doc """
+  Handles the browse events the two Fediverse tables share — `"filter"`,
+  `"sort"`, `"filter_server"` and `"clear"` — each of which just rewrites the
+  URL and lets `handle_params/3` reload. `path_fun` turns a query map into the
+  page's own path, so the route literal is the one thing each page keeps.
+  """
+  # Replaced, not pushed: the search box is debounced but still fires per burst
+  # of typing, and on a phone the back gesture is the way out of a page.
+  # Pushing would make leaving take one press per search term.
+  def handle_browse_event("filter", params, socket, path_fun) do
+    {:noreply,
+     patch_browse(socket, %{"q" => params["q"], "server" => params["server"]}, path_fun,
+       replace: true
+     )}
+  end
+
+  def handle_browse_event("sort", %{"col" => col}, socket, path_fun) do
+    dir = next_dir(socket.assigns.filters, fediverse_config(), col)
+    {:noreply, patch_browse(socket, %{"sort" => col, "dir" => dir}, path_fun)}
+  end
+
+  # A server name in a row is a filter you can click: at ten thousand rows
+  # "show me everyone else from this server" is the question the list raises.
+  def handle_browse_event("filter_server", %{"host" => host}, socket, path_fun) do
+    {:noreply, patch_browse(socket, %{"server" => host}, path_fun)}
+  end
+
+  def handle_browse_event("clear", _params, socket, path_fun) do
+    {:noreply, push_patch(socket, to: path_fun.(%{}))}
+  end
+
+  @doc """
+  The current Fediverse browse view with `overrides` applied, as a
+  `push_patch` to `path_fun`'s page.
+  """
+  def patch_browse(socket, overrides, path_fun, opts \\ []) do
+    query = build_query(socket.assigns.filters, fediverse_config(), overrides)
+    push_patch(socket, [to: path_fun.(query)] ++ opts)
+  end
+
+  @doc """
   The utilities that fold a column away on a phone.
 
   A handle already ends in the server it lives on, so the Server column is the
@@ -106,6 +191,24 @@ defmodule VutuvWeb.BrowseTable do
   width to judge them at.
   """
   def phone_hidden_class, do: "hidden sm:table-cell"
+
+  attr(:id, :string, required: true)
+  attr(:count, :integer, required: true)
+
+  @doc """
+  The headline count pill beside a browse page's title: the exact size of the
+  whole list, whatever the current view filters out of it.
+  """
+  def count_pill(assigns) do
+    ~H"""
+    <span
+      id={@id}
+      class="rounded-full bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+    >
+      {delimited_count(@count)}
+    </span>
+    """
+  end
 
   attr(:col, :string, required: true)
   attr(:label, :string, required: true)
@@ -147,7 +250,8 @@ defmodule VutuvWeb.BrowseTable do
   attr(:class, :string, default: nil)
 
   @doc """
-  The search box, the server dropdown and the Clear control.
+  The search box, the server dropdown and the Clear control of the Fediverse
+  tables.
 
   One form for both controls, so typing and picking a server are the same round
   trip. Debounced, since every keystroke is a query over the member's whole
@@ -204,13 +308,13 @@ defmodule VutuvWeb.BrowseTable do
         </select>
       </div>
       <button
-        :if={not default_view?(@filters)}
+        :if={not default_view?(@filters, fediverse_config())}
         type="button"
         phx-click="clear"
         id="clear-filters"
         class="min-h-10 px-2 text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
       >
-        <%= if filtered?(@filters) do %>
+        <%= if filtered?(@filters, fediverse_config()) do %>
           {gettext("Clear filters")}
         <% else %>
           {gettext("Reset sorting")}
@@ -275,16 +379,19 @@ defmodule VutuvWeb.BrowseTable do
   attr(:total, :integer, required: true)
   attr(:path, :string, required: true)
   attr(:filters, :map, required: true)
+  attr(:config, :map, default: nil)
 
   @doc """
   Where you are in the list and how to leave it: the "1-50 of 12,483" line and
   the numbered pager, which carries the active filter and sort onto every page
   link. Exact figures, because knowing where you are in a long list is the
-  whole point of the line.
+  whole point of the line. `config` names the page's filter vocabulary; left
+  out it is the Fediverse pair's.
   """
   def browse_footer(assigns) do
     assigns =
       assigns
+      |> assign(:config, assigns.config || fediverse_config())
       |> assign(:first, range_first(assigns.page, assigns.per_page, assigns.total))
       |> assign(:last, min(assigns.page * assigns.per_page, assigns.total))
 
@@ -302,7 +409,7 @@ defmodule VutuvWeb.BrowseTable do
       total={@total}
       per_page={@per_page}
       path={@path}
-      query={build_query(@filters)}
+      query={build_query(@filters, @config)}
     />
     """
   end

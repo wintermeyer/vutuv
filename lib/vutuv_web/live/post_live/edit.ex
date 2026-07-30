@@ -23,6 +23,7 @@ defmodule VutuvWeb.PostLive.Edit do
 
   alias Vutuv.Posts
   alias Vutuv.Posts.PostScreenshot
+  alias VutuvWeb.Live.InitAssigns
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -31,10 +32,7 @@ defmodule VutuvWeb.PostLive.Edit do
 
     cond do
       is_nil(post) or not Posts.author?(post, user) ->
-        {:ok,
-         socket
-         |> put_flash(:error, gettext("Sorry, that page could not be found."))
-         |> redirect(to: ~p"/")}
+        {:ok, InitAssigns.not_found(socket)}
 
       not Posts.editable?(post) ->
         {:ok,
@@ -140,7 +138,7 @@ defmodule VutuvWeb.PostLive.Edit do
         <div class="flex items-center justify-between">
           <.link
             href={Posts.path(@post)}
-            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {gettext("Back to the post")}
           </.link>

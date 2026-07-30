@@ -70,6 +70,18 @@ defmodule VutuvWeb.Live.InitAssigns do
     end
   end
 
+  @doc """
+  Flash "not found" and send the viewer away — the shared refusal for a
+  LiveView whose subject is missing or not theirs (`mount/3` returns
+  `{:ok, not_found(socket)}`). `to` overrides the landing page for hosts
+  whose home is not the front page.
+  """
+  def not_found(socket, to \\ ~p"/") do
+    socket
+    |> Phoenix.LiveView.put_flash(:error, gettext("Sorry, that page could not be found."))
+    |> Phoenix.LiveView.redirect(to: to)
+  end
+
   defp assign_shell_path(_params, uri, socket) do
     {:cont, assign(socket, :shell_path, URI.parse(uri).path)}
   end

@@ -412,7 +412,7 @@ defmodule VutuvWeb.OrganizationLive.Edit do
           {gettext("Reachable at")}
           <a
             href={"/" <> @organization.username}
-            class="font-semibold text-brand-600 hover:text-brand-700"
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {VutuvWeb.Endpoint.host()}/{@organization.username}
           </a>

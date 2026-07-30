@@ -32,6 +32,7 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias VutuvWeb.Live.InitAssigns
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
@@ -46,7 +47,7 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
     if post && Fediverse.remote_post_readable?(post, viewer) do
       {:ok, assign_gate(socket, post, viewer)}
     else
-      {:ok, not_found(socket)}
+      {:ok, InitAssigns.not_found(socket)}
     end
   end
 
@@ -74,12 +75,6 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
         |> put_flash(:error, answer_refusal_message(reason))
         |> redirect(to: ~p"/feed")
     end
-  end
-
-  defp not_found(socket) do
-    socket
-    |> put_flash(:error, gettext("Sorry, that page could not be found."))
-    |> redirect(to: ~p"/")
   end
 
   @impl true

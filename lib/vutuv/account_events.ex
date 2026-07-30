@@ -446,7 +446,7 @@ defmodule Vutuv.AccountEvents do
     )
   end
 
-  defp contains(term), do: "%" <> SearchText.escape_like(String.trim(term)) <> "%"
+  defp contains(term), do: SearchText.contains(String.trim(term))
 
   # The member join is shared by the member filter and the member sort, and must
   # be added at most once — `has_named_binding?/2` is what keeps a filtered AND
