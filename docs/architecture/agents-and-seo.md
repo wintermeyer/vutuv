@@ -99,7 +99,13 @@ below the bar answers with `X-Robots-Tag: noindex` from `TagController`, so
 the ~10K thin one-member/empty tag pages stopped piling up in Search Console
 as "crawled - currently not indexed"), RSS 2.0 feeds with full post content
 (`/:slug/posts/feed.xml` per member, `/posts/feed.xml` site-wide,
-`VutuvWeb.Feeds`), robots.txt names the AI crawlers and declares draft
+`VutuvWeb.Feeds`; the member feed carries **original posts only** — reposts
+are engagement rows and never `Post` rows, and replies are filtered by the
+archive's `:posts` predicate in `Vutuv.Posts.recent_public_posts/2` — while
+the site-wide firehose deliberately keeps replies; besides the invisible
+`<link rel="alternate">` autodiscovery the profile's "Other formats" card
+shows a visible RSS chip via its `rss_path` attr), robots.txt names the AI
+crawlers and declares draft
 `Content-Signal` directives from the one policy source
 (`VutuvWeb.ContentPolicy`, config `:ai_crawler_policy` — flips robots.txt and
 the response headers together), `Link` headers advertise

@@ -733,11 +733,19 @@ defmodule VutuvWeb.UI do
   `VutuvWeb.ContentPolicy.agent_docs_blocked?/1`) drops the Markdown / text /
   JSON / XML chips — those URLs answer 404 for such a profile — and shows a
   short note in their place; the vCard chip stays when `vcard` is set.
+
+  `rss_path` (the profile passes `VutuvWeb.Feeds.user_feed_path/1`) appends an
+  RSS chip so members can find and hand out their feed URL — autodiscovery via
+  `<link rel="alternate">` is invisible. Like the vCard it survives
+  `machine_formats={false}`: the feed serves for every member and signals the
+  opt-outs per response (`VutuvWeb.FeedController`), and it skips `?lang=`
+  (the feed is one canonical document).
   """
   attr(:base_path, :string, required: true)
   attr(:locale, :any, default: nil)
   attr(:vcard, :boolean, default: false)
   attr(:machine_formats, :boolean, default: true)
+  attr(:rss_path, :string, default: nil)
   attr(:rest, :global)
 
   def other_formats_card(assigns) do
@@ -757,8 +765,9 @@ defmodule VutuvWeb.UI do
       end
 
     vcard_chip = if assigns.vcard, do: [{gettext("vCard"), base <> ".vcf"}], else: []
+    rss_chip = if assigns.rss_path, do: [{"RSS", assigns.rss_path}], else: []
 
-    assigns = assign(assigns, :formats, machine_chips ++ vcard_chip)
+    assigns = assign(assigns, :formats, machine_chips ++ vcard_chip ++ rss_chip)
 
     ~H"""
     <.card {@rest}>

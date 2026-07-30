@@ -11,6 +11,8 @@ defmodule VutuvWeb.FeedControllerTest do
 
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Posts
+
   @base "http://localhost:4001"
 
   setup do
@@ -110,6 +112,16 @@ defmodule VutuvWeb.FeedControllerTest do
       refute body =~ foreign.id
     end
 
+    test "a member's replies stay out — the feed carries original posts only", %{author: author} do
+      parent = create_post!(author, %{"body" => "The conversation starter"})
+      {:ok, reply} = Posts.create_reply(author, parent, %{body: "Following myself up"})
+
+      body = build_conn() |> get("/feed_author/posts/feed.xml") |> response(200)
+
+      assert body =~ parent.id
+      refute body =~ reply.id
+    end
+
     test "an unknown or unactivated member 404s" do
       insert(:user, username: "sleepy_member")
 
@@ -171,6 +183,18 @@ defmodule VutuvWeb.FeedControllerTest do
       assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
     end
 
+    # The member feed filters replies out (above); the firehose deliberately
+    # keeps them — it answers "what is being posted here", not "who says what".
+    test "keeps replies — the firehose carries every public post", %{author: author} do
+      parent = create_post!(author, %{"body" => "Origin"})
+      {:ok, reply} = Posts.create_reply(author, parent, %{body: "An answer"})
+
+      body = build_conn() |> get("/posts/feed.xml") |> response(200)
+
+      assert body =~ parent.id
+      assert body =~ reply.id
+    end
+
     # The aggregate feed carries one all-yes Content-Signal and cannot
     # signal per item, so members who opted out (of search engines or of
     # AI use) are left out entirely — same reasoning for both axes.
@@ -209,6 +233,16 @@ defmodule VutuvWeb.FeedControllerTest do
       html = build_conn() |> get("/feed_author/posts") |> html_response(200)
 
       assert html =~ ~s(href="/feed_author/posts/feed.xml")
+    end
+
+    # Autodiscovery is invisible; members who want to hand their feed URL to
+    # someone need a link they can see and copy (the "Other formats" card).
+    test "the profile offers the feed as a visible RSS chip", %{author: author} do
+      create_post!(author, %{"body" => "Chip-worthy"})
+
+      html = build_conn() |> get("/feed_author") |> html_response(200)
+
+      assert html =~ ~r|<a[^>]*href="/feed_author/posts/feed\.xml"[^>]*>\s*RSS\s*</a>|
     end
   end
 end

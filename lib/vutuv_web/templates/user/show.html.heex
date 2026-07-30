@@ -1488,6 +1488,7 @@ the resulting ~200px rail width. --%>
         locale={@locale}
         vcard
         machine_formats={not VutuvWeb.ContentPolicy.agent_docs_blocked?(@user)}
+        rss_path={VutuvWeb.Feeds.user_feed_path(@user)}
         id="profile-other-formats"
       />
     </div>
