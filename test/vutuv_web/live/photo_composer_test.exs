@@ -285,21 +285,21 @@ defmodule VutuvWeb.PhotoComposerTest do
       refute has_element?(live, ~s([data-photo-camera-inline="#{image.id}"]))
     end
 
-    test "a single photo carries no reorder arrows, just remove and the photo itself", %{
+    test "tiles reorder by pointer drag alone — no arrow dots on any count", %{
       conn: conn,
       user: user
     } do
-      # With one photo there is no order to change: the ◀ ▶ pair would be two
-      # dead ghost buttons.
       live = open_composer(conn)
       image = upload_photo!(live, user)
 
-      refute has_element?(live, ~s([phx-click="photo-move"]))
+      # The frame is the drag zone (the PhotoStrip hook's contract) and the
+      # tile keeps its remove dot; the old ◀ ▶ arrow pair is gone for good.
+      assert has_element?(live, ~s([data-photo-drag="#{image.id}"]))
       assert has_element?(live, ~s(button[phx-click="remove-image"][phx-value-id="#{image.id}"]))
+      refute has_element?(live, ~s([phx-click="photo-move"]))
 
       upload_photo!(live, user)
-
-      assert has_element?(live, ~s([phx-click="photo-move"]))
+      refute has_element?(live, ~s([phx-click="photo-move"]))
     end
 
     test "the review triggers stay available with photos attached", %{conn: conn, user: user} do
@@ -834,16 +834,18 @@ defmodule VutuvWeb.PhotoComposerTest do
       %{conn: conn, user: user, live: open_composer(conn)}
     end
 
-    test "the arrows move a photo, and the first one leads the mosaic", %{
+    test "a dragged order is what saves, and the first photo leads the mosaic", %{
       live: live,
       user: user
     } do
       first = upload_photo!(live, user)
       second = upload_photo!(live, user)
 
+      # The PhotoStrip hook's push after a pointer drop: the DOM order it
+      # already applied, as ids.
       live
-      |> element(~s([phx-click="photo-move"][phx-value-id="#{second.id}"][phx-value-dir="back"]))
-      |> render_click()
+      |> element("#composer-images")
+      |> render_hook("photo-reorder", %{"order" => [second.id, first.id]})
 
       live |> form("#composer-form", %{"post" => %{"body" => "Two."}}) |> render_submit()
 

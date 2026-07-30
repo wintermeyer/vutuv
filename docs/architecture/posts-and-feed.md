@@ -634,9 +634,10 @@ camera settings" switch with the very line visitors would see**. **The
 picture itself is the options button** (a real `<button>`, so keyboard users
 reach the panel too); the old four-button bottom scrim is gone — with a
 single photo it was two dead arrows plus a ⚙ the picture-tap covers. What
-remains on the tile: a remove dot top-right, and the ◀ ▶ reorder dots only
-when more than one photo gives them meaning (they stay the touch reorder
-path, native drag cannot fire there). The book/film review triggers are
+remains on the tile: a remove dot top-right and the crop dot bottom-center.
+Reordering is **pointer drag on the tile itself** — mouse and touch alike
+(hold a tile briefly on touch to lift it; the ◀ ▶ arrow dots that used to be
+the touch path are gone, on Stefan's ask). The book/film review triggers are
 always available (a book review may well carry a photo of the book); the
 licence and download pair folds behind the **"Photo details" row** (see
 below). The cover badge appears only from the second photo on, and the amber
@@ -719,7 +720,7 @@ a post. The frame stays orientation-tuned even for a chosen variant — the
 variant names where the tiles sit, the frame keeps the hero cell near the
 hero's own shape. Swapping photos in the preview is **tap-tap** (`mosaic-swap`:
 first tap marks, second trades places), which needs no drag and therefore
-works identically on a phone; the grid's ◀ ▶ arrows and drag reorder stay.
+works identically on a phone; the grid reorders by pointer drag (below).
 
 The workshop also owns the **fit pair** ("Whole photos" / "Fill the tiles",
 `mosaic-fit`): by default the mosaic shows every photo **whole**, letterboxed
@@ -768,11 +769,12 @@ the permalink still shows those whole.
 
 **In the feed, two or more attachments lay themselves out as an aspect-aware
 bento mosaic** (`VutuvWeb.PostComponents.mosaic/1`). The first photo is the
-hero and gets the big tile, so **reordering is the only layout control** — drag
-in the composer, or the ◀ ▶ buttons, which are the path on touch (HTML5 drag
-cannot fire there). At most five tiles show; the rest fold into a `+N` on the
+hero and gets the big tile, so **ordering leads the layout** — pointer drag in
+the composer's grid (the PhotoStrip hook: lift on first mouse movement, or
+after a short still hold on touch, so scrolling over the photos keeps
+working), or the bento preview's tap-tap swap. At most five tiles show; the rest fold into a `+N` on the
 last one, and the block is height-capped, so a photo essay costs the same
-timeline height as a snapshot. The layout table is in `mosaic_shape/2` on a
+timeline height as a snapshot. The layout table is `Vutuv.Posts.GalleryLayout` on a
 12×6 grid; what it tunes is the **hero cell's** aspect, not the frame's (a
 cell's shape is `frame × cols/12 ÷ rows/6`, so the two pull in opposite
 directions). `mosaic_layout_test.exs` asserts both the tiling and the hero

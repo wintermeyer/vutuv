@@ -484,7 +484,6 @@ const Hooks = {
   // are the reorder path on a phone; this layers pointer drag on top.
   PhotoStrip: {
     mounted() {
-      this.dragging = null
       const strip = this.el
       const tiles = () => [...strip.querySelectorAll("[data-photo-tile]")]
 
@@ -511,7 +510,7 @@ const Hooks = {
 
       const nearest = (x, y) =>
         tiles()
-          .filter((tile) => tile !== this.dragging)
+          .filter((tile) => !drag || tile !== drag.tile)
           .reduce(
             (closest, tile) => {
               const box = tile.getBoundingClientRect()
@@ -525,32 +524,127 @@ const Hooks = {
             { distance: Number.POSITIVE_INFINITY, tile: null, before: false }
           )
 
-      strip.addEventListener("dragstart", (e) => {
-        const tile = e.target.closest("[data-photo-tile]")
-        if (!tile) return
-        this.dragging = tile
-        tile.classList.add("opacity-40")
+      // Pointer-drag reorder — one mechanism for mouse AND touch (the ◀ ▶
+      // arrow dots that used to be the touch path are gone). The rules that
+      // make it coexist with everything else on the tile:
+      //
+      //   * Mouse: the drag lifts on the first real movement (~6px), so a
+      //     plain click still opens the photo panel.
+      //   * Touch: the drag lifts after a short hold (220ms) with the finger
+      //     still; moving before that is scrolling and cancels the lift, so
+      //     the page keeps scrolling normally over the photos. Once lifted, a
+      //     non-passive touchmove preventDefault keeps the browser from
+      //     starting a scroll mid-drag.
+      //   * After a lifted drop, the release's click is swallowed once so
+      //     dropping a tile does not also open its options panel.
+      //
+      // The tile is moved live in the DOM while dragging; on release the id
+      // order is pushed (pushEventTo, not pushEvent: the composer is a
+      // LiveComponent) and the server's re-render just settles what the
+      // author already sees.
+      const HOLD_MS = 220
+      const LIFT_CLASSES = ["opacity-60", "z-10", "scale-[1.03]", "shadow-xl"]
+      let drag = null
+
+      const lift = () => {
+        if (!drag) return
+        drag.lifted = true
+        drag.tile.classList.add(...LIFT_CLASSES)
+        // Explicit capture so a mouse drag released outside the grid still
+        // delivers its pointerup here (touch captures implicitly).
+        try {
+          drag.tile.setPointerCapture(drag.pointerId)
+        } catch (_e) {
+          // A tile re-rendered mid-gesture cannot capture; the drag still
+          // works while the pointer stays over the grid.
+        }
+      }
+
+      const settle = (fromPointerUp) => {
+        if (!drag) return
+        clearTimeout(drag.timer)
+        drag.tile.classList.remove(...LIFT_CLASSES)
+        if (drag.lifted) {
+          // A lifted drop must not also open the photo panel: swallow the
+          // click the release generates (only on a real pointerup — a
+          // cancelled drag produces no click, and the guard must not linger
+          // to eat the author's next intentional one).
+          if (fromPointerUp) {
+            strip.addEventListener(
+              "click",
+              (e) => {
+                e.stopPropagation()
+                e.preventDefault()
+              },
+              { capture: true, once: true }
+            )
+          }
+          this.pushEventTo(this.el, "photo-reorder", {
+            order: tiles().map((tile) => tile.dataset.photoTile),
+          })
+        }
+        drag = null
+      }
+
+      strip.addEventListener("pointerdown", (e) => {
+        const frame = e.target.closest("[data-photo-drag]")
+        if (!frame || drag || (e.pointerType === "mouse" && e.button !== 0)) return
+        // The corner dots (remove, crop) are click targets, never drag
+        // handles — a drag started there would eat their click.
+        if (e.target.closest("[data-photo-crop], [phx-click='remove-image']")) return
+        drag = {
+          tile: frame.closest("[data-photo-tile]"),
+          pointerId: e.pointerId,
+          x: e.clientX,
+          y: e.clientY,
+          touch: e.pointerType !== "mouse",
+          lifted: false,
+          timer: null,
+        }
+        if (drag.touch) drag.timer = setTimeout(lift, HOLD_MS)
       })
 
-      strip.addEventListener("dragend", () => {
-        if (!this.dragging) return
-        this.dragging.classList.remove("opacity-40")
-        this.dragging = null
-        // pushEventTo(this.el, …), not pushEvent: the composer is a
-        // LiveComponent, and a bare pushEvent would be delivered to the host
-        // LiveView, which has no handler for it.
-        this.pushEventTo(this.el, "photo-reorder", {
-          order: tiles().map((tile) => tile.dataset.photoTile),
-        })
-      })
-
-      strip.addEventListener("dragover", (e) => {
-        e.preventDefault()
-        if (!this.dragging) return
+      strip.addEventListener("pointermove", (e) => {
+        if (!drag || e.pointerId !== drag.pointerId) return
+        if (!drag.lifted) {
+          const moved = Math.hypot(e.clientX - drag.x, e.clientY - drag.y)
+          if (drag.touch) {
+            // Moving before the hold ends is a scroll, not a drag.
+            if (moved > 8) {
+              clearTimeout(drag.timer)
+              drag = null
+            }
+            return
+          }
+          if (moved <= 6) return
+          lift()
+        }
         const { tile, before } = nearest(e.clientX, e.clientY)
         if (!tile) return
-        if (before) strip.insertBefore(this.dragging, tile)
-        else strip.insertBefore(this.dragging, tile.nextSibling)
+        if (before) strip.insertBefore(drag.tile, tile)
+        else strip.insertBefore(drag.tile, tile.nextSibling)
+      })
+
+      // Once lifted, the finger is dragging a tile, not the page.
+      strip.addEventListener(
+        "touchmove",
+        (e) => {
+          if (drag && drag.lifted) e.preventDefault()
+        },
+        { passive: false }
+      )
+
+      strip.addEventListener("pointerup", (e) => {
+        if (drag && e.pointerId === drag.pointerId) settle(true)
+      })
+      strip.addEventListener("pointercancel", (e) => {
+        if (drag && e.pointerId === drag.pointerId) settle(false)
+      })
+
+      // A long touch-hold must lift the tile, not open the OS context menu
+      // (Android fires it around the 500ms mark, well after our lift).
+      strip.addEventListener("contextmenu", (e) => {
+        if (drag) e.preventDefault()
       })
     },
   },

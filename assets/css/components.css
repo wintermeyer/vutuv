@@ -2346,6 +2346,17 @@ html.lightbox-open { overflow: hidden; }
 [data-composer-dropzone] [data-drop-overlay] { display: none; }
 [data-composer-dropzone].phx-drop-target-active [data-drop-overlay] { display: flex; }
 
+/* The composer's photo tiles reorder by pointer drag (the PhotoStrip hook).
+   The browser's own gestures on an image would race it: WebKit's native
+   image drag on a mouse, iOS's long-press callout sheet and text selection
+   on touch. draggable="false" on the img covers the standard half; these
+   cover the WebKit-prefixed rest. */
+[data-photo-drag] img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
 @media (prefers-color-scheme: dark) {
   .profile-header__manage {
     color: #93c5fd;

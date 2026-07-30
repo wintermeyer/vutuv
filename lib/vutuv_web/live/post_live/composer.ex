@@ -758,23 +758,9 @@ defmodule VutuvWeb.PostLive.Composer do
     end
   end
 
-  # The ◀ ▶ buttons: the reorder path on touch, where a native HTML5 drag
-  # cannot fire at all.
-  def handle_event("photo-move", %{"id" => id, "dir" => dir}, socket) do
-    images = socket.assigns.images
-    index = Enum.find_index(images, &(&1.id == id))
-    target = if dir == "back", do: index && index - 1, else: index && index + 1
-
-    if index && target >= 0 && target < length(images) do
-      moved = images |> List.delete_at(index) |> List.insert_at(target, Enum.at(images, index))
-      {:noreply, socket |> assign(:images, moved) |> schedule_draft_save()}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  # The drag path (the `PhotoStrip` hook pushes the id order it has already
-  # applied in the DOM). Ids are looked up rather than trusted: an order naming
+  # The reorder path (the `PhotoStrip` hook pushes the id order its pointer
+  # drag has already applied in the DOM — mouse and touch alike, so there is
+  # no second control). Ids are looked up rather than trusted: an order naming
   # an unknown id must not be able to drop photos from the post.
   def handle_event("photo-reorder", %{"order" => order}, socket) when is_list(order) do
     by_id = Map.new(socket.assigns.images, &{&1.id, &1})
@@ -1412,13 +1398,13 @@ defmodule VutuvWeb.PostLive.Composer do
           <%!-- The photo grid, whenever photos are attached: they come large
           in their own aspect ratio, with their caption and camera switch in
           plain sight under every tile — nothing to hunt for behind ⚙, which
-          keeps only the rarer refinements (alt text, download override). The
-          grid is also the drop target, and adding more is a tile of its own,
-          the way every photo tool does it. Tiles are drag-reorderable on a
-          pointer device and ◀ ▶ reorderable everywhere (touch cannot fire
-          native HTML5 drag); the first tile leads the mosaic, so ordering is
-          the only layout control there is. Each tile carries a DOM id so
-          morphdom keys it: a drag has already moved the node when the
+          keeps only the rarer refinements (alt text, download override).
+          Adding more is a tile of its own, the way every photo tool does it.
+          Tiles reorder by pointer drag everywhere — the PhotoStrip hook
+          lifts a tile after a short hold on touch (so ordinary scrolling
+          over the photos keeps working) and on the first movement with a
+          mouse; the first tile leads the mosaic. Each tile carries a DOM id
+          so morphdom keys it: a drag has already moved the node when the
           server's re-render arrives, and the patch then just settles it. --%>
           <%!-- No phx-drop-target of its own: the whole form is the drop
           zone now, and nesting a second one would steal the active state
@@ -2163,14 +2149,15 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   # One photo's frame: the picture as one big options button, the badges, a
-  # remove dot and (only when there is an order to change) the two reorder
-  # dots. The old four-button bottom scrim is gone: with a single photo it
-  # was two dead arrows plus a ⚙ the picture-tap already covers. `draggable`
-  # sits here rather than on the outer cell so a drag in the grid's caption
-  # inputs selects text instead of starting a photo drag; the PhotoStrip
-  # hook finds the reorder unit via closest("[data-photo-tile]") either way.
-  # The frame takes the photo's own aspect ratio — the author judges the
-  # upload by the full frame, never by a square crop.
+  # remove dot and the crop dot. Reordering is pointer-drag on the frame
+  # (`data-photo-drag` — the PhotoStrip hook lifts the tile after a short
+  # hold on touch, immediately on mouse movement, so it works on a phone
+  # without the ◀ ▶ arrow dots that used to be the touch path; Stefan asked
+  # for those to go). The drag zone is the frame, not the outer cell, so a
+  # drag in the grid's caption inputs still selects text; the hook finds the
+  # reorder unit via closest("[data-photo-tile]"). The frame takes the
+  # photo's own aspect ratio — the author judges the upload by the full
+  # frame, never by a square crop.
   attr(:image, :any, required: true)
   attr(:index, :integer, required: true)
   attr(:count, :integer, required: true)
@@ -2183,7 +2170,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
     ~H"""
     <div
-      draggable="true"
+      data-photo-drag={@image.id}
       style={@ratio_style}
       class={[
         "group relative overflow-hidden rounded-lg ring-1",
@@ -2207,7 +2194,15 @@ defmodule VutuvWeb.PostLive.Composer do
         version: `thumb` is itself a 320×320 centre crop (Vutuv.Uploads.Spec),
         so inside a portrait frame it would show a cut of a cut — exactly the
         "still not the full picture" complaint the frame was meant to fix. --%>
-        <img src={PostImage.url(@image, "feed")} alt="" class="h-full w-full object-cover" />
+        <%!-- draggable="false": the browser's native image drag would race
+        the hook's pointer drag on a mouse (components.css also disables
+        WebKit's variant). --%>
+        <img
+          src={PostImage.url(@image, "feed")}
+          alt=""
+          draggable="false"
+          class="h-full w-full object-cover"
+        />
       </button>
 
       <div class="pointer-events-none absolute left-1 top-1 flex flex-col items-start gap-1">
@@ -2275,33 +2270,6 @@ defmodule VutuvWeb.PostLive.Composer do
         <.crop_icon class="h-4 w-4" />
       </button>
 
-      <%!-- Reorder, only when there is an order: the end positions simply
-      drop their arrow instead of showing a dead one. Touch cannot fire
-      native HTML5 drag, so these stay the reorder path on a phone. --%>
-      <button
-        :if={@count > 1 and @index > 0}
-        type="button"
-        phx-click="photo-move"
-        phx-value-id={@image.id}
-        phx-value-dir="back"
-        phx-target={@myself}
-        aria-label={gettext("Move photo earlier")}
-        class={["absolute bottom-1 left-1", tile_dot_class()]}
-      >
-        ◀
-      </button>
-      <button
-        :if={@count > 1 and @index < @count - 1}
-        type="button"
-        phx-click="photo-move"
-        phx-value-id={@image.id}
-        phx-value-dir="forward"
-        phx-target={@myself}
-        aria-label={gettext("Move photo later")}
-        class={["absolute bottom-1 right-1", tile_dot_class()]}
-      >
-        ▶
-      </button>
     </div>
     """
   end
