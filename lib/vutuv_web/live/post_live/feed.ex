@@ -69,10 +69,6 @@ defmodule VutuvWeb.PostLive.Feed do
       # Refresh the Berlin-day-relative post stamps ("09:50 Uhr" -> "Gestern,
       # 09:50 Uhr") the moment the German day rolls over at midnight.
       Vutuv.DayClock.subscribe()
-      # Reshuffle the "Who to follow" rail every few minutes while the page stays
-      # open, so a long-lived session keeps seeing fresh suggestions even without
-      # a reload (a new visit reshuffles too, via this same mount).
-      Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
     end
 
     # The member's private content filters (issue #940): compiled once, applied
@@ -101,11 +97,27 @@ defmodule VutuvWeb.PostLive.Feed do
     # Order/dupes don't matter: the refresh uses stream_insert update_only, which
     # updates existing rows where they sit and ignores ones already gone.
     |> assign(:entries, entries)
-    |> assign_followed_tags()
-    |> assign_who_to_follow()
-    |> assign_discover_posts()
+    |> assign_empty_rails()
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
     |> stream(:posts, entries)
+  end
+
+  # The discovery rail (Tags you follow / Who to follow / Suggested posts)
+  # costs the majority of the feed's queries and is hidden under md, so no
+  # mount computes it: the dead render ships the aside empty, and the
+  # LazyRails hook asks for the rails with "load-rails" only from a viewport
+  # that actually shows them (>= md, the breakpoint the aside's `md:block`
+  # uses). A phone therefore never pays for the rail at all; a desktop pays
+  # once, over the socket, instead of on both mounts of every visit.
+  defp assign_empty_rails(socket) do
+    socket
+    |> assign(:rails_loaded?, false)
+    |> assign(:followed_tags, [])
+    |> assign(:recommended_users, [])
+    |> assign(:work_info_by_id, %{})
+    |> assign(:following_by_id, %{})
+    |> assign(:suggested_posts_by_id, %{})
+    |> assign(:discover_posts, [])
   end
 
   # The desktop "Tags you follow" rail (issue #872): the member's tag
@@ -424,6 +436,25 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign_discover_posts(socket)}
   end
 
+  # The LazyRails hook on the rail aside: this viewport shows the desktop rail
+  # (>= md), so fill it. Once per socket — the reshuffle paths keep it fresh
+  # afterwards — and the periodic reshuffle timer only starts here, so a feed
+  # that never shows the rail never ticks for it either.
+  def handle_event("load-rails", _params, socket) do
+    if socket.assigns.rails_loaded? do
+      {:noreply, socket}
+    else
+      Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
+
+      {:noreply,
+       socket
+       |> assign(:rails_loaded?, true)
+       |> assign_followed_tags()
+       |> assign_who_to_follow()
+       |> assign_discover_posts()}
+    end
+  end
+
   def handle_event("show-new", _params, socket) do
     pending = socket.assigns.pending_posts
 
@@ -520,8 +551,14 @@ defmodule VutuvWeb.PostLive.Feed do
   # the next tick. Cheap (a ranking query, a follow-edge query and the pooled
   # posts draw, all small), so a 5-minute cadence on an open feed is fine.
   def handle_info(:refresh_suggestions, socket) do
-    Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
-    {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
+    if socket.assigns.rails_loaded? do
+      Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
+      {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
+    else
+      # The timer only ever starts in "load-rails", so a stray tick on an
+      # unloaded rail must not become the query bill the laziness avoids.
+      {:noreply, socket}
+    end
   end
 
   # The viewer followed / unfollowed a tag elsewhere (a tag page in another tab,
@@ -529,7 +566,11 @@ defmodule VutuvWeb.PostLive.Feed do
   # open feed reflects it live. Posts already streamed stay; the new tag's posts
   # arrive on the next load, like a fresh person-follow.
   def handle_info({:tag_follows_changed, _}, socket) do
-    {:noreply, socket |> assign_followed_tags() |> assign_who_to_follow()}
+    if socket.assigns.rails_loaded? do
+      {:noreply, socket |> assign_followed_tags() |> assign_who_to_follow()}
+    else
+      {:noreply, socket}
+    end
   end
 
   # The Berlin day rolled over (Vutuv.DayClock at midnight): re-render every
@@ -1021,8 +1062,10 @@ defmodule VutuvWeb.PostLive.Feed do
         <%!-- Desktop-only rail (hidden under md, where the grid is one column):
         the profile-style "Who to follow" card (suggestions the viewer doesn't
         already follow; a live follow, no reload, drops the row and surfaces the
-        next) plus the "Other formats" card — the same aside the profile shows. --%>
-        <aside class="hidden space-y-6 md:block">
+        next) plus the "Other formats" card — the same aside the profile shows.
+        The discovery cards load lazily: the LazyRails hook sends "load-rails"
+        once the viewport is >= md, so a phone never computes them. --%>
+        <aside id="feed-rail" phx-hook="LazyRails" class="hidden space-y-6 md:block">
           <%!-- "Tags you follow" (issue #872): the viewer's tag subscriptions,
           each a chip linking to the tag page with a reload-free ✕ unfollow. Sits
           at the top of the rail because it is the viewer's own state and the

@@ -13,6 +13,15 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
+  # The discovery rail is lazy (see FeedRailsLazyTest): a real browser's
+  # LazyRails hook requests it once the viewport is >= md. The rail tests
+  # stand in for the hook.
+  defp live_feed_with_rails(conn) do
+    {:ok, view, _html} = live(conn, ~p"/feed")
+    html = view |> element("#feed-rail") |> render_hook("load-rails")
+    {:ok, view, html}
+  end
+
   # Where `text` first shows up in the rendered feed — how the thread tests
   # assert reading order without parsing the whole card tree.
   defp position(html, text) do
@@ -700,7 +709,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # most_followed_users ranks by follower count, so give them one follower.
       insert(:follow, follower: other_user(), followee: popular)
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
       assert has_element?(live, ~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
@@ -716,7 +725,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       recent = insert(:post, user: popular, body: "What I am working on")
       for post <- [old, recent], do: :ok = Vutuv.Posts.like_post(other_user(), post)
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       samples = ~s(#who-to-follow [data-suggested-posts="#{popular.id}"])
       assert has_element?(live, ~s(#{samples} a[href="/#{popular.username}/posts/#{recent.id}"]))
@@ -733,7 +742,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       insert(:follow, follower: user, followee: already)
       insert(:follow, follower: other_user(), followee: fresh)
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       assert Vutuv.Social.user_follows_user?(user.id, already.id)
       assert has_element?(live, ~s(#who-to-follow a[href="/#{fresh.username}"]))
@@ -745,7 +754,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       popular = other_user(first_name: "Pop", last_name: "Ular")
       insert(:follow, follower: other_user(), followee: popular)
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       live
       |> element(~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
@@ -775,7 +784,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # exceed the 6 shown at once — a fixed top-6 ordering never would.
       shown =
         Enum.reduce(1..12, MapSet.new(), fn _i, acc ->
-          {:ok, live, _html} = live(recycle(conn), ~p"/feed")
+          {:ok, live, _html} = live_feed_with_rails(recycle(conn))
 
           pool
           |> Enum.filter(&has_element?(live, ~s(#who-to-follow a[href="/#{&1.username}"])))
@@ -790,11 +799,11 @@ defmodule VutuvWeb.PostFeedLiveTest do
       popular = other_user(first_name: "Pop", last_name: "Ular")
       insert(:follow, follower: other_user(), followee: popular)
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
       assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
 
-      # The mount schedules a refresh timer; firing it by hand must recompute the
-      # rail (and not crash), keeping the eligible suggestion visible.
+      # "load-rails" schedules a refresh timer; firing it by hand must recompute
+      # the rail (and not crash), keeping the eligible suggestion visible.
       send(live.pid, :refresh_suggestions)
       _ = render(live)
 
@@ -810,7 +819,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       author = other_user(first_name: "New", last_name: "Voice")
       {:ok, post} = Posts.create_post(author, %{body: "something worth discovering"})
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       assert has_element?(live, ~s(#discover-posts a[href="/#{author.username}"]))
 
@@ -833,7 +842,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {:ok, german_post} = Posts.create_post(german, %{body: "deutsche Worte"})
       {:ok, fresh_post} = Posts.create_post(fresh, %{body: "fresh words"})
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       assert has_element?(
                live,
@@ -854,7 +863,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "hides the card when nothing is eligible", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       refute has_element?(live, "#discover-posts")
     end
@@ -868,7 +877,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
           body: "# **Zwischenüberschrift**\n\nA second paragraph that must stay visible."
         })
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
       html = render(live)
 
       body = ~s(#discover-posts .markdown--post)
@@ -901,7 +910,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
           body: "Eine Digitalisierungsstrategie für unternehmenseigene Softwareentwicklung."
         })
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       # Browser hyphenation is switched on for the narrow rail column via the
       # `.markdown--post` seam (auto on desktop too, not just the phone default),
@@ -929,7 +938,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
           {author, post}
         end
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       # Over several reshuffles the union of shown permalinks must exceed the 5
       # shown at once — a fixed pick never would.
@@ -952,7 +961,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       author = other_user(first_name: "New", last_name: "Voice")
       {:ok, post} = Posts.create_post(author, %{body: "still discoverable"})
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, _html} = live_feed_with_rails(conn)
 
       assert has_element?(
                live,

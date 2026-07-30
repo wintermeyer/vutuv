@@ -9,13 +9,22 @@ defmodule VutuvWeb.PostLive.FeedFollowedTagsTest do
 
   alias Vutuv.Tags
 
+  # The discovery rail is lazy (see FeedRailsLazyTest): a real browser's
+  # LazyRails hook requests it once the viewport is >= md. These tests stand
+  # in for the hook.
+  defp live_feed_with_rails(conn) do
+    {:ok, view, _html} = live(conn, ~p"/feed")
+    html = view |> element("#feed-rail") |> render_hook("load-rails")
+    {:ok, view, html}
+  end
+
   describe "Tags you follow rail" do
     test "renders the followed-tag chips and unfollows one with no reload", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       tag = insert(:tag)
       Tags.follow_tag(user, tag)
 
-      {:ok, view, html} = live(conn, ~p"/feed")
+      {:ok, view, html} = live_feed_with_rails(conn)
       assert html =~ "Tags you follow"
       assert has_element?(view, "#followed-tag-#{tag.id}")
 
@@ -29,7 +38,7 @@ defmodule VutuvWeb.PostLive.FeedFollowedTagsTest do
 
     test "the rail is absent when the member follows no tags", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
-      {:ok, view, _html} = live(conn, ~p"/feed")
+      {:ok, view, _html} = live_feed_with_rails(conn)
       refute has_element?(view, "#followed-tags")
     end
   end
@@ -44,7 +53,7 @@ defmodule VutuvWeb.PostLive.FeedFollowedTagsTest do
       ut = insert(:user_tag, user: candidate, tag: tag)
       insert(:user_tag_endorsement, user_tag: ut, user: insert(:activated_user))
 
-      {:ok, view, _html} = live(conn, ~p"/feed")
+      {:ok, view, _html} = live_feed_with_rails(conn)
       assert has_element?(view, "#who-to-follow")
       assert render(view) =~ "Tagged Person"
     end

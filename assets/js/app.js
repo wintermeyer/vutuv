@@ -272,6 +272,37 @@ const Hooks = {
       this.el.scrollTop = this.el.scrollHeight
     },
   },
+  // The feed's desktop discovery rail is hidden under md (48rem), so its
+  // queries are only spent when the viewport actually shows it: the server
+  // renders the aside empty and fills it on "load-rails". Crossing the
+  // breakpoint later (a tablet rotation, a resized window) loads it then;
+  // once loaded it stays loaded, so this only ever fires once per socket.
+  LazyRails: {
+    mounted() {
+      this.mq = window.matchMedia("(min-width: 48rem)")
+      this.onChange = () => {
+        if (this.mq.matches) this.request()
+      }
+      // The listener stays armed for the whole page life: the server ignores
+      // a repeated "load-rails", and un-arming after the first load would
+      // leave a rotated-away-and-back tablet without its rail.
+      this.mq.addEventListener("change", this.onChange)
+      if (this.mq.matches) this.request()
+    },
+    // A reconnect re-mounts the LiveView, which resets the rail to its empty
+    // mount state — and a rejoined hook gets reconnected(), not mounted(), so
+    // the rail would silently vanish on every network blip or deploy without
+    // this second ask.
+    reconnected() {
+      if (this.mq.matches) this.request()
+    },
+    request() {
+      this.pushEvent("load-rails", {})
+    },
+    destroyed() {
+      this.mq.removeEventListener("change", this.onChange)
+    },
+  },
   // Browser-tab title indicator, so a backgrounded tab still shows new activity.
   // ShellLive pushes the state; this hook prefixes document.title:
   //   "(3) vutuv"   unread messages + notifications (exact; shown always)
