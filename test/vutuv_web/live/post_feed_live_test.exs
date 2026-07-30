@@ -13,12 +13,10 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
-  # The discovery rail is lazy (see FeedRailsLazyTest): a real browser's
-  # LazyRails hook requests it once the viewport is >= md. The rail tests
-  # stand in for the hook.
+  # The discovery rail renders with the page again (the v7.200.3 laziness was
+  # undone — see FeedRailsTest); the helper name survives at the call sites.
   defp live_feed_with_rails(conn) do
-    {:ok, view, _html} = live(conn, ~p"/feed")
-    html = view |> element("#feed-rail") |> render_hook("load-rails")
+    {:ok, view, html} = live(conn, ~p"/feed")
     {:ok, view, html}
   end
 

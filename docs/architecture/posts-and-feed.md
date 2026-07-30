@@ -193,18 +193,17 @@ and blocked authors stay out exactly as elsewhere). Following a tag lives in
 `Vutuv.Tags` — see [social-graph.md](social-graph.md). The feed also carries the
 reload-free **"Tags you follow"** rail (chips + a `phx-click` ✕ unfollow).
 
-**The whole discovery rail is lazy.** The rail (Tags you follow / Who to
-follow / Suggested posts) is hidden under `md` yet used to cost the majority of
-the feed's queries on *every* mount — twice per visit (dead + connected), phones
-included. No mount computes it anymore: the aside renders empty with the
-`LazyRails` hook (`#feed-rail`), which sends `"load-rails"` only from a viewport
-that is actually ≥ `md` (and again from `reconnected()`, because a reconnect
-re-mounts the LiveView with the rail back at its empty mount state). So a phone
-never pays for the rail, a desktop pays once per visit, and the dead render —
-the part of the visit the member waits on — skips it for everyone. The
-periodic reshuffle timer is armed in the `"load-rails"` handler, and the rail
-refresh paths (`:refresh_suggestions`, `{:tag_follows_changed, _}`) are gated on
-`:rails_loaded?`, so no side channel fills an unrequested rail.
+**The discovery rail renders with the page.** The rail (Tags you follow / Who
+to follow / Suggested posts) was lazily loaded for one release (v7.200.3: an
+empty aside plus a `LazyRails` hook asking for it after connect), and the
+pop-in after the paint read as the page being *slow* — so the laziness was
+deliberately undone (v7.200.8). The rail is computed once in `feed_payload/1`
+on the dead render and rides the mount handoff to the connected socket (see
+[realtime.md](realtime.md)), so a visit still pays its queries only once.
+Phones keep it hidden under `md` by CSS and pay those queries on the dead
+render — the accepted cost of the immediate desktop paint. The periodic
+reshuffle timer is armed at connect; the refresh paths
+(`:refresh_suggestions`, `{:tag_follows_changed, _}`) redraw unconditionally.
 
 The composer's body field is the shared **Milkdown WYSIWYG Markdown editor**
 (`VutuvWeb.UI.markdown_editor/1` + the `MarkdownEditor` hook, also used by the
