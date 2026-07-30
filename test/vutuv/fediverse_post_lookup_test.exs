@@ -239,10 +239,77 @@ defmodule Vutuv.FediversePostLookupTest do
       assert local.id == post.id
     end
 
-    test "a vutuv link that is not a post says so rather than being fetched" do
-      url = "#{VutuvWeb.Endpoint.url()}/some-member"
+    # Every shape a vutuv post link is really pasted in. The point of each is
+    # that it costs **no request**: `refuse_all/0` makes any outbound call fail,
+    # so a case that fell through to the remote path would come back
+    # `:post_unreachable` instead of the post.
+    test "in every shape a vutuv post link is pasted in" do
+      refuse_all()
+      author = insert(:activated_user)
+      post = insert(:post, user: author)
+      host = VutuvWeb.Endpoint.host()
+      viewer = member()
 
-      assert {:error, :local_url} = Fediverse.look_up_post(member(), url)
+      urls = [
+        # The canonical form, and the `www.` alias the same site answers on.
+        "https://#{host}/#{author.username}/posts/#{post.id}",
+        "https://www.#{host}/#{author.username}/posts/#{post.id}",
+        # A trailing slash, a query string a share button appended, a fragment,
+        # a shouted host, and plain http.
+        "https://#{host}/#{author.username}/posts/#{post.id}/",
+        "https://#{host}/#{author.username}/posts/#{post.id}?utm_source=mail",
+        "https://#{host}/#{author.username}/posts/#{post.id}#kommentar",
+        "https://#{String.upcase(host)}/#{author.username}/posts/#{post.id}",
+        "http://#{host}/#{author.username}/posts/#{post.id}"
+      ]
+
+      for url <- urls do
+        assert {:local, local} = Fediverse.look_up_post(viewer, url), "failed for #{url}"
+        assert local.id == post.id, "wrong post for #{url}"
+        # With the author attached, or `Posts.path/1` would raise on the caller.
+        assert local.user.id == author.id
+      end
+    end
+
+    # The id names the post; the handle in front of it is decoration that goes
+    # stale the moment its owner renames. Landing on the post beats a dead end.
+    test "a vutuv post link carrying a stale handle still lands on the post" do
+      refuse_all()
+      author = insert(:activated_user)
+      other = insert(:activated_user)
+      post = insert(:post, user: author)
+      url = "#{VutuvWeb.Endpoint.url()}/#{other.username}/posts/#{post.id}"
+
+      assert {:local, local} = Fediverse.look_up_post(member(), url)
+      assert local.id == post.id
+      assert local.user.id == author.id
+    end
+
+    test "a vutuv link that is not a post says so rather than being fetched" do
+      refuse_all()
+
+      for url <- [
+            "#{VutuvWeb.Endpoint.url()}/some-member",
+            "https://www.#{VutuvWeb.Endpoint.host()}/some-member",
+            "#{VutuvWeb.Endpoint.url()}/some-member/posts/2026/07",
+            "#{VutuvWeb.Endpoint.url()}/some-member/posts/019fb1a9-761a-70f9-aa96-f38b4c428691"
+          ] do
+        assert {:error, :local_url} = Fediverse.look_up_post(member(), url), "failed for #{url}"
+      end
+    end
+
+    test "a local URL claims no slot of the hourly budget" do
+      refuse_all()
+      Application.put_env(:vutuv, :fediverse_lookup_limit, 1)
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_lookup_limit) end)
+
+      viewer = member()
+      post = insert(:post, user: insert(:activated_user))
+      url = "https://www.#{VutuvWeb.Endpoint.host()}/whoever/posts/#{post.id}"
+
+      # Ten times over a budget of one: recognising our own link asks nobody
+      # anything, so there is nothing to meter.
+      for _ <- 1..10, do: assert({:local, _} = Fediverse.look_up_post(viewer, url))
     end
 
     test "an account address is handed on rather than refused" do

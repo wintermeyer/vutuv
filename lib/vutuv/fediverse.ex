@@ -1107,9 +1107,24 @@ defmodule Vutuv.Fediverse do
   def local_host?(uri) do
     case BlockedInstance.normalize_host(uri) do
       nil -> false
-      host -> host == String.downcase(VutuvWeb.Endpoint.host())
+      host -> same_site?(host, String.downcase(VutuvWeb.Endpoint.host()))
     end
   end
+
+  # `www.` is not another installation. Serving a site at both the apex and its
+  # `www.` alias is the oldest convention on the web, and every caller here asks
+  # "is this us", never "is this byte-identical to the configured host" — so an
+  # exact match sent all four of them the wrong answer for an address a member
+  # can perfectly well paste: the follow gate offered to follow this vutuv from
+  # itself, the search page offered the same, `own_object?/3` accepted a
+  # document attributing a post to one of our own actors, and the post lookup
+  # made a signed GET to our own server (issue #1211, found in production).
+  # Nothing about it is vutuv.de-specific.
+  defp same_site?(host, host), do: true
+  defp same_site?(host, other), do: strip_www(host) == strip_www(other)
+
+  defp strip_www("www." <> rest), do: rest
+  defp strip_www(host), do: host
 
   defp claim_remote_follow_budget(%User{id: user_id}) do
     case RateLimiter.hit(
@@ -4872,28 +4887,33 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  # A vutuv post URL, recognised the way `local_note_post/1` recognises one:
-  # anchored on our own base URL, so a foreign URL that merely copies the
-  # `/name/posts/id` shape names nothing of ours. None of that path's other
-  # gates apply here — they decide whether a member's post may be
-  # **redistributed** on a remote actor's say-so, where this only decides where
-  # to send a reader. What they may see when they arrive is the permalink's own
-  # business.
+  # A vutuv post URL. Matched on **host plus path**, not on a prefix of
+  # `Endpoint.url()`: a member pastes what their browser or their mail client
+  # gave them, and that is the same link in half a dozen spellings — the `www.`
+  # alias, a trailing slash, a `?utm_source=` a share button appended, a
+  # fragment, a shouted host, plain `http`. Every one of them named a post and
+  # every one of them missed a whole-string prefix match, which sent an
+  # unmistakably local link off to `look_up_remote_post/2`, where this
+  # installation made a signed request to itself and spent a slot of the
+  # member's hourly budget doing it.
+  #
+  # The **id** names the post; the handle in front of it is decoration that goes
+  # stale the moment its owner renames, so the post is resolved by id alone and
+  # the caller navigates to its current canonical path. `local_note_post/1` on
+  # the boost path deliberately does require the pair to agree — but that one
+  # decides whether a member's post may be **redistributed** on a remote actor's
+  # say-so, where this only decides where to send a reader who is already here.
+  # What they may see when they arrive is the permalink's own business.
   defp local_lookup_post(url) do
-    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
-    # Without the query and the fragment, so a link carrying a tracking
-    # parameter still resolves to the post it names.
-    uri = URI.parse(url)
-    bare = URI.to_string(%URI{uri | query: nil, fragment: nil})
-
-    with rest when rest != bare <- String.replace_prefix(bare, base, ""),
-         [username, "posts", post_id] <- String.split(rest, "/"),
-         %User{} = user <- Accounts.get_user_by_username(username),
-         %Post{user_id: user_id} = post when user_id == user.id <-
-           UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
-      # With its author attached: the caller's next move is `Posts.path/1`, and
-      # the member is already in hand from the segment that named them.
-      %{post | user: user}
+    with true <- local_host?(url),
+         # The query and the fragment are not part of `path`, so a tracking
+         # parameter falls away by itself. `trim: true` drops the leading and a
+         # trailing empty segment in one go.
+         %URI{path: path} when is_binary(path) <- URI.parse(url),
+         [_username, "posts", post_id] <- String.split(path, "/", trim: true),
+         %Post{} = post <- UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
+      # With its author attached: the caller's next move is `Posts.path/1`.
+      Repo.preload(post, :user)
     else
       _ -> nil
     end

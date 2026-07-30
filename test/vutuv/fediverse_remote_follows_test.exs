@@ -204,6 +204,23 @@ defmodule Vutuv.FediverseRemoteFollowsTest do
                Fediverse.follow_remote(federated_user(), "@#{other.username}@vutuv.test")
     end
 
+    # The `www.` alias is the same installation, and a member pastes whichever
+    # spelling their browser gave them. Matching the configured host exactly
+    # sent this address off to WebFinger, i.e. had vutuv resolve and follow
+    # itself (found on the post lookup in production, issue #1211).
+    test "the www alias of this installation is the same installation" do
+      stub_remote(fn _conn -> raise "our own members need no WebFinger lookup" end)
+      with_endpoint_host("vutuv.test")
+      other = insert(:activated_user)
+
+      assert Fediverse.local_host?("https://www.vutuv.test/#{other.username}")
+      assert Fediverse.local_host?("@#{other.username}@www.vutuv.test")
+      refute Fediverse.local_host?("@them@vutuv.test.evil.example")
+
+      assert {:error, :local_account} =
+               Fediverse.follow_remote(federated_user(), "@#{other.username}@www.vutuv.test")
+    end
+
     test "a typo is refused before the network is touched" do
       stub_remote(fn _conn -> raise "an invalid address must never be resolved" end)
 

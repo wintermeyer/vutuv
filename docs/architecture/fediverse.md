@@ -1231,8 +1231,28 @@ be pasted and `Vutuv.Fediverse.look_up_post/2` answers each of them:
 | an account address or profile URL | `{:account, address}` — handed to the follow box at `/settings/fediverse/following?address=` |
 | anything else | `{:error, reason}` |
 
-Telling the third apart from the first costs no request: `RemoteFollow.parse_address/1`
-is pure string work and accepts exactly `@you@server`, `you@server` and
+**Our own link is recognised on host plus path, never on a prefix of
+`Endpoint.url()`.** A member pastes what their browser or their mail client gave
+them, and that is the same link in half a dozen spellings: the `www.` alias, a
+trailing slash, a `?utm_source=` a share button appended, a fragment, a shouted
+host, plain `http`. A whole-string prefix match missed every one of them and
+sent an unmistakably local link to the remote path, where this installation made
+a signed request **to itself** and spent a slot of the member's hourly budget
+doing it. The post is resolved by its **id** alone and the caller navigates to
+the current canonical path, so a link carrying a handle its owner has since
+changed still lands on the post; `local_note_post/1` on the boost path still
+requires handle and id to agree, because that one decides whether a post may be
+*redistributed* on a remote actor's say-so rather than where to send a reader.
+
+That fix also moved `local_host?/1`, which now treats a leading `www.` as the
+same site. All four of its callers were asking "is this us" and getting the
+wrong answer for an address anybody can paste: the follow gate offered to follow
+this vutuv from itself, the search page offered the same, and `own_object?/3`
+would accept a document attributing a post to one of our own actors.
+
+Telling the third row apart from the first costs no request:
+`RemoteFollow.parse_address/1` is pure string work and accepts exactly
+`@you@server`, `you@server` and
 `https://server/@you`, and a post URL has one path segment too many for all
 three.
 
