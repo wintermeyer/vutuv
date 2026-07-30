@@ -2137,6 +2137,7 @@ defmodule VutuvWeb.PostLive.Composer do
         label={gettext("What's new?")}
         placeholder={gettext("What's new? Markdown is supported.")}
         rows={if(@post, do: 10, else: 3)}
+        submit_on="cmd-enter"
         images
         help
       />

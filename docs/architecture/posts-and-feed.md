@@ -176,6 +176,10 @@ message composer). It edits Markdown *source* in place — the field stays a
 `<textarea>` and the body is still stored and rendered as Markdown — so nothing
 downstream (`VutuvWeb.Markdown`, the `.md`/`.txt`/`.json`/`.xml` siblings)
 changes. See `.claude/rules/design.md` for the component and its gotchas.
+**Cmd/Ctrl+Enter submits** (issue #1196, `submit_on="cmd-enter"` — the same
+opt-in the message composer passes, one handler in the hook); the shortcut
+respects a disabled submit button, so it cannot post past the photo-upload
+guard, and the "?" shortcuts overlay lists it.
 
 **Emoji** (issue #1197) are picked from the 🙂 toolbar button's picker or typed as
 a shortcode (`:tada:` becomes 🎉 on the closing colon, aliases included). What a

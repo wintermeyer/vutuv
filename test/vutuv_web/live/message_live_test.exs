@@ -164,6 +164,10 @@ defmodule VutuvWeb.MessageLiveTest do
       assert has_element?(view, "#message-body[phx-hook='MarkdownEditor']")
       assert has_element?(view, "#message-body-source[rows='2']")
 
+      # Cmd/Ctrl+Enter sends — the same data-mde-submit opt-in the post
+      # composer uses (issue #1196), one handler in markdown_editor.js.
+      assert has_element?(view, ~s(#message-body[data-mde-submit="cmd-enter"]))
+
       # The Markdown / Ctrl+Enter helper line was removed to keep the composer
       # compact; both features still work, they are just no longer spelled out.
       refute has_element?(view, "#send-shortcut-key")

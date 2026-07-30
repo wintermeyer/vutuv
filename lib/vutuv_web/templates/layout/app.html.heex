@@ -108,7 +108,9 @@ it on desktop where that bar is hidden. Links wrap into a centered row. --%>
 <%!-- Keyboard-shortcuts help overlay (desktop). Hidden by default; opened by
 "?" or the account-menu "Keyboard shortcuts" item, both wired in app.js. Lives
 in the static layout, outside the live root, so it is stable across LiveView
-patches. The list is kept in sync with keyboard_shortcuts.js by hand. --%>
+patches. The list is kept in sync by hand with keyboard_shortcuts.js — except
+the Cmd/Ctrl+Enter send row, whose handler lives in markdown_editor.js
+(data-mde-submit) and therefore works while typing and on every device. --%>
 <% shortcut_groups = [
   {gettext("Navigation"),
    [
@@ -122,6 +124,7 @@ patches. The list is kept in sync with keyboard_shortcuts.js by hand. --%>
   {gettext("Actions"),
    [
      {["n"], gettext("Write a new post")},
+     {["⌘/Ctrl", "↵"], gettext("Send the post or message you are writing")},
      {["j"], gettext("Next post in the feed")},
      {["k"], gettext("Previous post in the feed")}
    ]},
@@ -182,7 +185,7 @@ patches. The list is kept in sync with keyboard_shortcuts.js by hand. --%>
     </div>
 
     <p class="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
-      {gettext("Shortcuts pause while you type, and are off on phones and tablets.")}
+      {gettext("The single-key shortcuts pause while you type, and are off on phones and tablets.")}
     </p>
   </div>
 </div>

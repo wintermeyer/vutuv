@@ -832,14 +832,21 @@ export const MarkdownEditor = {
     })
   },
 
-  // Cmd/Ctrl+Enter submits the surrounding form (the message composer wants it;
-  // posts leave it off). Works from the WYSIWYG surface and the source textarea.
+  // Cmd/Ctrl+Enter submits the surrounding form — the post and the message
+  // composers both opt in (issue #1196). Works from the WYSIWYG surface and
+  // the source textarea. A disabled submit button blocks the shortcut like it
+  // blocks a click: requestSubmit() alone would sail past it, and the post
+  // composer disables its button while photo uploads are still in flight.
   wireSubmitShortcut() {
     if (this.root.dataset.mdeSubmit !== "cmd-enter") return
     const submit = (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        this.source.form?.requestSubmit()
+        const form = this.source.form
+        if (!form) return
+        const btn = form.querySelector('button[type="submit"], input[type="submit"]')
+        if (btn && btn.disabled) return
+        form.requestSubmit()
       }
     }
     this.mountEl.addEventListener("keydown", submit)

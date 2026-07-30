@@ -195,7 +195,9 @@ defmodule VutuvWeb.UI do
   `@value` is the current Markdown source; it must be mirrored into
   `data-mde-value` so a server-driven change (an inline image insert, the
   post-save reset, the message-send clear) re-seeds the editor. Pass
-  `submit_on="cmd-enter"` on the message composer so Cmd/Ctrl+Enter sends.
+  `submit_on="cmd-enter"` so Cmd/Ctrl+Enter submits the surrounding form —
+  the post and the message composers both do (issue #1196); the hook skips
+  the shortcut while the form's submit button is disabled.
   """
   attr(:id, :string, required: true)
   attr(:name, :string, required: true, doc: "the form field name, e.g. post[body]")

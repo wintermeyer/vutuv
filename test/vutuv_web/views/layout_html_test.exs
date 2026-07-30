@@ -93,6 +93,28 @@ defmodule VutuvWeb.LayoutHTMLTest do
     assert overlay_tag =~ "hidden"
   end
 
+  # Cmd/Ctrl+Enter submits the post and message composers (issue #1196); the
+  # overlay is where a member can discover that, so the row must not get lost.
+  test "the shortcuts overlay lists the Cmd/Ctrl+Enter send shortcut", %{conn: conn} do
+    body = conn |> get(~p"/impressum") |> html_response(200)
+
+    assert body =~ "⌘/Ctrl"
+    assert body =~ "Send the post or message you are writing"
+  end
+
+  # The German render must carry the hand-written translations, not English or
+  # a fuzzy-merge artifact (the gettext merge hazard in CLAUDE.md).
+  test "the shortcuts overlay is translated for German visitors", %{conn: conn} do
+    body =
+      conn
+      |> put_req_header("accept-language", "de-DE,de")
+      |> get(~p"/impressum")
+      |> html_response(200)
+
+    assert body =~ "Beitrag oder Nachricht absenden, während Sie schreiben"
+    assert body =~ "Die Einzeltasten-Kürzel pausieren, während Sie tippen"
+  end
+
   defp footer_html(body) do
     [footer] = Regex.run(~r{<footer.*?</footer>}s, body)
     footer

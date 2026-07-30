@@ -588,6 +588,17 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute has_element?(live, "#open-composer")
     end
 
+    test "the composer submits on Cmd/Ctrl+Enter like the message composer", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Issue #1196: data-mde-submit="cmd-enter" opts the shared Milkdown editor
+      # into the one Cmd/Ctrl+Enter handler in assets/js/markdown_editor.js —
+      # the same attribute the message composer passes, so both composers share
+      # the wiring instead of growing their own key handling.
+      assert has_element?(live, ~s(#composer-body[data-mde-submit="cmd-enter"]))
+    end
+
     test "the composer drops the audience picker and its summary line", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
