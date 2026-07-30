@@ -496,9 +496,12 @@ defmodule VutuvWeb.NotificationLive.Index do
           >
             <span aria-hidden="true">🔒</span> {gettext("Sent to you only, visible to nobody else")}
           </p>
+          <%!-- The same solid quote rail the local reply quotes wear — the row's
+          wording already says it came from another network, so the quote needs
+          no dashed variant of its own. --%>
           <div
             data-remote-reply-preview="true"
-            class="border-l-2 border-dashed border-slate-300 pl-2.5 dark:border-slate-600"
+            class="border-l-2 border-slate-200 pl-2.5 dark:border-slate-700"
           >
             <%!-- No `text-*` / `leading-*` here: `.notif-clamp` owns the type
             size and line height, since its box height is counted in them. --%>

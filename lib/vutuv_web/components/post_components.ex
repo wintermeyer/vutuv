@@ -784,8 +784,6 @@ defmodule VutuvWeb.PostComponents do
     * an initials tile in **slate**, not the brand tint members get, carrying the
       globe badge that issue #1068 established for "another network". No picture
       is ever fetched or hosted: vutuv does not host a third party's image.
-    * a **dashed** left rail down the body, against the solid connector rail the
-      vutuv cards hang from.
     * the author's name as plain text (there is no vutuv profile to link to)
       beside their `@handle@host`, which links out to the account.
     * **no action bar.** Liking, reposting or bookmarking a note that lives on
@@ -913,7 +911,7 @@ defmodule VutuvWeb.PostComponents do
   #
   # The four pieces every card for content from another network is built from,
   # so "this did not come from vutuv" — the slate initials tile with its globe
-  # badge, the lock line, the dashed rail with its content-warning lid, the
+  # badge, the lock line, the body with its content-warning lid, the
   # origin footer — has ONE definition and reads identically wherever it
   # appears. `remote_reply_card/1` (a reply under a member's post) and
   # `remote_post_card/1` (a post by a followed account) differ only in which
@@ -1069,9 +1067,12 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
-  # The dashed rail and the text down it. `warning` set (a content warning, or
-  # the author's sensitive flag) closes the lid: the text hides behind a click,
-  # which is the one thing that author asked for.
+  # The body text, reading like any post body — the avatar badge, the host chip
+  # and the origin footer say where it came from, so the text is not set apart
+  # as if it were a quotation (the dashed rail it once wore read as an
+  # unexplained decoration). `warning` set (a content warning, or the author's
+  # sensitive flag) closes the lid: the text hides behind a click, which is the
+  # one thing that author asked for.
   attr(:warning, :any, default: nil)
   attr(:text, :string, required: true)
 
@@ -1104,10 +1105,7 @@ defmodule VutuvWeb.PostComponents do
     assigns = assign(assigns, :html, Markdown.render_remote(assigns.text))
 
     ~H"""
-    <div
-      :if={@warning || presence?(@text)}
-      class="mt-1.5 border-l-2 border-dashed border-slate-300 pl-3 dark:border-slate-600"
-    >
+    <div :if={@warning || presence?(@text)} class="mt-1.5">
       <%= if @warning do %>
         <details data-remote-warning class="group">
           <summary class="flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -1316,7 +1314,7 @@ defmodule VutuvWeb.PostComponents do
   (issue #1161).
 
   It wears the **same remote skin** as `remote_reply_card/1` — slate initials
-  tile, globe badge, dashed rail, plain text, "View the original" — so "this did
+  tile, globe badge, plain text, "View the original" — so "this did
   not come from vutuv" reads identically wherever it appears, and a member never
   has to learn two visual vocabularies for the same fact.
 

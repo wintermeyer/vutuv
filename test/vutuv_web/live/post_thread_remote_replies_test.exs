@@ -94,6 +94,10 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       assert html =~ "https://social.example/@alice/1"
       # Its own visual language: the slate initials tile, not a member avatar.
       assert html =~ "data-remote-avatar"
+      # But the text itself reads like a normal reply body — the markers above
+      # carry the origin, not a dashed quote rail down the text (2026-07-30).
+      [remote_card] = Regex.run(~r{<article data-fediverse-reply.*?</article>}s, html)
+      refute remote_card =~ "border-dashed"
     end
 
     test "shows no action bar, because none of those actions exist for it", %{post: post} do

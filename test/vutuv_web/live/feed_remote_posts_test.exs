@@ -67,6 +67,19 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     refute has_element?(view, "[data-remote-post='#{post.id}'] [data-post-actions]")
   end
 
+  test "the body reads like a normal post, not a quotation", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    post = cached_post(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    # The origin is carried by the globe badge, the host chip and the footer
+    # line; the text itself is not set apart behind a dashed quote rail
+    # (removed 2026-07-30 — it read as an unexplained decoration).
+    assert has_element?(view, "[data-remote-post='#{post.id}'] .markdown")
+    refute has_element?(view, "[data-remote-post='#{post.id}'] .border-dashed")
+  end
+
   test "the body is formatted: links are clickable, hashtags reach our tag pages", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     # The hashtag grammar is `[A-Za-z0-9_]+`, so the factory's hyphenated name

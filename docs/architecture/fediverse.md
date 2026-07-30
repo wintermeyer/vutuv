@@ -301,7 +301,7 @@ every activity of a member it finds no key for, silently.
     sibling in time order (`VutuvWeb.PostLive.Thread` +
     `PostComponents.remote_reply_card/1`), wearing its own skin so the two worlds
     are told apart without colour: a **slate** initials tile with the 🌐 badge,
-    a **dashed** left rail against the solid connector rail, the name as plain
+    the name as plain
     text beside a `@handle@host` that links out, and **no action bar** (liking a
     note on someone else's server is not a thing that exists). A content warning
     renders as a closed lid. The member also gets a notification: the
