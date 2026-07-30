@@ -216,6 +216,19 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
             {gettext("Move your account")} ›
           </.link>
         </p>
+        <%!-- The one thing a follow cannot do (issue #1211): it only ever brings
+              what an account posts from now on, so the post somebody actually
+              read out there is fetched by its address instead. --%>
+        <p>
+          {gettext("Read something out there that you want to answer from here?")}
+          <.link
+            navigate={~p"/system/fediverse/lookup"}
+            id="fediverse-lookup-link"
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+          >
+            {gettext("Look up a post by its address")} ›
+          </.link>
+        </p>
         <p>
           {gettext(
             "Want the checkmark on your Mastodon profile? That works without taking part here: your vutuv profile links your listed accounts with rel=\"me\"."

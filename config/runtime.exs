@@ -213,6 +213,12 @@ if config_env() == :prod do
     config :vutuv, :fediverse_announce_fetch_limit, String.to_integer(String.trim(limit))
   end
 
+  # How many posts one member may fetch by pasting their URL, per hour (issue
+  # #1211). Per member, since the address is the member's own choice.
+  if limit = System.get_env("FEDIVERSE_LOOKUP_LIMIT") do
+    config :vutuv, :fediverse_lookup_limit, String.to_integer(String.trim(limit))
+  end
+
   # How long a post by an account a member follows may be held here (issue
   # #1161). The promise the privacy page makes about the other half of
   # following: it is deleted when the clock runs out whatever else happens.

@@ -441,6 +441,20 @@ defmodule VutuvWeb.FediverseFollowingLive do
                 "To show their posts we keep a copy here for up to six months. If the author deletes or edits something, ours follows; and when you stop following an account, its posts are deleted here at once."
               )}
             </p>
+            <%!-- The other way in (issue #1211). Somebody on this page is
+                  usually here because they read something out there, and a
+                  follow only ever brings what an account posts from now on —
+                  the post they actually meant is fetched one page over. --%>
+            <p>
+              {gettext("Want to answer one particular post rather than follow its author?")}
+              <.link
+                navigate={~p"/system/fediverse/lookup"}
+                id="fediverse-lookup-link"
+                class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-100"
+              >
+                {gettext("Look up a post by its address")} ›
+              </.link>
+            </p>
           </div>
           <.card_footer_link href={~p"/settings/fediverse"}>
             {gettext("Back to Fediverse settings")}

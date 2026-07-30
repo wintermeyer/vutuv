@@ -64,6 +64,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.PostLike
+  alias Vutuv.Fediverse.PostLookup
   alias Vutuv.Fediverse.PostRepost
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
@@ -1870,17 +1871,24 @@ defmodule Vutuv.Fediverse do
   #   * a followed account **boosted** it (issue #1167) — nobody here follows
   #     its author, which is the normal case for a boost, and the boost is the
   #     whole reason the copy exists.
+  #   * a member here **looked it up** by its URL (issue #1211) — the same
+  #     situation as a boost and the commoner one, since the lookup page works
+  #     on any account: a copy fetched precisely because nobody follows its
+  #     author would otherwise be swept within the hour, while the member who
+  #     asked for it is still reading it.
   #
-  # Neither buys extra time: both only buy the right to live out the ordinary
-  # clock instead of being swept the moment the last follower of the author
-  # walks away. The `:post` alias comes from `spare_reposted/2`, which is why
-  # the boost half is added on top of it rather than beside it.
+  # None of the three buys extra time: they only buy the right to live out the
+  # ordinary clock instead of being swept the moment the last follower of the
+  # author walks away. The `:post` alias comes from `spare_reposted/2`, which is
+  # why the other two are added on top of it rather than beside it.
   defp spare_held(query) do
     boosted = from(b in PostBoost, where: b.remote_post_id == parent_as(:post).id)
+    looked_up = from(l in PostLookup, where: l.remote_post_id == parent_as(:post).id)
 
     query
     |> spare_reposted(RemotePost)
     |> where([p], not exists(boosted))
+    |> where([p], not exists(looked_up))
   end
 
   @doc """
@@ -2435,6 +2443,14 @@ defmodule Vutuv.Fediverse do
   # that server did not choose, so it is metered per host: one busy relay must
   # not be able to walk us through a stranger's whole archive.
   @announce_fetch_limit 60
+
+  # Posts a member may look up by URL per hour (issue #1211). Per member rather
+  # than per host, because this is somebody's own reading and the address is
+  # theirs to choose: what has to be bounded is one account turning the
+  # installation into a crawler, not the traffic any one server sees. Sized for
+  # a person following links out of a conversation; a cached post costs nothing
+  # from it, so re-opening the same one is free however often it happens.
+  @lookup_limit 30
 
   # How long a post with an unvetted picture is held before it federates without
   # it. The ceiling, not the normal wait — see `image_hold_seconds/0`.
@@ -4742,6 +4758,308 @@ defmodule Vutuv.Fediverse do
 
   defp boost_target(%RemotePost{id: id}), do: %{remote_post_id: id}
   defp boost_target(%Post{id: id}), do: %{post_id: id}
+
+  ## Looking a post up by its URL (issue #1211)
+
+  @doc """
+  Fetches the post behind a pasted URL, so a member can answer, like or reshare
+  it (issue #1211).
+
+  ActivityPub pushes only what happens **after** a follow is accepted, so
+  everything an account published before that is simply not here: no
+  `fediverse_posts` row, nothing to reply to, and the account page deliberately
+  fetches nothing on view. This is the one door in — a member pastes the URL
+  they are looking at and gets that post as an ordinary remote card.
+
+  Four answers, because four things can be pasted:
+
+    * `{:ok, post}` — a post on another network, cached already or fetched now,
+      with its account preloaded.
+    * `{:local, post}` — a **vutuv** post URL. It costs no request to recognise
+      and the reader wants its permalink, not a copy of it.
+    * `{:account, address}` — an account address or profile URL rather than a
+      post. Not an error: it is what the follow box on
+      `/settings/fediverse/following` is for, so the caller hands it over.
+    * `{:error, reason}` — see below.
+
+  Everything downstream of the fetch is the announce path's chain unchanged
+  (`fetch_and_store_announced/2`, issue #1167): the object-type gate, the
+  `own_object?/3` anti-impersonation check, public and unlisted only, the
+  author's actor upserted, the pictures through the AI gate. What differs is the
+  way in, and every part of it is because a **member** asked rather than a
+  remote server:
+
+    * they must federate. The GET is signed with their own key, so there is no
+      such thing as an actorless lookup — `:not_federating` is the one refusal
+      they can act on, and the page turns it into the switch rather than a dead
+      end (the `check_remote_reply/2` pattern).
+    * the operator blocklist is checked on the pasted host, on the canonical
+      object id the document claims and on the author's host, since each can be
+      somewhere else than the last.
+    * an hourly per-member budget (`lookup_limit/0`) bounds it.
+
+  **A post we already hold is returned without a fetch and without claiming
+  budget**, whichever of its two URLs was pasted: the canonical object id
+  servers exchange, or the display URL people copy out of their browser.
+
+  Any account and any age. The copy gets a hold against the unfollowed purge
+  (`Vutuv.Fediverse.PostLookup`) because the author is usually somebody nobody
+  here follows, and `expires_at` counts from receipt, so an old post lives out
+  the ordinary clock from the lookup rather than arriving already expired.
+
+  Refusals: `:fediverse_disabled`, `:not_federating`, `:moved`,
+  `:instance_blocked` (the vocabulary the rest of this subsystem speaks), plus
+  `:invalid_post_url` (not a link at all), `:local_url` (a vutuv link that is
+  not a post), `:lookup_capped` (the budget), `:post_unreachable` (that server
+  did not answer, or not with a document), `:not_a_post` (it answered with
+  something that is not a post, or with one whose author it may not speak for)
+  and `:post_not_public` (addressed narrower than public or unlisted).
+  """
+  def look_up_post(%User{} = user, input) when is_binary(input) do
+    url = String.trim(input)
+
+    if url == "", do: {:error, :invalid_post_url}, else: classify_lookup(user, url)
+  end
+
+  def look_up_post(_user, _input), do: {:error, :invalid_post_url}
+
+  # What was pasted, asked in the order that costs least. Ours first: it costs
+  # no request to recognise, and neither the address parser nor a signed GET
+  # should ever be pointed at this installation.
+  defp classify_lookup(%User{} = user, url) do
+    case local_lookup_post(url) do
+      %Post{} = post ->
+        {:local, post}
+
+      nil ->
+        cond do
+          local_host?(url) -> {:error, :local_url}
+          # An account rather than a post. `parse_address/1` is pure string work
+          # and accepts exactly the three shapes people paste (`@you@server`,
+          # `you@server`, `https://server/@you`); a post URL has a path segment
+          # too many for any of them, so the two are told apart without asking
+          # anybody anything.
+          match?({:ok, _}, RemoteFollow.parse_address(url)) -> {:account, url}
+          true -> look_up_remote_post(user, url)
+        end
+    end
+  end
+
+  @doc """
+  Why this member cannot look a post up, when they cannot: `nil` when they can,
+  else `:fediverse_disabled`, `:not_federating` or `:moved`.
+
+  The render-time half of the gate `look_up_post/2` applies at submit, so the
+  page can put the explanation and the switch where the form would be instead of
+  letting somebody paste a URL into a box that was never going to work.
+  """
+  def lookup_refusal(%User{} = user) do
+    case check_can_look_up(user) do
+      :ok -> nil
+      {:error, reason} -> reason
+    end
+  end
+
+  @doc "How many posts one member may look up by URL per hour."
+  def lookup_limit, do: Application.get_env(:vutuv, :fediverse_lookup_limit, @lookup_limit)
+
+  defp check_can_look_up(%User{} = user) do
+    cond do
+      not enabled?() -> {:error, :fediverse_disabled}
+      not federated?(user) -> {:error, :not_federating}
+      moved?(user) -> {:error, :moved}
+      true -> :ok
+    end
+  end
+
+  # A vutuv post URL, recognised the way `local_note_post/1` recognises one:
+  # anchored on our own base URL, so a foreign URL that merely copies the
+  # `/name/posts/id` shape names nothing of ours. None of that path's other
+  # gates apply here — they decide whether a member's post may be
+  # **redistributed** on a remote actor's say-so, where this only decides where
+  # to send a reader. What they may see when they arrive is the permalink's own
+  # business.
+  defp local_lookup_post(url) do
+    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/"
+    # Without the query and the fragment, so a link carrying a tracking
+    # parameter still resolves to the post it names.
+    uri = URI.parse(url)
+    bare = URI.to_string(%URI{uri | query: nil, fragment: nil})
+
+    with rest when rest != bare <- String.replace_prefix(bare, base, ""),
+         [username, "posts", post_id] <- String.split(rest, "/"),
+         %User{} = user <- Accounts.get_user_by_username(username),
+         %Post{user_id: user_id} = post when user_id == user.id <-
+           UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
+      # With its author attached: the caller's next move is `Posts.path/1`, and
+      # the member is already in hand from the segment that named them.
+      %{post | user: user}
+    else
+      _ -> nil
+    end
+  end
+
+  defp look_up_remote_post(%User{} = user, url) do
+    with :ok <- check_can_look_up(user),
+         :ok <- check_lookup_url(url),
+         {:ok, post} <- fetch_looked_up_post(user, url) do
+      hold_looked_up_post(user, post)
+      {:ok, Repo.preload(post, :remote_account)}
+    end
+  end
+
+  # The pasted string, before anybody is asked anything: a real https URL on a
+  # host the operator has not shut out. `https` only because that is what the
+  # fetch below speaks — an `http://` link would fail there anyway, and saying
+  # so here is a better answer than "that server did not respond".
+  defp check_lookup_url(url) do
+    case URI.parse(url) do
+      %URI{scheme: "https", host: host} when is_binary(host) and host != "" ->
+        if instance_blocked?(url), do: {:error, :instance_blocked}, else: :ok
+
+      _ ->
+        {:error, :invalid_post_url}
+    end
+  end
+
+  defp fetch_looked_up_post(%User{} = user, url) do
+    case cached_lookup_post(url) do
+      %RemotePost{} = post -> {:ok, post}
+      nil -> dereference_looked_up_post(user, url)
+    end
+  end
+
+  # A post we already hold, under either of the two URLs one post is written as.
+  # The row is keyed on the canonical object id servers exchange
+  # (`https://host/users/you/statuses/1`), but what a member pastes is almost
+  # always the display URL they were reading (`https://host/@you/1`), which the
+  # insert stores beside it. Matching both is what makes re-opening a post free.
+  defp cached_lookup_post(url) do
+    Repo.one(
+      from(p in RemotePost,
+        where: p.object_uri == ^url or p.origin_url == ^url,
+        order_by: [asc: p.id],
+        limit: 1
+      )
+    )
+  end
+
+  defp dereference_looked_up_post(%User{} = user, url) do
+    with {:ok, key} <- lookup_signer(user),
+         :ok <- claim_lookup_budget(user),
+         {:ok, doc} <- fetch_lookup_document(url, key),
+         {:ok, author_uri} <- lookup_author(url, doc),
+         :ok <- check_lookup_hosts(doc, url, author_uri),
+         {:ok, audience} <- lookup_audience(doc),
+         {:ok, author} <- lookup_author_account(author_uri, key) do
+      store_looked_up_post(author, doc, audience)
+    end
+  end
+
+  # No key, no lookup — and `:not_federating` rather than a shrug, because a
+  # federating member without an actor row is a member one click from having
+  # one, and that click is what the refusal points at.
+  defp lookup_signer(%User{} = user) do
+    case signer(user) do
+      nil -> {:error, :not_federating}
+      key -> {:ok, key}
+    end
+  end
+
+  defp claim_lookup_budget(%User{id: user_id}) do
+    case RateLimiter.hit({:fediverse_lookup, user_id}, lookup_limit(), @inbound_window_ms) do
+      :ok -> :ok
+      _ -> {:error, :lookup_capped}
+    end
+  end
+
+  # The same https-only, SSRF-fenced, size-capped, signed GET every other fetch
+  # here makes, plus the object-type gate: a `Video`, an `Article` or an `Event`
+  # with a `content` field is not a post, and neither is an actor document
+  # somebody pasted the profile URL of.
+  defp fetch_lookup_document(url, key) do
+    case fetch_remote_note(url, key) do
+      {:ok, doc} ->
+        case remote_post_object(doc) do
+          %{} = note -> {:ok, note}
+          nil -> {:error, :not_a_post}
+        end
+
+      _unreachable ->
+        {:error, :post_unreachable}
+    end
+  end
+
+  # A server may only speak for itself, exactly as on the announce path: the
+  # document is the object we asked for, its author lives on the object's own
+  # host, and it does not claim to be one of ours. Without this, any server
+  # could answer a URL on **its** host with a Note attributed to somebody else
+  # entirely, and we would store that person's name over a stranger's words.
+  defp lookup_author(url, doc) do
+    author_uri = announced_author(doc)
+
+    if is_binary(author_uri) and own_object?(url, doc, author_uri),
+      do: {:ok, author_uri},
+      else: {:error, :not_a_post}
+  end
+
+  # The blocklist on the other two hops. `own_object?/3` has already tied all
+  # three to one host, so this can only fire together with the check on the
+  # pasted URL — which is the point: the day that check changes, this one is
+  # still asking the question the operator's block means.
+  defp check_lookup_hosts(doc, url, author_uri) do
+    object_id = presence(doc["id"]) || url
+
+    if instance_blocked?(object_id) or instance_blocked?(author_uri),
+      do: {:error, :instance_blocked},
+      else: :ok
+  end
+
+  # Public and unlisted only. A member may well be able to read a followers-only
+  # post on the origin server with their own account there, but they are not
+  # reading it there — they are asking this installation to store a copy of it,
+  # and an audience its author narrowed is not one we widen.
+  defp lookup_audience(doc) do
+    case announced_audience(doc) do
+      audience when is_binary(audience) -> {:ok, audience}
+      _narrower -> {:error, :post_not_public}
+    end
+  end
+
+  defp lookup_author_account(author_uri, key) do
+    case announced_author_account(author_uri, key) do
+      %RemoteAccount{} = account -> {:ok, account}
+      nil -> {:error, :post_unreachable}
+    end
+  end
+
+  defp store_looked_up_post(%RemoteAccount{} = author, doc, audience) do
+    case insert_remote_post(author, doc, audience) do
+      {:ok, post} ->
+        attach_pictures(post, doc)
+        {:ok, post}
+
+      # Another lookup (or a delivery) stored it while this one was fetching.
+      # The row is what we wanted either way, and its pictures are that write's
+      # business.
+      {:exists, post} ->
+        {:ok, post}
+
+      _error ->
+        {:error, :not_a_post}
+    end
+  end
+
+  # The hold this feature owes the copy it leaves behind (see
+  # `Vutuv.Fediverse.PostLookup`). Written for a cached post too, not only a
+  # freshly fetched one: whoever looked it up first may unfollow tomorrow, and
+  # the reader in front of us now is a reason of their own for it to stay.
+  defp hold_looked_up_post(%User{id: user_id}, %RemotePost{id: post_id}) do
+    %PostLookup{user_id: user_id, remote_post_id: post_id}
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:user_id, :remote_post_id])
+
+    :ok
+  end
 
   ## Sharing one of their posts onward (issue #1166)
 

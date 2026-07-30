@@ -222,6 +222,12 @@ config :vutuv, :fediverse_outbound_boost_limit, 100
 # address that server did not choose, so it is metered per host.
 config :vutuv, :fediverse_announce_fetch_limit, 60
 
+# How many posts one member may look up by URL per hour (issue #1211). Metered
+# per member rather than per host: the address is theirs to choose, so what has
+# to be bounded is one account turning the installation into a crawler. A post
+# already cached here costs nothing from the budget.
+config :vutuv, :fediverse_lookup_limit, 30
+
 # Following accounts on other networks (issue #1160): how many follow requests
 # one member may send per hour, and how many accounts they may follow at all.
 #

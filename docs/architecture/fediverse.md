@@ -1210,3 +1210,76 @@ since some servers never send an `Update` of themselves — but **only** for a
 document that still claims to be this account, or a followed account could
 quietly become a different one on a blocked host with the member's follow still
 attached.
+
+### Looking a post up by its URL (issue #1211)
+
+Everything above is push. A server delivers to us because one of our members
+follows that account, and only from the moment the follow is accepted, so an
+account's whole back catalogue is invisible here: no `fediverse_posts` row,
+nothing to reply to, like or reshare. The account page (#1162) deliberately
+makes that worse rather than better, since it fetches nothing on view.
+
+`/system/fediverse/lookup` (`VutuvWeb.FediverseLookupLive`) is the one pull. A
+member pastes the address of a post they are reading out there, and it comes
+back as the ordinary remote card with its ordinary action bar. Four things can
+be pasted and `Vutuv.Fediverse.look_up_post/2` answers each of them:
+
+| Pasted | Answer |
+| --- | --- |
+| a post on another network | `{:ok, post}`, cached or fetched now |
+| a vutuv post URL | `{:local, post}` — the page navigates to its permalink |
+| an account address or profile URL | `{:account, address}` — handed to the follow box at `/settings/fediverse/following?address=` |
+| anything else | `{:error, reason}` |
+
+Telling the third apart from the first costs no request: `RemoteFollow.parse_address/1`
+is pure string work and accepts exactly `@you@server`, `you@server` and
+`https://server/@you`, and a post URL has one path segment too many for all
+three.
+
+Downstream of the fetch this is the announce path's chain unchanged — object
+type gate, `own_object?/3` (the document is the object we asked for, its author
+lives on the object's host, it does not claim to be one of ours), public and
+unlisted only, the author's actor upserted, pictures through the AI gate. What
+differs is the way in, and each difference is because a **member** asked rather
+than a remote server:
+
+* they must federate. The GET is signed with their own key, so there is no
+  anonymous lookup; `:not_federating` puts the explanation and the switch where
+  the box would be, the way the reply pages do.
+* the blocklist is checked on the pasted host, on the canonical object id the
+  document claims and on the author's host.
+* the budget is **per member** (`FEDIVERSE_LOOKUP_LIMIT`, 30/hour), not per
+  host: the address is the member's own choice, so what needs bounding is one
+  account turning the installation into a crawler.
+
+**A post we already hold is returned with no request and no budget claimed**,
+under either of its two URLs — the canonical object id servers exchange
+(`https://host/users/you/statuses/1`) and the display URL people copy out of
+their browser (`https://host/@you/1`), which the insert stores as `origin_url`
+and which now carries an index for exactly this lookup.
+
+Any account, not only followed ones, which is what makes `fediverse_post_lookups`
+necessary: the copy usually has no follower holding it, and
+`purge_unfollowed_remote_posts/0` deletes precisely the copies nobody holds. It
+is the third exemption in `spare_held/1` beside a reshare (#1166) and a boost
+(#1167), under the same rule — it buys the right to live out the ordinary clock,
+never extra time, and `expires_at` counts from **receipt**, so an old post lives
+its full retention from the lookup rather than arriving already expired.
+
+The result renders **inline**. There is no permalink of ours for it and no
+anchor on the account page: a copy of somebody else's post is not a page we
+publish. The card's ⋯ menu drops **Mute** here (`mute?={@follow != nil}`), since
+muting a follow that does not exist is a control that does nothing under a flash
+saying it did; the follow itself is offered right below the card, because
+somebody who came here for one post is somebody deciding about its author — and
+following them also pulls this post into the home feed at its own publication
+position, along with everything else they have written.
+
+Nothing happens on arrival: a `GET` of the page asks nobody anything, exactly
+like the account page's address box. A reconnect therefore re-mounts to an empty
+page with the pasted URL recovered in the form, and pressing "Look up" again is
+free, since by then the post is cached.
+
+Deliberately **not** built: backfilling an account's outbox history. The lookup
+is one post the member named; walking somebody's archive because a member
+followed them is a different bargain.

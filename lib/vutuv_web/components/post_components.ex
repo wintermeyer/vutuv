@@ -1362,6 +1362,12 @@ defmodule VutuvWeb.PostComponents do
     doc: "the followed remote account whose boost put this card here (issue #1167), or nil"
   )
 
+  attr(:mute?, :boolean,
+    default: true,
+    doc:
+      "whether the ⋯ menu offers Mute. Pass false where the viewer is known not to follow the account (the lookup page, issue #1211): muting a follow that does not exist is a control that does nothing and a flash that says otherwise"
+  )
+
   def remote_post_card(assigns) do
     post = assigns.remote_post
     account = post.remote_account
@@ -1410,7 +1416,7 @@ defmodule VutuvWeb.PostComponents do
                 it out of all of their feeds. Muting is the private, reversible
                 lever — the same one the member card's ⋯ menu offers — and the
                 follow itself survives it. --%>
-                <:item click="mute-remote-account" value={@account.id}>
+                <:item :if={@mute?} click="mute-remote-account" value={@account.id}>
                   {gettext("Mute %{handle}", handle: RemoteAccount.display_handle(@account))}
                 </:item>
                 <:item

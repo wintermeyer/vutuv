@@ -502,11 +502,11 @@ defmodule VutuvWeb.Router do
 
       # The signed-in Fediverse pages that are not settings: answering a reply
       # that arrived under one's own post (issue #1070), answering a post by a
-      # followed account (issue #1165) and the page for one remote account
-      # (issue #1162). Under /system/ rather than a new root word, which
-      # profiles own; "system" is already reserved, so this burns no handle.
-      # `:noindex_pipe` because all of them are assembled from things other
-      # people wrote on other servers.
+      # followed account (issue #1165), the page for one remote account
+      # (issue #1162) and the box that fetches a post by its URL (issue #1211).
+      # Under /system/ rather than a new root word, which profiles own; "system"
+      # is already reserved, so this burns no handle. `:noindex_pipe` because all
+      # of them are assembled from things other people wrote on other servers.
       #
       # The two reply routes differ in segment count, so neither shadows the
       # other, and each keeps the id space of its own table.
@@ -516,6 +516,7 @@ defmodule VutuvWeb.Router do
         live("/reply/:id", PostLive.RemoteReply, :new)
         live("/reply/post/:id", PostLive.RemotePostReply, :new)
         live("/account/:id", FediverseAccountLive, :show)
+        live("/lookup", FediverseLookupLive, :index)
       end
 
       # The private likes / bookmarks lists (reserved slugs too).
