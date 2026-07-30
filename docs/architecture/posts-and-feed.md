@@ -912,6 +912,24 @@ spends no Chromium run at all. The same blocklist gates the profile-link
 previews inside `capture_framed/2` (returning `:blocked_host`, a permanent
 outcome).
 
+**A YouTube video link stores YouTube's own thumbnail instead of a capture.**
+The watch page answers every logged-out request with the cookie-consent
+interstitial, so a screenshot of it only ever shows the banner.
+`Vutuv.YoutubeThumbnail` recognises a video URL (watch / `youtu.be` / shorts /
+live / embed on any of YouTube's hosts, parsed by host + path segments, never
+a string prefix), confirms the video exists via the keyless oEmbed endpoint
+(so a deleted or private video falls through instead of storing YouTube's grey
+placeholder tile), and fetches the static `maxresdefault.jpg`, falling back to
+the always-present `hqdefault.jpg`. The bytes are stored through the same
+uploader **without the browser frame** (the thumbnail is the video's artwork,
+not a web page) and enter AI image moderation like any capture; readers only
+ever see our stored copy, never `img.youtube.com`, so no viewer IP reaches
+Google. Any failure — unknown video, network trouble, a non-image answer —
+falls back to the ordinary capture below. Tests stub the fetch via the
+`:youtube_thumbnail_req_options` seam; the one-shot backfill that re-queued
+the pre-existing banner captures is `Vutuv.Release.requeue_youtube_screenshots/0`
+(`Screenshots.requeue_youtube/0`).
+
 A link that does **not answer a plain HTTP 200** is rejected at capture time by
 `ensure_http_ok/1`, a `redirect: false` GET probe the worker runs before Chromium
 (GET, not HEAD, so a server that 405s HEAD on a real 200 page isn't wrongly

@@ -20,6 +20,12 @@ defmodule Vutuv.Posts.Screenshots do
   row is the scope, exactly like a `Url`), so the stored file is the same
   400×264 AVIF thumb with the `/images/screenshot.png` fallback. The capture is
   gated by the `:generate_screenshots` flag (intranet installs run air-gapped).
+
+  **YouTube links don't screenshot.** A watch page always answers with the
+  cookie-consent banner, so a capture never shows the video; the worker stores
+  the thumbnail YouTube publishes for every video instead, frameless
+  (`Vutuv.YoutubeThumbnail`), and falls back to the ordinary capture whenever
+  that fetch fails.
   """
 
   import Ecto.Query
@@ -29,6 +35,7 @@ defmodule Vutuv.Posts.Screenshots do
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Repo
   alias Vutuv.SocialFeed.Http
+  alias Vutuv.YoutubeThumbnail
 
   require Logger
 
@@ -231,6 +238,34 @@ defmodule Vutuv.Posts.Screenshots do
 
   def requeue(%PostScreenshot{}), do: {:error, :not_requeueable}
 
+  @doc """
+  Puts every finished job whose URL is a YouTube video back in the queue, so
+  the worker replaces its stored capture with the video's own thumbnail
+  (`Vutuv.YoutubeThumbnail`) — the one-shot backfill for captures from before
+  that existed, which all show YouTube's consent banner. `ready` and `failed`
+  rows alike get a clean pending slate; an author-`dismissed` tombstone stays
+  dismissed (their call, and the thumbnail may be exactly what they removed).
+  Returns the number re-queued. On a release, run it via
+  `Vutuv.Release.requeue_youtube_screenshots/0`.
+  """
+  def requeue_youtube do
+    from(ps in PostScreenshot, where: ps.status in ["ready", "failed"])
+    |> Repo.all()
+    |> Enum.filter(&match?({:ok, _id}, YoutubeThumbnail.video_id(&1.url)))
+    |> Enum.map(fn job ->
+      {:ok, _requeued} =
+        job
+        |> Ecto.Changeset.change(
+          status: "pending",
+          attempts: 0,
+          next_attempt_at: nil,
+          last_error: nil
+        )
+        |> Repo.update()
+    end)
+    |> length()
+  end
+
   @doc "Loads one job by id, raising when it is gone (the admin views' reads)."
   def get_job!(id), do: Repo.get!(PostScreenshot, id)
 
@@ -307,10 +342,54 @@ defmodule Vutuv.Posts.Screenshots do
   defp permanent_failure?({:bad_status, _status}), do: true
   defp permanent_failure?(_reason), do: false
 
-  # The real capture: capture only a plain HTTP-200 link, then reuse the shared
-  # pipeline and store through the same uploader profile links use. Returns the
-  # stored filename + display size.
+  # The real capture. A YouTube video link stores the thumbnail YouTube itself
+  # publishes (a watch-page capture only ever shows the consent banner); every
+  # other link — and any YouTube fetch trouble — takes the Chromium path.
   defp capture_and_store(%PostScreenshot{} = job) do
+    case youtube_capture(job) do
+      {:ok, result} -> {:ok, result}
+      :fallback -> page_capture_and_store(job)
+    end
+  end
+
+  # The YouTube branch: `{:ok, result}` with the stored thumbnail, or
+  # `:fallback` — not a YouTube video URL, a video oEmbed doesn't know
+  # (deleted, private), fetch or store trouble — and the caller then captures
+  # the page like any other link.
+  defp youtube_capture(%PostScreenshot{} = job) do
+    with {:ok, video_id} <- YoutubeThumbnail.video_id(job.url),
+         {:ok, bytes} <- YoutubeThumbnail.fetch(video_id) do
+      store_thumbnail(job, bytes)
+    else
+      :error -> :fallback
+    end
+  end
+
+  # Stored raw — no browser frame: the thumbnail is the video's artwork, not a
+  # captured web page, so browser chrome around it would be a lie.
+  defp store_thumbnail(%PostScreenshot{} = job, bytes) do
+    tmp = Path.join(System.tmp_dir!(), "yt_thumb_#{job.id}.jpg")
+
+    try do
+      File.write!(tmp, bytes)
+      upload = %Plug.Upload{content_type: "image/jpeg", filename: "#{job.id}.jpg", path: tmp}
+
+      case Vutuv.Screenshot.store({upload, job}) do
+        {:ok, file_name} ->
+          {:ok, %{screenshot: file_name, width: @display_width, height: @display_height}}
+
+        {:error, _reason} ->
+          :fallback
+      end
+    after
+      File.rm(tmp)
+    end
+  end
+
+  # The classic capture: capture only a plain HTTP-200 link, then reuse the
+  # shared pipeline and store through the same uploader profile links use.
+  # Returns the stored filename + display size.
+  defp page_capture_and_store(%PostScreenshot{} = job) do
     with :ok <- ensure_http_ok(job.url),
          {:ok, framed_path} <- Vutuv.PageScreenshot.capture_framed(job.url, job.id) do
       upload = %Plug.Upload{

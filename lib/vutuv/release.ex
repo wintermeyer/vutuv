@@ -8,6 +8,7 @@ defmodule Vutuv.Release do
   """
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.ReviewCovers
+  alias Vutuv.Posts.Screenshots
   alias Vutuv.Uploads.LegacyRelabel
   alias Vutuv.Uploads.LegacySweeper
   alias Vutuv.Uploads.Regenerator
@@ -239,6 +240,25 @@ defmodule Vutuv.Release do
   defp print_opinion(opinion) do
     verdict = if opinion["safe"], do: "safe", else: "unsafe"
     IO.puts("    - #{verdict} (#{opinion["category"]}): #{opinion["reason"]}")
+  end
+
+  @doc """
+  Re-queues every finished YouTube link screenshot so the worker replaces the
+  old consent-banner captures with the video's own thumbnail — the one-shot
+  backfill after the thumbnail capture shipped
+  (`Vutuv.Posts.Screenshots.requeue_youtube/0`):
+
+      bin/vutuv eval "Vutuv.Release.requeue_youtube_screenshots()"
+  """
+  def requeue_youtube_screenshots do
+    load_app()
+    [repo] = repos()
+
+    {:ok, count, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo -> Screenshots.requeue_youtube() end)
+
+    IO.puts("requeue_youtube_screenshots: #{count} job(s) re-queued")
+    count
   end
 
   defp repos do

@@ -482,4 +482,160 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       refute Repo.get_by(PostScreenshot, post_id: post.id)
     end
   end
+
+  describe "deliver_due/1 with a YouTube link (thumbnail instead of Chromium)" do
+    # These run the REAL capture path (no capture: stub): the YouTube fetch is
+    # stubbed via :youtube_thumbnail_req_options, the page probe via
+    # :post_screenshot_req_options, and stored files land in a tmp uploads dir.
+    setup do
+      tmp = Path.join(System.tmp_dir!(), "vutuv_yt_shots_#{System.unique_integer([:positive])}")
+      previous = Application.get_env(:vutuv, :uploads_dir_prefix)
+      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
+      on_exit(fn ->
+        File.rm_rf(tmp)
+
+        if previous,
+          do: Application.put_env(:vutuv, :uploads_dir_prefix, previous),
+          else: Application.delete_env(:vutuv, :uploads_dir_prefix)
+
+        Application.delete_env(:vutuv, :youtube_thumbnail_req_options)
+        Application.delete_env(:vutuv, :post_screenshot_req_options)
+      end)
+
+      # A real (tiny) JPEG: the store path opens it with libvips.
+      fixture = Path.join(tmp, "fixture.jpg")
+      File.mkdir_p!(tmp)
+      {:ok, img} = Image.new(64, 36, color: [200, 30, 30])
+      {:ok, _} = Image.write(img, fixture)
+      jpeg_bytes = File.read!(fixture)
+
+      {:ok, tmp: tmp, jpeg: jpeg_bytes}
+    end
+
+    defp stub_youtube(fun) when is_function(fun),
+      do: Application.put_env(:vutuv, :youtube_thumbnail_req_options, plug: fun)
+
+    defp youtube_post(author),
+      do: create_post!(author, %{body: "https://www.youtube.com/watch?v=EZ05e7EMOLM"})
+
+    test "stores the video's thumbnail raw — no page probe, no Chromium", %{
+      tmp: tmp,
+      jpeg: jpeg
+    } do
+      post = youtube_post(user())
+      {:ok, job} = Screenshots.reconcile(post)
+
+      test_pid = self()
+      maxres = "/vi/EZ05e7EMOLM/maxresdefault.jpg"
+
+      stub_youtube(fn conn ->
+        cond do
+          conn.request_path == "/oembed" ->
+            send(test_pid, :oembed_checked)
+
+            conn
+            |> Plug.Conn.put_resp_content_type("application/json")
+            |> Plug.Conn.send_resp(200, ~s({"title":"stub"}))
+
+          conn.request_path == maxres ->
+            conn
+            |> Plug.Conn.put_resp_content_type("image/jpeg", nil)
+            |> Plug.Conn.send_resp(200, jpeg)
+        end
+      end)
+
+      # If the classic path ran anyway, this probe answer would mark the job
+      # for retry (attempts 1), never ready — so "ready with 0 attempts"
+      # proves the page was neither probed nor captured.
+      stub_probe(500)
+
+      Screenshots.deliver_due(force: true)
+
+      job = Screenshots.get_job!(job.id)
+      assert job.status == "ready"
+      assert job.attempts == 0
+      # The classic path stores .webp (framed capture); the thumbnail is .jpg.
+      assert String.ends_with?(job.screenshot, ".jpg")
+      assert_received :oembed_checked
+
+      thumb_name = "thumb-#{Path.rootname(job.screenshot)}.avif"
+      assert File.exists?(Path.join([tmp, "screenshots", job.id, thumb_name]))
+    end
+
+    test "falls back to the page capture when YouTube doesn't know the video" do
+      post = youtube_post(user())
+      {:ok, job} = Screenshots.reconcile(post)
+
+      stub_youtube(fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/plain")
+        |> Plug.Conn.send_resp(404, "Not Found")
+      end)
+
+      # The fallback probes the page; a 301 is a permanent refusal, so hitting
+      # exactly that state proves the classic path took over.
+      stub_probe(301)
+
+      Screenshots.deliver_due(force: true)
+
+      job = Screenshots.get_job!(job.id)
+      assert job.status == "failed"
+      assert job.last_error == ":redirect"
+    end
+
+    test "a non-YouTube link never calls the YouTube seam" do
+      post = url_post(user())
+      {:ok, job} = Screenshots.reconcile(post)
+
+      test_pid = self()
+
+      stub_youtube(fn conn ->
+        send(test_pid, :youtube_called)
+        Plug.Conn.send_resp(conn, 500, "")
+      end)
+
+      stub_probe(301)
+
+      Screenshots.deliver_due(force: true)
+
+      assert Screenshots.get_job!(job.id).status == "failed"
+      refute_received :youtube_called
+    end
+  end
+
+  describe "requeue_youtube/0 (backfill after the thumbnail capture shipped)" do
+    defp youtube_job(author, video_id, status) do
+      post = create_post!(author, %{body: "https://youtu.be/#{video_id}"})
+      {:ok, job} = Screenshots.reconcile(post)
+
+      Repo.update!(
+        Ecto.Changeset.change(job,
+          status: status,
+          attempts: Screenshots.max_attempts(),
+          last_error: ":timeout"
+        )
+      )
+    end
+
+    test "re-queues finished YouTube jobs; other URLs and dismissed rows stay" do
+      author = user()
+
+      yt_ready = youtube_job(author, "AAAAAAAAAA1", "ready")
+      yt_failed = youtube_job(author, "AAAAAAAAAA2", "failed")
+      yt_dismissed = youtube_job(author, "AAAAAAAAAA3", "dismissed")
+      {_post, other_ready} = ready_post(author)
+
+      assert Screenshots.requeue_youtube() == 2
+
+      requeued = Screenshots.get_job!(yt_ready.id)
+      assert requeued.status == "pending"
+      assert requeued.attempts == 0
+      assert requeued.last_error == nil
+
+      assert Screenshots.get_job!(yt_failed.id).status == "pending"
+      assert Screenshots.get_job!(yt_dismissed.id).status == "dismissed"
+      assert Screenshots.get_job!(other_ready.id).status == "ready"
+    end
+  end
 end

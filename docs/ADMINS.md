@@ -169,7 +169,9 @@ and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
 `:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's
 GitHub/GitLab/Codeberg statistics), `:generate_screenshots` (profile link
 previews **and** the auto-screenshot for single-link posts — admins watch the
-capture queue and browse the gallery at `/admin/screenshots`), and
+capture queue and browse the gallery at `/admin/screenshots`; a YouTube video
+link stores the video's published thumbnail instead of a capture, fetched
+server-side from YouTube under this same flag), and
 `:serve_uploads_locally` (see nginx below).
 
 ## systemd

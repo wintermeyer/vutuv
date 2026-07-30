@@ -104,6 +104,14 @@ window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on
 `$PATH`)
 
+One exception skips Chromium entirely: a **YouTube video link** in a post
+stores the thumbnail YouTube publishes for every video instead
+(`Vutuv.YoutubeThumbnail`: keyless oEmbed existence check, then
+`maxresdefault.jpg` → `hqdefault.jpg`), frameless — a capture of the watch
+page only ever shows the cookie-consent banner. Any fetch failure falls back
+to the ordinary capture; see the link-screenshots section in
+[posts-and-feed.md](posts-and-feed.md).
+
 Some hosts never yield a useful shot — they answer a headless capture with a
 login/consent wall or block bots outright — so a **screenshot blocklist**
 (`:screenshot_blocked_hosts`, default `["reddit.com"]`, override with
