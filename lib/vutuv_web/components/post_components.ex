@@ -2329,6 +2329,7 @@ defmodule VutuvWeb.PostComponents do
                 permalink={@permalink}
                 license={@post.license}
                 layout={@post.gallery_layout}
+                fill={@post.gallery_fill?}
               />
             <% true -> %>
               <.post_gallery
@@ -2617,6 +2618,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:permalink, :string, required: true)
   attr(:license, :string, default: nil, doc: "the post's license, for the lightbox panel")
   attr(:layout, :string, default: nil, doc: "the post's chosen bento arrangement; nil = auto")
+  attr(:fill, :boolean, default: false, doc: "tiles filled (cropping) vs whole photos")
 
   defp post_gallery(%{mode: :preview} = assigns), do: mosaic(assigns)
 
@@ -2674,10 +2676,13 @@ defmodule VutuvWeb.PostComponents do
     * **The layout follows the shapes.** A portrait hero gets a tall
       left-hand tile and the mosaic a portrait-ish frame; a landscape hero
       gets a wide top tile and a landscape frame
-      (`VutuvWeb.PostComponents.mosaic_layout/1`). A mosaic crops — that is
-      what makes it a mosaic — and choosing the frame from the photos is what
-      keeps the crop gentle instead of chopping every picture to one
-      hardcoded band.
+      (`VutuvWeb.PostComponents.mosaic_layout/1`). By default every photo
+      shows **whole**, letterboxed inside its tile (`fill={false}`); the
+      author can switch the tiles to *filled* instead, where the photo covers
+      its tile and is cropped by it — and choosing the frame from the photos
+      is what keeps that crop gentle instead of chopping every picture to one
+      hardcoded band. Either way the orientation-tuned frames matter: they
+      minimise the letterboxing or the crop alike.
 
     * **It stays one glance tall.** At most five tiles show; a sixth and
       beyond fold into a `+N` on the last one, and the whole block is capped,
@@ -2692,6 +2697,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:gallery, :list, required: true)
   attr(:permalink, :string, required: true)
   attr(:layout, :string, default: nil)
+  attr(:fill, :boolean, default: false)
 
   def mosaic(assigns) do
     layout = mosaic_layout(assigns.gallery, assigns.layout)
@@ -2711,11 +2717,14 @@ defmodule VutuvWeb.PostComponents do
         class="relative overflow-hidden bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-800"
         style={"grid-area: #{cell.area}"}
       >
+        <%!-- Whole photos by default: object-contain letterboxes a photo
+        inside its tile instead of cropping it — nobody's picture loses its
+        edges unless the author switched the tiles to "filled". --%>
         <img
           src={PostImage.url(cell.image, "feed")}
           alt={photo_alt(cell.image)}
           loading="lazy"
-          class="h-full w-full object-cover"
+          class={["h-full w-full", (@fill && "object-cover") || "object-contain"]}
         />
         <%!-- The overflow badge sits on the last visible tile and dims it, so
         the count reads as "there are more behind this" rather than as a label

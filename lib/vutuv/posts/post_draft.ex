@@ -57,6 +57,9 @@ defmodule Vutuv.Posts.PostDraft do
     field(:photos, :map, default: %{})
     # The chosen bento arrangement (Vutuv.Posts.GalleryLayout); nil = auto.
     field(:layout, :string)
+    # Whether the bento tiles are filled (cropped) rather than showing whole
+    # photos — the composer's fit pair, default whole.
+    field(:fill?, :boolean, default: false)
 
     timestamps()
   end
@@ -73,7 +76,7 @@ defmodule Vutuv.Posts.PostDraft do
   """
   def changeset(draft, attrs) do
     draft
-    |> cast(attrs, [:body, :tags, :license, :review, :image_ids, :photos, :layout])
+    |> cast(attrs, [:body, :tags, :license, :review, :image_ids, :photos, :layout, :fill?])
     |> validate_length(:body, max: Post.max_body_length())
     |> validate_length(:tags, max: @max_tags_length)
   end

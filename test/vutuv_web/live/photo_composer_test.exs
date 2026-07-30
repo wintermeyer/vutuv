@@ -946,6 +946,52 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert only_post(user).gallery_layout == nil
     end
 
+    test "whole photos are the default fit; filling the tiles is the explicit choice", %{
+      live: live,
+      user: user
+    } do
+      upload_photo!(live, user)
+      upload_photo!(live, user)
+
+      # The pair renders, "whole" in force, and the preview shows whole photos.
+      assert has_element?(live, ~s([data-bento-fit="whole"][aria-pressed="true"]))
+      assert has_element?(live, ~s([data-bento-fit="fill"][aria-pressed="false"]))
+      assert has_element?(live, "[data-bento-preview] img.object-contain")
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Whole."}}) |> render_submit()
+      assert only_post(user).gallery_fill? == false
+    end
+
+    test "switching to filled tiles crops the preview and the save stores it", %{
+      live: live,
+      user: user
+    } do
+      upload_photo!(live, user)
+      upload_photo!(live, user)
+
+      live |> element(~s([data-bento-fit="fill"])) |> render_click()
+      assert has_element?(live, ~s([data-bento-fit="fill"][aria-pressed="true"]))
+      assert has_element?(live, "[data-bento-preview] img.object-cover")
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Filled."}}) |> render_submit()
+      assert only_post(user).gallery_fill? == true
+    end
+
+    test "the fit rides the draft and comes back on reload", %{
+      conn: conn,
+      live: live,
+      user: user
+    } do
+      upload_photo!(live, user)
+      upload_photo!(live, user)
+
+      live |> element(~s([data-bento-fit="fill"])) |> render_click()
+      assert %Posts.PostDraft{fill?: true} = Posts.get_draft(user)
+
+      {:ok, reopened, _html} = live(conn, ~p"/feed")
+      assert has_element?(reopened, ~s([data-bento-fit="fill"][aria-pressed="true"]))
+    end
+
     test "the chosen arrangement rides the draft and comes back on reload", %{
       conn: conn,
       live: live,
@@ -1099,6 +1145,8 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert html =~ "Foto zuschneiden"
       assert html =~ "Nebeneinander"
       assert html =~ "Fotos hier ablegen, um sie hinzuzufügen"
+      assert html =~ "Ganze Fotos"
+      assert html =~ "Kacheln füllen"
     end
   end
 end

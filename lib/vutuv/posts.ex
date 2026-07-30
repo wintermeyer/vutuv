@@ -454,9 +454,15 @@ defmodule Vutuv.Posts do
         license -> Map.put(params, :license, license)
       end
 
-    case fetch(attrs, :layout) do
+    params =
+      case fetch(attrs, :layout) do
+        nil -> params
+        layout -> Map.put(params, :gallery_layout, layout)
+      end
+
+    case fetch(attrs, :fill) do
       nil -> params
-      layout -> Map.put(params, :gallery_layout, layout)
+      fill -> Map.put(params, :gallery_fill?, fill)
     end
   end
 
@@ -3724,7 +3730,7 @@ defmodule Vutuv.Posts do
         |> Repo.insert(
           on_conflict:
             {:replace,
-             [:body, :tags, :license, :review, :image_ids, :photos, :layout, :updated_at]},
+             [:body, :tags, :license, :review, :image_ids, :photos, :layout, :fill?, :updated_at]},
           conflict_target: draft_conflict_target(context)
         )
         |> case do

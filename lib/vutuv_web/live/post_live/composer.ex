@@ -156,6 +156,9 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:open_photo, nil)
     # The chosen bento arrangement (Vutuv.Posts.GalleryLayout); nil = auto.
     |> assign(:layout, (post && post.gallery_layout) || nil)
+    # Whether the bento tiles are filled (cropped) rather than showing whole
+    # photos. Default whole — nobody's picture loses its edges unasked.
+    |> assign(:fill?, (post && post.gallery_fill?) == true)
     # The first half of a tap-tap swap in the bento preview: the id of the
     # photo tapped first, highlighted until its partner (or the same photo
     # again, to cancel) is tapped. Event-driven on purpose — tap-tap needs no
@@ -234,6 +237,7 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:photos, photo_state_from_draft(draft, images))
       |> assign(:license, PhotoLicense.cast(draft.license || assigns.license))
       |> assign(:layout, GalleryLayout.cast(draft.layout))
+      |> assign(:fill?, draft.fill? == true)
       |> assign(:restored_draft?, true)
     else
       _no_draft -> socket
@@ -310,7 +314,8 @@ defmodule VutuvWeb.PostLive.Composer do
         "review" => assigns.review,
         "image_ids" => Enum.map(assigns.images, & &1.id),
         "photos" => Map.new(assigns.photos, fn {id, settings} -> {id, stringify(settings)} end),
-        "layout" => assigns.layout
+        "layout" => assigns.layout,
+        "fill?" => assigns.fill?
       })
     end
 
@@ -809,6 +814,15 @@ defmodule VutuvWeb.PostLive.Composer do
      |> schedule_draft_save()}
   end
 
+  # The fit pair: whole photos (default — the mosaic letterboxes) vs filled
+  # tiles (object-cover, the tile crops the photo).
+  def handle_event("mosaic-fit", %{"fill" => fill}, socket) do
+    {:noreply,
+     socket
+     |> assign(:fill?, fill == "true")
+     |> schedule_draft_save()}
+  end
+
   # The crop dialog's verdict (assets/js/photo_crop.js): ratio-crop fractions,
   # or "" for "show the whole photo again". The heavy lifting — re-deriving
   # every served version from the kept original — is `Posts.crop_image/2`;
@@ -899,7 +913,8 @@ defmodule VutuvWeb.PostLive.Composer do
       image_ids: Enum.map(socket.assigns.images, & &1.id),
       # Event-driven like the person denials (the chips are buttons, not form
       # fields), so the assign is the truth; "" clears back to automatic.
-      layout: socket.assigns.layout || ""
+      layout: socket.assigns.layout || "",
+      fill: socket.assigns.fill?
     }
 
     socket.assigns
@@ -1061,6 +1076,7 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:photos, %{})
     |> assign(:open_photo, nil)
     |> assign(:layout, nil)
+    |> assign(:fill?, false)
     |> assign(:swap_photo, nil)
     |> assign(:photo_details_open?, false)
     |> assign(:error, nil)
@@ -1572,6 +1588,49 @@ defmodule VutuvWeb.PostLive.Composer do
               </button>
             </div>
 
+            <%!-- The fit pair: whole photos (default) or tiles filled by
+            their photos, which crops them. Whole is the default on purpose —
+            nobody's picture loses its edges unless the author asks. --%>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                phx-click="mosaic-fit"
+                phx-value-fill="false"
+                phx-target={@myself}
+                aria-pressed={to_string(not @fill?)}
+                data-bento-fit="whole"
+                class={[
+                  "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold",
+                  (!@fill? &&
+                     "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+                    "text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
+                ]}
+              >
+                {gettext("Whole photos")}
+              </button>
+              <button
+                type="button"
+                phx-click="mosaic-fit"
+                phx-value-fill="true"
+                phx-target={@myself}
+                aria-pressed={to_string(@fill?)}
+                data-bento-fit="fill"
+                class={[
+                  "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold",
+                  (@fill? &&
+                     "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+                    "text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
+                ]}
+              >
+                {gettext("Fill the tiles")}
+              </button>
+              <span class="text-xs text-slate-600 dark:text-slate-400">
+                {if @fill?,
+                  do: gettext("Each photo covers its tile and is cropped by it."),
+                  else: gettext("Each photo shows whole inside its tile.")}
+              </span>
+            </div>
+
             <div
               class="mt-2 grid gap-1 overflow-hidden rounded-lg"
               style={"aspect-ratio: #{@bento.aspect}; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); max-height: 44rem"}
@@ -1593,7 +1652,7 @@ defmodule VutuvWeb.PostLive.Composer do
                 <img
                   src={PostImage.url(cell.image, "feed")}
                   alt=""
-                  class="h-full w-full object-cover"
+                  class={["h-full w-full", (@fill? && "object-cover") || "object-contain"]}
                 />
                 <span
                   :if={@swap_photo == cell.image.id}

@@ -18,6 +18,11 @@ defmodule Vutuv.Posts.Post do
     # orientation-driven choice). Presentation only — the agent formats list
     # the photos regardless of how the HTML tiles them.
     field(:gallery_layout, :string)
+    # Whether the bento tiles are FILLED by their photos (object-cover, which
+    # crops them to the tile). Default false: the mosaic shows whole photos,
+    # letterboxed inside their tiles — nobody's picture loses its edges
+    # without the author asking for it.
+    field(:gallery_fill?, :boolean, default: false)
 
     # The license the post's photos are published under (issue #1104), from
     # the fixed `Vutuv.Posts.PhotoLicense` vocabulary. It rides on the post,
@@ -80,7 +85,7 @@ defmodule Vutuv.Posts.Post do
     post
     # empty_values: [] so clearing the body on edit is a real change ("" must
     # not be swallowed as "no change") — a photo-only post has an empty body.
-    |> cast(params, [:body, :license, :gallery_layout], empty_values: [])
+    |> cast(params, [:body, :license, :gallery_layout, :gallery_fill?], empty_values: [])
     |> update_change(:body, &String.trim/1)
     |> validate_length(:body, max: @max_body_length)
     # An unknown licence becomes the safe default rather than a validation

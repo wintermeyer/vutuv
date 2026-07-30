@@ -721,6 +721,16 @@ hero's own shape. Swapping photos in the preview is **tap-tap** (`mosaic-swap`:
 first tap marks, second trades places), which needs no drag and therefore
 works identically on a phone; the grid's ◀ ▶ arrows and drag reorder stay.
 
+The workshop also owns the **fit pair** ("Whole photos" / "Fill the tiles",
+`mosaic-fit`): by default the mosaic shows every photo **whole**, letterboxed
+inside its tile (`object-contain` — nobody's picture loses its edges
+unasked); "fill" switches the tiles to the old `object-cover` behaviour,
+where the photo covers its tile and is cropped by it. Stored as
+`posts.gallery_fill?` (default false — which deliberately flips existing
+posts to whole-photo rendering too, decided 2026-07-30), drafted as
+`post_drafts.fill?`. The orientation-tuned frames matter in both modes: they
+minimise the letterboxing exactly where they used to minimise the crop.
+
 ### A post waits for all of its photos
 
 A post carrying a picture that has not finished the AI image scan is held back

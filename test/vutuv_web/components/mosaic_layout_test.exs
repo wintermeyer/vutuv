@@ -173,6 +173,33 @@ defmodule VutuvWeb.MosaicLayoutTest do
     end
   end
 
+  describe "the fit (whole photos vs filled tiles)" do
+    import Phoenix.LiveViewTest
+
+    test "shows whole photos by default: object-contain, never object-cover" do
+      html =
+        render_component(&PostComponents.mosaic/1,
+          gallery: [portrait(), landscape()],
+          permalink: "/x"
+        )
+
+      assert html =~ "object-contain"
+      refute html =~ "object-cover"
+    end
+
+    test "fills the tiles (cropping) only when the author chose it" do
+      html =
+        render_component(&PostComponents.mosaic/1,
+          gallery: [portrait(), landscape()],
+          permalink: "/x",
+          fill: true
+        )
+
+      assert html =~ "object-cover"
+      refute html =~ "object-contain"
+    end
+  end
+
   describe "more than five photos" do
     test "shows five tiles and folds the rest into a count on the last one" do
       layout = PostComponents.mosaic_layout(List.duplicate(landscape(), 9))
