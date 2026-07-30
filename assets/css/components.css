@@ -1843,14 +1843,13 @@ ul.thumbs li .text .url a {
   /* Finger-sized toolbar targets on a phone (the desktop 1.9rem is a mouse
      target). The gap goes to zero so the top row still fits across a narrow
      screen: the buttons themselves are what has to grow, not the spacing.
-     2.25rem, not the 2.5rem the touch-target rule asks for, is arithmetic
-     rather than preference: the eight controls a phone shows (B, I, link,
-     emoji, photo, the chevron, MD, full screen) get 295px of toolbar inside a
-     390px viewport once the page gutter, the card padding, the frame border and
-     the toolbar padding are paid for, and 8 x 2.5rem is 320px. So 2.5rem would
-     buy 4px of finger and cost a whole wrapped row on every phone. Below 390px
-     (an SE, a small Android) it still wraps, which is the accepted floor:
-     shrinking further to chase it would put us under 32px. */
+     The size is arithmetic, not preference. The phone's row carries eight
+     controls (B, I, link, emoji, photo, the chevron, then MD and full screen
+     pushed right by the spacer), and the toolbar's own width is the viewport
+     minus the page gutter (32), the card padding (48), the frame border (2)
+     and its own padding (13). So the row fits when 8 x <size> is under that:
+     295px at a 390px viewport takes 2.25rem (288px) but not 2.5rem (320px),
+     which is why the touch-target rule's ~40px is not reachable here. */
   .mde__toolbar { gap: 0; }
   .mde__btn { min-width: 2.25rem; height: 2.25rem; padding: 0 0.2rem; }
   .mde__toolbar:not(.is-open) .mde__more-row { display: none; }
@@ -1861,6 +1860,21 @@ ul.thumbs li .text .url a {
     margin-top: 0.25rem;
   }
   .mde__toolbar.is-open .mde__more-toggle svg { transform: rotate(180deg); }
+}
+
+/* Under 25rem (400px) those same eight controls have to fit into as little as
+   265px (a 360px Android), 280px (an SE / mini at 375px) or 295px (a 390px
+   iPhone), so they step down to 2rem = 256px and MD + full screen stay up on
+   the first row instead of wrapping onto a second one (Stefan, 2026-07-30).
+   The boundary is 25rem rather than the 24rem where 2.25rem *just* stops
+   fitting, because "just" was one pixel of slack at 384px: a step needs room
+   for a scrollbar or a rounding difference, not a photo finish. A 320px
+   viewport (or a desktop window zoomed until its CSS width is that narrow) has
+   225px and wraps whatever we do: fitting it would mean 28px targets, and a
+   wrapped toolbar is the better trade at that point. */
+@media (width < 25rem) {
+  .mde__btn { min-width: 2rem; height: 2rem; padding: 0 0.15rem; }
+  .mde__btn svg { width: 0.95rem; height: 0.95rem; }
 }
 
 /* ProseMirror base (adapted from @milkdown/prose), scoped to .mde so it can't
