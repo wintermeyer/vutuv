@@ -26,11 +26,21 @@ defmodule Vutuv.MastodonTest do
       send(test_pid, {:req, conn.request_path, conn.query_string})
 
       case conn.request_path do
-        "/api/v1/accounts/lookup" -> Plug.Conn.send_resp(conn, 200, Jason.encode!(lookup))
-        "/api/v1/accounts/42/statuses" -> Plug.Conn.send_resp(conn, 200, Jason.encode!(statuses))
+        "/api/v1/accounts/lookup" -> json_resp(conn, lookup)
+        "/api/v1/accounts/42/statuses" -> json_resp(conn, statuses)
         "/avatars/alice.png" -> avatar.(conn)
       end
     end)
+  end
+
+  # A real Mastodon server marks its answers `application/json`, and Req's
+  # decode step branches on exactly that header — a stub without it leaves the
+  # body a binary and cannot catch a client that no longer receives one (the
+  # v7.95.4 regression). Every JSON stub must answer content-typed.
+  defp json_resp(conn, payload) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.send_resp(200, Jason.encode!(payload))
   end
 
   defp avatar_ok(conn) do

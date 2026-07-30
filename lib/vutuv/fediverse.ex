@@ -5941,6 +5941,12 @@ defmodule Vutuv.Fediverse do
           connect_options: [timeout: 2_000],
           retry: false,
           redirect: false,
+          # The callers `Jason.decode` the body themselves, so Req's own decode
+          # step must stay off — `into:` does NOT imply that. Today only the
+          # MIME registry's ignorance of `application/activity+json` keeps the
+          # body a binary; a server answering plain `application/json` (spec
+          # legal) would arrive decoded and fail the `is_binary` path.
+          decode_body: false,
           # Stream with a hard ceiling: fetch_remote_actor runs synchronously in
           # the inbox web request against an attacker-controlled host BEFORE the
           # signature check, so a multi-GB body must be dropped during receipt,

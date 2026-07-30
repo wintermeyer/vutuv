@@ -38,15 +38,25 @@ defmodule Vutuv.BlueskyTest do
 
       case conn.request_path do
         "/xrpc/app.bsky.actor.getProfile" ->
-          Plug.Conn.send_resp(conn, 200, Jason.encode!(profile))
+          json_resp(conn, profile)
 
         "/xrpc/app.bsky.feed.getAuthorFeed" ->
-          Plug.Conn.send_resp(conn, 200, Jason.encode!(%{"feed" => items}))
+          json_resp(conn, %{"feed" => items})
 
         "/img/avatar/alice.jpg" ->
           avatar.(conn)
       end
     end)
+  end
+
+  # The real AppView marks its answers `application/json`, and Req's decode
+  # step branches on exactly that header — a stub without it leaves the body a
+  # binary and cannot catch a client that no longer receives one (the
+  # v7.95.4 regression). Every JSON stub must answer content-typed.
+  defp json_resp(conn, payload) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.send_resp(200, Jason.encode!(payload))
   end
 
   defp avatar_ok(conn) do

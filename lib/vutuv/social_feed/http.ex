@@ -37,6 +37,11 @@ defmodule Vutuv.SocialFeed.Http do
       connect_options: [timeout: 2_000],
       retry: false,
       redirect: false,
+      # The callers decode the body themselves behind `is_binary` guards, so
+      # Req's own decode step must stay off — `into:` does NOT imply that (it
+      # still runs over the collected body, and the real APIs answer
+      # `application/json`); losing this line broke every fetch in v7.95.4.
+      decode_body: false,
       # Stream with a hard ceiling so a hostile large body is dropped during
       # receipt; the per-use post-checks (decode/1, fetch_avatar/2) still enforce
       # their exact JSON / avatar limits.

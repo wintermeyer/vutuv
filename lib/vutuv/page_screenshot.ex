@@ -273,6 +273,10 @@ defmodule Vutuv.PageScreenshot do
       connect_options: [timeout: 3_000],
       retry: false,
       redirect: false,
+      # The body is never read, so Req must not spend work on (or fail over)
+      # decoding it — a member link answering malformed `application/json`
+      # would otherwise error the probe.
+      decode_body: false,
       into: Vutuv.Http.capped_collector(@probe_max_body_bytes),
       headers: [{"user-agent", Http.user_agent()}]
     ]

@@ -12,6 +12,16 @@ defmodule Vutuv.CodeStats.ClientsTest do
     on_exit(fn -> Application.delete_env(:vutuv, options_key) end)
   end
 
+  # The real forge APIs mark their answers `application/json`, and Req's decode
+  # step branches on exactly that header — a stub without it leaves the body a
+  # binary and cannot catch a client that no longer receives one (the v7.95.4
+  # regression). Every 200-JSON stub must answer content-typed.
+  defp json_resp(conn, json) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.send_resp(200, json)
+  end
+
   describe "Snapshot.build/2" do
     test "aggregates own repos only, forks still count for last activity" do
       own = %{
@@ -85,7 +95,7 @@ defmodule Vutuv.CodeStats.ClientsTest do
 
   describe "GitLab.fetch_stats/1" do
     test "an empty username lookup is gone" do
-      stub(:gitlab_req_options, fn conn -> Plug.Conn.send_resp(conn, 200, "[]") end)
+      stub(:gitlab_req_options, fn conn -> json_resp(conn, "[]") end)
       assert GitLab.fetch_stats("nobody") == {:error, :gone}
     end
 
@@ -93,17 +103,12 @@ defmodule Vutuv.CodeStats.ClientsTest do
       stub(:gitlab_req_options, fn conn ->
         case conn.request_path do
           "/api/v4/users" ->
-            Plug.Conn.send_resp(
-              conn,
-              200,
-              Jason.encode!([%{"id" => 7, "created_at" => "2015-03-01T00:00:00Z"}])
-            )
+            json_resp(conn, Jason.encode!([%{"id" => 7, "created_at" => "2015-03-01T00:00:00Z"}]))
 
           "/api/v4/users/7/projects" ->
             conn
             |> Plug.Conn.put_resp_header("x-total", "120")
-            |> Plug.Conn.send_resp(
-              200,
+            |> json_resp(
               Jason.encode!([
                 %{
                   "path" => "tool",
@@ -137,17 +142,15 @@ defmodule Vutuv.CodeStats.ClientsTest do
       stub(:codeberg_req_options, fn conn ->
         case conn.request_path do
           "/api/v1/users/dev" ->
-            Plug.Conn.send_resp(
+            json_resp(
               conn,
-              200,
               Jason.encode!(%{"followers_count" => 9, "created" => "2020-11-11T00:00:00Z"})
             )
 
           "/api/v1/users/dev/repos" ->
             conn
             |> Plug.Conn.put_resp_header("x-total-count", "61")
-            |> Plug.Conn.send_resp(
-              200,
+            |> json_resp(
               Jason.encode!([
                 %{
                   "name" => "berg",

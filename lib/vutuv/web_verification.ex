@@ -199,6 +199,11 @@ defmodule Vutuv.WebVerification do
         connect_options: [timeout: 2_000],
         retry: false,
         redirect: false,
+        # The callers read the body as a binary (`is_binary` guards), so Req's
+        # own decode step must stay off — `into:` does NOT imply that, and a
+        # member's server may well mark a well-known answer `application/json`,
+        # which Req would decode into a map.
+        decode_body: false,
         # Stream with a hard byte ceiling so a hostile large body is dropped
         # during receipt instead of being buffered whole and truncated after the
         # fact (the @max_*_bytes cap then bounds memory for real).
