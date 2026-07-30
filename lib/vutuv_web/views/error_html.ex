@@ -23,6 +23,46 @@ defmodule VutuvWeb.ErrorHTML do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
+  # A request the server could not read (issue #1227): a mangled multipart
+  # body raises in the endpoint (invalid UTF-8 in a text part, or all fields
+  # dropped over a defective Content-Disposition) before any controller runs,
+  # so no per-form message can help — and the fallback used to be the bare
+  # words "Bad Request", a dead end. Say what happened, that reload + resend
+  # usually clears it, and give the recurring case a bug-report path.
+  def render("400.html", assigns) do
+    assigns = Map.new(assigns)
+
+    ~H"""
+    <div class="error-page">
+      <p class="error-page__code">400</p>
+      <h1 class="error-page__title">
+        {gettext("Your browser sent a request we could not read.")}
+      </h1>
+      <p class="error-page__hint">
+        {gettext("Please go back, reload the page, and send the form again.")}
+      </p>
+      <p class="error-page__hint">
+        {gettext("If this keeps happening, please tell us with a bug report at")}
+        <a href="https://github.com/wintermeyer/vutuv/issues">github.com/wintermeyer/vutuv/issues</a>.
+      </p>
+      <%!-- The stamp is rendered, not just asked for: the member is the only
+      one who knows when it happened, and the operator's logs are the only
+      place the cause can be found. UTC and server-rendered plain text on
+      purpose - this page must work when the asset pipeline (and with it the
+      local-time rewriting JS) is exactly what broke. --%>
+      <p class="error-page__hint">
+        {gettext(
+          "The most helpful detail in such a report is the exact time of the error. Right now it is %{time}.",
+          time: Calendar.strftime(DateTime.utc_now(), "%Y-%m-%d %H:%M UTC")
+        )}
+      </p>
+      <p class="error-page__actions">
+        <a href="/" class="button">{gettext("Back to the start page")}</a>
+      </p>
+    </div>
+    """
+  end
+
   def render("404.html", assigns) do
     assigns
     |> Map.new()
