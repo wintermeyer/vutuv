@@ -19,6 +19,8 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
 
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
@@ -122,9 +124,26 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                 />
               </a>
               <p class="mt-2 truncate text-sm">
-                <.link navigate={Posts.path(ps.post)} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+                <%!-- A member's post links to its permalink; a cached fediverse
+                post has none here, so its origin page stands in. --%>
+                <.link
+                  :if={ps.post}
+                  navigate={Posts.path(ps.post)}
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                >
                   {gettext("Post by %{name}", name: full_name(ps.post.user))}
                 </.link>
+                <a
+                  :if={ps.remote_post}
+                  href={RemotePost.origin(ps.remote_post)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                >
+                  {gettext("Post by %{name}",
+                    name: RemoteAccount.display_handle(ps.remote_post.remote_account)
+                  )}
+                </a>
               </p>
               <p class="breakwrap text-xs text-slate-600 dark:text-slate-400">
                 <a href={ps.url} target="_blank" rel="noopener">{ps.url}</a>
@@ -162,9 +181,17 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                     <a href={ps.url} target="_blank" rel="noopener">{ps.url}</a>
                   </td>
                   <td>
-                    <.link navigate={Posts.path(ps.post)}>
+                    <.link :if={ps.post} navigate={Posts.path(ps.post)}>
                       @{ps.post.user.username}
                     </.link>
+                    <a
+                      :if={ps.remote_post}
+                      href={RemotePost.origin(ps.remote_post)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {RemoteAccount.display_handle(ps.remote_post.remote_account)}
+                    </a>
                   </td>
                   <td class="tabular-nums">{ps.attempts}</td>
                   <td class="breakwrap text-slate-600 dark:text-slate-400">{ps.last_error}</td>

@@ -4,6 +4,13 @@ defmodule Vutuv.Posts.PostScreenshot do
   once captured, the attachment record. Created for a post that carries a single
   URL and no image (see `Vutuv.Posts.Screenshots`).
 
+  **Two owners, one queue.** A row belongs to exactly one of a member's post
+  (`post_id`) or a cached fediverse post from a followed account
+  (`remote_post_id`, `Vutuv.Fediverse.RemotePost`) — a DB check constraint
+  enforces the exactly-one. Everything downstream (worker, capture, YouTube
+  thumbnail, retries, AI moderation, admin views) is shared; only the enqueue
+  trigger and the "who is told when it's ready" differ per owner.
+
   The row is the queue: a `pending`/`capturing`/`failed` row is work the
   `Vutuv.Posts.ScreenshotWorker` drains, so a restart or re-deploy loses
   nothing; a `ready` row carries the stored screenshot. A `dismissed` row is the
@@ -28,6 +35,7 @@ defmodule Vutuv.Posts.PostScreenshot do
 
   schema "post_screenshots" do
     belongs_to(:post, Vutuv.Posts.Post)
+    belongs_to(:remote_post, Vutuv.Fediverse.RemotePost)
 
     field(:url, :string)
     field(:status, :string, default: "pending")

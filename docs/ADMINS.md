@@ -168,7 +168,8 @@ A few rarely-changed switches are compile-time settings in
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
 `:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's
 GitHub/GitLab/Codeberg statistics), `:generate_screenshots` (profile link
-previews **and** the auto-screenshot for single-link posts — admins watch the
+previews **and** the auto-screenshot for single-link posts, including cached
+fediverse posts in the feed — admins watch the
 capture queue and browse the gallery at `/admin/screenshots`; a YouTube video
 link stores the video's published thumbnail instead of a capture, fetched
 server-side from YouTube under this same flag), and

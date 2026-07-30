@@ -981,6 +981,29 @@ pictures too (`Media.sync_attachments/3`): a warning added after publishing
 covers them here as well, a removed picture goes with its file, an added one is
 fetched.
 
+### Their link screenshots
+
+A cached post that carries **exactly one URL, no picture and no content
+warning** gets the same auto link screenshot a member's post gets — one shared
+subsystem, `Vutuv.Posts.Screenshots` (see `posts-and-feed.md`), whose
+`post_screenshots` row carries `remote_post_id` instead of `post_id` (a check
+constraint enforces exactly one owner). The reconcile sits inside
+`attach_pictures/2`, after the picture set is on record, so every path that
+mints a cached post — a follower delivery, a boost, a URL lookup — gets it by
+construction, and an author's `Update` re-reconciles (URL changed → re-capture;
+picture or warning added → job and files dropped). The warned-post skip is the
+one remote-only rule: the author closed the lid, and an auto-fetched preview
+would prop it open. Downstream everything is shared (worker, HTTP-200 probe,
+YouTube thumbnail branch, retries, `:generate_screenshots` gate, the
+`/admin/screenshots` views) with two per-owner differences: the AI scan is
+enqueued **owner-less** like the remote-picture scans, and a released capture
+is **not broadcast** — no author is watching a remote post get captured, so the
+card simply shows it on the next feed load. File cleanup rides the same
+`delete_media_for_posts/1` chokepoint as the pictures
+(`Screenshots.delete_for_remote_posts/1`; the rows cascade, the files never
+do), and the card floats the shot beside the text exactly as a member post's
+card does.
+
 ### Liking one of their posts (issue #1164)
 
 The heart on a remote card really federates: `like_remote_post/2` writes the

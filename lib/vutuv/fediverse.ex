@@ -76,6 +76,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostRemoteReply
+  alias Vutuv.Posts.Screenshots
   alias Vutuv.RateLimiter
   alias Vutuv.RemoteHtml
   alias Vutuv.RemoteMedia
@@ -1442,6 +1443,13 @@ defmodule Vutuv.Fediverse do
     post
     |> Media.record_attachments(List.wrap(object["attachment"]), RemotePost.warned?(post))
     |> Media.fetch_async()
+
+    # With the picture set on record the post's link screenshot can be decided:
+    # a single-URL, picture-less, unwarned post enqueues the same durable
+    # capture job a member post gets (`Vutuv.Posts.Screenshots`). Here rather
+    # than beside the callers, so every path that mints a cached post — a
+    # follower delivery, a boost, a URL lookup — gets it by construction.
+    Screenshots.reconcile(post)
   end
 
   @doc """
@@ -1507,7 +1515,7 @@ defmodule Vutuv.Fediverse do
         where: p.audience in ^RemotePost.open_audiences() or f.state == "accepted",
         order_by: [desc: p.published_at, desc: p.id],
         limit: ^fetch_n,
-        preload: [remote_account: a]
+        preload: [:screenshot, remote_account: a]
       )
       |> utc_at_or_before(cursor, :published_at)
       |> Repo.all()
@@ -1549,7 +1557,7 @@ defmodule Vutuv.Fediverse do
         where: p.audience in ^RemotePost.open_audiences(),
         order_by: [desc: r.inserted_at, desc: r.id],
         limit: ^fetch_n,
-        preload: [remote_post: {p, remote_account: a}, user: reposter]
+        preload: [remote_post: {p, [:screenshot, remote_account: a]}, user: reposter]
       )
       |> remote_reposts_at_or_before(cursor)
       |> Repo.all()
@@ -1621,7 +1629,11 @@ defmodule Vutuv.Fediverse do
         # them) and its author (`filter_visible_boosts/2`'s moderation check
         # reads the struct instead of re-fetching the user per row); the rest
         # a card needs is preloaded once for the whole page by `Vutuv.Posts`.
-        preload: [remote_account: a, remote_post: [:remote_account], post: [:denials, :user]]
+        preload: [
+          remote_account: a,
+          remote_post: [:remote_account, :screenshot],
+          post: [:denials, :user]
+        ]
       )
       |> utc_at_or_before(cursor, :announced_at)
       |> Repo.all()
@@ -1785,9 +1797,10 @@ defmodule Vutuv.Fediverse do
     |> Enum.group_by(& &1.remote_post_id)
   end
 
-  @doc "One cached remote post with its account, or nil."
+  @doc "One cached remote post with its account and screenshot, or nil."
   def get_remote_post(id) do
-    UUIDv7.with_cast(id, &Repo.get(RemotePost, &1)) |> Repo.preload(:remote_account)
+    UUIDv7.with_cast(id, &Repo.get(RemotePost, &1))
+    |> Repo.preload([:remote_account, :screenshot])
   end
 
   @doc """
@@ -1848,6 +1861,10 @@ defmodule Vutuv.Fediverse do
   # delete goes through `delete_cached_post/1`, which is the one place a post row
   # is removed.
   defp delete_media_for_posts(post_ids) when is_list(post_ids) do
+    # The auto link screenshots go with the pictures: same "nothing at rest
+    # for a post nobody can reach" promise, same chokepoint.
+    Screenshots.delete_for_remote_posts(post_ids)
+
     from(i in RemoteImage, where: i.remote_post_id in ^post_ids, select: i.id)
     |> Repo.all()
     |> Enum.each(&RemoteMedia.delete_post_image/1)
@@ -2037,7 +2054,8 @@ defmodule Vutuv.Fediverse do
       # fourth audience value cannot open here and close there.
       where: p.audience in ^RemotePost.open_audiences() or exists(accepted),
       order_by: [desc: p.published_at, desc: p.id],
-      limit: ^(@account_page_posts + 1)
+      limit: ^(@account_page_posts + 1),
+      preload: [:screenshot]
     )
     |> Repo.all()
     |> Enum.split(@account_page_posts)
@@ -2323,6 +2341,10 @@ defmodule Vutuv.Fediverse do
         updated
         |> Media.sync_attachments(List.wrap(object["attachment"]), RemotePost.warned?(updated))
         |> Media.fetch_async()
+
+        # …and where the single URL, the picture set or the content warning can
+        # change, each of which enqueues, refreshes or cancels the screenshot.
+        Screenshots.reconcile(updated)
       end
     end
   end

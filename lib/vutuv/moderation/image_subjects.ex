@@ -306,8 +306,10 @@ defmodule Vutuv.Moderation.ImageSubjects do
         ps = Repo.get!(PostScreenshot, scan.subject_id)
         Vutuv.Screenshot.promote_from_quarantine(ps)
         # The card upgrade was deliberately held back at capture time; the
-        # screenshot is only announced once it is released.
-        Vutuv.Posts.broadcast_screenshot_ready(ps.post_id)
+        # screenshot is only announced once it is released. A remote-owned row
+        # (`remote_post_id`) has no member post and nobody watching — its card
+        # simply shows the screenshot on the next feed load.
+        if ps.post_id, do: Vutuv.Posts.broadcast_screenshot_ready(ps.post_id)
         :ok
 
       _ ->
@@ -681,9 +683,11 @@ defmodule Vutuv.Moderation.ImageSubjects do
   end
 
   defp post_screenshot_stranded do
+    # left_join: a row owned by a cached remote post (`remote_post_id`) has no
+    # member post and re-enqueues owner-less, like the remote-image scans.
     from(ps in PostScreenshot,
       as: :subject,
-      join: p in assoc(ps, :post),
+      left_join: p in assoc(ps, :post),
       where: ps.moderation == "pending",
       where: not exists(open_scan_exists("post_screenshot")),
       select: {ps.id, p.user_id, ps.screenshot}

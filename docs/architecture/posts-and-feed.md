@@ -897,6 +897,13 @@ the save is never slowed. The subsystem is `Vutuv.Posts.Screenshots` with the
 the durable queue and the attachment record**: a `pending`/`capturing`/`failed`
 row is work, a `ready` row carries the stored screenshot.
 
+The queue serves **two owners**: a member's post (`post_id`) and a cached
+fediverse post from a followed account (`remote_post_id`,
+`Vutuv.Fediverse.RemotePost`; a check constraint enforces exactly one). The
+remote side's qualifying rule, wiring and cleanup live in
+`fediverse.md` ("Their link screenshots"); everything below — worker, probe,
+YouTube branch, retries, moderation, admin views — is shared.
+
 Some links are deliberately **not** screenshotted. Two are caught in
 `qualifying_url/1` (a pure, no-network check on the request path, so no row is
 ever created): a link to *this* installation's own **`/settings`, `/admin` or

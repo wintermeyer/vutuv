@@ -1375,6 +1375,7 @@ defmodule VutuvWeb.PostComponents do
       assigns
       |> assign(:account, account)
       |> assign(:initials, name_initials(account.name || account.handle))
+      |> assign(:link_screenshot, remote_link_screenshot(post, assigns.images))
 
     ~H"""
     <article data-remote-post={@remote_post.id} data-audience={@remote_post.audience}>
@@ -1440,13 +1441,25 @@ defmodule VutuvWeb.PostComponents do
             {gettext("Only for this account's followers")}
           </.remote_restricted_note>
 
-          <.remote_body
-            warning={
-              RemotePost.warned?(@remote_post) &&
-                (@remote_post.summary || gettext("Marked as sensitive by its author"))
-            }
-            text={@remote_post.content_text}
-          />
+          <%!-- The auto link screenshot floats beside the text exactly as on a
+          member post's card, ahead of the body (a float only wraps what
+          follows it); the flow-root fence keeps a tall shot beside a short
+          body from spilling over the action bar below. A warned post never
+          has one, so the float can never sit beside a closed lid. --%>
+          <div class="flow-root">
+            <.link_screenshot_image
+              :if={@link_screenshot}
+              screenshot={@link_screenshot}
+              class="float-right mb-1 ml-4 mt-1.5 w-2/5 sm:w-1/3"
+            />
+            <.remote_body
+              warning={
+                RemotePost.warned?(@remote_post) &&
+                  (@remote_post.summary || gettext("Marked as sensitive by its author"))
+              }
+              text={@remote_post.content_text}
+            />
+          </div>
 
           <.remote_post_images images={@images} />
 
@@ -3245,6 +3258,17 @@ defmodule VutuvWeb.PostComponents do
   end
 
   defp link_screenshot(_post), do: nil
+
+  # The remote twin of `link_screenshot/1`, for a cached fediverse post: its
+  # ready screenshot when the card shows no pictures and the author raised no
+  # content warning. The reconcile enforces those on the queue side; this
+  # re-check guards a row from before an edit and, via the struct pattern, a
+  # caller that did not preload `:screenshot` (NotLoaded matches nothing).
+  defp remote_link_screenshot(%{screenshot: %PostScreenshot{} = ps} = post, []) do
+    if not RemotePost.warned?(post) and PostScreenshot.ready?(ps), do: ps
+  end
+
+  defp remote_link_screenshot(_post, _images), do: nil
 
   # Whether the PREVIEW needs the float-wrap body layout for the link screenshot
   # (a height clamp instead of a line clamp, since `-webkit-line-clamp` cannot

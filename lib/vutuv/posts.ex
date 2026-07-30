@@ -2778,7 +2778,7 @@ defmodule Vutuv.Posts do
     # one renders as a blank card on a profile.
     images = Vutuv.Fediverse.list_remote_images(ids)
 
-    from(p in RemotePost, where: p.id in ^ids, preload: [:remote_account])
+    from(p in RemotePost, where: p.id in ^ids, preload: [:remote_account, :screenshot])
     |> Repo.all()
     |> Map.new(&{&1.id, {&1, Map.get(images, &1.id, [])}})
   end

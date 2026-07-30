@@ -26,11 +26,21 @@ defmodule Vutuv.Posts.Screenshots do
   the thumbnail YouTube publishes for every video instead, frameless
   (`Vutuv.YoutubeThumbnail`), and falls back to the ordinary capture whenever
   that fetch fails.
+
+  **Cached fediverse posts ride the same queue.** A followed account's post
+  (`Vutuv.Fediverse.RemotePost`) qualifies by the same rule — one URL, no
+  picture — plus one of its own: never behind the author's content warning /
+  sensitive flag (the author closed the lid; an auto-preview would prop it
+  open). Its job carries `remote_post_id` instead of `post_id`, and everything
+  downstream is shared, with two per-owner differences: the ready-announcement
+  (nobody is watching a remote post get captured, so no broadcast) and the AI
+  scan's owner (no local member, like the remote-picture scans).
   """
 
   import Ecto.Query
 
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
@@ -69,14 +79,26 @@ defmodule Vutuv.Posts.Screenshots do
   Reconciles a post's screenshot job with what the post now is. Enqueues a
   `pending` job when the post carries exactly one URL and no image (refreshing
   the URL if it changed); removes the job (and its files) when the post no
-  longer qualifies. Called after every create/update; idempotent.
+  longer qualifies. Called after every create/update; idempotent. Takes a
+  member's `Post` or a cached fediverse `RemotePost` — both own the same job
+  row, keyed by their own foreign key.
   """
   def reconcile(%Post{} = post) do
     # force: the caller's struct may carry a stale `:screenshot` (nil from create
     # time) even after a prior reconcile inserted the row — reload it so a second
     # reconcile updates the row instead of colliding on the unique post_id.
-    post = Repo.preload(post, [:images, :screenshot], force: true)
+    post
+    |> Repo.preload([:images, :screenshot], force: true)
+    |> reconcile_loaded()
+  end
 
+  def reconcile(%RemotePost{} = post) do
+    post
+    |> Repo.preload([:images, :screenshot], force: true)
+    |> reconcile_loaded()
+  end
+
+  defp reconcile_loaded(post) do
     case qualifying_url(post) do
       {:ok, url} -> enqueue(post, url)
       :none -> cancel(post)
@@ -96,9 +118,20 @@ defmodule Vutuv.Posts.Screenshots do
   `/settings`, `/admin` or `/system` area, or at a screenshot-blocklisted host
   (`Vutuv.PageScreenshot.host_blocked?/1`, e.g. `reddit.com`), does **not**
   qualify — a blocklisted page never screenshots, so no job is even enqueued.
+
+  A cached fediverse post plays by the same rules plus one of its own: a post
+  its author put behind a content warning (or flagged sensitive) never
+  qualifies — the card renders it as a closed lid, and an auto-fetched preview
+  image would prop that lid open.
   """
   def qualifying_url(%Post{images: [], body: body}), do: sole_url_target(body)
   def qualifying_url(%Post{images: images}) when is_list(images), do: :none
+
+  def qualifying_url(%RemotePost{images: [], content_text: text} = post) do
+    if RemotePost.warned?(post), do: :none, else: sole_url_target(text)
+  end
+
+  def qualifying_url(%RemotePost{images: images}) when is_list(images), do: :none
 
   defp sole_url_target(body) do
     case extract_urls(body) do
@@ -142,12 +175,14 @@ defmodule Vutuv.Posts.Screenshots do
     Enum.any?(@internal_path_roots, &(path == &1 or String.starts_with?(path, &1 <> "/")))
   end
 
-  defp enqueue(%Post{screenshot: %PostScreenshot{url: url} = existing}, url) do
+  # The refresh/keep clauses match on the preloaded `:screenshot` alone, so
+  # they serve both owners; only a fresh insert needs to know whose key to set.
+  defp enqueue(%{screenshot: %PostScreenshot{url: url} = existing}, url) do
     # Same URL already queued/captured: leave it (a `ready` row stays ready).
     {:ok, existing}
   end
 
-  defp enqueue(%Post{screenshot: %PostScreenshot{} = existing}, url) do
+  defp enqueue(%{screenshot: %PostScreenshot{} = existing}, url) do
     # The single URL changed: re-capture. Reset to pending and clear the old
     # error/backoff; the stored file is replaced in place on the next capture.
     existing
@@ -162,12 +197,18 @@ defmodule Vutuv.Posts.Screenshots do
     |> Repo.insert()
   end
 
+  defp enqueue(%RemotePost{id: remote_post_id, screenshot: nil}, url) do
+    %PostScreenshot{remote_post_id: remote_post_id}
+    |> PostScreenshot.enqueue_changeset(url)
+    |> Repo.insert()
+  end
+
   # No longer qualifies: drop the row and its files (the render path already
   # ignores it once the post has images, but keeping the row/file would leak).
   # Unlike post deletion, nothing cascades here, so delete the row explicitly.
-  defp cancel(%Post{screenshot: nil}), do: :ok
+  defp cancel(%{screenshot: nil}), do: :ok
 
-  defp cancel(%Post{screenshot: %PostScreenshot{} = existing}) do
+  defp cancel(%{screenshot: %PostScreenshot{} = existing}) do
     Repo.delete(existing)
     delete(existing)
     :ok
@@ -180,6 +221,19 @@ defmodule Vutuv.Posts.Screenshots do
   """
   def delete(%PostScreenshot{} = post_screenshot) do
     Vutuv.Screenshot.delete(post_screenshot)
+  end
+
+  @doc """
+  Deletes the stored screenshot files of cached fediverse posts that are about
+  to be deleted. Called from the one media-wipe chokepoint every cached-post
+  deletion goes through (`Vutuv.Fediverse`), so an upstream `Delete`, a report,
+  a narrowing edit, the retention sweep and an instance block all shed the
+  files; the rows themselves cascade with the `fediverse_posts` foreign key.
+  """
+  def delete_for_remote_posts(remote_post_ids) when is_list(remote_post_ids) do
+    from(ps in PostScreenshot, where: ps.remote_post_id in ^remote_post_ids)
+    |> Repo.all()
+    |> Enum.each(&delete/1)
   end
 
   @doc """
@@ -494,15 +548,28 @@ defmodule Vutuv.Posts.Screenshots do
       |> Repo.update()
 
     if moderation == "approved" do
-      # Open feeds/profiles upgrade the card to show the screenshot with no reload.
-      Vutuv.Posts.broadcast_screenshot_ready(ready.post_id)
+      announce_ready(ready)
     else
-      post = Repo.get!(Post, ready.post_id)
-      ImageScans.enqueue("post_screenshot", ready.id, post.user_id, ready.screenshot)
+      ImageScans.enqueue("post_screenshot", ready.id, owner_user_id(ready), ready.screenshot)
     end
 
     ready
   end
+
+  # Open feeds/profiles upgrade a member post's card to show the screenshot
+  # with no reload. A cached remote post has no author watching their fresh
+  # post and no topic of its own, so it simply shows the screenshot on the
+  # next feed load — no broadcast.
+  defp announce_ready(%PostScreenshot{post_id: post_id}) when is_binary(post_id),
+    do: Vutuv.Posts.broadcast_screenshot_ready(post_id)
+
+  defp announce_ready(%PostScreenshot{}), do: :ok
+
+  # The AI scan's owning member: the post's author, or nobody for a remote
+  # post's capture (the same ownerless shape the "remote_post_image" and
+  # "remote_avatar" scans use).
+  defp owner_user_id(%PostScreenshot{post_id: nil}), do: nil
+  defp owner_user_id(%PostScreenshot{post_id: post_id}), do: Repo.get!(Post, post_id).user_id
 
   defp mark_retry(%PostScreenshot{} = job, reason) do
     attempts = job.attempts + 1
@@ -545,13 +612,20 @@ defmodule Vutuv.Posts.Screenshots do
   defp error_string(reason), do: reason |> inspect() |> String.slice(0, 255)
 
   defp failure_message(job, reason),
-    do: "post screenshot failed for post #{job.post_id} (#{job.url}): #{inspect(reason)}"
+    do: "post screenshot failed for #{owner_label(job)} (#{job.url}): #{inspect(reason)}"
+
+  defp owner_label(%PostScreenshot{post_id: post_id}) when is_binary(post_id),
+    do: "post #{post_id}"
+
+  defp owner_label(%PostScreenshot{remote_post_id: remote_post_id}),
+    do: "remote post #{remote_post_id}"
 
   ## Admin reads
 
   @doc """
   One page of the admin queue view: the unfinished jobs (`pending` / `capturing`
-  / `failed`), newest first, post + author preloaded. Returns `{rows, total}`.
+  / `failed`), newest first, with the owning post + author (or the cached
+  remote post + its account) preloaded. Returns `{rows, total}`.
   Author-`dismissed` tombstones are neither unfinished work nor a gallery item,
   so they are excluded from both admin views.
   """
@@ -592,7 +666,7 @@ defmodule Vutuv.Posts.Screenshots do
       base
       |> order_by(^order)
       |> Vutuv.Pages.paginate(params, total, @per_page)
-      |> preload(post: :user)
+      |> preload(post: :user, remote_post: :remote_account)
       |> Repo.all()
 
     {rows, total}

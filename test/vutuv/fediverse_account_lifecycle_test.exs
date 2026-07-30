@@ -13,8 +13,6 @@ defmodule Vutuv.FediverseAccountLifecycleTest do
   """
   use Vutuv.DataCase, async: false
 
-  require Logger
-
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount

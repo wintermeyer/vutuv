@@ -21,8 +21,12 @@ defmodule Vutuv.Fediverse.RemotePost do
       here was addressed in is simply not stored, so only the three public-ish
       audiences exist.
 
-  There is no avatar column and no picture of any kind. Pictures are issue
-  #1163, and until then the card renders initials and links to the origin.
+  Pictures arrive two ways: the author's own attachments (issue #1163,
+  `Vutuv.Fediverse.Media` / `Vutuv.Fediverse.RemoteImage`), and — for a
+  single-URL post with no attachment and no content warning — the same auto
+  link screenshot a member's post gets (`Vutuv.Posts.Screenshots`, one shared
+  queue keyed here by `remote_post_id`). Both wait behind the AI image gate
+  before anything renders.
   """
 
   use VutuvWeb, :model
@@ -74,6 +78,13 @@ defmodule Vutuv.Fediverse.RemotePost do
     field(:checked_at, :utc_datetime)
 
     belongs_to(:remote_account, Vutuv.Fediverse.RemoteAccount)
+
+    # The pictures the author attached (issue #1163) and the auto link
+    # screenshot for a single-URL, picture-less post — the exact machinery a
+    # member's post gets (`Vutuv.Posts.Screenshots`), keyed here by
+    # `remote_post_id`.
+    has_many(:images, Vutuv.Fediverse.RemoteImage)
+    has_one(:screenshot, Vutuv.Posts.PostScreenshot, foreign_key: :remote_post_id)
   end
 
   @doc "The audiences a stored post can have."
