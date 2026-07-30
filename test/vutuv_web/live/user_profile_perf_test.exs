@@ -57,7 +57,7 @@ defmodule VutuvWeb.UserProfilePerfTest do
     assert union_queries == 1
 
     # And the standalone count shapes it replaced are gone from the mount.
-    {conn, standalone_social_counts} =
+    {_conn, standalone_social_counts} =
       Vutuv.QueryCounter.count_queries(
         fn -> recycle(conn) |> get(~p"/#{user.username}") end,
         matching: ~r/^SELECT count\(f0\."id"\) FROM "follows"/
