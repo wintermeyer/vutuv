@@ -85,6 +85,23 @@ defmodule VutuvWeb.FeedControllerTest do
       assert body =~ ~s(href="#{@base}/tags")
     end
 
+    # RSS readers treat <description> as entity-encoded HTML, so the
+    # plain-text excerpt needs an HTML-escape layer under the XML one:
+    # a bare `&` that survives XML-unescaping is invalid HTML (the W3C
+    # validator flags it as "Named entity expected. Got none."), and an
+    # unescaped `<div>` would be swallowed as a tag instead of shown.
+    test "the description double-escapes & and < so the HTML layer stays valid", %{author: author} do
+      create_post!(author, %{
+        "body" => "Siehe https://example.com/a?b=1&smid=share und <div> Tags"
+      })
+
+      body = build_conn() |> get("/feed_author/posts/feed.xml") |> response(200)
+
+      assert body =~
+               "<description>Siehe https://example.com/a?b=1&amp;amp;smid=share " <>
+                 "und &amp;lt;div&amp;gt; Tags</description>"
+    end
+
     test "pubDate is RFC 1123", %{author: author} do
       create_post!(author, %{"body" => "Dated"})
 

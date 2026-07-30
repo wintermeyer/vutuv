@@ -56,7 +56,7 @@ defmodule VutuvWeb.Feeds do
       "  <title>#{Xml.escape(opts[:title])}</title>\n",
       "  <link>#{Xml.escape(opts[:link])}</link>\n",
       ~s(  <atom:link href="#{Xml.escape(opts[:self])}" rel="self" type="application/rss+xml"/>\n),
-      "  <description>#{Xml.escape(opts[:description])}</description>\n",
+      "  <description>#{html_text(opts[:description])}</description>\n",
       last_build_date(posts),
       Enum.map(posts, &item/1),
       "</channel>\n</rss>\n"
@@ -82,7 +82,7 @@ defmodule VutuvWeb.Feeds do
       "    <pubDate>#{rfc1123(post.inserted_at)}</pubDate>\n",
       "    <dc:creator>#{Xml.escape(UserHelpers.full_name(post.user))}</dc:creator>\n",
       Enum.map(post.tags, &"    <category>#{Xml.escape(&1.name)}</category>\n"),
-      "    <description>#{Xml.escape(AgentDocs.excerpt(post.body))}</description>\n",
+      "    <description>#{html_text(AgentDocs.excerpt(post.body))}</description>\n",
       "    <content:encoded><![CDATA[#{cdata_safe(rendered_body(post))}]]></content:encoded>\n",
       "  </item>\n"
     ]
@@ -111,6 +111,12 @@ defmodule VutuvWeb.Feeds do
 
   # A literal "]]>" in the rendered body would close the CDATA section.
   defp cdata_safe(html), do: String.replace(html, "]]>", "]]]]><![CDATA[>")
+
+  # RSS readers interpret <description> as entity-encoded HTML, so plain
+  # text needs an HTML-escape layer under the XML one: a bare `&` that
+  # survives XML-unescaping is invalid HTML (the W3C validator flags it
+  # as "Named entity expected"), and a `<div>` would be read as a tag.
+  defp html_text(text), do: text |> Xml.escape() |> Xml.escape()
 
   defp rfc1123(%NaiveDateTime{} = naive),
     do: Calendar.strftime(naive, "%a, %d %b %Y %H:%M:%S GMT")
