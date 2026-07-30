@@ -95,6 +95,34 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert html_response(conn, 200) =~ "composer-panel"
       assert draft_queries == 1, "expected one post_drafts read per mount, got #{draft_queries}"
     end
+
+    test "the connected mount reuses the dead render's work (handoff)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      {:ok, _} = Posts.create_post(friend, %{body: "a handoff post from my friend"})
+
+      # The dead render stashes the computed page; the connect takes it. This
+      # module is sync (ConnCase default), which count_queries_global needs.
+      conn = get(conn, ~p"/feed")
+      assert html_response(conn, 200) =~ "a handoff post from my friend"
+
+      {{:ok, _view, hit_html}, hit} =
+        Vutuv.QueryCounter.count_queries_global(fn -> live(conn) end)
+
+      assert hit_html =~ "a handoff post from my friend"
+
+      # Single-use: a second connect finds the stash consumed and full-loads.
+      {{:ok, _view, miss_html}, miss} =
+        Vutuv.QueryCounter.count_queries_global(fn -> live(conn) end)
+
+      assert miss_html =~ "a handoff post from my friend"
+
+      assert hit <= 15, "handoff-hit feed connect ran #{hit} queries; the handoff was not used"
+
+      assert miss >= hit + 10,
+             "consumed-stash feed connect ran #{miss} vs hit #{hit}; full-load fallback missing?"
+    end
   end
 
   describe "mount" do

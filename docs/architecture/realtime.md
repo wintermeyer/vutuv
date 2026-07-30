@@ -301,6 +301,34 @@ exactly at that moment. A NULL means no note, which is what every account
 predating the feature keeps — the derived feed is otherwise retroactive, and a
 welcome years after the fact would be nonsense.
 
+## The dead-render → socket-mount handoff (profile + feed)
+
+Every LiveView visit computes its data twice: once for the HTML the visitor
+sees immediately (the dead render) and once when the websocket connects and
+`mount/3` runs again in a fresh process — identical data, seconds apart,
+~50 queries each on the profile. **`VutuvWeb.Live.MountHandoff`** (an ETS
+table + sweeper in the supervision tree) lets the dead render pass its
+finished work to the connected mount: the dead mount stashes the assigns it
+computed under `{authenticated viewer id, subject}`, the connected mount
+takes (consumes) them and skips the reload. `UserProfileLive` stashes the
+assigns `load_profile/1` added (diffed, not listed, so new assigns ride
+automatically) and recomputes only the two connected-only slices (social-feed
+ETS reads, code-stats refresh request); `PostLive.Feed` stashes its
+`feed_payload/1` map and rebuilds the stream from it (a consumed
+`LiveStream` struct must never ride a handoff — it would replay empty).
+
+It is deliberately **not a cache**: single-use (`:ets.take/2`, so a
+reconnect after a blip or deploy full-loads), keyed by the *server-side*
+authenticated viewer on both ends (never by anything the client sent;
+anonymous visitors — mostly crawlers whose socket never connects — are never
+stashed for), expired after ~15s, and fail-closed (any miss runs the normal
+full load). The accepted trade: changes landing in the sub-second gap
+between the two renders are not re-read at connect; both pages subscribe to
+their PubSub topics at connect, so the next event heals the snapshot.
+Regression tests in `user_profile_perf_test.exs` and
+`post_feed_live_test.exs` pin both sides: a hit connects on a handful of
+queries, a consumed stash still full-loads.
+
 ## Live member counter
 
 The logged-out landing page shows the **exact** number of members and ticks it

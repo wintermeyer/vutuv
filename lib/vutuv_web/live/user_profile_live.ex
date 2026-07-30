@@ -49,6 +49,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Tags.UserTagEndorsement
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.MountHandoff
 
   # The controller embeds this LiveView with `live_render/3` (not a `live/3`
   # router route), so `VutuvWeb.Live.InitAssigns` cannot be the on_mount: it
@@ -78,7 +79,7 @@ defmodule VutuvWeb.UserProfileLive do
       # (issue #859), one of "all" / "certification" / "license". Set once here
       # so it survives the PubSub re-renders that rebuild the profile assigns.
       |> assign(:qualifications_tab, "all")
-      |> load_profile()
+      |> mount_profile()
 
     # Only a real visitor triggers the (cached, single-flight) social feed
     # fetches; the disconnected SEO pass stays a no-network render. Rebinds:
@@ -86,6 +87,43 @@ defmodule VutuvWeb.UserProfileLive do
     socket = if connected?(socket), do: request_social_feed_posts(socket), else: socket
 
     {:ok, socket}
+  end
+
+  # The dead render computes the page and stashes the result; the connected
+  # mount — moments later, same authenticated viewer — takes it and skips
+  # re-running the same ~50 queries (`VutuvWeb.Live.MountHandoff`). Any miss
+  # (anonymous viewer, expired, already consumed by an earlier connect, a
+  # reconnect after a blip or deploy) falls back to the plain full load, so
+  # the handoff is a fast path, never a requirement.
+  defp mount_profile(socket) do
+    viewer_id = socket.assigns.current_user && socket.assigns.current_user.id
+    subject = {:profile, socket.assigns.profile_user_id}
+
+    if connected?(socket) do
+      case MountHandoff.take(viewer_id, subject) do
+        {:ok, payload} -> apply_handoff(socket, payload)
+        :error -> load_profile(socket)
+      end
+    else
+      before_keys = Map.keys(socket.assigns)
+      socket = load_profile(socket)
+      # Exactly the assigns load_profile added — diffed, not listed, so an
+      # assign added to load_profile later rides the handoff automatically.
+      MountHandoff.stash(viewer_id, subject, Map.drop(socket.assigns, before_keys))
+      socket
+    end
+  end
+
+  # Apply the dead render's assigns, then recompute the two connected-only
+  # slices the dead pass deliberately left cold: the social-feed card reads
+  # the ETS cache (no network, no DB) and the code-stats card asks for its
+  # background refresh — the same calls load_profile would have made on a
+  # connected socket, working off the payload's preloaded user.
+  defp apply_handoff(socket, payload) do
+    socket
+    |> assign(payload)
+    |> put_social_feed_assigns(payload.user)
+    |> put_code_stats_assigns(payload.user)
   end
 
   @impl true

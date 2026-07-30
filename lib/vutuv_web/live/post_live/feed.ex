@@ -30,6 +30,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Social
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.UserHelpers
 
   @page_size 20
@@ -69,8 +70,24 @@ defmodule VutuvWeb.PostLive.Feed do
       # Refresh the Berlin-day-relative post stamps ("09:50 Uhr" -> "Gestern,
       # 09:50 Uhr") the moment the German day rolls over at midnight.
       Vutuv.DayClock.subscribe()
-    end
 
+      # The dead render stashed its computed page seconds ago
+      # (VutuvWeb.Live.MountHandoff); take it and skip re-running the same
+      # queries. Any miss (expired, consumed, a reconnect) recomputes.
+      case MountHandoff.take(user.id, :feed) do
+        {:ok, payload} -> apply_feed_payload(socket, payload)
+        :error -> apply_feed_payload(socket, feed_payload(user))
+      end
+    else
+      payload = feed_payload(user)
+      MountHandoff.stash(user.id, :feed, payload)
+      apply_feed_payload(socket, payload)
+    end
+  end
+
+  # Everything a feed mount computes, as data — what the dead render hands the
+  # connected mount through the single-use stash.
+  defp feed_payload(user) do
     # The member's private content filters (issue #940): compiled once, applied
     # to every page, and the set of posts they chose to reveal anyway.
     compiled = ContentFilters.compile_for(user)
@@ -81,30 +98,44 @@ defmodule VutuvWeb.PostLive.Feed do
     # skips its own identical query on init.
     draft = Posts.get_draft(user)
 
+    %{
+      content_filters: compiled,
+      more?: page.more?,
+      cursor: page.next_cursor,
+      draft: draft,
+      entries: entries
+    }
+  end
+
+  # The stream is rebuilt here rather than riding the payload: a
+  # %Phoenix.LiveView.LiveStream{} carries per-socket insert state that the
+  # dead render already consumed, so handing the struct itself to the
+  # connected socket would replay as an empty feed.
+  defp apply_feed_payload(socket, payload) do
     socket
-    |> assign(:content_filters, compiled)
+    |> assign(:content_filters, payload.content_filters)
     |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
-    |> assign(:more?, page.more?)
-    |> assign(:cursor, page.next_cursor)
-    |> assign(:empty?, page.entries == [])
+    |> assign(:more?, payload.more?)
+    |> assign(:cursor, payload.cursor)
+    |> assign(:empty?, payload.entries == [])
     |> assign(:pending_posts, [])
-    |> assign(:draft, draft)
+    |> assign(:draft, payload.draft)
     # The composer starts collapsed to a single "What's new?" button; posting
     # (own activity arriving below) collapses it again. A stored draft opens it
     # instead (issue #1148): the composer will restore that draft, and text
     # hidden behind a collapsed panel is indistinguishable from text that was
     # thrown away. Resolved here rather than announced by the composer so the
     # disconnected render already agrees and the panel never flickers open.
-    |> assign(:composer_open?, draft != nil)
+    |> assign(:composer_open?, payload.draft != nil)
     # The set of entries currently on screen, kept so the midnight :day_changed
     # tick can re-render each stamp in place (streams don't retain their data).
     # Order/dupes don't matter: the refresh uses stream_insert update_only, which
     # updates existing rows where they sit and ignores ones already gone.
-    |> assign(:entries, entries)
+    |> assign(:entries, payload.entries)
     |> assign_empty_rails()
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
-    |> stream(:posts, entries)
+    |> stream(:posts, payload.entries)
   end
 
   # The discovery rail (Tags you follow / Who to follow / Suggested posts)

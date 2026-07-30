@@ -7,6 +7,8 @@ defmodule VutuvWeb.UserProfilePerfTest do
   """
   use VutuvWeb.ConnCase
 
+  import Phoenix.LiveViewTest
+
   alias Vutuv.Posts
 
   # The action-bar engagement SELECT is the only query built from this
@@ -62,6 +64,55 @@ defmodule VutuvWeb.UserProfilePerfTest do
       )
 
     assert standalone_social_counts == 0
+  end
+
+  describe "dead-render → socket-mount handoff" do
+    # These tests count queries globally during the connect window (the
+    # LiveView process + Ecto's parallel preload tasks), so this module must
+    # stay sync (the ConnCase default) — an async neighbour's queries would
+    # land in the window.
+    test "the connected mount reuses the dead render's work", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _} = Posts.create_post(user, %{body: "handoff post"})
+
+      # The dead render (stashes the payload)...
+      conn = get(conn, ~p"/#{user.username}")
+      assert html_response(conn, 200) =~ "handoff post"
+
+      # ...then the connect takes it: only the socket's own auth and the
+      # shell's badge queries remain.
+      {{:ok, _view, hit_html}, hit} =
+        Vutuv.QueryCounter.count_queries_global(fn -> live(conn) end)
+
+      assert hit_html =~ "handoff post"
+
+      # A second connect on the same rendered page finds the stash consumed
+      # (single-use) and must full-load — still correct, just the slow path.
+      {{:ok, _view, miss_html}, miss} =
+        Vutuv.QueryCounter.count_queries_global(fn -> live(conn) end)
+
+      assert miss_html =~ "handoff post"
+
+      assert hit <= 15, "handoff-hit connect ran #{hit} queries; the handoff was not used"
+
+      assert miss >= hit + 20,
+             "consumed-stash connect ran #{miss} vs hit #{hit}; full-load fallback missing?"
+    end
+
+    test "an anonymous visitor never uses the handoff and still full-loads", %{conn: conn} do
+      owner = insert(:user, email_confirmed?: true)
+      {:ok, _} = Posts.create_post(owner, %{body: "public post"})
+
+      conn = get(conn, ~p"/#{owner.username}")
+
+      {{:ok, _view, html}, connected} =
+        Vutuv.QueryCounter.count_queries_global(fn -> live(conn) end)
+
+      # The fallback path must really run: nothing is stashed for an
+      # anonymous viewer, so the connect loads the whole profile itself.
+      assert html =~ "public post"
+      assert connected > 20
+    end
   end
 
   test "profile query count does not grow with post count", %{conn: conn} do

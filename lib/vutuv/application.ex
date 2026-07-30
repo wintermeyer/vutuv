@@ -66,6 +66,10 @@ defmodule Vutuv.Application do
         # tests.
         Vutuv.CodeStats.Fetcher,
         Vutuv.RateLimiter,
+        # The single-use dead-render -> socket-mount handoff for the profile
+        # and the feed (owns its ETS table + expiry sweeper). Before the
+        # Endpoint so the table exists for the first request.
+        VutuvWeb.Live.MountHandoff,
         VutuvWeb.Endpoint
       ] ++
         optional_child(:prefs_defaults_cache, Vutuv.Prefs.Cache) ++
