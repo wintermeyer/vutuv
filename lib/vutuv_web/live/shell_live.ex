@@ -470,7 +470,7 @@ defmodule VutuvWeb.ShellLive do
               href={~p"/admin"}
               title={new_members_label(@new_members_today)}
               aria-label={new_members_label(@new_members_today)}
-              class="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
+              class="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
             >
               <.icon_user_plus />
               <span class="tabular-nums">{compact_count(@new_members_today)}</span>
@@ -727,7 +727,7 @@ defmodule VutuvWeb.ShellLive do
   # A person with a plus: the "new member" glyph on the admin sign-up pill.
   defp icon_user_plus(assigns) do
     ~H"""
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+    <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
       <path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
     </svg>
     """

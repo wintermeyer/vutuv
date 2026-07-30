@@ -699,6 +699,18 @@ defmodule VutuvWeb.ShellLiveTest do
       assert has_element?(german, ~s(#{@pill}[title="1 neues Mitglied heute"]))
     end
 
+    test "renders at the nav's text size, not badge-small", %{conn: conn} do
+      # The pill started life at text-xs and the figure was too small to read
+      # at a glance. It sits between text-sm nav links, so it shares their size.
+      joined_today(1)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
+
+      assert has_element?(view, "#{@pill}.text-sm")
+      refute has_element?(view, "#{@pill}.text-xs")
+    end
+
     test "re-reads the figure at the Berlin day boundary", %{conn: conn} do
       joined_today(1)
 
