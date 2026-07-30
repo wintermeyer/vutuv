@@ -79,6 +79,22 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert many <= few + 2,
              "feed query count grew from #{few} to #{many}; engagement is not batched"
     end
+
+    test "the stored draft is read once per mount, not by feed and composer both", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      :ok = Posts.save_draft(user, nil, %{body: "half-typed"})
+
+      {conn, draft_queries} =
+        Vutuv.QueryCounter.count_queries(
+          fn -> get(conn, ~p"/feed") end,
+          matching: ~r/FROM "post_drafts"/
+        )
+
+      # The feed reads the draft to decide whether the composer panel opens and
+      # hands it to the composer, which must not run the same query again.
+      assert html_response(conn, 200) =~ "composer-panel"
+      assert draft_queries == 1, "expected one post_drafts read per mount, got #{draft_queries}"
+    end
   end
 
   describe "mount" do

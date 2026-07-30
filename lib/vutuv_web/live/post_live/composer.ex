@@ -99,7 +99,8 @@ defmodule VutuvWeb.PostLive.Composer do
           :parent,
           :remote_note,
           :remote_post,
-          :initial_body
+          :initial_body,
+          :preloaded_draft
         ])
       )
 
@@ -212,7 +213,6 @@ defmodule VutuvWeb.PostLive.Composer do
   # other people have already read is a different promise from keeping a draft.
   defp draftable?(assigns), do: assigns[:post] == nil and assigns[:remote_post] == nil
 
-  # Which composer this is, in the terms `Vutuv.Posts` keys drafts by.
   # Which composer this is, in the terms `Vutuv.Posts` keys drafts by. The
   # answer-to-a-followed-post composer (issue #1165) is deliberately absent: it
   # is not a draft context, for the blue/green reason `Posts.draft_key/1`
@@ -220,11 +220,23 @@ defmodule VutuvWeb.PostLive.Composer do
   # composer's row.
   defp draft_context(assigns), do: assigns[:parent] || assigns[:remote_note]
 
+  # The stored draft this composer restores: what the host already read and
+  # handed in (`preloaded_draft={{:loaded, draft_or_nil}}` — the feed reads it
+  # anyway to decide whether the panel opens), or this composer's own query.
+  # The `{:loaded, ...}` wrapper keeps "host read it and found none" apart from
+  # "host did not pass one".
+  defp stored_draft(assigns) do
+    case assigns[:preloaded_draft] do
+      {:loaded, draft} -> draft
+      _not_handed_in -> Posts.get_draft(assigns.current_user, draft_context(assigns))
+    end
+  end
+
   defp restore_draft(socket) do
     assigns = socket.assigns
 
     with true <- draftable?(assigns),
-         %PostDraft{} = draft <- Posts.get_draft(assigns.current_user, draft_context(assigns)) do
+         %PostDraft{} = draft <- stored_draft(assigns) do
       # The ids are re-checked against the author's own still-pending rows, so a
       # stale list cannot resurrect a photo that was removed or attached since.
       images = Posts.pending_images(assigns.current_user, draft.image_ids)

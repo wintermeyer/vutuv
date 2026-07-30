@@ -125,25 +125,51 @@ defmodule Vutuv.Social do
   # other end is the page owner, who may be a frozen member viewing their own
   # lists through the moderation bypass.
 
-  def follower_count(user) do
-    Repo.one(
-      from(c in Follow,
-        join: u in assoc(c, :follower),
-        where: account_confirmed_row(u) and not account_hidden_row(u),
-        where: c.followee_id == ^user.id,
-        select: count(c.id)
-      )
+  def follower_count(user), do: Repo.one(follower_count_query(user.id)).total
+
+  def followee_count(user), do: Repo.one(followee_count_query(user.id)).total
+
+  @doc """
+  The three profile-header counts — followers, followees, connections — in one
+  round trip as `%{followers:, followees:, connections:}`: a union of the same
+  three count queries the singles run, so the gates cannot drift. The profile
+  renders all three on every mount (and social-graph refresh), and each single
+  count walks every follow row of the member with a users join, so paying the
+  scan once instead of three times is what this exists for.
+  """
+  def social_counts(%User{id: user_id}) do
+    counts =
+      follower_count_query(user_id)
+      |> union_all(^followee_count_query(user_id))
+      |> union_all(^connection_count_query(user_id))
+      |> Repo.all()
+      |> Map.new(fn %{kind: kind, total: total} -> {kind, total} end)
+
+    %{
+      followers: Map.get(counts, "followers", 0),
+      followees: Map.get(counts, "followees", 0),
+      connections: Map.get(counts, "connections", 0)
+    }
+  end
+
+  # The tagged single-count queries behind both the single accessors and
+  # `social_counts/1`'s union (a union's arms must share one select shape, so
+  # the singles carry the tag too and read `.total` off the one row).
+  defp follower_count_query(user_id) do
+    from(c in Follow,
+      join: u in assoc(c, :follower),
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      where: c.followee_id == ^user_id,
+      select: %{kind: type(^"followers", :string), total: count(c.id)}
     )
   end
 
-  def followee_count(user) do
-    Repo.one(
-      from(c in Follow,
-        join: u in assoc(c, :followee),
-        where: account_confirmed_row(u) and not account_hidden_row(u),
-        where: c.follower_id == ^user.id,
-        select: count(c.id)
-      )
+  defp followee_count_query(user_id) do
+    from(c in Follow,
+      join: u in assoc(c, :followee),
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      where: c.follower_id == ^user_id,
+      select: %{kind: type(^"followees", :string), total: count(c.id)}
     )
   end
 
@@ -821,9 +847,12 @@ defmodule Vutuv.Social do
   list.
   """
   def connection_count(%User{id: user_id}) do
+    Repo.one(connection_count_query(user_id)).total
+  end
+
+  defp connection_count_query(user_id) do
     mutual_follows_query(user_id)
-    |> select([out], count(out.id))
-    |> Repo.one()
+    |> select([out], %{kind: type(^"connections", :string), total: count(out.id)})
   end
 
   # The mutual-follow set ordered newest-pair-first and shaped into the

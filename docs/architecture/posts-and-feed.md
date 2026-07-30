@@ -460,6 +460,15 @@ Counters are counted live from the `post_likes` / `post_bookmarks` /
 `post_reposts` rows and broadcast as absolute values on the post topic
 (`"post:<id>"`).
 
+The engagement a bar starts from is **batched by its host, never queried per
+card**: the feed decorates each page's entries via `Posts.post_engagement_map/2`
+(one query for the page including nested thread parents), and the profile does
+the same for its Beiträge preview, the nested parents *and* the pinned post
+(`UserProfileLive.attach_engagement/3` → `:posts` entries +
+`:pinned_engagement`). A bar only self-loads when nothing was handed in (a lone
+card on a dead page). `user_profile_perf_test.exs` and the feed's batching test
+fail the build if a host drifts back to one query per card.
+
 Likes and bookmarks work on any visible post **and on any member** — from a
 profile a logged-in visitor can like / bookmark another member (`Vutuv.Social`,
 tables `user_likes` / `user_bookmarks`), a private, silent save that needs no

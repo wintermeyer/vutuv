@@ -77,6 +77,10 @@ defmodule VutuvWeb.PostLive.Feed do
     page = Posts.feed_page(user, limit: @page_size)
     entries = page.entries |> with_engagement(user) |> mark_filtered(compiled, user.id)
 
+    # Read the stored draft once and hand it to the composer below, which then
+    # skips its own identical query on init.
+    draft = Posts.get_draft(user)
+
     socket
     |> assign(:content_filters, compiled)
     |> assign(:revealed_filters, MapSet.new())
@@ -85,13 +89,14 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:cursor, page.next_cursor)
     |> assign(:empty?, page.entries == [])
     |> assign(:pending_posts, [])
+    |> assign(:draft, draft)
     # The composer starts collapsed to a single "What's new?" button; posting
     # (own activity arriving below) collapses it again. A stored draft opens it
     # instead (issue #1148): the composer will restore that draft, and text
     # hidden behind a collapsed panel is indistinguishable from text that was
     # thrown away. Resolved here rather than announced by the composer so the
     # disconnected render already agrees and the panel never flickers open.
-    |> assign(:composer_open?, Posts.get_draft(socket.assigns.current_user) != nil)
+    |> assign(:composer_open?, draft != nil)
     # The set of entries currently on screen, kept so the midnight :day_changed
     # tick can re-render each stamp in place (streams don't retain their data).
     # Order/dupes don't matter: the refresh uses stream_insert update_only, which
@@ -964,6 +969,7 @@ defmodule VutuvWeb.PostLive.Feed do
               id="composer"
               current_user={@current_user}
               post={nil}
+              preloaded_draft={{:loaded, @draft}}
             />
           </div>
 

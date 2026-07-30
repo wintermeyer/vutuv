@@ -442,6 +442,7 @@ the resulting ~200px rail width. --%>
           viewer={@current_user}
           entry_id={"pinned-#{@pinned_post.id}"}
           conn_or_socket={@socket}
+          engagement={@pinned_engagement}
           surface={:flat}
           pinned?
         />
@@ -482,10 +483,12 @@ the resulting ~200px rail width. --%>
             :if={!Vutuv.Posts.remote_feed_entry?(entry)}
             post={entry.post}
             ancestors={entry[:ancestors]}
+            ancestor_engagement={entry[:ancestor_engagement] || %{}}
             reposted_by={entry.reposted_by}
             entry_id={entry.id}
             conn_or_socket={@socket}
             viewer={@current_user}
+            engagement={entry[:engagement]}
             surface={:flat}
           />
         </div>

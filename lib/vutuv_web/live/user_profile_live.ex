@@ -167,7 +167,7 @@ defmodule VutuvWeb.UserProfileLive do
     {:noreply,
      socket
      |> assign(:post_filter, filter)
-     |> assign(:posts, fetch_profile_posts(socket, filter))
+     |> assign_posts_with_engagement(filter)
      |> assign(
        :post_filter_total,
        Vutuv.Posts.count_author_posts(
@@ -504,11 +504,16 @@ defmodule VutuvWeb.UserProfileLive do
     # of the six overlapping lookups the four header_* helpers used to fire.
     rel = header_relationship(current_user, user)
 
+    # All three header counts in one round trip — each single count walks every
+    # follow row of the member with a users join, and this runs on both mounts
+    # and on every social-graph refresh.
+    counts = Social.social_counts(user)
+
     socket
     |> assign(:user, user)
-    |> assign(:follower_count, Social.follower_count(user))
-    |> assign(:followee_count, Social.followee_count(user))
-    |> assign(:connection_count, Social.connection_count(user))
+    |> assign(:follower_count, counts.followers)
+    |> assign(:followee_count, counts.followees)
+    |> assign(:connection_count, counts.connections)
     |> assign(:header_follow_id, rel.follow_id)
     |> assign(:header_follows_viewer?, rel.follows_viewer?)
     |> assign(:header_connected?, rel.connected?)
@@ -544,6 +549,51 @@ defmodule VutuvWeb.UserProfileLive do
     )
   end
 
+  # Re-fetch the Beiträge preview and hand every shown card its engagement from
+  # one batched query (:posts + :pinned_engagement in one go).
+  defp assign_posts_with_engagement(socket, filter) do
+    {entries, pinned_engagement} =
+      socket
+      |> fetch_profile_posts(filter)
+      |> attach_engagement(socket.assigns[:pinned_post], socket.assigns.current_user)
+
+    socket
+    |> assign(:posts, entries)
+    |> assign(:pinned_engagement, pinned_engagement)
+  end
+
+  # One engagement read for everything the Beiträge card shows — the timeline
+  # entries, the thread parents they nest and the pinned post — so the per-card
+  # action bars render from handed-in data instead of each running the heavy
+  # engagement query on mount (it ran once per card until v7.201). Returns the
+  # decorated entries plus the pinned post's own engagement. A reshared remote
+  # post has no vutuv post (and no action bar), so it passes through untouched.
+  defp attach_engagement(entries, pinned_post, viewer) do
+    ancestor_ids = fn entry -> Enum.map(entry[:ancestors] || [], & &1.id) end
+    local = Enum.reject(entries, &Vutuv.Posts.remote_feed_entry?/1)
+
+    ids =
+      local
+      |> Enum.flat_map(fn entry -> [entry.post.id | ancestor_ids.(entry)] end)
+      |> then(&if(pinned_post, do: [pinned_post.id | &1], else: &1))
+      |> Enum.uniq()
+
+    engagement = if ids == [], do: %{}, else: Vutuv.Posts.post_engagement_map(ids, viewer)
+
+    entries =
+      Enum.map(entries, fn entry ->
+        if Vutuv.Posts.remote_feed_entry?(entry) do
+          entry
+        else
+          entry
+          |> Map.put(:engagement, engagement[entry.post.id])
+          |> Map.put(:ancestor_engagement, Map.take(engagement, ancestor_ids.(entry)))
+        end
+      end)
+
+    {entries, pinned_post && engagement[pinned_post.id]}
+  end
+
   # The Beiträge card shows the pinned post (issue #1110) in its own block above
   # the timeline, so the timeline leaves it out — one post, shown once. Only
   # under the unfiltered "All" tab: the filtered views are the plain timeline and
@@ -573,7 +623,7 @@ defmodule VutuvWeb.UserProfileLive do
       :pinned_post,
       Vutuv.Posts.pinned_post(socket.assigns.user, socket.assigns.current_user)
     )
-    |> then(&assign(&1, :posts, fetch_profile_posts(&1, &1.assigns.post_filter)))
+    |> then(&assign_posts_with_engagement(&1, &1.assigns.post_filter))
   end
 
   # ── Initial load (ports UserController.show_html) ──
@@ -616,6 +666,11 @@ defmodule VutuvWeb.UserProfileLive do
     # timeline, which therefore leaves it out (see profile_posts/4).
     pinned_post = Vutuv.Posts.pinned_post(user, current_user)
 
+    {post_entries, pinned_engagement} =
+      user
+      |> profile_posts(current_user, "all", pinned_post)
+      |> attach_engagement(pinned_post, current_user)
+
     socket
     |> assign(:as_owner?, owner?)
     |> assign(:vcard_full?, private_emails?)
@@ -623,7 +678,8 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:user_saved, header_user_saved(current_user, user))
     |> assign(:emails, profile_emails(private_emails?, current_user, user))
     |> assign(:pinned_post, pinned_post)
-    |> assign(:posts, profile_posts(user, current_user, "all", pinned_post))
+    |> assign(:pinned_engagement, pinned_engagement)
+    |> assign(:posts, post_entries)
     |> assign(:posts_total, posts_total)
     # The Beiträge card's type filter (issue #945). Resets to "all" on a full
     # profile reload (mount, block/unblock); a tab click re-fetches in place.

@@ -130,6 +130,41 @@ defmodule Vutuv.SocialTest do
     end
   end
 
+  describe "social_counts/1" do
+    test "returns all three profile counts in one query, agreeing with the singles" do
+      user = insert(:user, email_confirmed?: true)
+      fan = insert(:user, email_confirmed?: true)
+      friend = insert(:user, email_confirmed?: true)
+      unactivated = insert(:user)
+
+      # fan -> user (follower only); user <-> friend (mutual = a connection);
+      # unactivated -> user must not count.
+      {:ok, _} = Social.follow(fan.id, user.id)
+      {:ok, _} = Social.follow(user.id, friend.id)
+      {:ok, _} = Social.follow(friend.id, user.id)
+      {:ok, _} = Social.follow(unactivated.id, user.id)
+
+      {counts, queries} =
+        Vutuv.QueryCounter.count_queries(fn -> Social.social_counts(user) end)
+
+      assert queries == 1
+
+      assert counts == %{
+               followers: Social.follower_count(user),
+               followees: Social.followee_count(user),
+               connections: Social.connection_count(user)
+             }
+
+      assert counts == %{followers: 2, followees: 1, connections: 1}
+    end
+
+    test "every count is present even when all are zero" do
+      user = insert(:user, email_confirmed?: true)
+
+      assert Social.social_counts(user) == %{followers: 0, followees: 0, connections: 0}
+    end
+  end
+
   describe "follows_page/3" do
     test "lists no moderation-hidden people" do
       user = insert(:user, email_confirmed?: true)

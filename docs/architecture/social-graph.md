@@ -20,6 +20,17 @@ follow is mutual, and a `<.mute_button>` once you follow the member.
 `/:slug/connections` lists a member's vernetzt people (the owner ends a
 connection by unfollowing).
 
+The profile header reads its three counts through **`Social.social_counts/1`**,
+a union of the same gated count queries the single accessors
+(`follower_count/1` / `followee_count/1` / `connection_count/1`) run — one
+round trip per mount instead of three, and the gates cannot drift because the
+union is built from the singles' own query builders. The header's newest-3
+follower/following previews (`Follow.latest/2`) are served by the
+`follows_(follower|followee)_recency_index` composite indexes
+(`(side_id, inserted_at DESC, id DESC)`), which let the LIMIT stop at the
+first gate-passing rows instead of sorting the member's whole follow set; the
+old single-column follows indexes were dropped as redundant prefixes.
+
 **Mute** is a per-follow flag (`follows.muted`, `<.mute_button>` → PUT
 `/follows/:id/mute`): a muted follow keeps the relationship and any vernetzt
 status but drops the followee's posts out of *your* feed — silent and
