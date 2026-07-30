@@ -8,10 +8,34 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Activity
+  alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
+
+  # A stored public reply from another network, the way the inbox writes one
+  # (it feeds the "fediverse_reply" arm of the unread notification count).
+  defp insert_note!(post) do
+    now = DateTime.utc_now(:second)
+    actor = "https://social.example/users/alice#{System.unique_integer([:positive])}"
+
+    %Note{post_id: post.id}
+    |> Note.changeset(%{
+      object_uri: "#{actor}/statuses/#{System.unique_integer([:positive])}",
+      actor_uri: actor,
+      inbox_uri: "#{actor}/inbox",
+      handle: "alice",
+      display_name: "Alice Anders",
+      content_text: "Guter Punkt.",
+      audience: "public",
+      received_at: now,
+      checked_at: now,
+      expires_at: DateTime.add(now, 183 * 86_400)
+    })
+    |> Repo.insert!()
+  end
 
   # The discovery rail renders with the page again (the v7.200.3 laziness was
   # undone — see FeedRailsTest); the helper name survives at the call sites.
@@ -1188,6 +1212,81 @@ defmodule VutuvWeb.PostFeedLiveTest do
       html = render(live)
       refute html =~ "Show 1 new post"
       refute html =~ "fleeting"
+    end
+  end
+
+  describe "revealing pending posts clears their notifications" do
+    # Clicking "Show N new posts" is the member choosing to look at exactly
+    # those posts, so a notification whose subject is one of them (the answer
+    # to their post, an answer elsewhere in their thread, the post naming
+    # them) must stop counting as unread the moment the pill unfolds — the
+    # bell badge recounts over the existing :notifications_changed signal.
+    test "a pending reply's unread notification clears on reveal", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      {:ok, mine} = Posts.create_post(user, %{body: "my open question"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # A fresh registration already carries its own welcome notification, so
+      # the tests count relative to that baseline.
+      base = Activity.unread_notification_count(user.id)
+
+      {:ok, _reply} = Posts.create_reply(friend, mine, %{body: "the answer, live"})
+
+      assert render(live) =~ "Show 1 new post"
+      assert Activity.unread_notification_count(user.id) == base + 1
+
+      live |> element("#show-new-posts") |> render_click()
+
+      assert render(live) =~ "the answer, live"
+      assert Activity.unread_notification_count(user.id) == base
+    end
+
+    test "a pending mention's unread notification clears on reveal", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      base = Activity.unread_notification_count(user.id)
+
+      {:ok, _post} = Posts.create_post(friend, %{body: "Ask @#{user.username} about it."})
+
+      assert render(live) =~ "Show 1 new post"
+      assert Activity.unread_notification_count(user.id) == base + 1
+
+      live |> element("#show-new-posts") |> render_click()
+
+      assert Activity.unread_notification_count(user.id) == base
+    end
+
+    test "revealing leaves notifications about other posts unread", %{conn: conn} do
+      # The reveal marks exactly the revealed posts — a reply from another
+      # network (a fediverse Note on the member's post) never sits behind the
+      # pill (remote replies live on the post's thread page), so revealing an
+      # unrelated pending post must not swallow its notification.
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      {:ok, mine} = Posts.create_post(user, %{body: "federated far and wide"})
+      insert_note!(mine)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Baseline includes the welcome notification and the fediverse reply.
+      base = Activity.unread_notification_count(user.id)
+
+      {:ok, _post} = Posts.create_post(friend, %{body: "unrelated news"})
+
+      assert render(live) =~ "Show 1 new post"
+      assert Activity.unread_notification_count(user.id) == base
+
+      live |> element("#show-new-posts") |> render_click()
+
+      assert render(live) =~ "unrelated news"
+      assert Activity.unread_notification_count(user.id) == base
     end
   end
 

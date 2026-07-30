@@ -165,9 +165,13 @@ reply to it, and the badge would still insist on one unread notification until
 you opened the page and dismissed it by hand.
 
 The chokepoints are `Vutuv.Posts`'s `engage/4` (like / bookmark / repost, on the
-idempotent repeat too) and `do_create_reply/4` (the parent). Marking broadcasts
-`:notifications_changed`, the shell's recount-from-source signal, rather than
-decrementing a tally, so the badge cannot drift.
+idempotent repeat too), `do_create_reply/4` (the parent), and the feed's "Show N
+new posts" pill: clicking it is the member choosing to look at exactly those
+posts, so `PostLive.Feed`'s reveal marks the whole batch through the plural
+`Activity.mark_posts_seen/2` (one recount broadcast for the batch, not one per
+post). Marking broadcasts `:notifications_changed`, the shell's
+recount-from-source signal, rather than decrementing a tally, so the badge
+cannot drift.
 
 Which events a seen post clears is `Activity.subject_post_id/1`, and it is
 deliberately narrow — only the three kinds whose subject is somebody *else's*

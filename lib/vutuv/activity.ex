@@ -228,8 +228,10 @@ defmodule Vutuv.Activity do
   Called from `Vutuv.Posts` whenever a member answers, likes, bookmarks or
   reposts a post: all four are deliberate acts on a post they were looking at,
   which makes "you were mentioned here" or "somebody answered this" news they
-  already have. Idempotent (the four actions are toggles that may fire again),
-  and a no-op for a missing member or post.
+  already have. The feed's "Show N new posts" pill marks the same way (via
+  `mark_posts_seen/2`): revealing a batch is the member choosing to look at
+  exactly those posts. Idempotent (the four actions are toggles that may fire
+  again), and a no-op for a missing member or post.
 
   The badge is not decremented here — `:notifications_changed` tells the shell
   to recount from the source, the same way a silently removed event does, so
@@ -239,15 +241,31 @@ defmodule Vutuv.Activity do
   def mark_post_seen(nil, _post_id), do: :ok
   def mark_post_seen(_user_id, nil), do: :ok
 
-  def mark_post_seen(user_id, post_id) when is_binary(user_id) and is_binary(post_id) do
-    case Engagement.insert_if_new(
-           NotificationPostRead,
-           %{user_id: user_id, post_id: post_id},
-           [:user_id, :post_id]
-         ) do
-      {:inserted, _row} -> broadcast(user_id, :notifications_changed)
-      :exists -> :ok
-    end
+  def mark_post_seen(user_id, post_id) when is_binary(user_id) and is_binary(post_id),
+    do: mark_posts_seen(user_id, [post_id])
+
+  @doc """
+  Batch form of `mark_post_seen/2`, for the feed's "Show N new posts" pill:
+  revealing the batch is one act of looking, so all fresh marks together
+  broadcast a single `:notifications_changed` recount instead of one per post.
+  Same semantics otherwise — idempotent, and silent when nothing was new.
+  """
+  def mark_posts_seen(nil, _post_ids), do: :ok
+
+  def mark_posts_seen(user_id, post_ids) when is_binary(user_id) and is_list(post_ids) do
+    fresh =
+      Enum.count(post_ids, fn post_id ->
+        match?(
+          {:inserted, _row},
+          Engagement.insert_if_new(
+            NotificationPostRead,
+            %{user_id: user_id, post_id: post_id},
+            [:user_id, :post_id]
+          )
+        )
+      end)
+
+    if fresh > 0, do: broadcast(user_id, :notifications_changed), else: :ok
   end
 
   @doc """

@@ -24,6 +24,7 @@ defmodule VutuvWeb.PostLive.Feed do
   import VutuvWeb.UserHTML, only: [user_row: 1]
 
   alias Phoenix.LiveView.JS
+  alias Vutuv.Activity
   alias Vutuv.ContentFilters
   alias Vutuv.Fediverse
   alias Vutuv.Posts
@@ -481,6 +482,18 @@ defmodule VutuvWeb.PostLive.Feed do
 
   def handle_event("show-new", _params, socket) do
     pending = socket.assigns.pending_posts
+
+    # Revealing the batch is the member choosing to look at exactly these
+    # posts, so a notification whose subject is one of them (the answer to
+    # their post, an answer elsewhere in their thread, the post naming them)
+    # is old news the moment the pill unfolds: the bell recounts over the
+    # :notifications_changed broadcast. Harmless for posts nobody notified
+    # about (the mark is a row no tally consults), and the pattern skips any
+    # future pending entry without a local post to mark.
+    Activity.mark_posts_seen(
+      socket.assigns.current_user.id,
+      for(%{post: %{id: post_id}} <- pending, do: post_id)
+    )
 
     socket =
       pending

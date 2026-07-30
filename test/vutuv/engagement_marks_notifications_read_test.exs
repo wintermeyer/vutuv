@@ -176,6 +176,47 @@ defmodule Vutuv.EngagementMarksNotificationsReadTest do
     end
   end
 
+  describe "mark_posts_seen/2 (the feed's reveal pill)" do
+    # Clicking "Show N new posts" reveals the whole pending batch at once, so
+    # the feed marks them seen in one call: every notification whose subject
+    # is one of the revealed posts stops counting, and the member's open
+    # sessions get ONE recount signal for the batch, not one per post.
+    test "clears the whole batch and recounts once" do
+      me = insert(:user)
+      other = insert(:user)
+      mine = insert(:post, user: me)
+      first = insert(:post, user: other)
+      second = insert(:post, user: insert(:user))
+      insert(:post_reply, post: first, parent_post: mine, parent_author: me)
+      insert(:post_reply, post: second, parent_post: mine, parent_author: me)
+
+      assert Activity.unread_notification_count(me.id) == 2
+
+      Activity.subscribe(me.id)
+      assert :ok = Activity.mark_posts_seen(me.id, [first.id, second.id])
+
+      assert Activity.unread_notification_count(me.id) == 0
+      assert_receive :notifications_changed
+      refute_receive :notifications_changed
+    end
+
+    test "an already-seen batch stays silent (no recount for nothing)" do
+      {me, answer} = answered_post()
+      Activity.mark_post_seen(me.id, answer.id)
+
+      Activity.subscribe(me.id)
+      assert :ok = Activity.mark_posts_seen(me.id, [answer.id])
+
+      refute_receive :notifications_changed
+    end
+
+    test "a nil member or an empty batch is a no-op" do
+      post = insert(:post, user: insert(:user))
+      assert Activity.mark_posts_seen(nil, [post.id]) == :ok
+      assert Activity.mark_posts_seen(Vutuv.UUIDv7.generate(), []) == :ok
+    end
+  end
+
   describe "mark_post_seen/2" do
     test "tells the member's open sessions to recount their badge" do
       me = insert(:user)
