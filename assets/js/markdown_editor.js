@@ -35,6 +35,7 @@
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core"
 import {
   commonmark,
+  linkSchema,
   toggleStrongCommand,
   toggleEmphasisCommand,
   toggleInlineCodeCommand,
@@ -100,6 +101,19 @@ const table = [
 ]
 
 const gfmSubset = [gfm.remarkGFMPlugin, ...strikethrough, ...table].flat()
+
+// A link ends where its text ends. ProseMirror marks are "inclusive" by
+// default — typing at a mark's right edge inherits it — and Milkdown's
+// linkSchema doesn't say otherwise, so with the caret at the end of a link
+// the space that was meant to END it (and every word after) joined the link,
+// storing `[https://… more words](https://…)`. A freshly pasted URL only
+// looks immune because it stays plain text until the next re-seed (draft
+// restore, post edit) autolinks it via GFM. Mark registration is last-wins,
+// so this must be `.use`d after the commonmark preset.
+const nonInclusiveLink = linkSchema.extendSchema((prev) => (ctx) => ({
+  ...prev(ctx),
+  inclusive: false,
+}))
 
 // A no-dependency placeholder: decorate the sole empty paragraph so CSS can
 // paint the prompt text (::before reads data-placeholder). Milkdown ships no
@@ -295,6 +309,7 @@ export const MarkdownEditor = {
         })
       })
       .use(commonmark)
+      .use(nonInclusiveLink)
       .use(gfmSubset)
       .use(listener)
       .use(history)
