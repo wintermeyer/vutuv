@@ -144,6 +144,35 @@ defmodule VutuvWeb.MarkdownEditorTest do
     refute html =~ "Search emoji"
   end
 
+  test "the fence-language labels ride the editor root (issues #1108/#1137/#1138)" do
+    html = editor()
+
+    # The composer's code-block preview names a block the way the published
+    # page will (`PHP`, not `php`), and the display names come from the server
+    # so VutuvWeb.CodeHighlight.Languages stays the only registry — the same
+    # arrangement as the emoji group labels above.
+    assert [langs] =
+             Regex.run(~r/data-mde-langs="([^"]*)"/, html, capture: :all_but_first)
+
+    pairs =
+      langs
+      |> String.split("|")
+      |> Map.new(fn pair ->
+        [name, label] = String.split(pair, ":", parts: 2)
+        {name, label}
+      end)
+
+    assert pairs["php"] == "PHP"
+    assert pairs["elixir"] == "Elixir"
+    # An alias resolves to its language's label.
+    assert pairs["js"] == "JavaScript"
+    # The "no language" words are present with an EMPTY label, so the editor
+    # knows to leave such a block alone (the published page shows no label
+    # for them either).
+    assert pairs["text"] == ""
+    assert pairs["plain"] == ""
+  end
+
   test "power users get a WYSIWYG/source toggle and a full-screen control" do
     html = editor()
     assert html =~ ~s(data-mde-cmd="mode")

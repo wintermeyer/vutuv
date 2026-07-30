@@ -207,6 +207,40 @@ defmodule VutuvWeb.CodeHighlightTest do
     end
   end
 
+  describe "Languages.editor_labels/0 (the composer preview's name source)" do
+    alias VutuvWeb.CodeHighlight.Languages
+
+    test "covers every registered fence word plus the plain words" do
+      labels = Languages.editor_labels()
+
+      for name <- Languages.names() do
+        assert is_binary(labels[name]), "no editor label for #{name}"
+      end
+
+      # The "no language" words map to the empty string — the signal that the
+      # composer, like the published page, must leave such a block unlabelled.
+      assert labels["text"] == ""
+      assert labels["none"] == ""
+    end
+
+    test "an alias carries its language's label" do
+      labels = Languages.editor_labels()
+
+      assert labels["py"] == "Python"
+      assert labels["patch"] == "Diff"
+    end
+
+    test "every entry survives the pipe/colon serialization onto the editor root" do
+      # VutuvWeb.UI.markdown_editor/1 writes the map as `name:Label|name:Label`;
+      # a name holding `:` or `|`, or a label holding `|`, would corrupt every
+      # entry after it.
+      for {name, label} <- Languages.editor_labels() do
+        refute name =~ ~r/[:|]/, "fence word #{inspect(name)} breaks the attr format"
+        refute label =~ "|", "label #{inspect(label)} breaks the attr format"
+      end
+    end
+  end
+
   # The code text with every tag removed, so a test can assert that highlighting
   # changed the markup and nothing else.
   defp text_of(html) do

@@ -610,4 +610,23 @@ defmodule VutuvWeb.CodeHighlight.Languages do
 
   @doc "Every fence word the registry answers to. For tests and documentation."
   def names, do: Map.keys(@by_name)
+
+  @doc """
+  Every fence word the composer might meet, mapped to the label the published
+  block will show for it — and the "no language" words mapped to `""`, the
+  signal that such a block gets no label there either.
+
+  `VutuvWeb.UI.markdown_editor/1` serializes this map onto the editor root
+  (`data-mde-langs`) so the composer's code-block preview (issues #1108, #1137,
+  #1138) names a block the way the rendered post will, without a second copy of
+  this registry living in JavaScript.
+  """
+  def editor_labels do
+    labels =
+      for {name, slug} <- @by_name, into: %{} do
+        {name, Map.fetch!(@registry, slug).label}
+      end
+
+    Enum.reduce(@plain, labels, &Map.put(&2, &1, ""))
+  end
 end

@@ -2025,6 +2025,66 @@ ul.thumbs li .text .url a {
   padding: 0.7em 0.85em;
 }
 .mde__mount .ProseMirror pre code { background: transparent; padding: 0; }
+/* The code-fence preview (issues #1108, #1137, #1138). The published page
+   renders a labelled fence as `.codeblock` and a diff fence as `.diff-line*`
+   rows (see above); the composer used to show the same block as a plain grey
+   box, which read as "the fence did not work" — the reason all three issues
+   came back. The MarkdownEditor hook decorates such a block
+   (`codeFencePreview` in markdown_editor.js), and these rules mirror the
+   published styles onto the decorations: the corner language chip
+   (`data-mde-lang`), the file-name bar (`data-mde-title`, issue #1137) and
+   the added/removed row tints. The text itself stays the plain source — the
+   `+`/`-` markers are what a member edits, so unlike the published block they
+   keep their column — and token colouring stays server-side (the composer
+   ships no highlighter, like the rest of the site). */
+.mde__mount .ProseMirror pre.mde-codeblock { position: relative; padding-top: 1.9em; }
+.mde__mount .ProseMirror pre.mde-codeblock::after {
+  background: #e2e8f0;
+  border-radius: 5px;
+  color: #475569;
+  content: attr(data-mde-lang);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1em 0.45em;
+  pointer-events: none;
+  position: absolute;
+  right: 0.55em;
+  top: 0.45em;
+}
+/* With a file name the bar owns the top edge (negative margins bleed it over
+   the pre's padding), the language moves into its right corner as quiet text,
+   and the right padding keeps a long path from running underneath it. The
+   path wraps rather than truncating, like the published bar: on a phone the
+   last segments are the ones that matter. */
+.mde__mount .ProseMirror pre.mde-codeblock--titled { padding-top: 0.7em; }
+.mde__mount .ProseMirror pre.mde-codeblock--titled::before {
+  background: #e2e8f0;
+  border-radius: 8px 8px 0 0;
+  color: #334155;
+  content: attr(data-mde-title);
+  display: block;
+  font-size: 0.78em;
+  font-weight: 600;
+  margin: -0.7em -0.85em 0.6em;
+  overflow-wrap: anywhere;
+  padding: 0.5em 4em 0.5em 0.9em;
+}
+.mde__mount .ProseMirror pre.mde-codeblock--titled::after {
+  background: transparent;
+  font-weight: 400;
+  top: 0.55em;
+}
+/* Diff rows (issues #1108 + #1138): the same tints as the published
+   `.diff-line--*`, as inline decorations over each classified row; `.mde-diff-m`
+   is the row's own +/- marker, coloured like the published gutter. */
+.mde__mount .ProseMirror .mde-diff--add { background: #d1fae5; }
+.mde__mount .ProseMirror .mde-diff--del { background: #ffe4e6; }
+.mde__mount .ProseMirror .mde-diff--hunk { color: #64748b; font-weight: 600; }
+.mde__mount .ProseMirror .mde-diff--meta { color: #64748b; }
+.mde__mount .ProseMirror .mde-diff--add.mde-diff-m,
+.mde__mount .ProseMirror .mde-diff--add .mde-diff-m { color: #047857; }
+.mde__mount .ProseMirror .mde-diff--del.mde-diff-m,
+.mde__mount .ProseMirror .mde-diff--del .mde-diff-m { color: #be123c; }
 .mde__mount .ProseMirror hr {
   border: 0;
   border-top: 2px solid #e2e8f0;
@@ -2630,6 +2690,19 @@ html.lightbox-open { overflow: hidden; }
   .mde__mount .ProseMirror hr { border-color: #334155; }
   .mde__mount .ProseMirror a { color: #93c5fd; }
   .mde__mount .ProseMirror .mde-placeholder::before { color: #64748b; }
+  /* The code-fence preview (light values above) mirrors the published dark
+     block: the `.codeblock` chip/bar greys and the `.diff-line--*` tints. */
+  .mde__mount .ProseMirror pre.mde-codeblock::after { background: #334155; color: #cbd5e1; }
+  .mde__mount .ProseMirror pre.mde-codeblock--titled::before { background: #334155; color: #e2e8f0; }
+  .mde__mount .ProseMirror pre.mde-codeblock--titled::after { background: transparent; }
+  .mde__mount .ProseMirror .mde-diff--add { background: rgb(16 185 129 / 0.18); }
+  .mde__mount .ProseMirror .mde-diff--del { background: rgb(244 63 94 / 0.18); }
+  .mde__mount .ProseMirror .mde-diff--hunk,
+  .mde__mount .ProseMirror .mde-diff--meta { color: #94a3b8; }
+  .mde__mount .ProseMirror .mde-diff--add.mde-diff-m,
+  .mde__mount .ProseMirror .mde-diff--add .mde-diff-m { color: #6ee7b7; }
+  .mde__mount .ProseMirror .mde-diff--del.mde-diff-m,
+  .mde__mount .ProseMirror .mde-diff--del .mde-diff-m { color: #fda4af; }
   .mde .ProseMirror th, .mde .ProseMirror td { border-color: #334155; }
   .mde .ProseMirror th { background: #1e293b; }
   .mde[data-mde-fullscreen="1"] { background: #0b1220; }

@@ -92,6 +92,29 @@ and nothing more:
 examples through the same code (`VutuvWeb.HelpController`), so the page cannot
 describe a feature the renderer has stopped supporting.
 
+### The composer previews the fence
+
+The Milkdown composer shows the plain source inside a code block — the `+`/`-`
+markers are what a member edits — but it no longer shows a plain grey box for
+the whole block: that read as "the fence did not work" and got issues #1108,
+#1137 and #1138 reopened ("when something looks broken in the preview, I'm
+hesitant to submit"). `codeFencePreview` in `assets/js/markdown_editor.js` is a
+ProseMirror decoration plugin that mirrors what the renderer will do: added and
+removed diff rows get the published tints (their markers coloured like the
+gutter), hunk and file headers are quieted, and the block carries the corner
+language chip or the file-name bar (`.mde-codeblock*` / `.mde-diff--*` in
+`components.css`, light and dark).
+
+The row classification mirrors `VutuvWeb.CodeHighlight.Diff.classify/1`, and
+the display names come from the server — `VutuvWeb.UI.markdown_editor/1` writes
+`VutuvWeb.CodeHighlight.Languages.editor_labels/0` onto the editor root as
+`data-mde-langs` ("php:PHP|…", the emoji-group-labels arrangement) — so no
+second registry lives in JavaScript; the "no language" words carry an empty
+label, the sign to leave such a block alone. Token colouring stays server-side
+on both surfaces: the preview is decorations over the stored source, not a
+shipped highlighter. Drift guards live in `markdown_code_fence_test.exs` and
+`components/markdown_editor_test.exs`.
+
 ### Footnotes
 
 A body may annotate itself (issue #1147):

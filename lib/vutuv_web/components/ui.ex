@@ -29,6 +29,7 @@ defmodule VutuvWeb.UI do
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Tags.UserTag
+  alias VutuvWeb.CodeHighlight.Languages
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Markdown
 
@@ -243,6 +244,7 @@ defmodule VutuvWeb.UI do
       data-emoji-close={gettext("Close")}
       data-emoji-empty={gettext("No emoji found.")}
       data-emoji-groups={emoji_group_labels()}
+      data-mde-langs={code_fence_labels()}
       class={["mde", @compact && "mde--compact", @class]}
       {@rest}
     >
@@ -485,6 +487,21 @@ defmodule VutuvWeb.UI do
     ]
     |> Enum.map_join("|", fn {key, label} -> "#{key}:#{label}" end)
   end
+
+  # The fence-language display names for the composer's code-block preview
+  # (issues #1108, #1137, #1138), as "word:Label|word:Label" on the editor root
+  # (`data-mde-langs`) — the same arrangement as the emoji group labels above:
+  # the server is the only side that holds the registry, so the preview names a
+  # block exactly the way the published page will ("PHP", not "php"), and the
+  # "no language" words carry an empty label, the sign to leave such a block
+  # alone. Built at compile time: the registry is static, and the composer
+  # re-renders on every keystroke. A fence word never contains `:` or `|` and a
+  # label never `|` (code_highlight_test.exs pins that), so the format is safe.
+  @code_fence_labels Languages.editor_labels()
+                     |> Enum.sort()
+                     |> Enum.map_join("|", fn {word, label} -> "#{word}:#{label}" end)
+
+  defp code_fence_labels, do: @code_fence_labels
 
   @doc """
   Wraps every case-insensitive occurrence of `needles` (a string or a list of

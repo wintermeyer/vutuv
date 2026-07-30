@@ -237,4 +237,55 @@ defmodule VutuvWeb.MarkdownCodeFenceTest do
       assert css =~ ~r/@media \(prefers-color-scheme: dark\)[\s\S]*\.codeblock__title \{/
     end
   end
+
+  describe "the composer previews what the renderer will do (issues #1108, #1137, #1138)" do
+    # The published post renders a diff fence as tinted rows and a titled fence
+    # with its file-name bar — but the composer used to show the same block as a
+    # plain grey box, which read as "the fence did not work" and is why all
+    # three issues were reopened. The preview is a ProseMirror decoration
+    # plugin in the editor hook; like the round-trip tests above, these are
+    # static source checks (no JS test runner) plus the drift guards that keep
+    # the JS classification aligned with VutuvWeb.CodeHighlight.Diff.
+    test "the editor carries a code fence preview plugin" do
+      js = File.read!(@editor_js)
+
+      assert js =~ "codeFencePreview"
+      assert js =~ ~r/\.use\(codeFencePreview\(/
+    end
+
+    test "the JS row classification mirrors Diff.classify/1, meta before add/del" do
+      js = File.read!(@editor_js)
+
+      # The server's rule: hunk first, then the file headers (so `+++` is never
+      # an added line), then the single-character markers.
+      assert js =~ ~r/@@[\s\S]*?mde-diff--hunk/
+
+      assert js =~
+               ~r/mde-diff--hunk[\s\S]*?mde-diff--meta[\s\S]*?mde-diff--add[\s\S]*?mde-diff--del/
+
+      # The meta prefixes are the server's list (VutuvWeb.CodeHighlight.Diff).
+      for prefix <- ["+++", "diff ", "index ", "rename from", "\\\\ No newline"] do
+        assert js =~ prefix, "missing diff meta prefix in the editor: #{inspect(prefix)}"
+      end
+    end
+
+    test "the diff words the editor recognises are the server's" do
+      js = File.read!(@editor_js)
+
+      # `diff` plus the aliases Languages maps onto it.
+      assert js =~ ~r/diff\|patch\|udiff/
+    end
+
+    test "the preview styles exist, light and dark" do
+      css = File.read!(@components_css)
+
+      for class <- ~w(mde-codeblock mde-codeblock--titled mde-diff--add mde-diff--del
+                      mde-diff--hunk mde-diff--meta) do
+        assert css =~ class, "missing composer preview class: .#{class}"
+
+        assert css =~ ~r/@media \(prefers-color-scheme: dark\)[\s\S]*#{Regex.escape(class)}/,
+               "missing dark counterpart for .#{class}"
+      end
+    end
+  end
 end

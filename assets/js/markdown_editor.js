@@ -248,6 +248,130 @@ const emojiInputRule = () =>
     })
   )
 
+// The composer previews what the renderer will make of a code fence (issues
+// #1108, #1137 and #1138): a `diff` fence's added and removed rows are tinted
+// like the published block's, its hunk and file headers are quieted the same
+// way, and a fence that names a language or a file shows that name on the
+// block — so nobody has to post to find out whether a fence was understood
+// ("when something looks broken in the preview, I'm hesitant to submit").
+// It is a preview, not the renderer: everything here is decorations over the
+// plain source — the text, markers included, stays exactly what is stored and
+// edited — and token colouring stays server-side, so the composer ships no
+// highlighter either.
+//
+// The display names come from the server (`data-mde-langs`, built from
+// VutuvWeb.CodeHighlight.Languages), so no second registry lives here. The
+// small grammar below reads the STORED short form only (`diff:php`,
+// `php:config/app.php` with `%20` for a space) — the attribute form is folded
+// into it before Milkdown ever sees the fence (rewriteFenceInfo below) — and
+// the row classification mirrors VutuvWeb.CodeHighlight.Diff.classify/1.
+const DIFF_WORDS = /^(diff|patch|udiff)$/i
+
+// Rows that carry no +/- of their own; matched before the single-character
+// markers, so a `+++` file header never reads as an added line.
+const DIFF_META = [
+  "+++",
+  "---",
+  "diff ",
+  "index ",
+  "new file mode",
+  "deleted file mode",
+  "old mode",
+  "new mode",
+  "similarity index",
+  "rename from",
+  "rename to",
+  "\\ No newline",
+]
+
+const diffRowClass = (line) => {
+  if (line.startsWith("@@")) return "mde-diff--hunk"
+  if (DIFF_META.some((prefix) => line.startsWith(prefix))) return "mde-diff--meta"
+  if (line.startsWith("+")) return "mde-diff--add"
+  if (line.startsWith("-")) return "mde-diff--del"
+  return null
+}
+
+// What a block's fence word means for the preview — `{diff, label, title}` —
+// or null when the block must be left alone (no info string, or one of the
+// "no language" words, which the published page does not label either; those
+// carry an empty label in the map).
+const fenceFacts = (word, labels) => {
+  if (!word) return null
+  const colon = word.indexOf(":")
+  const head = (colon === -1 ? word : word.slice(0, colon)).toLowerCase()
+  const rest = colon === -1 ? "" : word.slice(colon + 1)
+  if (!head || labels[head] === "") return null
+  const label = (name) => (name in labels ? labels[name] : name)
+
+  if (DIFF_WORDS.test(head)) {
+    // A diff's colon segment is the language inside it (issue #1138). The
+    // published block colours the rows' tokens with it; the preview cannot
+    // (no highlighter here), so the label names it instead — the member still
+    // sees their `:php` registered.
+    const sub = rest && label(rest.toLowerCase())
+    return { diff: true, label: sub ? `${label(head)} · ${sub}` : label(head), title: "" }
+  }
+
+  // Everything else's colon segment is the file name (issue #1137). A space
+  // travels as `%20`; decoded leniently, so a literal `%` stays as typed.
+  let title = rest
+  try {
+    title = decodeURIComponent(rest)
+  } catch {
+    // not percent-encoded — keep the raw segment
+  }
+  return { diff: false, label: label(head), title }
+}
+
+// One inline decoration per classified row, and one more over its `+`/`-` so
+// the marker can take the gutter colour. Offsets are plain JS string offsets:
+// a ProseMirror text node's size IS its string length.
+const diffRowDecorations = (node, pos, decorations) => {
+  let at = pos + 1
+  for (const line of node.textContent.split("\n")) {
+    const rowClass = diffRowClass(line)
+    if (rowClass) {
+      decorations.push(Decoration.inline(at, at + line.length, { class: "mde-diff " + rowClass }))
+      if (rowClass === "mde-diff--add" || rowClass === "mde-diff--del") {
+        decorations.push(Decoration.inline(at, at + 1, { class: "mde-diff-m" }))
+      }
+    }
+    at += line.length + 1
+  }
+}
+
+const codeFencePreview = (labels) =>
+  $prose(
+    () =>
+      new Plugin({
+        key: new PluginKey("MDE_CODE_FENCE_PREVIEW"),
+        props: {
+          // Recomputed per render, like the placeholder above — a post is
+          // small, and a code block's decorations must follow every keystroke
+          // inside it anyway.
+          decorations(state) {
+            const decorations = []
+            state.doc.descendants((node, pos) => {
+              if (node.type.name !== "code_block") return true
+              const facts = fenceFacts(node.attrs.language || "", labels)
+              if (!facts) return false
+              const attrs = { class: "mde-codeblock" }
+              if (facts.label) attrs["data-mde-lang"] = facts.label
+              if (facts.title) {
+                attrs.class += " mde-codeblock--titled"
+                attrs["data-mde-title"] = facts.title
+              }
+              decorations.push(Decoration.node(pos, pos + node.nodeSize, attrs))
+              if (facts.diff) diffRowDecorations(node, pos, decorations)
+              return false
+            })
+            return decorations.length ? DecorationSet.create(state.doc, decorations) : null
+          },
+        },
+      })
+  )
+
 // Toolbar button (data-mde-cmd) -> Milkdown command. Each returns the command
 // key + optional payload; `link` is special-cased (it needs a URL).
 const COMMANDS = {
@@ -316,6 +440,7 @@ export const MarkdownEditor = {
       .use(placeholder(placeholderText))
       .use(imagePolicy(this.imagesEnabled))
       .use(emojiInputRule())
+      .use(codeFencePreview(this.fenceLabels()))
 
     if (this.imagesEnabled) {
       editor = editor.use(imageSelectionWatch(this)).use(imageFileCapture(this))
@@ -384,6 +509,19 @@ export const MarkdownEditor = {
   },
 
   // --- helpers ---
+
+  // The server's fence-word → display-label map off the root (`data-mde-langs`,
+  // see VutuvWeb.UI.markdown_editor/1: "php:PHP|…"). An empty label marks a
+  // "no language" word — the sign for codeFencePreview to leave such a block
+  // alone, exactly as the published page does.
+  fenceLabels() {
+    const labels = {}
+    for (const pair of (this.root.dataset.mdeLangs || "").split("|")) {
+      const at = pair.indexOf(":")
+      if (at > 0) labels[pair.slice(0, at)] = pair.slice(at + 1)
+    }
+    return labels
+  },
 
   // Mirror the editor's Markdown into the hidden form field and fire `input`
   // so phx-change (validate / typing) runs, exactly as the plain textarea did.
