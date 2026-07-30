@@ -56,6 +56,29 @@ defmodule VutuvWeb.ComposerDraftTest do
       refute html =~ ~s(id="composer-panel" class="hidden")
     end
 
+    test "a restored draft shows exactly one Discard draft control", %{conn: conn} do
+      # The restore notice carries its own "Discard draft" (issue #1148) and
+      # the feed header shows one while there is something to lose (issue
+      # #1135). After a reload both conditions held, so the composer rendered
+      # the button twice, one right above the other (issue #1221). While the
+      # notice shows, it owns the action; the header button takes over as soon
+      # as the notice steps aside.
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      type(live, %{"body" => "Ein halber Gedanke"})
+
+      {:ok, reloaded, _html} = live(recycle(conn), ~p"/feed")
+
+      assert has_element?(reloaded, "[data-draft-restored] button[phx-click='discard-draft']")
+      refute has_element?(reloaded, "#composer-discard")
+
+      type(reloaded, %{"body" => "Ein halber Gedanke, weitergeschrieben"})
+
+      refute has_element?(reloaded, "[data-draft-restored]")
+      assert has_element?(reloaded, "#composer-discard")
+    end
+
     test "the notice steps aside as soon as the member edits", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 

@@ -1321,6 +1321,7 @@ defmodule VutuvWeb.PostLive.Composer do
               type="button"
               phx-click="discard-draft"
               phx-target={@myself}
+              data-confirm={gettext("Discard the photos and text of this draft?")}
               class="font-semibold underline underline-offset-2 hover:text-brand-900 dark:hover:text-white"
             >
               {gettext("Discard draft")}
@@ -1356,7 +1357,10 @@ defmodule VutuvWeb.PostLive.Composer do
           </div>
           <%!-- Header row, feed compose only: "Discard draft" (while there is
           something to lose) and the corner ✕ that merely collapses the
-          composer. The ✕ carries no phx-target: the event bubbles up to the
+          composer. While the restore notice above is showing, its own
+          "Discard draft" owns the action and this one stays away — with both
+          gates true the button rendered twice, one right above the other
+          (issue #1221); the first edit clears the notice and hands over. The ✕ carries no phx-target: the event bubbles up to the
           feed LiveView that owns the reveal (`close-composer`) — a draft
           always survives it (issue #1135; the server-side draft of #1148
           keeps the photos too, and the feed re-opens over a held draft, so
@@ -1370,7 +1374,7 @@ defmodule VutuvWeb.PostLive.Composer do
             class="-mt-1 mb-2 flex items-center justify-end gap-1"
           >
             <button
-              :if={drafting?(assigns)}
+              :if={drafting?(assigns) and not @restored_draft?}
               type="button"
               id={"#{@id}-discard"}
               phx-click="discard-draft"
