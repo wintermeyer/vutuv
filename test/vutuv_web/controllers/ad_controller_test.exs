@@ -4,17 +4,25 @@ defmodule VutuvWeb.AdControllerTest do
   alias Vutuv.Ads
   alias Vutuv.Repo
 
-  @booking_params %{
-    "day" => Date.to_iso8601(Date.add(Ads.today(), 14)),
-    "content" => "**Acme GmbH** sucht Elixir-Entwickler.",
-    "billing_name" => "Acme GmbH",
-    "billing_company" => "",
-    "billing_street" => "Musterstraße 1",
-    "billing_zip_code" => "10115",
-    "billing_city" => "Berlin",
-    "billing_country" => "Deutschland",
-    "vat_id" => "DE123456789"
-  }
+  # A function, deliberately NOT a module attribute: an attribute's day would
+  # be minted when the file compiles, while assertions read Ads.today() at run
+  # time — across Berlin midnight (22:00 UTC in summer) the two disagree and
+  # the suite fails only in that nightly window (caught on CI 2026-07-30
+  # 22:01 UTC). Each test binds the map ONCE and derives every day it asserts
+  # from that same map, so one clock read serves the whole test.
+  defp booking_params(day \\ Date.add(Ads.today(), 14)) do
+    %{
+      "day" => Date.to_iso8601(day),
+      "content" => "**Acme GmbH** sucht Elixir-Entwickler.",
+      "billing_name" => "Acme GmbH",
+      "billing_company" => "",
+      "billing_street" => "Musterstraße 1",
+      "billing_zip_code" => "10115",
+      "billing_city" => "Berlin",
+      "billing_country" => "Deutschland",
+      "vat_id" => "DE123456789"
+    }
+  end
 
   describe "index (the public offer page)" do
     test "shows price and conditions to anonymous visitors", %{conn: conn} do
@@ -83,7 +91,7 @@ defmodule VutuvWeb.AdControllerTest do
       beyond = Date.add(Ads.last_bookable_day(), 1)
 
       conn =
-        post(conn, ~p"/ads", %{"ad" => Map.put(@booking_params, "day", Date.to_iso8601(beyond))})
+        post(conn, ~p"/ads", %{"ad" => booking_params(beyond)})
 
       assert html_response(conn, 422) =~ "is outside the booking window"
     end
@@ -91,14 +99,14 @@ defmodule VutuvWeb.AdControllerTest do
 
   describe "preview (the check before buying)" do
     test "requires login", %{conn: conn} do
-      conn = post(conn, ~p"/ads/preview", %{"ad" => @booking_params})
+      conn = post(conn, ~p"/ads/preview", %{"ad" => booking_params()})
       assert redirected_to(conn) == "/"
     end
 
     test "tolerates a tampered list-valued param without a 500", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       # A crafted non-scalar value must not crash the hidden-input stringify.
-      params = Map.put(@booking_params, "billing_company", ["x", "y"])
+      params = Map.put(booking_params(), "billing_company", ["x", "y"])
 
       conn = post(conn, ~p"/ads/preview", %{"ad" => params})
       assert conn.status in [200, 422]
@@ -108,7 +116,8 @@ defmodule VutuvWeb.AdControllerTest do
       conn: conn
     } do
       {conn, _user} = create_and_login_user(conn)
-      conn = post(conn, ~p"/ads/preview", %{"ad" => @booking_params})
+      params = booking_params()
+      conn = post(conn, ~p"/ads/preview", %{"ad" => params})
       html = html_response(conn, 200)
 
       # The rendered ad with its mandatory label...
@@ -122,7 +131,7 @@ defmodule VutuvWeb.AdControllerTest do
       refute html =~ "data-ad-close"
 
       # The order summary and both ways forward.
-      assert html =~ @booking_params["day"]
+      assert html =~ params["day"]
       assert html =~ "1,250"
       assert html =~ ~s(action="/ads") or html =~ ~s(action="#{~p"/ads"}")
       assert html =~ ~s(formaction="/ads/new")
@@ -138,7 +147,7 @@ defmodule VutuvWeb.AdControllerTest do
       {conn, _user} = create_and_login_user(conn)
 
       conn =
-        post(conn, ~p"/ads/preview", %{"ad" => Map.put(@booking_params, "billing_name", "")})
+        post(conn, ~p"/ads/preview", %{"ad" => Map.put(booking_params(), "billing_name", "")})
 
       html = html_response(conn, 422)
       assert html =~ "id=\"ad-form\""
@@ -146,10 +155,11 @@ defmodule VutuvWeb.AdControllerTest do
     end
 
     test "an already booked day is caught at preview time", %{conn: conn} do
-      insert(:ad, day: Date.from_iso8601!(@booking_params["day"]))
+      params = booking_params()
+      insert(:ad, day: Date.from_iso8601!(params["day"]))
       {conn, _user} = create_and_login_user(conn)
 
-      conn = post(conn, ~p"/ads/preview", %{"ad" => @booking_params})
+      conn = post(conn, ~p"/ads/preview", %{"ad" => params})
       html = html_response(conn, 422)
 
       assert html =~ "id=\"ad-form\""
@@ -159,11 +169,12 @@ defmodule VutuvWeb.AdControllerTest do
     test "the edit round-trip keeps the entered values", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 
-      conn = post(conn, ~p"/ads/new", %{"ad" => @booking_params})
+      params = booking_params()
+      conn = post(conn, ~p"/ads/new", %{"ad" => params})
       html = html_response(conn, 200)
 
       assert html =~ "id=\"ad-form\""
-      assert html =~ @booking_params["content"]
+      assert html =~ params["content"]
       assert html =~ "Acme GmbH"
     end
   end
@@ -195,21 +206,25 @@ defmodule VutuvWeb.AdControllerTest do
 
   describe "create" do
     test "requires login", %{conn: conn} do
-      conn = post(conn, ~p"/ads", %{"ad" => @booking_params})
+      conn = post(conn, ~p"/ads", %{"ad" => booking_params()})
       assert redirected_to(conn) == "/"
       assert Repo.aggregate(Ads.Ad, :count) == 0
     end
 
     test "books the day and mails the booking (CSRF enforced like a browser)", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
+      params = booking_params()
 
       conn = get(conn, ~p"/ads/new")
-      conn = submit_with_csrf(conn, ~p"/ads", %{"ad" => @booking_params})
+      conn = submit_with_csrf(conn, ~p"/ads", %{"ad" => params})
 
       assert redirected_to(conn) == ~p"/ads/bookings"
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "booked"
 
-      ad = Repo.get_by!(Ads.Ad, day: Date.add(Ads.today(), 14))
+      # The booked day comes from the SAME params map the form submitted, not
+      # from a second Ads.today() read that may sit on the far side of Berlin
+      # midnight (the 2026-07-30 CI failure).
+      ad = Repo.get_by!(Ads.Ad, day: Date.from_iso8601!(params["day"]))
       assert ad.user_id == user.id
       assert ad.price_cents == 125_000
       assert ad.vat_id == "DE123456789"
@@ -218,15 +233,16 @@ defmodule VutuvWeb.AdControllerTest do
 
       assert_received {:email, email}
       assert email.to == [{"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}]
-      assert email.text_body =~ @booking_params["content"]
+      assert email.text_body =~ params["content"]
       assert email.text_body =~ "Acme GmbH"
     end
 
     test "an already booked day re-renders the form with the error", %{conn: conn} do
-      insert(:ad, day: Date.from_iso8601!(@booking_params["day"]))
+      params = booking_params()
+      insert(:ad, day: Date.from_iso8601!(params["day"]))
       {conn, _user} = create_and_login_user(conn)
 
-      conn = post(conn, ~p"/ads", %{"ad" => @booking_params})
+      conn = post(conn, ~p"/ads", %{"ad" => params})
       html = html_response(conn, 422)
 
       assert html =~ "id=\"ad-form\""
