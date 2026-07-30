@@ -500,8 +500,10 @@ defmodule VutuvWeb.NotificationLive.Index do
             data-remote-reply-preview="true"
             class="border-l-2 border-dashed border-slate-300 pl-2.5 dark:border-slate-600"
           >
+            <%!-- No `text-*` / `leading-*` here: `.notif-clamp` owns the type
+            size and line height, since its box height is counted in them. --%>
             <p
-              class="notif-clamp mb-0 whitespace-pre-line text-sm text-slate-600 dark:text-slate-400"
+              class="notif-clamp mb-0 whitespace-pre-line text-slate-600 dark:text-slate-400"
               {clamp_attrs(@quote_lines)}
             >{@n.note_text}</p>
           </div>
@@ -599,8 +601,11 @@ defmodule VutuvWeb.NotificationLive.Index do
       {@rest}
     >
       <.link href={@href} aria-label={gettext("View post")} class="absolute inset-0 z-10"></.link>
+      <%!-- The type size and line height come from `.notif-clamp` itself: the
+      reader's line budget is a box height counted in them, so a `text-*` here
+      would cut the quote mid-letter. --%>
       <div
-        class="markdown markdown--post notif-clamp text-sm text-slate-600 dark:text-slate-400 [&_a]:relative [&_a]:z-20"
+        class="markdown markdown--post notif-clamp text-slate-600 dark:text-slate-400 [&_a]:relative [&_a]:z-20"
         {clamp_attrs(@quote_lines)}
       >
         {@html}

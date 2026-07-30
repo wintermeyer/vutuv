@@ -1269,11 +1269,20 @@ ul.thumbs li .text .url a {
 
    Clamped by height, like `.post-clamp--wrap`, not by `-webkit-line-clamp`:
    the quote is formatted Markdown now, so its content is block children
-   (paragraphs, lists) and a `-webkit-box` clamps those unreliably. */
+   (paragraphs, lists) and a `-webkit-box` clamps those unreliably.
+
+   The whole arithmetic — type size, line height, box height — lives here and
+   not in utilities at the call site, and it is spelled in one absolute unit
+   rather than in `lh`; see the `.teaser-clamp` note below for what the `lh`
+   unit did in Safari. The count is always a real number of lines (the
+   preference runs 1..50), so the calc always resolves. */
 .notif-clamp {
+  --notif-line: 1.25rem;
   display: flow-root;
+  font-size: 0.875rem;
+  line-height: var(--notif-line);
+  max-height: calc(var(--notif-clamp, 5) * var(--notif-line));
   overflow: hidden;
-  max-height: calc(var(--notif-clamp, 5) * 1lh);
 }
 
 /* A quote is a compact excerpt, and the budget above is counted in line boxes:
@@ -1287,12 +1296,11 @@ ul.thumbs li .text .url a {
   margin-block: 0;
 }
 /* For the same reason every line box inside the quote has to be exactly the
-   `1lh` the budget counts in, and a line box is font-size × line-height. The
+   line the budget counts in, and a line box is font-size × line-height. The
    legacy element default `p { font-size: 15px }` is enough to break that on its
-   own: the quote's line-height is Tailwind's unitless `text-sm` ratio, so a
-   paragraph one pixel larger renders a taller line, five of them overflow a
-   five-line box, and the last one gets shaved. Hand the whole excerpt one type
-   size — it is five lines of quoted text, not a document. */
+   own: a paragraph one pixel larger renders a taller line, five of them
+   overflow a five-line box, and the last one gets shaved. Hand the whole
+   excerpt one type size — it is five lines of quoted text, not a document. */
 .notif-clamp.markdown * {
   font-size: inherit;
   line-height: inherit;
@@ -1306,19 +1314,31 @@ ul.thumbs li .text .url a {
    sliver. The budget is fixed here — the rail teases a post rather than
    quoting one, so there is no per-reader line preference to feed in.
 
-   The call site pairs this with `leading-5`, and that is load-bearing, not
-   decoration: `1lh` resolves against the *container's* line-height, so with
-   Tailwind's unitless `text-sm` ratio the box and the line boxes inside it are
-   only equal while both compute from the same font-size. Anything that scales
-   the text without scaling the box — a browser minimum-font-size setting, a
-   page zoom quirk — then grows the line boxes past `1lh` and the clamp cuts a
-   line **through the middle of its glyphs**. Inheriting an absolute
-   line-height instead makes every line box exactly `1lh` by construction, so
-   N lines are always N whole lines. */
+   Three numbers have to agree for the cut to land between two lines and not
+   through one: the type size, the line height and the box height. All three
+   are set here, in one absolute unit, and the markup deliberately carries no
+   `text-*` / `leading-*` utility that could redefine one of them behind the
+   stylesheet's back.
+
+   In particular the box height is **not** written in `lh`. That unit reads as
+   the obvious way to say "three lines of my own text", and it is not portable:
+   WebKit resolves `lh` before the element's own line-height is applied and so
+   falls back to the *inherited* one (webkit.org/b/267185 — "it's getting the
+   line-height of the parent element instead of the current one"). Here that is
+   the 24px the surrounding card passes down rather than the teaser's own 20px,
+   so `calc(3 * 1lh)` is 72px in Safari against Chrome's intended 60px: three
+   whole lines fit, and the extra 12px let a strip of the fourth peek in,
+   sliced through the middle of its letters (reported 2026-07-30). Counting the
+   box in the same rem length the line height is set to cannot come apart that
+   way, in any engine. */
 .teaser-clamp {
+  --teaser-line: 1.25rem;
   display: flow-root;
+  font-size: 0.875rem;
+  line-height: var(--teaser-line);
+  max-height: calc(3 * var(--teaser-line));
   overflow: hidden;
-  max-height: calc(3 * 1lh);
+  position: relative;
 }
 .teaser-clamp.markdown > *,
 .teaser-clamp.markdown li {
@@ -1327,6 +1347,46 @@ ul.thumbs li .text .url a {
 .teaser-clamp.markdown * {
   font-size: inherit;
   line-height: inherit;
+}
+
+/* The tinted tile one teaser sits in. Its background lives here rather than in
+   utilities at the call site because the ellipsis below has to blend into
+   exactly this colour, hover and dark mode included — one custom property, so
+   the two can't drift. The dark values are the flattened result of what the
+   tile used to be (slate-800 at 60% / brand-900 at 30% over the slate-900
+   card): a translucent tile would show through the ellipsis's own blend and
+   paint a darker patch over the text it is meant to cover. `position` is the
+   containing block for the stretched permalink the tile carries. */
+.teaser-tile {
+  --teaser-bg: #f8fafc;
+  background-color: var(--teaser-bg);
+  border-radius: 0.75rem;
+  padding: 0.625rem;
+  position: relative;
+  transition: background-color 150ms ease;
+}
+.teaser-tile:hover {
+  --teaser-bg: #eff6ff;
+}
+
+/* A height clamp cuts silently — `-webkit-line-clamp` paints an ellipsis, this
+   does not — so a teaser would simply stop mid-sentence. Draw the "…" over the
+   end of the last visible line, on a short blend into the tile so the cut-off
+   word fades into it instead of colliding with it.
+
+   Gated on `.is-clamped`, which app.js only sets once the body really
+   overflows (the same `[data-clamp-body]` measurement the feed's post previews
+   use): whether three lines are enough depends on the column width and the
+   font, so the server cannot know it, and an unconditional ellipsis would sit
+   behind every short teaser that was never cut. */
+.teaser-tile.is-clamped .teaser-clamp::after {
+  background: linear-gradient(to right, transparent, var(--teaser-bg) 1.25rem);
+  bottom: 0;
+  content: "…";
+  padding-left: 2rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
 }
 
 /* Truncated feed/profile post preview: fade the clamp into the card so the cut
@@ -1395,7 +1455,14 @@ ul.thumbs li .text .url a {
    per-reader line budget (the `--post-clamp-*` custom properties) and the expand
    behaviour are unchanged; only the truncation mechanism differs. If `lh` is
    unsupported the max-height calc is dropped and the full body simply shows
-   (graceful) — the server-truncation floor still bounds very long bodies. */
+   (graceful) — the server-truncation floor still bounds very long bodies.
+
+   This is the one clamp left counting in `lh`, and it can be, because a post
+   body declares no type size of its own: it renders at the line height it
+   inherits, so Safari's "`1lh` = the inherited line-height" reading (which cut
+   a sliver of a fourth line into the `.teaser-clamp` teasers) resolves to the
+   same number here. Put a `text-*` / `leading-*` utility on this body and that
+   stops holding — convert it to the rem arithmetic `.teaser-clamp` uses. */
 .post-clamp--wrap {
   display: flow-root;
   overflow: hidden;
@@ -2496,6 +2563,12 @@ html.lightbox-open { overflow: hidden; }
   .post-preview.is-clamped:not(.is-expanded) .post-preview__more {
     background: linear-gradient(to right, transparent, #0f172a 1.5rem);
   }
+  /* The suggested-post tile (light values above). Opaque on purpose: these are
+     the old translucent tints flattened over the slate-900 card, so the
+     ellipsis can blend into the same colour without stacking a second layer of
+     transparency over the text it covers. */
+  .teaser-tile { --teaser-bg: #182234; }
+  .teaser-tile:hover { --teaser-bg: #111b37; }
   /* Markdown bodies (light values above). */
   .markdown blockquote { border-color: #334155; color: #94a3b8; }
   .markdown code { background: #1e293b; }

@@ -86,9 +86,19 @@ defmodule VutuvWeb.UserHTML do
       thumbnail would indent those tiles' text while the others start at the
       card edge, so the reader's eye has no straight left margin to run down. --%>
       <ul :if={@posts != []} data-suggested-posts={@user.id} class="space-y-1.5">
+        <%!-- `.teaser-tile` carries the tint and, with it, the colour the
+        truncation ellipsis blends into (components.css). The two clamp markers
+        are the feed post preview's: app.js measures `[data-clamp-body]` and
+        puts `is-clamped` on `[data-post-preview]` when the body really
+        overflows, which is what paints the "…" — the server cannot know, since
+        three lines is a question of column width and font. The hook re-measures
+        after a patch (the card re-renders on every follow toggle). --%>
         <li
           :for={post <- @posts}
-          class="relative rounded-xl bg-slate-50 p-2.5 transition hover:bg-brand-50 dark:bg-slate-800/60 dark:hover:bg-brand-900/30"
+          id={"suggested-post-#{post.id}"}
+          phx-hook="PostPreviewClamp"
+          data-post-preview
+          class="teaser-tile"
         >
           <%!-- Stretched link, the same arrangement the feed's "Suggested
           posts" card and the /notifications quotes use: the excerpt is
@@ -107,9 +117,14 @@ defmodule VutuvWeb.UserHTML do
               <%!-- The body goes through the same pipeline as every other post
               preview, so it reads here the way it does in the feed. The rail
               column is narrow, so hyphenation is on at both breakpoints (long
-              German compounds), like the "Suggested posts" card. --%>
+              German compounds), like the "Suggested posts" card. Type size and
+              line height are deliberately absent here: `.teaser-clamp` sets
+              both, because its three-line cut is arithmetic against them (see
+              components.css) and a `text-*` utility here would silently make
+              the box no longer a whole number of lines. --%>
               <div
-                class="markdown markdown--post teaser-clamp text-sm leading-5 text-slate-700 dark:text-slate-200 [&_a]:relative [&_a]:z-20"
+                data-clamp-body
+                class="markdown markdown--post teaser-clamp text-slate-700 dark:text-slate-200 [&_a]:relative [&_a]:z-20"
                 style="--post-hyphens-desktop:auto;--post-hyphens-mobile:auto"
               >
                 {post_teaser(post.body)}
@@ -152,7 +167,7 @@ defmodule VutuvWeb.UserHTML do
   # feed — a fully-qualified `@user@host` is a link to that remote account
   # rather than bare text. Images are deliberately not passed: a teaser is text,
   # and the post's lead photo rides beside it as the thumbnail. The visible cut
-  # is the two-line `.teaser-clamp` height clamp on the wrapper, so the
+  # is the three-line `.teaser-clamp` height clamp on the wrapper, so the
   # truncation flag is dropped here.
   defp post_teaser(body) do
     {html, _truncated?} = Markdown.render_preview(body, [], limit: @teaser_source_chars)

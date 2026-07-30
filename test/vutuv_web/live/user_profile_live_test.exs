@@ -671,6 +671,30 @@ defmodule VutuvWeb.UserProfileLiveTest do
       assert has_element?(view, ~s(#{samples} a.absolute.inset-0))
     end
 
+    test "a sample tile is wired to reveal the truncation ellipsis", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      candidate = insert_activated_user()
+      liked_post(candidate, "Ein Beitrag, der länger ist als drei Zeilen im Steckbrief")
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      samples = ~s([data-suggested-posts="#{candidate.id}"])
+
+      # The cut is a CSS height clamp, so whether a given teaser really
+      # overflows depends on the column width and the font — only the browser
+      # knows. The tile therefore carries the same two markers the feed's post
+      # previews use: app.js measures `[data-clamp-body]` and puts `is-clamped`
+      # on `[data-post-preview]`, which is what paints the "…" (see the
+      # `.teaser-tile.is-clamped` rule in components.css). Without them a
+      # clamped teaser would end mid-sentence with no sign that it was cut.
+      assert has_element?(view, ~s(#{samples} li[data-post-preview]))
+      assert has_element?(view, ~s(#{samples} li[phx-hook="PostPreviewClamp"]))
+      assert has_element?(view, ~s(#{samples} .teaser-clamp[data-clamp-body]))
+      # The blend the "…" sits on is the tile's own background, so the tile
+      # has to be the class that owns that colour.
+      assert has_element?(view, ~s(#{samples} li.teaser-tile))
+    end
+
     test "a suggestion with nothing to show keeps the plain row", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       # A bodyless photo post makes them a suggestion but has no excerpt.
