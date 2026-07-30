@@ -279,6 +279,29 @@ defmodule Vutuv.FediverseReactionsTest do
       assert entry.actor_handle == "@alice@social.example"
     end
 
+    test "reading the notifications page clears the badge for good", %{user: user, note: note} do
+      # An older local event pins the read marker: mark_notifications_read/1
+      # anchors the marker to the newest event it knows about, and a source
+      # missing from that anchor query stays "unread" on every recount — the
+      # /notifications -> /feed badge loop.
+      old_follow = insert(:follow, follower: insert(:user), followee: user)
+
+      Repo.update_all(from(f in Vutuv.Social.Follow, where: f.id == ^old_follow.id),
+        set: [inserted_at: ~N[2020-01-01 12:00:00]]
+      )
+
+      Vutuv.Activity.mark_notifications_read(user.id)
+
+      :ok = Fediverse.record_reaction(user, note, "like", @actor)
+      backdate_reaction(DateTime.add(DateTime.utc_now(:second), -300, :second))
+
+      assert Vutuv.Activity.unread_notification_count(user.id) == 1
+
+      Vutuv.Activity.mark_notifications_read(user.id)
+
+      assert Vutuv.Activity.unread_notification_count(user.id) == 0
+    end
+
     test "taking the reaction back takes its notification with it", %{user: user, note: note} do
       :ok = Fediverse.record_reaction(user, note, "like", @actor)
       :ok = Fediverse.remove_reaction(user, note, "like", @actor)
@@ -355,5 +378,11 @@ defmodule Vutuv.FediverseReactionsTest do
       assert [%{"handle" => "fan6", "kind" => "announce"} | _] =
                counts.fediverse_reaction_actors
     end
+  end
+
+  # Timestamps have second precision, so same-second events tie with the read
+  # marker; backdating gives the reaction a distinct, deterministic time.
+  defp backdate_reaction(at) do
+    Repo.update_all(Reaction, set: [received_at: at])
   end
 end

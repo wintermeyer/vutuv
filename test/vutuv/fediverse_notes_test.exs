@@ -775,6 +775,35 @@ defmodule Vutuv.FediverseNotesTest do
     end
   end
 
+  describe "the reply joins the unread badge" do
+    test "reading the notifications page clears it for good", %{user: user, note_url: note_url} do
+      # An older local event pins the read marker: mark_notifications_read/1
+      # anchors the marker to the newest event it knows about, and a source
+      # missing from that anchor query stays "unread" on every recount — the
+      # /notifications -> /feed badge loop.
+      old_follow = insert(:follow, follower: insert(:user), followee: user)
+
+      Repo.update_all(from(f in Vutuv.Social.Follow, where: f.id == ^old_follow.id),
+        set: [inserted_at: ~N[2020-01-01 12:00:00]]
+      )
+
+      Vutuv.Activity.mark_notifications_read(user.id)
+
+      :ok = Fediverse.record_reply(user, create_activity(note_url), remote())
+
+      # Second precision would let a same-second mark tie the note away.
+      Repo.update_all(Note,
+        set: [received_at: DateTime.add(DateTime.utc_now(:second), -300, :second)]
+      )
+
+      assert Vutuv.Activity.unread_notification_count(user.id) == 1
+
+      Vutuv.Activity.mark_notifications_read(user.id)
+
+      assert Vutuv.Activity.unread_notification_count(user.id) == 0
+    end
+  end
+
   describe "the count reaches the action bar" do
     test "engagement_counts/1 carries public replies on their own figure", %{
       user: user,

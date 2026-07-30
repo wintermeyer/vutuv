@@ -127,6 +127,22 @@ defmodule Vutuv.Activity do
 
     mention_max = select(mention_events(user_id), [mention: m], %{ts: max(m.inserted_at)})
 
+    # Replies and reactions from other networks (issues #1069/#1068). Without
+    # these arms the marker ignores them, so when the newest event is a remote
+    # one the marker lands before it and its badge never clears: /notifications
+    # empties the bell, the next recount on /feed fills it again. `received_at`
+    # is a :utc_datetime, but its column is the same timestamp family as the
+    # inserted_at arms, so the union stays type-consistent.
+    fediverse_reply_max =
+      user_id
+      |> fediverse_reply_events()
+      |> select([note: n], %{ts: max(n.received_at)})
+
+    fediverse_reaction_max =
+      user_id
+      |> fediverse_reaction_events()
+      |> select([note: r], %{ts: max(r.received_at)})
+
     # No self-like filter needed: a member cannot like their own post
     # (enforced in Posts.like_post/2, issue #1030).
     like_max =
@@ -185,6 +201,8 @@ defmodule Vutuv.Activity do
       |> union_all(^reply_max)
       |> union_all(^thread_max)
       |> union_all(^mention_max)
+      |> union_all(^fediverse_reply_max)
+      |> union_all(^fediverse_reaction_max)
       |> union_all(^like_max)
       |> union_all(^moderation_max)
       |> union_all(^image_rejected_max)
