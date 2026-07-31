@@ -1679,8 +1679,16 @@ defmodule Vutuv.Fediverse do
   Both kinds ride the same source. A boosted **cached post** carries the remote
   card; a boosted **vutuv post** carries the local one, which is how members get
   discovered through the outside network.
+
+  `only:` keeps just one of the two — `:remote` for the boosts of a cached
+  post, `:local` for the boosts of a vutuv post — which is how the feed's
+  source tabs (`Vutuv.Posts.feed_page/2`) split this source between them. It
+  narrows the **query**, not the rows it returns, so a narrowed page is as
+  full as an unnarrowed one.
   """
-  def feed_remote_boosts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+  def feed_remote_boosts(viewer, fetch_n, cursor, opts \\ [])
+
+  def feed_remote_boosts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
       # The author's own follow is consulted too, not only the booster's: a
       # reader who muted an account out there muted *them*, and somebody else
@@ -1712,6 +1720,7 @@ defmodule Vutuv.Fediverse do
           post: [:denials, :user]
         ]
       )
+      |> boosts_of_kind(opts[:only])
       |> utc_at_or_before(cursor, :announced_at)
       |> Repo.all()
       |> Enum.map(&boost_entry/1)
@@ -1720,6 +1729,13 @@ defmodule Vutuv.Fediverse do
       []
     end
   end
+
+  # Which of the two things a boost can point at. `remote_post_id` is the one
+  # that decides it — a boost carries exactly one of the two ids — so the split
+  # reads it rather than the left-joined row.
+  defp boosts_of_kind(query, :remote), do: where(query, [b], not is_nil(b.remote_post_id))
+  defp boosts_of_kind(query, :local), do: where(query, [b], is_nil(b.remote_post_id))
+  defp boosts_of_kind(query, _both), do: query
 
   # One entry shape for both kinds. Exactly one of the two references is set on
   # a row, so which card the feed renders follows from the boost itself

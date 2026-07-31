@@ -184,14 +184,48 @@ line) with cursor "Load more", a *"Show N new posts"* pill fed by `{:new_post,
 `Vutuv.Social.most_followed_users/1`, live follow — now led by members endorsed
 for tags you follow, see below).
 
-`Posts.feed_page/2` merges **three** sources through `Vutuv.FeedPage` (a shared
-cursor over independent fetchers): own + followed authors' posts, their reposts,
-and — since issue #872 — posts carrying a **tag you follow**
+`Posts.feed_page/2` merges **six** sources through `Vutuv.FeedPage` (a shared
+cursor over independent fetchers). Three are local: own + followed authors'
+posts, their reposts, and — since issue #872 — posts carrying a **tag you follow**
 (`feed_tag_items/3`), from authors you do *not* already follow (so following a
 tag widens the feed with new voices without duplicating the follow path; muted
 and blocked authors stay out exactly as elsewhere). Following a tag lives in
 `Vutuv.Tags` — see [social-graph.md](social-graph.md). The feed also carries the
-reload-free **"Tags you follow"** rail (chips + a `phx-click` ✕ unfollow).
+reload-free **"Tags you follow"** rail (chips + a `phx-click` ✕ unfollow). The
+other three come from `Vutuv.Fediverse` — cached posts of accounts you follow
+out there (#1161), what people you follow *here* reshared from another network
+(#1166), and what those accounts boosted (#1167) — see
+[fediverse.md](fediverse.md).
+
+**Source tabs: All / vutuv / Fediverse.** Above the timeline sits the same
+segmented control the profile's post-type tabs use
+(`PostComponents.post_filter_tabs/1`, here with `feed_filter_options/0` and the
+`filter-source` event). The split is `feed_page/2`'s `filter:` option, which
+picks the sources rather than filtering their rows: **vutuv** runs the three
+local sources plus the boosts of a *local* post, **Fediverse** the cached posts,
+the local reshares of one and the boosts of a *remote* post. The rule is what
+kind of post an entry carries (`Posts.remote_feed_entry?/1`, the same question
+the renderer asks to pick a card), so every entry lands on exactly one tab and
+the two together are "All" — a member's post that an account out there boosted
+is a vutuv post, however it arrived. The one source producing both kinds
+(`Fediverse.feed_remote_boosts/4`, issue #1167) is narrowed by `only:` **inside
+its query**, not by dropping rows afterwards, so a narrowed page is as full as
+an unnarrowed one and `more?` stays honest.
+
+Switching a tab reloads the timeline from the top (`stream reset: true`) — the
+tab decides what the query pulls, so it cannot be applied to what is already on
+screen — and drops the pending batch with it, since the fresh page already
+carries whatever waited behind the pill. Live arrivals are gated by the
+in-memory twin `Posts.feed_filter_accepts?/2`: a followed member's post neither
+appears nor counts toward the pill while the Fediverse tab is open. The one
+exception is the **viewer's own** post, which must be visible after they press
+Post — there the feed switches back to "All" rather than swallowing it. The
+choice is socket state with no URL behind it (this LiveView is off-router and
+cannot patch), so a reload opens on "All", and the agent-format siblings
+(`/feed.md|txt|json|xml`) always serve the whole feed, exactly as the archive's
+siblings ignore `?type=`. The bar is not rendered at all when
+`:fediverse_enabled` is off (there is only one source then) or while the whole
+feed is empty.
 
 **The discovery rail renders with the page.** The rail (Tags you follow / Who
 to follow / Suggested posts) was lazily loaded for one release (v7.200.3: an

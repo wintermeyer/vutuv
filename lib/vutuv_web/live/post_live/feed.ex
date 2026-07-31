@@ -7,6 +7,15 @@ defmodule VutuvWeb.PostLive.Feed do
   `%{id:, post:, reposted_by:, at:}` maps; repost entries render the
   "Reposted by X" line on the card.
 
+  Above the timeline sit the **source tabs** — All / vutuv / Fediverse — the
+  same segmented control the profile's post-type tabs use
+  (`PostComponents.post_filter_tabs/1` with `feed_filter_options/0`). They
+  partition the feed by what kind of post an entry carries, so the two named
+  tabs together are "All"; the split itself lives in
+  `Vutuv.Posts.feed_page/2`. Like the profile's tabs the choice is socket
+  state with no URL of its own (this LiveView is off-router and cannot patch),
+  so a reload opens on "All".
+
   Real-time: `Vutuv.Posts.create_post/2` broadcasts `{:new_post, …}` and
   `Vutuv.Posts.repost_post/2` `{:new_repost, …}` to the author/reposter and
   every follower over `Vutuv.Activity`. The viewer's own posts and reposts
@@ -138,6 +147,9 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:content_filters, payload.content_filters)
     |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
+    # A mount always opens on the whole feed: the source tab is socket state
+    # with no URL behind it, so there is nothing to restore it from.
+    |> assign(:feed_filter, :all)
     |> assign(:more?, payload.more?)
     |> assign(:cursor, payload.cursor)
     |> assign(:empty?, payload.entries == [])
@@ -323,7 +335,8 @@ defmodule VutuvWeb.PostLive.Feed do
     page =
       Posts.feed_page(socket.assigns.current_user,
         limit: @page_size,
-        cursor: socket.assigns.cursor
+        cursor: socket.assigns.cursor,
+        filter: socket.assigns.feed_filter
       )
 
     # A post shown higher up (as a newer repost, or nested in a shown thread)
@@ -349,6 +362,13 @@ defmodule VutuvWeb.PostLive.Feed do
      |> assign(:cursor, page.next_cursor)
      |> update(:entries, &(&1 ++ entries))
      |> stream(:posts, entries, at: -1)}
+  end
+
+  # A source tab (All / vutuv / Fediverse). The tab decides which sources the
+  # query pulls from, so it cannot be applied to the page already on screen —
+  # the timeline reloads from the top.
+  def handle_event("filter-source", %{"type" => type}, socket) do
+    {:noreply, load_source_filter(socket, Posts.normalize_feed_filter(type))}
   end
 
   def handle_event("open-composer", _params, socket) do
@@ -509,6 +529,29 @@ defmodule VutuvWeb.PostLive.Feed do
       |> assign(:empty?, false)
 
     {:noreply, socket}
+  end
+
+  # Load the timeline for one source tab, replacing whatever is on screen
+  # (`reset: true`). The pending batch is dropped with it rather than
+  # re-filtered: the fresh page is newest-first from the top, so it already
+  # carries everything that was waiting behind the pill.
+  defp load_source_filter(socket, filter) do
+    user = socket.assigns.current_user
+    page = Posts.feed_page(user, limit: @page_size, filter: filter)
+
+    entries =
+      page.entries
+      |> with_engagement(user)
+      |> mark_filtered(socket.assigns.content_filters, user.id)
+
+    socket
+    |> assign(:feed_filter, filter)
+    |> assign(:more?, page.more?)
+    |> assign(:cursor, page.next_cursor)
+    |> assign(:empty?, entries == [])
+    |> assign(:pending_posts, [])
+    |> assign(:entries, entries)
+    |> stream(:posts, entries, reset: true)
   end
 
   @impl true
@@ -674,6 +717,16 @@ defmodule VutuvWeb.PostLive.Feed do
     user = socket.assigns.current_user
 
     cond do
+      # The author must see what they just wrote. Every live arrival carries a
+      # vutuv post, so on the Fediverse tab there is no row to put it in — the
+      # feed switches back to All and reloads rather than swallowing the post,
+      # which from the composer reads as the post having been lost.
+      actor_id == user.id and not Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
+        {:noreply,
+         socket
+         |> assign(:composer_open?, false)
+         |> load_source_filter(:all)}
+
       actor_id == user.id ->
         decorated = decorate(entry, user, socket)
 
@@ -690,6 +743,12 @@ defmodule VutuvWeb.PostLive.Feed do
       # must not carry a blocked author's post into the feed (blocking already
       # severed the direct follow). visible_to?/2 alone never checks blocks.
       Social.blocked_between?(user.id, entry.post.user_id) ->
+        {:noreply, socket}
+
+      # A post nobody on this tab asked for must not be counted by the pill
+      # either: the pill's whole promise is that clicking it shows those posts
+      # right here.
+      not Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
         {:noreply, socket}
 
       Posts.visible_to?(entry.post, user) ->
@@ -995,6 +1054,20 @@ defmodule VutuvWeb.PostLive.Feed do
             />
           </div>
 
+          <%!-- The source tabs, the same segmented control the profile's
+          post-type tabs use. They are dropped on an installation with no
+          fediverse at all (there is only one source then), and on a feed that
+          is completely empty — three tabs over a "follow somebody" invitation
+          would be filing cabinets for an empty drawer. An empty *tab* keeps
+          them, or there would be no way back. --%>
+          <.post_filter_tabs
+            :if={Fediverse.enabled?() and (not @empty? or @feed_filter != :all)}
+            id="feed-source-tabs"
+            active={to_string(@feed_filter)}
+            event="filter-source"
+            options={feed_filter_options()}
+          />
+
           <div :if={@pending_posts != []} class="text-center">
             <.button id="show-new-posts" variant="secondary" phx-click="show-new">
               {ngettext(
@@ -1063,7 +1136,20 @@ defmodule VutuvWeb.PostLive.Feed do
             </div>
           </.post_list>
 
-          <p :if={@empty? && @pending_posts == []} class="text-slate-600 dark:text-slate-400">
+          <%!-- An empty *tab* says which half of the feed is missing; an empty
+          feed keeps the general invitation, which is the one that helps a new
+          member. --%>
+          <p
+            :if={@empty? && @pending_posts == [] && @feed_filter != :all}
+            class="text-slate-600 dark:text-slate-400"
+          >
+            {feed_filter_empty_text(to_string(@feed_filter))}
+          </p>
+
+          <p
+            :if={@empty? && @pending_posts == [] && @feed_filter == :all}
+            class="text-slate-600 dark:text-slate-400"
+          >
             {gettext("Nothing here yet. Follow people to fill your feed, or write your first post.")}
             <.link
               navigate={~p"/listings/most_followed_users"}

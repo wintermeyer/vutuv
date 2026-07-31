@@ -329,6 +329,37 @@ defmodule VutuvWeb.PostComponents do
   end
 
   @doc """
+  The value/label pairs for the **feed's** source tabs: All, vutuv, Fediverse.
+  Like the post-type tabs above they partition what they filter — an entry
+  either carries a vutuv post or a cached one from another network
+  (`Vutuv.Posts.remote_feed_entry?/1`), never both — so the same segmented
+  control fits. Values match `Vutuv.Posts.normalize_feed_filter/1`.
+
+  "vutuv" and "Fediverse" are proper names and stay untranslated; only "All"
+  is a word.
+  """
+  def feed_filter_options do
+    [
+      {"all", gettext("All")},
+      {"vutuv", "vutuv"},
+      {"fediverse", "Fediverse"}
+    ]
+  end
+
+  @doc """
+  The feed's per-tab empty-state line, so an empty tab says which half of the
+  feed is missing rather than repeating the generic invitation to follow
+  people.
+  """
+  def feed_filter_empty_text("vutuv"),
+    do: gettext("Nothing from vutuv yet. Follow people here to fill this tab.")
+
+  def feed_filter_empty_text("fediverse"),
+    do: gettext("Nothing from the fediverse yet. Follow accounts out there to fill this tab.")
+
+  def feed_filter_empty_text(_all), do: nil
+
+  @doc """
   The per-tab empty-state line, keyed by the active filter so an empty tab
   says what is missing ("No reposts yet.") instead of a bare "Nothing here".
   """
@@ -356,19 +387,30 @@ defmodule VutuvWeb.PostComponents do
       is a plain link to `base_path` (+ `?type=`), a full navigation.
 
   `active` is the current filter string; the matching tab reads as selected.
+  `options` swaps the tab set — the feed passes `feed_filter_options/0` for
+  its All / vutuv / Fediverse source tabs, which are the same control asking
+  a different question.
   """
   attr(:active, :string, required: true)
   attr(:event, :string, default: nil, doc: "phx-click event name → button mode")
   attr(:base_path, :string, default: nil, doc: "archive base path → link mode")
+
+  attr(:options, :list,
+    default: nil,
+    doc: "value/label pairs; defaults to post_filter_options/0"
+  )
+
   attr(:rest, :global, doc: "container attrs, e.g. an id for tests")
 
   def post_filter_tabs(assigns) do
+    assigns = assign(assigns, :options, assigns.options || post_filter_options())
+
     ~H"""
     <div
       class="mb-4 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800"
       {@rest}
     >
-      <%= for {value, label} <- post_filter_options() do %>
+      <%= for {value, label} <- @options do %>
         <button
           :if={@event}
           type="button"

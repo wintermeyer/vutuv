@@ -1635,33 +1635,84 @@ defmodule Vutuv.Posts do
   Returns `%{entries:, more?:, next_cursor:}` — pass `cursor:` back for the
   next older page. The cursor (and the merge across the two sources) is the
   shared `Vutuv.FeedPage` scheme. Treat it as opaque.
+
+  `filter:` narrows the feed to one **source tab** — `:all` (the default),
+  `:vutuv` or `:fediverse`; see `feed_sources/2`.
   """
   def feed_page(%User{} = viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_feed_limit)
     cursor = Keyword.get(opts, :cursor)
+    filter = Keyword.get(opts, :filter, :all)
 
-    page =
-      Vutuv.FeedPage.paginate(
-        [
-          &feed_post_items(viewer, &1, &2),
-          &feed_repost_items(viewer, &1, &2),
-          &feed_tag_items(viewer, &1, &2),
-          &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
-          # Fifth: what people the viewer follows *here* have reshared from
-          # another network (issue #1166) — the one way a member who follows
-          # nobody out there meets that content at all.
-          &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2),
-          # Sixth: what the accounts the viewer follows out there have
-          # re-shared (issue #1167) — a large part of what any account
-          # contributes, and invisible here until now.
-          &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2)
-        ],
-        limit,
-        cursor
-      )
+    page = Vutuv.FeedPage.paginate(feed_sources(viewer, filter), limit, cursor)
 
     %{page | entries: decorate_feed_entries(page.entries, viewer)}
   end
+
+  # The six sources the merged feed pulls from, narrowed to the reader's tab.
+  #
+  # The two tabs partition the feed by **what kind of post an entry carries**
+  # (`remote_feed_entry?/1`) — the same question the renderer asks to pick a
+  # card, so every entry lands on exactly one tab and the two together are
+  # "All". That rule decides the one source that produces both kinds:
+  # `feed_remote_boosts/4` (issue #1167) carries a cached remote post when the
+  # boosted thing lives out there, and a plain vutuv post when a followed
+  # account passed a member's post on — the latter *is* a vutuv post, so it
+  # belongs on the vutuv tab even though it arrived through the fediverse.
+  # `:only` narrows that source inside its own query rather than by filtering
+  # rows afterwards, so a page is never short of what the paginator fetched
+  # for it (which is what decides `more?`).
+  defp feed_sources(viewer, :vutuv) do
+    [
+      &feed_post_items(viewer, &1, &2),
+      &feed_repost_items(viewer, &1, &2),
+      &feed_tag_items(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :local)
+    ]
+  end
+
+  defp feed_sources(viewer, :fediverse) do
+    [
+      &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :remote)
+    ]
+  end
+
+  defp feed_sources(viewer, _all) do
+    [
+      &feed_post_items(viewer, &1, &2),
+      &feed_repost_items(viewer, &1, &2),
+      &feed_tag_items(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
+      # Fifth: what people the viewer follows *here* have reshared from
+      # another network (issue #1166) — the one way a member who follows
+      # nobody out there meets that content at all.
+      &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2),
+      # Sixth: what the accounts the viewer follows out there have
+      # re-shared (issue #1167) — a large part of what any account
+      # contributes, and invisible here until now.
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2)
+    ]
+  end
+
+  @doc """
+  Maps a raw feed-tab string (a phx-value) to one of the filters
+  `feed_page/2` understands, defaulting to `:all` for anything unrecognised.
+  """
+  def normalize_feed_filter(type)
+  def normalize_feed_filter("vutuv"), do: :vutuv
+  def normalize_feed_filter("fediverse"), do: :fediverse
+  def normalize_feed_filter(_type), do: :all
+
+  @doc """
+  Whether the feed tab `filter` shows `entry` — the in-memory twin of the
+  source split in `feed_sources/2`, for the entries that arrive live over
+  PubSub rather than through a query.
+  """
+  def feed_filter_accepts?(:vutuv, entry), do: not remote_feed_entry?(entry)
+  def feed_filter_accepts?(:fediverse, entry), do: remote_feed_entry?(entry)
+  def feed_filter_accepts?(_all, _entry), do: true
 
   # Everything the six sources produce, made ready to render.
   #
