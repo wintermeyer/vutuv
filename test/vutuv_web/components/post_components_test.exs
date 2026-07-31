@@ -4,6 +4,18 @@ defmodule VutuvWeb.PostComponentsTest do
   alias Vutuv.Accounts.User
   alias VutuvWeb.PostComponents
 
+  # Render the tab bar on its own. A function component needs `__changed__`
+  # in its assigns; `rendered_to_string/1` then gives the markup every one of
+  # its three call sites emits.
+  defp tabs_html(opts \\ []) do
+    assigns =
+      opts
+      |> Enum.into(%{active: "all", event: "filter", options: nil, rest: %{}})
+      |> Map.put(:__changed__, nil)
+
+    Phoenix.LiveViewTest.rendered_to_string(PostComponents.post_filter_tabs(assigns))
+  end
+
   describe "post_body_style/1" do
     test "returns nil for the default preferences so the DOM stays clean" do
       # A logged-out reader and a fresh account both get the defaults, which the
@@ -35,6 +47,56 @@ defmodule VutuvWeb.PostComponentsTest do
 
       assert style =~ "--post-clamp-desktop:none"
       assert style =~ "--post-clamp-mobile:8"
+    end
+  end
+
+  describe "post_filter_tabs/1 reads on every page background" do
+    # The bar renders on BOTH of this app's backgrounds — inside a white card
+    # (the profile's Beiträge section) and directly on the `slate-100` page
+    # canvas (the feed, the `/:slug/posts` archive). It used to sit on a
+    # `bg-slate-100` track, which is the canvas colour exactly, so on two of
+    # those three surfaces the control was invisible and only the feed's lone
+    # white pill showed. These tests pin the two properties that fix it, since
+    # nothing else fails when a colour quietly matches its background.
+    #
+    # The three surfaces are checked as one because they are one component:
+    # whatever these assert is what all of them render.
+
+    test "the container paints no track, so no page background can swallow it" do
+      html = tabs_html()
+      [container | _] = String.split(html, ">", parts: 2)
+
+      refute container =~ "bg-slate",
+             "the tab bar must not paint a filled track: `bg-slate-100` IS the page canvas"
+    end
+
+    test "the active tab is tinted apart from white AND from the slate canvas" do
+      html = tabs_html(active: "reposts")
+
+      # brand-100 (#dbeafe) reads against white and against slate-100.
+      # brand-50 (#eff6ff) does not — it differs from the canvas by ~6 in one
+      # channel, which is why the shell's nav pill recipe cannot be copied here
+      # verbatim (its header is white).
+      assert html =~ "bg-brand-100"
+      refute html =~ "bg-brand-50 "
+
+      # The tint marks the ACTIVE tab, and only it.
+      assert html |> String.split("bg-brand-100") |> length() == 2
+    end
+
+    test "an inactive tab's hover is not the canvas colour either" do
+      html = tabs_html()
+
+      assert html =~ "hover:bg-slate-200"
+      refute html =~ "hover:bg-slate-100"
+    end
+
+    test "every tab clears the 40px mobile tap target" do
+      # text-sm is a 20px line box, so py-2.5 (10px each side) is exactly 40.
+      html = tabs_html()
+
+      assert html =~ "py-2.5"
+      refute html =~ "py-1 "
     end
   end
 end

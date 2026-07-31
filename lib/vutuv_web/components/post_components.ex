@@ -378,10 +378,11 @@ defmodule VutuvWeb.PostComponents do
   def post_archive_path(user, type), do: ~p"/#{user}/posts?#{[type: type]}"
 
   @doc """
-  The post-type filter tab bar (issue #945), a segmented control matching the
-  profile's other in-card tabs. Two modes, one look:
+  The filter tab bar (issue #945): the one control for "which of these am I
+  looking at", worn by the profile's Beiträge card, the `/:slug/posts` archive
+  and the feed's source tabs. Two modes, one look:
 
-    * pass `event` for a LiveView host (the profile) — each tab is a
+    * pass `event` for a LiveView host (the profile, the feed) — each tab is a
       `phx-click` button firing `event` with `phx-value-type`, so it toggles
       with no reload;
     * pass `base_path` for a dead page (the `/:slug/posts` archive) — each tab
@@ -391,6 +392,17 @@ defmodule VutuvWeb.PostComponents do
   `options` swaps the tab set — the feed passes `feed_filter_options/0` for
   its All / vutuv / Fediverse source tabs, which are the same control asking
   a different question.
+
+  **It carries no filled track, and that is load-bearing.** The bar used to be
+  a segmented control on a `bg-slate-100` track, which reads correctly inside
+  a white card (the profile, the archive) and is *literally invisible* on the
+  feed — the page canvas is `slate-100`, the identical colour, so the feed's
+  tabs were a lone white pill floating on nothing while the profile's sat in a
+  proper trough. One filled colour cannot contrast with both of this app's
+  backgrounds, so the state rides the **active tab** instead: a brand-tinted
+  pill, which reads on white and on the canvas alike. That is the same
+  vocabulary the shell's top-bar nav uses for the page you are on, so "which
+  of these am I on" looks the same everywhere in the app.
   """
   attr(:active, :string, required: true)
   attr(:event, :string, default: nil, doc: "phx-click event name → button mode")
@@ -407,10 +419,11 @@ defmodule VutuvWeb.PostComponents do
     assigns = assign(assigns, :options, assigns.options || post_filter_options())
 
     ~H"""
-    <div
-      class="mb-4 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800"
-      {@rest}
-    >
+    <%!-- No `role="tablist"`: these are toggle buttons carrying `aria-pressed`
+    (and links carrying `aria-current` on the archive). A real tablist owes the
+    reader a roving tabindex and arrow-key traversal, the same call the emoji
+    picker's group tabs made. --%>
+    <div class="mb-4 flex flex-wrap gap-1 text-sm" {@rest}>
       <%= for {value, label} <- @options do %>
         <button
           :if={@event}
@@ -437,15 +450,31 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
-  # The active tab reads as a raised white pill, the rest as quiet muted text —
-  # the same treatment as the profile's Certificates & licenses tabs.
+  # The active tab is a brand-tinted pill, the rest quiet muted text that tints
+  # on hover — the shell's top-bar nav treatment for the page you are on,
+  # reused so the app has one look for "which of these am I on".
+  #
+  # **Every colour here is picked to read against BOTH page backgrounds**, the
+  # thing the old filled track could not do. Checked side by side in a browser
+  # over white and over the canvas, because the near-misses are invisible on
+  # screen and obvious only when you put them next to each other:
+  #
+  #   * `brand-50` (#eff6ff) vs the `slate-100` canvas (#f1f5f9) differ by ~6
+  #     in one channel — the shell gets away with it because its header is
+  #     white, here it vanishes. `brand-100` reads on both, and it is already
+  #     the tint the profile's tag count pill wears.
+  #   * the hover is `slate-200`, not `slate-100`, for the same reason.
+  #   * `brand-600` + white text reads everywhere but is the primary-CTA
+  #     weight, far too loud for a row of filters.
+  #
+  # `py-2.5` keeps the tap target at 40px, the mobile-first floor.
   defp post_filter_tab_class(true),
     do:
-      "whitespace-nowrap rounded-md bg-white px-3 py-1 font-semibold text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-100"
+      "whitespace-nowrap rounded-lg bg-brand-100 px-3 py-2.5 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
   defp post_filter_tab_class(false),
     do:
-      "whitespace-nowrap rounded-md px-3 py-1 font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+      "whitespace-nowrap rounded-lg px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
 
   # Link-mode href: the plain base path for "all", a `?type=` variant otherwise.
   defp post_filter_link(base_path, "all"), do: base_path
