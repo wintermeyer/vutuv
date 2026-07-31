@@ -46,6 +46,7 @@ defmodule Vutuv.FediverseNotesTest do
         "cc" => Keyword.get(opts, :cc, ["#{actor}/followers"])
       }
       |> maybe_put("summary", opts[:summary])
+      |> maybe_put("tag", opts[:tag])
 
     %{
       "type" => "Create",
@@ -278,6 +279,32 @@ defmodule Vutuv.FediverseNotesTest do
 
       assert [%Note{content_text: text}] = Repo.all(Note)
       assert String.length(text) <= Note.max_content()
+    end
+
+    test "a mentioned account is stored as its full fediverse address", %{
+      user: user,
+      note_url: note_url
+    } do
+      content =
+        ~s(<p><a href="https://social.example/@carla" class="u-url mention">@<span>carla</span></a> hat recht.</p>)
+
+      tag = [
+        %{
+          "type" => "Mention",
+          "href" => "https://social.example/users/carla",
+          "name" => "@carla"
+        }
+      ]
+
+      assert :ok =
+               Fediverse.record_reply(
+                 user,
+                 create_activity(note_url, content: content, tag: tag),
+                 remote()
+               )
+
+      assert [%Note{content_text: text}] = Repo.all(Note)
+      assert text == "@carla@social.example hat recht."
     end
 
     test "a content warning is kept as the lid, not folded into the text", %{

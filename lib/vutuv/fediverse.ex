@@ -2335,7 +2335,7 @@ defmodule Vutuv.Fediverse do
       |> Enum.map_join("\n", &("• " <> &1))
 
     [
-      remote_text(object["content"], RemotePost.max_content()),
+      remote_text(object["content"], RemotePost.max_content(), object["tag"]),
       SearchText.normalize_search(options)
     ]
     |> Enum.reject(&is_nil/1)
@@ -2343,7 +2343,8 @@ defmodule Vutuv.Fediverse do
     |> SearchText.normalize_search()
   end
 
-  defp remote_post_text(object), do: remote_text(object["content"], RemotePost.max_content())
+  defp remote_post_text(object),
+    do: remote_text(object["content"], RemotePost.max_content(), object["tag"])
 
   # The body of a post whose author wrote no words: the empty string, when it
   # carries at least one picture (and nil otherwise, which drops the post).
@@ -3198,7 +3199,8 @@ defmodule Vutuv.Fediverse do
     with %{} = object <- note_object(activity["object"]),
          uri when is_binary(uri) <- object["id"],
          %Note{} = note <- Repo.get_by(Note, object_uri: uri, actor_uri: actor_uri),
-         text when text != "" <- remote_text(object["content"], Note.max_content()) do
+         text when text != "" <-
+           remote_text(object["content"], Note.max_content(), object["tag"]) do
       note
       |> Note.changeset(%{
         content_text: text,
@@ -3545,7 +3547,7 @@ defmodule Vutuv.Fediverse do
 
   defp insert_note(user, post, activity, object, actor) do
     uri = object["id"]
-    text = remote_text(object["content"], Note.max_content())
+    text = remote_text(object["content"], Note.max_content(), object["tag"])
     received = DateTime.utc_now(:second)
 
     cond do
@@ -3641,12 +3643,17 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  defp remote_text(nil, _max), do: nil
+  # `tags` is the object's AP `tag` array: content passes it so a bare `@user`
+  # mention widens to the linkable `@user@host` (see `Vutuv.RemoteHtml`); a
+  # summary is a content warning and stays as written.
+  defp remote_text(html, max, tags \\ [])
 
-  defp remote_text(html, max) when is_binary(html),
-    do: SearchText.normalize_search(RemoteHtml.to_text(html, max))
+  defp remote_text(nil, _max, _tags), do: nil
 
-  defp remote_text(_html, _max), do: nil
+  defp remote_text(html, max, tags) when is_binary(html),
+    do: SearchText.normalize_search(RemoteHtml.to_text(html, max, tags))
+
+  defp remote_text(_html, _max, _tags), do: nil
 
   # The nil UUID can never match a row: "not the author" without a NULL arm,
   # the same trick `Vutuv.Posts.engagement_viewer_id/1` uses.
@@ -3734,7 +3741,7 @@ defmodule Vutuv.Fediverse do
   end
 
   defp apply_refresh(%Note{} = note, {:ok, doc}) do
-    text = remote_text(doc["content"], Note.max_content())
+    text = remote_text(doc["content"], Note.max_content(), doc["tag"])
     still_public? = doc_public?(doc)
 
     cond do
@@ -3886,7 +3893,7 @@ defmodule Vutuv.Fediverse do
   end
 
   defp apply_repost_refresh(%RemotePost{} = post, {:ok, doc}) do
-    text = remote_text(doc["content"], RemotePost.max_content())
+    text = remote_text(doc["content"], RemotePost.max_content(), doc["tag"])
 
     cond do
       not doc_public?(doc) ->

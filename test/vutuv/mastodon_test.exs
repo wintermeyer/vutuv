@@ -136,6 +136,27 @@ defmodule Vutuv.MastodonTest do
       refute_receive {:req, _, _}
     end
 
+    test "a mentioned account is expanded to its full fediverse address" do
+      serve([
+        status(%{
+          "id" => "1",
+          "content" =>
+            ~s(<p>Track von <a href="https://example.social/@herrkaschke" class="u-url mention">@<span>herrkaschke</span></a></p>),
+          "mentions" => [
+            %{
+              "id" => "9",
+              "username" => "herrkaschke",
+              "acct" => "herrkaschke",
+              "url" => "https://example.social/@herrkaschke"
+            }
+          ]
+        })
+      ])
+
+      assert {:ok, %Feed{posts: [post]}} = Mastodon.fetch_posts(@handle)
+      assert post.text == "Track von @herrkaschke@example.social"
+    end
+
     test "custom-emoji shortcodes are stripped from the display name" do
       serve([status(%{})], lookup: %{"display_name" => "Johannes Mirus :verified:"})
       assert {:ok, %Feed{name: "Johannes Mirus"}} = Mastodon.fetch_posts(@handle)

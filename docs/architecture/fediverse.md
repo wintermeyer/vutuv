@@ -236,14 +236,21 @@ every activity of a member it finds no key for, silently.
   sentence with their name on it does), the Note answers one of *their own*
   posts, the post is public, the sender is within its inbound cap, and there is
   text left once the markup is gone. Same 202 whatever it decides.
-  - **Stored as plain text, never HTML.** `Vutuv.RemoteHtml.to_text/2` (shared
+  - **Stored as plain text, never HTML.** `Vutuv.RemoteHtml.to_text/3` (shared
     with the Mastodon profile feed, so remote HTML is reduced exactly one way)
     drops `<script>`/`<style>` **with their contents**, turns `<br>`/`</p>` into
     line breaks, strips every remaining tag, decodes the base entities once and
     clamps. So no markup a stranger wrote survives into the database, the
     agent-format siblings carry the value unchanged, and the cap is well
     defined. **No avatar is copied**: the card renders initials and links to the
-    origin.
+    origin. One repair on the way through: those networks render a mention as
+    the bare `@user` short form, its full address hiding in the anchor the strip
+    throws away — so every content path hands the object's `Mention` tags along
+    and the reducer widens `@user` to the full `@user@host` (only where the pair
+    is unambiguous, matches the shared entity grammar and is not this very
+    installation), which the renderer below then links like any typed fediverse
+    handle. The Mastodon profile feed normalizes its REST `mentions` to the same
+    shape.
   - **Shown through `VutuvWeb.Markdown.render_remote/1`** — the same renderer
     the Mastodon profile feed uses, so remote text reads one way across the app.
     A post from those networks is largely links, and as raw strings they sat on

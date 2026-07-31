@@ -20,6 +20,7 @@ defmodule Vutuv.Mastodon do
 
   require Logger
 
+  alias Vutuv.RemoteHtml
   alias Vutuv.SocialFeed.Feed
   alias Vutuv.SocialFeed.Http
   alias Vutuv.SocialFeed.Post
@@ -181,7 +182,19 @@ defmodule Vutuv.Mastodon do
     cond do
       spoiler != "" -> Post.truncate(spoiler)
       status["sensitive"] == true -> ""
-      true -> text_content(to_string(status["content"] || ""))
+      true -> RemoteHtml.to_text(to_string(status["content"] || ""), nil, mention_tags(status))
+    end
+  end
+
+  # The REST API names each mentioned account in `mentions` — `acct` bare for
+  # a same-server account, `user@host` for a remote one — beside its profile
+  # `url`. Normalized to the AP Mention-tag shape, so `Vutuv.RemoteHtml` widens
+  # the bare `@user` the content shows to the full linkable address either way.
+  defp mention_tags(status) do
+    for %{"acct" => acct, "url" => url} <- List.wrap(status["mentions"]),
+        is_binary(acct),
+        is_binary(url) do
+      %{"type" => "Mention", "name" => "@" <> acct, "href" => url}
     end
   end
 
@@ -193,5 +206,5 @@ defmodule Vutuv.Mastodon do
   Fediverse replies (issue #1069), so remote HTML is turned into text exactly
   one way in this codebase.
   """
-  defdelegate text_content(html), to: Vutuv.RemoteHtml, as: :to_text
+  defdelegate text_content(html), to: RemoteHtml, as: :to_text
 end

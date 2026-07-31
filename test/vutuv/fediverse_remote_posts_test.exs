@@ -92,6 +92,35 @@ defmodule Vutuv.FediverseRemotePostsTest do
       assert DateTime.to_date(post.published_at) == ~D[2026-07-20]
     end
 
+    test "a mentioned account is stored as its full fediverse address" do
+      user = member()
+      acc = account()
+      follow(user, acc)
+
+      # Mastodon renders a mention as the bare `@user` short form; the host
+      # needed to link the account rides in the object's Mention tag. Stored
+      # expanded, the renderer links it like any typed `@user@host` handle.
+      activity =
+        create_activity(%{
+          object: %{
+            "content" =>
+              ~s(<p>Starker Track von <a href="https://social.cologne/@herrkaschke" class="u-url mention">@<span>herrkaschke</span></a>.</p>),
+            "tag" => [
+              %{
+                "type" => "Mention",
+                "href" => "https://social.cologne/users/herrkaschke",
+                "name" => "@herrkaschke"
+              }
+            ]
+          }
+        })
+
+      assert :ok = Fediverse.record_remote_post(activity, @actor)
+
+      assert [post] = Repo.all(RemotePost)
+      assert post.content_text == "Starker Track von @herrkaschke@social.cologne."
+    end
+
     test "a redelivery stores no second row, and is a skip" do
       user = member()
       acc = account()
