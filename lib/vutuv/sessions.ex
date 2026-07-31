@@ -194,8 +194,22 @@ defmodule Vutuv.Sessions do
   `"disconnect"` event so the topic format and event name live in one place;
   callers outside this context (the logout path) hand it a `live_socket_id`
   read straight from the cookie.
+
+  A no-op when the endpoint is not running. `bin/vutuv eval` — which is how a
+  release runs migrations and one-off tasks — *loads* the application without
+  starting it, so `Endpoint.broadcast/3` would raise on the endpoint's missing
+  ETS table. Skipping is the correct answer there rather than a fallback: with
+  no endpoint there are no live sockets, so there is nothing to disconnect.
+  Without this, any account deletion from a release task (an admin cleanup, a
+  data migration) dies partway through.
   """
-  def disconnect(topic), do: VutuvWeb.Endpoint.broadcast(topic, "disconnect", %{})
+  def disconnect(topic) do
+    if Process.whereis(VutuvWeb.Endpoint) do
+      VutuvWeb.Endpoint.broadcast(topic, "disconnect", %{})
+    end
+
+    :ok
+  end
 
   # ── Security-alert detection (issue #786) ──
 

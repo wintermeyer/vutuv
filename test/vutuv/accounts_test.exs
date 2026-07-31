@@ -633,6 +633,158 @@ defmodule Vutuv.AccountsTest do
     end
   end
 
+  describe "delete_unconfirmed_legacy_registrations/1" do
+    # An abandoned registration from the backlog: unconfirmed and old, with no
+    # login PIN left (they expire and are cleared), which is exactly why the
+    # periodic sweep above can never reach it.
+    defp stale_registration(days_old \\ 30) do
+      user = insert(:user, email_confirmed?: false)
+      set_inserted_at(from(u in User, where: u.id == ^user.id), days_old * 24 * 60)
+      Repo.get!(User, user.id)
+    end
+
+    test "deletes an old unconfirmed registration and everything hanging off it" do
+      user = stale_registration()
+      email = insert(:email, user: user)
+      tag = insert(:tag, name: unique_tag_name("Karteileiche"))
+      user_tag = insert(:user_tag, user: user, tag: tag)
+
+      assert {1, _} = Accounts.delete_unconfirmed_legacy_registrations()
+
+      refute Repo.get(User, user.id)
+      refute Repo.get(Vutuv.Accounts.Email, email.id)
+      refute Repo.get(Vutuv.Tags.UserTag, user_tag.id)
+      # The tag row itself is a separate cleanup's business, not this one's.
+      assert Repo.get(Vutuv.Tags.Tag, tag.id)
+    end
+
+    # The two account states that make up the protected member count.
+    test "never touches a confirmed account, however old" do
+      user = insert(:activated_user)
+      set_inserted_at(from(u in User, where: u.id == ^user.id), 365 * 24 * 60)
+
+      assert {0, _} = Accounts.delete_unconfirmed_legacy_registrations()
+      assert Repo.get(User, user.id)
+    end
+
+    # A member from before the flag existed: `email_confirmed?` is NULL, which
+    # the schema's `default: false` makes unreachable through a changeset, so
+    # the column is set directly — exactly the state the real legacy rows are in.
+    defp legacy_member do
+      user = insert(:user)
+      Repo.update_all(from(u in User, where: u.id == ^user.id), set: [email_confirmed?: nil])
+      Repo.get!(User, user.id)
+    end
+
+    test "never touches a legacy member whose email_confirmed? is NULL" do
+      # The critical case: these accounts predate the flag and count as members.
+      # `email_confirmed? == false` must not match NULL under SQL three-valued
+      # logic, and this is what proves it.
+      user = legacy_member()
+      assert is_nil(user.email_confirmed?)
+      set_inserted_at(from(u in User, where: u.id == ^user.id), 365 * 24 * 60)
+
+      assert {0, _} = Accounts.delete_unconfirmed_legacy_registrations()
+      assert Repo.get(User, user.id)
+    end
+
+    test "spares a registration inside the grace period" do
+      user = stale_registration(3)
+
+      assert {0, _} = Accounts.delete_unconfirmed_legacy_registrations(7)
+      assert Repo.get(User, user.id)
+    end
+
+    test "keeps the protected member count exactly intact" do
+      confirmed = insert(:activated_user)
+      legacy = legacy_member()
+      stale_registration()
+      before = Accounts.count_users()
+
+      assert {1, _} = Accounts.delete_unconfirmed_legacy_registrations()
+
+      assert Accounts.count_users() == before
+      assert Repo.get(User, confirmed.id)
+      assert Repo.get(User, legacy.id)
+    end
+
+    # Fail closed: the sweep's whole premise is that these accounts never got
+    # started. Any evidence to the contrary stops it rather than deleting on a
+    # wrong assumption.
+    test "refuses to run when a candidate is an admin" do
+      user = stale_registration()
+      Repo.update_all(from(u in User, where: u.id == ^user.id), set: [admin?: true])
+
+      assert_raise RuntimeError, ~r/admin/i, fn ->
+        Accounts.delete_unconfirmed_legacy_registrations()
+      end
+
+      assert Repo.get(User, user.id)
+    end
+
+    test "refuses to run when a candidate has written a post" do
+      user = stale_registration()
+      insert(:post, user: user)
+
+      assert_raise RuntimeError, ~r/posts/, fn ->
+        Accounts.delete_unconfirmed_legacy_registrations()
+      end
+
+      assert Repo.get(User, user.id)
+    end
+
+    # The guard reads the live foreign keys rather than a list of activity
+    # tables, so a table nobody thought about still stops it. `post_bookmarks`
+    # stands in for exactly that: it is named nowhere in the cleanup.
+    test "refuses on a table the cleanup never names, found through the catalog" do
+      user = stale_registration()
+
+      Repo.insert!(%Vutuv.Posts.PostBookmark{user_id: user.id, post_id: insert(:post).id})
+
+      assert_raise RuntimeError, ~r/post_bookmarks/, fn ->
+        Accounts.delete_unconfirmed_legacy_registrations()
+      end
+
+      assert Repo.get(User, user.id)
+    end
+
+    # The rows a bare sign-up writes must NOT trip the guard, or the cleanup
+    # could never run at all.
+    test "an email, a handle and tags do not count as activity" do
+      user = stale_registration()
+      insert(:email, user: user)
+      insert(:user_tag, user: user, tag: insert(:tag, name: unique_tag_name("Anmeldung")))
+      # Somebody else following the account is their action, not its use.
+      insert(:follow, follower: insert(:activated_user), followee: user)
+
+      assert {1, _} = Accounts.delete_unconfirmed_legacy_registrations()
+      refute Repo.get(User, user.id)
+    end
+
+    test "refuses to run when a candidate has ever held a session" do
+      user = stale_registration()
+
+      Repo.insert!(%Vutuv.Sessions.UserSession{
+        user_id: user.id,
+        token_hash: Base.encode16(:crypto.strong_rand_bytes(16), case: :lower),
+        last_seen_at: DateTime.utc_now(:second)
+      })
+
+      assert_raise RuntimeError, ~r/user_sessions/, fn ->
+        Accounts.delete_unconfirmed_legacy_registrations()
+      end
+
+      assert Repo.get(User, user.id)
+    end
+
+    test "is idempotent" do
+      stale_registration()
+
+      assert {1, _} = Accounts.delete_unconfirmed_legacy_registrations()
+      assert {0, _} = Accounts.delete_unconfirmed_legacy_registrations()
+    end
+  end
+
   describe "moderation removal filter + restore" do
     test "the spam flag lists only accounts marked as spam" do
       spammer = insert(:activated_user, deactivated_at: naive_now(), moderation_reason: "spam")

@@ -1268,4 +1268,66 @@ defmodule Vutuv.TagsTest do
       assert %{"tags" => 0} = Tags.delete_legacy_overlong_tags()
     end
   end
+
+  describe "delete_orphaned_tags/0" do
+    defp orphan_tag, do: insert(:tag, name: unique_tag_name("Waise"))
+
+    test "deletes a tag nothing points at any more" do
+      tag = orphan_tag()
+
+      assert %{"tags" => 1} = Tags.delete_orphaned_tags()
+      refute Repo.get(Tag, tag.id)
+    end
+
+    test "keeps a tag somebody still holds" do
+      tag = orphan_tag()
+      insert(:user_tag, user: insert(:activated_user), tag: tag)
+
+      assert %{"tags" => 0} = Tags.delete_orphaned_tags()
+      assert Repo.get(Tag, tag.id)
+    end
+
+    # The distinction that makes this safe: "nobody holds it" is not the same as
+    # "nothing uses it". A tag with no holder can still be the chip under
+    # somebody's post, and deleting it would take that chip with it.
+    test "keeps a holderless tag that is still a post's tag" do
+      tag = orphan_tag()
+      post_tag = Repo.insert!(%PostTag{post_id: insert(:post).id, tag_id: tag.id})
+
+      assert %{"tags" => 0} = Tags.delete_orphaned_tags()
+      assert Repo.get(Tag, tag.id)
+      assert Repo.get(PostTag, post_tag.id)
+    end
+
+    test "keeps a holderless tag a post names as a #hashtag" do
+      tag = orphan_tag()
+      Repo.insert!(%PostHashtag{post_id: insert(:post).id, tag_id: tag.id})
+
+      assert %{"tags" => 0} = Tags.delete_orphaned_tags()
+      assert Repo.get(Tag, tag.id)
+    end
+
+    test "keeps a holderless tag somebody follows" do
+      tag = orphan_tag()
+      insert(:tag_follow, user: insert(:activated_user), tag: tag)
+
+      assert %{"tags" => 0} = Tags.delete_orphaned_tags()
+      assert Repo.get(Tag, tag.id)
+    end
+
+    test "keeps a holderless tag a newsletter group is built on" do
+      tag = orphan_tag()
+      Repo.insert!(%NewsletterGroup{name: "Zielgruppe", tag_id: tag.id})
+
+      assert %{"tags" => 0} = Tags.delete_orphaned_tags()
+      assert Repo.get(Tag, tag.id)
+    end
+
+    test "is idempotent" do
+      orphan_tag()
+
+      assert %{"tags" => 1} = Tags.delete_orphaned_tags()
+      assert %{"tags" => 0} = Tags.delete_orphaned_tags()
+    end
+  end
 end

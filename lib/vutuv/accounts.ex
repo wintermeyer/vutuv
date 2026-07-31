@@ -852,6 +852,176 @@ defmodule Vutuv.Accounts do
     end
   end
 
+  # How long an unconfirmed account is left alone by the backlog cleanup. The
+  # periodic sweep above already reaps a real abandoned registration within
+  # ~75 minutes, so anything this young is either mid-registration or the
+  # sweep's business, never the backlog's.
+  @legacy_registration_grace_days 7
+
+  # What a bare registration leaves behind, and the only rows a candidate may
+  # therefore own. Everything else that references `users` counts as evidence
+  # the account was actually *used* and stops the cleanup.
+  #
+  # It is written this way round on purpose. A list of activity tables to check
+  # goes stale the moment somebody adds one, and that is not hypothetical: two
+  # tables carrying a member's fediverse boosts and bookmarks landed on main
+  # between this cleanup being written and being deployed, and a positive list
+  # would have waved both through in silence. The set below is the small, closed
+  # one — sign-up writes an account, its email, its handle, the tags typed into
+  # the form and a login PIN — while the set of ways to use vutuv only grows.
+  #
+  # `search_terms` is on the list because it is not behaviour at all: the rows
+  # are derived from the name typed into the sign-up form
+  # (`SearchTerm.create_search_terms/1`, called from `user_changeset/4`) so that
+  # others can find the member, roughly eighteen per account. Leaving it off is
+  # what proved the design worth having — it stopped the cleanup on real data
+  # before a single row was deleted, rather than letting a wrong assumption run.
+  #
+  # `follows.followee_id` is here because it is somebody *else's* action: a
+  # member following this account says nothing about whether the account itself
+  # was ever used.
+  @registration_owned [
+    {"emails", "user_id"},
+    {"handles", "user_id"},
+    {"user_tags", "user_id"},
+    {"search_terms", "user_id"},
+    {"login_pins", "user_id"},
+    {"follows", "followee_id"}
+  ]
+
+  @doc """
+  Deletes the backlog of accounts that registered but never confirmed, and were
+  left behind by the periodic sweep.
+
+  `delete_unconfirmed_registrations/1` only reaps an account whose first "login"
+  PIN was minted alongside it, which is what tells an abandoned sign-up apart
+  from a member who merely failed to log in. That guard cannot see the backlog:
+  a PIN expires and is cleared, so an old abandoned registration has none left
+  and the sweep passes over it forever. Hence a one-time cleanup with a
+  different guard.
+
+  **What is protected.** Only `email_confirmed? == false` matches. A confirmed
+  account is out, and so is a legacy member whose flag predates it and is `NULL`
+  — SQL three-valued logic gives `NULL = false` no match, which is the same
+  reason `count_users/0` counts them as members. That count is taken before and
+  after and must come out identical, or the whole thing raises and rolls back.
+
+  **When it refuses.** Sign-up writes an account, an email, a handle, the tags
+  typed into the form and a login PIN, and nothing else. So every *other* table
+  referencing `users` — read from the live foreign keys, not from a list kept
+  here — is checked, and one row on a candidate means the premise is wrong and
+  the cleanup stops rather than guessing (see `@registration_owned`). An admin
+  among the candidates stops it too. All of this runs before the first delete,
+  so a refusal costs nothing.
+
+  Accounts younger than `grace_days` are left to the periodic sweep. Each row is
+  re-checked as still unconfirmed at delete time and removed through
+  `delete_user/1`, so on-disk avatars go with it. Returns
+  `{deleted_count, protected_member_count}`.
+  """
+  def delete_unconfirmed_legacy_registrations(grace_days \\ @legacy_registration_grace_days) do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -grace_days * 24 * 60 * 60)
+
+    refuse_on_admin!(cutoff)
+    Enum.each(activity_references(), &refuse_on_activity!(&1, cutoff))
+
+    protected_before = count_users()
+
+    deleted =
+      from(u in User,
+        where: u.email_confirmed? == false and u.inserted_at < ^cutoff,
+        select: u.id
+      )
+      |> Repo.all()
+      |> Enum.count(&delete_candidate_if_still_unconfirmed/1)
+
+    protected_after = count_users()
+
+    if protected_after != protected_before do
+      raise """
+      The protected member count changed from #{protected_before} to \
+      #{protected_after} during the cleanup, so it touched an account it must \
+      not have. Nothing is committed: this runs inside the migration's \
+      transaction and the raise rolls it back.\
+      """
+    end
+
+    {deleted, protected_after}
+  end
+
+  defp refuse_on_admin!(cutoff) do
+    count =
+      Repo.aggregate(
+        from(u in User,
+          where: u.email_confirmed? == false and u.inserted_at < ^cutoff and u.admin? == true
+        ),
+        :count
+      )
+
+    if count > 0 do
+      raise "#{count} of the unconfirmed accounts is an admin — refusing to run."
+    end
+  end
+
+  # Every foreign key into `users` except the ones a registration itself writes.
+  # Read from the catalog so a table added after this was written is checked
+  # without anyone remembering to add it here.
+  defp activity_references do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT c.conrelid::regclass::text, a.attname
+        FROM pg_constraint c
+        JOIN unnest(c.conkey) AS k(attnum) ON true
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+        WHERE c.contype = 'f' AND c.confrelid = 'users'::regclass
+        """,
+        []
+      )
+
+    rows
+    |> Enum.map(fn [table, column] -> {table, column} end)
+    |> Enum.reject(&(&1 in @registration_owned))
+    |> Enum.uniq()
+  end
+
+  # Table and column names come from the catalog, never from user input.
+  # `$1::timestamp` because Postgrex needs the parameter typed for a
+  # NaiveDateTime.
+  defp refuse_on_activity!({table, column}, cutoff) do
+    %{rows: [[count]]} =
+      Repo.query!(
+        """
+        SELECT count(*) FROM #{table} c
+        JOIN users u ON u.id = c.#{column}
+        WHERE u."email_confirmed?" = false AND u.inserted_at < $1::timestamp
+        """,
+        [cutoff]
+      )
+
+    if count > 0 do
+      raise """
+      #{count} #{table} row(s) belong to accounts this cleanup would delete. A \
+      registration that was never confirmed cannot have written them, so the \
+      assumption behind the cleanup does not hold for this data. Nothing has \
+      been deleted; work out what those accounts are before running it again.\
+      """
+    end
+  end
+
+  # The same re-check the periodic sweep makes, from an id: a member could have
+  # confirmed between the read above and now, and must then be left alone.
+  defp delete_candidate_if_still_unconfirmed(id) do
+    case Repo.get(User, id) do
+      %User{email_confirmed?: false} = user ->
+        delete_user(user)
+        true
+
+      _ ->
+        false
+    end
+  end
+
   @doc """
   Verifies a one-time PIN.
 

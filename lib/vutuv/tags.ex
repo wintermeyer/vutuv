@@ -978,6 +978,45 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
+  Deletes the tags nothing points at any more.
+
+  A tag row is not the thing members see — the chips on a profile, the posts on
+  `/tags/:slug` and the follow button are all rows in other tables that name it.
+  Once the last of those is gone the tag is a name no surface can reach, and the
+  most common way that happens is an account leaving and taking its `user_tags`
+  with it.
+
+  "Nobody holds it" is deliberately **not** the test. A tag with no holder can
+  still be the chip under somebody's post, the `#hashtag` in a sentence, a
+  subscription, or the audience rule of a newsletter group. The test is that no
+  row in *any* table referencing `tags` names it, and the tables are read from
+  the live foreign keys, so one added later is included without an edit here.
+
+  Returns rows deleted per table (only `tags` can be non-zero — a tag nothing
+  references has, by definition, nothing to cascade). Idempotent.
+  """
+  def delete_orphaned_tags do
+    delete_tags_matching(orphaned_tags_query())
+  end
+
+  # `WHERE NOT EXISTS (…)` once per referencing table. The table and column names
+  # come from the catalog, never from user input, but Ecto rightly refuses an
+  # interpolated `fragment/1`, so the condition is run as its own statement and
+  # the ids it returns become an ordinary query.
+  defp orphaned_tags_query do
+    conditions =
+      "tags"
+      |> foreign_keys_to()
+      |> Enum.map_join(" AND ", fn %{table: table, column: column} ->
+        "NOT EXISTS (SELECT 1 FROM #{table} ref WHERE ref.#{column} = t.id)"
+      end)
+
+    %{rows: rows} = Repo.query!("SELECT t.id::text FROM tags t WHERE #{conditions}", [])
+
+    from(t in Tag, where: t.id in ^List.flatten(rows))
+  end
+
+  @doc """
   Deletes every tag `query` selects, and everything that hung off it.
 
   A tag goes together with the rows that existed only to tie something to it —
