@@ -3394,11 +3394,17 @@ defmodule Vutuv.Posts do
 
   defp post_preloads do
     # denials with group/denied_user: the author-facing audience display
-    # names them (never shown to other viewers). reply_ref goes exactly one
-    # level deep (the banner names the direct parent only) — preloading the
-    # parent's own reply_ref would recurse. The parent carries :images + :tags
-    # too: the feed/profile thread nests it as a full post card (its own action
-    # bar, images, tags), not just a one-line excerpt.
+    # names them (never shown to other viewers). The parent carries :images +
+    # :tags too: the feed/profile thread nests it as a full post card (its own
+    # action bar, images, tags), not just a one-line excerpt — which is also why
+    # reply_ref goes two levels deep rather than one. A thread block's topmost
+    # card is always a parent pulled in as context, and when that parent is
+    # itself a reply the block opens mid-conversation; with nothing loaded for
+    # its own banner it rendered as the post that STARTED the thread, so a
+    # profile showed a stranger's answer to a third member as their opening
+    # line. Level two carries only what that banner needs (the grandparent's
+    # author, to name and link) — never the grandparent's own refs, which is
+    # where an unbounded walk up the chain would start.
     [
       :user,
       :images,
@@ -3425,7 +3431,13 @@ defmodule Vutuv.Posts do
           :images,
           :screenshot,
           :review,
-          tags: from(t in Tag, order_by: t.name)
+          tags: from(t in Tag, order_by: t.name),
+          # The nested parent's own "Replying to …" line, local and remote: the
+          # two states it can be in when it is a reply rather than a thread
+          # starter. `parent_post: :user` is deliberately the author alone —
+          # the grandparent is named and linked, never rendered.
+          remote_reply_ref: [remote_post: :remote_account],
+          reply_ref: [:parent_author, parent_post: :user]
         ]
       ]
     ]

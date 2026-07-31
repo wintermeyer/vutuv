@@ -470,6 +470,41 @@ defmodule VutuvWeb.UserProfileLiveTest do
       # replaces it, so the relationship is shown once, not twice.
       refute has_element?(view, "[data-reply-banner]")
     end
+
+    test "a context parent that is itself a reply says who IT answers", %{conn: conn} do
+      # The thread block's topmost card is a post the page pulled in purely as
+      # context, and when that post is itself a reply it opens mid-conversation.
+      # Without its own "Replying to" banner it reads as the post that started
+      # the thread, so a profile showed a stranger's answer to a third member as
+      # if it were their opening line.
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      opener = insert_activated_user()
+      middle = insert_activated_user()
+
+      {:ok, root} = Posts.create_post(opener, %{body: "the post that opened it"})
+      {:ok, parent} = Posts.create_reply(middle, root, %{body: "an answer to the opener"})
+      {:ok, _reply} = Posts.create_reply(owner, parent, %{body: "my answer to that answer"})
+
+      {:ok, view, html} = live(conn, ~p"/#{owner}")
+
+      # The context card names the post it answers and links to it, so the
+      # reader can reach the start of the conversation.
+      assert html =~ "an answer to the opener"
+
+      assert has_element?(
+               view,
+               ~s(#profile-posts [data-reply-banner="parent"] a[href="#{Posts.path(root)}"]),
+               "@#{opener.username}"
+             )
+
+      # The owner's own reply still drops its banner: the parent card above it
+      # already shows that relationship.
+      refute has_element?(
+               view,
+               ~s(#profile-posts [data-reply-banner] a[href="#{Posts.path(parent)}"])
+             )
+    end
   end
 
   describe "midnight day-change refresh" do

@@ -286,6 +286,36 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{root.id}-like")
     end
 
+    test "a context parent that is itself a reply says who IT answers", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # Two members the viewer does not follow hold a conversation and the viewer
+      # answers the second of them. Only that answer is on this feed, so the
+      # chain stops one step up and the block's topmost card is a post pulled in
+      # purely as context — itself an answer to a post that is not on the page.
+      opener = other_user()
+      middle = other_user()
+      {:ok, root} = Posts.create_post(opener, %{body: "the post that opened it"})
+      {:ok, parent} = Posts.create_reply(middle, root, %{body: "an answer to the opener"})
+      {:ok, _leaf} = Posts.create_reply(user, parent, %{body: "my answer to that answer"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # It says so, rather than passing for the post that started the thread.
+      assert has_element?(
+               live,
+               ~s(#feed-posts [data-reply-banner="parent"] a[href="#{Posts.path(root)}"]),
+               "@#{opener.username}"
+             )
+
+      # The viewer's own reply keeps its banner off — the card above it already
+      # shows that relationship.
+      refute has_element?(
+               live,
+               ~s(#feed-posts [data-reply-banner] a[href="#{Posts.path(parent)}"])
+             )
+    end
+
     test "a branching thread nests each reply under the post it answers", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
