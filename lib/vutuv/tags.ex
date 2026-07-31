@@ -25,6 +25,12 @@ defmodule Vutuv.Tags do
   @endorser_sorts ~w(name username date)
   @endorsers_per_page 25
 
+  # How many `#hashtags` of one body are looked up and filed (a member's post
+  # body, a cached remote post). Generous for anybody writing normally and a
+  # ceiling on the pathological case: a body listing two hundred hashtags is
+  # reaching for two hundred tag pages, not writing about two hundred topics.
+  @max_hashtags_per_body 20
+
   # The most tags one profile may carry. A handful of members overdid it, so a
   # profile is capped here. The cap bites only when tags *change*: a profile
   # already over it (from before the cap) keeps every tag but can add none, and
@@ -368,12 +374,22 @@ defmodule Vutuv.Tags do
 
   @doc """
   Given candidate tag slugs (the `#hashtags` in a Markdown body), returns the
-  `MapSet` of those naming a real tag with **at least one visible member** — a
-  confirmed, non-hidden user carries the tag, so its `/tags/:slug` page actually
-  shows something. Powers the hashtag links `VutuvWeb.Markdown` writes; an
-  unknown or empty tag is absent from the set, so it stays plain text. The
-  visible-member gate is the same one the tag page lists by
-  (`Tag.recommended_users/1`). One query; an empty input skips the DB so the
+  `MapSet` of those whose `/tags/:slug` page actually shows something — a real
+  tag with **at least one visible member** (a confirmed, non-hidden user carries
+  it, the same gate the tag page lists by) **or at least one publicly visible
+  post** filed under it (`Posts.visible_tagged_posts_query/0`, the tag page's own
+  posts gate). Powers the hashtag links `VutuvWeb.Markdown` writes; an unknown or
+  empty tag is absent from the set, so it stays plain text.
+
+  The post arm is what keeps the link and the listing honest in both directions:
+  a post is filed under the tag its own `#hashtag` names, so a tag nobody has on
+  their profile but several posts carry is a page worth landing on. Without it a
+  reader would meet a plain-text `#elixir` in a post that the elixir page lists.
+  It is the same set `indexable_tags_query/0` calls worth indexing, at a
+  threshold of one member rather than two — that bar asks whether a page
+  deserves a crawler, this one only whether it deserves a click.
+
+  One query per body (two arms of a union); an empty input skips the DB so the
   renderer's no-hashtag path stays query-free.
   """
   def linkable_slugs(slugs) when is_list(slugs) do
@@ -384,18 +400,67 @@ defmodule Vutuv.Tags do
         MapSet.new()
 
       normalized ->
-        from(t in Tag,
-          join: ut in assoc(t, :user_tags),
-          join: u in assoc(ut, :user),
-          where: t.slug in ^normalized,
-          where: account_confirmed_row(u) and not account_hidden_row(u),
-          distinct: true,
-          select: t.slug
-        )
+        held =
+          from(t in Tag,
+            join: ut in assoc(t, :user_tags),
+            join: u in assoc(ut, :user),
+            where: t.slug in ^normalized,
+            where: account_confirmed_row(u) and not account_hidden_row(u),
+            select: %{slug: t.slug}
+          )
+
+        posted =
+          from([post_tag: pt] in Posts.visible_tagged_posts_query(),
+            join: t in Tag,
+            on: t.id == pt.tag_id,
+            where: t.slug in ^normalized,
+            select: %{slug: t.slug}
+          )
+
+        from(row in subquery(union_all(held, ^posted)), distinct: true, select: row.slug)
         |> Repo.all()
         |> MapSet.new()
     end
   end
+
+  @doc """
+  The ids of the tags `hashtags` names here — **existing tags only**, matched on
+  the slug, which is exactly what `VutuvWeb.Markdown` links a `#hashtag` to.
+
+  Feeds both hashtag filing paths: a member's post body
+  (`Vutuv.Posts.create_post/2`) and a cached remote post
+  (`Vutuv.Fediverse.Hashtags`). Neither mints a tag. For a member post that is
+  merely conservative — the composer's own tag field is where a member deliberately
+  names a new tag, and a typo in a body should not leave a page behind. For a
+  remote post it is a rule: a table a stranger's server can extend is a table a
+  stranger's server can flood with pages on our own domain.
+
+  Matched case-insensitively on **name or slug**, the predicate
+  `Tag.find_by_value/1` uses, so `#PostgreSQL` reaches the `postgresql` tag and a
+  remote `#München` reaches the tag a member spelled that way (whose slug is
+  transliterated and would never match on its own). Capped at
+  `max_hashtags_per_body/0` so one hostile body cannot file itself under every
+  tag on the site; an empty input skips the DB.
+  """
+  def tag_ids_for_hashtags([]), do: []
+
+  def tag_ids_for_hashtags(hashtags) when is_list(hashtags) do
+    names =
+      hashtags
+      |> Enum.map(&String.downcase/1)
+      |> Enum.uniq()
+      |> Enum.take(@max_hashtags_per_body)
+
+    Repo.all(
+      from(t in Tag,
+        where: fragment("lower(?)", t.name) in ^names or t.slug in ^names,
+        select: t.id
+      )
+    )
+  end
+
+  @doc "How many `#hashtags` of one body are resolved to tags (see `tag_ids_for_hashtags/1`)."
+  def max_hashtags_per_body, do: @max_hashtags_per_body
 
   # --- Tag follows (issue #872) --------------------------------------------
   #

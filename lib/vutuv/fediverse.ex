@@ -56,6 +56,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.Follower
   alias Vutuv.Fediverse.FollowerPrune
+  alias Vutuv.Fediverse.Hashtags
   alias Vutuv.Fediverse.HttpSignature
   alias Vutuv.Fediverse.Keys
   alias Vutuv.Fediverse.Media
@@ -2294,10 +2295,21 @@ defmodule Vutuv.Fediverse do
       )
       |> Repo.insert(on_conflict: :nothing, conflict_target: [:object_uri])
       |> stored_post(uri)
+      |> file_hashtags(object)
     else
       _ -> :error
     end
   end
+
+  # File the post under the tags its hashtags name, so it reaches `/tags/:slug`
+  # (`Vutuv.Fediverse.Hashtags`). Done here rather than at the three call sites,
+  # so a fourth ingestion path cannot forget it — and only for the row **this**
+  # delivery wrote: a redelivery (`{:exists, _}`) is the same post arriving once
+  # per follower, already filed.
+  defp file_hashtags({:ok, %RemotePost{} = post}, object),
+    do: {:ok, Hashtags.sync(post, object)}
+
+  defp file_hashtags(result, _object), do: result
 
   # Which row this delivery actually left behind, and whether it was *this*
   # delivery that wrote it.
@@ -2430,6 +2442,11 @@ defmodule Vutuv.Fediverse do
              post
              |> RemotePost.changeset(remote_post_attrs(object, text, audience))
              |> Repo.update() do
+        # An edit is also where a hashtag is added or taken out, so the filings
+        # are re-synced rather than left at what the original text said — a post
+        # that drops `#berlin` drops off that tag page.
+        Hashtags.sync(updated, object)
+
         # An edit is where a picture is added, dropped, described or covered —
         # see `Media.sync_attachments/3`.
         updated

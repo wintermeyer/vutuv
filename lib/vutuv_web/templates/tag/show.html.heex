@@ -24,34 +24,22 @@ card stretch edge to edge with a huge line length and dead space. --%>
   </div>
   <JsonLd.script data={JsonLd.breadcrumb_trail([{gettext("Tags"), ~p"/tags"}, gettext("Show")])} />
 
-  <%!-- The tag's front matter (description, most-endorsed members, jobs) rides
-  only on page 1; pages 2+ of the post pager are just more posts. --%>
-  <div :if={@overview?} class="card-list">
+  <%!-- The tag's front matter: description, most-endorsed members. --%>
+  <div class="card-list">
     <%= render "single_card.html", assigns %>
   </div>
 
-  <%!-- Posts carrying this tag (#946), rendered as flat divide-y rows inside one
-  card via <.post_thread_entry> — the same treatment as the feed, the profile and
-  the author archive (a reply nests the post it answers inline). Offset-paginated
-  with the numbered <.pager>, like the tag index. --%>
-  <section :if={@tag_posts != []} id="tag-posts" class="mt-6">
-    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-      {gettext("Posts with this tag")}
-    </h2>
-    <.post_list class="mt-3" data-post-list>
-      <div :for={post <- @tag_posts} class={post_row_class()}>
-        <.post_thread_entry
-          post={post}
-          conn_or_socket={@conn}
-          viewer={@current_user}
-          surface={:flat}
-        />
-      </div>
-    </.post_list>
-    <.pager params={@conn.params} total={@posts_total} per_page={@posts_per_page} />
-  </section>
+  <%!-- Everything written about this tag — vutuv posts and posts cached from
+  other networks in one list — as the embedded VutuvWeb.TagLive.Timeline
+  LiveView: its source tabs, sort, date range, search box and "Load more" all
+  run over the socket, so narrowing a topic never reloads the page. The
+  controller keeps owning the URL and the agent-format siblings. --%>
+  {live_render(@conn, VutuvWeb.TagLive.Timeline,
+    id: "tag-timeline-live",
+    session: Map.merge(VutuvWeb.ControllerHelpers.live_render_session(@conn), @timeline_session)
+  )}
 
-  <section :if={@overview? and @open_positions != []} class="mt-6">
+  <section :if={@open_positions != []} class="mt-6">
     <div class="flex items-center justify-between gap-2">
       <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {gettext("Open positions")}

@@ -66,6 +66,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostBookmark
   alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostDraft
+  alias Vutuv.Posts.PostHashtag
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostMention
@@ -111,7 +112,6 @@ defmodule Vutuv.Posts do
   @thread_skeleton_limit 1000
   @pending_max_age_hours 24
   @max_tags 5
-  @tag_posts_per_page 20
 
   def max_images_per_post, do: Keyword.fetch!(config(), :max_per_post)
   def max_image_filesize, do: Keyword.fetch!(config(), :max_filesize)
@@ -323,7 +323,7 @@ defmodule Vutuv.Posts do
   `{:error, :edit_engaged}` once someone liked, reposted or answered it.
   """
   def update_post(%Post{} = post, attrs) do
-    post = Repo.preload(post, [:denials, :post_tags, :images, :review])
+    post = Repo.preload(post, [:denials, :post_tags, :post_hashtags, :images, :review])
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
 
     with :ok <- check_edit_open(post),
@@ -436,10 +436,36 @@ defmodule Vutuv.Posts do
       |> Post.changeset(post_params(attrs))
       |> Ecto.Changeset.put_assoc(:denials, Enum.map(denials, &struct(PostDenial, &1)))
       |> Ecto.Changeset.put_assoc(:post_tags, Enum.map(tag_ids, &%PostTag{tag_id: &1}))
+      |> put_body_hashtags(tag_ids)
       |> put_review(post_or_struct, fetch(attrs, :review))
       |> require_content(image_ids)
 
     if changeset.valid?, do: {:ok, changeset}, else: {:error, changeset}
+  end
+
+  # The tags the body names as `#hashtags`, filed so `/tags/:slug` lists the
+  # post — the reader who follows a `#berlin` link out of a post finds that post
+  # on the page it took them to.
+  #
+  # Re-derived from the body on every save (so an edit that drops a hashtag
+  # drops the filing), existing tags only (`Tags.tag_ids_for_hashtags/1` mints
+  # nothing — a typo must not leave a tag page behind), and never a tag the
+  # composer's field already filed: that one is a chip on the card, and one
+  # filing per (post, tag) is all the tag page can use.
+  defp put_body_hashtags(changeset, field_tag_ids) do
+    hashtag_ids =
+      changeset
+      |> Ecto.Changeset.get_field(:body)
+      |> to_string()
+      |> Mentions.hashtags()
+      |> Tags.tag_ids_for_hashtags()
+      |> Enum.reject(&(&1 in field_tag_ids))
+
+    Ecto.Changeset.put_assoc(
+      changeset,
+      :post_hashtags,
+      Enum.map(hashtag_ids, &%PostHashtag{tag_id: &1})
+    )
   end
 
   # The license key is only put through when the caller sent one, so the API's
@@ -1525,82 +1551,64 @@ defmodule Vutuv.Posts do
   # so a post with several matching tags is not duplicated. Same match shape as
   # the people-side `Vutuv.Search.filter_tag/3`: substring by default, equality
   # when the query is `exact?`.
+  # Both filings count, the same way they do on the tag page
+  # (`visible_tagged_posts_query/0`): the composer's tag field and a `#hashtag`
+  # in the body. Two EXISTS rather than a union subquery, because EXISTS stops
+  # at the first hit and neither can duplicate the post.
   defp filter_posts_by_tag(query, nil, _exact?), do: query
 
-  defp filter_posts_by_tag(query, tag, true) do
-    sub =
-      from(pt in PostTag,
-        join: t in assoc(pt, :tag),
-        where:
-          pt.post_id == parent_as(:post).id and
-            (fragment("lower(?)", t.name) == ^tag or t.slug == ^tag)
-      )
+  defp filter_posts_by_tag(query, tag, exact?) do
+    field_match = tag_filing_match(PostTag, tag, exact?)
+    body_match = tag_filing_match(PostHashtag, tag, exact?)
 
-    where(query, [], exists(subquery(sub)))
+    where(query, [], exists(subquery(field_match)) or exists(subquery(body_match)))
   end
 
-  defp filter_posts_by_tag(query, tag, false) do
+  defp tag_filing_match(schema, tag, true) do
+    from(f in schema,
+      join: t in assoc(f, :tag),
+      where:
+        f.post_id == parent_as(:post).id and
+          (fragment("lower(?)", t.name) == ^tag or t.slug == ^tag)
+    )
+  end
+
+  defp tag_filing_match(schema, tag, false) do
     infix = contains(tag)
 
-    sub =
-      from(pt in PostTag,
-        join: t in assoc(pt, :tag),
-        where:
-          pt.post_id == parent_as(:post).id and
-            (ilike(t.name, ^infix) or ilike(t.slug, ^infix))
-      )
-
-    where(query, [], exists(subquery(sub)))
-  end
-
-  @doc "Posts per page in the tag page's \"Posts with this tag\" section (#946)."
-  def tag_posts_per_page, do: @tag_posts_per_page
-
-  @doc """
-  How many public posts carry `tag` (the total behind the tag page's post
-  pager). Same anonymous-visibility gate as `list_tag_posts/3`.
-  """
-  def count_tag_posts(%Tag{} = tag) do
-    tag |> tag_posts_query() |> Repo.aggregate(:count)
+    from(f in schema,
+      join: t in assoc(f, :tag),
+      where:
+        f.post_id == parent_as(:post).id and
+          (ilike(t.name, ^infix) or ilike(t.slug, ^infix))
+    )
   end
 
   @doc """
-  One page of the public posts carrying `tag`, newest first, for the tag
-  page's "Posts with this tag" section (issue #946). Anonymous view: only posts
-  every visitor may read surface (`scope_visible(nil)`), same gate as
-  `search_public/2`. Matches the exact tag (its id), not a name substring —
-  this is "posts filed under this tag", not a search. Preloaded like every
-  rendered post.
+  The public posts carrying at least one tag (anonymous view), the filing
+  exposed as the named binding `:post_tag` (with `post_id` / `tag_id`). The one
+  visibility gate behind the tag page's timeline (`Vutuv.Tags.Timeline` narrows
+  it to one tag through `tag_posts_query/1`), the tag indexability bar
+  (`Vutuv.Tags.indexable_tags_query/0` groups it by tag id) and the hashtag-link
+  gate (`Vutuv.Tags.linkable_slugs/1`), so none of them can disagree about which
+  posts count.
 
-  Offset-paginated from the `?page` param via `Vutuv.Pages` (like the tag
-  index and the member directory), `tag_posts_per_page/0` rows per page. Pass
-  `total:` (from `count_tag_posts/1`) to reuse a count the caller already has;
-  `per_page:` overrides the page size (tests). Both must match the `<.pager>`.
-  """
-  def list_tag_posts(%Tag{} = tag, params \\ %{}, opts \\ []) do
-    per_page = Keyword.get(opts, :per_page, @tag_posts_per_page)
-    total = Keyword.get(opts, :total) || count_tag_posts(tag)
-
-    tag
-    |> tag_posts_query()
-    |> order_by([p], desc: p.id)
-    |> Pages.paginate(params, total, per_page)
-    |> Repo.all()
-    |> Repo.preload(post_preloads())
-  end
-
-  @doc """
-  The public posts carrying at least one tag (anonymous view), the `PostTag`
-  join exposed as the named binding `:post_tag`. The one visibility gate
-  behind both the tag page's posts (`count_tag_posts/1` / `list_tag_posts/3`
-  filter it to one tag) and the tag indexability bar
-  (`Vutuv.Tags.indexable_tags_query/0` groups it by tag id), so the two can
-  never disagree about which posts count.
+  A post reaches a tag two ways, and this is where they meet: the composer's tag
+  field (`Vutuv.Posts.PostTag`, what the card renders as chips) and a `#hashtag`
+  in the body (`Vutuv.Posts.PostHashtag`). `union` rather than `union_all`, so a
+  post that does both — a "berlin" chip over a body saying `#berlin` — is one
+  row and not two; every caller counts and pages on these rows.
   """
   def visible_tagged_posts_query do
+    filings =
+      union(
+        from(pt in PostTag, select: %{post_id: pt.post_id, tag_id: pt.tag_id}),
+        ^from(ph in PostHashtag, select: %{post_id: ph.post_id, tag_id: ph.tag_id})
+      )
+
     from(p in Post,
       join: u in assoc(p, :user),
-      join: pt in PostTag,
+      join: pt in subquery(filings),
       as: :post_tag,
       on: pt.post_id == p.id,
       where: u.email_confirmed? == true
@@ -1608,11 +1616,20 @@ defmodule Vutuv.Posts do
     |> scope_visible(nil)
   end
 
-  # The public posts carrying `tag` (unordered, unpaginated), shared by the
-  # count and the page query so both apply the exact same visibility gate.
-  defp tag_posts_query(%Tag{} = tag) do
+  @doc """
+  The public posts carrying `tag` (unordered, unpaginated) — the vutuv half of
+  the tag page's timeline, which `Vutuv.Tags.Timeline` filters, sorts and pages.
+  """
+  def tag_posts_query(%Tag{} = tag) do
     from([post_tag: pt] in visible_tagged_posts_query(), where: pt.tag_id == ^tag.id)
   end
+
+  @doc """
+  The associations every rendered post carries. Public so a caller that loads
+  posts through its own query (`Vutuv.Tags.Timeline`) preloads exactly what the
+  card needs, rather than keeping a second list that drifts.
+  """
+  def render_preloads, do: post_preloads()
 
   @doc """
   One page of `viewer`'s newsfeed: own posts plus posts **and reposts** of

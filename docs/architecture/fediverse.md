@@ -284,6 +284,20 @@ every activity of a member it finds no key for, silently.
     stretched link, where a chip row would be both noise and a link inside a
     link. The stored `content_text` is untouched, so the agent-format siblings
     and the `.json`/`.xml` exports still carry the hashtags in the text.
+  - **Those hashtags are also filed, so the post reaches our tag pages.**
+    `Vutuv.Fediverse.Hashtags` reads them from two places on every `Create` and
+    every upstream `Update` — the ActivityPub `tag` array's `Hashtag` objects
+    (what Mastodon and its relatives send, the same array the mention expansion
+    reads) and the `#hashtags` left in the stored text, for servers that send no
+    tag objects — and writes `Vutuv.Fediverse.RemotePostTag` rows (table
+    `fediverse_post_tags`). Idempotent in both directions: an edit that adds a
+    hashtag files it, one that drops a hashtag unfiles it. Only tags that
+    **already exist here** are filed — a table a stranger's server can extend is
+    a table a stranger's server can flood with pages on our own domain. What the
+    filing is for is the tag page's timeline (see
+    [social-graph.md](social-graph.md)), which is also the one surface where
+    these cached posts are published to everybody rather than to a follower, and
+    therefore shows **public** audiences only.
   - **Audience** (issue #1071), read from `to`/`cc` on both the Create and the
     Note, handling all three spellings of the public collection. Only `"public"`
     is public; `"followers"`, `"direct"` and `"unknown"` render to the addressed

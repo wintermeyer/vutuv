@@ -10,11 +10,23 @@ Markdown posts (up to 20k chars) with images and tags.
 
 An **`@handle` of an existing member is auto-linked** to their profile with the
 member's name as a hover tooltip, and a **`#hashtag` is auto-linked** to that
-tag's `/tags/:slug` page **only when the tag exists and has at least one visible
-member** (so a link never lands on an empty tag page) — everywhere the Markdown
-renderer runs (`VutuvWeb.Markdown`: posts, chat messages, ads, the RSS/JSON
-renderings), skipping entities typed inside code spans/blocks or existing links
-and resolving all of a body's mentions and hashtags in one batched query each.
+tag's `/tags/:slug` page **only when that page has something to show** — the tag
+exists here and carries either at least one visible member or at least one
+visible post (`Vutuv.Tags.linkable_slugs/1`), so a link never lands on an empty
+tag page. This runs everywhere the Markdown renderer does (`VutuvWeb.Markdown`:
+posts, chat messages, ads, the RSS/JSON renderings), skipping entities typed
+inside code spans/blocks or existing links and resolving all of a body's
+mentions and hashtags in one batched query each.
+
+A hashtag also **files the post under that tag**, so the link points both ways:
+`Vutuv.Posts.PostHashtag` (table `post_hashtags`, re-derived from the body on
+every save, existing tags only — a typo never leaves a tag page behind). It is a
+separate table from `post_tags` on purpose: `post_tags` is what the card renders
+as tag chips, and a hashtag is already visible in the sentence it was written
+in, so filing it there would print it twice.
+`Vutuv.Posts.visible_tagged_posts_query/0` unions the two, which is what every
+"which posts carry this tag" reader asks — the tag timeline, the indexability
+bar, the `tag:` search operator and the hashtag-link gate above.
 
 A **bare `http(s)://` URL is auto-linked too**, with its display text shortened
 to host + first path directory — but only *outside* code. Inside a fenced block

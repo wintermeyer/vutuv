@@ -115,6 +115,32 @@ defmodule Vutuv.Mentions do
 
   def local_handles(_), do: []
 
+  @doc """
+  The unique, lowercased `#hashtags` in `text` — the tag **slugs** they name.
+
+  The `@handle` twin of `local_handles/1`, reading the same grammar and skipping
+  code spans/blocks for the same reason, so what this returns is exactly what
+  `VutuvWeb.Markdown` would turn into a `/tags/:slug` link. That equality is the
+  point: it is what lets a post be *filed* under the tag its own hashtag points
+  at (`Vutuv.Tags.tag_ids_for_hashtags/1`), instead of a reader clicking
+  `#berlin` and not finding the post they clicked it in.
+
+  Lowercased because the slug is: `#Berlin`, `#berlin` and `#BERLIN` are one
+  tag, which is also how the renderer resolves them.
+  """
+  def hashtags(text) when is_binary(text) do
+    if String.contains?(text, "#") do
+      text
+      |> text_chunks()
+      |> Enum.flat_map(&scan_hashtags/1)
+      |> Enum.uniq()
+    else
+      []
+    end
+  end
+
+  def hashtags(_), do: []
+
   @doc "Whether `text` mentions `handle` (case-insensitive; a leading `@` is optional)."
   def mentions?(text, handle) when is_binary(text) do
     normalize(handle) in local_handles(text)
@@ -366,6 +392,17 @@ defmodule Vutuv.Mentions do
   defp handle_of([user, host | _]) when user != "" and host != "", do: []
   defp handle_of([_, _, handle | _]) when handle != "", do: [String.downcase(handle)]
   defp handle_of(_), do: []
+
+  defp scan_hashtags(chunk) do
+    @entity
+    |> Regex.scan(unescape_handle_chars(chunk), capture: :all_but_first)
+    |> Enum.flat_map(&hashtag_of/1)
+  end
+
+  # Same truncation rule as `handle_of/1`: only a hashtag hit has a fourth
+  # group, so anything shorter is one of the two `@` forms.
+  defp hashtag_of([_, _, _, hashtag]) when hashtag != "", do: [String.downcase(hashtag)]
+  defp hashtag_of(_), do: []
 
   defp rewrite_chunk(chunk, old_n, replacement, acc) do
     hits =

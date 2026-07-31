@@ -81,6 +81,46 @@ to `/tag_follows`), the feed's reload-free **"Tags you follow"** rail (a
 (a settings-hub row that appears only once you follow at least one tag, like
 saved searches).
 
+## The tag page (`/tags/:slug`)
+
+A tag's public page is the topic page: its description, the most endorsed
+members, the open positions carrying it, and below them the **timeline** —
+everything written about the topic, from both worlds, in one list.
+
+The timeline is `Vutuv.Tags.Timeline`, a SQL union of two sources:
+
+- **vutuv posts** carrying the tag (`Vutuv.Posts.tag_posts_query/1`, which is
+  itself the union of the composer's tag field and the body's `#hashtags` — see
+  [posts-and-feed.md](posts-and-feed.md)), in the anonymous public view;
+- **posts cached from other networks** whose hashtags name the tag
+  (`Vutuv.Fediverse.RemotePostTag`, filled at ingestion by
+  `Vutuv.Fediverse.Hashtags`), **public audience only**. `unlisted` is not a
+  smaller kind of public — it means the author asked their own server to keep
+  the post off its discovery surfaces, and a topic page crawlers read is exactly
+  such a surface — and a followers-only post is not ours to publish at all.
+
+Neither ingestion path **mints** a tag: a hashtag files a post only under a tag
+that already exists here. A table a stranger's server can extend is a table a
+stranger's server can flood with pages on our own domain, and the tag namespace
+is what members chose to call things.
+
+The reader's controls are the embedded `VutuvWeb.TagLive.Timeline` LiveView
+(`live_render` from `VutuvWeb.TagController.show/2`, the profile's and the post
+permalink's pattern, so the controller keeps owning the URL and the agent-format
+siblings): the All / vutuv / Fediverse **source tabs** (the feed's
+`<.post_filter_tabs>`), a **sort** (newest, oldest, most liked), a full-text
+**search** over both sides' `search_tsv`, a **date range** read as German
+calendar days, and "Load more" — none of them reloading the page.
+
+Sorting by likes is lopsided and the page says so where it applies: a member's
+post has a real tally (its hearts plus the favourites that arrived over
+ActivityPub), while for a cached remote post there is no public number vutuv may
+show, so it counts as zero and lands last. Being off-router the LiveView cannot
+`push_patch`, so the controls do not rewrite the address bar — but the
+controller passes `?source=`, `?sort=`, `?q=`, `?from=` and `?until=` into the
+mount session, so a shared link opens on exactly that view, and the agent
+formats honour the same params.
+
 ## Blocking
 
 Reachable wherever you decide to block someone — a quiet "Block" next to the

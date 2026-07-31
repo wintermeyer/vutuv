@@ -3,9 +3,9 @@ defmodule VutuvWeb.TagController do
 
   alias Vutuv.Jobs
   alias Vutuv.Pages
-  alias Vutuv.Posts
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
+  alias Vutuv.Tags.Timeline
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ContentPolicy
@@ -29,8 +29,8 @@ defmodule VutuvWeb.TagController do
   end
 
   # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs
-  # (anonymous view: the description, the most endorsed members and the public
-  # posts carrying this tag — not the viewer-dependent "people you may know").
+  # (anonymous view: the description, the most endorsed members and the timeline
+  # of posts carrying this tag — not the viewer-dependent "people you may know").
   # Keep show.html and the doc builder in sync (agent_docs_drift_test.exs).
   def show(conn, _params) do
     tag = conn.assigns[:tag]
@@ -55,14 +55,6 @@ defmodule VutuvWeb.TagController do
         do: conn,
         else: ContentPolicy.put_robots_header(conn, true, false)
 
-    # "Posts with this tag" (#946) is offset-paginated (`?page`). The overview —
-    # description, most-endorsed members and the "Offene Stellen" jobs (#933) —
-    # is the tag's front matter, so it rides only on page 1; pages 2+ are just
-    # more posts. The post total is computed once and reused by both branches
-    # and the pager.
-    posts_total = Posts.count_tag_posts(tag)
-    first_page? = Pages.effective_page(conn.params, posts_total, Posts.tag_posts_per_page()) == 1
-
     # The HTML page subtracts what the signed-in viewer may not see from the
     # jobs (#939 exclusions / blocks); the agent formats stay the anonymous
     # public view, so each branch loads its own list (only one runs).
@@ -73,31 +65,66 @@ defmodule VutuvWeb.TagController do
           current_user: current_user,
           following_tag?: following_tag?,
           tag_follower_count: tag_follower_count,
-          overview?: first_page?,
-          open_positions:
-            if(first_page?,
-              do: Jobs.list_tag_postings(tag, conn.assigns[:current_user]),
-              else: []
-            ),
-          tag_posts: Posts.list_tag_posts(tag, conn.params, total: posts_total),
-          posts_total: posts_total,
-          posts_per_page: Posts.tag_posts_per_page(),
+          open_positions: Jobs.list_tag_postings(tag, conn.assigns[:current_user]),
+          # The timeline itself is the embedded VutuvWeb.TagLive.Timeline
+          # LiveView; the controller only hands it the tag and the controls a
+          # shared link may carry, since an off-router LiveView cannot read the
+          # query string for itself.
+          timeline_session: timeline_session(conn, tag),
           meta_description: gettext("Members on vutuv tagged %{tag}.", tag: tag.name || tag.slug)
         ),
       doc: fn ->
-        recommended = if first_page?, do: Tag.recommended_users(tag), else: []
+        recommended = Tag.recommended_users(tag)
         work_info_by_id = VutuvWeb.UserHelpers.work_information_map(recommended, 45)
-        jobs = if first_page?, do: Jobs.list_tag_postings(tag, nil), else: []
+        jobs = Jobs.list_tag_postings(tag, nil)
+        timeline = timeline_doc(tag, conn.params)
 
         ListDocs.build_tag(
           tag,
           recommended,
           work_info_by_id,
           jobs,
-          Posts.list_tag_posts(tag, conn.params, total: posts_total),
-          posts_total
+          timeline.entries,
+          timeline.total
         )
       end
     )
+  end
+
+  # The controls a link can carry, handed to the LiveView as strings — it
+  # normalizes them itself, so a typed or stale value lands on the full list
+  # rather than on an error.
+  defp timeline_session(conn, tag) do
+    params = conn.params
+
+    %{
+      "tag_id" => tag.id,
+      "source" => params["source"],
+      "sort" => params["sort"],
+      "q" => params["q"],
+      "from" => params["from"],
+      "until" => params["until"]
+    }
+  end
+
+  # The same controls for the agent formats, which have no socket: one document
+  # per URL, so `/tags/berlin.md?source=fediverse` is the fediverse half exactly
+  # as the HTML page shows it. `?page` is offset-paginated here (the HTML page
+  # loads more over the socket instead), with an out-of-range page falling back
+  # to the first rather than serving an empty document — `Vutuv.Pages`' rule
+  # everywhere else, which is why the total is read before the page.
+  defp timeline_doc(tag, params) do
+    opts = [
+      source: Timeline.normalize_source(params["source"]),
+      sort: Timeline.normalize_sort(params["sort"]),
+      query: Timeline.normalize_query(params["q"]),
+      from: Timeline.normalize_date(params["from"]),
+      until: Timeline.normalize_date(params["until"])
+    ]
+
+    total = Timeline.count(tag, opts)
+    page = Pages.effective_page(params, total, Timeline.per_page())
+
+    Timeline.page(tag, Keyword.put(opts, :page, page))
   end
 end

@@ -70,7 +70,10 @@ defmodule VutuvWeb.TagControllerTest do
   end
 
   # Issue #946: a tag used only in posts (no endorsed members) used to open an
-  # empty page. The tag page now lists the public posts carrying the tag.
+  # empty page. The tag page now lists everything carrying the tag, through the
+  # embedded VutuvWeb.TagLive.Timeline - see tag_timeline_live_test.exs for the
+  # controls. What matters here is that the dead render (what a crawler and a
+  # visitor with no JavaScript get) already carries the posts.
   describe "posts with this tag (issue #946)" do
     test "a tag used only in posts still shows those posts", %{conn: conn} do
       author = insert(:activated_user)
@@ -82,7 +85,7 @@ defmodule VutuvWeb.TagControllerTest do
 
       html = conn |> get(~p"/tags/#{String.downcase(tag_name)}") |> html_response(200)
 
-      assert html =~ "tag-posts"
+      assert html =~ "tag-timeline"
       assert html =~ "Elixir meetup notes"
       assert html =~ "/#{author.username}/posts/#{post.id}"
       # The posts render as flat rows in one card (the feed/archive treatment),
@@ -90,48 +93,24 @@ defmodule VutuvWeb.TagControllerTest do
       assert html =~ "data-post-list"
     end
 
-    test "posts are paginated; page 2 drops the overview and shows older posts", %{conn: conn} do
-      author = insert(:activated_user)
-      per_page = Vutuv.Posts.tag_posts_per_page()
+    test "the front matter rides above the timeline whatever ?page says", %{conn: conn} do
+      # The timeline pages over the socket now, so the description and the
+      # member list no longer disappear on a `?page=2` that no longer drives
+      # them.
+      insert(:tag, name: "Busy", slug: "busy", description: "A very busy tag indeed.")
 
-      tag =
-        insert(:tag, name: "Busy", slug: "busy", description: "A very busy tag indeed.")
+      html = conn |> get(~p"/tags/busy?page=2") |> html_response(200)
 
-      # A recommended member so the overview card has visible content to gate on.
-      insert(:user_tag, tag: tag, user: insert(:activated_user))
-
-      posts =
-        for i <- 1..(per_page + 1) do
-          Vutuv.PostsHelpers.create_post!(author, %{body: "Busy post number #{i}", tags: "busy"})
-        end
-
-      # UUID v7 ids sort by creation, so the last-created is newest.
-      oldest = List.first(posts)
-      newest = List.last(posts)
-      oldest_link = "/#{author.username}/posts/#{oldest.id}"
-      newest_link = "/#{author.username}/posts/#{newest.id}"
-
-      # Page 1: the overview (description) shows, the newest post shows, the
-      # oldest is pushed to page 2, and there is a link to page 2.
-      page1 = conn |> get(~p"/tags/busy") |> html_response(200)
-      assert page1 =~ "A very busy tag indeed."
-      assert page1 =~ "page=2"
-      assert page1 =~ newest_link
-      refute page1 =~ oldest_link
-
-      # Page 2: the overview is gone and only the remaining (oldest) post shows.
-      page2 = conn |> get(~p"/tags/busy?page=2") |> html_response(200)
-      refute page2 =~ "A very busy tag indeed."
-      assert page2 =~ oldest_link
-      refute page2 =~ newest_link
+      assert html =~ "A very busy tag indeed."
     end
 
-    test "the posts section is absent when no public post carries the tag", %{conn: conn} do
+    test "an empty tag says so instead of showing a bare list", %{conn: conn} do
       insert(:tag, name: "Empty", slug: "empty")
 
       html = conn |> get(~p"/tags/empty") |> html_response(200)
 
-      refute html =~ ~s(id="tag-posts")
+      assert html =~ ~s(id="tag-timeline-empty")
+      refute html =~ "data-post-list"
     end
   end
 

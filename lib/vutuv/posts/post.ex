@@ -76,6 +76,13 @@ defmodule Vutuv.Posts.Post do
     has_many(:post_tags, Vutuv.Posts.PostTag, on_replace: :delete)
     has_many(:tags, through: [:post_tags, :tag])
 
+    # The tags the BODY names as `#hashtags` — a separate filing from the
+    # composer's tag field above, re-derived on every save. Deliberately not
+    # exposed as a `:tags`-style through assoc: nothing renders these (the
+    # hashtag is already in the text), they exist so `/tags/:slug` can list the
+    # post. See `Vutuv.Posts.PostHashtag`.
+    has_many(:post_hashtags, Vutuv.Posts.PostHashtag, on_replace: :delete)
+
     timestamps()
   end
 
