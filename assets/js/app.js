@@ -1574,6 +1574,40 @@ document.addEventListener("keydown", (e) => {
     .forEach((menu) => menu.removeAttribute("open"))
 })
 
+// Multipart enctype fallback (issue #1227). One member's Safari submitted the
+// multipart profile form with a declared boundary but a zero-byte body on
+// every attempt (Content-Length: 0 in the nginx capture), while every
+// urlencoded form from the same browser worked: WebKit builds a multipart body
+// as a stream it cannot always replay, a urlencoded body is in-memory and
+// survives. Multipart only buys file transport, so when no file is actually
+// selected the form downgrades to urlencoded at submit time — and the empty
+// file inputs are disabled for that one submission, so the request carries the
+// exact params a fileless multipart submit produces. Capture phase, before the
+// browser serializes the form; LiveView forms own their submits and are
+// skipped. The re-enable runs a tick later: the entry list is built
+// synchronously after dispatch, and a submit some other handler cancels must
+// not leave the inputs disabled.
+function multipartEnctypeFallback(e) {
+  const form = e.target
+  if (!(form instanceof HTMLFormElement) || form.hasAttribute("phx-submit")) return
+
+  const wasMultipart =
+    form.enctype === "multipart/form-data" || form.dataset.multipartForm === "1"
+  if (!wasMultipart) return
+  form.dataset.multipartForm = "1"
+
+  const fileInputs = [...form.querySelectorAll("input[type=file]")]
+  const hasFiles = fileInputs.some((input) => input.files && input.files.length > 0)
+  form.enctype = hasFiles ? "multipart/form-data" : "application/x-www-form-urlencoded"
+  if (hasFiles) return
+
+  const disabled = fileInputs.filter((input) => !input.disabled)
+  disabled.forEach((input) => (input.disabled = true))
+  setTimeout(() => disabled.forEach((input) => (input.disabled = false)), 0)
+}
+
+document.addEventListener("submit", multipartEnctypeFallback, true)
+
 // Avatar fallback. A user's stored avatar file can be missing — a legacy row
 // whose image was never imported, a failed upload, a derived version not yet
 // regenerated — so the <img> 404s and the browser draws a broken-image icon.
