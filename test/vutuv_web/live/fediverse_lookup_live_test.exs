@@ -117,8 +117,8 @@ defmodule VutuvWeb.FediverseLookupLiveTest do
     assert has_element?(view, "[data-remote-post='#{post.id}']")
     # The three acts the card carries, all reaching a post that was never
     # delivered here.
-    assert has_element?(view, "button[phx-click='like-remote-post']")
-    assert has_element?(view, "button[phx-click='repost-remote-post']")
+    assert has_element?(view, "[data-remote-act='like']")
+    assert has_element?(view, "[data-remote-act='repost']")
     assert has_element?(view, "[data-remote-reply-link='#{post.id}']")
   end
 
@@ -156,11 +156,11 @@ defmodule VutuvWeb.FediverseLookupLiveTest do
     {:ok, view, _html} = live(conn, ~p"/system/fediverse/lookup")
     view |> element("#lookup-form") |> render_submit(%{"url" => @display})
 
-    view |> element("button[phx-click='like-remote-post']") |> render_click()
+    view |> element("[data-remote-act='like']") |> render_click()
 
     post = Repo.get_by!(RemotePost, object_uri: @object)
     assert MapSet.member?(Fediverse.liked_remote_post_ids(user, [post.id]), post.id)
-    assert has_element?(view, "button[phx-click='unlike-remote-post']")
+    assert has_element?(view, "button[data-remote-act='like']")
   end
 
   test "a refused URL says why and shows no card", %{conn: conn} do

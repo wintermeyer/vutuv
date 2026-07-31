@@ -343,9 +343,10 @@ defmodule VutuvWeb.TagLive.Timeline do
         <div :for={{dom_id, entry} <- @streams.entries} id={dom_id} class={post_row_class()}>
           <%= if Posts.remote_feed_entry?(entry) do %>
             <.remote_post_card
+            live?
               remote_post={entry.remote_post}
               images={entry[:images] || []}
-              liked?={entry[:liked?] == true}
+              marks={entry[:marks]}
               viewer={@current_user}
               mute?={false}
             />

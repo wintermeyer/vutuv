@@ -89,8 +89,7 @@ defmodule VutuvWeb.FediverseAccountLive do
     # Which of them the reader already likes (issue #1164), read once for the
     # page. Unlike the feed this page holds its posts in a plain assign, so a
     # set beside them redraws every card on a toggle, which is what we want.
-    |> assign(:liked, Fediverse.liked_remote_post_ids(viewer, ids))
-    |> assign(:reposted, Fediverse.reposted_remote_post_ids(viewer, ids))
+    |> assign(:marks, Fediverse.mark_lookup(posts, viewer))
     |> assign(:more?, more?)
   end
 
@@ -176,28 +175,6 @@ defmodule VutuvWeb.FediverseAccountLive do
   # The heart (issue #1164): the local marker plus a signed `Like` to this
   # account's own inbox. Only the reader's own state changes — there is no
   # count on the card, because the real one lives on their server.
-  def handle_event("like-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_act(socket, id, &Fediverse.like_remote_post/2)}
-  end
-
-  def handle_event("unlike-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_act(socket, id, &Fediverse.unlike_remote_post/2)}
-  end
-
-  # Sharing one of their posts onward (issue #1166), the same act the feed card
-  # offers. Publishing, so it says so — but only when the reshare really
-  # happened, never over the top of a refusal or a second tab's press.
-  def handle_event("repost-remote-post", %{"id" => id}, socket) do
-    {:noreply,
-     toggle_remote_act(socket, id, &Fediverse.repost_remote_post/2,
-       flash: {:reposted, gettext("Reposted. Your followers see it now.")}
-     )}
-  end
-
-  def handle_event("unrepost-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_act(socket, id, &Fediverse.unrepost_remote_post/2)}
-  end
-
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
     viewer = socket.assigns.current_user
     :ok = Fediverse.set_remote_follow_mute(viewer, account_id, true)
@@ -240,26 +217,6 @@ defmodule VutuvWeb.FediverseAccountLive do
   # what the database says — a second tab that liked the same post is then not
   # contradicted by this one. `:flash` is an `{outcome, message}` the act
   # announces itself with, and only when that outcome really came back.
-  defp toggle_remote_act(socket, remote_post_id, action, opts \\ []) do
-    case Enum.find(socket.assigns.posts, &(&1.id == remote_post_id)) do
-      nil ->
-        socket
-
-      post ->
-        post = %{post | remote_account: socket.assigns.account}
-
-        case action.(socket.assigns.current_user, post) do
-          {:ok, outcome} -> socket |> load_posts() |> flash_outcome(opts[:flash], outcome)
-          {:error, reason} -> put_flash(socket, :error, like_refusal_message(reason))
-        end
-    end
-  end
-
-  defp flash_outcome(socket, {outcome, message}, outcome),
-    do: put_flash(socket, :info, message)
-
-  defp flash_outcome(socket, _flash, _outcome), do: socket
-
   defp mute_message(true),
     do: gettext("Muted. You still follow them; their posts leave your feed.")
 
@@ -410,10 +367,10 @@ defmodule VutuvWeb.FediverseAccountLive do
                   it is the one account, already in hand. --%>
             <div :for={post <- @posts} class="py-4 first:pt-0 last:pb-0">
               <.remote_post_card
+            live?
                 remote_post={%{post | remote_account: @account}}
                 images={Map.get(@images, post.id, [])}
-                liked?={MapSet.member?(@liked, post.id)}
-                reposted?={MapSet.member?(@reposted, post.id)}
+                marks={@marks.(post)}
                 viewer={@current_user}
               />
             </div>

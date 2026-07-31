@@ -112,15 +112,15 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
       # Nothing about how many others liked it: the real number is on their
       # server, and one assembled from what passed through here would be a lie.
-      assert has_element?(view, "[phx-click='like-remote-post']")
+      assert has_element?(view, "[data-remote-act='like']")
       refute html =~ "data-on=\"on\""
 
-      view |> element("[phx-click='like-remote-post']") |> render_click()
+      view |> element("[data-remote-act='like']") |> render_click()
 
       assert has_element?(view, "[data-remote-act='like'][data-on='on']")
-      assert has_element?(view, "[phx-click='unlike-remote-post']")
+      assert has_element?(view, "[data-remote-act='like']")
 
-      view |> element("[phx-click='unlike-remote-post']") |> render_click()
+      view |> element("[data-remote-act='like']") |> render_click()
 
       refute has_element?(view, "[data-remote-act='like'][data-on='on']")
     end
@@ -128,14 +128,14 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     test "resharing paints the state and says so, and takes it back", ctx do
       {:ok, view, _html} = live(ctx.conn, ~p"/feed")
 
-      html = view |> element("[phx-click='repost-remote-post']") |> render_click()
+      html = view |> element("[data-remote-act='repost']") |> render_click()
 
       assert has_element?(view, "[data-remote-act='repost'][data-on='on']")
       # Publishing, unlike the heart: the reader's own feed does not show their
       # reshare back to them, so a silent button would leave them unsure.
       assert html =~ "Repostet" or html =~ "Reposted"
 
-      view |> element("[phx-click='unrepost-remote-post']") |> render_click()
+      view |> element("[data-remote-act='repost']") |> render_click()
 
       refute has_element?(view, "[data-remote-act='repost'][data-on='on']")
     end
@@ -186,9 +186,9 @@ defmodule VutuvWeb.FeedRemotePostsTest do
       # No control rather than one that refuses: passing on an audience its
       # author narrowed is not ours to do.
       assert has_element?(view, "[data-remote-post='#{ctx.post.id}']")
-      refute has_element?(view, "[phx-click='repost-remote-post']")
+      refute has_element?(view, "[data-remote-act='repost']")
       # The heart stays: liking is private and reaches nobody new.
-      assert has_element?(view, "[phx-click='like-remote-post']")
+      assert has_element?(view, "[data-remote-act='like']")
     end
 
     test "a member who does not federate is told where the switch is", ctx do
@@ -198,7 +198,7 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
       # The heart is shown anyway: hiding it would leave them no way to find
       # out that this exists and is one setting away.
-      html = view |> element("[phx-click='like-remote-post']") |> render_click()
+      html = view |> element("[data-remote-act='like']") |> render_click()
 
       # The wording is the one every other Fediverse refusal uses, and it must
       # not claim the switch is off — `federated?/1` is also false for an

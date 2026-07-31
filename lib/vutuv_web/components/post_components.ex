@@ -824,8 +824,8 @@ defmodule VutuvWeb.PostComponents do
             note={node.note}
             owner?={node.owner?}
             viewer={@viewer}
-            liked?={node.liked?}
-            acts={[:like, :reply]}
+            marks={node.marks}
+            live?
           />
         <% else %>
           <.post_card
@@ -908,15 +908,17 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil")
 
-  attr(:acts, :list,
-    default: [],
+  attr(:live?, :boolean,
+    default: false,
     doc:
-      "which acts this surface carries, in the `remote_actions/1` vocabulary. The conversation takes `[:like, :reply]`; the answering page takes none, since the card there is the read-only thing being answered — a Reply link to the page you are already on is noise, and a heart would fire an event that page does not handle."
+      "whether this surface is a LiveView that can host the action bar. False on a dead controller page, where a LiveComponent cannot render at all, and on the answering page, where the card is the read-only thing being answered."
   )
 
-  attr(:liked?, :boolean, default: false, doc: "whether the viewer already likes this reply")
-  attr(:reposted?, :boolean, default: false, doc: "whether the viewer already passed it on")
-  attr(:bookmarked?, :boolean, default: false, doc: "whether the viewer already saved it")
+  attr(:marks, :any,
+    default: nil,
+    doc:
+      "the viewer's like/repost/bookmark flags for this subject when the host batched them (`Vutuv.Fediverse.liked_ids/2` and friends); nil lets the bar load its own."
+  )
 
   def remote_reply_card(assigns) do
     note = assigns.note
@@ -991,22 +993,20 @@ defmodule VutuvWeb.PostComponents do
 
           <.remote_body warning={@warned? && @note.summary} text={@note.content_text} />
 
-          <%!-- The card's acts (issue #1270), in the open under the body where
-          a reader looks for them and sized as real touch targets. One component
-          for both remote cards (`remote_actions/1` below), so a reply and a
-          cached post carry the same row in the same order. --%>
-          <.remote_actions
-            :if={@acts != []}
-            kind="remote-reply"
-            subject_id={@note.id}
+          <%!-- The card's acts, in the open under the body where a reader
+          looks for them (issues #1270, #1275, #1276). The bar owns its own
+          state and its own events, so this card — and every host that renders
+          it — hands it the subject and nothing else. `live?` is false on a dead
+          controller page, where a LiveComponent cannot render and its buttons
+          would do nothing anyway, and on the answering page, where this card is
+          the read-only thing being answered. --%>
+          <.live_component
+            :if={@live? and @viewer}
+            module={VutuvWeb.PostLive.RemoteActionsComponent}
+            id={"remote-actions-note-#{@note.id}"}
+            subject={@note}
             viewer={@viewer}
-            liked?={@liked?}
-            reposted?={@reposted?}
-            bookmarked?={@bookmarked?}
-            like?={Note.likeable?(@note)}
-            reply_to={@public? && ~p"/system/fediverse/reply/#{@note.id}"}
-            repost?={@public?}
-            acts={@acts}
+            marks={@marks}
           />
 
           <.remote_footer host={@host} origin={@origin} label={gettext("View the original")} />
@@ -1326,7 +1326,7 @@ defmodule VutuvWeb.PostComponents do
   `like-remote-reply` / `unlike-remote-reply` and so on, `"remote-post"` the
   `…-remote-post` pairs the feed and the account page already handle.
   """
-  attr(:kind, :string, required: true, values: ~w(remote-reply remote-post))
+  attr(:target, :any, required: true, doc: "the RemoteActionsComponent that handles the presses")
   attr(:subject_id, :string, required: true, doc: "rides every control as phx-value-id")
   attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil for no row at all")
   attr(:liked?, :boolean, default: false)
@@ -1335,15 +1335,6 @@ defmodule VutuvWeb.PostComponents do
   attr(:like?, :boolean, default: true, doc: "false where a Like could not be delivered at all")
   attr(:reply_to, :any, default: nil, doc: "the answering page's path, or nil/false for none")
   attr(:repost?, :boolean, default: false)
-
-  attr(:acts, :list,
-    default: [:like, :reply, :repost],
-    doc:
-      "which acts this host handles. A control whose `phx-click` nobody handles " <>
-        "crashes a LiveView and does nothing at all on a dead controller page, so " <>
-        "the host says what it can take rather than the card assuming. Every host " <>
-        "gets the full set once the row moves into its own LiveComponent (issue #1276)."
-  )
 
   def remote_actions(assigns) do
     ~H"""
@@ -1368,12 +1359,11 @@ defmodule VutuvWeb.PostComponents do
       <.remote_action
         :if={@like?}
         act="like"
-        kind={@kind}
+        target={@target}
         subject_id={@subject_id}
         on?={@liked?}
         on_class="text-accent"
         label={gettext("Like")}
-        shown={:like in @acts}
       >
         <.icon_heart filled?={@liked?} />
       </.remote_action>
@@ -1384,7 +1374,7 @@ defmodule VutuvWeb.PostComponents do
         href={@reply_to}
         subject_id={@subject_id}
         label={gettext("Reply")}
-        shown={@reply_to && :reply in @acts}
+        shown={@reply_to}
       >
         <.icon_reply />
       </.remote_action_link>
@@ -1392,24 +1382,22 @@ defmodule VutuvWeb.PostComponents do
       <.remote_action
         :if={@repost?}
         act="repost"
-        kind={@kind}
+        target={@target}
         subject_id={@subject_id}
         on?={@reposted?}
         on_class="text-brand-600 dark:text-brand-300"
         label={if @reposted?, do: gettext("Undo repost"), else: gettext("Repost")}
-        shown={:repost in @acts}
       >
         <.icon_repost />
       </.remote_action>
 
       <.remote_action
         act="bookmark"
-        kind={@kind}
+        target={@target}
         subject_id={@subject_id}
         on?={@bookmarked?}
         on_class="text-brand-600 dark:text-brand-300"
         label={if @bookmarked?, do: gettext("Remove bookmark"), else: gettext("Bookmark")}
-        shown={:bookmark in @acts}
       >
         <.icon_bookmark filled?={@bookmarked?} />
       </.remote_action>
@@ -1424,7 +1412,7 @@ defmodule VutuvWeb.PostComponents do
   # what made the fediverse card look like a different component. An act this
   # card cannot carry keeps its slot and gives up its glyph.
   attr(:act, :string, required: true, values: ~w(like repost bookmark))
-  attr(:kind, :string, required: true)
+  attr(:target, :any, required: true)
   attr(:subject_id, :string, required: true)
   attr(:on?, :boolean, required: true)
   attr(:on_class, :string, required: true)
@@ -1442,8 +1430,9 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <button
       type="button"
-      phx-click={"#{if @on?, do: "un", else: ""}#{@act}-#{@kind}"}
-      phx-value-id={@subject_id}
+      phx-click="toggle"
+      phx-target={@target}
+      phx-value-act={@act}
       aria-pressed={to_string(@on?)}
       aria-label={@label}
       title={@label}
@@ -1701,19 +1690,16 @@ defmodule VutuvWeb.PostComponents do
     doc: "the post's released pictures (issue #1163); the caller batches the read"
   )
 
-  attr(:liked?, :boolean,
+  attr(:live?, :boolean,
     default: false,
-    doc: "whether the viewer already likes this post (issue #1164); batched by the caller"
+    doc:
+      "whether this surface is a LiveView that can host the action bar. False on a dead controller page, where a LiveComponent cannot render at all, and on the answering page, where the card is the read-only thing being answered."
   )
 
-  attr(:reposted?, :boolean,
-    default: false,
-    doc: "whether the viewer has reshared this post (issue #1166); batched by the caller"
-  )
-
-  attr(:bookmarked?, :boolean,
-    default: false,
-    doc: "whether the viewer has saved this post (issue #1276); batched by the caller"
+  attr(:marks, :any,
+    default: nil,
+    doc:
+      "the viewer's like/repost/bookmark flags for this post when the host batched them; nil lets the bar load its own."
   )
 
   attr(:reposted_by, :any,
@@ -1828,19 +1814,16 @@ defmodule VutuvWeb.PostComponents do
 
           <.remote_post_images images={@images} />
 
-          <%!-- The card's acts, in the one row both remote cards share
-          (`remote_actions/1`) — issues #1164, #1165, #1166 and #1276. --%>
-          <.remote_actions
-            kind="remote-post"
-            subject_id={@remote_post.id}
+          <%!-- The same bar, from the same component (issues #1164, #1165,
+          #1166 and #1276) — a reply and a cached post are the same kind of
+          thing to a reader, so "what can I do with this" has one definition. --%>
+          <.live_component
+            :if={@live? and @viewer}
+            module={VutuvWeb.PostLive.RemoteActionsComponent}
+            id={"remote-actions-post-#{@remote_post.id}"}
+            subject={@remote_post}
             viewer={@viewer}
-            liked?={@liked?}
-            reposted?={@reposted?}
-            bookmarked?={@bookmarked?}
-            reply_to={
-              RemotePost.open?(@remote_post) && ~p"/system/fediverse/reply/post/#{@remote_post.id}"
-            }
-            repost?={RemotePost.open?(@remote_post)}
+            marks={@marks}
           />
 
           <%!-- A poll's options are shown above, but a vote is not something
@@ -2086,12 +2069,12 @@ defmodule VutuvWeb.PostComponents do
         "siblings of that post's own answers, in time order"
   )
 
-  attr(:liked_notes, :any,
+  attr(:note_marks, :any,
     default: nil,
     doc:
-      "the note ids the viewer already likes as a MapSet " <>
-        "(Vutuv.Fediverse.liked_note_ids/2), batched by the host so the remote " <>
-        "reply cards' hearts don't each ask for themselves"
+      "a fun from a note to its `%{liked?:, reposted?:, bookmarked?:}` map, " <>
+        "batched by the host so the remote reply cards' bars don't each ask " <>
+        "for themselves (`Vutuv.Fediverse.liked_ids/2` and friends)"
   )
 
   attr(:conn_or_socket, :any, required: true)
@@ -2122,7 +2105,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:viewer_follows, :map, default: %{})
   attr(:engagement, :map, default: %{})
   attr(:remote_replies, :map, default: %{})
-  attr(:liked_notes, :any, default: nil)
+  attr(:note_marks, :any, default: nil)
   attr(:conn_or_socket, :any, required: true)
 
   def thread_window_conversation(assigns) do
@@ -2219,7 +2202,7 @@ defmodule VutuvWeb.PostComponents do
     |> weave_remote_replies(
       assigns[:remote_replies] || %{},
       assigns.viewer,
-      assigns[:liked_notes] || MapSet.new()
+      assigns[:note_marks] || fn _note -> nil end
     )
   end
 
@@ -2231,22 +2214,22 @@ defmodule VutuvWeb.PostComponents do
   # `remote_replies` is `Vutuv.Fediverse.list_notes/2`'s per-post map, already
   # viewer-scoped — a reply addressed to the member alone never reaches anybody
   # else's render.
-  defp weave_remote_replies(nodes, remote, _viewer, _liked) when remote == %{}, do: nodes
+  defp weave_remote_replies(nodes, remote, _viewer, _marks) when remote == %{}, do: nodes
 
-  defp weave_remote_replies(nodes, remote, viewer, liked) do
+  defp weave_remote_replies(nodes, remote, viewer, marks) do
     Enum.map(nodes, fn node ->
       children =
         node.children
-        |> weave_remote_replies(remote, viewer, liked)
-        |> merge_remote_nodes(Map.get(remote, node.post.id, []), node.post, viewer, liked)
+        |> weave_remote_replies(remote, viewer, marks)
+        |> merge_remote_nodes(Map.get(remote, node.post.id, []), node.post, viewer, marks)
 
       %{node | children: children}
     end)
   end
 
-  defp merge_remote_nodes(children, [], _post, _viewer, _liked), do: children
+  defp merge_remote_nodes(children, [], _post, _viewer, _marks), do: children
 
-  defp merge_remote_nodes(children, notes, post, viewer, liked) do
+  defp merge_remote_nodes(children, notes, post, viewer, marks) do
     owner? = match?(%User{}, viewer) and viewer.id == post.user_id
 
     # An answer to one of these notes (issue #1070) is, underneath, an ordinary
@@ -2260,7 +2243,7 @@ defmodule VutuvWeb.PostComponents do
         %{
           note: note,
           owner?: owner?,
-          liked?: MapSet.member?(liked, note.id),
+          marks: marks.(note),
           children:
             answers
             |> Enum.filter(&(answered_note_id(&1) == note.id))

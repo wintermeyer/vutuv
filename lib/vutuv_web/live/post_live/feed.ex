@@ -431,35 +431,6 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  # The heart on a post from another network (issue #1164): the marker is
-  # written here and a signed `Like` goes to the author's own server. Only the
-  # reader's own state is painted — there is no count to update, because vutuv
-  # does not know the post's real one.
-  def handle_event("like-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_flag(socket, id, :liked?, true, &Fediverse.like_remote_post/2)}
-  end
-
-  def handle_event("unlike-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_flag(socket, id, :liked?, false, &Fediverse.unlike_remote_post/2)}
-  end
-
-  # Sharing a post from another network onward (issue #1166). Unlike the heart
-  # this is a publishing act, so it says so rather than only painting a button:
-  # what changed is who else can now see this, which is not visible from here.
-  def handle_event("repost-remote-post", %{"id" => id}, socket) do
-    {:noreply,
-     toggle_remote_flag(socket, id, :reposted?, true, &Fediverse.repost_remote_post/2,
-       # Only when the act really happened, so a second tab pressing the same
-       # button does not announce a reshare that was already standing.
-       flash: {:reposted, gettext("Reposted. Your followers see it now.")}
-     )}
-  end
-
-  def handle_event("unrepost-remote-post", %{"id" => id}, socket) do
-    {:noreply,
-     toggle_remote_flag(socket, id, :reposted?, false, &Fediverse.unrepost_remote_post/2)}
-  end
-
   # "Not this account today": the private, reversible lever beside Report. The
   # follow survives; its posts leave this feed, so every row from that account
   # goes in the same round trip rather than lingering until the next reload.
@@ -878,33 +849,6 @@ defmodule VutuvWeb.PostLive.Feed do
   # an assign being flipped: a stream item redraws only when its own entry is
   # handed back, which is also why the state rides the entry. `:flash` is an
   # `{outcome, message}` the act announces itself with when it really happened.
-  defp toggle_remote_flag(socket, remote_post_id, key, value, action, opts \\ []) do
-    with %{} = entry <- Enum.find(socket.assigns.entries, &remote_entry?(&1, remote_post_id)),
-         {:ok, outcome} <- action.(socket.assigns.current_user, entry.remote_post) do
-      updated = Map.put(entry, key, value)
-
-      socket
-      |> flash_outcome(opts[:flash], outcome)
-      |> update(:entries, &replace_remote_entry(&1, updated))
-      |> stream_insert(:posts, updated, update_only: true)
-    else
-      {:error, reason} -> put_flash(socket, :error, like_refusal_message(reason))
-      _ -> socket
-    end
-  end
-
-  defp flash_outcome(socket, {outcome, message}, outcome),
-    do: put_flash(socket, :info, message)
-
-  defp flash_outcome(socket, _flash, _outcome), do: socket
-
-  # By the entry's own id, not by the post's. Two entries can carry the same
-  # cached post (a direct one and a reshare), and replacing "every entry with
-  # this post" wrote one identity over both — losing the reshare's id and its
-  # "Reposted by" line, and leaving the stream unable to find either again.
-  defp replace_remote_entry(entries, %{id: id} = updated),
-    do: Enum.map(entries, &if(&1.id == id, do: updated, else: &1))
-
   # "This row is the cached post with that id" — the one predicate the three
   # scans over `:entries` that single a remote post out all read from.
   defp remote_entry?(entry, remote_post_id),
@@ -1115,10 +1059,10 @@ defmodule VutuvWeb.PostLive.Feed do
                   (issue #1164; replies and boosts are #1165/#1166), and its own
                   report control. --%>
                   <.remote_post_card
+            live?
                     remote_post={entry.remote_post}
                     images={entry[:images] || []}
-                    liked?={entry[:liked?] == true}
-                    reposted?={entry[:reposted?] == true}
+                    marks={entry[:marks]}
                     reposted_by={entry[:reposted_by]}
                     boosted_by={entry[:boosted_by]}
                     viewer={@current_user}

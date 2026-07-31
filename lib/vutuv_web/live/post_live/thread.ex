@@ -40,20 +40,13 @@ defmodule VutuvWeb.PostLive.Thread do
   use Phoenix.LiveView
 
   import VutuvWeb.PostComponents,
-    only: [
-      post_card: 1,
-      thread_conversation: 1,
-      thread_window_conversation: 1,
-      like_refusal_message: 2
-    ]
+    only: [post_card: 1, thread_conversation: 1, thread_window_conversation: 1]
 
   import VutuvWeb.UI, only: [card: 1, delimited_count: 1]
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
-  alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
   alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
@@ -158,18 +151,6 @@ defmodule VutuvWeb.PostLive.Thread do
      )}
   end
 
-  # The heart on a reply from another network (issue #1270): the marker is
-  # written here and a signed `Like` goes to its author's own server. Only the
-  # reader's own state is painted — there is no count to update, because vutuv
-  # does not know the reply's real one.
-  def handle_event("like-remote-reply", %{"id" => id}, socket) do
-    {:noreply, toggle_note_like(socket, id, &Fediverse.like_note/2, true)}
-  end
-
-  def handle_event("unlike-remote-reply", %{"id" => id}, socket) do
-    {:noreply, toggle_note_like(socket, id, &Fediverse.unlike_note/2, false)}
-  end
-
   @impl true
   def handle_info({:post_counters, %{post_id: post_id} = payload}, socket) do
     # This host holds the post-topic subscriptions for its cards; the matching
@@ -208,7 +189,7 @@ defmodule VutuvWeb.PostLive.Thread do
         |> assign(:window, nil)
         |> assign(:focus, nil)
         |> assign(:remote_replies, %{})
-        |> assign(:liked_notes, MapSet.new())
+        |> assign(:note_marks, Fediverse.mark_lookup([], nil))
 
       post ->
         window =
@@ -236,14 +217,10 @@ defmodule VutuvWeb.PostLive.Thread do
         # addressed to the member alone never reaches anybody else's render.
         remote = Fediverse.list_notes(ids, viewer)
 
-        # Which of them this reader already likes (issue #1270) — one query for
-        # the whole window, the way the posts' engagement is batched above.
-        liked_notes =
-          remote
-          |> Map.values()
-          |> List.flatten()
-          |> Enum.map(& &1.id)
-          |> then(&Fediverse.liked_note_ids(viewer, &1))
+        # What this reader has already done with each of them — three batched
+        # reads for the whole window rather than three per card, the way the
+        # posts' engagement is batched above.
+        note_marks = remote |> Map.values() |> List.flatten() |> Fediverse.mark_lookup(viewer)
 
         # The lazy freshness check (issue #1069): ask the origins of the stale
         # public ones whether they are still published there. Deliberately
@@ -260,45 +237,9 @@ defmodule VutuvWeb.PostLive.Thread do
         |> assign(:engagement, Posts.post_engagement_map(ids, viewer))
         |> assign(:viewer_follows, follows)
         |> assign(:remote_replies, remote)
-        |> assign(:liked_notes, liked_notes)
+        |> assign(:note_marks, note_marks)
         |> subscribe_shown(ids)
     end
-  end
-
-  # The heart's outcome (issue #1270). The id in a click is attacker-controlled,
-  # so it is resolved against the replies this page really rendered before
-  # anything is written — `Vutuv.Fediverse` re-reads and re-gates it anyway, this
-  # only keeps the page honest about what it is acting on.
-  #
-  # A success repaints the one card from the set in hand rather than re-running
-  # the whole window: nothing else on the page changed, and a like carries no
-  # count for anybody else to see. `{:ok, :already}` (a double tap, a second tab)
-  # lands on the same state as `{:ok, :liked}`, which is the point of it.
-  defp toggle_note_like(socket, id, fun, liked?) do
-    with %User{} = viewer <- socket.assigns.current_user,
-         %Note{} = note <- shown_note(socket, id) do
-      case fun.(viewer, note) do
-        {:ok, _outcome} ->
-          socket
-          |> assign(:notice, nil)
-          |> update(:liked_notes, &toggle_member(&1, note.id, liked?))
-
-        {:error, reason} ->
-          assign(socket, :notice, like_refusal_message(reason, :reply))
-      end
-    else
-      _ -> socket
-    end
-  end
-
-  defp toggle_member(set, id, true), do: MapSet.put(set, id)
-  defp toggle_member(set, id, false), do: MapSet.delete(set, id)
-
-  defp shown_note(socket, id) do
-    socket.assigns.remote_replies
-    |> Map.values()
-    |> List.flatten()
-    |> Enum.find(&(&1.id == id))
   end
 
   # The outcome is shown as an inline notice above the conversation, not as a
@@ -393,7 +334,7 @@ defmodule VutuvWeb.PostLive.Thread do
                 viewer_follows={@viewer_follows}
                 engagement={@engagement}
                 remote_replies={@remote_replies}
-                liked_notes={@liked_notes}
+                note_marks={@note_marks}
                 auto_scroll?={@auto_scroll?}
                 conn_or_socket={@socket}
               />
@@ -405,7 +346,7 @@ defmodule VutuvWeb.PostLive.Thread do
                 viewer_follows={@viewer_follows}
                 engagement={@engagement}
                 remote_replies={@remote_replies}
-                liked_notes={@liked_notes}
+                note_marks={@note_marks}
                 auto_scroll?={@auto_scroll?}
                 conn_or_socket={@socket}
               />

@@ -473,6 +473,7 @@ the resulting ~200px rail width. --%>
           that kill the LiveView. The place to act on such a post is the feed or
           the account page, both one click away through the card itself. --%>
           <.remote_post_card
+            live?
             :if={Vutuv.Posts.remote_feed_entry?(entry)}
             remote_post={entry.remote_post}
             images={entry[:images] || []}

@@ -62,8 +62,6 @@ defmodule VutuvWeb.FediverseLookupLive do
     socket
     |> assign(:post, nil)
     |> assign(:images, [])
-    |> assign(:liked?, false)
-    |> assign(:reposted?, false)
     |> assign(:follow, nil)
   end
 
@@ -94,25 +92,6 @@ defmodule VutuvWeb.FediverseLookupLive do
   # a URL the member has since corrected.
   def handle_event("typing", %{"url" => url}, socket) do
     {:noreply, socket |> assign(:url, url) |> assign(:error, nil)}
-  end
-
-  def handle_event("like-remote-post", _params, socket) do
-    {:noreply, act(socket, &Fediverse.like_remote_post/2)}
-  end
-
-  def handle_event("unlike-remote-post", _params, socket) do
-    {:noreply, act(socket, &Fediverse.unlike_remote_post/2)}
-  end
-
-  def handle_event("repost-remote-post", _params, socket) do
-    {:noreply,
-     act(socket, &Fediverse.repost_remote_post/2,
-       flash: {:reposted, gettext("Reposted. Your followers see it now.")}
-     )}
-  end
-
-  def handle_event("unrepost-remote-post", _params, socket) do
-    {:noreply, act(socket, &Fediverse.unrepost_remote_post/2)}
   end
 
   # The card is reportable here like everywhere else. It matters more here than
@@ -169,28 +148,6 @@ defmodule VutuvWeb.FediverseLookupLive do
   # re-read rather than nudged, so what the page draws is what the database
   # says. No `phx-value-id` is trusted: there is exactly one post here, it is the
   # one the socket already holds, and an act pushed at an empty page is nothing.
-  defp act(socket, action, opts \\ [])
-
-  defp act(%{assigns: %{post: nil}} = socket, _action, _opts), do: socket
-
-  defp act(socket, action, opts) do
-    case action.(socket.assigns.current_user, socket.assigns.post) do
-      {:ok, outcome} -> socket |> reload_result() |> flash_outcome(opts[:flash], outcome)
-      {:error, reason} -> put_flash(socket, :error, like_refusal_message(reason))
-    end
-  end
-
-  defp flash_outcome(socket, {outcome, message}, outcome),
-    do: put_flash(socket, :info, message)
-
-  defp flash_outcome(socket, _flash, _outcome), do: socket
-
-  defp reload_result(socket) do
-    case Fediverse.get_remote_post(socket.assigns.post.id) do
-      nil -> clear_result(socket)
-      post -> load_result(socket, post)
-    end
-  end
 
   defp load_result(socket, post) do
     viewer = socket.assigns.current_user
@@ -356,10 +313,9 @@ defmodule VutuvWeb.FediverseLookupLive do
       under a flash that says it did. --%>
       <.card :if={@post} id="lookup-result">
         <.remote_post_card
+            live?
           remote_post={@post}
           images={@images}
-          liked?={@liked?}
-          reposted?={@reposted?}
           mute?={@follow != nil}
           viewer={@current_user}
         />

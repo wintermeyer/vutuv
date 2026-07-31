@@ -1812,20 +1812,16 @@ defmodule Vutuv.Posts do
     |> Enum.uniq_by(& &1.remote_post.id)
   end
 
-  # Which of the page's remote posts the reader already likes (issue #1164),
-  # read once for the whole page. It rides the entry rather than a socket-level
-  # set because the feed re-renders a card by re-inserting its entry into the
-  # stream, so the state a card draws from has to live on the entry it draws.
+  # What the reader has already done with each of the page's remote posts
+  # (issues #1164, #1166 and #1276), read once for the whole page. It rides the
+  # entry rather than a socket-level set because the feed re-renders a card by
+  # re-inserting its entry into the stream, so the state a card draws from has
+  # to live on the entry it draws.
   defp attach_remote_likes(remote, viewer) do
-    ids = Enum.map(remote, & &1.remote_post.id)
-    liked = Vutuv.Fediverse.liked_remote_post_ids(viewer, ids)
-    reposted = Vutuv.Fediverse.reposted_remote_post_ids(viewer, ids)
+    posts = Enum.map(remote, & &1.remote_post)
+    marks = Vutuv.Fediverse.mark_lookup(posts, viewer)
 
-    Enum.map(remote, fn entry ->
-      entry
-      |> Map.put(:liked?, MapSet.member?(liked, entry.remote_post.id))
-      |> Map.put(:reposted?, MapSet.member?(reposted, entry.remote_post.id))
-    end)
+    Enum.map(remote, &Map.put(&1, :marks, marks.(&1.remote_post)))
   end
 
   # The pictures of the remote half (issue #1163), read once for the whole page

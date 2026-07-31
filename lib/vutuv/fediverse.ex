@@ -4517,6 +4517,101 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  ## What a card from another network can do — one vocabulary for both kinds
+  ##
+  ## `VutuvWeb.PostLive.RemoteActionsComponent` is the only caller. It renders
+  ## the same bar for a cached post and for a reply, so it needs to ask about
+  ## both in the same words rather than branching on the struct at every step —
+  ## the branching lives here, once, beside the acts it dispatches to.
+
+  @doc """
+  Performs one act on one subject: `act` is `"like"`, `"repost"` or
+  `"bookmark"`, and `on?` says whether it is being switched on or taken back.
+
+  The one entry point the action bar calls, so the bar never has to know which
+  of six public functions the pair it holds maps to. Each of those keeps its own
+  name and its own doc — this only routes.
+  """
+  def toggle_engagement(%User{} = user, %Note{} = note, act, on?),
+    do: apply(__MODULE__, note_act_fun(act, on?), [user, note])
+
+  def toggle_engagement(%User{} = user, %RemotePost{} = post, act, on?),
+    do: apply(__MODULE__, post_act_fun(act, on?), [user, post])
+
+  def toggle_engagement(nil, _subject, _act, _on?), do: {:error, :not_signed_in}
+
+  defp note_act_fun("like", true), do: :like_note
+  defp note_act_fun("like", false), do: :unlike_note
+  defp note_act_fun("repost", true), do: :repost_note
+  defp note_act_fun("repost", false), do: :unrepost_note
+  defp note_act_fun("bookmark", true), do: :bookmark_note
+  defp note_act_fun("bookmark", false), do: :unbookmark_note
+
+  defp post_act_fun("like", true), do: :like_remote_post
+  defp post_act_fun("like", false), do: :unlike_remote_post
+  defp post_act_fun("repost", true), do: :repost_remote_post
+  defp post_act_fun("repost", false), do: :unrepost_remote_post
+  defp post_act_fun("bookmark", true), do: :bookmark_remote_post
+  defp post_act_fun("bookmark", false), do: :unbookmark_remote_post
+
+  @doc """
+  The three marks for a page of subjects as **one lookup fun**: three batched
+  reads up front, then a map read per card.
+
+  Every host that draws more than one card from another network uses this — the
+  feed, the permalink conversation, the account page, the tag timeline — so
+  "what has this reader already done with these" is three queries per page
+  wherever it is asked, and the bars never each ask for themselves. A single
+  card (the URL lookup) can skip it: `VutuvWeb.PostLive.RemoteActionsComponent`
+  loads its own when the host hands it nothing.
+
+  Takes either kind of subject, or a mixed list.
+  """
+  def mark_lookup(subjects, viewer) do
+    liked = liked_ids(viewer, subjects)
+    reposted = reposted_ids(viewer, subjects)
+    bookmarked = bookmarked_ids(viewer, subjects)
+
+    fn subject ->
+      %{
+        liked?: MapSet.member?(liked, subject.id),
+        reposted?: MapSet.member?(reposted, subject.id),
+        bookmarked?: MapSet.member?(bookmarked, subject.id)
+      }
+    end
+  end
+
+  @doc "Which of these subjects the viewer likes — the batch read, either kind."
+  def liked_ids(viewer, subjects), do: batch_ids(viewer, subjects, NoteLike, PostLike)
+
+  @doc "Which of these subjects the viewer has passed on."
+  def reposted_ids(viewer, subjects), do: batch_ids(viewer, subjects, NoteRepost, PostRepost)
+
+  @doc "Which of these subjects the viewer has saved."
+  def bookmarked_ids(viewer, subjects), do: batch_ids(viewer, subjects, Bookmark, Bookmark)
+
+  # One subject or a list of them, of either kind. A mixed list is split, since
+  # the two kinds live in different columns (and, for the bookmarks, different
+  # columns of the same table).
+  defp batch_ids(nil, _subjects, _note_schema, _post_schema), do: MapSet.new()
+
+  defp batch_ids(%User{} = viewer, subject, note_schema, post_schema) when not is_list(subject),
+    do: batch_ids(viewer, [subject], note_schema, post_schema)
+
+  defp batch_ids(%User{} = viewer, subjects, note_schema, post_schema) do
+    {notes, posts} = Enum.split_with(subjects, &match?(%Note{}, &1))
+
+    MapSet.union(
+      ids_for(note_schema, :note_id, viewer, notes),
+      ids_for(post_schema, :remote_post_id, viewer, posts)
+    )
+  end
+
+  defp ids_for(_schema, _fk, _viewer, []), do: MapSet.new()
+
+  defp ids_for(schema, fk, viewer, subjects),
+    do: marker_ids(schema, fk, viewer, Enum.map(subjects, & &1.id))
+
   ## Saving something from another network for yourself (issue #1276)
   ##
   ## The one act on these cards that stays here. Nothing is signed, nothing is
