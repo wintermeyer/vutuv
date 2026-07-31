@@ -27,6 +27,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemoteAccount
@@ -906,7 +907,16 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:can_reply?, not is_nil(assigns.viewer) and Note.public?(note))
 
     ~H"""
-    <article data-fediverse-reply={@note.id} data-audience={@note.audience}>
+    <%!-- The `id` is this reply's anchor: it has no permalink of its own, so a
+    link to one (the notification quote) is the conversation's URL plus this
+    fragment. `scroll-mt-24` keeps the sticky top bar from parking over the card
+    the reader was sent to, the same allowance a footnote target gets. --%>
+    <article
+      data-fediverse-reply={@note.id}
+      data-audience={@note.audience}
+      id={Fediverse.reply_anchor(@note.id)}
+      class="scroll-mt-24"
+    >
       <div class="flex items-start gap-3">
         <.remote_avatar initials={@initials} />
 

@@ -58,6 +58,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.BerlinTime
+  alias Vutuv.Fediverse
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -536,14 +537,34 @@ defmodule VutuvWeb.NotificationLive.Index do
           wording already says it came from another network, so the quote needs
           no dashed variant of its own. Marked for the clamp measurement like
           those quotes too, so a remote reply that runs past the reader's line
-          budget also ends in a "…". --%>
+          budget also ends in a "…".
+
+          And it is a link, on the same stretched-overlay arrangement as
+          <.quoted_post>: a readable block of somebody's words is what the reader
+          reaches for, so a quote that does nothing on tap reads as a broken row,
+          whichever network the words came from. It goes where the row's own
+          sentence already goes (`primary_target/2` — the reader's post, not the
+          stranger's server, which the card over there links to) and carries the
+          note's anchor, so a post that collected several replies opens on this
+          one. No `[&_a]:relative` escape hatch is needed inside: unlike a local
+          quote's Markdown, this text is deliberately never linkified, so there
+          is no inner link for the overlay to swallow. --%>
           <div
             id={"quote-remote-#{@group.id}"}
             phx-hook="PostPreviewClamp"
             data-post-preview
             data-remote-reply-preview="true"
-            class="border-l-2 border-slate-200 pl-2.5 dark:border-slate-700"
+            class={[
+              "relative border-l-2 border-slate-200 pl-2.5 transition-colors hover:border-brand-400",
+              "dark:border-slate-700 dark:hover:border-brand-500"
+            ]}
           >
+            <.link
+              href={remote_reply_target(@n, @current_user)}
+              aria-label={gettext("View the conversation")}
+              class="absolute inset-0 z-10"
+            >
+            </.link>
             <%!-- No `text-*` / `leading-*` here: `.notif-clamp` owns the type
             size and line height, since its box height is counted in them. --%>
             <p
@@ -1147,6 +1168,20 @@ defmodule VutuvWeb.NotificationLive.Index do
     do: ~p"/#{viewer}/tags"
 
   defp primary_target(_n, _viewer), do: nil
+
+  # Where the quoted remote reply itself goes: the same conversation the row's
+  # sentence opens, plus the anchor of this note (`Fediverse.reply_anchor/1`),
+  # so a post that collected several replies lands on the one being quoted
+  # rather than at the top. The anchor is dropped when the row somehow carries
+  # no note id, which leaves the plain conversation link rather than a dead "#".
+  defp remote_reply_target(n, viewer) do
+    target = notification_target(n, viewer)
+
+    case n[:note_id] do
+      id when is_binary(id) and is_binary(target) -> target <> "#" <> Fediverse.reply_anchor(id)
+      _ -> target
+    end
+  end
 
   defp actor_target(n) do
     if is_binary(n[:actor_param]), do: ~p"/#{n.actor_param}"

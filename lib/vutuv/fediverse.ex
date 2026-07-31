@@ -3263,6 +3263,20 @@ defmodule Vutuv.Fediverse do
   def delete_reply(_actor_uri, _object_uri), do: :ok
 
   @doc """
+  The DOM anchor of one stored remote reply, e.g.
+  `"fediverse-reply-019fb8b5-cb56-765a-99c3-82aea0498272"`.
+
+  A remote reply has no permalink of its own here — it is rendered inside the
+  conversation under the post it answers — so the way to send a reader to one
+  is the post's permalink plus this fragment. Both ends live in one function
+  because they have to agree exactly: the card that carries it as its `id`
+  (`VutuvWeb.PostComponents.remote_reply_card/1`) and the notification quote
+  that links to it. A drift between them is silent, since a fragment that
+  matches nothing simply opens the page at the top.
+  """
+  def reply_anchor(note_id) when is_binary(note_id), do: "fediverse-reply-" <> note_id
+
+  @doc """
   The stored replies for `post_ids`, grouped by post id, oldest first — what the
   thread renderer interleaves among the vutuv replies.
 

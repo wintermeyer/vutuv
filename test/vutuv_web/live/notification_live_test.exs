@@ -883,6 +883,58 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
   end
 
+  describe "replies from other networks (#1069)" do
+    defp remote_note!(post, name, text) do
+      Vutuv.Repo.insert!(%Vutuv.Fediverse.Note{
+        post_id: post.id,
+        object_uri:
+          "https://social.example/users/#{name}/statuses/#{System.unique_integer([:positive])}",
+        actor_uri: "https://social.example/users/#{name}",
+        handle: name,
+        display_name: String.capitalize(name),
+        content_text: text,
+        audience: "public",
+        received_at: DateTime.utc_now(:second),
+        expires_at: DateTime.add(DateTime.utc_now(:second), 30, :day)
+      })
+    end
+
+    test "the quoted reply opens the conversation, anchored at that reply", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "why are the trains late"})
+      note = remote_note!(post, "ba_eh", "the delays come down to two factors")
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The quote is what the reader reaches for, so it has to be the link — a
+      # readable block of somebody's words that does nothing on tap reads as a
+      # broken row. It goes where the row's own sentence goes (the reader's post,
+      # not the stranger's server) and lands on this reply among the others.
+      assert has_element?(
+               live,
+               ~s([data-remote-reply-preview] a[href="/#{user.username}/posts/#{post.id}#fediverse-reply-#{note.id}"])
+             )
+    end
+
+    test "the quote's accessible name is translated", %{conn: conn} do
+      # The overlay link has no text of its own, so its aria-label is the only
+      # name a screen reader gets. vutuv is a German site, so assert the German
+      # by name: a new msgid comes out of the merge untranslated (or worse,
+      # fuzzy-filled from something unrelated) and nothing else fails the build.
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "warum sind die Züge zu spät"})
+      remote_note!(post, "ba_eh", "die Verspätungen resultieren aus zwei Faktoren")
+
+      {:ok, live, _html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> live(~p"/notifications")
+
+      assert render(live) =~ ~s(aria-label="Unterhaltung ansehen")
+    end
+  end
+
   describe "reactions from other networks (#1068)" do
     # Written straight to the table: the inbox gates are the Fediverse tests'
     # business, this is about the row the reader gets.

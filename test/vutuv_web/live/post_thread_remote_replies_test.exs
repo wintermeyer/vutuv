@@ -80,6 +80,18 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       assert html =~ ~s(data-fediverse-reply="#{note.id}")
     end
 
+    test "carries its anchor, so a link can land on it among the others", %{post: post} do
+      note = note!(post)
+
+      {:ok, _view, html} = thread_view(post)
+
+      # A remote reply has no permalink of its own, so the notifications quote
+      # sends the reader here with this fragment. The two ends share
+      # `Fediverse.reply_anchor/1`, but only a rendered id makes the fragment
+      # resolve — without it the link silently opens the page at the top.
+      assert html =~ ~s(id="#{Vutuv.Fediverse.reply_anchor(note.id)}")
+    end
+
     test "is marked as coming from another network, never disguised as a vutuv reply", %{
       post: post
     } do

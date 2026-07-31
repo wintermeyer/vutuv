@@ -336,6 +336,16 @@ every activity of a member it finds no key for, silently.
     renders as a closed lid. The member also gets a notification: the
     `fediverse_reply` kind, sourced **straight from the notes table**, so
     deleting a note deletes its notification with no second place to remember.
+    That notification quotes the reply, and **the quote is a link back to here**
+    — a readable block of somebody's words that does nothing on tap reads as a
+    broken row, which is what it was until v7.209.2. A remote reply has no
+    permalink of its own, so the link is the answered post's permalink plus the
+    reply's anchor: `Vutuv.Fediverse.reply_anchor/1` owns that fragment for both
+    ends (the card renders it as its `id`, the notification appends it), because
+    a drift between them is silent — a fragment matching nothing just opens the
+    page at the top. It deliberately stays on vutuv rather than jumping to the
+    original, which the card itself links to, and a private reply (issue #1071)
+    has no public page to open anyway.
 - **Answering a reply that came from another network** (issue #1070, the one
   place a member's own action makes vutuv POST to a server that never followed
   them): the "Reply" link on a remote reply's card opens
