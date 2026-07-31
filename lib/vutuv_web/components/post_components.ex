@@ -815,7 +815,18 @@ defmodule VutuvWeb.PostComponents do
         (issue #1069), which sits among them as an ordinary sibling in time
         order and wears its own skin. --%>
         <%= if Map.has_key?(node, :note) do %>
-          <.remote_reply_card note={node.note} owner?={node.owner?} viewer={@viewer} />
+          <%!-- `acts?` unconditionally: the conversation is only ever rendered
+          by `VutuvWeb.PostLive.Thread`, which handles the heart's events — and
+          on its throwaway dead render the buttons are as live as every other
+          `phx-click` on the page, which is to say the moment the socket
+          connects. --%>
+          <.remote_reply_card
+            note={node.note}
+            owner?={node.owner?}
+            viewer={@viewer}
+            liked?={node.liked?}
+            acts?
+          />
         <% else %>
           <.post_card
             post={node.post}
@@ -859,10 +870,17 @@ defmodule VutuvWeb.PostComponents do
       is ever fetched or hosted: vutuv does not host a third party's image.
     * the author's name as plain text (there is no vutuv profile to link to)
       beside their `@handle@host`, which links out to the account.
-    * **no action bar.** Liking, reposting or bookmarking a note that lives on
-      someone else's server is not a thing that exists, so the row is absent
-      rather than dead. What is there instead is where it came from, a link to
-      the original, and the takedown controls.
+    * **two acts, not four.** Answering it and liking it both mean something
+      across the network boundary and both are here (issue #1270); resharing and
+      bookmarking somebody else's reply on somebody else's server do not, so
+      those are absent rather than dead.
+
+  Those two acts sit in a **row of their own under the body**, not in the
+  provenance footer, which is what they were built into first and what made the
+  card read as having no actions at all: a `text-xs` word between the server
+  name and "View the original" is a caption, and nobody presses a caption. They
+  are the size the rest of the app's controls are (issue #1270 was reported as
+  "I have no way to like or answer this").
 
   What is **stored** is plain text (`Vutuv.RemoteHtml` reduced the remote HTML
   at the inbox, and that does not change). What is **shown** is that text run
@@ -877,8 +895,9 @@ defmodule VutuvWeb.PostComponents do
   lid and reveals the text on a click, which is the one thing that author asked
   for.
 
-  Rendered only inside `VutuvWeb.PostLive.Thread`, so the takedown controls are
-  plain `phx-click` events on that LiveView.
+  Rendered inside `VutuvWeb.PostLive.Thread` (the conversation) and, without its
+  acts, as the read-only target of the answering page — so the takedown controls
+  and the heart are plain `phx-click` events on the host LiveView.
   """
   attr(:note, :map, required: true, doc: "a Vutuv.Fediverse.Note")
 
@@ -888,6 +907,14 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil")
+
+  attr(:acts?, :boolean,
+    default: false,
+    doc:
+      "whether this surface carries the card's own acts. The conversation does; the answering page, where the card is the read-only thing being answered, does not — a Reply link to the page you are already on is noise, and a heart there would fire an event that page does not handle."
+  )
+
+  attr(:liked?, :boolean, default: false, doc: "whether the viewer already likes this reply")
 
   def remote_reply_card(assigns) do
     note = assigns.note
@@ -904,7 +931,19 @@ defmodule VutuvWeb.PostComponents do
       # Only a public reply can be answered (issue #1070): a private one would
       # mean publishing half of an exchange its author asked to keep to one
       # person, so v1 does not offer it at all.
-      |> assign(:can_reply?, not is_nil(assigns.viewer) and Note.public?(note))
+      |> assign(
+        :can_reply?,
+        assigns.acts? and not is_nil(assigns.viewer) and Note.public?(note)
+      )
+      # A like has no such audience gate (issue #1270) — it is addressed to the
+      # author alone and publishes nothing, so a reply sent to the member only
+      # can be liked too. What it does need is an address to send it to: a reply
+      # stored before issue #1070 carries none, and a heart that could never
+      # leave the building is worse than no heart.
+      |> assign(
+        :can_like?,
+        assigns.acts? and not is_nil(assigns.viewer) and Note.likeable?(note)
+      )
 
     ~H"""
     <%!-- The `id` is this reply's anchor: it has no permalink of its own, so a
@@ -966,23 +1005,54 @@ defmodule VutuvWeb.PostComponents do
 
           <.remote_body warning={@warned? && @note.summary} text={@note.content_text} />
 
-          <.remote_footer host={@host} origin={@origin} label={gettext("View the original")}>
-            <%!-- Answering is the one action on a remote reply that exists, so it
-            sits here in the open beside where the reply came from. The card still
-            has no action bar: liking or resharing something on somebody else's
-            server is not a thing, and an absent row still beats a dead one. Shown
-            to every signed-in member on a public reply — the page behind it is
-            what explains a member who does not federate why they cannot send
-            (issue #1070). --%>
-            <span :if={@can_reply?}>
-              ·
-              <.link
-                navigate={~p"/system/fediverse/reply/#{@note.id}"}
-                data-remote-reply-link={@note.id}
-                class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-              >{gettext("Reply")}</.link>
-            </span>
-          </.remote_footer>
+          <%!-- The card's acts (issue #1270), in the open under the body where a
+          reader looks for them, sized as real touch targets. Both are shown to
+          every signed-in member including one who has not switched Fediverse
+          participation on: each is signed with their own key, so for them
+          neither can be sent — but hiding the controls would leave them with no
+          way to find out that any of this exists. Pressing one explains and
+          points at the switch (issue #1070). --%>
+          <div :if={@can_like? or @can_reply?} class="mt-1 flex flex-wrap items-center gap-5">
+            <%!-- A plain toggle with no number beside it, like the one on a
+            cached post: the heart says what the reader did, and the only honest
+            answer to "how many others" is the author's own server, one click
+            away in the footer below. --%>
+            <button
+              :if={@can_like?}
+              type="button"
+              phx-click={if @liked?, do: "unlike-remote-reply", else: "like-remote-reply"}
+              phx-value-id={@note.id}
+              aria-pressed={to_string(@liked?)}
+              data-remote-reply-like={@note.id}
+              data-liked={@liked? && "on"}
+              class={[
+                "inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
+                if(@liked?,
+                  do: "text-accent",
+                  else: "text-slate-600 hover:text-accent dark:text-slate-400"
+                )
+              ]}
+            >
+              <.icon_heart filled?={@liked?} class="h-5 w-5" />
+              <%!-- One label in both states, with the state carried by the
+              filled heart, the accent colour and `aria-pressed` — German has one
+              word for both, so two labels would have read differently per
+              language, and in German not at all. --%>
+              <span>{gettext("Like")}</span>
+            </button>
+
+            <.link
+              :if={@can_reply?}
+              navigate={~p"/system/fediverse/reply/#{@note.id}"}
+              data-remote-reply-link={@note.id}
+              class="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+            >
+              <.icon_reply class="h-5 w-5" />
+              <span>{gettext("Reply")}</span>
+            </.link>
+          </div>
+
+          <.remote_footer host={@host} origin={@origin} label={gettext("View the original")} />
         </div>
       </div>
     </article>
@@ -1264,8 +1334,10 @@ defmodule VutuvWeb.PostComponents do
     end)
   end
 
-  # Where it came from and the way on to the real thing. The inner block is for
-  # the rare extra action that belongs beside it (answering a reply).
+  # Where it came from and the way on to the real thing — provenance, not
+  # actions: both remote cards' acts live in their own row above this line
+  # (issue #1270). The inner block is what a card needs to add to the
+  # provenance itself.
   attr(:host, :any, default: nil)
   attr(:origin, :string, required: true)
   attr(:label, :string, required: true)
@@ -1596,63 +1668,81 @@ defmodule VutuvWeb.PostComponents do
 
           <.remote_post_images images={@images} />
 
-          <%!-- The one act this card carries (issue #1164). A plain toggle with
-          no number beside it: the heart says what the reader did, and the only
-          honest answer to "how many others" is the author's own server, which
-          is one click away in the footer below. Sized as a real touch target.
+          <%!-- The card's three acts (issues #1164, #1165 and #1166), in one
+          row of real touch targets under the body — the same row, in the same
+          order, the remote reply card wears (issue #1270), so a card from
+          another network reads the same whichever of the two it is.
 
           Shown to every signed-in reader, including one who has not switched
-          Fediverse participation on: the `Like` is signed with their own key,
-          so for them it cannot be sent — but hiding the control would leave
-          them with no way to find that out. Pressing it explains and points at
-          the switch, the same way the reply page does (issue #1070). --%>
-          <button
-            :if={@viewer}
-            type="button"
-            phx-click={if @liked?, do: "unlike-remote-post", else: "like-remote-post"}
-            phx-value-id={@remote_post.id}
-            aria-pressed={to_string(@liked?)}
-            data-remote-like={@liked? && "on"}
-            class={[
-              "mr-4 mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
-              if(@liked?,
-                do: "text-accent",
-                else: "text-slate-600 hover:text-accent dark:text-slate-400"
-              )
-            ]}
-          >
-            <.icon_heart filled?={@liked?} class="h-5 w-5" />
-            <%!-- One label in both states, with the state carried by the filled
-            heart, the accent colour and `aria-pressed` — the same way the local
-            action bar does it. Two labels needed two words, and German has one
-            for both ("Gefällt mir"), so the state would have read differently
-            per language, and in German not at all. --%>
-            <span>{gettext("Like")}</span>
-          </button>
+          Fediverse participation on: each is signed with their own key, so for
+          them none can be sent — but hiding the controls would leave them with
+          no way to find that out. Pressing one explains and points at the
+          switch, the same way the reply page does (issue #1070). --%>
+          <div :if={@viewer} class="mt-1 flex flex-wrap items-center gap-5">
+            <%!-- A plain toggle with no number beside it: the heart says what
+            the reader did, and the only honest answer to "how many others" is
+            the author's own server, one click away in the footer below. --%>
+            <button
+              type="button"
+              phx-click={if @liked?, do: "unlike-remote-post", else: "like-remote-post"}
+              phx-value-id={@remote_post.id}
+              aria-pressed={to_string(@liked?)}
+              data-remote-like={@liked? && "on"}
+              class={[
+                "inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
+                if(@liked?,
+                  do: "text-accent",
+                  else: "text-slate-600 hover:text-accent dark:text-slate-400"
+                )
+              ]}
+            >
+              <.icon_heart filled?={@liked?} class="h-5 w-5" />
+              <%!-- One label in both states, with the state carried by the filled
+              heart, the accent colour and `aria-pressed` — the same way the local
+              action bar does it. Two labels needed two words, and German has one
+              for both ("Gefällt mir"), so the state would have read differently
+              per language, and in German not at all. --%>
+              <span>{gettext("Like")}</span>
+            </button>
 
-          <%!-- Sharing it onward (issue #1166). Unlike the heart this is a
-          publishing act — everybody who follows the reader here and out there
-          sees it — so it is only offered on an open post: passing on an
-          audience its author narrowed is not ours to do, and a boost is the
-          least reversible way to do it. --%>
-          <button
-            :if={@viewer && RemotePost.open?(@remote_post)}
-            type="button"
-            phx-click={if @reposted?, do: "unrepost-remote-post", else: "repost-remote-post"}
-            phx-value-id={@remote_post.id}
-            aria-pressed={to_string(@reposted?)}
-            data-remote-repost={@reposted? && "on"}
-            class={[
-              "mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
-              if(@reposted?,
-                do: "text-emerald-700 dark:text-emerald-400",
-                else: "text-slate-600 hover:text-emerald-700 dark:text-slate-400"
-              )
-            ]}
-          >
-            <.icon_repost class="h-5 w-5" />
-            <span>{gettext("Repost")}</span>
-          </button>
+            <%!-- Answering (issue #1165). Only on an open post: an answer is a
+            public vutuv post, and republishing the audience a followers-only
+            post's author chose is not ours to do, so there is no control rather
+            than one that refuses. --%>
+            <.link
+              :if={RemotePost.open?(@remote_post)}
+              navigate={~p"/system/fediverse/reply/post/#{@remote_post.id}"}
+              data-remote-post-reply-link={@remote_post.id}
+              class="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+            >
+              <.icon_reply class="h-5 w-5" />
+              <span>{gettext("Reply")}</span>
+            </.link>
+
+            <%!-- Sharing it onward (issue #1166). Unlike the heart this is a
+            publishing act — everybody who follows the reader here and out there
+            sees it — so it too is only offered on an open post: passing on an
+            audience its author narrowed is not ours to do, and a boost is the
+            least reversible way to do it. --%>
+            <button
+              :if={RemotePost.open?(@remote_post)}
+              type="button"
+              phx-click={if @reposted?, do: "unrepost-remote-post", else: "repost-remote-post"}
+              phx-value-id={@remote_post.id}
+              aria-pressed={to_string(@reposted?)}
+              data-remote-repost={@reposted? && "on"}
+              class={[
+                "inline-flex min-h-10 items-center gap-1.5 text-sm font-medium",
+                if(@reposted?,
+                  do: "text-emerald-700 dark:text-emerald-400",
+                  else: "text-slate-600 hover:text-emerald-700 dark:text-slate-400"
+                )
+              ]}
+            >
+              <.icon_repost class="h-5 w-5" />
+              <span>{gettext("Repost")}</span>
+            </button>
+          </div>
 
           <%!-- A poll's options are shown above, but a vote is not something
           vutuv can carry, so the link says what it is actually for. --%>
@@ -1661,27 +1751,7 @@ defmodule VutuvWeb.PostComponents do
             origin={RemotePost.origin(@remote_post)}
             label={origin_label(@remote_post)}
             data-remote-origin
-          >
-            <%!-- Answering (issue #1165) sits beside where the post came from,
-            like the remote reply card's does. Only on an open post: an answer
-            is a public vutuv post, and republishing the audience a
-            followers-only post's author chose is not ours to do, so there is no
-            control rather than one that refuses. Shown to every signed-in
-            member including one who does not federate — the page behind it is
-            what explains why they cannot send yet. --%>
-            <span :if={@viewer && RemotePost.open?(@remote_post)}>
-              ·
-              <%!-- Padded to a finger-sized target rather than left as a
-              `text-xs` word: this is the card's second real action, and it sits
-              right beside a link that leaves the site — a mis-tap there is not
-              a small mistake. --%>
-              <.link
-                navigate={~p"/system/fediverse/reply/post/#{@remote_post.id}"}
-                data-remote-post-reply-link={@remote_post.id}
-                class="inline-flex min-h-10 items-center px-1 font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-              >{gettext("Reply")}</.link>
-            </span>
-          </.remote_footer>
+          />
         </div>
       </div>
     </article>
@@ -1706,11 +1776,22 @@ defmodule VutuvWeb.PostComponents do
   who pressed a heart while reading has not asked to be told what the operator
   blocks, and that table's fallback tells them to check an address a like does
   not have.
+
+  `subject` names what was pressed — a cached post (the default) or a reply from
+  another network (issue #1270). It changes exactly one sentence, the one that
+  says the thing is gone; everything else is about the member's own standing and
+  reads the same whichever it was. One table with a subject beats two tables
+  that drift.
   """
-  def like_refusal_message(:like_capped),
+  def like_refusal_message(reason, subject \\ :post)
+
+  def like_refusal_message(:like_capped, _subject),
     do: gettext("That is a lot of likes in one hour. Please try again later.")
 
-  def like_refusal_message(reason) when reason in [:not_found, :not_visible],
+  def like_refusal_message(reason, :reply) when reason in [:not_found, :not_visible],
+    do: gettext("That reply is not here any more.")
+
+  def like_refusal_message(reason, _subject) when reason in [:not_found, :not_visible],
     do: gettext("That post is not here any more.")
 
   # The states a member is in rather than a fact about this act: those already
@@ -1719,11 +1800,11 @@ defmodule VutuvWeb.PostComponents do
   # `federated?/1` is false with the switch already on (an unconfirmed address,
   # a frozen or suspended account). Only its catch-all is overridden, which is
   # about an address a heart does not have.
-  def like_refusal_message(reason)
+  def like_refusal_message(reason, _subject)
       when reason in [:not_federating, :moved, :fediverse_disabled, :instance_blocked],
       do: FediverseComponents.refusal_message(reason)
 
-  def like_refusal_message(_reason), do: gettext("That did not work.")
+  def like_refusal_message(_reason, _subject), do: gettext("That did not work.")
 
   @doc """
   The chrome both "answer something on another network" pages wear: the reply
@@ -1906,6 +1987,14 @@ defmodule VutuvWeb.PostComponents do
         "siblings of that post's own answers, in time order"
   )
 
+  attr(:liked_notes, :any,
+    default: nil,
+    doc:
+      "the note ids the viewer already likes as a MapSet " <>
+        "(Vutuv.Fediverse.liked_note_ids/2), batched by the host so the remote " <>
+        "reply cards' hearts don't each ask for themselves"
+  )
+
   attr(:conn_or_socket, :any, required: true)
 
   def thread_conversation(assigns) do
@@ -1934,6 +2023,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:viewer_follows, :map, default: %{})
   attr(:engagement, :map, default: %{})
   attr(:remote_replies, :map, default: %{})
+  attr(:liked_notes, :any, default: nil)
   attr(:conn_or_socket, :any, required: true)
 
   def thread_window_conversation(assigns) do
@@ -2027,7 +2117,11 @@ defmodule VutuvWeb.PostComponents do
     end)
     |> Posts.thread_forest()
     |> banner_on_roots()
-    |> weave_remote_replies(assigns[:remote_replies] || %{}, assigns.viewer)
+    |> weave_remote_replies(
+      assigns[:remote_replies] || %{},
+      assigns.viewer,
+      assigns[:liked_notes] || MapSet.new()
+    )
   end
 
   # Hangs the replies written on other networks (issue #1069) under the posts
@@ -2038,22 +2132,22 @@ defmodule VutuvWeb.PostComponents do
   # `remote_replies` is `Vutuv.Fediverse.list_notes/2`'s per-post map, already
   # viewer-scoped — a reply addressed to the member alone never reaches anybody
   # else's render.
-  defp weave_remote_replies(nodes, remote, _viewer) when remote == %{}, do: nodes
+  defp weave_remote_replies(nodes, remote, _viewer, _liked) when remote == %{}, do: nodes
 
-  defp weave_remote_replies(nodes, remote, viewer) do
+  defp weave_remote_replies(nodes, remote, viewer, liked) do
     Enum.map(nodes, fn node ->
       children =
         node.children
-        |> weave_remote_replies(remote, viewer)
-        |> merge_remote_nodes(Map.get(remote, node.post.id, []), node.post, viewer)
+        |> weave_remote_replies(remote, viewer, liked)
+        |> merge_remote_nodes(Map.get(remote, node.post.id, []), node.post, viewer, liked)
 
       %{node | children: children}
     end)
   end
 
-  defp merge_remote_nodes(children, [], _post, _viewer), do: children
+  defp merge_remote_nodes(children, [], _post, _viewer, _liked), do: children
 
-  defp merge_remote_nodes(children, notes, post, viewer) do
+  defp merge_remote_nodes(children, notes, post, viewer, liked) do
     owner? = match?(%User{}, viewer) and viewer.id == post.user_id
 
     # An answer to one of these notes (issue #1070) is, underneath, an ordinary
@@ -2067,6 +2161,7 @@ defmodule VutuvWeb.PostComponents do
         %{
           note: note,
           owner?: owner?,
+          liked?: MapSet.member?(liked, note.id),
           children:
             answers
             |> Enum.filter(&(answered_note_id(&1) == note.id))

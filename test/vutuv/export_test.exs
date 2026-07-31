@@ -39,7 +39,7 @@ defmodule Vutuv.ExportTest do
 
     data = Export.build(user)
 
-    assert data.schema_version == 7
+    assert data.schema_version == 8
     assert Enum.any?(data.blocked_members, &(&1.member == blocked.username))
     # The private content filters (issue #940) are owner-only, so they ride
     # along in the member's own GDPR export.

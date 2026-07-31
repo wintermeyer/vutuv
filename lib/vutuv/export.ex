@@ -15,6 +15,7 @@ defmodule Vutuv.Export do
   alias Vutuv.Ads.Ad
   alias Vutuv.Chat.{Conversation, Participant}
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Jobs.{JobPostingBookmark, JobPostingLike}
@@ -34,7 +35,9 @@ defmodule Vutuv.Export do
   #    when, from where and how it was confirmed.
   # 6: composer drafts (issue #1148) — posts the member started but never sent.
   # 7: the accounts followed on other networks (issue #1160).
-  @schema_version 7
+  # 8: `fediverse_likes` covers liked **replies** too (issue #1270) and every
+  #    entry names which it is in `kind`.
+  @schema_version 8
 
   def build(%User{} = user) do
     user =
@@ -178,22 +181,46 @@ defmodule Vutuv.Export do
       # own remote followers are deliberately absent: those rows are about other
       # people, and this export is the member's data.
       fediverse_following: fediverse_following(user),
-      # What they liked on other networks (issue #1164). Unambiguously their own
-      # data — an act of theirs, recorded here — so Art. 20 covers it, the same
-      # way the saved_* sections above are covered.
+      # What they liked on other networks (issues #1164 and #1270). Unambiguously
+      # their own data — an act of theirs, recorded here — so Art. 20 covers it,
+      # the same way the saved_* sections above are covered.
       fediverse_likes: fediverse_likes(user)
     }
   end
 
+  # Posts by accounts the member follows and replies written under vutuv posts,
+  # in one list: to the member both are "something on another network I liked",
+  # and splitting them into two sections by which of our tables happens to hold
+  # them would be an export of our schema rather than of their acts. `kind`
+  # names which is which.
   defp fediverse_likes(user) do
+    post_likes(user) ++ note_likes(user)
+  end
+
+  defp post_likes(user) do
     user
     |> Fediverse.list_remote_likes()
     |> Enum.map(fn {post, account} ->
       %{
+        kind: "post",
         post: RemotePost.origin(post),
         author: RemoteAccount.display_handle(account),
         server: account.host,
         at: post.published_at
+      }
+    end)
+  end
+
+  defp note_likes(user) do
+    user
+    |> Fediverse.list_note_likes()
+    |> Enum.map(fn note ->
+      %{
+        kind: "reply",
+        post: Note.origin(note),
+        author: Note.display_handle(note),
+        server: Note.host(note.actor_uri),
+        at: note.received_at
       }
     end)
   end

@@ -62,6 +62,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Media
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.NoteEvent
+  alias Vutuv.Fediverse.NoteLike
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.PostLike
@@ -968,6 +969,11 @@ defmodule Vutuv.Fediverse do
     # follows would otherwise survive this member leaving, as a record of what
     # they read on another network kept after they asked to be out of it.
     drop_remote_likes(user)
+    # And the ones on replies under vutuv posts (issue #1270), which are the
+    # same act on a different table and must not survive the same decision —
+    # those rows do not hang off a follow at all, so nothing else would ever
+    # take them.
+    drop_note_likes(user)
 
     {count, _} = Repo.delete_all(from(f in Follow, where: f.user_id == ^user.id))
     # Their cached posts existed because this member followed their authors
@@ -4478,6 +4484,216 @@ defmodule Vutuv.Fediverse do
     case post_account(post) do
       %RemoteAccount{actor_uri: uri} -> uri
       _ -> nil
+    end
+  end
+
+  ## Liking a reply from another network (issue #1270)
+  ##
+  ## The same act as the heart above, one step further down the conversation:
+  ## there it is a post by an account the member follows, here it is an answer
+  ## somebody wrote under the member's own post. The activity, the addressing,
+  ## the budget and the reasoning are the post path's unchanged — only the row
+  ## it is keyed to differs, because a note is its own table.
+
+  @doc """
+  Whether `user` may like the stored reply `note`, and when not, which gate
+  refused — `check_remote_like/2`'s vocabulary, plus one of this path's own:
+
+    * `:not_deliverable` — the note carries no inbox address, so a `Like` for it
+      could not leave the building. Replies stored before issue #1070 have none
+      (the column arrived with the answering feature), and for those the card
+      offers no heart at all rather than one that refuses: writing the marker
+      anyway would paint a heart for a like the author's server never hears
+      about, which is the one disagreement a member cannot fix from here.
+    * `:not_visible` — the reply is not one this member may read.
+
+  Deliberately **no audience gate**, unlike answering: a `Like` is addressed to
+  its author alone and publishes nothing, so a reply sent to the member only
+  (issue #1071) can be liked exactly the way a public one can. What the two
+  paths do share is that the id in a click is attacker-controlled, so the read
+  question is asked here and not left to the fact that the LiveView resolved it
+  against its own rendered list.
+
+  Free of side effects, so a render may ask it. The budget is claimed separately.
+  """
+  def check_note_like(%User{} = user, %Note{} = note) do
+    cond do
+      not enabled?() -> {:error, :fediverse_disabled}
+      not Note.likeable?(note) -> {:error, :not_deliverable}
+      not federated?(user) -> {:error, :not_federating}
+      moved?(user) -> {:error, :moved}
+      instance_blocked?(note.actor_uri) -> {:error, :instance_blocked}
+      not note_readable?(note, user) -> {:error, :not_visible}
+      true -> :ok
+    end
+  end
+
+  @doc """
+  Whether `viewer` may read this stored reply: a public one is everybody's,
+  anything else only ever the member whose post it answers.
+
+  The same rule `list_notes/2` enforces in SQL for the conversation, for the
+  callers holding a single row — so a reply nobody else may see cannot be liked
+  (or its existence confirmed) by guessing its id.
+  """
+  def note_readable?(%Note{} = note, %User{id: viewer_id}) do
+    Note.public?(note) or
+      Repo.exists?(from(p in Post, where: p.id == ^note.post_id and p.user_id == ^viewer_id))
+  end
+
+  def note_readable?(_note, _viewer), do: false
+
+  @doc """
+  The member likes a reply from another network: writes the local marker and
+  queues a signed `Like` to its author's own inbox.
+
+  `{:ok, :liked}`, `{:ok, :already}` when the marker was already there (a double
+  tap, or a second tab — no second activity goes out), or the gate's
+  `{:error, reason}`.
+
+  Marker first, activity after, for the reason the post path spells out: a
+  queued activity whose marker failed to write would paint no heart while the
+  author's server counts the like.
+  """
+  def like_note(%User{} = user, %Note{} = note) do
+    # Re-read first, like the post path: the card was rendered at some earlier
+    # moment and the row can be gone by the time the heart is pressed — expiry,
+    # an upstream `Delete`, a takedown, an instance block — and the insert would
+    # then hit the foreign key and take the whole LiveView down with it.
+    with %Note{} = note <- reload_note(note),
+         :ok <- check_note_like(user, note) do
+      case insert_note_marker(user, note) do
+        {:ok, :liked} -> send_note_like(user, note)
+        other -> other
+      end
+    else
+      nil -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  # The budget is claimed here rather than before the insert, so a double tap or
+  # a second tab — which writes nothing and sends nothing — does not spend
+  # somebody's slot. It is the **same** hourly budget the post heart claims:
+  # both are one member's like leaving for another network, and metering them
+  # apart would let an hour of one hide inside the other's allowance.
+  defp send_note_like(user, note) do
+    case claim_like_budget(user) do
+      :ok ->
+        deliver_note_like(user, note, &Docs.like_activity/3)
+        {:ok, :liked}
+
+      {:error, _} = capped ->
+        delete_note_marker(user, note)
+        capped
+    end
+  end
+
+  @doc """
+  The member takes the like back: drops the marker and queues the matching
+  `Undo(Like)`.
+
+  `{:ok, :unliked}` or `{:ok, :already}`. No gate and no budget — a withdrawal
+  must not be refusable, and if the member has since stopped federating there is
+  simply nothing to send.
+  """
+  def unlike_note(%User{} = user, %Note{} = note) do
+    if delete_note_marker(user, note) > 0 do
+      deliver_note_like(user, note, &Docs.undo_like_activity/3)
+      {:ok, :unliked}
+    else
+      {:ok, :already}
+    end
+  end
+
+  @doc """
+  Which of `note_ids` this member already likes, as a `MapSet` — one query for a
+  whole conversation rather than one per card.
+  """
+  def liked_note_ids(%User{} = viewer, note_ids) when is_list(note_ids) do
+    from(l in NoteLike,
+      where: l.user_id == ^viewer.id and l.note_id in ^note_ids,
+      select: l.note_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  def liked_note_ids(_viewer, _note_ids), do: MapSet.new()
+
+  @doc """
+  Every reply from another network this member likes — for their GDPR export and
+  for the withdrawal below, which needs the same rows.
+  """
+  def list_note_likes(%User{id: user_id}) do
+    Repo.all(
+      from(l in NoteLike,
+        join: n in Note,
+        on: n.id == l.note_id,
+        where: l.user_id == ^user_id,
+        order_by: [desc: l.id],
+        select: n
+      )
+    )
+  end
+
+  @doc """
+  Withdraws every like this member holds on replies from other networks and
+  drops the markers — the note half of `drop_remote_likes/1`, called from the
+  same place and for the same reason: what stands on other servers under their
+  name goes with the decision to leave rather than after it.
+  """
+  def drop_note_likes(%User{} = user) do
+    Enum.each(list_note_likes(user), fn note ->
+      deliver_note_like(user, note, &Docs.undo_like_activity/3)
+    end)
+
+    {count, _} = Repo.delete_all(from(l in NoteLike, where: l.user_id == ^user.id))
+    count
+  end
+
+  @doc """
+  This stored reply as it is **now**, or nil once the row is gone. Every write
+  path acting on a reply a member is looking at goes through here first, for the
+  reason `reload_remote_post/1` spells out.
+  """
+  def reload_note(%Note{id: id}), do: Repo.get(Note, id)
+
+  # The marker kernel, written through `Vutuv.Engagement.insert_if_new/3` like
+  # every other engagement toggle here: only the inserted row count is an honest
+  # answer to "did this request create the like", and that answer is what decides
+  # whether an activity leaves the building.
+  defp insert_note_marker(user, note) do
+    case Engagement.insert_if_new(
+           NoteLike,
+           %{user_id: user.id, note_id: note.id},
+           [:user_id, :note_id]
+         ) do
+      {:inserted, _row} -> {:ok, :liked}
+      :exists -> {:ok, :already}
+    end
+  end
+
+  # The withdrawal half, answering in the same currency: how many rows really
+  # went, so a second tab's press can be told from a real one.
+  defp delete_note_marker(user, note) do
+    {count, _} =
+      Repo.delete_all(where(NoteLike, [l], l.user_id == ^user.id and l.note_id == ^note.id))
+
+    count
+  end
+
+  # The author's own inbox, never a shared one: a Like is addressed to one
+  # person. `ever_federated?/1` rather than `federated?/1`, so a withdrawal still
+  # reaches the server a member can no longer sign new acts for (issue #1102) —
+  # and nothing is sent at all for a note that never carried an address, which
+  # `check_note_like/2` refuses up front anyway.
+  defp deliver_note_like(%User{} = user, %Note{} = note, builder) do
+    with inbox when is_binary(inbox) <- note.inbox_uri,
+         true <- ever_federated?(user) do
+      enqueue(user, [inbox], builder.(user, note.actor_uri, note.object_uri))
+    else
+      _ -> :skip
     end
   end
 

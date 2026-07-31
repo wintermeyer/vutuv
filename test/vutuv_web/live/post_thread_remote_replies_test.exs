@@ -12,6 +12,7 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
   import Phoenix.LiveViewTest
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
 
@@ -46,6 +47,9 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       content_text: Keyword.get(attrs, :content_text, "Sturdier than they look."),
       summary: Keyword.get(attrs, :summary),
       audience: Keyword.get(attrs, :audience, "public"),
+      # Where an answer — and a Like (issue #1270) — is delivered. Only a reply
+      # stored before issue #1070 has none, which is its own test below.
+      inbox_uri: Keyword.get(attrs, :inbox_uri, "#{@actor}/inbox"),
       received_at: now,
       checked_at: now,
       expires_at: DateTime.add(now, 86_400)
@@ -302,6 +306,113 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       encoded = inspect(Map.from_struct(event))
       refute encoded =~ "Sturdier than they look."
       refute encoded =~ @actor
+    end
+  end
+
+  describe "the reply's own acts (issue #1270)" do
+    test "a signed-in reader gets a heart and a Reply control", %{post: post, owner: owner} do
+      note = note!(post)
+
+      {:ok, _view, html} = thread_view(post, owner)
+
+      assert html =~ ~s(data-remote-reply-like="#{note.id}")
+      assert html =~ ~s(data-remote-reply-link="#{note.id}")
+      # Both are real controls under the body, not words in the provenance
+      # footer, which is what made the card read as having no actions at all.
+      assert html =~ ~s(phx-click="like-remote-reply")
+    end
+
+    test "a logged-out visitor gets neither", %{post: post} do
+      note!(post)
+
+      {:ok, _view, html} = thread_view(post)
+
+      refute html =~ "data-remote-reply-like"
+      refute html =~ "data-remote-reply-link"
+    end
+
+    test "pressing the heart marks it, and pressing it again takes it back", %{
+      post: post,
+      user: user,
+      owner: owner
+    } do
+      note = note!(post)
+      {:ok, view, _html} = thread_view(post, owner)
+
+      html =
+        view
+        |> element(~s([phx-click="like-remote-reply"][phx-value-id="#{note.id}"]))
+        |> render_click()
+
+      assert html =~ ~s(data-liked="on")
+      assert MapSet.member?(Fediverse.liked_note_ids(user, [note.id]), note.id)
+
+      html =
+        view
+        |> element(~s([phx-click="unlike-remote-reply"][phx-value-id="#{note.id}"]))
+        |> render_click()
+
+      refute html =~ ~s(data-liked="on")
+      refute MapSet.member?(Fediverse.liked_note_ids(user, [note.id]), note.id)
+    end
+
+    test "a reply stored without an inbox address gets no heart", %{post: post, owner: owner} do
+      note = note!(post, inbox_uri: nil)
+
+      {:ok, _view, html} = thread_view(post, owner)
+
+      # A Like for it could never leave the building, and a heart that paints
+      # itself over nothing is worse than no heart. Answering still stands.
+      refute html =~ "data-remote-reply-like"
+      assert html =~ ~s(data-remote-reply-link="#{note.id}")
+    end
+
+    test "a member who does not federate is told why, not left guessing", %{post: post} do
+      note = note!(post)
+      {_other, cookie} = other_member()
+
+      {:ok, view, _html} = thread_view(post, cookie)
+
+      # The control is deliberately shown to them — hiding it would leave them
+      # with no way to find out the capability exists — so the press has to
+      # explain itself.
+      html =
+        view
+        |> element(~s([phx-click="like-remote-reply"][phx-value-id="#{note.id}"]))
+        |> render_click()
+
+      assert html =~ "thread-notice"
+      refute html =~ ~s(data-liked="on")
+      assert Repo.aggregate(Vutuv.Fediverse.NoteLike, :count) == 0
+    end
+
+    # vutuv is a German site, so the German render is the one real visitors get
+    # — and a brand-new msgid is exactly what `gettext.extract --merge` fills in
+    # fuzzily with some unrelated sentence it thinks looks similar. This one was
+    # handed "Diese Antwort können Sie nicht entfernen." ("you cannot remove this
+    # reply"), which is confident nonsense in the right grammatical shape.
+    test "the controls and the refusal read right in German", %{post: post, owner: owner} do
+      note = note!(post)
+
+      {:ok, view, html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Thread,
+          session: Map.merge(owner, %{"post_id" => post.id, "locale" => "de"})
+        )
+
+      assert html =~ "Gefällt mir"
+      assert html =~ "Antworten"
+
+      # The reply goes between render and click — expiry, a takedown, an
+      # upstream Delete. The page is holding a card for a row that is no longer
+      # there, which is the one refusal with a wording of its own.
+      Repo.delete!(note)
+
+      refusal =
+        view
+        |> element(~s([phx-click="like-remote-reply"][phx-value-id="#{note.id}"]))
+        |> render_click()
+
+      assert refusal =~ "Diese Antwort gibt es hier nicht mehr."
     end
   end
 end

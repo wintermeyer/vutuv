@@ -101,6 +101,18 @@ defmodule Vutuv.Fediverse.Note do
   def public?(%__MODULE__{}), do: false
 
   @doc """
+  Whether a like on this reply could actually reach its author (issue #1270):
+  we hold the inbox to deliver it to.
+
+  Replies stored before issue #1070 carry none — the column arrived with the
+  answering feature — and for those the card offers no heart rather than one
+  that refuses, because a marker written for a `Like` that never leaves paints a
+  heart the author's server knows nothing about. They age out with the
+  six-month retention.
+  """
+  def likeable?(%__MODULE__{inbox_uri: inbox}), do: is_binary(inbox) and inbox != ""
+
+  @doc """
   How the card names the author: `@handle@host`, the form every one of these
   networks uses. Shared with the follower list and the reaction chips
   (`Vutuv.Fediverse.Handle`), so one person reads the same way everywhere.

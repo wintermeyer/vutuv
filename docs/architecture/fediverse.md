@@ -414,6 +414,37 @@ every activity of a member it finds no key for, silently.
     stored — the same rule the inbox already applies to a signature's `keyId` — and
     `attempt/2` re-checks every row at send time (https, not internal, not
     blocked).
+- **Liking a reply that came from another network** (issue #1270): the same act
+  the heart on a cached post is (#1164, below), one step further down the
+  conversation. `like_note/2` writes the marker (`fediverse_note_likes`, through
+  the shared `Vutuv.Engagement.insert_if_new/3` kernel) and queues a signed
+  `Like` to the reply author's **own** inbox — the address the note already
+  carries for answering, so this costs no network call either; `unlike_note/2`
+  sends the matching `Undo(Like)` with the id the original carried. Everything
+  else is the post path's, deliberately: the same gates
+  (`check_note_like/2`), the same hourly budget (a member's likes are one
+  allowance whichever kind of thing they land on), the same rollback of a capped
+  marker, the same withdrawal when they leave the Fediverse, the same absence of
+  any count, and the same place in the GDPR export. Two differences of its own:
+  - **No audience gate.** A `Like` is addressed to one person and publishes
+    nothing, so a reply sent to the member alone (issue #1071) can be liked
+    exactly as a public one can — the opposite of answering, which is refused
+    there because the answer would be a public vutuv post. What is asked instead
+    is whether the reply is theirs to *read*, which `note_readable?/2` answers in
+    the same terms `list_notes/2` enforces in SQL, since the id in a click is
+    attacker-controlled.
+  - **`:not_deliverable`.** `inbox_uri` is nullable — replies stored before
+    #1070 have none — and a marker written for a `Like` that could never leave
+    would paint a heart the author's server knows nothing about. Such a reply
+    gets no heart at all (`Note.likeable?/1` decides it at render time) rather
+    than one that refuses; they age out with the six-month retention.
+  The card's shape changed with it: answering used to be a `text-xs` word inside
+  the provenance footer, between the server name and "View the original", which
+  is why #1270 was reported as "I have no way to like or answer this". Both acts
+  now sit in a row of their own under the body, at the size every other control
+  in the app is, and the footer says only where the reply came from. The cached
+  post's card was brought into the same shape in the same change, so the two read
+  alike.
 - **Holding a post back until its pictures are vetted** (issue #1070): a post's
   images are invisible until the AI scan releases them
   (`Vutuv.Moderation.ImageScans`), so a Note built the instant the post commits
@@ -1111,6 +1142,11 @@ likes that happened to pass through this installation would read as the real one
 while being a fraction of it. The marker cascades with the cached post, expiry
 included; the like on the author's server stands, and a re-like after expiry
 sends a duplicate every implementation treats as a no-op.
+
+The **reply** heart (issue #1270, its own bullet in the inbound section above)
+is this act on `fediverse_notes` instead of `fediverse_posts`: same activity,
+same addressing, same budget, same withdrawal, same silence about counts. Read
+the two together — a claim that holds for one and not the other is drift.
 
 ### Answering one of their posts (issue #1165)
 
