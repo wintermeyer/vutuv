@@ -290,15 +290,15 @@ defmodule VutuvWeb.FediverseAccountLive do
         the same shape every other long remote text on the site wears. --%>
         <details :if={@account.summary} data-remote-summary class="group mt-4">
           <summary class="cursor-pointer list-none">
-            <p class="post-clamp mb-0 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 group-open:hidden dark:text-slate-300">
-              {@account.summary}
-            </p>
             <span class="mt-1 inline-flex min-h-10 items-center text-xs font-medium text-brand-600 group-open:hidden dark:text-brand-400">
               {gettext("Show the whole description")}
             </span>
             <span class="mt-1 hidden min-h-10 items-center text-xs font-medium text-brand-600 group-open:inline-flex dark:text-brand-400">
               {gettext("Show less")}
             </span>
+            <p class="post-clamp mb-0 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 group-open:hidden dark:text-slate-300">
+              {@account.summary}
+            </p>
           </summary>
           <p class="mb-0 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300">
             {@account.summary}
