@@ -154,6 +154,81 @@ defmodule VutuvWeb.Markdown do
   def render_remote(_), do: ""
 
   @doc """
+  Split remote plain text into `{body, hashtags}`, lifting the closing
+  hashtag line off the end.
+
+  A post on Mastodon and its cousins routinely ends in a line that is nothing
+  but hashtags — `#CSD #Anschlag #Berlin` — because over there a tag *is* a
+  word in the text. Here a tag is a chip below the post, so that line arrived
+  as a run of blue words in the middle of the card's prose and read like a
+  sentence that stopped making sense. The card renders the returned hashtags
+  as `<.chip>` pills instead (`VutuvWeb.PostComponents`), which is the same
+  thing a member's own post does with its tags.
+
+  Only a **closing** run is taken: walking the text back to front, every line
+  that consists solely of hashtags is lifted (blank lines between them go
+  too), and the walk stops at the first line carrying anything else. A hashtag
+  inside a sentence, or a hashtag line the author wrote in the *middle* of a
+  post, therefore stays exactly where it was and still links through
+  `render_remote/1`. Hashtags come back in reading order, in the case the
+  author typed, with repeats dropped case-insensitively.
+
+  The grammar is deliberately wider than the `@entity` regex's ASCII
+  `[A-Za-z0-9_]`: `#München` is an ordinary German hashtag and a line holding
+  one must split like any other. Whether a pill then *links* is a separate
+  question the caller asks `Vutuv.Tags.linkable_slugs/1` — the same gate the
+  body's `#hashtag` linking uses, so a pill links exactly where the inline
+  hashtag would have.
+  """
+  def split_trailing_hashtags(text) when is_binary(text) do
+    if String.contains?(text, "#") do
+      {kept, hashtags} =
+        text |> String.split("\n") |> Enum.reverse() |> take_trailing_hashtag_lines([])
+
+      {kept |> Enum.join("\n") |> String.trim_trailing(),
+       Enum.uniq_by(hashtags, &String.downcase/1)}
+    else
+      {text, []}
+    end
+  end
+
+  def split_trailing_hashtags(_), do: {"", []}
+
+  # Walks the lines back to front. A blank line is passed over rather than
+  # ended on: the hashtag line is nearly always separated from the prose by
+  # one, and it would otherwise stop the walk before the tags are reached.
+  # Those blanks are simply dropped — whatever prose survives is trimmed at the
+  # end anyway, so a text with no closing hashtag line comes back unchanged.
+  defp take_trailing_hashtag_lines([], hashtags), do: {[], hashtags}
+
+  defp take_trailing_hashtag_lines([line | above], hashtags) do
+    cond do
+      String.trim(line) == "" -> take_trailing_hashtag_lines(above, hashtags)
+      hashtag_line?(line) -> take_trailing_hashtag_lines(above, hashtags_in(line) ++ hashtags)
+      true -> {Enum.reverse([line | above]), hashtags}
+    end
+  end
+
+  # A `#` followed by at least one word character, the Unicode reading of
+  # "word" (see `split_trailing_hashtags/1`). Punctuation is not part of a
+  # hashtag, so a line like "Mehr dazu: #Berlin." keeps its full stop and is
+  # therefore not a hashtag line — which is right, it is a sentence.
+  @hashtag_token ~r/^#([\p{L}\p{N}_]+)$/u
+
+  defp hashtag_line?(line) do
+    case String.split(line, ~r/\s+/u, trim: true) do
+      [] -> false
+      tokens -> Enum.all?(tokens, &Regex.match?(@hashtag_token, &1))
+    end
+  end
+
+  defp hashtags_in(line) do
+    line
+    |> String.split(~r/\s+/u, trim: true)
+    |> Enum.map(&String.trim_leading(&1, "#"))
+  end
+
+  @doc """
   Flatten Markdown to **plain text**: the same pipeline a post body runs,
   then the tags dropped and the escapes decoded.
 

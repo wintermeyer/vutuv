@@ -74,4 +74,50 @@ defmodule VutuvWeb.MarkdownRemoteTest do
       refute html =~ "<script"
     end
   end
+
+  describe "split_trailing_hashtags/1" do
+    test "lifts a closing hashtag line off the body" do
+      assert Markdown.split_trailing_hashtags(
+               "Fall Abdul B.\n\nDer Anwalt sagt Report Mainz.\n\n#CSD #Anschlag #Berlin"
+             ) ==
+               {"Fall Abdul B.\n\nDer Anwalt sagt Report Mainz.", ["CSD", "Anschlag", "Berlin"]}
+    end
+
+    test "takes every consecutive closing hashtag line, blank lines and all" do
+      assert Markdown.split_trailing_hashtags("Ein Text\n\n#eins #zwei\n\n#drei\n") ==
+               {"Ein Text", ["eins", "zwei", "drei"]}
+    end
+
+    test "a hashtag line in the middle of the text stays where the author put it" do
+      text = "Oben\n\n#mitten drin\n\nUnten"
+
+      assert Markdown.split_trailing_hashtags(text) == {text, []}
+    end
+
+    test "a closing line that is more than hashtags is left alone" do
+      text = "Ein Text\n\nMehr zu #Berlin gibt es hier"
+
+      assert Markdown.split_trailing_hashtags(text) == {text, []}
+    end
+
+    test "a post that is nothing but hashtags becomes pills and an empty body" do
+      assert Markdown.split_trailing_hashtags("#Crochet #Botanik") ==
+               {"", ["Crochet", "Botanik"]}
+    end
+
+    test "the typed case is kept and a repeat is dropped" do
+      assert Markdown.split_trailing_hashtags("Text\n\n#Berlin #berlin #BERLIN") ==
+               {"Text", ["Berlin"]}
+    end
+
+    test "text without a closing hashtag line comes back unchanged" do
+      assert Markdown.split_trailing_hashtags("Nur ein Satz.") == {"Nur ein Satz.", []}
+      assert Markdown.split_trailing_hashtags("") == {"", []}
+    end
+
+    test "a non-ASCII hashtag counts, so a German closing line splits too" do
+      assert Markdown.split_trailing_hashtags("Text\n\n#München #Grünflächen") ==
+               {"Text", ["München", "Grünflächen"]}
+    end
+  end
 end

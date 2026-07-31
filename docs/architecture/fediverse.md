@@ -262,6 +262,28 @@ every activity of a member it finds no key for, silently.
     over there it names an account in the fediverse, not the vutuv member who
     happens to share the handle. What is rendered `raw` is our own pipeline's
     sanitized output, exactly as for a member post.
+  - **The closing hashtag line becomes tag chips.** A post over there routinely
+    ends in a line that is nothing but hashtags, because there a tag *is* a word
+    in the text; here a tag is a chip under the post, so that line landed in the
+    middle of the card's prose as a run of blue words and read like a sentence
+    that stopped making sense. `VutuvWeb.Markdown.split_trailing_hashtags/1`
+    lifts it off the end before the body is rendered and
+    `VutuvWeb.PostComponents` renders the tags as the same `<.chip>` row a
+    member's own post gets (`[data-remote-tags]`), linking to `/tags/:slug`
+    through the very gate the inline `#hashtag` uses
+    (`Vutuv.Tags.linkable_slugs/1`), so a chip never lands on an empty tag page
+    — one we do not carry stays a plain chip rather than being dropped. Only a
+    **closing** run is taken (blank lines between hashtag lines go with it); a
+    hashtag inside a sentence, or a hashtag line the author wrote in the middle
+    of a post, stays exactly where they put it and still links inline. The
+    grammar is Unicode-wide (`#München` is an ordinary German hashtag), and a
+    warned post keeps its chips **inside** the content-warning lid: the tags of
+    a post its author covered up are part of what they covered. Only the two
+    fediverse cards do this — the Mastodon/Bluesky teasers in the profile's
+    "Social media posts" card are five-line clamped excerpts inside one
+    stretched link, where a chip row would be both noise and a link inside a
+    link. The stored `content_text` is untouched, so the agent-format siblings
+    and the `.json`/`.xml` exports still carry the hashtags in the text.
   - **Audience** (issue #1071), read from `to`/`cc` on both the Create and the
     Note, handling all three spellings of the public collection. Only `"public"`
     is public; `"followers"`, `"direct"` and `"unknown"` render to the addressed

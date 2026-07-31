@@ -327,4 +327,91 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
     refute has_element?(view, "[data-remote-post]")
   end
+
+  describe "the closing hashtag line" do
+    # A tag this installation really carries, so the chip may link to its page.
+    # The name is minted per call with an underscore rather than the factory's
+    # hyphenated `unique_tag_name/1`: a hashtag is `[\p{L}\p{N}_]+`, so
+    # "#tag-7" would parse as "#tag" — and a hardcoded literal would deadlock
+    # against another async module inserting the same one.
+    defp linkable_tag do
+      name = "Berlin_#{System.unique_integer([:positive])}"
+      tag = insert(:tag, name: name, slug: String.downcase(name))
+      insert(:user_tag, user: insert(:activated_user), tag: tag)
+      tag
+    end
+
+    test "becomes tag chips instead of a run of words in the prose", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      tag = linkable_tag()
+
+      post =
+        cached_post(user, %{
+          content_text: "Kamen die Gespräche zu spät?\n\n##{tag.name} #Anschlag"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      card = "[data-remote-post='#{post.id}']"
+
+      assert has_element?(view, "#{card} [data-remote-tags]")
+      # A tag we carry reaches its page, the same link a member post's chip has.
+      assert has_element?(
+               view,
+               "#{card} a[data-remote-tag='#{tag.name}'][href='/tags/#{tag.slug}']"
+             )
+
+      # One we do not carry is still shown, just not as a link to an empty page.
+      assert has_element?(view, "#{card} span[data-remote-tag='Anschlag']")
+      # And the line itself is gone from the body.
+      refute has_element?(view, "#{card} .markdown a.hashtag")
+      refute render(view) =~ "##{tag.name}"
+      assert render(view) =~ "Kamen die Gespräche zu spät?"
+    end
+
+    test "a hashtag inside a sentence stays in the sentence", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      tag = linkable_tag()
+
+      post = cached_post(user, %{content_text: "Mehr zu ##{tag.name} gibt es hier"})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      card = "[data-remote-post='#{post.id}']"
+
+      refute has_element?(view, "#{card} [data-remote-tags]")
+      assert has_element?(view, "#{card} .markdown a.hashtag[href='/tags/#{tag.slug}']")
+    end
+
+    test "a warned post keeps its chips behind the lid", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post =
+        cached_post(user, %{
+          summary: "Politics",
+          sensitive: true,
+          content_text: "Schwerer Stoff.\n\n#Anschlag"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      # The tags of a post its author covered up are part of what they covered.
+      assert has_element?(
+               view,
+               "[data-remote-post='#{post.id}'] [data-remote-warning] [data-remote-tags]"
+             )
+    end
+
+    test "a post that is only hashtags renders as chips and no empty body", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = cached_post(user, %{content_text: "#Anschlag #Berlin"})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      card = "[data-remote-post='#{post.id}']"
+
+      assert has_element?(view, "#{card} [data-remote-tag='Anschlag']")
+      refute has_element?(view, "#{card} .markdown")
+    end
+  end
 end

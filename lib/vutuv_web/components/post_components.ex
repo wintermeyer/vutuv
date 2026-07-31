@@ -43,6 +43,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.RemoteMedia
   alias Vutuv.ReviewCover
+  alias Vutuv.Tags
   alias VutuvWeb.FediverseComponents
   alias VutuvWeb.Markdown
 
@@ -1143,11 +1144,23 @@ defmodule VutuvWeb.PostComponents do
   # The lid is a real touch target (`min-h-10`) and says both things: "Show"
   # while it is closed, "Hide" once it is open — a lid you cannot shut again is
   # not a lid.
+  #
+  # The closing hashtag line is lifted out of the text first
+  # (`Markdown.split_trailing_hashtags/1`) and rendered as chips below, so a
+  # post from over there wears its tags the way a member's post does. A warned
+  # post keeps its chips **inside** the lid: the tags of a post its author put
+  # behind a content warning are part of what they covered up.
   defp remote_body(assigns) do
-    assigns = assign(assigns, :html, Markdown.render_remote(assigns.text))
+    {text, hashtags} = Markdown.split_trailing_hashtags(assigns.text)
+
+    assigns =
+      assigns
+      |> assign(:body?, presence?(text))
+      |> assign(:html, Markdown.render_remote(text))
+      |> assign(:tags, remote_tag_chips(hashtags))
 
     ~H"""
-    <div :if={@warning || presence?(@text)} class="mt-1.5">
+    <div :if={@warning || @body? || @tags != []} class="mt-1.5">
       <%= if @warning do %>
         <details data-remote-warning class="group">
           <summary class="flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -1160,17 +1173,56 @@ defmodule VutuvWeb.PostComponents do
               {gettext("Hide")}
             </span>
           </summary>
-          <div class="markdown markdown--post mt-1.5 text-sm text-slate-700 dark:text-slate-300">
+          <div
+            :if={@body?}
+            class="markdown markdown--post mt-1.5 text-sm text-slate-700 dark:text-slate-300"
+          >
             {Phoenix.HTML.raw(@html)}
           </div>
+          <.remote_tags tags={@tags} />
         </details>
       <% else %>
-        <div class="markdown markdown--post text-sm text-slate-700 dark:text-slate-300">
+        <div :if={@body?} class="markdown markdown--post text-sm text-slate-700 dark:text-slate-300">
           {Phoenix.HTML.raw(@html)}
         </div>
+        <.remote_tags tags={@tags} />
       <% end %>
     </div>
     """
+  end
+
+  # The hashtags a remote post closed with, as the same brand-tint `<.chip>`
+  # row a member's post gets for its tags — the whole point of lifting them out
+  # of the text (`Markdown.split_trailing_hashtags/1`): one tag vocabulary,
+  # rendered one way, wherever a post came from.
+  attr(:tags, :list, required: true)
+
+  defp remote_tags(assigns) do
+    ~H"""
+    <div :if={@tags != []} data-remote-tags class="mt-2 flex flex-wrap gap-2">
+      <.chip :for={tag <- @tags} navigate={tag.path} data-remote-tag={tag.name}>{tag.name}</.chip>
+    </div>
+    """
+  end
+
+  # A chip links to `/tags/:slug` on exactly the same gate the inline
+  # `#hashtag` uses (`Tags.linkable_slugs/1`: the tag exists here and has at
+  # least one visible member), so a pill never lands on an empty tag page. One
+  # query for the whole row — and the body it came out of is now one hashtag
+  # lighter, so this costs the card no extra lookup.
+  #
+  # A tag we do not carry still gets its chip, as a plain span: dropping it
+  # would silently swallow part of what the author wrote, and rendering it
+  # differently would say something about the tag that is really about us.
+  defp remote_tag_chips([]), do: []
+
+  defp remote_tag_chips(hashtags) do
+    linkable = Tags.linkable_slugs(hashtags)
+
+    Enum.map(hashtags, fn hashtag ->
+      slug = String.downcase(hashtag)
+      %{name: hashtag, path: if(MapSet.member?(linkable, slug), do: ~p"/tags/#{slug}")}
+    end)
   end
 
   # Where it came from and the way on to the real thing. The inner block is for
