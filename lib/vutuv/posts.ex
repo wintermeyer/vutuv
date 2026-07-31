@@ -1731,6 +1731,39 @@ defmodule Vutuv.Posts do
   def feed_filter_accepts?(:fediverse, entry), do: remote_feed_entry?(entry)
   def feed_filter_accepts?(_all, _entry), do: true
 
+  @doc """
+  Whether `viewer`'s feed can show anything from another network at all — the
+  gate on the source tabs (issue #1267).
+
+  Without it the tabs are noise for a member the fediverse never reaches:
+  "Fediverse" is permanently empty and "vutuv" is therefore the same list as
+  "All", so all three offer one timeline under three names.
+
+  It asks the **same sources the Fediverse tab renders** rather than a
+  member-level flag, because no flag gets this right. The obvious candidate,
+  `Vutuv.Fediverse.federated?/1`, is about *publishing outward* (their opt-in,
+  their actor, their standing) and answers a different question; so does "do
+  they follow any remote account". Both would hide the tabs from a member who
+  is not in the fediverse in any sense yet still has remote posts in their
+  feed, because somebody they follow **here** reshared one (issue #1166,
+  `feed_remote_reposts/3` — scoped to vutuv followees, so it reaches a member
+  with no fediverse involvement whatsoever). Asking the sources cannot drift
+  from what the tab shows, which a hand-maintained condition would.
+
+  One row is enough, so each source is asked for exactly one and `Enum.any?/2`
+  stops at the first hit: a member with remote follows pays a single indexed
+  `LIMIT 1`, and only a member with nothing pays all three. The sources
+  themselves are newest-first and unbounded below, so a single old remote post
+  is found just as reliably as a fresh one. Every source short-circuits to
+  `[]` while the installation switch is off, so this covers `enabled?/0` too
+  and no second check is needed beside it.
+  """
+  def fediverse_feed_available?(%User{} = viewer) do
+    viewer
+    |> feed_sources(:fediverse)
+    |> Enum.any?(fn fetch -> fetch.(1, nil) != [] end)
+  end
+
   # Everything the six sources produce, made ready to render.
   #
   # The remote sources (issues #1161, #1166) carry a cached post from another network,

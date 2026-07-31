@@ -15,24 +15,31 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.PostBoost
+  alias Vutuv.Fediverse.PostRepost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Social
 
-  defp remote_account(user, handle) do
+  # An account out there that nobody here follows.
+  defp remote_account(handle) do
     actor = "https://social.example/users/#{handle}"
 
-    account =
-      Repo.insert!(%RemoteAccount{
-        actor_uri: actor,
-        host: "social.example",
-        handle: handle,
-        name: String.capitalize(handle),
-        inbox_uri: actor <> "/inbox"
-      })
+    Repo.insert!(%RemoteAccount{
+      actor_uri: actor,
+      host: "social.example",
+      handle: handle,
+      name: String.capitalize(handle),
+      inbox_uri: actor <> "/inbox"
+    })
+  end
+
+  # …and the same account with `user` following it.
+  defp remote_account(user, handle) do
+    account = remote_account(handle)
 
     Repo.insert!(%Follow{
       user_id: user.id,
@@ -77,10 +84,11 @@ defmodule VutuvWeb.FeedSourceTabsTest do
     if has_element?(view, "#feed-posts"), do: render(element(view, "#feed-posts")), else: ""
   end
 
-  describe "the tab bar" do
+  describe "the tab bar shows only where it means something (issue #1267)" do
     test "renders the three source tabs above the timeline", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {_author, _post} = followed_post(user, "a vutuv post")
+      cached_post(remote_account(user, "them"), "written out there")
 
       {:ok, view, html} = live(conn, ~p"/feed")
 
@@ -91,6 +99,20 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       # "All" is where a mount opens; the tab reads as selected.
       assert has_element?(view, "[data-post-filter-tab='all'][aria-pressed='true']")
+    end
+
+    test "a member the fediverse never reaches gets no tabs at all", %{conn: conn} do
+      # The reported bug: with nothing out there, "Fediverse" can never fill
+      # and "vutuv" is just "All" again — one timeline under three names.
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "a vutuv post")
+
+      {:ok, view, html} = live(conn, ~p"/feed")
+
+      refute has_element?(view, "#feed-source-tabs")
+      refute html =~ "Fediverse"
+      # The timeline itself is untouched — this hides a control, not content.
+      assert timeline(view) =~ "a vutuv post"
     end
 
     test "a completely empty feed shows the invitation instead of tabs", %{conn: conn} do
@@ -107,10 +129,34 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {conn, user} = create_and_login_user(conn)
       {_author, _post} = followed_post(user, "a vutuv post")
+      cached_post(remote_account(user, "them"), "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
       refute has_element?(view, "#feed-source-tabs")
+    end
+
+    test "somebody here resharing a remote post is enough, with no fediverse account of one's own",
+         %{conn: conn} do
+      # The case a member-level flag would get wrong (issue #1166): this viewer
+      # follows nobody out there and has no actor, but a member they follow
+      # *here* reshared a remote post, so remote posts really are in their feed
+      # and the tabs have work to do.
+      {conn, user} = create_and_login_user(conn)
+      sharer = insert(:user, email_confirmed?: true)
+      Social.follow(user, sharer.id)
+
+      # A cached post nobody here follows the author of.
+      post = cached_post(remote_account("stranger"), "passed on by a friend")
+      Repo.insert!(%PostRepost{user_id: sharer.id, remote_post_id: post.id})
+
+      refute Fediverse.federated?(user),
+             "the viewer must not be federated, or this proves nothing"
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(view, "#feed-source-tabs")
+      assert timeline(view) =~ "passed on by a friend"
     end
   end
 
@@ -145,6 +191,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
     test "an unknown tab value falls back to the whole feed", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {_author, _post} = followed_post(user, "still here")
+      cached_post(remote_account(user, "them"), "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
@@ -154,19 +201,17 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       assert has_element?(view, "[data-post-filter-tab='all'][aria-pressed='true']")
     end
 
-    test "the German render names the tabs and the empty fediverse tab in German", %{conn: conn} do
+    test "the German render names the tabs in German", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {_author, _post} = followed_post(user, "the only post")
+      cached_post(remote_account(user, "them"), "written out there")
       conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de;q=0.9")
 
-      {:ok, view, html} = live(conn, ~p"/feed")
+      {:ok, _view, html} = live(conn, ~p"/feed")
 
       # The two proper names stay as they are; only "All" is a word.
       assert html =~ "Alle"
       assert html =~ "Fediverse"
-
-      assert render_click(view, "filter-source", %{"type" => "fediverse"}) =~
-               "Noch nichts aus dem Fediverse"
     end
 
     test "an empty vutuv tab says so in German too", %{conn: conn} do
@@ -182,15 +227,37 @@ defmodule VutuvWeb.FeedSourceTabsTest do
     end
 
     test "an empty tab says which half is missing and keeps the tabs", %{conn: conn} do
+      # Reachable for the vutuv half: this member reads the fediverse but has
+      # written and followed nothing here.
       {conn, user} = create_and_login_user(conn)
-      {_author, _post} = followed_post(user, "the only post")
+      cached_post(remote_account(user, "them"), "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      html = render_click(view, "filter-source", %{"type" => "fediverse"})
+      html = render_click(view, "filter-source", %{"type" => "vutuv"})
+
+      assert html =~ "Nothing from vutuv yet"
+      # Without the tabs an empty tab would be a dead end.
+      assert has_element?(view, "#feed-source-tabs")
+    end
+
+    test "the tabs survive their fediverse content going away mid-session", %{conn: conn} do
+      # Since the bar is gated on there BEING fediverse content, an empty
+      # Fediverse tab is only reachable once the content leaves under the
+      # reader — muting the account it all came from is the everyday way. The
+      # bar has to stay (the assign is a fact about the mount, not the tab), or
+      # they would be stranded on a tab they cannot leave.
+      {conn, user} = create_and_login_user(conn)
+      account = remote_account(user, "them")
+      cached_post(account, "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      assert timeline(view) =~ "written out there"
+
+      html = render_click(view, "mute-remote-account", %{"id" => account.id})
 
       assert html =~ "Nothing from the fediverse yet"
-      # Without the tabs an empty tab would be a dead end.
       assert has_element?(view, "#feed-source-tabs")
     end
   end

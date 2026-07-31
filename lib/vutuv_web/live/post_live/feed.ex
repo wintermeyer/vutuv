@@ -116,6 +116,11 @@ defmodule VutuvWeb.PostLive.Feed do
       cursor: page.next_cursor,
       draft: draft,
       entries: entries,
+      # Whether the source tabs are worth showing this member at all (issue
+      # #1267). Read once per mount and carried on the handoff like the rest;
+      # it is a fact about their whole timeline, not about the open tab, so
+      # switching tabs must not recompute it.
+      source_tabs?: Posts.fediverse_feed_available?(user),
       # The desktop discovery rail renders WITH the page: it was lazy-loaded
       # for one release (v7.200.3) and the pop-in read as slowness, so it is
       # eager again — computed here once, riding the handoff to the connected
@@ -150,6 +155,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # A mount always opens on the whole feed: the source tab is socket state
     # with no URL behind it, so there is nothing to restore it from.
     |> assign(:feed_filter, :all)
+    |> assign(:source_tabs?, payload.source_tabs?)
     |> assign(:more?, payload.more?)
     |> assign(:cursor, payload.cursor)
     |> assign(:empty?, payload.entries == [])
@@ -1055,13 +1061,17 @@ defmodule VutuvWeb.PostLive.Feed do
           </div>
 
           <%!-- The source tabs, the same segmented control the profile's
-          post-type tabs use. They are dropped on an installation with no
-          fediverse at all (there is only one source then), and on a feed that
-          is completely empty — three tabs over a "follow somebody" invitation
-          would be filing cabinets for an empty drawer. An empty *tab* keeps
-          them, or there would be no way back. --%>
+          post-type tabs use — shown only to a member the fediverse actually
+          reaches (issue #1267). For everyone else the three tabs are one
+          timeline under three names: "Fediverse" can never fill, so "vutuv"
+          is just "All" again. `Posts.fediverse_feed_available?/1` asks the
+          tab's own sources, so this cannot drift from what it would show, and
+          it is false on an installation with the fediverse switched off. A
+          feed with fediverse content in it is never empty, so no separate
+          empty-feed check is needed — and an empty *tab* keeps the bar, or
+          there would be no way back. --%>
           <.post_filter_tabs
-            :if={Fediverse.enabled?() and (not @empty? or @feed_filter != :all)}
+            :if={@source_tabs?}
             id="feed-source-tabs"
             active={to_string(@feed_filter)}
             event="filter-source"

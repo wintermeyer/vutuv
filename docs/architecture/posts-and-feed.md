@@ -235,9 +235,27 @@ Post — there the feed switches back to "All" rather than swallowing it. The
 choice is socket state with no URL behind it (this LiveView is off-router and
 cannot patch), so a reload opens on "All", and the agent-format siblings
 (`/feed.md|txt|json|xml`) always serve the whole feed, exactly as the archive's
-siblings ignore `?type=`. The bar is not rendered at all when
-`:fediverse_enabled` is off (there is only one source then) or while the whole
-feed is empty.
+siblings ignore `?type=`.
+
+**The bar is shown only to a member the fediverse actually reaches** (issue
+#1267). For anyone else "Fediverse" can never fill, so "vutuv" is the same
+list as "All" and the three tabs are one timeline under three names — which is
+what the reporter saw. The gate is `Posts.fediverse_feed_available?/1`, and it
+asks **the Fediverse tab's own sources** (one row each, `Enum.any?/2`
+short-circuiting) rather than any member-level flag, for two reasons. The
+obvious flags are wrong: `Fediverse.federated?/1` is about *publishing
+outward* — their opt-in, their actor, their standing — and "do they follow a
+remote account" misses the member with no fediverse involvement whatsoever who
+still has remote posts in their feed because somebody they follow *here*
+reshared one (`feed_remote_reposts/3`, issue #1166). And asking the sources
+cannot drift from what the tab renders, which a hand-maintained condition
+would. Every remote source short-circuits to `[]` while `:fediverse_enabled`
+is off, so the installation switch needs no separate check. The answer is read
+once per mount and rides the handoff — it is a fact about the whole timeline,
+not the open tab — so a member who follows their first remote account while
+the feed is open sees the bar on their next load. An empty *tab* keeps the bar
+(reachable once the content leaves under the reader — muting the account it
+came from), or they would be stranded on a tab they cannot leave.
 
 **The discovery rail renders with the page.** The rail (Tags you follow / Who
 to follow / Suggested posts) was lazily loaded for one release (v7.200.3: an
