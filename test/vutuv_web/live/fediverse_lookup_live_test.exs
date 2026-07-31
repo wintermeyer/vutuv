@@ -119,7 +119,7 @@ defmodule VutuvWeb.FediverseLookupLiveTest do
     # delivered here.
     assert has_element?(view, "button[phx-click='like-remote-post']")
     assert has_element?(view, "button[phx-click='repost-remote-post']")
-    assert has_element?(view, "[data-remote-post-reply-link='#{post.id}']")
+    assert has_element?(view, "[data-remote-reply-link='#{post.id}']")
   end
 
   test "the author can be followed from the result", %{conn: conn} do

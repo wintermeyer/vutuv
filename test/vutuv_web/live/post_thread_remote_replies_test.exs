@@ -315,7 +315,8 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
 
       {:ok, _view, html} = thread_view(post, owner)
 
-      assert html =~ ~s(data-remote-reply-like="#{note.id}")
+      assert html =~ ~s(phx-click="like-remote-reply")
+      assert html =~ ~s(data-remote-id="#{note.id}")
       assert html =~ ~s(data-remote-reply-link="#{note.id}")
       # Both are real controls under the body, not words in the provenance
       # footer, which is what made the card read as having no actions at all.
@@ -327,7 +328,7 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
 
       {:ok, _view, html} = thread_view(post)
 
-      refute html =~ "data-remote-reply-like"
+      refute html =~ "like-remote-reply"
       refute html =~ "data-remote-reply-link"
     end
 
@@ -344,7 +345,7 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
         |> element(~s([phx-click="like-remote-reply"][phx-value-id="#{note.id}"]))
         |> render_click()
 
-      assert html =~ ~s(data-liked="on")
+      assert html =~ ~s(data-on="on")
       assert MapSet.member?(Fediverse.liked_note_ids(user, [note.id]), note.id)
 
       html =
@@ -352,7 +353,7 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
         |> element(~s([phx-click="unlike-remote-reply"][phx-value-id="#{note.id}"]))
         |> render_click()
 
-      refute html =~ ~s(data-liked="on")
+      refute html =~ ~s(data-on="on")
       refute MapSet.member?(Fediverse.liked_note_ids(user, [note.id]), note.id)
     end
 
@@ -363,7 +364,7 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
 
       # A Like for it could never leave the building, and a heart that paints
       # itself over nothing is worse than no heart. Answering still stands.
-      refute html =~ "data-remote-reply-like"
+      refute html =~ "like-remote-reply"
       assert html =~ ~s(data-remote-reply-link="#{note.id}")
     end
 
@@ -382,7 +383,7 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
         |> render_click()
 
       assert html =~ "thread-notice"
-      refute html =~ ~s(data-liked="on")
+      refute html =~ ~s(data-on="on")
       assert Repo.aggregate(Vutuv.Fediverse.NoteLike, :count) == 0
     end
 

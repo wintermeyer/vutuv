@@ -113,16 +113,16 @@ defmodule VutuvWeb.FeedRemotePostsTest do
       # Nothing about how many others liked it: the real number is on their
       # server, and one assembled from what passed through here would be a lie.
       assert has_element?(view, "[phx-click='like-remote-post']")
-      refute html =~ "data-remote-like=\"on\""
+      refute html =~ "data-on=\"on\""
 
       view |> element("[phx-click='like-remote-post']") |> render_click()
 
-      assert has_element?(view, "[data-remote-like='on']")
+      assert has_element?(view, "[data-remote-act='like'][data-on='on']")
       assert has_element?(view, "[phx-click='unlike-remote-post']")
 
       view |> element("[phx-click='unlike-remote-post']") |> render_click()
 
-      refute has_element?(view, "[data-remote-like='on']")
+      refute has_element?(view, "[data-remote-act='like'][data-on='on']")
     end
 
     test "resharing paints the state and says so, and takes it back", ctx do
@@ -130,14 +130,14 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
       html = view |> element("[phx-click='repost-remote-post']") |> render_click()
 
-      assert has_element?(view, "[data-remote-repost='on']")
+      assert has_element?(view, "[data-remote-act='repost'][data-on='on']")
       # Publishing, unlike the heart: the reader's own feed does not show their
       # reshare back to them, so a silent button would leave them unsure.
       assert html =~ "Repostet" or html =~ "Reposted"
 
       view |> element("[phx-click='unrepost-remote-post']") |> render_click()
 
-      refute has_element?(view, "[data-remote-repost='on']")
+      refute has_element?(view, "[data-remote-act='repost'][data-on='on']")
     end
 
     test "a post reaching the reader twice renders one card", ctx do
@@ -204,7 +204,7 @@ defmodule VutuvWeb.FeedRemotePostsTest do
       # not claim the switch is off — `federated?/1` is also false for an
       # unconfirmed address or a frozen account, whose switch is already on.
       assert html =~ VutuvWeb.FediverseComponents.refusal_message(:not_federating)
-      refute has_element?(view, "[data-remote-like='on']")
+      refute has_element?(view, "[data-remote-act='like'][data-on='on']")
       # And no marker is written for a like that never left.
       assert Repo.aggregate(Vutuv.Fediverse.PostLike, :count) == 0
     end

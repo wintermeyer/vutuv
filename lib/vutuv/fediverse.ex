@@ -50,6 +50,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Engagement
   alias Vutuv.Fediverse.Actor
   alias Vutuv.Fediverse.BlockedInstance
+  alias Vutuv.Fediverse.Bookmark
   alias Vutuv.Fediverse.Deliverer
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.DeliveryFailure
@@ -63,6 +64,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.NoteEvent
   alias Vutuv.Fediverse.NoteLike
+  alias Vutuv.Fediverse.NoteRepost
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.PostLike
@@ -974,6 +976,10 @@ defmodule Vutuv.Fediverse do
     # those rows do not hang off a follow at all, so nothing else would ever
     # take them.
     drop_note_likes(user)
+    # And what they passed on (issue #1275). A reshare stands on other people's
+    # servers under this member's name, so it goes with the decision to leave
+    # exactly as the cached-post boosts do.
+    drop_note_reposts(user)
 
     {count, _} = Repo.delete_all(from(f in Follow, where: f.user_id == ^user.id))
     # Their cached posts existed because this member followed their authors
@@ -4332,38 +4338,72 @@ defmodule Vutuv.Fediverse do
   no heart while the author's server counts the like, which is the one
   disagreement a member cannot fix from here.
   """
-  def like_remote_post(%User{} = user, %RemotePost{} = post) do
-    # Re-read first. The card was rendered at some earlier moment and the row
-    # can be gone by the time the heart is pressed — expiry, an upstream
-    # `Delete`, another member's report, an instance block — and the insert
-    # would then hit the foreign key and take the whole LiveView down with it.
-    # `on_conflict: :nothing` suppresses the *unique* violation, never this one.
-    with %RemotePost{} = post <- reload_remote_post(post),
-         :ok <- check_remote_like(user, post) do
-      case insert_remote_marker(PostLike, user, post, :liked) do
-        {:ok, :liked} -> send_like(user, post)
-        other -> other
-      end
-    else
-      nil -> {:error, :not_found}
-      {:error, _} = error -> error
-    end
-  end
+  def like_remote_post(%User{} = user, %RemotePost{} = post),
+    do: outbound_act(user, post, remote_post_like())
 
   # The budget is claimed here rather than before the insert, so a double tap or
   # a second tab — which writes nothing and sends nothing — does not spend
   # somebody's slot. A refusal rolls the marker back: a heart painted for a like
   # that never left is the one disagreement a member cannot fix from here.
-  defp send_like(user, post) do
-    case claim_like_budget(user) do
-      :ok ->
-        deliver_like(user, post, &Docs.like_activity/3)
-        {:ok, :liked}
+  # The four acts, each naming only what is its own (see `outbound_act/3`).
+  defp remote_post_like do
+    %{
+      reload: &reload_remote_post/1,
+      gate: &check_remote_like/2,
+      schema: PostLike,
+      fk: :remote_post_id,
+      budget: &claim_like_budget/1,
+      deliver: fn user, post -> deliver_like(user, post, &Docs.like_activity/3) end,
+      undo: fn user, post -> deliver_like(user, post, &Docs.undo_like_activity/3) end,
+      written: :liked,
+      undone: :unliked
+    }
+  end
 
-      {:error, _} = capped ->
-        delete_remote_marker(PostLike, user, post)
-        capped
-    end
+  defp remote_post_repost do
+    %{
+      reload: &reload_remote_post/1,
+      gate: &check_remote_repost/2,
+      schema: PostRepost,
+      fk: :remote_post_id,
+      budget: &claim_boost_budget/1,
+      deliver: fn user, post -> deliver_boost(user, post, &Docs.announce_remote_activity/4) end,
+      undo: fn user, post -> deliver_boost(user, post, &Docs.undo_announce_remote_activity/4) end,
+      written: :reposted,
+      undone: :unreposted
+    }
+  end
+
+  defp note_like do
+    %{
+      reload: &reload_note/1,
+      gate: &check_note_like/2,
+      schema: NoteLike,
+      fk: :note_id,
+      budget: &claim_like_budget/1,
+      deliver: fn user, note -> deliver_note_like(user, note, &Docs.like_activity/3) end,
+      undo: fn user, note -> deliver_note_like(user, note, &Docs.undo_like_activity/3) end,
+      written: :liked,
+      undone: :unliked
+    }
+  end
+
+  defp note_repost do
+    %{
+      reload: &reload_note/1,
+      gate: &check_note_repost/2,
+      schema: NoteRepost,
+      fk: :note_id,
+      budget: &claim_boost_budget/1,
+      deliver: fn user, note ->
+        deliver_note_boost(user, note, &Docs.announce_remote_activity/4)
+      end,
+      undo: fn user, note ->
+        deliver_note_boost(user, note, &Docs.undo_announce_remote_activity/4)
+      end,
+      written: :reposted,
+      undone: :unreposted
+    }
   end
 
   @doc """
@@ -4392,21 +4432,15 @@ defmodule Vutuv.Fediverse do
   must not be refusable, and if the member has since stopped federating there
   is simply nothing to send, which `deliver_like/3` handles by finding no actor.
   """
-  def unlike_remote_post(%User{} = user, %RemotePost{} = post) do
-    if delete_remote_marker(PostLike, user, post) > 0 do
-      deliver_like(user, post, &Docs.undo_like_activity/3)
-      {:ok, :unliked}
-    else
-      {:ok, :already}
-    end
-  end
+  def unlike_remote_post(%User{} = user, %RemotePost{} = post),
+    do: outbound_undo(user, post, remote_post_like())
 
   @doc """
   Which of `post_ids` this member already likes, as a `MapSet` — one query for a
   whole feed page rather than one per card.
   """
   def liked_remote_post_ids(%User{} = viewer, post_ids) when is_list(post_ids),
-    do: remote_marker_ids(PostLike, viewer, post_ids)
+    do: marker_ids(PostLike, :remote_post_id, viewer, post_ids)
 
   def liked_remote_post_ids(_viewer, _post_ids), do: MapSet.new()
 
@@ -4423,11 +4457,242 @@ defmodule Vutuv.Fediverse do
   # Here that answer decides whether an activity leaves the building. Nothing
   # needs a changeset — both ids come from records the caller already resolved.
   # `written` is what the caller calls a row that really landed.
-  defp insert_remote_marker(schema, user, post, written) do
+  # ## One outbound act, four callers
+  #
+  # Liking a cached post, resharing it, liking a reply and resharing a reply are
+  # the same steps in the same order: re-read the subject (the card was rendered
+  # at some earlier moment and the row can be gone — expiry, an upstream
+  # `Delete`, a takedown, an instance block — and the insert would then hit the
+  # foreign key and take the whole LiveView down with it; `on_conflict: :nothing`
+  # suppresses the *unique* violation, never this one), ask that act's gate,
+  # write the marker, and — only when the row really is new — claim an hourly
+  # slot and queue the activity, rolling the marker back if the budget refuses.
+  #
+  # That last order is the load-bearing part: a marker standing for an activity
+  # that never left paints a heart (or a reshare) the other server knows nothing
+  # about, which is the one disagreement a member cannot fix from here. And a
+  # repeat — a double tap, a second tab — writes nothing, sends nothing and
+  # therefore spends no slot.
+  #
+  # What differs per act is named in `act` and nothing else: the reload, the
+  # gate, the marker table and its subject column, which budget it spends, how
+  # the activity is addressed, and the word for a row that really landed.
+  defp outbound_act(user, subject, act) do
+    with subject when not is_nil(subject) <- act.reload.(subject),
+         :ok <- act.gate.(user, subject),
+         {:ok, written} when written == act.written <-
+           insert_marker(act.schema, act.fk, user, subject.id, act.written) do
+      claim_and_deliver(user, subject, act)
+    else
+      nil -> {:error, :not_found}
+      {:ok, :already} -> {:ok, :already}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp claim_and_deliver(user, subject, act) do
+    case act.budget.(user) do
+      :ok ->
+        act.deliver.(user, subject)
+        {:ok, act.written}
+
+      {:error, _} = capped ->
+        delete_marker(act.schema, act.fk, user, subject.id)
+        capped
+    end
+  end
+
+  # The withdrawal half, in one place for the same four callers: drop the row,
+  # and queue the `Undo` only when a row really went (so a second tab's press
+  # sends nothing). Never gated and never budgeted — refusing to let somebody
+  # take an act back because they have been busy would be an odd shape of limit,
+  # and it must still go out once the member has stopped federating, which the
+  # deliverers handle through `ever_federated?/1` (issue #1102).
+  defp outbound_undo(user, subject, act) do
+    if delete_marker(act.schema, act.fk, user, subject.id) > 0 do
+      act.undo.(user, subject)
+      {:ok, act.undone}
+    else
+      {:ok, :already}
+    end
+  end
+
+  ## Saving something from another network for yourself (issue #1276)
+  ##
+  ## The one act on these cards that stays here. Nothing is signed, nothing is
+  ## addressed, nothing leaves the building — so unlike every other act in this
+  ## module it asks nothing of the member's Fediverse standing, spends no hourly
+  ## budget and has no `Undo` to send. What it does share is the marker fabric
+  ## below and the read gate: you may only save what you may read, since the id
+  ## in a click is the member's to choose.
+
+  @doc """
+  Whether `user` may save this cached post or reply — the read question and
+  nothing else.
+
+  Deliberately not `check_remote_like/2`: a bookmark is private and local, so
+  the installation switch, the member's own participation and the operator
+  blocklist have no bearing on it. A member who does not federate at all can
+  still keep something they read.
+  """
+  def check_bookmark(%User{} = user, %RemotePost{} = post) do
+    if remote_post_readable?(post, user), do: :ok, else: {:error, :not_visible}
+  end
+
+  def check_bookmark(%User{} = user, %Note{} = note) do
+    if note_readable?(note, user), do: :ok, else: {:error, :not_visible}
+  end
+
+  @doc """
+  Saves a cached post. `{:ok, :bookmarked}`, `{:ok, :already}`, or the gate's
+  `{:error, reason}`.
+  """
+  def bookmark_remote_post(%User{} = user, %RemotePost{} = post),
+    do: outbound_act(user, post, remote_post_bookmark())
+
+  @doc "Drops the bookmark. `{:ok, :unbookmarked}` or `{:ok, :already}`."
+  def unbookmark_remote_post(%User{} = user, %RemotePost{} = post),
+    do: outbound_undo(user, post, remote_post_bookmark())
+
+  @doc "Saves a reply from another network."
+  def bookmark_note(%User{} = user, %Note{} = note),
+    do: outbound_act(user, note, note_bookmark())
+
+  @doc "Drops the bookmark on a reply."
+  def unbookmark_note(%User{} = user, %Note{} = note),
+    do: outbound_undo(user, note, note_bookmark())
+
+  @doc "Which of `post_ids` this member has saved, as a `MapSet`."
+  def bookmarked_remote_post_ids(%User{} = viewer, post_ids) when is_list(post_ids),
+    do: marker_ids(Bookmark, :remote_post_id, viewer, post_ids)
+
+  def bookmarked_remote_post_ids(_viewer, _post_ids), do: MapSet.new()
+
+  @doc "Which of `note_ids` this member has saved, as a `MapSet`."
+  def bookmarked_note_ids(%User{} = viewer, note_ids) when is_list(note_ids),
+    do: marker_ids(Bookmark, :note_id, viewer, note_ids)
+
+  def bookmarked_note_ids(_viewer, _note_ids), do: MapSet.new()
+
+  @doc """
+  One page of what this member saved from other networks, newest first, as feed
+  entries — the same shape `/bookmarks` already streams for vutuv posts, so that
+  page can interleave the three kinds by saved-at time.
+
+  `q` filters on the saved text, which is the only thing there is to search: a
+  cached post and a reply both carry plain text and nothing else we could match
+  a member's own words against.
+  """
+  def saved_from_networks(%User{id: user_id}, opts \\ []) do
+    q = opts[:q]
+
+    from(b in Bookmark,
+      left_join: p in RemotePost,
+      on: p.id == b.remote_post_id,
+      left_join: a in RemoteAccount,
+      on: a.id == p.remote_account_id,
+      left_join: n in Note,
+      on: n.id == b.note_id,
+      where: b.user_id == ^user_id,
+      order_by: [desc: b.inserted_at, desc: b.id],
+      preload: [remote_post: {p, remote_account: a}, note: n]
+    )
+    |> saved_matching(q)
+    |> Repo.all()
+    |> Enum.map(&saved_entry/1)
+  end
+
+  defp saved_matching(query, q) when is_binary(q) and q != "" do
+    like = "%" <> String.replace(q, ~r/[%_]/, "") <> "%"
+
+    where(
+      query,
+      [b, p, a, n],
+      ilike(p.content_text, ^like) or ilike(n.content_text, ^like) or ilike(a.handle, ^like) or
+        ilike(n.handle, ^like)
+    )
+  end
+
+  defp saved_matching(query, _q), do: query
+
+  # The saved row as a feed entry: `at` is when it was **saved**, not when it was
+  # written, because that is the order the page is in and the order the member
+  # remembers.
+  defp saved_entry(%Bookmark{remote_post: %RemotePost{} = post} = bookmark),
+    do: %{
+      id: "saved-remote-post-#{bookmark.id}",
+      post: nil,
+      remote_post: post,
+      reposted_by: nil,
+      at: bookmark.inserted_at
+    }
+
+  defp saved_entry(%Bookmark{note: %Note{} = note} = bookmark),
+    do: %{
+      id: "saved-remote-reply-#{bookmark.id}",
+      post: nil,
+      note: note,
+      reposted_by: nil,
+      at: bookmark.inserted_at
+    }
+
+  # A bookmark spends no budget and sends nothing, so the two act fields the
+  # fabric needs are the identity: claim nothing, deliver nothing. Naming them
+  # here rather than special-casing `outbound_act/3` keeps that function with one
+  # shape for all six acts.
+  defp remote_post_bookmark do
+    %{
+      reload: &reload_remote_post/1,
+      gate: &check_bookmark/2,
+      schema: Bookmark,
+      fk: :remote_post_id,
+      budget: fn _user -> :ok end,
+      deliver: fn _user, _post -> :skip end,
+      undo: fn _user, _post -> :skip end,
+      written: :bookmarked,
+      undone: :unbookmarked
+    }
+  end
+
+  defp note_bookmark do
+    %{
+      reload: &reload_note/1,
+      gate: &check_bookmark/2,
+      schema: Bookmark,
+      fk: :note_id,
+      budget: fn _user -> :ok end,
+      deliver: fn _user, _note -> :skip end,
+      undo: fn _user, _note -> :skip end,
+      written: :bookmarked,
+      undone: :unbookmarked
+    }
+  end
+
+  # ## One marker fabric for everything that came from another network
+  #
+  # A member's like of a cached post, their reshare of it, their like of a reply
+  # and their reshare of a reply are the **same three database operations** four
+  # times over — write the row if it is not there, drop it and say whether it
+  # really went, and ask which of a page's subjects are marked. The only thing
+  # that differs is which column names the subject (`remote_post_id` for a
+  # cached post, `note_id` for a reply), so that column is the parameter and
+  # there is one of each operation rather than eight.
+  #
+  # Everything above them stays per-subject on purpose: the gates ask different
+  # questions and the activities are addressed differently. This is the layer
+  # where they genuinely are identical.
+
+  # The join-row kernel every other engagement toggle here writes through
+  # (`Vutuv.Engagement`), for the reason `insert_reaction/3` spells out:
+  # `Repo.insert(on_conflict: :nothing)` cannot say whether the row landed,
+  # because the v7 id is minted in Elixir and the struct comes back looking
+  # identical either way, so only the inserted row count is an honest answer.
+  # Here that answer decides whether an activity leaves the building.
+  defp insert_marker(schema, fk, user, subject_id, written) do
     case Engagement.insert_if_new(
            schema,
-           %{user_id: user.id, remote_post_id: post.id},
-           [:user_id, :remote_post_id]
+           Map.new([{:user_id, user.id}, {fk, subject_id}]),
+           [:user_id, fk]
          ) do
       {:inserted, _row} -> {:ok, written}
       :exists -> {:ok, :already}
@@ -4436,19 +4701,21 @@ defmodule Vutuv.Fediverse do
 
   # The withdrawal half, answering in the same currency: how many rows really
   # went, so a second tab's press can be told from a real one.
-  defp delete_remote_marker(schema, user, post) do
+  defp delete_marker(schema, fk, user, subject_id) do
     {count, _} =
-      Repo.delete_all(where(schema, [r], r.user_id == ^user.id and r.remote_post_id == ^post.id))
+      Repo.delete_all(
+        from(r in schema, where: r.user_id == ^user.id and field(r, ^fk) == ^subject_id)
+      )
 
     count
   end
 
-  # Which of `post_ids` this member has marked — one query per feed page rather
+  # Which of `subject_ids` this member has marked — one query per page rather
   # than one per card.
-  defp remote_marker_ids(schema, %User{id: user_id}, post_ids) do
+  defp marker_ids(schema, fk, %User{id: user_id}, subject_ids) do
     from(r in schema,
-      where: r.user_id == ^user_id and r.remote_post_id in ^post_ids,
-      select: r.remote_post_id
+      where: r.user_id == ^user_id and field(r, ^fk) in ^subject_ids,
+      select: field(r, ^fk)
     )
     |> Repo.all()
     |> MapSet.new()
@@ -4555,39 +4822,14 @@ defmodule Vutuv.Fediverse do
   queued activity whose marker failed to write would paint no heart while the
   author's server counts the like.
   """
-  def like_note(%User{} = user, %Note{} = note) do
-    # Re-read first, like the post path: the card was rendered at some earlier
-    # moment and the row can be gone by the time the heart is pressed — expiry,
-    # an upstream `Delete`, a takedown, an instance block — and the insert would
-    # then hit the foreign key and take the whole LiveView down with it.
-    with %Note{} = note <- reload_note(note),
-         :ok <- check_note_like(user, note) do
-      case insert_note_marker(user, note) do
-        {:ok, :liked} -> send_note_like(user, note)
-        other -> other
-      end
-    else
-      nil -> {:error, :not_found}
-      {:error, _} = error -> error
-    end
-  end
+  def like_note(%User{} = user, %Note{} = note),
+    do: outbound_act(user, note, note_like())
 
   # The budget is claimed here rather than before the insert, so a double tap or
   # a second tab — which writes nothing and sends nothing — does not spend
   # somebody's slot. It is the **same** hourly budget the post heart claims:
   # both are one member's like leaving for another network, and metering them
   # apart would let an hour of one hide inside the other's allowance.
-  defp send_note_like(user, note) do
-    case claim_like_budget(user) do
-      :ok ->
-        deliver_note_like(user, note, &Docs.like_activity/3)
-        {:ok, :liked}
-
-      {:error, _} = capped ->
-        delete_note_marker(user, note)
-        capped
-    end
-  end
 
   @doc """
   The member takes the like back: drops the marker and queues the matching
@@ -4597,27 +4839,15 @@ defmodule Vutuv.Fediverse do
   must not be refusable, and if the member has since stopped federating there is
   simply nothing to send.
   """
-  def unlike_note(%User{} = user, %Note{} = note) do
-    if delete_note_marker(user, note) > 0 do
-      deliver_note_like(user, note, &Docs.undo_like_activity/3)
-      {:ok, :unliked}
-    else
-      {:ok, :already}
-    end
-  end
+  def unlike_note(%User{} = user, %Note{} = note),
+    do: outbound_undo(user, note, note_like())
 
   @doc """
   Which of `note_ids` this member already likes, as a `MapSet` — one query for a
   whole conversation rather than one per card.
   """
-  def liked_note_ids(%User{} = viewer, note_ids) when is_list(note_ids) do
-    from(l in NoteLike,
-      where: l.user_id == ^viewer.id and l.note_id in ^note_ids,
-      select: l.note_id
-    )
-    |> Repo.all()
-    |> MapSet.new()
-  end
+  def liked_note_ids(%User{} = viewer, note_ids) when is_list(note_ids),
+    do: marker_ids(NoteLike, :note_id, viewer, note_ids)
 
   def liked_note_ids(_viewer, _note_ids), do: MapSet.new()
 
@@ -4663,25 +4893,6 @@ defmodule Vutuv.Fediverse do
   # every other engagement toggle here: only the inserted row count is an honest
   # answer to "did this request create the like", and that answer is what decides
   # whether an activity leaves the building.
-  defp insert_note_marker(user, note) do
-    case Engagement.insert_if_new(
-           NoteLike,
-           %{user_id: user.id, note_id: note.id},
-           [:user_id, :note_id]
-         ) do
-      {:inserted, _row} -> {:ok, :liked}
-      :exists -> {:ok, :already}
-    end
-  end
-
-  # The withdrawal half, answering in the same currency: how many rows really
-  # went, so a second tab's press can be told from a real one.
-  defp delete_note_marker(user, note) do
-    {count, _} =
-      Repo.delete_all(where(NoteLike, [l], l.user_id == ^user.id and l.note_id == ^note.id))
-
-    count
-  end
 
   # The author's own inbox, never a shared one: a Like is addressed to one
   # person. `ever_federated?/1` rather than `federated?/1`, so a withdrawal still
@@ -4692,6 +4903,162 @@ defmodule Vutuv.Fediverse do
     with inbox when is_binary(inbox) <- note.inbox_uri,
          true <- ever_federated?(user) do
       enqueue(user, [inbox], builder.(user, note.actor_uri, note.object_uri))
+    else
+      _ -> :skip
+    end
+  end
+
+  ## Passing a reply from another network on (issue #1275)
+  ##
+  ## `repost_remote_post/2` (issue #1166) for a note. Same activity, same
+  ## addressing, same budget — and one thing the like beside it does not have:
+  ## the reshare is a **feed source**, because a button that publishes to other
+  ## servers and shows nothing on the site it was pressed on is a button that
+  ## did nothing as far as the member can tell.
+
+  @doc """
+  Whether `user` may pass this reply on, and when not, which gate refused —
+  `check_note_like/2`'s vocabulary plus the one a publishing act adds:
+
+    * `:note_not_public` — its author addressed it to the member alone (issue
+      #1071). A reshare hands it to everybody who follows the resharer here and
+      out there, and passing on an audience its author narrowed is not ours to
+      do, so the card offers no control there rather than one that refuses.
+
+  The audience question is asked **first**, for the reason the cached post's
+  gate spells out: no setting of the member's own could ever make a private
+  reply shareable, so telling them to go and switch something on would be a lie.
+  """
+  def check_note_repost(%User{} = user, %Note{} = note) do
+    if Note.public?(note),
+      do: check_note_like(user, note),
+      else: {:error, :note_not_public}
+  end
+
+  @doc """
+  The member passes a reply on: writes the row and queues a signed `Announce` to
+  their own followers (and the reply's author, so that server learns of it).
+
+  `{:ok, :reposted}`, `{:ok, :already}`, or the gate's `{:error, reason}`. The
+  reply is re-read first, like the heart's: the row can be gone by the time the
+  button is pressed and the audience can have narrowed, and neither may be
+  decided from the struct the page rendered with.
+  """
+  def repost_note(%User{} = user, %Note{} = note),
+    do: outbound_act(user, note, note_repost())
+
+  @doc """
+  The member takes the reshare back: drops the row and queues the matching
+  `Undo(Announce)`.
+
+  No gate and no budget, like unliking — a withdrawal must not be refusable, and
+  it must go out even once the member has stopped federating (issue #1102).
+  """
+  def unrepost_note(%User{} = user, %Note{} = note),
+    do: outbound_undo(user, note, note_repost())
+
+  @doc """
+  Which of `note_ids` this member has passed on, as a `MapSet` — one query for a
+  whole page rather than one per card.
+  """
+  def reposted_note_ids(%User{} = viewer, note_ids) when is_list(note_ids),
+    do: marker_ids(NoteRepost, :note_id, viewer, note_ids)
+
+  def reposted_note_ids(_viewer, _note_ids), do: MapSet.new()
+
+  @doc """
+  Withdraws every reshare of a reply this member holds and drops the rows — the
+  note half of what leaving the Fediverse means for `Announce`, called beside
+  `drop_note_likes/1`.
+  """
+  def drop_note_reposts(%User{} = user) do
+    Enum.each(list_note_reposts(user), fn note ->
+      deliver_note_boost(user, note, &Docs.undo_announce_remote_activity/4)
+    end)
+
+    {count, _} = Repo.delete_all(from(r in NoteRepost, where: r.user_id == ^user.id))
+    count
+  end
+
+  @doc "Every reply this member has passed on — for the withdrawal above."
+  def list_note_reposts(%User{id: user_id}) do
+    Repo.all(
+      from(r in NoteRepost,
+        join: n in Note,
+        on: n.id == r.note_id,
+        where: r.user_id == ^user_id,
+        order_by: [desc: r.id],
+        select: n
+      )
+    )
+  end
+
+  @doc """
+  The seventh feed source (issue #1275): **replies** from another network that
+  people the viewer follows **here** have passed on.
+
+  The exact twin of `feed_remote_reposts/3` one table over, and scoped the same
+  way — to the resharer, never to any follow of the author, because being
+  vouched for by somebody here is the whole reason this row reaches a member who
+  follows nobody out there. Stamped with the reshare time: what is new is the
+  sharing.
+  """
+  def feed_remote_reply_reposts(%User{id: viewer_id}, fetch_n, cursor) do
+    if enabled?() do
+      from(r in NoteRepost,
+        join: n in Note,
+        on: n.id == r.note_id,
+        join: resharer in User,
+        on: resharer.id == r.user_id,
+        where: r.user_id == ^viewer_id or r.user_id in subquery(unmuted_followees(viewer_id)),
+        # A resharer who is not in good standing amplifies nothing — the same
+        # stricter rule the cached-post reshare source applies, and for the same
+        # reason: carrying a third party's words into other people's feeds is
+        # exactly what a frozen or suspended account must not keep doing.
+        where:
+          r.user_id == ^viewer_id or
+            (account_confirmed_row(resharer) and not account_hidden_row(resharer)),
+        # Only ever what the resharer could have shared: the audience gate is the
+        # same one that let them press the button, re-asked here because a note's
+        # audience can be narrowed by an upstream `Update` after the fact.
+        where: n.audience == "public",
+        order_by: [desc: r.inserted_at, desc: r.id],
+        preload: [note: n, user: resharer]
+      )
+      |> limit(^fetch_n)
+      |> note_reposts_at_or_before(cursor)
+      |> Repo.all()
+      |> Enum.map(&remote_reply_repost_entry/1)
+    else
+      []
+    end
+  end
+
+  defp note_reposts_at_or_before(query, nil), do: query
+
+  defp note_reposts_at_or_before(query, %{at: at}),
+    do: where(query, [r], r.inserted_at <= ^at)
+
+  defp remote_reply_repost_entry(%NoteRepost{} = repost) do
+    %{
+      id: "remote-reply-repost-#{repost.id}",
+      post: nil,
+      note: repost.note,
+      reposted_by: repost.user,
+      at: repost.inserted_at
+    }
+  end
+
+  # The resharer's own audience — that is the act — plus the reply's author, so
+  # their server learns of it, exactly as `deliver_boost/3` addresses a cached
+  # post's. The author's inbox is the one the note already carries; a note with
+  # none still reaches the resharer's followers, which is the whole audience that
+  # matters here (a `Like` has no such fallback, which is why it refuses).
+  defp deliver_note_boost(%User{} = user, %Note{} = note, builder) do
+    with true <- ever_federated?(user),
+         [_ | _] = inboxes <-
+           Enum.uniq(delivery_inboxes(user) ++ List.wrap(note.inbox_uri)) do
+      enqueue(user, inboxes, builder.(user, note.actor_uri, note.object_uri, note.audience))
     else
       _ -> :skip
     end
@@ -5545,18 +5912,8 @@ defmodule Vutuv.Fediverse do
   button is pressed, and the audience can have narrowed, and neither may be
   decided from the struct the page rendered with.
   """
-  def repost_remote_post(%User{} = user, %RemotePost{} = post) do
-    with %RemotePost{} = post <- reload_remote_post(post),
-         :ok <- check_remote_repost(user, post) do
-      case insert_remote_marker(PostRepost, user, post, :reposted) do
-        {:ok, :reposted} -> send_announce(user, post)
-        other -> other
-      end
-    else
-      nil -> {:error, :not_found}
-      {:error, _} = error -> error
-    end
-  end
+  def repost_remote_post(%User{} = user, %RemotePost{} = post),
+    do: outbound_act(user, post, remote_post_repost())
 
   @doc """
   The member takes the boost back: drops the row and queues the matching
@@ -5566,37 +5923,17 @@ defmodule Vutuv.Fediverse do
   it must go out even once the member has stopped federating (issue #1102), which
   `deliver_boost/3` handles through `ever_federated?/1`.
   """
-  def unrepost_remote_post(%User{} = user, %RemotePost{} = post) do
-    if delete_remote_marker(PostRepost, user, post) > 0 do
-      deliver_boost(user, post, &Docs.undo_announce_remote_activity/4)
-      {:ok, :unreposted}
-    else
-      {:ok, :already}
-    end
-  end
+  def unrepost_remote_post(%User{} = user, %RemotePost{} = post),
+    do: outbound_undo(user, post, remote_post_repost())
 
   @doc """
   Which of `post_ids` this member has reposted, as a `MapSet` — one query per
   feed page rather than one per card.
   """
   def reposted_remote_post_ids(%User{} = viewer, post_ids) when is_list(post_ids),
-    do: remote_marker_ids(PostRepost, viewer, post_ids)
+    do: marker_ids(PostRepost, :remote_post_id, viewer, post_ids)
 
   def reposted_remote_post_ids(_viewer, _post_ids), do: MapSet.new()
-
-  # See `send_like/1`: the budget is claimed once the row is really new, and a
-  # refusal rolls it back rather than leaving a boost painted that never left.
-  defp send_announce(user, post) do
-    case claim_boost_budget(user) do
-      :ok ->
-        deliver_boost(user, post, &Docs.announce_remote_activity/4)
-        {:ok, :reposted}
-
-      {:error, _} = capped ->
-        delete_remote_marker(PostRepost, user, post)
-        capped
-    end
-  end
 
   # An Announce goes to the reposter's own audience — that is the act — plus the
   # original author, so their server learns of the boost. The one place this

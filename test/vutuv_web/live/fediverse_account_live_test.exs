@@ -245,10 +245,10 @@ defmodule VutuvWeb.FediverseAccountLiveTest do
       # liking what it shows has to work — which is why the gate asks whether
       # the post is readable, not whether there is a follow.
       view |> element("[phx-click='like-remote-post']") |> render_click()
-      assert has_element?(view, "[data-remote-like='on']")
+      assert has_element?(view, "[data-remote-act='like'][data-on='on']")
 
       view |> element("[phx-click='unlike-remote-post']") |> render_click()
-      refute has_element?(view, "[data-remote-like='on']")
+      refute has_element?(view, "[data-remote-act='like'][data-on='on']")
     end
   end
 

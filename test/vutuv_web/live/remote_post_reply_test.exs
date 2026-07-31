@@ -77,7 +77,7 @@ defmodule VutuvWeb.RemotePostReplyTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      assert has_element?(view, "[data-remote-post-reply-link='#{post.id}']")
+      assert has_element?(view, "[data-remote-reply-link='#{post.id}']")
     end
 
     test "a followers-only post offers none", %{conn: conn} do
@@ -91,7 +91,7 @@ defmodule VutuvWeb.RemotePostReplyTest do
       # No control rather than one that refuses: the answer would be a public
       # vutuv post quoting a restricted context.
       assert has_element?(view, "[data-remote-post='#{post.id}']")
-      refute has_element?(view, "[data-remote-post-reply-link='#{post.id}']")
+      refute has_element?(view, "[data-remote-reply-link='#{post.id}']")
     end
   end
 
