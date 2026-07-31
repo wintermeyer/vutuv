@@ -1,5 +1,10 @@
 defmodule Vutuv.TagsTest do
   use Vutuv.DataCase, async: true
+  alias Vutuv.Accounts.User
+  alias Vutuv.Newsletters.NewsletterGroup
+  alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostHashtag
+  alias Vutuv.Posts.PostTag
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
@@ -1093,6 +1098,174 @@ defmodule Vutuv.TagsTest do
 
       tag = Repo.get_by!(Tag, slug: String.downcase(name))
       refute Tags.indexable_tag?(tag)
+    end
+  end
+
+  describe "delete_legacy_comma_tags/0" do
+    defp comma_tag, do: insert(:tag, name: unique_tag_name("Linux, Debian, Ubuntu"))
+
+    test "deletes the tag and every row that only tied something to it" do
+      holder = insert(:activated_user)
+      endorser = insert(:activated_user)
+      follower = insert(:activated_user)
+      post = insert(:post)
+      tag = comma_tag()
+
+      user_tag = insert(:user_tag, user: holder, tag: tag)
+      endorsement = insert(:user_tag_endorsement, user: endorser, user_tag: user_tag)
+      follow = insert(:tag_follow, user: follower, tag: tag)
+      post_tag = Repo.insert!(%PostTag{post_id: post.id, tag_id: tag.id})
+      hashtag = Repo.insert!(%PostHashtag{post_id: post.id, tag_id: tag.id})
+
+      counts = Tags.delete_legacy_comma_tags()
+
+      refute Repo.get(Tag, tag.id)
+      refute Repo.get(UserTag, user_tag.id)
+      refute Repo.get(UserTagEndorsement, endorsement.id)
+      refute Repo.get(TagFollow, follow.id)
+      refute Repo.get(PostTag, post_tag.id)
+      refute Repo.get(PostHashtag, hashtag.id)
+
+      # Nothing on the far side of a join row goes with it: the member keeps
+      # their account and their endorsement history, the post keeps its body.
+      # They only lose a tag that never named one topic to begin with.
+      assert Repo.get(User, holder.id)
+      assert Repo.get(User, endorser.id)
+      assert Repo.get(Post, post.id)
+
+      assert counts["tags"] == 1
+      assert counts["user_tags"] == 1
+      assert counts["user_tag_endorsements"] == 1
+      assert counts["post_tags"] == 1
+      assert counts["post_hashtags"] == 1
+      assert counts["tag_follows"] == 1
+    end
+
+    test "leaves a comma-free tag and everything hanging off it alone" do
+      holder = insert(:activated_user)
+      keep = insert(:tag, name: unique_tag_name("Elixir"))
+      kept_user_tag = insert(:user_tag, user: holder, tag: keep)
+      _doomed = comma_tag()
+
+      counts = Tags.delete_legacy_comma_tags()
+
+      assert Repo.get(Tag, keep.id)
+      assert Repo.get(UserTag, kept_user_tag.id)
+      assert counts["tags"] == 1
+      assert counts["user_tags"] == 0
+    end
+
+    test "deletes an unattached comma tag" do
+      tag = comma_tag()
+
+      assert %{"tags" => 1} = Tags.delete_legacy_comma_tags()
+      refute Repo.get(Tag, tag.id)
+    end
+
+    test "refuses rather than silently widen a newsletter group's audience" do
+      tag = comma_tag()
+
+      # newsletter_groups.tag_id is ON DELETE SET NULL, so the group would
+      # survive the tag with its criteria quietly changed from "members holding
+      # this tag" to "every member". A cleanup does not get to make that call.
+      group = Repo.insert!(%NewsletterGroup{name: "Comma tag audience", tag_id: tag.id})
+
+      assert_raise RuntimeError, ~r/newsletter_groups\.tag_id/, fn ->
+        Tags.delete_legacy_comma_tags()
+      end
+
+      assert Repo.get(Tag, tag.id)
+      assert Repo.get(NewsletterGroup, group.id).tag_id == tag.id
+    end
+
+    test "is idempotent" do
+      comma_tag()
+
+      assert %{"tags" => 1} = Tags.delete_legacy_comma_tags()
+      assert %{"tags" => 0} = Tags.delete_legacy_comma_tags()
+    end
+  end
+
+  describe "delete_legacy_overlong_tags/0" do
+    # A name of exactly `len` characters, unique per call so async modules never
+    # collide on the tags_lower_name_index.
+    defp tag_of_length(len) do
+      suffix = "-#{System.unique_integer([:positive])}"
+      insert(:tag, name: String.duplicate("a", len - String.length(suffix)) <> suffix)
+    end
+
+    test "deletes a 35-character name and every row that only tied something to it" do
+      holder = insert(:activated_user)
+      endorser = insert(:activated_user)
+      post = insert(:post)
+      tag = tag_of_length(35)
+
+      user_tag = insert(:user_tag, user: holder, tag: tag)
+      endorsement = insert(:user_tag_endorsement, user: endorser, user_tag: user_tag)
+      post_tag = Repo.insert!(%PostTag{post_id: post.id, tag_id: tag.id})
+
+      counts = Tags.delete_legacy_overlong_tags()
+
+      refute Repo.get(Tag, tag.id)
+      refute Repo.get(UserTag, user_tag.id)
+      refute Repo.get(UserTagEndorsement, endorsement.id)
+      refute Repo.get(PostTag, post_tag.id)
+
+      assert Repo.get(User, holder.id)
+      assert Repo.get(Post, post.id)
+
+      assert counts["tags"] == 1
+      assert counts["user_tags"] == 1
+      assert counts["user_tag_endorsements"] == 1
+      assert counts["post_tags"] == 1
+    end
+
+    test "cuts at 35 exactly: 34 stays, 35 and longer go" do
+      short = tag_of_length(34)
+      boundary = tag_of_length(35)
+      long = tag_of_length(41)
+
+      assert %{"tags" => 2} = Tags.delete_legacy_overlong_tags()
+
+      assert Repo.get(Tag, short.id)
+      refute Repo.get(Tag, boundary.id)
+      refute Repo.get(Tag, long.id)
+    end
+
+    test "counts characters, not bytes, so umlauts do not shorten a name" do
+      # 34 characters, but well over 35 bytes in UTF-8 — a byte-length test
+      # would delete this German name while leaving its ASCII twin of the same
+      # length alone.
+      suffix = "-#{System.unique_integer([:positive])}"
+      umlauts = String.duplicate("ä", 10)
+      name = umlauts <> String.duplicate("a", 34 - 10 - String.length(suffix)) <> suffix
+
+      assert String.length(name) == 34
+      assert byte_size(name) > 35
+
+      tag = insert(:tag, name: name)
+
+      assert %{"tags" => 0} = Tags.delete_legacy_overlong_tags()
+      assert Repo.get(Tag, tag.id)
+    end
+
+    test "refuses rather than silently widen a newsletter group's audience" do
+      tag = tag_of_length(40)
+      group = Repo.insert!(%NewsletterGroup{name: "Overlong tag audience", tag_id: tag.id})
+
+      assert_raise RuntimeError, ~r/newsletter_groups\.tag_id/, fn ->
+        Tags.delete_legacy_overlong_tags()
+      end
+
+      assert Repo.get(Tag, tag.id)
+      assert Repo.get(NewsletterGroup, group.id).tag_id == tag.id
+    end
+
+    test "is idempotent" do
+      tag_of_length(40)
+
+      assert %{"tags" => 1} = Tags.delete_legacy_overlong_tags()
+      assert %{"tags" => 0} = Tags.delete_legacy_overlong_tags()
     end
   end
 end

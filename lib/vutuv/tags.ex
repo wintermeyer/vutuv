@@ -37,6 +37,12 @@ defmodule Vutuv.Tags do
   # the sign-up form validates the same ceiling up front.
   @max_user_tags 15
 
+  # Where a tag name stops being a topic and starts being a sentence, used by
+  # the one-time `delete_legacy_overlong_tags/0` cleanup. This is a cleanup
+  # threshold, not a validation: nothing stops a member typing a longer name
+  # today, and the question of whether the composer should cap it is separate.
+  @overlong_tag_length 35
+
   # What separates two tags: a comma, or a line break so a pasted list of tags
   # arrives as a list rather than as one giant name.
   @separators ~r/[,\r\n]+/
@@ -926,4 +932,177 @@ defmodule Vutuv.Tags do
 
   defp holder_count(tag_id),
     do: Repo.aggregate(from(ut in UserTag, where: ut.tag_id == ^tag_id), :count)
+
+  @doc """
+  One-time cleanup of the legacy tags whose own name carries a comma.
+
+  A comma is what separates two tags when a member types a batch — that is the
+  whole of `parse_tag_names/1`'s rule — so a tag *named* "Linux, Debian, Ubuntu,
+  CentOS" is a pasted list from before the rule existed: one row standing in for
+  four topics, matching none of them in a search, and filed under a slug nobody
+  would ever type. There is no reader these serve, so they go rather than get
+  split: guessing which of four topics a member meant to claim is a decision
+  only that member can make, and they can retype the ones they want.
+
+  See `delete_tags_matching/1` for what a deletion takes with it and what stops
+  it. Returns rows deleted per table.
+  """
+  def delete_legacy_comma_tags do
+    delete_tags_matching(from(t in Tag, where: like(t.name, "%,%")))
+  end
+
+  @doc """
+  One-time cleanup of the legacy tags whose name runs to #{@overlong_tag_length}
+  characters or more.
+
+  Past roughly this length a tag name stops being a topic and starts being a
+  sentence — a line lifted out of a job ad or a skills list, pasted whole into
+  the tag field. Two things in the data say so plainly: the longest name in the
+  table is 41 characters, and 159 names sit at exactly 40 with 140 of those
+  ending in a literal "...", the signature of a legacy importer that truncated
+  at 40 and appended an ellipsis. A name cut off mid-word names nothing, matches
+  no search, and cannot be typed by anyone hoping to land on it.
+
+  The threshold is deliberately generous: real compound topics
+  ("Softwareentwicklung", "Projektmanagement") sit well under it, so this takes
+  the phrases and leaves the vocabulary. A member who wants a long name back can
+  retype it.
+
+  See `delete_tags_matching/1` for what a deletion takes with it and what stops
+  it. Returns rows deleted per table.
+  """
+  def delete_legacy_overlong_tags do
+    delete_tags_matching(
+      from(t in Tag, where: fragment("char_length(?) >= ?", t.name, ^@overlong_tag_length))
+    )
+  end
+
+  @doc """
+  Deletes every tag `query` selects, and everything that hung off it.
+
+  A tag goes together with the rows that existed only to tie something to it —
+  the `user_tags` and their endorsements, the `post_tags`, `post_hashtags`,
+  `fediverse_post_tags`, `job_posting_tags` and `tag_follows`. What sits on the
+  far side of those join rows is untouched: a member keeps their account, a post
+  keeps its body, and both simply lose the tag.
+
+  The fan-out is walked from the live foreign keys rather than a list written
+  here, so a table added to the schema after this was written is still accounted
+  for. Anything that would **survive** the delete holding a nulled pointer stops
+  the cleanup with a raise instead: today that is `newsletter_groups.tag_id`
+  (ON DELETE SET NULL), where nulling would quietly widen an audience from
+  "members holding this tag" to "every member" — not a call a cleanup gets to
+  make. Postgres itself blocks any reference it cannot resolve, so the delete is
+  either complete or it does not happen.
+
+  Returns rows deleted per table. Idempotent, and a no-op on a fresh or test
+  database, so the real work only ever happens against production data.
+  """
+  def delete_tags_matching(query) do
+    {:ok, counts} = Repo.transaction(fn -> delete_matching_tags(query) end)
+    counts
+  end
+
+  defp delete_matching_tags(query) do
+    # Resolve the doomed ids up front so the guard below and the delete itself
+    # are provably the same set of tags, rather than two evaluations of one
+    # predicate with a window between them.
+    doomed = Repo.all(from(t in query, select: t.id))
+    {cascading, retaining} = tag_delete_fanout()
+    Enum.each(retaining, &refuse_dangling_reference!(&1, doomed))
+
+    before = row_counts(cascading)
+    Repo.delete_all(from(t in Tag, where: t.id in ^doomed))
+    remaining = row_counts(cascading)
+
+    Map.new(cascading, fn table -> {table, before[table] - remaining[table]} end)
+  end
+
+  # Every table a `tags` delete empties, found by following the foreign keys
+  # that cascade — and transitively their own, so a second-order row like a
+  # `user_tag_endorsements` hanging off a deleted `user_tags` is counted as
+  # well. Returns `{cascading_tables, retaining_refs}`: the tables whose rows go
+  # with the tag, and the references that would outlive it.
+  defp tag_delete_fanout, do: walk_cascade(["tags"], MapSet.new(["tags"]), [])
+
+  defp walk_cascade([], cascading, retaining), do: {MapSet.to_list(cascading), retaining}
+
+  defp walk_cascade([table | rest], cascading, retaining) do
+    {cascades, retains} = Enum.split_with(foreign_keys_to(table), &(&1.on_delete == "c"))
+
+    fresh =
+      cascades
+      |> Enum.map(& &1.table)
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(cascading, &1))
+
+    walk_cascade(rest ++ fresh, MapSet.union(cascading, MapSet.new(fresh)), retaining ++ retains)
+  end
+
+  # The foreign keys pointing AT `table`, straight from the catalog:
+  # `confdeltype` is the ON DELETE rule ("c" cascade, "n" set null, "a" no
+  # action, "r" restrict, "d" set default).
+  defp foreign_keys_to(table) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT c.conrelid::regclass::text, a.attname, c.confdeltype
+        FROM pg_constraint c
+        JOIN unnest(c.conkey) AS k(attnum) ON true
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+        WHERE c.contype = 'f' AND c.confrelid = $1::text::regclass
+        """,
+        [table]
+      )
+
+    Enum.map(rows, fn [child, column, on_delete] ->
+      %{parent: table, table: child, column: column, on_delete: on_delete}
+    end)
+  end
+
+  # A reference straight to `tags` that does not cascade: the row survives the
+  # delete, so the cleanup may only proceed while no such row actually points at
+  # a doomed tag. Fail closed — a pointer we would blank is a product decision.
+  #
+  # `$1::text[]::uuid[]` and not a bare `::uuid[]`: Postgres reports the
+  # parameter type of the latter as `uuid[]`, and Postgrex then demands the raw
+  # 16-byte form, so the readable `019f…` strings `Repo.all` returns would raise
+  # an EncodeError. Casting from text hands Postgres the strings to parse.
+  defp refuse_dangling_reference!(%{parent: "tags", table: table, column: column}, doomed) do
+    %{rows: [[count]]} =
+      Repo.query!(
+        "SELECT count(*) FROM #{table} WHERE #{column} = ANY($1::text[]::uuid[])",
+        [doomed]
+      )
+
+    if count > 0 do
+      raise """
+      #{count} #{table} row(s) reference a doomed tag through #{table}.#{column}, \
+      which does not cascade: deleting the tags would leave those rows behind \
+      pointing at nothing. Decide what should happen to them first — for \
+      #{table}.#{column} that means re-pointing or deleting them by hand — then \
+      run the cleanup again.\
+      """
+    end
+  end
+
+  # The same hazard one level down: a table that outlives the cascade holding a
+  # blanked pointer into it. None exists today, so this is a tripwire for a
+  # foreign key added between now and the day this runs, and refusing outright
+  # is the honest answer — which rows are doomed depends on the whole cascade
+  # path, and no cleanup should guess at it.
+  defp refuse_dangling_reference!(%{parent: parent, table: table, column: column}, _doomed) do
+    raise """
+    #{table}.#{column} references #{parent}, which this cleanup deletes from, \
+    and it does not cascade. That foreign key postdates the cleanup; work out \
+    what those rows should become before deleting these tags.\
+    """
+  end
+
+  defp row_counts(tables) do
+    Map.new(tables, fn table ->
+      %{rows: [[count]]} = Repo.query!("SELECT count(*) FROM #{table}", [])
+      {table, count}
+    end)
+  end
 end
