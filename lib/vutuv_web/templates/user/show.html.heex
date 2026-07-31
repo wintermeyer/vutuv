@@ -755,8 +755,9 @@ the resulting ~200px rail width. --%>
 
     <%!-- Links: preview cards built from the page screenshots that
     Vutuv.PageScreenshot captures on link create/update. Lives in the wide
-    main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back
-    to the bundled placeholder while a screenshot is still missing. --%>
+    main column so the thumbnails get room; <.link_thumb> owns what a link
+    without a screenshot looks like (a blocklisted site names itself, a
+    capture still on its way keeps the placeholder). --%>
     <.card :if={@totals.links > 0 or @as_owner?} id="profile-links">
       <.section_header title={ngettext("Link", "Links", @totals.links)} />
       <.empty_add :if={@as_owner? and @totals.links == 0} href={~p"/settings/links/new"}>
@@ -773,14 +774,7 @@ the resulting ~200px rail width. --%>
             href={VutuvWeb.UrlHTML.linkable_url(url.value)}
             class="block overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
           >
-            <img
-              src={Vutuv.Screenshot.url({url.screenshot, url}, :thumb)}
-              alt={url.description || url.value}
-              width="400"
-              height="264"
-              loading="lazy"
-              class="aspect-[400/264] w-full object-cover"
-            />
+            <.link_thumb url={url} />
           </a>
           <div class="mt-2 min-w-0 text-sm">
             <p :if={url.description} class="mb-0.5 truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>

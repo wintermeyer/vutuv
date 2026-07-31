@@ -45,6 +45,7 @@ defmodule Vutuv.Posts.Screenshots do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Repo
+  alias Vutuv.ScreenshotBlocklist
   alias Vutuv.SocialFeed.Http
   alias Vutuv.YoutubeThumbnail
 
@@ -115,9 +116,10 @@ defmodule Vutuv.Posts.Screenshots do
   The single URL a post should be screenshotted for, or `:none`. Qualifies only
   with **no image attachment** and **exactly one** distinct `http(s)` URL in the
   body (surrounding text is fine). A URL pointing at this installation's own
-  `/settings`, `/admin` or `/system` area, or at a screenshot-blocklisted host
-  (`Vutuv.PageScreenshot.host_blocked?/1`, e.g. `reddit.com`), does **not**
-  qualify — a blocklisted page never screenshots, so no job is even enqueued.
+  `/settings`, `/admin` or `/system` area, or at a blocklisted page
+  (`Vutuv.ScreenshotBlocklist.blocked?/1`, e.g. `heise.de`), does **not**
+  qualify — a blocklisted page never screenshots, so no job is even enqueued
+  and the post simply shows its link.
 
   A cached fediverse post plays by the same rules plus one of its own: a post
   its author put behind a content warning (or flagged sensitive) never
@@ -141,7 +143,7 @@ defmodule Vutuv.Posts.Screenshots do
   end
 
   defp qualify(url) do
-    if own_internal_url?(url) or Vutuv.PageScreenshot.host_blocked?(url),
+    if own_internal_url?(url) or ScreenshotBlocklist.blocked?(url),
       do: :none,
       else: {:ok, url}
   end
@@ -316,6 +318,31 @@ defmodule Vutuv.Posts.Screenshots do
     |> length()
   end
 
+  @doc """
+  Drops every job — queued, ready or failed — whose URL is on the blocklist
+  today, row and stored files alike, and returns how many went.
+
+  The one-shot cleanup after an entry is added (`Vutuv.ScreenshotBlocklist`):
+  such a capture is exactly the consent-banner picture the entry exists to
+  prevent, and nothing would ever replace it, since `reconcile/1` only
+  re-captures when a post's URL changes. Dropping the row is what `reconcile/1`
+  itself does for a post that stopped qualifying, so the card falls back to
+  showing the plain link. Run from a release together with the profile-link
+  half:
+
+      bin/vutuv eval "Vutuv.Release.purge_blocklisted_screenshots()"
+  """
+  def purge_blocklisted do
+    PostScreenshot
+    |> Repo.all()
+    |> Enum.filter(&ScreenshotBlocklist.blocked?(&1.url))
+    |> Enum.map(fn job ->
+      Repo.delete(job)
+      delete(job)
+    end)
+    |> length()
+  end
+
   @doc "Loads one job by id, raising when it is gone (the admin views' reads)."
   def get_job!(id), do: Repo.get!(PostScreenshot, id)
 
@@ -381,13 +408,13 @@ defmodule Vutuv.Posts.Screenshots do
   end
 
   # A property of the target that won't change on retry: an SSRF-refused internal
-  # host, a blocklisted host (`:blocked_host`, a login-walled site we never shoot),
-  # a link that redirects (`:redirect`), or a `4xx` non-200 answer
-  # (`{:bad_status, _}`). Everything else — a `5xx` server error, an unreachable
-  # probe, a missing/crashed/timed-out Chromium — is transient and retries with
-  # backoff until the cap.
+  # host, a blocklisted page (`:blocklisted`, one we never shoot), a link that
+  # redirects (`:redirect`), or a `4xx` non-200 answer (`{:bad_status, _}`).
+  # Everything else — a `5xx` server error, an unreachable probe, a
+  # missing/crashed/timed-out Chromium — is transient and retries with backoff
+  # until the cap.
   defp permanent_failure?(:internal_target), do: true
-  defp permanent_failure?(:blocked_host), do: true
+  defp permanent_failure?(:blocklisted), do: true
   defp permanent_failure?(:redirect), do: true
   defp permanent_failure?({:bad_status, _status}), do: true
   defp permanent_failure?(_reason), do: false

@@ -1,10 +1,15 @@
 defmodule VutuvWeb.Admin.ScreenshotLiveTest do
   @moduledoc """
   The admin link-screenshot view (`/admin/screenshots`): admins-only, a Queue
-  tab (unfinished jobs) and a Gallery tab (captured screenshots linked to their
-  posts), both paginated.
+  tab (unfinished jobs), a Gallery tab (captured screenshots linked to their
+  posts), both paginated, and the Blocklist tab that edits which pages this
+  installation never captures.
+
+  Not async: the blocklist tab's tests rewrite the seeded
+  `screenshot_blocklist_entries` rows, which concurrent modules would convoy on
+  (see `Vutuv.ScreenshotBlocklistTest`).
   """
-  use VutuvWeb.ConnCase
+  use VutuvWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
@@ -12,6 +17,7 @@ defmodule VutuvWeb.Admin.ScreenshotLiveTest do
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Repo
+  alias Vutuv.ScreenshotBlocklist
 
   defp post_for(author) do
     Repo.insert!(%Post{
@@ -120,6 +126,101 @@ defmodule VutuvWeb.Admin.ScreenshotLiveTest do
       {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=gallery")
 
       assert has_element?(view, "nav[aria-label]")
+    end
+  end
+
+  describe "blocklist tab" do
+    setup %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+      %{conn: conn}
+    end
+
+    test "lists the entries this installation is seeded with", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=blocklist")
+
+      [entry] = Enum.filter(ScreenshotBlocklist.list_entries(), &(&1.pattern == "heise.de"))
+      assert has_element?(view, "#blocklist-entry-#{entry.id}")
+    end
+
+    test "an admin adds a page and it stops being captured at once", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=blocklist")
+
+      refute ScreenshotBlocklist.blocked?("https://consent.example/page")
+
+      view
+      |> form("#blocklist-form", entry: %{pattern: "consent.example", note: "Cookie banner"})
+      |> render_submit()
+
+      assert ScreenshotBlocklist.blocked?("https://consent.example/page")
+      assert render(view) =~ "consent.example"
+    end
+
+    test "an entry that names no host is refused with an error, not stored", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=blocklist")
+
+      before = length(ScreenshotBlocklist.list_entries())
+
+      view |> form("#blocklist-form", entry: %{pattern: "https://"}) |> render_submit()
+
+      assert has_element?(view, "#blocklist-form .editform__error")
+      assert length(ScreenshotBlocklist.list_entries()) == before
+    end
+
+    test "an admin removes an entry and that site is captured again", %{conn: conn} do
+      {:ok, entry} = ScreenshotBlocklist.create_entry(%{"pattern" => "gone.example"})
+
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=blocklist")
+
+      view
+      |> element("#blocklist-entry-#{entry.id} button[phx-click=delete-entry]")
+      |> render_click()
+
+      refute has_element?(view, "#blocklist-entry-#{entry.id}")
+      refute ScreenshotBlocklist.blocked?("https://gone.example/x")
+    end
+
+    test "the check box answers what the list covers for a real URL", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=blocklist")
+
+      view
+      |> form("#blocklist-check-form", url: "https://www.heise.de/news/story-1.html")
+      |> render_change()
+
+      assert has_element?(view, "#blocklist-check-result")
+      assert render(view) =~ "no screenshot is taken"
+
+      view |> form("#blocklist-check-form", url: "https://example.com/page") |> render_change()
+
+      assert render(view) =~ "captured as usual"
+    end
+
+    test "the tab reads in German for a German admin", %{conn: conn} do
+      # A one-word label is exactly what `gettext.extract --merge` fuzzy-fills
+      # with something unrelated ("Blocklist" first arrived as "Blockieren"),
+      # and nothing in the build would have noticed.
+      body =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/admin/screenshots?tab=blocklist")
+        |> html_response(200)
+
+      assert body =~ "Blockliste"
+      assert body =~ "Domain oder URL"
+      assert body =~ "URL testen"
+      assert body =~ "Jetzt entfernen"
+    end
+
+    test "the cleanup drops the screenshots taken before an entry existed", %{conn: conn} do
+      blocked = screenshot(status: "ready", url: "https://heise.de/x", screenshot: "aaa111.avif")
+      kept = ready_screenshot()
+
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=blocklist")
+
+      view |> element("#blocklist-purge") |> render_click()
+
+      refute Repo.get(PostScreenshot, blocked.id)
+      assert Repo.get(PostScreenshot, kept.id)
     end
   end
 end

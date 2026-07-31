@@ -96,7 +96,7 @@ Everything else has a default (the vutuv.de production value):
 | `POOL_SIZE` | `10` | DB connection pool |
 | `UPLOADS_DIR_PREFIX` | `/srv/legacy-vutuv` | **Set this.** Root directory for uploaded images (avatars, covers, screenshots, post images, private originals) |
 | `CHROMIUM_PATH` | – | Chromium binary, if not on `$PATH` |
-| `SCREENSHOT_BLOCKED_HOSTS` | `reddit.com` | Comma-separated hosts to never take a link-preview screenshot of (profile links **and** single-link posts). Some sites answer a headless capture with a login/consent wall or block bots outright, so the shot is always a useless placeholder — listing the host skips the Chromium run instead of burning it. Each entry matches the apex host and every subdomain (`old.reddit.com`). Set it (replacing the default) to tune the list for your installation |
+| `SCREENSHOT_BLOCKLIST` | – | Extra pages never to take a link-preview screenshot of, on top of the shipped `reddit.com` and `heise.de`. Comma-separated domains and/or URLs, copied into the blocklist table the first time you migrate; afterwards the live list is edited in the admin area (see "Screenshot blocklist" below) and this variable is inert. `SCREENSHOT_BLOCKED_HOSTS` is the older name and still works |
 | `SMTP_RELAY` | `127.0.0.1` | SMTP server |
 | `SMTP_PORT` | `25` | SMTP port |
 | `SMTP_USERNAME` | – | SMTP auth (empty = no auth) |
@@ -459,6 +459,42 @@ pages; you decide what everyone gets **until** they do.
 
 No configuration file or restart is involved; the defaults live in the
 database and every node picks changes up immediately.
+
+## Screenshot blocklist
+
+vutuv screenshots the pages your members link to: every profile link gets a
+preview thumbnail, and a post that carries a single link and no picture gets a
+preview of that page. Some sites make that pointless — they answer a headless
+browser with a cookie-consent banner, a login wall or a bot check, so the
+"preview" is a picture of a dialog. Those pages belong on the blocklist.
+
+**`/admin` → Link screenshots → Blocklist** (`/admin/screenshots?tab=blocklist`)
+is the editor. An entry is a domain or a URL:
+
+| Entry | Covers |
+| --- | --- |
+| `heise.de` | the whole site: the domain, every subdomain (`www.`, `m.`), every path |
+| `*.heise.de` | the same rule, spelled out |
+| `example.com/news` | that path and everything below it (but not `/newsroom`) |
+| `example.com/*/private` | `*` stands for exactly one path segment |
+| `https://example.com/story-1` | one page; the scheme, a port, `?query` and `#fragment` are ignored |
+
+A change takes effect immediately, on every node — no restart, no config file.
+The tab also has a **Try a URL** box: paste a real link to see whether the
+list covers it, which is the quickest way to check that a new entry does what
+you meant.
+
+Nothing breaks for a listed link. A post shows the plain link, and a profile
+link shows the site's name where the thumbnail would be. Note that adding an
+entry only stops **new** captures: a page screenshotted earlier keeps its
+picture, because a link is re-captured only when its URL changes. The
+**Remove them now** button on the same tab deletes the stored screenshots of
+every page currently on the list; headless, that is
+`bin/vutuv eval "Vutuv.Release.purge_blocklisted_screenshots()"`.
+
+Every installation starts with `reddit.com` and `heise.de`, plus whatever
+`SCREENSHOT_BLOCKLIST` held when you first migrated. Remove any of them here if
+they work fine for you.
 
 ## "I didn't do anything!" — the account-activity log
 

@@ -109,7 +109,7 @@ defmodule Vutuv.Posts.ScreenshotsTest do
     end
 
     test "does not qualify: a screenshot-blocklisted host (reddit.com + subdomains)" do
-      # config/config.exs ships reddit.com on :screenshot_blocked_hosts; a
+      # The seeded blocklist ships reddit.com (Vutuv.ScreenshotBlocklist); a
       # single-URL post pointing at it must not enqueue a job — the capture would
       # only ever be reddit's login/consent wall.
       for url <- ~w(
@@ -122,21 +122,18 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       end
     end
 
-    test "the blocklist is config-driven and honours a per-installation override" do
-      previous = Application.get_env(:vutuv, :screenshot_blocked_hosts)
-      on_exit(fn -> Application.put_env(:vutuv, :screenshot_blocked_hosts, previous) end)
-      Application.put_env(:vutuv, :screenshot_blocked_hosts, ["example.com"])
+    test "the blocklist is admin-editable data, and an added entry takes effect at once" do
+      assert Screenshots.qualifying_url(%Posts.Post{
+               images: [],
+               body: "https://example.com/page"
+             }) == {:ok, "https://example.com/page"}
+
+      {:ok, _entry} = Vutuv.ScreenshotBlocklist.create_entry(%{"pattern" => "example.com"})
 
       assert Screenshots.qualifying_url(%Posts.Post{
                images: [],
                body: "https://example.com/page"
              }) == :none
-
-      # A host no longer on the (overridden) list qualifies again.
-      assert Screenshots.qualifying_url(%Posts.Post{
-               images: [],
-               body: "https://reddit.com/r/elixir"
-             }) == {:ok, "https://reddit.com/r/elixir"}
     end
   end
 
@@ -328,14 +325,14 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       assert Repo.get_by!(PostScreenshot, post_id: post.id).status == "failed"
     end
 
-    test "a blocklisted-host refusal fails permanently (a stale row is never retried)" do
+    test "a blocklisted refusal fails permanently (a stale row is never retried)" do
       # `qualify/1` keeps a blocklisted URL from ever enqueuing, but a row queued
-      # before the host was blocklisted could still reach capture — it must die
+      # before the page was blocklisted could still reach capture — it must die
       # at once, not burn five retries on a shot that can't work.
       post = url_post(user())
       {:ok, _job} = Screenshots.reconcile(post)
 
-      Screenshots.deliver_due(force: true, capture: fn _ -> {:error, :blocked_host} end)
+      Screenshots.deliver_due(force: true, capture: fn _ -> {:error, :blocklisted} end)
 
       assert Repo.get_by!(PostScreenshot, post_id: post.id).status == "failed"
     end

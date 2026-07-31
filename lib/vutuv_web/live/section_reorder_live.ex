@@ -35,7 +35,7 @@ defmodule VutuvWeb.SectionReorderLive do
   use Gettext, backend: VutuvWeb.Gettext
 
   import Ecto.Query, only: [from: 2]
-  import VutuvWeb.UI, only: [row_actions: 1, verified_mark: 1]
+  import VutuvWeb.UI, only: [link_thumb: 1, row_actions: 1, verified_mark: 1]
   import VutuvWeb.UrlHTML, only: [linkable_url: 1, display_url: 1]
   import VutuvWeb.EmailHTML, only: [email_type_label: 1]
   import VutuvWeb.PhoneNumberHTML, only: [phone_type_label: 1]
@@ -183,14 +183,7 @@ defmodule VutuvWeb.SectionReorderLive do
   defp entry_body(%{section: "links"} = assigns) do
     ~H"""
     <a class="reorder__thumb" href={linkable_url(@entry.value)}>
-      <img
-        :if={@entry.screenshot}
-        src={Vutuv.Screenshot.url({@entry.screenshot, @entry}, :thumb)}
-        alt=""
-        width="400"
-        height="264"
-      />
-      <img :if={!@entry.screenshot} src="/images/screenshot.png" alt="" width="400" height="264" />
+      <.link_thumb url={@entry} />
     </a>
     <div class="reorder__text">
       <div :if={@entry.description} class="reorder__title">{@entry.description}</div>

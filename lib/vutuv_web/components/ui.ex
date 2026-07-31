@@ -717,6 +717,58 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The 400×264 preview tile of a profile link, in whichever of its three states
+  the link is in — the one place that decides what a link looks like when there
+  is no screenshot.
+
+    * a stored capture renders as the thumbnail (`Vutuv.Screenshot.url/2`);
+    * a link this installation never captures (`Vutuv.ScreenshotBlocklist` — a
+      consent-banner or login-walled site) renders a calm tile naming the site,
+      because "a screenshot has not been created yet" would be a promise that
+      never comes true here;
+    * anything else is a capture still on its way and keeps the bundled
+      placeholder image.
+
+  Carries `data-link-thumb` with that state (`shot` / `site` / `pending`) for
+  tests. Sizing lives in the component, so both the profile Links card (kit
+  page) and the `/:slug/links` list (classic page) render one tile.
+  """
+  attr(:url, :map, required: true, doc: "a %Vutuv.Profiles.Url{}")
+  attr(:class, :any, default: nil)
+
+  def link_thumb(assigns) do
+    assigns =
+      assigns
+      |> assign(:src, Vutuv.Screenshot.url({assigns.url.screenshot, assigns.url}, :thumb))
+      |> assign(:blocklisted?, Vutuv.ScreenshotBlocklist.blocked?(assigns.url.value))
+
+    ~H"""
+    <div
+      :if={is_nil(@url.screenshot) and @blocklisted?}
+      data-link-thumb="site"
+      class={[
+        "flex aspect-[400/264] w-full items-center justify-center bg-slate-50 px-3 dark:bg-slate-800",
+        @class
+      ]}
+    >
+      <span class="truncate text-sm font-semibold text-slate-600 dark:text-slate-400">
+        {VutuvWeb.UrlHTML.display_url(@url.value)}
+      </span>
+    </div>
+    <img
+      :if={not (is_nil(@url.screenshot) and @blocklisted?)}
+      data-link-thumb={if @url.screenshot, do: "shot", else: "pending"}
+      src={@src}
+      alt={@url.description || VutuvWeb.UrlHTML.display_url(@url.value)}
+      width="400"
+      height="264"
+      loading="lazy"
+      class={["aspect-[400/264] w-full object-cover", @class]}
+    />
+    """
+  end
+
+  @doc """
   The "Other formats" rail card: links to a page's `VutuvWeb.AgentDocs` agent
   siblings (Markdown / plain text / JSON / XML, and the profile additionally
   vCard) under the same URL plus an extension. Shared by the **profile** aside

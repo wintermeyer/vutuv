@@ -17,13 +17,27 @@ defmodule VutuvWeb.ProfileLinksTest do
     assert html =~ ~s(src="/screenshots/#{url.id}/thumb-b0efec47a6e9.avif")
   end
 
-  test "links without a screenshot fall back to the placeholder image", %{conn: conn} do
+  test "links whose capture is still on its way fall back to the placeholder image", %{conn: conn} do
     user = insert_activated_user()
-    insert(:url, user: user, screenshot: nil)
+    insert(:url, user: user, value: "https://example.com/page", screenshot: nil)
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
     assert html =~ ~s(src="/images/screenshot.png")
+  end
+
+  test "a link this installation never captures names the site instead", %{conn: conn} do
+    # "A screenshot has not been created yet" would be a promise that never
+    # comes true for a blocklisted page (Vutuv.ScreenshotBlocklist), so the
+    # tile carries the site's name and the card reads as finished.
+    user = insert_activated_user()
+    insert(:url, user: user, value: "https://www.heise.de/newsticker/x.html", screenshot: nil)
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    refute html =~ ~s(src="/images/screenshot.png")
+    assert html =~ ~s(data-link-thumb="site")
+    assert html =~ "www.heise.de…"
   end
 
   test "the profile preview shows links in the owner's chosen order", %{conn: conn} do

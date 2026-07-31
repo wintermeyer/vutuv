@@ -110,11 +110,17 @@ if config_env() == :prod do
     config :vutuv, :post_draft_retention_days, String.to_integer(days)
   end
 
-  # Hosts to never take a link-preview screenshot of (default `reddit.com`; see
-  # config/config.exs). Comma-separated apex hosts; every subdomain is covered.
-  if blocked = System.get_env("SCREENSHOT_BLOCKED_HOSTS") do
+  # Extra pages a FRESH installation never takes a link-preview screenshot of,
+  # on top of the shipped `reddit.com` + `heise.de` (see config/config.exs for
+  # the entry grammar). Comma-separated domains and/or URLs, copied into the
+  # blocklist table by the migration that created it — after that the live list
+  # is edited at /admin/screenshots?tab=blocklist and this variable is inert.
+  # SCREENSHOT_BLOCKED_HOSTS is the older name of the same knob, still honoured
+  # so an existing installation's .env is carried over rather than dropped.
+  if blocked =
+       System.get_env("SCREENSHOT_BLOCKLIST") || System.get_env("SCREENSHOT_BLOCKED_HOSTS") do
     config :vutuv,
-           :screenshot_blocked_hosts,
+           :screenshot_blocklist,
            blocked |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
   end
 

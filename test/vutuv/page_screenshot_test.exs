@@ -10,6 +10,7 @@ defmodule Vutuv.PageScreenshotTest do
   use Vutuv.DataCase, async: false
 
   import ExUnit.CaptureLog
+  import Vutuv.Factory
 
   alias Vutuv.SocialFeed.Http
 
@@ -163,43 +164,52 @@ defmodule Vutuv.PageScreenshotTest do
     refute File.exists?(args_file)
   end
 
-  describe "host_blocked?/1 (screenshot blocklist)" do
-    test "matches the apex host and every subdomain of a blocklisted host" do
-      # config/config.exs ships reddit.com on the list.
-      assert Vutuv.PageScreenshot.host_blocked?("https://reddit.com/r/elixir")
-      assert Vutuv.PageScreenshot.host_blocked?("https://www.reddit.com/r/elixir")
-      assert Vutuv.PageScreenshot.host_blocked?("http://old.reddit.com/r/programming")
-    end
-
-    test "a host that is not on the list is not blocked" do
-      refute Vutuv.PageScreenshot.host_blocked?("https://example.com/page")
-      # A host that merely ends with the letters but is a different domain.
-      refute Vutuv.PageScreenshot.host_blocked?("https://notreddit.com/page")
-      refute Vutuv.PageScreenshot.host_blocked?("garbage-not-a-url")
-    end
-
-    test "the list is config-driven (a per-installation override is honoured)" do
-      previous = Application.get_env(:vutuv, :screenshot_blocked_hosts)
-      on_exit(fn -> Application.put_env(:vutuv, :screenshot_blocked_hosts, previous) end)
-      Application.put_env(:vutuv, :screenshot_blocked_hosts, ["blocked.example"])
-
-      assert Vutuv.PageScreenshot.host_blocked?("https://blocked.example/x")
-      refute Vutuv.PageScreenshot.host_blocked?("https://reddit.com/r/elixir")
-    end
-  end
-
-  test "capture_framed refuses a blocklisted host before resolving or launching Chromium" do
+  test "capture_framed refuses a blocklisted page before resolving or launching Chromium" do
     args_file =
       Path.join(System.tmp_dir!(), "chromium-args-#{System.unique_integer([:positive])}")
 
     on_exit(fn -> File.rm(args_file) end)
     Application.put_env(:vutuv, :chromium_path, fake_chromium(args_file))
 
-    assert {:error, :blocked_host} =
+    # The seeded blocklist ships reddit.com (see Vutuv.ScreenshotBlocklist).
+    assert {:error, :blocklisted} =
              Vutuv.PageScreenshot.capture_framed("https://reddit.com/r/elixir", "cap3")
 
     # No DNS resolve, no Chromium spawn — the whole point is spending nothing.
     refute File.exists?(args_file)
+  end
+
+  describe "generate_screenshot/1 on a blocklisted link" do
+    setup do
+      user = insert_activated_user()
+      %{url: insert(:url, user: user, value: "https://www.heise.de/newsticker/meldung-1.html")}
+    end
+
+    test "stores nothing and does not flag the link as broken", %{url: url} do
+      # A page we deliberately never capture is not a failure: flagging it would
+      # poison a perfectly good link, and the bulk task would then skip it for
+      # the wrong reason.
+      assert :ok = Vutuv.PageScreenshot.generate_screenshot(url)
+
+      reloaded = Vutuv.Repo.get!(Vutuv.Profiles.Url, url.id)
+      assert is_nil(reloaded.screenshot)
+      assert is_nil(reloaded.broken?)
+    end
+  end
+
+  test "purge_blocklisted/0 drops the screenshots taken before an entry existed" do
+    user = insert_activated_user()
+
+    blocked =
+      insert(:url, user: user, value: "https://www.heise.de/x", screenshot: "a1b2c3d4e5f6.webp")
+
+    kept =
+      insert(:url, user: user, value: "https://example.com/x", screenshot: "b0efec47a6e9.webp")
+
+    assert Vutuv.PageScreenshot.purge_blocklisted() == 1
+
+    assert is_nil(Vutuv.Repo.get!(Vutuv.Profiles.Url, blocked.id).screenshot)
+    assert Vutuv.Repo.get!(Vutuv.Profiles.Url, kept.id).screenshot == "b0efec47a6e9.webp"
   end
 
   test "capture_framed refuses a host that resolves to an internal IP before launching Chromium" do

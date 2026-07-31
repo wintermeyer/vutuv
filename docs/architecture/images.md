@@ -112,13 +112,31 @@ page only ever shows the cookie-consent banner. Any fetch failure falls back
 to the ordinary capture; see the link-screenshots section in
 [posts-and-feed.md](posts-and-feed.md).
 
-Some hosts never yield a useful shot — they answer a headless capture with a
-login/consent wall or block bots outright — so a **screenshot blocklist**
-(`:screenshot_blocked_hosts`, default `["reddit.com"]`, override with
-`SCREENSHOT_BLOCKED_HOSTS`) short-circuits both paths before any Chromium run:
-`Vutuv.PageScreenshot.host_blocked?/1` matches the apex host and every subdomain,
-`capture_framed/2` returns `:blocked_host`, and the post path skips the job
-entirely at `qualifying_url/1`.
+Some pages never yield a useful shot — they answer a headless capture with a
+cookie banner, a login wall or a bot check — so a **screenshot blocklist**
+(`Vutuv.ScreenshotBlocklist`) short-circuits both paths before any Chromium
+run: `blocked?/1` decides, `capture_framed/2` returns `:blocklisted`, and the
+post path skips the job entirely at `qualifying_url/1`.
+
+The list is per-installation **data**, edited by admins at
+`/admin/screenshots?tab=blocklist` (`screenshot_blocklist_entries`, cached in
+`:persistent_term` by `Vutuv.ScreenshotBlocklist.Cache`, reloaded over PubSub
+so every node picks an edit up). `:screenshot_blocklist` in `config/config.exs`
+— `reddit.com` and `heise.de`, or `SCREENSHOT_BLOCKLIST` from the environment —
+is only the seed the creating migration copies in. An entry is a domain
+(`heise.de` / `*.heise.de`, matched at the label boundary, so `www.` and every
+other subdomain is covered but `notheise.de` is not) or a URL
+(`example.com/news`, `example.com/*/private`, `https://example.com/story-1`,
+matched by whole path segments, with scheme, port, query and fragment ignored).
+
+Nothing downstream depends on a screenshot existing: a post shows its plain
+link, and a profile link renders `<.link_thumb>`'s tile naming the site instead
+of the "not created yet" placeholder. Captures taken *before* an entry was
+added are not replaced by anything (a link is only re-captured when its URL
+changes), so the admin page has a cleanup button —
+`Vutuv.PageScreenshot.purge_blocklisted/0` +
+`Vutuv.Posts.Screenshots.purge_blocklisted/0`, also reachable headless as
+`bin/vutuv eval "Vutuv.Release.purge_blocklisted_screenshots()"`.
 
 The capture browser sends vutuv's own `User-Agent`
 (`Vutuv.SocialFeed.Http.user_agent/0`), the same string the HTTP preflight

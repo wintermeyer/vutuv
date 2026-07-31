@@ -910,14 +910,15 @@ ever created): a link to *this* installation's own **`/settings`, `/admin` or
 `/system`** area — the host is derived from `VutuvWeb.Endpoint.host()`, never a
 literal `vutuv.de`, so it holds on any installation, and a shot of those pages
 would only ever be a login redirect or an internal page — and a link to a
-**screenshot-blocklisted host** (`Vutuv.PageScreenshot.host_blocked?/1`, the
-`:screenshot_blocked_hosts` config, default `reddit.com`, override with
-`SCREENSHOT_BLOCKED_HOSTS`). Those sites answer a headless capture with a
-login/consent wall or block bots outright, so the shot is always a useless
-placeholder; skipping them (matched on the apex host and every subdomain)
-spends no Chromium run at all. The same blocklist gates the profile-link
-previews inside `capture_framed/2` (returning `:blocked_host`, a permanent
-outcome).
+**blocklisted page** (`Vutuv.ScreenshotBlocklist.blocked?/1`, the admin-edited
+list at `/admin/screenshots?tab=blocklist`, seeded with `reddit.com` and
+`heise.de`). Those sites answer a headless capture with a cookie banner, a
+login wall or a bot check, so the shot is always a picture of a dialog;
+skipping them spends no Chromium run at all, and the post simply shows its
+link. Entries are domains or URLs — see
+[images.md](images.md) for the grammar. The same blocklist gates the
+profile-link previews inside `capture_framed/2` (returning `:blocklisted`, a
+permanent outcome).
 
 **A YouTube video link stores YouTube's own thumbnail instead of a capture.**
 The watch page answers every logged-out request with the cookie-consent

@@ -3,11 +3,7 @@
   <li>
     <div class="img">
       <a href={linkable_url(url.value)}>
-        <%= if url.screenshot do %>
-          <img src={Vutuv.Screenshot.url({url.screenshot, url}, :thumb)} alt="Screenshot" width="400" height="264" />
-        <% else %>
-          <img src="/images/screenshot.png" alt={gettext("A screenshot has not been created yet.")} width="400" height="264" />
-        <% end %>
+        <.link_thumb url={url} />
       </a>
     </div>
     <div class="text">

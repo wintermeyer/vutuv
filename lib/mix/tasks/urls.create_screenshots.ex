@@ -23,7 +23,12 @@ defmodule Mix.Tasks.Urls.CreateScreenshots do
   defp process_user_urls(user) do
     IO.puts("#{user.first_name} #{user.last_name}")
 
-    for url <- user.urls, !url.screenshot, !url.broken? do
+    # A blocklisted page is skipped outright rather than walked past a Chromium
+    # run that would refuse it anyway (Vutuv.ScreenshotBlocklist).
+    for url <- user.urls,
+        !url.screenshot,
+        !url.broken?,
+        !Vutuv.ScreenshotBlocklist.blocked?(url.value) do
       IO.puts("-> #{url.value}")
       Vutuv.PageScreenshot.generate_screenshot(url)
       :timer.sleep(500)

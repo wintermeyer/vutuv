@@ -27,6 +27,10 @@ config :vutuv, :sweep_account_events, false
 # pref resolution falls back to the shipped defaults and tests inject
 # installation defaults via Vutuv.Prefs.Cache.store/1 (see prefs_test.exs).
 config :vutuv, :prefs_defaults_cache, false
+# Same deal for the screenshot blocklist's cache: with it off, every check
+# reads the table from the calling (sandbox-owning) process, so a test that
+# inserts an entry sees it act immediately.
+config :vutuv, :screenshot_blocklist_cache, false
 config :vutuv, :send_unread_message_emails, false
 config :vutuv, :moderation_sweeper, false
 config :vutuv, :prune_search_history, false

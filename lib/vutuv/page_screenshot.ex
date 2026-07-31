@@ -16,10 +16,13 @@ defmodule Vutuv.PageScreenshot do
 
   require Logger
 
+  import Ecto.Query
+
   alias Vutuv.BrowserFrame
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
+  alias Vutuv.ScreenshotBlocklist
   alias Vutuv.SocialFeed.Http
   alias Vutuv.Ssrf
   alias Vutuv.Ssrf.SocksProxy
@@ -55,9 +58,13 @@ defmodule Vutuv.PageScreenshot do
   than being a dropped `Task.start`) and gated by `:generate_screenshots` (tests
   launch no headless Chromium and never touch the SQL Sandbox from an unrelated
   process). Shared by the HTML link forms and the API's link writes.
+
+  A blocklisted page (`Vutuv.ScreenshotBlocklist`) never gets a task at all —
+  the check is a cached string comparison, cheaper than the process it saves.
   """
   def generate_async(%Url{} = url) do
-    if Application.get_env(:vutuv, :generate_screenshots, true) do
+    if Application.get_env(:vutuv, :generate_screenshots, true) and
+         not ScreenshotBlocklist.blocked?(url.value) do
       Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn -> generate_screenshot(url) end)
     end
 
@@ -67,8 +74,12 @@ defmodule Vutuv.PageScreenshot do
   @doc """
   Renders, frames, and stores the screenshot for `url`.
 
-  On success the URL is marked `broken?: false`. On failure the two kinds of
-  failure are kept apart:
+  On success the URL is marked `broken?: false`. Otherwise three outcomes are
+  kept apart:
+
+    * a **blocklisted** page (`Vutuv.ScreenshotBlocklist`) is not a failure at
+      all: this installation deliberately never captures it, so nothing is
+      logged, nothing is flagged, and the link simply keeps no screenshot;
 
     * a genuinely un-capturable *target* — an SSRF-refused internal host
       (issue #777) — is a permanent property of the URL, so it is marked
@@ -99,10 +110,15 @@ defmodule Vutuv.PageScreenshot do
         File.rm(framed_path)
         :ok
 
-      {:error, reason} when reason in [:internal_target, :blocked_host] ->
-        # A permanent property of this URL and an expected policy outcome — an
-        # SSRF-refused internal host (issue #777) or a blocklisted host that
-        # never screenshots (a login/consent wall). Flag it so the bulk task
+      {:error, :blocklisted} ->
+        # Not a failure: this installation never captures this page (a consent
+        # banner, a login wall). Nothing to log, nothing to flag — the link
+        # renders without a screenshot, which every surface handles.
+        :ok
+
+      {:error, :internal_target = reason} ->
+        # A permanent property of this URL and an expected policy outcome: an
+        # SSRF-refused internal host (issue #777). Flag it so the bulk task
         # never retries it, and log quietly.
         Logger.warning(failure_message(url, reason))
         set_broken(url, true)
@@ -125,9 +141,18 @@ defmodule Vutuv.PageScreenshot do
   # The profile path's own preflight (the post path has its own, ensure_http_ok):
   # resolve the member link's redirect chain, validating every hop, so Chromium
   # only ever receives a public URL. Frames the resolved target.
+  #
+  # The blocklist is consulted on the member's own link first, before the
+  # redirect probe, so a blocklisted site is not even asked for its headers;
+  # `capture_framed/2` checks the *resolved* target again, which is what catches
+  # a shortener pointing at one.
   defp capture_and_frame(url) do
-    with {:ok, target} <- resolve_public_target(url.value) do
-      capture_framed(target, url.id)
+    if ScreenshotBlocklist.blocked?(url.value) do
+      {:error, :blocklisted}
+    else
+      with {:ok, target} <- resolve_public_target(url.value) do
+        capture_framed(target, url.id)
+      end
     end
   end
 
@@ -166,8 +191,8 @@ defmodule Vutuv.PageScreenshot do
   neither gated nor proxied.
   """
   def capture_framed(url_value, id) when is_binary(url_value) do
-    if host_blocked?(url_value) do
-      {:error, :blocked_host}
+    if ScreenshotBlocklist.blocked?(url_value) do
+      {:error, :blocklisted}
     else
       capture_vetted(url_value, id)
     end
@@ -211,33 +236,29 @@ defmodule Vutuv.PageScreenshot do
   end
 
   @doc """
-  True when `url`'s host is on the screenshot blocklist
-  (`:screenshot_blocked_hosts`, default `["reddit.com"]`, override via
-  `SCREENSHOT_BLOCKED_HOSTS`). Those sites answer a headless capture with a
-  login / consent wall or block bots outright, so the shot is never useful
-  preview content — the caller skips the capture instead of spending a Chromium
-  run on it. Matches the apex host and any subdomain (`old.reddit.com`), so one
-  entry covers a site's mirrors.
+  Drops the stored screenshot of every profile link that is on the blocklist
+  today, and returns how many were dropped.
+
+  The one-shot cleanup after an entry is added: a capture taken before that is
+  exactly the useless picture the entry exists to prevent, and it would
+  otherwise sit on the member's profile forever (nothing re-captures a link
+  whose URL has not changed). The files go, the row keeps its URL, and the
+  Links card falls back to naming the site. A moderation scan still pending for
+  such a screenshot resolves to `:gone` and cancels itself.
+
+  On a release:
+
+      bin/vutuv eval "Vutuv.Release.purge_blocklisted_screenshots()"
   """
-  def host_blocked?(url) when is_binary(url) do
-    case URI.parse(url).host do
-      nil -> false
-      host -> host_on_blocklist?(String.downcase(host))
-    end
-  end
-
-  def host_blocked?(_url), do: false
-
-  defp host_on_blocklist?(host) do
-    Enum.any?(blocked_hosts(), fn blocked ->
-      host == blocked or String.ends_with?(host, "." <> blocked)
+  def purge_blocklisted do
+    from(u in Url, where: not is_nil(u.screenshot))
+    |> Repo.all()
+    |> Enum.filter(&ScreenshotBlocklist.blocked?(&1.value))
+    |> Enum.map(fn url ->
+      Vutuv.Screenshot.delete(url)
+      {:ok, _purged} = url |> Ecto.Changeset.change(screenshot: nil) |> Repo.update()
     end)
-  end
-
-  defp blocked_hosts do
-    :vutuv
-    |> Application.get_env(:screenshot_blocked_hosts, [])
-    |> Enum.map(&String.downcase/1)
+    |> length()
   end
 
   # Resolve a member link to the final PUBLIC URL Chromium should shoot,

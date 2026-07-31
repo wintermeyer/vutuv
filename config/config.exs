@@ -71,14 +71,28 @@ config :vutuv, Vutuv.Repo,
 config :vutuv, :generate_screenshots, true
 config :vutuv, :fetch_gravatar, true
 
-# Hosts whose pages are never worth a link-preview screenshot: they answer a
-# headless capture with a login/consent wall or block bots outright, so the
-# shot is always a useless placeholder. Skipping them (in Vutuv.PageScreenshot
-# and the single-link post queue) saves the Chromium run instead of burning it
-# on something that can't work. Matches the apex host and every subdomain
-# (`old.reddit.com`). Override per installation with SCREENSHOT_BLOCKED_HOSTS
-# (comma-separated) in config/runtime.exs.
-config :vutuv, :screenshot_blocked_hosts, ["reddit.com"]
+# Pages that are never worth a link-preview screenshot: they answer a headless
+# capture with a cookie-consent banner, a login wall or a bot check, so the
+# shot is a picture of a dialog rather than of the page. Skipping them (in
+# Vutuv.PageScreenshot and the single-link post queue) saves the Chromium run
+# instead of burning it on something that can't work.
+#
+# An entry is a domain or a URL, see Vutuv.ScreenshotBlocklist:
+#
+#     heise.de                     the site: apex + every subdomain, any path
+#     *.heise.de                   the same rule spelled out
+#     example.com/news             that path and everything below it
+#     example.com/*/private        `*` stands for exactly one path segment
+#     https://example.com/story-1  one page (the scheme is ignored)
+#
+# This is only the SEED a fresh installation starts with: which sites need it
+# changes the day one adds a consent layer, so the live list is data in the
+# `screenshot_blocklist_entries` table, edited at /admin/screenshots?tab=
+# blocklist. The migration that created that table copied this list in once
+# (together with SCREENSHOT_BLOCKLIST from the environment, see
+# config/runtime.exs); editing it afterwards changes nothing on an installation
+# that has already migrated — add the entry in the admin area instead.
+config :vutuv, :screenshot_blocklist, ["reddit.com", "heise.de"]
 
 # AI image moderation (Vutuv.Moderation.ImageScans): every image — uploads
 # and machine-generated screenshots alike — is held in owner-only limbo until
