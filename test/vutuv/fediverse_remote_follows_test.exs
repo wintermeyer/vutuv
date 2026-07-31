@@ -9,10 +9,14 @@ defmodule Vutuv.FediverseRemoteFollowsTest do
   """
   use Vutuv.DataCase, async: false
 
+  import Vutuv.EndpointHostHelper
+
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Social
+  alias Vutuv.Social.Follow, as: SocialFollow
   alias VutuvWeb.Fediverse.Docs
 
   @actor_uri "https://social.example/users/them"
@@ -64,22 +68,6 @@ defmodule Vutuv.FediverseRemoteFollowsTest do
       conn
       |> Plug.Conn.put_resp_content_type(type)
       |> Plug.Conn.send_resp(200, Jason.encode!(body))
-    end)
-  end
-
-  # The endpoint's host, for the one gate that compares an address against this
-  # installation's own name. Phoenix caches the endpoint config, so the app env
-  # alone is not enough — `config_change/2` is what re-reads it.
-  defp with_endpoint_host(host) do
-    original = Application.get_env(:vutuv, VutuvWeb.Endpoint)
-    changed = Keyword.put(original, :url, Keyword.put(original[:url] || [], :host, host))
-
-    Application.put_env(:vutuv, VutuvWeb.Endpoint, changed)
-    VutuvWeb.Endpoint.config_change([{VutuvWeb.Endpoint, changed}], [])
-
-    on_exit(fn ->
-      Application.put_env(:vutuv, VutuvWeb.Endpoint, original)
-      VutuvWeb.Endpoint.config_change([{VutuvWeb.Endpoint, original}], [])
     end)
   end
 
@@ -192,33 +180,96 @@ defmodule Vutuv.FediverseRemoteFollowsTest do
                Fediverse.follow_remote(federated_user(), "@them@social.example")
     end
 
-    test "an address on this very installation is named as a vutuv account" do
+    test "an address on this very installation becomes a vutuv follow, nothing federates" do
       stub_remote(fn _conn -> raise "our own members need no WebFinger lookup" end)
       # The test endpoint answers as "localhost", which is not a Fediverse
       # address at all, so the installation has to wear a real hostname for this
       # gate to be the one that fires.
       with_endpoint_host("vutuv.test")
+      user = federated_user()
       other = insert(:activated_user)
 
-      assert {:error, :local_account} =
-               Fediverse.follow_remote(federated_user(), "@#{other.username}@vutuv.test")
+      assert {:ok, {:local_follow, followed}} =
+               Fediverse.follow_remote(user, "@#{other.username}@vutuv.test")
+
+      assert followed.id == other.id
+      # The plain vutuv follow exists; no signed request, no remote rows.
+      assert Social.user_follows_user?(user.id, other.id)
+      assert Repo.aggregate(Follow, :count) == 0
+      assert Repo.aggregate(RemoteAccount, :count) == 0
+      assert Repo.aggregate(Delivery, :count) == 0
     end
 
     # The `www.` alias is the same installation, and a member pastes whichever
     # spelling their browser gave them. Matching the configured host exactly
     # sent this address off to WebFinger, i.e. had vutuv resolve and follow
     # itself (found on the post lookup in production, issue #1211).
-    test "the www alias of this installation is the same installation" do
+    test "the www alias and a pasted profile URL land the same vutuv follow" do
       stub_remote(fn _conn -> raise "our own members need no WebFinger lookup" end)
       with_endpoint_host("vutuv.test")
-      other = insert(:activated_user)
+      user = federated_user()
+      one = insert(:activated_user)
+      two = insert(:activated_user)
 
-      assert Fediverse.local_host?("https://www.vutuv.test/#{other.username}")
-      assert Fediverse.local_host?("@#{other.username}@www.vutuv.test")
+      assert Fediverse.local_host?("https://www.vutuv.test/#{one.username}")
+      assert Fediverse.local_host?("@#{one.username}@www.vutuv.test")
       refute Fediverse.local_host?("@them@vutuv.test.evil.example")
 
+      assert {:ok, {:local_follow, _}} =
+               Fediverse.follow_remote(user, "@#{one.username}@www.vutuv.test")
+
+      assert {:ok, {:local_follow, _}} =
+               Fediverse.follow_remote(user, "https://www.vutuv.test/@#{two.username}")
+
+      assert Social.user_follows_user?(user.id, one.id)
+      assert Social.user_follows_user?(user.id, two.id)
+    end
+
+    test "one's own address follows nobody" do
+      stub_remote(fn _conn -> raise "our own members need no WebFinger lookup" end)
+      with_endpoint_host("vutuv.test")
+      user = federated_user()
+
+      assert {:error, :own_account} =
+               Fediverse.follow_remote(user, "@#{user.username}@vutuv.test")
+
+      assert Repo.aggregate(SocialFollow, :count) == 0
+      assert Repo.aggregate(Follow, :count) == 0
+    end
+
+    test "a local address that names no member keeps the plain refusal" do
+      stub_remote(fn _conn -> raise "our own members need no WebFinger lookup" end)
+      with_endpoint_host("vutuv.test")
+
       assert {:error, :local_account} =
-               Fediverse.follow_remote(federated_user(), "@#{other.username}@www.vutuv.test")
+               Fediverse.follow_remote(federated_user(), "@ghost@vutuv.test")
+    end
+
+    test "a member already followed on vutuv is told so, not followed twice" do
+      stub_remote(fn _conn -> raise "our own members need no WebFinger lookup" end)
+      with_endpoint_host("vutuv.test")
+      user = federated_user()
+      other = insert(:activated_user)
+      {:ok, _} = Social.follow(user, other.id)
+
+      assert {:error, :already_following} =
+               Fediverse.follow_remote(user, "@#{other.username}@vutuv.test")
+
+      assert Repo.aggregate(SocialFollow, :count) == 1
+    end
+
+    # A vutuv follow needs no actor key, so the "you are not federating" gate
+    # does not apply to an address that turns out to live here.
+    test "a member who does not federate can still land the vutuv follow" do
+      stub_remote(fn _conn -> raise "our own members need no WebFinger lookup" end)
+      with_endpoint_host("vutuv.test")
+      user = insert(:activated_user)
+      other = insert(:activated_user)
+
+      assert {:ok, {:local_follow, _}} =
+               Fediverse.follow_remote(user, "@#{other.username}@vutuv.test")
+
+      assert Social.user_follows_user?(user.id, other.id)
     end
 
     test "a typo is refused before the network is touched" do

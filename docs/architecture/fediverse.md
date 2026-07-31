@@ -816,9 +816,18 @@ touched:
 2. **the operator blocklist**, checked three times over one follow: on the typed
    host, on the resolved actor URL and on the canonical id the document claims,
    because each hop can land somewhere else than the last.
-3. **an address on this very installation** is refused as `:local_account` and
-   answered with a link to that member's profile. Following a vutuv member is a
-   vutuv follow.
+3. **an address on this very installation never federates.** When it names a
+   member, `follow_local_member/2` creates the plain vutuv follow on the spot
+   and `{:ok, {:local_follow, member}}` comes back — following a vutuv member
+   is a vutuv follow, so that is what happens instead of a signed request to
+   ourselves. The member's own address is refused as `:own_account` (nobody
+   follows themselves, and `Vutuv.Social.Follow`'s changeset enforces the same
+   for every local follow), a handle that resolves to nobody as
+   `:local_account` with a search hand-off. The same short-circuit sits in the
+   profile's remote-follow dialog (`VutuvWeb.RemoteFollowController`) — a
+   visitor whose "own server" is this vutuv gets the local follow (signed in)
+   or the way to it, never a WebFinger of ourselves — and the account lookup
+   page sends a member-naming address to that member's profile.
 4. **an hourly budget** (`FEDIVERSE_REMOTE_FOLLOW_LIMIT`, the
    `claim_reply_budget/1` pattern), so a compromised account cannot walk a
    server's whole member list.

@@ -280,10 +280,16 @@ defmodule VutuvWeb.FediverseComponents do
   def refusal_message(:instance_blocked),
     do: gettext("This vutuv does not exchange anything with that server.")
 
-  # The address turned out to name somebody on this very vutuv. The caller adds
-  # where to go instead, since only it knows whether the handle resolved.
+  # The address turned out to be on this very vutuv without naming a member —
+  # one that does resolve is followed here on the spot instead of refused. The
+  # caller adds the search hand-off as the way forward.
   def refusal_message(:local_account),
-    do: gettext("That is an address on this vutuv, not another network.")
+    do: gettext("That address is on this vutuv, but it names no member here.")
+
+  # The member's very own address. The wording has to carry the whole answer:
+  # there is no link or button that makes following yourself sensible.
+  def refusal_message(:own_account),
+    do: gettext("That is your own address. You cannot follow yourself.")
 
   # Deliberately without "it is in the list below": the error keeps the active
   # filter and the table is paged, so the row it points at is often genuinely

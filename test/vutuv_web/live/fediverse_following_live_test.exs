@@ -9,9 +9,11 @@ defmodule VutuvWeb.FediverseFollowingLiveTest do
   use VutuvWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import Vutuv.EndpointHostHelper
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
+  alias Vutuv.Social
 
   @actor_uri "https://social.example/users/them"
 
@@ -203,6 +205,71 @@ defmodule VutuvWeb.FediverseFollowingLiveTest do
       assert has_element?(view, "#follow-address[value='@them@social.example']")
       # Arriving is a GET: nothing may have left the building yet.
       assert Repo.all(from(f in Follow, where: f.user_id == ^user.id)) == []
+    end
+  end
+
+  describe "following an address that lives on this vutuv" do
+    setup %{conn: conn} do
+      # Any outbound request here would be vutuv resolving itself (issue #1211).
+      Application.put_env(:vutuv, :fediverse_req_options,
+        plug: fn _conn -> raise "our own members need no WebFinger lookup" end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
+
+      with_endpoint_host("vutuv.test")
+      {conn, user} = federating(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "the member behind the address is followed on vutuv instead", %{conn: conn, user: user} do
+      other = insert_activated_user()
+      {:ok, view, _html} = live(conn, ~p"/settings/fediverse/following")
+
+      view
+      |> element("#follow-form")
+      |> render_submit(%{"address" => "@#{other.username}@vutuv.test"})
+
+      assert Social.user_follows_user?(user.id, other.id)
+      # No Fediverse row, no request row, no refusal: the box simply clears.
+      assert Repo.all(from(f in Follow, where: f.user_id == ^user.id)) == []
+      refute has_element?(view, "#follow-error")
+      refute has_element?(view, "#follow-address[value^='@']")
+    end
+
+    test "one's own address is refused, in words", %{conn: conn, user: user} do
+      {:ok, view, _html} = live(conn, ~p"/settings/fediverse/following")
+
+      view
+      |> element("#follow-form")
+      |> render_submit(%{"address" => "@#{user.username}@vutuv.test"})
+
+      assert has_element?(view, "#follow-error")
+      assert render(view) =~ "yourself"
+      assert Repo.aggregate(Social.Follow, :count) == 0
+    end
+
+    test "the German member reads the German refusal", %{conn: conn, user: user} do
+      {:ok, view, _html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> live(~p"/settings/fediverse/following")
+
+      view
+      |> element("#follow-form")
+      |> render_submit(%{"address" => "@#{user.username}@vutuv.test"})
+
+      assert render(view) =~ "nicht selbst folgen"
+    end
+
+    test "an unknown handle on this host still gets the search hand-off", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/fediverse/following")
+
+      view |> element("#follow-form") |> render_submit(%{"address" => "@ghost@vutuv.test"})
+
+      assert has_element?(view, "#follow-error")
+      assert has_element?(view, "#local-member-search")
     end
   end
 

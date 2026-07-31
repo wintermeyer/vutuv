@@ -7,6 +7,7 @@ defmodule VutuvWeb.FediverseAccountLiveTest do
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import Vutuv.EndpointHostHelper
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
@@ -261,6 +262,36 @@ defmodule VutuvWeb.FediverseAccountLiveTest do
       {:ok, view, _html} = live(conn, ~p"/feed")
 
       assert has_element?(view, "[data-remote-account='#{acc.id}']")
+    end
+  end
+
+  describe "the lookup box on an address of this very vutuv" do
+    test "an address naming a member opens their profile, not a refusal", %{conn: conn} do
+      with_endpoint_host("vutuv.test")
+      {conn, _user} = create_and_login_user(conn)
+      other = insert_activated_user()
+      acc = account()
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+
+      view
+      |> element("#lookup-form")
+      |> render_submit(%{"address" => "@#{other.username}@vutuv.test"})
+
+      assert_redirect(view, "/#{other.username}")
+    end
+
+    test "a handle that names nobody here keeps the refusal", %{conn: conn} do
+      with_endpoint_host("vutuv.test")
+      {conn, _user} = create_and_login_user(conn)
+      acc = account()
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+
+      view |> element("#lookup-form") |> render_submit(%{"address" => "@ghost@vutuv.test"})
+
+      assert has_element?(view, "#lookup-error")
+      assert render(view) =~ "names no member"
     end
   end
 end

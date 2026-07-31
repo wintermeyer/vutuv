@@ -52,15 +52,77 @@ defmodule VutuvWeb.RemoteFollowController do
   end
 
   defp resolve(conn, user, address) do
-    case RemoteFollow.subscribe_url(address, Docs.acct(user)) do
-      {:ok, url} ->
-        redirect(conn, external: url)
+    if local_address?(address) do
+      follow_here(conn, user)
+    else
+      case RemoteFollow.subscribe_url(address, Docs.acct(user)) do
+        {:ok, url} ->
+          redirect(conn, external: url)
 
-      {:error, reason} ->
+        {:error, reason} ->
+          conn
+          |> put_flash(:error, message(reason, address))
+          |> back_to(user)
+      end
+    end
+  end
+
+  # The visitor's "own server" turned out to be this very vutuv. WebFingering
+  # it would be vutuv resolving itself (issue #1211's shape) and could only
+  # ever route the visitor back here — so no request leaves.
+  defp local_address?(address) do
+    case RemoteFollow.parse_address(address) do
+      {:ok, {_user, host}} -> Fediverse.local_host?(host)
+      _ -> false
+    end
+  end
+
+  # A member of this installation asked to follow this profile "from their own
+  # server", and their own server is us: give them the thing they asked for, a
+  # plain vutuv follow — or, signed out, the way to it.
+  defp follow_here(conn, user) do
+    case conn.assigns[:current_user] do
+      nil ->
         conn
-        |> put_flash(:error, message(reason, address))
+        |> put_flash(
+          :error,
+          gettext(
+            "That address is on this vutuv. Sign in and use the Follow button on this profile."
+          )
+        )
+        |> back_to(user)
+
+      viewer ->
+        conn
+        |> flash_local_follow(user, Fediverse.follow_local_member(viewer, user))
         |> back_to(user)
     end
+  end
+
+  defp flash_local_follow(conn, user, {:ok, {:local_follow, _member}}) do
+    put_flash(
+      conn,
+      :info,
+      gettext("You are on this vutuv yourself, so you now follow @%{handle} right here.",
+        handle: user.username
+      )
+    )
+  end
+
+  defp flash_local_follow(conn, _user, {:error, :own_account}) do
+    put_flash(conn, :error, gettext("That is your own profile. You cannot follow yourself."))
+  end
+
+  defp flash_local_follow(conn, user, {:error, :already_following}) do
+    put_flash(
+      conn,
+      :info,
+      gettext("You already follow @%{handle} here.", handle: user.username)
+    )
+  end
+
+  defp flash_local_follow(conn, _user, {:error, _refused}) do
+    put_flash(conn, :error, gettext("Something went wrong"))
   end
 
   # Same gate the profile card renders on: a member who moved their Fediverse

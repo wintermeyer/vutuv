@@ -216,6 +216,15 @@ defmodule VutuvWeb.FediverseAccountLive do
       {:ok, account} ->
         {:noreply, push_navigate(socket, to: ~p"/system/fediverse/account/#{account.id}")}
 
+      {:error, :local_account} ->
+        # An address on this very vutuv: when it names a member, their page is
+        # their profile, so go there instead of refusing; the refusal stays for
+        # a handle that resolves to nobody.
+        case Fediverse.local_member_for_address(address) do
+          nil -> {:noreply, socket |> assign(:address, address) |> assign(:error, :local_account)}
+          member -> {:noreply, push_navigate(socket, to: ~p"/#{member.username}")}
+        end
+
       {:error, reason} ->
         {:noreply, socket |> assign(:address, address) |> assign(:error, reason)}
     end

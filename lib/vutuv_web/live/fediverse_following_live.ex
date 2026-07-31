@@ -38,12 +38,9 @@ defmodule VutuvWeb.FediverseFollowingLive do
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
-  alias Vutuv.Accounts
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
-  alias Vutuv.Fediverse.RemoteFollow
-  alias Vutuv.Handles
   alias Vutuv.Pages
 
   @impl true
@@ -58,7 +55,6 @@ defmodule VutuvWeb.FediverseFollowingLive do
      |> assign(:blocked_reason, Fediverse.follow_refusal(user))
      |> assign(:address, "")
      |> assign(:error, nil)
-     |> assign(:local_member, nil)
      |> assign_totals()}
   end
 
@@ -116,6 +112,17 @@ defmodule VutuvWeb.FediverseFollowingLive do
   @impl true
   def handle_event("follow", %{"address" => address}, socket) do
     case Fediverse.follow_remote(socket.assigns.user, address) do
+      # The address turned out to live here, so the member got a plain vutuv
+      # follow instead of a Fediverse request — say so, since the table below
+      # (remote follows only) will not show it.
+      {:ok, {:local_follow, member}} ->
+        {:noreply,
+         socket
+         |> assign(:address, "")
+         |> assign_error(nil)
+         |> put_flash(:info, local_follow_message(member))
+         |> patch_browse(%{}, &browse_path/1)}
+
       {:ok, follow} ->
         # Patch rather than reload in place: it keeps any active filter and
         # drops the `?address=` the search page may have arrived with, so a
@@ -129,7 +136,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
          |> patch_browse(%{}, &browse_path/1)}
 
       {:error, reason} ->
-        {:noreply, socket |> assign(:address, address) |> assign_error(reason, address)}
+        {:noreply, socket |> assign(:address, address) |> assign_error(reason)}
     end
   end
 
@@ -162,28 +169,21 @@ defmodule VutuvWeb.FediverseFollowingLive do
 
   defp browse_path(query), do: ~p"/settings/fediverse/following?#{query}"
 
-  # The refusal, plus the one thing a refusal sometimes needs beyond a sentence:
-  # the member of this very vutuv the address turned out to name. Resolved here
-  # rather than in the template, so the lookup happens once when the answer
-  # arrives instead of on every later re-render while the message stands.
-  defp assign_error(socket, reason, address \\ nil)
-
-  defp assign_error(socket, :local_account, address),
-    do: socket |> assign(:error, :local_account) |> assign(:local_member, local_member(address))
-
-  defp assign_error(socket, reason, _address),
-    do: socket |> assign(:error, reason) |> assign(:local_member, nil)
-
-  defp local_member(address) do
-    with {:ok, {name, _host}} <- RemoteFollow.parse_address(address),
-         %{username: username} <- Accounts.get_user_by_username(Handles.normalize(name)) do
-      username
-    else
-      _ -> nil
-    end
-  end
+  # `:local_account` now only ever means "our host, but nobody's handle" — an
+  # address that really names a member is followed on the spot by
+  # `Fediverse.follow_remote/2` — so no lookup rides along with the refusal any
+  # more; the template's one extra affordance is the search hand-off.
+  defp assign_error(socket, reason), do: assign(socket, :error, reason)
 
   # ── Wording ───────────────────────────────────────────────────────────────
+
+  # The vutuv follow that answered a Fediverse address (the auto-follow): named
+  # by handle, because the address the member typed was one.
+  defp local_follow_message(member) do
+    gettext("@%{handle} is on this vutuv, so you now follow them here.",
+      handle: member.username
+    )
+  end
 
   # A Follow is a request, so the confirmation says what really happened rather
   # than "Following" — and names the account, since the row it just added may be
@@ -267,20 +267,12 @@ defmodule VutuvWeb.FediverseFollowingLive do
               class="mt-4"
             >
               <:error_detail>
-                <%!-- The profile when the handle really resolves to a member,
-                      the search when it does not (a pasted profile URL that is
-                      local but names nothing) — either way a next step, never a
+                <%!-- A local address that named a member was followed on the
+                      spot, so this refusal means the handle resolved to nobody
+                      (a typo, a rename) — the search is the next step, never a
                       sentence that just stops. --%>
                 <.link
-                  :if={@error == :local_account and @local_member}
-                  navigate={~p"/#{@local_member}"}
-                  id="local-member-link"
-                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-                >
-                  {gettext("Open their profile")} ›
-                </.link>
-                <.link
-                  :if={@error == :local_account and is_nil(@local_member)}
+                  :if={@error == :local_account}
                   navigate={~p"/search?#{[q: @address]}"}
                   id="local-member-search"
                   class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"

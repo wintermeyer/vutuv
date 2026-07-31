@@ -71,6 +71,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Handles
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -634,31 +635,107 @@ defmodule Vutuv.Fediverse do
       this account no longer acts out there.
     * `:invalid_address` / `:unreachable` / `:no_actor` — from the address parse
       and the WebFinger lookup (`RemoteFollow`).
-    * `:local_account` — the address names a member of this very installation.
-      Following them is a vutuv follow, not a Fediverse one, and saying so is far
-      more useful than a signed request to ourselves.
+    * `:local_account` — the address is on this very installation but names no
+      member (a typo, a renamed handle).
+    * `:own_account` — the address is the member's very own. Nobody follows
+      themselves, on either network.
     * `:instance_blocked` — the operator shut that server out.
     * `:follow_capped` — the hourly budget is spent.
     * `:follow_limit` — the member is at `max_remote_follows/0`.
-    * `:already_following` — there is a row for this pair already.
+    * `:already_following` — there is a row for this pair already (the same
+      answer whether the pair is a remote follow or a vutuv one).
     * `:unreachable_actor` — WebFinger answered but the actor document did not.
 
-  The state the row starts in is `requested`, because that is the truth: an
-  account that approves its followers by hand may never answer, and a page that
-  showed "Following" for a request nobody accepted would be lying.
+  **An address that names a member of this installation never federates**:
+  following them is a plain vutuv follow, so that is what happens —
+  `follow_local_member/2` runs and `{:ok, {:local_follow, member}}` comes back
+  instead of a follow row. Doing the real thing beats both a signed request to
+  ourselves and a refusal that sends the member off to do it by hand.
+
+  The state a remote row starts in is `requested`, because that is the truth:
+  an account that approves its followers by hand may never answer, and a page
+  that showed "Following" for a request nobody accepted would be lying.
   """
   def follow_remote(%User{} = user, address) do
-    with :ok <- check_can_follow(user),
-         :ok <- check_follow_limit(user),
-         {:ok, account} <- resolve_remote_account(user, address),
-         {:ok, follow} <- insert_remote_follow(user, account) do
-      enqueue(
-        user,
-        [account.inbox_uri],
-        Docs.follow_activity(user, account.actor_uri, follow.follow_activity_id)
-      )
+    case local_follow_target(address) do
+      :remote ->
+        with :ok <- check_can_follow(user),
+             :ok <- check_follow_limit(user),
+             {:ok, account} <- resolve_remote_account(user, address),
+             {:ok, follow} <- insert_remote_follow(user, account) do
+          enqueue(
+            user,
+            [account.inbox_uri],
+            Docs.follow_activity(user, account.actor_uri, follow.follow_activity_id)
+          )
 
-      {:ok, %{follow | remote_account: account}}
+          {:ok, %{follow | remote_account: account}}
+        end
+
+      # A vutuv follow needs no actor key and spends no outbound budget, so
+      # none of the Fediverse gates apply — only the installation switch, which
+      # is what put the member on a Fediverse surface in the first place.
+      {:member, member} ->
+        with :ok <- check_can_resolve(), do: follow_local_member(user, member)
+
+      :unknown_member ->
+        with :ok <- check_can_resolve(), do: {:error, :local_account}
+    end
+  end
+
+  @doc """
+  The vutuv follow behind a Fediverse address that turned out to name a member
+  of this very installation: a plain `Vutuv.Social.follow/2`, no signed
+  request, no remote rows. `follow_remote/2` lands here by itself; the
+  profile's remote-follow dialog calls it directly when the visitor's "own
+  server" is this one.
+
+  Returns `{:ok, {:local_follow, member}}`, or `{:error, :own_account}` /
+  `{:error, :already_following}` / `{:error, :follow_failed}` (the social
+  context refused — a block between the two).
+  """
+  def follow_local_member(%User{id: id}, %User{id: id}), do: {:error, :own_account}
+
+  def follow_local_member(%User{} = user, %User{} = member) do
+    if Social.user_follows_user?(user.id, member.id) do
+      {:error, :already_following}
+    else
+      case Social.follow(user, member.id) do
+        {:ok, _follow} -> {:ok, {:local_follow, member}}
+        {:error, _refused} -> {:error, :follow_failed}
+      end
+    end
+  end
+
+  @doc """
+  The member of this installation a pasted Fediverse address names, or nil —
+  nil for every remote address too, so it doubles as "is this one of ours, and
+  whose". Pure string work plus one lookup; no network.
+
+  The account lookup page uses it to send an address that names a member to
+  their profile instead of explaining why vutuv will not fetch itself.
+  """
+  def local_member_for_address(address) do
+    case local_follow_target(address) do
+      {:member, member} -> member
+      _ -> nil
+    end
+  end
+
+  # Whether the pasted address stays on this installation, answered before any
+  # Fediverse gate: `{:member, user}` when it names a member here,
+  # `:unknown_member` when the host is ours but the handle resolves to nobody,
+  # `:remote` for everything else (including whatever does not parse — the
+  # remote chain owns those refusals).
+  defp local_follow_target(address) do
+    with {:ok, {name, host}} <- RemoteFollow.parse_address(address),
+         true <- local_host?(host) do
+      case Accounts.get_user_by_username(Handles.normalize(name)) do
+        %User{} = member -> {:member, member}
+        nil -> :unknown_member
+      end
+    else
+      _ -> :remote
     end
   end
 

@@ -8,6 +8,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import Vutuv.EndpointHostHelper
 
   alias Vutuv.Social
   alias VutuvWeb.Fediverse.Docs
@@ -234,6 +235,85 @@ defmodule VutuvWeb.UserProfileFediverseTest do
       conn = post(conn, ~p"/#{user}/fediverse/follow", %{"address" => "@them@social.example"})
 
       assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+    end
+  end
+
+  describe "POST /:slug/fediverse/follow with an address on this very vutuv" do
+    # Whatever happens next, vutuv must not WebFinger itself over it
+    # (issue #1211's shape); the stub proves no request leaves.
+    setup %{conn: conn} do
+      stub_remote(fn _conn -> raise "vutuv must not WebFinger itself" end)
+      with_endpoint_host("vutuv.test")
+      %{conn: conn}
+    end
+
+    test "a signed-in member follows the profile owner on vutuv instead", %{conn: conn} do
+      user = federating_member()
+      {conn, viewer} = create_and_login_user(conn)
+
+      conn =
+        post(conn, ~p"/#{user}/fediverse/follow", %{
+          "address" => "@#{viewer.username}@vutuv.test"
+        })
+
+      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert Social.user_follows_user?(viewer.id, user.id)
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "@#{user.username}"
+    end
+
+    test "the German member reads the German confirmation", %{conn: conn} do
+      user = federating_member()
+      {conn, viewer} = create_and_login_user(conn)
+
+      conn =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> post(~p"/#{user}/fediverse/follow", %{
+          "address" => "@#{viewer.username}@vutuv.test"
+        })
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Sie folgen"
+      assert Social.user_follows_user?(viewer.id, user.id)
+    end
+
+    test "a member already following is told so, and not followed twice", %{conn: conn} do
+      user = federating_member()
+      {conn, viewer} = create_and_login_user(conn)
+      {:ok, _} = Social.follow(viewer, user.id)
+
+      conn =
+        post(conn, ~p"/#{user}/fediverse/follow", %{
+          "address" => "@#{viewer.username}@vutuv.test"
+        })
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "already follow"
+      assert Repo.aggregate(Social.Follow, :count) == 1
+    end
+
+    test "the owner cannot follow themselves", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, user} = Vutuv.Accounts.update_user(user, %{"fediverse_followers?" => "true"})
+
+      conn =
+        post(conn, ~p"/#{user}/fediverse/follow", %{
+          "address" => "@#{user.username}@vutuv.test"
+        })
+
+      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "yourself"
+      assert Repo.aggregate(Social.Follow, :count) == 0
+    end
+
+    test "a signed-out visitor is pointed at the Follow button, nothing happens", %{conn: conn} do
+      user = federating_member()
+
+      conn =
+        post(conn, ~p"/#{user}/fediverse/follow", %{"address" => "@whoever@vutuv.test"})
+
+      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Sign in"
+      assert Repo.aggregate(Social.Follow, :count) == 0
     end
   end
 end
