@@ -297,6 +297,26 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     assert has_element?(view, "[data-remote-network='social.example']")
   end
 
+  test "the header wraps on a phone as name + chip over the meta line", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    cached_post(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    # The chip is the NAME's neighbour, not the row's last item. Trailing the
+    # whole header it was the first thing a narrow column pushed onto a line of
+    # its own, under the handle and the stamp — a stray pill hanging below the
+    # header with nothing beside it. Bound to the name it shares the first line
+    # (both are short) and the phone gets two clean lines instead of three.
+    assert has_element?(view, "[data-remote-author] + [data-remote-network]")
+
+    # And whenever it does wrap, the lines are set apart. `gap-x-2` alone left
+    # a wrapped row with literally zero vertical gap.
+    header = view |> element("[data-remote-header]") |> render()
+    assert [opening_tag] = Regex.run(~r/^<div[^>]*>/, header)
+    assert opening_tag =~ "gap-y-"
+  end
+
   test "muting the account takes its posts out of the feed and keeps the follow", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     post = cached_post(user)

@@ -1133,15 +1133,45 @@ defmodule VutuvWeb.PostComponents do
   # most likely to need it.
   #
   # The handle is shown **without its server** (`Handle.short/1`): the globe chip
-  # at the end of this very row already names the server, so `@tagesschau@ard.social`
+  # in this very row already names the server, so `@tagesschau@ard.social`
   # said it twice and ate the width the stamp needed. The full address stays as
   # the link's `title`, which is also what a member wants to read before they
   # paste it somewhere.
+  #
+  # Three things wrap in that row — the name, the server chip and the muted
+  # `@handle · stamp` line — and on a phone they do not all fit. So the order is
+  # **name, chip, meta**, and the row has a `gap-y`. Both are load-bearing.
+  # Trailing the row, the chip was the item a narrow column pushed out first: it
+  # landed alone on a third line under the handle, touching it, because `gap-x-2`
+  # sets no vertical gap at all. Beside the name it shares the first line (a
+  # display name and a hostname are both short, where the handle *plus* the
+  # stamp are not), so the phone reads as two lines — who and where, then the
+  # address and the time — and a desktop still puts all three on one. Keep the
+  # chip next to the name; `feed_remote_posts_test.exs` fails the build if it
+  # drifts back to the end of the row or the row loses its `gap-y`.
   defp remote_header(assigns) do
     ~H"""
     <div class="flex items-start gap-2">
-      <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
-        <span class="break-words font-semibold text-slate-900 dark:text-white">{@author}</span>
+      <div
+        data-remote-header
+        class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1"
+      >
+        <span data-remote-author class="break-words font-semibold text-slate-900 dark:text-white">
+          {@author}
+        </span>
+        <%!-- Where this came from, up here where the eye lands, not only in the
+        footer under the text. A reply card can leave it to the footer because
+        it is visibly indented under a member's post; in a flat feed that
+        context is gone, and a reader must not have to finish the post before
+        learning it is not a member's. --%>
+        <span
+          :if={@network}
+          data-remote-network={@network}
+          class="inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+        >
+          <span aria-hidden="true">🌐</span>
+          <span class="truncate">{@network}</span>
+        </span>
         <span class="min-w-0 text-xs text-slate-600 dark:text-slate-400">
           <.link
             {remote_actor_destination(@account_id, @actor_uri)}
@@ -1164,19 +1194,6 @@ defmodule VutuvWeb.PostComponents do
             <.post_time at={@at} />
           </.link>
           <.post_time :if={!@permalink} at={@at} />
-        </span>
-        <%!-- Where this came from, up here where the eye lands, not only in the
-        footer under the text. A reply card can leave it to the footer because
-        it is visibly indented under a member's post; in a flat feed that
-        context is gone, and a reader must not have to finish the post before
-        learning it is not a member's. --%>
-        <span
-          :if={@network}
-          data-remote-network={@network}
-          class="inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-        >
-          <span aria-hidden="true">🌐</span>
-          <span class="truncate">{@network}</span>
         </span>
       </div>
       {render_slot(@menu)}
