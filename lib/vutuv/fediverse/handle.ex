@@ -41,6 +41,29 @@ defmodule Vutuv.Fediverse.Handle do
     end
   end
 
+  @doc """
+  The handle without its server: `"@tagesschau@ard.social"` → `"@tagesschau"`.
+
+  What a card header shows once the server is already on the card in its own
+  right — the globe chip beside the name says `ard.social`, so spelling it out a
+  second time in the handle only pushed the timestamp off the line. The full
+  form stays the link's `title`, so it is one hover away and still copyable from
+  the account page, where it is the address somebody pastes into their own
+  server.
+
+  A handle we could only derive as `@host` (no username anywhere in the actor
+  document or its URI) has nothing to cut and is returned unchanged: the host is
+  the name there.
+  """
+  def short("@" <> rest = handle) do
+    case String.split(rest, "@", parts: 2) do
+      [name, host] when name != "" and host != "" -> "@" <> name
+      _ -> handle
+    end
+  end
+
+  def short(handle), do: handle
+
   @doc "The server an account URI names, or nil."
   def host(uri) when is_binary(uri) do
     case URI.parse(uri) do

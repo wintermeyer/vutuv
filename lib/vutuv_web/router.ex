@@ -516,6 +516,7 @@ defmodule VutuvWeb.Router do
         live("/reply/:id", PostLive.RemoteReply, :new)
         live("/reply/post/:id", PostLive.RemotePostReply, :new)
         live("/account/:id", FediverseAccountLive, :show)
+        live("/post/:id", FediversePostLive, :show)
         live("/lookup", FediverseLookupLive, :index)
       end
 

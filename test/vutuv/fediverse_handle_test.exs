@@ -45,6 +45,21 @@ defmodule Vutuv.FediverseHandleTest do
     end
   end
 
+  describe "short/1" do
+    test "drops the server, which the card's globe chip already names" do
+      assert Handle.short("@tagesschau@ard.social") == "@tagesschau"
+      assert Handle.short("@alice@social.example") == "@alice"
+    end
+
+    test "leaves a handle that is only a server alone" do
+      # `display/2`'s last fallback: no username anywhere, so the host IS the
+      # name and there is nothing to cut.
+      assert Handle.short("@social.example") == "@social.example"
+      assert Handle.short("@alice") == "@alice"
+      assert Handle.short(nil) == nil
+    end
+  end
+
   describe "host/1" do
     test "is the URI's host, or nil" do
       assert Handle.host("https://social.example/users/alice") == "social.example"

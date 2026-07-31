@@ -1117,6 +1117,12 @@ defmodule VutuvWeb.PostComponents do
     doc: "the stored account row, when we know it: the handle then links to its page here"
   )
 
+  attr(:permalink, :any,
+    default: nil,
+    doc:
+      "our own page for this content, which the stamp then links to like a member post's does; nil leaves the stamp plain text"
+  )
+
   slot(:menu)
 
   # `break-words` on the author and the handle is not cosmetic: both come
@@ -1125,6 +1131,12 @@ defmodule VutuvWeb.PostComponents do
   # min-content, and on a phone that scrolls the whole page sideways and pushes
   # the ⋯ menu off the viewport — taking Report with it, on exactly the post
   # most likely to need it.
+  #
+  # The handle is shown **without its server** (`Handle.short/1`): the globe chip
+  # at the end of this very row already names the server, so `@tagesschau@ard.social`
+  # said it twice and ate the width the stamp needed. The full address stays as
+  # the link's `title`, which is also what a member wants to read before they
+  # paste it somewhere.
   defp remote_header(assigns) do
     ~H"""
     <div class="flex items-start gap-2">
@@ -1134,9 +1146,24 @@ defmodule VutuvWeb.PostComponents do
           <.link
             {remote_actor_destination(@account_id, @actor_uri)}
             data-remote-account={@account_id}
+            data-remote-handle={@handle}
+            title={@handle}
             class="break-all hover:text-brand-700 dark:hover:text-brand-300 sm:break-normal"
-          >{@handle}</.link>
-          · <.post_time at={@at} />
+          >{Handle.short(@handle)}</.link>
+          ·
+          <%!-- The stamp is the way to this post's own page here, exactly as on a
+          member's card. Only where we have such a page: a reply from another
+          network has none, and a reader who is not signed in cannot open the one
+          a cached post has. --%>
+          <.link
+            :if={@permalink}
+            navigate={@permalink}
+            data-remote-permalink
+            class="hover:text-brand-700 dark:hover:text-brand-300"
+          >
+            <.post_time at={@at} />
+          </.link>
+          <.post_time :if={!@permalink} at={@at} />
         </span>
         <%!-- Where this came from, up here where the eye lands, not only in the
         footer under the text. A reply card can leave it to the footer because
@@ -1691,8 +1718,13 @@ defmodule VutuvWeb.PostComponents do
       happened to pass through this installation would read as the real one
       while being a fraction of it. Replying and resharing are still their own
       issues (#1165, #1166); an absent control beats a dead one.
-    * **no permalink of ours.** The post lives on its own server; "View the
-      original" is where it is read in full.
+    * **a page for our copy, but not a published one.** The stamp in the header
+      links to `/system/fediverse/post/:id` (`VutuvWeb.FediversePostLive`), the
+      same place a member post's stamp leads — that is where the card came from
+      when somebody links it to you, and where a photo-heavy post is readable
+      without the feed around it. It is signed-in only and `noindex`, so the
+      link is rendered only when there is a viewer; the post itself still lives
+      on its own server, and "View the original" is where it is read in full.
 
   A content warning (or the author's `sensitive` flag) renders as a closed lid
   and reveals the text on a click, which is the one thing that author asked for.
@@ -1742,6 +1774,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:account, account)
       |> assign(:initials, name_initials(account.name || account.handle))
       |> assign(:link_screenshot, remote_link_screenshot(post, assigns.images))
+      |> assign(:permalink, remote_post_permalink(post, assigns.viewer))
 
     ~H"""
     <article data-remote-post={@remote_post.id} data-audience={@remote_post.audience}>
@@ -1772,6 +1805,7 @@ defmodule VutuvWeb.PostComponents do
             at={@remote_post.published_at}
             network={@account.host}
             account_id={@account.id}
+            permalink={@permalink}
           >
             <:menu>
               <.card_menu :if={@viewer} id={"remote-post-menu-#{@remote_post.id}"}>
@@ -1860,6 +1894,17 @@ defmodule VutuvWeb.PostComponents do
       do: gettext("Vote on the original"),
       else: gettext("View the original")
   end
+
+  # Our copy's own page (`VutuvWeb.FediversePostLive`), for the stamp in the
+  # header. Signed-in readers only, because that page is: it is assembled from
+  # what somebody else wrote on somebody else's server, so it is a members' page
+  # like every other `/system/fediverse/*` one — and a link an anonymous reader
+  # of the tag timeline could only follow into a login wall is worse than the
+  # plain stamp they have today.
+  defp remote_post_permalink(%RemotePost{id: id}, %User{}),
+    do: ~p"/system/fediverse/post/#{id}"
+
+  defp remote_post_permalink(_post, _viewer), do: nil
 
   @doc """
   The sentence for one `{:error, reason}` refusing the heart above (issue
