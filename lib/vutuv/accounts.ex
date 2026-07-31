@@ -719,6 +719,14 @@ defmodule Vutuv.Accounts do
     # FK from blocking the cascade; that column is gone (drop_audience_groups).
     {:ok, _} = Repo.delete(user)
 
+    # The live member total (the landing-page pill and the top bar's figure)
+    # counts confirmed accounts, so a deletion takes one back out the moment it
+    # commits rather than waiting for the counter's five-minute reconcile. Only
+    # for an account that was ever counted, though: the abandoned-sign-up sweep
+    # deletes unconfirmed registrations through this same function, and those
+    # were never in the total.
+    if counted_member?(user), do: MemberCounter.decrement()
+
     Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
     Enum.each(job_image_tokens, &Vutuv.JobPostingImageStore.delete/1)
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
@@ -746,6 +754,13 @@ defmodule Vutuv.Accounts do
 
     {:ok, user}
   end
+
+  # Whether this account was in the live member total, mirroring the SQL gate
+  # `count_users/0` counts by (`account_confirmed_row/1`): a legacy
+  # `nil`-activated account counts as confirmed, and only an explicit `false` is
+  # a sign-up that never confirmed its PIN.
+  defp counted_member?(%User{email_confirmed?: false}), do: false
+  defp counted_member?(%User{}), do: true
 
   @doc """
   Admin-initiated deletion of `user`. Snapshots the account's identifying

@@ -63,8 +63,9 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
   "Load 50 of 80 more" button that appends to the stream. Displayed counts
   (badges, follower numbers) are compacted site-wide via
   `VutuvWeb.UI.compact_count/1`: exact up to 999, then 1K/80K/5M. The one
-  exception is the landing-page member counter, which shows the **exact** total
-  via `delimited_count/1` (see [realtime.md](realtime.md))
+  exception is the member counter — the landing page's pill and the top bar's
+  total — which shows the **exact** figure via `delimited_count/1` so it
+  visibly ticks (see [realtime.md](realtime.md))
 - **Ids**: all database ids are UUID v7 (`Vutuv.UUIDv7`): time-ordered, minted
   in the app, never integers or UUID v4.
 

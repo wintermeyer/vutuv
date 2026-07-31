@@ -727,4 +727,75 @@ defmodule VutuvWeb.ShellLiveTest do
       assert has_element?(view, @pill, "2")
     end
   end
+
+  describe "the member total in the top bar" do
+    @total "#member-total"
+
+    # The application-wide MemberCounter is quiet in tests (its timers are off),
+    # so the only `{:member_count, n}` on the topic is the one each test sends.
+    defp broadcast_total(n),
+      do: Phoenix.PubSub.broadcast(Vutuv.PubSub, "member_count", {:member_count, n})
+
+    test "ticks the exact total up when the counter broadcasts a new value", %{conn: conn} do
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(insert(:user)))
+
+      broadcast_total(60_123)
+
+      # The precise figure, not a compacted "60K" — a rounded total would never
+      # visibly move, and watching it move is the point of the live counter.
+      assert has_element?(view, @total, "60,123")
+
+      broadcast_total(60_124)
+      assert has_element?(view, @total, "60,124")
+    end
+
+    test "shows the total to a logged-out visitor too", %{conn: conn} do
+      # The member total is public (the landing page has advertised it all
+      # along), so the chrome carries it whether or not anyone is signed in.
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+      broadcast_total(60_123)
+
+      assert has_element?(view, @total, "60,123")
+    end
+
+    test "groups the figure in the viewer's language", %{conn: conn} do
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: %{"locale" => "de"})
+
+      broadcast_total(60_123)
+
+      assert has_element?(view, @total, "60.123")
+      assert has_element?(view, ~s(#{@total}[title="60.123 Mitglieder"]))
+    end
+
+    test "links to the public member directory", %{conn: conn} do
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+      broadcast_total(60_123)
+
+      assert has_element?(view, ~s(#{@total}[href="/system/members"]))
+    end
+
+    test "stays hidden while the counter has no total yet", %{conn: conn} do
+      # The cell reads 0 for the sub-second between boot and the first reconcile.
+      # A "0 members" pill in the chrome would be worse than no pill at all.
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+      broadcast_total(0)
+
+      refute has_element?(view, @total)
+    end
+
+    test "keeps the account controls at the right edge without it", %{conn: conn} do
+      # The pill sits in an always-rendered middle cell of the header grid, so
+      # the bar does not re-flow when the counter has nothing to show.
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+      broadcast_total(0)
+
+      assert has_element?(view, "#member-total-slot")
+    end
+  end
 end

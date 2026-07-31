@@ -21,8 +21,11 @@ defmodule Vutuv.Accounts.MemberCounter do
       only when it actually changed. A burst of sign-ups therefore coalesces
       into at most one broadcast per tick instead of a fan-out storm.
 
-  `VutuvWeb.MemberCountLive` (embedded in the landing page) subscribes and
-  re-renders the member-count pill on each `{:member_count, n}` message.
+  Two LiveViews subscribe and re-render on each `{:member_count, n}` message:
+  `VutuvWeb.MemberCountLive` (the landing page's hero pill) and
+  `VutuvWeb.ShellLive` (the total in the middle of the top bar, so it is on
+  every page). Both feeds move it — `increment/0` on a confirmed sign-up,
+  `decrement/0` on an account deletion.
   """
   use GenServer
 
@@ -57,6 +60,33 @@ defmodule Vutuv.Accounts.MemberCounter do
     end
 
     :ok
+  end
+
+  @doc """
+  Record one member leaving, the mirror of `increment/0`: an account deletion
+  takes a confirmed member out of the advertised total, so the figure ticks back
+  down at once instead of waiting up to five minutes for the next reconcile.
+  Lock-free like its twin.
+  """
+  def decrement do
+    case :persistent_term.get(@persistent_key, nil) do
+      nil -> :ok
+      ref -> subtract_one(ref)
+    end
+
+    :ok
+  end
+
+  # The cell is unsigned, so `:atomics.sub_get/3` wraps to the top of the 64-bit
+  # range rather than returning a negative number. Zero is only reachable in the
+  # sub-second before the first reconcile seeds the cell, but without this guard
+  # one delete landing in that window would advertise eighteen quintillion
+  # members until the next reconcile. Any result in the upper half of the range
+  # is that wrap and never a real member total.
+  @wrapped_below_zero 0x8000_0000_0000_0000
+
+  defp subtract_one(ref) do
+    if :atomics.sub_get(ref, 1, 1) > @wrapped_below_zero, do: :atomics.put(ref, 1, 0)
   end
 
   @doc "Subscribe the calling process to live `{:member_count, n}` updates."

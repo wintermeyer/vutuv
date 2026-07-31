@@ -336,26 +336,54 @@ queries, a consumed stash still full-loads.
 ## Live member counter
 
 The logged-out landing page shows the **exact** number of members and ticks it
-up in real time as people register. `Vutuv.Accounts.MemberCounter` keeps the
-total in a lock-free `:atomics` cell (ref in `:persistent_term`), so the
-per-render read (`count/0`) and the per-signup bump (`increment/0`, called from
-`Accounts.register_user/2`) are O(1) and never hit the database — a signup spike
-just races on one atomic add.
+up in real time as people register, and so does the middle of the top bar on
+every page. `Vutuv.Accounts.MemberCounter` keeps the total in a lock-free
+`:atomics` cell (ref in `:persistent_term`), so the per-render read (`count/0`)
+and the two writes are O(1) and never hit the database — a signup spike just
+races on one atomic add.
+
+Both writes are conditional on the account being one the advertised total
+counts, i.e. a **confirmed** one (`Accounts.count_users/0` counts by
+`account_confirmed_row/1`):
+
+* `increment/0` is called from `Accounts.activate_user/1`, on a genuine first
+  confirmation (`email_confirmed?` false → true), **not** at registration — an
+  unconfirmed sign-up is not a member yet (issue #781).
+* `decrement/0` is called from `Accounts.delete_user/1`, the deletion
+  chokepoint, so a departure shows up at once instead of waiting for the next
+  reconcile. The same function deletes abandoned sign-ups, which were never
+  counted, so it only ticks down for an account that was confirmed (a legacy
+  `nil`-activated one counts as confirmed). The cell is unsigned, so a
+  subtraction that would cross zero — only reachable in the sub-second before
+  the first reconcile seeds it — is clamped instead of wrapping to 2^64-1.
 
 A single owner GenServer seeds the cell from the DB at boot, re-reads the
-authoritative count on a slow timer (self-healing against deletions), and
-broadcasts the value only when it changed, so a burst of signups coalesces into
-at most one PubSub message per tick instead of a fan-out storm.
+authoritative count on a slow timer (self-healing against any out-of-band
+change), and broadcasts the value only when it changed, so a burst of signups
+coalesces into at most one PubSub message per tick instead of a fan-out storm.
 
-The pill is the embedded `VutuvWeb.MemberCountLive` (rendered via `live_render`,
-like the shell).
+Three readers consume that broadcast:
 
-The same broadcast drives a second, **admin-only** reader: the top bar's "new
+The landing page's hero pill is the embedded `VutuvWeb.MemberCountLive`
+(rendered via `live_render`, like the shell).
+
+The top bar's member total (`#member-total` in `ShellLive`) is the same figure
+in the site chrome, so it is on every page. **Every** socket subscribes —
+logged in or not, since the total is public — and takes the new number straight
+from the message. It is `delimited_count/1`, the exact grouped figure, never a
+compacted "60K": a rounded total would never visibly move, and moving is the
+point. Zero renders nothing (the window before the first reconcile), and the
+slot around it is always rendered so the bar keeps its shape either way. The
+pill links to the public member directory at `/system/members`.
+
+The same broadcast drives a third, **admin-only** reader: the top bar's "new
 members today" pill (`#new-members-today` in `ShellLive`), which shows how many
 sign-ups confirmed since Berlin midnight and links into `/admin`. Only an admin
-socket subscribes, so nobody else pays for it, and the pill is rendered only
-above zero — a quiet day adds no chrome. Each `{:member_count, n}` message makes
-it re-read `Vutuv.Dashboard.registrations_today/0` (the figure the admin
+socket runs its query (every socket now receives the messages, but the
+`recount` is gated on `user_admin?`), so nobody else pays for it, and the pill
+is rendered only above zero — a quiet day adds no chrome. Each
+`{:member_count, n}` message makes an admin socket re-read
+`Vutuv.Dashboard.registrations_today/0` (the figure the admin
 dashboard's "New members" tile shows) rather than adjusting a running tally, so
 it cannot drift; `Vutuv.DayClock`'s midnight tick empties it out for the new
 day.

@@ -63,6 +63,60 @@ defmodule Vutuv.Accounts.MemberCounterTest do
     end
   end
 
+  describe "members leaving" do
+    test "deleting a confirmed member ticks the live total back down" do
+      user = insert(:activated_user)
+      # The factory writes the row straight to the database, so count the member
+      # the way a real confirmation would before deleting them again.
+      MemberCounter.increment()
+      before = MemberCounter.count()
+
+      assert {:ok, _user} = Accounts.delete_user(user)
+
+      assert MemberCounter.count() == before - 1
+    end
+
+    test "deleting a legacy nil-activated account ticks the total down too" do
+      user = insert(:user, email_confirmed?: nil)
+      MemberCounter.increment()
+      before = MemberCounter.count()
+
+      assert {:ok, _user} = Accounts.delete_user(user)
+
+      assert MemberCounter.count() == before - 1
+    end
+
+    test "deleting an abandoned sign-up leaves the total alone" do
+      # An unconfirmed registration was never in the advertised total (it only
+      # counts confirmed accounts), and the abandoned-sign-up sweep deletes it
+      # through this same function — so its deletion must not tick anything down.
+      user = insert(:user, email_confirmed?: false)
+      MemberCounter.increment()
+      before = MemberCounter.count()
+
+      assert {:ok, _user} = Accounts.delete_user(user)
+
+      assert MemberCounter.count() == before
+    end
+
+    test "decrement/0 stops at zero instead of wrapping the unsigned cell around" do
+      # Zero is only reachable in the sub-second before the first reconcile
+      # seeds the cell, but an unsigned atomic wraps to 2^64-1 on a subtraction
+      # that would go negative, so without the guard one stray delete would
+      # advertise eighteen quintillion members. This module is synchronous, so
+      # draining and refilling the process-global cell is safe here.
+      start = MemberCounter.count()
+      for _ <- 1..start//1, do: MemberCounter.decrement()
+      assert MemberCounter.count() == 0
+
+      assert :ok = MemberCounter.decrement()
+      assert MemberCounter.count() == 0
+
+      for _ <- 1..start//1, do: MemberCounter.increment()
+      assert MemberCounter.count() == start
+    end
+  end
+
   describe "the broadcasting owner process" do
     # An isolated instance with its own atomic cell and topic, so it neither
     # disturbs nor depends on the application-wide singleton.

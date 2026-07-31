@@ -53,6 +53,12 @@ defmodule VutuvWeb.ShellLive do
     # shell's subscribe on full page loads (the broadcast can fire first).
     path = session["path"] || ""
 
+    # The member total in the middle of the bar is public and on every page, so
+    # every socket subscribes — logged in or not. `Vutuv.Accounts.MemberCounter`
+    # coalesces a burst of sign-ups into at most one message per second, so this
+    # fan-out costs one message per connected tab per second of actual change.
+    if connected?(socket), do: MemberCounter.subscribe()
+
     socket =
       if connected?(socket) do
         # The live socket authenticates from the cookie's `session_token` — the
@@ -158,6 +164,11 @@ defmodule VutuvWeb.ShellLive do
     # Admins get one more figure: how many sign-ups confirmed so far today.
     # Zero renders nothing, so it is also the starting value for everyone else.
     |> assign(:new_members_today, 0)
+    # The registered-member total. An O(1) atomics read, so the throwaway dead
+    # render can afford it too and a classic controller page shows the figure
+    # before its socket connects. Zero (the sub-second before the counter's
+    # first reconcile seeds the cell) renders nothing.
+    |> assign(:member_count, MemberCounter.count())
   end
 
   # Site-wide online presence. The shell is the one component on every page, so
@@ -188,14 +199,13 @@ defmodule VutuvWeb.ShellLive do
   end
 
   # The admin-only sign-up pulse in the top bar: how many members confirmed
-  # their registration since Berlin midnight. Only an admin socket subscribes,
-  # so nobody else pays for the query or the messages. Two feeds keep it true:
-  # `Vutuv.Accounts.MemberCounter` (the member total moves the moment a sign-up
-  # confirms — it coalesces a burst into at most one message per second) and
-  # `Vutuv.DayClock` (Berlin midnight, when the tally starts over).
+  # their registration since Berlin midnight. Only an admin socket runs the
+  # query, so nobody else pays for it. Two feeds keep it true: the
+  # `{:member_count, n}` messages every socket already receives (the total moves
+  # the moment a sign-up confirms) and `Vutuv.DayClock` (Berlin midnight, when
+  # the tally starts over) — which only an admin socket subscribes to.
   defp maybe_start_new_members(socket) do
     if connected?(socket) and socket.assigns.user_admin? do
-      MemberCounter.subscribe()
       DayClock.subscribe()
       recount_new_members(socket)
     else
@@ -322,11 +332,15 @@ defmodule VutuvWeb.ShellLive do
     {:noreply, socket |> assign(:self_online?, show_online?) |> push_online()}
   end
 
-  # The live member total moved — a sign-up just confirmed, or the counter
-  # reconciled itself against the database. Either way today's figure may have
-  # changed, so re-read it (only admin sockets are subscribed).
-  def handle_info({:member_count, _total}, socket),
-    do: {:noreply, recount_new_members(socket)}
+  # The live member total moved — a sign-up confirmed, an account was deleted,
+  # or the counter reconciled itself against the database. Every socket shows
+  # the total, so every socket takes the new figure; only an admin's socket also
+  # re-reads today's tally, which is a database query the rest must not pay for.
+  def handle_info({:member_count, total}, socket) do
+    socket = assign(socket, :member_count, total)
+
+    {:noreply, if(socket.assigns.user_admin?, do: recount_new_members(socket), else: socket)}
+  end
 
   # Berlin midnight: yesterday's sign-ups stop counting, so the pill empties out
   # until the first member of the new day confirms.
@@ -372,6 +386,18 @@ defmodule VutuvWeb.ShellLive do
     )
   end
 
+  # The member-total pill is a glyph and a number, so its accessible name and
+  # hover title are what say "members". `ngettext/4` binds the raw integer to
+  # %{count}, hence the separate %{formatted} placeholder for the grouped figure.
+  defp member_total_label(count) do
+    ngettext(
+      "%{formatted} member",
+      "%{formatted} members",
+      count,
+      formatted: delimited_count(count)
+    )
+  end
+
   # Push the current attention total (unread messages + notifications) to the
   # TabBadge JS hook, which prefixes the browser-tab <title> with "(N)" so a
   # backgrounded tab shows there is something to read. Sent on connect and
@@ -407,58 +433,94 @@ defmodule VutuvWeb.ShellLive do
       the hook owns document.title, not this node. --%>
       <div :if={@user_id} id="tab-badge" phx-hook="TabBadge" phx-update="ignore" class="hidden"></div>
       <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
-        <div class="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
-          <%!-- The logo is "home": for a logged-in member "/" redirects to their
-               home (feed or profile) via RequireUserLoggedOut; logged out it is the
-               landing page. On /feed itself it links to the member's own profile
-               instead (see brand_path/2). --%>
-          <.link
-            href={@brand_path}
-            data-brand
-            class="shrink-0 text-2xl font-extrabold tracking-tight text-brand-800 dark:text-white"
-          >
-            vutuv
-          </.link>
+        <%!-- Three tracks, so the member total in the middle one is centred on
+        the bar itself rather than on whatever space the flanking content leaves
+        over. The side tracks are equal (1fr), so the pill stays put as the nav
+        and the icon row change with the viewer and the breakpoint. --%>
+        <div class="mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 lg:gap-6">
+          <div class="flex items-center gap-4 lg:gap-6">
+            <%!-- The logo is "home": for a logged-in member "/" redirects to their
+                 home (feed or profile) via RequireUserLoggedOut; logged out it is the
+                 landing page. On /feed itself it links to the member's own profile
+                 instead (see brand_path/2). --%>
+            <.link
+              href={@brand_path}
+              data-brand
+              class="shrink-0 text-2xl font-extrabold tracking-tight text-brand-800 dark:text-white"
+            >
+              vutuv
+            </.link>
 
-          <nav aria-label={gettext("Main navigation")} class="hidden items-center gap-1 text-sm font-medium md:flex">
-            <.link
-              :if={@user_id}
-              href={~p"/feed"}
-              aria-current={on_route?(@path, "/feed") && "page"}
-              class={nav_link_class(on_route?(@path, "/feed"))}
-            >
-              {gettext("Feed")}
-            </.link>
-            <%!-- An explicit "Profile" item makes the member's own profile a
-                 named, discoverable destination (the logo's deep-link on /feed
-                 is too subtle). Only rendered for a logged-in member — it needs
-                 @user_param, which only a valid session carries. --%>
-            <.link
-              :if={@user_id}
-              href={~p"/#{@user_param}"}
-              data-nav-profile
-              aria-current={on_route?(@path, "/#{@user_param}") && "page"}
-              class={nav_link_class(on_route?(@path, "/#{@user_param}"))}
-            >
-              {gettext("Profile")}
-            </.link>
-            <.link
-              href={~p"/listings/most_followed_users"}
-              aria-current={on_route?(@path, "/listings/most_followed_users") && "page"}
-              class={nav_link_class(on_route?(@path, "/listings/most_followed_users"))}
-            >
-              {gettext("Network")}
-            </.link>
-            <.link
-              href={~p"/jobs"}
-              aria-current={on_route?(@path, "/jobs") && "page"}
-              class={nav_link_class(on_route?(@path, "/jobs"))}
-            >
-              {gettext("Jobs")}
-            </.link>
-          </nav>
+            <nav aria-label={gettext("Main navigation")} class="hidden items-center gap-1 text-sm font-medium md:flex">
+              <.link
+                :if={@user_id}
+                href={~p"/feed"}
+                aria-current={on_route?(@path, "/feed") && "page"}
+                class={nav_link_class(on_route?(@path, "/feed"))}
+              >
+                {gettext("Feed")}
+              </.link>
+              <%!-- An explicit "Profile" item makes the member's own profile a
+                   named, discoverable destination (the logo's deep-link on /feed
+                   is too subtle). Only rendered for a logged-in member — it needs
+                   @user_param, which only a valid session carries. --%>
+              <.link
+                :if={@user_id}
+                href={~p"/#{@user_param}"}
+                data-nav-profile
+                aria-current={on_route?(@path, "/#{@user_param}") && "page"}
+                class={nav_link_class(on_route?(@path, "/#{@user_param}"))}
+              >
+                {gettext("Profile")}
+              </.link>
+              <.link
+                href={~p"/listings/most_followed_users"}
+                aria-current={on_route?(@path, "/listings/most_followed_users") && "page"}
+                class={nav_link_class(on_route?(@path, "/listings/most_followed_users"))}
+              >
+                {gettext("Network")}
+              </.link>
+              <.link
+                href={~p"/jobs"}
+                aria-current={on_route?(@path, "/jobs") && "page"}
+                class={nav_link_class(on_route?(@path, "/jobs"))}
+              >
+                {gettext("Jobs")}
+              </.link>
+            </nav>
+          </div>
 
-          <div class="ml-auto flex items-center gap-1">
+          <%!-- The registered-member total, the one figure that belongs to the
+          whole site rather than to the viewer, so it sits in the middle of the
+          bar on every page. It is the exact, grouped number (never a compacted
+          "60K"): it ticks up the moment a sign-up confirms and back down when an
+          account is deleted, live from Vutuv.Accounts.MemberCounter over PubSub,
+          and a rounded figure would never visibly move. The slot is always
+          rendered so the bar keeps its shape while the counter has nothing to
+          show, and the pill links to the public member directory — the page that
+          answers "who are those members?".
+
+          `md:hidden lg:inline-flex` is a fit, not a taste: measured at 768px
+          with the German labels, an admin's bar needs 757 of the 736 available
+          pixels once this pill joins it (the desktop nav appears at md while
+          the width does not grow until lg). Below md the nav is hidden and
+          there is ~72px to spare; at lg there is ~219px. So it shows
+          everywhere except that one band, where nothing would fit anyway. --%>
+          <div id="member-total-slot" class="flex justify-center">
+            <.link
+              :if={@member_count > 0}
+              id="member-total"
+              href={~p"/system/members"}
+              title={member_total_label(@member_count)}
+              aria-label={member_total_label(@member_count)}
+              class="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-brand-700 sm:px-3 md:hidden lg:inline-flex dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-brand-100"
+            >
+              <.icon_users />
+              <span class="tabular-nums">{delimited_count(@member_count)}</span>
+            </.link>
+          </div>
+
+          <div class="flex items-center justify-end gap-1">
             <%!-- Admins only: today's confirmed sign-ups (German calendar day),
             live from MemberCounter and reset by the DayClock at Berlin
             midnight. Rendered only when there is something to report, so a
@@ -720,6 +782,15 @@ defmodule VutuvWeb.ShellLive do
     ~H"""
     <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+    </svg>
+    """
+  end
+
+  # A small group of people: the "members" glyph on the site-wide member total.
+  defp icon_users(assigns) do
+    ~H"""
+    <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
     </svg>
     """
   end
