@@ -66,7 +66,9 @@ defmodule VutuvWeb.MultipartFormFallbackTest do
     end
 
     test "the profile basics form stays multipart (the fallback's target)" do
-      template = File.read!(Path.expand("../../lib/vutuv_web/templates/user/edit.html.heex", __DIR__))
+      template =
+        File.read!(Path.expand("../../lib/vutuv_web/templates/user/edit.html.heex", __DIR__))
+
       assert template =~ "multipart"
     end
   end
