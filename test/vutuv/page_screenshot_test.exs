@@ -36,8 +36,9 @@ defmodule Vutuv.PageScreenshotTest do
   end
 
   # A stand-in "Chromium" that records its argv (one element per line, so the
-  # space-carrying `--host-resolver-rules=MAP * <ip>` stays one line) and writes
-  # no screenshot. Lets a test assert the exact command line without a browser.
+  # space-carrying `--host-resolver-rules=MAP * ~NOTFOUND,...` stays one line)
+  # and writes no screenshot. Lets a test assert the exact command line without
+  # a browser.
   defp fake_chromium(args_file) do
     path = Path.join(System.tmp_dir!(), "fake-chromium-#{System.unique_integer([:positive])}")
     File.write!(path, "#!/bin/sh\nprintf '%s\\n' \"$@\" > #{args_file}\n")
@@ -79,48 +80,45 @@ defmodule Vutuv.PageScreenshotTest do
     assert "--user-agent=#{Http.user_agent()}" in args
   end
 
-  describe "capture_args/3 host-resolver pinning (SSRF egress control)" do
-    test "no pin IP means no --host-resolver-rules flag (unchanged behaviour)" do
+  describe "capture_args/3 proxy egress (SSRF control)" do
+    test "no proxy port means no proxy and no resolver flags (EvidenceScreenshot's own-host path)" do
       args = Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png")
+      refute Enum.any?(args, &String.starts_with?(&1, "--proxy-server"))
       refute Enum.any?(args, &String.starts_with?(&1, "--host-resolver-rules"))
     end
 
-    test "a pin IP maps EVERY host Chromium resolves to that one vetted address" do
+    test "a proxy port routes every connection through the loopback SOCKS proxy, DNS included" do
       args =
-        Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png",
-          pin_ip: {93, 184, 216, 34}
-        )
+        Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png", proxy_port: 1080)
 
-      # `MAP * <ip>` pins the seed host, its subresources, and any redirect /
-      # <meta refresh> / JS navigation to the single public IP we already
-      # vetted, so Chromium cannot be steered onto an internal host after the
-      # seed URL passed the guard (GHSA-mmjf-8cwc-6vwv).
-      assert "--host-resolver-rules=MAP * 93.184.216.34" in args
+      # Chromium treats `socks5://` as remote-DNS: it sends the proxy each
+      # hostname in CONNECT instead of resolving it locally, which is what
+      # lets the proxy vet every connection (seed, subresources, redirects).
+      assert "--proxy-server=socks5://127.0.0.1:1080" in args
+
+      # Belt and braces from Chromium's own SOCKS recipe: any name resolution
+      # that would happen OUTSIDE the proxy fails (`~NOTFOUND`), so nothing
+      # can slip past the vetting — fail closed, per the safety-check rule.
+      assert "--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1" in args
     end
 
-    test "the URL stays the final positional argument, after the pin flag" do
+    test "the URL stays the final positional argument, after the proxy flags" do
       args =
         Vutuv.PageScreenshot.capture_args("https://example.com/page", "/tmp/out.png",
-          pin_ip: {93, 184, 216, 34}
+          proxy_port: 1080
         )
 
       assert List.last(args) == "https://example.com/page"
     end
-
-    test "an IPv6 pin address is bracketed for the resolver rule" do
-      args =
-        Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png",
-          pin_ip: {0x2606, 0x2800, 0x220, 1, 0x248, 0x1893, 0x25C8, 0x1946}
-        )
-
-      assert "--host-resolver-rules=MAP * [2606:2800:220:1:248:1893:25c8:1946]" in args
-    end
   end
 
-  test "capture_framed pins Chromium to the host's vetted IP (resolve-once, no re-lookup)" do
-    # A public-looking host that resolves to a public IP: capture_framed must
-    # resolve it ONCE and hand Chromium that exact address, so the browser never
-    # does its own lookup that DNS rebinding could flip to an internal IP.
+  test "capture_framed routes Chromium through the vetting SOCKS proxy" do
+    # A public-looking host that resolves publicly: capture_framed must launch
+    # Chromium with ALL egress forced through the loopback SOCKS proxy, which
+    # re-vets every connection's hostname right before dialling it. (The old
+    # `MAP * <vetted-ip>` pin also sent every SUBRESOURCE host to the seed's
+    # IP, which broke CSS/JS on any site serving assets from a CDN domain —
+    # GitHub pages screenshotted as bare unstyled HTML.)
     Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family ->
       {:ok, [{93, 184, 216, 34}]}
     end)
@@ -135,7 +133,34 @@ defmodule Vutuv.PageScreenshotTest do
     # capture_framed returns an error — but the recorded args are what we assert.
     _ = Vutuv.PageScreenshot.capture_framed("https://public.example/page", "cap1")
 
-    assert File.read!(args_file) =~ "--host-resolver-rules=MAP * 93.184.216.34"
+    recorded = File.read!(args_file)
+    assert recorded =~ "--proxy-server=socks5://127.0.0.1:"
+    assert recorded =~ "--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1"
+  end
+
+  test "capture_framed fails closed when the vetting proxy is down: no unprotected Chromium" do
+    # Without the proxy Chromium would fall back to its own DNS and egress,
+    # reopening the SSRF hole — so a missing proxy must abort the capture
+    # entirely (as a transient environment failure), never degrade to an
+    # unvetted run.
+    :ok = Supervisor.terminate_child(Vutuv.Supervisor, Vutuv.Ssrf.SocksProxy)
+    on_exit(fn -> Supervisor.restart_child(Vutuv.Supervisor, Vutuv.Ssrf.SocksProxy) end)
+
+    Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family ->
+      {:ok, [{93, 184, 216, 34}]}
+    end)
+
+    args_file =
+      Path.join(System.tmp_dir!(), "chromium-args-#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm(args_file) end)
+    Application.put_env(:vutuv, :chromium_path, fake_chromium(args_file))
+
+    assert {:error, :proxy_unavailable} =
+             Vutuv.PageScreenshot.capture_framed("https://public.example/page", "cap4")
+
+    # Chromium was never spawned — the whole point of failing closed.
+    refute File.exists?(args_file)
   end
 
   describe "host_blocked?/1 (screenshot blocklist)" do

@@ -139,19 +139,33 @@ be steered onto `169.254.169.254`, `127.0.0.1:<port>`, or any LAN host and
 publish the rendered result on the attacker's own profile/post card. Validating
 only the seed URL does not help — the browser is what does the fetching.
 
-The guard therefore constrains Chromium itself. `Vutuv.PageScreenshot.capture_framed/2`
-resolves the target host **once** through `Vutuv.Ssrf.vetted_address/1`
-(fail-closed: any resolved internal address refuses the whole capture) and pins
-the browser to that exact IP with `--host-resolver-rules=MAP * <vetted-ip>`.
-Chromium then does no DNS of its own, so every request it makes — the seed page,
-its subresources, and any redirect / meta-refresh / in-page navigation — goes to
-the one vetted public address. This also closes the check-vs-fetch (TOCTOU) DNS
-rebinding window, since there is no second lookup to poison. The real hostname
-still rides in `Host:`/SNI, so the intended page renders; only a *different*
-host is pinned to the wrong address and simply fails to load — an accepted
-fidelity trade for cross-host subresources.
+The guard therefore constrains Chromium itself: **all of its egress runs
+through `Vutuv.Ssrf.SocksProxy`**, a loopback SOCKS5 proxy in the application
+supervision tree. Chromium treats a `socks5://` proxy as remote-DNS (it sends
+each hostname to the proxy inside the CONNECT request instead of resolving it
+locally), so the proxy can resolve-and-vet **every connection** — the seed
+page, each subresource host, any redirect / meta-refresh / in-page-navigation
+target, and IP literals — through `Vutuv.Ssrf.vetted_address/1` /
+`internal_ip?/1` right before dialling it, and dials exactly the IP it vetted
+(no second lookup, so no check-vs-fetch DNS-rebinding window). Internal
+targets are refused per connection. A companion
+`--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1` (Chromium's own
+documented SOCKS recipe) makes any name resolution *outside* the proxy fail,
+and `Vutuv.PageScreenshot` refuses to launch Chromium at all when the proxy
+is down (`:proxy_unavailable`) — every degraded path fails closed.
 
-`Vutuv.Moderation.EvidenceScreenshot` calls `capture/3` without a pin, on
+The proxy replaced the original egress control, `--host-resolver-rules=MAP *
+<vetted-ip>` (v7.141.2): pinning **every** name to the seed's IP was equally
+safe but sent every *subresource* host there too, and most large sites serve
+CSS/JS from a separate CDN domain — GitHub's `github.githubassets.com` fetches
+died on a certificate mismatch, so every GitHub link card screenshotted as
+bare unstyled HTML. Per-connection vetting keeps the same guarantees while
+letting cross-host assets load from their real (vetted) addresses.
+`Vutuv.PageScreenshot.capture_framed/2` still resolves the seed host once up
+front, but only to *classify* it (`:internal_target` poisons the row,
+`:unresolvable_target` is retried).
+
+`Vutuv.Moderation.EvidenceScreenshot` calls `capture/3` without the proxy, on
 purpose: it shoots this installation's *own* host (a profile/evidence page),
 which may legitimately be internal.
 

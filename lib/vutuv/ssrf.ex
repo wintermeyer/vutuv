@@ -20,12 +20,14 @@ defmodule Vutuv.Ssrf do
       a fetcher that then re-resolves the host could get a different, internal
       answer.
     * `vetted_address/1` — resolves once and returns the exact public IP to pin
-      the fetcher to, so there is no second lookup to poison. This closes the
-      TOCTOU for the one fetcher that re-resolved on its own, the headless-capture
-      browser: it is handed the vetted IP via `--host-resolver-rules`
-      (`Vutuv.PageScreenshot`, GHSA-mmjf-8cwc-6vwv / CWE-918) rather than the
-      hostname, and every redirect / `<meta refresh>` / in-page navigation it
-      then makes is pinned to that same address too.
+      the fetcher to, so there is no second lookup to poison. For the one
+      fetcher that resolves on its own, the headless-capture browser, this runs
+      inside `Vutuv.Ssrf.SocksProxy`: Chromium egresses through that loopback
+      SOCKS5 proxy, which hands every connection's hostname to
+      `vetted_address/1` and dials exactly the IP it vetted — per connection,
+      covering redirects / `<meta refresh>` / in-page navigation and
+      subresource hosts (`Vutuv.PageScreenshot`, GHSA-mmjf-8cwc-6vwv /
+      CWE-918).
 
   The resolver is injectable via `config :vutuv, :ssrf_resolver` (a
   `fun(charlist, :inet | :inet6) -> {:ok, [ip]} | {:error, term}`) so tests can
@@ -82,9 +84,9 @@ defmodule Vutuv.Ssrf do
   This is what `resolves_to_internal?/1` cannot do on its own: that predicate only
   *checks* the host, and the fetcher then looked it up again — a second lookup that
   could answer with an internal address (DNS rebinding), the TOCTOU acknowledged in
-  the moduledoc. Handing the fetcher the exact IP we validated (the headless-capture
-  browser gets it via `--host-resolver-rules`) removes that second lookup, so there
-  is no window for the answer to change.
+  the moduledoc. Connecting to the exact IP this function validated (for the
+  headless-capture browser, `Vutuv.Ssrf.SocksProxy` does that per connection)
+  removes that second lookup, so there is no window for the answer to change.
 
     * `{:ok, ip}` — a public IP literal (returns itself, no lookup), or a hostname
       whose resolved addresses are **all** public (returns the first, to pin on).

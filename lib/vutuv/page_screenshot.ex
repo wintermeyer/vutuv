@@ -22,6 +22,7 @@ defmodule Vutuv.PageScreenshot do
   alias Vutuv.Repo
   alias Vutuv.SocialFeed.Http
   alias Vutuv.Ssrf
+  alias Vutuv.Ssrf.SocksProxy
 
   @candidate_binaries ~w(chromium chromium-browser google-chrome google-chrome-stable chrome)
   @macos_paths [
@@ -144,18 +145,25 @@ defmodule Vutuv.PageScreenshot do
   internal IP (DNS rebinding, issue #777), so resolve at capture time and refuse
   before handing the URL to Chromium.
 
-  Resolving is done **once** here, and the vetted IP is *pinned* into Chromium
-  via `--host-resolver-rules` (see `capture_args/3`): the browser never does its
-  own DNS lookup, so it cannot be steered onto an internal host by a redirect, a
-  `<meta http-equiv="refresh">`, in-page JavaScript navigation, or a DNS record
-  that flips between our check and Chromium's fetch — the SSRF-via-capture hole
-  of GHSA-mmjf-8cwc-6vwv (CWE-918). A host that resolves only to internal
-  addresses is a permanent property of the URL (`:internal_target`); one that
-  does not resolve at all right now is transient (`:unresolvable_target`), so the
-  caller retries rather than poisoning the row.
+  The resolve here only *classifies* the seed URL — a host resolving solely to
+  internal addresses is a permanent property of the URL (`:internal_target`,
+  never retried); one that does not resolve at all right now is transient
+  (`:unresolvable_target`, the caller retries). The actual SSRF egress control
+  is `Vutuv.Ssrf.SocksProxy`: Chromium is launched with **all** connections
+  forced through that loopback SOCKS5 proxy (see `capture_args/3`), which
+  re-resolves and vets every target — the seed page, each subresource host, any
+  redirect / `<meta refresh>` / JS-navigation destination, and IP literals —
+  right before dialling it, and refuses internal ones. That closes the
+  SSRF-via-capture hole of GHSA-mmjf-8cwc-6vwv (CWE-918) without the collateral
+  of the earlier `MAP * <vetted-ip>` DNS pin, which sent every subresource host
+  to the seed's IP and so broke CSS/JS on any site serving assets from a CDN
+  domain (GitHub screenshotted as bare unstyled HTML). If the proxy is not
+  running, the capture **fails closed** (`:proxy_unavailable`, transient) —
+  Chromium is never launched unprotected.
 
   `Vutuv.Moderation.EvidenceScreenshot` calls `capture/3` directly to shoot the
-  app's own host and is intentionally neither gated nor pinned.
+  app's own host (which may legitimately be internal) and is intentionally
+  neither gated nor proxied.
   """
   def capture_framed(url_value, id) when is_binary(url_value) do
     if host_blocked?(url_value) do
@@ -167,12 +175,25 @@ defmodule Vutuv.PageScreenshot do
 
   defp capture_vetted(url_value, id) do
     case Ssrf.vetted_address(URI.parse(url_value).host) do
-      {:ok, pin_ip} ->
+      {:ok, _public_ip} ->
+        capture_proxied(url_value, id)
+
+      {:error, :internal} ->
+        {:error, :internal_target}
+
+      {:error, :unresolvable} ->
+        {:error, :unresolvable_target}
+    end
+  end
+
+  defp capture_proxied(url_value, id) do
+    case SocksProxy.port() do
+      {:ok, proxy_port} ->
         page_path = tmp_path("page", id, "png")
         framed_path = tmp_path("frame", id, "webp")
 
         try do
-          with :ok <- capture(url_value, page_path, pin_ip: pin_ip),
+          with :ok <- capture(url_value, page_path, proxy_port: proxy_port),
                {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url_value, framed_path) do
             {:ok, framed_path}
           end
@@ -180,11 +201,12 @@ defmodule Vutuv.PageScreenshot do
           File.rm(page_path)
         end
 
-      {:error, :internal} ->
-        {:error, :internal_target}
-
-      {:error, :unresolvable} ->
-        {:error, :unresolvable_target}
+      {:error, :not_running} ->
+        # Fail closed: without the vetting proxy Chromium would do its own DNS
+        # and egress and could be steered onto an internal host, so no capture
+        # happens at all. An environment failure like a missing Chromium —
+        # transient, logged at :error, the row is not poisoned.
+        {:error, :proxy_unavailable}
     end
   end
 
@@ -349,16 +371,25 @@ defmodule Vutuv.PageScreenshot do
   page that scrolls itself on arrival is captured before those tiles are
   painted and stores a blank image (issue #1033).
 
-  `opts[:pin_ip]` (an `:inet.ip_address/0`) adds
-  `--host-resolver-rules=MAP * <ip>`, which forces **every** name Chromium would
-  resolve during the run — the seed host, its subresources, and any redirect /
-  meta-refresh / JavaScript-navigation target — to the single vetted public IP.
-  That is the SSRF egress control (GHSA-mmjf-8cwc-6vwv): Chromium does no DNS of
-  its own, so it cannot reach an internal address the seed URL was validated
-  against. The real hostname still rides in `Host:`/SNI, so the intended page
-  renders; only a *different* host is pinned to the wrong address and simply
-  fails to load. Omitted (`EvidenceScreenshot` shooting our own host), no rule
-  is added and behaviour is unchanged.
+  `opts[:proxy_port]` routes **all** of Chromium's egress through the loopback
+  SOCKS5 vetting proxy (`Vutuv.Ssrf.SocksProxy`) on that port — the SSRF egress
+  control (GHSA-mmjf-8cwc-6vwv). Two flags, both needed:
+
+    * `--proxy-server=socks5://127.0.0.1:<port>` — Chromium treats `socks5://`
+      as remote-DNS (its network-stack docs): it resolves no hostname itself
+      but sends each one to the proxy in the CONNECT request, so the proxy can
+      resolve-and-vet every connection (seed page, subresources, redirect /
+      meta-refresh / JS-navigation targets, IP literals) right before dialling.
+    * `--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1` — Chromium's
+      own documented companion recipe: any name resolution attempted *outside*
+      the proxy fails, so nothing can slip past the vetting (fail closed).
+
+  This replaced pinning every name to the seed's vetted IP (`MAP * <ip>`),
+  which was equally safe but sent every *subresource* host to the seed's
+  address: on any site serving CSS/JS from a CDN domain those fetches died on
+  a certificate mismatch, and e.g. GitHub pages screenshotted as bare
+  unstyled HTML. Omitted (`EvidenceScreenshot` shooting our own, possibly
+  internal, host), no proxy flags are added and Chromium runs direct.
   """
   def capture_args(url, out_path, opts \\ []) do
     {width, height} = Keyword.get(opts, :window, window_size())
@@ -381,20 +412,16 @@ defmodule Vutuv.PageScreenshot do
       "--user-agent=#{Http.user_agent()}",
       "--window-size=#{width},#{height}",
       "--screenshot=#{out_path}"
-    ] ++ host_resolver_args(Keyword.get(opts, :pin_ip)) ++ [url]
+    ] ++ proxy_args(Keyword.get(opts, :proxy_port)) ++ [url]
   end
 
-  # The SSRF pin: map every resolved name to the one vetted IP, or nothing when
-  # unpinned. `MAP * <ip>` still lets Chromium send the correct `Host:`/SNI, so
-  # the seed page renders normally while nothing can be re-resolved elsewhere.
-  defp host_resolver_args(nil), do: []
-  defp host_resolver_args(pin_ip), do: ["--host-resolver-rules=MAP * #{format_pin(pin_ip)}"]
+  defp proxy_args(nil), do: []
 
-  # Chromium's resolver-rule replacement wants a bare IPv4 literal, and a
-  # bracketed IPv6 literal so the optional `:port` suffix stays unambiguous.
-  defp format_pin(pin_ip) do
-    addr = pin_ip |> :inet.ntoa() |> to_string()
-    if tuple_size(pin_ip) == 8, do: "[#{addr}]", else: addr
+  defp proxy_args(proxy_port) do
+    [
+      "--proxy-server=socks5://127.0.0.1:#{proxy_port}",
+      "--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1"
+    ]
   end
 
   @doc "The OS-level ceiling for one Chromium run, in seconds."

@@ -57,6 +57,13 @@ defmodule Vutuv.Application do
         # Must start after PubSub (it depends on it) and before the Endpoint.
         VutuvWeb.Presence,
         {Task.Supervisor, name: Vutuv.TaskSupervisor},
+        # The loopback SOCKS5 proxy every screenshot-Chromium egresses through
+        # (per-connection SSRF vetting; see its moduledoc for why it replaced
+        # the `MAP *` DNS pin). Starts after the TaskSupervisor (connection
+        # handlers run under it). Unconditional even where captures are off
+        # (tests, air-gapped installs): one idle loopback listener, and the
+        # capture path fails closed on `port/1` when it is missing.
+        Vutuv.Ssrf.SocksProxy,
         # Caches + single-flights the inline social feed fetches (Mastodon,
         # Bluesky). Starts after the TaskSupervisor (its fetch tasks run under
         # it); does no work until a profile visit asks, and the per-provider
