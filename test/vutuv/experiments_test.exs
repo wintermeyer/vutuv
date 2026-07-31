@@ -1,5 +1,13 @@
 defmodule Vutuv.ExperimentsTest do
-  use Vutuv.DataCase, async: true
+  @moduledoc """
+  `async: false` on purpose: these tests upsert the same `experiment_stats`
+  rows (the fixed production variants "stube"/"knapp" on today's Berlin day)
+  as `VutuvWeb.LandingExperimentTest`, and two async modules incrementing the
+  same unique-key rows in opposite orders deadlock (40P01) — the lost
+  increment then fails the counting assertions. The variant names are
+  production data, not test literals, so they cannot be uniquified per module.
+  """
+  use Vutuv.DataCase, async: false
 
   alias Vutuv.BerlinTime
   alias Vutuv.Experiments

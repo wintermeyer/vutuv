@@ -8,8 +8,15 @@ defmodule VutuvWeb.LandingExperimentTest do
   sign-up POST *and* the PIN round trip, both of which renew the session — so
   the confirmation tests walk the real registration flow rather than poking
   the context directly.
+
+  `async: false` on purpose: these tests upsert the same `experiment_stats`
+  rows (the fixed production variants "stube"/"knapp" on today's Berlin day)
+  as `Vutuv.ExperimentsTest`, and two async modules incrementing the same
+  unique-key rows in opposite orders deadlock (40P01) — the lost increment
+  then fails the counting assertions. The variant names are production data,
+  not test literals, so they cannot be uniquified per module.
   """
-  use VutuvWeb.ConnCase, async: true
+  use VutuvWeb.ConnCase, async: false
 
   alias Vutuv.Experiments
 
