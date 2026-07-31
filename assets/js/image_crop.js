@@ -36,6 +36,39 @@ function register() {
   })
 }
 
+// Freeze the picked file into an in-memory copy (issue #1227, round 2). WebKit
+// streams a picked file from disk only when the form is SENT, and a photo
+// picked from the Photos media library is a temporary export that can be gone
+// by then (the crop dialog and the rest of the form cost minutes) — the body
+// stream then aborts and Safari submits the whole multipart body as zero
+// bytes, a 400 with no way forward. Right now, at selection time, the bytes
+// are provably readable (the crop dialog reads them too), so copy them into a
+// File backed by RAM and swap it into the input: an in-memory File cannot
+// vanish before send. Guarded by identity so a quick re-pick is never
+// clobbered by a stale read, and skipped for absurd sizes the server would
+// reject anyway.
+const FREEZE_MAX_BYTES = 32 * 1024 * 1024
+
+function freezePickedFile(input, file) {
+  if (!file.arrayBuffer || typeof DataTransfer !== "function") return
+  if (file.size === 0 || file.size > FREEZE_MAX_BYTES) return
+
+  file
+    .arrayBuffer()
+    .then((bytes) => {
+      if (!input.files || input.files[0] !== file) return // re-picked meanwhile
+      const copy = new File([bytes], file.name, {
+        type: file.type,
+        lastModified: file.lastModified,
+      })
+      const dt = new DataTransfer()
+      dt.items.add(copy)
+      input.files = dt.files
+      input.dataset.frozenPick = "1"
+    })
+    .catch(() => {}) // unreadable already — leave the plain upload in place
+}
+
 function onFilePicked(input) {
   const file = input.files && input.files[0]
   const hidden = document.getElementById(input.dataset.cropTarget)
@@ -44,6 +77,8 @@ function onFilePicked(input) {
   // sets it again on Save. A new upload must never inherit the old crop.
   if (hidden) hidden.value = ""
   clearPreview(input)
+  delete input.dataset.frozenPick
+  if (file) freezePickedFile(input, file)
 
   if (!file || !file.type.startsWith("image/") || typeof createImageBitmap !== "function") {
     return // leave the plain upload in place

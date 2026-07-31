@@ -71,5 +71,25 @@ defmodule VutuvWeb.MultipartFormFallbackTest do
 
       assert template =~ "multipart"
     end
+
+    # Round 2 of issue #1227: with a photo selected the form must stay
+    # multipart, and the member's WebKit still sent Content-Length: 0 (Safari
+    # AND the DuckDuckGo browser — the same system WebKit). WebKit streams a
+    # picked file from disk only at send time, and a file picked from the
+    # Photos media library is a temporary export that can vanish before the
+    # member finishes the crop dialog and presses Save — the body stream then
+    # aborts and zero bytes go out. So the crop enhancement freezes the picked
+    # file into an in-memory copy at selection time, when it is provably
+    # readable; an in-memory File is serialized from RAM and cannot vanish.
+    test "image_crop.js freezes a picked photo into memory at selection time" do
+      js = File.read!(Path.expand("../../assets/js/image_crop.js", __DIR__))
+
+      assert js =~ "freezePickedFile",
+             "image_crop.js lost the issue #1227 pick-time in-memory freeze"
+
+      # The mechanism: read the bytes, rebuild the FileList around a copy.
+      assert js =~ "arrayBuffer"
+      assert js =~ "DataTransfer"
+    end
   end
 end
