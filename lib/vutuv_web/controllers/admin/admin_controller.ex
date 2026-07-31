@@ -34,6 +34,7 @@ defmodule VutuvWeb.Admin.AdminController do
       jobs_published_count: jobs_counts.published,
       jobs_open_cases_count: jobs_counts.open_cases,
       pref_overrides_count: map_size(Vutuv.Prefs.list_default_rows()),
+      screenshot_blocklist_count: Vutuv.ScreenshotBlocklist.count_entries(),
       frozen_accounts_count: Vutuv.Deliverability.frozen_count(),
       moderation_frozen_count: Vutuv.Moderation.frozen_accounts_count(),
       fediverse_enabled: Fediverse.enabled?(),

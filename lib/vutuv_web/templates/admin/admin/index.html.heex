@@ -198,6 +198,23 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
         "Auto-generated screenshots for single-link posts: watch the capture queue and browse the gallery of finished shots, each linked to its post."
       )}
     </.admin_card>
+
+    <%!-- Its own card, not a line in the one above: the whole card is a single
+    link, so a second destination needs a second card — and a site that
+    screenshots as a cookie banner is a task an admin comes here to solve, not
+    something to find behind a tab they have to know about. --%>
+    <.admin_card
+      icon="funnel"
+      title={gettext("Screenshot blocklist")}
+      href={~p"/admin/screenshots?tab=blocklist"}
+      id="admin-screenshot-blocklist-link"
+      count={@screenshot_blocklist_count}
+      cta={gettext("Edit the blocklist")}
+    >
+      {gettext(
+        "Pages never to screenshot, because a headless capture only ever gets their cookie banner or login wall. Add a domain or a single URL, and the links stay plain instead."
+      )}
+    </.admin_card>
   </.admin_group>
 
   <.admin_group title={gettext("Communication")}>

@@ -135,6 +135,24 @@ defmodule VutuvWeb.Admin.ScreenshotLiveTest do
       %{conn: conn}
     end
 
+    test "the admin dashboard links straight to it", %{conn: conn} do
+      # A tab nobody can reach from /admin is a feature nobody finds, which is
+      # exactly what was reported the day this shipped.
+      html = conn |> get(~p"/admin") |> html_response(200)
+
+      assert html =~ ~s(id="admin-screenshot-blocklist-link")
+      assert html =~ "/admin/screenshots?tab=blocklist"
+
+      german =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/admin")
+        |> html_response(200)
+
+      assert german =~ "Screenshot-Blockliste"
+    end
+
     test "lists the entries this installation is seeded with", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=blocklist")
 
