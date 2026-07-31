@@ -445,6 +445,31 @@ every activity of a member it finds no key for, silently.
   in the app is, and the footer says only where the reply came from. The cached
   post's card was brought into the same shape in the same change, so the two read
   alike.
+- **Passing a reply on** (issue #1275): `repost_note/2` is `repost_remote_post/2`
+  one table over — the marker (`fediverse_note_reposts`), a signed `Announce` of
+  the reply's own id to the resharer's followers with its author in `cc`, the
+  matching `Undo(Announce)`, the shared hourly boost budget, the withdrawal on
+  leaving. Public replies only, and for the reshare the audience question is
+  asked **first**: no setting of the member's own could make a private reply
+  shareable, so pointing them at one would be a lie. Unlike the like beside it
+  this row is also **read**: `feed_remote_reply_reposts/3` is the feed's seventh
+  source, so a reply somebody here vouched for reaches readers who never opened
+  that conversation, carrying the same "Reposted by" line a reshared post does.
+  That second remote row shape is why `Vutuv.Posts.remote_reply_entry?/1` exists
+  and why every reader of `entry.remote_post` has to ask it first.
+- **Saving one for yourself** (issue #1276): `fediverse_bookmarks`, **one** table
+  for both kinds (two nullable owner columns and a check constraint, the
+  `post_screenshots` pattern) because a bookmark has no audience question, no
+  activity and no per-kind read — it is only ever "what did this member save",
+  which wants the two interleaved. It is the one act here that asks nothing of
+  the member's Fediverse standing: nothing is signed, so a member who does not
+  federate at all can still keep what they read. The gate is the read question
+  alone. Its indexes are deliberately **not partial**: `ON CONFLICT` cannot infer
+  a partial unique index (Postgres answers 42P10), and the whole marker fabric is
+  built on that inference. They surface under `/bookmarks` on an "Other networks"
+  tab — its own tab rather than mixed into the saved posts, because that list has
+  no vutuv author for the "by name" sort and pages a different table, so one
+  stream would need a union pager to stay honest about `more?`.
 - **Holding a post back until its pictures are vetted** (issue #1070): a post's
   images are invisible until the AI scan releases them
   (`Vutuv.Moderation.ImageScans`), so a Note built the instant the post commits
@@ -1147,6 +1172,19 @@ The **reply** heart (issue #1270, its own bullet in the inbound section above)
 is this act on `fediverse_notes` instead of `fediverse_posts`: same activity,
 same addressing, same budget, same withdrawal, same silence about counts. Read
 the two together — a claim that holds for one and not the other is drift.
+
+That pairing is now structural rather than a convention. All six outbound acts
+on something from another network — like, reshare and bookmark, on a cached post
+and on a reply — run through **one** `outbound_act/3` (reload, gate, marker,
+budget, activity, roll back on refusal) over **one** marker fabric parameterized
+by the column that names the subject, and each act is a map naming only what is
+its own. The bar that draws them is one LiveComponent
+(`VutuvWeb.PostLive.RemoteActionsComponent`) wearing the local action bar's
+geometry to the pixel, so a card from another network offers the same four acts
+in the same places as a vutuv post — with no counts, the one deliberate
+difference. Before that, each of the seven hosts that render these cards carried
+its own copy of every handler, which is how the two cards drifted to two and
+three acts in the first place.
 
 ### Answering one of their posts (issue #1165)
 

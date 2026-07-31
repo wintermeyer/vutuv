@@ -1692,6 +1692,7 @@ defmodule Vutuv.Posts do
     [
       &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
       &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2),
       &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :remote)
     ]
   end
@@ -1709,7 +1710,13 @@ defmodule Vutuv.Posts do
       # Sixth: what the accounts the viewer follows out there have
       # re-shared (issue #1167) — a large part of what any account
       # contributes, and invisible here until now.
-      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2)
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2),
+      # Seventh: **replies** from another network that people here have
+      # passed on (issue #1275). The same act as the fifth source one table
+      # over: a reply arrived under somebody's vutuv post, a member here
+      # thought it worth carrying, and that is how it reaches readers who
+      # never opened that conversation.
+      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2)
     ]
   end
 
@@ -1844,7 +1851,15 @@ defmodule Vutuv.Posts do
   through it first, because a remote entry has no author, no thread and no
   engagement here.
   """
-  def remote_feed_entry?(entry), do: not is_nil(entry[:remote_post])
+  def remote_feed_entry?(entry), do: not is_nil(entry[:remote_post]) or remote_reply_entry?(entry)
+
+  @doc """
+  Whether this row is a **reply** from another network rather than a cached post
+  (issue #1275). The second remote row shape, and the one every reader of
+  `entry.remote_post` has to be asked first — that field is nil here, and the
+  card, the content filter and the id all come from `entry.note` instead.
+  """
+  def remote_reply_entry?(entry), do: not is_nil(entry[:note])
 
   defp feed_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     from(p in Post,

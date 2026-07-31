@@ -439,7 +439,8 @@ defmodule VutuvWeb.PostLive.Feed do
 
     muted =
       Enum.filter(socket.assigns.entries, fn entry ->
-        Posts.remote_feed_entry?(entry) and entry.remote_post.remote_account_id == account_id
+        Posts.remote_feed_entry?(entry) and not Posts.remote_reply_entry?(entry) and
+          entry.remote_post.remote_account_id == account_id
       end)
 
     {:noreply,
@@ -792,7 +793,7 @@ defmodule VutuvWeb.PostLive.Feed do
       # plain text: the member muted a word because they do not want to read it,
       # and where it was written changes nothing about that.
       Posts.remote_feed_entry?(entry) ->
-        ContentFilters.filtered_text(entry.remote_post.content_text, compiled)
+        ContentFilters.filtered_text(remote_entry_text(entry), compiled)
 
       # Never the member's own posts. A remote post cannot reach this arm: it has
       # no author here, so the exemption has nothing to match on.
@@ -809,7 +810,11 @@ defmodule VutuvWeb.PostLive.Feed do
   # network (issue #1161) by its row id — it is not a `%Post{}` and has no post
   # id to key on.
   defp filter_key(entry) do
-    if Posts.remote_feed_entry?(entry), do: entry.remote_post.id, else: entry.post.id
+    cond do
+      Posts.remote_reply_entry?(entry) -> entry.note.id
+      Posts.remote_feed_entry?(entry) -> entry.remote_post.id
+      true -> entry.post.id
+    end
   end
 
   # Whether the reader's filters currently hide this entry: it matched one, and
@@ -849,10 +854,19 @@ defmodule VutuvWeb.PostLive.Feed do
   # an assign being flipped: a stream item redraws only when its own entry is
   # handed back, which is also why the state rides the entry. `:flash` is an
   # `{outcome, message}` the act announces itself with when it really happened.
+  # The text a content filter matches on, whichever remote shape the row is.
+  defp remote_entry_text(entry) do
+    if Posts.remote_reply_entry?(entry),
+      do: entry.note.content_text,
+      else: entry.remote_post.content_text
+  end
+
   # "This row is the cached post with that id" — the one predicate the three
   # scans over `:entries` that single a remote post out all read from.
   defp remote_entry?(entry, remote_post_id),
-    do: Posts.remote_feed_entry?(entry) and entry.remote_post.id == remote_post_id
+    do:
+      Posts.remote_feed_entry?(entry) and not Posts.remote_reply_entry?(entry) and
+        entry.remote_post.id == remote_post_id
 
   # The entries carrying a vutuv post. A cached post from another network has
   # `post: nil`, so every batch read and every scan that reaches for
@@ -1053,6 +1067,17 @@ defmodule VutuvWeb.PostLive.Feed do
                   the reader can still open, instead of vanishing (a silently
                   shorter feed confuses and breaks reply threads). --%>
                   <.filtered_placeholder pattern={entry.filtered_by} key={filter_key(entry)} />
+                <% Posts.remote_reply_entry?(entry) -> %>
+                  <%!-- A reply from another network that somebody here passed
+                  on (issue #1275). The same card the conversation draws, with
+                  the reshare line above it — what is new is the sharing. --%>
+                  <.remote_reply_card
+                    note={entry.note}
+                    viewer={@current_user}
+                    marks={entry[:marks]}
+                    reposted_by={entry.reposted_by}
+                    live?
+                  />
                 <% Posts.remote_feed_entry?(entry) -> %>
                   <%!-- A post by an account the reader follows out there: the
                   same remote skin the reply cards wear, one federating heart

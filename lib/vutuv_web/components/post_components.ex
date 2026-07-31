@@ -920,6 +920,12 @@ defmodule VutuvWeb.PostComponents do
       "the viewer's like/repost/bookmark flags for this subject when the host batched them (`Vutuv.Fediverse.liked_ids/2` and friends); nil lets the bar load its own."
   )
 
+  attr(:reposted_by, :any,
+    default: nil,
+    doc:
+      "the member whose reshare put this reply in the reader's feed (issue #1275), or nil in a conversation, where it stands under the post it answers"
+  )
+
   def remote_reply_card(assigns) do
     note = assigns.note
 
@@ -944,6 +950,15 @@ defmodule VutuvWeb.PostComponents do
       id={Fediverse.reply_anchor(@note.id)}
       class="scroll-mt-24"
     >
+      <%!-- Why this reply is in the reader's feed: somebody they follow here
+      passed it on (issue #1275). The same line a reshared post wears, so
+      "somebody carried this to you" reads identically whatever was carried. --%>
+      <.reshare_line
+        :if={@reposted_by}
+        name={full_name(@reposted_by)}
+        navigate={~p"/#{@reposted_by.username}"}
+        data-reshared-reply
+      />
       <div class="flex items-start gap-3">
         <.remote_avatar initials={@initials} />
 

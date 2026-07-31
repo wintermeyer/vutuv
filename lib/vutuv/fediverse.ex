@@ -4680,6 +4680,8 @@ defmodule Vutuv.Fediverse do
   """
   def saved_from_networks(%User{id: user_id}, opts \\ []) do
     q = opts[:q]
+    limit = Keyword.get(opts, :limit, 20)
+    offset = Keyword.get(opts, :offset, 0)
 
     from(b in Bookmark,
       left_join: p in RemotePost,
@@ -4693,9 +4695,15 @@ defmodule Vutuv.Fediverse do
       preload: [remote_post: {p, remote_account: a}, note: n]
     )
     |> saved_matching(q)
+    |> limit(^(limit + 1))
+    |> offset(^offset)
     |> Repo.all()
     |> Enum.map(&saved_entry/1)
   end
+
+  @doc "How many things this member saved from other networks."
+  def saved_from_networks_count(%User{id: user_id}),
+    do: Repo.aggregate(from(b in Bookmark, where: b.user_id == ^user_id), :count)
 
   defp saved_matching(query, q) when is_binary(q) and q != "" do
     like = "%" <> String.replace(q, ~r/[%_]/, "") <> "%"

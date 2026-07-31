@@ -36,18 +36,19 @@ defmodule Vutuv.Repo.Migrations.CreateFediverseBookmarks do
       )
     )
 
-    # One bookmark per member and subject. Two **partial** unique indexes rather
-    # than one over both columns: a NULL is not equal to anything in a btree, so
-    # a plain unique index on the pair would let the same post be saved twice.
-    create(
-      unique_index(:fediverse_bookmarks, [:user_id, :remote_post_id],
-        where: "remote_post_id IS NOT NULL"
-      )
-    )
-
-    create(
-      unique_index(:fediverse_bookmarks, [:user_id, :note_id], where: "note_id IS NOT NULL")
-    )
+    # One bookmark per member and subject: one index per owner column, and
+    # deliberately **not** partial (`where: "... IS NOT NULL"`). A partial unique
+    # index cannot be inferred by `ON CONFLICT (user_id, note_id)` — Postgres
+    # answers 42P10, "no unique or exclusion constraint matching the ON CONFLICT
+    # specification" — and the whole marker fabric is built on that inference.
+    #
+    # Plain indexes are correct here anyway. A NULL is not equal to anything in
+    # a btree, so the `note_id` index constrains nothing for a saved *post*
+    # (whose `note_id` is NULL) — and it does not need to, because the
+    # `remote_post_id` index constrains exactly those rows, and the check
+    # constraint above guarantees every row has one owner or the other.
+    create(unique_index(:fediverse_bookmarks, [:user_id, :remote_post_id]))
+    create(unique_index(:fediverse_bookmarks, [:user_id, :note_id]))
 
     # The cascades' own indexes, so deleting a cached post or an expired reply
     # does not scan this table — both delete in bulk.

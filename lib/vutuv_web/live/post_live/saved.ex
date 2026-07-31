@@ -24,6 +24,7 @@ defmodule VutuvWeb.PostLive.Saved do
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias Vutuv.Posts
@@ -52,7 +53,8 @@ defmodule VutuvWeb.PostLive.Saved do
      |> stream(:posts, [])
      |> stream(:people, [])
      |> stream(:organizations, [])
-     |> stream(:jobs, [])}
+     |> stream(:jobs, [])
+     |> stream(:networks, [])}
   end
 
   @impl true
@@ -97,31 +99,60 @@ defmodule VutuvWeb.PostLive.Saved do
       sort: socket.assigns.sort
     ]
 
-    case {socket.assigns.live_action, socket.assigns.type} do
-      {:likes, :posts} ->
-        {:posts, Posts.liked_posts_page(user, opts)}
+    page(socket.assigns.type, socket.assigns.live_action, user, opts)
+  end
 
-      {:bookmarks, :posts} ->
-        {:posts, Posts.bookmarked_posts_page(user, opts)}
+  # One clause per sub-tab, each branching on which of the two hubs it is —
+  # rather than one `case` over the pair, which grows a branch every time either
+  # axis does and had already outgrown what one function should carry.
+  defp page(:posts, :likes, user, opts), do: {:posts, Posts.liked_posts_page(user, opts)}
+  defp page(:posts, :bookmarks, user, opts), do: {:posts, Posts.bookmarked_posts_page(user, opts)}
+  defp page(:people, :likes, user, opts), do: {:people, Social.liked_users_page(user, opts)}
 
-      {:likes, :people} ->
-        {:people, Social.liked_users_page(user, opts)}
+  defp page(:people, :bookmarks, user, opts),
+    do: {:people, Social.bookmarked_users_page(user, opts)}
 
-      {:bookmarks, :people} ->
-        {:people, Social.bookmarked_users_page(user, opts)}
+  defp page(:organizations, action, user, opts),
+    do: {:organizations, Organizations.saved_organizations_page(user, kind(action), opts)}
 
-      {:likes, :organizations} ->
-        {:organizations, Organizations.saved_organizations_page(user, :like, opts)}
+  defp page(:jobs, action, user, opts),
+    do: {:jobs, Jobs.saved_job_postings_page(user, kind(action), opts)}
 
-      {:bookmarks, :organizations} ->
-        {:organizations, Organizations.saved_organizations_page(user, :bookmark, opts)}
+  defp page(:networks, action, user, opts),
+    do: {:networks, saved_networks_page(action, user, opts)}
 
-      {:likes, :jobs} ->
-        {:jobs, Jobs.saved_job_postings_page(user, :like, opts)}
+  defp kind(:likes), do: :like
+  defp kind(:bookmarks), do: :bookmark
 
-      {:bookmarks, :jobs} ->
-        {:jobs, Jobs.saved_job_postings_page(user, :bookmark, opts)}
-    end
+  # What they saved from other networks (issue #1276). Its own sub-tab rather
+  # than mixed into the posts, and deliberately: this list has no vutuv author
+  # to sort by (the "by name" order the others offer is meaningless here) and it
+  # pages a different table, so merging the two would need a union pager to stay
+  # honest about `more?`. A tab is the smaller, truer answer; the things
+  # themselves read as the same cards.
+  #
+  # Nothing from another network is *liked* into a list — a like out there is a
+  # message to its author, not a shelf of your own — so that half is empty by
+  # construction and the tab is not offered under Likes at all.
+  #
+  # Returns the same `%{entries:, more?:, next_offset:}` shape every other
+  # loader here does: it asks for one row more than it shows and drops it, which
+  # answers "is there another page" without a second count.
+  defp saved_networks_page(:likes, _user, opts),
+    do: %{entries: [], more?: false, next_offset: Keyword.fetch!(opts, :offset)}
+
+  defp saved_networks_page(:bookmarks, user, opts) do
+    limit = Keyword.fetch!(opts, :limit)
+    offset = Keyword.fetch!(opts, :offset)
+
+    rows =
+      Fediverse.saved_from_networks(user,
+        q: Keyword.get(opts, :search),
+        limit: limit,
+        offset: offset
+      )
+
+    %{entries: Enum.take(rows, limit), more?: length(rows) > limit, next_offset: offset + limit}
   end
 
   defp subscribe_posts(entries), do: Enum.each(entries, &Posts.subscribe_post(&1.id))
@@ -129,6 +160,7 @@ defmodule VutuvWeb.PostLive.Saved do
   defp parse_type("people"), do: :people
   defp parse_type("organizations"), do: :organizations
   defp parse_type("jobs"), do: :jobs
+  defp parse_type("networks"), do: :networks
   defp parse_type(_), do: :posts
 
   defp parse_sort("oldest"), do: :oldest
@@ -413,7 +445,17 @@ defmodule VutuvWeb.PostLive.Saved do
   defp type_param(:people), do: "people"
   defp type_param(:organizations), do: "organizations"
   defp type_param(:jobs), do: "jobs"
+  defp type_param(:networks), do: "networks"
   defp type_param(_posts), do: false
+
+  defp networks_empty_text(q) when is_binary(q) and q != "",
+    do: gettext("Nothing saved from other networks matches that.")
+
+  defp networks_empty_text(_q),
+    do:
+      gettext(
+        "Nothing saved from other networks yet. The bookmark on a post or reply from another network keeps it here."
+      )
 
   defp sort_options do
     [
@@ -457,6 +499,17 @@ defmodule VutuvWeb.PostLive.Saved do
           <.subtab patch={saved_path(@live_action, :jobs, @q, @sort)} active?={@type == :jobs} id="subtab-jobs">
             {gettext("Jobs")}
           </.subtab>
+          <%!-- Only under Bookmarks (issue #1276): a like on something from
+          another network is a message to its author, not a shelf of your own,
+          so there is no such list to offer. --%>
+          <.subtab
+            :if={@live_action == :bookmarks}
+            patch={saved_path(@live_action, :networks, @q, @sort)}
+            active?={@type == :networks}
+            id="subtab-networks"
+          >
+            {gettext("Other networks")}
+          </.subtab>
         </nav>
 
         <.form for={%{}} id="saved-filter" phx-change="filter" class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -494,6 +547,30 @@ defmodule VutuvWeb.PostLive.Saved do
                   conn_or_socket={@socket}
                   engagement={Map.get(@post_engagement, post.id)}
                   surface={:flat}
+                />
+              </div>
+            </.post_list>
+          <% @type == :networks -> %>
+            <%!-- The very cards these things wear everywhere else, so a saved
+            reply and a saved post read here exactly as they did where they were
+            saved — including their action bars, which is how a bookmark is
+            taken back from this page. --%>
+            <.post_list id="saved-networks" phx-update="stream" data-post-list>
+              <p class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-networks-empty">
+                {networks_empty_text(@q)}
+              </p>
+              <div :for={{dom_id, entry} <- @streams.networks} id={dom_id} class={post_row_class()}>
+                <.remote_reply_card
+                  :if={Posts.remote_reply_entry?(entry)}
+                  note={entry.note}
+                  viewer={@current_user}
+                  live?
+                />
+                <.remote_post_card
+                  :if={not Posts.remote_reply_entry?(entry)}
+                  remote_post={entry.remote_post}
+                  viewer={@current_user}
+                  live?
                 />
               </div>
             </.post_list>
