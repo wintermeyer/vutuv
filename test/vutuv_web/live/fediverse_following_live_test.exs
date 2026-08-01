@@ -132,12 +132,19 @@ defmodule VutuvWeb.FediverseFollowingLiveTest do
       refute has_element?(view, "#no-following")
     end
 
-    test "an accepted follow reads differently", %{conn: conn, user: user} do
+    test "an Accept flips the state on the open page, no reload", %{conn: conn, user: user} do
       {:ok, view, _html} = live(conn, ~p"/settings/fediverse/following")
       view |> element("#follow-form") |> render_submit(%{"address" => "@them@social.example"})
 
       [follow] = Repo.all(from(f in Follow, where: f.user_id == ^user.id))
+      assert has_element?(view, "[data-follow-state=requested]")
+      # Nothing is marked until something moves, or every page load would claim
+      # a change.
+      refute has_element?(view, "tr[data-row-changed]")
 
+      # The answer arrives in the inbox minutes or days later and never in this
+      # member's browser, so the page they left open has to follow along by
+      # itself — otherwise "Requested" is a lie until somebody hits reload.
       :ok =
         Fediverse.accept_remote_follow(
           user,
@@ -145,8 +152,36 @@ defmodule VutuvWeb.FediverseFollowingLiveTest do
           @actor_uri
         )
 
-      {:ok, view, _html} = live(conn, ~p"/settings/fediverse/following")
       assert has_element?(view, "[data-follow-state=accepted]")
+      refute has_element?(view, "[data-follow-state=requested]")
+      # And the row says which one moved, so the eye can find it.
+      assert has_element?(view, "#follow-#{follow.id}[data-row-changed]")
+
+      # The marker comes off again by itself (its timer's own message, fired
+      # here rather than waited out — this is the first change, so the sequence
+      # number it carries is 1). Without that a second change to the same row
+      # would arrive on a row already marked, and a CSS animation does not
+      # restart on an element that never stopped matching.
+      send(view.pid, {:clear_changed_rows, 1})
+      refute has_element?(view, "tr[data-row-changed]")
+    end
+
+    test "a Reject takes the row off the open page", %{conn: conn, user: user} do
+      {:ok, view, _html} = live(conn, ~p"/settings/fediverse/following")
+      view |> element("#follow-form") |> render_submit(%{"address" => "@them@social.example"})
+
+      [follow] = Repo.all(from(f in Follow, where: f.user_id == ^user.id))
+
+      :ok =
+        Fediverse.reject_remote_follow(
+          user,
+          %{"type" => "Reject", "object" => follow.follow_activity_id},
+          @actor_uri
+        )
+
+      refute has_element?(view, "#follow-#{follow.id}")
+      # And the headline count went with it, not just the row.
+      assert has_element?(view, "#no-following")
     end
 
     test "a refusal is explained next to the box", %{conn: conn} do

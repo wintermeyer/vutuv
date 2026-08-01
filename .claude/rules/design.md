@@ -45,7 +45,20 @@ LiveView can sit on either style.
    arrows are the reorder path on phones), `.card__tablewrap` (every in-card `<table>`
    sits in this overflow-x scroller so a wide table scrolls instead of being
    clipped by the card's `overflow:hidden` — `card_table_scroll_test.exs`
-   enforces it), `.breakwrap` (break a long unbroken string and cap the line at a
+   enforces it), `tr[data-row-changed]` (the **live-row marker**: a table row that
+   changed while the member was only looking at the page sweeps once through a
+   brand tint and back to transparent, 1.4s — for a table whose rows can move
+   without anybody here touching them, like `/settings/fediverse/following`,
+   where the answer to a follow comes from another server. The tint is the
+   custom property `--row-changed-tint`, which is why light/dark share one set
+   of keyframes and why the `prefers-reduced-motion` rule can paint the very
+   colour it would otherwise have faded — under reduced motion the row is still
+   pointed out, it just stands still. **The marker must be put on by the server
+   on exactly the rows that moved and taken off again** after the sweep, or the
+   table lights up on every page load and a row that changes twice lights up
+   once: a CSS animation restarts only when the element begins matching the rule
+   afresh),
+   `.breakwrap` (break a long unbroken string and cap the line at a
    readable measure — use it instead of an inline `word-wrap`/`max-width` style),
    `.card__empty` empty-state line, `.card__label` (the small uppercase muted
    caption for field/section labels inside a legacy card — e.g. the detail show

@@ -33,7 +33,13 @@ browser** (`/settings/fediverse/followers`,
 changes nothing, it *finds* something — search-as-you-type, a server filter,
 sortable columns and paging over a follower list that can run to five figures,
 with the whole view in the URL via `push_patch` (see
-[fediverse.md](fediverse.md)).
+[fediverse.md](fediverse.md)). Its mirror image, the **following browser**
+(`/settings/fediverse/following`, `VutuvWeb.FediverseFollowingLive`), is the one
+settings page that has to keep itself current: what a follow's state *is* is
+decided on another server and reaches us in the inbox, so an `Accept`, a
+`Reject`, a `Move`, an account `Delete` or an instance block reloads the open
+page over `:remote_follows_changed` instead of waiting for somebody to hit
+reload.
 
 **Every state-changing control fires a LiveView event, so the page never
 reloads**: the follow pill, the ⋯-menu mute/bookmark/like/block (and unblock),

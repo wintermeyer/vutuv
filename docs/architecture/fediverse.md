@@ -917,6 +917,19 @@ deletes the row (there is nothing left to show, nothing to retry, and keeping a
 stranger's refusal on file earns nobody anything). Both are scoped to the actor
 that answered, so one server can never settle a follow addressed to another.
 
+**The following browser updates itself.** Every change on that page except the
+member's own follow and unfollow is decided on another server and arrives in the
+inbox at a time nobody here picks — an `Accept` seconds or days behind the
+request, a `Reject`, a `Move`, an account `Delete`, an operator blocking the
+instance. So each of those write paths broadcasts a bare `:remote_follows_changed`
+on the affected members' `"user:<id>"` topic (`Vutuv.Activity`), and
+`VutuvWeb.FediverseFollowingLive` reloads its current view: the rows and their
+state badges, the headline count, the server filter and the pager, keeping the
+page the member is on. Without it "Requested" stays on screen long after the
+other side said yes, and only a manual reload tells the truth. The signal
+carries no payload on purpose — the page's view is filtered, sorted and paged,
+and none of that is knowable from the context.
+
 ### The gates
 
 In the order they cost, because the cheap ones must run before the network is

@@ -914,6 +914,8 @@ defmodule Vutuv.Fediverse do
       # #1168). A move the successor never answers keeps the record of what the
       # member had.
       settle_moved_follows(user, actor_uri)
+
+      broadcast_remote_follows_changed([user.id])
     end
 
     :ok
@@ -928,9 +930,49 @@ defmodule Vutuv.Fediverse do
   list, which is what "they did not accept" looks like.
   """
   def reject_remote_follow(%User{} = user, activity, actor_uri) do
-    if follow = find_answered_follow(user, activity, actor_uri), do: Repo.delete(follow)
+    if follow = find_answered_follow(user, activity, actor_uri) do
+      Repo.delete(follow)
+      broadcast_remote_follows_changed([user.id])
+    end
 
     :ok
+  end
+
+  # Tells these members' open following browsers
+  # (`/settings/fediverse/following`) that their list of accounts elsewhere
+  # changed underneath them.
+  #
+  # Every change on that page except the member's own follow and unfollow
+  # arrives from **another server**, at a time nobody here picks: an `Accept`
+  # may be seconds or days behind the request, a `Reject` or a `Delete` comes
+  # with no warning at all. So the one page that shows a follow's *state* is
+  # also the one page in /settings that cannot be a snapshot — left to a
+  # reload, "Requested" reads as the current answer long after the other side
+  # said yes.
+  #
+  # A bare signal, not a payload: the page reloads its own view (which is
+  # filtered, sorted and paged, and none of that is knowable from here) rather
+  # than patching a row. `VutuvWeb.FediverseFollowingLive` listens; every other
+  # subscriber of the owner topic ignores it through its catch-all
+  # `handle_info/2`.
+  defp broadcast_remote_follows_changed(user_ids) when is_list(user_ids) do
+    user_ids
+    |> Enum.uniq()
+    |> Enum.each(&Activity.broadcast(&1, :remote_follows_changed))
+  end
+
+  # The members here who follow one of these remote accounts. Read **before** a
+  # delete of those accounts: their follows cascade away with them, so asked
+  # afterwards the answer is always "nobody" and the page never hears about it.
+  defp remote_follow_user_ids(accounts) do
+    Repo.all(
+      from(f in Follow,
+        join: a in subquery(accounts),
+        on: a.id == f.remote_account_id,
+        distinct: true,
+        select: f.user_id
+      )
+    )
   end
 
   @doc """
@@ -1132,6 +1174,7 @@ defmodule Vutuv.Fediverse do
   def remove_remote_account(actor_uri) when is_binary(actor_uri) do
     accounts = from(a in RemoteAccount, where: a.actor_uri == ^actor_uri)
     log_account_gone(actor_uri, accounts)
+    follow_owners = remote_follow_user_ids(from(a in accounts, select: %{id: a.id}))
 
     # The rows cascade, the files do not: the account's own picture and every
     # picture on the posts we cached for it have to be swept before the delete
@@ -1142,6 +1185,7 @@ defmodule Vutuv.Fediverse do
 
     wipe_avatars(accounts)
     Repo.delete_all(accounts)
+    broadcast_remote_follows_changed(follow_owners)
     :ok
   end
 
@@ -2763,8 +2807,19 @@ defmodule Vutuv.Fediverse do
 
     wipe_avatars(from(a in RemoteAccount, where: a.host == ^host))
 
+    # Which members are about to lose follows, asked while the rows still
+    # exist. Named for the members it holds, not `followers` — that is already
+    # this function's count of the rows pointing the *other* way, and the
+    # returned tally would silently become a list of member ids.
+    follow_owners =
+      remote_follow_user_ids(
+        from(a in RemoteAccount, where: a.host == ^host, select: %{id: a.id})
+      )
+
     {remote_accounts, _} =
       Repo.delete_all(from(a in RemoteAccount, where: a.host == ^host))
+
+    broadcast_remote_follows_changed(follow_owners)
 
     # A block is also a takedown: text that server's members wrote under our
     # members' posts goes with it (issue #1069), not just the follow rows.
@@ -5831,6 +5886,7 @@ defmodule Vutuv.Fediverse do
          {:ok, successor} <- upsert_remote_account(remote) do
       Repo.update(Ecto.Changeset.change(old, moved_to: successor.actor_uri))
       Enum.each(follows, &repoint_follow(&1, successor))
+      broadcast_remote_follows_changed(Enum.map(follows, & &1.user_id))
       :ok
     else
       _ -> :skip

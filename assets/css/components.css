@@ -882,6 +882,37 @@ td.text-right {
   white-space: nowrap;
 }
 
+/* A row that changed while the member was only looking at the page — today
+   `/settings/fediverse/following`, where a follow's state is answered on
+   ANOTHER server, so "Angefragt" can turn into "Folge ich" with nothing on
+   this end touched. One calm sweep of brand tint fading back out tells an eye
+   that was elsewhere which row moved; a table that silently rewrites itself
+   otherwise looks like a misread.
+   The marker is put on by the server, on exactly the rows that moved, and
+   taken off again a moment later (`VutuvWeb.FediverseFollowingLive`): a CSS
+   animation only restarts when the element starts matching the rule afresh, so
+   a marker left on forever would light a row up once and never again.
+   The tint is a custom property rather than a literal, because a keyframe
+   resolves `var()` against the animated element — which is what lets light and
+   dark share one set of keyframes AND lets the reduced-motion rule below paint
+   the same colour it would have faded. Under `prefers-reduced-motion` the tint
+   simply stands still for that moment: the row is still pointed out, nothing
+   moves or fades. */
+@keyframes row-changed {
+  from { background-color: var(--row-changed-tint); }
+  to { background-color: transparent; }
+}
+tr[data-row-changed] > td {
+  --row-changed-tint: var(--color-brand-100);
+  animation: row-changed 1.4s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  tr[data-row-changed] > td {
+    animation: none;
+    background-color: var(--row-changed-tint);
+  }
+}
+
 /* ---------- Lists / tags / badges ---------- */
 .tags,
 .badges {
@@ -2600,6 +2631,9 @@ html.lightbox-open { overflow: hidden; }
   .reorder__btn:hover:not(:disabled) { background: #334155; }
   .pure-table th { background: #1e293b; color: #cbd5e1; }
   .pure-table th, .pure-table td { border-color: #1e293b; }
+  /* Only the tint: the keyframes read it off the element, so the animation and
+     the reduced-motion fallback both follow without a dark copy of either. */
+  tr[data-row-changed] > td { --row-changed-tint: var(--color-brand-900); }
   /* Bare tables (legacy sets `th{color:#444;border:#ddd}` / `td{border:#eee}`). */
   th { color: #cbd5e1; border-color: #1e293b; }
   td { border-color: #1e293b; }

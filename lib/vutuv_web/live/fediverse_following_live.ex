@@ -38,14 +38,27 @@ defmodule VutuvWeb.FediverseFollowingLive do
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
+  alias Vutuv.Activity
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Pages
 
+  # How long a changed row keeps its marker. Longer than the CSS sweep
+  # (`tr[data-row-changed]`, 1.4s): taking the marker off mid-animation would
+  # cut the fade short.
+  @row_mark_ms 1_800
+
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
+
+    # Everything this page shows that the member did not do themselves is
+    # decided on another server and arrives in the inbox, so the owner topic is
+    # the only way the page can be right without a reload (see
+    # `Vutuv.Fediverse`'s `:remote_follows_changed`). Connected only, like every
+    # other subscriber here: the disconnected render is thrown away.
+    if connected?(socket), do: Activity.subscribe(user.id)
 
     {:ok,
      socket
@@ -55,6 +68,11 @@ defmodule VutuvWeb.FediverseFollowingLive do
      |> assign(:blocked_reason, Fediverse.follow_refusal(user))
      |> assign(:address, "")
      |> assign(:error, nil)
+     # Nothing is marked on arrival: the animation is for a change the member
+     # watched happen, and a table that lights up on every page load would say
+     # "something moved" when nothing did.
+     |> assign(:changed_ids, MapSet.new())
+     |> assign(:change_seq, 0)
      |> assign_totals()}
   end
 
@@ -78,7 +96,8 @@ defmodule VutuvWeb.FediverseFollowingLive do
   # the headline count and the server dropdown. Deliberately not in the page
   # loader — neither depends on the filters, the sort or the page, so recomputing
   # them per keystroke would be two extra queries for an unchanged answer. Only
-  # a follow or an unfollow can move them, so only those refresh.
+  # something that adds or removes a follow can move them: the member's own
+  # follow and unfollow, and the answers that arrive from other servers.
   defp assign_totals(socket) do
     user = socket.assigns.user
 
@@ -87,7 +106,14 @@ defmodule VutuvWeb.FediverseFollowingLive do
     |> assign(:hosts, Fediverse.remote_follow_hosts(user))
   end
 
-  defp load_page(socket, params \\ %{}) do
+  # Reloads the view the member is looking at. The page number comes from the
+  # socket rather than starting over at 1, so an answer arriving from another
+  # server while they read page three does not throw them back to the top of
+  # the list (`Pages.effective_page/3` still catches a page that just ran out
+  # of rows).
+  defp load_page(socket), do: load_page(socket, %{"page" => socket.assigns.page})
+
+  defp load_page(socket, params) do
     user = socket.assigns.user
     filters = socket.assigns.filters
     per_page = Fediverse.browse_per_page()
@@ -174,6 +200,75 @@ defmodule VutuvWeb.FediverseFollowingLive do
   # `Fediverse.follow_remote/2` — so no lookup rides along with the refusal any
   # more; the template's one extra affordance is the search hand-off.
   defp assign_error(socket, reason), do: assign(socket, :error, reason)
+
+  # ── Live updates from elsewhere ───────────────────────────────────────────
+
+  # The other side answered (`Accept` / `Reject`), a followed account moved to
+  # another server, deleted itself, or an operator blocked its instance —
+  # broadcast by `Vutuv.Fediverse` on the owner's topic. None of it passes
+  # through this page, so without this a follow reads "Requested" until the
+  # member reloads by hand.
+  #
+  # The whole view is reloaded rather than one row patched: a state change also
+  # moves the headline count and can move the server filter and the pager, and
+  # a page is at most 50 rows, so re-asking costs the same four queries the
+  # member's own unfollow already pays.
+  @impl true
+  def handle_info(:remote_follows_changed, socket) do
+    shown = socket.assigns.follows
+
+    {:noreply,
+     socket
+     |> assign_totals()
+     |> load_page()
+     |> mark_changed_rows(shown)}
+  end
+
+  # The marker's own timer, come round: see `mark_changed_rows/2`. Ignored when
+  # a newer change has since marked its own rows, or this one would cut that
+  # animation short.
+  def handle_info({:clear_changed_rows, seq}, socket) do
+    if seq == socket.assigns.change_seq,
+      do: {:noreply, assign(socket, :changed_ids, MapSet.new())},
+      else: {:noreply, socket}
+  end
+
+  # The owner topic carries every other in-app event (message and notification
+  # badges, follows made here); this page has nothing to do with them.
+  def handle_info(_other, socket), do: {:noreply, socket}
+
+  # Which rows the reload actually moved, so only those light up: a follow whose
+  # state changed under the member's eyes, and one that has appeared (an account
+  # that moved servers arrives as a fresh request beside its old row). A row that
+  # is simply *gone* gets nothing — there is no longer anything to mark, and
+  # animating a removal would mean holding a row the member no longer follows.
+  #
+  # "Appeared" is read against this page of the table, not the whole list, so a
+  # row that a deletion further up pulled onto the page counts as one. That is
+  # the honest reading anyway: from where the member is looking, it did just
+  # turn up.
+  #
+  # The marker is taken off again on a timer, because a CSS animation restarts
+  # only when the element begins matching the rule afresh: left on, the same row
+  # changing a second time would stay silent.
+  defp mark_changed_rows(socket, shown_before) do
+    before = Map.new(shown_before, &{&1.id, &1.state})
+
+    changed =
+      for follow <- socket.assigns.follows,
+          Map.get(before, follow.id) != follow.state,
+          into: MapSet.new(),
+          do: follow.id
+
+    if Enum.empty?(changed) do
+      socket
+    else
+      seq = socket.assigns.change_seq + 1
+      Process.send_after(self(), {:clear_changed_rows, seq}, @row_mark_ms)
+
+      socket |> assign(:changed_ids, changed) |> assign(:change_seq, seq)
+    end
+  end
 
   # ── Wording ───────────────────────────────────────────────────────────────
 
@@ -328,7 +423,11 @@ defmodule VutuvWeb.FediverseFollowingLive do
                   </tr>
                 </thead>
                 <tbody id="following">
-                  <tr :for={follow <- @follows} id={"follow-#{follow.id}"}>
+                  <tr
+                    :for={follow <- @follows}
+                    id={"follow-#{follow.id}"}
+                    data-row-changed={MapSet.member?(@changed_ids, follow.id)}
+                  >
                     <td>
                       <.account_link
                         uri={follow.remote_account.actor_uri}
