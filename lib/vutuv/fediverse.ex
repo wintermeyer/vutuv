@@ -4160,13 +4160,23 @@ defmodule Vutuv.Fediverse do
     |> Enum.take(limit)
   end
 
-  # Least recently asked first, never-asked ahead of everything — the two
-  # tables' own orders merged into one. **Not** the `DateTime` struct itself:
-  # Erlang's term order compares maps field by field in key order, so it would
-  # put `day` before `month` and `year` and sort the queue by nothing anybody
-  # means.
-  defp counts_order(%{counts_checked_at: nil} = subject), do: {-1, subject.id}
-  defp counts_order(subject), do: {DateTime.to_unix(subject.counts_checked_at), subject.id}
+  # The two tables' own orders merged into one, and it has to agree with the
+  # `order_by` each of them was fetched under or the merge would undo it.
+  #
+  # **Not** the `DateTime` struct itself: Erlang's term order compares maps field
+  # by field in key order, so it would weigh `day` before `month` and `year` and
+  # sort the queue by nothing anybody means.
+  defp counts_order(%{counts_checked_at: nil} = subject),
+    do: {0, -DateTime.to_unix(counts_age(subject)), subject.id}
+
+  defp counts_order(subject),
+    do: {1, DateTime.to_unix(subject.counts_checked_at), subject.id}
+
+  # How old the thing itself is — the clock the ladder runs on. A cached post
+  # was published somewhere; a reply was delivered here, which is the closest
+  # thing it has to the same fact.
+  defp counts_age(%RemotePost{published_at: at}), do: at
+  defp counts_age(%Note{received_at: at}), do: at
 
   @doc """
   Asks one object's origin for its figures and stores the answer.
@@ -4355,10 +4365,21 @@ defmodule Vutuv.Fediverse do
   # failed ask, so a server having a bad day is asked less and less rather than
   # every quarter of an hour. An object with `@counts_max_strikes` strikes has
   # left the ladder for good.
+  # Least recently asked first — and, among the never-asked, **newest first**.
+  # That tiebreaker is load-bearing rather than tidy: every row an installation
+  # already holds when this ships has a null here, so the queue starts as one
+  # long backfill, and ordering it by id (creation order, since the ids are v7)
+  # would serve the six-month-old cache first and leave today's posts — the ones
+  # somebody is actually reading — until last. Newest first means a post reaches
+  # its figures within a run of arriving, and the old cache fills in behind it.
   defp due_counts_query(schema, age_field, now, ladder, limit) do
     from(r in schema,
       where: r.counts_failures < @counts_max_strikes,
-      order_by: [asc_nulls_first: r.counts_checked_at, asc: r.id],
+      order_by: [
+        asc_nulls_first: r.counts_checked_at,
+        desc: field(r, ^age_field),
+        asc: r.id
+      ],
       limit: ^limit
     )
     |> where(^ladder_conditions(age_field, now, ladder))

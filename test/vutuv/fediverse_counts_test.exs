@@ -295,6 +295,20 @@ defmodule Vutuv.FediverseCountsTest do
       assert old.id in Enum.map(Fediverse.due_for_counts(10), & &1.id)
     end
 
+    test "the never-asked queue is served newest first" do
+      # Everything an installation already holds when this ships has a null
+      # here, so the queue starts as one long backfill. Served in creation order
+      # it would work through the six-month-old cache first and leave today's
+      # posts — the ones somebody is reading — until last.
+      {stale, _user} = followed_post(%{published_at: minutes_ago(60 * 24 * 60)})
+      {recent, _user} = followed_post(%{published_at: minutes_ago(30)})
+
+      due = Enum.map(Fediverse.due_for_counts(10), & &1.id)
+
+      assert Enum.find_index(due, &(&1 == recent.id)) <
+               Enum.find_index(due, &(&1 == stale.id))
+    end
+
     test "failures push the next ask out, and enough of them end it" do
       {post, _user} = followed_post(%{counts_checked_at: minutes_ago(20), counts_failures: 1})
 
