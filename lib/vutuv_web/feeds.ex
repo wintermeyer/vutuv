@@ -17,7 +17,16 @@ defmodule VutuvWeb.Feeds do
   alias VutuvWeb.Xml
 
   @doc "The one source of a member's feed path (controller, head tag, llms.txt)."
-  def user_feed_path(user), do: "/#{user.username}/posts/feed.xml"
+  def user_feed_path(user), do: "/#{user.username}" <> user_feed_suffix()
+
+  @doc """
+  What a member's feed path adds to their profile path.
+
+  Split out so a caller holding a profile *URL* rather than a `%User{}` can
+  reach the same feed — the landing page's RSS chip hangs off the configured
+  example-profile URL, which may point at another installation entirely.
+  """
+  def user_feed_suffix, do: "/posts/feed.xml"
 
   @doc "The site-wide feed path."
   def site_feed_path, do: "/posts/feed.xml"

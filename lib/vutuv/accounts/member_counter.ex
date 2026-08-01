@@ -22,7 +22,7 @@ defmodule Vutuv.Accounts.MemberCounter do
       into at most one broadcast per tick instead of a fan-out storm.
 
   Two LiveViews subscribe and re-render on each `{:member_count, n}` message:
-  `VutuvWeb.MemberCountLive` (the landing page's hero pill) and
+  `VutuvWeb.ShellLive` (the top bar's member total,
   `VutuvWeb.ShellLive` (the total in the middle of the top bar, so it is on
   every page). Both feeds move it — `increment/0` on a confirmed sign-up,
   `decrement/0` on an account deletion.

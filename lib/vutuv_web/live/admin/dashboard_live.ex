@@ -2,7 +2,7 @@ defmodule VutuvWeb.Admin.DashboardLive do
   @moduledoc """
   The live activity dashboard pinned to the top of the admin home page
   (`/admin`). Embedded with `live_render` in the admin index template (like
-  `VutuvWeb.MemberCountLive` on the landing page and `ShellLive` in the app
+  `VutuvWeb.ShellLive` in the app
   layout), so it owns its own socket and refreshes on its own without turning
   the rest of the admin home into a LiveView.
 

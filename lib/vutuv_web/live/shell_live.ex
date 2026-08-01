@@ -169,6 +169,11 @@ defmodule VutuvWeb.ShellLive do
     # before its socket connects. Zero (the sub-second before the counter's
     # first reconcile seeds the cell) renders nothing.
     |> assign(:member_count, MemberCounter.count())
+    # False until the first broadcast: the figure's span is keyed on its value
+    # (see .member-total__figure in components.css), so without this gate the
+    # first render would look like an insert and every page load would open with
+    # the number sliding in.
+    |> assign(:member_count_ticked?, false)
   end
 
   # Site-wide online presence. The shell is the one component on every page, so
@@ -337,7 +342,10 @@ defmodule VutuvWeb.ShellLive do
   # the total, so every socket takes the new figure; only an admin's socket also
   # re-reads today's tally, which is a database query the rest must not pay for.
   def handle_info({:member_count, total}, socket) do
-    socket = assign(socket, :member_count, total)
+    socket =
+      socket
+      |> assign(:member_count, total)
+      |> assign(:member_count_ticked?, true)
 
     {:noreply, if(socket.assigns.user_admin?, do: recount_new_members(socket), else: socket)}
   end
@@ -386,9 +394,16 @@ defmodule VutuvWeb.ShellLive do
     )
   end
 
-  # The member-total pill is a glyph and a number, so its accessible name and
-  # hover title are what say "members". `ngettext/4` binds the raw integer to
-  # %{count}, hence the separate %{formatted} placeholder for the grouped figure.
+  # The word beside the figure, from `lg` up where the bar has room for it. A
+  # glyph and a bare number read as a version string as easily as a head count
+  # (reported 2026-08-01), and the accessible name below only ever said so to a
+  # screen reader or a hovering mouse.
+  defp member_total_word(count), do: ngettext("member", "members", count)
+
+  # The pill's accessible name and hover title, which carry the word at every
+  # width — including the phone, where it does not fit on screen. `ngettext/4`
+  # binds the raw integer to %{count}, hence the separate %{formatted}
+  # placeholder for the grouped figure.
   defp member_total_label(count) do
     ngettext(
       "%{formatted} member",
@@ -500,6 +515,8 @@ defmodule VutuvWeb.ShellLive do
           show, and the pill links to the public member directory — the page that
           answers "who are those members?".
 
+          The visible word rides along for logged-out visitors at every width and
+          from `lg` for members (see member_total_word/1); the
           `md:hidden lg:inline-flex` is a fit, not a taste: measured at 768px
           with the German labels, an admin's bar needs 757 of the 736 available
           pixels once this pill joins it (the desktop nav appears at md while
@@ -516,7 +533,33 @@ defmodule VutuvWeb.ShellLive do
               class="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-brand-700 sm:px-3 md:hidden lg:inline-flex dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-brand-100"
             >
               <.icon_users />
-              <span class="tabular-nums">{delimited_count(@member_count)}</span>
+              <%!-- The id carries the value on purpose: LiveView patches text in
+                    place and a patched text node animates nothing, so a changed
+                    figure has to be a NEW node for the tick to play. --%>
+              <span
+                id={"member-total-figure-#{@member_count}"}
+                class={[
+                  "member-total__figure tabular-nums",
+                  @member_count_ticked? && "member-total__figure--tick"
+                ]}
+              >
+                {delimited_count(@member_count)}
+              </span>
+              <%!-- Gated on who is looking, not on the breakpoint, because that
+                    is what the width actually depends on. The documented ~72px
+                    of spare room below md was measured with an ADMIN signed in,
+                    whose bar also carries search, bookmarks, messages, alerts
+                    and an avatar; a logged-out phone bar holds a wordmark, this
+                    pill and a Log in button, and measures ~330px free at 606px.
+                    So the word shows unconditionally for a visitor — the one who
+                    needs it, since they are the one meeting the number for the
+                    first time — and waits for `lg` once the bar is carrying a
+                    member's controls. Either branch sets at most one display
+                    utility, so the #880 two-competing-utilities trap cannot
+                    form. --%>
+              <span class={@user_id && "hidden lg:inline"}>
+                {member_total_word(@member_count)}
+              </span>
             </.link>
           </div>
 

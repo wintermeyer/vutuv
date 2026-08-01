@@ -25,10 +25,6 @@
       </div>
     </div>
   </:headline>
-  <:hero>
-    {live_render(@conn, VutuvWeb.MemberCountLive, id: "member-count-lv")}
-  </:hero>
-
   <h2 class="text-xl font-bold text-slate-900 dark:text-white">
     {gettext("Create your free account")}
   </h2>
@@ -222,6 +218,248 @@
     <p class="text-xs text-slate-600 dark:text-slate-400">{gettext("We reserve the right to stop this service or delete your account anytime without warning.")}</p>
   </.form>
 </.auth_layout>
+
+<%!-- Everything below the sign-up card is the answer to "what IS this?", which
+      the form alone never gave a first-time visitor. It sits under the form on
+      purpose: the form is the conversion path and keeps the top of the page.
+      Same max-w-5xl as <.auth_layout> so every edge on the page lines up.
+
+      Two kinds of example, and the split is deliberate. What a PROFILE looks
+      like is static screenshots: they name nobody, so nobody has to agree to
+      being on the front page, and they show a whole page at once the way a card
+      never could. That the site is ALIVE cannot be shown in a picture, so the
+      posts below are real and current (Vutuv.Landing). --%>
+<div class="mx-auto max-w-5xl space-y-12 pb-12">
+  <section>
+    <%!-- "Readable without an account" was jargon nobody outside the project
+          parses. Say who can do what, then name the thing everybody has
+          actually run into. --%>
+    <.landing_heading
+      eyebrow={gettext("A look inside")}
+      title={gettext("This is what a vutuv profile looks like")}
+      lead={
+        gettext(
+          "Work experience, education, certificates, languages, links and tags others endorse you for. Anyone can read a profile, entirely without a vutuv account. Unlike LinkedIn, where you hit a login wall in short order."
+        )
+      }
+    />
+    <%!-- A real, readable profile right under the pictures, because "readable
+          without an account" is a claim anybody can check in one click and the
+          screenshots alone cannot. The URL is configurable
+          (LANDING_EXAMPLE_PROFILE_URL) and the whole line drops out where an
+          installation cleared it. --%>
+    <% example_url = example_profile_url() %>
+    <p :if={example_url} class="mt-3 text-base text-slate-600 dark:text-slate-400">
+      {gettext("Try it out:")}
+      <a
+        href={example_url}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {example_profile_label(example_url)}
+      </a>
+    </p>
+
+    <.profile_shots />
+
+    <p class="mt-8 text-center">
+      <a
+        href={~p"/system/members"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Browse real profiles")} <span aria-hidden="true">›</span>
+      </a>
+    </p>
+  </section>
+
+  <%!-- The most convincing block on the page and the cheapest to doubt, so it
+        shows real posts rather than a mockup: the best-liked ones of the last
+        week, at most one per member (Vutuv.Landing), which is what keeps it
+        reading as a network rather than as one person's megaphone. --%>
+  <section :if={@showcase_posts != []} data-showcase-posts>
+    <.landing_heading
+      eyebrow={gettext("Live from vutuv")}
+      title={posts_heading(@showcase_window_days)}
+      lead={posts_lead(@showcase_window_days)}
+    />
+    <%!-- The wall is its own embedded LiveView (like the member-count pill in
+          the hero above): it owns the "show others" button and swaps the cards
+          in place, where a ?shuffle= link would have thrown the reader back to
+          the top of a very long page. One socket for the whole wall — the cards
+          themselves render with actions={false}. --%>
+    {live_render(@conn, VutuvWeb.LandingPostsLive, id: "landing-posts-lv")}
+  </section>
+
+  <%!-- Gated on the installation's federation switch, like the sign-up form's
+        Fediverse question is: with FEDIVERSE_ENABLED=false (the intranet case)
+        every endpoint behind this 404s, so a section promising Mastodon would
+        be a straight lie on the operator's front page. Both pictures and the
+        larger half of the text are about federation, so the whole section goes
+        rather than half of it — posts and messages are still named in the
+        feature list below.
+
+        The closing sentence is not decoration: plenty of people want a business
+        network and no Fediverse at all, and they need to read that it is a
+        choice they make at sign-up and can take back later, not something that
+        happens to them. --%>
+  <section :if={Fediverse.enabled?()}>
+    <.landing_heading
+      eyebrow={gettext("Talking to people")}
+      title={gettext("Posts, messages, and the Fediverse along with them")}
+      lead={
+        gettext(
+          "Write a post, react with a heart, a repost or a reply, or message somebody privately. And you are not stuck among vutuv members: vutuv is part of the Fediverse, the union of independent networks that Mastodon belongs to as well. Follow an account over there and its posts arrive in your feed; the other way round, people there can follow you and see your public posts. Both directions, and entirely your choice: at sign-up you decide whether to use vutuv with or without the Fediverse, and you can change that at any time in the settings."
+        )
+      }
+    />
+    <.communication_shots />
+  </section>
+
+  <section>
+    <.landing_heading
+      eyebrow={gettext("What you get")}
+      title={gettext("What vutuv can do")}
+      lead={
+        gettext(
+          "A business network that is free, does not lock your data in, and is yours to run yourself if you want to."
+        )
+      }
+    />
+    <.landing_features />
+  </section>
+
+  <section>
+    <.landing_heading
+      eyebrow={gettext("Open by default")}
+      title={gettext("Readable by people, by machines, and on your own server")}
+      lead={
+        gettext(
+          "Every public page here is also served as Markdown, plain text, JSON and XML under the same address. No scraping, no API key, no account."
+        )
+      }
+    />
+    <div class="mt-6 grid gap-4 md:grid-cols-2">
+      <.card>
+        <.section_title>{gettext("For machines")}</.section_title>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <%!-- Live links, not a list of formats we claim to support: whoever
+                doubts it is one click from the document itself. --%>
+          <.landing_format_chips />
+        </div>
+        <%!-- RSS is a chip of its own now, so it is out of this sentence: the
+              list is what the chips do NOT already show. --%>
+        <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Plus a sitemap, JSON-LD and a REST API with OAuth 2 and personal access tokens."
+          )}
+        </p>
+      </.card>
+
+      <.card>
+        <.section_title>{gettext("Run it yourself")}</.section_title>
+        <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+          {gettext(
+            "vutuv is open source under the MIT license. Run it for a company, an association or a school, on the internet or air-gapped inside your own network."
+          )}
+        </p>
+        <p class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold">
+          <a
+            href="https://github.com/wintermeyer/vutuv"
+            class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Source code")} <span aria-hidden="true">↗</span>
+          </a>
+          <a
+            href={~p"/developers"}
+            class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Developer documentation")} <span aria-hidden="true">›</span>
+          </a>
+        </p>
+      </.card>
+    </div>
+  </section>
+
+
+  <%!-- Last, because it answers the question somebody asks once they have
+        decided they like the place: what happens to what I put in?
+
+        The four promises are deliberately of two kinds. Three are properties of
+        the SOFTWARE and hold on every installation — no third-party cookies
+        (verified: production sets exactly one, `_vutuv_key`, and the HTML loads
+        nothing from another host), the GDPR export, and self-service deletion,
+        both reachable from every account. The fourth, where the servers stand,
+        is the operator's alone (:data_location) and drops out entirely where
+        they cleared it. Mixing the two would have put a claim on somebody
+        else's front page that only we can keep. --%>
+  <section>
+    <.landing_heading
+      eyebrow={gettext("Your data")}
+      title={gettext("Fair and transparent, in plain words")}
+    />
+    <div class="mt-6 grid gap-4 md:grid-cols-2">
+      <.card :if={data_location()}>
+        <.section_title>{gettext("Where your data lives")}</.section_title>
+        <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+          {gettext(
+            "On our own servers in %{place}, not in somebody else's cloud. We do not hand your profile to a third party, and there is no tracking network reading along.",
+            place: data_location()
+          )}
+        </p>
+      </.card>
+
+      <.card>
+        <.section_title>{gettext("No third-party cookies")}</.section_title>
+        <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+          {gettext(
+            "vutuv sets one cookie, the one that keeps you signed in. No advertising network, no analytics service, nothing loaded from anybody else's server."
+          )}
+        </p>
+      </.card>
+
+      <.card>
+        <.section_title>{gettext("Your data stays with you")}</.section_title>
+        <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+          {gettext(
+            "Download everything you have here at any time, in a machine-readable file. Not on request, not after a waiting period: from your settings, whenever you like."
+          )}
+        </p>
+      </.card>
+
+      <.card>
+        <.section_title>{gettext("Leave whenever you like")}</.section_title>
+        <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+          <%!-- "You are welcome back" is a checkable claim, not a nicety:
+                deleting an account hard-deletes the row and cascades its email
+                addresses away (add_cascade_deletes_on_user_associations), so the
+                address is free again and nothing on the sign-up path holds it
+                against you. --%>
+          {gettext(
+            "Delete your account yourself, without writing to anybody. No questions asked, and you are welcome back any time."
+          )}
+        </p>
+      </.card>
+
+      <%!-- Full width and last, because it is the one that backs the other
+            four: they are claims, and this is how you check them. --%>
+      <.card class="md:col-span-2">
+        <.section_title>{gettext("Open source")}</.section_title>
+        <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+          {gettext(
+            "You can check at any time how exactly vutuv works. The whole source code is public under the MIT license, so everything said above about your data can be read rather than taken on trust."
+          )}
+        </p>
+        <p class="mt-4 text-sm font-semibold">
+          <a
+            href="https://github.com/wintermeyer/vutuv"
+            class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Source code")} <span aria-hidden="true">↗</span>
+          </a>
+        </p>
+      </.card>
+    </div>
+  </section>
+</div>
 
 <JsonLd.script data={JsonLd.organization()} />
 <JsonLd.script data={JsonLd.web_site()} />

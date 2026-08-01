@@ -2794,6 +2794,166 @@ html.lightbox-open { overflow: hidden; }
   .emoji-picker__empty { color: #94a3b8; }
 }
 
+/* The landing page's post carousel (VutuvWeb.LandingPostsLive).
+
+   Three cards abreast on a wide screen, two on a tablet, one on a phone, all of
+   them exactly the same height, sliding continuously in from the right.
+
+   Why the widths are container-query units and not percentages: the track is
+   far wider than what you can see (it holds the posts TWICE, see below), and a
+   percentage width on a flex item resolves against that track, not against the
+   window. `100cqi` is the visible frame's width whatever the track does, so
+   "three abreast" stays three abreast.
+
+   Why the posts are rendered twice: this is a plain CSS marquee, and the loop is
+   seamless only if the second half is already on screen when the first half
+   leaves. The track therefore slides by exactly one set plus one gap and starts
+   over, which the eye cannot see. `-50%` alone would be half a gap short — the
+   track's own width counts one gap fewer than two sets do — hence the `- 0.5rem`
+   against the 1rem gap. Change the gap and that number changes with it.
+
+   The duplicate half is `aria-hidden` AND `inert` in the markup: aria-hidden
+   alone would leave its links in the tab order, so a keyboard reader would tab
+   into content a screen reader was told does not exist.
+
+   Equal height comes from `align-items: stretch`; `max-height` bounds the one
+   card with a big picture in it so it cannot set the height for all the others.
+   Motion pauses on hover and on focus-within, because a card nobody can stop is
+   a card nobody can read (or click a link in). */
+.post-carousel {
+  container-type: inline-size;
+  overflow: hidden;
+  /* Cards enter and leave rather than being chopped off at the frame edge.
+     The -webkit- prefix is for Safari before 15.4, which has the property only
+     under it; without the fallback those browsers show a hard cut, not a
+     broken layout. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 2rem,
+    black calc(100% - 2rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 2rem,
+    black calc(100% - 2rem),
+    transparent
+  );
+}
+
+.post-carousel__track {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
+  width: max-content;
+  animation: post-carousel-slide 90s linear infinite;
+}
+
+.post-carousel:hover .post-carousel__track,
+.post-carousel:focus-within .post-carousel__track {
+  animation-play-state: paused;
+}
+
+.post-carousel__card {
+  flex: 0 0 auto;
+  width: 100cqi;
+  max-height: 26rem;
+  overflow: hidden;
+}
+
+@container (min-width: 40rem) {
+  .post-carousel__card {
+    width: calc((100cqi - 1rem) / 2);
+  }
+}
+
+@container (min-width: 64rem) {
+  .post-carousel__card {
+    width: calc((100cqi - 2rem) / 3);
+  }
+}
+
+@keyframes post-carousel-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-50% - 0.5rem));
+  }
+}
+
+/* Reduced motion does not mean "hide the posts": the carousel stops and becomes
+   an ordinary horizontal scroller, so the same cards are still reachable — by
+   swipe on a phone, by the scrollbar or the keyboard everywhere else. */
+@media (prefers-reduced-motion: reduce) {
+  .post-carousel {
+    overflow-x: auto;
+  }
+
+  .post-carousel__track {
+    animation: none;
+  }
+}
+
+/* The member total ticking over in the top bar (VutuvWeb.ShellLive).
+
+   The figure changes when somebody confirms an account or deletes one, which
+   arrives over PubSub while the reader is looking at something else entirely.
+   Without a cue the number simply *is* different the next time you glance at
+   it, and the whole point of an exact, live total is watching it move.
+
+   How it is triggered: LiveView patches the text of a span in place, and a
+   patched text node runs no animation. So the span's `id` carries the figure
+   (`member-total-figure-5873`) — a new value is therefore a new node, morphdom
+   inserts it, and the animation plays on insert. That is also why the class is
+   only present after the first broadcast: without that gate the very first
+   render would count as an insert and every page load would open with the
+   number sliding in, which reads as a page still loading rather than as news.
+
+   Deliberately quiet: one short rise with a brand tint that fades back to the
+   inherited colour. It sits in the chrome of every page, so anything longer or
+   louder would be a nag. Under prefers-reduced-motion it does not move at all —
+   an unannounced number is better than an unwanted animation. */
+.member-total__figure {
+  /* Kept as a safeguard, not as a fix: inside the pill this span is a flex item
+     and is already blockified, so `transform` works without it. It matters only
+     if the figure is ever rendered outside a flex parent, where an inline box
+     would drop the translate and the tick would become a bare fade. */
+  display: inline-block;
+}
+
+@keyframes member-total-tick {
+  0% {
+    transform: translateY(0.3em);
+    opacity: 0;
+    color: var(--color-brand-600);
+  }
+
+  45% {
+    transform: translateY(0);
+    opacity: 1;
+    color: var(--color-brand-600);
+  }
+
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+    color: inherit;
+  }
+}
+
+.member-total__figure--tick {
+  animation: member-total-tick 520ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .member-total__figure--tick {
+    animation: none;
+  }
+}
+
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a
    design-language change — a PostToolUse hook reminds you to update
    .claude/rules/design.md so the design rule stays in sync. */

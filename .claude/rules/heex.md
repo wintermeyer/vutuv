@@ -61,6 +61,20 @@ paths:
 
 - **Never** use `<% Enum.each %>` or non-for comprehensions for generating template content, instead **always** use `<%= for item <- @collection do %>`
 - HEEx HTML comments use `<%!-- comment --%>`. **Always** use the HEEx HTML comment syntax for template comments (`<%!-- comment --%>`)
+- **A HEEx comment may never sit between a tag's attributes** — only between tags. It reads like a natural place to explain the attribute below it, and the compiler answers with `expected closing '>' or '/>'` pointing at the comment line, which does not say "comments are not allowed here". Put it on the line **above the opening tag** instead:
+
+      <%!-- INVALID: dies with a ParseError at the comment line --%>
+      <.landing_heading
+        title={gettext("…")}
+        <%!-- why this lead says what it says --%>
+        lead={gettext("…")}
+      />
+
+      <%!-- VALID: the comment goes above the tag --%>
+      <%!-- why this lead says what it says --%>
+      <.landing_heading title={gettext("…")} lead={gettext("…")} />
+
+  Watch for it especially when a comment explains one specific attribute, and remember that `mix gettext.extract` compiles templates too — piping its output to `/dev/null` hides this error completely (both times it happened here, the wasted cycle came from the masked output, not from the mistake).
 - HEEx allows interpolation via `{...}` and `<%= ... %>`, but the `<%= %>` **only** works within tag bodies. **Always** use the `{...}` syntax for interpolation within tag attributes, and for interpolation of values within tag bodies. **Always** interpolate block constructs (if, cond, case, for) within tag bodies using `<%= ... %>`.
 
   **Always** do this:

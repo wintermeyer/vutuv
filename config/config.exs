@@ -156,6 +156,27 @@ config :vutuv, :ads_enabled, false
 # (config/runtime.exs). Only aggregate counters are stored, never a visitor.
 config :vutuv, :landing_headline_experiment, true
 
+# Where this installation's data physically lives, named on the start page's
+# privacy section ("on our own servers in Deutschland, not in somebody else's
+# cloud"). Empty drops that whole claim and leaves only the three promises the
+# SOFTWARE makes on every installation: no third-party cookies, export your data
+# whenever you like, delete your account yourself.
+#
+# Set it only if it is true for you. An operator running vutuv on rented cloud
+# infrastructure must clear it — the sentence says "our own servers", and a
+# start page that claims otherwise is worse than one that says nothing.
+# Runtime override: DATA_LOCATION (config/runtime.exs).
+config :vutuv, :data_location, "Deutschland"
+
+# The one profile the logged-out start page offers as "try it out" beside the
+# screenshots of a filled-in profile. A full URL, because the point is a page
+# somebody can open and read without an account, and because the default has to
+# keep working on an installation that has no members yet — pointing at the
+# reference installation is more useful there than a dead local link.
+# Set it to one of your own members once you have one, or to "" to drop the
+# line. Runtime override: LANDING_EXAMPLE_PROFILE_URL (config/runtime.exs).
+config :vutuv, :landing_example_profile_url, "https://vutuv.de/wintermeyer"
+
 # Follow-only ActivityPub federation (Vutuv.Fediverse): people on Mastodon
 # & Co. can follow opted-in members and receive their public posts. Off =
 # every Fediverse endpoint 404s and nothing is ever delivered — the switch

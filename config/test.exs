@@ -104,6 +104,7 @@ config :vutuv, :async_email, false
 config :vutuv, :reconcile_member_count, false
 config :vutuv, :refresh_popular_users, false
 config :vutuv, :refresh_top_posters, false
+config :vutuv, :refresh_landing_showcase, false
 # Every profile LiveView test performs a connected mount; the inline social
 # feeds must never fetch a remote network from there. The feed tests flip
 # these on per-test and stub HTTP via :mastodon_req_options /

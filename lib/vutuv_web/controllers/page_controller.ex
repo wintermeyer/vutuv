@@ -5,6 +5,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
+  alias Vutuv.Landing
   alias Vutuv.SearchText
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
@@ -59,15 +60,34 @@ defmodule VutuvWeb.PageController do
 
     prefetch = "/listings/most_followed_users"
 
-    # The member count is rendered by the embedded VutuvWeb.MemberCountLive (it
-    # ticks up live), so the controller no longer fetches it here.
     # The headline is under a split test (VutuvWeb.LandingExperiment): the
     # variant is drawn once per session and one view is counted with it.
     conn
     |> LandingExperiment.assign_variant()
-    |> render("index.html",
-      changeset: changeset,
-      prefetch: prefetch
+    |> render_landing(changeset: changeset, prefetch: prefetch)
+  end
+
+  # The one way to render the landing page, because it is rendered from two
+  # actions: `index` and the rejected sign-up below, which shows the identical
+  # screen with the errors on it. Assigning the examples in `index` only left
+  # the rejected sign-up raising KeyError on the first assign the template
+  # reached, i.e. a 500 on every mistyped form.
+  defp render_landing(conn, assigns) do
+    # The posts come from the snapshot in Vutuv.Landing.Showcase rather than per
+    # request: this is the most requested page in the app. What a profile looks
+    # like is answered by static screenshots in the template, so nothing is
+    # loaded for that.
+    render(
+      conn,
+      "index.html",
+      Keyword.merge(
+        [
+          prefetch: "/listings/most_followed_users",
+          showcase_posts: Landing.showcase_posts(),
+          showcase_window_days: Landing.window_days()
+        ],
+        assigns
+      )
     )
   end
 
@@ -187,7 +207,7 @@ defmodule VutuvWeb.PageController do
           conn
           |> LandingExperiment.assign_variant_without_view()
           |> put_status(:unprocessable_entity)
-          |> render("index.html", changeset: changeset)
+          |> render_landing(changeset: changeset)
         end
     end
   end

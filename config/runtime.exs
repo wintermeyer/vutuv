@@ -171,6 +171,24 @@ if config_env() == :prod do
     config :vutuv, :landing_headline_experiment, false
   end
 
+  # The profile the start page offers as "try it out" beside the screenshots.
+  # The compiled default points at a member of the reference installation, which
+  # is the useful answer while you have no filled-in profile of your own; point
+  # it at one of your members once you do, or set it empty to drop the line.
+  # Where this installation's data lives, named on the start page's privacy
+  # section. Set it to your own country or data centre, or to an empty value to
+  # drop that claim — the three promises the software itself makes (no
+  # third-party cookies, data export, self-service deletion) stay either way.
+  # Clear it if you run vutuv on rented cloud infrastructure: the sentence says
+  # "our own servers".
+  if location = System.get_env("DATA_LOCATION") do
+    config :vutuv, :data_location, location
+  end
+
+  if url = System.get_env("LANDING_EXAMPLE_PROFILE_URL") do
+    config :vutuv, :landing_example_profile_url, url
+  end
+
   # How much any single remote server (and any single remote account) may store
   # here per hour, as "host,actor" (issue #1067). The safety floor under the
   # operator's blocklist: it bounds servers nobody has thought to block yet.

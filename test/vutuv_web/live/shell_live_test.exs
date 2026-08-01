@@ -788,6 +788,65 @@ defmodule VutuvWeb.ShellLiveTest do
       refute has_element?(view, @total)
     end
 
+    # A glyph and a bare number read as a version string as easily as a head
+    # count (reported 2026-08-01), so the word has to be on screen — but only
+    # where the bar has room, and that depends on what else the bar is carrying
+    # rather than on the breakpoint alone.
+    test "spells out the word for a logged-out visitor at every width", %{conn: conn} do
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{"locale" => "de"})
+
+      broadcast_total(60_123)
+
+      assert has_element?(view, @total, "Mitglieder")
+      # No breakpoint gate for a visitor: their bar holds a wordmark, this pill
+      # and a Log in button, with room to spare even on a phone. Asserted on the
+      # word's own span — the pill's `md:hidden lg:inline-flex` contains the
+      # substring "hidden lg:inline", so a plain text match passes for the wrong
+      # reason.
+      refute has_element?(view, "#{@total} span.hidden")
+    end
+
+    test "holds the word back until lg once a member's controls are in the bar", %{conn: conn} do
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(insert(:user)))
+
+      broadcast_total(60_123)
+
+      # Same word, but out of the way below lg: a signed-in bar also carries
+      # search, bookmarks, messages, alerts and an avatar, and the documented
+      # spare room below md was measured with exactly that.
+      assert has_element?(view, "#{@total} span.hidden")
+      assert has_element?(view, @total, "members")
+    end
+
+    # The figure arrives over PubSub while the reader is looking elsewhere, so a
+    # changed total needs a cue; watching it move is the point of an exact live
+    # count.
+    test "the figure ticks when a new total arrives", %{conn: conn} do
+      {:ok, view, html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+      # Not on the first render: that would make every page load open with the
+      # number sliding in, which reads as a page still loading.
+      refute html =~ "member-total__figure--tick"
+
+      broadcast_total(60_123)
+
+      assert has_element?(view, "#{@total} span.member-total__figure--tick")
+    end
+
+    # LiveView patches text in place and a patched text node animates nothing,
+    # so the figure's span has to be a NEW node for the animation to play.
+    test "a changed total is a new node, not patched text", %{conn: conn} do
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+      broadcast_total(60_123)
+      assert has_element?(view, "#member-total-figure-60123")
+
+      broadcast_total(60_124)
+      assert has_element?(view, "#member-total-figure-60124")
+      refute has_element?(view, "#member-total-figure-60123")
+    end
+
     test "keeps the account controls at the right edge without it", %{conn: conn} do
       # The pill sits in an always-rendered middle cell of the header grid, so
       # the bar does not re-flow when the counter has nothing to show.

@@ -79,7 +79,7 @@ defmodule VutuvWeb.PostLive.ActionBar do
   """
   def apply_counters(
         socket,
-        %{likes: likes, bookmarks: bookmarks, reposts: reposts, replies: replies} = payload
+        %{likes: _, bookmarks: _, reposts: _, replies: _} = payload
       ) do
     case socket.assigns.engagement do
       nil ->
@@ -89,25 +89,35 @@ defmodule VutuvWeb.PostLive.ActionBar do
         if payload[:by_user_id] && payload[:by_user_id] == socket.assigns.viewer_id do
           load_engagement(socket)
         else
-          assign(socket, :engagement, %{
-            engagement
-            | likes: likes,
-              bookmarks: bookmarks,
-              reposts: reposts,
-              replies: replies,
-              # Issues #1068 and #1069: a reaction or a reply from another
-              # network arrives without any viewer of ours acting, so this is the
-              # only path that updates the remote figures — which now also move
-              # the like / repost / reply counters themselves, since the card
-              # shows one number per act. The chips ride along, the panel behind
-              # them naming the accounts.
-              fediverse_likes: payload.fediverse_likes,
-              fediverse_reposts: payload.fediverse_reposts,
-              fediverse_reaction_actors: payload.fediverse_reaction_actors,
-              fediverse_replies: payload.fediverse_replies
-          })
+          assign(socket, :engagement, apply_counters_to(engagement, payload))
         end
     end
+  end
+
+  @doc """
+  The same rule for a caller holding an engagement rather than a socket — the
+  landing-page carousel keeps a map of them, one per card.
+
+  Split out rather than copied, because the interesting half of this list is
+  easy to forget: **issues #1068 and #1069**, a reaction or a reply from another
+  network arrives without any viewer of ours acting, so this is the only path
+  that updates the remote figures. Since the card shows one number per act
+  (`Posts.shown_counts/1`), leaving them out means a heart from Mastodon simply
+  never moves the heart on the card. The chips ride along, the panel behind them
+  naming the accounts.
+  """
+  def apply_counters_to(engagement, payload) do
+    %{
+      engagement
+      | likes: payload.likes,
+        bookmarks: payload.bookmarks,
+        reposts: payload.reposts,
+        replies: payload.replies,
+        fediverse_likes: payload.fediverse_likes,
+        fediverse_reposts: payload.fediverse_reposts,
+        fediverse_reaction_actors: payload.fediverse_reaction_actors,
+        fediverse_replies: payload.fediverse_replies
+    }
   end
 
   @doc """

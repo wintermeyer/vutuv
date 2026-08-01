@@ -111,6 +111,28 @@ defmodule VutuvWeb.PostComponents do
     doc: "@conn (dead pages) or @socket (LiveViews) — anchors the embedded live action bar"
   )
 
+  attr(:max_lines, :integer,
+    default: nil,
+    doc:
+      "hard ceiling on the preview body, in lines, overriding the reader's and " <>
+        "the installation's clamp preference. For a surface that is a WALL of " <>
+        "posts rather than a timeline: the landing page's masonry sets it, because " <>
+        "there one long post next to two short ones is not a tall card, it is a " <>
+        "column nobody can read past. Leave nil everywhere a reader is reading " <>
+        "posts one after another — there their own preference is the whole point"
+  )
+
+  attr(:actions, :boolean,
+    default: true,
+    doc:
+      "render the like / repost / bookmark bar. The bar is a LiveView per card " <>
+        "(a LiveComponent on a LiveView host, an embedded Actions LiveView on a dead " <>
+        "page), which is right wherever a reader can act on the post. Set false where " <>
+        "nobody can: the logged-out landing page shows posts as examples, and three " <>
+        "sockets per visit on the page that greets every crawler buys a row of buttons " <>
+        "that would only bounce the visitor to the login form"
+  )
+
   attr(:reposted_by, :any,
     default: nil,
     doc: "%User{} who carried this post into the timeline — renders the \"Reposted by\" line"
@@ -142,8 +164,10 @@ defmodule VutuvWeb.PostComponents do
 
   def post_card(assigns) do
     # The reader's post-display preferences (per-breakpoint line clamp +
-    # hyphenation), fed onto the body as CSS custom properties below.
-    prefs = User.post_prefs(assigns.viewer)
+    # hyphenation), fed onto the body as CSS custom properties below. A surface
+    # that passes `max_lines` caps both breakpoints at that value: it is a
+    # ceiling, not a replacement, so a reader who chose FEWER lines keeps theirs.
+    prefs = assigns.viewer |> User.post_prefs() |> cap_prefs(assigns[:max_lines])
 
     # A logged-in viewer (vs anonymous / a "View as public" preview, both nil),
     # bound once and reused for the acting-viewer id and the reporter test.
@@ -2915,19 +2939,21 @@ defmodule VutuvWeb.PostComponents do
           is the standalone `Actions` LiveView, embedded so its counters still
           tick. The id derives from the timeline entry, not the post: the same
           post can render twice on one page (original + repost). --%>
-          <%= if match?(%Phoenix.LiveView.Socket{}, @conn_or_socket) do %>
-            <.live_component
-              module={VutuvWeb.PostLive.ActionsComponent}
-              id={@actions_id}
-              post_id={@post.id}
-              viewer_id={@viewer_id}
-              engagement={@engagement}
-            />
-          <% else %>
-            {live_render(@conn_or_socket, VutuvWeb.PostLive.Actions,
-              id: @actions_id,
-              session: %{"post_id" => @post.id, "id" => @actions_id, "engagement" => @engagement}
-            )}
+          <%= cond do %>
+            <% not @actions -> %>
+            <% match?(%Phoenix.LiveView.Socket{}, @conn_or_socket) -> %>
+              <.live_component
+                module={VutuvWeb.PostLive.ActionsComponent}
+                id={@actions_id}
+                post_id={@post.id}
+                viewer_id={@viewer_id}
+                engagement={@engagement}
+              />
+            <% true -> %>
+              {live_render(@conn_or_socket, VutuvWeb.PostLive.Actions,
+                id: @actions_id,
+                session: %{"post_id" => @post.id, "id" => @actions_id, "engagement" => @engagement}
+              )}
           <% end %>
         </div>
       </div>
@@ -2964,6 +2990,23 @@ defmodule VutuvWeb.PostComponents do
 
   defp clamp_value(0), do: "none"
   defp clamp_value(n) when is_integer(n), do: Integer.to_string(n)
+
+  # `max_lines` is a ceiling on both breakpoints, not a replacement: a reader who
+  # asked for four lines still gets four. `0` means "no clamp" in the preference
+  # vocabulary, so it is the one value the ceiling has to bring DOWN rather than
+  # leave alone — an unclamped body is exactly what this surface cannot have.
+  defp cap_prefs(prefs, nil), do: prefs
+
+  defp cap_prefs(prefs, max) when is_integer(max) and max > 0 do
+    %{
+      prefs
+      | lines_desktop: cap_line_count(prefs.lines_desktop, max),
+        lines_mobile: cap_line_count(prefs.lines_mobile, max)
+    }
+  end
+
+  defp cap_line_count(0, max), do: max
+  defp cap_line_count(lines, max), do: min(lines, max)
 
   defp hyphens_value(true), do: "auto"
   defp hyphens_value(false), do: "manual"
