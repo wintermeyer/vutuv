@@ -288,15 +288,42 @@ defmodule VutuvWeb.FediverseAccountLive do
         whole it would be some 400 lines on a phone, with Follow, the posts and
         the lookup box all several screens below it. So it is clamped with a lid,
         the same shape every other long remote text on the site wears. --%>
-        <details :if={@account.summary} data-remote-summary class="group mt-4">
-          <summary class="cursor-pointer list-none">
-            <span class="mt-1 inline-flex min-h-10 items-center text-xs font-medium text-brand-600 group-open:hidden dark:text-brand-400">
-              {gettext("Show the whole description")}
+        <%!-- Whether the toggle is offered at all is decided by measuring, not
+        by the server: the cut is `-webkit-line-clamp`, so how many lines this
+        description really takes depends on the reader's window and font and is
+        not knowable here. The measuring already exists for post previews
+        (`revealPreviewClamp` in app.js, hook and `data-clamp-body` below), and
+        it answers on the wrapper: `is-measured` once it has looked,
+        `is-clamped` when something is genuinely hidden.
+
+        That pair, rather than `is-clamped` alone, is what keeps this working
+        with JavaScript off. Unmeasured means the toggle shows, which is exactly
+        today's behaviour, so the enhancement can only ever take away a control
+        that does nothing — never the one that does something. --%>
+        <details
+          :if={@account.summary}
+          id="remote-summary"
+          phx-hook="PostPreviewClamp"
+          data-remote-summary
+          class="group mt-4"
+        >
+          <%!-- `cursor` and the toggle's `display` both live in components.css
+          (`[data-remote-summary]`), so each has ONE owner. A Tailwind display
+          utility here beside a state rule is the cascade conflict that made
+          "Read more" show on every post (issue #880). --%>
+          <summary class="list-none">
+            <span data-remote-summary-toggle>
+              <span class="mt-1 inline-flex min-h-10 items-center text-xs font-medium text-brand-600 group-open:hidden dark:text-brand-400">
+                {gettext("Show the whole description")}
+              </span>
+              <span class="mt-1 hidden min-h-10 items-center text-xs font-medium text-brand-600 group-open:inline-flex dark:text-brand-400">
+                {gettext("Show less")}
+              </span>
             </span>
-            <span class="mt-1 hidden min-h-10 items-center text-xs font-medium text-brand-600 group-open:inline-flex dark:text-brand-400">
-              {gettext("Show less")}
-            </span>
-            <p class="post-clamp mb-0 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 group-open:hidden dark:text-slate-300">
+            <p
+              data-clamp-body
+              class="post-clamp mb-0 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 group-open:hidden dark:text-slate-300"
+            >
               {@account.summary}
             </p>
           </summary>

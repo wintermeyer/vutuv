@@ -1440,6 +1440,32 @@ ul.thumbs li .text .url a {
   margin-left: auto;
 }
 
+/* ---------- The fediverse account description's expand toggle ----------
+   Same clamp, same measurement (`revealPreviewClamp` in app.js), one extra
+   question: a description short enough to fit was still offered a "Show the
+   whole description" that unfolded the very same lines — a control that
+   promises something and does nothing (issue #1268).
+
+   The gate is `is-measured` AND NOT `is-clamped`, never `:not(.is-clamped)`
+   alone. Unmeasured has to mean "leave it as rendered": with JavaScript off
+   nothing ever measures, and hiding the toggle there would strand a long
+   description permanently truncated with no way to open it. So the enhancement
+   can only remove a toggle that was proven useless.
+
+   `display` and `cursor` are owned HERE and nowhere else — the markup carries
+   no Tailwind display utility on `[data-remote-summary-toggle]` — because two
+   owners of `display` on one element is exactly what made "Read more" appear on
+   every post in issue #880. */
+[data-remote-summary] > summary {
+  cursor: pointer;
+}
+[data-remote-summary].is-measured:not(.is-clamped) > summary {
+  cursor: default;
+}
+[data-remote-summary].is-measured:not(.is-clamped) [data-remote-summary-toggle] {
+  display: none;
+}
+
 /* Float-wrap preview variant (`<.preview_body wrap>`): a small image/screenshot
    floats to the top-right (the `:float` slot, the clamp block's first child) and
    the body text flows around AND below it, so a short image leaves no dead column

@@ -294,4 +294,36 @@ defmodule VutuvWeb.FediverseAccountLiveTest do
       assert render(view) =~ "names no member"
     end
   end
+
+  describe "the description's expand toggle (issue #1268)" do
+    test "it is wired to the measurement the post previews already use",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      acc = account()
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+
+      # Whether the toggle is worth offering depends on how many lines the text
+      # takes at this reader's width and font, which the server cannot know. So
+      # the markup hands the question to `revealPreviewClamp`: the wrapper it
+      # answers on, and the body it measures.
+      assert has_element?(view, "[data-remote-summary][phx-hook='PostPreviewClamp']")
+      assert has_element?(view, "[data-remote-summary] [data-clamp-body].post-clamp")
+      assert has_element?(view, "[data-remote-summary] [data-remote-summary-toggle]")
+    end
+
+    test "the toggle's own element declares no display, so the CSS state rule owns it",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      acc = account()
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+
+      # The issue #880 shape: an element carrying both a display utility and a
+      # state rule that wants to hide it, where whichever CSS is emitted last
+      # silently wins. The wrapper therefore carries no class at all.
+      html = view |> element("[data-remote-summary-toggle]") |> render()
+      refute html =~ ~r/<span[^>]*data-remote-summary-toggle[^>]*class=/
+    end
+  end
 end

@@ -82,7 +82,16 @@ function revealPreviewClamp(el) {
   if (el.classList.contains("is-expanded")) return
   const body = el.querySelector("[data-clamp-body]")
   if (!body) return
+  // A body nothing is painting cannot be measured: both heights read 0, and the
+  // answer would come out as "nothing is cut". The fediverse account
+  // description hits this every time it is open, since the clamped copy is
+  // `group-open:hidden` while the full one shows.
+  if (body.clientHeight === 0) return
   const clipped = body.scrollHeight > body.clientHeight + 1
+  // "We have looked", which is a different thing from "nothing is cut" — an
+  // element that was never measured (no JavaScript, or not yet run) must keep
+  // whatever the server rendered rather than be treated as uncut.
+  el.classList.add("is-measured")
   el.classList.toggle("is-clamped", clipped)
 }
 
@@ -150,8 +159,14 @@ document.addEventListener("click", (e) => {
 // Sweep every preview on the page (classic pages, and the initial static render
 // of live pages). The PostPreviewClamp hook re-checks each one on stream patches;
 // a debounced resize sweep catches reflows that change how many lines wrap.
+// Everything on the page that clamps text by line count and needs to know
+// whether it really cut any: the post previews, and the fediverse account
+// description, which hides its own expand toggle when there is nothing behind
+// it (issue #1268).
+const CLAMP_PROBES = "[data-post-preview], [data-remote-summary]"
+
 function sweepPreviewClamps() {
-  document.querySelectorAll("[data-post-preview]").forEach(revealPreviewClamp)
+  document.querySelectorAll(CLAMP_PROBES).forEach(revealPreviewClamp)
 }
 
 onReady(sweepPreviewClamps)
