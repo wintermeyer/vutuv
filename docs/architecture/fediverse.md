@@ -917,18 +917,26 @@ deletes the row (there is nothing left to show, nothing to retry, and keeping a
 stranger's refusal on file earns nobody anything). Both are scoped to the actor
 that answered, so one server can never settle a follow addressed to another.
 
-**The following browser updates itself.** Every change on that page except the
-member's own follow and unfollow is decided on another server and arrives in the
-inbox at a time nobody here picks — an `Accept` seconds or days behind the
-request, a `Reject`, a `Move`, an account `Delete`, an operator blocking the
-instance. So each of those write paths broadcasts a bare `:remote_follows_changed`
-on the affected members' `"user:<id>"` topic (`Vutuv.Activity`), and
-`VutuvWeb.FediverseFollowingLive` reloads its current view: the rows and their
-state badges, the headline count, the server filter and the pager, keeping the
-page the member is on. Without it "Requested" stays on screen long after the
-other side said yes, and only a manual reload tells the truth. The signal
-carries no payload on purpose — the page's view is filtered, sorted and paged,
-and none of that is knowable from the context.
+**Both relationship browsers update themselves.** Every change on those pages
+except the member's own follow and unfollow is decided on another server and
+arrives in the inbox at a time nobody here picks — an `Accept` seconds or days
+behind the request, a `Reject`, a `Move`, an account `Delete`, an operator
+blocking the instance; and on the follower side a `Follow`, an `Undo`, an actor
+`Update` that renames somebody, or the pruner dropping an account that is gone.
+So each of those write paths broadcasts on the affected members' `"user:<id>"`
+topic (`Vutuv.Activity`): `:remote_follows_changed` for the accounts a member
+follows, `:remote_followers_changed` for the people who follow them. The two
+signals are named for the two tables and are never interchangeable — *follows*
+is what the member does, *followers* is what is done to them.
+
+Each page then reloads its current view — rows, headline count, server filter,
+pager — keeping the page number the member is on, and marks the rows that
+actually moved so they light up (`BrowseTable.mark_changed_rows/4`, the
+`tr[data-row-changed]` sweep). Without it "Angefragt" stays on screen long after
+the other side said yes, and the follower page's own promise that a renamed
+account updates by itself is only true across a reload. The signals carry no
+payload on purpose — a page's view is filtered, sorted and paged, and none of
+that is knowable from the context.
 
 ### The gates
 

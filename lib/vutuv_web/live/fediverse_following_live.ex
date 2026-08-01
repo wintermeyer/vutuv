@@ -44,11 +44,6 @@ defmodule VutuvWeb.FediverseFollowingLive do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Pages
 
-  # How long a changed row keeps its marker. Longer than the CSS sweep
-  # (`tr[data-row-changed]`, 1.4s): taking the marker off mid-animation would
-  # cut the fade short.
-  @row_mark_ms 1_800
-
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
@@ -68,11 +63,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
      |> assign(:blocked_reason, Fediverse.follow_refusal(user))
      |> assign(:address, "")
      |> assign(:error, nil)
-     # Nothing is marked on arrival: the animation is for a change the member
-     # watched happen, and a table that lights up on every page load would say
-     # "something moved" when nothing did.
-     |> assign(:changed_ids, MapSet.new())
-     |> assign(:change_seq, 0)
+     |> init_row_marks()
      |> assign_totals()}
   end
 
@@ -213,62 +204,23 @@ defmodule VutuvWeb.FediverseFollowingLive do
   # moves the headline count and can move the server filter and the pager, and
   # a page is at most 50 rows, so re-asking costs the same four queries the
   # member's own unfollow already pays.
+  # What "unchanged" means for a row here: the state of the follow. That is the
+  # only thing on the row another server can move (the account's own name and
+  # handle are the following browser's mirror page's business).
   @impl true
   def handle_info(:remote_follows_changed, socket) do
     shown = socket.assigns.follows
+    socket = socket |> assign_totals() |> load_page()
 
-    {:noreply,
-     socket
-     |> assign_totals()
-     |> load_page()
-     |> mark_changed_rows(shown)}
+    {:noreply, mark_changed_rows(socket, shown, socket.assigns.follows, & &1.state)}
   end
 
-  # The marker's own timer, come round: see `mark_changed_rows/2`. Ignored when
-  # a newer change has since marked its own rows, or this one would cut that
-  # animation short.
-  def handle_info({:clear_changed_rows, seq}, socket) do
-    if seq == socket.assigns.change_seq,
-      do: {:noreply, assign(socket, :changed_ids, MapSet.new())},
-      else: {:noreply, socket}
-  end
+  def handle_info({:clear_changed_rows, seq}, socket),
+    do: {:noreply, clear_row_marks(socket, seq)}
 
   # The owner topic carries every other in-app event (message and notification
   # badges, follows made here); this page has nothing to do with them.
   def handle_info(_other, socket), do: {:noreply, socket}
-
-  # Which rows the reload actually moved, so only those light up: a follow whose
-  # state changed under the member's eyes, and one that has appeared (an account
-  # that moved servers arrives as a fresh request beside its old row). A row that
-  # is simply *gone* gets nothing — there is no longer anything to mark, and
-  # animating a removal would mean holding a row the member no longer follows.
-  #
-  # "Appeared" is read against this page of the table, not the whole list, so a
-  # row that a deletion further up pulled onto the page counts as one. That is
-  # the honest reading anyway: from where the member is looking, it did just
-  # turn up.
-  #
-  # The marker is taken off again on a timer, because a CSS animation restarts
-  # only when the element begins matching the rule afresh: left on, the same row
-  # changing a second time would stay silent.
-  defp mark_changed_rows(socket, shown_before) do
-    before = Map.new(shown_before, &{&1.id, &1.state})
-
-    changed =
-      for follow <- socket.assigns.follows,
-          Map.get(before, follow.id) != follow.state,
-          into: MapSet.new(),
-          do: follow.id
-
-    if Enum.empty?(changed) do
-      socket
-    else
-      seq = socket.assigns.change_seq + 1
-      Process.send_after(self(), {:clear_changed_rows, seq}, @row_mark_ms)
-
-      socket |> assign(:changed_ids, changed) |> assign(:change_seq, seq)
-    end
-  end
 
   # ── Wording ───────────────────────────────────────────────────────────────
 
@@ -426,7 +378,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
                   <tr
                     :for={follow <- @follows}
                     id={"follow-#{follow.id}"}
-                    data-row-changed={MapSet.member?(@changed_ids, follow.id)}
+                    data-row-changed={row_changed?(@changed_ids, follow.id)}
                   >
                     <td>
                       <.account_link

@@ -221,13 +221,17 @@ defmodule Vutuv.Fediverse do
   with `{:error, :inbound_capped}`.
   """
   def add_follower(%User{} = user, attrs) do
-    with :ok <- check_inbound_cap(attrs[:actor_uri] || attrs["actor_uri"]) do
-      %Follower{user_id: user.id}
-      |> Follower.changeset(attrs)
-      |> Repo.insert(
-        on_conflict: {:replace, [:inbox_uri, :shared_inbox_uri, :handle, :name, :updated_at]},
-        conflict_target: [:user_id, :actor_uri]
-      )
+    with :ok <- check_inbound_cap(attrs[:actor_uri] || attrs["actor_uri"]),
+         {:ok, follower} <-
+           %Follower{user_id: user.id}
+           |> Follower.changeset(attrs)
+           |> Repo.insert(
+             on_conflict:
+               {:replace, [:inbox_uri, :shared_inbox_uri, :handle, :name, :updated_at]},
+             conflict_target: [:user_id, :actor_uri]
+           ) do
+      broadcast_remote_followers_changed([user.id])
+      {:ok, follower}
     end
   end
 
@@ -239,17 +243,25 @@ defmodule Vutuv.Fediverse do
   document must not crash the inbox.
   """
   def refresh_follower(%User{id: user_id}, %{actor_uri: actor_uri} = attrs) do
-    if follower = Repo.get_by(Follower, user_id: user_id, actor_uri: actor_uri) do
-      follower |> Follower.changeset(attrs) |> Repo.update()
+    with %Follower{} = follower <- Repo.get_by(Follower, user_id: user_id, actor_uri: actor_uri),
+         {:ok, _updated} <- follower |> Follower.changeset(attrs) |> Repo.update() do
+      # The name and handle are what the follower table shows, so a rename is a
+      # change to that page even though no row came or went.
+      broadcast_remote_followers_changed([user_id])
     end
 
     :ok
   end
 
   def remove_follower(%User{id: user_id}, actor_uri) do
-    Repo.delete_all(
-      from(f in Follower, where: f.user_id == ^user_id and f.actor_uri == ^actor_uri)
-    )
+    {count, _} =
+      Repo.delete_all(
+        from(f in Follower, where: f.user_id == ^user_id and f.actor_uri == ^actor_uri)
+      )
+
+    # Only when a row really went: an `Undo` for a follow we never stored is
+    # ordinary inbox traffic, and waking every open page for it would be noise.
+    if count > 0, do: broadcast_remote_followers_changed([user_id])
 
     :ok
   end
@@ -959,6 +971,19 @@ defmodule Vutuv.Fediverse do
     user_ids
     |> Enum.uniq()
     |> Enum.each(&Activity.broadcast(&1, :remote_follows_changed))
+  end
+
+  # The same thing for the **other** direction: who follows the member from out
+  # there (`/settings/fediverse/followers`, `Vutuv.Fediverse.Follower`), which
+  # moves when a `Follow` arrives, an `Undo` withdraws one, an actor `Update`
+  # renames somebody, the pruner drops an account that is gone, or an operator
+  # blocks its server. The two signals are named for the two tables and are
+  # never interchangeable — `follows` is what the member does, `followers` is
+  # what is done to them.
+  defp broadcast_remote_followers_changed(user_ids) when is_list(user_ids) do
+    user_ids
+    |> Enum.uniq()
+    |> Enum.each(&Activity.broadcast(&1, :remote_followers_changed))
   end
 
   # The members here who follow one of these remote accounts. Read **before** a
@@ -2632,6 +2657,7 @@ defmodule Vutuv.Fediverse do
 
   defp prune_follower(%Follower{} = follower, status) do
     Repo.delete(follower)
+    broadcast_remote_followers_changed([follower.user_id])
 
     # The host is always parseable here (an unparseable actor URI never gets as
     # far as an HTTP status), but fall back rather than lose the ledger row: a
@@ -2784,8 +2810,20 @@ defmodule Vutuv.Fediverse do
   post_deliveries: n}`.
   """
   def purge_instance(host) when is_binary(host) do
+    # Whose follower tables are about to lose rows, asked while they still exist.
+    followed_members =
+      Repo.all(
+        from(f in Follower,
+          where: uri_host(f.actor_uri) == ^host,
+          distinct: true,
+          select: f.user_id
+        )
+      )
+
     {followers, _} =
       Repo.delete_all(from(f in Follower, where: uri_host(f.actor_uri) == ^host))
+
+    broadcast_remote_followers_changed(followed_members)
 
     # A block cuts both directions (issue #1160): the accounts our members
     # follow over there go with the ones that follow us, and the follow rows

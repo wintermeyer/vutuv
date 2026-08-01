@@ -210,6 +210,76 @@ defmodule VutuvWeb.FediverseFollowersLiveTest do
     end
   end
 
+  describe "the list keeps itself current" do
+    setup %{conn: conn} do
+      {conn, user} = federating(conn)
+      {:ok, live, _html} = live(conn, ~p"/settings/fediverse/followers")
+      %{conn: conn, live: live, user: user}
+    end
+
+    test "a follow that arrives in the inbox lands on the open page", %{live: live, user: user} do
+      assert has_element?(live, "#no-followers")
+
+      # A follower arrives through the inbox, at a time nobody here picks —
+      # never through this page.
+      {:ok, follower} =
+        Fediverse.add_follower(user, %{
+          actor_uri: "https://mastodon.example/users/newcomer",
+          inbox_uri: "https://mastodon.example/users/newcomer/inbox",
+          handle: "newcomer",
+          name: "Newcomer"
+        })
+
+      refute has_element?(live, "#no-followers")
+      assert has_element?(live, "#follower-#{follower.id}")
+      assert render(live) =~ "@newcomer@mastodon.example"
+      # And the row says it is the one that moved.
+      assert has_element?(live, "#follower-#{follower.id}[data-row-changed]")
+
+      # The marker comes off again by itself (its timer's own message, fired
+      # here rather than waited out — first change, so its sequence is 1), or a
+      # second change to the same row would arrive on a row already marked and
+      # the CSS animation would not restart.
+      send(live.pid, {:clear_changed_rows, 1})
+      refute has_element?(live, "tr[data-row-changed]")
+    end
+
+    test "an Undo takes the follower off the open page", %{live: live, user: user} do
+      one = follower(user, handle: "one")
+
+      {:ok, _} =
+        Fediverse.add_follower(user, %{
+          actor_uri: "https://x.example/users/two",
+          inbox_uri: "https://x.example/users/two/inbox",
+          handle: "two"
+        })
+
+      Fediverse.remove_follower(user, one.actor_uri)
+
+      refute has_element?(live, "#follower-#{one.id}")
+      assert render(live) =~ "@two@x.example"
+      # The headline count went with it, not just the row.
+      assert has_element?(live, "#follower-total", "1")
+    end
+
+    test "a rename reaches the open page and marks the row", %{live: live, user: user} do
+      one = follower(user, handle: "one", name: "Old Name")
+      # A rename arrives as an actor Update, not as anything this member did.
+      :ok =
+        Fediverse.refresh_follower(user, %{
+          actor_uri: one.actor_uri,
+          inbox_uri: one.inbox_uri,
+          handle: "one",
+          name: "New Name"
+        })
+
+      html = render(live)
+      assert html =~ "New Name"
+      refute html =~ "Old Name"
+      assert has_element?(live, "#follower-#{one.id}[data-row-changed]")
+    end
+  end
+
   # vutuv is a German site, so a page whose new strings have no German msgstr
   # renders as an English island for real visitors while every English check
   # stays green.

@@ -12,13 +12,20 @@ defmodule VutuvWeb.FediverseFollowersLive do
   (Account / Server / Following since) and numbered paging.
 
   Filter, sort and page live in the **URL** (`push_patch`), so a particular view
-  is shareable and the back button restores it; `handle_params/3` is the single
-  loader, the table itself — query string, sortable headers, filter form,
-  account and server cells, range line and pager — is `VutuvWeb.BrowseTable`
-  (shared with the mirror-image following browser) and the query work stays in
-  `Vutuv.Fediverse` (`browse_filters/1`, `count_followers/2`,
-  `list_followers_page/4`, `follower_hosts/2`). What is left here is what
-  genuinely differs: the rows, the columns, and the wording.
+  is shareable and the back button restores it; the table itself — query string,
+  sortable headers, filter form, account and server cells, range line and pager
+  — is `VutuvWeb.BrowseTable` (shared with the mirror-image following browser)
+  and the query work stays in `Vutuv.Fediverse` (`browse_filters/1`,
+  `count_followers/2`, `list_followers_page/4`, `follower_hosts/2`). What is
+  left here is what genuinely differs: the rows, the columns, and the wording.
+
+  It **keeps itself current**. Nothing on this page is ever the member's own
+  doing — a follower arrives, withdraws, renames itself or is pruned on another
+  server's time — so `handle_params/3` is not the only loader: the page
+  subscribes to the owner's topic and reloads on `:remote_followers_changed`,
+  marking the rows that moved so they light up (`BrowseTable.mark_changed_rows/4`).
+  Without it the card below the table would be promising something untrue when
+  it says a renamed account updates here on its own.
 
   Owner-only by construction: it lives in the `/settings` scope, reads only
   `current_user`'s rows, and a member who does not federate is sent back to
@@ -31,6 +38,7 @@ defmodule VutuvWeb.FediverseFollowersLive do
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
+  alias Vutuv.Activity
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follower
   alias Vutuv.Pages
@@ -40,12 +48,19 @@ defmodule VutuvWeb.FediverseFollowersLive do
     user = socket.assigns.current_user
 
     if Fediverse.federated?(user) do
+      # Nothing on this page is ever the member's own doing: a follower arrives,
+      # withdraws, renames itself or is pruned entirely on other servers' time.
+      # The owner topic is the only way the list can be right without a reload
+      # (see `Vutuv.Fediverse`'s `:remote_followers_changed`). Connected only:
+      # the disconnected render is thrown away.
+      if connected?(socket), do: Activity.subscribe(user.id)
+
       {:ok,
        socket
        |> assign(:page_title, gettext("Followers from other networks"))
        |> assign(:user, user)
-       |> assign(:total_followers, Fediverse.follower_count(user))
-       |> assign(:hosts, Fediverse.follower_hosts(user))}
+       |> init_row_marks()
+       |> assign_totals()}
     else
       {:ok, push_navigate(socket, to: ~p"/settings/fediverse")}
     end
@@ -53,8 +68,30 @@ defmodule VutuvWeb.FediverseFollowersLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
+    {:noreply, socket |> assign(:filters, Fediverse.browse_filters(params)) |> load_page(params)}
+  end
+
+  # The headline count and the server dropdown: what the whole list looks like,
+  # whatever the current view filters out of it. Only something that adds or
+  # removes a follower can move them, so they refresh with the page rather than
+  # per keystroke.
+  defp assign_totals(socket) do
     user = socket.assigns.user
-    filters = Fediverse.browse_filters(params)
+
+    socket
+    |> assign(:total_followers, Fediverse.follower_count(user))
+    |> assign(:hosts, Fediverse.follower_hosts(user))
+  end
+
+  # Reloads the view the member is looking at. The page number comes from the
+  # socket rather than starting over at 1, so a follower arriving while they
+  # read page three does not throw them back to the top of the list
+  # (`Pages.effective_page/3` still catches a page that just ran out of rows).
+  defp load_page(socket), do: load_page(socket, %{"page" => socket.assigns.page})
+
+  defp load_page(socket, params) do
+    user = socket.assigns.user
+    filters = socket.assigns.filters
     per_page = Fediverse.browse_per_page()
     total = Fediverse.count_followers(user, filters)
     page = Pages.effective_page(params, total, per_page)
@@ -65,14 +102,37 @@ defmodule VutuvWeb.FediverseFollowersLive do
         per_page: per_page
       )
 
-    {:noreply,
-     socket
-     |> assign(:filters, filters)
-     |> assign(:total, total)
-     |> assign(:page, page)
-     |> assign(:per_page, per_page)
-     |> assign(:followers, followers)}
+    socket
+    |> assign(:total, total)
+    |> assign(:page, page)
+    |> assign(:per_page, per_page)
+    |> assign(:followers, followers)
   end
+
+  # ── Live updates from elsewhere ───────────────────────────────────────────
+
+  # A `Follow` arrived, an `Undo` withdrew one, an actor `Update` renamed
+  # somebody, the pruner dropped an account that is gone, or an operator blocked
+  # its server — broadcast by `Vutuv.Fediverse` on the owner's topic.
+  #
+  # What "unchanged" means for a row here is the display pair the Account column
+  # shows: a rename moves the row without anything coming or going, and the card
+  # below this table promises exactly that ("a renamed account updates here on
+  # its own too").
+  @impl true
+  def handle_info(:remote_followers_changed, socket) do
+    shown = socket.assigns.followers
+    socket = socket |> assign_totals() |> load_page()
+
+    {:noreply, mark_changed_rows(socket, shown, socket.assigns.followers, &{&1.name, &1.handle})}
+  end
+
+  def handle_info({:clear_changed_rows, seq}, socket),
+    do: {:noreply, clear_row_marks(socket, seq)}
+
+  # The owner topic carries every other in-app event (message and notification
+  # badges, follows made here); this page has nothing to do with them.
+  def handle_info(_other, socket), do: {:noreply, socket}
 
   # ── Events (every one just rewrites the URL; handle_params reloads) ──
 
@@ -153,7 +213,11 @@ defmodule VutuvWeb.FediverseFollowersLive do
                   </tr>
                 </thead>
                 <tbody id="followers">
-                  <tr :for={follower <- @followers} id={"follower-#{follower.id}"}>
+                  <tr
+                    :for={follower <- @followers}
+                    id={"follower-#{follower.id}"}
+                    data-row-changed={row_changed?(@changed_ids, follower.id)}
+                  >
                     <td>
                       <.account_link
                         uri={follower.actor_uri}

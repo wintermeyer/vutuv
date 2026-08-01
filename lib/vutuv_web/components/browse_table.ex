@@ -181,6 +181,81 @@ defmodule VutuvWeb.BrowseTable do
     push_patch(socket, [to: path_fun.(query)] ++ opts)
   end
 
+  ## Rows that change while somebody is looking at them
+
+  # How long a changed row keeps its marker. Longer than the CSS sweep
+  # (`tr[data-row-changed]` in `components.css`, 1.4s): taking the marker off
+  # mid-animation would cut the fade short.
+  @row_mark_ms 1_800
+
+  @doc """
+  Sets up the row-marking assigns. Call it in `mount/3` of a browse page whose
+  rows can change without the member touching anything.
+
+  Nothing is marked on arrival, on purpose: the animation is for a change the
+  member watched happen, and a table that lights up on every page load would
+  say "something moved" when nothing did.
+  """
+  def init_row_marks(socket) do
+    socket |> assign(:changed_ids, MapSet.new()) |> assign(:change_seq, 0)
+  end
+
+  @doc """
+  Marks the rows a reload actually moved, so only those light up.
+
+  `signature` is what "unchanged" means for this page's row — the state of a
+  follow, the display name and handle of a follower — read from the rows shown
+  before and the rows shown now. A row whose signature moved is marked, and so
+  is one that was not there before. A row that is simply *gone* gets nothing:
+  there is no longer anything to mark, and animating a removal would mean
+  holding on to a row the member no longer has.
+
+  "Not there before" is read against this **page** of the table, not the whole
+  list, so a row that a deletion further up pulled onto the page counts as one.
+  That is the honest reading anyway: from where the member is looking, it did
+  just turn up.
+
+  The marker is taken off again on a timer, because a CSS animation restarts
+  only when the element begins matching the rule afresh: left on, the same row
+  changing a second time would stay silent. The timer's message carries a
+  sequence number so an older one cannot cut a newer change's animation short —
+  route it to `clear_row_marks/2`.
+  """
+  def mark_changed_rows(socket, shown_before, shown_now, signature) do
+    before = Map.new(shown_before, &{&1.id, signature.(&1)})
+
+    changed =
+      for row <- shown_now,
+          Map.get(before, row.id) != signature.(row),
+          into: MapSet.new(),
+          do: row.id
+
+    if Enum.empty?(changed) do
+      socket
+    else
+      seq = socket.assigns.change_seq + 1
+      Process.send_after(self(), {:clear_changed_rows, seq}, @row_mark_ms)
+
+      socket |> assign(:changed_ids, changed) |> assign(:change_seq, seq)
+    end
+  end
+
+  @doc """
+  The marker timer come round (see `mark_changed_rows/4`). Ignored when a newer
+  change has since marked its own rows.
+  """
+  def clear_row_marks(socket, seq) do
+    if seq == socket.assigns.change_seq,
+      do: assign(socket, :changed_ids, MapSet.new()),
+      else: socket
+  end
+
+  @doc """
+  Whether this row is one the last reload moved — the `data-row-changed`
+  attribute value, which HEEx drops entirely when it is false.
+  """
+  def row_changed?(changed_ids, id), do: MapSet.member?(changed_ids, id)
+
   @doc """
   The utilities that fold a column away on a phone.
 
