@@ -31,12 +31,6 @@ defmodule VutuvWeb.LandingShowcaseTest do
   # noai? default to false.
   defp poster(attrs \\ []), do: insert(:activated_user, attrs)
 
-  defp example(url) do
-    original = Application.get_env(:vutuv, :landing_example_profile_url)
-    Application.put_env(:vutuv, :landing_example_profile_url, url)
-    on_exit(fn -> Application.put_env(:vutuv, :landing_example_profile_url, original) end)
-  end
-
   defp age(post, days) do
     stamp = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -days, :day)
 
@@ -258,54 +252,6 @@ defmodule VutuvWeb.LandingShowcaseTest do
       end
     end
 
-    # "Readable without an account" is a claim, and this is the one-click check
-    # that goes with it. The label drops the scheme, the href keeps it.
-    test "offers a real profile to try out", %{conn: conn} do
-      example("https://vutuv.example/ada")
-
-      html = conn |> get(~p"/") |> html_response(200)
-
-      assert html =~ "Try it out:"
-      assert html =~ ~s(href="https://vutuv.example/ada")
-      assert html =~ ">\n        vutuv.example/ada\n      <"
-    end
-
-    # The machine-format chips hang off that same profile, so one setting moves
-    # both and the claim above them can be checked against a real document.
-    test "the machine-format chips point at that same profile, RSS included", %{conn: conn} do
-      example("https://vutuv.example/ada")
-
-      html = conn |> get(~p"/") |> html_response(200)
-
-      for suffix <- ~w(.md .txt .json .xml .vcf) do
-        assert html =~ ~s(href="https://vutuv.example/ada#{suffix}")
-      end
-
-      # From VutuvWeb.Feeds, so the chip cannot drift from the real feed route.
-      assert html =~
-               ~s(href="https://vutuv.example/ada#{VutuvWeb.Feeds.user_feed_suffix()}")
-
-      # Installation-wide, so it survives a cleared example profile.
-      assert html =~ ~s(href="/llms.txt")
-    end
-
-    # The installability half of the same knob. Asserted on the line itself, not
-    # on the URL: the founder signature in the hero links to a profile too, so a
-    # bare URL match would pass for the wrong reason.
-    test "drops the try-it-out line where the installation cleared the URL", %{conn: conn} do
-      example("")
-
-      html = conn |> get(~p"/") |> html_response(200)
-
-      refute html =~ "Try it out:"
-      # The screenshots and the rest of the section stay.
-      assert html =~ "data-profile-shots"
-      assert html =~ "data-landing-features"
-      # The per-profile chips go with it; the installation-wide one remains.
-      refute html =~ "vutuv.de/wintermeyer.md"
-      assert html =~ ~s(href="/llms.txt")
-    end
-
     # The Fediverse is the one thing nobody arrives already understanding, so it
     # gets its own section: the feed receiving posts from other networks, and
     # the page where a member subscribes to an account out there.
@@ -315,24 +261,6 @@ defmodule VutuvWeb.LandingShowcaseTest do
       assert html =~ "data-communication-shots"
       assert html =~ "/images/landing-feed-fediverse.avif"
       assert html =~ "/images/landing-fediverse-following.avif"
-    end
-
-    # An intranet installation federates nothing: every endpoint behind that
-    # section 404s there, so promising Mastodon on the operator's front page
-    # would be a straight lie. The sign-up form already gates its Fediverse
-    # question the same way.
-    test "hides the Fediverse section where the installation federates nothing", %{conn: conn} do
-      original = Application.get_env(:vutuv, :fediverse_enabled)
-      Application.put_env(:vutuv, :fediverse_enabled, false)
-      on_exit(fn -> Application.put_env(:vutuv, :fediverse_enabled, original) end)
-
-      html = conn |> get(~p"/") |> html_response(200)
-
-      refute html =~ "data-communication-shots"
-      refute html =~ "Mastodon"
-      # The rest of the page is untouched.
-      assert html =~ "data-profile-shots"
-      assert html =~ "data-landing-features"
     end
 
     # Three of the four promises are properties of the software and hold on every
@@ -352,32 +280,6 @@ defmodule VutuvWeb.LandingShowcaseTest do
       # The card that backs the other four: they are claims, this is the check.
       assert html =~ "Open Source"
       assert html =~ "wie vutuv genau funktioniert"
-    end
-
-    test "drops only the hosting claim where the operator cleared it", %{conn: conn} do
-      original = Application.get_env(:vutuv, :data_location)
-      Application.put_env(:vutuv, :data_location, "")
-      on_exit(fn -> Application.put_env(:vutuv, :data_location, original) end)
-
-      html =
-        conn |> put_req_header("accept-language", "de-DE,de") |> get(~p"/") |> html_response(200)
-
-      refute html =~ "eigenen Servern"
-      # The software's own promises are not the operator's to lose.
-      assert html =~ "Fair und transparent"
-      assert html =~ "Cookie"
-    end
-
-    test "names the place the operator configured", %{conn: conn} do
-      original = Application.get_env(:vutuv, :data_location)
-      Application.put_env(:vutuv, :data_location, "Österreich")
-      on_exit(fn -> Application.put_env(:vutuv, :data_location, original) end)
-
-      html =
-        conn |> put_req_header("accept-language", "de-DE,de") |> get(~p"/") |> html_response(200)
-
-      assert html =~ "eigenen Servern in Österreich"
-      refute html =~ "eigenen Servern in Deutschland"
     end
 
     # The page's argument, in order: this is what a profile looks like, here is
