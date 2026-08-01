@@ -1320,6 +1320,15 @@ defmodule VutuvWeb.PostComponents do
   # post from over there wears its tags the way a member's post does. A warned
   # post keeps its chips **inside** the lid: the tags of a post its author put
   # behind a content warning are part of what they covered up.
+  #
+  # `data-nosnippet` on the wrapper because this card also shows up on pages a
+  # crawler reads: a public tag timeline lists cached remote posts, and a member
+  # who reshares one puts it on their profile. The page stays indexable — it is
+  # ours, and the remote card is one entry on it — but the passage a search
+  # result quotes under our URL must come from our own content, not from a
+  # sentence somebody wrote on another server. Google honors the attribute on a
+  # `div`/`span`/`section` and covers its descendants, so the one wrapper takes
+  # the warning, the body and the chips with it.
   defp remote_body(assigns) do
     {text, hashtags} = Markdown.split_trailing_hashtags(assigns.text)
 
@@ -1330,7 +1339,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:tags, remote_tag_chips(hashtags))
 
     ~H"""
-    <div :if={@warning || @body? || @tags != []} class="mt-1.5">
+    <div :if={@warning || @body? || @tags != []} data-nosnippet class="mt-1.5">
       <%= if @warning do %>
         <details data-remote-warning class="group">
           <summary class="flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">

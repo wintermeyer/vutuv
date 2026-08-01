@@ -139,7 +139,9 @@ defmodule VutuvWeb.Markdown do
       account (it unambiguously names one), the same as in a member post;
     * bare `@mentions` deliberately stay plain text — a Mastodon `@name` names
       an account in the fediverse, not the vutuv member who happens to share
-      the handle, so linking it would point at the wrong person.
+      the handle, so linking it would point at the wrong person;
+    * every link that leaves the site is marked `ugc nofollow` — see
+      `mark_foreign_links/1`.
 
   Returns an HTML **string** (not `safe`): the caller renders it with
   `raw/1`; it is sanitized exactly like member-post HTML.
@@ -149,9 +151,36 @@ defmodule VutuvWeb.Markdown do
     |> render_pipeline()
     |> open_links_in_new_tab()
     |> linkify_entities(:hashtags_only)
+    |> mark_foreign_links()
   end
 
   def render_remote(_), do: ""
+
+  @doc """
+  Marks every outbound link in rendered **remote** content `ugc nofollow`.
+
+  A cached post is somebody else's text sitting on our domain, and the links in
+  it are their editorial choice, not ours. `ugc` is the value search engines
+  define for exactly that (user-generated content we host but did not write) and
+  `nofollow` says we are not vouching for the destination — without them a
+  spammer's post, boosted into one reader's feed, would hand its link our
+  ranking signal from every public page that shows the card (a tag timeline, a
+  member's reshare on their profile).
+
+  It rewrites the `rel` the two link builders above have already written
+  (`open_links_in_new_tab/1` for URLs in the body, `linkify_entities/2` for a
+  `@user@host` handle), so the marker cannot be forgotten on one of them. Links
+  to **our own** pages carry no `rel` at all — a `#hashtag` resolves to
+  `/tags/:slug` — so they are left alone: nofollowing our own tag pages would
+  throw away the internal linking they exist for.
+  """
+  def mark_foreign_links(html) when is_binary(html) do
+    String.replace(
+      html,
+      ~s(rel="noopener noreferrer"),
+      ~s(rel="ugc nofollow noopener noreferrer")
+    )
+  end
 
   @doc """
   Split remote plain text into `{body, hashtags}`, lifting the closing

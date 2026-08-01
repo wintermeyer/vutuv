@@ -15,8 +15,10 @@ defmodule VutuvWeb.MarkdownRemoteTest do
     test "autolinks bare URLs with truncated display, opening in a new tab" do
       html = Markdown.render_remote("Anleitung: https://drnik.org/tausendfusser.html")
 
+      # `rel` also carries the ugc/nofollow marking every outbound link in
+      # somebody else's post gets (see VutuvWeb.RemoteContentSeoTest).
       assert html =~
-               ~s(<a target="_blank" rel="noopener noreferrer" href="https://drnik.org/tausendfusser.html">)
+               ~s(<a target="_blank" rel="ugc nofollow noopener noreferrer" href="https://drnik.org/tausendfusser.html">)
 
       assert html =~ "drnik.org/tausendfusser.html</a>"
     end
