@@ -267,11 +267,12 @@ if config_env() == :prod do
   end
 
   # How often those figures are re-asked, as `age:interval` pairs in minutes,
-  # youngest first — the shipped ladder is "360:15,2880:60,10080:360" (every
-  # quarter hour for six hours, hourly to two days, four times a day to one
-  # week, never after that). It decides how much traffic this installation
-  # sends to servers that get nothing back, so an operator who wants to be a
-  # quieter neighbour lengthens it.
+  # youngest first — the shipped ladder is
+  # "30:5,90:10,360:15,2880:60,10080:360" (every five minutes for half an hour,
+  # every ten for the hour after, quarter hourly to six hours, hourly to two
+  # days, four times a day to one week, never after that). It decides how much
+  # traffic this installation sends to servers that get nothing back, so an
+  # operator who wants to be a quieter neighbour lengthens it.
   if ladder = System.get_env("FEDIVERSE_COUNTS_LADDER") do
     config :vutuv,
            :fediverse_counts_ladder,

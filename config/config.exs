@@ -220,12 +220,19 @@ config :vutuv, :fediverse_counts, true
 # nothing is asked again — a two-week-old post's tally does not move, and an
 # installation should not pay for asking.
 #
-# The floor is 15 minutes because the servers that serve these collections
-# advertise `cache-control: max-age=180`, so a quarter of an hour sits well
-# inside what the origin itself expects. Env-overridable
-# (FEDIVERSE_COUNTS_LADDER, see config/runtime.exs) for an operator who wants
-# to be quieter still.
+# The first hour and a half is where a post's tally actually moves, so the head
+# of the ladder is fine-grained: every five minutes for the first half hour,
+# then every ten for the next hour, before it settles into the quarter-hourly
+# tier and fades out from there.
+#
+# Five minutes is the floor and it is a deliberate one: the servers that serve
+# these collections advertise `cache-control: max-age=180`, so a five-minute
+# ask still sits outside what the origin itself expects to be re-asked within.
+# Env-overridable (FEDIVERSE_COUNTS_LADDER, see config/runtime.exs) for an
+# operator who wants to be quieter.
 config :vutuv, :fediverse_counts_ladder, [
+  {30, 5},
+  {90, 10},
   {6 * 60, 15},
   {48 * 60, 60},
   {7 * 24 * 60, 360}

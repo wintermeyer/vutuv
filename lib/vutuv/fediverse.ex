@@ -4363,8 +4363,8 @@ defmodule Vutuv.Fediverse do
   # The ladder as one query per table: an object is due when its age falls in a
   # tier and its last ask is older than that tier's interval — doubled once per
   # failed ask, so a server having a bad day is asked less and less rather than
-  # every quarter of an hour. An object with `@counts_max_strikes` strikes has
-  # left the ladder for good.
+  # every five minutes. An object with `@counts_max_strikes` strikes has left
+  # the ladder for good.
   # Least recently asked first — and, among the never-asked, **newest first**.
   # That tiebreaker is load-bearing rather than tidy: every row an installation
   # already holds when this ships has a null here, so the queue starts as one
@@ -4439,7 +4439,7 @@ defmodule Vutuv.Fediverse do
   # The member's own act, applied to the stored figure at once (issue #1283).
   #
   # We deliver the `Like` (or the `Announce`) and only learn what the origin did
-  # with it on the next ask, which may be a quarter of an hour away. Leaving the
+  # with it on the next ask, which on an older post is hours away. Leaving the
   # number still until then reads as the press having done nothing — and it
   # would survive a reload, which a client-side bump would not. So the one act
   # this reader just performed moves the figure by one, and the next fetch

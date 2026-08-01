@@ -15,10 +15,11 @@ defmodule Vutuv.Fediverse.CountsRefresher do
   This is the asking, and the whole design is about doing it as a good neighbour:
 
     * **On a ladder, by the object's own age** (`Vutuv.Fediverse.counts_ladder/0`).
-      Every quarter of an hour while a post is new, hourly through its second
-      day, four times a day to a week, and then never again — an old post's
-      tally has stopped moving, and asking about it is traffic a stranger's
-      server pays for and nobody reads.
+      Every five minutes for the first half hour and every ten for the hour
+      after that — which is when a post's tally actually moves — then quarter
+      hourly to six hours, hourly through its second day, four times a day to a
+      week, and then never again. An old post's tally has stopped moving, and
+      asking about it is traffic a stranger's server pays for and nobody reads.
     * **Conditionally.** The stored ETag rides along as `If-None-Match`, and a
       `304` costs both sides an empty body. The figures live in the body, so a
       `304` really does mean nothing changed.
@@ -29,8 +30,8 @@ defmodule Vutuv.Fediverse.CountsRefresher do
       accounts our members follow is spread over several runs, and a backlog
       drains gradually rather than in one spike.
     * **With a doubling backoff per object**, dropping it off the ladder after a
-      few strikes. A server having a bad day must never see us return every
-      fifteen minutes.
+      few strikes. A server having a bad day must never see us return every five
+      minutes.
 
   The run itself is sequential (`Vutuv.Fediverse.refresh_due_counts/0`) and the
   next one is scheduled after it finishes, so runs cannot pile up on a slow
@@ -47,9 +48,14 @@ defmodule Vutuv.Fediverse.CountsRefresher do
 
   alias Vutuv.Fediverse
 
-  # Well under the ladder's fifteen-minute floor, so an object that becomes due
-  # is asked about promptly rather than up to a whole tier late.
-  @interval :timer.minutes(5)
+  # Well under the ladder's shortest tier, and that margin is the whole point
+  # rather than caution. A run stamps `counts_checked_at` a few seconds *after*
+  # the moment it became due, so on the next run one tier later the object is a
+  # few seconds short of due and waits a whole further run — a five-minute tier
+  # polled every five minutes really re-asks every ten. Polling at well under
+  # the floor removes that doubling; a run with nothing due costs one indexed
+  # query per table.
+  @interval :timer.minutes(2)
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
 

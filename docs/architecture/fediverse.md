@@ -1196,12 +1196,20 @@ through this installation — but ActivityPub §5.7 and §5.8 put `likes` and
 `shares` on the object itself, and the servers our members read serve both with
 a `totalItems`. The figures are knowable; they have to be asked for.
 
-`Vutuv.Fediverse.CountsRefresher` asks, every five minutes, for whatever is due:
+`Vutuv.Fediverse.CountsRefresher` asks, every two minutes, for whatever is due:
 
 - **A ladder keyed to the object's own age** (`:fediverse_counts_ladder`): every
-  quarter of an hour under six hours old, hourly to two days, four times a day
-  to a week, and never again after that. An old post's tally has stopped moving,
-  and asking about it is traffic a stranger's server pays for and nobody reads.
+  five minutes for the first half hour and every ten for the hour after that,
+  which is when a post's tally actually moves, then quarter hourly to six hours,
+  hourly to two days, four times a day to a week, and never again after that. An
+  old post's tally has stopped moving, and asking about it is traffic a
+  stranger's server pays for and nobody reads.
+- **A run interval well under the shortest tier.** A run stamps
+  `counts_checked_at` a few seconds *after* the moment an object became due, so
+  polling *at* the tier length leaves it a few seconds short on the next run and
+  it waits a whole further one: a five-minute tier polled every five minutes
+  really re-asks every ten. Two minutes removes that doubling, and a run with
+  nothing due costs one indexed query per table.
 - **Conditional.** The stored ETag rides along as `If-None-Match`; a `304` costs
   both sides an empty body. The figures are *in* the body, so a `304` really does
   mean nothing changed.

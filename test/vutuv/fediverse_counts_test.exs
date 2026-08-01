@@ -233,19 +233,33 @@ defmodule Vutuv.FediverseCountsTest do
   describe "the ladder" do
     defp minutes_ago(minutes), do: DateTime.add(DateTime.utc_now(:second), -minutes * 60)
 
-    test "a new post is due a quarter of an hour after the last ask" do
-      {post, _user} = followed_post(%{counts_checked_at: minutes_ago(20)})
+    test "a post in its first half hour is due five minutes after the last ask" do
+      {post, _user} = followed_post(%{counts_checked_at: minutes_ago(6)})
 
       assert post.id in Enum.map(Fediverse.due_for_counts(10), & &1.id)
     end
 
-    test "a new post asked about five minutes ago is not due" do
-      {post, _user} = followed_post(%{counts_checked_at: minutes_ago(5)})
+    test "the same post asked about two minutes ago is not due" do
+      {post, _user} = followed_post(%{counts_checked_at: minutes_ago(2)})
 
       refute post.id in Enum.map(Fediverse.due_for_counts(10), & &1.id)
     end
 
-    test "a day-old post is asked hourly, not every quarter hour" do
+    test "past the first half hour it drops to every ten minutes" do
+      {post, _user} =
+        followed_post(%{published_at: minutes_ago(45), counts_checked_at: minutes_ago(6)})
+
+      refute post.id in Enum.map(Fediverse.due_for_counts(10), & &1.id)
+
+      Repo.update_all(
+        from(p in RemotePost, where: p.id == ^post.id),
+        set: [counts_checked_at: minutes_ago(12)]
+      )
+
+      assert post.id in Enum.map(Fediverse.due_for_counts(10), & &1.id)
+    end
+
+    test "a day-old post is asked hourly, not every ten minutes" do
       {post, _user} =
         followed_post(%{published_at: minutes_ago(60 * 24), counts_checked_at: minutes_ago(20)})
 
@@ -310,9 +324,9 @@ defmodule Vutuv.FediverseCountsTest do
     end
 
     test "failures push the next ask out, and enough of them end it" do
-      {post, _user} = followed_post(%{counts_checked_at: minutes_ago(20), counts_failures: 1})
+      {post, _user} = followed_post(%{counts_checked_at: minutes_ago(6), counts_failures: 1})
 
-      # One strike doubles the fifteen minutes, so twenty is no longer enough.
+      # One strike doubles the five minutes, so six is no longer enough.
       refute post.id in Enum.map(Fediverse.due_for_counts(10), & &1.id)
 
       Repo.update_all(
