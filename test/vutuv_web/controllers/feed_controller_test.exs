@@ -303,5 +303,51 @@ defmodule VutuvWeb.FeedControllerTest do
 
       assert html =~ ~r|<a[^>]*href="/feed_author/posts/feed\.xml"[^>]*>\s*RSS\s*</a>|
     end
+
+    # Issue #1287: the rail card at the very foot of a long profile was not
+    # where anyone looked for a feed. The button sits in the header of the
+    # Posts card, on the posts it feeds.
+    test "the profile's Posts card carries a visible feed button", %{author: author} do
+      create_post!(author, %{"body" => "Subscribe-worthy"})
+
+      button =
+        build_conn()
+        |> get("/feed_author")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#profile-posts-feed")
+
+      assert LazyHTML.attribute(button, "href") == ["/feed_author/posts/feed.xml"]
+      # Icon-only would be a guess for anyone who does not know the glyph.
+      assert LazyHTML.text(button) =~ "RSS"
+      # The rail chip is a second link named "RSS" to the same URL, so this
+      # one spells the action out — with the visible word inside the label.
+      assert [label] = LazyHTML.attribute(button, "aria-label")
+      assert label =~ "RSS"
+      assert LazyHTML.attribute(button, "title") == [label]
+    end
+
+    test "the post archive carries the same feed button" do
+      button =
+        build_conn()
+        |> get("/feed_author/posts")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#archive-feed")
+
+      assert LazyHTML.attribute(button, "href") == ["/feed_author/posts/feed.xml"]
+    end
+
+    # A member with nothing to say yet still has a feed worth subscribing to,
+    # but their profile renders no Posts card at all for a visitor — so the
+    # button cannot be the only visible way there.
+    test "a visitor's empty profile keeps the rail chip when there is no Posts card" do
+      html = build_conn() |> get("/feed_author") |> html_response(200)
+      document = LazyHTML.from_document(html)
+
+      assert Enum.empty?(LazyHTML.query(document, "#profile-posts"))
+      assert Enum.empty?(LazyHTML.query(document, "#profile-posts-feed"))
+      assert html =~ ~r|<a[^>]*href="/feed_author/posts/feed\.xml"[^>]*>\s*RSS\s*</a>|
+    end
   end
 end

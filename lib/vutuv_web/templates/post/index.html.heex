@@ -6,12 +6,18 @@
         {gettext("Posts by %{name}", name: full_name(@author))}
         <span :if={@period_label} class="font-normal text-slate-600 dark:text-slate-400">· {@period_label}</span>
       </h1>
-      <.link
-        href={~p"/#{@author}"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >
-        {gettext("View profile")}
-      </.link>
+      <%!-- The page IS what the feed carries, so the subscribe pill belongs
+      here as much as on the profile (issue #1287). `items-baseline` on the row
+      would hang the pill off the h1's baseline, so this pair centers itself. --%>
+      <div class="flex items-center gap-3 self-center">
+        <.link
+          href={~p"/#{@author}"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("View profile")}
+        </.link>
+        <.feed_button id="archive-feed" href={VutuvWeb.Feeds.user_feed_path(@author)} />
+      </div>
     </div>
 
     <%!-- The trail back up a scoped archive: All posts / 2026 / 06 / 06. --%>

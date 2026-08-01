@@ -843,6 +843,80 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The **subscribe-by-feed** pill (issue #1287): the visible way to a member's
+  RSS feed (`VutuvWeb.Feeds.user_feed_path/1`), rendered where their posts
+  are — the profile's Posts card header and the `/:slug/posts` archive
+  header. Autodiscovery (`<link rel="alternate">`) is invisible and the rail's
+  "Other formats" chip sits at the foot of a very long page, which is why the
+  feature was reported missing although both already existed.
+
+  Glyph **and** the word "RSS": the arcs are famous among people who use
+  feeds and meaningless to everyone else, while "RSS" alone in a row of
+  section headings does not read as something to click. `type` states the
+  media type so a browser or reader extension knows what it is being handed
+  before fetching. The `aria-label` spells the action out (and the `title`
+  shows the same sentence on hover) because the visible word alone would put
+  a second link named just "RSS" — the rail's format chip points at the same
+  URL — into a screen reader's link list; it keeps the visible label inside
+  the accessible name (WCAG 2.5.3).
+
+  The pill is the app's `<.tag_follow_button>` / `<.follow_button
+  variant="text">` outline pill grown to a full `min-h-10` (40px) touch
+  target, since it stands alone in a card header with room around it rather
+  than in a dense list row. Deliberately slate-to-brand, not the RSS orange:
+  a bespoke colour for one control would be the only one in the app.
+  """
+  attr(:href, :string, required: true)
+  attr(:id, :string, default: nil)
+  attr(:class, :any, default: nil)
+
+  def feed_button(assigns) do
+    ~H"""
+    <.link
+      id={@id}
+      href={@href}
+      type="application/rss+xml"
+      title={gettext("Subscribe to this feed in your RSS reader")}
+      aria-label={gettext("Subscribe to this feed in your RSS reader")}
+      data-feed-button
+      class={[
+        "inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors",
+        "border-slate-300 text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700",
+        "dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/30 dark:hover:text-brand-200",
+        @class
+      ]}
+    >
+      <.icon_rss class="h-4 w-4" />RSS
+    </.link>
+    """
+  end
+
+  @doc """
+  The outline RSS icon (24×24 stroke) — the broadcast arcs over their dot.
+  Size it via `class`; `<.feed_button>` is its one call site so far.
+  """
+  attr(:class, :any, default: "h-5 w-5")
+
+  def icon_rss(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M12.75 19.5v-.75a7.5 7.5 0 0 0-7.5-7.5H4.5m0-6.75h.75c7.87 0 14.25 6.38 14.25 14.25v.75M6 18.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
   The profile rail's **CV / Lebenslauf card** (issue #841): this profile as
   a formatted CV for a job application, offered to **every** viewer. One
   affordance only — an "Open CV" button to the builder (`/:slug/cv`), where

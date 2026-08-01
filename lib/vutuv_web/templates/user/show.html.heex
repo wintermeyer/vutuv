@@ -403,7 +403,18 @@ the resulting ~200px rail width. --%>
       <%!-- A "profile" context disambiguates the noun (Beitrag/Beiträge) from the
       bare gettext("Post") verb on the composer's submit button ("Posten"), which
       shares the "Post" msgid and must not be repurposed. --%>
-      <.section_header title={pngettext("profile", "Post", "Posts", @posts_total)} />
+      <%!-- The feed lives on the posts it carries (issue #1287). The rail's
+      "Other formats" RSS chip stays as the machine-formats footer, but it is
+      the last card of a very long page, so a reader looking for a feed found
+      nothing. This is the same URL, where they look for it. --%>
+      <.section_header title={pngettext("profile", "Post", "Posts", @posts_total)}>
+        <:action>
+          <.feed_button
+            id="profile-posts-feed"
+            href={VutuvWeb.Feeds.user_feed_path(@user)}
+          />
+        </:action>
+      </.section_header>
 
       <%!-- Compose affordance on top, the convention everywhere: the same
       avatar-card trigger as the feed's (shared <.composer_trigger>, flat

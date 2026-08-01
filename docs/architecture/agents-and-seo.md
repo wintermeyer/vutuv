@@ -103,8 +103,14 @@ as "crawled - currently not indexed"), RSS 2.0 feeds with full post content
 are engagement rows and never `Post` rows, and replies are filtered by the
 archive's `:posts` predicate in `Vutuv.Posts.recent_public_posts/2` — while
 the site-wide firehose deliberately keeps replies; besides the invisible
-`<link rel="alternate">` autodiscovery the profile's "Other formats" card
-shows a visible RSS chip via its `rss_path` attr. `/:slug/posts.xml` — the
+`<link rel="alternate">` autodiscovery there are two visible ways in, both
+pointing at the same canonical `/:slug/posts/feed.xml`: the
+`<.feed_button>` subscribe pill in the profile's **Posts card header** and
+in the `/:slug/posts` archive header (issue #1287 — the card at the foot of
+a long profile was reported as "no feed button", so the affordance moved
+onto the posts it feeds), plus the "Other formats" card's RSS chip
+(`rss_path` attr), which is the one that still serves on a profile whose
+Posts card does not render at all. `/:slug/posts.xml` — the
 URL readers guess for "posts as XML" — 301s to the member feed instead of
 serving the generic `<post_archive>` agent document, which a feed validator
 rejects; the period-scoped archives keep their XML sibling), robots.txt names the AI
