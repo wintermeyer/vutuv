@@ -35,6 +35,34 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
   defp example(url), do: put_config(:landing_example_profile_url, url)
 
+  # /llms.txt is the agent-discovery file, and it used to list `/ads`
+  # unconditionally. Ads ship switched OFF, and the ad page 404s while they are,
+  # so every installation was pointing agents at a dead URL.
+  describe "/llms.txt lists only pages this installation actually serves" do
+    test "names the ad page when ads are on", %{conn: conn} do
+      put_config(:ads_enabled, true)
+
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      assert body =~ "`/ads`"
+      refute body =~ "{{ads}}"
+      assert body =~ "(booking happens online and requires a login)\n\nList pages"
+    end
+
+    test "leaves it out when they are off, so it names no 404", %{conn: conn} do
+      put_config(:ads_enabled, false)
+
+      body = conn |> get(~p"/llms.txt") |> response(200)
+
+      refute body =~ "`/ads`"
+      refute body =~ "{{ads}}"
+      # The rest of the document is untouched, blank line and indentation
+      # included — the placeholder must not eat the paragraph break.
+      assert body =~ "`/jobs`"
+      assert body =~ "how to apply\n\nList pages paginate with `?page=N`."
+    end
+  end
+
   describe "the landing page's installation switches" do
     # "Readable without an account" is a claim, and this is the one-click check
     # that goes with it. The label drops the scheme, the href keeps it.

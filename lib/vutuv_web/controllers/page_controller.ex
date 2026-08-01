@@ -310,8 +310,7 @@ defmodule VutuvWeb.PageController do
   - `/organizations` — the verified organization directory; one organization at `/organizations/<slug>`
   - `/jobs` — the public job board: open positions, filterable, newest first
   - `/jobs/<slug>` — a job posting: role, location, pay range, tags and how to apply
-  - `/ads` — the daily text ad: price, conditions, next available day
-    (booking happens online and requires a login)
+  {{ads}}
 
   List pages paginate with `?page=N`.
 
@@ -358,7 +357,24 @@ defmodule VutuvWeb.PageController do
   def llms(conn, _params) do
     conn
     |> put_resp_content_type("text/plain")
-    |> send_resp(200, @llms_txt)
+    |> send_resp(200, llms_txt())
+  end
+
+  # The document is a compile-time constant with one hole in it, because one of
+  # the pages it lists is optional. `:ads_enabled` ships **off** (config.exs),
+  # and the ad page 404s while it is — so listing `/ads` unconditionally pointed
+  # every installation's agents at a dead URL, vutuv.de included. A discovery
+  # file that names a page which is not there is worse than one that stays quiet
+  # about a feature.
+  defp llms_txt, do: String.replace(@llms_txt, "{{ads}}\n", ads_entry())
+
+  defp ads_entry do
+    if Vutuv.Ads.enabled?() do
+      "- `/ads` — the daily text ad: price, conditions, next available day\n" <>
+        "  (booking happens online and requires a login)\n"
+    else
+      ""
+    end
   end
 
   @doc """
