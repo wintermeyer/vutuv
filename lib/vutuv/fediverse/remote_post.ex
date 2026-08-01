@@ -77,6 +77,23 @@ defmodule Vutuv.Fediverse.RemotePost do
     # copies alone, since nothing else here outlives its ceiling.
     field(:checked_at, :utc_datetime)
 
+    # What the origin says about its own post: the size of its `likes` and
+    # `shares` collections, when we last asked, the ETag we may ask with, and
+    # how many asks in a row have failed (issue #1283,
+    # `Vutuv.Fediverse.CountsRefresher`).
+    #
+    # Null is not zero. Both collections are MAY in ActivityPub and some
+    # software serves neither, so an absent figure renders as nothing at all
+    # rather than as a `0` we would be inventing.
+    #
+    # Written by the refresher and nudged by a member's own act, never cast
+    # from user input — there is no `:counts` changeset for that reason.
+    field(:likes_count, :integer)
+    field(:shares_count, :integer)
+    field(:counts_checked_at, :utc_datetime)
+    field(:counts_etag, :string)
+    field(:counts_failures, :integer, default: 0)
+
     belongs_to(:remote_account, Vutuv.Fediverse.RemoteAccount)
 
     # The pictures the author attached (issue #1163) and the auto link

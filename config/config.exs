@@ -207,6 +207,38 @@ config :vutuv, :fediverse_note_refresh_days, 7
 # Env-overridable (FEDIVERSE_POST_RETENTION_DAYS).
 config :vutuv, :fediverse_post_retention_days, 183
 
+# Whether the GenServer that keeps the like and repost figures of cached remote
+# objects current runs (issue #1283). Off in tests, where it would talk to the
+# network from outside the SQL sandbox; tests call
+# Vutuv.Fediverse.refresh_counts/1 and refresh_due_counts/0 directly. A no-op
+# while :fediverse_enabled is off.
+config :vutuv, :fediverse_counts, true
+
+# How often a cached post or reply is re-asked for its origin's own figures,
+# by the age of the object itself: `{age in minutes, re-ask every N minutes}`,
+# youngest tier first. Past the last tier the numbers stand as they are and
+# nothing is asked again — a two-week-old post's tally does not move, and an
+# installation should not pay for asking.
+#
+# The floor is 15 minutes because the servers that serve these collections
+# advertise `cache-control: max-age=180`, so a quarter of an hour sits well
+# inside what the origin itself expects. Env-overridable
+# (FEDIVERSE_COUNTS_LADDER, see config/runtime.exs) for an operator who wants
+# to be quieter still.
+config :vutuv, :fediverse_counts_ladder, [
+  {6 * 60, 15},
+  {48 * 60, 60},
+  {7 * 24 * 60, 360}
+]
+
+# The ceilings on one refresh run: how many objects in total, and how many of
+# them may belong to any single host. The per-host cap is the neighbourly one —
+# one instance hosting many of the accounts our members follow must not be
+# fetched in a burst — and the total cap protects our own boxes, so a backlog
+# drains over several runs instead of in one spike.
+config :vutuv, :fediverse_counts_batch, 60
+config :vutuv, :fediverse_counts_per_host, 10
+
 # How long a post whose picture the AI image scan has not judged yet waits before
 # it federates anyway (issue #1070). The scan normally settles within seconds and
 # releases the post at once, so this is the CEILING, not the usual wait: it is

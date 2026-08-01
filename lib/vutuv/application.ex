@@ -98,6 +98,7 @@ defmodule Vutuv.Application do
         optional_child(:fediverse_deliverer, Vutuv.Fediverse.Deliverer) ++
         optional_child(:fediverse_follower_pruning, Vutuv.Fediverse.FollowerPruner) ++
         optional_child(:fediverse_note_sweeping, Vutuv.Fediverse.NoteSweeper) ++
+        optional_child(:fediverse_counts, Vutuv.Fediverse.CountsRefresher) ++
         optional_child(:post_screenshot_worker, Vutuv.Posts.ScreenshotWorker) ++
         optional_child(:image_scan_worker, Vutuv.Moderation.ImageScanWorker) ++
         optional_child(:daily_report_email, Vutuv.Reports.DailyReporter) ++

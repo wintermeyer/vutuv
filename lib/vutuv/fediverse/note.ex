@@ -79,6 +79,15 @@ defmodule Vutuv.Fediverse.Note do
     field(:checked_at, :utc_datetime)
     field(:expires_at, :utc_datetime)
 
+    # The origin's own figures for this reply (issue #1283), exactly as on
+    # `Vutuv.Fediverse.RemotePost` — see the block there for why they are
+    # nullable and why nothing casts them.
+    field(:likes_count, :integer)
+    field(:shares_count, :integer)
+    field(:counts_checked_at, :utc_datetime)
+    field(:counts_etag, :string)
+    field(:counts_failures, :integer, default: 0)
+
     # The stored account behind `actor_uri`, when we have one (issue #1162).
     # Virtual because a note is keyed to its author by URI, not by a foreign
     # key; every loader fills it through the one join that knows why (see the

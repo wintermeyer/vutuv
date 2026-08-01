@@ -2305,6 +2305,7 @@ defmodule Vutuv.Fediverse do
           expires_at: DateTime.add(received, remote_post_retention_days() * 86_400)
         })
       )
+      |> put_object_counts(object)
       |> Repo.insert(on_conflict: :nothing, conflict_target: [:object_uri])
       |> stored_post(uri)
       |> file_hashtags(object)
@@ -3640,6 +3641,7 @@ defmodule Vutuv.Fediverse do
           checked_at: received,
           expires_at: DateTime.add(received, note_retention_days() * 86_400)
         })
+        |> put_object_counts(object)
         |> Repo.insert()
     end
   end
@@ -3861,16 +3863,51 @@ defmodule Vutuv.Fediverse do
 
   # The same https-only, SSRF-guarded, size-capped, signed GET
   # `fetch_remote_actor/2` uses — pointed at a note instead of an actor.
+  #
+  # The freshness check has no use for the ETag, so it drops it and keeps the
+  # two-element shape its three call sites already match on.
   defp fetch_remote_note(uri, signer) do
+    case fetch_object(uri, signer, nil) do
+      {:ok, doc, _etag} -> {:ok, doc}
+      other -> other
+    end
+  end
+
+  # The same fetch, conditional: with `etag` in hand it sends `If-None-Match`
+  # and a `304` costs both sides an empty body (issue #1283). Answers
+  # `{:ok, doc, etag}`, `{:not_modified, etag}`, `{:gone, status}` or
+  # `{:error, reason}`.
+  defp fetch_object(uri, signer, etag) do
     with {:parse, %URI{scheme: "https", host: host}} <- {:parse, URI.parse(uri)},
          {:ssrf, false} <- {:ssrf, Vutuv.Ssrf.resolves_to_internal?(host)},
-         {:ok, %Req.Response{status: 200, body: body}} <- ap_get(uri, signer),
-         {:size, true} <- {:size, byte_size(body) <= @max_body_bytes},
-         {:ok, %{} = doc} <- Jason.decode(body) do
-      {:ok, doc}
+         {:ok, %Req.Response{} = response} <- ap_get(uri, signer, etag) do
+      read_object(response)
     else
-      {:ok, %Req.Response{status: status}} when status in [403, 404, 410] -> {:gone, status}
       other -> {:error, other}
+    end
+  end
+
+  defp read_object(%Req.Response{status: 304} = response),
+    do: {:not_modified, response_etag(response)}
+
+  defp read_object(%Req.Response{status: 200, body: body} = response) do
+    with {:size, true} <- {:size, is_binary(body) and byte_size(body) <= @max_body_bytes},
+         {:ok, %{} = doc} <- Jason.decode(body) do
+      {:ok, doc, response_etag(response)}
+    else
+      other -> {:error, other}
+    end
+  end
+
+  defp read_object(%Req.Response{status: status}) when status in [403, 404, 410],
+    do: {:gone, status}
+
+  defp read_object(%Req.Response{status: status}), do: {:error, {:http, status}}
+
+  defp response_etag(%Req.Response{} = response) do
+    case Req.Response.get_header(response, "etag") do
+      [etag | _rest] when is_binary(etag) -> etag
+      _none -> nil
     end
   end
 
@@ -4012,6 +4049,425 @@ defmodule Vutuv.Fediverse do
       deleted: Enum.count(results, &(&1 == :deleted)),
       skipped: Enum.count(results, &(&1 not in [:refreshed, :deleted]))
     }
+  end
+
+  ## The origin's own figures (issue #1283)
+  ##
+  ## How many people liked a post out there, and how many passed it on. Nothing
+  ## about a third party's counters is ever delivered here — a `Like` goes to
+  ## the author's inbox and an `Announce` to the author plus the announcer's
+  ## followers — so for somebody else's post the only route is to ask the object
+  ## itself, where ActivityPub §5.7/§5.8 put `likes` and `shares`.
+  ##
+  ## Which makes the whole design about **not** being a bad neighbour: a
+  ## background ladder that asks often while a post is new and stops entirely
+  ## once it is a week old, a conditional GET, a per-host and a per-run cap, and
+  ## a backoff that takes a struggling server off the list. Never on a page
+  ## render, which would make a popular thread an amplifier.
+
+  # Consecutive failures after which an object leaves the ladder for good. Four
+  # asks spread by the doubling backoff below is well over a day of trying.
+  @counts_max_strikes 4
+
+  # A hostile `totalItems` must not reach an `integer` column (22003 on the
+  # refresh path, which nothing user-facing guards). Far above any real tally.
+  @counts_max_total 1_000_000_000
+
+  # An ETag is a stranger's string in a `text` column. Kept short anyway: it is
+  # sent back on every ask, and a server that answers with a megabyte of header
+  # has said nothing useful.
+  @counts_etag_max 512
+
+  @counts_topic "fediverse:counts"
+
+  @doc "Whether the background counts refresher runs at all on this installation."
+  def counts_refresh_enabled?, do: Application.get_env(:vutuv, :fediverse_counts, true)
+
+  @doc """
+  The re-ask ladder as `{age in minutes, interval in minutes}` pairs, youngest
+  tier first. Past the last tier nothing is asked again.
+  """
+  def counts_ladder, do: Application.get_env(:vutuv, :fediverse_counts_ladder, [])
+
+  @doc "How many objects one refresh run may ask about."
+  def counts_batch, do: Application.get_env(:vutuv, :fediverse_counts_batch, 60)
+
+  @doc "How many of those may belong to any one host."
+  def counts_per_host, do: Application.get_env(:vutuv, :fediverse_counts_per_host, 10)
+
+  @doc "How many failed asks in a row drop an object off the ladder."
+  def counts_max_strikes, do: @counts_max_strikes
+
+  @doc """
+  The topic every open page listens on for a changed figure.
+
+  **One** topic rather than one per object: a run changes a handful of numbers
+  and each listener keeps only the cards it is showing, which is far cheaper
+  than a subscription per rendered card on a feed page.
+  """
+  def counts_topic, do: @counts_topic
+
+  @doc "Listen for changed figures. See `counts_topic/0`."
+  def subscribe_counts, do: Phoenix.PubSub.subscribe(Vutuv.PubSub, @counts_topic)
+
+  @doc """
+  What the origin last said about this object, as `%{likes:, shares:}`.
+
+  Either may be `nil`, and `nil` is **not** zero: both collections are MAY in
+  the spec and some software serves neither, so "we have not been told" has to
+  stay distinguishable from "nobody liked it". The bar renders nothing for a
+  `nil`; a `0` would be a claim we cannot make.
+  """
+  def counts(%RemotePost{} = post), do: %{likes: post.likes_count, shares: post.shares_count}
+  def counts(%Note{} = note), do: %{likes: note.likes_count, shares: note.shares_count}
+
+  @doc """
+  Asks the origins of every due object for their own figures, bounded per run
+  and per host. Returns `%{updated:, unchanged:, failed:, skipped:}`.
+
+  Sequential on purpose: this is the one sweep whose whole point is being quiet,
+  and a bounded batch of conditional GETs run one after another is both quiet
+  and simple — no task supervision, and a test can call it inside the SQL
+  sandbox.
+  """
+  def refresh_due_counts do
+    if enabled?() do
+      counts_batch() |> due_for_counts() |> Enum.map(&refresh_counts/1) |> counts_tally()
+    else
+      %{updated: 0, unchanged: 0, failed: 0, skipped: 0}
+    end
+  end
+
+  @doc """
+  The objects whose origin is due to be asked again, least recently asked first
+  and capped at `counts_per_host/0` per host.
+
+  Due-ness is the ladder in `counts_ladder/0` applied to the object's **own**
+  age, times the doubling backoff of its failed asks. An object past the last
+  tier is never due again: its tally has stopped moving, and asking would be
+  traffic a stranger's server pays for and nobody reads.
+  """
+  def due_for_counts(limit) do
+    now = DateTime.utc_now(:second)
+    ladder = counts_ladder()
+
+    posts = Repo.all(due_counts_query(RemotePost, :published_at, now, ladder, limit))
+    notes = Repo.all(due_counts_query(Note, :received_at, now, ladder, limit))
+
+    (posts ++ notes)
+    |> Enum.sort_by(&counts_order/1)
+    |> cap_per_host(counts_per_host())
+    |> Enum.take(limit)
+  end
+
+  # Least recently asked first, never-asked ahead of everything — the two
+  # tables' own orders merged into one. **Not** the `DateTime` struct itself:
+  # Erlang's term order compares maps field by field in key order, so it would
+  # put `day` before `month` and `year` and sort the queue by nothing anybody
+  # means.
+  defp counts_order(%{counts_checked_at: nil} = subject), do: {-1, subject.id}
+  defp counts_order(subject), do: {DateTime.to_unix(subject.counts_checked_at), subject.id}
+
+  @doc """
+  Asks one object's origin for its figures and stores the answer.
+
+  `:updated` when a number moved (and every open page has been told), `:unchanged`
+  for a `304` or an identical answer, `:failed` for a strike, `:skip` when the
+  question cannot honestly be asked at all.
+
+  Three things it deliberately does **not** do:
+
+    * **Ask about anything but a public or unlisted object.** A followers-only
+      or direct object answers `403`, and asking would tell its origin that we
+      hold their member's private post and how often we look at it.
+    * **Ask unsigned.** With no member keypair behind the object there is
+      nobody to sign as, and an authorized-fetch server's `403` would then be a
+      statement about us, not about the object.
+    * **Delete anything.** A `404` here is a strike, not a takedown: deletion
+      belongs to the retention paths (`refresh_note/1`,
+      `refresh_reposted_post/1`), which are built to weigh a `403` properly.
+      A counter refresh must never become a deletion path by accident.
+  """
+  def refresh_counts(subject) do
+    with true <- enabled?(),
+         true <- counts_askable?(subject),
+         signer when not is_nil(signer) <- counts_signer(subject) do
+      apply_counts(subject, fetch_object(subject.object_uri, signer, subject.counts_etag))
+    else
+      _ -> :skip
+    end
+  end
+
+  # Public and unlisted only — see `refresh_counts/1`.
+  defp counts_askable?(%RemotePost{} = post), do: RemotePost.open?(post)
+  defp counts_askable?(%Note{} = note), do: Note.public?(note)
+
+  # Somebody here with a keypair who has a reason to be asking: for a cached
+  # post any member who follows the account, for a reply the member whose post
+  # it answers.
+  defp counts_signer(%RemotePost{remote_account_id: account_id}) do
+    Repo.one(
+      from(f in Follow,
+        join: u in User,
+        on: u.id == f.user_id,
+        join: a in Actor,
+        on: a.user_id == u.id,
+        where: f.remote_account_id == ^account_id,
+        order_by: [asc: f.id],
+        limit: 1,
+        select: u
+      )
+    )
+    |> case do
+      %User{} = follower -> signer(follower)
+      nil -> nil
+    end
+  end
+
+  defp counts_signer(%Note{} = note) do
+    with %Post{} = post <- Repo.get(Post, note.post_id),
+         %User{} = author <- Repo.get(User, post.user_id) do
+      signer(author)
+    else
+      _ -> nil
+    end
+  end
+
+  defp apply_counts(subject, {:ok, doc, etag}) do
+    store_counts(subject, %{
+      likes_count: collection_total(doc["likes"]),
+      shares_count: collection_total(doc["shares"]),
+      counts_etag: truncate_etag(etag)
+    })
+  end
+
+  # The figures live in the body, so a `304` really does mean "nothing changed"
+  # — which is the whole reason the conditional GET is worth sending.
+  defp apply_counts(subject, {:not_modified, etag}),
+    do: store_counts(subject, %{counts_etag: truncate_etag(etag)})
+
+  # Unreachable, a 429, a 5xx, a 404, a body we cannot read: a strike, and the
+  # next ask is twice as far away. Nothing about the stored figures changes.
+  defp apply_counts(subject, _other) do
+    stamp_counts(subject, counts_failures: subject.counts_failures + 1)
+    :failed
+  end
+
+  # A `nil` is never written over a figure we already hold: it means the server
+  # did not tell us this time, not that the number dropped to zero.
+  defp store_counts(subject, attrs) do
+    sets = attrs |> Enum.reject(fn {_key, value} -> is_nil(value) end) |> Keyword.new()
+    updated = struct(subject, sets)
+
+    case stamp_counts(subject, sets ++ [counts_failures: 0]) do
+      0 ->
+        :skip
+
+      _ ->
+        if counts(updated) == counts(subject) do
+          :unchanged
+        else
+          broadcast_counts(updated)
+          :updated
+        end
+    end
+  end
+
+  # By id rather than through the struct in hand: the retention sweep can delete
+  # the row while this run is in flight, and `Repo.update/1` would then raise
+  # `Ecto.StaleEntryError` inside the refresher. A vanished row is simply no
+  # rows updated.
+  defp stamp_counts(subject, sets) do
+    sets = Keyword.put(sets, :counts_checked_at, DateTime.utc_now(:second))
+
+    {count, _} =
+      Repo.update_all(from(r in subject_schema(subject), where: r.id == ^subject.id), set: sets)
+
+    count
+  end
+
+  defp broadcast_counts(subject) do
+    Phoenix.PubSub.broadcast(
+      Vutuv.PubSub,
+      @counts_topic,
+      {:fediverse_counts, subject_kind(subject), subject.id, counts(subject)}
+    )
+  end
+
+  @doc """
+  Which kind of thing from another network this is — the word the action bar
+  and the broadcast use so one message can name either.
+  """
+  def subject_kind(%RemotePost{}), do: :remote_post
+  def subject_kind(%Note{}), do: :note
+
+  defp subject_schema(%RemotePost{}), do: RemotePost
+  defp subject_schema(%Note{}), do: Note
+
+  # `totalItems` is whatever the origin claims — the same trust the post's text
+  # already gets — but it lands in an `integer` column, so it is bounded here.
+  defp collection_total(%{"totalItems" => total}) when is_integer(total) and total >= 0,
+    do: min(total, @counts_max_total)
+
+  defp collection_total(_absent), do: nil
+
+  defp truncate_etag(etag) when is_binary(etag), do: String.slice(etag, 0, @counts_etag_max)
+  defp truncate_etag(_none), do: nil
+
+  defp counts_tally(results) do
+    %{
+      updated: Enum.count(results, &(&1 == :updated)),
+      unchanged: Enum.count(results, &(&1 == :unchanged)),
+      failed: Enum.count(results, &(&1 == :failed)),
+      skipped: Enum.count(results, &(&1 == :skip))
+    }
+  end
+
+  # One host may fill at most `per_host` of a run, so an instance that happens
+  # to host many of the accounts our members follow is spread over several runs
+  # rather than fetched in a burst. What that drops is logged rather than
+  # silently swallowed — a cap nobody can see reads as "we asked about
+  # everything".
+  defp cap_per_host(subjects, per_host) do
+    {kept, _seen} =
+      Enum.reduce(subjects, {[], %{}}, fn subject, {kept, seen} ->
+        host = object_host(subject)
+        taken = Map.get(seen, host, 0)
+
+        if taken < per_host,
+          do: {[subject | kept], Map.put(seen, host, taken + 1)},
+          else: {kept, seen}
+      end)
+
+    dropped = length(subjects) - length(kept)
+
+    if dropped > 0 do
+      Logger.info("Fediverse counts: #{dropped} due object(s) held back by the per-host cap")
+    end
+
+    Enum.reverse(kept)
+  end
+
+  defp object_host(subject), do: URI.parse(subject.object_uri).host
+
+  # The ladder as one query per table: an object is due when its age falls in a
+  # tier and its last ask is older than that tier's interval — doubled once per
+  # failed ask, so a server having a bad day is asked less and less rather than
+  # every quarter of an hour. An object with `@counts_max_strikes` strikes has
+  # left the ladder for good.
+  defp due_counts_query(schema, age_field, now, ladder, limit) do
+    from(r in schema,
+      where: r.counts_failures < @counts_max_strikes,
+      order_by: [asc_nulls_first: r.counts_checked_at, asc: r.id],
+      limit: ^limit
+    )
+    |> where(^ladder_conditions(age_field, now, ladder))
+  end
+
+  # An object nobody has ever asked about is due **once**, whatever its age.
+  # Without this, everything already cached when the feature shipped — and
+  # everything an installation caches from a server that serves no collection in
+  # its `Create` — would fall past the last tier before its first ask and carry
+  # no figure for the rest of its six months. One ask each, and the ladder takes
+  # over from there (an old post is stamped and never asked again). The batch and
+  # per-host caps are what keep that backlog a trickle rather than a stampede.
+  defp ladder_conditions(age_field, now, ladder) do
+    {conditions, _younger_than} =
+      Enum.reduce(ladder, {dynamic([r], is_nil(r.counts_checked_at)), nil}, fn {age_minutes,
+                                                                                interval},
+                                                                               {acc, younger} ->
+        tier =
+          dynamic(
+            [r],
+            ^age_window(age_field, now, age_minutes, younger) and
+              (is_nil(r.counts_checked_at) or ^ask_due(interval, now))
+          )
+
+        {dynamic(^acc or ^tier), age_minutes}
+      end)
+
+    conditions
+  end
+
+  # The youngest tier has no upper edge, so a published stamp a minute in the
+  # future (clock skew is ordinary between servers) still lands in it.
+  defp age_window(age_field, now, age_minutes, nil),
+    do: dynamic([r], field(r, ^age_field) > ^DateTime.add(now, -age_minutes * 60))
+
+  defp age_window(age_field, now, age_minutes, younger) do
+    dynamic(
+      [r],
+      field(r, ^age_field) > ^DateTime.add(now, -age_minutes * 60) and
+        field(r, ^age_field) <= ^DateTime.add(now, -younger * 60)
+    )
+  end
+
+  defp ask_due(interval, now) do
+    dynamic(
+      [r],
+      fragment(
+        "? <= ? - (? * power(2, ?) * interval '1 minute')",
+        r.counts_checked_at,
+        type(^now, :utc_datetime),
+        type(^interval, :integer),
+        r.counts_failures
+      )
+    )
+  end
+
+  # The member's own act, applied to the stored figure at once (issue #1283).
+  #
+  # We deliver the `Like` (or the `Announce`) and only learn what the origin did
+  # with it on the next ask, which may be a quarter of an hour away. Leaving the
+  # number still until then reads as the press having done nothing — and it
+  # would survive a reload, which a client-side bump would not. So the one act
+  # this reader just performed moves the figure by one, and the next fetch
+  # collapses the two by overwriting it with the origin's own answer.
+  #
+  # Only ever by one, and only when we have a figure at all: adding our stored
+  # markers wholesale would double-count every act the origin has already
+  # counted, and inventing a `1` where the server tells us nothing would turn
+  # "not told" into a claim.
+  defp nudge_counts(_subject, nil, _delta), do: :ok
+
+  defp nudge_counts(subject, column, delta) do
+    query =
+      from(r in subject_schema(subject),
+        where: r.id == ^subject.id and not is_nil(field(r, ^column))
+      )
+
+    # Never below zero: the origin's answer can land between the like and the
+    # unlike, and it may already be back at the figure we are about to decrement.
+    query = if delta < 0, do: where(query, [r], field(r, ^column) > 0), else: query
+
+    case Repo.update_all(query, inc: [{column, delta}]) do
+      # Read back rather than computed: the struct in hand was rendered at some
+      # earlier moment, and the figure may have been refreshed since.
+      {1, _} -> subject |> subject_schema() |> Repo.get(subject.id) |> broadcast_moved()
+      _none -> :ok
+    end
+  end
+
+  defp broadcast_moved(nil), do: :ok
+  defp broadcast_moved(subject), do: broadcast_counts(subject)
+
+  # What a delivered object already tells us about itself. Free, and it means a
+  # fresh post carries its figures from the first render instead of waiting for
+  # the first sweep. Only stamps `counts_checked_at` when the object really
+  # carried a collection — otherwise the row stays due, so the refresher fills
+  # it in on its next run.
+  defp put_object_counts(changeset, doc) do
+    likes = collection_total(doc["likes"])
+    shares = collection_total(doc["shares"])
+
+    if is_nil(likes) and is_nil(shares) do
+      changeset
+    else
+      changeset
+      |> Ecto.Changeset.put_change(:likes_count, likes)
+      |> Ecto.Changeset.put_change(:shares_count, shares)
+      |> Ecto.Changeset.put_change(:counts_checked_at, DateTime.utc_now(:second))
+    end
   end
 
   ## Account migration — move out (issue #986, half 2)
@@ -4355,6 +4811,7 @@ defmodule Vutuv.Fediverse do
       budget: &claim_like_budget/1,
       deliver: fn user, post -> deliver_like(user, post, &Docs.like_activity/3) end,
       undo: fn user, post -> deliver_like(user, post, &Docs.undo_like_activity/3) end,
+      counts_column: :likes_count,
       written: :liked,
       undone: :unliked
     }
@@ -4369,6 +4826,7 @@ defmodule Vutuv.Fediverse do
       budget: &claim_boost_budget/1,
       deliver: fn user, post -> deliver_boost(user, post, &Docs.announce_remote_activity/4) end,
       undo: fn user, post -> deliver_boost(user, post, &Docs.undo_announce_remote_activity/4) end,
+      counts_column: :shares_count,
       written: :reposted,
       undone: :unreposted
     }
@@ -4383,6 +4841,7 @@ defmodule Vutuv.Fediverse do
       budget: &claim_like_budget/1,
       deliver: fn user, note -> deliver_note_like(user, note, &Docs.like_activity/3) end,
       undo: fn user, note -> deliver_note_like(user, note, &Docs.undo_like_activity/3) end,
+      counts_column: :likes_count,
       written: :liked,
       undone: :unliked
     }
@@ -4401,6 +4860,7 @@ defmodule Vutuv.Fediverse do
       undo: fn user, note ->
         deliver_note_boost(user, note, &Docs.undo_announce_remote_activity/4)
       end,
+      counts_column: :shares_count,
       written: :reposted,
       undone: :unreposted
     }
@@ -4494,6 +4954,9 @@ defmodule Vutuv.Fediverse do
     case act.budget.(user) do
       :ok ->
         act.deliver.(user, subject)
+        # Only once the activity is really queued: a figure nudged for a like
+        # that never left is the same lie as a heart painted for one.
+        nudge_counts(subject, act.counts_column, 1)
         {:ok, act.written}
 
       {:error, _} = capped ->
@@ -4511,6 +4974,7 @@ defmodule Vutuv.Fediverse do
   defp outbound_undo(user, subject, act) do
     if delete_marker(act.schema, act.fk, user, subject.id) > 0 do
       act.undo.(user, subject)
+      nudge_counts(subject, act.counts_column, -1)
       {:ok, act.undone}
     else
       {:ok, :already}
@@ -4752,6 +5216,9 @@ defmodule Vutuv.Fediverse do
       budget: fn _user -> :ok end,
       deliver: fn _user, _post -> :skip end,
       undo: fn _user, _post -> :skip end,
+      # Nothing to nudge: a bookmark is private and local, so no counter on any
+      # server moves because of it.
+      counts_column: nil,
       written: :bookmarked,
       undone: :unbookmarked
     }
@@ -4766,6 +5233,7 @@ defmodule Vutuv.Fediverse do
       budget: fn _user -> :ok end,
       deliver: fn _user, _note -> :skip end,
       undo: fn _user, _note -> :skip end,
+      counts_column: nil,
       written: :bookmarked,
       undone: :unbookmarked
     }
@@ -6799,7 +7267,7 @@ defmodule Vutuv.Fediverse do
   defp normalize_uri_list(value) when is_list(value), do: Enum.filter(value, &is_binary/1)
   defp normalize_uri_list(_), do: []
 
-  defp ap_get(url, signer) do
+  defp ap_get(url, signer, etag \\ nil) do
     signature_headers =
       case signer do
         {key_id, private_key_pem} ->
@@ -6815,6 +7283,7 @@ defmodule Vutuv.Fediverse do
           url: url,
           headers:
             signature_headers ++
+              conditional_header(etag) ++
               [{"accept", "application/activity+json"}, {"user-agent", Http.user_agent()}],
           receive_timeout: 8_000,
           connect_options: [timeout: 2_000],
@@ -6837,4 +7306,12 @@ defmodule Vutuv.Fediverse do
 
     Req.get(options)
   end
+
+  # Only the counts refresher has an ETag to send; every other fetch here asks
+  # unconditionally, because it wants the document rather than a "still the
+  # same".
+  defp conditional_header(etag) when is_binary(etag) and etag != "",
+    do: [{"if-none-match", etag}]
+
+  defp conditional_header(_none), do: []
 end

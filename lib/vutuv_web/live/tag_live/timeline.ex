@@ -14,10 +14,10 @@ defmodule VutuvWeb.TagLive.Timeline do
   (`VutuvWeb.Live.InitAssigns.assign_embedded/2`), never from a curated
   `user_id`.
 
-  The query and every rule about what may be shown live in `Vutuv.Tags.Timeline`
-  — including the one this page has to explain rather than hide: a cached remote
-  post carries no public like count, so under "most liked" it counts as zero.
-  The note under the controls says so, and only where it applies.
+  The query and every rule about what may be shown live in `Vutuv.Tags.Timeline`.
+  "Most liked" ranks both kinds by a real tally since issue #1283 — a remote
+  post by the figure its own origin publishes — so the apologetic note this page
+  used to carry under that control is gone with the reason for it.
 
   Being off-router it cannot `push_patch`, so the controls do not rewrite the
   address bar. They are still readable **from** it: the controller passes the
@@ -48,6 +48,10 @@ defmodule VutuvWeb.TagLive.Timeline do
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.Timeline
   alias VutuvWeb.Live.InitAssigns
+
+  # The origin's like/repost figures on a card from another network tick
+  # while this page is open (issue #1283). One line, no handler.
+  on_mount(VutuvWeb.Live.RemoteCounts)
 
   @impl true
   def mount(_params, session, socket) do
@@ -324,20 +328,6 @@ defmodule VutuvWeb.TagLive.Timeline do
           {gettext("Clear filters")}
         </button>
       </form>
-
-      <%!-- Said where it applies and nowhere else. A reader who sorts by likes
-      and then finds every fediverse post at the bottom deserves the reason,
-      which is that we do not have their real count and will not print a
-      fraction of one as if we did. --%>
-      <p
-        :if={@sort == :likes and @source != :fediverse and Fediverse.enabled?()}
-        data-likes-note
-        class="mt-2 text-xs text-slate-600 dark:text-slate-400"
-      >
-        {gettext(
-          "Posts from other networks carry no public like count here, so they come last in this order."
-        )}
-      </p>
 
       <.post_list :if={!@empty?} id="tag-timeline-posts" phx-update="stream" data-post-list class="mt-3">
         <div :for={{dom_id, entry} <- @streams.entries} id={dom_id} class={post_row_class()}>

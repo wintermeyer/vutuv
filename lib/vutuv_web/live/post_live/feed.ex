@@ -43,6 +43,10 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.UserHelpers
 
+  # The origin's like/repost figures on a card from another network tick
+  # while this page is open (issue #1283). One line, no handler.
+  on_mount(VutuvWeb.Live.RemoteCounts)
+
   @page_size 20
   # "Who to follow" rail: how many suggestions to show, the size of the popular
   # pool we shuffle them out of, and how often an open feed reshuffles. Defined

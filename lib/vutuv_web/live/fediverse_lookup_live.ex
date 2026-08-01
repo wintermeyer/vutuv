@@ -47,6 +47,10 @@ defmodule VutuvWeb.FediverseLookupLive do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Posts
 
+  # The origin's like/repost figures on a card from another network tick
+  # while this page is open (issue #1283). One line, no handler.
+  on_mount(VutuvWeb.Live.RemoteCounts)
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,

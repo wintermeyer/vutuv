@@ -53,6 +53,10 @@ defmodule VutuvWeb.PostLive.Thread do
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.PostLive.ActionsComponent
 
+  # The origin's like/repost figures on a card from another network tick
+  # while this page is open (issue #1283). One line, no handler.
+  on_mount(VutuvWeb.Live.RemoteCounts)
+
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)

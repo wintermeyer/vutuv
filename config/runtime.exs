@@ -259,6 +259,39 @@ if config_env() == :prod do
     config :vutuv, :fediverse_image_hold_seconds, String.to_integer(String.trim(seconds))
   end
 
+  # The like/repost figures of cached remote objects (issue #1283).
+  # FEDIVERSE_COUNTS=false stops asking other servers about them altogether;
+  # what is already stored stays and keeps rendering.
+  if System.get_env("FEDIVERSE_COUNTS") == "false" do
+    config :vutuv, :fediverse_counts, false
+  end
+
+  # How often those figures are re-asked, as `age:interval` pairs in minutes,
+  # youngest first — the shipped ladder is "360:15,2880:60,10080:360" (every
+  # quarter hour for six hours, hourly to two days, four times a day to one
+  # week, never after that). It decides how much traffic this installation
+  # sends to servers that get nothing back, so an operator who wants to be a
+  # quieter neighbour lengthens it.
+  if ladder = System.get_env("FEDIVERSE_COUNTS_LADDER") do
+    config :vutuv,
+           :fediverse_counts_ladder,
+           ladder
+           |> String.split(",", trim: true)
+           |> Enum.map(fn pair ->
+             [age, interval] = String.split(pair, ":", parts: 2)
+             {String.to_integer(String.trim(age)), String.to_integer(String.trim(interval))}
+           end)
+  end
+
+  # The ceilings on one refresh run: objects in total, and objects per host.
+  if batch = System.get_env("FEDIVERSE_COUNTS_BATCH") do
+    config :vutuv, :fediverse_counts_batch, String.to_integer(String.trim(batch))
+  end
+
+  if per_host = System.get_env("FEDIVERSE_COUNTS_PER_HOST") do
+    config :vutuv, :fediverse_counts_per_host, String.to_integer(String.trim(per_host))
+  end
+
   # How long the account-activity log keeps an event (issue #1087). It holds
   # devices, IP addresses and what changed when, so how long that may be kept is
   # the operator's call; one year is what vutuv.de runs.

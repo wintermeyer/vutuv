@@ -20,10 +20,19 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
   at once. Without them the bar loads its own three point lookups, which is what
   the single-card pages want anyway.
 
-  What it deliberately does not do is subscribe to anything. There is no live
-  counter to tick: vutuv does not know how many people on other servers liked or
-  reshared a thing, so this bar shows the reader's own state and nothing else
-  (`remote_actions/1` says the same in the markup).
+  It shows the **origin's** own like and repost figures beside the reader's own
+  state (issue #1283). Those are asked for in the background
+  (`Vutuv.Fediverse.CountsRefresher`) and arrive here two ways: on the first
+  render from the stored row, and afterwards through a `send_update/3` from
+  whichever host LiveView is on screen — the bar cannot subscribe for itself,
+  since a LiveComponent has no process of its own, so `VutuvWeb.Live.RemoteCounts`
+  listens once per page and forwards by component id.
+
+  A press moves the figure at once, before any server confirms it. We deliver the
+  `Like` and only learn what the origin did with it on the next ask, so a still
+  number would read as the press having done nothing; the stored figure is nudged
+  by one on the same path (`Vutuv.Fediverse`), which is why the change survives a
+  reload rather than living in this socket.
 
   A refusal is explained **here**, inline under the bar, rather than as a flash.
   Two of the hosts are embedded LiveViews whose flash never reaches the toast
@@ -38,7 +47,25 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
 
+  @doc """
+  The DOM id one of these bars gets, from the kind and id of what it acts on
+  (the two words `Vutuv.Fediverse.subject_kind/1` answers in).
+
+  Owned here because two sides have to agree on it exactly: the card that
+  renders the bar, and `VutuvWeb.Live.RemoteCounts`, which addresses a
+  `send_update/2` at it when the origin's figures move. A drift between them is
+  silent — LiveView logs an unknown component id and moves on — so there is one
+  function rather than two string interpolations.
+  """
+  def dom_id(:note, id), do: "remote-actions-note-#{id}"
+  def dom_id(:remote_post, id), do: "remote-actions-post-#{id}"
+
+  # The origin's figures moved while this page was open. Its own clause, because
+  # such an update carries nothing else — no subject, no viewer — and must not
+  # go looking for them.
   @impl true
+  def update(%{counts: counts}, socket), do: {:ok, assign(socket, :counts, counts)}
+
   def update(assigns, socket) do
     {:ok,
      socket
@@ -46,6 +73,9 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
      |> assign(:subject, assigns.subject)
      |> assign(:viewer, assigns[:viewer])
      |> assign_new(:notice, fn -> nil end)
+     # `assign_new` like the marks below: a host re-render must not undo the
+     # figure this bar has already nudged for the reader's own press.
+     |> assign_new(:counts, fn -> Fediverse.counts(assigns.subject) end)
      # `assign_new`, like the local bar: the first pass takes what the host
      # batched (or loads its own), and later host re-renders keep the copy this
      # bar may have toggled since — re-applying a stale preload would undo the
@@ -77,12 +107,30 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
         {:noreply,
          socket
          |> assign(:notice, confirmation(outcome))
-         |> assign(:marks, Map.put(marks, flag(act), not on?))}
+         |> assign(:marks, Map.put(marks, flag(act), not on?))
+         |> assign(:counts, moved(socket.assigns.counts, act, outcome))}
 
       {:error, reason} ->
         {:noreply, assign(socket, :notice, like_refusal_message(reason, subject_kind(subject)))}
     end
   end
+
+  # The reader's own act, on the figure in front of them. Only for an act that
+  # really wrote something (`:already` is a second tab, and it moved nothing),
+  # only for the two acts a server out there counts, and never onto a figure we
+  # do not have — a `nil` means the origin does not serve that collection, and
+  # turning it into a `1` would invent a total.
+  defp moved(counts, "like", outcome) when outcome in [:liked, :unliked],
+    do: Map.update!(counts, :likes, &step(&1, outcome == :liked))
+
+  defp moved(counts, "repost", outcome) when outcome in [:reposted, :unreposted],
+    do: Map.update!(counts, :shares, &step(&1, outcome == :reposted))
+
+  defp moved(counts, _act, _outcome), do: counts
+
+  defp step(nil, _up?), do: nil
+  defp step(count, true), do: count + 1
+  defp step(count, false), do: max(count - 1, 0)
 
   # Resharing is the one act that says something back. The heart and the
   # bookmark are their own confirmation — the glyph fills in and that IS what
@@ -149,6 +197,8 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
         liked?={@marks.liked?}
         reposted?={@marks.reposted?}
         bookmarked?={@marks.bookmarked?}
+        likes={@counts.likes}
+        shares={@counts.shares}
         like?={@offer.like?}
         reply_to={@offer.reply_to}
         repost?={@offer.repost?}

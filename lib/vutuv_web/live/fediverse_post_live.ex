@@ -47,6 +47,10 @@ defmodule VutuvWeb.FediversePostLive do
   alias Vutuv.Fediverse.RemotePost
   alias VutuvWeb.Live.InitAssigns
 
+  # The origin's like/repost figures on a card from another network tick
+  # while this page is open (issue #1283). One line, no handler.
+  on_mount(VutuvWeb.Live.RemoteCounts)
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     viewer = socket.assigns.current_user

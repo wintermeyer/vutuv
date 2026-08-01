@@ -51,6 +51,10 @@ config :vutuv, :fediverse_note_sweeping, false
 # the log, since nothing awaits a Task. Tests call
 # Vutuv.Fediverse.refresh_note/1 directly with a stubbed HTTP layer.
 config :vutuv, :fediverse_note_refresh, false
+# The like/repost counts refresher (issue #1283) polls other servers on a timer,
+# outside the sandbox; tests call Vutuv.Fediverse.refresh_counts/1 and
+# refresh_due_counts/0 directly with a stubbed HTTP layer.
+config :vutuv, :fediverse_counts, false
 
 # Downloading the pictures of followed accounts (issue #1163) runs in a Task,
 # which would sit outside the SQL sandbox; tests call

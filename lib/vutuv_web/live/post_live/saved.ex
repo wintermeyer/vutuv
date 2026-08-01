@@ -32,6 +32,10 @@ defmodule VutuvWeb.PostLive.Saved do
   alias Vutuv.Social
   alias VutuvWeb.Live.DayClockRestream
 
+  # The origin's like/repost figures on a card from another network tick
+  # while this page is open (issue #1283). One line, no handler.
+  on_mount(VutuvWeb.Live.RemoteCounts)
+
   @page_size 20
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})

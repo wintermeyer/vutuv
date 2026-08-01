@@ -1161,17 +1161,18 @@ withdraws every like and drops the markers (`drop_remote_likes/1`) beside the
 follows, and the likes are in the GDPR export, because an act of the member's
 recorded here is their data.
 
-There is **no count**, here or in the agent docs. vutuv does not know how many
-people liked a post on somebody else's server, and a tally assembled from the
-likes that happened to pass through this installation would read as the real one
-while being a fraction of it. The marker cascades with the cached post, expiry
-included; the like on the author's server stands, and a re-like after expiry
-sends a duplicate every implementation treats as a no-op.
+The marker is **not** a tally and never became one: it says "this member, this
+post", and a figure assembled from the likes that happened to pass through this
+installation would read as the real one while being a fraction of it. The number
+the card shows comes from the origin instead (issue #1283, its own section
+below). The marker cascades with the cached post, expiry included; the like on
+the author's server stands, and a re-like after expiry sends a duplicate every
+implementation treats as a no-op.
 
 The **reply** heart (issue #1270, its own bullet in the inbound section above)
 is this act on `fediverse_notes` instead of `fediverse_posts`: same activity,
-same addressing, same budget, same withdrawal, same silence about counts. Read
-the two together — a claim that holds for one and not the other is drift.
+same addressing, same budget, same withdrawal, same figures. Read the two
+together — a claim that holds for one and not the other is drift.
 
 That pairing is now structural rather than a convention. All six outbound acts
 on something from another network — like, reshare and bookmark, on a cached post
@@ -1181,10 +1182,64 @@ by the column that names the subject, and each act is a map naming only what is
 its own. The bar that draws them is one LiveComponent
 (`VutuvWeb.PostLive.RemoteActionsComponent`) wearing the local action bar's
 geometry to the pixel, so a card from another network offers the same four acts
-in the same places as a vutuv post — with no counts, the one deliberate
-difference. Before that, each of the seven hosts that render these cards carried
-its own copy of every handler, which is how the two cards drifted to two and
-three acts in the first place.
+in the same places as a vutuv post. Before that, each of the seven hosts that
+render these cards carried its own copy of every handler, which is how the two
+cards drifted to two and three acts in the first place.
+
+### The origin's own like and repost figures (issue #1283)
+
+For a while that bar carried no numbers, and said so: vutuv cannot know how many
+people liked something on somebody else's server. That was half true. Nothing is
+**delivered** here — a `Like` reaches the author's inbox, an `Announce` the
+author plus the announcer's followers, so a third party's counters never pass
+through this installation — but ActivityPub §5.7 and §5.8 put `likes` and
+`shares` on the object itself, and the servers our members read serve both with
+a `totalItems`. The figures are knowable; they have to be asked for.
+
+`Vutuv.Fediverse.CountsRefresher` asks, every five minutes, for whatever is due:
+
+- **A ladder keyed to the object's own age** (`:fediverse_counts_ladder`): every
+  quarter of an hour under six hours old, hourly to two days, four times a day
+  to a week, and never again after that. An old post's tally has stopped moving,
+  and asking about it is traffic a stranger's server pays for and nobody reads.
+- **Conditional.** The stored ETag rides along as `If-None-Match`; a `304` costs
+  both sides an empty body. The figures are *in* the body, so a `304` really does
+  mean nothing changed.
+- **Background only.** Never on a page render — request volume follows how many
+  objects we cache, not how many people are reading them, so a popular thread
+  cannot turn this installation into an amplifier.
+- **Bounded per run and per host** (`:fediverse_counts_batch`,
+  `:fediverse_counts_per_host`), with what the per-host cap held back written to
+  the log rather than silently dropped.
+- **A doubling backoff per object**, off the ladder after four strikes. A `404`
+  is one of those strikes and nothing more: deleting belongs to the retention
+  paths (`refresh_note/1`, `refresh_reposted_post/1`), which are built to weigh a
+  `403` properly, and a counter refresh must never become a deletion path by
+  accident.
+- **Public and unlisted objects only, and only signed.** A followers-only or
+  direct object answers `403` anyway, and asking would tell its origin that we
+  hold their member's private post and how often we look at it.
+
+The columns are nullable on both `fediverse_posts` and `fediverse_notes`
+(`likes_count`, `shares_count`, `counts_checked_at`, `counts_etag`,
+`counts_failures`), and **null is not zero**: both collections are MAY in the
+spec, so a server that serves neither leaves the card with no figure rather than
+with a `0` we would be inventing. `totalItems` is whatever the origin claims —
+the same trust the post's text already gets — bounded only so a hostile number
+cannot overflow the column.
+
+Two things keep the number honest between asks. A member's own press **nudges
+the stored figure by one** on the same path that queues the activity, so the
+press visibly does something and the change survives a reload; the next ask
+overwrites it with the origin's own answer. And a changed figure is broadcast on
+one topic (`Fediverse.counts_topic/0`), which `VutuvWeb.Live.RemoteCounts` — an
+`on_mount` hook the seven card hosts each opt into with one line — forwards to
+the bar by component id, so an open page ticks without anyone writing a
+`handle_info`.
+
+The tag page's "most liked" order reads these figures too
+(`Vutuv.Tags.Timeline`), which is why the note that used to apologise for
+parking every fediverse post at the bottom of that order is gone.
 
 ### Answering one of their posts (issue #1165)
 

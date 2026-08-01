@@ -31,14 +31,15 @@ defmodule Vutuv.Tags.Timeline do
   `:source` — `:all`, `:vutuv` or `:fediverse`. The tabs **partition** the list:
   every entry is exactly one of the two, so the pair is "all".
 
-  `:sort` — `:newest` (the default), `:oldest` or `:likes`. Sorting by likes is
-  honest but lopsided, and the page says so: a member's post has a real tally
-  (its hearts plus the favourites that arrived over ActivityPub, the same figure
-  the card prints), while for a cached remote post there is no public number
-  vutuv may show — the likes that happened to pass through this installation are
-  a fraction of the real count, so they are not one. Remote posts therefore
-  count as zero and settle at the bottom of that order, newest first among
-  themselves.
+  `:sort` — `:newest` (the default), `:oldest` or `:likes`. Both kinds bring a
+  real tally to that order now (issue #1283): a member's post its hearts plus
+  the favourites that arrived over ActivityPub, a cached remote post the figure
+  its **own origin** publishes in the object's `likes` collection. Until that
+  figure existed the remote half had to be counted as zero and settled at the
+  bottom, and the page carried a line apologising for it. What is left of that
+  caveat is the handful of servers that serve no such collection: a null cannot
+  be ranked, so those posts still sort as zero — indistinguishable, here, from a
+  post nobody liked.
 
   `:query` — full text, over `posts.search_tsv` and `fediverse_posts.search_tsv`,
   so both sides answer the same question the same way (a substring match on one
@@ -189,9 +190,10 @@ defmodule Vutuv.Tags.Timeline do
 
   defp order_entries(query, :oldest), do: order_by(query, [row], asc: row.at, asc: row.id)
 
-  # Likes first, then newest — so the remote posts, which carry no public tally
-  # and therefore sort as zero, are at least in a sensible order among
-  # themselves rather than in whatever order the planner returns them.
+  # Likes first, then newest — so posts that share a tally (and the handful
+  # whose origin serves none, which sort as zero) are at least in a sensible
+  # order among themselves rather than in whatever order the planner returns
+  # them.
   defp order_entries(query, :likes),
     do: order_by(query, [row], desc: row.likes, desc: row.at, desc: row.id)
 
@@ -243,7 +245,12 @@ defmodule Vutuv.Tags.Timeline do
       # already legal, and matching the Elixir type keeps the two entry kinds
       # comparable in the renderer.
       at: type(rp.published_at, :naive_datetime),
-      likes: fragment("0::bigint")
+      # The origin's own tally (issue #1283), not a count of what happened to
+      # pass through this installation — which is why these posts can share one
+      # order with vutuv's own instead of being parked at the bottom. A server
+      # that serves no `likes` collection leaves it null, and a null cannot be
+      # ranked, so it sorts as the zero it is indistinguishable from here.
+      likes: fragment("coalesce(?, 0)::bigint", rp.likes_count)
     })
   end
 

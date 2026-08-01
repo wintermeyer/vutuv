@@ -168,4 +168,67 @@ defmodule VutuvWeb.FediversePostLiveTest do
       assert html =~ "@tagesschau"
     end
   end
+
+  describe "the origin's own figures (issue #1283)" do
+    test "the bar shows them", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      post = cached_post(account(), %{likes_count: 12, shares_count: 3})
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+
+      assert render(element(view, ~s{[data-remote-count="like"]})) =~ "12"
+      assert render(element(view, ~s{[data-remote-count="repost"]})) =~ "3"
+    end
+
+    test "a server that tells us nothing gets no figure, not a zero", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      post = cached_post(account())
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+
+      # The heart is there; the number beside it is not.
+      assert has_element?(view, ~s{[data-remote-act="like"]})
+      refute has_element?(view, ~s{[data-remote-count]})
+    end
+
+    test "a figure that moves upstream ticks on the open page", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      post = cached_post(account(), %{likes_count: 12, shares_count: 3})
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+
+      Phoenix.PubSub.broadcast(
+        Vutuv.PubSub,
+        Vutuv.Fediverse.counts_topic(),
+        {:fediverse_counts, :remote_post, post.id, %{likes: 40, shares: 5}}
+      )
+
+      # The hook forwards with `send_update/2`, which LiveView applies on the
+      # next message it handles — so the first render is what carries it out and
+      # the second is what can see the result.
+      render(view)
+
+      assert render(element(view, ~s{[data-remote-count="like"]})) =~ "40"
+      assert render(element(view, ~s{[data-remote-count="repost"]})) =~ "5"
+    end
+
+    test "a figure about another post leaves this page alone", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      acc = account()
+      post = cached_post(acc, %{likes_count: 12})
+      other = cached_post(acc, %{likes_count: 1})
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+
+      Phoenix.PubSub.broadcast(
+        Vutuv.PubSub,
+        Vutuv.Fediverse.counts_topic(),
+        {:fediverse_counts, :remote_post, other.id, %{likes: 99, shares: nil}}
+      )
+
+      render(view)
+
+      assert render(element(view, ~s{[data-remote-count="like"]})) =~ "12"
+    end
+  end
 end

@@ -47,6 +47,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Tags
   alias VutuvWeb.FediverseComponents
   alias VutuvWeb.Markdown
+  alias VutuvWeb.PostLive.RemoteActionsComponent
 
   # How many reposter faces the "Reposted by" avatar stack shows before the
   # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
@@ -1017,8 +1018,8 @@ defmodule VutuvWeb.PostComponents do
           the read-only thing being answered. --%>
           <.live_component
             :if={@live? and @viewer}
-            module={VutuvWeb.PostLive.RemoteActionsComponent}
-            id={"remote-actions-note-#{@note.id}"}
+            module={RemoteActionsComponent}
+            id={RemoteActionsComponent.dom_id(:note, @note.id)}
             subject={@note}
             viewer={@viewer}
             marks={@marks}
@@ -1391,6 +1392,13 @@ defmodule VutuvWeb.PostComponents do
   attr(:liked?, :boolean, default: false)
   attr(:reposted?, :boolean, default: false)
   attr(:bookmarked?, :boolean, default: false)
+
+  attr(:likes, :integer,
+    default: nil,
+    doc: "the origin's own like tally; nil when it does not serve one"
+  )
+
+  attr(:shares, :integer, default: nil, doc: "the origin's own repost tally, or nil")
   attr(:like?, :boolean, default: true, doc: "false where a Like could not be delivered at all")
   attr(:reply_to, :any, default: nil, doc: "the answering page's path, or nil/false for none")
   attr(:repost?, :boolean, default: false)
@@ -1409,12 +1417,14 @@ defmodule VutuvWeb.PostComponents do
       :if={@viewer}
       class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-600 dark:text-slate-400"
     >
-      <%!-- No number beside any of them, which is the one place this bar
-      departs from the local one — and it departs by leaving something out, not
-      by looking different. vutuv cannot know how many people liked or shared
-      something on somebody else's server, and a figure assembled from what
-      happened to pass through this installation would read as the real one. The
-      author's own server is one click away in the footer below. --%>
+      <%!-- The heart and the reshare carry a number, and it is the **origin's
+      own**, not a tally of what happened to pass through this installation
+      (issue #1283): the object's `likes` and `shares` collections, asked for in
+      the background and refreshed while the post is new. A `nil` — the servers
+      that serve neither collection — renders no figure at all rather than a
+      `0`, which would be a claim we cannot make on somebody else's behalf.
+      Reply and bookmark stay bare: a remote reply tally is not served in a form
+      we can trust, and a bookmark is private and local. --%>
       <.remote_action
         :if={@like?}
         act="like"
@@ -1423,6 +1433,7 @@ defmodule VutuvWeb.PostComponents do
         on?={@liked?}
         on_class="text-accent"
         label={gettext("Like")}
+        count={@likes}
       >
         <.icon_heart filled?={@liked?} />
       </.remote_action>
@@ -1446,6 +1457,7 @@ defmodule VutuvWeb.PostComponents do
         on?={@reposted?}
         on_class="text-brand-600 dark:text-brand-300"
         label={if @reposted?, do: gettext("Undo repost"), else: gettext("Repost")}
+        count={@shares}
       >
         <.icon_repost />
       </.remote_action>
@@ -1477,6 +1489,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:on_class, :string, required: true)
   attr(:label, :string, required: true)
   attr(:shown, :any, default: true)
+  attr(:count, :integer, default: nil, doc: "the origin's figure, or nil for no figure at all")
   slot(:inner_block, required: true)
 
   defp remote_action(%{shown: shown} = assigns) when shown in [nil, false] do
@@ -1506,7 +1519,32 @@ defmodule VutuvWeb.PostComponents do
       ]}
     >
       {render_slot(@inner_block)}
+      <.remote_count count={@count} act={@act} />
     </button>
+    """
+  end
+
+  # The origin's figure beside a glyph, in the local bar's own `count_pill`
+  # geometry. Two silences that look alike and are not: a `nil` is "this server
+  # tells us nothing", a `0` is "it says nobody has". Both render blank — but the
+  # zero keeps a mounted, invisible span, so the first arriving count does not
+  # shift the neighbouring glyphs under the pointer, exactly as on a member's
+  # post.
+  attr(:count, :integer, default: nil)
+  attr(:act, :string, required: true)
+
+  defp remote_count(%{count: nil} = assigns) do
+    ~H""
+  end
+
+  defp remote_count(assigns) do
+    ~H"""
+    <span
+      class={["font-medium tabular-nums", @count == 0 && "invisible"]}
+      data-remote-count={@act}
+    >
+      {compact_count(@count)}
+    </span>
     """
   end
 
@@ -1885,8 +1923,8 @@ defmodule VutuvWeb.PostComponents do
           thing to a reader, so "what can I do with this" has one definition. --%>
           <.live_component
             :if={@live? and @viewer}
-            module={VutuvWeb.PostLive.RemoteActionsComponent}
-            id={"remote-actions-post-#{@remote_post.id}"}
+            module={RemoteActionsComponent}
+            id={RemoteActionsComponent.dom_id(:remote_post, @remote_post.id)}
             subject={@remote_post}
             viewer={@viewer}
             marks={@marks}

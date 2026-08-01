@@ -112,18 +112,25 @@ defmodule VutuvWeb.TagTimelineLiveTest do
       assert :binary.match(html, "/posts/#{older.id}") < :binary.match(html, "/posts/#{newer.id}")
     end
 
-    test "sorting by likes owns up to the fediverse posts having no count", %{conn: conn} do
-      {tag, _post} = tag_with_post("Ein Beitrag")
+    test "sorting by likes ranks a fediverse post by its origin's own tally",
+         %{conn: conn} do
+      # A vutuv post nobody here liked, and a remote one its own server says was
+      # liked forty times (issue #1283). Before those figures existed the remote
+      # half counted as zero and was parked at the bottom of this order, under a
+      # note apologising for it.
+      {tag, local} = tag_with_post("Ein Beitrag von hier")
+      remote = remote_post(tag, "Ein Beitrag von woanders")
+
+      Repo.update_all(
+        from(p in RemotePost, where: p.id == ^remote.id),
+        set: [likes_count: 40]
+      )
 
       view = timeline(conn, tag)
-      refute has_element?(view, "[data-likes-note]")
+      html = view |> form("#tag-timeline-filter", %{"sort" => "likes"}) |> render_change()
 
-      view |> form("#tag-timeline-filter", %{"sort" => "likes"}) |> render_change()
-      assert has_element?(view, "[data-likes-note]")
-
-      # Not on the fediverse tab, where every post is in the same position.
-      view |> element(~s([data-post-filter-tab="fediverse"])) |> render_click()
-      refute has_element?(view, "[data-likes-note]")
+      assert :binary.match(html, "Ein Beitrag von woanders") <
+               :binary.match(html, "/posts/#{local.id}")
     end
   end
 
