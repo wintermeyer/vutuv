@@ -386,7 +386,11 @@ defmodule VutuvWeb.PageController do
     case VutuvWeb.OgCard.png() do
       {:ok, png} ->
         conn
-        |> put_resp_content_type("image/png")
+        # `nil` as the third argument drops Phoenix's default `; charset=utf-8`,
+        # which is meaningless on a binary body and makes strict clients treat
+        # the response as something other than a plain PNG. Every binary
+        # response in the app passes it (binary_content_type_test.exs).
+        |> put_resp_content_type("image/png", nil)
         |> put_resp_header("cache-control", "public, max-age=86400")
         |> send_resp(200, png)
 

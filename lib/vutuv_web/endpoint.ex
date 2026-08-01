@@ -41,7 +41,8 @@ defmodule VutuvWeb.Endpoint do
     at: "/",
     from: :vutuv,
     gzip: false,
-    only: ~w(assets css fonts images js favicon.ico),
+    only: ~w(assets css fonts images js favicon.ico favicon.svg
+         apple-touch-icon.png apple-touch-icon-precomposed.png),
     cache_control_for_etags: @static_etag_cache_control
   )
 

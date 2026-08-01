@@ -292,7 +292,7 @@ defmodule VutuvWeb.OpenGraphTest do
       conn = get(conn, "/og-card.png")
 
       assert conn.status == 200
-      assert get_resp_header(conn, "content-type") == ["image/png; charset=utf-8"]
+      assert get_resp_header(conn, "content-type") == ["image/png"]
       assert [cache] = get_resp_header(conn, "cache-control")
       assert cache =~ "public"
       assert <<137, ?P, ?N, ?G, _rest::binary>> = conn.resp_body

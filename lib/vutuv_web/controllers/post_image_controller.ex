@@ -57,7 +57,7 @@ defmodule VutuvWeb.PostImageController do
         conn
         |> ImageProxy.put_cache_control()
         |> put_download_name(image, "og", "jpg")
-        |> put_resp_content_type("image/jpeg")
+        |> put_resp_content_type("image/jpeg", nil)
         |> send_resp(200, jpeg)
 
       :error ->
@@ -88,7 +88,7 @@ defmodule VutuvWeb.PostImageController do
       {path, ext} ->
         conn
         |> ImageProxy.put_cache_control()
-        |> put_resp_content_type(MIME.from_path(path))
+        |> put_resp_content_type(MIME.from_path(path), nil)
         |> put_resp_header(
           "content-disposition",
           ~s(attachment; filename="#{filename(image, ext)}")
@@ -110,7 +110,7 @@ defmodule VutuvWeb.PostImageController do
          path when not is_nil(path) <- Vutuv.PostImageStore.source_path(image) do
       conn
       |> ImageProxy.put_cache_control()
-      |> put_resp_content_type("image/avif")
+      |> put_resp_content_type("image/avif", nil)
       |> send_file(200, path)
     else
       _ -> ImageProxy.not_found(conn)

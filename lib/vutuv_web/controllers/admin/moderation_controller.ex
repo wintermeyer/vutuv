@@ -24,7 +24,7 @@ defmodule VutuvWeb.Admin.ModerationController do
          path = EvidenceScreenshot.path(filename),
          true <- File.exists?(path) do
       conn
-      |> put_resp_content_type("image/webp")
+      |> put_resp_content_type("image/webp", nil)
       |> send_file(200, path)
     else
       _ -> ControllerHelpers.render_error(conn, 404)

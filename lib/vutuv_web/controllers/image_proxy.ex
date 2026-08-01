@@ -56,7 +56,7 @@ defmodule VutuvWeb.ImageProxy do
         accel_path = opts[:accel_path].(version)
 
         conn
-        |> put_resp_content_type(MIME.from_path(accel_path))
+        |> put_resp_content_type(MIME.from_path(accel_path), nil)
         |> decorate.(Path.extname(accel_path))
         |> put_resp_header("x-accel-redirect", accel_path)
         |> send_resp(200, "")
@@ -68,7 +68,7 @@ defmodule VutuvWeb.ImageProxy do
 
           path ->
             conn
-            |> put_resp_content_type(MIME.from_path(path))
+            |> put_resp_content_type(MIME.from_path(path), nil)
             |> decorate.(Path.extname(path))
             |> send_file(200, path)
         end

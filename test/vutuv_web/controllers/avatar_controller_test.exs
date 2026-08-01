@@ -56,7 +56,8 @@ defmodule VutuvWeb.AvatarControllerTest do
     conn = get(conn, "/#{user.username}/avatar.jpg")
 
     assert conn.status == 200
-    assert get_resp_header(conn, "content-type") == ["image/jpeg; charset=utf-8"]
+    # No charset: a binary body must not claim one (binary_content_type_test.exs).
+    assert get_resp_header(conn, "content-type") == ["image/jpeg"]
     assert [cache] = get_resp_header(conn, "cache-control")
     assert cache =~ "public"
 

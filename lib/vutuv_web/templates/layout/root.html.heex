@@ -29,8 +29,12 @@
     <% end %>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <link rel="shortcut icon" href="/favicon.ico" />
-    <link rel="icon" href="/favicon.ico" />
+    <%!-- Site icons. iMessage's LinkPresentation renders the page and then looks for
+    an icon; when every candidate 404s it drops the rich link preview and shows the
+    bare URL, so these files must exist (test/vutuv_web/site_icons_test.exs). --%>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />
     <%!-- Agent-format discovery (VutuvWeb.AgentDocs): pages that exist as

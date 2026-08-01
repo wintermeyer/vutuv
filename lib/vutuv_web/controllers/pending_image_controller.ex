@@ -25,7 +25,7 @@ defmodule VutuvWeb.PendingImageController do
     with true <- version in Map.get(@versions, kind, []),
          path when is_binary(path) <- pending_path(user, kind, version) do
       conn
-      |> put_resp_content_type("image/avif")
+      |> put_resp_content_type("image/avif", nil)
       |> put_resp_header("cache-control", "private, no-store")
       |> send_file(200, path)
     else

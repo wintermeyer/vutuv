@@ -78,7 +78,7 @@ defmodule VutuvWeb.QualificationDocumentController do
   defp send_document(conn, path, decorate) do
     conn
     |> ImageProxy.put_cache_control()
-    |> put_resp_content_type(MIME.from_path(path))
+    |> put_resp_content_type(MIME.from_path(path), nil)
     |> decorate.()
     |> send_file(200, path)
   end
