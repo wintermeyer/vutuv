@@ -3363,14 +3363,9 @@ defmodule VutuvWeb.PostComponents do
     end
   end
 
-  # The envelope of shapes a photo is shown **whole** in, in the feed.
-  # Everything a camera or a phone actually produces lives inside it: 4:3
-  # (1.33), 3:2 (1.5), 16:9 (1.78) and their portrait mirrors down to 9:16
-  # (0.5625). Outside it are the deliberate extremes — a stitched panorama, a
-  # full-page screenshot, a tall infographic — which at column width would
-  # either be a letterbox slit or a photo the reader has to scroll past.
-  # Those are cropped to the nearest ordinary frame instead.
-  @whole_ratio_max 2.0
+  # Below this a photo is taller than 1:2 — a tower the reader has to scroll
+  # past rather than look at — and is cropped to an ordinary frame instead.
+  # There is deliberately no counterpart for wide photos; see the doc below.
   @whole_ratio_min 0.5
 
   @doc """
@@ -3379,25 +3374,32 @@ defmodule VutuvWeb.PostComponents do
 
   **A single photo is not cropped.** The old card forced every one into a
   24rem-tall `object-cover` box, which cut the top and bottom off any portrait
-  — the shape a phone takes by default. Now an ordinary photo is shown
-  complete and merely bounded in height, so it can be *smaller* than the
-  column but never a fragment of itself.
+  — the shape a phone takes by default. Now a photo is shown complete and
+  merely bounded in height, so it can be *smaller* than the column but never a
+  fragment of itself.
 
-  The exceptions are the shapes that are not really "a photo" at column width:
-  past 2:1 a panorama becomes a slit, past 1:2 a tower turns the card into a
-  scroll. Those crop to 2:1 and 3:4 — a normal frame, as the issue asks — and
-  the permalink still shows them whole.
+  The one exception is a photo taller than **1:2**: at column width that is not
+  a picture you look at but a scroll you get past, so it is cropped to 3:4 and
+  the permalink shows it whole.
+
+  **Width has no such limit, and that asymmetry is the point.** A wide photo
+  cropped to 2:1 used to be the mirror rule, on the reasoning that a panorama
+  at column width is a letterbox slit. It isn't: the column bounds the width,
+  so a wide frame is merely *flat*, and nothing about it costs the timeline
+  anything. What the crop did cost was content, always from the right-hand
+  edge — a 1572×424 screenshot of a news teaser lost the headline and the
+  teaser text in the feed while the permalink showed them, which reads as two
+  different renderings of one post. Height is a budget the card has to defend;
+  width is not.
 
   Public for `single_photo_fit_test.exs`: the boundary is the feature, and a
   ratio rule is the kind of thing that reads correct and is off by a factor.
   """
   def feed_photo_fit(%PostImage{} = image) do
-    ratio = PostImage.aspect(image)
-
-    cond do
-      ratio > @whole_ratio_max -> {:crop, "2 / 1"}
-      ratio < @whole_ratio_min -> {:crop, "3 / 4"}
-      true -> :whole
+    if PostImage.aspect(image) < @whole_ratio_min do
+      {:crop, "3 / 4"}
+    else
+      :whole
     end
   end
 

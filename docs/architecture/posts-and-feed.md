@@ -871,13 +871,20 @@ post" pill for a post their feed query then filters out. Everything updates over
 PubSub, so the author watches it go live without reloading.
 
 **A single photo is shown whole in the feed.** `PostComponents.feed_photo_fit/1`
-answers `:whole` for every ordinary shape (the envelope is 2:1 down to 1:2, so
-4:3, 3:2, 16:9, 1:1 and a phone's 9:16 all qualify) and the image is bounded by
-height rather than cropped, so a portrait occupies a narrower centred column
-instead of losing its top and bottom to the old 24rem `object-cover` box. Only
-the extremes crop — past 2:1 a panorama is a slit at column width, past 1:2 a
-tower is something you scroll past — to `2 / 1` and `3 / 4` respectively, and
-the permalink still shows those whole.
+answers `:whole` for every shape but one, and the image is bounded by height
+rather than cropped, so a portrait occupies a narrower centred column instead of
+losing its top and bottom to the old 24rem `object-cover` box. The exception is
+a photo **taller than 1:2**, which at column width is a scroll rather than a
+picture: that one crops to `3 / 4`, and the permalink still shows it whole.
+
+**Width has no such limit, and the asymmetry is deliberate.** A wide photo used
+to crop to `2 / 1` on the mirror argument that a panorama at column width is a
+letterbox slit. It is not: the column bounds the width, so a wide frame is
+merely flat and costs the timeline nothing. The crop, on the other hand, always
+cost content off the right-hand edge — a 1572×424 screenshot of a news teaser
+lost its headline and teaser text in the feed while the permalink showed them,
+which reads as two renderings of one post rather than one. Height is a budget
+the card has to defend; width is not.
 
 **In the feed, two or more attachments lay themselves out as an aspect-aware
 bento mosaic** (`VutuvWeb.PostComponents.mosaic/1`). The first photo is the

@@ -1545,16 +1545,42 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute html =~ "object-cover"
     end
 
-    test "a stitched panorama is cropped to an ordinary frame instead of a slit", %{conn: conn} do
+    test "a wide screenshot is shown whole, not cut off at the right", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      # 6000×1000 = 6:1. Shown whole at column width this is a ~120px letterbox
-      # strip, so it is the one single-photo case that still crops.
+      # 1572×424 = 3.7:1, the shape that reopened this: a screenshot of a news
+      # teaser card whose right-hand third carries the headline and the teaser
+      # text. Cropping it to 2:1 threw exactly that away in the feed while the
+      # permalink showed it, so the two read as different posts.
+      post_with_image(user, "A teaser screenshot", 1572, 424, "shottok")
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      assert html =~ ~s(data-photo-fit="whole")
+      refute html =~ "object-cover"
+    end
+
+    test "even a stitched panorama is shown whole, only flat", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # 6000×1000 = 6:1. The column bounds the width, so this is merely a flat
+      # strip — it costs the timeline nothing and keeps every pixel.
       post_with_image(user, "A panorama", 6000, 1000, "panotok")
 
       {:ok, _live, html} = live(conn, ~p"/feed")
 
+      assert html =~ ~s(data-photo-fit="whole")
+      refute html =~ "object-cover"
+    end
+
+    test "a tall tower is cropped to an ordinary frame instead of a scroll", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # 1000×6000 = 1:6. Shown whole at column width this runs several screens
+      # down the timeline, so it is the one single-photo case that still crops.
+      post_with_image(user, "A tall infographic", 1000, 6000, "towertok")
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
       assert html =~ ~s(data-photo-fit="crop")
-      assert html =~ "aspect-ratio: 2 / 1"
+      assert html =~ "aspect-ratio: 3 / 4"
       assert html =~ "object-cover"
     end
 

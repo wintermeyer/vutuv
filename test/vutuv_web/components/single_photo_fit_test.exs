@@ -5,7 +5,14 @@ defmodule VutuvWeb.SinglePhotoFitTest do
   The rule is "show it whole unless the shape is extreme", and the whole value
   of it sits at the boundary — so this walks the shapes cameras and phones
   actually produce and asserts none of them is cropped, then checks that the
-  deliberate extremes still are.
+  one deliberate extreme that is still cropped stays cropped.
+
+  **Only tall photos are cropped.** A wide one is never cut: a wide frame at
+  column width is merely flat, and there the crop cost content without buying
+  anything back — the 1572×424 screenshot that made this rule fall over lost
+  the right third of its text in the feed while the permalink showed it whole.
+  A tall one is the case that keeps its crop, because there the card really
+  does turn into a scroll the reader has to get past.
   """
   use ExUnit.Case, async: true
 
@@ -36,33 +43,43 @@ defmodule VutuvWeb.SinglePhotoFitTest do
     end
   end
 
-  describe "extreme shapes are cropped to an ordinary frame" do
-    test "a stitched panorama becomes a 2:1 frame instead of a slit" do
-      assert fit(10_000, 1000) == {:crop, "2 / 1"}
-      assert fit(6000, 1500) == {:crop, "2 / 1"}
+  describe "a wide photo is never cropped" do
+    # The shape of the post that reopened this: a screenshot of a news teaser
+    # card, whose right-hand third (the headline and the teaser text) was cut
+    # away by the old 2:1 crop.
+    test "a wide screenshot keeps every pixel of its width" do
+      assert fit(1572, 424) == :whole
     end
 
+    test "even a stitched panorama is shown whole, only flat" do
+      assert fit(10_000, 1000) == :whole
+      assert fit(6000, 1500) == :whole
+    end
+  end
+
+  describe "a tall photo is cropped to an ordinary frame" do
     test "a tall tower becomes a 3:4 frame instead of a card you scroll past" do
       assert fit(1000, 10_000) == {:crop, "3 / 4"}
       assert fit(1500, 6000) == {:crop, "3 / 4"}
     end
 
-    test "the crop frames are themselves ordinary shapes" do
-      for {:crop, aspect} <- [fit(10_000, 1000), fit(1000, 10_000)] do
-        [w, h] = aspect |> String.split(" / ") |> Enum.map(&String.to_integer/1)
-        assert w / h <= 2.0
-        assert w / h >= 0.5
-      end
+    test "the crop frame is itself an ordinary shape" do
+      {:crop, aspect} = fit(1000, 10_000)
+      [w, h] = aspect |> String.split(" / ") |> Enum.map(&String.to_integer/1)
+      assert w / h <= 2.0
+      assert w / h >= 0.5
     end
   end
 
   describe "the boundary" do
-    test "2:1 and 1:2 are still ordinary; just past them is not" do
-      assert fit(2000, 1000) == :whole
+    test "1:2 is still ordinary; just past it is not" do
       assert fit(1000, 2000) == :whole
-
-      assert fit(2100, 1000) == {:crop, "2 / 1"}
       assert fit(1000, 2100) == {:crop, "3 / 4"}
+    end
+
+    test "there is no upper boundary left to trip over" do
+      assert fit(2000, 1000) == :whole
+      assert fit(2100, 1000) == :whole
     end
 
     test "a photo with no stored dimensions is shown whole, never cropped blind" do
