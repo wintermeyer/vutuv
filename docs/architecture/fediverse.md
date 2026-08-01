@@ -444,7 +444,10 @@ every activity of a member it finds no key for, silently.
   now sit in a row of their own under the body, at the size every other control
   in the app is, and the footer says only where the reply came from. The cached
   post's card was brought into the same shape in the same change, so the two read
-  alike.
+  alike. (The **reply** card kept that footer; the **post** card dropped it in
+  2026-08 — see "Their posts in the feed" below. The reply is visibly indented
+  under the member's post it answers, so its footer is the only place naming the
+  server it came from, where the post card says that in its header chip.)
 - **Passing a reply on** (issue #1275): `repost_note/2` is `repost_remote_post/2`
   one table over — the marker (`fediverse_note_reposts`), a signed `Announce` of
   the reply's own id to the resharer's followers with its author in `cc`, the
@@ -1002,6 +1005,21 @@ One thing worth remembering about the report path: there is **one** cached row
 per post, shared by everybody following its author, so one member's report
 deletes it out of all of their feeds. That is why the card leads with Mute — the
 private, reversible lever — and why the confirmation says so.
+
+**The card's header carries the whole provenance**, and since 2026-08 nothing
+under the text repeats it. It reads name, `@handle`, host chip, stamp: who,
+their address, where that address lives, when. Two of those are links out of
+their own world — the **chip is the post on its own server** (new tab,
+`rel="nofollow noopener noreferrer"`), the **stamp is our copy** at
+`/system/fediverse/post/:id` — and the ⋯ menu repeats the first in words
+("View the original", or "Vote on the original" for a poll), for a reader who
+does not think to tap a pill. What went away with that arrangement is the
+`From another network · host · View the original` line under every card: it was
+the globe badge, the chip and that link said a second time, in the one spot a
+reader reaches only after finishing the post. The chip has to carry the link
+rather than the menu alone, because a card rendered for **no viewer** (the
+public tag timeline) has neither menu nor permalink — it would otherwise be a
+post from somewhere with no way to get there.
 
 ### The account page (issue #1162)
 

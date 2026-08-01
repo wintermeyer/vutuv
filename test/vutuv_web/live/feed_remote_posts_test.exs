@@ -67,6 +67,56 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     refute has_element?(view, "[data-remote-post='#{post.id}'] [data-post-actions]")
   end
 
+  describe "the way out to the original" do
+    test "is the host chip itself, and no line under the card repeats it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = cached_post(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      # The chip naming the server IS the link to the post over there: the
+      # server is where the thing lives, so saying where and offering to go
+      # there are one control, not two facts printed twice.
+      assert has_element?(
+               view,
+               "[data-remote-network='social.example'][data-remote-origin][href='#{post.origin_url}'][target='_blank']"
+             )
+
+      # The provenance line under the card ("From another network · host ·
+      # View the original") is gone — everything it said is in the header row
+      # and the ⋯ menu now.
+      refute has_element?(view, "[data-remote-post='#{post.id}'] p a[href='#{post.origin_url}']")
+    end
+
+    test "is in the ⋯ menu as well, where a reader looks for a post's actions", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = cached_post(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(
+               view,
+               "#remote-post-menu-#{post.id} a[href='#{post.origin_url}'][target='_blank']"
+             )
+    end
+
+    test "survives for a reader with no ⋯ menu at all" do
+      # A logged-out reader on the public tag timeline gets neither the menu nor
+      # the stamp's permalink, so the chip is their only way to the original.
+      # Removing the footer must not have stranded them.
+      post = cached_post(insert(:activated_user))
+
+      html =
+        render_component(&VutuvWeb.PostComponents.remote_post_card/1,
+          remote_post: Repo.preload(post, :remote_account),
+          viewer: nil
+        )
+
+      refute html =~ "remote-post-menu"
+      assert html =~ ~s(href="#{post.origin_url}")
+    end
+  end
+
   test "the body reads like a normal post, not a quotation", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     post = cached_post(user)
@@ -297,21 +347,22 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     assert has_element?(view, "[data-remote-network='social.example']")
   end
 
-  test "the header wraps on a phone as name + chip over the meta line", %{conn: conn} do
+  test "the header reads name, handle, server, stamp", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     cached_post(user)
 
     {:ok, view, _html} = live(conn, ~p"/feed")
 
-    # The chip is the NAME's neighbour, not the row's last item. Trailing the
-    # whole header it was the first thing a narrow column pushed onto a line of
-    # its own, under the handle and the stamp — a stray pill hanging below the
-    # header with nothing beside it. Bound to the name it shares the first line
-    # (both are short) and the phone gets two clean lines instead of three.
-    assert has_element?(view, "[data-remote-author] + [data-remote-network]")
+    # Who, then their address, then where that address lives, then when. The
+    # chip sits between the handle and the stamp rather than beside the name
+    # (Stefan, 2026-08-01): the handle and the server are one address read in
+    # two parts, so they belong next to each other.
+    assert has_element?(view, "[data-remote-handle] + [data-remote-network]")
+    assert has_element?(view, "[data-remote-network] + [data-remote-stamp]")
 
-    # And whenever it does wrap, the lines are set apart. `gap-x-2` alone left
-    # a wrapped row with literally zero vertical gap.
+    # And whenever it wraps, the lines are set apart. `gap-x-2` alone left a
+    # wrapped row with literally zero vertical gap, which put the pill hard
+    # against the line above it on a phone (issue #1284).
     header = view |> element("[data-remote-header]") |> render()
     assert [opening_tag] = Regex.run(~r/^<div[^>]*>/, header)
     assert opening_tag =~ "gap-y-"

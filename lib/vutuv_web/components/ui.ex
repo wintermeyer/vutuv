@@ -903,8 +903,9 @@ defmodule VutuvWeb.UI do
   not always in the viewer's face. A native `<details data-menu>` dropdown:
   no JS framework, keyboard-accessible out of the box; `app.js` closes any
   open menu on outside click and Escape. Items render via the `:item` slot
-  (`href` required, optional `method`); the owner guard stays at the call
-  site, e.g. inside `<.section_header>`'s `:action` slot:
+  (`href` required, optional `method`, and `target`/`rel` for an item that
+  leaves the site — the fediverse card's "View the original"); the owner guard
+  stays at the call site, e.g. inside `<.section_header>`'s `:action` slot:
 
       <:action :if={owner?}>
         <.card_menu id="profile-links-menu">
@@ -925,6 +926,14 @@ defmodule VutuvWeb.UI do
     attr(:id, :string, doc: "optional DOM id for the item link (tests, anchors)")
     attr(:href, :any, doc: "link target (a navigation/CSRF item); omit when using `click`")
     attr(:method, :string)
+
+    attr(:target, :string,
+      doc: "browsing context, e.g. `_blank` for an item that leaves the site (a remote original)"
+    )
+
+    attr(:rel, :string,
+      doc: "link relationship, e.g. `nofollow noopener noreferrer` with `_blank`"
+    )
 
     attr(:click, :string,
       doc: "phx-click event name — renders a `<button>` (a LiveView action) instead of a link"
@@ -972,6 +981,8 @@ defmodule VutuvWeb.UI do
             id={item[:id]}
             href={item[:href]}
             method={item[:method]}
+            target={item[:target]}
+            rel={item[:rel]}
             data-confirm={item[:confirm]}
             class={["block", card_menu_item_class(item[:danger])]}
           >

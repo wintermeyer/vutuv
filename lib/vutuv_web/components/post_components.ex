@@ -1124,6 +1124,12 @@ defmodule VutuvWeb.PostComponents do
       "our own page for this content, which the stamp then links to like a member post's does; nil leaves the stamp plain text"
   )
 
+  attr(:origin, :any,
+    default: nil,
+    doc:
+      "the content's own address on its server, which the host chip then links to; nil leaves the chip plain text"
+  )
+
   slot(:menu)
 
   # `break-words` on the author and the handle is not cosmetic: both come
@@ -1139,17 +1145,22 @@ defmodule VutuvWeb.PostComponents do
   # the link's `title`, which is also what a member wants to read before they
   # paste it somewhere.
   #
-  # Three things wrap in that row — the name, the server chip and the muted
-  # `@handle · stamp` line — and on a phone they do not all fit. So the order is
-  # **name, chip, meta**, and the row has a `gap-y`. Both are load-bearing.
-  # Trailing the row, the chip was the item a narrow column pushed out first: it
-  # landed alone on a third line under the handle, touching it, because `gap-x-2`
-  # sets no vertical gap at all. Beside the name it shares the first line (a
-  # display name and a hostname are both short, where the handle *plus* the
-  # stamp are not), so the phone reads as two lines — who and where, then the
-  # address and the time — and a desktop still puts all three on one. Keep the
-  # chip next to the name; `feed_remote_posts_test.exs` fails the build if it
-  # drifts back to the end of the row or the row loses its `gap-y`.
+  # The row reads **name, handle, server chip, stamp** — who, their address,
+  # where that address lives, when. The chip stands between the handle and the
+  # stamp rather than beside the name (Stefan, 2026-08-01): `@tagesschau` and
+  # `ard.social` are one address read in two parts, and splitting them around
+  # the name made the eye assemble it backwards.
+  #
+  # Four things wrap in that row and on a phone they do not all fit, so the
+  # `gap-y` is load-bearing: `gap-x-2` sets no vertical gap at all, and a
+  # wrapped pill then sits hard against the line above it, which is how issue
+  # #1284 was reported. For the same reason there is **no `·` before the
+  # stamp** any more: with the handle and the stamp in one span it separated
+  # them, but as four independent flex items a wrapped line began with a lonely
+  # dot that read as a bullet. The gap does that work now, exactly as on a
+  # member's post card, whose header has never carried one.
+  # `feed_remote_posts_test.exs` fails the build if the order changes or the
+  # row loses its `gap-y`.
   defp remote_header(assigns) do
     ~H"""
     <div class="flex items-start gap-2">
@@ -1160,28 +1171,20 @@ defmodule VutuvWeb.PostComponents do
         <span data-remote-author class="break-words font-semibold text-slate-900 dark:text-white">
           {@author}
         </span>
-        <%!-- Where this came from, up here where the eye lands, not only in the
-        footer under the text. A reply card can leave it to the footer because
-        it is visibly indented under a member's post; in a flat feed that
-        context is gone, and a reader must not have to finish the post before
-        learning it is not a member's. --%>
-        <span
-          :if={@network}
-          data-remote-network={@network}
-          class="inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-        >
-          <span aria-hidden="true">🌐</span>
-          <span class="truncate">{@network}</span>
-        </span>
-        <span class="min-w-0 text-xs text-slate-600 dark:text-slate-400">
-          <.link
-            {remote_actor_destination(@account_id, @actor_uri)}
-            data-remote-account={@account_id}
-            data-remote-handle={@handle}
-            title={@handle}
-            class="break-all hover:text-brand-700 dark:hover:text-brand-300 sm:break-normal"
-          >{Handle.short(@handle)}</.link>
-          ·
+        <.link
+          {remote_actor_destination(@account_id, @actor_uri)}
+          data-remote-account={@account_id}
+          data-remote-handle={@handle}
+          title={@handle}
+          class="min-w-0 break-all text-xs hover:text-brand-700 dark:hover:text-brand-300 sm:break-normal"
+        >{Handle.short(@handle)}</.link>
+        <%!-- Where this came from, up here where the eye lands, not in a line
+        under the text. A reply card can carry that line because it is visibly
+        indented under a member's post; in a flat feed that context is gone, and
+        a reader must not have to finish the post before learning it is not a
+        member's. --%>
+        <.remote_network_chip :if={@network} network={@network} origin={@origin} />
+        <span data-remote-stamp class="text-xs text-slate-600 dark:text-slate-400">
           <%!-- The stamp is the way to this post's own page here, exactly as on a
           member's card. Only where we have such a page: a reply from another
           network has none, and a reader who is not signed in cannot open the one
@@ -1200,6 +1203,47 @@ defmodule VutuvWeb.PostComponents do
       {render_slot(@menu)}
     </div>
     """
+  end
+
+  attr(:network, :string, required: true)
+  attr(:origin, :any, default: nil)
+
+  # The server this came from, and — where we have the content's own address —
+  # the way to it. One control instead of two: the chip was already the answer
+  # to "where is this from", and "and take me there" is the same question asked
+  # one step further, so the provenance footer that used to repeat the host and
+  # append a "View the original" link is gone (Stefan, 2026-08-01). A card with
+  # no viewer (the public tag timeline: no ⋯ menu, no permalink on the stamp)
+  # keeps its way out this way, which is why the chip carries the link and not
+  # only the menu.
+  defp remote_network_chip(assigns) do
+    ~H"""
+    <.link
+      :if={@origin}
+      href={@origin}
+      target="_blank"
+      rel="nofollow noopener noreferrer"
+      data-remote-network={@network}
+      data-remote-origin
+      title={gettext("View the original")}
+      class={[network_chip_class(), "hover:bg-slate-200 dark:hover:bg-slate-700"]}
+    >
+      <span aria-hidden="true">🌐</span>
+      <span class="truncate">{@network}</span>
+    </.link>
+    <span :if={!@origin} data-remote-network={@network} class={network_chip_class()}>
+      <span aria-hidden="true">🌐</span>
+      <span class="truncate">{@network}</span>
+    </span>
+    """
+  end
+
+  # The chip's own look, shared by its two shapes so a linked and an unlinked
+  # one are the same pill. The slate text colour is spelled out because
+  # `components.css` colours a bare `a` brand-600, which would otherwise turn
+  # the linked chip into a blue pill.
+  defp network_chip_class do
+    "inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
   end
 
   # Where a remote handle leads, as the attributes to splat onto a `<.link>`.
@@ -1760,9 +1804,9 @@ defmodule VutuvWeb.PostComponents do
   (issue #1161).
 
   It wears the **same remote skin** as `remote_reply_card/1` — slate initials
-  tile, globe badge, plain text, "View the original" — so "this did
-  not come from vutuv" reads identically wherever it appears, and a member never
-  has to learn two visual vocabularies for the same fact.
+  tile, globe badge, plain text — so "this did not come from vutuv" reads
+  identically wherever it appears, and a member never has to learn two visual
+  vocabularies for the same fact.
 
   What it has and what it deliberately does not:
 
@@ -1778,8 +1822,15 @@ defmodule VutuvWeb.PostComponents do
       same place a member post's stamp leads — that is where the card came from
       when somebody links it to you, and where a photo-heavy post is readable
       without the feed around it. It is signed-in only and `noindex`, so the
-      link is rendered only when there is a viewer; the post itself still lives
-      on its own server, and "View the original" is where it is read in full.
+      link is rendered only when there is a viewer.
+    * **two ways out, no line of provenance.** The post itself still lives on
+      its own server, and the header's **host chip is the link to it** — the
+      pill already named the server, so being the way there costs no space at
+      all; the ⋯ menu repeats it in words for a reader who does not try tapping
+      a pill. The footer that used to say "From another network · host · View
+      the original" under every card is gone with them (Stefan, 2026-08-01): it
+      printed the globe badge, the chip and that link a second time, in the one
+      spot on the card where a reader had to finish the post to reach it.
 
   A content warning (or the author's `sensitive` flag) renders as a closed lid
   and reveals the text on a click, which is the one thing that author asked for.
@@ -1830,6 +1881,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:initials, name_initials(account.name || account.handle))
       |> assign(:link_screenshot, remote_link_screenshot(post, assigns.images))
       |> assign(:permalink, remote_post_permalink(post, assigns.viewer))
+      |> assign(:origin, RemotePost.origin(post))
 
     ~H"""
     <article data-remote-post={@remote_post.id} data-audience={@remote_post.audience}>
@@ -1861,9 +1913,24 @@ defmodule VutuvWeb.PostComponents do
             network={@account.host}
             account_id={@account.id}
             permalink={@permalink}
+            origin={@origin}
           >
             <:menu>
               <.card_menu :if={@viewer} id={"remote-post-menu-#{@remote_post.id}"}>
+                <%!-- The way to the real thing, where a reader looks for what
+                they can do with a post. The host chip in the header is the same
+                link; a reader who has not learned that the pill is clickable
+                finds it here, next to Mute and Report, the way the local card
+                keeps its post actions. A poll says what the trip is for: a vote
+                is not something vutuv can carry. --%>
+                <:item
+                  id={"remote-post-origin-#{@remote_post.id}"}
+                  href={@origin}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                >
+                  {origin_label(@remote_post)}
+                </:item>
                 <%!-- Mute first, and Report is not the only way out. The usual
                 complaint about a followed account is "not today", and a report
                 does not answer it: there is ONE cached row per post, shared by
@@ -1928,15 +1995,6 @@ defmodule VutuvWeb.PostComponents do
             subject={@remote_post}
             viewer={@viewer}
             marks={@marks}
-          />
-
-          <%!-- A poll's options are shown above, but a vote is not something
-          vutuv can carry, so the link says what it is actually for. --%>
-          <.remote_footer
-            host={@account.host}
-            origin={RemotePost.origin(@remote_post)}
-            label={origin_label(@remote_post)}
-            data-remote-origin
           />
         </div>
       </div>
