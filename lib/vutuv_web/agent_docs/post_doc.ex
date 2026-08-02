@@ -23,7 +23,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
+  alias Vutuv.Profiles.VerifiedLinks
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.Markdown
   alias VutuvWeb.UserHelpers
 
   @doc """
@@ -65,6 +67,11 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       author: AgentDocs.person_ref(author),
       published_on: post.published_on,
       body_markdown: post.body,
+      # The links in that body pointing at a webpage the author has PROVED is
+      # their own (issue #1246). The HTML page marks them with the emerald ✓,
+      # which a `.md`/`.json` reader cannot see, so the fact travels as data:
+      # the proven address, the method behind it, and what the proof covers.
+      verified_author_links: verified_author_links(author, post.body),
       # The structured book/film review riding on the post (nil for ordinary
       # posts) — what the HTML review card shows.
       review: review_entry(post.review),
@@ -146,6 +153,34 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
 
   defp period_suffix(nil), do: ""
   defp period_suffix(label), do: " · #{label}"
+
+  # The links in the body that point at a webpage the author has proved is
+  # their own (issue #1246) — the emerald ✓ the HTML page draws, as data.
+  #
+  # The `http` test is the whole guard the query needs: nothing without a
+  # scheme in it can name a proven page, so an ordinary post pays nothing.
+  defp verified_author_links(author, body) do
+    if String.contains?(body, "http") do
+      body
+      |> Markdown.verified_author_links(VerifiedLinks.load(author))
+      |> Enum.map(&verified_link_entry/1)
+    else
+      []
+    end
+  end
+
+  # `address` is the shortest honest reading of the proof and `scope` says how
+  # far it reaches: `"host"` when the member controls the whole host (a DNS /
+  # well-known proof, or a rel=me back-link on the front page), `"page"` when
+  # the rel=me proof covers exactly this one URL and nothing beside it.
+  defp verified_link_entry(link) do
+    %{
+      url: link.value,
+      address: VerifiedLinks.address(link),
+      verified_method: link.verification_method,
+      scope: VerifiedLinks.scope(link)
+    }
+  end
 
   @doc """
   One timeline entry (`%{post:, reposted_by:, reposters:}`) as a compact doc

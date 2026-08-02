@@ -26,9 +26,13 @@ defmodule VutuvWeb.Markdown do
   (`Vutuv.MarkdownContent.validate_no_images/2` plus the same pipeline drop).
   """
 
+  use Gettext, backend: VutuvWeb.Gettext
+
   alias Vutuv.Accounts
   alias Vutuv.Fediverse
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Profiles.Url
+  alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.Tags
   alias VutuvWeb.CodeHighlight
   alias VutuvWeb.CodeHighlight.Diff
@@ -111,19 +115,29 @@ defmodule VutuvWeb.Markdown do
   markers *before* rendering, every `<img>` the pipeline produces is
   stripped *after* sanitizing, and the markers are then replaced with
   `<img>` tags built here from known-safe parts.
+
+  `:verified_links` (opts) carries **this post author's** proven webpages
+  (`Vutuv.Profiles.VerifiedLinks.of/1`); a link in the body that points at
+  one of them earns the small verified mark — see
+  `mark_verified_author_links/2`. Omit it and nothing is marked, which is
+  also what an installation with `:verify_user_links` off gets: no member
+  has a verified link there, so the list is always empty.
   """
-  def render_post(text, images) when is_binary(text) and is_list(images) do
+  def render_post(text, images, opts \\ [])
+
+  def render_post(text, images, opts) when is_binary(text) and is_list(images) do
     {prepared, replacements} = extract_inline_images(text, images)
 
     prepared
     |> render_pipeline(breaks: false)
     |> open_links_in_new_tab()
+    |> mark_verified_author_links(Keyword.get(opts, :verified_links, []))
     |> linkify_entities()
     |> inject_inline_images(replacements)
     |> Phoenix.HTML.raw()
   end
 
-  def render_post(_, _), do: Phoenix.HTML.raw("")
+  def render_post(_text, _images, _opts), do: Phoenix.HTML.raw("")
 
   @doc """
   Render **remote** plain text — a Mastodon post reduced to text by
@@ -180,6 +194,102 @@ defmodule VutuvWeb.Markdown do
       ~s(rel="noopener noreferrer"),
       ~s(rel="ugc nofollow noopener noreferrer")
     )
+  end
+
+  ## The author's own, proven webpages (issue #1246)
+
+  # One rendered anchor: its opening tag, its label, its closing tag. Anchors
+  # never nest, so the lazy `.*?` really does stop at this link's own `</a>`;
+  # `s` lets a label span lines.
+  @anchor ~r{(<a\s[^>]*>)(.*?)(</a>)}s
+
+  @doc """
+  Marks every link in rendered post HTML that points at a webpage the post's
+  **author has proved is theirs** (`Vutuv.Profiles.LinkVerification`, issue
+  #1246) with the small emerald ✓ the profile's Links card uses.
+
+  `verified_links` are that one author's verified links and nothing else:
+  verification carries no uniqueness constraint, so a global lookup would put
+  a stranger's proof on this member's post. What each proof covers — a whole
+  host or a single page — is `Vutuv.Profiles.VerifiedLinks`' decision; this
+  function only asks it about each anchor's `href`.
+
+  Runs on the already-rendered, sanitized HTML (after
+  `open_links_in_new_tab/1`), so a URL inside a code span or a fenced block is
+  never marked: the pipeline turned it into escaped text, not an anchor. The
+  mark goes **inside** the anchor, after the label, which keeps it out of
+  `linkify_entities/2`'s reach (that pass skips everything inside an `a`) and
+  makes it part of the link a reader clicks rather than a stray glyph beside
+  it.
+
+  The author's own anchor text is left exactly as written — the words in
+  their sentence, never the profile entry's label. The mark's `title` /
+  `aria-label` names the proven address instead, escaped, so the value can
+  never break out of the attribute.
+  """
+  def mark_verified_author_links(html, []) when is_binary(html), do: html
+
+  def mark_verified_author_links(html, verified_links)
+      when is_binary(html) and is_list(verified_links) do
+    Regex.replace(@anchor, html, fn whole, open_tag, label, close_tag ->
+      case matched_link(open_tag, verified_links) do
+        %Url{} = link -> open_tag <> label <> verified_mark_html(link) <> close_tag
+        nil -> whole
+      end
+    end)
+  end
+
+  @doc """
+  The author's proven webpages a post body actually links to, in body order
+  and without repeats — what the agent-format siblings of the permalink
+  report (`VutuvWeb.AgentDocs.PostDoc`).
+
+  It renders the body and walks the same anchors `mark_verified_author_links/2`
+  marks, so "which links count" is decided in exactly one place: a URL in a
+  code fence is not a link here either, and a Markdown link target counts the
+  same as a bare URL.
+  """
+  def verified_author_links(text, verified_links)
+      when is_binary(text) and is_list(verified_links) and verified_links != [] do
+    @anchor
+    |> Regex.scan(render_pipeline(text, breaks: false), capture: :all_but_first)
+    |> Enum.map(fn [open_tag | _rest] -> matched_link(open_tag, verified_links) end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  def verified_author_links(_text, _verified_links), do: []
+
+  # The proven link this anchor points at, or nil. The href arrives
+  # HTML-escaped (the sanitizer wrote it), so it is decoded before parsing —
+  # `&amp;` in a query string is an ampersand, not three extra characters.
+  defp matched_link(open_tag, verified_links) do
+    case Regex.run(~r/\shref="([^"]*)"/, open_tag, capture: :all_but_first) do
+      [href] -> href |> decode_escapes() |> VerifiedLinks.match(verified_links)
+      _no_href -> nil
+    end
+  end
+
+  # The same emerald ✓ as `VutuvWeb.UI.verified_mark/1`, written as a string
+  # because this stage works on rendered HTML rather than HEEx. Icon-only, so
+  # it carries the whole statement in its accessible name; the sizing and
+  # colour live in `.verified-author-link` (assets/css/components.css).
+  defp verified_mark_html(%Url{} = link) do
+    label =
+      escape(
+        gettext("Verified webpage of the author (%{address})",
+          address: VerifiedLinks.address(link)
+        )
+      )
+
+    # `width`/`height` are a floor, not the design: an inline SVG with only a
+    # viewBox falls back to 300×150 px where the stylesheet does not reach, and
+    # `.verified-author-link`'s `width: 1em` outranks a presentation attribute
+    # anyway, so the real sizing still lives in the CSS.
+    ~s(<svg class="verified-author-link" width="16" height="16" ) <>
+      ~s(viewBox="0 0 20 20" fill="currentColor" ) <>
+      ~s(role="img" aria-label="#{label}"><title>#{label}</title>) <>
+      ~s(<path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd"/></svg>)
   end
 
   @doc """
@@ -506,7 +616,9 @@ defmodule VutuvWeb.Markdown do
     limit = Keyword.get(opts, :limit, @preview_limit)
     {prose, definitions} = Footnotes.split_definitions(text)
     {snippet, truncated?} = truncate_markdown(prose, limit)
-    {render_post(Footnotes.reattach(snippet, definitions), images), truncated?}
+    # `opts` travels on, so a preview marks the author's verified links exactly
+    # as the full body does (`render_post/3` ignores the keys meant for us).
+    {render_post(Footnotes.reattach(snippet, definitions), images, opts), truncated?}
   end
 
   def render_preview(_, _images, _opts), do: {Phoenix.HTML.raw(""), false}

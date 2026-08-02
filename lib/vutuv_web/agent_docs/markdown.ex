@@ -102,6 +102,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{gettext("Post by %{name}", name: author_link)} · #{doc.published_on}",
       doc.in_reply_to && in_reply_to_line(doc.in_reply_to),
       doc.body_markdown,
+      verified_links_line(doc),
       review_line(doc.review),
       tags_line(doc.tags),
       engagement_line(doc),
@@ -987,6 +988,29 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     do: gettext("%{handle} shared this", handle: handle)
 
   defp reaction_name(%{handle: handle}), do: gettext("%{handle} liked this", handle: handle)
+
+  @doc """
+  The emerald ✓ the HTML post marks a link with when it points at a webpage
+  the author proved is their own (issue #1246), as one fact line — a reader
+  of the `.md`/`.txt` sibling cannot see an icon. Nil when the post links to
+  none. Shared with the text renderer.
+
+  Each entry names the proven address and how far the proof reaches: the
+  whole host, or that one page and nothing beside it.
+  """
+  def verified_links_line(%{verified_author_links: [_ | _] = links}) do
+    gettext("Verified webpages of the author linked here: %{addresses}",
+      addresses: Enum.map_join(links, ", ", &verified_link_label/1)
+    )
+  end
+
+  def verified_links_line(_doc), do: nil
+
+  defp verified_link_label(%{scope: "host"} = link),
+    do: gettext("%{address} (whole website)", address: link.address)
+
+  defp verified_link_label(link),
+    do: gettext("%{address} (this page only)", address: link.address)
 
   @doc """
   The post's review sidecar as one fact line (what the HTML review card

@@ -84,6 +84,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.ScreenshotWorker
   alias Vutuv.Posts.TopPosters
   alias Vutuv.Prefs
+  alias Vutuv.Profiles.Url
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
   alias Vutuv.Tags
@@ -3567,7 +3568,6 @@ defmodule Vutuv.Posts do
     # author, to name and link) — never the grandparent's own refs, which is
     # where an unbounded walk up the chain would start.
     [
-      :user,
       :images,
       # The auto link screenshot rendered beside a single-URL post (nil for
       # every other post); the card shows it only once `status: "ready"`.
@@ -3575,6 +3575,10 @@ defmodule Vutuv.Posts do
       # The book/film review sidecar (nil for ordinary posts) — the card
       # renders it wherever the post renders, so it always travels along.
       :review,
+      # The author, with the links they have PROVED are their own webpage
+      # (issue #1246) — a link in the body pointing at one of them wears the
+      # verified mark. One extra batched query per page, never one per card.
+      user: verified_links_preload(),
       # Present only on an answer to something from another network. The
       # conversation renderer reads it to hang an answer to a *reply* (issue
       # #1070) under the remote card it answers rather than beside it; an answer
@@ -3588,10 +3592,12 @@ defmodule Vutuv.Posts do
       reply_ref: [
         :parent_author,
         parent_post: [
-          :user,
           :images,
           :screenshot,
           :review,
+          # Rendered as a full card, so its author's proven links come along
+          # too (issue #1246) — same reason as the top-level `user` above.
+          user: verified_links_preload(),
           tags: from(t in Tag, order_by: t.name),
           # The nested parent's own "Replying to …" line, local and remote: the
           # two states it can be in when it is a reply rather than a thread
@@ -3602,6 +3608,16 @@ defmodule Vutuv.Posts do
         ]
       ]
     ]
+  end
+
+  # The post author's **verified** profile links (Vutuv.Profiles.Url), the
+  # ones `VutuvWeb.Markdown.mark_verified_author_links/2` may mark in a body.
+  # Scoped in the preload query rather than filtered afterwards, so a member
+  # with fifty links still ships only the handful they proved — and ordered,
+  # because an un-ordered multi-row preload comes back in whatever order
+  # Postgres likes (id order is creation order, ids being UUID v7).
+  defp verified_links_preload do
+    [urls: from(u in Url, where: not is_nil(u.verified_at), order_by: u.id)]
   end
 
   @doc """

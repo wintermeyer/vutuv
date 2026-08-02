@@ -42,6 +42,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.RemoteMedia
   alias Vutuv.ReviewCover
   alias Vutuv.Tags
@@ -200,7 +201,13 @@ defmodule VutuvWeb.PostComponents do
     # simply stays absent for strangers while the author sees it; a preview
     # body carrying inline images switches to the height-based media clamp
     # (`inline_media?` below — a line clamp cannot hold pictures or floats).
-    body_html = Markdown.render_post(post.body, post.images)
+    # A link in the body that points at a webpage this author has PROVED is
+    # theirs wears the verified mark (issue #1246). The links ride in on the
+    # already-preloaded author (`Vutuv.Posts.post_preloads/0`), so a feed of
+    # fifty cards costs one batched query, not fifty — and a surface that
+    # renders a card without that preload simply marks nothing.
+    body_html =
+      Markdown.render_post(post.body, post.images, verified_links: VerifiedLinks.of(post.user))
 
     # Attachments the body references inline render in place; the rest form
     # the gallery (full mode) / the image tile row (preview).

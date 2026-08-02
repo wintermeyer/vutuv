@@ -44,6 +44,60 @@ or an inline code span a URL is sample text, so it is left verbatim
 (`VutuvWeb.Markdown.map_outside_code/2`); rewriting it turned `curl
 https://vutuv.de` into visible Markdown link syntax.
 
+### The author's own, proven webpage (issue #1246)
+
+A link in a post that points at a webpage the **post's author** has proved is
+theirs (`Vutuv.Profiles.LinkVerification`, see `profiles.md`) wears the same
+small emerald ✓ the profile's Links card shows. Without it a reader has no way
+to tell the author's own site from any other address in the text.
+
+What the mark may claim is `Vutuv.Profiles.VerifiedLinks`' decision, and it is
+deliberately never wider than the proof:
+
+| proof | covers |
+| --- | --- |
+| `dns`, `well_known` | the whole host — any link on it |
+| `rel_me` at the host root (`/` or no path) | the whole host |
+| `rel_me` on a deeper path | **that one URL** and nothing else |
+
+The last row is the shared-hosting case: a member who proves
+`example.com/~alice` with a rel=me back-link has said nothing about
+`example.com/~bob`, who is a different person, nor about
+`example.com/~alice/foo`. Comparison parses with `URI.parse/1` (never a string
+prefix), treats `www.` and the apex as one party, `http` and `https` as one
+site, and ignores a trailing slash, the query and the fragment — a reader who
+pastes a link carrying `?utm_source=` is naming the same page. The path keeps
+its case; a case-sensitive server really does serve two pages.
+
+Only the **post author's** verified links are ever consulted: verification
+carries no uniqueness constraint (two members may each prove the same shared
+host), so a global lookup would hand a stranger's proof to the wrong person.
+They ride in on the already-preloaded author (`Vutuv.Posts.post_preloads/0`
+scopes the `urls` preload to `verified_at is not null`), so a feed of fifty
+cards costs one batched query rather than one per card; a surface that renders
+a card without that preload marks nothing rather than firing queries.
+
+`VutuvWeb.Markdown.mark_verified_author_links/2` writes the mark, on the
+rendered HTML like the code highlighter and for the same reason. It goes
+*inside* the anchor, after the label — part of the link a reader taps, and out
+of reach of the entity linker, which skips everything inside an `a`. The
+author's own anchor text is never replaced by the profile entry's description:
+those are the author's words in their own sentence. The mark is icon-only, so
+the whole statement is its escaped `title` / `aria-label`, naming exactly what
+was proved ("Verified webpage of the author (example.com/~alice)"); the look is
+`.verified-author-link` in `assets/css/components.css`.
+
+Local posts only. Remote/fediverse content renders through `render_remote/1`
+and its author is not a member with verified links, and the outgoing
+ActivityPub Note, the RSS item and `VutuvWeb.PostJSON` stay unmarked as well —
+an emerald tick is this site's vocabulary, not something to push onto another
+server's renderer. The permalink's agent siblings carry the fact as **data**
+instead: `verified_author_links` on the post doc (`address`, `url`,
+`verified_method`, `scope`), plus one sentence in the md/txt renderings.
+
+An installation with `:verify_user_links` off simply has no verified links, so
+nothing marks — it falls out, no extra gate.
+
 ### Fenced code blocks
 
 A fence that names its language (` ```elixir `) gets that language printed in

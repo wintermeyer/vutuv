@@ -1198,6 +1198,24 @@ ul.thumbs li .text .url a {
    appear in chat message bubbles. */
 .mention,
 .hashtag { font-weight: 600; }
+/* The verified mark on a link that points at a webpage the post's AUTHOR has
+   proved is their own (issue #1246, Vutuv.Profiles.LinkVerification). The
+   same emerald ✓ as `<.verified_mark>` on the profile's Links card, written
+   into the rendered HTML by VutuvWeb.Markdown, so it is styled here rather
+   than with utilities. It sits inside the anchor, after the label: part of
+   the link a reader taps, not a separate target — hence no size of its own
+   beyond the surrounding text (1em), which also keeps it from stretching a
+   line. `inline-block` is load-bearing: `.markdown a` is underlined, and a
+   parent's text decoration is not drawn across an atomic inline-level box,
+   so the tick does not get a line through its foot. */
+.verified-author-link {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-left: 0.15em;
+  vertical-align: -0.125em;
+  color: #059669;
+}
 .markdown h1, .markdown h2, .markdown h3, .markdown h4 {
   font-weight: 700;
   margin: 1em 0 0.4em;
@@ -2710,6 +2728,9 @@ html.lightbox-open { overflow: hidden; }
   .diff-line--del .diff-line__marker { color: #fda4af; }
   .diff-line--hunk, .diff-line--meta { color: #94a3b8; }
   .markdown th, .markdown td { border-color: #1e293b; }
+  /* The author's verified-webpage mark (light values above): the same
+     emerald step up `<.verified_mark>` takes on a dark card. */
+  .verified-author-link { color: #34d399; }
   /* Footnotes (light values above). */
   .footnotes { border-top-color: #1e293b; color: #94a3b8; }
   .footnotes li:target {

@@ -822,6 +822,56 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert [0, 1, 2, 1] == Enum.map(doc["thread"], & &1["depth"])
   end
 
+  # The HTML marks a link to the author's proven webpage with an emerald ✓ and
+  # an accessible label (issue #1246). An icon is invisible to a `.md`/`.json`
+  # reader, so the fact has to travel as a sentence and as data.
+  test "post permalink: a link to the author's proven webpage reaches every format", %{
+    user: user
+  } do
+    insert(:url,
+      user: user,
+      value: "https://greta.example/~greta",
+      description: "Never the anchor text",
+      verification_method: "rel_me",
+      verified_at: ~N[2026-08-01 10:00:00]
+    )
+
+    post = create_post!(user, %{"body" => "Wrote it up: https://greta.example/~greta"})
+    rendered = formats_for("/drift_tester/posts/#{post.id}")
+
+    assert rendered.html =~ "verified-author-link"
+    assert rendered.html =~ "Verified webpage of the author (greta.example/~greta)"
+    # The author's own words stay the anchor text in every format.
+    refute rendered.html =~ "Never the anchor text"
+
+    for format <- [rendered.md, rendered.txt] do
+      assert format =~ "Verified webpages of the author linked here:"
+      assert format =~ "greta.example/~greta"
+    end
+
+    # ...including how far the proof reaches: a rel=me back-link on a sub-page
+    # proves that page and nothing else on the host. Asserted on the Markdown
+    # sibling alone — the text renderer hard-wraps at 80 columns, so a phrase
+    # this long is not a contiguous substring there.
+    assert rendered.md =~ "greta.example/~greta (this page only)"
+
+    assert [entry] = Jason.decode!(rendered.json)["verified_author_links"]
+    assert entry["address"] == "greta.example/~greta"
+    assert entry["url"] == "https://greta.example/~greta"
+    assert entry["verified_method"] == "rel_me"
+    assert entry["scope"] == "page"
+
+    assert rendered.xml =~ "<scope>page</scope>"
+  end
+
+  test "post permalink: an ordinary post says nothing about verified webpages", %{post: post} do
+    rendered = formats_for("/drift_tester/posts/#{post.id}")
+
+    refute rendered.html =~ "verified-author-link"
+    for format <- [rendered.md, rendered.txt], do: refute(format =~ "Verified webpages")
+    assert Jason.decode!(rendered.json)["verified_author_links"] == []
+  end
+
   test "post permalink: a book review's facts reach every format", %{user: user} do
     reviewed =
       create_post!(user, %{

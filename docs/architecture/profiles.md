@@ -861,6 +861,13 @@ on). Off = disabled on the installation (no outbound calls); existing marks keep
 working, no new link can be verified. Tests stub DNS / HTTP via
 `:user_links_dns_resolver` / `:user_links_req_options`.
 
+The proof travels beyond the profile: a link in one of the member's **posts**
+that points at the proven page earns the same mark
+(`Vutuv.Profiles.VerifiedLinks`, issue #1246). What it may claim depends on the
+method — the two domain proofs and a root rel=me cover the whole host, a rel=me
+on a deeper path covers that one URL alone, so a neighbour on shared hosting is
+never marked. See `posts-and-feed.md`.
+
 ## Email & phone number types, addresses and maps
 
 Every email address and phone number carries an owner-editable type label.
