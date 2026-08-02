@@ -54,6 +54,16 @@ defmodule Vutuv.Notifications.EmailHtmlDriftTest do
     # VutuvWeb.EmailText.username_change_email_en/1 is undefined`). `EmailText`
     # now defines `__mix_recompile__?/0` so Mix rebuilds it whenever the *set*
     # of templates changes; this asserts the outcome rather than the mechanism.
+    # `function_exported?/3` answers **false for every function of a module that
+    # is not loaded**, and module loading is lazy: whether anything has touched
+    # `EmailText` by the time this async test runs depends on the seed and on
+    # `max_cases`. Without this line the test therefore fails at random with
+    # *all* templates listed as missing — which turned main red right after
+    # v7.226.0 merged, on a commit whose own PR run was green and which passed
+    # on re-run. Note the shape of that lie: real drift is one new template, so
+    # a list naming every one of them is this bug, not a missing function.
+    Code.ensure_loaded!(VutuvWeb.EmailText)
+
     missing =
       for base <- text_bases(),
           not function_exported?(VutuvWeb.EmailText, String.to_atom(base), 1),
