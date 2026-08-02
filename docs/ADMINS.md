@@ -480,9 +480,15 @@ database and every node picks changes up immediately.
 
 vutuv screenshots the pages your members link to: every profile link gets a
 preview thumbnail, and a post that carries a single link and no picture gets a
-preview of that page. Some sites make that pointless — they answer a headless
-browser with a cookie-consent banner, a login wall or a bot check, so the
-"preview" is a picture of a dialog. Those pages belong on the blocklist.
+preview of that page.
+
+The capture browser dismisses cookie-consent dialogs by itself. It always
+answers them with **reject**, never accept, so nothing is consented to on a
+member's behalf, and it needs no setup from you beyond the ordinary
+`mix assets.setup` in a deploy. Some sites still make a preview pointless
+though: a login wall, a bot check, or a "consent or subscribe" wall that
+offers no reject at all (heise is one), so the shot is a picture of a dialog
+whatever the browser tries. Those pages belong on the blocklist.
 
 **`/admin` → Link screenshots → Blocklist** (`/admin/screenshots?tab=blocklist`)
 is the editor. An entry is a domain or a URL:

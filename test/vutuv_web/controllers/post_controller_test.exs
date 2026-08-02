@@ -811,7 +811,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     # Issue #1033: the link-preview screenshot of a vutuv post permalink came
-    # out as an empty page. Headless Chromium's `--screenshot` renders the
+    # out as an empty page. The headless capture renders the
     # document from the top, but the arrival auto-scroll moves the compositor
     # away before those tiles are painted, so the shot is blank. Our capture
     # browser sends vutuv's own user agent, and for it the page must not jump.

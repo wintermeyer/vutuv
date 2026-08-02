@@ -2,9 +2,10 @@
   "name": "vutuv-assets",
   "version": "0.0.0",
   "private": true,
-  "description": "Client-side dependencies bundled into app.js by esbuild.",
+  "description": "Client-side dependencies: @milkdown/kit is bundled into app.js by esbuild, @duckduckgo/autoconsent is vendored into priv/chrome/autoconsent for the screenshot browser by mix assets.setup.",
   "license": "MIT",
   "dependencies": {
+    "@duckduckgo/autoconsent": "^16.19.0",
     "@milkdown/kit": "^7.6.0"
   }
 }

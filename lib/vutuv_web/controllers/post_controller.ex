@@ -307,11 +307,11 @@ defmodule VutuvWeb.PostController do
   end
 
   # The link-preview screenshot browser reading this page rather than a person
-  # (`Vutuv.PageScreenshot`, which sends vutuv's own user agent). Headless
-  # Chromium's `--screenshot` renders the document **from the top**, so the
-  # thread's arrival scroll jump moves the compositor away before those tiles
-  # are painted and the stored preview is an empty page (issue #1033). The
-  # capture gets the same conversation, just no jump.
+  # (`Vutuv.PageScreenshot`, which sends vutuv's own user agent). The capture
+  # renders the document **from the top**, so the thread's arrival scroll jump
+  # moves the compositor away before those tiles are painted and the stored
+  # preview is an empty page (issue #1033). The capture gets the same
+  # conversation, just no jump.
   defp page_capture?(conn) do
     conn |> get_req_header("user-agent") |> List.first() |> Http.own_agent?()
   end

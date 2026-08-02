@@ -7,6 +7,11 @@ defmodule Vutuv.PageScreenshot do
   (`Vutuv.BrowserFrame`), then store it through the `Url` changeset (which
   writes the original plus a thumb via `Vutuv.Screenshot`).
 
+  The browser is driven over the DevTools protocol
+  (`Vutuv.PageScreenshot.Cdp`) rather than by `chromium --screenshot`, so a
+  cookie-consent blocker (`Vutuv.PageScreenshot.Consent`) can be injected into
+  the page — otherwise a large share of captures are a picture of a dialog.
+
   The Chromium binary is located from, in order: the `:vutuv, :chromium_path`
   application env, the `CHROMIUM_PATH` environment variable, the usual binaries
   on `$PATH`, and finally the macOS app bundle (handy for local development).
@@ -20,6 +25,7 @@ defmodule Vutuv.PageScreenshot do
 
   alias Vutuv.BrowserFrame
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.PageScreenshot.Cdp
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
   alias Vutuv.ScreenshotBlocklist
@@ -40,17 +46,6 @@ defmodule Vutuv.PageScreenshot do
   # stub in tests). Empty in prod. An atom key (like the post path's) — a tuple
   # key is deprecated in Elixir 1.20.
   @probe_req_options_key :page_screenshot_probe_req_options
-  # Hard ceiling for one Chromium run. `timeout` enforces it at the OS level
-  # (and kills Chromium, so it can't be orphaned); the BEAM-side Task adds a
-  # slightly looser backstop.
-  @capture_seconds 30
-  @capture_grace 5
-  # Chromium's own stop, comfortably inside the OS ceiling above. Headless
-  # Chromium takes the shot when the page finishes loading, and a page whose
-  # network never goes quiet never gets there: `--screenshot` then blocks until
-  # the OS kills it and we store nothing at all. `--timeout` stops the load and
-  # shoots what is rendered instead.
-  @page_timeout_seconds 20
 
   @doc """
   Capture `url`'s screenshot off the request path, fire-and-forget: supervised
@@ -175,7 +170,7 @@ defmodule Vutuv.PageScreenshot do
   never retried); one that does not resolve at all right now is transient
   (`:unresolvable_target`, the caller retries). The actual SSRF egress control
   is `Vutuv.Ssrf.SocksProxy`: Chromium is launched with **all** connections
-  forced through that loopback SOCKS5 proxy (see `capture_args/3`), which
+  forced through that loopback SOCKS5 proxy (see `capture_args/1`), which
   re-resolves and vets every target — the seed page, each subresource host, any
   redirect / `<meta refresh>` / JS-navigation destination, and IP literals —
   right before dialling it, and refuses internal ones. That closes the
@@ -218,7 +213,7 @@ defmodule Vutuv.PageScreenshot do
         framed_path = tmp_path("frame", id, "webp")
 
         try do
-          with :ok <- capture(url_value, page_path, proxy_port: proxy_port),
+          with :ok <- capture(url_value, page_path, proxy_port: proxy_port, consent: true),
                {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url_value, framed_path) do
             {:ok, framed_path}
           end
@@ -368,29 +363,49 @@ defmodule Vutuv.PageScreenshot do
   def capture(url, out_path, opts \\ []) do
     case binary() do
       nil -> {:error, :chromium_not_found}
-      bin -> run(bin, capture_args(url, out_path, opts), out_path)
+      bin -> run(bin, url, out_path, opts)
+    end
+  end
+
+  # In a task of its own, for two reasons. The driver owns a port and collects
+  # the screenshot reply on its process heap, and one of the callers is the
+  # long-lived `Vutuv.Posts.ScreenshotWorker` GenServer, whose mailbox and heap
+  # should carry neither. And the yield is the BEAM-side backstop behind the OS
+  # `timeout`, so a driver wedged in a way its own deadlines miss still ends.
+  defp run(bin, url, out_path, opts) do
+    consent = Keyword.get(opts, :consent, false)
+
+    task =
+      Task.async(fn ->
+        Cdp.capture(bin, capture_args(opts), url, out_path, consent: consent)
+      end)
+
+    case Task.yield(task, (Cdp.capture_seconds() + 10) * 1000) || Task.shutdown(task) do
+      {:ok, result} -> result
+      _no_result -> {:error, :timeout}
     end
   end
 
   @doc """
-  The Chromium command line `capture/3` runs. Split out so the flags are
-  testable without a Chromium binary.
+  The browser flags `capture/3` launches with. Split out so they are testable
+  without a Chromium binary.
 
-  `--timeout` is the one that decides whether a slow page yields anything:
-  headless Chromium shoots when the page finishes loading, so a page whose
-  network never goes quiet — GitHub's issue search is one — blocks
-  `--screenshot` until the OS force-kill and stores **nothing**.
-  `--virtual-time-budget` does *not* bound that under `--headless=new`, so it is
-  no substitute; with `--timeout` the load is stopped and whatever has rendered
-  is captured, which is what a member sees in their own browser anyway.
+  Capture policy only. There is no `--screenshot` here and no page URL: the
+  shot is taken over the DevTools protocol instead
+  (`Vutuv.PageScreenshot.Cdp`), which is the only way to get a consent blocker
+  into the page, and the flag that opens that channel belongs to the driver
+  along with the rest of its plumbing. The load is no longer bounded by
+  `--timeout` either: the driver holds its own deadline and shoots whatever has
+  rendered when it passes, the same guarantee for a page whose network never
+  settles.
 
   `--user-agent` names the installation the same way the HTTP preflight probe
   does, so a site sees one agent for both requests instead of a nameless Chrome
   for the shot — and our own pages can recognise the capture
   (`Vutuv.SocialFeed.Http.own_agent?/1`) and skip on-arrival behaviour that
-  would spoil it: `--screenshot` renders the document **from the top**, so a
-  page that scrolls itself on arrival is captured before those tiles are
-  painted and stores a blank image (issue #1033).
+  would spoil it: the capture renders the document **from the top**, so a page
+  that scrolls itself on arrival is shot before those tiles are painted and
+  stores a blank image (issue #1033).
 
   `opts[:proxy_port]` routes **all** of Chromium's egress through the loopback
   SOCKS5 vetting proxy (`Vutuv.Ssrf.SocksProxy`) on that port — the SSRF egress
@@ -412,7 +427,7 @@ defmodule Vutuv.PageScreenshot do
   unstyled HTML. Omitted (`EvidenceScreenshot` shooting our own, possibly
   internal, host), no proxy flags are added and Chromium runs direct.
   """
-  def capture_args(url, out_path, opts \\ []) do
+  def capture_args(opts \\ []) do
     {width, height} = Keyword.get(opts, :window, window_size())
 
     # `--headless=new` already runs in a fresh throwaway profile per
@@ -428,12 +443,9 @@ defmodule Vutuv.PageScreenshot do
       "--no-first-run",
       "--disable-extensions",
       "--force-device-scale-factor=1",
-      "--virtual-time-budget=8000",
-      "--timeout=#{@page_timeout_seconds * 1000}",
       "--user-agent=#{Http.user_agent()}",
-      "--window-size=#{width},#{height}",
-      "--screenshot=#{out_path}"
-    ] ++ proxy_args(Keyword.get(opts, :proxy_port)) ++ [url]
+      "--window-size=#{width},#{height}"
+    ] ++ proxy_args(Keyword.get(opts, :proxy_port))
   end
 
   defp proxy_args(nil), do: []
@@ -446,70 +458,7 @@ defmodule Vutuv.PageScreenshot do
   end
 
   @doc "The OS-level ceiling for one Chromium run, in seconds."
-  def capture_seconds, do: @capture_seconds
-
-  # Chromium can hang on hostile or dead pages. Wrap it in `timeout` so the
-  # OS force-kills the process (its children follow) instead of leaving an
-  # orphaned Chromium behind when the BEAM-side Task is shut down.
-  defp run(bin, args, out_path) do
-    {cmd, cmd_args} = wrap_timeout(bin, args)
-    task = Task.async(fn -> safe_cmd(cmd, cmd_args) end)
-
-    result =
-      case Task.yield(task, (@capture_seconds + @capture_grace + 5) * 1000) || Task.shutdown(task) do
-        {:ok, {:ok, {_output, 0}}} ->
-          :ok
-
-        {:ok, {:ok, {output, code}}} ->
-          {:error, {:exit_status, code, String.slice(output, 0, 500)}}
-
-        {:ok, {:error, reason}} ->
-          {:error, reason}
-
-        _ ->
-          {:error, :timeout}
-      end
-
-    capture_outcome(result, out_path)
-  end
-
-  @doc """
-  Turns how the Chromium *process* ended into whether we got a *screenshot* —
-  and the file on disk wins.
-
-  Chromium's `--timeout` stops a page that never finishes loading and writes the
-  shot, but the process can then still hang on shutdown (a renderer stuck in the
-  request that hung the page), so it is killed and reports a failure for a
-  capture that actually succeeded. Discarding that file was the whole bug: the
-  post got no screenshot even though the image already lay in the temp dir. A
-  truncated file is no risk — framing it fails in `Vutuv.BrowserFrame.wrap/3`
-  and the job retries.
-  """
-  def capture_outcome(result, out_path) do
-    cond do
-      File.exists?(out_path) -> :ok
-      result == :ok -> {:error, :no_output_file}
-      true -> result
-    end
-  end
-
-  # System.cmd raises if the binary cannot be spawned (e.g. missing); keep that
-  # inside the Task so capture/2 always returns a tagged tuple.
-  defp safe_cmd(cmd, args) do
-    {:ok, System.cmd(cmd, args, stderr_to_stdout: true)}
-  rescue
-    e -> {:error, {:spawn_failed, Exception.message(e)}}
-  end
-
-  # Prefer the `timeout` coreutil (`gtimeout` on macOS) so a hung Chromium is
-  # force-killed at the OS level. Falls back to running Chromium directly when
-  # neither is available (the Task backstop still applies).
-  defp wrap_timeout(bin, args) do
-    case System.find_executable("timeout") || System.find_executable("gtimeout") do
-      nil -> {bin, args}
-      timeout -> {timeout, ["--kill-after=#{@capture_grace}", "#{@capture_seconds}", bin | args]}
-    end
-  end
+  defdelegate capture_seconds, to: Cdp
 
   @doc "Resolves the Chromium/Chrome binary to use, or `nil` if none is found."
   def binary do

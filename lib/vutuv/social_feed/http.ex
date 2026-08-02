@@ -120,7 +120,7 @@ defmodule Vutuv.SocialFeed.Http do
   anybody else's, since only the version and the public URL differ.
 
   The headless page-capture browser sends it too
-  (`Vutuv.PageScreenshot.capture_args/3`), which is how a page can tell that it
+  (`Vutuv.PageScreenshot.capture_args/1`), which is how a page can tell that it
   is being screenshotted rather than read, and skip on-arrival behaviour that
   would spoil the shot (the post permalink's scroll jump, issue #1033).
   """

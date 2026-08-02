@@ -1138,15 +1138,13 @@ failures retry with exponential backoff up to a cap, then `failed`; an
 SSRF-refused internal host fails permanently (like a profile link's `broken?`).
 
 Chromium is bounded twice, because a page can hang the capture in two different
-places. `--timeout` (`Vutuv.PageScreenshot`, 20s) stops a page whose network
-never goes quiet — GitHub's issue search is one — and shoots what has rendered;
-without it headless Chromium waits for the load event forever and stores
-nothing, and `--virtual-time-budget` does **not** bound this under
-`--headless=new`. The OS `timeout` wrapper (30s) then force-kills a Chromium
-that took its shot but hung on shutdown. Either way `capture_outcome/2` lets the
-**file on disk decide**: a killed run that already wrote the screenshot counts
-as a capture, so a finished image is never thrown away (a truncated one simply
-fails to frame and retries).
+places. The driver's own deadline (`Vutuv.PageScreenshot.Cdp`, 20s from
+navigation) stops waiting on a page whose network never goes quiet — GitHub's
+issue search is one — and photographs what has rendered by then. The OS
+`timeout` wrapper (30s) then force-kills a Chromium that answered and hung
+anyway, and a `Task.yield` behind that catches a driver the first two miss. See
+the URL-screenshot section of [images.md](images.md) for how the wait adapts to
+a consent dialog in between.
 
 Capture is **DRY** with the profile-link previews: `Vutuv.PageScreenshot`
 (`capture_framed/2`, the shared Chromium + browser-frame + SSRF pipeline) and

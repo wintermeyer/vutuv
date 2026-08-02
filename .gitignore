@@ -15,6 +15,12 @@ erl_crash.dump
 # this depending on your deployment strategy.
 /priv/static/
 
+# The consent blocker the screenshot browser injects: verbatim copies of
+# @duckduckgo/autoconsent's prebuilt bundle and rule set, placed here by
+# `mix assets.setup` (see the alias in mix.exs). Generated, not authored.
+/priv/chrome/autoconsent/autoconsent.js
+/priv/chrome/autoconsent/rules.json
+
 # The config/prod.secret.exs file by default contains sensitive
 # data and you should not commit it into version control.
 #

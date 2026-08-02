@@ -48,49 +48,39 @@ defmodule Vutuv.PageScreenshotTest do
     path
   end
 
-  test "the command line bounds the page load, so a hanging page still yields a shot" do
-    args = Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png")
+  test "these are capture policy only, not what to shoot or how to talk to it" do
+    args = Vutuv.PageScreenshot.capture_args()
 
-    page_timeout_ms =
-      Enum.find_value(args, fn
-        "--timeout=" <> ms -> String.to_integer(ms)
-        _other -> nil
-      end)
-
-    # Headless Chromium shoots when the page finishes loading; a page whose
-    # network never goes quiet (GitHub's issue search) never gets there and
-    # `--screenshot` blocks forever, so the job dies on the OS kill with **no**
-    # image at all. `--virtual-time-budget` does not bound this under
-    # `--headless=new` — only `--timeout` does.
-    assert page_timeout_ms, "without --timeout a hanging page produces nothing"
-
-    # And it has to fire before the OS force-kill, or Chromium never gets to
-    # write the file it rendered.
-    assert page_timeout_ms < Vutuv.PageScreenshot.capture_seconds() * 1000
+    # Nothing here tells the browser what to shoot or where to put it any more:
+    # `Vutuv.PageScreenshot.Cdp` navigates and captures over the protocol, and
+    # owns the flag that opens that channel along with the rest of its plumbing.
+    refute Enum.any?(args, &String.starts_with?(&1, "--screenshot"))
+    refute Enum.any?(args, &String.starts_with?(&1, "--timeout"))
+    refute Enum.any?(args, &String.starts_with?(&1, "--remote-debugging"))
+    refute Enum.any?(args, &String.starts_with?(&1, "http"))
   end
 
   test "the capture browser identifies itself with vutuv's own user agent" do
-    args = Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png")
+    args = Vutuv.PageScreenshot.capture_args()
 
     # Same string the HTTP preflight probes with, so a site sees one agent for
     # both requests instead of a nameless Chrome for the shot. Our own pages
     # read it too: the post permalink drops its arrival auto-scroll for it,
-    # because `--screenshot` renders the document from the top and a page that
-    # scrolls itself is captured before those tiles are painted — the empty
+    # because the capture renders the document from the top and a page that
+    # scrolls itself is shot before those tiles are painted — the empty
     # preview image of issue #1033.
     assert "--user-agent=#{Http.user_agent()}" in args
   end
 
-  describe "capture_args/3 proxy egress (SSRF control)" do
+  describe "capture_args/1 proxy egress (SSRF control)" do
     test "no proxy port means no proxy and no resolver flags (EvidenceScreenshot's own-host path)" do
-      args = Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png")
+      args = Vutuv.PageScreenshot.capture_args()
       refute Enum.any?(args, &String.starts_with?(&1, "--proxy-server"))
       refute Enum.any?(args, &String.starts_with?(&1, "--host-resolver-rules"))
     end
 
     test "a proxy port routes every connection through the loopback SOCKS proxy, DNS included" do
-      args =
-        Vutuv.PageScreenshot.capture_args("https://example.com", "/tmp/out.png", proxy_port: 1080)
+      args = Vutuv.PageScreenshot.capture_args(proxy_port: 1080)
 
       # Chromium treats `socks5://` as remote-DNS: it sends the proxy each
       # hostname in CONNECT instead of resolving it locally, which is what
@@ -101,15 +91,6 @@ defmodule Vutuv.PageScreenshotTest do
       # that would happen OUTSIDE the proxy fails (`~NOTFOUND`), so nothing
       # can slip past the vetting — fail closed, per the safety-check rule.
       assert "--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1" in args
-    end
-
-    test "the URL stays the final positional argument, after the proxy flags" do
-      args =
-        Vutuv.PageScreenshot.capture_args("https://example.com/page", "/tmp/out.png",
-          proxy_port: 1080
-        )
-
-      assert List.last(args) == "https://example.com/page"
     end
   end
 
@@ -226,31 +207,6 @@ defmodule Vutuv.PageScreenshotTest do
 
     # Chromium was never spawned, so no argv was recorded.
     refute File.exists?(args_file)
-  end
-
-  describe "capture_outcome/2 (the file on disk decides)" do
-    setup do
-      path = Path.join(System.tmp_dir!(), "ps_#{System.unique_integer([:positive])}.png")
-      on_exit(fn -> File.rm(path) end)
-      %{path: path}
-    end
-
-    test "a run that hung *after* writing the shot is still a capture", %{path: path} do
-      File.write!(path, "captured bytes")
-
-      # Chromium's --timeout shoots the hanging page and then sometimes fails to
-      # exit, so it gets killed; throwing the finished image away is what left
-      # the post with no screenshot at all.
-      assert :ok = Vutuv.PageScreenshot.capture_outcome({:error, :timeout}, path)
-    end
-
-    test "a run that produced nothing keeps the failure it reported", %{path: path} do
-      assert {:error, :timeout} = Vutuv.PageScreenshot.capture_outcome({:error, :timeout}, path)
-    end
-
-    test "a clean exit that wrote no file is a failure", %{path: path} do
-      assert {:error, :no_output_file} = Vutuv.PageScreenshot.capture_outcome(:ok, path)
-    end
   end
 
   test "returns an error tuple (never raises) when the configured binary is missing" do

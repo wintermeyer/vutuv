@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.225.1",
+      version: "7.226.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -137,10 +137,15 @@ defmodule Vutuv.MixProject do
       # deploy (scripts/deploy.sh calls `mix assets.setup`). node/npm come from
       # mise (.tool-versions); assets/node_modules is gitignored, the lockfile is
       # committed, so the build is reproducible.
+      # The last step vendors @duckduckgo/autoconsent into the consent blocker
+      # the screenshot browser injects (priv/chrome/autoconsent/README.md).
+      # Copied rather than committed so `npm ci` keeps the CMP rules current;
+      # a checkout that skipped it just captures consent dialogs as before.
       "assets.setup": [
         "cmd --cd assets npm ci",
         "tailwind.install --if-missing",
-        "esbuild.install --if-missing"
+        "esbuild.install --if-missing",
+        "vutuv.autoconsent.vendor"
       ],
       "assets.build": ["tailwind vutuv", "esbuild vutuv"],
       "assets.deploy": [

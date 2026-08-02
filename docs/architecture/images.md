@@ -104,16 +104,88 @@ window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on
 `$PATH`)
 
+### How the browser is driven
+
+Over the **DevTools protocol** (`Vutuv.PageScreenshot.Cdp`), not by
+`chromium --screenshot <url>`. The one-shot command line had to go because it
+runs no extensions and takes no injected script, so there was nowhere to put a
+consent blocker — and a capture of a European page is more often than not a
+picture of a cookie dialog. (Verified, not assumed: an extension loaded with
+`--disable-extensions-except` / `--load-extension` never injects at all under
+`--screenshot`, in either the main or the isolated world. That recipe is for
+Puppeteer, which drives a browser-mode Chromium over this same protocol.)
+
+The transport is `--remote-debugging-pipe`: NUL-terminated JSON on file
+descriptors 3 and 4. A port only ever gets 0 and 1, so Chromium is launched
+through `/bin/sh` with those duplicated across (`3<&0 4>&1`) and its own stdio
+sent to `/dev/null` in the same redirection list — fd 4 is a dup of stdout, so
+its log lines would otherwise arrive interleaved with protocol frames. No
+websocket client, and so no new dependency. The `timeout` wrapper around the
+process is unchanged, and remains the thing that stops a wedged Chromium
+becoming an orphan.
+
+**When the shutter falls** is adaptive, under a hard 20s ceiling from
+navigation (the guarantee `--timeout` used to give: a page whose network never
+settles still yields the image it has rendered). A page with no consent dialog
+is shot shortly after load; one with a dialog is shot once autoconsent reports
+it has finished, plus a moment for the removal to paint; a dialog that never
+resolves gives up after 10s instead of burning the whole budget.
+
+### The consent blocker
+
+`Vutuv.PageScreenshot.Consent` injects `@duckduckgo/autoconsent` into every
+frame at document start. It detects the site's consent manager, hides it, and
+clicks **reject** — never accept, because consenting to tracking on a member's
+behalf is not ours to do.
+
+It is opt-in per capture (`consent: true`), and only the link-preview paths ask
+for it. `Vutuv.Moderation.EvidenceScreenshot` deliberately does without: that
+capture is a record of what a reported member actually posted, and a
+third-party script that hides elements and clicks buttons over it — one that
+updates itself with `npm update`, unreviewed — is not what evidence should be.
+
+The bundle and its rule set are vendored into `priv/chrome/autoconsent/` by
+`mix vutuv.autoconsent.vendor`, the last step of `mix assets.setup`; both files
+are gitignored, so `npm update` keeps the CMP rules current. A tree that never
+ran it has no blocker and captures dialogs as before: this **fails open** on
+purpose, because dismissing a dialog is cosmetic and a shot of the banner beats
+no shot at all. (The SSRF egress control below is a different matter and fails
+closed.)
+
+Two things about the integration are worth knowing, because each one failed
+*silently* — no error, just a capture that looked like autoconsent had no rule
+for the site:
+
+- **Consent dialogs live in another origin.** Both sites this was built against
+  serve theirs from a Sourcepoint iframe (`cdn.privacy-mgmt.com`,
+  `cmp.heise.de`), which Chromium isolates into a target of its own; a session
+  attached to the top frame neither sees it nor can script it. So every target
+  is auto-attached as it appears and set up identically, and each frame's
+  requests are answered **in its own session**.
+- **The bundle reaches its host through a function it captures at document
+  start**, before CDP has installed the binding, and a CDP binding takes
+  exactly one *string* while the bundle passes an object. Both are fixed by the
+  shim in `Consent.script/0`; without the serialisation the very first call
+  throws inside the bundle's constructor and it never installs itself.
+
+What it does **not** fix is a **consent-or-pay wall**: heise offers no reject
+at all for free readers ("Zustimmung erforderlich für kostenfreie Nutzung"), so
+autoconsent rejects everything rejectable, reports success, and the dialog
+stays. Those pages belong on the blocklist below, which is where heise already
+is.
+
 One exception skips Chromium entirely: a **YouTube video link** in a post
 stores the thumbnail YouTube publishes for every video instead
 (`Vutuv.YoutubeThumbnail`: keyless oEmbed existence check, then
-`maxresdefault.jpg` → `hqdefault.jpg`), frameless — a capture of the watch
-page only ever shows the cookie-consent banner. Any fetch failure falls back
+`maxresdefault.jpg` → `hqdefault.jpg`), frameless — the thumbnail YouTube
+publishes beats anything a capture of the watch page could produce, and costs
+no browser run at all. Any fetch failure falls back
 to the ordinary capture; see the link-screenshots section in
 [posts-and-feed.md](posts-and-feed.md).
 
-Some pages never yield a useful shot — they answer a headless capture with a
-cookie banner, a login wall or a bot check — so a **screenshot blocklist**
+Some pages still never yield a useful shot — a login wall, a bot check, or a
+consent-or-pay wall the blocker above cannot clear — so a **screenshot
+blocklist**
 (`Vutuv.ScreenshotBlocklist`) short-circuits both paths before any Chromium
 run: `blocked?/1` decides, `capture_framed/2` returns `:blocklisted`, and the
 post path skips the job entirely at `qualifying_url/1`.
@@ -141,8 +213,8 @@ changes), so the admin page has a cleanup button —
 The capture browser sends vutuv's own `User-Agent`
 (`Vutuv.SocialFeed.Http.user_agent/0`), the same string the HTTP preflight
 probe uses, so a site sees one agent for both requests. It also lets our own
-pages recognise a capture: `--screenshot` renders the document **from the
-top**, so a page that scrolls itself on arrival is shot before those tiles are
+pages recognise a capture: the shot renders the document **from the top**, so
+a page that scrolls itself on arrival is shot before those tiles are
 painted and stores a blank image — which is why the post permalink drops its
 thread auto-scroll for that agent (issue #1033,
 `Vutuv.SocialFeed.Http.own_agent?/1`). Keep new on-arrival scroll/focus
