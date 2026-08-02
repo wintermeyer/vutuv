@@ -669,6 +669,46 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert html =~ "gibt es nicht"
       refute html =~ "%{handles}"
     end
+
+    test "one tag too many is refused instead of being dropped", %{conn: conn} do
+      {conn, author} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      tags = Enum.map_join(1..(Posts.max_tags_per_post() + 1), ", ", &"cap-tag-#{&1}")
+
+      html =
+        live
+        |> form("#composer-form", %{"post" => %{"body" => "one tag too many", "tags" => tags}})
+        |> render_submit()
+
+      # Issue #1237: the extra tags used to disappear on the way to a published
+      # post. Now the composer stays open with the post intact and says why.
+      assert has_element?(live, "#composer-error")
+      assert html =~ "at most #{Posts.max_tags_per_post()}"
+      refute html =~ "%{max}"
+      refute Repo.exists?(from(p in Vutuv.Posts.Post, where: p.user_id == ^author.id))
+    end
+
+    test "the tag cap is explained in German for a German visitor", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      user |> Ecto.Changeset.change(%{locale: nil}) |> Vutuv.Repo.update!()
+
+      {:ok, live, _html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> live(~p"/feed")
+
+      tags = Enum.map_join(1..(Posts.max_tags_per_post() + 1), ", ", &"cap-tag-de-#{&1}")
+
+      html =
+        live
+        |> form("#composer-form", %{"post" => %{"body" => "ein Tag zu viel", "tags" => tags}})
+        |> render_submit()
+
+      assert html =~ "höchstens #{Posts.max_tags_per_post()} Tags"
+      refute html =~ "%{max}"
+    end
   end
 
   describe "composer reveal" do

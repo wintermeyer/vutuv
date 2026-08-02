@@ -129,6 +129,20 @@ defmodule Vutuv.HashtagFilingTest do
       # twice.
       assert Repo.preload(post, :tags).tags == []
     end
+
+    test "may name more hashtags than the tag field takes" do
+      user = confirmed_user()
+      tags = for n <- 1..(Posts.max_tags_per_post() + 3), do: tag_named("berlin#{n}")
+      body = "Writing about " <> Enum.map_join(tags, " ", &"##{&1.slug}")
+
+      # The cap (issue #1237) belongs to the composer's tag field, which fills
+      # the chip row. Filing by hashtag is a different table with a different
+      # job — listing the post on every tag page its text points at — so a body
+      # full of hashtags saves as written.
+      assert {:ok, post} = Posts.create_post(user, %{body: body})
+
+      assert Enum.sort(filed_tag_ids(post)) == Enum.sort(Enum.map(tags, & &1.id))
+    end
   end
 
   describe "a cached remote post" do

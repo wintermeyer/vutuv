@@ -210,16 +210,34 @@ defmodule Vutuv.PostsTest do
       assert Enum.map(post.tags, & &1.name) == [name]
     end
 
-    test "keeps at most #{Vutuv.Posts.max_tags_per_post()} tags, in input order" do
-      tags = Enum.map_join(1..7, ", ", &"tag-number-#{&1}")
+    test "refuses more than #{Vutuv.Posts.max_tags_per_post()} tags instead of dropping them" do
+      author = user()
+      names = Enum.map(1..(Posts.max_tags_per_post() + 1), &unique_tag_name("tag#{&1}"))
+
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Posts.create_post(author, %{body: "tagged", tags: Enum.join(names, ", ")})
+
+      # The count is the one odd input this path does NOT quietly fix (issue
+      # #1237): a member who typed a sixth tag gets the post back with a reason
+      # rather than a published post missing tags they never saw go.
+      assert [message] = errors_on(changeset).tags
+      assert message =~ "at most #{Posts.max_tags_per_post()}"
+
+      refute Repo.exists?(from(p in Post, where: p.user_id == ^author.id))
+      # …and no tag was minted for a post that never happened.
+      refute Repo.exists?(from(t in Vutuv.Tags.Tag, where: t.name in ^names))
+    end
+
+    test "counts distinct tags, so repeating one does not trip the cap" do
+      names = Enum.map(1..Posts.max_tags_per_post(), &unique_tag_name("tag#{&1}"))
+      # One value over the cap — but the extra is the first tag again in another
+      # case, and a member who repeats themselves is not over the limit.
+      tags = Enum.join(names ++ [String.upcase(hd(names))], ", ")
 
       post = create_post!(user(), %{body: "tagged", tags: tags})
 
       assert length(post.tags) == Posts.max_tags_per_post()
-
-      kept = post.tags |> Enum.map(& &1.name) |> Enum.sort()
-      expected = Enum.map(1..Posts.max_tags_per_post(), &"tag-number-#{&1}") |> Enum.sort()
-      assert kept == expected
+      assert Enum.sort(Enum.map(post.tags, & &1.name)) == Enum.sort(names)
     end
 
     test "stores wildcard and per-user denials" do
@@ -1587,6 +1605,26 @@ defmodule Vutuv.PostsTest do
       assert Posts.visible_to?(updated, stranger)
       # The publication date (the archive coordinate) never changes on edit.
       assert updated.published_on == post.published_on
+    end
+
+    test "refuses an edit past the tag cap and leaves the stored tags alone" do
+      author = user()
+      kept = unique_tag_name("elixir")
+      post = create_post!(author, %{body: "v1", tags: kept})
+
+      over =
+        Enum.map_join(1..(Posts.max_tags_per_post() + 1), ", ", &unique_tag_name("tag#{&1}"))
+
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Posts.update_post(post, %{body: "v2", tags: over})
+
+      assert [message] = errors_on(changeset).tags
+      assert message =~ "at most #{Posts.max_tags_per_post()}"
+
+      # The stored post is untouched: neither the body nor the tag row moved.
+      reloaded = Repo.preload(Repo.get!(Post, post.id), :tags, force: true)
+      assert reloaded.body == "v1"
+      assert Enum.map(reloaded.tags, & &1.name) == [kept]
     end
 
     test "clears denials when given an empty list" do

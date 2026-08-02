@@ -1730,6 +1730,7 @@ defmodule VutuvWeb.PostLive.Composer do
             placeholder={
               gettext("Tags, separated by commas (max. %{max})", max: Posts.max_tags_per_post())
             }
+            max={Posts.max_tags_per_post()}
             field_class={input_class()}
             class="mt-3"
           />

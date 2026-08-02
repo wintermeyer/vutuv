@@ -228,12 +228,12 @@ msgstr ""
 msgid "\"%{tag}\" is only punctuation, not a tag."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:122
+#: lib/vutuv_web/views/error_helpers.ex:124
 #, elixir-autogen, elixir-format
 msgid "\"%{uri}\" is not a valid https account address."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:121
+#: lib/vutuv_web/views/error_helpers.ex:123
 #, elixir-autogen, elixir-format
 msgid "Please list at most %{max} accounts."
 msgstr ""
@@ -241,4 +241,9 @@ msgstr ""
 #: lib/vutuv_web/views/error_helpers.ex:116
 #, elixir-autogen, elixir-format
 msgid "must spell out how the name sounds"
+msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:121
+#, elixir-autogen, elixir-format
+msgid "Please use at most %{max} tags."
 msgstr ""

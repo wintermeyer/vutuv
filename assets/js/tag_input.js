@@ -76,8 +76,15 @@ function build(root, field) {
   const placeholder = field.getAttribute("placeholder") || ""
   const morePlaceholder = root.dataset.morePlaceholder || ""
   const removeLabel = root.dataset.removeLabel || "Remove"
+  // How many pills this box takes, and what it says once it is full. Both come
+  // from the server (`<.tag_input max={…}>`), so the number lives beside the
+  // rule that enforces it and the sentence is translated — a post takes five
+  // tags, every other tag field on the site takes as many as you type.
+  const parsedMax = parseInt(root.dataset.max || "", 10)
+  const limit = Number.isInteger(parsedMax) && parsedMax > 0 ? parsedMax : null
+  const limitMessage = root.dataset.limitMessage || ""
   const sent = []
-  let tags = splitTags(field.value)
+  let tags = []
 
   const box = document.createElement("div")
   box.className = "tag-input__box"
@@ -101,9 +108,19 @@ function build(root, field) {
     if (value !== null) entry.setAttribute(name, value)
   })
 
+  // The line that says why the next tag will not go in. It is built even for an
+  // uncapped box and left empty: a live region has to be in the DOM before its
+  // text appears, or a screen reader never announces it.
+  const notice = document.createElement("p")
+  notice.className = "tag-input__notice"
+  notice.setAttribute("role", "status")
+  notice.setAttribute("data-tag-limit-notice", "")
+  notice.hidden = true
+
   field.type = "hidden"
   field.insertAdjacentElement("afterend", box)
   box.appendChild(entry)
+  box.insertAdjacentElement("afterend", notice)
   root.classList.add("tag-input--enhanced")
 
   function renderPills() {
@@ -131,6 +148,7 @@ function build(root, field) {
       remove.addEventListener("click", () => {
         tags.splice(index, 1)
         renderPills()
+        updateNotice()
         sync()
         entry.focus()
       })
@@ -155,23 +173,53 @@ function build(root, field) {
     field.dispatchEvent(new Event("input", { bubbles: true }))
   }
 
+  // Say why nothing more goes in, for as long as that is true. Shown the moment
+  // the box fills rather than only on the refusal, so the limit is visible
+  // before it bites — and cleared by taking a pill back out.
+  function updateNotice() {
+    const full = limit !== null && tags.length >= limit
+    notice.textContent = full ? limitMessage : ""
+    notice.hidden = !full || limitMessage === ""
+  }
+
+  // Take one typed value into the pills, answering what became of it. The
+  // caller has to know: a value the cap refuses is kept in the entry, because
+  // dropping it is the silent loss this whole box exists to prevent (#1237).
   function add(value) {
     const name = normalizeTag(value)
-    if (!name) return
+    if (!name) return "skipped"
     // Case-insensitive, like the server's dedupe — two pills reading the same
     // thing would promise a tag the save then collapses.
-    if (tags.some((tag) => tag.toLowerCase() === name.toLowerCase())) return
+    if (tags.some((tag) => tag.toLowerCase() === name.toLowerCase())) return "skipped"
+    if (limit !== null && tags.length >= limit) return "full"
     tags.push(name)
+    return "added"
+  }
+
+  // Add a run of finished values; returns the ones that did not fit. The first
+  // refusal stops the run, so what stays in the entry reads in the order it was
+  // typed rather than with the tags that happened to fit plucked out of it.
+  function addAll(values) {
+    const leftover = []
+
+    values.forEach((value) => {
+      const name = normalizeTag(value)
+      if (!name) return
+      if (leftover.length > 0 || add(name) === "full") leftover.push(name)
+    })
+
+    return leftover
   }
 
   function commitPending() {
     if (!entry.value.trim()) {
       entry.value = ""
+      updateNotice()
       return
     }
-    add(entry.value)
-    entry.value = ""
+    entry.value = addAll(splitTags(entry.value)).join(", ")
     renderPills()
+    updateNotice()
     sync()
   }
 
@@ -182,13 +230,21 @@ function build(root, field) {
       const parts = raw.split(SEPARATOR)
       // Everything before the last separator is finished; the tail stays in the
       // box as the tag still being typed (without the space after the comma,
-      // which would otherwise sit in front of the caret).
-      const tail = parts.pop()
-      parts.forEach(add)
-      entry.value = tail.replace(/^\s+/, "")
+      // which would otherwise sit in front of the caret). Anything the cap
+      // refused waits in front of that tail instead of disappearing — and keeps
+      // its comma, or the next thing typed runs into it and the two read as one
+      // tag ("LiveView Tailwind" for two refused names, caught in a browser).
+      const tail = parts.pop().replace(/^\s+/, "")
+      const leftover = addAll(parts)
+
+      entry.value = leftover.length
+        ? [leftover.join(", ") + ",", tail].filter(Boolean).join(" ")
+        : tail
+
       renderPills()
     }
 
+    updateNotice()
     sync()
   })
 
@@ -206,6 +262,7 @@ function build(root, field) {
       e.preventDefault()
       entry.value = tags.pop()
       renderPills()
+      updateNotice()
       sync()
     }
   })
@@ -218,14 +275,24 @@ function build(root, field) {
   })
 
   function reseed(value) {
-    tags = splitTags(value)
-    entry.value = ""
-    field.value = tags.join(", ")
+    tags = []
+    // Through the same gate as typing: a restored draft can carry more tags
+    // than the box takes, and the ones past the cap belong in the entry (where
+    // their member can still see and edit them), not in a sixth pill.
+    const leftover = addAll(splitTags(value))
+    entry.value = leftover.join(", ")
+    field.value = tags.concat(leftover).join(", ")
     sent.length = 0
     renderPills()
+    updateNotice()
   }
 
+  // Seed from what the server rendered, through the same gate as typing — so a
+  // value that arrives over the cap shows its overflow in the entry rather than
+  // as pills the box promised to keep and the save then refuses.
+  entry.value = addAll(splitTags(field.value)).join(", ")
   renderPills()
+  updateNotice()
 
   return {
     reseed,

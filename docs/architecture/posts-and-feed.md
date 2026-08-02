@@ -28,6 +28,16 @@ in, so filing it there would print it twice.
 "which posts carry this tag" reader asks — the tag timeline, the indexability
 bar, the `tag:` search operator and the hashtag-link gate above.
 
+The composer's tag **field** takes at most `Vutuv.Posts.max_tags_per_post/0`
+(five) tags, and past that the save fails with an error on `:tags` instead of
+quietly keeping the first five (issue #1237) — a member must not lose something
+they typed to a post that publishes anyway. The count is taken after the dedupe,
+so repeating a tag never trips it, and the composer's pill box refuses the sixth
+pill client-side (`<.tag_input max={…}>`) so it rarely gets that far. Everything
+else the parser drops is still dropped silently — punctuation, a bare link, a
+repeat — because none of those can become a tag at all. Filing by hashtag is
+uncapped: a body may name as many tags as it mentions.
+
 A **bare `http(s)://` URL is auto-linked too**, with its display text shortened
 to host + first path directory — but only *outside* code. Inside a fenced block
 or an inline code span a URL is sample text, so it is left verbatim

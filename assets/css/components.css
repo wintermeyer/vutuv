@@ -516,7 +516,8 @@ body.stretch main {
    for anyone who cannot separate the red from the slate around it — colour
    alone would leave the error invisible to them (WCAG 1.4.1). */
 .editform__error,
-.editform__field--error span {
+.editform__field--error span,
+.tag-input__notice {
   color: #dc2626;
   font-size: 0.8rem;
   font-weight: 500;
@@ -525,8 +526,16 @@ body.stretch main {
   align-items: baseline;
   gap: 0.3rem;
 }
+/* The pill box's "that's the last one" line (assets/js/tag_input.js) reads as a
+   field error, so it borrows the whole recipe — including the `!` glyph. It is
+   hidden until it has something to say, and `display: flex` above would beat
+   the browser's own `[hidden]` rule, so it is turned off by name. */
+.tag-input__notice[hidden] {
+  display: none;
+}
 .editform__error::before,
-.editform__field--error span::before {
+.editform__field--error span::before,
+.tag-input__notice::before {
   content: "!";
   display: inline-flex;
   align-items: center;
@@ -2654,9 +2663,11 @@ html.lightbox-open { overflow: hidden; }
   .editform__field--error input:not([type]),
   .editform__field--error select,
   .editform__field--error textarea { border-color: #ef4444; }
-  .editform__error, .editform__field--error span { color: #f87171; }
+  .editform__error, .editform__field--error span,
+  .tag-input__notice { color: #f87171; }
   .editform__error::before,
-  .editform__field--error span::before { background: #f87171; color: #450a0a; }
+  .editform__field--error span::before,
+  .tag-input__notice::before { background: #f87171; color: #450a0a; }
   .editform__hint { color: #94a3b8; }
   .editform__hint.editform__hint--error { color: #f87171; }
   .button--cancel, .button--secondary, .button--icon:hover,

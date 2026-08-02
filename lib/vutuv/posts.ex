@@ -130,8 +130,9 @@ defmodule Vutuv.Posts do
     * `:denials` — list of `%{"denied_user_id" => id}` / `%{"wildcard" => w}`
       maps (see `Vutuv.Posts.PostDenial`)
     * `:tags` — comma-separated string or list of tag names (find-or-create,
-      case-insensitive; invalid values are skipped, at most
-      `max_tags_per_post/0` are kept)
+      case-insensitive; invalid values are skipped, and more than
+      `max_tags_per_post/0` distinct ones fail the changeset on `:tags`
+      rather than being dropped, issue #1237)
     * `:image_ids` — pending image ids of the author, in display order
 
   Returns `{:ok, post}` (preloaded), `{:error, changeset}`,
@@ -429,7 +430,10 @@ defmodule Vutuv.Posts do
   # Body + denials + tags + review in one changeset; images attach separately
   # (they are pre-existing rows, not nested params).
   defp build_changeset(post_or_struct, attrs, denials, image_ids) do
-    tag_ids = attrs |> fetch(:tags) |> parse_tag_values() |> tag_ids_for()
+    tag_values = attrs |> fetch(:tags) |> parse_tag_values()
+    # Over the cap the post does not save at all, so nothing is minted for it
+    # either: find-or-create runs only on a set that can be kept.
+    tag_ids = if too_many_tags?(tag_values), do: [], else: tag_ids_for(tag_values)
 
     changeset =
       post_or_struct
@@ -439,8 +443,35 @@ defmodule Vutuv.Posts do
       |> put_body_hashtags(tag_ids)
       |> put_review(post_or_struct, fetch(attrs, :review))
       |> require_content(image_ids)
+      |> validate_tag_count(tag_values)
 
     if changeset.valid?, do: {:ok, changeset}, else: {:error, changeset}
+  end
+
+  defp too_many_tags?(values), do: length(values) > @max_tags
+
+  # The count is the one odd input `parse_tag_values/1` does NOT quietly fix
+  # (issue #1237). Everything else it drops is a value that cannot be a tag at
+  # all — punctuation, a bare link, a repeat — and dropping those still
+  # publishes the post the member wrote. A sixth tag is different: it is
+  # something they typed and meant, so it comes back with a reason instead of
+  # vanishing from a post that already went out. Counted after the dedupe, so
+  # repeating a tag is never what trips it.
+  #
+  # Keep the message byte-identical to its extraction anchor in
+  # `VutuvWeb.ErrorHelpers` — that is what puts it in `errors.pot` and gets it
+  # translated, since gettext cannot see a literal inside `add_error/4`.
+  defp validate_tag_count(changeset, values) do
+    if too_many_tags?(values) do
+      Ecto.Changeset.add_error(
+        changeset,
+        :tags,
+        "Please use at most %{max} tags.",
+        max: @max_tags
+      )
+    else
+      changeset
+    end
   end
 
   # The tags the body names as `#hashtags`, filed so `/tags/:slug` lists the
@@ -4013,7 +4044,7 @@ defmodule Vutuv.Posts do
 
   # The composer field shares the tags-page tokenizer: only a comma separates
   # ("Elixir, Ruby on Rails" is two tags), so a multi-word tag needs no
-  # quoting. Delegates to the list head below for the dedupe + cap.
+  # quoting. Delegates to the list head below for the dedupe.
   defp parse_tag_values(values) when is_binary(values),
     do: values |> Tags.parse_tag_names() |> parse_tag_values()
 
@@ -4025,12 +4056,15 @@ defmodule Vutuv.Posts do
   # Post tags share the global namespace with profile tags, so the composer must
   # not be the back door. Dropping them silently matches how this function
   # treats every other odd value — the post itself still publishes.
+  #
+  # The count is NOT enforced here: the caller (`validate_tag_count/2`) turns a
+  # sixth tag into a changeset error, so this returns everything that survived
+  # normalisation and the dedupe.
   defp parse_tag_values(values) when is_list(values) do
     values
     |> Enum.map(&Tag.normalize_value/1)
     |> Enum.reject(&(Tag.punctuation_only?(&1) or WebAddress.link_only?(&1)))
     |> Enum.uniq_by(&String.downcase/1)
-    |> Enum.take(@max_tags)
   end
 
   # Find-or-create by name/slug (case-insensitive), racing gracefully.

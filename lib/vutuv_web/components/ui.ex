@@ -132,6 +132,13 @@ defmodule VutuvWeb.UI do
   box reproduces that same look from `components.css`. Pass `field_id` when a
   `<label for=…>` or an `error_tag/2` span points at the field — the JS moves
   that id onto the box the member types in, so the label keeps working.
+
+  `max` caps how many pills the box takes (issue #1237). Past it the box keeps
+  the refused text in the entry instead of swallowing it and names the limit
+  underneath, so nothing a member typed disappears. It is deliberately **per
+  instance**: only a post has a tag cap (`Vutuv.Posts.max_tags_per_post/0`), and
+  a number baked into the component or the JS would silently cap the profile,
+  invitation, landing-page and job-posting fields too.
   """
   attr(:id, :string, required: true, doc: "DOM id of the widget root")
   attr(:name, :string, required: true, doc: "the form field name, e.g. user[tag_list]")
@@ -140,6 +147,7 @@ defmodule VutuvWeb.UI do
   attr(:placeholder, :string, default: "")
   attr(:field_class, :any, default: nil, doc: "class for the plain (no-JS) input")
   attr(:invalid?, :boolean, default: false, doc: "mark the box as failed validation")
+  attr(:max, :integer, default: nil, doc: "cap on the number of pills; nil = uncapped")
   attr(:class, :any, default: nil)
   attr(:rest, :global, doc: "lands on the field (phx-debounce, aria-describedby, …)")
 
@@ -154,6 +162,8 @@ defmodule VutuvWeb.UI do
       data-value={@value}
       data-more-placeholder={gettext("Add another tag")}
       data-remove-label={remove_tag_label()}
+      data-max={@max}
+      data-limit-message={@max && tag_limit_message(@max)}
     >
       <input
         type="text"
@@ -174,6 +184,12 @@ defmodule VutuvWeb.UI do
   # translation: the JS fills the tag in, so a screen reader announces "Remove
   # the tag Elixir" rather than fifteen identical "Remove" buttons.
   defp remove_tag_label, do: gettext("Remove the tag %{name}", name: "%{name}")
+
+  # What the box says once it is full. It names the way out, not just the rule:
+  # the pills are all removable, so the member is one ✕ away from adding the tag
+  # they actually want.
+  defp tag_limit_message(max),
+    do: gettext("At most %{max} tags. Remove one to add another.", max: max)
 
   @doc """
   The shared **Milkdown WYSIWYG Markdown editor** — one component for the post
