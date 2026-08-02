@@ -37,7 +37,9 @@ pages — both render `PostComponents.post_actions/1` and share `PostLive.Action
   member always sees their own view of a profile; there is **no** owner "view as public"
   preview (to see the public view you log out), so there is no `?view_as=` handling.
   **Every state-changing control is `phx-click`, handled here, no reload:** the header
-  follow pill, the tag-endorsement pills, the ⋯-menu Mute/Bookmark/Like/Block and the
+  follow pill, the tag-endorsement pills, the footer card's Bookmark/Like glyph
+  toggles (`<.profile_save_toggle>`, `VutuvWeb.UserHTML` — silent, no flash), the
+  ⋯-menu Mute/Block and the
   Unblock control, and the follower/following/who-to-follow `user_row` follow buttons —
   all pass `live?` to their `VutuvWeb.UI` components
   (`follow_button`/`follow_relationship`/`tag_vote`/`card_menu`/`user_row`).

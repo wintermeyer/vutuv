@@ -45,9 +45,10 @@ somebody to hit reload. A row that moved sweeps once through a brand tint
 the reader looks like a misread.
 
 **Every state-changing control fires a LiveView event, so the page never
-reloads**: the follow pill, the ⋯-menu mute/bookmark/like/block (and unblock),
-the follower/following/who-to-follow follow buttons, and the tag-endorsement
-pills. The follower/following/connection counts and
+reloads**: the follow pill, the header card's bookmark and like glyph toggles,
+the ⋯-menu mute/block (and unblock), the follower/following/who-to-follow
+follow buttons, and the tag-endorsement pills. The two save toggles raise no
+flash: the glyph fills, which says it where the member is already looking. The follower/following/connection counts and
 the tag-endorsement counts also update **live over PubSub even when the change
 is made on another page or by another member** (e.g. someone follows you from
 their feed); plain links (Message, Report, vCard, the agent-format links) stay
