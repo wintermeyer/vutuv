@@ -71,6 +71,47 @@ than its own heading. --%>
       </.form>
     </.card>
 
+    <%!-- Likes: whether other members see your name and picture in the row of
+          faces a post permalink shows under its like count (issue #1233).
+          Default on, like every other network people come from — and like the
+          reactions from other networks that have named their accounts on the
+          same card since issue #1068. Label and hint come from the Vutuv.Prefs
+          registry, so the member and the admin at /admin/preferences read the
+          same sentence.
+
+          The hint is where the two limits are stated outright: the post's
+          author still sees you (they were told your name in the notification
+          when you liked, so hiding it afterwards would be a promise we cannot
+          keep), and the count never moves. --%>
+    <.toggle_form_card
+      changeset={@changeset}
+      field={:like_attribution?}
+      form_id="like-attribution-form"
+      action={~p"/settings/privacy"}
+      title={gettext("Likes")}
+      intro={
+        gettext(
+          "A post's page shows the members who liked it, right under the count. This is whether you are one of the faces."
+        )
+      }
+      label={Vutuv.Prefs.label(:like_attribution?)}
+      hint={Vutuv.Prefs.hint(:like_attribution?)}
+    />
+
+    <%!-- Back to inheriting the installation default (a nil field), so a later
+          change of the site default reaches this member again. Only shown once
+          they hold a value of their own. --%>
+    <div :if={Vutuv.Prefs.customized_in_group?(@user, :privacy)} class="-mt-3">
+      <.link
+        href={~p"/settings/privacy/reset"}
+        method="post"
+        id="reset-privacy-prefs"
+        class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        {gettext("Reset to the site default")}
+      </.link>
+    </div>
+
     <%!-- Online status: the real-time green dot on your avatar. A positive flag
           (checked = shown), so a plain checkbox, unlike the inverted opt-out
           robot switches above. Off means VutuvWeb.Presence never tracks you, so

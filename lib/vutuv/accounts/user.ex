@@ -264,6 +264,13 @@ defmodule Vutuv.Accounts.User do
     # it has no "0 = never shorten" mode. Read through
     # notification_post_lines/1, never straight off the struct.
     field(:notification_post_lines, :integer)
+    # Whether other members may see that this member liked a post: the avatar
+    # row a post permalink shows under the like count (issue #1233). Off keeps
+    # the member out of that row for everybody **except the post's author**,
+    # who was already told by name in the like notification at the time — see
+    # `Vutuv.Posts.post_likers/2`. It never changes the count. Read through
+    # `Vutuv.Prefs.get/2`, never straight off the struct.
+    field(:like_attribution?, :boolean)
     # The license this member last published photos under (issue #1104),
     # offered as the pre-selection on their next photo post so a professional
     # sets it once. Written by Vutuv.Posts on save, never by a settings form —
@@ -395,7 +402,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source

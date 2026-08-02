@@ -149,6 +149,69 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
+  # Issue #1233. The switch over the "Liked by" row a post permalink shows.
+  describe "privacy: who sees that you liked a post" do
+    test "starts on, and says what it does not do", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/settings/privacy") |> html_response(200)
+
+      assert html =~ "Show my name on posts I like"
+      # The member never chose anything yet, so the box has to show the
+      # installation default that actually applies to them, not an unticked
+      # box for a setting that is on.
+      assert user.like_attribution? == nil
+      assert checkbox_checked?(html, "user[like_attribution?]")
+
+      # Both limits, in the setting's own words: the author is the exception,
+      # and the tally is untouched.
+      assert html =~ "The author of the post still does"
+      assert html =~ "the post keeps the same number of likes"
+    end
+
+    test "turning it off stores an explicit false", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = put(conn, ~p"/settings/privacy", user: %{"like_attribution?" => "false"})
+
+      assert redirected_to(conn) == ~p"/settings/privacy"
+      assert %{like_attribution?: false} = Repo.get(User, user.id)
+    end
+
+    test "the reset link appears only once the member holds a value, and clears it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      refute conn |> recycle() |> get(~p"/settings/privacy") |> html_response(200) =~
+               "reset-privacy-prefs"
+
+      {:ok, _} = Accounts.update_user(user, %{"like_attribution?" => "false"})
+
+      assert conn |> recycle() |> get(~p"/settings/privacy") |> html_response(200) =~
+               "reset-privacy-prefs"
+
+      conn = conn |> recycle() |> post(~p"/settings/privacy/reset")
+
+      assert redirected_to(conn) == ~p"/settings/privacy"
+      # Back to nil = inherit whatever the installation decides, now and later.
+      assert %{like_attribution?: nil} = Repo.get(User, user.id)
+    end
+
+    test "reads in German, the language most of this site is in", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/settings/privacy")
+        |> html_response(200)
+
+      assert html =~ "Meinen Namen bei Beiträgen zeigen, die mir gefallen"
+      assert html =~ "Die Autorin oder der Autor des Beitrags sieht es weiterhin"
+      assert html =~ "Der Beitrag hat in beiden Fällen gleich viele Likes."
+    end
+  end
+
   describe "privacy: safety card" do
     test "groups blocked members and content under review", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)

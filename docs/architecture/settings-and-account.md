@@ -96,7 +96,13 @@ notifications**: a read-only explainer of the rest, which are always on.
 ### Member preferences with installation defaults (`Vutuv.Prefs`)
 
 The map and post-display settings are the first citizens of the generic
-**preferences system**. Every such knob is declared once in the
+**preferences system**; the third group is `:privacy`, which holds
+`like_attribution?` — whether a post permalink names this member among the
+people who liked it (issue #1233, see the "Who liked it" section in
+[posts-and-feed.md](posts-and-feed.md)). It is the one pref whose home is not
+`/settings/preferences` but the visibility page (`/settings/privacy`, reset via
+POST `/settings/privacy/reset`), because it is a privacy posture rather than a
+display detail. Every such knob is declared once in the
 `Vutuv.Prefs.registry/0` (key, type, shipped default, constraints, group) and
 resolves in three layers: the member's **explicit value** (a non-nil `users`
 column; an explicit `0`/`false` is a choice) → the **installation default**

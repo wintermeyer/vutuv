@@ -450,6 +450,16 @@ notification on `/notifications` quotes, which map services appear on
 addresses and which one opens first. Members tune these on their own settings
 pages; you decide what everyone gets **until** they do.
 
+One of them is a privacy posture rather than a display detail: **whether a
+member is named among the likes of a post**. A post's own page lists the
+members who liked it under the count, and vutuv ships that as public, the way
+a like is on the networks people come from. If your installation wants the
+opposite — an intranet, say, where who agreed with what is nobody else's
+business — turn *Show my name on posts I like* off at `/admin/preferences` and
+every member who has not decided for themselves is unnamed, with the switch
+still theirs to turn back on. It never changes the **count**: a post always
+shows how many likes it got, whoever may be named.
+
 - **`/admin` → Preference defaults** (`/admin/preferences`): change the
   default for the whole installation at any time. It applies immediately to
   every member who has not set an own value — and to logged-out visitors.

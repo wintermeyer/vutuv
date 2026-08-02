@@ -574,6 +574,13 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.md =~ "Likes: 2"
     assert rendered.txt =~ "Likes: 2"
 
+    # The HTML page names the members behind those likes (issue #1233), so the
+    # siblings carry them as well — the same people, from the same query.
+    assert [%{"name" => "Fan Fervent", "username" => fan_handle}] = doc["likers"]
+    assert fan_handle == fan.username
+
+    for format <- [rendered.md, rendered.txt], do: assert(format =~ "Fan Fervent")
+
     for format <- [rendered.md, rendered.txt] do
       assert format =~ "Reactions from other networks: 1"
       assert format =~ "@alice@social.example liked this"
@@ -581,6 +588,28 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       # counts above, not something to add to them.
       assert format =~ "Already counted in the numbers above."
     end
+  end
+
+  test "post permalink: a liker who opted out is named in no format, and still counted", %{
+    post: post
+  } do
+    shy =
+      insert_activated_user(first_name: "Shy", last_name: "Sympathiser", like_attribution?: false)
+
+    :ok = Vutuv.Posts.like_post(shy, post)
+
+    rendered = formats_for("/drift_tester/posts/#{post.id}")
+    doc = Jason.decode!(rendered.json)
+
+    # These documents are the anonymous public view; their reader is never the
+    # post's author, so the one exception the HTML page makes — the author
+    # keeps seeing a liker who opted out, having been told their name in the
+    # notification at the time — deliberately has no counterpart here.
+    assert doc["likers"] == []
+    assert doc["like_count"] == 1
+
+    for format <- [rendered.md, rendered.txt, rendered.json, rendered.xml],
+        do: refute(format =~ "Sympathiser")
   end
 
   # Issue #1104. The rule these three assert together: an agent format shows

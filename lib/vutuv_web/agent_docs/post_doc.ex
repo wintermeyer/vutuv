@@ -96,6 +96,17 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # vutuv's own tally **and** what other networks did, in one figure each,
       # exactly as the buttons print them (`Posts.shown_counts/1`).
       like_count: counts.likes,
+      # ...and **who** liked it (issue #1233), the same members the HTML page
+      # names under the count, newest first and capped the same way — the count
+      # above stays the true total.
+      #
+      # Attributed members only, on every path: note the hardcoded anonymous
+      # call. The page shows a member who opted out of being named to the
+      # post's **author** (they were named in the like notification at the
+      # time), and the reader of a doc is never that author — not through a
+      # `.md` sibling and not through the authenticated `/api/2.0`, which
+      # `build/3` also serves.
+      likers: Enum.map(Posts.post_likers(post.id), &AgentDocs.person_ref/1),
       repost_count: counts.reposts,
       bookmark_count: engagement.bookmarks,
       # ...and the breakdown the card's "from other networks" panel shows when

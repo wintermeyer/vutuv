@@ -1028,6 +1028,9 @@ defmodule VutuvWeb.Router do
     # default" (Vutuv.Prefs) — the quiet reset links under the two cards.
     post("/post_display/reset", SettingsController, :reset_post_display)
     post("/maps/reset", SettingsController, :reset_maps)
+    # The visibility page's own preference group (issue #1233: who sees that
+    # you liked a post), so it too can go back to inheriting.
+    post("/privacy/reset", SettingsController, :reset_privacy_prefs)
     # Signed-in devices: DELETE one by id, or all-but-this-one (issue #794).
     delete("/devices/:id", SettingsController, :revoke_session)
     delete("/devices", SettingsController, :revoke_other_sessions)

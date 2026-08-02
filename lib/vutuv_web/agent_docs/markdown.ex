@@ -105,6 +105,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       review_line(doc.review),
       tags_line(doc.tags),
       engagement_line(doc),
+      likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
       license_line(doc.license),
       # The whole conversation (issue #1006), like the HTML permalink: every
@@ -935,6 +936,25 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     case fediverse_share(doc) do
       [] -> counts
       parts -> Enum.join([counts | parts], " · ")
+    end
+  end
+
+  @doc """
+  The members the HTML page names under the like count (issue #1233), as their
+  own line rather than a clause on the counts line: a roster grows, and the
+  plain-text renderer hard-wraps at 80 columns, so hanging it off the figures
+  would rewrap that line differently for every post. nil when nobody may be
+  named — a post whose likers all keep their names to themselves reads exactly
+  as it did before this existed.
+
+  Capped like the row, with the like count above it staying the true total, so
+  the line never claims to be the whole list. Shared with the plain-text
+  renderer.
+  """
+  def likers_line(doc) do
+    case doc[:likers] || [] do
+      [] -> nil
+      likers -> gettext("Liked by") <> ": " <> Enum.map_join(likers, ", ", & &1.name)
     end
   end
 

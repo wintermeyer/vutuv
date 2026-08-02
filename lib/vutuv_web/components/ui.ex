@@ -1517,6 +1517,15 @@ defmodule VutuvWeb.UI do
   attr(:cap, :integer, default: 5)
   attr(:size, :string, default: "2xs")
 
+  attr(:total, :integer,
+    default: nil,
+    doc:
+      "how many people the strip stands for, when that is more than `users` holds " <>
+        "(the post permalink's likes: everyone counts, but a member who opted out " <>
+        "of attribution has no face, so they ride in the `+N` instead). " <>
+        "nil = the list is everybody."
+  )
+
   attr(:overlap, :boolean,
     default: true,
     doc:
@@ -1531,7 +1540,7 @@ defmodule VutuvWeb.UI do
     assigns =
       assigns
       |> assign(:shown, Enum.with_index(shown))
-      |> assign(:overflow, length(assigns.users) - length(shown))
+      |> assign(:overflow, (assigns.total || length(assigns.users)) - length(shown))
       |> assign(:pull, assigns.overlap && "-ml-1.5")
 
     ~H"""

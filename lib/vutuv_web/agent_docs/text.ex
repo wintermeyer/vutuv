@@ -100,6 +100,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       Markdown.review_line(doc.review),
       tags_line(doc.tags),
       Markdown.engagement_line(doc),
+      Markdown.likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
       license_text(doc.license),
       section(

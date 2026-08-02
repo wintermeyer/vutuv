@@ -534,6 +534,37 @@ Counters are counted live from the `post_likes` / `post_bookmarks` /
 `post_reposts` rows and broadcast as absolute values on the post topic
 (`"post:<id>"`).
 
+### Who liked it (issue #1233)
+
+The **post permalink** — and only the permalink — names the members behind the
+like count: a row of linked faces under the post reading "Liked by NAME and N
+others" (`Posts.post_likers/2`, one query for that one post, fed to
+`<.post_card likers=…>` by `VutuvWeb.PostLive.Thread` and refreshed from the
+same `{:post_counters, …}` tick that moves the number). A feed card keeps the
+plain count: a per-card avatar row down a long timeline is a query-batching
+problem and visual noise, and there is deliberately no likes subpage.
+
+Being named is a member preference, `like_attribution?` (`Vutuv.Prefs`, group
+`:privacy`, shipped default **on**, member switch on `/settings/privacy`,
+installation default at `/admin/preferences`). Three rules hold it together:
+
+- **The count never moves.** The row's `+N` chip is the difference between the
+  total the button shows (`shown_counts/1`, so a favourite from another network
+  counts like any other like) and the faces beside it, so a member who opted
+  out rides in the `+N` — a figure that was public anyway. One member's private
+  choice must not shrink another member's tally.
+- **The post's author is the exception** (`include_hidden?: true`): they were
+  told the member's name in the like notification at the time, so hiding it
+  afterwards would be a promise we could not keep. The row says so to them
+  ("Only you see everyone here…") rather than letting them read it as public.
+- **The agent formats are anonymous-only.** `PostDoc` lists attributed members
+  alone on every path, including the authenticated `/api/2.0` reads, because a
+  doc's reader is never that author.
+
+Hidden accounts (frozen, deactivated, suspended, unreachable) and unconfirmed
+ones drop out of the row like they do from every other public people list;
+their likes still count.
+
 The engagement a bar starts from is **batched by its host, never queried per
 card**: the feed decorates each page's entries via `Posts.post_engagement_map/2`
 (one query for the page including nested thread parents), and the profile does

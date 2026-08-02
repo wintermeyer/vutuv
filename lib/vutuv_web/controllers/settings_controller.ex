@@ -142,7 +142,12 @@ defmodule VutuvWeb.SettingsController do
 
     render(conn, "privacy.html",
       user: user,
-      changeset: User.changeset(user),
+      # Over the member's *effective* preferences, like the language & display
+      # page: the like-attribution switch is a `Vutuv.Prefs` knob, so an
+      # untouched member holds nil there and would otherwise be shown an
+      # unticked box for a setting that is on (Prefs.with_effective/1 fills in
+      # the installation default the member actually gets).
+      changeset: User.changeset(Prefs.with_effective(user)),
       page_title: gettext("Visibility")
     )
   end
@@ -629,12 +634,23 @@ defmodule VutuvWeb.SettingsController do
     reset_prefs(conn, :maps, gettext("Map preferences reset to the site defaults."))
   end
 
-  defp reset_prefs(conn, group, flash) do
+  # The like-attribution switch (issue #1233) lives on the visibility page
+  # rather than under language & display, so its reset lands back there.
+  def reset_privacy_prefs(conn, _params) do
+    reset_prefs(
+      conn,
+      :privacy,
+      gettext("Your likes follow the site default again."),
+      ~p"/settings/privacy"
+    )
+  end
+
+  defp reset_prefs(conn, group, flash, redirect_to \\ ~p"/settings/preferences") do
     {:ok, _user} = Prefs.reset_group(conn.assigns[:user], group)
 
     conn
     |> put_flash(:info, flash)
-    |> redirect(to: ~p"/settings/preferences")
+    |> redirect(to: redirect_to)
   end
 
   # ── Signed-in devices (issue #794) ──

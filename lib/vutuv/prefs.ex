@@ -71,6 +71,12 @@ defmodule Vutuv.Prefs do
       max: 50,
       group: :post_display
     },
+    # Whether a member's likes are shown with their name (issue #1233). Public
+    # by default, the way a like has always been on the networks people come
+    # from — and the way a reaction from another network already reads on the
+    # same card. An installation that wants the opposite posture flips this one
+    # default at /admin/preferences and every untouched member follows.
+    %Pref{key: :like_attribution?, type: :boolean, default: true, group: :privacy},
     %Pref{key: :map_google?, type: :boolean, default: true, group: :maps},
     %Pref{key: :map_openstreetmap?, type: :boolean, default: true, group: :maps},
     %Pref{key: :map_apple?, type: :boolean, default: true, group: :maps},
@@ -117,6 +123,9 @@ defmodule Vutuv.Prefs do
   def label(:notification_post_lines),
     do: Gettext.gettext(VutuvWeb.Gettext, "Lines in notifications")
 
+  def label(:like_attribution?),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Show my name on posts I like")
+
   def label(:map_google?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Google Maps")
   def label(:map_openstreetmap?), do: Gettext.gettext(VutuvWeb.Gettext, "Show OpenStreetMap")
   def label(:map_apple?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Apple Maps")
@@ -133,6 +142,18 @@ defmodule Vutuv.Prefs do
         "How much of a post a notification quotes before it is cut off."
       )
 
+  # Says out loud what the switch does **not** do, because both limits would
+  # otherwise be discovered the hard way: the post's author still sees you (we
+  # named you in their notification the moment you liked, so hiding it from
+  # them afterwards would be a promise we cannot keep), and the count never
+  # moves (your private choice must not shrink somebody else's tally).
+  def hint(:like_attribution?),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "When off, other members no longer see you among the likes of a post. The author of the post still does: we named you in the notification they got when you liked it. Either way the post keeps the same number of likes."
+      )
+
   def hint(:default_map_service),
     do:
       Gettext.gettext(
@@ -144,6 +165,7 @@ defmodule Vutuv.Prefs do
 
   @doc "The human label of a pref group."
   def group_label(:post_display), do: Gettext.gettext(VutuvWeb.Gettext, "Posts")
+  def group_label(:privacy), do: Gettext.gettext(VutuvWeb.Gettext, "Privacy")
   def group_label(:maps), do: Gettext.gettext(VutuvWeb.Gettext, "Maps")
 
   @doc "The human label of one value of a pref (select options, current-value lines)."

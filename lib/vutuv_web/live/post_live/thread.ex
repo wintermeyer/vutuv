@@ -48,6 +48,7 @@ defmodule VutuvWeb.PostLive.Thread do
 
   alias Vutuv.Fediverse
   alias Vutuv.Posts
+  alias Vutuv.Prefs
   alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
@@ -161,7 +162,7 @@ defmodule VutuvWeb.PostLive.Thread do
     # in-process bar applies the payload (`ActionBar.apply_counters/2`). The
     # id mirrors post_card's `actions_id` for entry-less thread nodes.
     send_update(ActionsComponent, id: "post-actions-#{post_id}", counters: payload)
-    {:noreply, socket}
+    {:noreply, refresh_likers(socket, post_id, payload)}
   end
 
   def handle_info({:post_deleted, %{post_id: _}}, socket) do
@@ -192,6 +193,7 @@ defmodule VutuvWeb.PostLive.Thread do
         socket
         |> assign(:window, nil)
         |> assign(:focus, nil)
+        |> assign(:likers, nil)
         |> assign(:remote_replies, %{})
         |> assign(:note_marks, Fediverse.mark_lookup([], nil))
 
@@ -235,14 +237,54 @@ defmodule VutuvWeb.PostLive.Thread do
           remote |> Map.values() |> List.flatten() |> Fediverse.refresh_async()
         end
 
+        engagement = Posts.post_engagement_map(ids, viewer)
+
         socket
         |> assign(:window, window)
         |> assign(:focus, Enum.find(posts, &(&1.id == post.id)) || post)
-        |> assign(:engagement, Posts.post_engagement_map(ids, viewer))
+        |> assign(:engagement, engagement)
+        |> assign(:likers, likers(post, viewer, engagement[post.id]))
         |> assign(:viewer_follows, follows)
         |> assign(:remote_replies, remote)
         |> assign(:note_marks, note_marks)
         |> subscribe_shown(ids)
+    end
+  end
+
+  # The "Liked by" row of the permalinked post (issue #1233) — this page's post
+  # and no other, so it is one small query per load, not one per card.
+  #
+  # `total` is the figure the like button itself shows (`Posts.shown_counts/1`,
+  # so a favourite from another network counts like any other like): the row's
+  # faces plus its `+N` therefore add up to exactly the number above them, and
+  # a member who opted out of being named rides in the `+N` instead of
+  # vanishing from the tally.
+  #
+  # The author sees the opted-out likers too (`include_hidden?`) — they were
+  # named in the like notification at the time — and the row tells them that
+  # what they are looking at is not what everybody else sees (`private?`).
+  defp likers(post, viewer, engagement) do
+    author? = viewer != nil and viewer.id == post.user_id
+    users = Posts.post_likers(post.id, include_hidden?: author?)
+
+    %{
+      users: users,
+      total: (engagement && Posts.shown_counts(engagement).likes) || length(users),
+      private?: author? and Enum.any?(users, &(not Prefs.get(&1, :like_attribution?)))
+    }
+  end
+
+  # A like landed (or was withdrawn) on the post this page is about while it was
+  # open: the counters payload re-renders the bar, so the faces under it have to
+  # move with it or the row and the number would tell different stories. Only
+  # for the focus post — a like on a reply leaves this row alone.
+  defp refresh_likers(socket, post_id, payload) do
+    focus = socket.assigns.focus
+
+    if focus && focus.id == post_id do
+      assign(socket, :likers, likers(focus, socket.assigns.current_user, payload))
+    else
+      socket
     end
   end
 
@@ -320,6 +362,7 @@ defmodule VutuvWeb.PostLive.Thread do
             viewer={@current_user}
             viewer_follow={@viewer_follows[@focus.user_id]}
             engagement={@engagement[@focus.id]}
+            likers={@likers}
             mode={:full}
             conn_or_socket={@socket}
           />
@@ -339,6 +382,7 @@ defmodule VutuvWeb.PostLive.Thread do
                 engagement={@engagement}
                 remote_replies={@remote_replies}
                 note_marks={@note_marks}
+                likers={@likers}
                 auto_scroll?={@auto_scroll?}
                 conn_or_socket={@socket}
               />
@@ -351,6 +395,7 @@ defmodule VutuvWeb.PostLive.Thread do
                 engagement={@engagement}
                 remote_replies={@remote_replies}
                 note_marks={@note_marks}
+                likers={@likers}
                 auto_scroll?={@auto_scroll?}
                 conn_or_socket={@socket}
               />

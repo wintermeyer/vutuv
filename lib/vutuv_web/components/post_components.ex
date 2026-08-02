@@ -162,6 +162,16 @@ defmodule VutuvWeb.PostComponents do
         "action bar so it skips its own mount query; nil = the bar loads it itself"
   )
 
+  attr(:likers, :any,
+    default: nil,
+    doc:
+      "the \"Liked by\" row (issue #1233) as " <>
+        "%{users: [%User{}], total: integer, private?: boolean}, or nil for no row. " <>
+        "Only the post permalink passes it — a per-card avatar row down a long " <>
+        "feed is a query-batching problem and visual noise, so the feed keeps " <>
+        "the plain count"
+  )
+
   def post_card(assigns) do
     # The reader's post-display preferences (per-breakpoint line clamp +
     # hyphenation), fed onto the body as CSS custom properties below. A surface
@@ -864,6 +874,7 @@ defmodule VutuvWeb.PostComponents do
             surface={@surface}
             conn_or_socket={@conn_or_socket}
             mode={Map.get(node, :mode, :preview)}
+            likers={Map.get(node, :likers)}
             show_reply_banner={reply_banner?(node, @connected?, @indent?)}
           />
         <% end %>
@@ -2283,6 +2294,13 @@ defmodule VutuvWeb.PostComponents do
         "for themselves (`Vutuv.Fediverse.liked_ids/2` and friends)"
   )
 
+  attr(:likers, :any,
+    default: nil,
+    doc:
+      "the permalinked post's \"Liked by\" row (issue #1233); it rides that " <>
+        "one card, never the replies around it"
+  )
+
   attr(:conn_or_socket, :any, required: true)
 
   def thread_conversation(assigns) do
@@ -2312,6 +2330,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:engagement, :map, default: %{})
   attr(:remote_replies, :map, default: %{})
   attr(:note_marks, :any, default: nil)
+  attr(:likers, :any, default: nil)
   attr(:conn_or_socket, :any, required: true)
 
   def thread_window_conversation(assigns) do
@@ -2399,6 +2418,10 @@ defmodule VutuvWeb.PostComponents do
         reposters: nil,
         entry_id: nil,
         mode: if(focus?, do: :full, else: :preview),
+        # The "Liked by" row rides the permalinked post alone (issue #1233):
+        # every other card in the conversation is an ordinary preview. `if`,
+        # not `&&` — a false would reach the card as a truthy-looking assign.
+        likers: if(focus?, do: assigns[:likers]),
         focus?: focus?,
         scroll?: assigns.auto_scroll? and focus? and post.id != top_id
       }
@@ -2931,6 +2954,8 @@ defmodule VutuvWeb.PostComponents do
             }
             tags={@post.tags}
           />
+
+          <.liked_by :if={@likers} likers={@likers} />
 
           <%!-- The action bar (like / repost / bookmark + counters). On a
           LiveView host it is an in-process LiveComponent that re-renders in
@@ -3701,6 +3726,81 @@ defmodule VutuvWeb.PostComponents do
           )}
         <% end %>
       </span>
+    </div>
+    """
+  end
+
+  # **Who** liked this post (issue #1233), on the permalink only: the faces of
+  # the members whose `like_attribution?` preference lets this reader see them,
+  # and a sentence naming the newest one.
+  #
+  # Until now a like was a number, and the one moment an author ever learned
+  # who was behind it was the notification — a month later the answer lived in
+  # an old notification list. A favourite from another network, meanwhile, has
+  # named its account right here on the card since issue #1068, so vutuv's own
+  # members were the one anonymous half of a post's likes.
+  #
+  # Three things it deliberately does **not** do. It does not move the **count**:
+  # the `+N` chip is the difference between the total the button shows and the
+  # faces beside it, so a member's private choice never shrinks somebody else's
+  # tally and the chip leaks nothing past a figure that was already public. It
+  # does not appear on a **feed** card: a per-card avatar row down a long
+  # timeline is a query-batching problem and visual noise. And it does not lead
+  # to a **likes subpage** — one row of faces is the whole feature.
+  #
+  # `private?` is the author's case: they see members who opted out of being
+  # named (we told them the name in the like notification at the time, so
+  # hiding it afterwards would be a promise we could not keep), and the line
+  # under the row says so rather than letting them read the row as public.
+  #
+  # Spaced rather than shingled, and `xs` rather than the `2xs` of the repost
+  # banner: these are people the reader may well want to look up, so each face
+  # is a finger-sized target and a picture-less member's monogram stays whole.
+  attr(:likers, :map, required: true)
+
+  defp liked_by(%{likers: %{users: []}} = assigns), do: ~H""
+
+  defp liked_by(assigns) do
+    likers = assigns.likers
+    total = max(likers.total, length(likers.users))
+
+    assigns =
+      assigns
+      |> assign(:primary, hd(likers.users))
+      |> assign(:total, total)
+      |> assign(:others, total - 1)
+
+    ~H"""
+    <div class="mt-3" data-post-likers={@total}>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <%!-- The faces link to each member; the sentence beside them names the
+        newest, so the stack itself is decoration for assistive tech. --%>
+        <.avatar_stack
+          users={@likers.users}
+          total={@total}
+          size="xs"
+          overlap={false}
+          cap={Posts.likers_shown()}
+        />
+        <span class="min-w-0 text-sm text-slate-600 dark:text-slate-400">
+          <%= if @others == 0 do %>
+            {gettext("Liked by %{name}", name: full_name(@primary))}
+          <% else %>
+            {ngettext(
+              "Liked by %{name} and %{formatted} other",
+              "Liked by %{name} and %{formatted} others",
+              @others,
+              name: full_name(@primary),
+              formatted: compact_count(@others)
+            )}
+          <% end %>
+        </span>
+      </div>
+      <p :if={@likers.private?} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Only you see everyone here: some of these members are not named to other readers."
+        )}
+      </p>
     </div>
     """
   end

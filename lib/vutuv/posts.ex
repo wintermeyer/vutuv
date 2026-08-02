@@ -48,7 +48,10 @@ defmodule Vutuv.Posts do
   """
 
   import Ecto.Query
-  import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+
+  import Vutuv.Moderation.Query,
+    only: [account_hidden: 1, account_confirmed_row: 1, account_hidden_row: 1]
+
   import Vutuv.SearchText, only: [contains: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
@@ -80,6 +83,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
   alias Vutuv.Posts.TopPosters
+  alias Vutuv.Prefs
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
   alias Vutuv.Tags
@@ -112,6 +116,10 @@ defmodule Vutuv.Posts do
   @thread_skeleton_limit 1000
   @pending_max_age_hours 24
   @max_tags 5
+  # How many likers the permalink names before the rest fold into the avatar
+  # stack's `+N` chip (issue #1233). The same cap the row and the agent-format
+  # siblings use, so both name the same people.
+  @likers_shown 5
 
   def max_images_per_post, do: Keyword.fetch!(config(), :max_per_post)
   def max_image_filesize, do: Keyword.fetch!(config(), :max_filesize)
@@ -1055,6 +1063,67 @@ defmodule Vutuv.Posts do
 
   defp has_likes?(post_id) when is_binary(post_id) do
     Repo.exists?(from(l in PostLike, where: l.post_id == ^post_id))
+  end
+
+  @doc """
+  **Who** liked a post, newest first — the faces the permalink shows under the
+  like count (issue #1233), and the names the agent-format siblings list.
+
+  A bare number told the author nothing: the only moment they ever learned who
+  liked their post was the notification, so a month later the answer lived in
+  an old notification list. Meanwhile a favourite from another network has
+  named its account on the same card since issue #1068, which left vutuv's own
+  members as the one anonymous half of a post's likes.
+
+  Three rules the query encodes:
+
+  * **Attribution is per member.** A member who turned `like_attribution?` off
+    (settings → Visibility, installation default at /admin/preferences) is left
+    out. NULL there means "inherit the installation default", so the filter
+    coalesces against the resolved default rather than testing the column.
+  * **...except for the post's author** (`include_hidden?: true`), who was told
+    the member's name in the like notification the moment it happened. Hiding
+    it from them afterwards would be a promise we cannot keep, and it is their
+    own post's page.
+  * **The count is not touched.** This list is capped and filtered; the like
+    total (`shown_counts/1`) stays the true total, and the renderer folds the
+    difference into the `+N` chip — a number that was public anyway.
+
+  Hidden accounts (frozen, deactivated, suspended, unreachable) and unconfirmed
+  ones drop out like they do from every other public people list; their likes
+  still count, they simply have no face to show.
+  """
+  def post_likers(post_id, opts \\ []) when is_binary(post_id) do
+    # Matches `<.avatar_stack>`'s cap, so the row never queries rows it would
+    # only fold into `+N` — and the agent formats name exactly the same people
+    # the page does.
+    limit = Keyword.get(opts, :limit, @likers_shown)
+
+    from(l in PostLike,
+      join: u in User,
+      on: u.id == l.user_id,
+      where: l.post_id == ^post_id,
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      # UUID v7: id order is creation order, so this is newest liker first.
+      order_by: [desc: l.id],
+      limit: ^limit,
+      select: u
+    )
+    |> scope_attributed(Keyword.get(opts, :include_hidden?, false))
+    |> Repo.all()
+  end
+
+  @doc "How many likers the permalink names before the rest fold into `+N`."
+  def likers_shown, do: @likers_shown
+
+  defp scope_attributed(query, true), do: query
+
+  defp scope_attributed(query, false) do
+    default = Prefs.default(:like_attribution?)
+
+    from([_l, u] in query,
+      where: coalesce(field(u, :like_attribution?), type(^default, :boolean)) == true
+    )
   end
 
   @doc """
