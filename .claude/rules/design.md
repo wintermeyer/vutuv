@@ -29,7 +29,12 @@ LiveView can sit on either style.
    `.profiles` (+ the `.profiles--tags` variant whose rows grow to fit a
    `.profile-tags` line: up to 4 small tag links plus a `.profile-tags__more`
    "+N more tags" overflow count, used by the most-followed listing via
-   `card_list`), `ol.tags`/`.upvote`, `ul.thumbs` (flex rows: capped
+   `card_list`; `card_list` also takes an optional `filed_names` assign that
+   swaps each row's link text for `UserHelpers.filed_name/1` ("Özil, Mesut") —
+   only the member directory's letter pages pass it, because they are the one
+   listing sorted by last name, and a natural-order column under a heading of
+   "M" makes the reader hunt for the word the order is built on),
+   `ol.tags`/`.upvote`, `ul.thumbs` (flex rows: capped
    thumbnail + truncating URL), `.reorder*` (the owner's drag-and-drop ordering
    tool shared by every orderable section page — links, phone numbers, addresses,
    social media accounts, emails: `.reorder__item` draggable tile =

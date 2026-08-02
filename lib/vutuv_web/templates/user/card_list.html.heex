@@ -12,6 +12,10 @@ muted_by_id (followee_id => muted?), so other listings render no mute control. -
 tags_by_id (user_id => %{top: [user_tag], total: n}), so other listings render
 no tag line and the rows keep their compact height. --%>
 <% tags_by_id = assigns[:tags_by_id] %>
+<%!-- Optional filing order: only the member directory passes filed_names, since
+it is the one listing sorted by last name ("Özil, Mesut"). Every other listing
+shows the name the way its owner writes it. --%>
+<% filed_names? = assigns[:filed_names] || false %>
 <ul class={["button-list profiles", tags_by_id && "profiles--tags"]}>
   <%= for user <- @users do %>
     <li>
@@ -31,7 +35,7 @@ no tag line and the rows keep their compact height. --%>
         <% end %>
       </div>
       <% tag_summary = tags_by_id && Map.get(tags_by_id, user.id) %>
-      <p><strong><%= link full_name(user), to: ~p"/#{user}" %></strong>
+      <p><strong><%= link (if filed_names?, do: filed_name(user), else: full_name(user)), to: ~p"/#{user}" %></strong>
       <%= Map.get_lazy(work_info_by_id, user.id, fn -> work_information_string(user, @work_string_length) end) %>
       <span :if={tag_summary} class="profile-tags">
         <.link :for={user_tag <- tag_summary.top} href={~p"/tags/#{user_tag.tag.slug}"}>

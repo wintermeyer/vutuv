@@ -19,6 +19,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobPostingDoc
   alias VutuvWeb.AgentDocs.PostDoc
+  alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
 
   alias Vutuv.Tags.UserTag
@@ -154,21 +155,38 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   The member-directory overview (`/system/members`): one entry per letter bucket
   with its member count and letter-page URL. Zero-count letters ride along
   so the doc mirrors the HTML page's full A-Z strip.
+
+  `total` is what the directory lists, `members_total` the whole membership
+  (`Vutuv.Accounts.count_users/0`) — a reader that only saw the first would
+  take it for the site's size.
   """
-  def build_directory_index(entries, total) do
+  def build_directory_index(entries, total, members_total) do
     AgentDocs.doc_meta("directory", "/system/members")
     |> Map.merge(%{
       title: gettext("Member directory"),
-      description:
-        gettext(
-          "All members who allow search engines to index their profile, grouped by the first letter of their last name."
-        ),
+      description: directory_description(total, members_total),
       total: total,
+      members_total: members_total,
       letters:
         Enum.map(entries, fn %{letter: letter, count: count} ->
           %{letter: letter, count: count, url: AgentDocs.abs_url("/system/members/#{letter}")}
         end)
     })
+  end
+
+  # The Markdown and text renderings carry no counts of their own, so the
+  # gap between the two figures has to live in the description — the same
+  # explanation the HTML page prints under its heading.
+  defp directory_description(total, members_total) do
+    gettext(
+      "All members who allow search engines to index their profile, grouped by the first letter of their last name."
+    ) <>
+      " " <>
+      gettext(
+        "%{listed} of %{total} members are listed here; the others do not open their profile to search engines.",
+        listed: UI.delimited_count(total),
+        total: UI.delimited_count(members_total)
+      )
   end
 
   @doc """

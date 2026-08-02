@@ -41,11 +41,14 @@
     <%= if @users == [] do %>
       <p class="card__empty">{gettext("No members with this initial yet.")}</p>
     <% else %>
+      <%!-- filed_names: the rows are sorted by last name, so they are filed by
+      it too ("Özil, Mesut"). Every other listing keeps the natural order. --%>
       {VutuvWeb.UserHTML.card_list(%{
         conn: @conn,
         users: @users,
         current_user: @current_user,
         current_user_id: @current_user_id,
+        filed_names: true,
         work_string_length: 60,
         work_info_by_id: @work_info_by_id,
         tags_by_id: @tags_by_id,

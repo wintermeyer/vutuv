@@ -36,6 +36,30 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The member's name the way a directory files it: `"Özil, Mesut"` — surname
+  first, everything else after the comma. Only the member directory
+  (`/system/members/:letter`) uses it, because that is the one listing sorted
+  by last name: a column of "Vorname Nachname" under a heading of "M" leaves
+  the reader scanning for the word the order is built on.
+
+  Falls back to `full_name/1` whenever there is no surname to file under (the
+  directory buckets such a member by their first name, so the row must show
+  that name rather than a stray comma).
+  """
+  def filed_name(%User{last_name: last_name} = user) do
+    given =
+      [user.honorific_prefix, user.first_name, user.honorific_suffix]
+      |> Enum.reject(&(&1 == "" || &1 == nil))
+      |> Enum.join(" ")
+
+    case String.trim(last_name || "") do
+      "" -> full_name(user)
+      surname when given == "" -> surname
+      surname -> surname <> ", " <> given
+    end
+  end
+
+  @doc """
   The `{label, value}` options for the Basics form's employment-status select
   (issue #870): the two real statuses derived from the schema's single source
   (`User.employment_statuses/0` mapped through `User.employment_status_label/1`,

@@ -10,6 +10,7 @@ defmodule VutuvWeb.DirectoryController do
 
   use VutuvWeb, :controller
 
+  alias Vutuv.Accounts
   alias Vutuv.Directory
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
@@ -22,15 +23,22 @@ defmodule VutuvWeb.DirectoryController do
     entries = Directory.letter_entries()
     total = Directory.total(entries)
 
+    # The whole membership beside the listed part, so the directory's total
+    # cannot be read as "this is how many members there are". It comes from
+    # Accounts.count_users/0, the same definition the top bar's live member
+    # total uses, or the two figures on one page would disagree.
+    members_total = Accounts.count_users()
+
     AgentDocs.respond(conn,
       html: fn conn ->
         render(conn, "index.html",
           page_title: gettext("Member directory"),
           entries: entries,
-          total: total
+          total: total,
+          members_total: members_total
         )
       end,
-      doc: fn -> ListDocs.build_directory_index(entries, total) end
+      doc: fn -> ListDocs.build_directory_index(entries, total, members_total) end
     )
   end
 

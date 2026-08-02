@@ -172,8 +172,23 @@ paginated at 50 members per page (accents folded, DIN 5007; names without a
 letter share an "other" bucket), linked in the footer of every page, so
 link-following crawlers and humans reach every indexable profile.
 
+A letter page files each row under the name it is sorted by ("Özil, Mesut",
+`UserHelpers.filed_name/1`, switched on by the `filed_names` assign the
+directory alone passes to the shared `card_list`); a column of "Vorname
+Nachname" under a heading of "M" leaves the reader scanning for the word the
+order is built on. The avatar's alt text and the agent docs keep the canonical
+name, so only the visible listing changes.
+
 Members with `noindex?` never appear here or in the sitemap, and their profile
 answers with the robots meta tag *and* an `X-Robots-Tag` header.
+
+The overview therefore prints **two** figures: what it lists, and the whole
+membership (`Vutuv.Accounts.count_users/0`, the same definition behind the top
+bar's live member total). Without the second one the directory's count reads
+as the site's size, and every member who keeps their profile out of search
+engines looks like a member the site does not have. The agent formats carry
+both as `total` and `members_total`, and the doc description spells the gap out
+in words for the Markdown and text renderings, which print no counts of their own.
 
 It lives under `/system/` — the one reserved word all future site pages share,
 so new pages stop burning root path words members could have as handles.

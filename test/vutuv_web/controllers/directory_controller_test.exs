@@ -38,6 +38,30 @@ defmodule VutuvWeb.DirectoryControllerTest do
       assert html =~ ~s(data-letter="x" data-count="0")
     end
 
+    test "names the whole membership beside the listed count", %{conn: conn} do
+      # Two of the three confirmed members allow search engines. Naming only
+      # the listed figure would read as the whole membership, so the page
+      # says both and explains who is missing.
+      html = get(conn, ~p"/system/members") |> html_response(200)
+
+      assert html =~ "All 2 members"
+      assert html =~ "There are 3 members in total"
+    end
+
+    test "explains the gap in German too", %{conn: conn} do
+      # The German render is what real visitors get, and a gettext merge can
+      # fuzzy-fill a fresh msgid with an unrelated translation, so the
+      # sentence is asserted by name rather than trusted.
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> get(~p"/system/members")
+        |> html_response(200)
+
+      assert html =~ "Insgesamt gibt es 3 Mitglieder."
+      assert html =~ "Wer sein Profil nicht für Suchmaschinen freigibt, erscheint hier nicht."
+    end
+
     test "the directory page itself is indexable", %{conn: conn} do
       conn = get(conn, ~p"/system/members")
 
@@ -54,17 +78,27 @@ defmodule VutuvWeb.DirectoryControllerTest do
 
       html = get(conn, ~p"/system/members/m") |> html_response(200)
 
-      assert html =~ "Jonas Maler"
-      jonas = :binary.match(html, "Jonas Maler") |> elem(0)
-      anna = :binary.match(html, "Anna Meyer") |> elem(0)
-      zoe = :binary.match(html, "Zoe Meyer") |> elem(0)
+      assert html =~ "Maler, Jonas"
+      jonas = :binary.match(html, "Maler, Jonas") |> elem(0)
+      anna = :binary.match(html, "Meyer, Anna") |> elem(0)
+      zoe = :binary.match(html, "Meyer, Zoe") |> elem(0)
       assert jonas < anna and anna < zoe
+    end
+
+    test "files each row by last name, the way it is sorted", %{conn: conn} do
+      # The page is one letter of an alphabet built from last names, so the
+      # row leads with the name it is filed under. The avatar's alt text keeps
+      # the natural order, which is why this asserts the link text.
+      html = get(conn, ~p"/system/members/o") |> html_response(200)
+
+      assert html =~ ">Özil, Mesut</a>"
+      refute html =~ ">Mesut Özil</a>"
     end
 
     test "folds accented names into their base letter", %{conn: conn} do
       html = get(conn, ~p"/system/members/o") |> html_response(200)
 
-      assert html =~ "Mesut Özil"
+      assert html =~ "Özil, Mesut"
     end
 
     test "never lists an opted-out member", %{conn: conn} do

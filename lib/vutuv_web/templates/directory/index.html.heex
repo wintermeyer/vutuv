@@ -12,6 +12,16 @@
       )}
     </p>
 
+    <%!-- Without this line the listed count reads as the whole membership, so
+    every member who keeps their profile out of search engines looks like a
+    member the site does not have. --%>
+    <p class="text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "There are %{total} members in total; anyone who does not open their profile to search engines is not listed here.",
+        total: delimited_count(@members_total)
+      )}
+    </p>
+
     <%!-- The A-Z strip: letters with members link to their page, empty ones
     render as muted tiles so the strip always shows the whole alphabet. Plain
     <a>/<span> tags keep the attribute order stable for the tests. --%>

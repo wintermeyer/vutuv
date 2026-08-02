@@ -1051,13 +1051,25 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     # must link both letter pages.
     assert_fact_everywhere(rendered, "/system/members/g")
     assert_fact_everywhere(rendered, "/system/members/f")
-    assert Jason.decode!(rendered.json)["type"] == "directory"
+
+    doc = Jason.decode!(rendered.json)
+    assert doc["type"] == "directory"
+
+    # The listed count is only part of the picture: every format also names
+    # the whole membership, so the members who keep their profile out of
+    # search engines are explained rather than silently absent.
+    assert doc["members_total"] >= doc["total"]
+    assert_fact_everywhere(rendered, "#{doc["members_total"]} member")
   end
 
   test "member directory letter page in every format", %{tag: tag} do
     rendered = formats_for("/system/members/g")
 
-    assert_fact_everywhere(rendered, "Greta Gradient")
+    # The HTML files each member under their last name ("Gradient, Greta")
+    # while the docs carry the canonical name, so the shared fact is the name
+    # itself rather than one particular order of its parts.
+    assert_fact_everywhere(rendered, "Gradient")
+    assert_fact_everywhere(rendered, "Greta")
     # Each listed member's tags ride along in every format, like their name.
     assert_fact_everywhere(rendered, tag.name)
     assert Jason.decode!(rendered.json)["type"] == "listing"
