@@ -121,15 +121,9 @@ defmodule VutuvWeb.PageController do
   # that flipping :ai_crawler_policy reaches crawlers promptly; Googlebot keeps
   # its own robots.txt copy for up to 24h regardless).
   #
-  # Setting this is also what un-breaks the two files in Safari. Without an
-  # explicit header Plug falls back to `max-age=0, private, must-revalidate`,
-  # and Safari 26 on macOS renders such a top-level text/plain document as a
-  # blank page: the response arrives complete (nginx logs a 200 with the full
-  # body, the body decodes fine), but WebKit ends up with
-  # `<html><head></head><body></body></html>`, no `<pre>` in it, and leaves
-  # the progress bar spinning. Chrome shows the same response without complaint.
-  # These two were the only text/plain URLs in the app without an explicit
-  # cache-control, and the only ones that came up blank (2026-08-02).
+  # This is NOT what makes them readable in Safari, though it was the first
+  # suspect: the `nosniff` header is, and it comes from the :machine_docs
+  # pipeline in the router, which explains the whole trap.
   defp discovery_cache_headers(conn) do
     put_resp_header(conn, "cache-control", "public, max-age=3600")
   end

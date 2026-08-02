@@ -79,15 +79,7 @@ defmodule VutuvWeb.PageControllerTest do
 
   # Both discovery files answer every visitor with the same bytes, so they are
   # `public` cacheable like /sitemap.xml and /.well-known/security.txt beside
-  # them. Without an explicit header Plug falls back to
-  # `max-age=0, private, must-revalidate`, and Safari 26 on macOS then renders
-  # such a top-level text/plain document as an EMPTY page: the response arrives
-  # complete (nginx logs a 200 with the full body), but WebKit builds
-  # `<html><head></head><body></body></html>` with no `<pre>` in it and leaves
-  # the progress bar hanging. Chrome shows the same response fine. Every other
-  # text/plain URL in this app sets `public` and renders in Safari, and these
-  # two were the only ones that did not, which is what made them look broken
-  # (2026-08-02).
+  # them in the router.
   describe "the discovery files' cache headers" do
     test "robots.txt and llms.txt are never marked private" do
       for path <- ["/robots.txt", "/llms.txt"] do
@@ -95,6 +87,40 @@ defmodule VutuvWeb.PageControllerTest do
 
         assert header =~ "public", "#{path} should be publicly cacheable, got: #{header}"
         refute header =~ "private", "#{path} must not be private, got: #{header}"
+      end
+    end
+  end
+
+  # The header that decides whether a human can read these files at all.
+  #
+  # These routes deliberately skip the :browser pipeline (so a crawler sending
+  # `Accept: text/plain` is not turned away by `accepts ["html"]`), which also
+  # dropped `put_secure_browser_headers` and with it `nosniff`. Safari 26 on
+  # macOS then sniffs the body it was handed, and past ~512 bytes that body is
+  # still zstd-compressed (Bandit compresses on the way out). Compressed bytes
+  # look binary, so Safari decides a `text/plain` document is not text and
+  # renders NOTHING: empty `<body>`, no `<pre>`, progress bar spinning forever.
+  # Chrome shows the same response fine, which is what made this look like a
+  # vutuv-only mystery.
+  #
+  # Measured against production on 2026-08-02: a 511-byte encoded body renders,
+  # 623 does not, and the same 1185-byte body renders the moment this header is
+  # on it. /.well-known/security.txt escaped it only by being 144 bytes, and
+  # /<slug>.txt only by riding :browser. `mix test` sees no compression at all,
+  # so nothing here can reproduce the blank page: this asserts the header, and
+  # the header is the fix.
+  describe "the machine-facing documents' nosniff header" do
+    test "every no-pipeline document declares nosniff" do
+      for path <- [
+            "/robots.txt",
+            "/llms.txt",
+            "/sitemap.xml",
+            "/.well-known/security.txt",
+            "/.well-known/agent-skills/index.json"
+          ] do
+        assert ["nosniff"] =
+                 build_conn() |> get(path) |> get_resp_header("x-content-type-options"),
+               "#{path} must send nosniff or Safari renders it blank once it grows past ~512 encoded bytes"
       end
     end
   end

@@ -43,6 +43,31 @@ defmodule VutuvWeb.Router do
     plug(Plugs.NoIndex)
   end
 
+  # The machine-facing documents (robots.txt, llms.txt, the sitemaps, the RSS
+  # feeds, the .well-known files, the ActivityPub endpoints) run without the
+  # :browser pipeline on purpose, so `accepts ["html"]` cannot turn away a
+  # crawler that asks for text/plain. They lost `put_secure_browser_headers`
+  # along with it, and one of its headers turns out not to be optional here.
+  #
+  # Every one of these declares an exact Content-Type, so nosniff is simply
+  # true. Without it Safari sniffs, and it sniffs the body it was handed, which
+  # for anything past ~512 bytes is still zstd-compressed (Bandit compresses on
+  # the way out). Compressed bytes look like binary, so Safari concludes a
+  # `text/plain` document is not text and renders NOTHING: no `<pre>`, an empty
+  # `<body>`, and a progress bar that never finishes. That is why /robots.txt
+  # and /llms.txt were blank in Safari while Chrome showed them, and why
+  # /.well-known/security.txt was fine (144 bytes, under the sniff window) and
+  # /<slug>.txt was fine too (it rides :browser and had the header all along).
+  # Measured 2026-08-02: 511 encoded bytes renders, 623 does not, and the same
+  # 1185-byte body renders as soon as this header is on it.
+  pipeline :machine_docs do
+    plug(:put_nosniff)
+  end
+
+  defp put_nosniff(conn, _opts) do
+    Plug.Conn.put_resp_header(conn, "x-content-type-options", "nosniff")
+  end
+
   pipeline :user_pipe do
     # Keep the per-user detail pages (phone numbers, emails, addresses, …) out
     # of search indexes. Runs first so the header is present even when a later
@@ -105,9 +130,12 @@ defmodule VutuvWeb.Router do
   end
 
   # Served from the app (not priv/static, which is gitignored) and with no
-  # pipeline so crawlers that send "Accept: text/plain" are not turned away
-  # by the browser pipeline's `accepts ["html"]`.
+  # browser pipeline, so crawlers that send "Accept: text/plain" are not turned
+  # away by its `accepts ["html"]`. :machine_docs adds back the one secure
+  # header these documents cannot do without (see the pipeline).
   scope "/", VutuvWeb do
+    pipe_through(:machine_docs)
+
     get("/robots.txt", PageController, :robots)
     # The agent-format discovery file (llms.txt convention): documents the
     # .md/.txt/.json/.vcf URL scheme; see VutuvWeb.AgentDocs.
