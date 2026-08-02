@@ -33,7 +33,7 @@ defmodule VutuvWeb.MarkdownVerifiedLinksTest do
       assert html =~ ~s(class="verified-author-link")
       assert html =~ ~s(href="https://example.com/~alice")
       # ...and the mark sits inside the link it belongs to.
-      assert html =~ ~r{<a[^>]*>[^<]*<svg class="verified-author-link".*?</svg></a>}s
+      assert html =~ ~r{<a[^>]*>.*<svg class="verified-author-link".*?</svg></span></a>}s
     end
 
     test "marks a Markdown link and keeps the author's own anchor text" do
@@ -44,7 +44,9 @@ defmodule VutuvWeb.MarkdownVerifiedLinksTest do
         )
 
       assert html =~ ~s(class="verified-author-link")
-      assert html =~ "something about bridges"
+      # The glue box that keeps the tick on the line (#1307) splits the
+      # last word off in the markup, so read the label with the tags taken out.
+      assert String.replace(html, ~r/<[^>]*>/, "") =~ "something about bridges"
       # The profile entry's own label is deliberately NOT substituted: the
       # anchor text is the author's words inside their own sentence.
       refute html =~ "Alice's notebook"
@@ -140,7 +142,76 @@ defmodule VutuvWeb.MarkdownVerifiedLinksTest do
         )
 
       assert html =~ "verified-author-link"
-      assert String.ends_with?(html, "</svg></a>")
+      assert String.ends_with?(html, "</svg></span></a>")
+    end
+  end
+
+  describe "the mark cannot be left alone on the next line (reported on #1307)" do
+    # Chrome and Firefox treat the mark's `<svg>` as an atomic inline and allow
+    # a line break in front of it, so a link that ended flush with the line put
+    # the tick on the next line by itself. The renderer therefore pulls the end
+    # of the link's own text into the mark's `white-space: nowrap` box.
+    defp glued(html) do
+      case Regex.run(~r{<span class="verified-author-glue">(.*?)<svg}s, html,
+             capture: :all_but_first
+           ) do
+        [tail] -> tail
+        nil -> nil
+      end
+    end
+
+    test "the address's own tail travels with the tick" do
+      html = render("New piece: https://example.com/~alice", [link("https://example.com/~alice")])
+
+      assert glued(html) == "e.com/~alice"
+      # ...and the head of the address stays outside the box, free to wrap.
+      assert html =~ ~s(>exampl<span class="verified-author-glue">e.com/~alice)
+    end
+
+    test "only the last word of a prose label is glued" do
+      html =
+        render(
+          "I wrote [something about bridges](https://example.com/~alice) last night.",
+          [link("https://example.com/~alice")]
+        )
+
+      assert glued(html) == "bridges"
+      assert html =~ ~s(>something about <span class="verified-author-glue">bridges)
+    end
+
+    test "a long address is glued only by its last few characters" do
+      # `white-space: nowrap` suspends `overflow-wrap`, so a whole 40-character
+      # display glued in one box would push a phone's post column sideways
+      # (measured: 15px of page scroll at a 310px column). The cap keeps the
+      # unbreakable run short enough to fit any column we ship.
+      long = "https://sehr-langer-hostname-mit-vielen.example/verzeichnis/tief/drin"
+      html = render(long, [link(long, "dns")])
+
+      tail = glued(html)
+      assert String.length(tail) == 12
+      # ...and the rest of the address is left outside the box, where the line
+      # can still break.
+      assert html =~ ~r/>[^<]{10,}<span class="verified-author-glue">/
+    end
+
+    test "a label ending in markup keeps the bare mark" do
+      # Nothing to glue without a plain-text tail, and slicing into markup or an
+      # entity would corrupt the label. Rare enough to simply leave as it was.
+      html =
+        Markdown.mark_verified_author_links(
+          ~s|<a href="https://example.com/~alice"><strong>hier</strong></a>|,
+          [link("https://example.com/~alice")]
+        )
+
+      assert html =~ "verified-author-link"
+      refute html =~ "verified-author-glue"
+      assert html =~ "</strong><svg"
+    end
+
+    test "the stylesheet is the other half of the fix" do
+      css = File.read!("assets/css/components.css")
+
+      assert css =~ ~r/\.verified-author-glue \{[^}]*white-space: nowrap;/s
     end
   end
 

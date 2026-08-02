@@ -1216,6 +1216,19 @@ ul.thumbs li .text .url a {
   vertical-align: -0.125em;
   color: #059669;
 }
+/* The mark's own box, holding the end of the link's text with it (reported
+   on #1307). That `inline-block` above is an atomic inline, and UAX #14 allows a
+   line break in front of one, so Chrome and Firefox were free to end the line
+   after the address and leave the tick alone on the next one with nothing else
+   on it — Safari never broke there, which is why the report and the screenshot
+   answering it disagreed. A word joiner (U+2060) between them is the textbook
+   fix and does nothing in Chrome; `nowrap` is what closes the opportunity.
+   VutuvWeb.Markdown puts only a SHORT trailing slice of the label in here,
+   because `nowrap` also suspends `.markdown`'s `overflow-wrap` and a whole
+   address glued in one box scrolls a phone's post column sideways. */
+.verified-author-glue {
+  white-space: nowrap;
+}
 .markdown h1, .markdown h2, .markdown h3, .markdown h4 {
   font-weight: 700;
   margin: 1em 0 0.4em;

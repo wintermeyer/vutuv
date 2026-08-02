@@ -87,6 +87,16 @@ the whole statement is its escaped `title` / `aria-label`, naming exactly what
 was proved ("Verified webpage of the author (example.com/~alice)"); the look is
 `.verified-author-link` in `assets/css/components.css`.
 
+The mark does not travel alone: its `<svg>` is an atomic inline, and UAX #14
+lets a line break in front of one, so a link ending flush with the line put the
+tick on the next line by itself in Chrome and Firefox (Safari never broke there
+— reported on #1307). The renderer therefore wraps the label's trailing word plus the
+mark in `.verified-author-glue`, a `white-space: nowrap` box. Only a **short**
+slice joins it (`@glue_chars`, 12): `nowrap` also suspends `.markdown`'s
+`overflow-wrap`, so gluing a whole address in one box would scroll a phone's
+post column sideways. A label with no plain-text tail (it ends in a tag or an
+entity) keeps the bare mark rather than risk a slice through markup.
+
 Local posts only. Remote/fediverse content renders through `render_remote/1`
 and its author is not a member with verified links, and the outgoing
 ActivityPub Note, the RSS item and `VutuvWeb.PostJSON` stay unmarked as well —

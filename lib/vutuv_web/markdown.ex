@@ -233,10 +233,51 @@ defmodule VutuvWeb.Markdown do
       when is_binary(html) and is_list(verified_links) do
     Regex.replace(@anchor, html, fn whole, open_tag, label, close_tag ->
       case matched_link(open_tag, verified_links) do
-        %Url{} = link -> open_tag <> label <> verified_mark_html(link) <> close_tag
+        %Url{} = link -> open_tag <> glue_mark(label, verified_mark_html(link)) <> close_tag
         nil -> whole
       end
     end)
+  end
+
+  # The end of the label and the mark, tied into one unbreakable box.
+  #
+  # Chrome and Firefox treat the mark's `<svg>` as an atomic inline, and UAX #14
+  # allows a line break in front of one — so a link that happened to end flush
+  # with the line put the tick on the next line by itself, with nothing else on
+  # it (reported on #1307). Safari does not break there, which is why the report and
+  # the screenshot answering it disagreed. A word joiner (U+2060) between the
+  # two is the textbook fix and does nothing in Chrome (measured); only
+  # `white-space: nowrap` closes that break opportunity, hence
+  # `.verified-author-glue` (assets/css/components.css).
+  #
+  # Only the label's TRAILING WORD joins the mark, capped at @glue_chars,
+  # because `nowrap` also suspends `overflow-wrap`: gluing a whole address in
+  # one box costs a phone's post column its wrapping, and a 40-character
+  # display (`@url_display_max`) then pushes the page sideways — measured at
+  # 15px of horizontal scroll in a 310px column, the very thing
+  # `mobile_overflow_test.exs` guards. A short tail can always break away from
+  # the text before it, so nothing overflows and the tick still has a word to
+  # sit beside.
+  @glue_chars 12
+
+  # The tail must be plain text: `<` `>` keep the slice out of markup and `&`
+  # `;` out of an HTML entity, either of which would corrupt the label. A label
+  # with no such tail (it ends in a tag, or in an entity) simply keeps the bare
+  # mark — no real link label looks like that.
+  @glue_tail ~r/[^\s<>&;]{1,#{@glue_chars}}\z/u
+
+  defp glue_mark(label, mark) do
+    case Regex.run(@glue_tail, label) do
+      [tail] ->
+        String.replace_suffix(
+          label,
+          tail,
+          ~s(<span class="verified-author-glue">) <> tail <> mark <> "</span>"
+        )
+
+      nil ->
+        label <> mark
+    end
   end
 
   @doc """
