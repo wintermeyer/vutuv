@@ -110,8 +110,28 @@ defmodule VutuvWeb.PageController do
   """
   def robots(conn, _params) do
     conn
+    |> discovery_cache_headers()
     |> put_resp_content_type("text/plain")
     |> send_resp(200, VutuvWeb.RobotsTxt.render(VutuvWeb.ContentPolicy.policy()))
+  end
+
+  # robots.txt and llms.txt answer every visitor with the same bytes and carry
+  # nothing personal, so they are `public` cacheable like /sitemap.xml and
+  # /.well-known/security.txt beside them in the router (an hour, short enough
+  # that flipping :ai_crawler_policy reaches crawlers promptly; Googlebot keeps
+  # its own robots.txt copy for up to 24h regardless).
+  #
+  # Setting this is also what un-breaks the two files in Safari. Without an
+  # explicit header Plug falls back to `max-age=0, private, must-revalidate`,
+  # and Safari 26 on macOS renders such a top-level text/plain document as a
+  # blank page: the response arrives complete (nginx logs a 200 with the full
+  # body, the body decodes fine), but WebKit ends up with
+  # `<html><head></head><body></body></html>`, no `<pre>` in it, and leaves
+  # the progress bar spinning. Chrome shows the same response without complaint.
+  # These two were the only text/plain URLs in the app without an explicit
+  # cache-control, and the only ones that came up blank (2026-08-02).
+  defp discovery_cache_headers(conn) do
+    put_resp_header(conn, "cache-control", "public, max-age=3600")
   end
 
   def impressum(conn, _params) do
@@ -356,6 +376,7 @@ defmodule VutuvWeb.PageController do
   @doc "Serves /llms.txt: the agent-format discovery file (llms.txt convention)."
   def llms(conn, _params) do
     conn
+    |> discovery_cache_headers()
     |> put_resp_content_type("text/plain")
     |> send_resp(200, llms_txt())
   end

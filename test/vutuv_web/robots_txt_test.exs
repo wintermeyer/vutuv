@@ -36,8 +36,32 @@ defmodule VutuvWeb.RobotsTxtTest do
       body = RobotsTxt.render(:permissive)
 
       # Each group carries its own copy of the sensitive-path rules.
-      occurrences = body |> String.split("Disallow: /admin/") |> length()
-      assert occurrences == 3, "expected the path rules in both groups"
+      assert count(body, "Disallow: /admin/") == 2, "expected the path rules in both groups"
+      assert count(body, "Allow: /\n") == 2
+    end
+
+    # The *rules* have to repeat per group, the *reasoning* does not. It used to
+    # ride along in the same string, so the whole 29-line essay about why
+    # nothing else is disallowed was printed once per group and the file was
+    # 3.4 KB of mostly the same paragraphs. The prose now lives in the preamble
+    # and is written once; a group is its User-agent lines plus two rules.
+    test "explains itself once, not once per group" do
+      for policy <- [:permissive, :block_training] do
+        body = RobotsTxt.render(policy)
+
+        for sentence <- ["A Disallow only", "Redirects stay crawlable", "linked nowhere"] do
+          assert count(body, sentence) == 1,
+                 "#{policy}: #{inspect(sentence)} should appear once, not per group"
+        end
+      end
+    end
+
+    test "stays small: the prose is written once, the rules are two lines a group" do
+      # A guard on the shape, not the wording. The duplicated version was 3.4 KB
+      # because each group dragged the whole explanation along; deduplicated it
+      # is ~2.2 KB, nearly all of it the one-time preamble. If this trips again,
+      # someone re-attached prose to a per-group block.
+      assert byte_size(RobotsTxt.render(:permissive)) < 2_500
     end
 
     test "advertises the sitemap with an absolute URL" do
@@ -155,4 +179,6 @@ defmodule VutuvWeb.RobotsTxtTest do
       assert ContentPolicy.robots_directives(true, true) == "noindex, noai, noimageai"
     end
   end
+
+  defp count(body, needle), do: length(String.split(body, needle)) - 1
 end

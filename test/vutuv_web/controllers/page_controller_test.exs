@@ -71,6 +71,32 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Content-Signal: ai-train=yes, search=yes, ai-input=yes"
       assert body =~ "Sitemap: http://localhost:4001/sitemap.xml"
     end
+
+    test "is publicly cacheable" do
+      assert cache_control("/robots.txt") =~ "public"
+    end
+  end
+
+  # Both discovery files answer every visitor with the same bytes, so they are
+  # `public` cacheable like /sitemap.xml and /.well-known/security.txt beside
+  # them. Without an explicit header Plug falls back to
+  # `max-age=0, private, must-revalidate`, and Safari 26 on macOS then renders
+  # such a top-level text/plain document as an EMPTY page: the response arrives
+  # complete (nginx logs a 200 with the full body), but WebKit builds
+  # `<html><head></head><body></body></html>` with no `<pre>` in it and leaves
+  # the progress bar hanging. Chrome shows the same response fine. Every other
+  # text/plain URL in this app sets `public` and renders in Safari, and these
+  # two were the only ones that did not, which is what made them look broken
+  # (2026-08-02).
+  describe "the discovery files' cache headers" do
+    test "robots.txt and llms.txt are never marked private" do
+      for path <- ["/robots.txt", "/llms.txt"] do
+        header = cache_control(path)
+
+        assert header =~ "public", "#{path} should be publicly cacheable, got: #{header}"
+        refute header =~ "private", "#{path} must not be private, got: #{header}"
+      end
+    end
   end
 
   describe "GET /llms.txt" do
@@ -725,5 +751,10 @@ defmodule VutuvWeb.PageControllerTest do
       |> File.read!()
 
     {:ok, _page} = Vutuv.Legal.upsert_page(slug, %{body: body})
+  end
+
+  defp cache_control(path) do
+    assert [header] = build_conn() |> get(path) |> get_resp_header("cache-control")
+    header
   end
 end
