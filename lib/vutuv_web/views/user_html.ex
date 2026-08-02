@@ -275,6 +275,77 @@ defmodule VutuvWeb.UserHTML do
   end
 
   @doc """
+  The profile's private-save toggle — bookmark or like *this member* — as the
+  twin of the post card's bookmark and heart: the same glyph, the same fill-on-
+  active language, one click, in the footer row of the header card. It used to
+  be an item in the header's ⋯ menu, where saving a profile cost two taps and
+  looked nothing like the act everyone already knows from a post.
+
+  The save is silent and private (no follow, no notification, no public count),
+  so unlike the post bar there is no counter beside the glyph and its own state
+  is the whole confirmation: the glyph fills, `aria-pressed` flips, and the
+  label swaps between "Bookmark" and "Remove bookmark". Icon-only, so that
+  label rides `title` + `aria-label`; it is a full 40px touch target because it
+  stands alone in a footer row rather than in the post bar's dense cluster.
+
+  `kind` picks the pair of events the profile LiveView handles
+  (`bookmark_user` / `unbookmark_user`, `like_user` / `unlike_user`); keep the
+  logged-in, non-owner, non-blocker guard on the `:if` at the call site.
+  """
+  attr(:kind, :atom, required: true, values: [:bookmark, :like])
+  attr(:active?, :boolean, required: true)
+
+  def profile_save_toggle(assigns) do
+    assigns = assign(assigns, :spec, save_toggle_spec(assigns.kind, assigns.active?))
+
+    ~H"""
+    <button
+      type="button"
+      id={@spec.id}
+      phx-click={@spec.event}
+      aria-pressed={to_string(@active?)}
+      aria-label={@spec.label}
+      title={@spec.label}
+      data-profile-save={@spec.token}
+      class={[
+        "inline-flex h-10 w-10 items-center justify-center rounded-lg",
+        "hover:bg-slate-100 dark:hover:bg-slate-800",
+        # components.css colors a bare `button` brand-600, which would beat the
+        # row's inherited slate — so the state color sits on the button itself.
+        if(@active?, do: @spec.active_class, else: "text-slate-600 dark:text-slate-400")
+      ]}
+    >
+      <.icon_bookmark :if={@kind == :bookmark} filled?={@active?} />
+      <.icon_heart :if={@kind == :like} filled?={@active?} />
+    </button>
+    """
+  end
+
+  # Everything that differs between the two toggles, in one place: the ids the
+  # tests key on, the event pair, the label (which names the act, not the
+  # state), and the active tint — brand for a bookmark, the coral accent for a
+  # like, exactly as the post action bar colors the same two glyphs.
+  defp save_toggle_spec(:bookmark, active?) do
+    %{
+      id: "profile-bookmark",
+      token: "bookmark",
+      event: if(active?, do: "unbookmark_user", else: "bookmark_user"),
+      label: if(active?, do: gettext("Remove bookmark"), else: gettext("Bookmark")),
+      active_class: "text-brand-600 dark:text-brand-300"
+    }
+  end
+
+  defp save_toggle_spec(:like, active?) do
+    %{
+      id: "profile-like",
+      token: "like",
+      event: if(active?, do: "unlike_user", else: "like_user"),
+      label: if(active?, do: gettext("Unlike"), else: gettext("Like")),
+      active_class: "text-accent"
+    }
+  end
+
+  @doc """
   A single-path brand glyph for a social-media provider (Simple Icons, CC0),
   drawn in `currentColor` so it inherits the surrounding text colour and can
   shift on hover. Unknown providers fall back to a generic link glyph. Used by

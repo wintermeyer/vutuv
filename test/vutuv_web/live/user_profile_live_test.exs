@@ -175,21 +175,6 @@ defmodule VutuvWeb.UserProfileLiveTest do
       assert view |> element(~s(button[phx-click="toggle_mute"])) |> render_click() =~ "Mute"
     end
 
-    test "bookmark / like toggle the menu item between save and remove", %{conn: conn} do
-      {conn, _viewer} = create_and_login_user(conn)
-      owner = insert_activated_user()
-
-      {:ok, view, _html} = live(conn, ~p"/#{owner}")
-
-      assert has_element?(view, ~s(button[phx-click="bookmark_user"]))
-      view |> element(~s(button[phx-click="bookmark_user"])) |> render_click()
-      assert has_element?(view, ~s(button[phx-click="unbookmark_user"]))
-
-      assert has_element?(view, ~s(button[phx-click="like_user"]))
-      view |> element(~s(button[phx-click="like_user"])) |> render_click()
-      assert has_element?(view, ~s(button[phx-click="unlike_user"]))
-    end
-
     test "blocking swaps the controls to Unblock, and unblocking restores them", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
       owner = insert_activated_user()
@@ -206,6 +191,117 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute has_element?(view, "#unblock-user")
       # The follow pill is back once the block is gone.
       assert has_element?(view, ~s(button[phx-click="follow"][phx-value-followee="#{owner.id}"]))
+    end
+  end
+
+  describe "bookmark / like straight from the header card" do
+    test "each toggle flips its own state without a reload", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      bookmark = "#profile-bookmark"
+      like = "#profile-like"
+
+      assert has_element?(view, ~s(#{bookmark}[phx-click="bookmark_user"][aria-pressed="false"]))
+      view |> element(bookmark) |> render_click()
+      assert has_element?(view, ~s(#{bookmark}[phx-click="unbookmark_user"][aria-pressed="true"]))
+      view |> element(bookmark) |> render_click()
+      assert has_element?(view, ~s(#{bookmark}[phx-click="bookmark_user"][aria-pressed="false"]))
+
+      assert has_element?(view, ~s(#{like}[phx-click="like_user"][aria-pressed="false"]))
+      view |> element(like) |> render_click()
+      assert has_element?(view, ~s(#{like}[phx-click="unlike_user"][aria-pressed="true"]))
+      view |> element(like) |> render_click()
+      assert has_element?(view, ~s(#{like}[phx-click="like_user"][aria-pressed="false"]))
+    end
+
+    test "a toggle raises no toast — the glyph itself is the confirmation", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The tray already holds the login's "Welcome back" toast, so the claim is
+      # that a toggle leaves it exactly as it was — a put_flash would replace
+      # that text with its own confirmation.
+      tray = fn ->
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#toast-tray")
+        |> LazyHTML.text()
+      end
+
+      before = tray.()
+
+      view |> element("#profile-bookmark") |> render_click()
+      assert has_element?(view, ~s(#profile-bookmark[aria-pressed="true"]))
+      assert tray.() == before
+
+      view |> element("#profile-like") |> render_click()
+      assert has_element?(view, ~s(#profile-like[aria-pressed="true"]))
+      assert tray.() == before
+    end
+
+    test "the frequent act sits last in the row, the rare vCard download first", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+
+      {:ok, _view, html} = live(conn, ~p"/#{owner}")
+
+      {vcard_at, _} = :binary.match(html, ~s(id="download-vcard"))
+      {bookmark_at, _} = :binary.match(html, ~s(id="profile-bookmark"))
+      {like_at, _} = :binary.match(html, ~s(id="profile-like"))
+      assert vcard_at < bookmark_at and bookmark_at < like_at
+    end
+
+    test "the ⋯ menu no longer carries either of them", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      menu = "#profile-actions-menu"
+      refute has_element?(view, ~s(#{menu} button[phx-click="bookmark_user"]))
+      refute has_element?(view, ~s(#{menu} button[phx-click="like_user"]))
+      # What the menu keeps: navigation and the heavier moderation actions.
+      assert has_element?(view, "#{menu} #message-user")
+      assert has_element?(view, "#{menu} #report-profile")
+      assert has_element?(view, "#{menu} #block-user")
+    end
+
+    test "a signed-out visitor gets no toggles", %{conn: conn} do
+      owner = insert_activated_user()
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      refute has_element?(view, "#profile-bookmark")
+      refute has_element?(view, "#profile-like")
+      # The row itself still carries the vCard download for everyone.
+      assert has_element?(view, "#download-vcard")
+    end
+
+    test "the owner cannot bookmark or like themselves", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/#{viewer}")
+
+      refute has_element?(view, "#profile-bookmark")
+      refute has_element?(view, "#profile-like")
+    end
+
+    test "a member the viewer blocked shows Unblock alone, no toggles", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      {:ok, _} = Social.block_user(viewer, owner)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      assert has_element?(view, "#unblock-user")
+      refute has_element?(view, "#profile-bookmark")
+      refute has_element?(view, "#profile-like")
     end
   end
 

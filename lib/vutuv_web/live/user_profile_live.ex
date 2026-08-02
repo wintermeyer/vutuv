@@ -240,18 +240,25 @@ defmodule VutuvWeb.UserProfileLive do
   end
 
   # Private, silent saves of this member (bookmark / like): no follow, no
-  # notification, no public count. The menu label flips on re-render.
+  # notification, no public count. The header card's two glyph toggles flip on
+  # the re-render, which is the whole confirmation — no toast. They used to
+  # flash one, because back when they were ⋯-menu items the label flipped out
+  # of sight behind a closing menu and nothing else moved; a filled bookmark
+  # sitting right under the cursor says it better, and a toast repeating it
+  # trains members to stop reading toasts. The classic CSRF route
+  # (UserSaveController, the no-JS path) keeps its flash: there the page
+  # reloads and the flash is the only thing that reports what happened.
   def handle_event("bookmark_user", _params, socket),
-    do: {:noreply, save_member(socket, &Social.bookmark_user/2, gettext("Bookmarked."))}
+    do: {:noreply, save_member(socket, &Social.bookmark_user/2)}
 
   def handle_event("unbookmark_user", _params, socket),
-    do: {:noreply, save_member(socket, &Social.unbookmark_user/2, gettext("Bookmark removed."))}
+    do: {:noreply, save_member(socket, &Social.unbookmark_user/2)}
 
   def handle_event("like_user", _params, socket),
-    do: {:noreply, save_member(socket, &Social.like_user/2, gettext("Liked."))}
+    do: {:noreply, save_member(socket, &Social.like_user/2)}
 
   def handle_event("unlike_user", _params, socket),
-    do: {:noreply, save_member(socket, &Social.unlike_user/2, gettext("Like removed."))}
+    do: {:noreply, save_member(socket, &Social.unlike_user/2)}
 
   # Block / unblock this member. Both reshape the page (follows severed, the
   # control swaps to Unblock and back, counts change), so reload the whole
@@ -480,23 +487,16 @@ defmodule VutuvWeb.UserProfileLive do
   end
 
   # Run a private-save toggle (bookmark/like a member) for a logged-in
-  # non-owner, then re-read the saved flags so the menu item label flips, and
-  # confirm with the same copy the controller used.
-  defp save_member(socket, fun, ok_msg) do
+  # non-owner, then re-read the saved flags so the glyph fills (or empties) and
+  # its label flips on the re-render.
+  defp save_member(socket, fun) do
     me = socket.assigns.current_user
     user = socket.assigns.user
 
     cond do
-      is_nil(me) or me.id == user.id ->
-        socket
-
-      fun.(me, user) == :ok ->
-        socket
-        |> assign(:user_saved, Social.user_saved_flags(me, user))
-        |> put_flash(:info, ok_msg)
-
-      true ->
-        socket
+      is_nil(me) or me.id == user.id -> socket
+      fun.(me, user) == :ok -> assign(socket, :user_saved, Social.user_saved_flags(me, user))
+      true -> socket
     end
   end
 
