@@ -224,11 +224,14 @@
       purpose: the form is the conversion path and keeps the top of the page.
       Same max-w-5xl as <.auth_layout> so every edge on the page lines up.
 
-      Two kinds of example, and the split is deliberate. What a PROFILE looks
-      like is static screenshots: they name nobody, so nobody has to agree to
-      being on the front page, and they show a whole page at once the way a card
-      never could. That the site is ALIVE cannot be shown in a picture, so the
-      posts below are real and current (Vutuv.Landing). --%>
+      Every example here is a static screenshot, and that is a decision rather
+      than a shortcut. A picture names nobody, so nobody has to agree to being
+      on the front page; it shows a whole page at once the way a card never
+      could; and it costs one lazily loaded image instead of a socket. A wall of
+      real, current posts used to sit under these blocks as the proof that the
+      site is alive. It was dropped because it was not paying for itself: a
+      carousel over its own LiveView, a cached snapshot behind it and a query
+      per refresh, on the page that greets every crawler. --%>
 <div class="mx-auto max-w-5xl space-y-12 pb-12">
   <section>
     <%!-- "Readable without an account" was jargon nobody outside the project
@@ -248,18 +251,9 @@
           screenshots alone cannot. The URL is configurable
           (LANDING_EXAMPLE_PROFILE_URL) and the whole line drops out where an
           installation cleared it. --%>
-    <% example_url = example_profile_url() %>
-    <p :if={example_url} class="mt-3 text-base text-slate-600 dark:text-slate-400">
-      {gettext("Try it out:")}
-      <a
-        href={example_url}
-        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >
-        {example_profile_label(example_url)}
-      </a>
-    </p>
+    <.try_it_out />
 
-    <.profile_shots />
+    <.shot_deck deck={:profile} />
 
     <p class="mt-8 text-center">
       <a
@@ -271,22 +265,66 @@
     </p>
   </section>
 
-  <%!-- The most convincing block on the page and the cheapest to doubt, so it
-        shows real posts rather than a mockup: the best-liked ones of the last
-        week, at most one per member (Vutuv.Landing), which is what keeps it
-        reading as a network rather than as one person's megaphone. --%>
-  <section :if={@showcase_posts != []} data-showcase-posts>
+  <%!-- The two sections a visitor who is mid-application actually came for, and
+        the reason they sit this high: the block above answers "what is this",
+        and these answer "what do I get out of it", which is the question
+        somebody with a job application open is actually deciding.
+
+        They are two sections and not one, although both are about job
+        applications, because they promise opposite things. The CV is something
+        you hand OUT, so its section ends in a link anybody can open. The
+        Arbeitszeugnis is something you show nobody, so its section spends its
+        last two lines on where the document stays and on what the review is
+        not. Folded together, the privacy half is what gets lost. --%>
+  <section>
     <.landing_heading
-      eyebrow={gettext("Live from vutuv")}
-      title={posts_heading(@showcase_window_days)}
-      lead={posts_lead(@showcase_window_days)}
+      eyebrow={gettext("Job applications")}
+      title={gettext("Your CV, ready to send")}
+      lead={
+        gettext(
+          "What your profile already says becomes a CV. You tick what should go in, then download it as PDF, Word, OpenDocument, LaTeX or JSON Resume. Anonymously as well, if you would rather show what you can do before you show who you are."
+        )
+      }
     />
-    <%!-- The wall is its own embedded LiveView (like the member-count pill in
-          the hero above): it owns the "show others" button and swaps the cards
-          in place, where a ?shuffle= link would have thrown the reader back to
-          the top of a very long page. One socket for the whole wall — the cards
-          themselves render with actions={false}. --%>
-    {live_render(@conn, VutuvWeb.LandingPostsLive, id: "landing-posts-lv")}
+    <%!-- The CV builder is public, so the claim above is one click away. Same
+          setting as the profile link above, so an installation that cleared it
+          loses both rather than keeping a half-configured page. --%>
+    <.try_it_out suffix="/cv" />
+
+    <.shot_deck deck={:career} />
+  </section>
+
+  <%!-- Gated on the review queue's own switch, the way the Fediverse section is
+        gated on federation: an installation with no model behind it
+        (`REFERENCE_CHECKS_ENABLED=false`) can still store references, but the
+        grading this section is named after never happens there, and a heading
+        promising it would be the operator's front page lying. --%>
+  <section :if={Checks.enabled?()}>
+    <.landing_heading
+      eyebrow={gettext("Employment reference")}
+      title={gettext("What your employment reference really says")}
+      lead={
+        gettext(
+          "Upload your employment references and have them read sentence by sentence: a grade, a traffic light, and the explanation of how a recruiter reads that wording. It takes a few minutes, then the report is there. Nothing becomes public before you release it."
+        )
+      }
+    />
+    <.shot_deck deck={:reference} />
+
+    <%!-- Two closing lines, and neither is decoration. The first is the whole
+          reason to hand a document like this to us rather than to a chatbot,
+          and it is quoted from the feature page so the two cannot disagree. The
+          second is the boundary: the analysis prompt deliberately refuses to
+          draft a Berichtigungsverlangen or a Klagestrategie (§ 2 RDG), so the
+          start page must not promise one. --%>
+    <p class="mt-6 text-base leading-relaxed text-slate-700 dark:text-slate-300">
+      {reference_privacy_line()}
+    </p>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "The review is a text analysis, not legal advice, and it covers German employment references."
+      )}
+    </p>
   </section>
 
   <%!-- Gated on the installation's federation switch, like the sign-up form's
@@ -311,7 +349,7 @@
         )
       }
     />
-    <.communication_shots />
+    <.shot_deck deck={:communication} />
   </section>
 
   <section>

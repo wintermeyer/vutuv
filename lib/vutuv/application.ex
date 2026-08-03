@@ -84,7 +84,6 @@ defmodule Vutuv.Application do
       ] ++
         optional_child(:prefs_defaults_cache, Vutuv.Prefs.Cache) ++
         optional_child(:screenshot_blocklist_cache, Vutuv.ScreenshotBlocklist.Cache) ++
-        optional_child(:refresh_landing_showcase, Vutuv.Landing.Showcase) ++
         optional_child(:sweep_pending_images, Vutuv.Posts.PendingImageSweeper) ++
         optional_child(:sweep_post_drafts, Vutuv.Posts.DraftSweeper) ++
         optional_child(

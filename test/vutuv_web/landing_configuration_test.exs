@@ -1,8 +1,17 @@
 defmodule VutuvWeb.LandingConfigurationTest do
   @moduledoc """
   The landing page's per-installation switches: which profile it offers as
-  "try it out", where it says the data lives, and whether it mentions the
-  Fediverse at all.
+  "try it out", where it says the data lives, whether it mentions the Fediverse
+  at all, and whether it offers the Arbeitszeugnis review.
+
+  Keys flipped here, and who else reads them (the rule below wants this named,
+  so a widened blast radius is visible at a glance): `:landing_example_profile_url`
+  and `:data_location` are read only by `VutuvWeb.PageHTML`; `:ads_enabled` by
+  `VutuvWeb.Plug.AdBanner` and the `/ads` routes; `:fediverse_enabled` by
+  `Vutuv.Fediverse.enabled?/0`, which the tag timeline, the feed source tabs and
+  the sign-up form all consult; `:reference_checks_enabled` by
+  `Vutuv.References.Checks.enabled?/0`, which gates `Vutuv.References.CheckWorker`,
+  `VutuvWeb.ReferenceCheckLive` and `VutuvWeb.JobReferenceHTML.checks_enabled?/0`.
 
   async: false, like `VutuvWeb.LandingExperimentDisabledTest` and
   `VutuvWeb.AdsDisabledTest`: every test here flips a global application env
@@ -73,7 +82,30 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
       assert html =~ "Try it out:"
       assert html =~ ~s(href="https://vutuv.example/ada")
-      assert html =~ ">\n        vutuv.example/ada\n      <"
+      assert html =~ ~r{>\s*vutuv\.example/ada\s*<}
+    end
+
+    # The CV builder is public, so the same one-click check applies to it, and it
+    # hangs off the same setting: `/cv` under the configured profile.
+    test "offers that profile's CV builder too", %{conn: conn} do
+      example("https://vutuv.example/ada")
+
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ ~s(href="https://vutuv.example/ada/cv")
+      assert html =~ ~r{>\s*vutuv\.example/ada/cv\s*<}
+    end
+
+    # A configured URL may carry a trailing slash. The join lives in
+    # `example_profile_url/1` so href and label cannot disagree about it, which
+    # they did while the markup did the joining: `…/ada//cv` under `…/ada/cv`.
+    test "a trailing slash in the configured URL does not double up", %{conn: conn} do
+      example("https://vutuv.example/ada/")
+
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ ~s(href="https://vutuv.example/ada/cv")
+      refute html =~ "ada//cv"
     end
 
     # The installability half of the same knob. Asserted on the line itself, not
@@ -109,13 +141,37 @@ defmodule VutuvWeb.LandingConfigurationTest do
       assert html =~ "data-landing-features"
     end
 
+    # The same shape as the Fediverse gate above. An installation with no model
+    # behind the review queue can still store Arbeitszeugnisse, but the grading
+    # this section is named after never happens there, so the heading, the
+    # screenshots and the feature bullet all have to go rather than promise it.
+    test "hides the reference review where the installation runs no model", %{conn: conn} do
+      put_config(:reference_checks_enabled, false)
+
+      html =
+        conn |> put_req_header("accept-language", "de-DE,de") |> get(~p"/") |> html_response(200)
+
+      refute html =~ "data-reference-shots"
+      refute html =~ "Arbeitszeugnis"
+      refute html =~ "landing-reference-list.avif"
+      # The CV section is a different feature and stays, as does the rest.
+      assert html =~ "data-career-shots"
+      assert html =~ "data-profile-shots"
+      assert html =~ "data-landing-features"
+    end
+
     test "drops only the hosting claim where the operator cleared it", %{conn: conn} do
       put_config(:data_location, "")
 
       html =
         conn |> put_req_header("accept-language", "de-DE,de") |> get(~p"/") |> html_response(200)
 
-      refute html =~ "eigenen Servern"
+      # Named by the card, not by the bare phrase "eigenen Servern": the
+      # Arbeitszeugnis section promises our own servers too, and that promise
+      # hangs off the review switch rather than off :data_location, so a
+      # substring refute would fail for a claim this test is not about.
+      refute html =~ "Wo Ihre Daten liegen"
+      refute html =~ "eigenen Servern in"
       # The software's own promises are not the operator's to lose.
       assert html =~ "Fair und transparent"
       assert html =~ "Cookie"

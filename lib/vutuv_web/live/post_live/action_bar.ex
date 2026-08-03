@@ -94,19 +94,15 @@ defmodule VutuvWeb.PostLive.ActionBar do
     end
   end
 
-  @doc """
-  The same rule for a caller holding an engagement rather than a socket — the
-  landing-page carousel keeps a map of them, one per card.
-
-  Split out rather than copied, because the interesting half of this list is
-  easy to forget: **issues #1068 and #1069**, a reaction or a reply from another
-  network arrives without any viewer of ours acting, so this is the only path
-  that updates the remote figures. Since the card shows one number per act
-  (`Posts.shown_counts/1`), leaving them out means a heart from Mastodon simply
-  never moves the heart on the card. The chips ride along, the panel behind them
-  naming the accounts.
-  """
-  def apply_counters_to(engagement, payload) do
+  # The same rule for an engagement rather than a socket. Kept a named function
+  # rather than inlined, because the interesting half of this list is easy to
+  # forget: **issues #1068 and #1069**, a reaction or a reply from another
+  # network arrives without any viewer of ours acting, so this is the only path
+  # that updates the remote figures. Since the card shows one number per act
+  # (`Posts.shown_counts/1`), leaving them out means a heart from Mastodon simply
+  # never moves the heart on the card. The chips ride along, the panel behind
+  # them naming the accounts.
+  defp apply_counters_to(engagement, payload) do
     %{
       engagement
       | likes: payload.likes,

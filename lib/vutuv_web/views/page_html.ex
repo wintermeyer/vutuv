@@ -8,10 +8,26 @@ defmodule VutuvWeb.PageHTML do
   import VutuvWeb.EmailHTML, only: [email_type_label: 1]
   alias Vutuv.Accounts.Email
   alias Vutuv.Fediverse
-  alias Vutuv.Landing
+  alias Vutuv.References.Checks
   alias VutuvWeb.Feeds
+  alias VutuvWeb.JobReferenceHTML
 
   embed_templates("../templates/page/*")
+
+  # Where a deck holds two cards they lean away from each other around a shared
+  # centre rather than fanning from a middle one. Three decks are built that way,
+  # so the geometry is named once: a tilt tweaked in one of them and not the
+  # others is the kind of drift nobody notices and everybody sees.
+  @lean_left "md:z-20 md:-mr-10 md:-rotate-3"
+  @lean_right "md:z-10 md:-ml-10 md:rotate-3"
+
+  @doc """
+  Every deck on the page, in the order it appears.
+
+  The single source for "which decks exist": `shot_deck/1` accepts exactly these
+  and `landing_page_test` walks them rather than repeating the list.
+  """
+  def shot_decks, do: [:profile, :career, :reference, :communication]
 
   @doc """
   The founder quote at the top of the logged-out landing page, in the variant
@@ -33,8 +49,8 @@ defmodule VutuvWeb.PageHTML do
   The heading block every example section under the sign-up form wears: a small
   uppercase eyebrow, the heading itself and one lead sentence.
 
-  Written once because the four sections differ only in their words, and a
-  landing page where the third heading sits two pixels off the second reads as
+  Written once because the sections differ only in their words, and a landing
+  page where the third heading sits two pixels off the second reads as
   unfinished.
   """
   attr(:eyebrow, :string, required: true)
@@ -51,65 +67,6 @@ defmodule VutuvWeb.PageHTML do
       {@lead}
     </p>
     """
-  end
-
-  @doc """
-  The static screenshots of a profile shown under the sign-up form.
-
-  Screenshots rather than live profile cards, so the block names nobody: being
-  on the front page is louder than having a public profile, and the difference
-  between the two is somebody's consent. A picture also shows what a card
-  cannot, namely the whole page at once, rails and all, which is the question a
-  visitor actually has.
-
-  **The arrangement is a fanned deck, but only from `md` up.** Overlapping,
-  tilted pictures are a marketing gesture, and a phone has no room for the
-  gesture: at 390px three tilted cards would be three unreadable slivers. So
-  below `md` they are a plain vertical stack at full width, and the tilt, the
-  overlap and the straighten-on-hover only exist where there is space for them.
-  The rotations are fixed values, not random: "random" would mean a different
-  page on every render, and the point is a deliberate-looking scatter, not
-  noise.
-
-  They carry **no visible caption**. Three overlapping pictures leave nowhere to
-  put one that does not land on the picture below, and a label under a fanned
-  deck reads as a mistake. The description lives in the `alt` text, which is
-  where a reader who cannot see the pictures needs it anyway.
-
-  `drop-shadow`, not `shadow`: the images are window screenshots with rounded
-  corners and transparency, so a box shadow would draw a rectangle around the
-  transparent bounding box instead of hugging the window.
-
-  They are `loading="lazy"` and carry their intrinsic size: three of them sit
-  below the fold of the most requested page in the app, so they must neither be
-  fetched before they are needed nor shift the layout when they arrive.
-
-  The images are committed under `priv/static/images/`, which is **gitignored** —
-  a new one needs `git add -f` or it 404s in production while rendering fine in
-  dev.
-  """
-  def profile_shots(assigns) do
-    assigns =
-      assigns |> assign(:shots, profile_shot_list()) |> assign(:hook, "data-profile-shots")
-
-    ~H"<.shot_deck shots={@shots} hook={@hook} />"
-  end
-
-  @doc """
-  The screenshots explaining how people talk to each other here.
-
-  Two pictures rather than prose, and these two because they are the halves
-  people get wrong: the feed showing posts that arrived from *other* networks,
-  and the settings page where a member subscribes to an account out there by
-  typing its address. Together they say "both directions" without a diagram.
-  """
-  def communication_shots(assigns) do
-    assigns =
-      assigns
-      |> assign(:shots, communication_shot_list())
-      |> assign(:hook, "data-communication-shots")
-
-    ~H"<.shot_deck shots={@shots} hook={@hook} />"
   end
 
   @doc """
@@ -138,20 +95,32 @@ defmodule VutuvWeb.PageHTML do
   requested page in the app, so they must neither be fetched before they are
   needed nor shift the layout when they arrive.
 
-  **AVIF only, by decision.** The five weigh 316 KB as AVIF against 750 KB as
-  WebP, and carrying both formats to keep pre-16.4 Safari served was judged not
-  worth the second set of files. A browser without AVIF shows the `alt` text
-  instead of the picture, which is why those alt texts describe what is in each
-  screenshot rather than merely labelling it.
+  **AVIF only, by decision.** The nine weigh 522 KB as AVIF, against roughly
+  twice that as WebP, and carrying both formats to keep pre-16.4 Safari served
+  was judged not worth the second set of files. A browser without AVIF shows the
+  `alt` text instead of the picture, which is why those alt texts describe what
+  is in each screenshot rather than merely labelling it. That decision rejected a
+  second *format*; a second *width* (`srcset`) is untouched ground, and the
+  figures render into roughly 361 CSS px, so there is real room there.
 
-  The files are committed under `priv/static/images/`, which is **gitignored** —
-  a new one needs `git add -f` or it 404s in production while rendering fine in
-  dev.
+  The files live under `priv/static/images/`, which is **gitignored**, so a new
+  one needs `git add -f`. Do not rely on remembering that: `landing_page_test`
+  walks this catalog and fails the build if a shot is missing from the index,
+  which is the only reason it cannot 404 in production while rendering in dev.
+
+  One component, one `deck` key: the four decks differ in nothing but their
+  pictures, so they are four clauses of `shot_list/1` rather than four
+  components. The `data-…-shots` attribute the tests key on is derived from that
+  key, so a new deck cannot ship with a hook nobody hooks.
   """
-  attr(:shots, :list, required: true)
-  attr(:hook, :string, required: true, doc: "the bare data attribute tests key on")
+  attr(:deck, :atom, required: true, values: [:profile, :communication, :career, :reference])
 
   def shot_deck(assigns) do
+    assigns =
+      assigns
+      |> assign(:shots, shot_list(assigns.deck))
+      |> assign(:hook, "data-#{assigns.deck}-shots")
+
     ~H"""
     <div
       {%{@hook => true}}
@@ -192,10 +161,17 @@ defmodule VutuvWeb.PageHTML do
     """
   end
 
-  # The alt text says what is IN the picture, because for a reader who cannot
-  # see it that is the entire content of this block. `deck` is that card's place
-  # in the fan: tilt, overlap and stacking order, all `md:`-only.
-  defp profile_shot_list do
+  @doc """
+  The pictures of one deck.
+
+  Public so `landing_page_test` can walk every deck and check that each file is
+  really in the git index, `priv/static/` being gitignored.
+
+  The alt text says what is IN the picture, because for a reader who cannot see
+  it that is the entire content of these blocks. `deck` is that card's place in
+  the fan: tilt, overlap and stacking order, all `md:`-only.
+  """
+  def shot_list(:profile) do
     [
       %{
         src: ~p"/images/landing-profile-overview.avif",
@@ -232,15 +208,17 @@ defmodule VutuvWeb.PageHTML do
     ]
   end
 
-  # Two cards, so they lean away from each other around a shared centre rather
-  # than fanning from a middle one.
-  defp communication_shot_list do
+  # Two pictures rather than prose, and these two because they are the halves
+  # people get wrong: the feed showing posts that arrived from *other* networks,
+  # and the settings page where a member subscribes to an account out there by
+  # typing its address. Together they say "both directions" without a diagram.
+  def shot_list(:communication) do
     [
       %{
         src: ~p"/images/landing-feed-fediverse.avif",
         width: 1800,
         height: 1134,
-        deck: "md:z-20 md:-mr-10 md:-rotate-3",
+        deck: @lean_left,
         alt:
           gettext(
             "The vutuv feed with the Fediverse tab selected: posts by news accounts on ard.social, mastodon.social and bonn.social, each with the server it came from, and heart, reply and repost counts underneath."
@@ -250,13 +228,89 @@ defmodule VutuvWeb.PageHTML do
         src: ~p"/images/landing-fediverse-following.avif",
         width: 1800,
         height: 1134,
-        deck: "md:z-10 md:-ml-10 md:rotate-3",
+        deck: @lean_right,
         alt:
           gettext(
             "The settings page for followed Fediverse accounts: a field to enter an address like @name@server, and a table of accounts already followed with their server and an unfollow link."
           )
       }
     ]
+  end
+
+  # The two halves of the promise: the checklist where you decide what goes into
+  # the CV, and the finished document that comes out. Either alone leaves the
+  # visitor guessing at the other. Both are shot LOGGED OUT, like the profile
+  # deck: the builder is viewer-scoped (`VutuvWeb.CV`), so the owner's own view
+  # of it also lists the addresses they have kept private, and a picture of that
+  # on the most requested page in the app would publish them.
+  def shot_list(:career) do
+    [
+      %{
+        src: ~p"/images/landing-cv-builder.avif",
+        width: 1800,
+        height: 1215,
+        deck: @lean_left,
+        alt:
+          gettext(
+            "The CV builder: a checklist of everything that could go into the CV, with name, photo, tagline and contact details, and beside it a panel offering the download as PDF, Word, OpenDocument, LaTeX or JSON Resume."
+          )
+      },
+      %{
+        src: ~p"/images/landing-cv-print.avif",
+        width: 1800,
+        height: 1215,
+        deck: @lean_right,
+        alt:
+          gettext(
+            "The finished CV ready to print: name, tagline and contact details at the top, below them the positions held with employer and period, and further down the tags and the spoken languages."
+          )
+      }
+    ]
+  end
+
+  # The list first, because two references graded 1 and 4-5 side by side say in
+  # one glance that the thing really grades; then one report, and deliberately
+  # the BAD one. A green report is reassuring and sells nothing, where a red one
+  # shows the decoded wording that is the whole point of the feature. The good
+  # grade sits in the list beside it, so the pair does not read as scaremongering
+  # either.
+  def shot_list(:reference) do
+    [
+      %{
+        src: ~p"/images/landing-reference-list.avif",
+        width: 1800,
+        height: 1193,
+        deck: @lean_left,
+        alt:
+          gettext(
+            "The uploaded employment references, each marked private: one graded 1 (very good) on a green panel, one graded 4 to 5 (poor to unsatisfactory) on a red one, each with a link to its full report."
+          )
+      },
+      %{
+        src: ~p"/images/landing-reference-check.avif",
+        width: 1800,
+        height: 1193,
+        deck: @lean_right,
+        alt:
+          gettext(
+            "The review of a single employment reference: the overall grade on a red panel, then a report naming the kind of reference, the grade range, a traffic-light tally of its wordings and the main criticism."
+          )
+      }
+    ]
+  end
+
+  @doc """
+  The privacy promise under the Arbeitszeugnis screenshots, in the words the
+  feature page itself uses.
+
+  Composed from `VutuvWeb.JobReferenceHTML`'s own two sentences rather than
+  written again here, because both name a country and a piece of hardware that
+  come from this installation's configuration. A second copy of that claim on
+  the front page is a second chance to state it wrongly, and this is the claim
+  where being wrong costs the most.
+  """
+  def reference_privacy_line do
+    JobReferenceHTML.check_location_heading() <> " " <> JobReferenceHTML.check_location_line()
   end
 
   @doc """
@@ -266,11 +320,23 @@ defmodule VutuvWeb.PageHTML do
   A full URL rather than a local path: the default points at the reference
   installation, which is the useful answer on an installation that has no
   filled-in profile of its own yet, and a local path would be a dead link there.
+
+  `suffix` appends a subpage of that profile (the CV builder passes `"/cv"`).
+  The join lives here rather than at the call site because the trailing slash a
+  configured URL may carry has to come off first, and `example_profile_label/1`
+  already strips it: doing it in markup rendered `…/wintermeyer//cv` under a
+  label reading `…/wintermeyer/cv`.
   """
-  def example_profile_url do
+  def example_profile_url(suffix \\ "") do
     case Application.get_env(:vutuv, :landing_example_profile_url) do
-      url when is_binary(url) -> if String.trim(url) == "", do: nil, else: String.trim(url)
-      _other -> nil
+      url when is_binary(url) ->
+        case url |> String.trim() |> String.trim_trailing("/") do
+          "" -> nil
+          base -> base <> suffix
+        end
+
+      _other ->
+        nil
     end
   end
 
@@ -280,6 +346,32 @@ defmodule VutuvWeb.PageHTML do
   """
   def example_profile_label(url) do
     url |> String.replace(~r{^https?://}, "") |> String.trim_trailing("/")
+  end
+
+  @doc """
+  The "Try it out:" line under a section heading, or nothing where the
+  installation cleared the example profile.
+
+  One component for both call sites: the profile deck offers the profile itself,
+  the CV deck the same profile's `/cv`, and the two were a verbatim copy of each
+  other down to the brand-link class string. `suffix` is the only difference.
+  """
+  attr(:suffix, :string, default: "")
+
+  def try_it_out(assigns) do
+    assigns = assign(assigns, :url, example_profile_url(assigns.suffix))
+
+    ~H"""
+    <p :if={@url} class="mt-3 text-base text-slate-600 dark:text-slate-400">
+      {gettext("Try it out:")}
+      <a
+        href={@url}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {example_profile_label(@url)}
+      </a>
+    </p>
+    """
   end
 
   @doc """
@@ -299,36 +391,6 @@ defmodule VutuvWeb.PageHTML do
 
       _other ->
         nil
-    end
-  end
-
-  @doc """
-  The posts block's heading and lead, following the window the posts actually
-  came from.
-
-  Two written-out strings rather than one with a number in it: German wants
-  "sieben Tagen" and "vier Wochen", the same sentence cannot carry both, and a
-  heading that says "the past seven days" over four weeks of posts is the one
-  outcome worse than a short carousel.
-  """
-  def posts_heading(days) do
-    if days <= Landing.preferred_window_days() do
-      gettext("Posts from the past seven days, not screenshots")
-    else
-      gettext("Posts from the past four weeks, not screenshots")
-    end
-  end
-
-  @doc "The lead under `posts_heading/1`, matching the same window."
-  def posts_lead(days) do
-    if days <= Landing.preferred_window_days() do
-      gettext(
-        "The most liked posts of the past seven days, everybody's best one first. Some were answered from Mastodon and other independent networks."
-      )
-    else
-      gettext(
-        "The most liked posts of the past four weeks, everybody's best one first. Some were answered from Mastodon and other independent networks."
-      )
     end
   end
 
@@ -363,20 +425,26 @@ defmodule VutuvWeb.PageHTML do
   end
 
   @doc """
-  The nine things vutuv does, in three groups of three.
+  The ten things vutuv does, in three groups.
 
   Three groups rather than one long list because the three answer three
   different questions a visitor actually has: what do I get out of a profile,
   what happens here day to day, and what happens to my data if I stop liking
-  the place. Nine rather than the three big claims a smaller network can get
+  the place. Ten rather than the three big claims a smaller network can get
   away with: breadth is the honest argument here, and every line below is
   something that is built and running.
 
+  The groups are deliberately **not** kept to an even three each. They used to
+  be, and when the Arbeitszeugnis review joined "Your profile" the choice was
+  between dropping a real feature to preserve the shape and letting one column
+  run a line longer. The list is read as a list, not as a grid, so the feature
+  won.
+
   This is our own copy, so it needs no member and shows on every installation,
-  including a brand-new empty one. The one line that is not true everywhere is
-  the Fediverse one, which drops out where the operator turned federation off
-  (`FEDIVERSE_ENABLED=false`, the intranet case) — leaving that group with two
-  entries rather than promising something whose every endpoint 404s there.
+  including a brand-new empty one. Two lines are not true everywhere and drop
+  out with the switch that turns their feature off: the Fediverse one where the
+  operator federates nothing (`FEDIVERSE_ENABLED=false`, the intranet case),
+  and the Arbeitszeugnis one where no model backs the review queue.
   """
   def landing_features(assigns) do
     assigns = assign(assigns, :groups, feature_groups())
@@ -412,21 +480,38 @@ defmodule VutuvWeb.PageHTML do
     end
   end
 
+  # Gated like `fediverse_feature/0`, and for the same reason: an installation
+  # with no model behind the queue (`REFERENCE_CHECKS_ENABLED=false`) cannot
+  # keep this promise, and the feature list is where a visitor counts what they
+  # get.
+  defp reference_feature do
+    if Checks.enabled?() do
+      [
+        gettext(
+          "Employment references: upload them, keep them private, and have the wording read and graded on our own servers."
+        )
+      ]
+    else
+      []
+    end
+  end
+
   defp feature_groups do
     [
       %{
         title: gettext("Your profile"),
-        items: [
-          gettext(
-            "A CV with positions, education, certificates including proof, spoken languages and tags other members endorse you for."
-          ),
-          gettext(
-            "CV download as PDF, Word, OpenDocument, LaTeX or JSON Resume, and you pick what goes in before you download it."
-          ),
-          gettext(
-            "A permanent public address, readable without an account and downloadable as a vCard."
-          )
-        ]
+        items:
+          [
+            gettext(
+              "A CV with positions, education, certificates including proof, spoken languages and tags other members endorse you for."
+            ),
+            gettext(
+              "CV download as PDF, Word, OpenDocument, LaTeX or JSON Resume, and you pick what goes in before you download it."
+            ),
+            gettext(
+              "A permanent public address, readable without an account and downloadable as a vCard."
+            )
+          ] ++ reference_feature()
       },
       %{
         title: gettext("People, posts, jobs"),

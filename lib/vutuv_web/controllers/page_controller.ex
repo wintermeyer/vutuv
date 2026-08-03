@@ -5,7 +5,6 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
-  alias Vutuv.Landing
   alias Vutuv.SearchText
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
@@ -73,19 +72,16 @@ defmodule VutuvWeb.PageController do
   # the rejected sign-up raising KeyError on the first assign the template
   # reached, i.e. a 500 on every mistyped form.
   defp render_landing(conn, assigns) do
-    # The posts come from the snapshot in Vutuv.Landing.Showcase rather than per
-    # request: this is the most requested page in the app. What a profile looks
-    # like is answered by static screenshots in the template, so nothing is
-    # loaded for that.
+    # Every example on this page is a static screenshot in the template, so the
+    # landing page loads nothing of its own. It used to show a wall of real
+    # posts from a cached snapshot; that came out again because a socket and a
+    # refresh query on the most requested page in the app were not worth what
+    # the block added.
     render(
       conn,
       "index.html",
       Keyword.merge(
-        [
-          prefetch: "/listings/most_followed_users",
-          showcase_posts: Landing.showcase_posts(),
-          showcase_window_days: Landing.window_days()
-        ],
+        [prefetch: "/listings/most_followed_users"],
         assigns
       )
     )
