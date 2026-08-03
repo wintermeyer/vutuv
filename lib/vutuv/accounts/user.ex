@@ -148,6 +148,10 @@ defmodule Vutuv.Accounts.User do
     # the feature never mass-mails existing members. The events themselves are
     # always pushed in-app regardless; these only gate the email copy.
     field(:email_on_endorsement?, :boolean, default: false)
+    # The one notification email that is on by default: it answers a question
+    # the member asked and waited minutes for, and it is what lets them close
+    # the tab. See the migration for the reasoning.
+    field(:email_on_reference_check?, :boolean, default: true)
     field(:email_on_follower?, :boolean, default: false)
     # The admin newsletter ("Rundbrief", Vutuv.Newsletters). Unlike the event
     # notices above this is an opt-OUT (default true): existing members are
@@ -290,6 +294,10 @@ defmodule Vutuv.Accounts.User do
     field(:welcome_notified_at, :naive_datetime)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
+    # How far the digest mail has got (`Vutuv.Activity.Digest`). The feed is
+    # derived, so there is no row to flag as sent — this is the high-water mark
+    # that stands in for one.
+    field(:notifications_notified_at, :utc_datetime_usec)
     # The owner closed the profile-completion checklist with its × (it also
     # auto-hides an hour after sign-up). Set programmatically by
     # Vutuv.Accounts.dismiss_onboarding/1; never cast from a profile form.
@@ -338,6 +346,7 @@ defmodule Vutuv.Accounts.User do
     has_many(:messengers, Vutuv.Profiles.Messenger)
     has_many(:languages, Vutuv.Profiles.Language)
     has_many(:qualifications, Vutuv.Profiles.Qualification)
+    has_many(:job_references, Vutuv.References.JobReference)
 
     # The work experience the member pinned as their profile job title (issue
     # #833). nil = pick it automatically (UserHelpers.current_job/1). Set only
@@ -402,7 +411,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -547,7 +556,7 @@ defmodule Vutuv.Accounts.User do
   """
   def email_pref_fields,
     do:
-      ~w(notification_emails? email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails?)a
+      ~w(notification_emails? email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails?)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 

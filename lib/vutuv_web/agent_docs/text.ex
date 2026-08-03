@@ -493,6 +493,13 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp entry_line("educations", edu), do: education_line(edu)
   defp entry_line("qualifications", qualification), do: qualification_line(qualification)
 
+  defp entry_line("job_references", reference) do
+    [reference.title, reference.employer, reference.kind_label, reference.issued_on]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" · ")
+    |> then(&if reference.text, do: &1 <> "\n" <> reference.text, else: &1)
+  end
+
   defp entry_line("languages", language),
     do: "* #{language.name}: #{language.level}#{Markdown.language_preferred_gloss(language)}"
 

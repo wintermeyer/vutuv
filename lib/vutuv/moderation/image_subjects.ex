@@ -18,6 +18,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
+  alias Vutuv.JobReferenceDocument
   alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Moderation.ImageScan
   alias Vutuv.Organizations.Organization
@@ -28,6 +29,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
   alias Vutuv.QualificationDocument
+  alias Vutuv.References.JobReference
   alias Vutuv.RemoteMedia
   alias Vutuv.Repo
   alias Vutuv.Uploads
@@ -166,6 +168,21 @@ defmodule Vutuv.Moderation.ImageSubjects do
       {:ok, path}
     else
       _ -> :gone
+    end
+  end
+
+  # An Arbeitszeugnis document: the rendered first page when one exists (the
+  # vision model cannot decode a PDF), else the verbatim original.
+  # Fingerprint-guarded like the other in-place assets.
+  def source(%ImageScan{kind: "job_reference_document"} = scan) do
+    with %JobReference{} = reference <- Repo.get(JobReference, scan.subject_id),
+         true <-
+           reference.document_fingerprint != nil and
+             reference.document_fingerprint == scan.fingerprint,
+         path when is_binary(path) <- JobReferenceDocument.scan_source_path(reference.id) do
+      {:ok, path}
+    else
+      _gone_or_replaced -> :gone
     end
   end
 
@@ -317,6 +334,27 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  def apply_approved(%ImageScan{kind: "job_reference_document"} = scan) do
+    flipped =
+      from(r in JobReference,
+        where:
+          r.id == ^scan.subject_id and r.document_fingerprint == ^scan.fingerprint and
+            r.document_moderation == "pending"
+      )
+      |> Repo.update_all(set: [document_moderation: "approved"])
+
+    case flipped do
+      {1, _rows} ->
+        # No quarantine move: the bytes are served through the authorizing
+        # proxy, which reads this state (the review-cover pattern).
+        broadcast(scan, :approved)
+        :ok
+
+      _stale ->
+        :stale
+    end
+  end
+
   def apply_approved(%ImageScan{kind: "qualification_document"} = scan) do
     flipped =
       from(q in Qualification,
@@ -452,6 +490,28 @@ defmodule Vutuv.Moderation.ImageSubjects do
         :ok
 
       _ ->
+        :stale
+    end
+  end
+
+  # A rejected Arbeitszeugnis document: the file goes, the entry stays. The
+  # member's own pasted or extracted text is untouched — the model judged the
+  # picture, not the words, and deleting their Zeugnis text along with it
+  # would destroy work the verdict never covered.
+  def apply_rejected(%ImageScan{kind: "job_reference_document"} = scan) do
+    cleared =
+      from(r in JobReference,
+        where: r.id == ^scan.subject_id and r.document_fingerprint == ^scan.fingerprint
+      )
+      |> Repo.update_all(set: JobReference.document_reset_fields())
+
+    case cleared do
+      {1, _rows} ->
+        JobReferenceDocument.delete(scan.subject_id)
+        broadcast(scan, :rejected)
+        :ok
+
+      _stale ->
         :stale
     end
   end
@@ -631,6 +691,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
       post_screenshot_stranded() ++
       review_cover_stranded() ++
       qualification_document_stranded() ++
+      job_reference_document_stranded() ++
       remote_post_image_stranded() ++
       remote_avatar_stranded()
   end
@@ -736,6 +797,19 @@ defmodule Vutuv.Moderation.ImageSubjects do
     )
     |> Repo.all()
     |> Enum.map(fn {id, fingerprint} -> {"remote_avatar", id, nil, fingerprint} end)
+  end
+
+  defp job_reference_document_stranded do
+    from(r in JobReference,
+      as: :subject,
+      where: r.document_moderation == "pending",
+      where: not exists(open_scan_exists("job_reference_document")),
+      select: {r.id, r.user_id, r.document_fingerprint}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, owner_id, fingerprint} ->
+      {"job_reference_document", id, owner_id, fingerprint}
+    end)
   end
 
   defp qualification_document_stranded do

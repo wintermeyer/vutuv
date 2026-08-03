@@ -1,0 +1,17 @@
+<.email_layout preheader="The review of your employment reference is finished" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    the review of your employment reference "{@title}" is finished.
+  </.email_p>
+  <.email_p :if={@grade}><strong>Overall grade: {@grade}</strong></.email_p>
+  <.email_p>Only you can see the result.</.email_p>
+  <.email_button href={"#{@url}settings/job_references/#{@reference_id}/check"}>
+    Read the review
+  </.email_button>
+  <.email_p>
+    The reading was produced by a language model on our own servers and is not legal advice.
+    For a binding assessment please ask a lawyer, ideally one specialising in employment law.
+  </.email_p>
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

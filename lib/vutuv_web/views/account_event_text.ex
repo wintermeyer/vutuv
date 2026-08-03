@@ -57,6 +57,13 @@ defmodule VutuvWeb.AccountEventText do
   def event_label("account_restored"), do: gettext("Account restored")
   def event_label("identity_verified"), do: gettext("Identity verified")
   def event_label("preferences_overridden"), do: gettext("Settings changed by support")
+  def event_label("job_reference_added"), do: gettext("Employment reference added")
+  def event_label("job_reference_updated"), do: gettext("Employment reference changed")
+  def event_label("job_reference_removed"), do: gettext("Employment reference deleted")
+
+  def event_label("job_reference_reviewed"),
+    do: gettext("Employment reference reviewed by the AI")
+
   def event_label("activity_log_viewed"), do: gettext("Activity log opened")
   def event_label(other), do: other
 
@@ -109,6 +116,11 @@ defmodule VutuvWeb.AccountEventText do
 
   defp detail("app_disconnected", %{"app" => app}) when is_binary(app), do: app
 
+  # Which model read it. The transparency box on the references page names the
+  # model this installation runs *today*; this says which one actually read
+  # yours, months later and after an upgrade.
+  defp detail("job_reference_reviewed", %{"model" => model}) when is_binary(model), do: model
+
   defp detail("activity_log_viewed", %{"member" => member}) when is_binary(member),
     do: "@" <> member
 
@@ -154,6 +166,13 @@ defmodule VutuvWeb.AccountEventText do
   def field_label("avatar"), do: gettext("Photo")
   def field_label("cover_photo"), do: gettext("Cover picture")
   def field_label("locale"), do: gettext("Interface language")
+  # The employment-reference fields. "public?" is the one that matters: it is
+  # the field whose change cannot be taken back.
+  def field_label("employer"), do: gettext("Employer")
+  def field_label("issued_on"), do: gettext("Issue date")
+  def field_label("body"), do: gettext("Text")
+  def field_label("document"), do: gettext("File")
+  def field_label("public?"), do: gettext("Visibility")
   def field_label("employment_status"), do: gettext("Job search")
   def field_label("noindex?"), do: gettext("Search engines")
   def field_label("noai?"), do: gettext("AI agents")

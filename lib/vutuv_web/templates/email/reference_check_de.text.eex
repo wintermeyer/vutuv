@@ -1,0 +1,21 @@
+<%= email_greeting(@user) %>,
+
+die Prüfung Ihres Arbeitszeugnisses „<%= @title %>“ ist fertig.
+<%= if @grade do %>
+Gesamtnote: <%= @grade %>
+<% end %>
+Das Ergebnis sieht nur Sie. Hier können Sie es lesen:
+
+<%= @url %>settings/job_references/<%= @reference_id %>/check
+
+Die Einordnung stammt von einem Sprachmodell auf unseren eigenen Servern und
+ist keine Rechtsberatung. Für eine verbindliche Beurteilung wenden Sie sich
+bitte an einen Anwalt, am besten an einen Fachanwalt für Arbeitsrecht.
+
+Diese Benachrichtigungs-E-Mails können Sie hier abschalten:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

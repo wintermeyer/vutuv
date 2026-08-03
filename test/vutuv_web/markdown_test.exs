@@ -219,6 +219,17 @@ defmodule VutuvWeb.MarkdownTest do
     assert html =~ "<td"
   end
 
+  # WCAG technique H63. A screen reader guesses the association on a simple
+  # table and stops guessing on a wide one — which is where it matters: the
+  # Arbeitszeugnis review opens with a five-column matrix whose cells only make
+  # sense announced under their own heading ("Note: 1", not a bare "1").
+  test "names every table header cell as a column header" do
+    html = render("| Wortlaut | Note |\n| :-- | :-- |\n| „stets“ | 1 |")
+
+    assert html =~ ~s(<th scope="col">)
+    refute html =~ "<th>"
+  end
+
   test "keeps a literal <br> inside a fenced code block (a code sample, not an artifact)" do
     html = render("```\n<br />\n```")
     assert html =~ "br"

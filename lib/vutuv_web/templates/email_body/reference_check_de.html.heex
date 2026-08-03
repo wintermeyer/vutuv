@@ -1,0 +1,18 @@
+<.email_layout preheader="Die Prüfung Ihres Arbeitszeugnisses ist fertig" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    die Prüfung Ihres Arbeitszeugnisses „{@title}“ ist fertig.
+  </.email_p>
+  <.email_p :if={@grade}><strong>Gesamtnote: {@grade}</strong></.email_p>
+  <.email_p>Das Ergebnis sieht nur Sie.</.email_p>
+  <.email_button href={"#{@url}settings/job_references/#{@reference_id}/check"}>
+    Prüfergebnis lesen
+  </.email_button>
+  <.email_p>
+    Die Einordnung stammt von einem Sprachmodell auf unseren eigenen Servern und ist keine
+    Rechtsberatung. Für eine verbindliche Beurteilung wenden Sie sich bitte an einen Anwalt,
+    am besten an einen Fachanwalt für Arbeitsrecht.
+  </.email_p>
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

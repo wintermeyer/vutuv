@@ -1371,6 +1371,114 @@ function setupEmploymentVisibility() {
 }
 onReady(setupEmploymentVisibility)
 
+// The Arbeitszeugnis form's publish confirmation (see job_reference/
+// form_content.html.heex). Publishing a Zeugnis hands a former employer's
+// graded judgement of a person to anyone, including search engines, and cannot
+// be taken back -- so the changeset demands a separate tick on the
+// private->public step. That tick is the one deliberate speed bump on this
+// form, and it was being spent on every save: an unticked confirmation box
+// under a form that saves fine reads as an unmet requirement, and after a few
+// of those nobody reads it on the save where it matters. So it appears with
+// the decision it confirms and goes away with it.
+// Same shape as the employment panel above: a plain wrapper whose only display
+// governor is `hidden` (issue #880), server-rendered visible, so with JS off
+// the box is simply always there to tick.
+function wirePublicConsent(toggle) {
+  if (!once(toggle, "publicConsent")) return
+  const wrap = toggle.closest("[data-public-visibility]")?.querySelector("[data-public-consent]")
+  if (!wrap) return
+
+  const sync = () => wrap.classList.toggle("hidden", !toggle.checked)
+  toggle.addEventListener("change", sync)
+  sync()
+}
+
+// The file drop zone on a classic form (the Arbeitszeugnis upload, see
+// job_reference/form_content.html.heex). Two things the native input cannot do:
+// take a dragged file, and say something before the upload starts.
+//
+// The size check is the second one. The cap is enforced server-side by
+// JobReferenceDocument.validate/1 and always will be -- this is not that check,
+// it is the difference between hearing "too large" now and hearing it after
+// pushing 40 MB up a phone's uplink. Both numbers come from the same place
+// (`data-upload-max`, written from JobReferenceDocument.max_size/0), so they
+// cannot drift.
+//
+// Clicking is NOT wired here: the <label for> already opens the picker, so the
+// zone works with JavaScript off. Only dropping and the check are added.
+function wireUploadDrop(zone) {
+  if (!once(zone, "uploadDrop")) return
+
+  const input = zone.querySelector("input[type=file]")
+  const nameEl = zone.querySelector("[data-upload-name]")
+  const errorEl = zone.parentElement?.querySelector("[data-upload-error]")
+  const max = parseInt(zone.dataset.uploadMax || "0", 10)
+  if (!input) return
+
+  const showError = message => {
+    if (!errorEl) return
+    errorEl.textContent = message || ""
+    errorEl.hidden = !message
+  }
+
+  const accept = file => {
+    if (max && file.size > max) {
+      // Refused before it is staged, so a submit cannot carry it: clearing the
+      // input is what makes the message true.
+      input.value = ""
+      if (nameEl) nameEl.textContent = ""
+      showError(zone.dataset.uploadTooLarge)
+      return false
+    }
+    if (nameEl) nameEl.textContent = file.name
+    showError(null)
+    return true
+  }
+
+  input.addEventListener("change", () => {
+    const file = input.files && input.files[0]
+    if (file) accept(file)
+  })
+
+  // dragover must be prevented too, or the browser keeps its "not allowed"
+  // cursor and never fires the drop.
+  ;["dragenter", "dragover"].forEach(name =>
+    zone.addEventListener(name, event => {
+      event.preventDefault()
+      zone.classList.add("is-dragover")
+    })
+  )
+  ;["dragleave", "dragend"].forEach(name =>
+    zone.addEventListener(name, () => zone.classList.remove("is-dragover"))
+  )
+
+  zone.addEventListener("drop", event => {
+    event.preventDefault()
+    zone.classList.remove("is-dragover")
+
+    const file = event.dataTransfer?.files?.[0]
+    if (!file || !accept(file)) return
+
+    // A file input's `files` is read-only except through a DataTransfer, which
+    // is the whole reason this handoff looks indirect.
+    const transfer = new DataTransfer()
+    transfer.items.add(file)
+    input.files = transfer.files
+  })
+}
+
+function setupUploadDrops() {
+  document.querySelectorAll("[data-upload-drop]").forEach(wireUploadDrop)
+}
+onReady(setupUploadDrops)
+
+function setupPublicConsent() {
+  document
+    .querySelectorAll('[data-public-visibility] input[name="job_reference[public?]"]')
+    .forEach(wirePublicConsent)
+}
+onReady(setupPublicConsent)
+
 // The profile editor's "Remove date of birth" control (see user/edit.html.heex).
 // The native <input type="date"> gives no clear affordance in some browsers
 // (Safari on macOS renders spinners with no ✕), so a member could set a birthday

@@ -67,6 +67,21 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         url: "http://istructe.example.org/verify/42"
       )
 
+    # A published Arbeitszeugnis. Single-token values on purpose, like the
+    # qualification above: the 80-column plain-text renderer wraps on word
+    # boundaries, so a long multi-word value stops being a contiguous
+    # substring. Its AI review is deliberately absent from every format, which
+    # the assertion below checks by name.
+    insert(:job_reference,
+      user: user,
+      title: "Zeugnis Spannbau",
+      employer: "Spannbau AG",
+      kind: "qualified",
+      body: "Sie erledigte alle Aufgaben stets zu unserer vollsten Zufriedenheit.",
+      public?: true,
+      public_consented_at: DateTime.utc_now(:second)
+    )
+
     # A stored proof document on the credential: the thumbnail + download
     # appear in HTML, the structured `document` map in the machine formats.
     # Moderation is off in tests, so it is released immediately.
@@ -1092,7 +1107,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       addresses: ["Berlin", "10115"],
       phone_numbers: ["+49 30 5550100"],
       emails: ["greta.public@example.com"],
-      tags: [tag.name]
+      tags: [tag.name],
+      job_references: ["Zeugnis Spannbau", "Spannbau AG"]
     }
 
     # The loop runs over the SectionDocs registry itself, so a new section

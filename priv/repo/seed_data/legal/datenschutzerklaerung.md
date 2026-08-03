@@ -91,6 +91,18 @@ Im Messenger zeigt vutuv an, wer gerade online ist. Dieser Status wird nur flüc
 
 vutuv hat eine Suchfunktion, mit der Sie Personen und Inhalte finden. Wenn Sie eine Suche ausführen, speichern wir den Suchbegriff und, sofern Sie angemeldet sind, eine Verknüpfung zu Ihrem Konto sowie den Zeitpunkt der Suche. Außerdem halten wir fest, welche Profile als Treffer angezeigt wurden. Das hilft uns, die Suche zu verbessern und Treffer schneller anzuzeigen. Rechtsgrundlage ist unser berechtigtes Interesse an einer funktionierenden und besseren Suche (Art. 6 Abs. 1 lit. f DSGVO); dieser Verarbeitung können Sie nach Art. 21 DSGVO widersprechen.
 
+#### Arbeitszeugnisse
+
+Sie können Arbeitszeugnisse zu Ihrem Konto hinzufügen, als PDF oder Bilddatei oder indem Sie den Text einfügen. Wir speichern die hochgeladene Datei, eine Vorschau daraus und den Text des Zeugnisses. Laden Sie eine Datei hoch, lesen wir den Text daraus aus; ist das Zeugnis ein Scan, geschieht das über eine Texterkennung auf unseren eigenen Servern.
+
+Ein Arbeitszeugnis ist **nicht öffentlich**. Sie sehen es nur selbst, bis Sie es ausdrücklich zur Veröffentlichung freigeben. Erst dann erscheint es auf Ihrem öffentlichen Profil und ist dort für alle lesbar und herunterladbar, auch für Suchmaschinen. Diese Freigabe können Sie jederzeit zurücknehmen; das Zeugnis ist dann wieder nur für Sie sichtbar. Sie können ein Zeugnis auch mit Einträgen Ihres Lebenslaufs verknüpfen, damit es bei einem veröffentlichten Zeugnis neben der zugehörigen Station erscheint.
+
+Ein hochgeladenes Zeugnis enthält typischerweise Ihren Namen, Ihr Geburtsdatum, Ihren früheren Arbeitgeber und eine Bewertung Ihrer Leistung. Überlegen Sie deshalb vor einer Veröffentlichung, was darauf zu sehen ist, und schwärzen Sie, was Sie nicht teilen möchten.
+
+Auf Ihren Wunsch prüfen wir ein Arbeitszeugnis mit einem Sprachmodell. Dabei wird der Text des Zeugnisses an ein Modell übergeben, das auf unserer eigenen Infrastruktur läuft. Es findet **keine Weitergabe an einen externen Anbieter** statt, und der Text wird nicht zum Training eines Modells verwendet. Das Ergebnis dieser Prüfung speichern wir bei dem Zeugnis und zeigen es ausschließlich Ihnen; es wird nie veröffentlicht, auch nicht bei einem veröffentlichten Zeugnis. Die Prüfung ist eine Lesehilfe und keine Rechtsberatung.
+
+Rechtsgrundlage für Speicherung und Prüfung ist Ihre Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), die Sie mit dem Hochladen beziehungsweise mit dem Start der Prüfung erteilen und jederzeit widerrufen können; für die Veröffentlichung tritt Ihre gesonderte Freigabe hinzu. Löschen Sie ein Zeugnis oder Ihr Konto, entfernen wir die Datei, die Vorschau, den Text und die gespeicherten Prüfergebnisse.
+
 #### Hosting und E-Mail-Versand
 
 vutuv läuft auf eigenen Servern in Deutschland. Wir geben Ihre Daten nicht zur Verarbeitung an einen externen Hosting-Dienstleister weiter. Auch unsere E-Mails (zum Beispiel die PINs zum Anmelden und die Benachrichtigungen) versenden wir über einen eigenen Mailserver auf diesem System und nicht über einen externen E-Mail-Dienstleister.

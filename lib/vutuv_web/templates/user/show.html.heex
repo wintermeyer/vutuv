@@ -613,10 +613,15 @@ the resulting ~200px rail width. --%>
         >
           {VutuvWeb.WorkExperienceHTML.kind_label(kind)}
         </h3>
+        <%!-- The published Zeugnisse, keyed by the CV entry each documents, so
+              a role can name its reference the way it already names the
+              qualification it was earned with. Built from the references this
+              page loaded, which are the published ones only. --%>
         <VutuvWeb.WorkExperienceHTML.experience_block
           :for={block <- blocks}
           block={block}
           user={@user}
+          references={VutuvWeb.JobReferenceHTML.references_by_subject(@job_references)}
         />
       </div>
 
@@ -723,6 +728,72 @@ the resulting ~200px rail width. --%>
         manage_href={~p"/settings/languages"}
         total={@totals.languages}
         preview={VutuvWeb.UserProfileLive.preview_limit(:languages)}
+        owner={@as_owner?}
+      />
+    </.card>
+
+    <%!-- Arbeitszeugnisse. Only the published ones are preloaded, so the owner
+    sees exactly what a visitor sees; their private entries stay in
+    /settings/job_references, which is where the empty tile points. The AI
+    review never appears here — it is the member's own reading of their own
+    document. --%>
+    <.card :if={@job_references != [] or @as_owner?} id="profile-job-references">
+      <.section_header title={gettext("Employment references")} />
+
+      <.empty_add :if={@as_owner? and @job_references == []} href={~p"/settings/job_references/new"}>
+        {gettext("Add an employment reference")}
+      </.empty_add>
+
+      <ul :if={@job_references != []} class="divide-y divide-slate-100 dark:divide-slate-800">
+        <li :for={reference <- @job_references} class="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+          <.link
+            :if={VutuvWeb.JobReferenceHTML.thumb_url(reference, @user)}
+            navigate={~p"/#{@user}/job_references/#{reference}"}
+            class="shrink-0"
+          >
+            <img
+              src={VutuvWeb.JobReferenceHTML.thumb_url(reference, @user)}
+              alt=""
+              class="h-24 w-[4.5rem] rounded border border-slate-200 object-cover object-top dark:border-slate-700"
+            />
+          </.link>
+
+          <div class="min-w-0">
+            <.link
+              navigate={~p"/#{@user}/job_references/#{reference}"}
+              class="font-medium text-slate-900 hover:underline dark:text-slate-100"
+            >
+              {reference.title}
+            </.link>
+            <p class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+              <span>{VutuvWeb.JobReferenceHTML.kind_name(reference.kind)}</span>
+              <span :if={reference.employer}>· {reference.employer}</span>
+              <span :if={reference.issued_on}>
+                · {VutuvWeb.JobReferenceHTML.issued_on(reference.issued_on)}
+              </span>
+            </p>
+
+            <%!-- Which part of the CV this Zeugnis documents. A reference is
+                  *about* a job, and a reader who has to match employers by eye
+                  between two cards is doing work the page can do for them. Only
+                  published references reach this list, so naming what one
+                  documents reveals nothing a visitor cannot already see. --%>
+            <p
+              :for={label <- VutuvWeb.JobReferenceHTML.linked_entry_labels(reference, @user)}
+              class="mt-1 text-xs text-slate-600 dark:text-slate-400"
+            >
+              {gettext("Documents:")} <span class="font-medium">{label}</span>
+            </p>
+          </div>
+        </li>
+      </ul>
+
+      <.manage_footer
+        :if={@job_references != [] or @as_owner?}
+        href={~p"/#{@user}/job_references"}
+        manage_href={~p"/settings/job_references"}
+        total={length(@job_references)}
+        preview={length(@job_references)}
         owner={@as_owner?}
       />
     </.card>

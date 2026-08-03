@@ -453,6 +453,136 @@ body.stretch main {
   margin-bottom: 0.375rem;
   padding: 0;
 }
+/* The file drop zone on a classic form (the Arbeitszeugnis upload). A bare
+   native file input is the smallest control the browser has, and on a page of
+   styled fields the one control the section exists for read as an
+   afterthought — its only feedback being the browser's own "no file selected".
+
+   The input is not hidden with `display: none`, which would take it out of the
+   tab order: it is clipped instead, so it stays focusable, and the zone shows
+   the focus ring for it via :focus-within. The <label for> is what opens the
+   picker, so clicking works with no JavaScript at all; app.js adds only the
+   drop half and the size check (`[data-upload-drop]`). */
+.upload-drop {
+  position: relative;
+}
+.upload-drop__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+/* Written as a descendant pair (0,2,0) rather than the bare class (0,1,0) on
+   purpose: the zone IS a <label>, and `.editform label` above is (0,1,1), so
+   the plain class loses and the zone lays itself out as one inline row with
+   the label's own font-size and bottom margin. Same shape as the two table
+   rules further down — a legacy rule that names an element catching new
+   markup — so it gets the same treatment: out-specify it and say why. */
+.upload-drop .upload-drop__zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0;
+  padding: 1.5rem 1rem;
+  font-size: 1rem;
+  text-align: center;
+  cursor: pointer;
+  border: 2px dashed #cbd5e1;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.upload-drop__zone:hover,
+.upload-drop.is-dragover .upload-drop__zone {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+/* The same two-part treatment every other field here gets on focus, moved to
+   the wrapper because the element you tab to is the clipped input. */
+.upload-drop:focus-within .upload-drop__zone {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.4);
+}
+.upload-drop__glyph {
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #64748b;
+}
+.upload-drop__label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #334155;
+}
+.upload-drop__hint {
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+/* The chosen file's name. Empty until something is picked, and it must not
+   reserve a line while empty, hence :empty rather than a toggled class. */
+.upload-drop__file {
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  overflow-wrap: anywhere;
+}
+.upload-drop__file:empty {
+  display: none;
+}
+
+/* A form field folded away behind one line (the Arbeitszeugnis text box, which
+   almost nobody needs: they upload a PDF). Native `<details>`, so it needs no
+   JavaScript and carries its own expanded state for assistive tech; the
+   summary reads as a quiet link rather than a control, because it offers a way
+   round the main path instead of competing with it. */
+.editform__reveal {
+  margin: 0 0 1rem;
+}
+.editform__reveal > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1d4ed8;
+  cursor: pointer;
+  list-style: none;
+}
+/* The default disclosure triangle differs per browser and sits oddly next to
+   an inline-flex summary, so it is replaced by one that turns with the state. */
+.editform__reveal > summary::-webkit-details-marker {
+  display: none;
+}
+.editform__reveal > summary::before {
+  content: "›";
+  display: inline-block;
+  font-size: 1.1em;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+.editform__reveal[open] > summary::before {
+  transform: rotate(90deg);
+}
+.editform__reveal > summary:hover {
+  color: #1e40af;
+  text-decoration: underline;
+}
+.editform__reveal > summary:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+.editform__reveal[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
 /* The optional marker. Required is the norm on these forms, so the quiet
    "(optional)" carries less ink than starring every other label would. */
 .editform__optional {
@@ -530,6 +660,10 @@ body.stretch main {
    field error, so it borrows the whole recipe — including the `!` glyph. It is
    hidden until it has something to say, and `display: flex` above would beat
    the browser's own `[hidden]` rule, so it is turned off by name. */
+/* The upload zone's own error line borrows the same recipe and needs the same
+   escape hatch: `display: flex` above out-ranks the browser's `[hidden]` rule,
+   so a "too large" message would never go away again (issue #880's shape). */
+.editform__error[hidden],
 .tag-input__notice[hidden] {
   display: none;
 }
@@ -1813,6 +1947,24 @@ ul.thumbs li .text .url a {
   vertical-align: top;
 }
 .markdown th { font-weight: 600; }
+/* A prose table always wraps, and its last column is prose like every other.
+   TWO element-level rules name the trailing cell by its *position* rather than
+   by the *thing* it holds, because both were written for the Edit/Delete pair
+   of a management table: `.card table td:last-child { white-space: nowrap }`
+   above, and `td:not(:first-child):last-child { text-align: right }` at the
+   top of this file. Both therefore also catch the final column of any Markdown
+   table that happens to sit in a card. The first forced a legal analysis whose
+   last column is a sentence 600px past its container; the second right-aligned
+   that column alone, so the Arbeitszeugnis review's five-column matrix ran
+   ragged-right against four ragged-left neighbours. An author who really wants
+   a right-aligned column still gets one: Earmark writes the `|---:|` alignment
+   as an inline style, which beats any selector. Same specificity as the two
+   rules (0,2,2 and 0,2,1), later in the file, so this wins both. */
+.markdown table td:last-child,
+.markdown table th:last-child {
+  white-space: normal;
+  text-align: left;
+}
 /* Inline post images (own attachments referenced via ![](…)). The alignment
    modifiers come from the `#left`/`#right`/`#center` src fragment the author
    chose in the composer (VutuvWeb.Markdown maps fragment → class; no fragment
@@ -2613,6 +2765,20 @@ html.lightbox-open { overflow: hidden; }
   .editform label,
   .editform__group > legend { color: #cbd5e1; }
   .editform__optional { color: #94a3b8; }
+  .editform__reveal > summary { color: #93c5fd; }
+  .editform__reveal > summary:hover { color: #bfdbfe; }
+  .upload-drop .upload-drop__zone {
+    border-color: #334155;
+    background: #0f172a;
+  }
+  .upload-drop__zone:hover,
+  .upload-drop.is-dragover .upload-drop__zone {
+    border-color: #60a5fa;
+    background: #1e293b;
+  }
+  .upload-drop__glyph, .upload-drop__hint { color: #94a3b8; }
+  .upload-drop__label { color: #e2e8f0; }
+  .upload-drop__file { color: #93c5fd; }
   /* Mirror the light-mode selector list above: its `[type=…]` attribute
      selectors outrank a plain `.editform input`, which would leave the
      fields white in dark mode. */

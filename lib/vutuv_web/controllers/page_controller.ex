@@ -313,7 +313,8 @@ defmodule VutuvWeb.PageController do
   - `/<username>/<section>` — the profile sections in full: `work_experiences`,
     `educations`, `qualifications`, `languages`, `links`, `social_media_accounts`,
     `messengers`, `addresses`, `phone_numbers`, `emails` (public addresses only),
-    `tags`; a single entry lives at `/<username>/<section>/<id-or-slug>`
+    `tags`, `job_references` (Arbeitszeugnisse the member chose to publish, with
+    their full text); a single entry lives at `/<username>/<section>/<id-or-slug>`
   - `/<username>/tags/<tag>/endorsers` — everyone who endorses this member for that tag
   - `/tags/<tag>` — a tag and its most endorsed members
   - `/listings/most_followed_users` — the most followed members

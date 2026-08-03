@@ -525,6 +525,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("educations", edu), do: education_line(edu)
   defp entry_line("qualifications", qualification), do: qualification_line(qualification)
 
+  defp entry_line("job_references", reference), do: job_reference_line(reference)
+
   defp entry_line("languages", language),
     do: "- #{md_text(language.name)}: #{language.level}#{language_preferred_gloss(language)}"
 
@@ -702,6 +704,28 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   # A credential line: the name, then its facts, then the verification link as
   # an autolink. Blank facts drop out, so a bare-name entry is just "- Name".
+  # The Zeugnis text is the point of the entry, so it goes on its own indented
+  # line rather than into the fact list: it is prose, often several sentences,
+  # and a reader (human or agent) came for its exact wording.
+  defp job_reference_line(reference) do
+    facts =
+      [reference.employer, reference.kind_label, reference.issued_on]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join(" · ")
+
+    base =
+      if facts == "",
+        do: "- #{md_text(reference.title)}",
+        else: "- #{md_text(reference.title)}: #{md_text(facts)}"
+
+    base
+    |> append_if(
+      reference.document,
+      &(&1 <> " [#{gettext("document")}](#{md_url(reference.document.url)})")
+    )
+    |> append_if(reference.text, &(&1 <> "\n\n  " <> md_text(reference.text)))
+  end
+
   defp qualification_line(qualification) do
     facts = qualification_facts(qualification)
 

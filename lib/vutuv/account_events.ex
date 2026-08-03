@@ -111,6 +111,17 @@ defmodule Vutuv.AccountEvents do
     "filter_added" => ["filter_kind"],
     "filter_removed" => ["filter_kind"],
 
+    # Employment references (Arbeitszeugnisse). Deliberately **no title and no
+    # grade**, only field names: a Zeugnis names a former employer and the
+    # review states a mark, this log outlives the entry by up to a year, and a
+    # member who deletes a Zeugnis must not leave "Zeugnis Muster GmbH, Note 4
+    # bis 5" behind in a page that support also reads. The kinds alone answer
+    # what this log is for — "who touched my references, and when".
+    "job_reference_added" => [],
+    "job_reference_updated" => ["fields"],
+    "job_reference_removed" => [],
+    "job_reference_reviewed" => ["model"],
+
     # Data in and out
     "data_exported" => [],
     "import_applied" => ["source"],

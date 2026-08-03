@@ -32,8 +32,6 @@ defmodule Vutuv.Activity do
       the page keeps listing those events, it just stops calling them new.
   """
   import Ecto.Query
-  require Logger
-
   alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.User
   alias Vutuv.Activity.NotificationPostRead
@@ -41,7 +39,6 @@ defmodule Vutuv.Activity do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Moderation.ImageScans
-  alias Vutuv.Notifications.Emailer
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Posts.Post
@@ -49,6 +46,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Posts.PostMention
   alias Vutuv.Posts.PostReply
   alias Vutuv.Profiles.CvUpdates
+  alias Vutuv.References.Check
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.UserTagEndorsement
@@ -328,9 +326,7 @@ defmodule Vutuv.Activity do
       })
     )
 
-    maybe_email(followee_id, follower, :email_on_follower?, fn email, user ->
-      Emailer.new_follower_email(email, user, follower)
-    end)
+    :ok
   end
 
   @doc """
@@ -388,6 +384,38 @@ defmodule Vutuv.Activity do
     notify(recipient_id, Map.merge(actor_fields(author), Map.put(payload, :kind, "cv_update")))
   end
 
+  @doc """
+  The finished AI review of one Arbeitszeugnis, pushed to the member's open
+  page and mailed to them.
+
+  The one notification here with no actor: nobody did this *to* the member,
+  they asked for it and were told they could close the page. A review takes
+  minutes, more with a queue in front of it, so this is the other half of that
+  promise — and the email is the half that works after they logged out.
+
+  The grade rides along because it is the fact they waited for; the report
+  itself never travels by mail, being a long legal reading of a private
+  document.
+
+  Nothing is mailed from here. Like every other kind, this reaches an inbox
+  only through `Vutuv.Activity.Digest`, and only for a member who was away long
+  enough to have missed it.
+  """
+  def notify_reference_check(%{user_id: user_id} = check, reference) do
+    grade = Check.grade_span(check)
+
+    notify(user_id, %{
+      id: "reference-check-#{check.id}",
+      kind: "reference_check",
+      at: check.finished_at || DateTime.utc_now(),
+      job_reference_id: reference.id,
+      title: reference.title,
+      grade: grade
+    })
+
+    :ok
+  end
+
   @doc ~S(Convenience: an "endorsed you for <tag>" notification for the tag's owner.)
   def notify_endorsement(owner_id, endorser, tag_name) do
     Vutuv.Webhooks.emit(owner_id, "endorsement.created", %{
@@ -405,9 +433,7 @@ defmodule Vutuv.Activity do
       })
     )
 
-    maybe_email(owner_id, endorser, :email_on_endorsement?, fn email, user ->
-      Emailer.endorsement_email(email, user, endorser, tag_name)
-    end)
+    :ok
   end
 
   @doc ~S"""
@@ -572,9 +598,7 @@ defmodule Vutuv.Activity do
       })
     )
 
-    maybe_email(user_id, other, :email_on_follower?, fn email, user ->
-      Emailer.new_follower_email(email, user, other)
-    end)
+    :ok
   end
 
   @doc """
@@ -595,36 +619,9 @@ defmodule Vutuv.Activity do
     )
   end
 
-  # Opt-in activity email. The in-app notification above always fires; this only
-  # adds the email copy when the recipient switched the matching preference on
-  # (all default off, set on the notifications settings page). Confirmed
-  # accounts only (the dormant legacy members are email_confirmed? false), never
-  # the actor themselves, and a delivery failure must never break the social
-  # action that triggered it. `build` turns the looked-up address + recipient
-  # into the `%Swoosh.Email{}` to deliver. Sent inline: these are low-frequency
-  # events and the preference defaults off, so most actions never reach here.
-  defp maybe_email(recipient_id, actor, field, build) when is_map(actor) do
-    actor_id = Map.get(actor, :id)
-
-    if recipient_id && recipient_id != actor_id do
-      # The whole lookup + send is best-effort: any failure (a bad id, an SMTP
-      # error) is logged and swallowed so it never breaks the social action that
-      # already fired its in-app notification above.
-      try do
-        with %User{email_confirmed?: true} = user <- Vutuv.Accounts.get_user(recipient_id),
-             true <- Map.get(user, field),
-             email when is_binary(email) <- Vutuv.Accounts.first_email_value(user) do
-          email |> build.(user) |> Emailer.deliver()
-        end
-      rescue
-        e -> Logger.error("activity email (#{field}) failed: #{Exception.message(e)}")
-      end
-    end
-
-    :ok
-  end
-
-  defp maybe_email(_recipient_id, _actor, _field, _build), do: :ok
+  # Nothing here sends email. Every notification kind reaches an inbox through
+  # one path, `Vutuv.Activity.Digest`, and only for a member who was away long
+  # enough to have missed it in the app. This module's job ends at the badge.
 
   ## Derived notifications feed
 
@@ -670,6 +667,47 @@ defmodule Vutuv.Activity do
       else: Vutuv.FeedPage.paginate(sources, limit, Keyword.get(opts, :cursor))
   end
 
+  @doc """
+  The notification kinds and the member preference each one answers to, as
+  `%{kind => field | nil}`. Public so `Vutuv.Activity.Digest` and its test can
+  read the registry rather than keeping a second copy of it.
+  """
+  def kind_email_prefs do
+    # The registry builds each kind's queries as it goes, and those queries
+    # need *a* member id — Ecto refuses to compare a column with nil. Nothing
+    # here runs them, so a throwaway id is enough, and reading the same list
+    # the feed reads is what keeps this from becoming a second registry.
+    throwaway = Vutuv.UUIDv7.generate()
+
+    for spec <- kind_specs(throwaway), into: %{}, do: {spec.kind, Map.fetch!(spec, :email_pref)}
+  end
+
+  @doc """
+  One page of the feed for the digest: everything that happened after `since`,
+  newest first, capped at `limit`.
+
+  `since` is a `DateTime`; entries carry `:at` as one too. The feed sources are
+  cursor-paginated from the newest end, so this walks back until it passes
+  `since` rather than filtering per kind — which keeps the registry the only
+  place that knows what a kind is.
+  """
+  def events_since(user_id, since, limit) do
+    %{entries: entries} = notifications_page(user_id, limit: limit)
+
+    Enum.filter(entries, fn entry -> after?(entry[:at], since) end)
+  end
+
+  defp after?(nil, _since), do: false
+  defp after?(_at, nil), do: true
+
+  defp after?(%DateTime{} = at, %DateTime{} = since), do: DateTime.compare(at, since) == :gt
+
+  defp after?(%NaiveDateTime{} = at, since),
+    do: at |> DateTime.from_naive!("Etc/UTC") |> after?(since)
+
+  defp after?(at, %NaiveDateTime{} = since),
+    do: after?(at, DateTime.from_naive!(since, "Etc/UTC"))
+
   # THE registry of notification kinds. Every kind declares all three of its
   # derivations here — read-marker MAX arm(s), feed source, count query(ies) —
   # so a kind can no longer join one structure and silently miss another,
@@ -684,6 +722,13 @@ defmodule Vutuv.Activity do
   #     (the merge sort is stable), so treat it as part of the interface.
   #   * `counts` — count queries summed into the badge tally, bounded by the
   #     same `read_at` the marker wrote.
+  #   * `email_pref` — the `Vutuv.Accounts.User` field a member turns off to
+  #     stop this kind reaching the digest mail (`Vutuv.Activity.Digest`), or
+  #     `nil` for a kind that is shown in the app and never mailed. It lives
+  #     here rather than in a map of its own for the same reason as the rest:
+  #     adding a kind must be one edit in one place, and a kind that forgets
+  #     this key fails `activity_digest_test.exs` instead of quietly never
+  #     mailing anybody.
   #
   # Deliberate per-kind asymmetries, kept as they were:
   #
@@ -703,99 +748,122 @@ defmodule Vutuv.Activity do
     [
       %{
         kind: "follower",
+        email_pref: :email_on_follower?,
         max_arms: [follower_max(user_id)],
         items: &follower_items(user_id, &1, &2),
         counts: [count_followers(user_id, read_at)]
       },
       %{
         kind: "endorsement",
+        email_pref: :email_on_endorsement?,
         max_arms: [endorsement_max(user_id)],
         items: &endorsement_items(user_id, &1, &2),
         counts: [count_endorsements(user_id, read_at)]
       },
       %{
         kind: "connection",
+        email_pref: :email_on_follower?,
         max_arms: [connection_max(user_id)],
         items: &connection_items(user_id, &1, &2),
         counts: [count_connections(user_id, read_at)]
       },
       %{
         kind: "reply",
+        email_pref: nil,
         max_arms: [reply_max(user_id)],
         items: &reply_items(user_id, &1, &2),
         counts: [count_replies(user_id, read_at, unread?)]
       },
       %{
         kind: "thread",
+        email_pref: nil,
         max_arms: [thread_max(user_id)],
         items: &thread_items(user_id, &1, &2),
         counts: [count_thread_replies(user_id, read_at, unread?)]
       },
       %{
         kind: "mention",
+        email_pref: nil,
         max_arms: [mention_max(user_id)],
         items: &mention_items(user_id, &1, &2),
         counts: [count_mentions(user_id, read_at, unread?)]
       },
       %{
         kind: "fediverse_reply",
+        email_pref: nil,
         max_arms: [fediverse_reply_max(user_id)],
         items: &fediverse_reply_items(user_id, &1, &2),
         counts: [count_fediverse_replies(user_id, read_at)]
       },
       %{
         kind: "fediverse_reaction",
+        email_pref: nil,
         max_arms: [fediverse_reaction_max(user_id)],
         items: &fediverse_reaction_items(user_id, &1, &2),
         counts: [count_fediverse_reactions(user_id, read_at)]
       },
       %{
         kind: "like",
+        email_pref: nil,
         max_arms: [like_max(user_id)],
         items: &like_items(user_id, &1, &2),
         counts: [count_likes(user_id, read_at)]
       },
       %{
         kind: "organization_role",
+        email_pref: nil,
         max_arms: [organization_role_max(user_id)],
         items: &organization_role_items(user_id, &1, &2),
         counts: [count_organization_roles(user_id, read_at)]
       },
       %{
         kind: "moderation",
+        email_pref: nil,
         max_arms: [moderation_max(user_id)],
         items: &moderation_items(user_id, &1, &2),
         counts: [count_moderation(user_id, read_at)]
       },
       %{
         kind: "image_rejected",
+        email_pref: nil,
         max_arms: [image_rejected_max(user_id)],
         items: &image_rejected_items(user_id, &1, &2),
         counts: [count_image_rejections(user_id, read_at)]
       },
       %{
         kind: "report_protection",
+        email_pref: nil,
         max_arms: [severance_max(user_id), severance_restore_max(user_id)],
         items: &report_protection_items(user_id, &1, &2),
         counts: [count_severances(user_id, read_at), count_severance_restores(user_id, read_at)]
       },
       %{
         kind: "handle_change",
+        email_pref: nil,
         max_arms: [handle_change_max(user_id)],
         items: &handle_change_items(user_id, &1, &2),
         counts: [count_handle_changes(user_id, read_at)]
       },
       %{
         kind: "cv_update",
+        email_pref: nil,
         max_arms: [cv_update_max(user_id)],
         items: &cv_update_items(user_id, &1, &2),
         counts: [count_cv_updates(user_id, read_at)]
       },
       %{
         kind: "username",
+        email_pref: nil,
         max_arms: [username_max(user_id)],
         items: &username_items(user_id, &1, &2),
         counts: [count_username(user_id, read_at)]
+      },
+      %{
+        kind: "reference_check",
+        email_pref: :email_on_reference_check?,
+        max_arms: [reference_check_max(user_id)],
+        items: &reference_check_items(user_id, &1, &2),
+        counts: [count_reference_checks(user_id, read_at)]
       }
     ]
   end
@@ -1464,6 +1532,62 @@ defmodule Vutuv.Activity do
   # (stamped by Accounts.activate_user/1) is both the gate and the timestamp,
   # so accounts that predate the feature keep a clean feed instead of being
   # handed a welcome years after the fact.
+  # "Your Arbeitszeugnis has been reviewed." The one notification here with no
+  # actor but the installation itself, and the reason the feature needs one at
+  # all: a review takes minutes, longer with a queue in front of it, so the
+  # member is explicitly invited to close the page. A notification (and the
+  # email beside it) is what makes that invitation honest.
+  #
+  # Derived straight from the finished check rows — no notification table, so
+  # deleting the Zeugnis takes its notification with it. Keyed on
+  # `finished_at`, not `inserted_at`, which is why it needs its own cursor
+  # clause: `inserted_at` is when the member pressed the button, and a row that
+  # waited an hour in the queue would sort into the feed an hour before the
+  # news it carries.
+  defp reference_check_items(user_id, limit, cursor) do
+    from(c in Check,
+      join: r in assoc(c, :job_reference),
+      where: c.user_id == ^user_id and c.status == "done" and not is_nil(c.finished_at),
+      order_by: [desc: c.finished_at, desc: c.id],
+      limit: ^limit,
+      select: {c.id, c.finished_at, c.job_reference_id, r.title, c.grade_span}
+    )
+    |> at_or_before_finished(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, reference_id, title, grade} ->
+      %{
+        id: "reference-check-#{id}",
+        kind: "reference_check",
+        at: at,
+        job_reference_id: reference_id,
+        title: title,
+        grade: grade
+      }
+    end)
+  end
+
+  defp reference_check_max(user_id) do
+    from(c in Check,
+      where: c.user_id == ^user_id and c.status == "done" and not is_nil(c.finished_at),
+      select: %{ts: max(c.finished_at)}
+    )
+  end
+
+  defp count_reference_checks(user_id, read_at) do
+    query =
+      from(c in Check,
+        where: c.user_id == ^user_id and c.status == "done" and not is_nil(c.finished_at),
+        select: %{count: count()}
+      )
+
+    if read_at, do: where(query, [c], c.finished_at > ^read_at), else: query
+  end
+
+  defp at_or_before_finished(query, nil), do: query
+
+  defp at_or_before_finished(query, %{at: at}),
+    do: where(query, [c], c.finished_at <= ^at)
+
   defp username_items(user_id, limit, cursor) do
     from(u in User,
       where: u.id == ^user_id and not is_nil(u.welcome_notified_at),

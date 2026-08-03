@@ -93,6 +93,7 @@ defmodule Vutuv.Application do
         ) ++
         optional_child(:sweep_account_events, Vutuv.AccountEvents.Sweeper) ++
         optional_child(:send_unread_message_emails, Vutuv.Chat.UnreadNotifier) ++
+        optional_child(:send_notification_digest_emails, Vutuv.Activity.DigestNotifier) ++
         optional_child(:moderation_sweeper, Vutuv.Moderation.Sweeper) ++
         optional_child(:prune_search_history, Vutuv.Search.HistorySweeper) ++
         optional_child(:webhook_deliverer, Vutuv.Webhooks.Deliverer) ++
@@ -102,6 +103,8 @@ defmodule Vutuv.Application do
         optional_child(:fediverse_counts, Vutuv.Fediverse.CountsRefresher) ++
         optional_child(:post_screenshot_worker, Vutuv.Posts.ScreenshotWorker) ++
         optional_child(:image_scan_worker, Vutuv.Moderation.ImageScanWorker) ++
+        optional_child(:reference_check_worker, Vutuv.References.CheckWorker) ++
+        optional_child(:reference_skill_refresher, Vutuv.References.SkillRefresher) ++
         optional_child(:daily_report_email, Vutuv.Reports.DailyReporter) ++
         optional_child(:bounce_watcher, Vutuv.Deliverability.Watcher) ++
         optional_child(:sweep_unreachable_accounts, Vutuv.Deliverability.Sweeper) ++

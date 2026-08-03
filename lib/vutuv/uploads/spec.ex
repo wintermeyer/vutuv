@@ -107,6 +107,14 @@ defmodule Vutuv.Uploads.Spec do
     # up to ~256px wide — the full document is a click away.
     qualification_document: [
       %{name: :thumb, fit: {:box_down, 640}, quality: 58}
+    ],
+    # An Arbeitszeugnis (Vutuv.JobReferenceDocument). Same shape as a
+    # qualification's proof — a portrait A4 scan shown as a card thumbnail —
+    # but with a second, larger version: a Zeugnis is a page of prose the
+    # member wants to skim before opening it, and 640px is too small to read.
+    job_reference_document: [
+      %{name: :thumb, fit: {:box_down, 640}, quality: 58},
+      %{name: :page, fit: {:box_down, 1400}, quality: 60}
     ]
   }
 

@@ -27,7 +27,7 @@ defmodule Vutuv.Moderation.ImageScan do
   # nobody — there is no member whose content was removed.
   @kinds ~w(avatar cover post_image job_posting_image organization_image
             url_screenshot post_screenshot review_cover qualification_document
-            remote_post_image remote_avatar)
+            job_reference_document remote_post_image remote_avatar)
   @statuses ~w(pending scanning approved rejected canceled)
   @open_statuses ~w(pending scanning)
 

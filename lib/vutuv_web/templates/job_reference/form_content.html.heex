@@ -1,0 +1,340 @@
+<.form :let={f} for={@changeset} action={@action} class="editform" multipart>
+  <.form_error changeset={@changeset} />
+
+  <%!-- `required` is the browser saying it before the round trip; the rule
+        itself is `validate_required` in the changeset, which trims, so a title
+        of spaces is as blank as an empty one. Both, not either: the attribute
+        is a courtesy a member can bypass, the changeset is what decides. --%>
+  <.editform_field form={f} field={:title}>
+    <%= label f, :title, gettext("Label") %>
+    <%= text_input f, :title, [autofocus: true, required: true, maxlength: 255] ++ err_attrs(f, :title) %>
+    <span class="editform__hint">{gettext("e.g. Zeugnis Muster GmbH 2019–2026")}</span>
+    <%= error_tag f, :title %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:employer}>
+    <%= label f, :employer do %>
+      {gettext("Employer")}
+      <span class="editform__optional">{gettext("(optional)")}</span>
+    <% end %>
+    <%= text_input f, :employer, err_attrs(f, :employer) %>
+    <%= error_tag f, :employer %>
+  </.editform_field>
+
+  <div class="editform__row">
+    <.editform_field form={f} field={:kind}>
+      <%= label f, :kind, gettext("Type") %>
+      <%= select f, :kind, kind_options(), err_attrs(f, :kind) %>
+      <%= error_tag f, :kind %>
+    </.editform_field>
+
+    <.editform_field form={f} field={:issued_on}>
+      <%= label f, :issued_on do %>
+        {gettext("Issued on")}
+        <span class="editform__optional">{gettext("(optional)")}</span>
+      <% end %>
+      <%= date_input f, :issued_on, err_attrs(f, :issued_on) %>
+      <%= error_tag f, :issued_on %>
+    </.editform_field>
+  </div>
+
+  <%!-- The country is not decoration. The AI review reads German employment
+        law (§ 109 GewO and BAG case law); Austria and Switzerland have their
+        own, incompatible rules, so the review is offered per country. Storing
+        and showing a reference works everywhere. --%>
+  <.editform_field form={f} field={:country}>
+    <%= label f, :country, gettext("Issued in") %>
+    <%= select f, :country, country_options(Phoenix.HTML.Form.input_value(f, :country)), err_attrs(f, :country) %>
+    <span class="editform__hint">
+      {gettext("The AI review covers German Arbeitszeugnisse only.")}
+    </span>
+    <%= error_tag f, :country %>
+  </.editform_field>
+
+  <fieldset class="editform__group">
+    <legend>{gettext("The document")}</legend>
+
+    <p class="editform__hint mb-3">
+      {gettext(
+        "Upload the PDF or the scan. We read the text out of it, and the review always reads that text, never the file itself."
+      )}
+    </p>
+
+    <%!-- Asked before the upload zone, not after it, because it is a question
+          about whether to upload at all. A Zeugnis names a person and grades
+          them, and a language model reads it here — filing somebody else's is
+          the processing of another human's personal data with nothing behind
+          it. The tick is required by the changeset on a new entry (and only
+          there), and it stamps `owner_confirmed_at`: a sentence nobody has to
+          answer leaves nothing behind, and the stamp is what the operator can
+          point at when somebody writes in a year later. --%>
+    <div :if={is_nil(assigns[:reference])} class="editform__field">
+      <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <input
+          type="checkbox"
+          name="job_reference[owner_confirmation]"
+          value="true"
+          checked={owner_confirmation_ticked?(@changeset)}
+          class={checkbox_class()}
+        />
+        <span>
+          {gettext("This reference was issued to me.")}
+          <span class="mt-1 block text-xs text-slate-600 dark:text-slate-400">
+            {gettext(
+              "A reference belongs to the person it is about. If this one is somebody else's, ask them first: without their explicit agreement you may not upload it here or have it reviewed."
+            )}
+          </span>
+        </span>
+      </label>
+      <%= error_tag f, :owner_confirmation %>
+    </div>
+
+    <%!-- The upload was a bare native file input under a label, which on a
+          page of styled fields read as nothing in particular: the one control
+          this whole section exists for looked like an afterthought, and its
+          "Keine ausgewählt" was the only feedback a member ever got. The zone
+          is a real target now, and it takes a dropped file as well as a
+          click. Progressive enhancement: the `<label for>` opens the picker
+          with no JavaScript at all, and the drop half is what app.js adds. --%>
+
+    <%!-- What is already attached, named and shown, so the member can tell
+          which scan is stored rather than guessing from a file name they last
+          saw in a picker.
+
+          It offers no "remove the file". A Zeugnis is not detachable from its
+          entry: the review grades the text, but the text is only worth
+          something because a document was read to produce it, so an entry
+          holding one without the other would be a claim with nothing behind
+          it. Uploading a new file replaces this one, and the whole entry can
+          be deleted — which takes the file with it. --%>
+    <div
+      :if={assigns[:reference] && assigns[:user] && JobReference.document?(@reference)}
+      class="editform__field"
+      data-document-current
+    >
+      <label>{gettext("Uploaded file")}</label>
+      <div class="flex items-start gap-3">
+        <%!-- Decorative: "Datei öffnen" right beside it is the same target
+              with a name, so a reader that announced this one too would offer
+              the same link twice, once nameless. --%>
+        <.link
+          :if={thumb_url(@reference, @user)}
+          href={document_url(@reference, @user)}
+          target="_blank"
+          rel="noopener"
+          class="shrink-0"
+          tabindex="-1"
+          aria-hidden="true"
+        >
+          <img
+            src={thumb_url(@reference, @user)}
+            alt=""
+            class="h-16 w-12 rounded object-cover object-top ring-1 ring-slate-200 dark:ring-slate-700"
+          />
+        </.link>
+        <div class="min-w-0 text-sm">
+          <span class="block truncate font-medium text-slate-900 dark:text-white">
+            {@reference.document}
+          </span>
+          <span class="block text-xs text-slate-600 dark:text-slate-400">
+            {document_label(@reference)}
+          </span>
+          <span class="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            <.link
+              :if={document_url(@reference, @user)}
+              href={document_url(@reference, @user)}
+              target="_blank"
+              rel="noopener"
+              class="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              {gettext("Open the file")}
+            </.link>
+          </span>
+        </div>
+      </div>
+      <span class="editform__hint">
+        {gettext(
+          "Choosing a new file below replaces this one; the text is kept either way. The file itself can only go together with the whole reference."
+        )}
+      </span>
+    </div>
+
+    <.editform_field form={f} field={:document}>
+      <%!-- The zone IS the field's label, so the input has exactly one
+            accessible name ("Datei hierher ziehen oder eine auswählen") rather
+            than a second one stacked on top of it. The format and size line is
+            a description instead: useful when a reader asks for it, not
+            something to read out before every interaction. --%>
+      <div
+        class="upload-drop"
+        data-upload-drop
+        data-upload-max={JobReferenceDocument.max_size()}
+        data-upload-too-large={
+          gettext("That file is larger than %{limit}. Please upload a smaller one.",
+            limit: max_upload_label()
+          )
+        }
+      >
+        <label class="upload-drop__zone" for="job_reference_document">
+          <span class="upload-drop__glyph" aria-hidden="true">↑</span>
+          <span class="upload-drop__label">
+            {gettext("Drag the file here, or choose one")}
+          </span>
+          <span class="upload-drop__hint" id="job_reference_document_formats" aria-hidden="true">
+            {gettext("PDF, JPG, PNG or WebP, up to %{limit}", limit: max_upload_label())}
+          </span>
+          <span class="upload-drop__file" data-upload-name role="status"></span>
+        </label>
+
+        <%= file_input f, :document, [id: "job_reference_document", class: "upload-drop__input", accept: Enum.join(JobReferenceDocument.extension_whitelist(), ","), "aria-describedby": "job_reference_document_formats job_reference_document_size_error"] ++ err_attrs(f, :document) %>
+      </div>
+
+      <%!-- `role="alert"` because the size refusal happens in JavaScript, after
+            the member acted: without it the file simply does not appear and
+            nothing says why. Turned off by the `hidden` attribute, which
+            `.editform__error[hidden]` has to re-assert — the recipe's own
+            `display: flex` would otherwise out-rank it. --%>
+      <p
+        class="editform__error"
+        id="job_reference_document_size_error"
+        data-upload-error
+        role="alert"
+        hidden
+      >
+      </p>
+      <%= error_tag f, :document %>
+    </.editform_field>
+
+    <%!-- The text is settled once it exists, and this is only the visible half
+          of that — `JobReference.changeset/2` drops the field, so a crafted
+          POST hits the same wall. What is at stake is not tidiness: the AI
+          review grades this exact wording, and a published Zeugnis is read by
+          strangers as a former employer's own words. Both claims collapse if
+          the person being judged can rewrite the judgement.
+
+          `readonly`, not `disabled`: the text stays selectable and copyable,
+          and screen readers still announce it as the field it is. --%>
+    <%!-- Almost nobody types a Zeugnis out: they hold a PDF or a scan, and the
+          upload is the path. Offering the text box as the equal second half of
+          an "either / or" made a new member stop and choose between two things
+          when there was nothing to choose. So on a **new** entry it folds away
+          behind one line, and the upload above stands alone.
+
+          On an entry that already exists it is open, because there the text is
+          the thing worth looking at: it is what the review actually read, and
+          the summary doubles as its label. One `<details>` rather than two
+          copies of the field, so the two cannot drift; native, so it needs no
+          JavaScript and announces its own expanded state. --%>
+    <details class="editform__reveal" open={not is_nil(assigns[:reference])}>
+      <summary>
+        <span :if={is_nil(assigns[:reference])}>
+          {gettext("No document at hand? Paste the text instead")}
+        </span>
+        <span :if={assigns[:reference]}>{gettext("Text of the reference")}</span>
+      </summary>
+
+      <div class="editform__field">
+        <%= textarea f, :body, [rows: 14, readonly: text_locked?(assigns), "aria-label": gettext("Text of the reference")] ++ err_attrs(f, :body) %>
+        <span :if={text_locked?(assigns)} class="editform__hint">
+          {gettext(
+            "This is the text of your document and cannot be edited: the review grades this exact wording. If it was read wrongly, delete this reference and upload it again."
+          )}
+        </span>
+        <span
+          :if={!text_locked?(assigns) && assigns[:reference] && source_note(@reference.body_source)}
+          class="editform__hint"
+        >
+          {source_note(@reference.body_source)}
+        </span>
+        <span :if={is_nil(assigns[:reference])} class="editform__hint">
+          {gettext("Only needed if you have no file to upload.")}
+        </span>
+        <%= error_tag f, :body %>
+      </div>
+    </details>
+  </fieldset>
+
+  <fieldset :if={Enum.any?(Map.values(@cv_entries), &Enum.any?/1)} class="editform__group">
+    <legend>
+      {gettext("Attach to your CV")}
+      <span class="editform__optional">{gettext("(optional)")}</span>
+    </legend>
+
+    <p class="editform__hint mb-3">
+      {gettext("A published reference then appears next to the entry it documents.")}
+    </p>
+
+    <div :for={{kind, entries} <- @cv_entries} :if={Enum.any?(entries)} class="mb-4 last:mb-0">
+      <%!-- h2, not h4: the page's only other heading is its h1, and a jump
+            from h1 to h4 leaves a screen reader's outline with two empty
+            levels in it. The size comes from the classes, not the tag. --%>
+      <h2 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {entries_heading(kind)}
+      </h2>
+
+      <label
+        :for={entry <- entries}
+        class="flex items-center gap-2 py-1 text-sm text-slate-700 dark:text-slate-300"
+      >
+        <input
+          type="checkbox"
+          name="job_reference[links][]"
+          value={link_value(kind, entry)}
+          checked={{kind, entry.id} in @selected}
+          class={checkbox_class()}
+        />
+        <span>{entry_label(entry)}</span>
+      </label>
+    </div>
+  </fieldset>
+
+  <%!-- The visibility gate. Default off, and the explanation sits next to the
+        box rather than behind a link: this is the one control on the form
+        whose wrong setting cannot be taken back. --%>
+  <fieldset class="editform__group" data-public-visibility>
+    <legend>{gettext("Visibility")}</legend>
+
+    <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+      <%= checkbox f, :public?, class: checkbox_class() %>
+      <span>
+        {gettext("Show this reference publicly on my profile")}
+        <span class="mt-1 block text-xs text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Anyone can then read and download it, including search engines. Black out anything you do not want to share (your address, your date of birth, signatures) before uploading."
+          )}
+        </span>
+      </span>
+    </label>
+
+    <%!-- The confirmation belongs to the act of publishing, so it is asked
+          only where it can apply. It used to sit unticked under *every* save —
+          on an already-public entry, and on a private one nobody was
+          publishing — which reads as an unmet requirement on a form that is
+          about to save fine, and spends the one deliberate speed bump this
+          form has on saves that do not need it. The changeset asks for it on
+          the private→public step alone, so the markup now says the same.
+
+          The wrapper carries no display utility: `hidden` is the only thing
+          governing it (issue #880), and the server renders it visible, so with
+          JS off the box is simply there to tick. --%>
+    <div
+      :if={is_nil(assigns[:reference]) || !@reference.public?}
+      class="mt-3"
+      data-public-consent
+    >
+      <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <input
+          type="checkbox"
+          name="job_reference[public_consent]"
+          value="true"
+          checked={consent_ticked?(@changeset, :public_consent)}
+          class={checkbox_class()}
+        />
+        <span>{gettext("I confirm that this reference may be shown publicly.")}</span>
+      </label>
+      <%= error_tag f, :public_consent %>
+    </div>
+  </fieldset>
+
+  <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
+</.form>

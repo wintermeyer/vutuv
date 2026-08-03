@@ -1,0 +1,17 @@
+# Third-party material bundled with vutuv
+
+## Arbeitszeugnis-Prüfer skill
+
+`priv/reference_skill/SKILL.md` is a copy of the Arbeitszeugnis-Prüfer skill,
+the prompt behind the employment-reference review (`Vutuv.References`).
+
+    https://github.com/Klotzkette/arbeitszeugnispruefer-skill
+
+Copyright (c) 2026 Klotzkette <tom@braegel.com>
+Dual-licensed MIT / Apache-2.0. The MIT text is kept beside the file at
+`priv/reference_skill/LICENSE-MIT`.
+
+The copy is a fallback: `Vutuv.References.SkillRefresher` re-fetches the skill
+from that repository once a day, and an installation without outbound network
+access (`FETCH_REFERENCE_SKILL=false`) runs on this copy instead. Every review
+vutuv renders credits the project and names the skill version it used.

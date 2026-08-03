@@ -58,6 +58,18 @@ heading. --%>
           {gettext("When someone starts following you.")}
         </.setting_toggle>
 
+        <%!-- On by default, unlike its neighbours: this one answers a question
+              the member asked and then waited minutes for, and it is what
+              makes "you can close this page" an honest thing to tell them. --%>
+        <.setting_toggle label={gettext("Employment reference reviews")}>
+          <:checkbox>
+            <%= checkbox f, :email_on_reference_check?, class: checkbox_class() %>
+          </:checkbox>
+          {gettext(
+            "When the review of one of your employment references is finished. It takes minutes, so you can close the page and wait for the email."
+          )}
+        </.setting_toggle>
+
         <.setting_toggle label={gettext("Newsletter")}>
           <:checkbox><%= checkbox f, :newsletter_emails?, class: checkbox_class() %></:checkbox>
           {gettext("Occasional vutuv news and announcements.")}

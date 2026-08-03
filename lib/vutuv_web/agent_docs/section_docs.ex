@@ -19,6 +19,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.JobReferenceDocument
   alias Vutuv.Languages
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -28,6 +29,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.QualificationDocument
+  alias Vutuv.References.JobReference
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.CV
@@ -48,7 +50,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     addresses: "address",
     phone_numbers: "phone_number",
     emails: "email",
-    tags: "user_tag"
+    tags: "user_tag",
+    job_references: "job_reference"
   }
 
   @doc "Every profile section (the drift test derives its coverage from this)."
@@ -105,6 +108,9 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp index_title(:emails, name), do: gettext("Email addresses of %{name}", name: name)
   defp index_title(:tags, name), do: gettext("Tags of %{name}", name: name)
 
+  defp index_title(:job_references, name),
+    do: gettext("Employment references of %{name}", name: name)
+
   defp entry_title(:work_experiences, entry),
     do: Enum.join(Enum.filter([entry.title, entry.organization], & &1), " @ ")
 
@@ -122,6 +128,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry_title(:phone_numbers, entry), do: entry.value
   defp entry_title(:emails, entry), do: entry.value
   defp entry_title(:tags, entry), do: entry.name
+  defp entry_title(:job_references, entry), do: entry.title
 
   defp entry(:work_experiences, record), do: work_entry(record)
   defp entry(:educations, record), do: education_entry(record)
@@ -150,6 +157,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   # Only the qualification entry needs the user (its document URL lives under
   # the member's slug); every other section's vocabulary stays user-less.
   defp entry(:qualifications, record, user), do: qualification_entry(record, user)
+  defp entry(:job_references, record, user), do: job_reference_entry(record, user)
   defp entry(section, record, _user), do: entry(section, record)
 
   # The tag detail page names its endorsers now (issue #1008), so its doc
@@ -237,7 +245,60 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     }
   end
 
-  @doc false
+  @doc """
+  One published Arbeitszeugnis.
+
+  Deliberately **not** the AI review: that is the member's own private reading
+  of their document and is never part of a public rendering, in any format.
+  The body is the Zeugnis text itself, which is what a reader (human or agent)
+  came for.
+  """
+  def job_reference_entry(reference, user \\ nil) do
+    %{
+      id: reference.id,
+      title: reference.title,
+      employer: reference.employer,
+      # qualified | simple | interim | apprenticeship | service, plus the word
+      # for it. The label lives in the doc map rather than in each renderer, so
+      # Markdown, text, JSON and XML can never name a kind differently.
+      kind: reference.kind,
+      kind_label: kind_label(reference.kind),
+      # The country whose employment law it was issued under; a Zeugnis only
+      # means what it means inside one legal system.
+      country: reference.country,
+      issued_on: reference.issued_on && Date.to_iso8601(reference.issued_on),
+      text: reference.body,
+      document: job_reference_document_ref(reference, user)
+    }
+  end
+
+  # The uploaded file, only once the AI scan released it (these docs are the
+  # anonymous public view) and only when the caller supplied the user whose
+  # slug its URL lives under.
+  defp kind_label("qualified"), do: gettext("Qualifiziertes Zeugnis")
+  defp kind_label("simple"), do: gettext("Einfaches Zeugnis")
+  defp kind_label("interim"), do: gettext("Zwischenzeugnis")
+  defp kind_label("apprenticeship"), do: gettext("Ausbildungszeugnis")
+  defp kind_label("service"), do: gettext("Dienstzeugnis")
+  defp kind_label(_unknown), do: nil
+
+  defp job_reference_document_ref(reference, %{username: username}) do
+    if JobReference.document_released?(reference) do
+      file =
+        reference.document_fingerprint <>
+          JobReferenceDocument.public_ext(reference.document_content_type)
+
+      %{
+        url: AgentDocs.abs_url("/#{username}/job_references/#{reference.id}/document/#{file}"),
+        content_type: reference.document_content_type,
+        size: reference.document_size,
+        pages: reference.document_page_count
+      }
+    end
+  end
+
+  defp job_reference_document_ref(_reference, _user), do: nil
+
   def qualification_entry(qualification, user \\ nil) do
     %{
       id: qualification.id,

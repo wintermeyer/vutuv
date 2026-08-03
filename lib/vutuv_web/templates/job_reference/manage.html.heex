@@ -1,0 +1,230 @@
+<%!-- The owner's editor. Unlike most sections this list is normally invisible
+to everyone else: a Zeugnis is private until the member ticks it public, so the
+public twin at /:slug/job_references is usually empty even here. --%>
+<.settings_shell
+  user={@user}
+  active={:job_references}
+  title={gettext("Employment references")}
+>
+  <p class="mb-5 text-sm text-slate-600 dark:text-slate-400">
+    {gettext(
+      "Upload your Arbeitszeugnisse, attach them to your CV, and have them reviewed. Nothing is public until you say so."
+    )}
+  </p>
+
+  <.card_section
+    empty={Enum.empty?(@references)}
+    add_href={~p"/settings/job_references/new"}
+    add_label={gettext("Add an employment reference")}
+  >
+    <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+      <li :for={reference <- @references} class="py-5 first:pt-0 last:pb-0">
+        <%!-- Two columns at every width, and the narrow one is budgeted: on a
+              390px phone the card leaves 310px, so a 96px thumbnail plus the
+              Edit/Delete pair on the same line left the content 58px and broke
+              the title, the kind chip and the review panel each across three
+              lines. The thumbnail steps down to 64px below `sm` and the
+              actions moved to the foot of the row, which also pulls them back
+              beside their entry on a wide screen — they used to float 400px
+              away at the top right. --%>
+        <div class="flex items-start gap-3 sm:gap-4">
+          <%!-- The preview is the way in. It looked clickable and was not, and
+                the owner had no way at all to read their own Zeugnis from
+                here: the public page does not exist for a private entry, and
+                the edit form only offers to *replace* the file. Sized to the
+                page it shows (A4 is 1:√2, so 80×112 and 128×180 keep it),
+                large enough that two scans are told apart by their layout. --%>
+          <.link
+            :if={thumb_url(reference, @user)}
+            navigate={~p"/settings/job_references/#{reference}"}
+            class="shrink-0"
+            tabindex="-1"
+            aria-hidden="true"
+          >
+            <img
+              src={thumb_url(reference, @user)}
+              alt=""
+              class="h-28 w-20 rounded border border-slate-200 object-cover object-top sm:h-45 sm:w-32 dark:border-slate-700"
+            />
+          </.link>
+          <div
+            :if={is_nil(thumb_url(reference, @user))}
+            class="flex h-28 w-20 shrink-0 items-center justify-center rounded border border-dashed border-slate-300 text-slate-600 sm:h-45 sm:w-32 dark:border-slate-700 dark:text-slate-400"
+            aria-hidden="true"
+          >
+            <span class="text-2xl">¶</span>
+          </div>
+
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <%!-- The title is the row's real link, so the way in has a name a
+                    screen reader can read out and a keyboard can reach. The
+                    thumbnail beside it points at the same page and is marked
+                    decorative, or every entry would announce twice. --%>
+              <.link
+                navigate={~p"/settings/job_references/#{reference}"}
+                class="font-medium text-slate-900 hover:underline dark:text-slate-100"
+              >
+                {reference.title}
+              </.link>
+
+              <%!-- Visibility is stated on every row, never implied by its
+                    absence: "who can see this" is the question a member has
+                    about a Zeugnis, and silence is not an answer. It is the
+                    only chip left up here — the kind is a fact, not a state,
+                    so it reads in the line below, where a long German label
+                    like "Qualifiziertes Zeugnis" can wrap as text instead of
+                    breaking across two lines inside a badge. --%>
+              <span
+                :if={reference.public?}
+                class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+              >
+                {gettext("Public")}
+              </span>
+              <span
+                :if={!reference.public?}
+                class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+              >
+                {gettext("Private")}
+              </span>
+            </div>
+
+            <.reference_meta reference={reference} class="mt-0.5" />
+
+            <p
+              :if={Enum.any?(reference.links)}
+              class="mt-1 text-xs text-slate-600 dark:text-slate-400"
+            >
+              {gettext("Attached to your CV")}
+            </p>
+
+            <%!-- The review panel is a LiveView so the member watches the
+                  queue move without reloading. --%>
+            <div class="mt-3">
+              {live_render(@conn, VutuvWeb.ReferenceCheckLive,
+                id: "check-#{reference.id}",
+                session: %{"job_reference_id" => reference.id},
+                sticky: false
+              )}
+            </div>
+
+            <.row_actions
+              class="mt-3"
+              edit_to={~p"/settings/job_references/#{reference}/edit"}
+              delete_to={~p"/settings/job_references/#{reference}"}
+              confirm={
+                gettext("Delete this reference, its document and its review? This cannot be undone.")
+              }
+            />
+          </div>
+        </div>
+      </li>
+    </ul>
+  </.card_section>
+
+  <%!-- What actually happens to the document, in the words of somebody who has
+        never heard of a language model. It sits below the list rather than
+        above it because the list is what the page is for, and it is a plain
+        card rather than a disclosure, because transparency that has to be
+        unfolded first is a claim rather than a practice.
+
+        Every fact in it is read from configuration (the model tag, the machine,
+        the skill's own URL and version), so it stays true on an installation
+        that runs a different model on a different box, and it cannot drift the
+        way a hand-written sentence about "our AI" would. --%>
+  <div :if={checks_enabled?()} class="mt-6">
+    <.card_section>
+    <h2 class="card__label">{gettext("How the review works")}</h2>
+
+    <%!-- Plain blocks, deliberately not a <dl>: `components.css` gives every
+          `dd` on a legacy page `font-weight: bold` and truncates any link
+          inside one to a single ellipsised line, which would have set this
+          whole box in bold and cut the skill's URL off mid-path. --%>
+    <div class="mt-1 space-y-4 text-sm text-slate-700 dark:text-slate-300">
+      <div>
+        <%!-- The heading names the country rather than saying "here": a member
+              asking where their Zeugnis goes is asking about a place, and
+              "here" answers with the website they are already looking at. --%>
+        <p class="mb-0.5 font-semibold text-slate-900 dark:text-slate-100">
+          {check_location_heading()}
+        </p>
+        <p class="mb-0">
+          {check_location_line()}
+          {gettext(
+            "It is not sent to ChatGPT, to Google or to any other company. There is no account and no interface anywhere else through which it could travel."
+          )}
+        </p>
+      </div>
+
+      <div>
+        <p class="mb-0.5 font-semibold text-slate-900 dark:text-slate-100">
+          {gettext("The model is open source.")}
+        </p>
+        <p class="mb-0">
+          {gettext(
+            "We use %{model}, a freely available language model. Anyone can download it and run the same review themselves, which is also why we are able to run it on our own machines at all.",
+            model: reference_check_model()
+          )}
+        </p>
+      </div>
+
+      <div>
+        <p class="mb-0.5 font-semibold text-slate-900 dark:text-slate-100">
+          {gettext("The yardstick is public too.")}
+        </p>
+        <%!-- The author is named, and his account is a link, because "we follow
+              somebody else's yardstick" is only worth saying if the reader can
+              go and look at who wrote it. Split on a placeholder rather than
+              pattern-matched: a `.po` slip in a two-part `[a, b] = split`
+              turns a page into a 500, which is how the German landing page
+              went down once. --%>
+        <% {before_author, after_author} =
+          split_marker(
+            gettext(
+              "Which wording counts as which grade is not our own invention. We follow the Arbeitszeugnis-Prüfer, a set of instructions published under the MIT and Apache 2.0 licences by the lawyer Tom Braegelmann ({account}). You can read every rule the model is given:"
+            ),
+            "{account}"
+          ) %>
+        <p class="mb-0 break-words">
+          {before_author}<.link
+            href="https://github.com/Klotzkette"
+            target="_blank"
+            rel="noopener"
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >{gettext("GitHub account @Klotzkette")}</.link>{after_author}
+          <.link
+            href={skill_project_url()}
+            target="_blank"
+            rel="noopener"
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {skill_project_url()}
+          </.link>
+        </p>
+      </div>
+
+      <div>
+        <p class="mb-0.5 font-semibold text-slate-900 dark:text-slate-100">
+          {gettext("The result is yours alone.")}
+        </p>
+        <p class="mb-0">
+          {gettext(
+            "Nobody else can open a review, and publishing a reference on your profile never publishes its review. What a machine read into your Zeugnis is nobody's business but yours."
+          )}
+        </p>
+      </div>
+
+      <div>
+        <p class="mb-0.5 font-semibold text-slate-900 dark:text-slate-100">
+          {gettext("It is not legal advice.")}
+        </p>
+        <p class="mb-0">
+          {gettext(
+            "A language model reads wording and can be wrong. For a binding assessment ask a lawyer, ideally a Fachanwalt für Arbeitsrecht."
+          )}
+        </p>
+      </div>
+    </div>
+    </.card_section>
+  </div>
+</.settings_shell>

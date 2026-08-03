@@ -3528,6 +3528,11 @@ defmodule VutuvWeb.UI do
            hint: gettext("Credentials, with proof documents"),
            terms: gettext("certificate licence diploma credential award proof document")
          ),
+         row(:job_references, gettext("Employment references"), ~p"/settings/job_references",
+           hint: gettext("Your Arbeitszeugnisse, private unless you publish them"),
+           terms:
+             gettext("arbeitszeugnis reference letter testimonial employer evaluation review")
+         ),
          row(:languages, gettext("Language skills"), ~p"/settings/languages",
            hint: gettext("The languages you speak"),
            terms: gettext("language speak spoken fluent native mother tongue")
@@ -3535,10 +3540,6 @@ defmodule VutuvWeb.UI do
          row(:tags, gettext("Tags"), ~p"/settings/tags",
            hint: gettext("The topics you are known for"),
            terms: gettext("skill topic keyword expertise endorsement")
-         ),
-         row(:organizations, gettext("Organizations"), ~p"/settings/organizations",
-           hint: gettext("Company pages you run"),
-           terms: gettext("company employer firm business organisation page")
          )
        ]},
       {gettext("Contact details"),
@@ -3630,6 +3631,10 @@ defmodule VutuvWeb.UI do
          row(:export, gettext("Export"), ~p"/#{user}/export",
            hint: gettext("Download everything we store about you"),
            terms: gettext("download gdpr dsgvo data backup json cv")
+         ),
+         row(:organizations, gettext("Organizations"), ~p"/settings/organizations",
+           hint: gettext("Company pages you run"),
+           terms: gettext("company employer firm business organisation page")
          ),
          row(:apps, gettext("Apps & API"), ~p"/settings/apps",
            hint: gettext("Connected apps and access tokens"),

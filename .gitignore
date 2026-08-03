@@ -42,6 +42,7 @@ erl_crash.dump
 /originals
 /moderation_evidence
 /qualification_documents
+/job_reference_documents
 /organization_images
 /job_posting_images
 # pictures fetched from other networks (Vutuv.RemoteMedia): a followed

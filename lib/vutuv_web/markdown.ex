@@ -600,7 +600,22 @@ defmodule VutuvWeb.Markdown do
     # language of the code inside the diff beside it when the fence named one.
     |> CodeHighlight.render()
     |> Diff.render()
+    |> scope_table_headers()
     |> Footnotes.inject(footnotes)
+  end
+
+  # Name each header cell as a **column** header (WCAG technique H63). A screen
+  # reader can guess it for a simple table, and stops guessing on a wide one —
+  # which is exactly where it matters: the Arbeitszeugnis review opens with a
+  # five-column matrix whose rows are only readable if each cell is announced
+  # under the right heading ("Note: 1", not a bare "1").
+  #
+  # Every `<th>` a pipe table produces is a column header (Earmark emits them
+  # only in the `<thead>` row), so the mapping needs no parsing. The sanitizer
+  # has already run and allows no `scope` attribute, hence doing it here, on
+  # markup this module built.
+  defp scope_table_headers(html) do
+    String.replace(html, "<th>", ~s(<th scope="col">))
   end
 
   # The Milkdown editor emits a literal `<br />` for content it has no plain

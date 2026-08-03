@@ -1,0 +1,13 @@
+<.form_page
+  user={@current_user}
+  active={:job_references}
+  section={{gettext("Employment references"), ~p"/settings/job_references"}}
+  title={gettext("Add an employment reference")}
+>
+  <%= render "form_content.html",
+        backlink: ~p"/settings/job_references",
+        changeset: @changeset,
+        action: ~p"/settings/job_references",
+        cv_entries: @cv_entries,
+        selected: @selected %>
+</.form_page>

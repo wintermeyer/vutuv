@@ -1,0 +1,11 @@
+<.email_layout preheader="New on vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>here is what happened on vutuv while you were away:</.email_p>
+  <ul style="margin: 0 0 16px; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
+    <li :for={line <- @lines} style="margin-bottom: 6px;">{line}</li>
+  </ul>
+  <.email_p :if={@more > 0}>… and {@more} more.</.email_p>
+  <.email_button href={@notifications_url}>See all notifications</.email_button>
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

@@ -31,6 +31,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.SavedSearches
   alias VutuvWeb.EmailComponents
   alias VutuvWeb.EmailText
+  alias VutuvWeb.NotificationDigestText, as: DigestText
   alias VutuvWeb.Plug.Locale
   alias VutuvWeb.SavedSearchToken
 
@@ -346,6 +347,69 @@ defmodule Vutuv.Notifications.Emailer do
       :email_on_endorsement?,
       fn -> gettext("@%{slug} endorsed you on vutuv", slug: endorser.username) end,
       %{actor_username: endorser.username, tag_name: tag_name}
+    )
+  end
+
+  @doc """
+  The notification digest: what a member missed while they were away.
+
+  **The one notification mail there is.** Every kind reaches the inbox through
+  this and nothing else, so adding a kind never means adding an email — see
+  `Vutuv.Activity.Digest`. `lines` are already-rendered plain sentences
+  (`VutuvWeb.NotificationDigestText.line/1`) and `more` is how many did not
+  fit, so the mail can say so instead of pretending it listed everything.
+
+  Unsubscribe points at the master switch (`notification_emails?`): a member
+  who wants one kind and not another turns that kind off on the settings page,
+  but the one-click header in a mail must switch off the mail it arrived in.
+  """
+  def notification_digest_email(email, user, events, more) do
+    # Rendered here rather than in `Vutuv.Activity.Digest`: turning an event
+    # into a sentence is a view's job, and it has to happen inside this call so
+    # the lines come out in the recipient's language — `notification_email/6`
+    # is what puts that locale in force.
+    notification_email(
+      email,
+      user,
+      "notification_digest",
+      :notification_emails?,
+      fn -> digest_subject(Enum.map(events, &DigestText.line/1), more) end,
+      %{
+        lines: Enum.map(events, &DigestText.line/1),
+        more: more,
+        notifications_url: public_url() <> "notifications"
+      }
+    )
+  end
+
+  # Named in the subject when there is one thing to say, counted when there are
+  # several: "3 neue Mitteilungen" tells a member nothing they cannot see in
+  # the app's badge, while the single line often saves them the trip.
+  defp digest_subject([line], 0), do: line
+
+  defp digest_subject(lines, more) do
+    count = length(lines) + more
+    ngettext("%{count} new notification on vutuv", "%{count} new notifications on vutuv", count)
+  end
+
+  @doc """
+  "Your Arbeitszeugnis has been reviewed."
+
+  The one notification mail with no actor: the member asked for this themselves
+  and were told they could close the page, so this is the other half of that
+  promise rather than news about somebody else. It names the Zeugnis and the
+  grade — the fact they waited for — and links to the report; the report itself
+  never travels by mail, since it is a long legal reading of a private
+  document and email is not where that belongs.
+  """
+  def reference_check_email(email, user, reference, grade) do
+    notification_email(
+      email,
+      user,
+      "reference_check",
+      :email_on_reference_check?,
+      fn -> gettext("Your reference “%{title}” has been reviewed", title: reference.title) end,
+      %{title: reference.title, grade: grade, reference_id: reference.id}
     )
   end
 

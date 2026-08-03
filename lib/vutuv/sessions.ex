@@ -107,6 +107,35 @@ defmodule Vutuv.Sessions do
     Repo.touch_throttled(session, :last_seen_at, @last_seen_resolution_seconds)
   end
 
+  @doc """
+  Whether the member has used vutuv on any device within `seconds`.
+
+  Read off `last_seen_at`, which every request bumps (throttled to
+  #{@last_seen_resolution_seconds}s) for every signed-in member. Deliberately
+  **not** `VutuvWeb.Presence`: that is gated on the member's "show when I'm
+  online" setting, which answers "may other members see a green dot next to my
+  face" — a privacy choice that must not double as "you may email me". This
+  answers a different question, and it is the same for everybody.
+
+  Used to decide whether news that just reached a member's in-app notifications
+  also needs to travel by email (`Vutuv.Activity.notify_reference_check/2`).
+  Coarse by nature: a member reading one long page without navigating stops
+  bumping it, so the answer drifts to "away" and they get the mail as well.
+  That is the safe direction — the in-app notification is waiting for them
+  either way, and a mail they did not need beats news they never heard.
+  """
+  def active_since?(user_id, seconds) when is_binary(user_id) and is_integer(seconds) do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(), -seconds, :second)
+
+    Repo.exists?(
+      from(s in UserSession,
+        where: s.user_id == ^user_id and is_nil(s.revoked_at) and s.last_seen_at > ^cutoff
+      )
+    )
+  end
+
+  def active_since?(_user_id, _seconds), do: false
+
   # ── The owner's signed-in-devices list ──
 
   @doc "The user's active (not revoked) sessions, most-recently-active first."

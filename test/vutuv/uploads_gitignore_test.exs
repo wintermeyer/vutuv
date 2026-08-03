@@ -28,6 +28,7 @@ defmodule Vutuv.UploadsGitignoreTest do
     moderation_evidence
     quarantine
     qualification_documents
+    job_reference_documents
     organization_images
     job_posting_images
     remote_media

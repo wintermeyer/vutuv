@@ -1,0 +1,161 @@
+<%!-- The analysis on a page of its own. It runs to ~10,000 characters and
+opens with a five-column matrix; in the list card it had 468px to live in and
+the matrix could only be read by scrolling it sideways. Here it gets the whole
+settings content column. --%>
+<.settings_shell
+  user={@user}
+  active={:job_references}
+  title={@reference.title}
+  crumbs={[
+    gettext("Settings"),
+    {gettext("Employment references"), ~p"/settings/job_references"},
+    gettext("Review result")
+  ]}
+>
+  <.card_section>
+    <%!-- When this reading was made, opposite the facts it is about. It dates
+          the verdict: the skill is versioned and the Zeugnis can be edited, so
+          "which reading am I looking at" is a question the page must answer.
+          Viewer timezone via <.local_time>, like every other stamp here that
+          is not a post time. --%>
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <.reference_meta reference={@reference} />
+
+      <p :if={@check.finished_at} class="text-xs text-slate-600 dark:text-slate-400">
+        {gettext("Reviewed on")}
+        <.local_time at={@check.finished_at} />
+      </p>
+    </div>
+
+    <%!-- The verdict and the document it is about, side by side. The answer
+          first, because the report itself buries it: it opens with a
+          fifteen-row decoding matrix and states the grade in section 2, about
+          two screens down, so the page a member opened *to learn their grade*
+          made them read the evidence before the verdict.
+
+          And the picture beside it rather than above it: a page of decoded
+          sentences says nothing about *which* Zeugnis is being read, and a
+          member arriving from a notification or an email has no picture of
+          what they opened. Stacked, it left the whole width beside the
+          thumbnail empty. The thumbnail links to the entry, so it is also the
+          way to the document itself. --%>
+    <div class="mt-4 flex items-start gap-4">
+      <.grade_label check={@check} variant={:panel} class="min-w-0 flex-1" />
+
+      <.link
+        :if={thumb_url(@reference, @user)}
+        navigate={~p"/settings/job_references/#{@reference}"}
+        title={gettext("Open this reference")}
+        class="ml-auto shrink-0"
+      >
+        <img
+          src={thumb_url(@reference, @user)}
+          alt=""
+          class="h-28 w-20 rounded border border-slate-200 object-cover object-top sm:h-32 sm:w-24 dark:border-slate-700"
+        />
+      </.link>
+    </div>
+
+    <%!-- An edited Zeugnis does not delete the earlier reading, it dates it —
+          and then offers the way out, because a notice a member cannot act on
+          just makes the page feel broken. --%>
+    <div
+      :if={!@current?}
+      class="mt-4 flex flex-wrap items-center gap-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+    >
+      <p>{gettext("You changed the text after this review. It describes the earlier version.")}</p>
+      <.link
+        href={~p"/settings/job_references/#{@reference}/check"}
+        method="post"
+        class="min-h-10 inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+      >
+        {gettext("Review again")}
+      </.link>
+    </div>
+
+    <%!-- What the model read is not necessarily what the document says. An OCR
+          mistake looks like a scanning error, but a vision model's mistake
+          looks like correct German — so the one page that presents a verdict
+          about the wording has to say the wording was machine-read, and offer
+          the text for proof-reading. --%>
+    <p
+      :if={machine_read?(@reference.body_source)}
+      class="mt-4 text-sm text-slate-600 dark:text-slate-400"
+    >
+      {source_note(@reference.body_source)}
+      <.link
+        navigate={~p"/settings/job_references/#{@reference}/edit"}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Check the text")}
+      </.link>
+    </p>
+
+    <%!-- The report's own headings start at h3 (the model writes "### 1. …"),
+          so without this the page jumps h1 → h3 and a screen reader's outline
+          has an empty level in it. It is a real heading rather than a spacer:
+          it names the block a reader is about to enter, and it is where "skip
+          to the report" lands. --%>
+    <h2 class="card__label mt-6">{gettext("The full report")}</h2>
+
+    <%!-- `.markdown` from components.css, never Tailwind's `prose`: vutuv
+          ships no typography plugin, so every `prose*` class compiles to
+          nothing and this would render as unstyled HTML. --%>
+    <div class="markdown mt-2 text-slate-800 dark:text-slate-200">
+      {VutuvWeb.Markdown.render(@check.result_markdown)}
+    </div>
+
+    <div class="mt-6 border-t border-slate-200 pt-4 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-400">
+      <p class="font-medium text-slate-700 dark:text-slate-300">
+        {gettext("This is not legal advice.")}
+      </p>
+      <p class="mt-1">
+        {gettext(
+          "We do not assess your case. What you see is an automated reading of the wording of your document, produced on our own servers by a language model."
+        )}
+        {gettext(
+          "For a binding assessment please ask a lawyer, ideally a Fachanwalt für Arbeitsrecht."
+        )}
+      </p>
+      <%!-- Credited by name, with his account linked: the yardstick is
+            somebody else's work and the reader should be able to see whose. --%>
+      <p class="mt-2">
+        {gettext("The analysis follows the freely available Arbeitszeugnis-Prüfer prompt")}
+        <span :if={@check.skill_version}>({@check.skill_version})</span>
+        {gettext("by the lawyer Tom Braegelmann")}
+        (<.link
+          href="https://github.com/Klotzkette"
+          class="underline"
+          target="_blank"
+          rel="noopener"
+        >{gettext("GitHub account @Klotzkette")}</.link>),
+        <.link
+          href={Vutuv.References.Skill.project_url()}
+          class="underline"
+          target="_blank"
+          rel="noopener"
+        >
+          MIT/Apache-2.0
+        </.link>. {gettext("We wrote neither the prompt nor the model.")}
+      </p>
+    </div>
+
+    <%!-- Both ways on from here. The list is where the member came from; the
+          entry itself is what the report is about, and a reading that says
+          "your text says X" is worth nothing if the text is two clicks away. --%>
+    <p class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
+      <.link
+        navigate={~p"/settings/job_references"}
+        class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Back to your employment references")}
+      </.link>
+      <.link
+        navigate={~p"/settings/job_references/#{@reference}/edit"}
+        class="text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        {gettext("Edit this reference")}
+      </.link>
+    </p>
+  </.card_section>
+</.settings_shell>

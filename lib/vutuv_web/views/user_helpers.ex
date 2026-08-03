@@ -844,6 +844,9 @@ defmodule VutuvWeb.UserHelpers do
   def image_kind_label("qualification_document", "de"),
     do: "einen hochgeladenen Nachweis zu einem Ihrer Zertifikate & Lizenzen"
 
+  def image_kind_label("job_reference_document", "de"),
+    do: "ein hochgeladenes Arbeitszeugnis"
+
   def image_kind_label(_kind, "de"), do: "ein Bild"
   def image_kind_label("avatar", _locale), do: "your profile picture"
   def image_kind_label("cover", _locale), do: "your cover photo"
@@ -855,6 +858,9 @@ defmodule VutuvWeb.UserHelpers do
 
   def image_kind_label("qualification_document", _locale),
     do: "an uploaded proof document on one of your certificates & licenses"
+
+  def image_kind_label("job_reference_document", _locale),
+    do: "an uploaded employment reference"
 
   def image_kind_label(_kind, _locale), do: "an image"
 

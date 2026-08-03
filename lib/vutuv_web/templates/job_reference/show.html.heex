@@ -1,0 +1,43 @@
+<%!-- One published Zeugnis. The text is rendered as preformatted prose rather
+than Markdown: it is a document whose exact wording carries the grade, so
+nothing here may reflow it, reinterpret punctuation, or "tidy" a phrase. --%>
+<.page_header
+  title={@reference.title}
+  manage_to={
+    same_user?(@user, @current_user) && ~p"/settings/job_references/#{@reference}/edit"
+  }
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Employment references"), ~p"/#{@user}/job_references"},
+    @reference.title
+  ]}
+/>
+
+<.card_section>
+  <.reference_meta reference={@reference} />
+
+  <div :if={page_url(@reference, @user)} class="mt-5">
+    <img
+      src={page_url(@reference, @user)}
+      alt={gettext("Preview of the reference")}
+      class="max-w-full rounded border border-slate-200 dark:border-slate-700"
+    />
+  </div>
+
+  <p :if={document_url(@reference, @user)} class="mt-3">
+    <.link
+      href={document_url(@reference, @user)}
+      class="text-sm text-slate-700 underline dark:text-slate-300"
+    >
+      {gettext("Download the document")}
+    </.link>
+  </p>
+
+  <div :if={@reference.body} class="mt-6">
+    <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      {gettext("Text")}
+    </h2>
+    <pre class="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800 dark:text-slate-200">{@reference.body}</pre>
+  </div>
+</.card_section>

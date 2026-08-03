@@ -1,0 +1,16 @@
+<.form_page
+  user={@current_user}
+  active={:job_references}
+  section={{gettext("Employment references"), ~p"/settings/job_references"}}
+  title={gettext("Edit employment reference")}
+>
+  <%= render "form_content.html",
+        backlink: ~p"/settings/job_references",
+        changeset: @changeset,
+        action: ~p"/settings/job_references/#{@reference}",
+        delete_to: ~p"/settings/job_references/#{@reference}",
+        reference: @reference,
+        user: @current_user,
+        cv_entries: @cv_entries,
+        selected: @selected %>
+</.form_page>

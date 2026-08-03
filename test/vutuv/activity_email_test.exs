@@ -1,10 +1,16 @@
 defmodule Vutuv.ActivityEmailTest do
   @moduledoc """
-  The opt-in activity notification emails (new follower / endorsement /
-  connection request). The in-app push always fires; the email copy is added
-  only when the recipient switched the matching preference on (all default
-  off), never to the actor themselves, and only to a confirmed account with an
-  address.
+  What `Vutuv.Activity` itself sends: **nothing**.
+
+  Every notification kind now reaches an inbox through one path — the digest
+  sweeper (`Vutuv.Activity.Digest`, covered by `activity_digest_test.exs`) —
+  and only for a member who was away long enough to have missed it in the app.
+  These kinds used to mail the instant they happened, which meant a member
+  reading their notifications was mailed about the row they were looking at.
+
+  So what is worth guarding here is the absence: the in-app push still fires,
+  and no mail follows it. The preferences these tests set still matter, but
+  they are read by the sweeper now, which is where they are tested.
   """
   use Vutuv.DataCase, async: false
   import Swoosh.TestAssertions
@@ -20,19 +26,15 @@ defmodule Vutuv.ActivityEmailTest do
   end
 
   describe "new follower email" do
-    test "sent when the recipient opted in, naming the follower by @handle" do
+    # Opted in or not, nothing leaves here: the preference decides whether the
+    # digest may carry this kind later, not whether a mail goes now.
+    test "no mail follows the notification, even for a member who opted in" do
       followee = recipient(email_on_follower?: true)
       follower = insert(:activated_user, username: "ann.actor")
 
       Activity.notify_new_follower(followee.id, follower)
 
-      assert_email_sent(fn email ->
-        assert email.subject =~ "@ann.actor"
-        assert email.text_body =~ "following you"
-        # Carries a one-click unsubscribe that switches only this type off.
-        assert {"List-Unsubscribe-Post", _} =
-                 Enum.find(email.headers, &(elem(&1, 0) == "List-Unsubscribe-Post"))
-      end)
+      refute_email_sent()
     end
 
     test "not sent when the recipient did not opt in (default off)" do
@@ -49,16 +51,13 @@ defmodule Vutuv.ActivityEmailTest do
   end
 
   describe "endorsement email" do
-    test "sent when opted in and names the tag" do
+    test "no mail follows the notification, even for a member who opted in" do
       owner = recipient(email_on_endorsement?: true)
       endorser = insert(:activated_user, username: "ed.actor")
 
       Activity.notify_endorsement(owner.id, endorser, "Elixir")
 
-      assert_email_sent(fn email ->
-        assert email.subject =~ "@ed.actor"
-        assert email.text_body =~ "Elixir"
-      end)
+      refute_email_sent()
     end
 
     test "not sent when not opted in" do
@@ -69,7 +68,7 @@ defmodule Vutuv.ActivityEmailTest do
   end
 
   describe "connection (follow-back) email" do
-    test "a follow-back sends the new-follower email when opted in" do
+    test "no mail follows a follow-back either" do
       # Vernetzt is a mutual follow; the follow-back is also a new follow, so it
       # reuses the opted-in `email_on_follower?` new-follower email.
       target = recipient(email_on_follower?: true)
@@ -77,7 +76,7 @@ defmodule Vutuv.ActivityEmailTest do
 
       Activity.notify_connection(target.id, actor)
 
-      assert_email_sent(fn email -> assert email.subject =~ "@back.actor" end)
+      refute_email_sent()
     end
 
     test "not sent to an unconfirmed (dormant) recipient even when the flag is set" do

@@ -1,0 +1,21 @@
+<%= email_greeting(@user) %>,
+
+the review of your employment reference "<%= @title %>" is finished.
+<%= if @grade do %>
+Overall grade: <%= @grade %>
+<% end %>
+Only you can see the result. You can read it here:
+
+<%= @url %>settings/job_references/<%= @reference_id %>/check
+
+The reading was produced by a language model on our own servers and is not
+legal advice. For a binding assessment please ask a lawyer, ideally one
+specialising in employment law.
+
+You can turn these notification emails off here:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

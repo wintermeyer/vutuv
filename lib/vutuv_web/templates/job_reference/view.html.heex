@@ -1,0 +1,108 @@
+<%!-- The owner's own reading of one Zeugnis. Everything else in this section
+shows the document at 128px or not at all, and the public page — the only place
+it could be read whole — does not exist for a private entry, which is nearly
+every entry. So this is where the member looks at what they uploaded. --%>
+<.settings_shell
+  user={@user}
+  active={:job_references}
+  title={@reference.title}
+  crumbs={[
+    gettext("Settings"),
+    {gettext("Employment references"), ~p"/settings/job_references"},
+    @reference.title
+  ]}
+>
+  <.card_section>
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <.reference_meta reference={@reference} />
+
+      <span
+        :if={@reference.public?}
+        class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+      >
+        {gettext("Public")}
+      </span>
+      <span
+        :if={!@reference.public?}
+        class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+      >
+        {gettext("Private")}
+      </span>
+    </div>
+
+    <%!-- The review verdict, where it belongs: beside the document it judges.
+          Only the grade and the way in — the report itself has its own page. --%>
+    <div :if={@check && @check.status == "done"} class="mt-4 flex flex-wrap items-center gap-3">
+      <.grade_label check={@check} />
+      <.link
+        navigate={~p"/settings/job_references/#{@reference}/check"}
+        class="min-h-10 inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+      >
+        {gettext("Read the review")}
+      </.link>
+    </div>
+
+    <div :if={document_url(@reference, @user)} class="mt-6">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="card__label">{gettext("The document")}</h2>
+        <.link
+          href={document_url(@reference, @user)}
+          target="_blank"
+          rel="noopener"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Open in a new tab")}
+        </.link>
+      </div>
+
+      <%!-- A PDF is shown by the browser's own viewer in a same-origin iframe:
+            it pages, zooms and prints, which no still image of page one can do.
+            NOT an <object> — the CSP sets `object-src 'none'`, so that element
+            renders nothing at all here, while an iframe falls under
+            `default-src 'self'` and is allowed. Some mobile browsers still
+            render only the first page inside a frame, which is why the "open
+            in a new tab" link above is not decoration. --%>
+      <iframe
+        :if={pdf?(@reference)}
+        src={document_url(@reference, @user)}
+        title={gettext("The uploaded reference")}
+        class="mt-2 h-[75vh] w-full rounded border border-slate-200 dark:border-slate-700"
+      >
+      </iframe>
+
+      <%!-- An uploaded photo or scan is served as the derived preview rather
+            than the original: same picture, a fraction of the bytes. --%>
+      <img
+        :if={!pdf?(@reference) && page_url(@reference, @user)}
+        src={page_url(@reference, @user)}
+        alt={gettext("The uploaded reference")}
+        class="mt-2 w-full rounded border border-slate-200 dark:border-slate-700"
+      />
+    </div>
+
+    <%!-- The text is the thing the AI review actually reads — the model never
+          sees the file — so the member gets to read exactly what it read, said
+          plainly, next to the document it came from. Preformatted, never
+          Markdown: the exact wording of a Zeugnis carries its grade, so
+          nothing here may reflow it or reinterpret its punctuation. --%>
+    <div :if={@reference.body} class="mt-6">
+      <h2 class="card__label">{gettext("Text")}</h2>
+      <p
+        :if={source_note(@reference.body_source)}
+        class="mb-2 text-sm text-slate-600 dark:text-slate-400"
+      >
+        {source_note(@reference.body_source)}
+      </p>
+      <pre class="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800 dark:text-slate-200">{@reference.body}</pre>
+    </div>
+
+    <.row_actions
+      class="mt-6"
+      edit_to={~p"/settings/job_references/#{@reference}/edit"}
+      delete_to={~p"/settings/job_references/#{@reference}"}
+      confirm={
+        gettext("Delete this reference, its document and its review? This cannot be undone.")
+      }
+    />
+  </.card_section>
+</.settings_shell>

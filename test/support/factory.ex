@@ -223,6 +223,33 @@ defmodule Vutuv.Factory do
     }
   end
 
+  # An Arbeitszeugnis. Private by default, exactly like the schema — a test
+  # that wants a public one must say so, so nothing publishes by accident.
+  def job_reference_factory do
+    %Vutuv.References.JobReference{
+      title: sequence(:job_reference_title, &"Zeugnis Muster GmbH #{&1}"),
+      employer: "Muster GmbH",
+      kind: "qualified",
+      # The factory writes the struct straight to the database, so it has to
+      # carry what the changeset would otherwise fill in: `country` is NOT NULL
+      # because the AI check is bound to one country's employment law.
+      country: "DE",
+      body: "Wir waren mit seinen Leistungen zufrieden.",
+      body_source: "typed",
+      public?: false
+    }
+  end
+
+  # A moderation queue row. Every field is set by the caller in practice —
+  # the queue writes these, never a form — so the factory only supplies what
+  # the columns require.
+  def image_scan_factory do
+    %Vutuv.Moderation.ImageScan{
+      kind: "avatar",
+      status: "pending"
+    }
+  end
+
   def follow_factory do
     %Vutuv.Social.Follow{}
   end

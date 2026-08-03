@@ -232,44 +232,19 @@ defmodule Vutuv.Moderation.Ollama do
       messages: [%{role: "user", content: @prompt, images: [Base.encode64(jpeg)]}]
     }
 
-    # `:ollama_url` may name a comma-separated **priority list** of instances
-    # (e.g. a fast remote GPU box first, the patient local CPU one last).
-    # Each endpoint but the last gets `:ollama_remote_timeout` (a fast box
-    # that hasn't answered within it is skipped); the last is the fallback of
-    # record and gets the full `:ollama_timeout`. Only service-class failures
-    # (unreachable, timeout, non-200) fall through to the next endpoint — a
-    # verdict is a verdict wherever it came from.
-    try_endpoints(urls(), body, {:error, {:service, :no_endpoints}})
-  end
-
-  defp try_endpoints([], _body, last_error), do: last_error
-
-  defp try_endpoints([url | rest], body, _last_error) do
-    receive_timeout = if rest == [], do: timeout(), else: remote_timeout()
-
-    case request(url, body, receive_timeout) do
-      {:ok, %Req.Response{status: 200, body: response}} ->
-        parse(response)
-
-      {:ok, %Req.Response{status: status}} ->
-        try_endpoints(rest, body, {:error, {:service, {:http, status}}})
-
-      {:error, reason} ->
-        try_endpoints(rest, body, {:error, {:service, reason}})
+    # Endpoint selection lives in `Vutuv.Ollama`, shared with the
+    # Arbeitszeugnis analysis: `:ollama_url` may name a comma-separated
+    # priority list, every instance but the last is tried briefly and skipped
+    # on a service failure, the last is the patient fallback of record. Only
+    # service-class failures fall through — a verdict is a verdict wherever it
+    # came from.
+    case Vutuv.Ollama.post("/api/chat", body,
+           timeout: timeout(),
+           req_options_key: @req_options_key
+         ) do
+      {:ok, response} -> parse(response)
+      {:error, _reason} = error -> error
     end
-  end
-
-  defp request(url, json, receive_timeout) do
-    [
-      url: url <> "/api/chat",
-      json: json,
-      receive_timeout: receive_timeout,
-      # A down box must fail fast, not eat the whole budget on TCP connect.
-      connect_options: [timeout: 5_000],
-      retry: false
-    ]
-    |> Keyword.merge(Application.get_env(:vutuv, @req_options_key, []))
-    |> Req.post()
   end
 
   # Ollama structured output: the model may only answer this shape. The
@@ -313,17 +288,6 @@ defmodule Vutuv.Moderation.Ollama do
   defp reason(%{"reason" => reason}) when is_binary(reason), do: String.slice(reason, 0, 1000)
   defp reason(_verdict), do: nil
 
-  # The configured instance(s), in priority order (comma-separated in
-  # `:ollama_url` / the OLLAMA_URL env var). A single URL behaves exactly as
-  # before: one endpoint, full `:ollama_timeout`.
-  defp urls do
-    Application.get_env(:vutuv, :ollama_url, "http://localhost:11434")
-    |> String.split(",")
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.map(&String.trim_trailing(&1, "/"))
-  end
-
   defp model, do: Application.get_env(:vutuv, :ollama_vision_model, "qwen3-vl:8b")
 
   # How many opinions a suspected image gets, and how many of them must call
@@ -343,10 +307,8 @@ defmodule Vutuv.Moderation.Ollama do
   end
 
   # Vision inference on CPU can take a while; the queue is async, so patience
-  # beats a spurious service error.
+  # beats a spurious service error. This is the budget for the *last* instance
+  # in the priority list; `Vutuv.Ollama` gives the earlier ones the shorter
+  # `:ollama_remote_timeout`.
   defp timeout, do: Application.get_env(:vutuv, :ollama_timeout, 120_000)
-
-  # How long a non-final (fast/remote) instance may take before the next one
-  # is tried. Generous enough for a GPU box to cold-load the model.
-  defp remote_timeout, do: Application.get_env(:vutuv, :ollama_remote_timeout, 30_000)
 end

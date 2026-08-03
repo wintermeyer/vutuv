@@ -1192,6 +1192,47 @@ defmodule VutuvWeb.Router do
       as: :settings_qualification_document
     )
 
+    get("/job_references", JobReferenceController, :manage)
+
+    resources("/job_references", JobReferenceController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_job_reference
+    )
+
+    # The owner's own reading of one Zeugnis: the document at a size you can
+    # actually read, the text that was pulled out of it, and the review state.
+    # Declared after the `resources` block so `/job_references/new` still
+    # matches its own route rather than being read as an id.
+    get(
+      "/job_references/:id",
+      JobReferenceController,
+      :show_own,
+      as: :settings_job_reference_view
+    )
+
+    # There is deliberately no route that removes only the file: an uploaded
+    # Zeugnis lives and dies with its entry (`JobReferenceController.delete/2`).
+    #
+    # Queues the AI analysis. POST, not GET: it consumes one of the member's
+    # daily allowance and occupies a queue for minutes, so a link prefetch or
+    # a Back button must never start one.
+    post(
+      "/job_references/:id/check",
+      JobReferenceController,
+      :create_check,
+      as: :settings_job_reference_check
+    )
+
+    # The finished analysis on a page of its own. It runs to ~10,000 characters
+    # and opens with a five-column matrix, which is not something to read in a
+    # card inside a list — there the panel keeps the state and a link here.
+    get(
+      "/job_references/:id/check",
+      JobReferenceController,
+      :show_check,
+      as: :settings_job_reference_result
+    )
+
     get("/addresses", AddressController, :manage)
 
     resources("/addresses", AddressController,
@@ -1277,6 +1318,20 @@ defmodule VutuvWeb.Router do
         QualificationDocumentController,
         :show,
         as: :qualification_document
+      )
+
+      # Published Arbeitszeugnisse. Only the ones the member ticked public and
+      # whose document cleared moderation; the AI analysis is never here.
+      resources("/job_references", JobReferenceController, only: [:index, :show])
+
+      # The authorizing proxy for the document itself, same rules as the
+      # qualification one: private or still-in-moderation is owner-only, and
+      # the fingerprint in the filename makes the URLs immutable.
+      get(
+        "/job_references/:id/document/:file",
+        JobReferenceDocumentController,
+        :show,
+        as: :job_reference_document
       )
 
       resources("/addresses", AddressController, only: [:index, :show])

@@ -991,6 +991,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("cv_update"), do: "📄"
   # The welcome note naming the member's own handle.
   defp kind_glyph("username"), do: "👋"
+  # The finished AI reading of an Arbeitszeugnis. The magnifier, not a robot:
+  # what arrived is a close reading of wording, and the member is being told to
+  # go and read it.
+  defp kind_glyph("reference_check"), do: "🔍"
   defp kind_glyph(_), do: "•"
 
   # The accessible kind name (the badge's title + sr-only text). Translated
@@ -1011,6 +1015,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("handle_change"), do: gettext("Handle change")
   defp kind_label("cv_update"), do: gettext("CV update")
   defp kind_label("username"), do: gettext("Username")
+  defp kind_label("reference_check"), do: gettext("Employment reference review")
   defp kind_label(_), do: gettext("Activity")
 
   # ── The sentence ──
@@ -1111,6 +1116,7 @@ defmodule VutuvWeb.NotificationLive.Index do
       viewer == nil -> nil
       n[:image_kind] in ["avatar", "cover"] -> ~p"/settings/profile"
       n[:image_kind] == "qualification_document" -> ~p"/settings/qualifications"
+      n[:image_kind] == "job_reference_document" -> ~p"/settings/job_references"
       true -> nil
     end
   end
@@ -1118,6 +1124,12 @@ defmodule VutuvWeb.NotificationLive.Index do
   # The username note carries its own two links inside the sentence
   # (username_line/1), so the row itself must not be one.
   defp notification_target(%{kind: "username"}, _viewer), do: nil
+
+  # Straight to the report the member has been waiting for.
+  defp notification_target(%{kind: "reference_check"} = n, viewer) do
+    if viewer && is_binary(n[:job_reference_id]),
+      do: ~p"/settings/job_references/#{n.job_reference_id}/check"
+  end
 
   # A CV update (issue #980) opens the entry itself when the group holds
   # exactly one; a bigger group leads to the author's profile, where all of
@@ -1190,6 +1202,24 @@ defmodule VutuvWeb.NotificationLive.Index do
   # The event text for the ungrouped kinds, rendered from the kind (not
   # stored) so it translates with the viewer's locale. Unknown kinds fall
   # back to the pushed text.
+  # The only row here with no actor in front of it, so it is a whole sentence
+  # rather than a verb phrase. It names the Zeugnis, because a member with
+  # several of them is otherwise told only that "a" review is ready, and it
+  # names the grade when the report stated one — that is the fact they have
+  # been waiting minutes for, and burying it one click deeper would be a tease.
+  defp notification_text(%{kind: "reference_check"} = n) do
+    case {n[:title], n[:grade]} do
+      {title, grade} when is_binary(title) and is_binary(grade) ->
+        gettext("The review of “%{title}” is ready: %{grade}.", title: title, grade: grade)
+
+      {title, _none} when is_binary(title) ->
+        gettext("The review of “%{title}” is ready.", title: title)
+
+      _untitled ->
+        gettext("Your employment reference has been reviewed.")
+    end
+  end
+
   defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
 
   defp notification_text(%{kind: "mention"}), do: gettext("mentioned you in a post.")

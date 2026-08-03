@@ -109,6 +109,84 @@ config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
 config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 
+# Arbeitszeugnis analysis (Vutuv.References.Checks): a member may have an
+# uploaded employment reference reviewed by a text model against an open
+# skill. Shares :ollama_url with the image moderation above.
+#
+# :reference_check_num_ctx is NOT a tuning knob. The prompt measures ~35_200
+# tokens, and a window smaller than that does not make Ollama refuse — it
+# silently truncates and answers anyway. Measured against this prompt: at
+# 32_768 the model saw 16_386 of 35_559 tokens and produced a polished report
+# with no § 109 GewO and no Beweislast in it. 65_536 is the measured working
+# value; Vutuv.References.Analyst refuses to run below what it needs and
+# rejects a reply whose prompt_eval_count shows a truncation.
+#
+# The analysis reads GERMAN employment law (§ 109 GewO plus BAG case law), so
+# :reference_check_countries lists the countries it may be offered for.
+# Austria (§ 39 AngG) forbids the coded grading it decodes and Switzerland
+# (Art. 330a OR) has its own case law, so a German reading of either would be
+# confidently wrong. Uploading and showing a reference works everywhere.
+#
+# :reference_check_hardware and :reference_check_country say what the
+# member-facing "how the review works" box on /settings/job_references may
+# claim about where the analysis runs. The whole point of that box is that
+# nothing leaves this installation, and "on our own NVIDIA GPU in Germany" is a
+# stronger promise than "on our own servers" only while it is TRUE — an
+# installation running Ollama on a CPU, on another vendor's card, or in another
+# country sets its own values, or empty ones to drop the clause and keep the
+# plain sentence. Never hardcode either in the template.
+#
+# The country is an ISO 3166-1 alpha-2 code, not a word, so `Vutuv.Countries`
+# renders it in the reader's own language ("Deutschland" / "Germany") instead
+# of one operator's spelling leaking into every locale.
+#
+# Runtime overrides: REFERENCE_CHECKS_ENABLED, REFERENCE_CHECK_MODEL,
+# REFERENCE_CHECK_NUM_CTX, REFERENCE_CHECK_TIMEOUT, REFERENCE_CHECKS_PER_DAY,
+# REFERENCE_CHECK_HARDWARE, REFERENCE_CHECK_COUNTRY, FETCH_REFERENCE_SKILL,
+# REFERENCE_OCR (config/runtime.exs).
+# The one notification email: a digest of what a member missed, swept every few
+# minutes by Vutuv.Activity.DigestNotifier. :notification_digest_delay_minutes is
+# how long a notification may sit unread before it is mailed — long enough that
+# somebody stepping away from the keyboard never gets mail about news they came
+# back and read anyway.
+config :vutuv, :notification_digest_delay_minutes, 30
+
+config :vutuv, :reference_checks_enabled, true
+config :vutuv, :reference_check_model, "qwen3.6:27b"
+config :vutuv, :reference_check_hardware, "NVIDIA GPU"
+config :vutuv, :reference_check_country, "DE"
+config :vutuv, :reference_check_num_ctx, 65_536
+config :vutuv, :reference_check_timeout, 900_000
+config :vutuv, :reference_checks_per_day, 10
+config :vutuv, :reference_check_countries, ["DE"]
+
+# The analysis prompt ships **in this repository** (priv/reference_skill/SKILL.md)
+# and that copy is what runs. It is a legal document: the prompt that was
+# reviewed is the prompt that produces readings, a change to it is a reviewable
+# commit, and no installation depends on GitHub being up to answer a member.
+#
+# The daily re-fetch from upstream is still built and tested, but it is OFF by
+# default — an unreviewed overnight change to the thing that generates legal
+# analysis is worse than waiting for a deploy. Switch it on only if you want
+# upstream corrections without one (Vutuv.References.Skill).
+config :vutuv, :fetch_reference_skill, false
+
+# Reading a scanned reference. :auto prefers Tesseract and falls back to the
+# vision model. Tesseract goes first despite scoring worse overall because its
+# mistakes look like mistakes, while a vision model normalises plausibly — it
+# turned "Kundenstammdaten" into "Kundendaten" in testing, and in a document
+# where one word carries the grade a visible error is the safer one.
+config :vutuv, :reference_ocr, :auto
+config :vutuv, :reference_ocr_lang, "deu"
+
+# The model that reads a scan, deliberately separate from :ollama_vision_model
+# above: moderation wants a fast verdict on a picture, transcription wants
+# every word exactly as written. Measured on a real Zeugnis template,
+# qwen3-vl:8b (the moderation model) read "vollsten Zufriedenheit" as "vollen"
+# — Note 1 into Note 2, in flawless German. qwen3.5:9b got every checked
+# phrase right in a third of the time.
+config :vutuv, :reference_ocr_model, "qwen3.5:9b"
+
 # How a suspicion becomes a deletion. A model's answer on a borderline but
 # harmless picture (a cartoon skull, a horror-film still, a joke image) flips
 # between runs, so an "unsafe" answer is put to a vote of :image_scan_votes

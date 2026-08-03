@@ -1,0 +1,44 @@
+<%!-- The public showcase view. Only the entries the member ticked public and
+whose document cleared moderation reach this page; the AI review never does —
+that is the member's own reading of their Zeugnis, not something a visitor
+sees. The owner edits at /settings/job_references. --%>
+<.page_header
+  title={gettext("Employment references of ") <> full_name(@user)}
+  manage_to={same_user?(@user, @current_user) && ~p"/settings/job_references"}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    gettext("Employment references")
+  ]}
+/>
+
+<.card_section empty={Enum.empty?(@references)}>
+  <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+    <li :for={reference <- @references} class="py-4 first:pt-0 last:pb-0">
+      <div class="flex items-start gap-4">
+        <.link
+          :if={thumb_url(reference, @user)}
+          navigate={~p"/#{@user}/job_references/#{reference}"}
+          class="shrink-0"
+        >
+          <img
+            src={thumb_url(reference, @user)}
+            alt=""
+            class="h-32 w-24 rounded border border-slate-200 object-cover object-top dark:border-slate-700"
+          />
+        </.link>
+
+        <div class="min-w-0">
+          <.link
+            navigate={~p"/#{@user}/job_references/#{reference}"}
+            class="font-medium text-slate-900 hover:underline dark:text-slate-100"
+          >
+            {reference.title}
+          </.link>
+
+          <.reference_meta reference={reference} class="mt-0.5" />
+        </div>
+      </div>
+    </li>
+  </ul>
+</.card_section>

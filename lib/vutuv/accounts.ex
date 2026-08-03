@@ -683,6 +683,18 @@ defmodule Vutuv.Accounts do
         )
       )
 
+    # The uploaded Arbeitszeugnisse, same reasoning — and with more at stake:
+    # the file is a former employer's graded judgement of this person, so a
+    # leftover on disk after they deleted their account is the worst kind of
+    # orphan to leave behind.
+    job_reference_document_ids =
+      Repo.all(
+        from(r in Vutuv.References.JobReference,
+          where: r.user_id == ^user.id and not is_nil(r.document),
+          select: r.id
+        )
+      )
+
     # The moderation cases cascade with the account; their on-disk evidence
     # screenshots would be orphaned otherwise.
     evidence_case_ids =
@@ -733,6 +745,7 @@ defmodule Vutuv.Accounts do
     Enum.each(screenshot_ids, &Vutuv.Screenshot.delete/1)
     Enum.each(review_ids, &Vutuv.ReviewCover.delete_files/1)
     Enum.each(qualification_document_ids, &Vutuv.QualificationDocument.delete/1)
+    Enum.each(job_reference_document_ids, &Vutuv.JobReferenceDocument.delete/1)
     Moderation.EvidenceScreenshot.delete_for_cases(evidence_case_ids)
     Vutuv.Avatar.delete(user)
     Vutuv.Cover.delete(user)

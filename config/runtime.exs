@@ -368,6 +368,60 @@ if config_env() == :prod do
     config :vutuv, :ollama_vision_model, ollama_model
   end
 
+  # Arbeitszeugnis analysis (Vutuv.References.Checks). Shares OLLAMA_URL with
+  # the image moderation above.
+  #
+  # REFERENCE_CHECK_NUM_CTX is NOT a tuning knob: the prompt is ~35_200 tokens
+  # and Ollama silently truncates anything larger than the window instead of
+  # refusing. Measured at 32_768 the model saw 16_386 of 35_559 tokens and
+  # still produced a confident report, minus half its legal basis. See
+  # docs/ADMINS.md and Vutuv.References.Analyst.
+  if enabled = System.get_env("REFERENCE_CHECKS_ENABLED") do
+    config :vutuv, :reference_checks_enabled, enabled in ~w(1 true yes)
+  end
+
+  if model = System.get_env("REFERENCE_CHECK_MODEL") do
+    config :vutuv, :reference_check_model, model
+  end
+
+  # What the member-facing transparency box may say about where this runs: the
+  # machine, and the ISO 3166-1 alpha-2 country its servers stand in (rendered
+  # in the reader's language by Vutuv.Countries). An empty value drops that
+  # clause rather than printing an empty phrase.
+  if hardware = System.get_env("REFERENCE_CHECK_HARDWARE") do
+    config :vutuv, :reference_check_hardware, String.trim(hardware)
+  end
+
+  if country = System.get_env("REFERENCE_CHECK_COUNTRY") do
+    config :vutuv, :reference_check_country, country |> String.trim() |> String.upcase()
+  end
+
+  if num_ctx = System.get_env("REFERENCE_CHECK_NUM_CTX") do
+    config :vutuv, :reference_check_num_ctx, String.to_integer(num_ctx)
+  end
+
+  if timeout = System.get_env("REFERENCE_CHECK_TIMEOUT") do
+    config :vutuv, :reference_check_timeout, String.to_integer(timeout)
+  end
+
+  if per_day = System.get_env("REFERENCE_CHECKS_PER_DAY") do
+    config :vutuv, :reference_checks_per_day, String.to_integer(per_day)
+  end
+
+  # An installation without outbound network access sets this to false and
+  # runs on the copy vendored in priv/reference_skill/.
+  if fetch = System.get_env("FETCH_REFERENCE_SKILL") do
+    config :vutuv, :fetch_reference_skill, fetch in ~w(1 true yes)
+  end
+
+  if ocr_model = System.get_env("REFERENCE_OCR_MODEL") do
+    config :vutuv, :reference_ocr_model, ocr_model
+  end
+
+  if ocr = System.get_env("REFERENCE_OCR") do
+    config :vutuv, :reference_ocr, String.to_existing_atom(ocr)
+  end
+
   # How strict the scan is: an "unsafe" answer is put to a vote of
   # IMAGE_SCAN_VOTES opinions and the image is only deleted when
   # IMAGE_SCAN_REJECT_VOTES of them agree (3 of 3 by default). Both at 1 =

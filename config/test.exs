@@ -32,6 +32,10 @@ config :vutuv, :prefs_defaults_cache, false
 # inserts an entry sees it act immediately.
 config :vutuv, :screenshot_blocklist_cache, false
 config :vutuv, :send_unread_message_emails, false
+
+# The digest sweeper would run from a process that does not own the SQL Sandbox
+# connection; tests call Vutuv.Activity.Digest.send_pending/0 directly.
+config :vutuv, :send_notification_digest_emails, false
 config :vutuv, :moderation_sweeper, false
 config :vutuv, :prune_search_history, false
 # Webhook deliveries run inline in tests (Vutuv.Webhooks.deliver_due/0 with a
@@ -71,6 +75,13 @@ config :vutuv, :post_screenshot_worker, false
 # (sandbox rule). ImageScanWorker.nudge/0 casts into the void then.
 config :vutuv, :moderate_images, false
 config :vutuv, :image_scan_worker, false
+# Same arrangement for the Arbeitszeugnis analysis: the queue tests drain via
+# Checks.deliver_due/1 with a stubbed analysis function, and neither the
+# polling worker nor the daily skill fetch may run from the sandbox.
+# CheckWorker.nudge/0 casts into the void then.
+config :vutuv, :reference_check_worker, false
+config :vutuv, :reference_skill_refresher, false
+config :vutuv, :fetch_reference_skill, false
 # The overnight daily-report mailer; its DB tally would touch the sandbox from
 # outside. Vutuv.Reports is called directly in reports_test.exs instead.
 config :vutuv, :daily_report_email, false

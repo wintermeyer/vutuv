@@ -40,6 +40,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.References.JobReference
   alias Vutuv.Repo
   alias Vutuv.Social
   alias Vutuv.Social.Follow
@@ -776,6 +777,9 @@ defmodule VutuvWeb.UserProfileLive do
     # via Qualification.visible_to(owner?): a visitor gets only valid entries,
     # the owner gets all of theirs (their card marks the lapsed ones).
     |> assign(:qualifications, user.qualifications)
+    # Only the published ones are preloaded, so the owner sees exactly what a
+    # visitor sees here; their private entries live at /settings/job_references.
+    |> assign(:job_references, user.job_references)
     |> assign(:header_job, header_job)
     # The header line: a pinned education (issue #882) leads with its
     # "Degree, School", else the pinned/heuristic job's "Title @ Org". The user
@@ -1148,6 +1152,12 @@ defmodule VutuvWeb.UserProfileLive do
         {Qualification.visible_to(owner?)
          |> Qualification.ordered()
          |> limit(^preview_limit(:qualifications)), Qualification.citing_jobs_preload()},
+      # Published Arbeitszeugnisse. No limit: a member holds a handful, and the
+      # card's total is the loaded list, which keeps this out of the counts
+      # union query. `:links` rides along so the card can name the CV entry a
+      # Zeugnis documents — and so the CV entries can name their Zeugnis back,
+      # from the same rows, without a query per entry.
+      job_references: {JobReference.public_scope(), :links},
       phone_numbers: PhoneNumber.ordered() |> limit(^preview_limit(:phone_numbers)),
       urls: Url.ordered() |> limit(^preview_limit(:links)),
       addresses: Address.ordered() |> limit(^preview_limit(:addresses)),

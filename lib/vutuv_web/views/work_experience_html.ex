@@ -460,6 +460,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
   attr(:as_owner?, :boolean, default: false)
   attr(:show_description?, :boolean, default: false)
   attr(:profile_work_experience_id, :any, default: nil)
+  attr(:references, :map, default: %{})
 
   def experience_block(assigns) do
     ~H"""
@@ -548,6 +549,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
                   {role.dates.label}<%= if role.length do %> · {role.length}<% end %>
                 </p>
                 <.qualification_line user={@user} job={role.job} />
+                <.reference_line user={@user} job={role.job} references={@references} />
                 <.markdown_prose
                   :if={@show_description? and role.job.description}
                   text={role.job.description}
@@ -576,6 +578,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
               <.employer_name organization={@block.organization_page} text={role.job.organization} /><%= if role.length do %> · {role.length}<% end %>
             </p>
             <.qualification_line user={@user} job={role.job} />
+            <.reference_line user={@user} job={role.job} references={@references} />
             <.markdown_prose
               :if={@show_description? and role.job.description}
               text={role.job.description}
@@ -616,6 +619,45 @@ defmodule VutuvWeb.WorkExperienceHTML do
         class="font-medium text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
       >
         {@qualification.name}
+      </.link>
+    </p>
+    """
+  end
+
+  @doc """
+  The "Arbeitszeugnis: <title>" line under a role, naming the published
+  reference that documents it (the other half of the profile card's
+  "Documents:" line).
+
+  `references` is the `subject id => [reference]` map
+  `VutuvWeb.JobReferenceHTML.references_by_subject/1` builds once from the
+  references the page already loaded, so a twenty-role timeline costs no extra
+  queries. Empty by default, which is what the section page and every other
+  caller pass — the line then renders nothing.
+
+  Only published references are ever in that map (the profile preloads
+  `JobReference.public_scope()`), so this cannot betray a private one by
+  pointing at the job it belongs to.
+  """
+  attr(:user, :any, required: true)
+  attr(:job, :any, required: true)
+  attr(:references, :map, default: %{})
+  attr(:class, :string, default: nil)
+
+  def reference_line(assigns) do
+    assigns = assign(assigns, :references_for, Map.get(assigns.references, assigns.job.id, []))
+
+    ~H"""
+    <p
+      :for={reference <- @references_for}
+      class={["text-sm text-slate-600 dark:text-slate-400", @class]}
+    >
+      {gettext("Employment reference:")}
+      <.link
+        href={~p"/#{@user}/job_references/#{reference}"}
+        class="font-medium text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {reference.title}
       </.link>
     </p>
     """
