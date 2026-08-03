@@ -4290,14 +4290,35 @@ defmodule Vutuv.Fediverse do
       belongs to the retention paths (`refresh_note/1`,
       `refresh_reposted_post/1`), which are built to weigh a `403` properly.
       A counter refresh must never become a deletion path by accident.
+
+  A `:skip` still stamps `counts_checked_at`, and that is the one thing here
+  worth spelling out. It is not a claim that we asked: it is the ladder's clock,
+  and leaving it alone means the object is due again on the next run — for good,
+  since nothing about it changes in two minutes — while `due_for_counts/1`
+  serves the least recently asked first and therefore puts it at the head of
+  every queue from now on. A handful of such objects then spend the whole batch
+  cap on questions nobody can ask, and the posts a member is reading right now,
+  stamped on arrival and so last in the queue, are never reached at all. That
+  ran on production: every object boosted into the feed by a followed account
+  was unsignable (fixed in `counts_signer/1` below), 50 of them held the front
+  of a 60-object batch, and the day's posts kept the `0` their `Create` had
+  carried. Stamped, the object simply rejoins the ladder, is reconsidered at
+  its tier's pace, and ages off it like everything else — no strike, because
+  the origin did nothing wrong and a signer can appear the moment somebody here
+  follows the account.
   """
   def refresh_counts(subject) do
-    with true <- enabled?(),
-         true <- counts_askable?(subject),
+    if enabled?(), do: ask_counts(subject), else: :skip
+  end
+
+  defp ask_counts(subject) do
+    with true <- counts_askable?(subject),
          signer when not is_nil(signer) <- counts_signer(subject) do
       apply_counts(subject, fetch_object(subject.object_uri, signer, subject.counts_etag))
     else
-      _ -> :skip
+      _ ->
+        stamp_counts(subject, [])
+        :skip
     end
   end
 
@@ -4308,20 +4329,16 @@ defmodule Vutuv.Fediverse do
   # Somebody here with a keypair who has a reason to be asking: for a cached
   # post any member who follows the account, for a reply the member whose post
   # it answers.
-  defp counts_signer(%RemotePost{remote_account_id: account_id}) do
-    Repo.one(
-      from(f in Follow,
-        join: u in User,
-        on: u.id == f.user_id,
-        join: a in Actor,
-        on: a.user_id == u.id,
-        where: f.remote_account_id == ^account_id,
-        order_by: [asc: f.id],
-        limit: 1,
-        select: u
-      )
-    )
-    |> case do
+  #
+  # A boosted post has neither, and it is not a rare case — a large share of
+  # what any account contributes is boosts, and their authors live on servers
+  # nobody here follows. The reason to ask is one step further out: a member
+  # follows the account that re-shared it, which is why the post is in their
+  # feed and why its card carries these figures at all. That is also exactly
+  # who `fetch_and_store_announced/2` signed as to store the post in the first
+  # place, so the fallback claims nothing new about us.
+  defp counts_signer(%RemotePost{} = post) do
+    case account_follower(post.remote_account_id) || boost_follower(post) do
       %User{} = follower -> signer(follower)
       nil -> nil
     end
@@ -4334,6 +4351,44 @@ defmodule Vutuv.Fediverse do
     else
       _ -> nil
     end
+  end
+
+  # A member who follows the account and holds a keypair. `nil` in rather than
+  # a query on it: `where: f.remote_account_id == ^nil` raises, it is not a
+  # silent no-op.
+  defp account_follower(nil), do: nil
+
+  defp account_follower(account_id) do
+    Repo.one(
+      from(f in Follow,
+        join: u in User,
+        on: u.id == f.user_id,
+        join: a in Actor,
+        on: a.user_id == u.id,
+        where: f.remote_account_id == ^account_id,
+        order_by: [asc: f.id],
+        limit: 1,
+        select: u
+      )
+    )
+  end
+
+  # The same, for whoever re-shared the post into somebody's feed.
+  defp boost_follower(%RemotePost{id: post_id}) do
+    Repo.one(
+      from(b in PostBoost,
+        join: f in Follow,
+        on: f.remote_account_id == b.remote_account_id,
+        join: u in User,
+        on: u.id == f.user_id,
+        join: a in Actor,
+        on: a.user_id == u.id,
+        where: b.remote_post_id == ^post_id,
+        order_by: [asc: f.id],
+        limit: 1,
+        select: u
+      )
+    )
   end
 
   defp apply_counts(subject, {:ok, doc, etag}) do

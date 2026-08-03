@@ -1266,6 +1266,30 @@ a `totalItems`. The figures are knowable; they have to be asked for.
 - **Public and unlisted objects only, and only signed.** A followers-only or
   direct object answers `403` anyway, and asking would tell its origin that we
   hold their member's private post and how often we look at it.
+- **Whoever we sign as has a reason to be asking**, and for a boosted post that
+  reason is one step further out than it looks: nobody here follows the author,
+  so the signer is a member who follows the account that *re-shared* it — the
+  same follower `fetch_and_store_announced/2` signed as to store the post in the
+  first place.
+- **An object nobody can ask about is still stamped.** `counts_checked_at` is
+  the ladder's clock, not a claim that we asked, and a skip that leaves it alone
+  is due again two minutes later — for good, since nothing about the object
+  changes in that time — while the queue is served least-recently-asked first
+  and therefore hands it the front of every batch from now on.
+
+That last point is the one that bit. Until v7.228.1 the signer for a cached post
+was only ever a follower of its **author**, so every post boosted into a feed by
+a followed account was unaskable — and a skip wrote nothing. On production those
+objects took the front of the queue permanently, and because the per-host cap is
+applied to an already-sorted list they also spent their host's whole quota: a
+60-object batch resolved to 37 objects, *all* of them unaskable, twice a minute,
+for hours. Nothing else was ever reached, `ard.social` (the largest single
+source cached here) did not appear in a batch at all, and the day's posts — each
+stamped on arrival and so last in the queue — kept the `0` their `Create` had
+carried. Both halves are fixed: the boost fallback makes almost all of them
+askable, and a genuine skip now stamps (no strike: the origin did nothing wrong
+and a signer appears the moment somebody here follows the account) so the object
+rejoins the ladder and ages off it like everything else.
 
 The columns are nullable on both `fediverse_posts` and `fediverse_notes`
 (`likes_count`, `shares_count`, `counts_checked_at`, `counts_etag`,

@@ -14,6 +14,7 @@ defmodule Vutuv.FediverseCountsTest do
   alias Vutuv.Fediverse.Actor
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
 
@@ -47,6 +48,15 @@ defmodule Vutuv.FediverseCountsTest do
       remote_account_id: acc.id,
       state: "accepted",
       follow_activity_id: "https://vutuv.test/#{user.id}/actor#f/#{acc.id}"
+    })
+  end
+
+  defp boost(booster, post) do
+    Repo.insert!(%PostBoost{
+      remote_account_id: booster.id,
+      remote_post_id: post.id,
+      activity_id: "#{booster.actor_uri}/statuses/#{System.unique_integer([:positive])}/activity",
+      announced_at: DateTime.utc_now(:second)
     })
   end
 
@@ -213,12 +223,29 @@ defmodule Vutuv.FediverseCountsTest do
       assert stored.content_text == "Lesenswert."
     end
 
-    test "a post nobody follows the author of is not asked about at all" do
+    test "a post nobody follows the author or the booster of is not asked about" do
       post = cached_post(account())
       serve(object(post))
 
       assert :skip = Fediverse.refresh_counts(post)
-      assert is_nil(Repo.get!(RemotePost, post.id).counts_checked_at)
+      assert Repo.get!(RemotePost, post.id).likes_count == nil
+    end
+
+    # Nobody here follows the author — the post is in the feed because somebody
+    # they do follow re-shared it, and that follower is who we sign as. The
+    # dereference that stored the post in the first place already works this
+    # way; only the figures on its card did not.
+    test "a boosted post is asked about, signed as a follower of the booster" do
+      booster = account()
+      user = federating_member()
+      follow(user, booster)
+
+      post = cached_post(account())
+      boost(booster, post)
+      serve(object(post))
+
+      assert :updated = Fediverse.refresh_counts(post)
+      assert Repo.get!(RemotePost, post.id).likes_count == 12
     end
 
     test "a followers-only post is never asked about" do
@@ -226,7 +253,40 @@ defmodule Vutuv.FediverseCountsTest do
       serve(object(post))
 
       assert :skip = Fediverse.refresh_counts(post)
-      assert is_nil(Repo.get!(RemotePost, post.id).counts_checked_at)
+      assert Repo.get!(RemotePost, post.id).likes_count == nil
+    end
+
+    # The starvation this pair guards against ran on production for days: the
+    # skipped objects hold the front of the queue for good, the batch cap is
+    # spent on them, and the posts somebody is reading right now — stamped on
+    # arrival, so last in the queue — are never reached.
+    test "a skipped object rejoins the ladder instead of standing at the head of the queue" do
+      post = cached_post(account())
+      serve(object(post))
+
+      assert :skip = Fediverse.refresh_counts(post)
+
+      stored = Repo.get!(RemotePost, post.id)
+      assert stored.counts_checked_at
+      # No strike: the origin did nothing wrong, and a signer can appear the
+      # moment somebody here follows the account.
+      assert stored.counts_failures == 0
+      refute stored.id in Enum.map(Fediverse.due_for_counts(10), & &1.id)
+    end
+
+    test "an object that can never be asked about does not fill the batch forever" do
+      unaskable =
+        for _ <- 1..3 do
+          post = cached_post(account(), %{published_at: minutes_ago(45)})
+          assert :skip = Fediverse.refresh_counts(post)
+          post.id
+        end
+
+      {fresh, _user} = followed_post(%{counts_checked_at: minutes_ago(6)})
+
+      due = Enum.map(Fediverse.due_for_counts(2), & &1.id)
+      assert fresh.id in due
+      assert due -- unaskable == due
     end
   end
 
