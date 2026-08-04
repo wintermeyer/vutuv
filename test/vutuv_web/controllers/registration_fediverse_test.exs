@@ -45,8 +45,31 @@ defmodule VutuvWeb.RegistrationFediverseTest do
     test "the box says that replies are stored, and for how long", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert body =~ "A reply from there is stored here for up to six months"
-      assert body =~ "shown under your posts"
+      assert body =~ "kept for up to six months"
+      assert body =~ "come back under your posts"
+      # The two facts that make the tick informed consent: what is stored, and
+      # that it can be undone. The sentence was shortened once (2026-08-04) and
+      # may be shortened again, but never past these.
+      assert body =~ "switch it off at any time"
+    end
+
+    # The word is the one thing in that sentence a first-time visitor may not
+    # know, so it links out - in BOTH languages. The German string carries the
+    # {mastodon} placeholder too, and if it ever loses it `split_marker/2` fails
+    # soft: no crash, no link, nobody notices. Hence an assertion per locale.
+    test "Mastodon links to the project's own site in either language", %{conn: conn} do
+      for locale <- ["en", "de-DE,de;q=0.9"] do
+        body =
+          conn
+          |> put_req_header("accept-language", locale)
+          |> get(~p"/")
+          |> html_response(200)
+
+        assert body =~ ~s(href="https://joinmastodon.org")
+        assert body =~ ">Mastodon</a>"
+        # The placeholder itself must never reach the page.
+        refute body =~ "{mastodon}"
+      end
     end
 
     # vutuv is a German site, and a new English string on the one page every
@@ -60,7 +83,8 @@ defmodule VutuvWeb.RegistrationFediverseTest do
         |> html_response(200)
 
       assert body =~ "Am Fediverse teilnehmen"
-      assert body =~ "Eine Antwort von dort speichern wir dafür bis zu sechs Monate."
+      assert body =~ "bis zu sechs Monate gespeichert"
+      assert body =~ "Jederzeit abschaltbar."
     end
 
     # An intranet installation (FEDIVERSE_ENABLED=false) federates nothing, so

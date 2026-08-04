@@ -122,13 +122,25 @@
       </div>
     </div>
 
-    <%!-- Group 2: email. The email-type choice comes first (above the address
-          field): a radio group, not a dropdown, so a normal user sees all three
-          choices at once, and "Personal" is preselected (set on the changeset
-          by `PageController.index/2`) instead of the old unhelpful "Other"
-          default — most people sign up with their private address. --%>
+    <%!-- Group 2: email. The address itself comes first, then the two things
+          that are true *about* it: what kind of address it is, and who may see
+          it. A property is answered after the thing it belongs to — the same
+          order the name/salutation block above follows, and the reason the type
+          moved down here: it used to sit above the field, so the form asked how
+          to classify an address before asking for one, and it was the only
+          property of the address that did not sit under it (the visibility
+          checkbox always has). --%>
     <div class="space-y-4 border-t border-slate-200 pt-6 dark:border-slate-800">
       <.inputs_for :let={ef} field={f[:emails]}>
+        <div>
+          <%= email_input ef, :value, class: input_class(ef, :value), placeholder: gettext("Enter your email address"), "aria-invalid": ef.errors[:value] && "true" %>
+          <%= error_tag ef, :value %>
+        </div>
+        <%!-- A radio group, not a dropdown, so a normal user sees all three
+              choices at once, and "Personal" is preselected (set on the
+              changeset by `PageController.index/2`) instead of the old
+              unhelpful "Other" default — most people sign up with their
+              private address. --%>
         <fieldset>
           <legend class={legend_class}>{gettext("Type of email address")}</legend>
           <div class="flex flex-wrap gap-x-5 gap-y-2">
@@ -141,10 +153,6 @@
           </div>
           <%= error_tag ef, :email_type %>
         </fieldset>
-        <div>
-          <%= email_input ef, :value, class: input_class(ef, :value), placeholder: gettext("Enter your email address"), "aria-invalid": ef.errors[:value] && "true" %>
-          <%= error_tag ef, :value %>
-        </div>
         <%!-- Checked by default (the controller primes public?: true on the
               changeset), so a normal member's address shows on their profile
               unless they opt out here. --%>
@@ -202,10 +210,28 @@
                 <label> bold, which the three box labels want and this helper
                 line does not - without it the explanation shouts as loudly as
                 the choice it explains. --%>
+          <%!-- "Mastodon" links out to the project's own site, because the word
+                is the one thing in this sentence a first-time visitor may not
+                know, and the tick is only informed consent if they can find
+                out. Split on a placeholder with `split_marker/2` (the same
+                total, never-raising helper the terms line below uses) rather
+                than matching the sentence itself: a hard split on a translated
+                string turns any .po slip into a 500. The link text is not
+                translated - it is a product name. --%>
+          <% {mastodon_pre, mastodon_post} =
+            split_marker(
+              gettext(
+                "Your public posts then also appear on {mastodon} and other independent networks, where people can follow you. Replies and reposts come back under your posts, with the account's address, and are kept for up to six months. You can switch it off at any time."
+              ),
+              "{mastodon}"
+            ) %>
           <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
-            {gettext(
-              "People on Mastodon and other independent networks can then follow this profile, and your public posts appear there. What they answer or share comes back and is shown under your posts, by their account address. A reply from there is stored here for up to six months. You can switch all of it off again at any time."
-            )}
+            {mastodon_pre}<a
+              href="https://joinmastodon.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >Mastodon</a>{mastodon_post}
           </span>
         </span>
         <%= error_tag f, :fediverse_followers? %>

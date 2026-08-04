@@ -73,7 +73,7 @@ msgstr "Eine Adresse wurde geändert."
 msgid "Addresses"
 msgstr "Adressen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:235
+#: lib/vutuv_web/templates/page/index.html.heex:262
 #, elixir-autogen
 msgid "Already a member? Sign in here."
 msgstr "Schon ein Mitglied? Einloggen."
@@ -274,7 +274,7 @@ msgstr "Empfehlung eingetragen."
 msgid "English"
 msgstr "Englisch"
 
-#: lib/vutuv_web/templates/page/index.html.heex:144
+#: lib/vutuv_web/templates/page/index.html.heex:136
 #: lib/vutuv_web/templates/session/new.html.heex:37
 #, elixir-autogen
 msgid "Enter your email address"
@@ -667,7 +667,7 @@ msgstr "Suche"
 msgid "Show"
 msgstr "Anzeigen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:214
+#: lib/vutuv_web/templates/page/index.html.heex:241
 #, elixir-autogen
 msgid "Sign up for a free account"
 msgstr "Gratis-Konto erstellen"
@@ -879,7 +879,7 @@ msgstr "Sichtbarkeit"
 msgid "We can't find em' cap'n!"
 msgstr "Nichts zu finden, Käpt'n!"
 
-#: lib/vutuv_web/templates/page/index.html.heex:238
+#: lib/vutuv_web/templates/page/index.html.heex:265
 #, elixir-autogen
 msgid "We reserve the right to stop this service or delete your account anytime without warning."
 msgstr ""
@@ -960,12 +960,12 @@ msgstr "unserem Blog"
 msgid "An email has been sent to your email address with instructions on how to delete your account."
 msgstr "Eine E-Mail mit einem Löschlink wurde gerade an Sie verschickt."
 
-#: lib/vutuv_web/templates/page/index.html.heex:152
+#: lib/vutuv_web/templates/page/index.html.heex:161
 #, elixir-autogen
 msgid "Allow others to view your email address"
 msgstr "Diese E-Mail-Adresse soll auf meinem Profil öffentlich sichtbar sein."
 
-#: lib/vutuv_web/templates/page/index.html.heex:224
+#: lib/vutuv_web/templates/page/index.html.heex:251
 #, elixir-autogen, elixir-format
 msgid "By creating an account you accept our {nutzungsbedingungen} and confirm that you have read our {datenschutz}."
 msgstr ""
@@ -1688,7 +1688,7 @@ msgstr "Kontolöschung bestätigen"
 
 #: lib/vutuv_web/controllers/page_controller.ex:140
 #: lib/vutuv_web/templates/layout/app.html.heex:93
-#: lib/vutuv_web/templates/page/index.html.heex:231
+#: lib/vutuv_web/templates/page/index.html.heex:258
 #: lib/vutuv_web/views/admin/legal_page_html.ex:11
 #, elixir-autogen, elixir-format
 msgid "Datenschutzerklärung"
@@ -1696,7 +1696,7 @@ msgstr "Datenschutzerklärung"
 
 #: lib/vutuv_web/controllers/page_controller.ex:146
 #: lib/vutuv_web/templates/layout/app.html.heex:95
-#: lib/vutuv_web/templates/page/index.html.heex:231
+#: lib/vutuv_web/templates/page/index.html.heex:258
 #: lib/vutuv_web/views/admin/legal_page_html.ex:12
 #, elixir-autogen, elixir-format
 msgid "Nutzungsbedingungen"
@@ -2700,7 +2700,7 @@ msgstr "Willkommen zurück!"
 msgid "Founder of vutuv"
 msgstr "Gründer von vutuv"
 
-#: lib/vutuv_web/templates/page/index.html.heex:171
+#: lib/vutuv_web/templates/page/index.html.heex:180
 #: lib/vutuv_web/templates/settings/privacy.html.heex:58
 #, elixir-autogen, elixir-format
 msgid "Allow search engines to index your profile"
@@ -5448,7 +5448,7 @@ msgstr ""
 "Webhook-Dokumentation). Nur https://; http://localhost ist für die "
 "Entwicklung erlaubt."
 
-#: lib/vutuv_web/templates/page/index.html.heex:176
+#: lib/vutuv_web/templates/page/index.html.heex:185
 #: lib/vutuv_web/templates/settings/privacy.html.heex:63
 #, elixir-autogen, elixir-format
 msgid "Allow AI agents and LLMs to use your profile"
@@ -5660,7 +5660,7 @@ msgstr "Privat"
 msgid "Type of Email"
 msgstr "Art der E-Mail"
 
-#: lib/vutuv_web/templates/page/index.html.heex:132
+#: lib/vutuv_web/templates/page/index.html.heex:145
 #, elixir-autogen, elixir-format
 msgid "Type of email address"
 msgstr "Art der E-Mail-Adresse"
@@ -15587,7 +15587,7 @@ msgid "Nothing changes on vutuv itself, and you can switch it off again."
 msgstr "Auf vutuv selbst ändert sich nichts, und Sie können es jederzeit wieder ausschalten."
 
 #: lib/vutuv_web/components/fediverse_components.ex:198
-#: lib/vutuv_web/templates/page/index.html.heex:199
+#: lib/vutuv_web/templates/page/index.html.heex:208
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:64
 #, elixir-autogen, elixir-format
 msgid "Take part in the Fediverse"
@@ -18191,17 +18191,6 @@ msgstr ""
 "Dieser Link zeigt auf einen einzelnen Beitrag. Von hier aus können Sie dem "
 "Konto dahinter folgen: %{account}."
 
-#: lib/vutuv_web/templates/page/index.html.heex:205
-#, elixir-autogen, elixir-format
-msgid "People on Mastodon and other independent networks can then follow this profile, and your public posts appear there. What they answer or share comes back and is shown under your posts, by their account address. A reply from there is stored here for up to six months. You can switch all of it off again at any time."
-msgstr ""
-"Menschen auf Mastodon und in anderen unabhängigen Netzwerken können diesem "
-"Profil dann folgen, und Ihre öffentlichen Beiträge erscheinen dort. Was von "
-"dort geantwortet oder geteilt wird, kommt zurück und erscheint unter Ihren "
-"Beiträgen, mit der Adresse des jeweiligen Kontos. Eine Antwort von dort "
-"speichern wir dafür bis zu sechs Monate. Alles davon lässt sich jederzeit "
-"wieder abschalten."
-
 #: lib/vutuv_web/live/user_profile_live.ex:1282
 #, elixir-autogen, elixir-format
 msgid "Follow %{count} members"
@@ -18996,7 +18985,7 @@ msgstr "Diesen Feed in Ihrem RSS-Reader abonnieren"
 msgid "A CV with positions, education, certificates including proof, spoken languages and tags other members endorse you for."
 msgstr "Ein Lebenslauf mit Stationen, Ausbildung, Zertifikaten samt Nachweis, Sprachen und Tags, für die andere Mitglieder Sie empfehlen."
 
-#: lib/vutuv_web/templates/page/index.html.heex:380
+#: lib/vutuv_web/templates/page/index.html.heex:407
 #, elixir-autogen, elixir-format
 msgid "A business network that is free, does not lock your data in, and is yours to run yourself if you want to."
 msgstr "Ein Business-Netzwerk, das kostenlos ist, Ihre Daten nicht einsperrt und das Sie auf Wunsch selbst betreiben können."
@@ -19016,22 +19005,22 @@ msgstr "Eine feste öffentliche Adresse, ohne Konto lesbar und als vCard herunte
 msgid "CV download as PDF, Word, OpenDocument, LaTeX or JSON Resume, and you pick what goes in before you download it."
 msgstr "Lebenslauf-Download als PDF, Word, OpenDocument, LaTeX oder JSON Resume, und Sie wählen vor dem Download aus, was darin steht."
 
-#: lib/vutuv_web/templates/page/index.html.heex:433
+#: lib/vutuv_web/templates/page/index.html.heex:460
 #, elixir-autogen, elixir-format
 msgid "Developer documentation"
 msgstr "Entwicklerdokumentation"
 
-#: lib/vutuv_web/templates/page/index.html.heex:393
+#: lib/vutuv_web/templates/page/index.html.heex:420
 #, elixir-autogen, elixir-format
 msgid "Every public page here is also served as Markdown, plain text, JSON and XML under the same address. No scraping, no API key, no account."
 msgstr "Jede öffentliche Seite hier gibt es unter derselben Adresse auch als Markdown, reinen Text, JSON und XML. Ohne Scraping, ohne API-Schlüssel, ohne Konto."
 
-#: lib/vutuv_web/templates/page/index.html.heex:400
+#: lib/vutuv_web/templates/page/index.html.heex:427
 #, elixir-autogen, elixir-format
 msgid "For machines"
 msgstr "Für Maschinen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:390
+#: lib/vutuv_web/templates/page/index.html.heex:417
 #, elixir-autogen, elixir-format
 msgid "Open by default"
 msgstr "Offen von Haus aus"
@@ -19056,12 +19045,12 @@ msgstr "Menschen, Beiträge, Jobs"
 msgid "Posts, likes, reposts, replies and 1:1 messages, in real time."
 msgstr "Beiträge, Likes, Reposts, Antworten und 1:1-Nachrichten, in Echtzeit."
 
-#: lib/vutuv_web/templates/page/index.html.heex:391
+#: lib/vutuv_web/templates/page/index.html.heex:418
 #, elixir-autogen, elixir-format
 msgid "Readable by people, by machines, and on your own server"
 msgstr "Lesbar für Menschen, für Maschinen und auf Ihrem eigenen Server"
 
-#: lib/vutuv_web/templates/page/index.html.heex:416
+#: lib/vutuv_web/templates/page/index.html.heex:443
 #, elixir-autogen, elixir-format
 msgid "Run it yourself"
 msgstr "Selbst hosten"
@@ -19071,23 +19060,23 @@ msgstr "Selbst hosten"
 msgid "Sign in without a password, by emailed PIN, passkey, authenticator app or a printed list of codes."
 msgstr "Einloggen ohne Passwort, per PIN in der E-Mail, Passkey, Authenticator-App oder gedruckter Kennwortliste."
 
-#: lib/vutuv_web/templates/page/index.html.heex:427
-#: lib/vutuv_web/templates/page/index.html.heex:514
+#: lib/vutuv_web/templates/page/index.html.heex:454
+#: lib/vutuv_web/templates/page/index.html.heex:541
 #, elixir-autogen, elixir-format
 msgid "Source code"
 msgstr "Quellcode"
 
-#: lib/vutuv_web/templates/page/index.html.heex:262
+#: lib/vutuv_web/templates/page/index.html.heex:289
 #, elixir-autogen, elixir-format
 msgid "This is what a vutuv profile looks like"
 msgstr "So sieht ein Profil auf vutuv aus"
 
-#: lib/vutuv_web/templates/page/index.html.heex:378
+#: lib/vutuv_web/templates/page/index.html.heex:405
 #, elixir-autogen, elixir-format
 msgid "What vutuv can do"
 msgstr "Was vutuv kann"
 
-#: lib/vutuv_web/templates/page/index.html.heex:377
+#: lib/vutuv_web/templates/page/index.html.heex:404
 #, elixir-autogen, elixir-format
 msgid "What you get"
 msgstr "Was Sie bekommen"
@@ -19097,12 +19086,12 @@ msgstr "Was Sie bekommen"
 msgid "Your independence"
 msgstr "Ihre Unabhängigkeit"
 
-#: lib/vutuv_web/templates/page/index.html.heex:418
+#: lib/vutuv_web/templates/page/index.html.heex:445
 #, elixir-autogen, elixir-format
 msgid "vutuv is open source under the MIT license. Run it for a company, an association or a school, on the internet or air-gapped inside your own network."
 msgstr "vutuv ist Open Source unter der MIT-Lizenz. Betreiben Sie es für ein Unternehmen, einen Verein oder eine Schule, im Internet oder abgeschottet im eigenen Netz."
 
-#: lib/vutuv_web/templates/page/index.html.heex:261
+#: lib/vutuv_web/templates/page/index.html.heex:288
 #, elixir-autogen, elixir-format
 msgid "A look inside"
 msgstr "Ein Blick hinein"
@@ -19112,7 +19101,7 @@ msgstr "Ein Blick hinein"
 msgid "A vutuv profile: cover picture, photo, name, tagline and job title, follower counts and the first posts, with contact details and social media profiles in a column on the right."
 msgstr "Ein vutuv-Profil: Titelbild, Foto, Name, Motto und Position, die Follower-Zahlen und die ersten Beiträge, rechts daneben eine Spalte mit Kontaktdaten und Profilen in sozialen Netzwerken."
 
-#: lib/vutuv_web/templates/page/index.html.heex:283
+#: lib/vutuv_web/templates/page/index.html.heex:310
 #, elixir-autogen, elixir-format
 msgid "Browse real profiles"
 msgstr "Echte Profile durchstöbern"
@@ -19132,17 +19121,17 @@ msgstr "Dasselbe Profil weiter unten: Tags mit der Zahl der Mitglieder, die sie 
 msgid "Try it out:"
 msgstr "Probieren Sie es aus:"
 
-#: lib/vutuv_web/templates/page/index.html.heex:409
+#: lib/vutuv_web/templates/page/index.html.heex:436
 #, elixir-autogen, elixir-format
 msgid "Plus a sitemap, JSON-LD and a REST API with OAuth 2 and personal access tokens."
 msgstr "Dazu eine Sitemap, JSON-LD und eine REST-API mit OAuth 2 und persönlichen Zugriffstokens."
 
-#: lib/vutuv_web/templates/page/index.html.heex:264
+#: lib/vutuv_web/templates/page/index.html.heex:291
 #, elixir-autogen, elixir-format
 msgid "Work experience, education, certificates, languages, links and tags others endorse you for. Anyone can read a profile, entirely without a vutuv account. Unlike LinkedIn, where you hit a login wall in short order."
 msgstr "Berufserfahrung, Ausbildung, Zertifikate, Sprachen, Links und Tags, für die andere Sie empfehlen. Ein Profil kann jeder lesen, ganz ohne vutuv-Konto. Anders als bei LinkedIn, wo Sie schnell vor einer Anmeldeschranke stehen."
 
-#: lib/vutuv_web/templates/page/index.html.heex:364
+#: lib/vutuv_web/templates/page/index.html.heex:391
 #, elixir-autogen, elixir-format
 msgid "Talking to people"
 msgstr "Miteinander reden"
@@ -19162,12 +19151,12 @@ msgstr "Der vutuv-Feed mit ausgewähltem Fediverse-Reiter: Beiträge von Nachric
 msgid "The Fediverse: let people follow you from Mastodon, and your public posts show up there. You choose at sign-up, and can change it later."
 msgstr "Das Fediverse: Menschen können Ihnen von Mastodon aus folgen, und Ihre öffentlichen Beiträge erscheinen dort. Sie entscheiden das bei der Anmeldung und können es später ändern."
 
-#: lib/vutuv_web/templates/page/index.html.heex:365
+#: lib/vutuv_web/templates/page/index.html.heex:392
 #, elixir-autogen, elixir-format
 msgid "Posts, messages, and the Fediverse along with them"
 msgstr "Beiträge, Nachrichten und das Fediverse gleich dazu"
 
-#: lib/vutuv_web/templates/page/index.html.heex:367
+#: lib/vutuv_web/templates/page/index.html.heex:394
 #, elixir-autogen, elixir-format
 msgid "Write a post, react with a heart, a repost or a reply, or message somebody privately. And you are not stuck among vutuv members: vutuv is part of the Fediverse, the union of independent networks that Mastodon belongs to as well. Follow an account over there and its posts arrive in your feed; the other way round, people there can follow you and see your public posts. Both directions, and entirely your choice: at sign-up you decide whether to use vutuv with or without the Fediverse, and you can change that at any time in the settings."
 msgstr "Beitrag schreiben, mit Herz, Repost oder Antwort reagieren, oder jemandem privat schreiben. Und Sie bleiben nicht unter vutuv-Mitgliedern: vutuv gehört zum Fediverse, dem Verbund unabhängiger Netzwerke, zu dem auch Mastodon zählt. Folgen Sie dort einem Konto, und dessen Beiträge landen in Ihrem Feed; umgekehrt können Leute von dort Ihnen folgen und Ihre öffentlichen Beiträge sehen. In beide Richtungen, und ganz Ihre Entscheidung: Sie wählen bei der Anmeldung, ob Sie vutuv mit oder ohne Fediverse benutzen möchten, und können das jederzeit in den Einstellungen ändern."
@@ -19179,62 +19168,62 @@ msgid_plural "members"
 msgstr[0] "Mitglied"
 msgstr[1] "Mitglieder"
 
-#: lib/vutuv_web/templates/page/index.html.heex:480
+#: lib/vutuv_web/templates/page/index.html.heex:507
 #, elixir-autogen, elixir-format
 msgid "Download everything you have here at any time, in a machine-readable file. Not on request, not after a waiting period: from your settings, whenever you like."
 msgstr "Laden Sie jederzeit alles herunter, was Sie hier haben, als maschinenlesbare Datei. Nicht auf Anfrage, nicht nach einer Wartezeit: in Ihren Einstellungen, wann immer Sie möchten."
 
-#: lib/vutuv_web/templates/page/index.html.heex:455
+#: lib/vutuv_web/templates/page/index.html.heex:482
 #, elixir-autogen, elixir-format
 msgid "Fair and transparent, in plain words"
 msgstr "Fair und transparent, in klaren Worten"
 
-#: lib/vutuv_web/templates/page/index.html.heex:469
+#: lib/vutuv_web/templates/page/index.html.heex:496
 #, elixir-autogen, elixir-format
 msgid "No third-party cookies"
 msgstr "Keine Cookies von Dritten"
 
-#: lib/vutuv_web/templates/page/index.html.heex:461
+#: lib/vutuv_web/templates/page/index.html.heex:488
 #, elixir-autogen, elixir-format
 msgid "On our own servers in %{place}, not in somebody else's cloud. We do not hand your profile to a third party, and there is no tracking network reading along."
 msgstr "Auf unseren eigenen Servern in %{place}, nicht in der Cloud eines anderen. Wir geben Ihr Profil an niemanden weiter, und es liest kein Tracking-Netzwerk mit."
 
-#: lib/vutuv_web/templates/page/index.html.heex:459
+#: lib/vutuv_web/templates/page/index.html.heex:486
 #, elixir-autogen, elixir-format
 msgid "Where your data lives"
 msgstr "Wo Ihre Daten liegen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:454
+#: lib/vutuv_web/templates/page/index.html.heex:481
 #, elixir-autogen, elixir-format
 msgid "Your data"
 msgstr "Ihre Daten"
 
-#: lib/vutuv_web/templates/page/index.html.heex:471
+#: lib/vutuv_web/templates/page/index.html.heex:498
 #, elixir-autogen, elixir-format
 msgid "vutuv sets one cookie, the one that keeps you signed in. No advertising network, no analytics service, nothing loaded from anybody else's server."
 msgstr "vutuv setzt ein einziges Cookie, das Sie eingeloggt hält. Kein Werbenetzwerk, kein Analysedienst, nichts, was von fremden Servern nachgeladen wird."
 
-#: lib/vutuv_web/templates/page/index.html.heex:487
+#: lib/vutuv_web/templates/page/index.html.heex:514
 #, elixir-autogen, elixir-format
 msgid "Leave whenever you like"
 msgstr "Jederzeit wieder gehen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:503
+#: lib/vutuv_web/templates/page/index.html.heex:530
 #, elixir-autogen, elixir-format
 msgid "Open source"
 msgstr "Open Source"
 
-#: lib/vutuv_web/templates/page/index.html.heex:505
+#: lib/vutuv_web/templates/page/index.html.heex:532
 #, elixir-autogen, elixir-format
 msgid "You can check at any time how exactly vutuv works. The whole source code is public under the MIT license, so everything said above about your data can be read rather than taken on trust."
 msgstr "Sie können jederzeit nachsehen, wie vutuv genau funktioniert. Der komplette Quellcode ist öffentlich, unter der MIT-Lizenz. Alles, was oben über Ihre Daten steht, lässt sich also nachlesen, statt es uns glauben zu müssen."
 
-#: lib/vutuv_web/templates/page/index.html.heex:478
+#: lib/vutuv_web/templates/page/index.html.heex:505
 #, elixir-autogen, elixir-format
 msgid "Your data stays with you"
 msgstr "Ihre Daten bleiben Ihnen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:494
+#: lib/vutuv_web/templates/page/index.html.heex:521
 #, elixir-autogen, elixir-format
 msgid "Delete your account yourself, without writing to anybody. No questions asked, and you are welcome back any time."
 msgstr "Löschen Sie Ihr Konto selbst, ohne jemandem schreiben zu müssen. No questions asked! Und Sie können jederzeit gerne wiederkommen."
@@ -20134,7 +20123,7 @@ msgstr "Ihr Zeugnis bleibt auf unseren Servern in %{country}."
 msgid "You have reached your limit of %{limit} reviews. Please try again in %{window}."
 msgstr "Sie haben Ihr Limit von %{limit} Prüfungen erreicht. Bitte versuchen Sie es in %{window} wieder."
 
-#: lib/vutuv_web/templates/page/index.html.heex:324
+#: lib/vutuv_web/templates/page/index.html.heex:351
 #, elixir-autogen, elixir-format
 msgid "Employment reference"
 msgstr "Arbeitszeugnis"
@@ -20144,7 +20133,7 @@ msgstr "Arbeitszeugnis"
 msgid "Employment references: upload them, keep them private, and have the wording read and graded on our own servers."
 msgstr "Arbeitszeugnisse hochladen, privat halten und die Formulierungen auf unseren eigenen Servern lesen und benoten lassen."
 
-#: lib/vutuv_web/templates/page/index.html.heex:301
+#: lib/vutuv_web/templates/page/index.html.heex:328
 #, elixir-autogen, elixir-format
 msgid "Job applications"
 msgstr "Bewerbungsunterlagen"
@@ -20159,7 +20148,7 @@ msgstr "Der Lebenslauf-Baukasten: eine Liste zum Abhaken mit allem, was in den L
 msgid "The finished CV ready to print: name, tagline and contact details at the top, below them the positions held with employer and period, and further down the tags and the spoken languages."
 msgstr "Der fertige Lebenslauf in der Druckansicht: oben Name, Kurzbeschreibung und Kontaktdaten, darunter die Stationen mit Arbeitgeber und Zeitraum, weiter unten die Tags und die Sprachkenntnisse."
 
-#: lib/vutuv_web/templates/page/index.html.heex:344
+#: lib/vutuv_web/templates/page/index.html.heex:371
 #, elixir-autogen, elixir-format
 msgid "The review is a text analysis, not legal advice, and it covers German employment references."
 msgstr "Die Prüfung ist eine Textanalyse, keine Rechtsberatung, und sie deckt deutsche Arbeitszeugnisse ab."
@@ -20174,22 +20163,22 @@ msgstr "Die Prüfung eines einzelnen Arbeitszeugnisses: die Gesamtnote in einem 
 msgid "The uploaded employment references, each marked private: one graded 1 (very good) on a green panel, one graded 4 to 5 (poor to unsatisfactory) on a red one, each with a link to its full report."
 msgstr "Die hochgeladenen Arbeitszeugnisse, jedes als privat gekennzeichnet: eines mit der Note 1 (sehr gut) in einem grünen Feld, eines mit der Note 4 bis 5 (mangelhaft bis ungenügend) in einem roten, jeweils mit einem Link zum vollständigen Bericht."
 
-#: lib/vutuv_web/templates/page/index.html.heex:327
+#: lib/vutuv_web/templates/page/index.html.heex:354
 #, elixir-autogen, elixir-format
 msgid "Upload your employment references and have them read sentence by sentence: a grade, a traffic light, and the explanation of how a recruiter reads that wording. It takes a few minutes, then the report is there. Nothing becomes public before you release it."
 msgstr "Laden Sie Ihre Arbeitszeugnisse hoch und lassen Sie sie Satz für Satz durchlesen: Note, Ampel und die Erklärung, wie ein Personaler die Formulierung liest. Das dauert ein paar Minuten, dann steht der Bericht da. Öffentlich wird nichts davon, bevor Sie es freigeben."
 
-#: lib/vutuv_web/templates/page/index.html.heex:325
+#: lib/vutuv_web/templates/page/index.html.heex:352
 #, elixir-autogen, elixir-format
 msgid "What your employment reference really says"
 msgstr "Was in Ihrem Arbeitszeugnis wirklich steht"
 
-#: lib/vutuv_web/templates/page/index.html.heex:304
+#: lib/vutuv_web/templates/page/index.html.heex:331
 #, elixir-autogen, elixir-format
 msgid "What your profile already says becomes a CV. You tick what should go in, then download it as PDF, Word, OpenDocument, LaTeX or JSON Resume. Anonymously as well, if you would rather show what you can do before you show who you are."
 msgstr "Was auf Ihrem Profil steht, wird auf Wunsch ein Lebenslauf. Sie haken an, was hinein soll, und laden ihn als PDF, Word, OpenDocument, LaTeX oder JSON Resume herunter. Auch anonym, wenn Sie lieber erst zeigen, was Sie können, bevor Sie zeigen, wer Sie sind."
 
-#: lib/vutuv_web/templates/page/index.html.heex:302
+#: lib/vutuv_web/templates/page/index.html.heex:329
 #, elixir-autogen, elixir-format
 msgid "Your CV, ready to send"
 msgstr "Ihr Lebenslauf, fertig zum Verschicken"
@@ -20233,3 +20222,12 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "avatar portrait picture image birthday salutation about me"
 msgstr "avatar profilbild portrait foto bild geburtstag geburtsdatum anrede über mich"
+
+#: lib/vutuv_web/templates/page/index.html.heex:223
+#, elixir-autogen, elixir-format
+msgid "Your public posts then also appear on {mastodon} and other independent networks, where people can follow you. Replies and reposts come back under your posts, with the account's address, and are kept for up to six months. You can switch it off at any time."
+msgstr ""
+"Ihre öffentlichen Beiträge erscheinen dann auch auf {mastodon} und in anderen "
+"unabhängigen Netzwerken, wo man Ihnen folgen kann. Antworten und Reposts von "
+"dort stehen unter Ihren Beiträgen, mit der Adresse des Kontos, und werden bis "
+"zu sechs Monate gespeichert. Jederzeit abschaltbar."

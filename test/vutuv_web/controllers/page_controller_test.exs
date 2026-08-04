@@ -402,6 +402,23 @@ defmodule VutuvWeb.PageControllerTest do
                :binary.match(body, ~s(name="user[salutation]"))
     end
 
+    # The same rule one block down: a property is answered after the thing it
+    # belongs to. The type used to sit above the address field, so the form
+    # asked how to classify an address before asking for one — and it was the
+    # only property of the address not sitting under it, since the visibility
+    # checkbox always has.
+    test "the email address is asked before its type and its visibility",
+         %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      address = :binary.match(body, ~s(name="user[emails][0][value]"))
+      type = :binary.match(body, ~s(name="user[emails][0][email_type]"))
+      public = :binary.match(body, ~s(name="user[emails][0][public?]"))
+
+      assert address < type
+      assert type < public
+    end
+
     # The consent line by the submit button accepts the Nutzungsbedingungen
     # (AGB incorporation, §305 BGB) and links the Datenschutzerklärung (GDPR
     # Art. 13 information duty), both as links rather than separate checkboxes.
