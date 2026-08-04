@@ -802,35 +802,45 @@ defmodule VutuvWeb.NotificationLive.Index do
   end
 
   # The welcome note is the one row that is NOT one big link: the handle points
-  # at the member's own profile, the URL at the page that changes it, so both
-  # destinations are reachable and the rest of the sentence stays plain text.
-  # The two `{markers}` are split out of the translation (split_marker/2, total
-  # by design, so a botched .po can never raise here) and each half rendered in
-  # its own place — which is also how German and English each get their natural
-  # word order.
+  # at the member's own profile and the two URLs at the pages they name, so
+  # every destination is reachable and the rest of the sentence stays plain
+  # text. The three `{markers}` are split out of the translation (split_marker/2,
+  # total by design, so a botched .po can never raise here) and each piece
+  # rendered in its own place — which is also how German and English each get
+  # their natural word order.
+  #
+  # It greets first and explains second. It used to open with "Your
+  # automatically assigned vutuv username is …", which leads with a machine
+  # detail on the first thing a new member ever reads from us. The import offer
+  # rides along because this is the one moment somebody arriving from LinkedIn
+  # still has that profile in mind, and the page is otherwise buried in
+  # /settings.
   attr(:handle, :string, required: true)
 
   defp username_line(assigns) do
-    {before_handle, rest} =
+    {greeting, rest} =
       split_marker(
         gettext(
-          "Your automatically assigned vutuv username is {handle}. You can change it any time at {url}."
+          "Welcome to vutuv! You can change your username {handle} at {url}, and if you would like to import an existing LinkedIn profile, you can do that at {import_url}."
         ),
         "{handle}"
       )
 
-    {between, tail} = split_marker(rest, "{url}")
+    {between, rest} = split_marker(rest, "{url}")
+    {before_import, tail} = split_marker(rest, "{import_url}")
 
     assigns =
       assign(assigns,
-        before_handle: before_handle,
+        greeting: greeting,
         between: between,
+        before_import: before_import,
         tail: tail,
-        settings_url: url(~p"/settings/username")
+        settings_url: url(~p"/settings/username"),
+        import_url: url(~p"/settings/import/linkedin")
       )
 
     ~H"""
-    {@before_handle}<.link href={~p"/#{@handle}"} class={inline_link_class()}>@{@handle}</.link>{@between}<.link href={@settings_url} class={inline_link_class()}>{@settings_url}</.link>{@tail}
+    {@greeting}<.link href={~p"/#{@handle}"} class={inline_link_class()}>@{@handle}</.link>{@between}<.link href={@settings_url} class={inline_link_class()}>{@settings_url}</.link>{@before_import}<.link href={@import_url} class={inline_link_class()}>{@import_url}</.link>{@tail}
     """
   end
 

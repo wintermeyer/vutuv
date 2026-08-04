@@ -37,18 +37,24 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
 
     # A brand-new member never chose their handle - vutuv generated it from
-    # their name - so the feed tells them what it is and where to change it.
+    # their name - so the first thing they ever read from us greets them, says
+    # what the handle is and where to change it, and offers the LinkedIn import
+    # while an existing profile is still on their mind.
     test "tells a confirmed member their own username", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       assert has_element?(live, ~s([data-notification-row][data-kind="username"]))
-      assert render(live) =~ "Your automatically assigned vutuv username is"
+      html = render(live)
+      assert html =~ "Welcome to vutuv!"
+      # It greets before it explains: leading with the machine detail ("Your
+      # automatically assigned vutuv username is …") is what this replaced.
+      refute html =~ "Your automatically assigned"
 
-      # Two links inside the sentence, and the row itself is not one: the
-      # handle goes to the member's own profile, the spelled-out URL to the
-      # page that changes it.
+      # Three links inside the sentence, and the row itself is not one: the
+      # handle goes to the member's own profile, the spelled-out URLs to the
+      # page that changes it and to the LinkedIn import.
       assert has_element?(
                live,
                ~s([data-kind="username"] a[href="/#{user.username}"]),
@@ -63,6 +69,16 @@ defmodule VutuvWeb.NotificationLiveTest do
                live,
                ~s([data-kind="username"] a[href="#{settings_url}"]),
                settings_url
+             )
+
+      # The import offer is the reason this row mentions LinkedIn at all; the
+      # page is otherwise buried in /settings and nobody goes looking for it.
+      import_url = VutuvWeb.Endpoint.url() <> "/settings/import/linkedin"
+
+      assert has_element?(
+               live,
+               ~s([data-kind="username"] a[href="#{import_url}"]),
+               import_url
              )
     end
 
