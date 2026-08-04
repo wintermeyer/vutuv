@@ -75,7 +75,7 @@ msgstr ""
 msgid "Addresses"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:238
+#: lib/vutuv_web/templates/page/index.html.heex:235
 #, elixir-autogen
 msgid "Already a member? Sign in here."
 msgstr ""
@@ -92,7 +92,7 @@ msgstr ""
 msgid "Avatar"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:373
+#: lib/vutuv_web/templates/user/edit.html.heex:370
 #, elixir-autogen
 msgid "Birthdate"
 msgstr ""
@@ -125,8 +125,8 @@ msgstr ""
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:24
 #: lib/vutuv_web/templates/user/edit.html.heex:50
 #: lib/vutuv_web/templates/user/edit.html.heex:103
-#: lib/vutuv_web/templates/user/edit.html.heex:428
-#: lib/vutuv_web/templates/user/edit.html.heex:463
+#: lib/vutuv_web/templates/user/edit.html.heex:425
+#: lib/vutuv_web/templates/user/edit.html.heex:460
 #: lib/vutuv_web/templates/username/confirm.html.heex:222
 #, elixir-autogen
 msgid "Cancel"
@@ -274,7 +274,7 @@ msgstr ""
 msgid "English"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:147
+#: lib/vutuv_web/templates/page/index.html.heex:144
 #: lib/vutuv_web/templates/session/new.html.heex:37
 #, elixir-autogen
 msgid "Enter your email address"
@@ -632,7 +632,7 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/preferences.html.heex:205
 #: lib/vutuv_web/templates/settings/privacy.html.heex:69
 #: lib/vutuv_web/templates/settings/saved_searches.html.heex:65
-#: lib/vutuv_web/templates/user/edit.html.heex:423
+#: lib/vutuv_web/templates/user/edit.html.heex:420
 #: lib/vutuv_web/views/settings_html.ex:142
 #, elixir-autogen
 msgid "Save"
@@ -667,7 +667,7 @@ msgstr ""
 msgid "Show"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:217
+#: lib/vutuv_web/templates/page/index.html.heex:214
 #, elixir-autogen
 msgid "Sign up for a free account"
 msgstr ""
@@ -875,7 +875,7 @@ msgstr ""
 msgid "We can't find em' cap'n!"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:241
+#: lib/vutuv_web/templates/page/index.html.heex:238
 #, elixir-autogen
 msgid "We reserve the right to stop this service or delete your account anytime without warning."
 msgstr ""
@@ -950,12 +950,12 @@ msgstr ""
 msgid "An email has been sent to your email address with instructions on how to delete your account."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:155
+#: lib/vutuv_web/templates/page/index.html.heex:152
 #, elixir-autogen
 msgid "Allow others to view your email address"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:227
+#: lib/vutuv_web/templates/page/index.html.heex:224
 #, elixir-autogen, elixir-format
 msgid "By creating an account you accept our {nutzungsbedingungen} and confirm that you have read our {datenschutz}."
 msgstr ""
@@ -1654,7 +1654,7 @@ msgstr ""
 
 #: lib/vutuv_web/controllers/page_controller.ex:140
 #: lib/vutuv_web/templates/layout/app.html.heex:93
-#: lib/vutuv_web/templates/page/index.html.heex:234
+#: lib/vutuv_web/templates/page/index.html.heex:231
 #: lib/vutuv_web/views/admin/legal_page_html.ex:11
 #, elixir-autogen, elixir-format
 msgid "Datenschutzerklärung"
@@ -1662,7 +1662,7 @@ msgstr ""
 
 #: lib/vutuv_web/controllers/page_controller.ex:146
 #: lib/vutuv_web/templates/layout/app.html.heex:95
-#: lib/vutuv_web/templates/page/index.html.heex:234
+#: lib/vutuv_web/templates/page/index.html.heex:231
 #: lib/vutuv_web/views/admin/legal_page_html.ex:12
 #, elixir-autogen, elixir-format
 msgid "Nutzungsbedingungen"
@@ -2068,7 +2068,7 @@ msgid "September"
 msgstr ""
 
 #: lib/vutuv_web/templates/education/form_content.html.heex:32
-#: lib/vutuv_web/templates/user/edit.html.heex:215
+#: lib/vutuv_web/templates/user/edit.html.heex:212
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:51
 #, elixir-autogen, elixir-format
 msgid "Markdown is supported: bold, italics, links and lists."
@@ -2649,7 +2649,7 @@ msgstr ""
 msgid "Founder of vutuv"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:174
+#: lib/vutuv_web/templates/page/index.html.heex:171
 #: lib/vutuv_web/templates/settings/privacy.html.heex:58
 #, elixir-autogen, elixir-format
 msgid "Allow search engines to index your profile"
@@ -5226,7 +5226,7 @@ msgstr ""
 msgid "vutuv POSTs signed JSON envelopes here (see the webhooks documentation). https:// only; http://localhost is allowed for development."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:179
+#: lib/vutuv_web/templates/page/index.html.heex:176
 #: lib/vutuv_web/templates/settings/privacy.html.heex:63
 #, elixir-autogen, elixir-format
 msgid "Allow AI agents and LLMs to use your profile"
@@ -5409,7 +5409,7 @@ msgstr ""
 msgid "Someone tried to register with your email address"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:113
+#: lib/vutuv_web/templates/page/index.html.heex:110
 #, elixir-autogen, elixir-format
 msgid "Your tags (e.g. JavaScript, Cooking, Origami, Cat)"
 msgstr ""
@@ -5433,12 +5433,12 @@ msgstr ""
 msgid "Type of Email"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:135
+#: lib/vutuv_web/templates/page/index.html.heex:132
 #, elixir-autogen, elixir-format
 msgid "Type of email address"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:202
+#: lib/vutuv_web/templates/user/edit.html.heex:199
 #, elixir-autogen, elixir-format
 msgid "About you"
 msgstr ""
@@ -6033,7 +6033,7 @@ msgid "Add a tagline"
 msgstr ""
 
 #: lib/vutuv_web/live/cv_live.ex:148
-#: lib/vutuv_web/templates/user/edit.html.heex:211
+#: lib/vutuv_web/templates/user/edit.html.heex:208
 #: lib/vutuv_web/views/account_event_text.ex:162
 #, elixir-autogen, elixir-format
 msgid "Tagline"
@@ -8399,7 +8399,7 @@ msgstr ""
 msgid "Language & display"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:482
+#: lib/vutuv_web/templates/user/edit.html.heex:479
 #, elixir-autogen, elixir-format
 msgid "More profile sections"
 msgstr ""
@@ -8898,7 +8898,7 @@ msgstr ""
 msgid "For a PDF, open the print view and choose \"Save as PDF\" in your browser's print dialog. Word and OpenDocument are editable; LaTeX is the typesetting source; JSON Resume is the open %{link} format."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:224
+#: lib/vutuv_web/templates/user/edit.html.heex:221
 #, elixir-autogen, elixir-format
 msgid "characters"
 msgstr ""
@@ -9474,7 +9474,7 @@ msgstr ""
 msgid "Open to offers"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:248
+#: lib/vutuv_web/templates/user/edit.html.heex:245
 #, elixir-autogen, elixir-format
 msgid "Shown as a badge next to your tagline so people can see whether you are open to opportunities."
 msgstr ""
@@ -9732,18 +9732,18 @@ msgstr ""
 msgid "Date of birth"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:401
-#: lib/vutuv_web/templates/user/edit.html.heex:470
+#: lib/vutuv_web/templates/user/edit.html.heex:398
+#: lib/vutuv_web/templates/user/edit.html.heex:467
 #, elixir-autogen, elixir-format
 msgid "Remove date of birth"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:450
+#: lib/vutuv_web/templates/user/edit.html.heex:447
 #, elixir-autogen, elixir-format
 msgid "Remove your date of birth?"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:453
+#: lib/vutuv_web/templates/user/edit.html.heex:450
 #, elixir-autogen, elixir-format
 msgid "Your date of birth will be removed and your age will no longer be shown on your profile. You can add it again at any time."
 msgstr ""
@@ -10599,7 +10599,7 @@ msgstr ""
 msgid "vutuv is the open business network where professionals connect, share, and get found. Free to join."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:124
+#: lib/vutuv_web/templates/page/index.html.heex:121
 #, elixir-autogen, elixir-format
 msgid "At least three tags, separated by commas. A tag may be several words long, like Ruby on Rails."
 msgstr ""
@@ -10953,7 +10953,7 @@ msgstr ""
 msgid "Views"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:257
+#: lib/vutuv_web/templates/user/edit.html.heex:254
 #, elixir-autogen, elixir-format
 msgid "\"Signed-in members only\" is the default. It reduces who sees your availability but cannot guarantee it, since anyone can create an account. Choose \"No one\" to keep the status saved without showing it."
 msgstr ""
@@ -10977,43 +10977,43 @@ msgstr ""
 msgid "Signed-in members only"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:254
+#: lib/vutuv_web/templates/user/edit.html.heex:251
 #: lib/vutuv_web/templates/welcome/show.html.heex:108
 #, elixir-autogen, elixir-format
 msgid "Who can see your availability?"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:279
+#: lib/vutuv_web/templates/user/edit.html.heex:276
 #: lib/vutuv_web/templates/welcome/show.html.heex:124
 #, elixir-autogen, elixir-format
 msgid "Amount"
 msgstr ""
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:464
-#: lib/vutuv_web/templates/user/edit.html.heex:287
+#: lib/vutuv_web/templates/user/edit.html.heex:284
 #: lib/vutuv_web/templates/welcome/show.html.heex:132
 #, elixir-autogen, elixir-format
 msgid "Currency"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:297
+#: lib/vutuv_web/templates/user/edit.html.heex:294
 #, elixir-autogen, elixir-format
 msgid "Hidden by default, and it still does its job while hidden. \"Signed-in members only\" adds a quiet line to your profile for members; \"Everyone\" also shows it to logged-out visitors."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:270
+#: lib/vutuv_web/templates/user/edit.html.heex:267
 #: lib/vutuv_web/templates/welcome/show.html.heex:115
 #, elixir-autogen, elixir-format
 msgid "Minimum salary expectation"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:273
+#: lib/vutuv_web/templates/user/edit.html.heex:270
 #, elixir-autogen, elixir-format
 msgid "Optional. Even when hidden, it sharpens your own job search and alerts by filtering out postings below it. Leave the amount empty to remove it."
 msgstr ""
 
 #: lib/vutuv_web/live/job_posting_live/form.ex:471
-#: lib/vutuv_web/templates/user/edit.html.heex:283
+#: lib/vutuv_web/templates/user/edit.html.heex:280
 #: lib/vutuv_web/templates/welcome/show.html.heex:128
 #, elixir-autogen, elixir-format
 msgid "Per"
@@ -11024,7 +11024,7 @@ msgstr ""
 msgid "Salary expectation from %{amount} %{currency} per %{period}"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:294
+#: lib/vutuv_web/templates/user/edit.html.heex:291
 #, elixir-autogen, elixir-format
 msgid "Who can see your salary expectation?"
 msgstr ""
@@ -11093,7 +11093,7 @@ msgstr ""
 msgid "Exclude an email domain"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:350
+#: lib/vutuv_web/templates/user/edit.html.heex:347
 #, elixir-autogen, elixir-format
 msgid "Hide from specific people"
 msgstr ""
@@ -11104,12 +11104,12 @@ msgstr ""
 msgid "Job-search exclusion list"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:353
+#: lib/vutuv_web/templates/user/edit.html.heex:350
 #, elixir-autogen, elixir-format
 msgid "Keep your availability broadly visible while making sure your own employer never sees it. Exclude specific members or email domains, and they never see your availability or salary expectation, even at \"Everyone\"."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:361
+#: lib/vutuv_web/templates/user/edit.html.heex:358
 #, elixir-autogen, elixir-format
 msgid "Manage exclusion list (1 entry)"
 msgid_plural "Manage exclusion list (%{formatted} entries)"
@@ -13530,7 +13530,7 @@ msgstr ""
 msgid "Age only, without the date"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:412
+#: lib/vutuv_web/templates/user/edit.html.heex:409
 #, elixir-autogen, elixir-format
 msgid "Choose how much of your birthday your profile shows. \"Age only\" hides the exact date, \"Day and month\" hides the year (and your age), and \"Do not show\" keeps it saved but off your profile."
 msgstr ""
@@ -13553,7 +13553,7 @@ msgstr ""
 msgid "Full date and age"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:409
+#: lib/vutuv_web/templates/user/edit.html.heex:406
 #, elixir-autogen, elixir-format
 msgid "Show my birthday as"
 msgstr ""
@@ -14200,13 +14200,13 @@ msgstr ""
 msgid "Optional, and nobody else sees it. It filters postings below it out of your own job search."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:317
+#: lib/vutuv_web/templates/user/edit.html.heex:314
 #: lib/vutuv_web/templates/welcome/show.html.heex:144
 #, elixir-autogen, elixir-format
 msgid "How do you want to work?"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:337
+#: lib/vutuv_web/templates/user/edit.html.heex:334
 #: lib/vutuv_web/templates/welcome/show.html.heex:163
 #, elixir-autogen, elixir-format
 msgid "Shown next to your availability, and used to match you with postings."
@@ -14228,7 +14228,7 @@ msgstr ""
 msgid "Preferred workplace"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:245
+#: lib/vutuv_web/templates/user/edit.html.heex:242
 #: lib/vutuv_web/templates/welcome/show.html.heex:98
 #, elixir-autogen, elixir-format
 msgid "Availability"
@@ -14855,7 +14855,7 @@ msgid "Nothing changes on vutuv itself, and you can switch it off again."
 msgstr ""
 
 #: lib/vutuv_web/components/fediverse_components.ex:198
-#: lib/vutuv_web/templates/page/index.html.heex:202
+#: lib/vutuv_web/templates/page/index.html.heex:199
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:64
 #, elixir-autogen, elixir-format
 msgid "Take part in the Fediverse"
@@ -16402,19 +16402,19 @@ msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:436
 #: lib/vutuv_web/agent_docs/text.ex:431
-#: lib/vutuv_web/templates/user/edit.html.heex:185
+#: lib/vutuv_web/templates/user/edit.html.heex:182
 #: lib/vutuv_web/templates/user/show.html.heex:217
 #: lib/vutuv_web/views/account_event_text.ex:163
 #, elixir-autogen, elixir-format
 msgid "Name pronunciation"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:189
+#: lib/vutuv_web/templates/user/edit.html.heex:186
 #, elixir-autogen, elixir-format
 msgid "e.g. [SHTEH-fahn VIN-ter-my-er]"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:192
+#: lib/vutuv_web/templates/user/edit.html.heex:189
 #, elixir-autogen, elixir-format
 msgid "Optional. Write your name the way it sounds, so someone calling you for the first time gets it right. It shows in square brackets under your name on your profile, the way a transcription is written, and the brackets are added for you. Leave it empty and nothing is shown."
 msgstr ""
@@ -17415,7 +17415,7 @@ msgstr ""
 msgid "That link points at a single post. You can follow its author, %{account}, from here."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:208
+#: lib/vutuv_web/templates/page/index.html.heex:205
 #, elixir-autogen, elixir-format
 msgid "People on Mastodon and other independent networks can then follow this profile, and your public posts appear there. What they answer or share comes back and is shown under your posts, by their account address. A reply from there is stored here for up to six months. You can switch all of it off again at any time."
 msgstr ""
@@ -18209,7 +18209,7 @@ msgstr ""
 msgid "A CV with positions, education, certificates including proof, spoken languages and tags other members endorse you for."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:383
+#: lib/vutuv_web/templates/page/index.html.heex:380
 #, elixir-autogen, elixir-format
 msgid "A business network that is free, does not lock your data in, and is yours to run yourself if you want to."
 msgstr ""
@@ -18229,22 +18229,22 @@ msgstr ""
 msgid "CV download as PDF, Word, OpenDocument, LaTeX or JSON Resume, and you pick what goes in before you download it."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:436
+#: lib/vutuv_web/templates/page/index.html.heex:433
 #, elixir-autogen, elixir-format
 msgid "Developer documentation"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:396
+#: lib/vutuv_web/templates/page/index.html.heex:393
 #, elixir-autogen, elixir-format
 msgid "Every public page here is also served as Markdown, plain text, JSON and XML under the same address. No scraping, no API key, no account."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:403
+#: lib/vutuv_web/templates/page/index.html.heex:400
 #, elixir-autogen, elixir-format
 msgid "For machines"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:393
+#: lib/vutuv_web/templates/page/index.html.heex:390
 #, elixir-autogen, elixir-format
 msgid "Open by default"
 msgstr ""
@@ -18269,12 +18269,12 @@ msgstr ""
 msgid "Posts, likes, reposts, replies and 1:1 messages, in real time."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:394
+#: lib/vutuv_web/templates/page/index.html.heex:391
 #, elixir-autogen, elixir-format
 msgid "Readable by people, by machines, and on your own server"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:419
+#: lib/vutuv_web/templates/page/index.html.heex:416
 #, elixir-autogen, elixir-format
 msgid "Run it yourself"
 msgstr ""
@@ -18284,23 +18284,23 @@ msgstr ""
 msgid "Sign in without a password, by emailed PIN, passkey, authenticator app or a printed list of codes."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:430
-#: lib/vutuv_web/templates/page/index.html.heex:517
+#: lib/vutuv_web/templates/page/index.html.heex:427
+#: lib/vutuv_web/templates/page/index.html.heex:514
 #, elixir-autogen, elixir-format
 msgid "Source code"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:265
+#: lib/vutuv_web/templates/page/index.html.heex:262
 #, elixir-autogen, elixir-format
 msgid "This is what a vutuv profile looks like"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:381
+#: lib/vutuv_web/templates/page/index.html.heex:378
 #, elixir-autogen, elixir-format
 msgid "What vutuv can do"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:380
+#: lib/vutuv_web/templates/page/index.html.heex:377
 #, elixir-autogen, elixir-format
 msgid "What you get"
 msgstr ""
@@ -18310,12 +18310,12 @@ msgstr ""
 msgid "Your independence"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:421
+#: lib/vutuv_web/templates/page/index.html.heex:418
 #, elixir-autogen, elixir-format
 msgid "vutuv is open source under the MIT license. Run it for a company, an association or a school, on the internet or air-gapped inside your own network."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:264
+#: lib/vutuv_web/templates/page/index.html.heex:261
 #, elixir-autogen, elixir-format
 msgid "A look inside"
 msgstr ""
@@ -18325,7 +18325,7 @@ msgstr ""
 msgid "A vutuv profile: cover picture, photo, name, tagline and job title, follower counts and the first posts, with contact details and social media profiles in a column on the right."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:286
+#: lib/vutuv_web/templates/page/index.html.heex:283
 #, elixir-autogen, elixir-format
 msgid "Browse real profiles"
 msgstr ""
@@ -18345,17 +18345,17 @@ msgstr ""
 msgid "Try it out:"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:412
+#: lib/vutuv_web/templates/page/index.html.heex:409
 #, elixir-autogen, elixir-format
 msgid "Plus a sitemap, JSON-LD and a REST API with OAuth 2 and personal access tokens."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:267
+#: lib/vutuv_web/templates/page/index.html.heex:264
 #, elixir-autogen, elixir-format
 msgid "Work experience, education, certificates, languages, links and tags others endorse you for. Anyone can read a profile, entirely without a vutuv account. Unlike LinkedIn, where you hit a login wall in short order."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:367
+#: lib/vutuv_web/templates/page/index.html.heex:364
 #, elixir-autogen, elixir-format
 msgid "Talking to people"
 msgstr ""
@@ -18375,12 +18375,12 @@ msgstr ""
 msgid "The Fediverse: let people follow you from Mastodon, and your public posts show up there. You choose at sign-up, and can change it later."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:368
+#: lib/vutuv_web/templates/page/index.html.heex:365
 #, elixir-autogen, elixir-format
 msgid "Posts, messages, and the Fediverse along with them"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:370
+#: lib/vutuv_web/templates/page/index.html.heex:367
 #, elixir-autogen, elixir-format
 msgid "Write a post, react with a heart, a repost or a reply, or message somebody privately. And you are not stuck among vutuv members: vutuv is part of the Fediverse, the union of independent networks that Mastodon belongs to as well. Follow an account over there and its posts arrive in your feed; the other way round, people there can follow you and see your public posts. Both directions, and entirely your choice: at sign-up you decide whether to use vutuv with or without the Fediverse, and you can change that at any time in the settings."
 msgstr ""
@@ -18392,62 +18392,62 @@ msgid_plural "members"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:483
+#: lib/vutuv_web/templates/page/index.html.heex:480
 #, elixir-autogen, elixir-format
 msgid "Download everything you have here at any time, in a machine-readable file. Not on request, not after a waiting period: from your settings, whenever you like."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:458
+#: lib/vutuv_web/templates/page/index.html.heex:455
 #, elixir-autogen, elixir-format
 msgid "Fair and transparent, in plain words"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:472
+#: lib/vutuv_web/templates/page/index.html.heex:469
 #, elixir-autogen, elixir-format
 msgid "No third-party cookies"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:464
+#: lib/vutuv_web/templates/page/index.html.heex:461
 #, elixir-autogen, elixir-format
 msgid "On our own servers in %{place}, not in somebody else's cloud. We do not hand your profile to a third party, and there is no tracking network reading along."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:462
+#: lib/vutuv_web/templates/page/index.html.heex:459
 #, elixir-autogen, elixir-format
 msgid "Where your data lives"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:457
+#: lib/vutuv_web/templates/page/index.html.heex:454
 #, elixir-autogen, elixir-format
 msgid "Your data"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:474
+#: lib/vutuv_web/templates/page/index.html.heex:471
 #, elixir-autogen, elixir-format
 msgid "vutuv sets one cookie, the one that keeps you signed in. No advertising network, no analytics service, nothing loaded from anybody else's server."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:490
+#: lib/vutuv_web/templates/page/index.html.heex:487
 #, elixir-autogen, elixir-format
 msgid "Leave whenever you like"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:506
+#: lib/vutuv_web/templates/page/index.html.heex:503
 #, elixir-autogen, elixir-format
 msgid "Open source"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:508
+#: lib/vutuv_web/templates/page/index.html.heex:505
 #, elixir-autogen, elixir-format
 msgid "You can check at any time how exactly vutuv works. The whole source code is public under the MIT license, so everything said above about your data can be read rather than taken on trust."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:481
+#: lib/vutuv_web/templates/page/index.html.heex:478
 #, elixir-autogen, elixir-format
 msgid "Your data stays with you"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:497
+#: lib/vutuv_web/templates/page/index.html.heex:494
 #, elixir-autogen, elixir-format
 msgid "Delete your account yourself, without writing to anybody. No questions asked, and you are welcome back any time."
 msgstr ""
@@ -19341,7 +19341,7 @@ msgstr ""
 msgid "You have reached your limit of %{limit} reviews. Please try again in %{window}."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:327
+#: lib/vutuv_web/templates/page/index.html.heex:324
 #, elixir-autogen, elixir-format
 msgid "Employment reference"
 msgstr ""
@@ -19351,7 +19351,7 @@ msgstr ""
 msgid "Employment references: upload them, keep them private, and have the wording read and graded on our own servers."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:304
+#: lib/vutuv_web/templates/page/index.html.heex:301
 #, elixir-autogen, elixir-format
 msgid "Job applications"
 msgstr ""
@@ -19366,7 +19366,7 @@ msgstr ""
 msgid "The finished CV ready to print: name, tagline and contact details at the top, below them the positions held with employer and period, and further down the tags and the spoken languages."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:347
+#: lib/vutuv_web/templates/page/index.html.heex:344
 #, elixir-autogen, elixir-format
 msgid "The review is a text analysis, not legal advice, and it covers German employment references."
 msgstr ""
@@ -19381,22 +19381,22 @@ msgstr ""
 msgid "The uploaded employment references, each marked private: one graded 1 (very good) on a green panel, one graded 4 to 5 (poor to unsatisfactory) on a red one, each with a link to its full report."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:330
+#: lib/vutuv_web/templates/page/index.html.heex:327
 #, elixir-autogen, elixir-format
 msgid "Upload your employment references and have them read sentence by sentence: a grade, a traffic light, and the explanation of how a recruiter reads that wording. It takes a few minutes, then the report is there. Nothing becomes public before you release it."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:328
+#: lib/vutuv_web/templates/page/index.html.heex:325
 #, elixir-autogen, elixir-format
 msgid "What your employment reference really says"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:307
+#: lib/vutuv_web/templates/page/index.html.heex:304
 #, elixir-autogen, elixir-format
 msgid "What your profile already says becomes a CV. You tick what should go in, then download it as PDF, Word, OpenDocument, LaTeX or JSON Resume. Anonymously as well, if you would rather show what you can do before you show who you are."
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:305
+#: lib/vutuv_web/templates/page/index.html.heex:302
 #, elixir-autogen, elixir-format
 msgid "Your CV, ready to send"
 msgstr ""
@@ -19416,12 +19416,6 @@ msgstr ""
 #: lib/vutuv_web/views/user_helpers.ex:96
 #, elixir-autogen, elixir-format
 msgid "No salutation"
-msgstr ""
-
-#: lib/vutuv_web/templates/page/index.html.heex:104
-#: lib/vutuv_web/templates/user/edit.html.heex:175
-#, elixir-autogen, elixir-format
-msgid "Only used to address you in emails."
 msgstr ""
 
 #: lib/vutuv_web/templates/invitation/new.html.heex:58

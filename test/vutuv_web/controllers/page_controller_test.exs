@@ -385,9 +385,12 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ ~s(value="ms")
       assert body =~ ~s(value="mr")
       assert body =~ "No salutation"
-      # The purpose is stated on the form, so the question never reads as a
-      # classification the way "Gender" did.
-      assert body =~ "Only used to address you in emails."
+      # There is deliberately no helper line under the group. The label carries
+      # the purpose on its own, and a sentence promising the value is used for
+      # nothing but email would be a data-use commitment we do not want to make
+      # (Stefan, 2026-08-04) — "Gender" needed such a sentence, "Salutation"
+      # does not.
+      refute body =~ "Only used to address you in emails."
     end
 
     # The name is answered before the salutation: asking "how should we address

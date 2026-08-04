@@ -60,7 +60,6 @@ defmodule VutuvWeb.PageLocaleRenderTest do
     assert html =~ ">Frau<"
     assert html =~ ">Herr<"
     assert html =~ "Keine Anrede"
-    assert html =~ "Wird nur für die Anrede in unseren E-Mails verwendet"
 
     # The vocabulary the field left behind must not come back with it. The
     # third one is matched as a whole tag body on purpose: "divers" is a

@@ -171,9 +171,6 @@ lands here). --%>
               </label>
             <% end %>
           </div>
-          <p :if={!f.errors[:salutation]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Only used to address you in emails.")}
-          </p>
           <%= error_tag f, :salutation %>
         </div>
         <%!-- How the name is said out loud (issue #1112). Full width, last in
