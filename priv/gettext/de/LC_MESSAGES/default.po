@@ -2773,7 +2773,6 @@ msgstr "Persönliche Angaben hinzufügen"
 msgid "Add work experience"
 msgstr "Berufserfahrung hinzufügen"
 
-#: lib/vutuv_web/live/user_profile_live.ex:1271
 #: lib/vutuv_web/templates/user/show.html.heex:447
 #, elixir-autogen, elixir-format
 msgid "Write your first post"
@@ -5591,7 +5590,7 @@ msgstr "Profil vervollständigen"
 msgid "A few quick steps so people can find and recognize you."
 msgstr "Ein paar schnelle Schritte, damit andere Sie finden und erkennen."
 
-#: lib/vutuv_web/live/user_profile_live.ex:1261
+#: lib/vutuv_web/live/user_profile_live.ex:1265
 #, elixir-autogen, elixir-format
 msgid "Add a profile photo"
 msgstr "Profilfoto hinzufügen"
@@ -6269,7 +6268,7 @@ msgstr "z. B. MacBook"
 msgid "or"
 msgstr "oder"
 
-#: lib/vutuv_web/live/user_profile_live.ex:1265
+#: lib/vutuv_web/live/user_profile_live.ex:1270
 #, elixir-autogen, elixir-format
 msgid "Add a tagline"
 msgstr "Kurzbeschreibung hinzufügen"
@@ -8561,7 +8560,7 @@ msgstr "Import"
 #: lib/vutuv_web/templates/user/show.html.heex:405
 #, elixir-autogen, elixir-format
 msgid "Import from LinkedIn"
-msgstr "Von LinkedIn importieren"
+msgstr "LinkedIn-Profil importieren"
 
 #: lib/vutuv_web/templates/import/preview.html.heex:84
 #, elixir-autogen, elixir-format
@@ -8671,11 +8670,6 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Too many imports. Please try again in a little while."
 msgstr "Zu viele Importe. Bitte versuchen Sie es in Kürze erneut."
-
-#: lib/vutuv_web/live/user_profile_live.ex:1304
-#, elixir-autogen, elixir-format
-msgid "For example, a thought on %{tag}."
-msgstr "Zum Beispiel ein Gedanke zu %{tag}."
 
 #: lib/vutuv_web/components/ui.ex:3034
 #: lib/vutuv_web/controllers/admin/pref_controller.ex:29
@@ -18172,12 +18166,7 @@ msgstr ""
 "Dieser Link zeigt auf einen einzelnen Beitrag. Von hier aus können Sie dem "
 "Konto dahinter folgen: %{account}."
 
-#: lib/vutuv_web/live/user_profile_live.ex:1282
-#, elixir-autogen, elixir-format
-msgid "Follow %{count} members"
-msgstr "%{count} Mitgliedern folgen"
-
-#: lib/vutuv_web/live/user_profile_live.ex:1297
+#: lib/vutuv_web/live/user_profile_live.ex:1305
 #, elixir-autogen, elixir-format
 msgid "You already follow one member."
 msgid_plural "You already follow %{count} members."
@@ -20258,3 +20247,8 @@ msgstr ""
 "Willkommen bei vutuv! Ihren Benutzernamen {handle} können Sie unter {url} "
 "ändern, und unter {import_url} importieren Sie ein bestehendes "
 "LinkedIn-Profil."
+
+#: lib/vutuv_web/live/user_profile_live.ex:1290
+#, elixir-autogen, elixir-format
+msgid "Follow other members"
+msgstr "Anderen Mitgliedern folgen"

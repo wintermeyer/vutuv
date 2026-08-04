@@ -940,7 +940,7 @@ defmodule VutuvWeb.UserProfileLiveTest do
 
       # The step completed without a reload...
       refute has_element?(view, ~s(#profile-completion a[href="#profile-who-to-follow"]))
-      assert render(view) =~ "Follow 5 members"
+      assert render(view) =~ "Follow other members"
       # ...but the promoted card stays where it is: recomputing the placement
       # mid-click would teleport the rail away under the member's cursor. The
       # next visit demotes it.
@@ -948,7 +948,7 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
-  describe "onboarding checklist 'Follow 5 members' step" do
+  describe "onboarding checklist follow step" do
     test "links to the rail card and counts existing follows in its hint", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       suggest_to(owner, insert_activated_user())
@@ -957,7 +957,11 @@ defmodule VutuvWeb.UserProfileLiveTest do
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
       step = view |> element(~s(#profile-completion a[href="#profile-who-to-follow"])) |> render()
-      assert step =~ "Follow 5 members"
+      # The label names no number: the threshold is ours, not the member's,
+      # and "Follow 5 members" read as a quota. The hint below carries the
+      # real progress instead.
+      assert step =~ "Follow other members"
+      refute step =~ "5"
       # The progress hint sits under the label once the count is started.
       assert render(view) =~ "You already follow 2 members."
     end

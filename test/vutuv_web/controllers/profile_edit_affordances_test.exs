@@ -128,13 +128,26 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       assert checklist =~ "Add a tag"
       assert checklist =~ "Add a profile photo"
       assert checklist =~ "Add a tagline"
-      assert checklist =~ "Write your first post"
-      assert checklist =~ "Follow 5 members"
+      assert checklist =~ "Follow other members"
+      # No "write your first post" step: it asked the one thing a member cannot
+      # do well in their first minute here, with nobody yet reading.
+      refute checklist =~ "Write your first post"
       # The registration tags already check the first step off.
-      assert checklist =~ "1/5"
+      assert checklist =~ "1/4"
     end
 
-    # The checklist leads to photo / tagline / first post; work experience is
+    # Both profile-data steps lead to the page that actually holds the fields,
+    # not to the retired /:slug/edit URL that only redirects there.
+    test "the photo and tagline steps link into the settings form", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert completion_html(html) =~ ~s(href="#{~p"/settings/profile"}")
+      refute completion_html(html) =~ ~s(href="/#{user.username}/edit")
+    end
+
+    # The checklist leads to photo / tagline / following; work experience is
     # deliberately not pushed there (its section card keeps its own add tile).
     test "the checklist does not push work experience", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -146,27 +159,14 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       assert html =~ ~s(href="#{~p"/settings/work_experiences/new"}")
     end
 
-    # The first-post step borrows one of the member's own sign-up tags as a
-    # concrete prompt (and quietly demonstrates that #hashtags work in posts).
-    test "the first-post step suggests a topic from the member's own tags", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-
-      html = conn |> get(~p"/#{user}") |> html_response(200)
-
-      # The registration fixture's alphabetically first tag (the hint picks
-      # the most-endorsed tag, slug as tiebreaker — so alpha-tag-… wins).
-      [first_tag | _] = Vutuv.Tags.parse_tag_names(@registration_tags)
-      assert completion_text(html) =~ "For example, a thought on ##{first_tag}."
-    end
-
     test "the checklist disappears once every step is done", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       {:ok, user} =
         Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg", headline: "Builder of things"))
 
-      insert(:post, user: user)
-      # The follow step completes at five followed members.
+      # The follow step completes at five followed members — the label no longer
+      # says so, but the threshold is unchanged.
       for _ <- 1..5, do: insert(:follow, follower: user, followee: insert_activated_user())
 
       html = conn |> get(~p"/#{user}") |> html_response(200)

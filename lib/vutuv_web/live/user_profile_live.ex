@@ -1235,12 +1235,12 @@ defmodule VutuvWeb.UserProfileLive do
   # load and from the social-graph refresh (the follow step's count changes
   # live). Reads :followee_count, so it must run after put_social_assigns.
   defp refresh_completion_steps(socket) do
-    %{user: user, posts_total: posts_total, followee_count: followee_count} = socket.assigns
+    %{user: user, followee_count: followee_count} = socket.assigns
 
     assign(
       socket,
       :completion_steps,
-      completion_steps(user, posts_total, followee_count, socket.assigns.recommended_users != [])
+      completion_steps(user, followee_count, socket.assigns.recommended_users != [])
     )
   end
 
@@ -1249,7 +1249,7 @@ defmodule VutuvWeb.UserProfileLive do
       Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
   end
 
-  defp completion_steps(user, posts_total, followee_count, suggestions?) do
+  defp completion_steps(user, followee_count, suggestions?) do
     [
       # Sign-up requires three tags, so this step arrives already checked: the
       # checklist opens with visible progress instead of a wall of zeros
@@ -1257,29 +1257,37 @@ defmodule VutuvWeb.UserProfileLive do
       # for tag-less accounts from before the minimum, in their
       # dormant-return window.
       %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/settings/tags/new"},
+      # Both land on /settings/profile, which is where the two fields actually
+      # live. They used to point at /:slug/edit, the retired owner URL that only
+      # redirects there — one wasted round trip, and a link that shows the old
+      # address in the status bar.
       %{
         label: gettext("Add a profile photo"),
         done: present?(user.avatar),
-        href: ~p"/#{user}/edit"
+        href: ~p"/settings/profile"
       },
-      %{label: gettext("Add a tagline"), done: present?(user.headline), href: ~p"/#{user}/edit"},
-      # Same #compose hash as the Posts-card tile: land on the feed with the
-      # composer already open instead of a closed one. "Add work experience"
-      # is deliberately not a step any more: the checklist leads toward the
-      # first post, not CV upkeep (the Experience card keeps its own tile).
       %{
-        label: gettext("Write your first post"),
-        done: posts_total > 0,
-        href: ~p"/feed#compose",
-        hint: first_post_hint(user)
+        label: gettext("Add a tagline"),
+        done: present?(user.headline),
+        href: ~p"/settings/profile"
       },
+      # There is deliberately NO "write your first post" step. It asked the one
+      # thing a member cannot do well on their first minute here — they have
+      # nobody reading yet and nothing to answer — and it is the step a new
+      # account is least likely to complete, so the list ended on a dead end.
+      # Posting has its own permanent invitation at the top of the Posts card
+      # and on the feed; it does not need a checkbox.
       # vutuv runs on following: the feed stays empty until the member follows
       # people, so the list closes with the social step. Its link jumps to the
       # "Who to follow" card, which the under-threshold owner view promotes to
       # the top of the rail; an installation with nobody to suggest falls back
       # to the browsable most-followed listing instead of a dead anchor.
       %{
-        label: gettext("Follow %{count} members", count: @discovery_follow_target),
+        # Deliberately no number in the label. "Follow 5 members" reads as a
+        # quota to be served, and the figure is ours, not the member's. The
+        # threshold below still decides when the step is done; the hint under it
+        # reports real progress, which is the encouraging half of a count.
+        label: gettext("Follow other members"),
         done: followee_count >= @discovery_follow_target,
         href:
           if(suggestions?, do: "#profile-who-to-follow", else: ~p"/listings/most_followed_users"),
@@ -1300,12 +1308,6 @@ defmodule VutuvWeb.UserProfileLive do
   # ("a thought on #elixir") — which doubles as a quiet demo that #hashtags
   # work in posts. user_tags arrive most-endorsed first, slug as tiebreaker,
   # so a fresh account gets its alphabetically first tag.
-  defp first_post_hint(%User{user_tags: [user_tag | _]}) do
-    gettext("For example, a thought on %{tag}.", tag: "#" <> user_tag.tag.slug)
-  end
-
-  defp first_post_hint(_user), do: nil
-
   defp present?(nil), do: false
   defp present?(value) when is_binary(value), do: String.trim(value) != ""
   defp present?(_), do: true
