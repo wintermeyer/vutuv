@@ -15,10 +15,6 @@
     <.button type="submit" class="w-full">{gettext("submit")}</.button>
   </.form>
 
-  <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
-    {gettext("Please check your spam folder in case you don't find the email in your inbox.")}
-  </p>
-
   <%!-- Issue #912: shown only to members who set up an authenticator app or a
         one-time code list (see SessionHTML.alternative_codes?/1). --%>
   <p :if={alternative_codes?(@conn)} id="alternative-codes-hint" class="mt-2 text-sm text-slate-600 dark:text-slate-400">

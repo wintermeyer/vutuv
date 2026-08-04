@@ -70,7 +70,9 @@ defmodule VutuvWeb.PinScreenCopyTest do
       assert body =~ pending_email(params)
       # Named, not merely referred to: "that email address" is what a member
       # cannot check their typing against.
-      refute body =~ "That email address may"
+      # The whole "no PIN arrived" answer is one paragraph now, so the spam
+      # advice must have come with it rather than been dropped.
+      assert body =~ "spam folder"
     end
 
     test "the login screen prints it too", %{conn: conn} do
@@ -221,8 +223,9 @@ defmodule VutuvWeb.PinScreenCopyTest do
       |> registration_pin_screen(params)
 
     assert body =~ "PIN aus der E-Mail eingeben"
-    assert body =~ "6-stelliger PIN"
-    assert body =~ "funktioniert möglicherweise gerade nicht"
+    assert body =~ "6-stellige PIN"
+    assert body =~ "Kommt keine PIN an?"
+    assert body =~ "Spam-Ordner"
     assert body =~ pending_email(params)
     refute body =~ "weitere Adressen hinzugefügt"
   end

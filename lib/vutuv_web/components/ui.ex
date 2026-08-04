@@ -635,6 +635,11 @@ defmodule VutuvWeb.UI do
   )
 
   def pin_actions(assigns) do
+    # One paragraph, three short questions in the order a member asks them:
+    # nothing arrived, is the address right, did it land in spam. The spam
+    # advice used to be a separate paragraph above, which split one problem
+    # across two blocks and said more words than either needed.
+    #
     # The address is spelled out and set in semibold, because the single most
     # likely reason no PIN arrives is that it was mistyped one screen ago, and a
     # member cannot spot that in an address they cannot see. Split on a
@@ -642,7 +647,9 @@ defmodule VutuvWeb.UI do
     # sentence, which would turn a .po slip into a 500.
     {before_email, after_email} =
       split_marker(
-        gettext("Not getting the PIN? The email address {email} may not be working right now."),
+        gettext(
+          "PIN not arriving? Is the email address {email} correct? Have you checked your spam folder?"
+        ),
         "{email}"
       )
 
