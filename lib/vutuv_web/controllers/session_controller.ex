@@ -101,11 +101,22 @@ defmodule VutuvWeb.SessionController do
   # the PIN-entry form while a PIN is in flight, so the visitor can sign in or
   # register as someone else.
   def cancel(conn, _params) do
+    # Where "start over" leads depends on what was being started. A cancelled
+    # LOGIN goes back to the login form, which is the step before it. A cancelled
+    # REGISTRATION goes to "/", the sign-up form — sending someone who was
+    # half-way through creating an account to a login page offers them the one
+    # thing they cannot do yet. The flow has to be read before the cookie that
+    # carries it is dropped.
+    {_email, flow} = Accounts.pending_pin_identity(conn) || {nil, :login}
+
     conn
     |> Accounts.delete_pin_cookie()
     |> put_flash(:info, gettext("Okay, let's start over."))
-    |> redirect(to: ~p"/login")
+    |> redirect(to: cancel_return_path(flow))
   end
+
+  defp cancel_return_path(:registration), do: ~p"/"
+  defp cancel_return_path(_login), do: ~p"/login"
 
   # ── Passkey login (issue #795) ──
   # Two requests driven by assets/js/webauthn.js: step 1 mints a WebAuthn

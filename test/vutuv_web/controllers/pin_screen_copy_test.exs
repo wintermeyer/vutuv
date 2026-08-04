@@ -201,16 +201,29 @@ defmodule VutuvWeb.PinScreenCopyTest do
       assert body =~ ~s(action="/login/cancel")
     end
 
-    test "cancelling frees the landing page again", %{conn: conn} do
+    test "cancelling a registration returns to the sign-up form", %{conn: conn} do
       conn = post(conn, ~p"/new_registration", user: registration_params())
       # submit_with_csrf/3 recycles internally and reads the token out of this
       # response, so it must be handed the POST result, not a recycled conn.
       conn = submit_with_csrf(conn, ~p"/login/cancel", %{})
 
+      # Not /login: somebody who just abandoned signing up has no account to
+      # sign in to, so the login form is the one page that cannot help them.
+      assert redirected_to(conn) == ~p"/"
+
       body = conn |> recycle() |> get(~p"/") |> html_response(200)
 
       assert body =~ ~s(name="user[first_name]")
       refute body =~ "Enter the PIN from the email"
+    end
+
+    test "cancelling a login returns to the login form", %{conn: conn} do
+      user = insert(:activated_user)
+      email = insert(:email, user: user).value
+      conn = post(conn, ~p"/login", session: %{"email" => email})
+      conn = submit_with_csrf(conn, ~p"/login/cancel", %{})
+
+      assert redirected_to(conn) == ~p"/login"
     end
   end
 
