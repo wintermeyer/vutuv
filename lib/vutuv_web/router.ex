@@ -242,13 +242,6 @@ defmodule VutuvWeb.Router do
     # profile catch-all further down.
     get("/system/permalinks/users/:user_id", PermalinkController, :user)
 
-    # Invite a friend: the form and its submission. Logged-in only (the
-    # controller's RequireLogin plug). It lives under /system/ like the member
-    # directory, so it does not permanently burn a root path word a member
-    # could claim as a handle. POST records + emails the invitation.
-    get("/system/invitations/new", InvitationController, :new)
-    post("/system/invitations", InvitationController, :create)
-
     # The signed-in member's newsfeed. A controller (not a bare `live`) so it
     # can negotiate the agent-format siblings (/feed.md/.txt/.json/.xml,
     # VutuvWeb.AgentDocs) and live_render the LiveView for HTML. A literal route

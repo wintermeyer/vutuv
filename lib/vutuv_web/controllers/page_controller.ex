@@ -5,37 +5,25 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
-  alias Vutuv.SearchText
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.LandingExperiment
   alias VutuvWeb.RateLimit
 
-  def index(conn, params) do
-    # An invitation link lands here with the invited person's data in the query:
-    # either the compact `i=` token or, for older links still in inboxes, the
-    # spelled-out first_name/last_name/salutation/tags/email params (see
-    # Vutuv.Invitations.prefill_from_params/1). Stamp the invitation's first visit
-    # (a no-op for a plain visitor or an unknown address) and prefill the sign-up
-    # form with whatever the inviter entered.
-    prefill = Vutuv.Invitations.prefill_from_params(params)
-    Vutuv.Invitations.record_visit(prefill["email"])
-
+  def index(conn, _params) do
     # Sign-up form defaults: pre-check "show on profile" (public?: true) and
     # preselect the "Personal" email type (most people sign up with their
     # private address). These prime the form's controls only - the User/Email
     # schemas keep their own defaults for every other code path, so an address
     # created without an explicit choice still stays private.
     #
-    # The salutation is the one control deliberately left UNSET, and it is the
-    # only field on this form where that is a decision rather than an omission.
-    # It used to be a `gender` radio group preselected to "männlich", so every
+    # The gender question is the one control deliberately left UNSET, and it is
+    # the only field on this form where that is a decision rather than an
+    # omission. This exact group was once preselected to "männlich", so every
     # woman signing up had to correct an assumption about herself before typing
     # her name, and members wrote in about it. Nothing may fill it in for them:
-    # an unset group asks, a preselected one assumes. An invitation link may
-    # still carry a salutation the inviter chose, since that is a person naming
-    # how they address someone they know, not the form guessing.
+    # an unset group asks, a preselected one assumes.
     #
     # The Fediverse box is pre-checked the same way: most people who join want
     # the connection to Mastodon and friends, and sign-up is the one moment
@@ -51,24 +39,9 @@ defmodule VutuvWeb.PageController do
     # and replies that come back, because that is what "take part" means to
     # somebody reading it, and the box's own text says so.
     changeset =
-      %User{
-        # Already filtered to a value the form offers, or absent:
-        # `Invitations.prefill_from_params/1` owns that vocabulary because it is
-        # the one place that decodes invitation links.
-        salutation: prefill["salutation"],
-        first_name: SearchText.normalize_search(prefill["first_name"]),
-        last_name: SearchText.normalize_search(prefill["last_name"]),
-        tag_list: SearchText.normalize_search(prefill["tags"]),
-        fediverse_followers?: Fediverse.enabled?()
-      }
+      %User{fediverse_followers?: Fediverse.enabled?()}
       |> User.changeset()
-      |> Ecto.Changeset.put_assoc(:emails, [
-        %Email{
-          public?: true,
-          email_type: "Personal",
-          value: SearchText.normalize_search(prefill["email"])
-        }
-      ])
+      |> Ecto.Changeset.put_assoc(:emails, [%Email{public?: true, email_type: "Personal"}])
 
     prefetch = "/listings/most_followed_users"
 
@@ -206,11 +179,7 @@ defmodule VutuvWeb.PageController do
       end
 
     case Vutuv.Accounts.register_user(conn, user_params) do
-      {:ok, user} ->
-        # If this address was invited with the auto-follow flag, the inviter now
-        # follows the new member (a no-op otherwise). See Vutuv.Invitations.
-        Vutuv.Invitations.apply_auto_follow(email, user)
-
+      {:ok, _user} ->
         # Credit the headline this visitor was shown. The variant stays in the
         # session, so the PIN that follows can be credited too.
         conn

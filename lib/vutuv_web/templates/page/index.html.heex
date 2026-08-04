@@ -51,11 +51,11 @@
   >
     <.form_error changeset={@changeset} />
 
-    <%!-- Group 1: who you are. The name comes first and takes the autofocus:
-          the salutation question below it reads as "and how should we address
-          you" only once there is a name to address, and asking it first (which
-          is where the old gender radios sat) made it a gate in front of the
-          form rather than a detail within it. --%>
+    <%!-- Group 1: who you are. The name comes first and takes the autofocus.
+          The gender question below it used to sit here instead, preselected to
+          "männlich", which made it a gate in front of the form rather than a
+          detail within it — and made every woman correct an assumption about
+          herself before typing her name. --%>
     <div class="space-y-4">
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
@@ -67,33 +67,38 @@
           <%= error_tag f, :last_name %>
         </div>
       </div>
-      <%!-- A radio group, not a dropdown, so all three answers are visible at
-            once and "No salutation" cannot hide behind a closed select.
+      <%!-- The membership statistic (see `User.gender`), and the field members
+            complained about in its first incarnation. Three things keep it from
+            reading that way again: nothing is preselected, it sits below the
+            name rather than in front of it, and it is plainly marked optional.
+            The purpose sentence that used to sit under it was dropped on
+            Stefan's ask (2026-08-04) once the form was seen rendered; the
+            profile editor still carries the longer version.
 
             The checked state is computed here rather than left to
             `radio_button/4`'s own detection, which compares the field value to
             the option value — and `html_escape(nil)` equals the blank option's
-            "", so a fresh form would arrive with "No salutation" already
-            selected. Nothing may be preselected (`PageController.index/2` says
-            why), so an option is checked when it matches, and the blank one
-            additionally only once the form has been submitted, which is what
-            keeps a failed submit from silently dropping the member's answer. --%>
-      <% salutation_value = to_string(f[:salutation].value) %>
+            "", so a fresh form would arrive with "Keine Angabe" preselected.
+            Nothing may be preselected (`PageController.index/2` says why), so
+            an option is checked when it matches, and the blank one additionally
+            only once the form has been submitted, which is what keeps a failed
+            submit from silently dropping the member's answer. --%>
+      <% gender_value = to_string(f[:gender].value) %>
       <% submitted? = @changeset.action != nil %>
-      <fieldset id="signup-salutation">
+      <fieldset id="signup-gender">
         <legend class={legend_class}>
-          {gettext("Salutation")}
+          {gettext("Gender")}
           <span class="font-normal text-slate-600 dark:text-slate-400">{gettext("(optional)")}</span>
         </legend>
         <div class="flex flex-wrap gap-x-5 gap-y-2">
-          <%= for {slabel, svalue} <- salutation_options() do %>
+          <%= for {glabel, gvalue} <- gender_options() do %>
             <label class={radio_label_class()}>
-              <%= radio_button f, :salutation, svalue, class: radio_class(), checked: salutation_value == svalue and (svalue != "" or submitted?) %>
-              <span>{slabel}</span>
+              <%= radio_button f, :gender, gvalue, class: radio_class(), checked: gender_value == gvalue and (gvalue != "" or submitted?) %>
+              <span>{glabel}</span>
             </label>
           <% end %>
         </div>
-        <%= error_tag f, :salutation %>
+        <%= error_tag f, :gender %>
       </fieldset>
       <div>
         <.tag_input
@@ -119,12 +124,12 @@
     <%!-- Group 2: email. The address itself comes first, then the two things
           that are true *about* it: what kind of address it is, and who may see
           it. A property is answered after the thing it belongs to — the same
-          order the name/salutation block above follows, and the reason the type
+          order the block above follows, and the reason the type
           moved down here: it used to sit above the field, so the form asked how
           to classify an address before asking for one, and it was the only
           property of the address that did not sit under it (the visibility
           checkbox always has). --%>
-    <div class="space-y-4 border-t border-slate-200 pt-6 dark:border-slate-800">
+    <div class="space-y-4">
       <.inputs_for :let={ef} field={f[:emails]}>
         <div>
           <%= email_input ef, :value, class: input_class(ef, :value), placeholder: gettext("Enter your email address"), "aria-invalid": ef.errors[:value] && "true" %>

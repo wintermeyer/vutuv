@@ -106,9 +106,9 @@ defmodule VutuvWeb.UI do
   `checkbox_class/0`, and deliberately not derived from `checkbox_class/0` —
   that one carries `rounded`, `mt-0.5` and a ring offset a radio does not want.
 
-  The single source for the three groups that render one: the sign-up form's
-  salutation and email-type choices, the one-time welcome page, and the profile
-  editor's salutation. Those spelled the same two strings out four times over
+  The single source for the groups that render one: the sign-up form's gender
+  and email-type choices, the one-time welcome page, and the profile editor's
+  gender question. Those spelled the same two strings out four times over
   before this existed.
   """
   def radio_class do
@@ -3586,7 +3586,7 @@ defmodule VutuvWeb.UI do
        [
          row(:basics, gettext("Basics & photos"), ~p"/settings/profile",
            hint: gettext("Name, photo, cover picture, tagline"),
-           terms: gettext("avatar portrait picture image birthday salutation about me")
+           terms: gettext("avatar portrait picture image birthday gender about me")
          ),
          row(:username, gettext("Username"), ~p"/settings/username",
            hint: "@" <> to_string(user.username),

@@ -526,11 +526,6 @@ if config_env() == :prod do
     config :vutuv, :verify_social_accounts, false
   end
 
-  # The per-member daily cap on outbound invitations (see Vutuv.Invitations).
-  if invitation_daily_cap = System.get_env("INVITATION_DAILY_CAP") do
-    config :vutuv, :invitation_daily_cap, String.to_integer(invitation_daily_cap)
-  end
-
   # Avatars and URL screenshots are written under this root and served by
   # nginx (location /avatars/, /screenshots/). Override with UPLOADS_DIR_PREFIX;
   # the default must match the nginx alias root or fresh uploads will 404.

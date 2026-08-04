@@ -29,10 +29,11 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         # name, so every agent format must carry it too — it is worth the most
         # to a reader that says the name out loud.
         name_pronunciation: "[GRAY-ta GRAY-dee-ent]",
-        # The salutation is deliberately NOT here: it is a mail preference, so
-        # no agent format carries it. The `gender` line it replaced was in every
-        # one of them.
-        salutation: "ms",
+        # Set on purpose so the guard below has something to catch: the gender
+        # answer is kept for the membership statistic and no agent format may
+        # carry it. An earlier incarnation of this very field was published in
+        # every one of them.
+        gender: "female",
         birthdate: ~D[1991-04-23],
         employment_status: "looking",
         # Opt the availability badge + salary expectation public so they stay in
@@ -1210,14 +1211,15 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert get(build_conn(), "/drift_tester/emails/#{public.id}.md").resp_body =~ "greta.public"
   end
 
-  test "the salutation never reaches any public format" do
-    # The setup member has `salutation: "ms"`. Its predecessor `gender` was a
-    # published fact in all four formats plus the profile page; what replaced it
-    # says how the member wants an email to open, which is theirs and not the
-    # reader's. This asserts the whole vocabulary, not just the stored value, so
-    # renaming the label cannot quietly put it back on a public page.
+  test "the gender never reaches any public format" do
+    # The setup member has `gender: "female"`. This field was once a published
+    # fact in all four formats plus the profile page; it is now a voluntary
+    # answer kept for the membership statistic, and the only thing a reader may
+    # notice about it is the greeting in a mail addressed to that member. This
+    # asserts the whole vocabulary, not just the stored value, so renaming the
+    # label cannot quietly put it back on a public page.
     for path <- ["/drift_tester", "/drift_tester.md", "/drift_tester.txt", "/drift_tester.json"],
-        needle <- ["salutation", "Salutation", "gender", "Gender", "Ms.", "female"] do
+        needle <- ["gender", "Gender", "Female", "female", "Weiblich"] do
       refute get(build_conn(), path).resp_body =~ needle,
              "#{needle} must not appear in #{path}"
     end

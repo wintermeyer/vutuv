@@ -27,17 +27,35 @@ defmodule Vutuv.Accounts.User do
     # is why the profile renders the line only when it is present
     # (`name_pronunciation/1`).
     field(:name_pronunciation, :string)
-    # How the member wants to be addressed in a letter: "ms" / "mr", or nil for
-    # "no salutation", which is the default and a first-class third choice
-    # rather than a missing value. It is deliberately NOT a gender: the column
-    # it replaced was called `gender` and offered männlich / weiblich / divers,
-    # which read as a classification and was the single most complained-about
-    # field on the sign-up form. Nothing here ever needed to know a gender - the
-    # one consumer is the German email salutation (`UserHelpers.email_greeting/1`),
-    # and nil produces an equally warm "Hallo Max Meier" there, so declining
-    # costs the member nothing. Values are locale-neutral because the label is
-    # not (see `salutation_label/1`); it is not shown publicly anywhere.
-    field(:salutation, :string)
+    # "female" / "male" / "diverse", or nil for "keine Angabe", which is both
+    # the default and what `cast/3` folds the form's blank choice back to.
+    #
+    # It is asked for as the membership statistic at /admin, and it has exactly
+    # one other consumer: the German email greeting
+    # (`UserHelpers.email_greeting/1`), which opens "Liebe Frau Meier" / "Lieber
+    # Herr Meier" and otherwise names the member just as warmly with "Hallo Max
+    # Meier". A separate `salutation` preference used to own that greeting; it
+    # was dropped because on a rendered sign-up form the two questions read as
+    # one field asked twice.
+    #
+    # That merge has a known cost, and it is the reason the neutral greeting
+    # must never read as a downgrade: an answer that changes how the site
+    # addresses you is no longer purely an answer, so someone who wants the
+    # classic form has a reason to pick a value rather than state one. Keep
+    # every branch of `email_greeting/1` equally warm and the incentive stays
+    # negligible.
+    #
+    # Beyond that greeting it drives NOTHING a member or a visitor sees: not
+    # public, not in the agent formats, not on the CV, and deliberately not in
+    # `@identity_fields` — an admin's ID check is about who someone is, and a
+    # voluntary answer is not evidence about that, so changing it must not cost
+    # the verified badge.
+    #
+    # Read the values as approximate. The sign-up form preselected "männlich"
+    # until v7.229.0, so a "male" seeded from that era may equally be an
+    # untouched default, while the other two were only ever reached by
+    # overriding it (see the seeding migration).
+    field(:gender, :string)
     # The member's job-availability signal (issue #870), shown as a badge next
     # to the tagline on the profile. nil = not specified (the default, no
     # badge); "open" = employed but open to offers; "looking" = actively
@@ -421,25 +439,29 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation salutation birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list)a
 
-  # The addressable salutations, other than "no salutation" which is stored as
-  # nil. The single source of truth for the changeset's validate_inclusion and,
-  # via salutations/0, for every form's options, so no form can offer a value
-  # the changeset would reject.
-  @salutations ~w(ms mr)
+  # The answers the gender question offers, other than "keine Angabe" which is
+  # stored as nil. Single source of truth for the changeset's
+  # validate_inclusion and, via genders/0, for both forms' options, so no form
+  # can offer a value the changeset would reject.
+  @genders ~w(female male diverse)
 
   @doc """
-  The addressable salutation values, in the order every form offers them.
+  The gender values, in the order both forms offer them.
 
-  "ms" leads "mr" for the same reason the sign-up form preselects neither: the
-  field it replaced defaulted to "männlich", so every woman signing up had to
-  correct an assumption about herself before typing her name. Alphabetical in
-  both German ("Frau" before "Herr") and English, so the order needs no
-  defending. "No salutation" is not in the list because it is the absence of a
-  value; each form renders it as its own blank-valued choice.
+  This is the vocabulary of §22 Abs. 3 PStG (weiblich / männlich / divers), and
+  it is the right one precisely because the question is statistical: every
+  figure it will be compared against uses those categories. What made the old
+  sign-up field read as an official classification was not these words, it was
+  that the field was mandatory-looking, preselected and unexplained. It is
+  asked once, optionally, with a line saying what it is for.
+
+  "female" leads deliberately: this very field defaulted to "männlich" until
+  v7.229.0, so every woman signing up had to correct an assumption about
+  herself before typing her name.
   """
-  def salutations, do: @salutations
+  def genders, do: @genders
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -607,10 +629,10 @@ defmodule Vutuv.Accounts.User do
     |> normalize_name_pronunciation()
     |> validate_length(:name_pronunciation, max: 255)
     |> validate_name_pronunciation()
-    # An inclusion check, not a length cap: the salutation is a closed choice of
-    # two, and `cast/3` already folds the form's blank "no salutation" option to
-    # nil (its default empty_values), which `validate_inclusion` then skips.
-    |> validate_inclusion(:salutation, @salutations)
+    # An inclusion check, not a length cap: the gender is a closed choice of
+    # three, and `cast/3` already folds the form's blank "keine Angabe" option
+    # to nil (its default empty_values), which `validate_inclusion` then skips.
+    |> validate_inclusion(:gender, @genders)
     |> validate_length(:headline, max: @headline_max_length)
     # The tagline may only mention handles that exist (relaxed for the import).
     |> Mentions.validate_mentions_exist(:headline)
@@ -753,11 +775,10 @@ defmodule Vutuv.Accounts.User do
   # something *about* the verified name rather than being part of it, so no ID
   # check is invalidated by changing them. `name_pronunciation` says how the
   # name sounds — a badge that dropped over a spelling hint would just teach
-  # members to leave the hint wrong. `salutation` says how the member wants to
-  # be greeted in an email, which is a preference and not a claim an ID card
-  # could confirm or refute; its predecessor `gender` was on this list, and
-  # keeping it here would have made "how do you want to be addressed" cost
-  # people their badge.
+  # members to leave the hint wrong. `gender` is a voluntary answer kept for the
+  # membership statistic, which is not a claim an ID card could confirm or
+  # refute; it WAS on this list in its first incarnation, and keeping it here
+  # would make correcting a wrong value cost people their badge.
   @identity_fields ~w(first_name middle_name last_name nickname
     honorific_prefix honorific_suffix birthdate)a
 
@@ -942,7 +963,7 @@ defmodule Vutuv.Accounts.User do
   @doc """
   The human, translated label for an employment status, or nil for the unset
   default (nil / any unknown value renders no badge). Mirrors
-  `salutation_label/1`: a schema-level gettext helper the profile badge, the
+  `gender_label/1`: a schema-level gettext helper the profile badge, the
   edit form and the agent documents all read, so the wording lives in one
   place. "open" = employed but listening, "looking" = actively job-hunting.
   """
@@ -1098,16 +1119,18 @@ defmodule Vutuv.Accounts.User do
   end
 
   @doc """
-  The human, translated label for a salutation, or nil for "no salutation".
+  The human, translated label for a gender, or nil for "keine Angabe".
 
-  The stored values are locale-neutral (`ms` / `mr`) precisely because this is
-  not: German renders them "Frau" / "Herr", English "Ms." / "Mr.". Every form
-  and every email reads the wording from here, so an installation translating
-  it moves one string, not six call sites.
+  Locale-neutral values, translated labels, so an installation outside Germany
+  translates one string rather than six call sites: German renders them
+  "Weiblich" / "Männlich" / "Divers". "Divers" is the §22 Abs. 3 PStG word and stays that word in German;
+  the English label is "Diverse", not "Other", because the third answer names
+  itself rather than being the leftover bucket the old `other` value was.
   """
-  def salutation_label("ms"), do: gettext("Ms.")
-  def salutation_label("mr"), do: gettext("Mr.")
-  def salutation_label(_), do: nil
+  def gender_label("female"), do: gettext("Female")
+  def gender_label("male"), do: gettext("Male")
+  def gender_label("diverse"), do: gettext("Diverse")
+  def gender_label(_), do: nil
 
   defp nullify_default_birthdate(changeset) do
     case get_field(changeset, :birthdate) do

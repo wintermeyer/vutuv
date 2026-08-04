@@ -71,6 +71,47 @@ defmodule Vutuv.Dashboard do
   # The newest row's `inserted_at`, or nil for an empty table. Ordered by the
   # UUID v7 primary key, whose embedded creation time makes "highest id" mean
   # "newest" - an index lookup, no `inserted_at` scan.
+  @doc """
+  The membership breakdown by `users.gender` — the one reason that field is
+  collected at all — over confirmed members only, since an unconfirmed row is
+  not a member.
+
+  Returns the per-value counts, the `answered` total that is the honest
+  denominator for any share computed from them, and `unanswered`. Those last
+  two are the whole point of the shape: the answer is voluntary, most rows will
+  never carry one, and a percentage taken over `total` would quietly report
+  "silent" as a gender. Anything rendering this must divide by `answered` and
+  say so.
+
+  Deliberately not part of `activity_snapshot/0`: that runs on a 15-second
+  timer and this figure moves a handful of times a day, so it is read once per
+  mount instead of grouping the whole members table every tick.
+  """
+  def gender_breakdown do
+    counts =
+      from(u in User,
+        where: u.email_confirmed? == true,
+        group_by: u.gender,
+        select: {u.gender, count(u.id)}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    # A LIST, not a map, so the card shows the answers in the order both forms
+    # offer them. A map of three keys would iterate sorted, putting "diverse"
+    # first for no reason a reader could see.
+    by_value = Enum.map(User.genders(), &{&1, Map.get(counts, &1, 0)})
+    answered = by_value |> Enum.map(&elem(&1, 1)) |> Enum.sum()
+
+    %{
+      counts: by_value,
+      answered: answered,
+      # Everything that is not one of the offered answers, so a value left over
+      # from an older vocabulary lands here rather than vanishing from the sum.
+      unanswered: counts |> Map.values() |> Enum.sum() |> Kernel.-(answered)
+    }
+  end
+
   defp latest_inserted_at(schema) do
     from(r in schema, order_by: [desc: r.id], limit: 1, select: r.inserted_at)
     |> Repo.one()

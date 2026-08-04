@@ -30,6 +30,14 @@ erl_crash.dump
 /config/*.secret.exs
 /secrets/
 
+# One-off data seeds carrying real member rows. This repository is public, so a
+# file mapping member ids to anything they told us may never enter it — and a
+# blob that reaches git history is in every clone and fork for good, which a
+# later `git rm` does not undo. Such a seed is generated OUTSIDE the working
+# tree and applied straight to the server; this rule is only the backstop for
+# the day somebody drops one in here anyway.
+/priv/repo/data/
+
 # attachments in local storage (avatars, covers, post images + url
 # screenshots, plus the private originals tree); in production these live
 # under config :vutuv, :uploads_dir_prefix (/srv/legacy-vutuv)

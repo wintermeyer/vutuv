@@ -151,27 +151,25 @@ lands here). --%>
           <%= text_input f, :honorific_suffix, class: input_class(), placeholder: gettext("e.g. Jr. or PhD") %>
           <%= error_tag f, :honorific_suffix %>
         </div>
-        <%!-- How the member wants to be addressed. It belongs beside the name
-        without being part of it, so it sits full width below the name inputs,
-        in the same order the sign-up form asks. Unlike that form this one
-        DOES show a selection for a member who has none: there the blank
-        option must not be preselected because the form is asking, here it is
-        reporting what is stored, and "No salutation" is the honest reading of
-        an empty column. Plain `radio_button/4` gets that for free, since
-        `html_escape(nil)` matches the blank option's value. --%>
+        <%!-- The membership statistic (see `User.gender`). Unlike the sign-up
+        form this one DOES show a selection for a member who has none, because
+        it reports what is stored rather than asking, and "Keine Angabe" is the
+        honest reading of an empty column. There is deliberately no hint line
+        under it (Stefan, 2026-08-04): both this form and the sign-up form
+        carried one and both were dropped once they were seen rendered. --%>
         <div class="sm:col-span-2">
           <span class="block text-sm font-medium text-slate-900 dark:text-white">
-            {gettext("Salutation")}
+            {gettext("Gender")}
           </span>
           <div class="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-            <%= for {slabel, svalue} <- salutation_options() do %>
+            <%= for {glabel, gvalue} <- gender_options() do %>
               <label class={radio_label_class()}>
-                <%= radio_button f, :salutation, svalue, class: radio_class() %>
-                <span>{slabel}</span>
+                <%= radio_button f, :gender, gvalue, class: radio_class() %>
+                <span>{glabel}</span>
               </label>
             <% end %>
           </div>
-          <%= error_tag f, :salutation %>
+          <%= error_tag f, :gender %>
         </div>
         <%!-- How the name is said out loud (issue #1112). Full width, last in
         the card: it belongs to the name, but it is the one field almost nobody

@@ -25,7 +25,6 @@ defmodule Vutuv.Notifications.Emailer do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
-  alias Vutuv.Invitations.PrefillToken
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Reports.DailyReport
   alias Vutuv.SavedSearches
@@ -593,77 +592,6 @@ defmodule Vutuv.Notifications.Emailer do
 
   defp newsletter_unsubscribe(email, nil), do: email
   defp newsletter_unsubscribe(email, url), do: unsubscribe_headers(email, url)
-
-  @doc """
-  Invites a non-member to join, on behalf of `inviter` (see `Vutuv.Invitations`).
-
-  Unlike every other builder the recipient has no account, so the language is
-  the one the inviter chose (not a recipient `user.locale`) and the greeting is
-  built inline in the template rather than from a `%User{}`. The link opens the
-  sign-up form prefilled with the data the inviter entered (`prefill`); an
-  optional personal `message` is quoted in the body when present.
-
-  Deliberately not flagged `user_initiated`: bounce suppression should still
-  apply, so a previously-undeliverable address is not mailed again.
-  """
-  def invitation_email(%{
-        inviter: %Vutuv.Accounts.User{} = inviter,
-        to_email: to_email,
-        locale: locale,
-        message: message,
-        prefill: prefill
-      }) do
-    locale = get_locale(locale)
-    inviter_name = VutuvWeb.UserHelpers.full_name(inviter)
-
-    base_email()
-    |> to({invitee_name(prefill, to_email), to_email})
-    |> subject(
-      recipient_subject(locale, fn ->
-        gettext("%{name} invited you to vutuv", name: inviter_name)
-      end)
-    )
-    |> render_bodies("invitation", locale, %{
-      greeting: invitation_greeting(locale, prefill),
-      inviter_name: inviter_name,
-      inviter_url: public_url() <> inviter.username,
-      message: message,
-      invite_url: invitation_signup_url(prefill),
-      url: public_url()
-    })
-  end
-
-  # The invited person's salutation. Reuses the app-wide greeting convention
-  # (VutuvWeb.UserHelpers.email_greeting/1) so a salutation the inviter chose
-  # plus a surname yields "Liebe Frau Musterfrau" / "Dear …"; without them it
-  # degrades to the neutral greeting, which names the person just as warmly.
-  # Built from a throwaway struct — the recipient has no account.
-  defp invitation_greeting(locale, prefill) do
-    VutuvWeb.UserHelpers.email_greeting(%Vutuv.Accounts.User{
-      locale: locale,
-      salutation: prefill["salutation"],
-      first_name: prefill["first_name"],
-      last_name: prefill["last_name"]
-    })
-  end
-
-  # The invite link: the landing page prefilled from the sign-up fields the
-  # inviter entered. Vutuv.Invitations.PrefillToken packs them into one compact
-  # `i=` token (shorter than spelling the fields out, and it keeps the invitee's
-  # name and address out of the URL in the clear); VutuvWeb.PageController.index
-  # reads it back.
-  defp invitation_signup_url(prefill) do
-    case PrefillToken.query(prefill) do
-      "" -> public_url()
-      query -> public_url() <> "?" <> query
-    end
-  end
-
-  defp invitee_name(prefill, to_email) do
-    name = join_present([prefill["first_name"], prefill["last_name"]], " ")
-
-    if name == "", do: to_email, else: name
-  end
 
   ## Login security (see Vutuv.Sessions.start_session/3, the only caller)
 

@@ -48,15 +48,6 @@ defmodule VutuvWeb.TagInputTest do
     refute_pill_cap(html)
   end
 
-  test "the invitation form", %{conn: conn} do
-    {conn, _user} = create_and_login_user(conn)
-
-    html = conn |> get(~p"/system/invitations/new") |> html_response(200)
-
-    assert_tag_input(html, "invitation_request[tag_list]")
-    refute_pill_cap(html)
-  end
-
   test "both tag fields on the job posting form", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
     {:ok, live, _html} = live(conn, ~p"/jobs/new")

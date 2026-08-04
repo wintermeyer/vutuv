@@ -12,7 +12,7 @@ defmodule VutuvWeb.GettextExtractionAnchors do
   msgids. When you add a new runtime `Gettext.gettext/2,3` call with a literal
   msgid, add the same literal here.
 
-    * `Ms.` / `Mr.` — `Vutuv.Accounts.User.salutation_label/1`
+    * `Female` / `Male` / `Diverse` — `Vutuv.Accounts.User.gender_label/1`
     * `Open to offers` / `Looking for a job` — the employment-status labels
       `Vutuv.Accounts.User.employment_status_label/1` returns (issue #870)
     * The visibility labels (`Everyone, including logged-out visitors` /

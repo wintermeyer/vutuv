@@ -62,11 +62,15 @@ defmodule VutuvWeb.CV do
   # birth is a personal detail that rides here too, so a member can drop it
   # (and the Anonymize preset does, since it is bias-prone).
   #
-  # There is no gender row any more. The CV printed one as long as the account
-  # carried a `gender` field, and what replaced that field is a salutation
-  # preference — how the member wants to be greeted in an email. A Lebenslauf
-  # does not state how to open a letter to its author, so the row went with the
-  # field rather than being renamed into something no CV has ever had.
+  # There is no gender row, and the account carrying a `gender` field again does
+  # not bring one back. The CV printed that row while the field was a
+  # Personenstand-style classification asked of everyone at sign-up; what exists
+  # now is a voluntary answer kept for the membership statistic and shown on no
+  # public surface at all (`Vutuv.Accounts.User.gender`), so putting it on a
+  # document members send to employers would be the one place it leaks — and on
+  # a German application it invites exactly the bias the Anonymize preset exists
+  # to remove. The salutation has no row here either: a Lebenslauf does not
+  # state how to open a letter to its author.
   @identity_fields [
     {"name", :name},
     {"photo", :photo},

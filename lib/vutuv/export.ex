@@ -296,7 +296,10 @@ defmodule Vutuv.Export do
       honorific_prefix: user.honorific_prefix,
       honorific_suffix: user.honorific_suffix,
       name_pronunciation: user.name_pronunciation,
-      salutation: user.salutation,
+      # The gender answer belongs in the member's own GDPR export (Art. 15
+      # covers everything stored about them, and this is the one surface that
+      # shows it back to them) precisely because it appears on no public one.
+      gender: user.gender,
       birthdate: user.birthdate,
       headline: user.headline,
       locale: user.locale,

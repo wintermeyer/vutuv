@@ -103,6 +103,39 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
       assert has_element?(view, "#stat-posts-today", "3")
     end
 
+    # The gender breakdown is the only reason `users.gender` is collected, so
+    # the card has to actually show it — and it has to show it over the right
+    # denominator. A share computed against every member would count the silent
+    # majority as an answer and quietly understate every group.
+    test "the gender card counts shares against the members who answered", %{conn: conn} do
+      insert_activated_user(gender: "female")
+      insert_activated_user(gender: "female")
+      insert_activated_user(gender: "male")
+      insert_activated_user(gender: "diverse")
+      insert_activated_user(gender: nil)
+      insert_activated_user(gender: nil)
+
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.Admin.DashboardLive)
+
+      # 2 of the 4 answers, not 2 of the 6 members.
+      assert has_element?(view, "#stat-gender [data-gender=female]", "50%")
+      assert has_element?(view, "#stat-gender [data-gender=male]", "25%")
+      assert has_element?(view, "#stat-gender [data-gender=diverse]", "25%")
+      assert render(view) =~ "4 members who answered"
+      assert render(view) =~ "2 gave no answer"
+    end
+
+    # Nobody has answered yet: the shares must read as "no data" rather than as
+    # a measured zero, and the card must not divide by zero.
+    test "the gender card survives a membership that has answered nothing", %{conn: conn} do
+      insert_activated_user(gender: nil)
+
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.Admin.DashboardLive)
+
+      assert has_element?(view, "#stat-gender [data-gender=female]", "—")
+      refute render(view) =~ "0%"
+    end
+
     test "renders the admin's German labels when the session carries the de locale", %{conn: conn} do
       {:ok, view, _html} =
         live_isolated(conn, VutuvWeb.Admin.DashboardLive, session: %{"locale" => "de"})
@@ -111,6 +144,8 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
       assert html =~ "Gerade online"
       assert html =~ "Direktnachrichten"
       assert html =~ "Neue Mitglieder"
+      assert html =~ "Geschlecht"
+      assert html =~ "ohne Angabe"
     end
   end
 end

@@ -46,7 +46,7 @@ defmodule VutuvWeb.CVLiveTest do
           last_name: "Beispiel",
           email_confirmed?: true,
           birthdate: ~D[1990-05-15],
-          salutation: "ms"
+          gender: "female"
         )
       )
 
@@ -102,11 +102,11 @@ defmodule VutuvWeb.CVLiveTest do
       assert has_element?(view, "input[phx-value-key='social_media']")
       # The date of birth rides in the header identity toggles.
       assert has_element?(view, "input[phx-value-key='birthdate']")
-      # There is no gender toggle any more, and no salutation one either: a
-      # Lebenslauf does not state how to open a letter to its author, so the row
-      # went with the field rather than being renamed.
+      # There is no gender toggle, and the account carrying that field again
+      # does not bring one back: it is a voluntary answer kept for the
+      # membership statistic, and a document members send to employers is the
+      # one place it would leak.
       refute has_element?(view, "input[phx-value-key='gender']")
-      refute has_element?(view, "input[phx-value-key='salutation']")
 
       # Unticking one encodes it into every download link.
       view |> element("input[phx-value-key='social_media']") |> render_click()

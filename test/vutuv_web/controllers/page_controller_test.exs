@@ -363,43 +363,51 @@ defmodule VutuvWeb.PageControllerTest do
                |> Enum.map(fn [whole, value] -> {value, whole} end)
     end
 
-    # The salutation is the one control on this form that preselects NOTHING,
-    # and this is the regression guard for it. Its predecessor was a `gender`
-    # group defaulted to "männlich", so every woman signing up had to correct an
-    # assumption about herself before typing her name — which is what members
-    # wrote in about. An unset group asks; a preselected one assumes.
-    test "the salutation radio group preselects nothing", %{conn: conn} do
+    # The gender question is the membership statistic, and it is the field
+    # members complained about in its first incarnation. What must never come
+    # back is the shape, not the word: preselected, in front of the name, and
+    # unexplained.
+    test "the gender radio group preselects nothing", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      refute radio_checked?(body, "user[salutation]", "ms")
-      refute radio_checked?(body, "user[salutation]", "mr")
-      refute radio_checked?(body, "user[salutation]", "")
+      refute radio_checked?(body, "user[gender]", "female")
+      refute radio_checked?(body, "user[gender]", "male")
+      refute radio_checked?(body, "user[gender]", "diverse")
+      refute radio_checked?(body, "user[gender]", "")
     end
 
-    # All three answers are visible at once, and "no salutation" is one of them
-    # rather than something a member has to infer from leaving the group alone.
-    test "the salutation offers both forms of address and an explicit way out", %{conn: conn} do
+    test "the gender question offers all three answers and a way to decline",
+         %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert body =~ ~s(name="user[salutation]")
-      assert body =~ ~s(value="ms")
-      assert body =~ ~s(value="mr")
-      assert body =~ "No salutation"
-      # There is deliberately no helper line under the group. The label carries
-      # the purpose on its own, and a sentence promising the value is used for
-      # nothing but email would be a data-use commitment we do not want to make
-      # (Stefan, 2026-08-04) — "Gender" needed such a sentence, "Salutation"
-      # does not.
-      refute body =~ "Only used to address you in emails."
+      assert body =~ ~s(name="user[gender]")
+      assert body =~ ~s(value="female")
+      assert body =~ ~s(value="male")
+      assert body =~ ~s(value="diverse")
+      assert body =~ "Prefer not to say"
     end
 
-    # The name is answered before the salutation: asking "how should we address
-    # you" in front of the form made it a gate rather than a detail.
-    test "the salutation is asked after the name, not before it", %{conn: conn} do
+    test "the gender question is asked after the name, not before it", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
       assert :binary.match(body, ~s(name="user[first_name]")) <
-               :binary.match(body, ~s(name="user[salutation]"))
+               :binary.match(body, ~s(name="user[gender]"))
+    end
+
+    # The German render, because that is what real visitors get and an English
+    # check would pass over a missing or fuzzy-filled translation.
+    test "the gender question renders in German", %{conn: conn} do
+      body =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/")
+        |> html_response(200)
+
+      assert body =~ "Geschlecht"
+      assert body =~ "Weiblich"
+      assert body =~ "Männlich"
+      assert body =~ "Divers"
+      assert body =~ "Keine Angabe"
     end
 
     # The same rule one block down: a property is answered after the thing it
@@ -433,48 +441,68 @@ defmodule VutuvWeb.PageControllerTest do
 
   describe "POST /new_registration" do
     # The round trip the rendered form performs: the radio group's name and
-    # values have to be the ones the changeset accepts, or a member picks a
-    # salutation and the account is created without it — silently, since the
-    # field is optional and nothing would fail.
-    test "a chosen salutation is stored on the new account", %{conn: conn} do
+
+    # The same round trip for the gender group: the rendered name and values
+    # have to be the ones the changeset accepts, or a member answers the
+    # question and the account is created without it — silently, since the field
+    # is optional and nothing would fail. That silence is exactly how the
+    # statistic would quietly stop collecting.
+    test "a chosen gender is stored on the new account", %{conn: conn} do
       attrs =
         Map.merge(valid_attrs(), %{
-          "emails" => %{"0" => %{"value" => "addressed@example.com"}},
-          "salutation" => "ms"
+          "emails" => %{"0" => %{"value" => "counted@example.com"}},
+          "gender" => "diverse"
         })
 
       post(conn, ~p"/new_registration", user: attrs)
 
-      assert user_by_email("addressed@example.com").salutation == "ms"
+      assert user_by_email("counted@example.com").gender == "diverse"
     end
 
-    # The blank third option, which is what the group submits for "No
-    # salutation" and also what an untouched group submits. Both have to be an
-    # ordinary successful registration, not a validation error: the field is
-    # optional and declining it is a real answer.
-    test "no salutation registers fine and stores nothing", %{conn: conn} do
+    test "declining the gender question registers fine and stores nothing", %{conn: conn} do
       attrs =
         Map.merge(valid_attrs(), %{
-          "emails" => %{"0" => %{"value" => "unaddressed@example.com"}},
-          "salutation" => ""
+          "emails" => %{"0" => %{"value" => "uncounted@example.com"}},
+          "gender" => ""
         })
 
       post(conn, ~p"/new_registration", user: attrs)
 
-      assert user_by_email("unaddressed@example.com").salutation == nil
+      assert user_by_email("uncounted@example.com").gender == nil
     end
 
-    test "a salutation the form never offered is rejected", %{conn: conn} do
+    # What an untouched radio group actually submits: nothing at all. A browser
+    # sends no `user[gender]` key when no radio is checked, which is a different
+    # code path from the blank value above (`cast/3` never sees the field rather
+    # than folding an empty string), so it gets its own test. Leaving the
+    # question alone must register exactly like answering "Keine Angabe": no
+    # validation error, nothing stored.
+    test "not touching the gender question registers fine and stores nothing", %{conn: conn} do
+      attrs =
+        Map.merge(valid_attrs(), %{"emails" => %{"0" => %{"value" => "untouched@example.com"}}})
+
+      refute Map.has_key?(attrs, "gender")
+
+      conn = post(conn, ~p"/new_registration", user: attrs)
+
+      # A rejected sign-up re-renders the form with a 422; a valid one answers
+      # 200 with the PIN screen. Asserting the status alone would not prove
+      # much, so the account itself is the real check.
+      assert conn.status == 200
+      assert %{gender: nil} = user_by_email("untouched@example.com")
+    end
+
+    test "a gender the form never offered is rejected", %{conn: conn} do
       attrs =
         Map.merge(valid_attrs(), %{
-          "emails" => %{"0" => %{"value" => "smuggled@example.com"}},
-          "salutation" => "captain"
+          "emails" => %{"0" => %{"value" => "smuggled-gender@example.com"}},
+          "gender" => "attack helicopter"
         })
 
       conn = post(conn, ~p"/new_registration", user: attrs)
 
       assert html_response(conn, 422)
-      assert user_by_email("smuggled@example.com") == nil
+      assert user_by_email("smuggled-gender@example.com") == nil
     end
 
     # Checking the (inverted) indexing box submits "false", which must land as a

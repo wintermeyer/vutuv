@@ -252,6 +252,17 @@ defmodule Vutuv.Accounts.UserTest do
       refute Ecto.Changeset.get_change(changeset, :identity_verified?)
     end
 
+    test "changing the gender keeps the verification" do
+      # Same reasoning as the salutation above, and it has to be asserted
+      # separately because this field really is called `gender` again — the name
+      # is the whole reason someone would put it back on the identity list. An
+      # admin's ID check is evidence about who a member is; a voluntary answer
+      # kept for the membership statistic is not that claim, and a badge that
+      # dropped when a member corrected it would teach them to leave it wrong.
+      changeset = User.changeset(verified_user(), %{"gender" => "diverse"})
+      refute Ecto.Changeset.get_change(changeset, :identity_verified?)
+    end
+
     test "editing a non-identity field (headline) keeps the verification" do
       changeset = User.changeset(verified_user(), %{"headline" => "Now hiring"})
       refute Ecto.Changeset.get_change(changeset, :identity_verified?)

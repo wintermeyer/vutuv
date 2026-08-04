@@ -43,31 +43,43 @@ defmodule VutuvWeb.PageLocaleRenderTest do
     assert html =~ "Mit der Registrierung akzeptieren Sie"
   end
 
-  test "the salutation question is really translated, not fuzzy-filled", %{conn: conn} do
+  test "the gender question is really translated, not fuzzy-filled", %{conn: conn} do
     # `mix gettext.extract --merge` fills a brand-new msgid with the translation
     # of whatever existing string it looks similar to, flags it `fuzzy`, and
     # fails no build — so a German page can ship confident nonsense while every
-    # English assertion stays green. These five strings are the ones this change
-    # added, and short labels like "Frau" are exactly what that matcher gets
-    # wrong, so they are asserted by name in the German render.
+    # English assertion stays green. This field walked straight into it:
+    # "Diverse" came back as "Trennlinie" and "Male" as "Maltesisch". One-word
+    # labels are what that matcher gets wrong, so every one of them is asserted
+    # here by name in the German render.
     html =
       conn
       |> put_req_header("accept-language", "de-DE,de;q=0.9")
       |> get(~p"/")
       |> html_response(200)
 
-    assert html =~ "Anrede"
-    assert html =~ ">Frau<"
-    assert html =~ ">Herr<"
-    assert html =~ "Keine Anrede"
+    gender = fieldset_text(html, "#signup-gender")
 
-    # The vocabulary the field left behind must not come back with it. The
-    # third one is matched as a whole tag body on purpose: "divers" is a
-    # substring of "Fediverse", which this page mentions.
-    refute html =~ "Geschlecht"
-    refute html =~ "männlich"
-    refute html =~ "weiblich"
-    refute html =~ ">divers<"
+    assert gender =~ "Geschlecht"
+    assert gender =~ "Weiblich"
+    assert gender =~ "Männlich"
+    assert gender =~ "Divers"
+    assert gender =~ "Keine Angabe"
+
+    # The two labels that were fuzzy-filled with unrelated words. Naming them
+    # keeps the regression identifiable if anyone re-runs the merge and takes
+    # the suggestion.
+    refute gender =~ "Trennlinie"
+    refute gender =~ "Maltesisch"
+  end
+
+  # The text of one fieldset on the rendered page. `query/2`, never `filter/2`:
+  # on a whole document `filter/2` only matches root nodes, so it would return
+  # an empty set and make every refute below pass without looking at anything.
+  defp fieldset_text(html, selector) do
+    html
+    |> LazyHTML.from_document()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.text()
   end
 
   test "split_marker/2 is total, so a botched translation can never 500 the page" do

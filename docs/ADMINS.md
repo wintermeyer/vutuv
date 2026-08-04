@@ -148,7 +148,6 @@ Everything else has a default (the vutuv.de production value):
 | `VERIFY_SOCIAL_ACCOUNTS` | `true` | `false` disables verified social-media handles (a member proving a listed account is theirs, plus its periodic re-check) — no new account can be verified, existing marks keep working. Only Bluesky can be proved today: its profile description must carry the member's vutuv profile URL, which the public Bluesky AppView is asked for. Set it on installations that must not make outbound HTTP calls |
 | `GITHUB_API_TOKEN` | – | Optional token for the profile code-stats fetches (GitHub allows 60 unauthenticated requests/hour per IP; a token raises that to 5,000). A [fine-grained PAT](https://github.com/settings/personal-access-tokens) with **no** scopes/permissions is enough — the fetches read public data only. Can be added (or rotated) at any time; without it everything still works, the 7-day snapshot cache is sized for the unauthenticated limit |
 | `MAIL_LOG_POLL_MS` | `5000` | Bounce watcher poll interval |
-| `INVITATION_DAILY_CAP` | `50` | Most invitations a single member may send per day (abuse guard on outbound invite email) |
 | `JOB_RUNTIME_DAYS` | `90` | How long a published job posting stays live before it auto-expires. Flat, no renewals — a still-open role gets a fresh posting |
 | `JOBS_MAX_PER_MEMBER` | `3` | Most concurrently-published job postings for one member (anti-abuse) |
 | `JOBS_MAX_PER_ORG` | `10` | Most concurrently-published job postings for one organization |

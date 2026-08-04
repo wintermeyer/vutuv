@@ -75,25 +75,24 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
-  The `{label, value}` options for every salutation control, in the one order
-  they are ever offered: the two addressable salutations from the schema's
-  single source (`User.salutations/0` through `User.salutation_label/1`),
-  followed by the blank-valued "No salutation", which `cast/3` folds back to
-  nil.
+  The `{label, value}` options for the gender question: the schema's three
+  values through `User.gender_label/1`, then the blank-valued decline option
+  that `cast/3` folds back to nil.
 
-  "No salutation" comes **last and is rendered like the other two**, not as a
-  select's leading blank prompt and not as an afterthought below a divider. It
-  is one of three equally valid answers, and the email a member gets for
-  choosing it is exactly as warm as the other two
-  (`email_greeting/1`) — so nothing here may make it look like the option you
-  take when you refuse to answer properly.
+  The blank choice is rendered like the other three for the same reason it is
+  there at all: the question is voluntary, and a voluntary question with no
+  visible way to decline is not one. Nothing about the answer changes what a
+  member gets, so declining has to look as ordinary as answering.
 
-  No control preselects anything from this list; see the sign-up form and
-  `VutuvWeb.PageController.index/2`.
+  Its wording is "Prefer not to say" rather than the more obvious "No answer",
+  because that msgid is already translated for the fediverse admin ("Keine
+  Antwort", a remote server that did not respond) and reusing it would put that
+  sentence on this form. German wants "Keine Angabe" here, which is the standard
+  way a form offers to decline.
   """
-  def salutation_options do
-    Enum.map(User.salutations(), &{User.salutation_label(&1), &1}) ++
-      [{gettext("No salutation"), ""}]
+  def gender_options do
+    Enum.map(User.genders(), &{User.gender_label(&1), &1}) ++
+      [{gettext("Prefer not to say"), ""}]
   end
 
   @doc """
@@ -889,20 +888,26 @@ defmodule VutuvWeb.UserHelpers do
   @doc """
   The line that opens an email to `user`, in that member's own locale.
 
-  German gets the classic salutation, driven by the member's `salutation`
-  preference and their surname:
+  German gets the classic salutation, driven by the member's `gender` answer and
+  their surname:
 
-      "ms" + surname  ->  "Liebe Frau Meier"
-      "mr" + surname  ->  "Lieber Herr Meier"
-      anything else   ->  "Hallo Max Meier"
+      "female" + surname  ->  "Liebe Frau Meier"
+      "male" + surname    ->  "Lieber Herr Meier"
+      anything else       ->  "Hallo Max Meier"
 
-  **All three are real salutations, and that is the point.** The neutral one is
-  what a member gets for declining to state a salutation, so it must not read as
-  a downgrade, or declining carries a cost and the choice is not free. Its
-  predecessor dropped the name entirely and opened with a bare "Guten Morgen",
-  which is exactly the punishment to avoid. For the same reason the neutral
-  branch also catches "ms"/"mr" without a surname: there is no such thing as
-  "Liebe Frau ", so those fall through to a greeting that works.
+  **All three are real salutations, and that is the point.** `gender` is asked
+  for as a membership statistic, and this is the only place the answer does
+  anything a member notices — so the neutral branch must not read as a
+  downgrade. If it did, answering would become a way to get a better greeting
+  rather than a statement, and the figures the field exists for would stop
+  measuring anything. Its predecessor dropped the name entirely and opened with
+  a bare "Guten Morgen", which is exactly the punishment to avoid.
+
+  "diverse" therefore lands in the neutral branch by design rather than by
+  omission: German has no established third form of address, and inventing one
+  would single those members out in every mail they receive. The same branch
+  catches a gendered answer with no surname, since there is no such thing as
+  "Liebe Frau ", and any value outside the current vocabulary.
 
   The time-of-day opener the German branch used to carry ("Guten Morgen" before
   11, "Guten Abend" after 18) is gone: it competed with the salutation, and
@@ -916,9 +921,9 @@ defmodule VutuvWeb.UserHelpers do
   this reason.
   """
   def email_greeting(%User{locale: "de"} = user) do
-    case {user.salutation, present(user.last_name)} do
-      {"ms", surname} when is_binary(surname) -> "Liebe Frau #{surname}"
-      {"mr", surname} when is_binary(surname) -> "Lieber Herr #{surname}"
+    case {user.gender, present(user.last_name)} do
+      {"female", surname} when is_binary(surname) -> "Liebe Frau #{surname}"
+      {"male", surname} when is_binary(surname) -> "Lieber Herr #{surname}"
       _ -> neutral_greeting("Hallo", user)
     end
   end

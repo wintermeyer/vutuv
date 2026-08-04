@@ -75,6 +75,40 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert html =~ ~s(href="#{~p"/settings"}")
       assert html =~ ~s(id="cover")
     end
+
+    # Someone who left the gender question alone at sign-up stores nil, and this
+    # form must show that as the "Keine Angabe" answer rather than as four empty
+    # radios. Unlike the sign-up form, which deliberately preselects nothing
+    # because it is ASKING, this one is REPORTING what is stored — and an
+    # unanswered question that renders as blank reads like the form lost it.
+    #
+    # It works because `radio_button/4` compares the field value to the option
+    # value and `html_escape(nil)` equals the blank option's "". That is a
+    # coincidence of the helper rather than something the template states, which
+    # is exactly why it is asserted here.
+    test "an unanswered gender shows as the explicit \"no answer\" choice", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      assert user.gender == nil
+
+      html = conn |> get(~p"/settings/profile") |> html_response(200)
+
+      assert gender_radio_checked?(html, ""),
+             ~s(the blank "no answer" radio should be checked for a member who never answered)
+
+      for value <- ~w(female male diverse) do
+        refute gender_radio_checked?(html, value)
+      end
+    end
+
+    # Lookaheads rather than a left-to-right pattern: `radio_button/4` emits its
+    # attributes in alphabetical order, so `checked` lands BEFORE `name` and any
+    # regex assuming the source order silently matches nothing — which reads as
+    # "the radio is not checked" and sends you looking for a bug that isn't
+    # there.
+    defp gender_radio_checked?(html, value) do
+      html =~
+        ~r/<input(?=[^>]*\btype="radio")(?=[^>]*\bname="user\[gender\]")(?=[^>]*\bvalue="#{value}")(?=[^>]*\bchecked)[^>]*>/
+    end
   end
 
   describe "page titles" do

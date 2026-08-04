@@ -592,13 +592,6 @@ config :vutuv, :verify_social_accounts, true
 # itself is also a no-op when :verify_social_accounts is off.
 config :vutuv, :recheck_social_accounts, true
 
-# The most invitations a single member may send in one Berlin calendar day
-# (see Vutuv.Invitations) — the abuse guard on outbound invite email, which
-# protects the installation's sender reputation. Tune it per installation
-# (a small intranet may want it higher/lower). Runtime override:
-# INVITATION_DAILY_CAP (config/runtime.exs).
-config :vutuv, :invitation_daily_cap, 50
-
 # --- Operator identity ------------------------------------------------------
 # Everything naming the party who runs THIS installation lives behind these
 # keys, so another organization can run vutuv without editing source. The defaults

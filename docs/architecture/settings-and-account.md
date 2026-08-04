@@ -145,50 +145,59 @@ path dedupes the same way, so preview and outcome always agree. The public tag
 page's "Add this tag" button still POSTs to the dead
 `UserTagController.create`, which now always redirects.
 
-## Salutation (`users.salutation`)
+## Gender (`users.gender`)
 
-**How the member wants to be addressed, not what they are.** The column is
-`"ms"` / `"mr"` / NULL, where NULL means "no salutation" and is a first-class
-third answer rather than a missing value. Values are locale-neutral because the
-label is not: `User.salutation_label/1` renders them "Frau" / "Herr" in German
-and "Ms." / "Mr." in English, and every form and email reads the wording from
-there.
+**A voluntary answer kept for one thing: the membership breakdown on `/admin`.**
+`"female"` / `"male"` / `"diverse"`, or NULL for "keine Angabe", which is both
+the default and what `cast/3` folds the form's blank choice back to. Asked on
+the sign-up form and on `/settings/profile`, nothing preselected. It has exactly
+two readers: `Vutuv.Dashboard.gender_breakdown/0` and the German email greeting.
 
-It replaced a `gender` column offering männlich / weiblich / divers, which was
-the most complained-about field on the sign-up form. Nothing ever needed a
-gender: the **only** consumer was and is the German email salutation, so the
-field now says what it is for. Three rules came out of that and are worth
-keeping:
+**It also drives the German email greeting**, which a separate `salutation`
+preference used to own. That column was dropped (v7.230.0) because on the
+rendered sign-up form the two questions read as one field asked twice.
+`UserHelpers.email_greeting/1` now answers "Liebe Frau Meier" / "Lieber Herr
+Meier" and, for "diverse" and for no answer alike, "Hallo Max Meier".
 
-* **Nothing is preselected at sign-up.** The old radio group defaulted to
-  "männlich", so every woman signing up had to correct an assumption about
-  herself before typing her name. `PageController.index/2` leaves the group
-  unset and `page_controller_test` guards it. The **profile editor** does show
-  the stored value, blank option included — it reports rather than asks.
-* **Declining costs nothing.** `UserHelpers.email_greeting/1` answers "Liebe
-  Frau Meier" / "Lieber Herr Meier" / "Hallo Max Meier"; all three are real
-  salutations. A neutral branch that read as a downgrade would put pressure back
-  on the choice. (The predecessor dropped the name and opened with a bare
-  "Guten Morgen".) The time-of-day opener that branch used to carry is gone.
-* **It is never public.** No profile card, no agent format, no CV row, and it is
-  not on `User.@identity_fields`, so changing it cannot cost a member their
-  verified badge. `agent_docs_drift_test` asserts the whole vocabulary stays off
-  every public format.
+**That merge has a known cost, and one rule contains it.** An answer that
+changes how the site addresses you is no longer purely an answer: someone who
+wants the classic form has a reason to pick a value rather than state one. What
+keeps that incentive negligible is that **every branch of the greeting is
+equally warm** — the neutral one names the member in full and must never read as
+a downgrade. German has no established third form of address, so "diverse" lands
+in the neutral branch by design rather than by omission; inventing one would
+single those members out in every mail they get.
 
-Invitation links are the one place a salutation legitimately arrives
-preselected: an inviter naming how they address someone they know.
-`Invitations.prefill_from_params/1` also translates the old `gender` words, in
-the spelled-out params and in the positional `i=` token alike, because links
-already sitting in inboxes outlive any deploy.
+**Beyond that greeting it is never public**: not the profile, not the agent
+formats, not the CV, and it is not on `User.@identity_fields`, so correcting it
+cannot cost a verified badge. It IS in the member's own GDPR export, which is the
+one place they are entitled to see everything stored about them.
+`gender_privacy_test` asserts every one of those, and it does so with
+word-boundary regexes because "divers" and "diverse" are both substrings of
+"fediverse".
 
-**Expand/contract, both halves shipped:** the first migration added
-`salutation` and left `gender` in place so the previous release kept working
-during the blue/green switch; a second one dropped the column once v7.229.0 was
-serving. Two references to the old word survive on purpose and are not leftovers:
-`AccountEventText.field_label("gender")`, because the account-activity log is
-append-only and its old rows still name that field, and the legacy `gender`
-parameter in `Invitations.prefill_from_params/1`, because invitation links live
-in inboxes far longer than a deploy.
+**Read the numbers as approximate, and never over the wrong denominator.** The
+sign-up form preselected "männlich" until v7.229.0, so a `male` seeded from that
+era may equally be an untouched default, while the other two answers were only
+ever reached by overriding it. `gender_breakdown/0` therefore returns
+`answered` and `unanswered` beside the counts, and the admin card computes every
+share against `answered` and says so: a percentage over all members would report
+silence as a gender.
+
+**Seeding.** The migration derives `female` / `male` from the `salutation`
+column, which is where the old classification went when the form briefly stopped
+asking, so it recovers the member's own earlier answer rather than inferring a
+gender from a courtesy title. The third answer mapped to "no salutation" and is
+indistinguishable there from never having answered, so those rows are restored
+by id from a database dump predating the drop, applied on the server from a file
+that is **not** in this repository and must never be: a public repo may not carry
+a list naming which members answered what. `/priv/repo/data/` is gitignored as a
+backstop.
+
+**Two references to the old vocabulary survive on purpose** and are not
+leftovers: `AccountEventText.field_label("salutation")` and its `("gender")`
+sibling, because the account-activity log is append-only and its old rows still
+name whichever field was current when they were written.
 
 ## New-member onboarding
 

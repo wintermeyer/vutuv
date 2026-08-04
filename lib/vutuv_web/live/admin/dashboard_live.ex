@@ -32,6 +32,7 @@ defmodule VutuvWeb.Admin.DashboardLive do
   import VutuvWeb.UI, only: [avatar: 1, card: 1, local_time: 1, delimited_count: 1]
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Dashboard
   alias VutuvWeb.Presence
 
@@ -51,7 +52,12 @@ defmodule VutuvWeb.Admin.DashboardLive do
       schedule_refresh()
     end
 
-    {:ok, socket |> assign_online() |> assign_snapshot() |> assign_newest_members()}
+    {:ok,
+     socket
+     |> assign_online()
+     |> assign_snapshot()
+     |> assign_newest_members()
+     |> assign(:gender_breakdown, Dashboard.gender_breakdown())}
   end
 
   @impl true
@@ -159,9 +165,60 @@ defmodule VutuvWeb.Admin.DashboardLive do
           last_at={@last_message_at}
         />
       </div>
+
+      <div class="mt-4">
+        <.gender_card breakdown={@gender_breakdown} />
+      </div>
     </section>
     """
   end
+
+  # The membership breakdown by gender, the single reason that field is asked
+  # for (`Vutuv.Accounts.User.gender`).
+  #
+  # Two things here are the feature, not decoration. Every share is computed
+  # over the members who ANSWERED, never over all members, and the card says so
+  # underneath: the answer is voluntary, so most rows carry none, and a
+  # percentage taken over everybody would report silence as a gender. And the
+  # unanswered figure is shown rather than hidden, because it is the honest
+  # measure of how much this breakdown is worth on any given day.
+  #
+  # It carries no share bars or chart. The numbers moved into this card from a
+  # column that preselected "male" for years, so the figures are approximate in
+  # a way no graphic should paper over.
+  attr(:breakdown, :map, required: true)
+
+  defp gender_card(assigns) do
+    ~H"""
+    <.card>
+      <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {gettext("Gender")}
+      </p>
+      <dl id="stat-gender" class="mt-3 grid grid-cols-3 gap-4">
+        <div :for={{value, count} <- @breakdown.counts} data-gender={value}>
+          <dt class="text-xs text-slate-600 dark:text-slate-400">{User.gender_label(value)}</dt>
+          <dd class="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
+            {delimited_count(count)}
+          </dd>
+          <dd class="text-xs text-slate-600 dark:text-slate-400">
+            {gender_share(count, @breakdown.answered)}
+          </dd>
+        </div>
+      </dl>
+      <p class="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
+        {gettext("Shares are of the %{answered} members who answered. %{unanswered} gave no answer.",
+          answered: delimited_count(@breakdown.answered),
+          unanswered: delimited_count(@breakdown.unanswered)
+        )}
+      </p>
+    </.card>
+    """
+  end
+
+  # Whole percent, and "—" while nobody has answered: a "0%" against a zero
+  # denominator would read as a measured result rather than as no data.
+  defp gender_share(_count, 0), do: "—"
+  defp gender_share(count, answered), do: "#{round(count * 100 / answered)}%"
 
   # A card's linked people list: up to ten members, each an avatar + name row
   # that navigates straight to that profile, so an admin can eyeball who is
