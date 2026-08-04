@@ -18,16 +18,21 @@ defmodule VutuvWeb.PinScreenCopyTest do
 
   @email "tippfehler@example.com"
 
-  defp registration_pin_screen(conn) do
-    conn
-    |> post(~p"/new_registration",
-      user: %{
+  defp registration_params(overrides \\ %{}) do
+    Map.merge(
+      %{
         "first_name" => "Pina",
         "last_name" => "Probe",
         "tag_list" => "Anredetest, Elixir, Kochen",
         "emails" => %{"0" => %{"value" => @email}}
-      }
+      },
+      overrides
     )
+  end
+
+  defp registration_pin_screen(conn) do
+    conn
+    |> post(~p"/new_registration", user: registration_params())
     |> html_response(200)
   end
 
@@ -90,6 +95,78 @@ defmodule VutuvWeb.PinScreenCopyTest do
       email = insert(:email, user: user).value
 
       assert login_pin_screen(conn, email) =~ "other addresses to your vutuv account"
+    end
+  end
+
+  describe "coming back to \"/\" while a PIN is in flight" do
+    # The gap that let the login-only advice reappear after it had been removed
+    # from the registration screen: "/" is pinned to the PIN form while a PIN is
+    # pending, and it always rendered the LOGIN screen — whatever flow the
+    # visitor was actually in. Checking only the /new_registration response
+    # missed it entirely (reported 2026-08-04, with a screenshot of both tabs).
+    test "a pending registration shows the registration screen, not the login one",
+         %{conn: conn} do
+      conn = post(conn, ~p"/new_registration", user: registration_params())
+
+      body = conn |> recycle() |> get(~p"/") |> html_response(200)
+
+      assert body =~ "Enter the PIN from the email"
+      refute body =~ "other addresses to your vutuv account"
+      assert body =~ "Cancel registration"
+    end
+
+    test "a pending login still shows the login screen", %{conn: conn} do
+      user = insert(:activated_user)
+      email = insert(:email, user: user).value
+      conn = post(conn, ~p"/login", session: %{"email" => email})
+
+      body = conn |> recycle() |> get(~p"/") |> html_response(200)
+
+      assert body =~ "other addresses to your vutuv account"
+      assert body =~ "Use a different email address"
+      refute body =~ "Cancel registration"
+    end
+
+    # Both registration branches must leave an identical cookie, or which screen
+    # "/" renders would answer "does this address already have an account?" to
+    # anyone who types someone else's address.
+    test "an already-taken address leaves the same registration screen", %{conn: conn} do
+      user = insert(:activated_user)
+      taken = insert(:email, user: user).value
+
+      conn =
+        post(conn, ~p"/new_registration",
+          user: registration_params(%{"emails" => %{"0" => %{"value" => taken}}})
+        )
+
+      body = conn |> recycle() |> get(~p"/") |> html_response(200)
+
+      assert body =~ "Enter the PIN from the email"
+      refute body =~ "other addresses to your vutuv account"
+    end
+  end
+
+  describe "the way out of the PIN step" do
+    test "registration offers to cancel, not to swap the address", %{conn: conn} do
+      body = registration_pin_screen(conn)
+
+      assert body =~ "Cancel registration"
+      refute body =~ "Use a different email address"
+      # Whatever it is called, the escape hatch itself must stay: it is the only
+      # thing that frees the landing page while a PIN is pending.
+      assert body =~ ~s(action="/login/cancel")
+    end
+
+    test "cancelling frees the landing page again", %{conn: conn} do
+      conn = post(conn, ~p"/new_registration", user: registration_params())
+      # submit_with_csrf/3 recycles internally and reads the token out of this
+      # response, so it must be handed the POST result, not a recycled conn.
+      conn = submit_with_csrf(conn, ~p"/login/cancel", %{})
+
+      body = conn |> recycle() |> get(~p"/") |> html_response(200)
+
+      assert body =~ ~s(name="user[first_name]")
+      refute body =~ "Enter the PIN from the email"
     end
   end
 

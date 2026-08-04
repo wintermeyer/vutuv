@@ -253,7 +253,7 @@ defmodule VutuvWeb.PageController do
   defp handle_post_registration_login(conn, email) do
     # The account was just created, so login_by_email/2 always mails the PIN
     # and advances to the confirmation screen.
-    {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
+    {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email, :registration)
     render(conn, "pin_new_registration.html")
   end
 
@@ -421,9 +421,14 @@ defmodule VutuvWeb.PageController do
     end
   end
 
-  # If a login PIN is already in flight (the visitor entered their email, got a
-  # PIN, then came back to "/"), show the PIN-entry form instead of the sign-up
-  # page so they can finish logging in.
+  # If a PIN is already in flight (the visitor entered their email, got a PIN,
+  # then came back to "/"), show the PIN-entry form instead of the sign-up page
+  # so they can finish. Which of the two PIN screens is decided by the flow the
+  # cookie records: somebody half-way through a REGISTRATION used to land on the
+  # login screen here, which told them to "log in with one of your other
+  # addresses" — advice for an account they do not have yet (reported
+  # 2026-08-04). The two screens differ only in copy, and both registration
+  # branches mint the same cookie, so this leaks nothing about the address.
   defp display_pin_entry(conn, _params) do
     # A valid signed cookie means a login is in progress for that identity;
     # show the PIN form. Deliberately NOT gated on a PIN row existing in the
@@ -435,9 +440,15 @@ defmodule VutuvWeb.PageController do
         conn
 
       _email ->
-        conn
-        |> put_view(VutuvWeb.SessionHTML)
-        |> render("pin_user_login.html")
+        case Vutuv.Accounts.read_pin_flow(conn) do
+          :registration ->
+            render(conn, "pin_new_registration.html")
+
+          _login ->
+            conn
+            |> put_view(VutuvWeb.SessionHTML)
+            |> render("pin_user_login.html")
+        end
         |> halt()
     end
   end

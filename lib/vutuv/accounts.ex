@@ -261,8 +261,8 @@ defmodule Vutuv.Accounts do
   belongs to an account; an attacker who guesses an unknown address gets
   the identical PIN screen but never receives a PIN.
   """
-  def login_by_email(conn, email) do
-    advance_to_pin_screen(conn, email, &send_login_pin/2)
+  def login_by_email(conn, email, flow \\ :login) do
+    advance_to_pin_screen(conn, email, &send_login_pin/2, flow)
   end
 
   @doc """
@@ -276,19 +276,19 @@ defmodule Vutuv.Accounts do
   sent, so the notice carries nothing a non-owner could act on.
   """
   def notify_registration_attempt(conn, email) do
-    advance_to_pin_screen(conn, email, &send_registration_attempt_notice/2)
+    advance_to_pin_screen(conn, email, &send_registration_attempt_notice/2, :registration)
   end
 
   # The shared, enumeration-safe step 1 behind both flows above: look the
   # address up, hand a found account to `notify` (a login PIN, or the
   # registration-attempt notice), and advance to the PIN screen the same way
   # whether or not it was found — the response never depends on existence.
-  defp advance_to_pin_screen(conn, email, notify) do
+  defp advance_to_pin_screen(conn, email, notify, flow) do
     email = String.downcase(email)
 
     if user = user_by_email(email), do: notify.(user, email)
 
-    {:ok, put_pin_cookie(reset_login_session(conn), email)}
+    {:ok, put_pin_cookie(reset_login_session(conn), email, flow)}
   end
 
   # The account owning `email` (case-insensitive), or nil. The one email->user
@@ -438,8 +438,16 @@ defmodule Vutuv.Accounts do
   # the email step). Both resolve to the same `secret_key_base`.
   @token_context VutuvWeb.Endpoint
 
-  defp put_pin_cookie(conn, email) do
-    payload = Phoenix.Token.sign(@token_context, pin_cookie_salt(), email)
+  # The payload carries the flow beside the address, so a visitor who opens "/"
+  # while a PIN is in flight gets the screen belonging to the flow they are in
+  # rather than always the login one. It must be signed rather than derived at
+  # read time: deciding it from "does this address have an unconfirmed account"
+  # would answer that question to anyone who types someone else's address, which
+  # is the enumeration oracle the whole flow is built to avoid. Both registration
+  # branches (fresh address and already-taken address) pass :registration, so the
+  # cookie stays byte-indistinguishable between them.
+  defp put_pin_cookie(conn, email, flow) do
+    payload = Phoenix.Token.sign(@token_context, pin_cookie_salt(), {email, flow})
 
     conn
     |> Conn.delete_resp_cookie(@pin_cookie, pin_cookie_opts())
@@ -464,16 +472,43 @@ defmodule Vutuv.Accounts do
   Reads and verifies the signed login-identity cookie, returning the email it
   carries or `nil` when the cookie is absent, tampered with, or expired.
   """
-  def read_pin_cookie(%{cookies: %{@pin_cookie => payload}}) do
-    case Phoenix.Token.verify(@token_context, pin_cookie_salt(), payload,
-           max_age: @pin_cookie_max_age
-         ) do
-      {:ok, email} -> email
-      _ -> nil
+  def read_pin_cookie(conn) do
+    case read_pin_identity(conn) do
+      {email, _flow} -> email
+      nil -> nil
     end
   end
 
-  def read_pin_cookie(_conn), do: nil
+  @doc """
+  The flow the pending identity belongs to: `:registration` or `:login`.
+
+  `:login` is also the answer for a cookie minted before the flow was recorded,
+  which is the shape this must keep accepting for as long as one of those can
+  still be in a browser (`@pin_cookie_max_age`).
+  """
+  def read_pin_flow(conn) do
+    case read_pin_identity(conn) do
+      {_email, flow} -> flow
+      nil -> nil
+    end
+  end
+
+  defp read_pin_identity(%{cookies: %{@pin_cookie => payload}}) do
+    case Phoenix.Token.verify(@token_context, pin_cookie_salt(), payload,
+           max_age: @pin_cookie_max_age
+         ) do
+      {:ok, {email, flow}} when is_binary(email) and flow in [:login, :registration] ->
+        {email, flow}
+
+      {:ok, email} when is_binary(email) ->
+        {email, :login}
+
+      _ ->
+        nil
+    end
+  end
+
+  defp read_pin_identity(_conn), do: nil
 
   @doc "Drops the login-identity cookie (after a successful login or lockout)."
   def delete_pin_cookie(conn) do

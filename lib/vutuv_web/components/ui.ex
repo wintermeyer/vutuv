@@ -647,12 +647,26 @@ defmodule VutuvWeb.UI do
           </button>
         </.form>
         <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">&middot;</span>
+        <%!-- The same action either way: it drops the pending-identity cookie,
+              which is what frees the landing page from the PIN screen. Only the
+              label differs, because what the member is leaving differs. At
+              registration "Use a different email address" describes a step that
+              does not exist there - they gave one address, and what they
+              actually want is out. NOTE the label is honest about the *step*,
+              not about the data: the account row was created before the PIN was
+              sent and outlives this click. Making cancel really undo the
+              registration is deliberately not decided here (Stefan,
+              2026-08-04). --%>
         <.form for={%{}} action={~p"/login/cancel"} method="post" id="cancel-pin-form">
           <button
             type="submit"
             class="font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           >
-            {gettext("Use a different email address")}
+            <%= if @context == :registration do %>
+              {gettext("Cancel registration")}
+            <% else %>
+              {gettext("Use a different email address")}
+            <% end %>
           </button>
         </.form>
       </div>
