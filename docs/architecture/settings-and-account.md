@@ -181,9 +181,14 @@ preselected: an inviter naming how they address someone they know.
 the spelled-out params and in the positional `i=` token alike, because links
 already sitting in inboxes outlive any deploy.
 
-**Open follow-up (expand/contract):** the migration added `salutation` and left
-`gender` in place so the previous release kept working during the blue/green
-switch. Nothing reads `gender` any more, so a later deploy should drop it.
+**Expand/contract, both halves shipped:** the first migration added
+`salutation` and left `gender` in place so the previous release kept working
+during the blue/green switch; a second one dropped the column once v7.229.0 was
+serving. Two references to the old word survive on purpose and are not leftovers:
+`AccountEventText.field_label("gender")`, because the account-activity log is
+append-only and its old rows still name that field, and the legacy `gender`
+parameter in `Invitations.prefill_from_params/1`, because invitation links live
+in inboxes far longer than a deploy.
 
 ## New-member onboarding
 
