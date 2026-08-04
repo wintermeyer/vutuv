@@ -162,6 +162,10 @@ defmodule VutuvWeb.AccountEventText do
   def field_label("headline"), do: gettext("Tagline")
   def field_label("name_pronunciation"), do: gettext("Name pronunciation")
   def field_label("birthdate"), do: gettext("Date of birth")
+  def field_label("salutation"), do: gettext("Salutation")
+  # Kept for events recorded before the gender field became a salutation
+  # preference: the activity log is append-only, so its old rows still name
+  # the old field and must keep rendering as something a member can read.
   def field_label("gender"), do: gettext("Gender")
   def field_label("avatar"), do: gettext("Photo")
   def field_label("cover_photo"), do: gettext("Cover picture")

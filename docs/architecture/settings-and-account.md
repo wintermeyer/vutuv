@@ -145,6 +145,46 @@ path dedupes the same way, so preview and outcome always agree. The public tag
 page's "Add this tag" button still POSTs to the dead
 `UserTagController.create`, which now always redirects.
 
+## Salutation (`users.salutation`)
+
+**How the member wants to be addressed, not what they are.** The column is
+`"ms"` / `"mr"` / NULL, where NULL means "no salutation" and is a first-class
+third answer rather than a missing value. Values are locale-neutral because the
+label is not: `User.salutation_label/1` renders them "Frau" / "Herr" in German
+and "Ms." / "Mr." in English, and every form and email reads the wording from
+there.
+
+It replaced a `gender` column offering männlich / weiblich / divers, which was
+the most complained-about field on the sign-up form. Nothing ever needed a
+gender: the **only** consumer was and is the German email salutation, so the
+field now says what it is for. Three rules came out of that and are worth
+keeping:
+
+* **Nothing is preselected at sign-up.** The old radio group defaulted to
+  "männlich", so every woman signing up had to correct an assumption about
+  herself before typing her name. `PageController.index/2` leaves the group
+  unset and `page_controller_test` guards it. The **profile editor** does show
+  the stored value, blank option included — it reports rather than asks.
+* **Declining costs nothing.** `UserHelpers.email_greeting/1` answers "Liebe
+  Frau Meier" / "Lieber Herr Meier" / "Hallo Max Meier"; all three are real
+  salutations. A neutral branch that read as a downgrade would put pressure back
+  on the choice. (The predecessor dropped the name and opened with a bare
+  "Guten Morgen".) The time-of-day opener that branch used to carry is gone.
+* **It is never public.** No profile card, no agent format, no CV row, and it is
+  not on `User.@identity_fields`, so changing it cannot cost a member their
+  verified badge. `agent_docs_drift_test` asserts the whole vocabulary stays off
+  every public format.
+
+Invitation links are the one place a salutation legitimately arrives
+preselected: an inviter naming how they address someone they know.
+`Invitations.prefill_from_params/1` also translates the old `gender` words, in
+the spelled-out params and in the positional `i=` token alike, because links
+already sitting in inboxes outlive any deploy.
+
+**Open follow-up (expand/contract):** the migration added `salutation` and left
+`gender` in place so the previous release kept working during the blue/green
+switch. Nothing reads `gender` any more, so a later deploy should drop it.
+
 ## New-member onboarding
 
 Sign-up requires **at least three distinct tags** (tags are how members are
@@ -323,8 +363,8 @@ own download. The owner also finds a link to it from their data page
 **`/:slug/cv` is an interactive builder** (`VutuvWeb.CVLive`, embedded by
 `VutuvWeb.CVController.show` via `live_render`, the profile's pattern). The
 left column is the CV as an include/exclude checklist — every identity field
-(name, photo, tagline, email, phone, address, profile link, date of birth,
-gender), every section and every single entry has a toggle, plus an
+(name, photo, tagline, email, phone, address, profile link, date of birth),
+every section and every single entry has a toggle, plus an
 **Anonymize** preset that hides the name, photo, contact details, personal
 details and social media accounts in one click. The right column is the
 download panel. So a recruiter can drop sections, tailor the CV to a role, or
@@ -342,7 +382,7 @@ categories (university, apprenticeship, school — collapsed to one "Education"
 section for the common degrees-only member, like the profile), tags, spoken
 languages (#865), certificates & licenses (#859), links, social media
 accounts, the member's **first** email / phone number / address as contact
-details, and the personal details (date of birth, gender). Whenever a new
+details, and the personal details (date of birth). Whenever a new
 profile data section ships, add it here too.
 
 One renderer per format, all dependency-free (nothing for an air-gapped

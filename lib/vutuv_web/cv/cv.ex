@@ -19,8 +19,7 @@ defmodule VutuvWeb.CV do
   those keys and returns the trimmed map the renderers consume:
 
     * identity fields — `"name"`, `"photo"`, `"headline"`, `"email"`,
-      `"phone"`, `"address"`, `"url"` (the profile link), `"birthdate"` and
-      `"gender"` (the personal details)
+      `"phone"`, `"address"`, `"url"` (the profile link) and `"birthdate"`
     * whole sections — a work/education category key (`"employment"`,
       `"self_employed"`, `"internship"`, `"volunteer"`, `"other"`,
       `"university"`, `"apprenticeship"`, `"school"`, or `"education"` when
@@ -59,9 +58,15 @@ defmodule VutuvWeb.CV do
 
   # The identity fields, in header order, as `{hide-key, cv-map field}`. The
   # builder renders a toggle per field that has a value; the "Anonymize"
-  # preset hides all but the headline (a job title, not a name). Date of birth
-  # and gender are personal details that ride here too, so a member can drop
-  # them (and the Anonymize preset does, since they are bias-prone).
+  # preset hides all but the headline (a job title, not a name). The date of
+  # birth is a personal detail that rides here too, so a member can drop it
+  # (and the Anonymize preset does, since it is bias-prone).
+  #
+  # There is no gender row any more. The CV printed one as long as the account
+  # carried a `gender` field, and what replaced that field is a salutation
+  # preference — how the member wants to be greeted in an email. A Lebenslauf
+  # does not state how to open a letter to its author, so the row went with the
+  # field rather than being renamed into something no CV has ever had.
   @identity_fields [
     {"name", :name},
     {"photo", :photo},
@@ -70,11 +75,10 @@ defmodule VutuvWeb.CV do
     {"phone", :phone},
     {"address", :address_lines},
     {"url", :profile_url},
-    {"birthdate", :birthdate},
-    {"gender", :gender}
+    {"birthdate", :birthdate}
   ]
 
-  @anonymize ~w(name photo email phone address url birthdate gender social_media)
+  @anonymize ~w(name photo email phone address url birthdate social_media)
 
   @doc "The identity fields as `{key, cv-field}`, in header order."
   def identity_fields, do: @identity_fields
@@ -103,7 +107,6 @@ defmodule VutuvWeb.CV do
       phone: phone_display(first_value(user.phone_numbers)),
       address_lines: address_lines(List.first(user.addresses)),
       birthdate: birthdate(user),
-      gender: gender(user),
       links: Enum.map(user.urls, &%{id: &1.id, label: presence(&1.description), url: &1.value}),
       social_media: Enum.map(user.social_media_accounts, &social_media_entry/1),
       sections: sections(user),
@@ -131,7 +134,6 @@ defmodule VutuvWeb.CV do
         phone: hidden(cv.phone, "phone", hide),
         profile_url: hidden(cv.profile_url, "url", hide),
         birthdate: hidden(cv.birthdate, "birthdate", hide),
-        gender: hidden(cv.gender, "gender", hide),
         address_lines: if(MapSet.member?(hide, "address"), do: [], else: cv.address_lines),
         sections: filter_sections(cv.sections, hide),
         skills: filter_by_id(cv.skills, "tags", hide),
@@ -415,13 +417,6 @@ defmodule VutuvWeb.CV do
       _age_or_none -> nil
     end
   end
-
-  # The gender label, following the profile's rule: shown only for a concrete
-  # value, hidden for the unset default ("other"/nil).
-  defp gender(%{gender: value}) when is_binary(value) and value != "other",
-    do: User.gender_gettext(value)
-
-  defp gender(_user), do: nil
 
   defp first_value([%{value: value} | _rest]), do: presence(value)
   defp first_value(_none), do: nil

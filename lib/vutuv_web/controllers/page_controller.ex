@@ -13,19 +13,27 @@ defmodule VutuvWeb.PageController do
   def index(conn, params) do
     # An invitation link lands here with the invited person's data in the query:
     # either the compact `i=` token or, for older links still in inboxes, the
-    # spelled-out first_name/last_name/gender/tags/email params (see
+    # spelled-out first_name/last_name/salutation/tags/email params (see
     # Vutuv.Invitations.prefill_from_params/1). Stamp the invitation's first visit
     # (a no-op for a plain visitor or an unknown address) and prefill the sign-up
     # form with whatever the inviter entered.
     prefill = Vutuv.Invitations.prefill_from_params(params)
     Vutuv.Invitations.record_visit(prefill["email"])
 
-    # Sign-up form defaults: preselect "männlich" (gender), pre-check "show on
-    # profile" (public?: true) and preselect the "Personal" email type (most
-    # people sign up with their private address). These prime
-    # the form's controls only - the User/Email schemas keep their own defaults
-    # for every other code path, so an address created without an explicit
-    # choice still stays private.
+    # Sign-up form defaults: pre-check "show on profile" (public?: true) and
+    # preselect the "Personal" email type (most people sign up with their
+    # private address). These prime the form's controls only - the User/Email
+    # schemas keep their own defaults for every other code path, so an address
+    # created without an explicit choice still stays private.
+    #
+    # The salutation is the one control deliberately left UNSET, and it is the
+    # only field on this form where that is a decision rather than an omission.
+    # It used to be a `gender` radio group preselected to "männlich", so every
+    # woman signing up had to correct an assumption about herself before typing
+    # her name, and members wrote in about it. Nothing may fill it in for them:
+    # an unset group asks, a preselected one assumes. An invitation link may
+    # still carry a salutation the inviter chose, since that is a person naming
+    # how they address someone they know, not the form guessing.
     #
     # The Fediverse box is pre-checked the same way: most people who join want
     # the connection to Mastodon and friends, and sign-up is the one moment
@@ -42,7 +50,7 @@ defmodule VutuvWeb.PageController do
     # somebody reading it, and the box's own text says so.
     changeset =
       %User{
-        gender: prefill_gender(prefill["gender"]),
+        salutation: prefill_salutation(prefill["salutation"]),
         first_name: SearchText.normalize_search(prefill["first_name"]),
         last_name: SearchText.normalize_search(prefill["last_name"]),
         tag_list: SearchText.normalize_search(prefill["tags"]),
@@ -434,8 +442,10 @@ defmodule VutuvWeb.PageController do
     end
   end
 
-  # Only honor a prefilled gender the sign-up form actually offers; otherwise
-  # keep the form's own "male" default.
-  defp prefill_gender(gender) when gender in ["male", "female", "other"], do: gender
-  defp prefill_gender(_), do: "male"
+  # Only honor a prefilled salutation the sign-up form actually offers.
+  # Everything else, including an absent one, leaves the radio group with
+  # nothing selected — see the comment on the changeset above.
+  defp prefill_salutation(salutation) do
+    if salutation in User.salutations(), do: salutation
+  end
 end

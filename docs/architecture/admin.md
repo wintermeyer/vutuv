@@ -71,7 +71,7 @@ and badges its size).
 
 Verification is **auto-revoked** if the member later edits any identity detail
 the badge vouches for (any name part — first/middle/last name, nickname or
-honorific title — plus gender or birthday): the admin's ID check was made
+honorific title — plus the birthday): the admin's ID check was made
 against exactly those details, so `User.changeset/2` clears `identity_verified?`
 whenever one changes (the security chokepoint, so it bites on the edit form
 **and** the `/api/2.0` `PATCH /me`), and the profile editor shows a friendly

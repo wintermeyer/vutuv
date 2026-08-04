@@ -14,7 +14,7 @@ defmodule VutuvWeb.ExportControllerTest do
     "emails" => %{"0" => %{"value" => "exporter@example.com"}},
     "first_name" => "Erika",
     "last_name" => "Beispiel",
-    "gender" => "female",
+    "salutation" => "ms",
     "tag_list" => @registration_tags
   }
 

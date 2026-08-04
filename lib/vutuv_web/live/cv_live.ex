@@ -151,7 +151,6 @@ defmodule VutuvWeb.CVLive do
   defp identity_label("address"), do: gettext("Address")
   defp identity_label("url"), do: gettext("Profile link")
   defp identity_label("birthdate"), do: gettext("Date of birth")
-  defp identity_label("gender"), do: gettext("Gender")
 
   # A short preview of the field's value beside its toggle (the photo has no
   # text, so its label carries the meaning).

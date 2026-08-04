@@ -106,7 +106,7 @@ defmodule VutuvWeb.CV.Odt do
 
   defp details(cv) do
     line =
-      [detail(gettext("Date of birth"), cv.birthdate), detail(gettext("Gender"), cv.gender)]
+      [detail(gettext("Date of birth"), cv.birthdate)]
       |> Enum.filter(& &1)
       |> Enum.join(" | ")
 

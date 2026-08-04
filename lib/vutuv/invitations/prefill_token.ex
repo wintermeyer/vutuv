@@ -2,7 +2,7 @@ defmodule Vutuv.Invitations.PrefillToken do
   @moduledoc """
   Compact, URL-safe encoding of the sign-up prefill an inviter enters.
 
-  The invitation link carries the invited person's gender, first/last name,
+  The invitation link carries the invited person's salutation, first/last name,
   email and tags so the landing-page sign-up form arrives prefilled (see
   `Vutuv.Invitations` and `VutuvWeb.PageController.index/2`). Spelling the fields
   out as `?first_name=…&last_name=…&email=…&tags=…` is long — the parameter names
@@ -37,7 +37,13 @@ defmodule Vutuv.Invitations.PrefillToken do
 
   # The value order inside the token. Changing it is a breaking change to the
   # format; bump @version and keep decoding the old layout if that ever happens.
-  @fields ~w(gender first_name last_name email tags)
+  #
+  # The first slot was called `gender` and held "male"/"female"/"other" until
+  # that field became a salutation preference. The slot itself is unchanged, so
+  # tokens already sitting in inboxes still decode; it is
+  # `Vutuv.Invitations.prefill_from_params/1` that translates the old words,
+  # which is why this needed no @version bump.
+  @fields ~w(salutation first_name last_name email tags)
   @separator "\x1f"
   @version 1
   @param "i"
@@ -65,7 +71,7 @@ defmodule Vutuv.Invitations.PrefillToken do
   end
 
   @doc """
-  Encode `prefill` (a map with string keys `gender` / `first_name` / `last_name`
+  Encode `prefill` (a map with string keys `salutation` / `first_name` / `last_name`
   / `email` / `tags`) into a base64url token, or `nil` when every field is blank.
   """
   def encode(prefill) when is_map(prefill) do
@@ -87,7 +93,7 @@ defmodule Vutuv.Invitations.PrefillToken do
   for anything that is not a token we produced, so a tampered or truncated link
   degrades to an empty form rather than crashing.
   """
-  # A real token packs only gender/name/email/tags, so it is well under 1 KB.
+  # A real token packs only salutation/name/email/tags, so it is well under 1 KB.
   # The size guard rejects a decompression-bomb `i=` param before inflating it
   # (raw DEFLATE reaches ~1000:1, so a few KB would inflate to megabytes).
   def decode(token) when is_binary(token) and token != "" and byte_size(token) <= 1024 do

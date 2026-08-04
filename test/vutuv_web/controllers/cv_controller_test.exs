@@ -16,7 +16,7 @@ defmodule VutuvWeb.CVControllerTest do
     "emails" => %{"0" => %{"value" => "cv-owner@example.com"}},
     "first_name" => "Erika",
     "last_name" => "Beispiel",
-    "gender" => "female",
+    "salutation" => "ms",
     "tag_list" => @registration_tags
   }
 

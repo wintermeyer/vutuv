@@ -121,11 +121,6 @@ lands here). --%>
     <.card>
       <.section_title>{gettext("Your name")}</.section_title>
       <div class="mt-4 grid gap-5 sm:grid-cols-2">
-        <div class="sm:col-span-2">
-          <%= label f, :gender, gettext("Gender"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= select f, :gender, [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}], prompt: gettext("Choose a gender"), class: input_class() %>
-          <%= error_tag f, :gender %>
-        </div>
         <div>
           <%= label f, :first_name, gettext("First Name"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
           <%= text_input f, :first_name, class: input_class() %>
@@ -155,6 +150,31 @@ lands here). --%>
           <%= label f, :honorific_suffix, gettext("Suffix"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
           <%= text_input f, :honorific_suffix, class: input_class(), placeholder: gettext("e.g. Jr. or PhD") %>
           <%= error_tag f, :honorific_suffix %>
+        </div>
+        <%!-- How the member wants to be addressed. It belongs beside the name
+        without being part of it, so it sits full width below the name inputs,
+        in the same order the sign-up form asks. Unlike that form this one
+        DOES show a selection for a member who has none: there the blank
+        option must not be preselected because the form is asking, here it is
+        reporting what is stored, and "No salutation" is the honest reading of
+        an empty column. Plain `radio_button/4` gets that for free, since
+        `html_escape(nil)` matches the blank option's value. --%>
+        <div class="sm:col-span-2">
+          <span class="block text-sm font-medium text-slate-900 dark:text-white">
+            {gettext("Salutation")}
+          </span>
+          <div class="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+            <%= for {slabel, svalue} <- salutation_options() do %>
+              <label class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200">
+                <%= radio_button f, :salutation, svalue, class: "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+                <span>{slabel}</span>
+              </label>
+            <% end %>
+          </div>
+          <p :if={!f.errors[:salutation]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext("Only used to address you in emails.")}
+          </p>
+          <%= error_tag f, :salutation %>
         </div>
         <%!-- How the name is said out loud (issue #1112). Full width, last in
         the card: it belongs to the name, but it is the one field almost nobody

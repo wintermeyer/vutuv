@@ -3510,7 +3510,7 @@ defmodule VutuvWeb.UI do
        [
          row(:basics, gettext("Basics & photos"), ~p"/settings/profile",
            hint: gettext("Name, photo, cover picture, tagline"),
-           terms: gettext("avatar portrait picture image birthday gender about me")
+           terms: gettext("avatar portrait picture image birthday salutation about me")
          ),
          row(:username, gettext("Username"), ~p"/settings/username",
            hint: "@" <> to_string(user.username),

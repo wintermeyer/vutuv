@@ -634,14 +634,14 @@ defmodule Vutuv.Notifications.Emailer do
   end
 
   # The invited person's salutation. Reuses the app-wide greeting convention
-  # (VutuvWeb.UserHelpers.email_greeting/1) so a known gender + surname yields a
-  # personal "Guten Tag Frau Musterfrau" / "Dear …"; without them it degrades to
-  # the plain greeting. Built from a throwaway struct — the recipient has no
-  # account.
+  # (VutuvWeb.UserHelpers.email_greeting/1) so a salutation the inviter chose
+  # plus a surname yields "Liebe Frau Musterfrau" / "Dear …"; without them it
+  # degrades to the neutral greeting, which names the person just as warmly.
+  # Built from a throwaway struct — the recipient has no account.
   defp invitation_greeting(locale, prefill) do
     VutuvWeb.UserHelpers.email_greeting(%Vutuv.Accounts.User{
       locale: locale,
-      gender: prefill["gender"],
+      salutation: prefill["salutation"],
       first_name: prefill["first_name"],
       last_name: prefill["last_name"]
     })

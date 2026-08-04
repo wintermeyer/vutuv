@@ -135,7 +135,6 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       headline_markdown: user.headline,
       work_info: work_info,
       current_position: current_position(job),
-      gender: public_gender(user),
       member_since: NaiveDateTime.to_date(user.inserted_at),
       avatar_url: avatar_url(user),
       counts: profile_counts(user, viewer),
@@ -267,10 +266,6 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       }
     end
   end
-
-  # The page hides "other" (the unspecified default); the docs do the same.
-  defp public_gender(%{gender: gender}) when gender in [nil, "other"], do: nil
-  defp public_gender(%{gender: gender}), do: gender
 
   @doc """
   The member's absolute avatar URL, or nil when only the inline-data

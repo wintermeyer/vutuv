@@ -13,7 +13,7 @@ defmodule VutuvWeb.UserControllerTest do
   @invalid_attrs %{
     "emails" => %{"0" => %{"value" => nil}},
     "first_name" => nil,
-    "gender" => "male",
+    "salutation" => "mr",
     "last_name" => nil
   }
 
@@ -230,7 +230,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "lists the user's full profile information to visitors", %{conn: conn} do
     user =
       insert_activated_user(
-        gender: "female",
+        salutation: "ms",
         birthdate: ~D[1990-04-15],
         headline: "Hello world"
       )
@@ -262,11 +262,15 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ ~s(id="profile-social-media")
     assert html =~ "octocat"
 
-    # General info (gender, birthday in the en format, and the derived age)
+    # General info (birthday in the en format, and the derived age)
     assert html =~ ~s(id="profile-about")
-    assert html =~ "Female"
     assert html =~ "04/15/1990"
     assert html =~ "#{VutuvWeb.UserHelpers.age(user)} years old"
+
+    # The salutation is a mail preference, not a public fact: it never reaches
+    # the profile, unlike the "Geschlecht" line that used to stand here.
+    refute html =~ "Salutation"
+    refute html =~ ~s(>Ms.<)
 
     # Follower / following previews
     assert html =~ ~s(id="profile-followers")
@@ -300,7 +304,7 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   test "merges e-mail and phone into one Contact card, ordered about-first", %{conn: conn} do
-    user = insert_activated_user(gender: "female", birthdate: ~D[1990-04-15])
+    user = insert_activated_user(salutation: "ms", birthdate: ~D[1990-04-15])
     insert(:email, user: user, value: "public.contact@example.com")
     insert(:phone_number, user: user, value: "+49 30 5551234")
     insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")

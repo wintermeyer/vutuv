@@ -442,7 +442,6 @@ defmodule VutuvWeb.AgentDocs.Text do
       "#{gettext("Member since")}: #{doc.member_since}",
       fediverse_fact(doc[:fediverse]),
       count_facts(doc.counts),
-      doc.gender && "#{gettext("Gender")}: #{User.gender_gettext(doc.gender)}",
       birthday_facts(doc)
     ]
     |> List.flatten()

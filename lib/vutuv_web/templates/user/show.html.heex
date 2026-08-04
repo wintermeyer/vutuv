@@ -1072,32 +1072,32 @@ the resulting ~200px rail width. --%>
       posts_by_id={@suggested_posts_by_id}
     />
 
-    <%!-- General info leads the rail: who the person is (gender + birthday).
-    The headline already lives in the header. The birthday obeys the member's
+    <%!-- General info leads the rail: the birthday, which obeys the member's
     chosen granularity (birthdate_mode/1): full date + age, age only, day and
     month without the year, or hidden — the same gate the agent formats and the
-    public CV honour. --%>
+    public CV honour. The headline already lives in the header.
+    The card used to open with a "Geschlecht" line, which is gone along with the
+    field behind it: what replaced it is a salutation preference, i.e. how the
+    member wants to be greeted in an email, and that is no more a public fact
+    about them than which of our emails they have switched off. The old line was
+    inconsistent about it too — it rendered nothing at all for the third option,
+    so a member who picked "divers" was offered a choice the profile then
+    refused to show. --%>
     <% birthday_mode = birthdate_mode(@user) %>
-    <% has_gender = @user.gender && @user.gender != "other" %>
-    <% has_general_info = birthday_mode != :none || has_gender %>
+    <% has_general_info = birthday_mode != :none %>
     <.card :if={has_general_info || @as_owner?} id="profile-about">
       <%!-- General Info edits the profile form (no list). While empty it shows
-      the dashed "add personal details" onboarding tile; once gender/birthday are
+      the dashed "add personal details" onboarding tile; once the birthday is
       set it is a clean showcase with a quiet "Ändern" footer to /edit. --%>
       <.section_header title={gettext("General Info")} />
       <.empty_add :if={@as_owner? && !has_general_info} href={~p"/settings/profile"}>
         {gettext("Add personal details")}
       </.empty_add>
-      <%!-- Icon rows: one line per datum (person = gender, cake = birthday); the
-      label is screen-reader-only since the icon carries it. The dd needs `my-0`
+      <%!-- Icon rows: one line per datum (cake = birthday); the label is
+      screen-reader-only since the icon carries it. The dd needs `my-0`
       to cancel the legacy global `dl dd { margin: 10px 0 }` in components.css,
       which otherwise pads each row; a tight `gap-1.5` then sets the row rhythm. --%>
       <dl :if={has_general_info} class="flex flex-col gap-1.5 text-sm">
-        <div :if={has_gender} class="flex items-center gap-2.5">
-          <.detail_icon name="user" class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
-          <dt class="sr-only">{gettext("Gender")}</dt>
-          <dd class="my-0 font-medium text-slate-800 dark:text-slate-100">{Vutuv.Accounts.User.gender_gettext(@user.gender)}</dd>
-        </div>
         <div :if={birthday_mode != :none} class="flex items-center gap-2.5">
           <.detail_icon name="cake" class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
           <dt class="sr-only">{gettext("Birthday")}</dt>

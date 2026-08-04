@@ -133,7 +133,7 @@ defmodule Vutuv.Invitations do
   # the landing page reads it back with prefill_from_params/1 below.
   defp prefill_params(%InvitationRequest{} = request) do
     %{
-      "gender" => request.gender,
+      "salutation" => request.salutation,
       "first_name" => request.first_name,
       "last_name" => request.last_name,
       "tags" => request.tag_list,
@@ -146,9 +146,9 @@ defmodule Vutuv.Invitations do
 
   Reads the compact `i=` invitation token (`Vutuv.Invitations.PrefillToken`)
   when present, and otherwise falls back to the spelled-out
-  `first_name` / `last_name` / `gender` / `tags` / `email` params — the layout
-  older invitation links still sitting in inboxes use. Returns a map with those
-  string keys; missing fields are simply absent.
+  `first_name` / `last_name` / `salutation` / `tags` / `email` params — the
+  layout older invitation links still sitting in inboxes use. Returns a map with
+  those string keys; missing fields are simply absent.
   """
   def prefill_from_params(params) when is_map(params) do
     case params[PrefillToken.param()] do
@@ -156,8 +156,30 @@ defmodule Vutuv.Invitations do
         PrefillToken.decode(token)
 
       _ ->
-        Map.take(params, ~w(gender first_name last_name email tags))
+        Map.take(params, ~w(salutation gender first_name last_name email tags))
     end
+    |> normalize_salutation()
+  end
+
+  # An invitation link outlives a deploy by months: it sits in an inbox, and the
+  # slot that now carries a salutation used to carry a gender word, in the token
+  # and in the spelled-out params alike. Both spellings therefore have to arrive
+  # as something the sign-up form can preselect, or every invitation already sent
+  # would quietly lose the salutation its sender chose. "other" carried no
+  # salutation to begin with and correctly maps to none.
+  defp normalize_salutation(prefill) do
+    prefill
+    |> Map.delete("gender")
+    |> Map.put("salutation", salutation_value(prefill["salutation"] || prefill["gender"]))
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
+  end
+
+  defp salutation_value("male"), do: "mr"
+  defp salutation_value("female"), do: "ms"
+
+  defp salutation_value(value) do
+    if value in User.salutations(), do: value
   end
 
   @doc """

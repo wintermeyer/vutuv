@@ -34,7 +34,11 @@
         sections instead of one long, undifferentiated list. Shared class/option
         bindings keep the repeated radio groups and consent checkboxes
         consistent. --%>
-  <% gender_options = [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}] %>
+  <%!-- Whether the form has been submitted at least once. It is read off the
+        changeset rather than the form, so it can be bound out here with the
+        other shared bindings; the salutation radios below explain what it
+        is for. --%>
+  <% salutation_submitted? = @changeset.action != nil %>
   <%!-- Order and default come from the schema (Vutuv.Accounts.Email.email_types/0),
         so the form can never offer a value the changeset rejects: Privat, Arbeit,
         Andere - with Privat preselected by the controller. --%>
@@ -54,26 +58,15 @@
   >
     <.form_error changeset={@changeset} />
 
-    <%!-- Group 1: who you are. A radio group, not a dropdown: all options are
-          visible and "männlich" is preselected (set on the changeset by the
-          controller), so a normal user is not left on an empty
-          "Geschlecht auswählen" prompt. --%>
+    <%!-- Group 1: who you are. The name comes first and takes the autofocus:
+          the salutation question below it reads as "and how should we address
+          you" only once there is a name to address, and asking it first (which
+          is where the old gender radios sat) made it a gate in front of the
+          form rather than a detail within it. --%>
     <div class="space-y-4">
-      <fieldset>
-        <legend class={legend_class}>{gettext("Gender")}</legend>
-        <div class="flex flex-wrap gap-x-5 gap-y-2">
-          <%= for {glabel, gvalue} <- gender_options do %>
-            <label class={radio_label_class}>
-              <%= radio_button f, :gender, gvalue, class: radio_class, autofocus: gvalue == "male" %>
-              <span>{glabel}</span>
-            </label>
-          <% end %>
-        </div>
-        <%= error_tag f, :gender %>
-      </fieldset>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <%= text_input f, :first_name, class: input_class(f, :first_name), placeholder: gettext("Enter your first name"), "aria-invalid": f.errors[:first_name] && "true" %>
+          <%= text_input f, :first_name, class: input_class(f, :first_name), placeholder: gettext("Enter your first name"), autofocus: true, "aria-invalid": f.errors[:first_name] && "true" %>
           <%= error_tag f, :first_name %>
         </div>
         <div>
@@ -81,6 +74,36 @@
           <%= error_tag f, :last_name %>
         </div>
       </div>
+      <%!-- A radio group, not a dropdown, so all three answers are visible at
+            once and "No salutation" cannot hide behind a closed select.
+
+            The checked state is computed here rather than left to
+            `radio_button/4`'s own detection, which compares the field value to
+            the option value — and `html_escape(nil)` equals the blank option's
+            "", so a fresh form would arrive with "No salutation" already
+            selected. Nothing may be preselected (`PageController.index/2` says
+            why), so an option is checked when it matches, and the blank one
+            additionally only once the form has been submitted, which is what
+            keeps a failed submit from silently dropping the member's answer. --%>
+      <% salutation_value = to_string(f[:salutation].value) %>
+      <fieldset id="signup-salutation">
+        <legend class={legend_class}>
+          {gettext("Salutation")}
+          <span class="font-normal text-slate-600 dark:text-slate-400">{gettext("(optional)")}</span>
+        </legend>
+        <div class="flex flex-wrap gap-x-5 gap-y-2">
+          <%= for {slabel, svalue} <- salutation_options() do %>
+            <label class={radio_label_class}>
+              <%= radio_button f, :salutation, svalue, class: radio_class, checked: salutation_value == svalue and (svalue != "" or salutation_submitted?) %>
+              <span>{slabel}</span>
+            </label>
+          <% end %>
+        </div>
+        <%= error_tag f, :salutation %>
+        <p :if={!f.errors[:salutation]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          {gettext("Only used to address you in emails.")}
+        </p>
+      </fieldset>
       <div>
         <.tag_input
           id="signup-tags"

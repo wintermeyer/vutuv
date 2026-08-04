@@ -66,7 +66,7 @@ defmodule VutuvWeb.CV.Latex do
       end
 
     details =
-      [detail(gettext("Date of birth"), cv.birthdate), detail(gettext("Gender"), cv.gender)]
+      [detail(gettext("Date of birth"), cv.birthdate)]
       |> Enum.filter(& &1)
       |> Enum.join(" \\textbar{} ")
 

@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.228.2",
+      version: "7.229.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,

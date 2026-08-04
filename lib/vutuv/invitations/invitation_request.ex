@@ -2,7 +2,7 @@ defmodule Vutuv.Invitations.InvitationRequest do
   @moduledoc """
   The invite form's own schema (not persisted). It carries everything the
   inviter fills in: the sign-up fields to prefill on the invited person's
-  registration form (gender, name, tags, email), the optional personalized
+  registration form (salutation, name, tags, email), the optional personalized
   message that goes into the email body, whether to auto-follow once they
   register, and the language of the invitation.
 
@@ -16,17 +16,18 @@ defmodule Vutuv.Invitations.InvitationRequest do
 
   import Ecto.Changeset
 
+  alias Vutuv.Accounts.User
+
   # Match the sign-up form's own caps so a prefilled value can't be one the
   # registration changeset would then reject.
   @max_name 50
   @max_email 254
   @max_message 2_000
-  @genders ~w(male female other)
   @locales ~w(en de)
 
   @primary_key false
   embedded_schema do
-    field(:gender, :string)
+    field(:salutation, :string)
     field(:first_name, :string)
     field(:last_name, :string)
     field(:tag_list, :string)
@@ -39,7 +40,7 @@ defmodule Vutuv.Invitations.InvitationRequest do
   def changeset(request, attrs) do
     request
     |> cast(attrs, [
-      :gender,
+      :salutation,
       :first_name,
       :last_name,
       :tag_list,
@@ -60,7 +61,11 @@ defmodule Vutuv.Invitations.InvitationRequest do
     |> validate_length(:first_name, max: @max_name)
     |> validate_length(:last_name, max: @max_name)
     |> validate_length(:message, max: @max_message)
-    |> validate_inclusion(:gender, @genders)
+    # The one place a salutation may legitimately arrive preselected: an
+    # inviter naming how they address someone they know, rather than the
+    # sign-up form guessing at a stranger. The invited person can still
+    # change it before they register.
+    |> validate_inclusion(:salutation, User.salutations())
     |> validate_inclusion(:locale, @locales)
   end
 

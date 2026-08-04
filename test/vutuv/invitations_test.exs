@@ -105,14 +105,15 @@ defmodule Vutuv.InvitationsTest do
       end)
     end
 
-    test "greets a known gender with a personal salutation", %{inviter: inviter} do
+    test "greets a salutation the inviter chose with the classic German form",
+         %{inviter: inviter} do
       assert {:ok, :sent, _} =
                Invitations.deliver_invitation(
                  inviter,
-                 valid_attrs(%{"locale" => "de", "gender" => "female"})
+                 valid_attrs(%{"locale" => "de", "salutation" => "ms"})
                )
 
-      assert_email_sent(fn email -> assert email.text_body =~ "Frau Doe" end)
+      assert_email_sent(fn email -> assert email.text_body =~ "Liebe Frau Doe" end)
 
       assert {:ok, :sent, _} =
                Invitations.deliver_invitation(
@@ -120,11 +121,24 @@ defmodule Vutuv.InvitationsTest do
                  valid_attrs(%{
                    "email" => "herr@example.com",
                    "locale" => "de",
-                   "gender" => "male"
+                   "salutation" => "mr"
                  })
                )
 
-      assert_email_sent(fn email -> assert email.text_body =~ "Herr Doe" end)
+      assert_email_sent(fn email -> assert email.text_body =~ "Lieber Herr Doe" end)
+    end
+
+    test "greets an invitee with no salutation by name, not namelessly",
+         %{inviter: inviter} do
+      # An inviter who does not know how someone is addressed leaves the field
+      # blank, and the invitation must still read like a letter to a person.
+      assert {:ok, :sent, _} =
+               Invitations.deliver_invitation(
+                 inviter,
+                 valid_attrs(%{"locale" => "de", "salutation" => ""})
+               )
+
+      assert_email_sent(fn email -> assert email.text_body =~ "Hallo Jane Doe" end)
     end
 
     test "prints the inviter's profile URL as the visible link, not the name", %{inviter: inviter} do

@@ -75,6 +75,28 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The `{label, value}` options for every salutation control, in the one order
+  they are ever offered: the two addressable salutations from the schema's
+  single source (`User.salutations/0` through `User.salutation_label/1`),
+  followed by the blank-valued "No salutation", which `cast/3` folds back to
+  nil.
+
+  "No salutation" comes **last and is rendered like the other two**, not as a
+  select's leading blank prompt and not as an afterthought below a divider. It
+  is one of three equally valid answers, and the email a member gets for
+  choosing it is exactly as warm as the other two
+  (`email_greeting/1`) — so nothing here may make it look like the option you
+  take when you refuse to answer properly.
+
+  No control preselects anything from this list; see the sign-up form and
+  `VutuvWeb.PageController.index/2`.
+  """
+  def salutation_options do
+    Enum.map(User.salutations(), &{User.salutation_label(&1), &1}) ++
+      [{gettext("No salutation"), ""}]
+  end
+
+  @doc """
   The `{label, value}` pairs for the workplace-preference **checkboxes**: the
   three workplace forms from the schema's single source
   (`User.workplace_type_values/0` through `User.desired_workplace_label/1`, the
@@ -864,36 +886,64 @@ defmodule VutuvWeb.UserHelpers do
 
   def image_kind_label(_kind, _locale), do: "an image"
 
-  def email_greeting(%User{locale: "de", last_name: nil}), do: "#{greeting("de")}"
+  @doc """
+  The line that opens an email to `user`, in that member's own locale.
 
-  def email_greeting(%User{locale: "de", gender: "male", last_name: last_name}) do
-    "#{greeting("de")} Herr #{last_name}"
-  end
+  German gets the classic salutation, driven by the member's `salutation`
+  preference and their surname:
 
-  def email_greeting(%User{locale: "de", gender: "female", last_name: last_name}) do
-    "#{greeting("de")} Frau #{last_name}"
-  end
+      "ms" + surname  ->  "Liebe Frau Meier"
+      "mr" + surname  ->  "Lieber Herr Meier"
+      anything else   ->  "Hallo Max Meier"
 
-  def email_greeting(%User{locale: "de", gender: _}), do: "#{greeting("de")}"
+  **All three are real salutations, and that is the point.** The neutral one is
+  what a member gets for declining to state a salutation, so it must not read as
+  a downgrade, or declining carries a cost and the choice is not free. Its
+  predecessor dropped the name entirely and opened with a bare "Guten Morgen",
+  which is exactly the punishment to avoid. For the same reason the neutral
+  branch also catches "ms"/"mr" without a surname: there is no such thing as
+  "Liebe Frau ", so those fall through to a greeting that works.
 
-  def email_greeting(%User{locale: "en", first_name: nil}), do: "Hi"
+  The time-of-day opener the German branch used to carry ("Guten Morgen" before
+  11, "Guten Abend" after 18) is gone: it competed with the salutation, and
+  "Guten Morgen, liebe Frau Meier" is one greeting too many. Dropping it also
+  takes a wall clock out of a pure formatting function.
 
-  def email_greeting(%User{locale: "en", first_name: first_name}), do: "Hi #{first_name}"
-
-  def email_greeting(_), do: "Hi"
-
-  defp greeting("de") do
-    %{hour: hour} = Vutuv.BerlinTime.now()
-
-    cond do
-      hour in 1..10 -> "Guten Morgen"
-      hour in 11..17 -> "Hallo"
-      hour in 18..23 or hour == 0 -> "Guten Abend"
-      true -> "Hallo"
+  The words are literals rather than gettext calls because this dispatches on
+  `user.locale`, which is the *recipient's* language and not necessarily the
+  Gettext locale of the process building the mail (`Emailer` picks its templates
+  by that same locale). The predecessor hardcoded "Herr" / "Frau" for exactly
+  this reason.
+  """
+  def email_greeting(%User{locale: "de"} = user) do
+    case {user.salutation, present(user.last_name)} do
+      {"ms", surname} when is_binary(surname) -> "Liebe Frau #{surname}"
+      {"mr", surname} when is_binary(surname) -> "Lieber Herr #{surname}"
+      _ -> neutral_greeting("Hallo", user)
     end
   end
 
-  defp greeting(_) do
-    "Hi"
+  def email_greeting(%User{locale: "en"} = user) do
+    case present(user.first_name) do
+      nil -> "Hi"
+      first_name -> "Hi #{first_name}"
+    end
   end
+
+  def email_greeting(_), do: "Hi"
+
+  # The name the neutral salutation greets: given name and surname, no
+  # honorifics. "Hallo Max Meier" rather than "Hallo Max", because the German
+  # UI addresses members as "Sie" throughout and a bare given name undercuts
+  # that; and rather than "Hallo Meier", which is not how anyone is addressed.
+  defp neutral_greeting(word, %User{} = user) do
+    case present(Enum.join(Enum.reject([user.first_name, user.last_name], &blank?/1), " ")) do
+      nil -> word
+      name -> "#{word} #{name}"
+    end
+  end
+
+  defp present(value), do: if(blank?(value), do: nil, else: String.trim(value))
+
+  defp blank?(value), do: is_nil(value) or String.trim(value) == ""
 end

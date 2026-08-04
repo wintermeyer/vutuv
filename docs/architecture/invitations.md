@@ -1,7 +1,7 @@
 # Invitations
 
 Any logged-in member can invite someone who is not yet on this vutuv. They fill
-in what would be that person's sign-up (gender, name, tags, email address), an
+in what would be that person's sign-up (salutation, name, tags, email address), an
 optional personal note and the invitation's language, and choose whether to
 auto-follow the person once they register. vutuv emails a link that opens the
 sign-up form already filled in, so the invited person only has to confirm.
@@ -61,7 +61,7 @@ The email's call-to-action is `https://<host>/?i=<token>` (the host comes from
 is a **compact, URL-safe packing** of the prefill fields — the values in a fixed
 order, DEFLATE-compressed and base64url-encoded by
 `Vutuv.Invitations.PrefillToken`. It replaces the old spelled-out
-`?first_name=…&last_name=…&gender=…&tags=…&email=…` query, which repeated the
+`?first_name=…&last_name=…&salutation=…&tags=…&email=…` query, which repeated the
 parameter names on every link, percent-encoded the values (`@` → `%40`) and
 exposed the invitee's name and address in cleartext in mail logs and browser
 history. For a real invite (which always has a name — the form requires it) the

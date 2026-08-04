@@ -296,7 +296,7 @@ defmodule Vutuv.Export do
       honorific_prefix: user.honorific_prefix,
       honorific_suffix: user.honorific_suffix,
       name_pronunciation: user.name_pronunciation,
-      gender: user.gender,
+      salutation: user.salutation,
       birthdate: user.birthdate,
       headline: user.headline,
       locale: user.locale,

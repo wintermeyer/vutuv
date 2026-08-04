@@ -43,6 +43,34 @@ defmodule VutuvWeb.PageLocaleRenderTest do
     assert html =~ "Mit der Registrierung akzeptieren Sie"
   end
 
+  test "the salutation question is really translated, not fuzzy-filled", %{conn: conn} do
+    # `mix gettext.extract --merge` fills a brand-new msgid with the translation
+    # of whatever existing string it looks similar to, flags it `fuzzy`, and
+    # fails no build — so a German page can ship confident nonsense while every
+    # English assertion stays green. These five strings are the ones this change
+    # added, and short labels like "Frau" are exactly what that matcher gets
+    # wrong, so they are asserted by name in the German render.
+    html =
+      conn
+      |> put_req_header("accept-language", "de-DE,de;q=0.9")
+      |> get(~p"/")
+      |> html_response(200)
+
+    assert html =~ "Anrede"
+    assert html =~ ">Frau<"
+    assert html =~ ">Herr<"
+    assert html =~ "Keine Anrede"
+    assert html =~ "Wird nur für die Anrede in unseren E-Mails verwendet"
+
+    # The vocabulary the field left behind must not come back with it. The
+    # third one is matched as a whole tag body on purpose: "divers" is a
+    # substring of "Fediverse", which this page mentions.
+    refute html =~ "Geschlecht"
+    refute html =~ "männlich"
+    refute html =~ "weiblich"
+    refute html =~ ">divers<"
+  end
+
   test "split_marker/2 is total, so a botched translation can never 500 the page" do
     # Correct: one split into before/after.
     assert VutuvWeb.UI.split_marker("a {x} b", "{x}") == {"a ", " b"}

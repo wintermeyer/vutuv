@@ -1,7 +1,7 @@
 defmodule VutuvWeb.InvitationController do
   @moduledoc """
   Invite-a-friend: a logged-in member fills what would be the invited person's
-  sign-up (gender, name, tags, email) plus an optional note, and vutuv emails a
+  sign-up (salutation, name, tags, email) plus an optional note, and vutuv emails a
   link that opens the sign-up form prefilled with that data.
 
   All the real work — normalizing and hashing the address, the "invite each

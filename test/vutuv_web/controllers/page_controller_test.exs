@@ -363,14 +363,40 @@ defmodule VutuvWeb.PageControllerTest do
                |> Enum.map(fn [whole, value] -> {value, whole} end)
     end
 
-    # Gender is a radio group too (no empty "Choose a gender" prompt) and
-    # preselects "male" / männlich.
-    test "gender is a male-preselected radio group", %{conn: conn} do
+    # The salutation is the one control on this form that preselects NOTHING,
+    # and this is the regression guard for it. Its predecessor was a `gender`
+    # group defaulted to "männlich", so every woman signing up had to correct an
+    # assumption about herself before typing her name — which is what members
+    # wrote in about. An unset group asks; a preselected one assumes.
+    test "the salutation radio group preselects nothing", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert radio_checked?(body, "user[gender]", "male")
-      refute radio_checked?(body, "user[gender]", "female")
-      refute radio_checked?(body, "user[gender]", "other")
+      refute radio_checked?(body, "user[salutation]", "ms")
+      refute radio_checked?(body, "user[salutation]", "mr")
+      refute radio_checked?(body, "user[salutation]", "")
+    end
+
+    # All three answers are visible at once, and "no salutation" is one of them
+    # rather than something a member has to infer from leaving the group alone.
+    test "the salutation offers both forms of address and an explicit way out", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert body =~ ~s(name="user[salutation]")
+      assert body =~ ~s(value="ms")
+      assert body =~ ~s(value="mr")
+      assert body =~ "No salutation"
+      # The purpose is stated on the form, so the question never reads as a
+      # classification the way "Gender" did.
+      assert body =~ "Only used to address you in emails."
+    end
+
+    # The name is answered before the salutation: asking "how should we address
+    # you" in front of the form made it a gate rather than a detail.
+    test "the salutation is asked after the name, not before it", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert :binary.match(body, ~s(name="user[first_name]")) <
+               :binary.match(body, ~s(name="user[salutation]"))
     end
 
     # The consent line by the submit button accepts the Nutzungsbedingungen
@@ -386,6 +412,51 @@ defmodule VutuvWeb.PageControllerTest do
   end
 
   describe "POST /new_registration" do
+    # The round trip the rendered form performs: the radio group's name and
+    # values have to be the ones the changeset accepts, or a member picks a
+    # salutation and the account is created without it — silently, since the
+    # field is optional and nothing would fail.
+    test "a chosen salutation is stored on the new account", %{conn: conn} do
+      attrs =
+        Map.merge(valid_attrs(), %{
+          "emails" => %{"0" => %{"value" => "addressed@example.com"}},
+          "salutation" => "ms"
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      assert user_by_email("addressed@example.com").salutation == "ms"
+    end
+
+    # The blank third option, which is what the group submits for "No
+    # salutation" and also what an untouched group submits. Both have to be an
+    # ordinary successful registration, not a validation error: the field is
+    # optional and declining it is a real answer.
+    test "no salutation registers fine and stores nothing", %{conn: conn} do
+      attrs =
+        Map.merge(valid_attrs(), %{
+          "emails" => %{"0" => %{"value" => "unaddressed@example.com"}},
+          "salutation" => ""
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      assert user_by_email("unaddressed@example.com").salutation == nil
+    end
+
+    test "a salutation the form never offered is rejected", %{conn: conn} do
+      attrs =
+        Map.merge(valid_attrs(), %{
+          "emails" => %{"0" => %{"value" => "smuggled@example.com"}},
+          "salutation" => "captain"
+        })
+
+      conn = post(conn, ~p"/new_registration", user: attrs)
+
+      assert html_response(conn, 422)
+      assert user_by_email("smuggled@example.com") == nil
+    end
+
     # Checking the (inverted) indexing box submits "false", which must land as a
     # search-indexable profile.
     test "checking the indexing box stores an indexable profile", %{conn: conn} do

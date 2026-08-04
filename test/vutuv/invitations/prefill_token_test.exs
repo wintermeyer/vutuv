@@ -4,7 +4,7 @@ defmodule Vutuv.Invitations.PrefillTokenTest do
   alias Vutuv.Invitations.PrefillToken
 
   @full %{
-    "gender" => "female",
+    "salutation" => "ms",
     "first_name" => "Jane",
     "last_name" => "Doe",
     "email" => "jane@example.com",
@@ -33,7 +33,8 @@ defmodule Vutuv.Invitations.PrefillTokenTest do
     end
 
     test "returns nil when every field is blank" do
-      assert PrefillToken.encode(%{"gender" => nil, "first_name" => "", "email" => nil}) == nil
+      assert PrefillToken.encode(%{"salutation" => nil, "first_name" => "", "email" => nil}) ==
+               nil
     end
   end
 
@@ -78,7 +79,7 @@ defmodule Vutuv.Invitations.PrefillTokenTest do
     end
 
     test "is an empty string when there is nothing to prefill" do
-      assert PrefillToken.query(%{"gender" => nil, "first_name" => ""}) == ""
+      assert PrefillToken.query(%{"salutation" => nil, "first_name" => ""}) == ""
     end
   end
 end

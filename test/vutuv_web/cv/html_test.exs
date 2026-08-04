@@ -22,7 +22,6 @@ defmodule VutuvWeb.CV.HtmlTest do
       profile_url: nil,
       address_lines: [],
       birthdate: nil,
-      gender: nil,
       sections: [
         %{
           heading: "Experience",

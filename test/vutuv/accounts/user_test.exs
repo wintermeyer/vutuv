@@ -243,9 +243,13 @@ defmodule Vutuv.Accounts.UserTest do
       assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
     end
 
-    test "changing the gender revokes the verification" do
-      changeset = User.changeset(verified_user(), %{"gender" => "female"})
-      assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
+    test "changing the salutation keeps the verification" do
+      # The inverse of what its predecessor asserted, and deliberately so: this
+      # used to be a `gender` field on the identity list, so answering "how do
+      # you want to be addressed" cost a member their badge. A salutation is a
+      # preference, not a claim an ID card could confirm or refute.
+      changeset = User.changeset(verified_user(), %{"salutation" => "ms"})
+      refute Ecto.Changeset.get_change(changeset, :identity_verified?)
     end
 
     test "editing a non-identity field (headline) keeps the verification" do

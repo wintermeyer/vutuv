@@ -80,10 +80,7 @@ defmodule VutuvWeb.CV.Html do
     address = contact_paragraph(Enum.map(cv.address_lines, &esc/1), ", ")
 
     details =
-      contact_paragraph([
-        detail(gettext("Date of birth"), cv.birthdate),
-        detail(gettext("Gender"), cv.gender)
-      ])
+      contact_paragraph([detail(gettext("Date of birth"), cv.birthdate)])
 
     """
     <header class="head">

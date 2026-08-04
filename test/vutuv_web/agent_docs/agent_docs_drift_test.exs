@@ -29,7 +29,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         # name, so every agent format must carry it too — it is worth the most
         # to a reader that says the name out loud.
         name_pronunciation: "[GRAY-ta GRAY-dee-ent]",
-        gender: "female",
+        # The salutation is deliberately NOT here: it is a mail preference, so
+        # no agent format carries it. The `gender` line it replaced was in every
+        # one of them.
+        salutation: "ms",
         birthdate: ~D[1991-04-23],
         employment_status: "looking",
         # Opt the availability badge + salary expectation public so they stay in
@@ -237,8 +240,6 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       "t.me/gretachats",
       "+49 30 5550100",
       "Berlin",
-      # general info
-      "female",
       # the Fediverse address: the profile card shows it to a visitor arriving
       # from Mastodon and friends, md/txt as a fact line, JSON/XML structured
       Docs.handle(user),
@@ -1207,6 +1208,19 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     public = Repo.one!(from(e in Ecto.assoc(user, :emails), where: e.public?))
     assert get(build_conn(), "/drift_tester/emails/#{public.id}.md").resp_body =~ "greta.public"
+  end
+
+  test "the salutation never reaches any public format" do
+    # The setup member has `salutation: "ms"`. Its predecessor `gender` was a
+    # published fact in all four formats plus the profile page; what replaced it
+    # says how the member wants an email to open, which is theirs and not the
+    # reader's. This asserts the whole vocabulary, not just the stored value, so
+    # renaming the label cannot quietly put it back on a public page.
+    for path <- ["/drift_tester", "/drift_tester.md", "/drift_tester.txt", "/drift_tester.json"],
+        needle <- ["salutation", "Salutation", "gender", "Gender", "Ms.", "female"] do
+      refute get(build_conn(), path).resp_body =~ needle,
+             "#{needle} must not appear in #{path}"
+    end
   end
 
   test "email entries carry their Work/Personal/Other type in every format" do

@@ -10,8 +10,8 @@ defmodule VutuvWeb.CV.JsonResume do
   languages become `languages`, the profile links **and** social media
   accounts become `basics.profiles`, and the address becomes
   `basics.location`. Keys with no value are dropped, as the schema expects.
-  (The schema has no birthdate/gender fields, so those personal details ride
-  only on the human-readable formats, not here.)
+  (The schema has no birthdate field, so that personal detail rides only on
+  the human-readable formats, not here.)
   """
 
   @schema_url "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json"
