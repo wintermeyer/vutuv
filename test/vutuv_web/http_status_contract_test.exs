@@ -126,7 +126,7 @@ defmodule VutuvWeb.HttpStatusContractTest do
     # being the "incorrect PIN" redirect-to-"/" and becomes the lockout
     # redirect-to-"/login". Returns {attempt_number, status, location}.
     defp wrong_pin_until_lockout(conn, email) do
-      {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
+      {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email, :login)
 
       Enum.reduce_while(1..5, conn, fn n, acc ->
         acc = post(acc, ~p"/login", session: %{"pin" => "000000"})

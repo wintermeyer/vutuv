@@ -8,6 +8,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.SearchText
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.LandingExperiment
 
   def index(conn, params) do
@@ -50,7 +51,10 @@ defmodule VutuvWeb.PageController do
     # somebody reading it, and the box's own text says so.
     changeset =
       %User{
-        salutation: prefill_salutation(prefill["salutation"]),
+        # Already filtered to a value the form offers, or absent:
+        # `Invitations.prefill_from_params/1` owns that vocabulary because it is
+        # the one place that decodes invitation links.
+        salutation: prefill["salutation"],
         first_name: SearchText.normalize_search(prefill["first_name"]),
         last_name: SearchText.normalize_search(prefill["last_name"]),
         tag_list: SearchText.normalize_search(prefill["tags"]),
@@ -254,7 +258,7 @@ defmodule VutuvWeb.PageController do
     # The account was just created, so login_by_email/2 always mails the PIN
     # and advances to the confirmation screen.
     {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email, :registration)
-    render(conn, "pin_new_registration.html")
+    ControllerHelpers.render_pin_screen(conn)
   end
 
   # Same confirmation screen as a real sign-up (so the response can't be told
@@ -262,7 +266,7 @@ defmodule VutuvWeb.PageController do
   # existing owner a notice instead of a PIN.
   defp handle_existing_email_registration(conn, email) do
     {:ok, conn} = Vutuv.Accounts.notify_registration_attempt(conn, email)
-    render(conn, "pin_new_registration.html")
+    ControllerHelpers.render_pin_screen(conn)
   end
 
   # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs.
@@ -436,27 +440,8 @@ defmodule VutuvWeb.PageController do
     # (an enumeration oracle), since at step 1 an unknown address sets the
     # same cookie but creates no PIN row.
     case Vutuv.Accounts.read_pin_cookie(conn) do
-      nil ->
-        conn
-
-      _email ->
-        case Vutuv.Accounts.read_pin_flow(conn) do
-          :registration ->
-            render(conn, "pin_new_registration.html")
-
-          _login ->
-            conn
-            |> put_view(VutuvWeb.SessionHTML)
-            |> render("pin_user_login.html")
-        end
-        |> halt()
+      nil -> conn
+      _email -> conn |> ControllerHelpers.render_pin_screen() |> halt()
     end
-  end
-
-  # Only honor a prefilled salutation the sign-up form actually offers.
-  # Everything else, including an absent one, leaves the radio group with
-  # nothing selected — see the comment on the changeset above.
-  defp prefill_salutation(salutation) do
-    if salutation in User.salutations(), do: salutation
   end
 end

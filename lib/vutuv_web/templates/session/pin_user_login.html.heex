@@ -27,7 +27,7 @@
     )}
   </p>
 
-  <.pin_actions email={Vutuv.Accounts.read_pin_cookie(@conn)} context={:login} />
+  <.pin_actions email={@pending_email} context={@pin_flow} />
 
   <%= if dev_mailbox?() do %>
     <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">

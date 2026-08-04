@@ -104,7 +104,7 @@ defmodule VutuvWeb.SessionCookieTest do
       user = insert(:user, email_confirmed?: true)
       insert(:email, value: "pin-http@example.com", user: user)
 
-      {:ok, returned} = Accounts.login_by_email(conn, "pin-http@example.com")
+      {:ok, returned} = Accounts.login_by_email(conn, "pin-http@example.com", :login)
       cookie = returned |> Conn.send_resp(200, "") |> set_cookie(@pin_cookie)
 
       assert cookie
@@ -120,7 +120,7 @@ defmodule VutuvWeb.SessionCookieTest do
       insert(:email, value: "pin-https@example.com", user: user)
 
       with_scheme("https", fn ->
-        {:ok, returned} = Accounts.login_by_email(conn, "pin-https@example.com")
+        {:ok, returned} = Accounts.login_by_email(conn, "pin-https@example.com", :login)
         cookie = returned |> Conn.send_resp(200, "") |> set_cookie(@pin_cookie)
 
         assert cookie =~ "; secure"

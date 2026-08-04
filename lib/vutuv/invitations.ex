@@ -168,11 +168,12 @@ defmodule Vutuv.Invitations do
   # would quietly lose the salutation its sender chose. "other" carried no
   # salutation to begin with and correctly maps to none.
   defp normalize_salutation(prefill) do
-    prefill
-    |> Map.delete("gender")
-    |> Map.put("salutation", salutation_value(prefill["salutation"] || prefill["gender"]))
-    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-    |> Map.new()
+    {gender, prefill} = Map.pop(prefill, "gender")
+
+    case salutation_value(prefill["salutation"] || gender) do
+      nil -> Map.delete(prefill, "salutation")
+      value -> Map.put(prefill, "salutation", value)
+    end
   end
 
   defp salutation_value("male"), do: "mr"

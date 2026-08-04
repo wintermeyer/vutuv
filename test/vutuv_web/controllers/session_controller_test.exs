@@ -35,7 +35,7 @@ defmodule VutuvWeb.SessionControllerTest do
       # A visitor who has a pending PIN (started a login elsewhere, or was routed
       # here by the passkey fallback) should be able to finish on /login itself,
       # the same way "/" is pinned to the PIN form while a PIN is pending.
-      {:ok, conn} = Accounts.login_by_email(conn, "someone@example.com")
+      {:ok, conn} = Accounts.login_by_email(conn, "someone@example.com", :login)
 
       conn = get(recycle(conn), ~p"/login")
 

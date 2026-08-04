@@ -261,7 +261,7 @@ defmodule Vutuv.Accounts do
   belongs to an account; an attacker who guesses an unknown address gets
   the identical PIN screen but never receives a PIN.
   """
-  def login_by_email(conn, email, flow \\ :login) do
+  def login_by_email(conn, email, flow) when flow in [:login, :registration] do
     advance_to_pin_screen(conn, email, &send_login_pin/2, flow)
   end
 
@@ -473,27 +473,31 @@ defmodule Vutuv.Accounts do
   carries or `nil` when the cookie is absent, tampered with, or expired.
   """
   def read_pin_cookie(conn) do
-    case read_pin_identity(conn) do
+    case pending_pin_identity(conn) do
       {email, _flow} -> email
       nil -> nil
     end
   end
 
   @doc """
-  The flow the pending identity belongs to: `:registration` or `:login`.
+  The pending identity as `{email, flow}`, or `nil` when there is none.
 
-  `:login` is also the answer for a cookie minted before the flow was recorded,
-  which is the shape this must keep accepting for as long as one of those can
-  still be in a browser (`@pin_cookie_max_age`).
+  One verification for both halves, and the only way to get them as a pair: a
+  caller that needs the flow almost always needs the address too, and reading
+  them through two separate verifies would let it pair a flow from one read with
+  an address from another.
+
+  `flow` is `:registration` or `:login`, and `:login` is also the answer for a
+  cookie minted before the flow was recorded — the shape this must keep
+  accepting for as long as one of those can still be in a browser
+  (`@pin_cookie_max_age`, 30 minutes). That legacy clause covers a new release
+  meeting an old cookie. It cannot cover the mirror case, an old release meeting
+  a new cookie, where the old code binds the whole tuple as the address: that
+  needs no shim during a normal blue/green switch, which moves traffic one way,
+  but it is what a **rollback** would hit for anyone holding a pending PIN.
+  Delete the clause, and this paragraph, once no such cookie can exist.
   """
-  def read_pin_flow(conn) do
-    case read_pin_identity(conn) do
-      {_email, flow} -> flow
-      nil -> nil
-    end
-  end
-
-  defp read_pin_identity(%{cookies: %{@pin_cookie => payload}}) do
+  def pending_pin_identity(%{cookies: %{@pin_cookie => payload}}) do
     case Phoenix.Token.verify(@token_context, pin_cookie_salt(), payload,
            max_age: @pin_cookie_max_age
          ) do
@@ -508,7 +512,7 @@ defmodule Vutuv.Accounts do
     end
   end
 
-  defp read_pin_identity(_conn), do: nil
+  def pending_pin_identity(_conn), do: nil
 
   @doc "Drops the login-identity cookie (after a successful login or lockout)."
   def delete_pin_cookie(conn) do

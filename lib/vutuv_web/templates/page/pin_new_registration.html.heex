@@ -21,7 +21,7 @@
     {gettext("Please check your spam folder in case you don't find the email in your inbox.")}
   </p>
 
-  <.pin_actions email={Vutuv.Accounts.read_pin_cookie(@conn)} context={:registration} />
+  <.pin_actions email={@pending_email} context={@pin_flow} />
 
   <%= if dev_mailbox?() do %>
     <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">

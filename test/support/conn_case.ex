@@ -85,7 +85,7 @@ defmodule VutuvWeb.ConnCase do
       # email, then submit it. The signed identity cookie set by
       # `login_by_email/2` rides along when ConnTest recycles the response.
       defp login_via_pin(conn, email) do
-        {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
+        {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email, :login)
         post(conn, ~p"/login", session: %{"pin" => sent_pin()})
       end
 

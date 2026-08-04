@@ -165,8 +165,8 @@ lands here). --%>
           </span>
           <div class="mt-2 flex flex-wrap gap-x-5 gap-y-2">
             <%= for {slabel, svalue} <- salutation_options() do %>
-              <label class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200">
-                <%= radio_button f, :salutation, svalue, class: "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+              <label class={radio_label_class()}>
+                <%= radio_button f, :salutation, svalue, class: radio_class() %>
                 <span>{slabel}</span>
               </label>
             <% end %>
@@ -318,7 +318,7 @@ lands here). --%>
               <div class="mt-1.5 flex flex-wrap gap-x-5 gap-y-2">
                 <label
                   :for={{wlabel, wvalue} <- desired_workplace_options()}
-                  class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200"
+                  class={radio_label_class()}
                 >
                   <input
                     type="checkbox"

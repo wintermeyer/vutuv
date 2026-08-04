@@ -101,6 +101,26 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  Shared classes for a hand-written radio group: the control itself and the
+  label row it sits in. The radio companions to `input_class/0` and
+  `checkbox_class/0`, and deliberately not derived from `checkbox_class/0` —
+  that one carries `rounded`, `mt-0.5` and a ring offset a radio does not want.
+
+  The single source for the three groups that render one: the sign-up form's
+  salutation and email-type choices, the one-time welcome page, and the profile
+  editor's salutation. Those spelled the same two strings out four times over
+  before this existed.
+  """
+  def radio_class do
+    "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800"
+  end
+
+  @doc "The label row wrapping a `radio_class/0` control and its wording."
+  def radio_label_class do
+    "flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200"
+  end
+
+  @doc """
   The shared **tag pill box** — one component for every field where a member
   types a batch of tags: the add-tag form, the sign-up landing page, the
   invitation form, the post composer and both job-posting tag fields (DRY).
@@ -587,49 +607,51 @@ defmodule VutuvWeb.UI do
   @doc """
   The "stuck on the PIN page" escape hatches, shared by both PIN-entry screens
   (login and post-registration). "Resend PIN" re-mints and re-mails the one-time
-  PIN for the pending email (rate limited); "Use a different email address"
-  abandons the pending login so the visitor is no longer pinned to the PIN form
-  and can sign in or register as someone else. Both are CSRF-protected POSTs.
+  PIN for the pending email (rate limited); the second control abandons the
+  pending identity so the visitor is no longer pinned to the PIN form. Both are
+  CSRF-protected POSTs.
 
-  The hint above them is deliberately generic and always shown: it nudges a
-  member whose address has stopped working (a bounced, now-undeliverable inbox)
-  toward another of their addresses, without ever revealing whether the typed
-  address is registered - the PIN screen must stay byte-identical for known and
-  unknown addresses (the enumeration guard in `Vutuv.Accounts`).
+  Two things above them follow `context`, which
+  `VutuvWeb.ControllerHelpers.render_pin_screen/2` takes from the signed cookie
+  so a screen cannot contradict the flow it belongs to. Only `:login` suggests
+  trying another of the member's addresses — at registration they have given
+  exactly one and have no account yet — and only `:login` calls the second
+  control "Use a different email address", which at registration is
+  "Cancel registration".
+
+  Naming the address never reveals whether it is registered: it is the address
+  the visitor themself just typed, and the screen stays byte-identical for known
+  and unknown ones (the enumeration guard in `Vutuv.Accounts`).
   """
   attr(:email, :string,
-    default: nil,
+    required: true,
     doc: "the pending address, named so a typo in it is visible"
   )
 
   attr(:context, :atom,
-    default: :login,
+    required: true,
     values: [:login, :registration],
     doc: "which PIN screen this is; only :login may suggest another address"
   )
 
   def pin_actions(assigns) do
+    # The address is spelled out and set in semibold, because the single most
+    # likely reason no PIN arrives is that it was mistyped one screen ago, and a
+    # member cannot spot that in an address they cannot see. Split on a
+    # placeholder with `split_marker/2` rather than matching the translated
+    # sentence, which would turn a .po slip into a 500.
+    {before_email, after_email} =
+      split_marker(
+        gettext("Not getting the PIN? The email address {email} may not be working right now."),
+        "{email}"
+      )
+
+    assigns = assign(assigns, before_email: before_email, after_email: after_email)
+
     ~H"""
     <div class="mt-4 text-sm">
       <p class="text-slate-600 dark:text-slate-400">
-        <%!-- The address is spelled out and set in semibold, because the single
-              most likely reason no PIN arrives is that it was mistyped one
-              screen ago, and a member cannot spot that in an address they
-              cannot see. Split on a placeholder with `split_marker/2` rather
-              than matching the translated sentence, which would turn a .po slip
-              into a 500. The nil branch is the belt-and-braces case (no pending
-              cookie); the controllers redirect before rendering then, so it
-              should not be reachable. --%>
-        <%= if @email do %>
-          <% {pre, post} =
-            split_marker(
-              gettext("Not getting the PIN? The email address {email} may not be working right now."),
-              "{email}"
-            ) %>
-          {pre}<span class="font-semibold text-slate-800 dark:text-slate-200">{@email}</span>{post}
-        <% else %>
-          {gettext("Not getting the PIN? That email address may not be working right now.")}
-        <% end %>
+        {@before_email}<span class="font-semibold text-slate-800 dark:text-slate-200">{@email}</span>{@after_email}
         <%!-- Only the login screen may say this. At registration the member has
               given exactly one address and has no account yet, so advice to
               "log in with one of your other addresses" describes a situation
@@ -662,11 +684,9 @@ defmodule VutuvWeb.UI do
             type="submit"
             class="font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           >
-            <%= if @context == :registration do %>
-              {gettext("Cancel registration")}
-            <% else %>
-              {gettext("Use a different email address")}
-            <% end %>
+            {if @context == :registration,
+              do: gettext("Cancel registration"),
+              else: gettext("Use a different email address")}
           </button>
         </.form>
       </div>

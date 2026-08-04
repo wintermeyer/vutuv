@@ -312,7 +312,7 @@ defmodule Vutuv.Notifications.BouncesTest do
       assert reload(email).undeliverable_at
 
       conn = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
-      {:ok, _conn} = Vutuv.Accounts.login_by_email(conn, "dead@example.com")
+      {:ok, _conn} = Vutuv.Accounts.login_by_email(conn, "dead@example.com", :login)
       assert_received {:email, pin_email}
       [pin] = Regex.run(~r/\b\d{6}\b/, pin_email.text_body)
 
@@ -326,7 +326,7 @@ defmodule Vutuv.Notifications.BouncesTest do
       {:ok, _} = Bounces.record(@failed_dsn)
 
       conn = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
-      {:ok, _conn} = Vutuv.Accounts.login_by_email(conn, "dead@example.com")
+      {:ok, _conn} = Vutuv.Accounts.login_by_email(conn, "dead@example.com", :login)
 
       assert {:error, _} = Vutuv.Accounts.check_pin("dead@example.com", "000000", "login")
       assert reload(email).undeliverable_at

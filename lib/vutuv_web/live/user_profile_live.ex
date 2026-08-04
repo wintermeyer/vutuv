@@ -1304,10 +1304,6 @@ defmodule VutuvWeb.UserProfileLive do
   defp follow_step_hint(n),
     do: ngettext("You already follow one member.", "You already follow %{count} members.", n)
 
-  # A concrete first-post prompt borrowed from the member's own sign-up tags
-  # ("a thought on #elixir") — which doubles as a quiet demo that #hashtags
-  # work in posts. user_tags arrive most-endorsed first, slug as tiebreaker,
-  # so a fresh account gets its alphabetically first tag.
   defp present?(nil), do: false
   defp present?(value) when is_binary(value), do: String.trim(value) != ""
   defp present?(_), do: true

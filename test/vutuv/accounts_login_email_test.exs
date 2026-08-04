@@ -12,7 +12,7 @@ defmodule Vutuv.AccountsLoginEmailTest do
     user = insert(:user, email_confirmed?: true)
     insert(:email, value: "login-flow@example.com", user: user)
 
-    assert {:ok, returned} = Vutuv.Accounts.login_by_email(conn, "login-flow@example.com")
+    assert {:ok, returned} = Vutuv.Accounts.login_by_email(conn, "login-flow@example.com", :login)
     assert Map.has_key?(returned.resp_cookies, @pin_cookie)
     assert_email_sent()
   end
@@ -23,7 +23,7 @@ defmodule Vutuv.AccountsLoginEmailTest do
     # Same {:ok, conn} with the pending-identity cookie set as a known
     # address gets, so the response is no account-enumeration oracle — but
     # no PIN is mailed to an address without an account.
-    assert {:ok, returned} = Vutuv.Accounts.login_by_email(conn, "nobody@example.com")
+    assert {:ok, returned} = Vutuv.Accounts.login_by_email(conn, "nobody@example.com", :login)
     assert Map.has_key?(returned.resp_cookies, @pin_cookie)
     assert_no_email_sent()
   end

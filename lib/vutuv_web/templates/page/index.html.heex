@@ -34,18 +34,11 @@
         sections instead of one long, undifferentiated list. Shared class/option
         bindings keep the repeated radio groups and consent checkboxes
         consistent. --%>
-  <%!-- Whether the form has been submitted at least once. It is read off the
-        changeset rather than the form, so it can be bound out here with the
-        other shared bindings; the salutation radios below explain what it
-        is for. --%>
-  <% salutation_submitted? = @changeset.action != nil %>
   <%!-- Order and default come from the schema (Vutuv.Accounts.Email.email_types/0),
         so the form can never offer a value the changeset rejects: Privat, Arbeit,
         Andere - with Privat preselected by the controller. --%>
   <% email_type_options = Enum.map(Email.email_types(), &{email_type_label(&1), &1}) %>
-  <% radio_class = "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
   <% legend_class = "mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300" %>
-  <% radio_label_class = "flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200" %>
   <% check_label_class = "flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300" %>
 
   <.form
@@ -86,6 +79,7 @@
             additionally only once the form has been submitted, which is what
             keeps a failed submit from silently dropping the member's answer. --%>
       <% salutation_value = to_string(f[:salutation].value) %>
+      <% submitted? = @changeset.action != nil %>
       <fieldset id="signup-salutation">
         <legend class={legend_class}>
           {gettext("Salutation")}
@@ -93,8 +87,8 @@
         </legend>
         <div class="flex flex-wrap gap-x-5 gap-y-2">
           <%= for {slabel, svalue} <- salutation_options() do %>
-            <label class={radio_label_class}>
-              <%= radio_button f, :salutation, svalue, class: radio_class, checked: salutation_value == svalue and (svalue != "" or salutation_submitted?) %>
+            <label class={radio_label_class()}>
+              <%= radio_button f, :salutation, svalue, class: radio_class(), checked: salutation_value == svalue and (svalue != "" or submitted?) %>
               <span>{slabel}</span>
             </label>
           <% end %>
@@ -145,8 +139,8 @@
           <legend class={legend_class}>{gettext("Type of email address")}</legend>
           <div class="flex flex-wrap gap-x-5 gap-y-2">
             <%= for {elabel, evalue} <- email_type_options do %>
-              <label class={radio_label_class}>
-                <%= radio_button ef, :email_type, evalue, class: radio_class %>
+              <label class={radio_label_class()}>
+                <%= radio_button ef, :email_type, evalue, class: radio_class() %>
                 <span>{elabel}</span>
               </label>
             <% end %>

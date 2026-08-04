@@ -14,6 +14,53 @@ defmodule VutuvWeb.ControllerHelpers do
   alias Vutuv.Repo
 
   @doc """
+  Renders the PIN-entry screen belonging to the flow the pending identity is in,
+  and assigns what that screen needs (`:pending_email`, `:pin_flow`).
+
+  **Every place that renders a PIN screen goes through here.** There are five,
+  across two controllers, and the rule they share — a registration in flight
+  gets the registration screen, everything else the login one — is a fact about
+  the signed cookie, not about the call site. It was written once inside the
+  landing-page plug first, and the four sites that kept hardcoding the login
+  template are exactly what that looked like: a member half-way through signing
+  up who opened `/login`, or who simply tapped "Resend PIN", was handed the
+  login screen and its advice to try one of their *other* addresses, which is
+  the copy that change had just removed.
+
+  Assigning the address here is the second half: the templates used to re-read
+  the cookie themselves, so a page verified the same token three times and could
+  in principle contradict the screen it was rendering.
+  """
+  def render_pin_screen(%Conn{} = conn, opts \\ []) do
+    {email, flow} = Vutuv.Accounts.pending_pin_identity(conn) || {nil, :login}
+
+    conn
+    |> Conn.assign(:pending_email, email)
+    |> Conn.assign(:pin_flow, flow)
+    |> then(fn conn ->
+      case opts[:status] do
+        nil -> conn
+        status -> Conn.put_status(conn, status)
+      end
+    end)
+    |> pin_view(flow)
+  end
+
+  # The two templates live in different view modules, so the branch has to pick
+  # the view as well as the name.
+  defp pin_view(conn, :registration) do
+    conn
+    |> Phoenix.Controller.put_view(VutuvWeb.PageHTML)
+    |> Phoenix.Controller.render("pin_new_registration.html")
+  end
+
+  defp pin_view(conn, _login) do
+    conn
+    |> Phoenix.Controller.put_view(VutuvWeb.SessionHTML)
+    |> Phoenix.Controller.render("pin_user_login.html")
+  end
+
+  @doc """
   Returns the path of the request's `Referer` header, falling back to
   `fallback` when there is no usable referer.
 

@@ -16,24 +16,23 @@ defmodule VutuvWeb.PinScreenCopyTest do
   """
   use VutuvWeb.ConnCase, async: true
 
-  @email "tippfehler@example.com"
-
+  # `registration_attrs/1` (ConnCase) mints a fresh address, name and handle per
+  # call and uses this module's own tag set. Hand-built literals would put every
+  # run of this file on the same email / username / tag rows, which is the
+  # documented 40P01 deadlock between async modules inside one `register_user`
+  # transaction — and this file is `async: true`.
   defp registration_params(overrides \\ %{}) do
-    Map.merge(
-      %{
-        "first_name" => "Pina",
-        "last_name" => "Probe",
-        "tag_list" => "Anredetest, Elixir, Kochen",
-        "emails" => %{"0" => %{"value" => @email}}
-      },
-      overrides
-    )
+    Map.merge(registration_attrs("pin"), overrides)
+  end
+
+  defp pending_email(params), do: params["emails"]["0"]["value"]
+
+  defp registration_pin_screen(conn, params) do
+    conn |> post(~p"/new_registration", user: params) |> html_response(200)
   end
 
   defp registration_pin_screen(conn) do
-    conn
-    |> post(~p"/new_registration", user: registration_params())
-    |> html_response(200)
+    registration_pin_screen(conn, registration_params())
   end
 
   defp login_pin_screen(conn, email) do
@@ -65,9 +64,10 @@ defmodule VutuvWeb.PinScreenCopyTest do
   describe "the pending address is named so a typo is visible" do
     test "the registration screen prints the address that was just entered",
          %{conn: conn} do
-      body = registration_pin_screen(conn)
+      params = registration_params()
+      body = registration_pin_screen(conn, params)
 
-      assert body =~ @email
+      assert body =~ pending_email(params)
       # Named, not merely referred to: "that email address" is what a member
       # cannot check their typing against.
       refute body =~ "That email address may"
@@ -146,6 +146,48 @@ defmodule VutuvWeb.PinScreenCopyTest do
     end
   end
 
+  describe "the flow survives everything that re-renders a PIN screen" do
+    # Found by review, not by use: "Resend PIN" posts to /login/resend from BOTH
+    # screens, and re-minting the cookie there used to spell the flow :login by
+    # default. One tap therefore turned a pending registration into a pending
+    # login for the rest of that PIN's life — on "/" as well, permanently
+    # undoing the screen fix above.
+    test "resending a PIN keeps a registration a registration", %{conn: conn} do
+      conn = post(conn, ~p"/new_registration", user: registration_params())
+      conn = submit_with_csrf(conn, ~p"/login/resend", %{})
+
+      body = html_response(conn, 200)
+      assert body =~ "Cancel registration"
+      refute body =~ "other addresses to your vutuv account"
+
+      # And it is still a registration on the landing page afterwards.
+      landing = conn |> recycle() |> get(~p"/") |> html_response(200)
+      refute landing =~ "other addresses to your vutuv account"
+    end
+
+    # The other three sites that render a PIN screen. A member mid-registration
+    # is logged out, so nothing stops them opening /login.
+    test "opening /login mid-registration shows the registration screen", %{conn: conn} do
+      conn = post(conn, ~p"/new_registration", user: registration_params())
+
+      body = conn |> recycle() |> get(~p"/login") |> html_response(200)
+
+      assert body =~ "Cancel registration"
+      refute body =~ "other addresses to your vutuv account"
+    end
+
+    test "a plain login through /login is unaffected", %{conn: conn} do
+      user = insert(:activated_user)
+      email = insert(:email, user: user).value
+      conn = post(conn, ~p"/login", session: %{"email" => email})
+      conn = submit_with_csrf(conn, ~p"/login/resend", %{})
+
+      body = html_response(conn, 200)
+      assert body =~ "other addresses to your vutuv account"
+      refute body =~ "Cancel registration"
+    end
+  end
+
   describe "the way out of the PIN step" do
     test "registration offers to cancel, not to swap the address", %{conn: conn} do
       body = registration_pin_screen(conn)
@@ -171,15 +213,17 @@ defmodule VutuvWeb.PinScreenCopyTest do
   end
 
   test "the German render says all of it in German", %{conn: conn} do
+    params = registration_params()
+
     body =
       conn
       |> put_req_header("accept-language", "de-DE,de;q=0.9")
-      |> registration_pin_screen()
+      |> registration_pin_screen(params)
 
     assert body =~ "PIN aus der E-Mail eingeben"
     assert body =~ "6-stelliger PIN"
     assert body =~ "funktioniert möglicherweise gerade nicht"
-    assert body =~ @email
+    assert body =~ pending_email(params)
     refute body =~ "weitere Adressen hinzugefügt"
   end
 end
