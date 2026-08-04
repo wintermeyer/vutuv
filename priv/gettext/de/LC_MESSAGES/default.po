@@ -4826,7 +4826,7 @@ msgstr "sucht nur in Vornamen (nachname: für Nachnamen)"
 #: lib/vutuv_web/templates/user/show.html.heex:549
 #, elixir-autogen, elixir-format
 msgid "Add a tag"
-msgstr "Tag hinzufügen"
+msgstr "Tags hinzufügen"
 
 #: lib/vutuv_web/live/search_live.ex:385
 #, elixir-autogen, elixir-format
