@@ -10,6 +10,7 @@ defmodule VutuvWeb.PageController do
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.LandingExperiment
+  alias VutuvWeb.RateLimit
 
   def index(conn, params) do
     # An invitation link lands here with the invited person's data in the query:
@@ -262,10 +263,20 @@ defmodule VutuvWeb.PageController do
   end
 
   # Same confirmation screen as a real sign-up (so the response can't be told
-  # apart), but notify_registration_attempt/2 mints no account and sends the
-  # existing owner a notice instead of a PIN.
+  # apart), and no account is minted here. What reaches the address depends on
+  # what is behind it — an established member gets a notice, an abandoned
+  # sign-up gets a fresh PIN so a second attempt actually works; see
+  # `Accounts.notify_registration_attempt/3`.
+  #
+  # The rate limit is checked for every address, not just the ones that would
+  # get a PIN, so the bucket behaves identically whoever is typed in. It is the
+  # same budget the login form spends, because it is the same kind of mail; a
+  # spent budget falls back to the notice. (The notice itself is not throttled,
+  # which is unchanged and predates this.)
   defp handle_existing_email_registration(conn, email) do
-    {:ok, conn} = Vutuv.Accounts.notify_registration_attempt(conn, email)
+    pin_allowed? = RateLimit.check(conn, :login_email, email) == :ok
+
+    {:ok, conn} = Vutuv.Accounts.notify_registration_attempt(conn, email, pin_allowed?)
     ControllerHelpers.render_pin_screen(conn)
   end
 

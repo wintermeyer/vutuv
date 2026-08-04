@@ -266,17 +266,42 @@ defmodule Vutuv.Accounts do
   end
 
   @doc """
-  Step 1 of registration when the address is **already taken**. The sign-up
-  form must not betray that an account exists, so this returns the exact same
-  `{:ok, conn}` — same pin cookie, same PIN-entry screen — as a fresh sign-up:
+  Step 1 of registration when the address is **already taken**.
+
+  Two kinds of "taken" hide behind that, and they need opposite answers. An
+  established member gets the notice below. An **abandoned sign-up** — an
+  account created minutes ago whose PIN was never entered — gets a fresh login
+  PIN instead, because the person filling in the form is that same person having
+  another go, and the alternative is what they used to get: a PIN screen and no
+  PIN, with the way out mentioned only inside an email. That covers a deliberate
+  cancel-and-retry, but far more often a double-submitted form, a back button or
+  a lost tab. `pin_allowed?` is the caller's rate-limit verdict: a PIN carries a
+  credential, so it must not be mailable without a budget, and a spent budget
+  falls back to the notice.
+
+  The account is **not** rewritten from the second attempt's fields. It is the
+  same address either way, the profile is editable the moment they are in, and
+  a write path here could be aimed at a stranger's half-finished sign-up.
+
+  The sign-up form must not betray that an account exists, so this returns the
+  exact same `{:ok, conn}` — same pin cookie, same PIN-entry screen — as a fresh
+  sign-up:
   the response is byte-identical, which closes the enumeration oracle the
   inline "has already been taken" error used to be. The truth reaches only the
   address owner's inbox, where `Emailer.registration_attempt_email/2` tells
   them someone tried to register and links them to the login page. No PIN is
   sent, so the notice carries nothing a non-owner could act on.
   """
-  def notify_registration_attempt(conn, email) do
-    advance_to_pin_screen(conn, email, &send_registration_attempt_notice/2, :registration)
+  def notify_registration_attempt(conn, email, pin_allowed?) when is_boolean(pin_allowed?) do
+    notify = fn user, address ->
+      if pin_allowed? and incomplete_registration?(user) do
+        send_login_pin(user, address)
+      else
+        send_registration_attempt_notice(user, address)
+      end
+    end
+
+    advance_to_pin_screen(conn, email, notify, :registration)
   end
 
   # The shared, enumeration-safe step 1 behind both flows above: look the
@@ -651,6 +676,32 @@ defmodule Vutuv.Accounts do
   # delete the latter. The window is generous against request latency yet still
   # astronomically smaller than the years-apart gap of any legacy account.
   @registration_pin_window_seconds 300
+
+  @doc """
+  Whether `user` is a sign-up that was started and never confirmed, as opposed
+  to an established member.
+
+  The same test `delete_unconfirmed_registrations/1` reaps by, asked about one
+  account instead of a batch: unconfirmed, **and** carrying a "login" PIN minted
+  alongside the account itself (`@registration_pin_window_seconds`). That second
+  half is what tells an abandoned sign-up apart from a legacy member who merely
+  never confirmed, and it is the reason this can be trusted to decide who gets a
+  fresh PIN rather than a "somebody tried to register" notice.
+  """
+  def incomplete_registration?(%User{email_confirmed?: true}), do: false
+
+  def incomplete_registration?(%User{id: id, inserted_at: created_at}) do
+    window = @registration_pin_window_seconds
+
+    Repo.exists?(
+      from(p in LoginPin,
+        where:
+          p.user_id == ^id and p.type == "login" and
+            p.inserted_at >= datetime_add(^created_at, ^(-window), "second") and
+            p.inserted_at <= datetime_add(^created_at, ^window, "second")
+      )
+    )
+  end
 
   @doc """
   Deletes `user` and everything that belongs to them — a clean, complete

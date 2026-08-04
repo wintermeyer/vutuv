@@ -190,6 +190,58 @@ defmodule VutuvWeb.PinScreenCopyTest do
     end
   end
 
+  describe "a second attempt at an unfinished sign-up" do
+    # The dead end this closes: the account is created before the PIN is sent,
+    # so registering the same address again hit "email taken" and answered with
+    # a "somebody tried to register" notice instead of a PIN. The member sat on
+    # a PIN screen waiting for something that was never coming. Reached by a
+    # deliberate cancel-and-retry, but far more often by a double-submitted
+    # form, a back button or a lost tab.
+    test "sends a usable PIN instead of a notice", %{conn: conn} do
+      params = registration_params()
+      post(conn, ~p"/new_registration", user: params)
+      assert_received {:email, first}
+      assert first.text_body =~ ~r/\b\d{6}\b/
+
+      # Same address, second go.
+      conn = post(build_conn(), ~p"/new_registration", user: params)
+
+      assert html_response(conn, 200) =~ "Enter the PIN from the email"
+      assert_received {:email, second}
+
+      assert second.text_body =~ ~r/\b\d{6}\b/,
+             "the second attempt must carry a PIN, not a registration notice"
+    end
+
+    test "the second PIN actually logs the member in", %{conn: conn} do
+      params = registration_params()
+      post(conn, ~p"/new_registration", user: params)
+
+      conn = post(build_conn(), ~p"/new_registration", user: params)
+      pin = sent_pin()
+      conn = submit_with_csrf(conn, ~p"/login", %{"session" => %{"pin" => pin}})
+
+      assert redirected_to(conn) =~ ~r"^/"
+      refute redirected_to(conn) == ~p"/login"
+    end
+
+    # An established member is untouched: their address must still answer with
+    # the notice, never with a PIN somebody else's form submission triggered.
+    test "an established member still gets the notice, not a PIN", %{conn: conn} do
+      user = insert(:activated_user)
+      email = insert(:email, user: user).value
+
+      post(conn, ~p"/new_registration",
+        user: registration_params(%{"emails" => %{"0" => %{"value" => email}}})
+      )
+
+      assert_received {:email, sent}
+
+      refute sent.text_body =~ ~r/\b\d{6}\b/,
+             "an established member must never be mailed a PIN by somebody else's sign-up"
+    end
+  end
+
   describe "the way out of the PIN step" do
     test "registration offers to cancel, not to swap the address", %{conn: conn} do
       body = registration_pin_screen(conn)
