@@ -126,21 +126,48 @@ defmodule VutuvWeb.ApiV2Test do
   end
 
   describe "rate limiting" do
+    @window_ms 60_000
+
     test "per-token limit with headers, then 429", %{conn: conn, plaintext: plaintext} do
-      Application.put_env(:vutuv, :api_v2_rate_limit, {2, 60_000})
+      Application.put_env(:vutuv, :api_v2_rate_limit, {2, @window_ms})
       on_exit(fn -> Application.delete_env(:vutuv, :api_v2_rate_limit) end)
 
-      conn1 = conn |> authed(plaintext) |> get("/api/2.0/me")
+      {conn1, conn3} = three_requests(conn, plaintext)
+
       assert conn1.status == 200
       assert get_resp_header(conn1, "x-ratelimit-limit") == ["2"]
       assert get_resp_header(conn1, "x-ratelimit-remaining") == ["1"]
 
-      build_conn() |> authed(plaintext) |> get("/api/2.0/me")
-
-      conn3 = build_conn() |> authed(plaintext) |> get("/api/2.0/me")
       assert conn3.status == 429
       assert get_resp_header(conn3, "retry-after") != []
     end
+
+    # `Vutuv.RateLimiter` buckets by `div(now, window_ms)`, a **fixed** wall-clock
+    # window rather than a sliding one, so three requests that straddle the top of
+    # the window land in two different buckets: the counter restarts and the third
+    # request is not limited. That is not hypothetical — it turned CI red on
+    # 2026-08-04 at exactly 16:45:00.03, on a branch that touches nothing in this
+    # path, and it passes locally every time.
+    #
+    # So the window is checked around the requests rather than asserted into. A
+    # roll means the run was meaningless, not that the limiter is broken, and one
+    # retry is enough: the three requests take milliseconds and cannot straddle
+    # two boundaries in a row. The retry needs no fresh token, because the rolled
+    # window gives the same key a clean bucket.
+    defp three_requests(conn, plaintext, attempt \\ 1) do
+      before = current_window()
+      conn1 = conn |> authed(plaintext) |> get("/api/2.0/me")
+      build_conn() |> authed(plaintext) |> get("/api/2.0/me")
+      conn3 = build_conn() |> authed(plaintext) |> get("/api/2.0/me")
+
+      cond do
+        current_window() == before -> {conn1, conn3}
+        attempt < 3 -> three_requests(build_conn(), plaintext, attempt + 1)
+        true -> flunk("the rate-limit window rolled on every attempt")
+      end
+    end
+
+    defp current_window, do: div(System.system_time(:millisecond), @window_ms)
   end
 
   describe "CORS" do
