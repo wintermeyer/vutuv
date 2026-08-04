@@ -80,6 +80,13 @@ defmodule VutuvWeb.NotificationLiveTest do
                ~s([data-kind="username"] a[href="#{import_url}"]),
                import_url
              )
+
+      # The sentence must not END on a URL: the full stop then sits flush
+      # against the address and reads as part of it (reported 2026-08-04). This
+      # catches it whichever wording or language the row is in, because it looks
+      # for the punctuation right after the closing tag rather than for a phrase.
+      refute html =~ "/settings/import/linkedin</a>."
+      refute html =~ "/settings/username</a>."
     end
 
     test "lists real events derived from the database", %{conn: conn} do

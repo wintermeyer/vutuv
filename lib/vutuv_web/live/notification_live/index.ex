@@ -815,13 +815,19 @@ defmodule VutuvWeb.NotificationLive.Index do
   # rides along because this is the one moment somebody arriving from LinkedIn
   # still has that profile in mind, and the page is otherwise buried in
   # /settings.
+  #
+  # NEITHER language may end this sentence on a URL: the full stop then sits
+  # flush against the address, and a reader cannot tell whether it belongs to
+  # the link (reported 2026-08-04). Both {url} and {import_url} are therefore
+  # followed by a space and at least one word. Keep that property when
+  # rewording, in the .po files too.
   attr(:handle, :string, required: true)
 
   defp username_line(assigns) do
     {greeting, rest} =
       split_marker(
         gettext(
-          "Welcome to vutuv! You can change your username {handle} at {url}, and if you would like to import an existing LinkedIn profile, you can do that at {import_url}."
+          "Welcome to vutuv! You can change your username {handle} at {url}, and at {import_url} you can import an existing LinkedIn profile."
         ),
         "{handle}"
       )
