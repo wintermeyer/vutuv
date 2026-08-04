@@ -597,13 +597,48 @@ defmodule VutuvWeb.UI do
   address is registered - the PIN screen must stay byte-identical for known and
   unknown addresses (the enumeration guard in `Vutuv.Accounts`).
   """
+  attr(:email, :string,
+    default: nil,
+    doc: "the pending address, named so a typo in it is visible"
+  )
+
+  attr(:context, :atom,
+    default: :login,
+    values: [:login, :registration],
+    doc: "which PIN screen this is; only :login may suggest another address"
+  )
+
   def pin_actions(assigns) do
     ~H"""
     <div class="mt-4 text-sm">
       <p class="text-slate-600 dark:text-slate-400">
-        {gettext(
-          "Not getting the PIN? That email address may no longer be working. If you have added other addresses to your vutuv account, try logging in with one of those instead."
-        )}
+        <%!-- The address is spelled out and set in semibold, because the single
+              most likely reason no PIN arrives is that it was mistyped one
+              screen ago, and a member cannot spot that in an address they
+              cannot see. Split on a placeholder with `split_marker/2` rather
+              than matching the translated sentence, which would turn a .po slip
+              into a 500. The nil branch is the belt-and-braces case (no pending
+              cookie); the controllers redirect before rendering then, so it
+              should not be reachable. --%>
+        <%= if @email do %>
+          <% {pre, post} =
+            split_marker(
+              gettext("Not getting the PIN? The email address {email} may not be working right now."),
+              "{email}"
+            ) %>
+          {pre}<span class="font-semibold text-slate-800 dark:text-slate-200">{@email}</span>{post}
+        <% else %>
+          {gettext("Not getting the PIN? That email address may not be working right now.")}
+        <% end %>
+        <%!-- Only the login screen may say this. At registration the member has
+              given exactly one address and has no account yet, so advice to
+              "log in with one of your other addresses" describes a situation
+              that cannot exist and reads as a page written for somebody else. --%>
+        <span :if={@context == :login}>
+          {gettext(
+            "If you have added other addresses to your vutuv account, try logging in with one of those instead."
+          )}
+        </span>
       </p>
       <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         <.form for={%{}} action={~p"/login/resend"} method="post" id="resend-pin-form">

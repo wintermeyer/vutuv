@@ -2,14 +2,18 @@
   title={gettext("Please check your INBOX.")}
   subtitle={gettext("Your account has been created, and an email with a PIN has been sent. No passwords to remember! Once you enter your PIN below, you'll be logged in on this device for the next 90 days, or until you log out.")}
 >
+  <%!-- "Enter your PIN" alone can be read as an instruction to invent one, and
+        somebody who skims this page sees little else. The heading now says
+        where the PIN comes from, and the placeholder says what it looks like,
+        so the two lines answer different questions instead of repeating one. --%>
   <h2 class="text-xl font-bold text-slate-900 dark:text-white">
-    {gettext("Enter your PIN")}
+    {gettext("Enter the PIN from the email")}
   </h2>
 
   <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="mt-5 space-y-4" id="pin-form" method="post">
     <%!-- Greet first-time members as new, not with "Welcome back!". --%>
     <%= hidden_input f, :context, value: "registration" %>
-    <%= text_input f, :pin, class: input_class(), autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("Enter your PIN") %>
+    <%= text_input f, :pin, class: input_class(), autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("6-digit PIN") %>
     <.button type="submit" class="w-full">{gettext("submit")}</.button>
   </.form>
 
@@ -17,7 +21,7 @@
     {gettext("Please check your spam folder in case you don't find the email in your inbox.")}
   </p>
 
-  <.pin_actions />
+  <.pin_actions email={Vutuv.Accounts.read_pin_cookie(@conn)} context={:registration} />
 
   <%= if dev_mailbox?() do %>
     <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">

@@ -58,8 +58,11 @@ defmodule VutuvWeb.AuthPagesRedesignTest do
         |> post(~p"/login", session: %{"email" => "whoever@example.com"})
         |> html_response(200)
 
-      assert body =~ "may no longer be working"
+      assert body =~ "may not be working right now"
       assert body =~ "Use a different email address"
+      # And it names the address, so a member who mistyped it one screen ago can
+      # see that rather than wait for a PIN that was never going to arrive.
+      assert body =~ "whoever@example.com"
     end
   end
 

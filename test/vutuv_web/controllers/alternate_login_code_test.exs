@@ -51,7 +51,7 @@ defmodule VutuvWeb.AlternateLoginCodeTest do
     {user, secret} = enrolled_user(email)
 
     conn = post(build_conn(), ~p"/login", session: %{"email" => email})
-    assert html_response(conn, 200) =~ "Enter your PIN"
+    assert html_response(conn, 200) =~ "Enter the PIN from the email"
     assert conn.resp_body =~ "alternative-codes-hint"
 
     code = NimbleTOTP.verification_code(secret)
