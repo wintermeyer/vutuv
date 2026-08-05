@@ -29,16 +29,25 @@
     {gettext("Create your free account")}
   </h2>
 
-  <%!-- The sign-up form is grouped into three blocks (who you are / your email
-        / privacy) divided by hairlines, so the fields read as three digestible
-        sections instead of one long, undifferentiated list. Shared class/option
-        bindings keep the repeated radio groups and consent checkboxes
-        consistent. --%>
-  <%!-- Order and default come from the schema (Vutuv.Accounts.Email.email_types/0),
-        so the form can never offer a value the changeset rejects: Privat, Arbeit,
-        Andere - with Privat preselected by the controller. --%>
+  <%!-- One flat list of evenly spaced fields, each with a label above it — the
+        radio groups included, which is what the earlier version got wrong: it
+        labelled its two radio groups and left every text field to a placeholder
+        that disappears the moment you type, so half the form looked titled and
+        half of it did not. It also had three blocks, named none of them and
+        ruled off only the last, which read as grouping abandoned halfway. So
+        grouping is now all or nothing, and this is nothing.
+
+        The one deliberate group is at the end: every "who may see this" choice
+        in a single Privacy fieldset, the email address's own visibility box
+        included. That box used to sit up beside the address, which put four
+        identical-looking checkboxes in two unrelated places.
+
+        Order and default of the email types come from the schema
+        (Vutuv.Accounts.Email.email_types/0), so the form can never offer a value
+        the changeset rejects: Privat, Arbeit, Andere - with Privat preselected
+        by the controller. --%>
   <% email_type_options = Enum.map(Email.email_types(), &{email_type_label(&1), &1}) %>
-  <% legend_class = "mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300" %>
+  <% label_class = "mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300" %>
   <% check_label_class = "flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300" %>
 
   <.form
@@ -46,196 +55,191 @@
     for={@changeset}
     action={~p"/new_registration"}
     multipart
-    class="mt-5 space-y-6"
+    class="mt-5 space-y-5"
     id="registration-form"
   >
     <.form_error changeset={@changeset} />
 
-    <%!-- Group 1: who you are. The name comes first and takes the autofocus.
-          The gender question below it used to sit here instead, preselected to
-          "männlich", which made it a gate in front of the form rather than a
-          detail within it — and made every woman correct an assumption about
-          herself before typing her name. --%>
-    <div class="space-y-4">
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <%= text_input f, :first_name, class: input_class(f, :first_name), placeholder: gettext("Enter your first name"), autofocus: true, "aria-invalid": f.errors[:first_name] && "true" %>
-          <%= error_tag f, :first_name %>
-        </div>
-        <div>
-          <%= text_input f, :last_name, class: input_class(f, :last_name), placeholder: gettext("Enter your last name"), "aria-invalid": f.errors[:last_name] && "true" %>
-          <%= error_tag f, :last_name %>
-        </div>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label for={f[:first_name].id} class={label_class}>{gettext("First name")}</label>
+        <%= text_input f, :first_name, class: input_class(f, :first_name), autocomplete: "given-name", autofocus: true, "aria-invalid": f.errors[:first_name] && "true" %>
+        <%= error_tag f, :first_name %>
       </div>
-      <%!-- The membership statistic (see `User.gender`), and the field members
-            complained about in its first incarnation. Three things keep it from
-            reading that way again: nothing is preselected, it sits below the
-            name rather than in front of it, and it is plainly marked optional.
-            The purpose sentence that used to sit under it was dropped on
-            Stefan's ask (2026-08-04) once the form was seen rendered; the
-            profile editor still carries the longer version.
+      <div>
+        <label for={f[:last_name].id} class={label_class}>{gettext("Last name")}</label>
+        <%= text_input f, :last_name, class: input_class(f, :last_name), autocomplete: "family-name", "aria-invalid": f.errors[:last_name] && "true" %>
+        <%= error_tag f, :last_name %>
+      </div>
+    </div>
 
-            The checked state is computed here rather than left to
-            `radio_button/4`'s own detection, which compares the field value to
-            the option value — and `html_escape(nil)` equals the blank option's
-            "", so a fresh form would arrive with "Keine Angabe" preselected.
-            Nothing may be preselected (`PageController.index/2` says why), so
-            an option is checked when it matches, and the blank one additionally
-            only once the form has been submitted, which is what keeps a failed
-            submit from silently dropping the member's answer. --%>
-      <% gender_value = to_string(f[:gender].value) %>
-      <% submitted? = @changeset.action != nil %>
-      <fieldset id="signup-gender">
-        <legend class={legend_class}>
-          {gettext("Gender")}
-          <span class="font-normal text-slate-600 dark:text-slate-400">{gettext("(optional)")}</span>
-        </legend>
+    <%!-- The membership statistic (see `User.gender`), and the field members
+          complained about in its first incarnation. Three things keep it from
+          reading that way again: nothing is preselected, it sits below the name
+          rather than in front of it, and it is plainly marked optional.
+
+          The checked state is computed here rather than left to
+          `radio_button/4`'s own detection, which compares the field value to the
+          option value — and `html_escape(nil)` equals the blank option's "", so a
+          fresh form would arrive with "Keine Angabe" preselected. Nothing may be
+          preselected (`PageController.index/2` says why), so an option is checked
+          when it matches, and the blank one additionally only once the form has
+          been submitted, which is what keeps a failed submit from silently
+          dropping the member's answer. --%>
+    <% gender_value = to_string(f[:gender].value) %>
+    <% submitted? = @changeset.action != nil %>
+    <fieldset id="signup-gender">
+      <legend class={label_class}>
+        {gettext("Gender")}
+        <span class="font-normal text-slate-600 dark:text-slate-400">{gettext("(optional)")}</span>
+      </legend>
+      <div class="flex flex-wrap gap-x-5 gap-y-2">
+        <%= for {glabel, gvalue} <- gender_options() do %>
+          <label class={radio_label_class()}>
+            <%= radio_button f, :gender, gvalue, class: radio_class(), checked: gender_value == gvalue and (gvalue != "" or submitted?) %>
+            <span>{glabel}</span>
+          </label>
+        <% end %>
+      </div>
+      <%= error_tag f, :gender %>
+    </fieldset>
+
+    <div>
+      <label for={f[:tag_list].id} class={label_class}>{gettext("Tags")}</label>
+      <.tag_input
+        id="signup-tags"
+        field_id={f[:tag_list].id}
+        name={f[:tag_list].name}
+        value={f[:tag_list].value || ""}
+        placeholder={gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)")}
+        field_class={input_class(f, :tag_list)}
+        invalid?={f.errors[:tag_list] != nil}
+        aria-invalid={f.errors[:tag_list] && "true"}
+      />
+      <%!-- Tags are how members are found, so sign-up asks for at least three
+            (enforced by the registration changeset). On a failed submit the
+            specific error replaces the hint — the two would say nearly the same
+            thing, and one clear line beats a red-on-grey stack. The input itself
+            turns red via input_class/2. --%>
+      <%= error_tag f, :tag_list %>
+      <p :if={!f.errors[:tag_list]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by commas. A tag may be several words long, like Ruby on Rails.")}</p>
+    </div>
+
+    <%!-- The Privacy fieldset sits INSIDE this `inputs_for` so the email
+          address's visibility box can join the other three without a second
+          `inputs_for` over the same association, which would render the nested
+          form's hidden `_persistent_id` field twice under one name. `f` is still
+          in scope in here, so the three user-level checkboxes below cost
+          nothing for sitting in this block. --%>
+    <.inputs_for :let={ef} field={f[:emails]}>
+      <div>
+        <label for={ef[:value].id} class={label_class}>{gettext("Email address")}</label>
+        <%= email_input ef, :value, class: input_class(ef, :value), autocomplete: "email", autocapitalize: "off", autocorrect: "off", spellcheck: "false", "aria-invalid": ef.errors[:value] && "true" %>
+        <%= error_tag ef, :value %>
+      </div>
+
+      <%!-- A radio group, not a dropdown, so a normal user sees all three
+            choices at once, and "Personal" is preselected (set on the changeset
+            by `PageController.index/2`) instead of the old unhelpful "Other"
+            default — most people sign up with their private address. --%>
+      <fieldset>
+        <legend class={label_class}>{gettext("Type of email address")}</legend>
         <div class="flex flex-wrap gap-x-5 gap-y-2">
-          <%= for {glabel, gvalue} <- gender_options() do %>
+          <%= for {elabel, evalue} <- email_type_options do %>
             <label class={radio_label_class()}>
-              <%= radio_button f, :gender, gvalue, class: radio_class(), checked: gender_value == gvalue and (gvalue != "" or submitted?) %>
-              <span>{glabel}</span>
+              <%= radio_button ef, :email_type, evalue, class: radio_class() %>
+              <span>{elabel}</span>
             </label>
           <% end %>
         </div>
-        <%= error_tag f, :gender %>
+        <%= error_tag ef, :email_type %>
       </fieldset>
-      <div>
-        <.tag_input
-          id="signup-tags"
-          field_id={f[:tag_list].id}
-          name={f[:tag_list].name}
-          value={f[:tag_list].value || ""}
-          placeholder={gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)")}
-          field_class={input_class(f, :tag_list)}
-          invalid?={f.errors[:tag_list] != nil}
-          aria-invalid={f.errors[:tag_list] && "true"}
-        />
-        <%!-- Tags are how members are found, so sign-up asks for at least
-              three (enforced by the registration changeset). On a failed
-              submit the specific error replaces the hint — the two would say
-              nearly the same thing, and one clear line beats a red-on-grey
-              stack. The input itself turns red via input_class/2. --%>
-        <%= error_tag f, :tag_list %>
-        <p :if={!f.errors[:tag_list]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by commas. A tag may be several words long, like Ruby on Rails.")}</p>
-      </div>
-    </div>
 
-    <%!-- Group 2: email. The address itself comes first, then the two things
-          that are true *about* it: what kind of address it is, and who may see
-          it. A property is answered after the thing it belongs to — the same
-          order the block above follows, and the reason the type
-          moved down here: it used to sit above the field, so the form asked how
-          to classify an address before asking for one, and it was the only
-          property of the address that did not sit under it (the visibility
-          checkbox always has). --%>
-    <div class="space-y-4">
-      <.inputs_for :let={ef} field={f[:emails]}>
-        <div>
-          <%= email_input ef, :value, class: input_class(ef, :value), placeholder: gettext("Enter your email address"), "aria-invalid": ef.errors[:value] && "true" %>
-          <%= error_tag ef, :value %>
+      <%!-- Positive, opt-in phrasing throughout, every box checked by default.
+            The middle two are inverted: the box reads positively ("Allow ...")
+            while the underlying `noindex?` / `noai?` flags are negative, so a
+            checked box submits "false" (allow). The SEO question (search
+            engines), the GEO question (AI agents / LLMs) and the Fediverse
+            question (other social networks) are asked separately, since a member
+            may say yes to one and no to the next. --%>
+      <fieldset id="signup-privacy">
+        <legend class={label_class}>{gettext("Privacy")}</legend>
+        <div class="space-y-3">
+          <%!-- Checked by default (the controller primes public?: true on the
+                changeset), so a normal member's address shows on their profile
+                unless they opt out here. --%>
+          <label class={check_label_class}>
+            <%= checkbox ef, :public?, class: checkbox_class() %>
+            <span>{gettext("Allow others to view your email address")}</span>
+            <%= error_tag ef, :public? %>
+          </label>
+          <label class={check_label_class}>
+            <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
+            <%!-- The "(SEO)" / "(GEO)" tags are international (same in DE/EN), so
+                  they are literal text outside gettext rather than part of the
+                  string. --%>
+            <span>{gettext("Allow search engines to index your profile")} (SEO)</span>
+            <%= error_tag f, :noindex? %>
+          </label>
+          <label class={check_label_class}>
+            <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
+            <span>{gettext("Allow AI agents and LLMs to use your profile")} (GEO)</span>
+            <%= error_tag f, :noai? %>
+          </label>
+          <%!-- The third "who may reach this profile" question, and the one that
+                is NOT inverted: checked means taking part. Pre-checked by the
+                controller, because most people who join want it and this is the
+                only moment they are asked; /settings/fediverse takes it back at
+                any time. The label is deliberately the same sentence as the
+                switch on that page, so the member recognizes the thing they are
+                looking for later.
+
+                One box, all three of that page's switches (see
+                PageController.expand_fediverse_choice/1) — which is exactly why
+                this box carries three lines of explanation where the others carry
+                none. It is the only choice on this form that is not just about
+                the member's own data: ticking it means answers written by people
+                who never signed up here are stored on our server, so the text has
+                to say that, and say for how long, before the tick counts as
+                consent to it. Left out entirely where the installation federates
+                nothing (FEDIVERSE_ENABLED=false, intranets). --%>
+          <label :if={Vutuv.Fediverse.enabled?()} class={check_label_class}>
+            <%= checkbox f, :fediverse_followers?, class: checkbox_class() %>
+            <span>
+              {gettext("Take part in the Fediverse")}
+              <%!-- `font-normal` is not decoration: components.css sets every
+                    <label> bold, which the box labels want and this helper line
+                    does not - without it the explanation shouts as loudly as the
+                    choice it explains. --%>
+              <%!-- "Mastodon" links out to the project's own site, because the
+                    word is the one thing in this sentence a first-time visitor
+                    may not know, and the tick is only informed consent if they
+                    can find out. Split on a placeholder with `split_marker/2`
+                    (the same total, never-raising helper the terms line below
+                    uses) rather than matching the sentence itself: a hard split
+                    on a translated string turns any .po slip into a 500. The link
+                    text is not translated - it is a product name. --%>
+              <% {mastodon_pre, mastodon_post} =
+                split_marker(
+                  gettext(
+                    "Your public posts then also appear on {mastodon} and other independent networks, where people can follow you. Replies and reposts come back under your posts, with the account's address, and are kept for up to six months. You can switch it off at any time."
+                  ),
+                  "{mastodon}"
+                ) %>
+              <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
+                {mastodon_pre}<a
+                  href="https://joinmastodon.org"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                >Mastodon</a>{mastodon_post}
+              </span>
+            </span>
+            <%= error_tag f, :fediverse_followers? %>
+          </label>
         </div>
-        <%!-- A radio group, not a dropdown, so a normal user sees all three
-              choices at once, and "Personal" is preselected (set on the
-              changeset by `PageController.index/2`) instead of the old
-              unhelpful "Other" default — most people sign up with their
-              private address. --%>
-        <fieldset>
-          <legend class={legend_class}>{gettext("Type of email address")}</legend>
-          <div class="flex flex-wrap gap-x-5 gap-y-2">
-            <%= for {elabel, evalue} <- email_type_options do %>
-              <label class={radio_label_class()}>
-                <%= radio_button ef, :email_type, evalue, class: radio_class() %>
-                <span>{elabel}</span>
-              </label>
-            <% end %>
-          </div>
-          <%= error_tag ef, :email_type %>
-        </fieldset>
-        <%!-- Checked by default (the controller primes public?: true on the
-              changeset), so a normal member's address shows on their profile
-              unless they opt out here. --%>
-        <label class={check_label_class}>
-          <%= checkbox ef, :public?, class: checkbox_class() %>
-          <span>{gettext("Allow others to view your email address")}</span>
-          <%= error_tag ef, :public? %>
-        </label>
-      </.inputs_for>
-    </div>
-
-    <%!-- Group 3: reach. Positive, opt-in phrasing to match the email
-          checkbox above, and every box checked by default. The first two
-          fields are inverted: the box reads positively ("Allow ...") while the
-          underlying `noindex?` / `noai?` flags are negative, so a checked box
-          submits "false" (allow). The SEO question (search engines), the GEO
-          question (AI agents / LLMs) and the Fediverse question (other social
-          networks) are asked separately, since a member may say yes to one and
-          no to the next. --%>
-    <div class="space-y-3 border-t border-slate-200 pt-6 dark:border-slate-800">
-      <label class={check_label_class}>
-        <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
-        <%!-- The "(SEO)" / "(GEO)" tags are international (same in DE/EN), so they
-              are literal text outside gettext rather than part of the string. --%>
-        <span>{gettext("Allow search engines to index your profile")} (SEO)</span>
-        <%= error_tag f, :noindex? %>
-      </label>
-      <label class={check_label_class}>
-        <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
-        <span>{gettext("Allow AI agents and LLMs to use your profile")} (GEO)</span>
-        <%= error_tag f, :noai? %>
-      </label>
-      <%!-- The third "who may reach this profile" question (Vutuv.Fediverse),
-            and the one that is NOT inverted: checked means taking part.
-            Pre-checked by the controller, because most people who join want it
-            and this is the only moment they are asked; /settings/fediverse
-            takes it back at any time. The label is deliberately the same
-            sentence as the switch on that page, so the member recognizes the
-            thing they are looking for later.
-
-            One box, all three of that page's switches (see
-            PageController.expand_fediverse_choice/1) — which is exactly why
-            this box carries three lines of explanation where the other two
-            carry none. It is the only choice on this form that is not just
-            about the member's own data: ticking it means answers written by
-            people who never signed up here are stored on our server, so the
-            text has to say that, and say for how long, before the tick counts
-            as consent to it. Left out entirely where the installation
-            federates nothing (FEDIVERSE_ENABLED=false, intranets). --%>
-      <label :if={Vutuv.Fediverse.enabled?()} class={check_label_class}>
-        <%= checkbox f, :fediverse_followers?, class: checkbox_class() %>
-        <span>
-          {gettext("Take part in the Fediverse")}
-          <%!-- `font-normal` is not decoration: components.css sets every
-                <label> bold, which the three box labels want and this helper
-                line does not - without it the explanation shouts as loudly as
-                the choice it explains. --%>
-          <%!-- "Mastodon" links out to the project's own site, because the word
-                is the one thing in this sentence a first-time visitor may not
-                know, and the tick is only informed consent if they can find
-                out. Split on a placeholder with `split_marker/2` (the same
-                total, never-raising helper the terms line below uses) rather
-                than matching the sentence itself: a hard split on a translated
-                string turns any .po slip into a 500. The link text is not
-                translated - it is a product name. --%>
-          <% {mastodon_pre, mastodon_post} =
-            split_marker(
-              gettext(
-                "Your public posts then also appear on {mastodon} and other independent networks, where people can follow you. Replies and reposts come back under your posts, with the account's address, and are kept for up to six months. You can switch it off at any time."
-              ),
-              "{mastodon}"
-            ) %>
-          <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
-            {mastodon_pre}<a
-              href="https://joinmastodon.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-            >Mastodon</a>{mastodon_post}
-          </span>
-        </span>
-        <%= error_tag f, :fediverse_followers? %>
-      </label>
-    </div>
+      </fieldset>
+    </.inputs_for>
 
     <.button type="submit" class="w-full">{gettext("Sign up for a free account")}</.button>
 

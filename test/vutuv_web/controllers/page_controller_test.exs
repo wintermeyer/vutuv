@@ -439,6 +439,74 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
+  describe "GET / sign-up form layout" do
+    # Safari's AutoFill on macOS and iOS offers a form the user's own contact
+    # card only where the fields say what they hold: it reads the `autocomplete`
+    # tokens, and to a browser `user[first_name]` is otherwise an anonymous text
+    # box. Chrome and Firefox read the same tokens, so this is the whole feature
+    # for all three. Only fields that exist on a contact card get one — the tag
+    # box says `off`, since no address book holds a list of skills and a
+    # suggestion there would be noise on the field members most need to think
+    # about.
+    test "the name and email fields carry the autofill tokens", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert autocomplete(body, "user[first_name]") == "given-name"
+      assert autocomplete(body, "user[last_name]") == "family-name"
+      assert autocomplete(body, "user[emails][0][value]") == "email"
+      assert autocomplete(body, "user[tag_list]") == "off"
+    end
+
+    # Every field is labelled, and every label is really bound to its field.
+    # The form used to label its two radio groups and leave the text fields to
+    # placeholders — which vanish the moment you type, are not an accessible
+    # name, and made half the form look titled and half of it not.
+    test "every text field has a label bound to it", %{conn: conn} do
+      doc = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
+
+      for name <- [
+            "user[first_name]",
+            "user[last_name]",
+            "user[emails][0][value]",
+            "user[tag_list]"
+          ] do
+        assert [id] =
+                 doc
+                 |> LazyHTML.query(~s(#registration-form [name="#{name}"]))
+                 |> LazyHTML.attribute("id")
+
+        assert [_] = Enum.to_list(LazyHTML.query(doc, ~s(label[for="#{id}"]))),
+               "#{name} has no <label for> pointing at it"
+      end
+    end
+
+    # One home for the visibility choices. The email address's own "may others
+    # see it" box used to sit up beside the address while the other three sat in
+    # a block of their own, so four identical-looking checkboxes appeared in two
+    # unrelated places on one short form. Asserting that the form holds no
+    # checkbox OUTSIDE this fieldset is the part that keeps it that way.
+    test "every visibility choice sits in the one Privacy fieldset", %{conn: conn} do
+      doc = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
+
+      in_fieldset =
+        doc
+        |> LazyHTML.query(~s(#signup-privacy input[type="checkbox"]))
+        |> LazyHTML.attribute("name")
+
+      assert "user[emails][0][public?]" in in_fieldset
+      assert "user[noindex?]" in in_fieldset
+      assert "user[noai?]" in in_fieldset
+      assert "user[fediverse_followers?]" in in_fieldset
+
+      in_form =
+        doc
+        |> LazyHTML.query(~s(#registration-form input[type="checkbox"]))
+        |> LazyHTML.attribute("name")
+
+      assert Enum.sort(in_form) == Enum.sort(in_fieldset)
+    end
+  end
+
   describe "POST /new_registration" do
     # The round trip the rendered form performs: the radio group's name and
 
@@ -848,6 +916,17 @@ defmodule VutuvWeb.PageControllerTest do
 
   # `checkbox_checked?/2` is shared with the other form tests and lives in
   # VutuvWeb.ConnCase.
+
+  # The `autocomplete` token of the form field with this name, or nil when the
+  # field carries none — which is the failing state the autofill test guards
+  # against, not an error.
+  defp autocomplete(html, name) do
+    html
+    |> LazyHTML.from_document()
+    |> LazyHTML.query(~s(#registration-form [name="#{name}"]))
+    |> LazyHTML.attribute("autocomplete")
+    |> List.first()
+  end
 
   # True when the <input type="radio" name=name value=value> in `html` is
   # checked, regardless of attribute order.
