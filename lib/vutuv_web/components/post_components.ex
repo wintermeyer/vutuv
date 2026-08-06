@@ -1394,11 +1394,18 @@ defmodule VutuvWeb.PostComponents do
   # row a member's post gets for its tags — the whole point of lifting them out
   # of the text (`Markdown.split_trailing_hashtags/1`): one tag vocabulary,
   # rendered one way, wherever a post came from.
+  #
+  # Down to the gap above the row, which is `<.post_tags>`'s `mt-3` and not a
+  # tighter one of its own: the two cards sit one under the other in the same
+  # feed column, so a row 4px closer to the last line does not read as "this
+  # one came from elsewhere", it reads as a card that got its spacing wrong.
+  # It showed most where a post ends on a link, which is where the eye already
+  # sits low in the line.
   attr(:tags, :list, required: true)
 
   defp remote_tags(assigns) do
     ~H"""
-    <div :if={@tags != []} data-remote-tags class="mt-2 flex flex-wrap gap-2">
+    <div :if={@tags != []} data-remote-tags class="mt-3 flex flex-wrap gap-2">
       <.chip :for={tag <- @tags} navigate={tag.path} data-remote-tag={tag.name}>{tag.name}</.chip>
     </div>
     """

@@ -12,6 +12,7 @@ defmodule VutuvWeb.FeedRemotePostsTest do
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Posts
 
   @actor "https://social.example/users/them"
 
@@ -483,6 +484,35 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
       assert has_element?(view, "#{card} [data-remote-tag='Anschlag']")
       refute has_element?(view, "#{card} .markdown")
+    end
+
+    test "sits as far below the text as a member post's tag row", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # Two different tags, so the chip looked up below can only be the member
+      # card's — a remote chip links to the very same tag page.
+      theirs = linkable_tag()
+      mine = linkable_tag()
+
+      cached_post(user, %{content_text: "Von drüben.\n\n##{theirs.name}"})
+      {:ok, _post} = Posts.create_post(user, %{body: "Von hier.", tags: mine.name})
+
+      {:ok, _view, html} = live(conn, ~p"/feed")
+      doc = LazyHTML.from_document(html)
+
+      # Compare the two rows' classes rather than assert a literal margin: the
+      # member row is the reference, so whatever it changes to, the remote row
+      # has to follow. The last line of a post is very often a link, and a link
+      # that ends a paragraph sits closer to the chips than a plain sentence
+      # does, which made the 4px the remote row was short (mt-2 against mt-3)
+      # read as a different card rather than a different origin.
+      [remote_row_class] =
+        doc |> LazyHTML.query("[data-remote-tags]") |> LazyHTML.attribute("class")
+
+      member_chip =
+        LazyHTML.query(doc, ~s|div[class="#{remote_row_class}"] a[href="/tags/#{mine.slug}"]|)
+
+      refute Enum.empty?(member_chip),
+             "the member card's tag row does not carry the remote row's spacing (#{remote_row_class})"
     end
   end
 end
