@@ -283,6 +283,22 @@ out there (#1161), what people you follow *here* reshared from another network
 (#1166), and what those accounts boosted (#1167) — see
 [fediverse.md](fediverse.md).
 
+**What keeps that first source cheap.** The local posts source ("mine plus the
+people I follow", newest first) has to stay a *page*-sized read as the posts
+table grows, and two things make it one. `posts_recency_index` covers its sort
+key `(inserted_at DESC, id DESC)` — without it Postgres reads every post ever
+written and top-N sorts, because the `my own OR my followees'` disjunction rules
+out the per-author indexes. And the query names its author join `as: :author`,
+which makes `scope_visible/2` spell the moderation gate as
+`Moderation.Query.account_hidden_row/1` (reading the joined row) instead of the
+correlated `account_hidden/1`, whose de-correlated form scans all of `users` per
+post query. Any post query may opt in the same way: naming the binding is the
+only signal, and it changes how the question is asked, never the answer. For the
+queries that legitimately cannot join the author, `users_hidden_index` (partial,
+on the four columns that hide an account) keeps the EXISTS off a full scan.
+Measured on a copy of production seeded to 200,000 posts, the two indexes took
+that source from 76.7 ms to 0.53 ms.
+
 **Source tabs: All / vutuv / Fediverse.** Above the timeline sits the same
 segmented control the profile's post-type tabs use
 (`PostComponents.post_filter_tabs/1`, here with `feed_filter_options/0` and the

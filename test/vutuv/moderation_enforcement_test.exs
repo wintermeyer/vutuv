@@ -106,6 +106,26 @@ defmodule Vutuv.ModerationEnforcementTest do
       set_user!(author, deactivated_at: NaiveDateTime.utc_now(:second))
       refute post.id in feed_post_ids(follower)
     end
+
+    # The fourth arm of `Vutuv.Moderation.Query.account_hidden/1`, and the one
+    # that had no feed test: an account whose every address bounced
+    # (`Vutuv.Deliverability`) is a zombie nobody can reach, so it leaves the
+    # public network like the other three. Worth its own test because the gate
+    # is spelled twice — as a correlated EXISTS and, where the author row is
+    # already joined, as `account_hidden_row/1` — and the two must agree.
+    test "an unreachable account's posts vanish", %{
+      follower: follower,
+      author: author,
+      post: post
+    } do
+      assert post.id in feed_post_ids(follower)
+
+      set_user!(author, unreachable_at: NaiveDateTime.utc_now(:second))
+
+      refute post.id in feed_post_ids(follower)
+      refute Posts.visible_to?(Repo.get!(Posts.Post, post.id), follower)
+      assert post.id in feed_post_ids(author)
+    end
   end
 
   describe "frozen messages" do

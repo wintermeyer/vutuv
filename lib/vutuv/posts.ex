@@ -924,10 +924,7 @@ defmodule Vutuv.Posts do
   # condition itself is owned by Vutuv.Moderation.Query.
   defp scope_unfrozen(query, viewer) do
     passes =
-      dynamic(
-        [p],
-        is_nil(p.frozen_at) and p.images_pending? == false and not account_hidden(p.user_id)
-      )
+      dynamic([p], is_nil(p.frozen_at) and p.images_pending? == false) |> and_author_shown(query)
 
     filter =
       case viewer do
@@ -936,6 +933,30 @@ defmodule Vutuv.Posts do
       end
 
     where(query, ^filter)
+  end
+
+  # "…and the author's account is not hidden", in whichever of the two spellings
+  # the query can afford.
+  #
+  # `account_hidden/1` re-fetches the author row by id in a correlated EXISTS,
+  # which composes into any query but costs a pass over `users` — Postgres
+  # de-correlates it into a hashed subplan and scans the whole table to collect
+  # the few hundred hidden ids, once per post query (five times on one /feed).
+  # A query that already joins the author has those columns in hand, so it uses
+  # the row form instead and reads them; `Vutuv.Moderation.Query` documents the
+  # pair, and the two say exactly the same thing about the same row.
+  #
+  # The named binding is the signal: a post query that joins its author as
+  # `as: :author` gets the cheaper gate automatically, one that does not keeps
+  # the EXISTS. Nothing here decides *whether* a post is shown — only how the
+  # question is put to Postgres — so a caller may add or drop the binding
+  # freely.
+  defp and_author_shown(passes, query) do
+    if has_named_binding?(query, :author) do
+      dynamic([author: a], ^passes and not account_hidden_row(a))
+    else
+      dynamic([p], ^passes and not account_hidden(p.user_id))
+    end
   end
 
   @doc """
@@ -1620,7 +1641,12 @@ defmodule Vutuv.Posts do
     # (no denials, unfrozen, non-hidden author); only the search-specific
     # filters stay here. Search keeps the stricter `email_confirmed? == true`
     # (not the confirmed-or-legacy-NULL gate) deliberately.
-    from(p in Post, as: :post, join: u in assoc(p, :user), where: u.email_confirmed? == true)
+    from(p in Post,
+      as: :post,
+      join: u in assoc(p, :user),
+      as: :author,
+      where: u.email_confirmed? == true
+    )
     |> filter_body_search(value)
     |> filter_posts_by_tag(tag, Keyword.get(opts, :exact, false))
     |> order_public_search(value)
@@ -1709,6 +1735,7 @@ defmodule Vutuv.Posts do
 
     from(p in Post,
       join: u in assoc(p, :user),
+      as: :author,
       join: pt in subquery(filings),
       as: :post_tag,
       on: pt.post_id == p.id,
@@ -1965,6 +1992,7 @@ defmodule Vutuv.Posts do
   defp feed_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     from(p in Post,
       join: u in assoc(p, :user),
+      as: :author,
       where: p.user_id == ^viewer_id or p.user_id in subquery(followees_of(viewer_id)),
       where: p.user_id == ^viewer_id or account_confirmed_row(u),
       order_by: [desc: p.inserted_at, desc: p.id],
@@ -1988,6 +2016,7 @@ defmodule Vutuv.Posts do
       join: reposter in User,
       on: reposter.id == r.user_id,
       join: u in assoc(p, :user),
+      as: :author,
       where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
       where: r.user_id == ^viewer_id or account_confirmed_row(reposter),
       where: p.user_id == ^viewer_id or account_confirmed_row(u),
@@ -2030,6 +2059,7 @@ defmodule Vutuv.Posts do
         from(p in Post,
           as: :post,
           join: u in assoc(p, :user),
+          as: :author,
           where: p.user_id != ^viewer_id,
           where: p.user_id not in subquery(all_followees_of(viewer_id)),
           where: p.user_id not in subquery(blocked_either_way(viewer_id)),
@@ -2481,7 +2511,7 @@ defmodule Vutuv.Posts do
 
   def recent_public_posts(:all, opts) do
     Post
-    |> join(:inner, [p], u in assoc(p, :user))
+    |> join(:inner, [p], u in assoc(p, :user), as: :author)
     |> where([p, u], u.email_confirmed? and not u.noindex? and not u.noai?)
     |> recent_public(opts)
   end
@@ -2581,6 +2611,7 @@ defmodule Vutuv.Posts do
     from(p in Post,
       as: :post,
       join: u in assoc(p, :user),
+      as: :author,
       left_join: r in assoc(p, :reply_ref),
       where: is_nil(r.id),
       where: fragment("COALESCE(NULLIF(?, ''), 'en')", u.locale) == ^locale,
