@@ -359,6 +359,36 @@ render — the accepted cost of the immediate desktop paint. The periodic
 reshuffle timer is armed at connect; the refresh paths
 (`:refresh_suggestions`, `{:tag_follows_changed, _}`) redraw unconditionally.
 
+**Both suggestion cards read a snapshot, and neither trusts it.** "Who to
+follow" takes its pool from `Vutuv.Social.PopularUsers`, "Vorschläge" from
+`Vutuv.Posts.PopularPosts`: one GenServer each, re-ranking every ten minutes
+into a `read_concurrency` ETS table, with `:miss` falling back to the live
+query so boot and tests behave exactly as before. The reason is the same for
+both, and it is not the page load — it is that timer above. Every open feed tab
+redraws the rail every five minutes, so the old per-viewer ranking scaled with
+tabs left open rather than with people reading, while the expensive half of the
+question ("which posts in this language were well received, one per author,
+best first") has the same answer for every reader on the installation.
+
+What stays per request is the half that is actually personal, and for
+`discover_posts/2` that is where the old three-tier ladder went: the tiers were
+always one ordering over one candidate set (a stranger's post ahead of a
+followed author's, whose post must also be from this fortnight), so they are a
+`CASE` in the draw's `ORDER BY` now instead of three ranking scans, and the
+draw shuffles *inside* each tier — shuffling across the whole set silently
+throws the preference away. The ladder itself is still the code that runs on a
+`:miss`.
+
+The rule the design rests on: **the pool proposes, the database disposes.** A
+snapshot is minutes old and moderation is not, so the draw re-applies the full
+anonymous visibility gate plus the viewer's blocks and mutes to the candidates
+it picked. That check is affordable exactly because it is bounded to a few
+hundred known ids. Staleness can therefore cost a reader a slightly out-of-date
+*suggestion*, never a post they were not allowed to see — `popular_posts_test.exs`
+holds one case per way the world can move after a snapshot (post frozen, author
+frozen / suspended / deactivated / unreachable, post restricted, author blocked
+or muted since).
+
 The composer's body field is the shared **Milkdown WYSIWYG Markdown editor**
 (`VutuvWeb.UI.markdown_editor/1` + the `MarkdownEditor` hook, also used by the
 message composer). It edits Markdown *source* in place — the field stays a

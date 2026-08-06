@@ -436,8 +436,10 @@ config :vutuv, :reconcile_member_count, true
 # slow timer. Tests turn this off (sandbox ownership); every call then falls
 # back to the direct ranking query, so tests always see fresh data.
 config :vutuv, :refresh_popular_users, true
-# Same deal for the "who to follow" recent-poster pool (Vutuv.Posts.TopPosters).
+# Same deal for the "who to follow" recent-poster pool (Vutuv.Posts.TopPosters)
+# and the feed rail's suggested-posts pool (Vutuv.Posts.PopularPosts).
 config :vutuv, :refresh_top_posters, true
+config :vutuv, :refresh_popular_posts, true
 
 # The inline social posts on profiles (Vutuv.SocialFeed), one flag per
 # provider. Tests turn them off: every profile LiveView test performs a

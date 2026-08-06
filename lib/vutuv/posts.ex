@@ -65,6 +65,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Pages
   alias Vutuv.PostImageStore
   alias Vutuv.Posts.PhotoLicense
+  alias Vutuv.Posts.PopularPosts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostBookmark
   alias Vutuv.Posts.PostDenial
@@ -2570,6 +2571,106 @@ defmodule Vutuv.Posts do
   """
   def discover_posts(%User{} = viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @discover_limit)
+    table = Keyword.get(opts, :pool_table, PopularPosts.default_table())
+
+    case PopularPosts.top(locale_or_english(viewer.locale), table) do
+      {:ok, candidates} -> discover_from_pool(viewer, candidates, limit)
+      :miss -> discover_by_ladder(viewer, limit)
+    end
+  end
+
+  # The cheap path: the shared ranking already happened (see
+  # `Vutuv.Posts.PopularPosts`), so all that is left is to ask the database
+  # which of those candidates this reader may see, and to pick a handful.
+  #
+  # The ladder's three tiers become one ordering over one candidate set, which
+  # is what they always were. It also fixes which way round they run: tiers 1
+  # and 2 exclude everyone the viewer follows, so a well-connected member used
+  # to pay for two draws that could not fill the card before the third one did
+  # the work.
+  defp discover_from_pool(%User{} = viewer, candidates, limit) do
+    rank = candidates |> Enum.map(& &1.id) |> Enum.with_index() |> Map.new()
+
+    drawn =
+      rank
+      |> Map.keys()
+      |> discover_eligible(viewer)
+      |> Enum.group_by(& &1.tier)
+      |> Enum.sort_by(fn {tier, _rows} -> tier end)
+      # Each tier keeps its own draw — the best-liked @discover_pool of it, in
+      # random order — and a lower tier only fills what the ones above left
+      # over. The shuffle has to happen inside the tier, not across the whole
+      # set: shuffling the lot would throw away the preference the tiers exist
+      # to express and suggest someone the reader already follows while a
+      # stranger was available.
+      |> Enum.flat_map(fn {_tier, rows} ->
+        rows
+        |> Enum.sort_by(&Map.fetch!(rank, &1.id))
+        |> Enum.take(@discover_pool)
+        |> Enum.shuffle()
+      end)
+      |> Enum.uniq_by(& &1.user_id)
+      |> Enum.take(limit)
+
+    # Nothing drawn is not the same as nothing to show, and it happens two
+    # ways: a brand-new installation where nobody has liked anything yet (so
+    # the pool is legitimately empty), or a reader who filtered away every
+    # candidate in it. Both land on the same last resort the ladder has always
+    # had — the newest eligible posts — so the rail is never permanently blank.
+    if drawn == [] do
+      discover_recent_draw(discover_candidates(viewer, :strangers), limit)
+      |> Enum.map(& &1.id)
+      |> load_discover_posts()
+    else
+      drawn |> Enum.map(& &1.id) |> load_discover_posts()
+    end
+  end
+
+  # Which of `ids` this viewer may be shown, and in which tier each one lands.
+  # Bounded to the pool's ids, so every gate in here is a primary-key lookup
+  # rather than a scan — that is what makes re-checking visibility on a
+  # minutes-old snapshot affordable.
+  defp discover_eligible([], _viewer), do: []
+
+  defp discover_eligible(ids, %User{id: viewer_id}) do
+    window = discover_window_start()
+
+    from(p in Post,
+      as: :post,
+      join: u in assoc(p, :user),
+      as: :author,
+      left_join: f in Follow,
+      on: f.follower_id == ^viewer_id and f.followee_id == p.user_id,
+      as: :edge,
+      where: p.id in ^ids,
+      where: p.user_id != ^viewer_id,
+      # Muting means "keep this person's posts away from me", in every tier.
+      where: is_nil(f.id) or f.muted == false,
+      # A post by someone the viewer already reads is only a discovery while
+      # it is this fortnight's news; a stranger's may be any age.
+      where: is_nil(f.id) or p.inserted_at >= ^window,
+      where: p.user_id not in subquery(blocked_either_way(viewer_id)),
+      where: account_confirmed_row(u),
+      select: %{
+        id: p.id,
+        user_id: p.user_id,
+        tier:
+          fragment(
+            "CASE WHEN ? IS NULL AND ? >= ? THEN 0 WHEN ? IS NULL THEN 1 ELSE 2 END",
+            f.id,
+            p.inserted_at,
+            ^window,
+            f.id
+          )
+      }
+    )
+    |> scope_visible(nil)
+    |> Repo.all()
+  end
+
+  # The uncached path, unchanged: three tiers, each its own ranking scan. Still
+  # the answer at boot, for a locale the snapshot does not carry, and in tests.
+  defp discover_by_ladder(%User{} = viewer, limit) do
     window = discover_window_start()
 
     rows =
@@ -2622,6 +2723,40 @@ defmodule Vutuv.Posts do
       where: p.body != ""
     )
     |> scope_visible(nil)
+  end
+
+  @doc false
+  # The viewer-independent half of the rail, ranked once for the whole
+  # installation by `Vutuv.Posts.PopularPosts` (which is the only caller):
+  # this locale's best-liked eligible posts, one per author, best first.
+  #
+  # Deliberately no viewer in it. Every gate that depends on who is reading —
+  # own posts, follows, mutes, blocks — belongs to the draw, and so does the
+  # visibility gate, which is re-applied there because this list ages.
+  def compute_discover_pool(locale, pool_size) do
+    from(p in Post,
+      as: :post,
+      join: u in assoc(p, :user),
+      as: :author,
+      left_join: r in assoc(p, :reply_ref),
+      join: lc in subquery(discover_like_counts()),
+      on: lc.post_id == p.id,
+      as: :like_count,
+      where: is_nil(r.id),
+      where: fragment("COALESCE(NULLIF(?, ''), 'en')", u.locale) == ^locale,
+      where: account_confirmed_row(u),
+      where: p.body != "",
+      where: lc.likes >= @discover_min_likes,
+      distinct: p.user_id,
+      order_by: [asc: p.user_id, desc: lc.likes, desc: p.id],
+      select: %{id: p.id, user_id: p.user_id, likes: lc.likes, inserted_at: p.inserted_at}
+    )
+    |> scope_visible(nil)
+    |> subquery()
+    |> order_by([s], desc: s.likes, desc: s.id)
+    |> limit(^pool_size)
+    |> select([s], %{id: s.id, user_id: s.user_id, inserted_at: s.inserted_at})
+    |> Repo.all()
   end
 
   # The like counts the rail ranks on, rolled up once for the whole table
