@@ -309,6 +309,42 @@ defmodule Vutuv.Accounts.User do
     # it is a memory of a choice, not a setting anyone has to find. NULL = has
     # never picked one, so the shipped default (all rights reserved) applies.
     field(:default_post_license, :string)
+
+    # Automatic deletion of the member's own posts once they pass an age they
+    # set (issue #1255), the /settings/auto_post_deletion page. Off for
+    # everybody until they switch it on themselves, and deliberately NOT a
+    # `Vutuv.Prefs` knob: prefs fall back to an installation default, and no
+    # admin may set a default that deletes other people's posts.
+    field(:auto_post_deletion?, :boolean, default: false)
+    # How old a post has to be, in days, from the fixed
+    # `auto_post_deletion_day_options/0` list. NULL until the member picks one;
+    # the switch cannot be on without it.
+    field(:auto_post_deletion_after_days, :integer)
+    # The exceptions, all default true = keep. Photos and reviews are the posts
+    # that took work; an answered post is the root of a conversation other
+    # people are still reading (deleting it degrades their thread); a
+    # self-bookmarked post is the per-post "not this one", using the bookmark
+    # glyph that is already on every card.
+    field(:auto_post_deletion_keep_photos?, :boolean, default: true)
+    field(:auto_post_deletion_keep_answered?, :boolean, default: true)
+    field(:auto_post_deletion_keep_bookmarked?, :boolean, default: true)
+    # Whether the member's own replies in other people's threads go too.
+    # Default false, the one exception that defaults to keeping *more* by being
+    # off: a reply sits inside someone else's conversation.
+    field(:auto_post_deletion_delete_replies?, :boolean, default: false)
+    # Engagement floors, 0 = off. Likes and reposts count what other networks
+    # did too (`Vutuv.Posts.shown_counts/1`), because that is the figure the
+    # member sees on their own post; bookmarks are local by nature, since a
+    # bookmark is private to whoever made it and no server sends one on.
+    field(:auto_post_deletion_min_likes, :integer, default: 0)
+    field(:auto_post_deletion_min_bookmarks, :integer, default: 0)
+    field(:auto_post_deletion_min_reposts, :integer, default: 0)
+    # The Berlin day this member was last swept. Stamped by every pass,
+    # including the ones that delete nothing, so a member the sweeper can do
+    # nothing for cannot hold the front of the oldest-first batch forever.
+    # Set programmatically by `Vutuv.Posts.AutoDeletion`, never cast.
+    field(:auto_post_deletion_swept_on, :date)
+
     # The account owner proved control of their email by entering a login PIN
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and
@@ -439,7 +475,23 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list auto_post_deletion? auto_post_deletion_after_days auto_post_deletion_keep_photos? auto_post_deletion_keep_answered? auto_post_deletion_keep_bookmarked? auto_post_deletion_delete_replies? auto_post_deletion_min_likes auto_post_deletion_min_bookmarks auto_post_deletion_min_reposts)a
+
+  # The ages the automatic post deletion offers (issue #1255), in days. A fixed
+  # list rather than a free number field on purpose: this setting deletes
+  # things, and a typed "1" where "10" was meant is not recoverable. One day is
+  # the floor. Single source of truth for the form's options and the
+  # changeset's validate_inclusion, so no form can offer a value the changeset
+  # would reject.
+  @auto_post_deletion_day_options [1, 3, 7, 14, 30, 90, 180, 365, 730]
+
+  # The integer settings of that page, which the form submits as text: a
+  # cleared field arrives as "" and casts to nil, and every one of these
+  # columns is NOT NULL, so nil has to become the "off" value again.
+  @auto_post_deletion_counts ~w(auto_post_deletion_min_likes auto_post_deletion_min_bookmarks auto_post_deletion_min_reposts)a
+
+  @doc "The post ages the automatic deletion offers, in days (issue #1255)."
+  def auto_post_deletion_day_options, do: @auto_post_deletion_day_options
 
   # The answers the gender question offers, other than "keine Angabe" which is
   # stored as nil. Single source of truth for the changeset's
@@ -680,11 +732,58 @@ defmodule Vutuv.Accounts.User do
     |> normalize_workplace_types()
     |> validate_subset(:desired_workplace_types, @desired_workplace_types)
     |> clear_workplace_without_status()
+    |> validate_auto_post_deletion()
     |> nullify_default_birthdate()
     |> validate_birthdate()
     |> validate_inclusion(:birthdate_visibility, @birthdate_visibilities)
     |> normalize_also_known_as()
     |> revoke_verification_on_identity_change()
+  end
+
+  # Automatic post deletion (issue #1255). Three things, in the order they can
+  # go wrong:
+  #
+  #   * the age is one of the offered values, so a hand-made request cannot ask
+  #     for "delete everything from the last hour";
+  #   * the switch cannot be on without an age — an enabled rule with a NULL
+  #     threshold would either delete nothing (silently useless) or everything,
+  #     depending on how the query read it, and neither is allowed to be a
+  #     question;
+  #   * the engagement floors are whole, non-negative and inside int4. They are
+  #     NOT NULL columns fed by text inputs, so a cleared field ("" -> nil)
+  #     becomes 0 = off rather than a 23502 on save.
+  defp validate_auto_post_deletion(changeset) do
+    changeset
+    |> zero_cleared_counts()
+    |> validate_inclusion(:auto_post_deletion_after_days, @auto_post_deletion_day_options)
+    |> validate_auto_post_deletion_age_present()
+    |> validate_auto_post_deletion_counts()
+  end
+
+  defp zero_cleared_counts(changeset) do
+    Enum.reduce(@auto_post_deletion_counts, changeset, fn field, acc ->
+      case fetch_field(acc, field) do
+        {:changes, nil} -> put_change(acc, field, 0)
+        _ -> acc
+      end
+    end)
+  end
+
+  defp validate_auto_post_deletion_age_present(changeset) do
+    if get_field(changeset, :auto_post_deletion?) do
+      validate_required(changeset, [:auto_post_deletion_after_days])
+    else
+      changeset
+    end
+  end
+
+  defp validate_auto_post_deletion_counts(changeset) do
+    Enum.reduce(@auto_post_deletion_counts, changeset, fn field, acc ->
+      validate_number(acc, field,
+        greater_than_or_equal_to: 0,
+        less_than_or_equal_to: 2_147_483_647
+      )
+    end)
   end
 
   # The tagline is the one line under a member's name, so it has to say

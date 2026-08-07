@@ -21,6 +21,7 @@ defmodule VutuvWeb.AccountEventText do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.AccountEvents.AccountEvent
+  alias VutuvWeb.UI
 
   @doc "What happened, as a short heading. Also the kind filter's option text."
   def event_label(%AccountEvent{kind: kind}), do: event_label(kind)
@@ -47,6 +48,12 @@ defmodule VutuvWeb.AccountEventText do
   def event_label("member_unblocked"), do: gettext("Member unblocked")
   def event_label("filter_added"), do: gettext("Filter added")
   def event_label("filter_removed"), do: gettext("Filter removed")
+
+  def event_label("auto_post_deletion_changed"),
+    do: gettext("Automatic post deletion changed")
+
+  def event_label("posts_auto_deleted"), do: gettext("Posts deleted automatically")
+
   def event_label("data_exported"), do: gettext("Data downloaded")
   def event_label("import_applied"), do: gettext("Import applied")
   def event_label("api_token_created"), do: gettext("Access token created")
@@ -124,6 +131,12 @@ defmodule VutuvWeb.AccountEventText do
   defp detail("activity_log_viewed", %{"member" => member}) when is_binary(member),
     do: "@" <> member
 
+  # How many posts that day's pass took (issue #1255). The count is the whole
+  # detail the log keeps — which posts they were is what is gone.
+  defp detail("posts_auto_deleted", %{"count" => count}) when is_integer(count) do
+    ngettext("%{count} post", "%{formatted} posts", count, formatted: UI.delimited_count(count))
+  end
+
   defp detail("fediverse_changed", %{"enabled" => true}),
     do: gettext("taking part in the Fediverse")
 
@@ -196,6 +209,19 @@ defmodule VutuvWeb.AccountEventText do
   def field_label("fediverse_reactions?"), do: gettext("Fediverse reactions")
   def field_label("fediverse_replies?"), do: gettext("Fediverse replies")
   def field_label("also_known_as_input"), do: gettext("Fediverse aliases")
+
+  # Automatic post deletion (issue #1255). Named one by one rather than left to
+  # the humanizing fallback below, which would render the longest of them as
+  # "Auto post deletion keep bookmarked".
+  def field_label("auto_post_deletion?"), do: gettext("Automatic post deletion")
+  def field_label("auto_post_deletion_after_days"), do: gettext("Post age")
+  def field_label("auto_post_deletion_keep_photos?"), do: gettext("Keep photo posts")
+  def field_label("auto_post_deletion_keep_answered?"), do: gettext("Keep answered posts")
+  def field_label("auto_post_deletion_keep_bookmarked?"), do: gettext("Keep bookmarked posts")
+  def field_label("auto_post_deletion_delete_replies?"), do: gettext("Delete replies too")
+  def field_label("auto_post_deletion_min_likes"), do: gettext("Like floor")
+  def field_label("auto_post_deletion_min_bookmarks"), do: gettext("Bookmark floor")
+  def field_label("auto_post_deletion_min_reposts"), do: gettext("Repost floor")
 
   def field_label(raw) when is_binary(raw) do
     raw

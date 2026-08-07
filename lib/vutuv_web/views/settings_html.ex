@@ -17,10 +17,42 @@ defmodule VutuvWeb.SettingsHTML do
   # page reads exactly like the full log at /settings/activity.
   import VutuvWeb.AccountEventText, only: [event_label: 1, detail: 1, by_someone_else?: 1]
 
+  # A `<label for=…>` has to name the id the form really generated, and that is
+  # not `user_<field>`: a `<.form id=…>` prefixes every input id with its own
+  # (`auto-post-deletion-form_auto_post_deletion_after_days`). Hand-writing the
+  # guessed id points the label at nothing, which costs the label its click
+  # target and its accessible name without any visible sign.
+  import Phoenix.HTML.Form, only: [input_id: 2]
+
   alias Vutuv.Accounts.User
   alias Vutuv.SavedSearches
 
   embed_templates("../templates/settings/*")
+
+  @doc """
+  The post ages the automatic deletion offers (issue #1255), as `{label, days}`
+  select options.
+
+  Built from `User.auto_post_deletion_day_options/0`, so the form can only
+  offer what the changeset accepts. The labels are written out per value rather
+  than computed ("2 weeks", not "14 days"): this select is the one control that
+  decides what gets deleted, and a member should read the answer in the words
+  they think in.
+  """
+  def auto_post_deletion_options do
+    Enum.map(User.auto_post_deletion_day_options(), &{auto_post_deletion_label(&1), &1})
+  end
+
+  defp auto_post_deletion_label(1), do: gettext("1 day")
+  defp auto_post_deletion_label(3), do: gettext("3 days")
+  defp auto_post_deletion_label(7), do: gettext("1 week")
+  defp auto_post_deletion_label(14), do: gettext("2 weeks")
+  defp auto_post_deletion_label(30), do: gettext("1 month")
+  defp auto_post_deletion_label(90), do: gettext("3 months")
+  defp auto_post_deletion_label(180), do: gettext("6 months")
+  defp auto_post_deletion_label(365), do: gettext("1 year")
+  defp auto_post_deletion_label(730), do: gettext("2 years")
+  defp auto_post_deletion_label(days), do: ngettext("%{count} day", "%{count} days", days)
 
   @doc "The human, localized label for a content filter's kind (issue #940)."
   def filter_kind_label(%{kind: :tag}), do: gettext("Tag")

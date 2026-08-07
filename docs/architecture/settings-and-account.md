@@ -18,7 +18,7 @@ they cannot drift. If an editable area is not on it, it does not exist.
 | Profile | Basics & photos, Username, Experience, Education, Certificates & licenses, Language skills, Tags, Organizations |
 | Contact details | Email addresses, Phone numbers, Addresses, Websites & links, Social media profiles, Messengers |
 | Notifications & feed | Notifications, Muted words & tags, Tags you follow, Saved searches |
-| Privacy | Visibility, Blocked members, Fediverse |
+| Privacy | Visibility, Blocked members, Automatic post deletion, Fediverse |
 | Account | Sign-in & security, Account activity, Language & display, Import, Export, Apps & API, Delete account (red) |
 
 Each row is a map with `:key` (the sidebar's active state and the hub's entry
@@ -92,6 +92,18 @@ can switch off (`cv_update_notifications?`, default on), because it is the only
 one triggered by someone else's housekeeping rather than by something done to
 them — see the CV updates section in [realtime.md](realtime.md). **In-app
 notifications**: a read-only explainer of the rest, which are always on.
+
+### Automatic post deletion (`/settings/auto_post_deletion`)
+
+The member's own rule for letting their posts age out (issue #1255). Its own
+page rather than a card on the visibility page, because it is the one setting
+in this area that destroys something: it carries an explainer of what a delete
+can and cannot do on other servers, six exceptions, and a confirmation naming
+how many posts go right away. Off for everybody until they switch it on, and
+deliberately outside `Vutuv.Prefs` so no installation default can start
+deleting a member's posts. The rule itself, the nightly pass and the
+confirmation flow are described in
+[posts-and-feed.md](posts-and-feed.md#automatic-post-deletion-issue-1255).
 
 ### Member preferences with installation defaults (`Vutuv.Prefs`)
 

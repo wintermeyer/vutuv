@@ -25,7 +25,14 @@ defmodule VutuvWeb.SettingsController do
 
   plug(
     :scrub_params,
-    "user" when action in [:update_privacy, :update_notifications, :update_language, :update_maps]
+    "user"
+    when action in [
+           :update_privacy,
+           :update_notifications,
+           :update_language,
+           :update_maps,
+           :update_auto_post_deletion
+         ]
   )
 
   alias Vutuv.AccountEvents
@@ -35,6 +42,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
   alias Vutuv.Organizations
+  alias Vutuv.Posts.AutoDeletion
   alias Vutuv.Prefs
   alias Vutuv.SavedSearches
   alias Vutuv.SavedSearches.SavedSearch
@@ -184,6 +192,115 @@ defmodule VutuvWeb.SettingsController do
       on_success: fn saved ->
         Vutuv.Activity.broadcast(saved.id, {:presence_pref, saved.show_online_status?})
       end
+    )
+  end
+
+  # ── Automatic post deletion (issue #1255) ──
+
+  # The member's own rule for letting their posts age out. Its own page rather
+  # than a card on the visibility page: it is the one setting here that
+  # destroys something, and it carries an explainer, six exceptions and a
+  # confirmation of its own.
+  def auto_post_deletion(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "auto_post_deletion.html",
+      user: user,
+      changeset: User.changeset(user),
+      due_count: AutoDeletion.count_due(user),
+      confirm: nil,
+      page_title: gettext("Automatic post deletion")
+    )
+  end
+
+  # Saving is two steps whenever the new rule would delete something **now**.
+  #
+  # Step 1 previews: the submitted rule is applied to an in-memory copy of the
+  # member and counted with the very query the sweeper deletes by
+  # (`AutoDeletion.count_due/1`), so the number in the dialog cannot drift from
+  # what happens next. Zero saves straight through — there is nothing to warn
+  # about. Otherwise the page re-renders with the confirmation dialog, which
+  # carries the submitted values back as hidden fields plus `confirmed`.
+  #
+  # Step 2 saves, then runs the member's own pass **uncapped**: they were shown
+  # an exact figure and pressed the button for it, so finishing the job over
+  # the next few nights (what the sweeper's per-pass ceiling would do) is not
+  # what they agreed to.
+  #
+  # A tightened rule goes through the same two steps, not only the first
+  # switch-on: shortening the age or clearing an exception is exactly as
+  # destructive, and it is the moment a member is least likely to have worked
+  # out the consequence.
+  def update_auto_post_deletion(conn, %{"user" => params}) do
+    user = conn.assigns[:user]
+    changeset = User.changeset(user, params)
+
+    cond do
+      not changeset.valid? ->
+        render_auto_post_deletion_error(conn, changeset)
+
+      confirmed?(params) or prospective_due_count(changeset) == 0 ->
+        save_auto_post_deletion(conn, user, params)
+
+      true ->
+        render_auto_post_deletion_confirm(conn, changeset, params)
+    end
+  end
+
+  defp confirmed?(params), do: params["confirmed"] == "true"
+
+  # What the SUBMITTED rule would delete, counted against the unsaved copy.
+  defp prospective_due_count(changeset) do
+    changeset |> Ecto.Changeset.apply_changes() |> AutoDeletion.count_due()
+  end
+
+  defp save_auto_post_deletion(conn, user, params) do
+    case Accounts.update_user(user, params) do
+      {:ok, saved} ->
+        record_change(conn, "auto_post_deletion_changed", saved, params)
+        {:ok, deleted} = AutoDeletion.run_for(saved, limit: :infinity)
+
+        conn
+        |> put_flash(:info, auto_post_deletion_flash(deleted))
+        |> redirect(to: ~p"/settings/auto_post_deletion")
+
+      {:error, changeset} ->
+        render_auto_post_deletion_error(conn, changeset)
+    end
+  end
+
+  defp auto_post_deletion_flash(0), do: gettext("Settings saved.")
+
+  defp auto_post_deletion_flash(deleted) do
+    ngettext(
+      "Settings saved. %{count} post was deleted.",
+      "Settings saved. %{formatted} posts were deleted.",
+      deleted,
+      formatted: VutuvWeb.UI.delimited_count(deleted)
+    )
+  end
+
+  defp render_auto_post_deletion_confirm(conn, changeset, params) do
+    user = conn.assigns[:user]
+
+    render(conn, "auto_post_deletion.html",
+      user: user,
+      changeset: changeset,
+      due_count: AutoDeletion.count_due(user),
+      confirm: %{count: prospective_due_count(changeset), params: params},
+      page_title: gettext("Automatic post deletion")
+    )
+  end
+
+  defp render_auto_post_deletion_error(conn, changeset) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> render("auto_post_deletion.html",
+      user: conn.assigns[:user],
+      changeset: changeset,
+      due_count: AutoDeletion.count_due(conn.assigns[:user]),
+      confirm: nil,
+      page_title: gettext("Automatic post deletion")
     )
   end
 

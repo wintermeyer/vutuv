@@ -481,6 +481,62 @@ and no control. The permalink (`mode={:full}`) never clamps.
 
 The profile page and the archive show the author's timeline (posts + reposts).
 
+## Automatic post deletion (issue #1255)
+
+A member can let their own posts age out: `Vutuv.Posts.AutoDeletion`, configured
+on `/settings/auto_post_deletion`. **Off for everybody until they switch it on**,
+and deliberately not a `Vutuv.Prefs` knob, because prefs fall back to an
+installation default and no admin may set a default that deletes somebody
+else's posts. All of it lives on `users`, prefixed `auto_post_deletion_*`.
+
+The rule is one query, `due_query/1`, and both callers go through it: the
+settings page's confirmation counts with `count_due/1`, the nightly pass deletes
+with `run_for/2`. That is load-bearing rather than tidy — the dialog tells the
+member an exact number and then deletes, so a second, separately written query
+would eventually make that number a lie.
+
+What it takes: the member's own posts older than `auto_post_deletion_after_days`
+(a fixed list of ages from `User.auto_post_deletion_day_options/0`, one day up
+to two years; a select, not a free number field, because a typed "1" where "10"
+was meant is not recoverable). What it keeps:
+
+| Kept | Why |
+| --- | --- |
+| the pinned post, a frozen post, one with an open moderation case | never optional: the first is the member's own showcase, the other two are evidence in somebody else's complaint |
+| `…_keep_photos?` (default on) | photo posts and book/film reviews took work, and their files go with them |
+| `…_keep_answered?` (default on) | deleting a post that started a conversation does not delete the replies, it guts the thread they live in. Counts **any** answer, local or from another network |
+| `…_keep_bookmarked?` (default on) | the per-post escape hatch: bookmark your own post and the rule steps over it. No new UI, the glyph is already on every card |
+| `…_delete_replies?` (default **off**) | the one switch that defaults to deleting *less* by being off: your reply sits inside a conversation that is not only yours |
+| `…_min_likes` / `…_min_bookmarks` / `…_min_reposts` (0 = off) | a post that reached the floor is kept. Likes and reposts count what other networks did too (the figure `shown_counts/1` shows on the post); bookmarks are local, since a bookmark is private to whoever made it |
+
+Deletion runs through `Vutuv.Posts.delete_post/1`, so photo files, open clients'
+action bars, the moderation case and the fediverse `Delete(Tombstone)` are all
+handled exactly as on a manual delete. **"Asks" is the honest word** for that
+last one, and the settings page says so in as many words: a remote server that
+is offline, that has defederated or that ignores the activity keeps its copy,
+and copies people made by hand are out of reach entirely.
+
+Saving is two steps whenever the new rule would delete something *now* — on
+first switch-on and equally on a later tightening, which is the moment a member
+is least likely to have worked out the consequence. Step 1 applies the
+submitted rule to an in-memory copy, counts, and re-renders the page with a
+confirmation naming the figure (and a link to the data export). Step 2 saves and
+runs the member's own pass **uncapped**: they were shown an exact number and
+pressed the button for it.
+
+`Vutuv.Posts.AutoDeletionSweeper` runs the nightly pass at Berlin 00:30, one
+pass per member per Berlin day, capped at `per_pass_limit/0` posts per member so
+a ten-year backlog spreads over a few nights instead of firing thousands of
+federation deliveries in a burst. `auto_post_deletion_swept_on` is stamped on
+**every** pass, including the ones that delete nothing: it is the scheduler's
+clock, not a claim that work happened, and a member the sweeper can do nothing
+for must not hold the front of the oldest-first batch (the `CountsRefresher`
+deadlock of #1316 is exactly that shape). Each pass that deleted something
+writes one `posts_auto_deleted` line into the member's account activity log
+(`docs/architecture/account-activity.md`), so a day's deletions are one entry
+with a count and never a stream; a settings change writes
+`auto_post_deletion_changed` beside it.
+
 ## The pinned post (issue #1110)
 
 A member can pin **one** of their own posts to the top of their profile, so

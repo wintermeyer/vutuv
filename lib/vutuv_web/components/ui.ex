@@ -3677,6 +3677,14 @@ defmodule VutuvWeb.UI do
            hint: gettext("People who cannot interact with you"),
            terms: gettext("block ban mute report abuse harassment stalker")
          ),
+         row(
+           :auto_post_deletion,
+           gettext("Automatic post deletion"),
+           ~p"/settings/auto_post_deletion",
+           hint: gettext("Let your posts age out after a time you set"),
+           terms:
+             gettext("delete remove erase posts age old expire automatic cleanup retention purge")
+         ),
          row(:fediverse, gettext("Fediverse"), ~p"/settings/fediverse",
            hint: gettext("Follow accounts on Mastodon, and be followed from there"),
            terms:

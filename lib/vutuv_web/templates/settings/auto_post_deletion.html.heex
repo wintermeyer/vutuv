@@ -1,0 +1,281 @@
+<%!-- Automatic post deletion (issue #1255): the member's own rule for letting
+their posts age out. Off for everybody until they switch it on, and every
+exception defaults to keeping more, so a member who ticks the switch without
+reading the page loses the least.
+
+Three things this page has to say plainly, in this order: what it deletes, that
+deletion cannot be undone, and that a copy on another server is a request we
+send and not a switch we hold. The last one gets its own explainer card rather
+than a line of small print — a member who federates is publishing to servers
+this installation does not run, and that is exactly the expectation this
+feature could otherwise create falsely.
+
+The confirmation dialog at the bottom renders only while @confirm is set (the
+controller's step 1). It is a server-rendered panel, not a JS modal: this is a
+classic controller page, the whole flow is two POSTs, and a confirmation that
+depends on JavaScript is the wrong place to start relying on it. --%>
+<.settings_shell
+  user={@user}
+  active={:auto_post_deletion}
+  title={gettext("Automatic post deletion")}
+>
+  <div class="space-y-6">
+    <.card>
+      <.section_title>{gettext("What this does")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "With this on, your own posts are deleted once they pass the age you pick. It runs once a day and only ever touches your posts, never anyone else's."
+        )}
+      </p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Deleting a post cannot be undone. Your pinned post and any post a moderator is currently looking at are always kept."
+        )}
+      </p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("You can download everything you have here first:")}
+        <.link
+          navigate={~p"/#{@user.username}/export"}
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Download your data")}
+        </.link>
+      </p>
+    </.card>
+
+    <%!-- The Fediverse half, stated as what it is: a request. Rendered for
+          everyone rather than only for federating members, because a member
+          who has never federated may well switch it on later, and finding out
+          then that "delete" meant something weaker would be the wrong moment
+          to learn it. --%>
+    <.card>
+      <.section_title>{gettext("What we cannot promise")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "If a post of yours reached other networks (Mastodon and the rest), we ask every server that received it to delete its copy. We cannot make them. A server that is switched off, that no longer talks to us, or that simply ignores the request keeps what it has."
+        )}
+      </p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Copies people made themselves are out of reach entirely: a screenshot, a quote, a search engine's cache. Deleting a post here removes it from vutuv; it does not recall it from the internet."
+        )}
+      </p>
+    </.card>
+
+    <.card>
+      <.section_title>{gettext("Your rule")}</.section_title>
+
+      <.form
+        :let={f}
+        for={@changeset}
+        action={~p"/settings/auto_post_deletion"}
+        id="auto-post-deletion-form"
+        class="mt-5 space-y-6"
+      >
+        <.form_error changeset={@changeset} />
+
+        <.setting_toggle label={gettext("Delete my posts automatically")}>
+          <:checkbox><%= checkbox f, :auto_post_deletion?, class: checkbox_class() %></:checkbox>
+          {gettext("Off by default. Nothing is deleted until you switch this on and save.")}
+        </.setting_toggle>
+
+        <div>
+          <label
+            for={input_id(f, :auto_post_deletion_after_days)}
+            class="block text-sm font-medium text-slate-900 dark:text-white"
+          >
+            {gettext("Delete posts older than")}
+          </label>
+          <%= select f, :auto_post_deletion_after_days, auto_post_deletion_options(),
+                prompt: gettext("Please choose"),
+                class: [input_class(f, :auto_post_deletion_after_days), "mt-1 max-w-xs"] %>
+          <%= error_tag f, :auto_post_deletion_after_days %>
+          <p
+            :if={!f.errors[:auto_post_deletion_after_days]}
+            class="mt-1 text-sm text-slate-600 dark:text-slate-400"
+          >
+            {gettext("Counted from when you posted it.")}
+          </p>
+        </div>
+
+        <div class="space-y-4 border-t border-slate-100 pt-5 dark:border-slate-800">
+          <p class="text-sm font-medium text-slate-900 dark:text-white">
+            {gettext("Always keep")}
+          </p>
+
+          <.setting_toggle label={gettext("Posts with photos or a review")}>
+            <:checkbox>
+              <%= checkbox f, :auto_post_deletion_keep_photos?, class: checkbox_class() %>
+            </:checkbox>
+            {gettext("Photo posts and book or film reviews are kept whatever their age.")}
+          </.setting_toggle>
+
+          <.setting_toggle label={gettext("Posts somebody answered")}>
+            <:checkbox>
+              <%= checkbox f, :auto_post_deletion_keep_answered?, class: checkbox_class() %>
+            </:checkbox>
+            {gettext("Deleting a post that started a conversation leaves the replies without their beginning.")}
+          </.setting_toggle>
+
+          <.setting_toggle label={gettext("Posts you bookmarked yourself")}>
+            <:checkbox>
+              <%= checkbox f, :auto_post_deletion_keep_bookmarked?, class: checkbox_class() %>
+            </:checkbox>
+            {gettext("Bookmark one of your own posts and this rule steps over it. That is how you keep a single post.")}
+          </.setting_toggle>
+        </div>
+
+        <div class="space-y-4 border-t border-slate-100 pt-5 dark:border-slate-800">
+          <p class="text-sm font-medium text-slate-900 dark:text-white">
+            {gettext("Also delete")}
+          </p>
+
+          <.setting_toggle label={gettext("My replies in other people's threads")}>
+            <:checkbox>
+              <%= checkbox f, :auto_post_deletion_delete_replies?, class: checkbox_class() %>
+            </:checkbox>
+            {gettext("Off by default: a reply is one turn in a conversation that is not only yours.")}
+          </.setting_toggle>
+        </div>
+
+        <%!-- The engagement floors. 0 = off, which is why each hint says so
+              rather than leaving an empty-looking number field to be guessed
+              at. Likes and reposts count what other networks did too, because
+              that is the figure the member is shown on their own post. --%>
+        <div class="space-y-4 border-t border-slate-100 pt-5 dark:border-slate-800">
+          <p class="text-sm font-medium text-slate-900 dark:text-white">
+            {gettext("Keep posts that did well")}
+          </p>
+          <p class="text-sm text-slate-600 dark:text-slate-400">
+            {gettext("A post that reached one of these numbers is kept. Leave a field at 0 to switch it off. Likes and reposts include the ones from other networks, the same numbers you see on the post itself.")}
+          </p>
+
+          <div class="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label
+                for={input_id(f, :auto_post_deletion_min_likes)}
+                class="block text-sm font-medium text-slate-900 dark:text-white"
+              >
+                {gettext("Likes")}
+              </label>
+              <%= number_input f, :auto_post_deletion_min_likes,
+                    min: 0,
+                    class: [input_class(f, :auto_post_deletion_min_likes), "mt-1"] %>
+              <%= error_tag f, :auto_post_deletion_min_likes %>
+            </div>
+
+            <div>
+              <label
+                for={input_id(f, :auto_post_deletion_min_bookmarks)}
+                class="block text-sm font-medium text-slate-900 dark:text-white"
+              >
+                {gettext("Bookmarks")}
+              </label>
+              <%= number_input f, :auto_post_deletion_min_bookmarks,
+                    min: 0,
+                    class: [input_class(f, :auto_post_deletion_min_bookmarks), "mt-1"] %>
+              <%= error_tag f, :auto_post_deletion_min_bookmarks %>
+            </div>
+
+            <div>
+              <label
+                for={input_id(f, :auto_post_deletion_min_reposts)}
+                class="block text-sm font-medium text-slate-900 dark:text-white"
+              >
+                {gettext("Reposts")}
+              </label>
+              <%= number_input f, :auto_post_deletion_min_reposts,
+                    min: 0,
+                    class: [input_class(f, :auto_post_deletion_min_reposts), "mt-1"] %>
+              <%= error_tag f, :auto_post_deletion_min_reposts %>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-5 dark:border-slate-800">
+          <.button type="submit">{gettext("Save")}</.button>
+        </div>
+      </.form>
+    </.card>
+
+    <%!-- What the rule as SAVED would take on the next pass. Shown only while
+          the rule is on and has something to take, so the page is quiet for
+          everyone else. --%>
+    <p
+      :if={@due_count > 0 and is_nil(@confirm)}
+      id="auto-post-deletion-due"
+      data-due-count={@due_count}
+      class="text-sm text-slate-600 dark:text-slate-400"
+    >
+      {ngettext(
+        "%{count} of your posts is currently past this age.",
+        "%{formatted} of your posts are currently past this age.",
+        @due_count,
+        formatted: delimited_count(@due_count)
+      )}
+    </p>
+  </div>
+
+  <%!-- The confirmation. It names the exact number the rule would take right
+        now (counted with the same query the sweeper deletes by), carries the
+        submitted values back untouched as hidden fields, and repeats the two
+        things that cannot be taken back: the deletion itself, and the copies
+        on servers we do not run. --%>
+  <div
+    :if={@confirm}
+    id="auto-post-deletion-confirm"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-4 sm:items-center"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="auto-post-deletion-confirm-title"
+  >
+    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+      <h2
+        id="auto-post-deletion-confirm-title"
+        class="text-lg font-semibold text-slate-900 dark:text-white"
+      >
+        {ngettext(
+          "Delete %{count} post now?",
+          "Delete %{formatted} posts now?",
+          @confirm.count,
+          formatted: delimited_count(@confirm.count)
+        )}
+      </h2>
+
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        {ngettext(
+          "Saving this rule deletes %{count} post straight away. It cannot be undone.",
+          "Saving this rule deletes %{formatted} posts straight away. This cannot be undone.",
+          @confirm.count,
+          formatted: delimited_count(@confirm.count)
+        )}
+      </p>
+
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("We will ask other networks to delete their copies as well, but we cannot make them.")}
+      </p>
+
+      <.form
+        for={@changeset}
+        action={~p"/settings/auto_post_deletion"}
+        id="auto-post-deletion-confirm-form"
+        class="mt-5 flex flex-wrap items-center gap-3"
+      >
+        <%= for {field, value} <- @confirm.params, field != "confirmed" do %>
+          <input type="hidden" name={"user[#{field}]"} value={value} />
+        <% end %>
+        <input type="hidden" name="user[confirmed]" value="true" />
+
+        <.button type="submit" variant="danger" id="auto-post-deletion-confirm-submit">
+          {gettext("Delete and save")}
+        </.button>
+        <.link
+          navigate={~p"/settings/auto_post_deletion"}
+          class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          {gettext("Cancel")}
+        </.link>
+      </.form>
+    </div>
+  </div>
+</.settings_shell>

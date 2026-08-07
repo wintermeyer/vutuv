@@ -83,7 +83,12 @@ The hooks, by area:
 - **Privacy and reach** — the visibility, notification and Fediverse settings
   saves; blocking and unblocking (recorded at the `Vutuv.Social` chokepoint, so
   it covers the /blocks form, the profile menu and the report flow alike);
-  adding and removing a content filter.
+  adding and removing a content filter; the automatic-post-deletion rule
+  (`auto_post_deletion_changed`) and each pass that it took posts in
+  (`posts_auto_deleted`, one line per Berlin day carrying the count and nothing
+  else — **which** posts they were is precisely what is gone, and naming them
+  would rebuild a list of deleted posts inside a log that outlives them by a
+  year).
 - **Data** — the GDPR download, an applied LinkedIn import.
 - **Apps** — an access token minted or revoked, a connected app disconnected.
 - **Somebody else acting** — an admin freeze/unfreeze, a restore, an identity

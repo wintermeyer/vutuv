@@ -972,6 +972,13 @@ defmodule VutuvWeb.Router do
     get("/privacy", SettingsController, :privacy)
     put("/privacy", SettingsController, :update_privacy)
     patch("/privacy", SettingsController, :update_privacy)
+    # The member's own rule for letting their posts age out (issue #1255). Its
+    # own page because it is the one setting here that destroys something: it
+    # carries an explainer about what a Delete can and cannot do on other
+    # servers, and a confirmation naming how many posts go right away.
+    get("/auto_post_deletion", SettingsController, :auto_post_deletion)
+    put("/auto_post_deletion", SettingsController, :update_auto_post_deletion)
+    patch("/auto_post_deletion", SettingsController, :update_auto_post_deletion)
     get("/fediverse", SettingsController, :fediverse)
     put("/fediverse", SettingsController, :update_fediverse)
     patch("/fediverse", SettingsController, :update_fediverse)

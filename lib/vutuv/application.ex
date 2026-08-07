@@ -118,7 +118,8 @@ defmodule Vutuv.Application do
           Vutuv.Profiles.SocialAccountRecheckSweeper
         ) ++
         optional_child(:jobs_sweeper, Vutuv.Jobs.Sweeper) ++
-        optional_child(:saved_search_alerts, Vutuv.SavedSearches.AlertSweeper)
+        optional_child(:saved_search_alerts, Vutuv.SavedSearches.AlertSweeper) ++
+        optional_child(:auto_post_deletion_sweeper, Vutuv.Posts.AutoDeletionSweeper)
 
     opts = [strategy: :one_for_one, name: Vutuv.Supervisor]
     Supervisor.start_link(children, opts)

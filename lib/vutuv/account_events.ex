@@ -110,6 +110,13 @@ defmodule Vutuv.AccountEvents do
     "member_unblocked" => ["handle"],
     "filter_added" => ["filter_kind"],
     "filter_removed" => ["filter_kind"],
+    "auto_post_deletion_changed" => ["fields"],
+
+    # Posts the member's own automatic-deletion rule took (issue #1255), one
+    # line per sweeper pass. The count is the whole detail: **which** posts
+    # they were is precisely what is gone, and naming them here would rebuild
+    # a list of deleted posts inside a log that outlives them by a year.
+    "posts_auto_deleted" => ["count"],
 
     # Employment references (Arbeitszeugnisse). Deliberately **no title and no
     # grade**, only field names: a Zeugnis names a former employer and the
