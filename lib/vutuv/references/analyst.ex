@@ -261,6 +261,88 @@ defmodule Vutuv.References.Analyst do
   def model, do: Application.get_env(:vutuv, :reference_check_model, "qwen3.6:27b")
 
   @doc """
+  Where a reader can go and look this model up, or nil.
+
+  The transparency box claims the model is open source and freely available.
+  That is a claim only somebody who can reach the model is able to check, so
+  the box links the tag it names (issue #1318) — and the address is *derived
+  from the tag* for the same reason the hardware and the country are read from
+  configuration: a URL typed into the template would point at our model on
+  every other operator's installation.
+
+  An Ollama model reference is `[host[:port]/][namespace/]name[:tag]`, and the
+  leading segment is a registry rather than a namespace exactly when it looks
+  like a host (Docker's rule, which Ollama inherits). So:
+
+    * `qwen3.6:27b` -> `https://ollama.com/library/qwen3.6:27b`
+    * `someone/model:7b` -> `https://ollama.com/someone/model:7b`
+    * `hf.co/user/repo:Q4_K_M` -> `https://huggingface.co/user/repo`
+      (a Hugging Face repository has no tag in its path, so the quantization
+      suffix is dropped rather than carried into a 404)
+
+  Anything else — a private registry, a model built locally with
+  `ollama create` — resolves to **nil** rather than to a guess, and the box
+  then names the model without linking it. `:reference_check_model_url`
+  overrides all of it; set to an empty string it drops the link, the same
+  convention `hardware/0` and `country/0` use.
+  """
+  def model_url do
+    case Application.get_env(:vutuv, :reference_check_model_url) do
+      nil -> derive_model_url(model())
+      configured -> configured |> presence() |> web_url()
+    end
+  end
+
+  # Operator configuration, but it ends up in an href, so a scheme that is not
+  # a web address does not get rendered as one.
+  defp web_url(nil), do: nil
+
+  defp web_url(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme, host: host} when scheme in ~w(http https) and is_binary(host) -> url
+      _other -> nil
+    end
+  end
+
+  @ollama_registries ~w(ollama.com registry.ollama.ai)
+  @huggingface_registries ~w(hf.co huggingface.co)
+
+  defp derive_model_url(model) when is_binary(model) do
+    # `trim: true` so a stray leading or doubled slash cannot mint an address
+    # with an empty path segment in it.
+    case String.split(model, "/", trim: true) do
+      [] -> nil
+      [name] -> ollama_url([name])
+      [first | rest] -> registry_url(first, rest)
+    end
+  end
+
+  defp derive_model_url(_other), do: nil
+
+  defp registry_url(first, rest) do
+    cond do
+      not registry_host?(first) -> ollama_url([first | rest])
+      first in @ollama_registries -> ollama_url(rest)
+      first in @huggingface_registries -> huggingface_url(rest)
+      true -> nil
+    end
+  end
+
+  defp registry_host?(segment),
+    do: String.contains?(segment, ".") or String.contains?(segment, ":")
+
+  defp ollama_url([]), do: nil
+  defp ollama_url([name]), do: ollama_url(["library", name])
+  defp ollama_url(segments), do: "https://ollama.com/" <> Enum.join(segments, "/")
+
+  defp huggingface_url([]), do: nil
+
+  defp huggingface_url(segments) do
+    repo = segments |> Enum.join("/") |> String.split(":", parts: 2) |> hd()
+    "https://huggingface.co/" <> repo
+  end
+
+  @doc """
   What this installation calls the machine the analysis runs on, or nil.
 
   Member-facing, and the reason it is configuration rather than a word in a

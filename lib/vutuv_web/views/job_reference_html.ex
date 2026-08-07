@@ -277,8 +277,34 @@ defmodule VutuvWeb.JobReferenceHTML do
   @doc "The project behind the analysis prompt, credited under every result."
   def skill_project_url, do: Skill.project_url()
 
-  @doc "The exact model tag this installation runs, for the transparency box."
-  def reference_check_model, do: Analyst.model()
+  @doc """
+  The model tag, as a link to the model's own page where there is one.
+
+  "The model is open source" is a sentence a reader can only check by going and
+  looking at the model, and until issue #1318 the tag sat in the paragraph as
+  one more string, easy to miss and impossible to follow. The address comes
+  from `Analyst.model_url/0`, which derives it from the tag rather than from a
+  template, so a third-party installation links its own model or, where its
+  model has no page anywhere, links nothing and simply names it.
+
+  Semibold in both states: the name is the subject of the sentence around it,
+  and the reason the issue was filed is that it did not look like one.
+  """
+  def model_name(assigns) do
+    assigns = assign(assigns, model: Analyst.model(), url: Analyst.model_url())
+
+    ~H"""
+    <.link
+      :if={@url}
+      href={@url}
+      target="_blank"
+      rel="noopener"
+      data-model-link
+      title={gettext("Look up %{model}", model: @model)}
+      class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+    >{@model}</.link><span :if={!@url} class="font-semibold">{@model}</span>
+    """
+  end
 
   @doc """
   The headline of the transparency box: where the Zeugnis stays.

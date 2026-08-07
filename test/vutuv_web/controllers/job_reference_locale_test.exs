@@ -86,6 +86,25 @@ defmodule VutuvWeb.JobReferenceLocaleTest do
     refute body =~ "bleibt hier"
   end
 
+  # The linked model name (issue #1318) split a translated sentence in two, and
+  # the merge carried the German over with the OLD `%{model}` placeholder still
+  # inside it — which renders as the literal characters `%{model}` beside the
+  # real name. Both halves are asserted, so a translation that loses the marker
+  # cannot pass.
+  test "the model sentence keeps its two halves around the link in German", %{
+    conn: conn,
+    user: user
+  } do
+    insert(:job_reference, user: user)
+
+    body = conn |> get(~p"/settings/job_references") |> html_response(200)
+
+    assert body =~ "Wir benutzen "
+    assert body =~ ", ein frei verfügbares Sprachmodell."
+    assert body =~ "nachschlagen"
+    refute body =~ "%{model}"
+  end
+
   # The used-up allowance says a number and a time in both wordings. This is
   # the fallback one, which used to be a fuzzy-prone "please try again later".
   test "the used-up allowance says how long in German", %{user: user} do

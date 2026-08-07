@@ -271,4 +271,61 @@ defmodule Vutuv.References.AnalystTest do
       assert {:error, {:analysis, :bad_response}} = Analyst.analyze(@zeugnis)
     end
   end
+
+  # The transparency box says "we use <model>, a freely available language
+  # model" and now links that name, so a member can go and read what it is.
+  # The address is derived from the tag rather than typed into a template, or
+  # the next installation's box would point at ours.
+  describe "the model's own page" do
+    test "a library tag resolves to its page on ollama.com, tag and all" do
+      put_config(:reference_check_model, "qwen3.6:27b")
+      assert Analyst.model_url() == "https://ollama.com/library/qwen3.6:27b"
+    end
+
+    test "a namespaced tag keeps its namespace instead of going to the library" do
+      put_config(:reference_check_model, "guinogueira/ffxiv-pt-hy-mt2:7b")
+
+      assert Analyst.model_url() == "https://ollama.com/guinogueira/ffxiv-pt-hy-mt2:7b"
+    end
+
+    # Hugging Face repositories have no tag in their path, so the quantization
+    # suffix Ollama needs is dropped rather than carried into a 404.
+    test "a Hugging Face reference points at the repository" do
+      put_config(:reference_check_model, "hf.co/bartowski/Qwen3-27B-GGUF:Q4_K_M")
+
+      assert Analyst.model_url() == "https://huggingface.co/bartowski/Qwen3-27B-GGUF"
+    end
+
+    # Fail closed: a registry we cannot map gets no guessed address. An
+    # operator who wants one names it themselves.
+    test "an unknown registry gets no link at all" do
+      put_config(:reference_check_model, "registry.example.invalid/team/zeugnis:v1")
+
+      refute Analyst.model_url()
+    end
+
+    test "the configured address wins over anything derived" do
+      put_config(:reference_check_model, "qwen3.6:27b")
+      put_config(:reference_check_model_url, "https://example.com/our-model")
+
+      assert Analyst.model_url() == "https://example.com/our-model"
+    end
+
+    # The same "empty drops it" convention the hardware and country clauses
+    # use: an operator running a model nobody can look up says so with a blank.
+    test "an empty configured address drops the link" do
+      put_config(:reference_check_model, "qwen3.6:27b")
+      put_config(:reference_check_model_url, "  ")
+
+      refute Analyst.model_url()
+    end
+
+    # Operator configuration, but it lands in an href, and a scheme that is not
+    # a web address has no business there.
+    test "a non-http address is refused rather than rendered" do
+      put_config(:reference_check_model_url, "javascript:alert(1)")
+
+      refute Analyst.model_url()
+    end
+  end
 end

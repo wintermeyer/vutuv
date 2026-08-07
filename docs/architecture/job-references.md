@@ -339,6 +339,19 @@ own language) and the skill's own URL. That is not ceremony: this is the one
 box whose whole value is that it is true, and a template spelling out one
 operator's graphics card would be a lie on the next operator's server.
 
+The model tag is a **link** to the model's own page (issue #1318). "The model
+is open source" is a claim only a reader who can reach the model is able to
+check, and named in the middle of a paragraph the tag was one string among
+strings. `Analyst.model_url/0` derives the address from the tag, for the same
+reason as everything else in this box: an Ollama reference is
+`[host[:port]/][namespace/]name[:tag]`, so a bare name goes to
+`ollama.com/library/…`, a namespaced one to `ollama.com/<namespace>/…` and an
+`hf.co/…` reference to its Hugging Face repository (whose path carries no tag,
+so the quantization suffix is dropped). A private registry or a model built
+locally with `ollama create` resolves to **nil** rather than to a guessed
+address, and the box then names the model without linking it.
+`REFERENCE_CHECK_MODEL_URL` overrides the lot; empty drops the link.
+
 The country rides the **headline** (`JobReferenceHTML.check_location_heading/0`:
 "Your reference stays on our servers in Germany."), the hardware the sentence
 under it (`check_location_line/0`). The headline used to read "Your reference
@@ -352,7 +365,8 @@ transparency that has to be unfolded first is a claim rather than a practice.
 ## Configuration
 
 See the environment-variable table in `docs/ADMINS.md`:
-`REFERENCE_CHECKS_ENABLED`, `REFERENCE_CHECK_MODEL`, `REFERENCE_CHECK_NUM_CTX`,
+`REFERENCE_CHECKS_ENABLED`, `REFERENCE_CHECK_MODEL`,
+`REFERENCE_CHECK_MODEL_URL`, `REFERENCE_CHECK_NUM_CTX`,
 `REFERENCE_CHECK_TIMEOUT`, `REFERENCE_CHECKS_PER_DAY`,
 `REFERENCE_CHECK_HARDWARE`, `REFERENCE_CHECK_COUNTRY`, `FETCH_REFERENCE_SKILL`,
 `REFERENCE_OCR`. The instance itself is `OLLAMA_URL`, shared with AI image

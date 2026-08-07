@@ -6,16 +6,20 @@ defmodule VutuvWeb.JobReferenceTransparencyTest do
   Its headline used to read "Your reference stays here.", which answers a
   question about a *place* with the website the reader is already looking at.
   It names the country now, and the point of these tests is that it names it
-  from configuration: `:reference_check_country` and
-  `:reference_check_hardware` are read by `Vutuv.References.Analyst` and
-  rendered by `VutuvWeb.JobReferenceHTML`, so the box stays true on an
-  installation whose machines stand somewhere else, or whose operator would
-  rather not name their hardware at all.
+  from configuration: `:reference_check_country`, `:reference_check_hardware`,
+  `:reference_check_model` and `:reference_check_model_url` are read by
+  `Vutuv.References.Analyst` and rendered by `VutuvWeb.JobReferenceHTML`, so
+  the box stays true on an installation whose machines stand somewhere else,
+  whose operator would rather not name their hardware, or which runs a model
+  of its own.
 
   **`async: false`**: `Application.put_env/3` is global and the SQL sandbox
-  does not roll it back, so holding either key down for the length of a test
-  would change what every concurrently running test sees. Nothing else reads
-  these two keys.
+  does not roll it back, so holding any of those keys down for the length of a
+  test would change what every concurrently running test sees. Their only
+  other readers are `Vutuv.References.Analyst` (which `:reference_check_model`
+  sends to Ollama, so a check running beside this would ask for a model that
+  is not there) and `Vutuv.References.AnalystTest`, which is `async: false`
+  for the same reason.
   """
   use VutuvWeb.ConnCase, async: false
 
@@ -82,5 +86,42 @@ defmodule VutuvWeb.JobReferenceTransparencyTest do
 
     assert named =~ "It is analysed right here, on our own machines."
     refute named =~ "on our own hardware:"
+  end
+
+  # "The model is open source" is a claim a reader can only check by going and
+  # looking at the model, so the name is the way there (issue #1318). Named in
+  # the sentence and nothing more, it was a string among strings.
+  test "the model name is a link to the model's own page", %{conn: conn} do
+    put_config(:reference_check_model, "qwen3.6:27b")
+
+    html = box(conn)
+
+    assert Analyst.model_url() == "https://ollama.com/library/qwen3.6:27b"
+
+    # `<.link>` collects the extra attributes into a global map, so they come
+    # out sorted rather than in source order — match each on its own.
+    assert [anchor] = Regex.run(~r{<a [^>]*data-model-link[^>]*>[^<]*</a>}, html)
+    assert anchor =~ ~s(href="https://ollama.com/library/qwen3.6:27b")
+    assert anchor =~ ~s(target="_blank")
+    assert anchor =~ ~s(rel="noopener")
+    assert anchor =~ ">qwen3.6:27b</a>"
+
+    # The sentence is split on a `{model}` marker now, so a translation that
+    # kept the old `%{model}` (or lost the marker) prints it as characters.
+    assert html =~ "We use <a "
+    assert html =~ ", a freely available language model."
+    refute html =~ "{model}"
+  end
+
+  # An installation whose model has no page anywhere still has to read as a
+  # sentence, so the name stays put and only the link goes away.
+  test "with no address for the model the name is still named", %{conn: conn} do
+    put_config(:reference_check_model, "hausmodell:v1")
+    put_config(:reference_check_model_url, "")
+
+    html = box(conn)
+
+    assert html =~ "hausmodell:v1"
+    refute html =~ "data-model-link"
   end
 end

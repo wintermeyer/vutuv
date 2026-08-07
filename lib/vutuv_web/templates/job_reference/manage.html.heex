@@ -160,11 +160,20 @@ public twin at /:slug/job_references is usually empty even here. --%>
         <p class="mb-0.5 font-semibold text-slate-900 dark:text-slate-100">
           {gettext("The model is open source.")}
         </p>
-        <p class="mb-0">
-          {gettext(
-            "We use %{model}, a freely available language model. Anyone can download it and run the same review themselves, which is also why we are able to run it on our own machines at all.",
-            model: reference_check_model()
-          )}
+        <%!-- "Open source" is a claim, and the only way to check it is to go
+              and look at the model, so the tag is the way there. Split on a
+              placeholder rather than pattern-matched, like the author link
+              below: a `.po` slip in a two-part `[a, b] = split` turns a page
+              into a 500. --%>
+        <% {before_model, after_model} =
+          split_marker(
+            gettext(
+              "We use {model}, a freely available language model. Anyone can download it and run the same review themselves, which is also why we are able to run it on our own machines at all."
+            ),
+            "{model}"
+          ) %>
+        <p class="mb-0 break-words">
+          {before_model}<.model_name />{after_model}
         </p>
       </div>
 

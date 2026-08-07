@@ -140,10 +140,16 @@ config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 # renders it in the reader's own language ("Deutschland" / "Germany") instead
 # of one operator's spelling leaking into every locale.
 #
+# :reference_check_model_url is where that box links the model tag it names, so
+# a reader can check the "freely available" claim for themselves. nil means
+# derive it from the tag (`Analyst.model_url/0` knows the ollama.com and
+# Hugging Face address shapes); an empty string means this model has no page
+# anywhere and drops the link, keeping the name.
+#
 # Runtime overrides: REFERENCE_CHECKS_ENABLED, REFERENCE_CHECK_MODEL,
-# REFERENCE_CHECK_NUM_CTX, REFERENCE_CHECK_TIMEOUT, REFERENCE_CHECKS_PER_DAY,
-# REFERENCE_CHECK_HARDWARE, REFERENCE_CHECK_COUNTRY, FETCH_REFERENCE_SKILL,
-# REFERENCE_OCR (config/runtime.exs).
+# REFERENCE_CHECK_MODEL_URL, REFERENCE_CHECK_NUM_CTX, REFERENCE_CHECK_TIMEOUT,
+# REFERENCE_CHECKS_PER_DAY, REFERENCE_CHECK_HARDWARE, REFERENCE_CHECK_COUNTRY,
+# FETCH_REFERENCE_SKILL, REFERENCE_OCR (config/runtime.exs).
 # The one notification email: a digest of what a member missed, swept every few
 # minutes by Vutuv.Activity.DigestNotifier. :notification_digest_delay_minutes is
 # how long a notification may sit unread before it is mailed — long enough that
@@ -153,6 +159,7 @@ config :vutuv, :notification_digest_delay_minutes, 30
 
 config :vutuv, :reference_checks_enabled, true
 config :vutuv, :reference_check_model, "qwen3.6:27b"
+config :vutuv, :reference_check_model_url, nil
 config :vutuv, :reference_check_hardware, "NVIDIA GPU"
 config :vutuv, :reference_check_country, "DE"
 config :vutuv, :reference_check_num_ctx, 65_536

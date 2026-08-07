@@ -384,6 +384,14 @@ if config_env() == :prod do
     config :vutuv, :reference_check_model, model
   end
 
+  # Where the transparency box links the model tag it names, so a reader can
+  # check the "freely available" claim. Unset means derive it from the tag
+  # (`Vutuv.References.Analyst.model_url/0`); an empty value means this model
+  # has no page anywhere and drops the link, keeping the name.
+  if model_url = System.get_env("REFERENCE_CHECK_MODEL_URL") do
+    config :vutuv, :reference_check_model_url, String.trim(model_url)
+  end
+
   # What the member-facing transparency box may say about where this runs: the
   # machine, and the ISO 3166-1 alpha-2 country its servers stand in (rendered
   # in the reader's language by Vutuv.Countries). An empty value drops that
