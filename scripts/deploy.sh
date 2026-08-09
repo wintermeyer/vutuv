@@ -142,12 +142,29 @@ else
   sudo systemctl disable "$OLD_UNIT" 2>/dev/null || true
 fi
 
+# Everything from here on is MAINTENANCE, not deploy: traffic already runs on
+# the new slot, so the deploy has succeeded. Such a step must therefore never
+# be allowed to abort the script, because the one thing still outstanding —
+# stopping the old slot — matters far more than any of it. `set -e` used to
+# make a failure here fatal, and on 2026-08-09 that left both slots running
+# for 40 minutes: two pools against a 100-connection Postgres (which was what
+# had failed the maintenance step in the first place), and every periodic
+# sweeper running twice, including the one that emails members about unread
+# messages. Each step logs its own failure and the script carries on.
+maintenance() {
+  local what=$1
+  shift
+  if ! "$@"; then
+    log "WARNING: $what failed; continuing so the old slot still gets stopped"
+  fi
+}
+
 # UUID cutover only: rename the image directories from their old integer id to
 # the new UUID (avatars/covers/screenshots + their originals/ mirrors), using
 # the legacy_id_map the convert_ids_to_uuid_v7 migration leaves behind. Must run
 # before regenerate_images so the originals are found at their new UUID paths.
 # Idempotent and a no-op once the map is cleaned up after the cutover.
-"$dest/bin/$RELEASE" eval "Vutuv.Release.relabel_image_dirs()"
+maintenance "relabel_image_dirs" "$dest/bin/$RELEASE" eval "Vutuv.Release.relabel_image_dirs()"
 
 # Re-derive any image whose served versions predate the current
 # Vutuv.Uploads.Spec (format/resolution/quality), relocating legacy public
@@ -155,7 +172,7 @@ fi
 # there is nothing to do; runs after the traffic switch so new uploads are
 # already on the current spec (a not-yet-converted file keeps serving through
 # the transitional legacy fallback in the meantime).
-"$dest/bin/$RELEASE" eval "Vutuv.Release.regenerate_images()"
+maintenance "regenerate_images" "$dest/bin/$RELEASE" eval "Vutuv.Release.regenerate_images()"
 
 # Drain, then stop the old instance. The drain lets in-flight requests and
 # LiveView websockets finish; it stays short because the app's periodic
