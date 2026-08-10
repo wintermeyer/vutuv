@@ -26,6 +26,11 @@ defmodule Vutuv.Organizations.OrganizationRole do
     |> cast(attrs, [:organization_id, :user_id, :role, :granted_by_user_id])
     |> validate_required([:organization_id, :user_id, :role])
     |> validate_inclusion(:role, @roles)
+    # Both indexes exist during the issue #1333 rollout. The pair is the one that
+    # still enforces one-role-per-member and therefore the one that fires today;
+    # the triple takes over the moment the pair is dropped (deploy 2), and both
+    # put their error on `:organization_id`, so `add_role/4`'s mapping is unchanged.
     |> unique_constraint([:organization_id, :user_id])
+    |> unique_constraint([:organization_id, :user_id, :role])
   end
 end

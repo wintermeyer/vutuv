@@ -37,7 +37,7 @@ happen on the organization's own pages. --%>
     <.card :if={@organizations != []} id="your-organizations">
       <.section_title>{gettext("Your organizations")}</.section_title>
       <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
-        <li :for={{organization, role} <- @organizations} class="flex items-center gap-4 py-4">
+        <li :for={{organization, roles} <- @organizations} class="flex items-center gap-4 py-4">
           <.link navigate={~p"/organizations/#{organization.slug}"} class="shrink-0">
             <.organization_logo organization={organization} class="h-12 w-12" />
           </.link>
@@ -60,13 +60,15 @@ happen on the organization's own pages. --%>
               ]}>
                 {organization_status_label(organization)}
               </span>
+              <%!-- One line however many roles the member holds here, since the
+              question it answers ("what am I on this page?") is one question. --%>
               <span class="text-xs text-slate-600 dark:text-slate-400">
-                {gettext("Your role")}: {role_label(role)}
+                {ngettext("Your role", "Your roles", length(roles))}: {Enum.map_join(roles, ", ", &role_label/1)}
               </span>
             </div>
           </div>
           <.link
-            :if={role in ["owner", "admin"]}
+            :if={Enum.any?(roles, &(&1 in ["owner", "admin"]))}
             navigate={~p"/organizations/#{organization.slug}/edit"}
             class="shrink-0 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >

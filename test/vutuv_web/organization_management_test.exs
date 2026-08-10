@@ -40,7 +40,7 @@ defmodule VutuvWeb.OrganizationManagementTest do
       |> render_submit(%{"identifier" => "@" <> member.username, "role" => "admin"})
 
       assert render(view) =~ member.username
-      assert Organizations.role_of(organization, member) == "admin"
+      assert Organizations.roles_of(organization, member) == ["admin"]
     end
 
     test "the last owner cannot leave", %{conn: conn} do
@@ -48,13 +48,14 @@ defmodule VutuvWeb.OrganizationManagementTest do
       organization = active_organization_for(owner)
 
       role =
-        Organizations.role_of(organization, owner) && hd(Organizations.list_roles(organization))
+        Organizations.roles_of(organization, owner) != [] and
+          hd(Organizations.list_roles(organization))
 
       {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/roles")
       html = view |> element("#role-#{role.id} button", "Leave") |> render_click()
 
       assert html =~ "at least one owner"
-      assert Organizations.role_of(organization, owner) == "owner"
+      assert Organizations.roles_of(organization, owner) == ["owner"]
     end
 
     test "a logged-in non-member cannot open the roles page", %{conn: conn} do

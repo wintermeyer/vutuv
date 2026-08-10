@@ -134,6 +134,31 @@ defmodule Vutuv.OrganizationsManagementTest do
       assert {:ok, _} = Organizations.update_role(owner_role, "admin", owner)
     end
 
+    test "roles_of answers with a ranked list, and the permission predicates read it" do
+      {organization, owner} = active_organization()
+      recruiter = insert(:activated_user)
+      stranger = insert(:activated_user)
+      {:ok, _} = Organizations.add_role(organization, recruiter, "recruiter", owner)
+
+      assert Organizations.roles_of(organization, owner) == ["owner"]
+      assert Organizations.roles_of(organization, recruiter) == ["recruiter"]
+      assert Organizations.roles_of(organization, stranger) == []
+      assert Organizations.roles_of(organization, nil) == []
+
+      assert Organizations.owner?(organization, owner)
+      refute Organizations.owner?(organization, recruiter)
+      assert Organizations.can_edit_page?(organization, owner)
+      refute Organizations.can_edit_page?(organization, recruiter)
+      refute Organizations.can_edit_page?(organization, stranger)
+    end
+
+    test "member_organizations pairs each page with the member's ranked roles" do
+      {organization, owner} = active_organization()
+
+      assert [{listed, ["owner"]}] = Organizations.member_organizations(owner)
+      assert listed.id == organization.id
+    end
+
     test "list_roles orders owner, admin, recruiter" do
       {organization, owner} = active_organization()
       r = insert(:activated_user)

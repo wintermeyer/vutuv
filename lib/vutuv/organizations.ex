@@ -142,27 +142,40 @@ defmodule Vutuv.Organizations do
 
   def can_manage?(_, _), do: false
 
-  @doc ~S|The `user`'s role on `organization` ("owner"/"admin"/"recruiter"), or nil.|
-  def role_of(%Organization{id: id}, %User{id: user_id}) do
-    Repo.one(
+  @doc ~S"""
+  Every role `user` holds on `organization`, ranked owner → admin → recruiter,
+  as a list of strings (`[]` for a non-member).
+
+  This replaced `role_of/2`, which answered with a single role string, when
+  issue #1333 let a member hold several roles at once. It was **renamed** rather
+  than quietly changed: a permission accessor whose return type moves from
+  `"owner" | nil` to a list under the same name is how a check ends up reading a
+  non-empty list as truthy and waving everyone through.
+  """
+  def roles_of(%Organization{id: id}, %User{id: user_id}) do
+    Repo.all(
       from(r in OrganizationRole,
         where: r.organization_id == ^id and r.user_id == ^user_id,
         select: r.role
       )
     )
+    |> rank_roles()
   end
 
-  def role_of(_, _), do: nil
+  def roles_of(_, _), do: []
+
+  @doc "Sorts a list of role strings into the canonical owner → admin → recruiter order."
+  def rank_roles(roles), do: Enum.sort_by(roles, &role_rank/1)
 
   @doc "Whether `user` is an owner of `organization` (manage roles + domains)."
   def owner?(%Organization{} = organization, %User{} = user),
-    do: role_of(organization, user) == "owner"
+    do: "owner" in roles_of(organization, user)
 
   def owner?(_, _), do: false
 
   @doc "Whether `user` may edit the organization page + aliases (owner or admin)."
   def can_edit_page?(%Organization{} = organization, %User{} = user),
-    do: role_of(organization, user) in ["owner", "admin"]
+    do: Enum.any?(roles_of(organization, user), &(&1 in ["owner", "admin"]))
 
   def can_edit_page?(_, _), do: false
 
@@ -191,14 +204,15 @@ defmodule Vutuv.Organizations do
   end
 
   @doc """
-  Every organization the member helps run, as `{organization, role}` pairs
-  ordered by name. Covers each page the member holds any role on (owner / admin
-  / recruiter) — the claim wizard always makes the creator an `owner`, so a
-  member's own pages are included too. **Pending** pages (still finishing domain
-  verification) and **frozen** ones are kept so the member can act on them;
-  **archived** pages are dropped. Powers the member's "Your organizations" page
-  at `/settings/organizations` (distinct from `postable_organizations/1`, which
-  is the active-only job-posting attribution set).
+  Every organization the member helps run, as `{organization, roles}` pairs
+  ordered by name, where `roles` is the ranked list of every role they hold
+  there. Covers each page the member holds any role on — the claim wizard always
+  makes the creator an `owner`, so a member's own pages are included too.
+  **Pending** pages (still finishing domain verification) and **frozen** ones are
+  kept so the member can act on them; **archived** pages are dropped. Powers the
+  member's "Your organizations" page at `/settings/organizations` (distinct from
+  `postable_organizations/1`, which is the active-only job-posting attribution
+  set).
   """
   def member_organizations(%User{id: user_id}) do
     Repo.all(
@@ -206,10 +220,14 @@ defmodule Vutuv.Organizations do
         join: o in Organization,
         on: o.id == r.organization_id,
         where: r.user_id == ^user_id and o.status != "archived",
-        order_by: [asc: fragment("lower(?)", o.name)],
+        order_by: [asc: fragment("lower(?)", o.name), asc: o.id],
         select: {o, r.role}
       )
     )
+    |> Enum.chunk_by(fn {organization, _role} -> organization.id end)
+    |> Enum.map(fn [{organization, _} | _] = rows ->
+      {organization, rank_roles(Enum.map(rows, fn {_, role} -> role end))}
+    end)
   end
 
   @doc "An organization's roles, owner → admin → recruiter, each oldest first, user preloaded."
