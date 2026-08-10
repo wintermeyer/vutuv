@@ -2087,14 +2087,40 @@ defmodule VutuvWeb.PostComponents do
   def like_refusal_message(reason, _subject) when reason in [:not_found, :not_visible],
     do: gettext("That post is not here any more.")
 
-  # The states a member is in rather than a fact about this act: those already
-  # have one wording in `FediverseComponents.refusal_message/1`, and saying
-  # "switch it on under Settings" here would be wrong for the several ways
-  # `federated?/1` is false with the switch already on (an unconfirmed address,
-  # a frozen or suspended account). Only its catch-all is overridden, which is
-  # about an address a heart does not have.
+  # The one refusal a member can act on, and the one this table stopped
+  # borrowing from `FediverseComponents.refusal_message/1` (issue #1349). That
+  # sentence answers the *follow* pages: "there is no identity to sign the
+  # request with" is true of a follow request and reads, after a heart on a post
+  # somebody is reading, as vutuv not knowing who pressed it — the member who
+  # reported it logged out and back in twice before writing the issue, and
+  # titled it "User is not recognized". Practically every reader meets this, not
+  # a rare few: taking part in the Fediverse is opt-in and most members have not
+  # opted in, while remote posts reach their feed anyway through the people they
+  # follow here. So it says what the act would have done and leaves the way to
+  # the setting to the bar, which renders it as a real link beside this.
+  #
+  # What it deliberately does not say is "your switch is off": `federated?/1` is
+  # false for an unconfirmed address, a frozen or a suspended account too, whose
+  # switch is already on. The settings page tells them which it is.
+  #
+  # NOTE the `{settings}` marker: this is the one sentence in this table that
+  # names a page, and naming one without linking it is what left the reporter
+  # with nothing to try but logging out and back in. The bar splits the
+  # translation there (`UI.split_marker/2` — never a hard pattern match on a
+  # translated string) and puts the link in its place. A caller that renders
+  # this table's answers as plain text must swap the marker for
+  # `gettext("Fediverse settings")` itself.
+  def like_refusal_message(:not_federating, _subject),
+    do:
+      gettext(
+        "A like or a repost is sent back to the network this post came from, and your account does not take part in the Fediverse at the moment. You can switch it on in the {settings}."
+      )
+
+  # The other states a member is in rather than a fact about this act: those
+  # already have one wording in `FediverseComponents.refusal_message/1`. Only
+  # its catch-all is overridden, which is about an address a heart does not have.
   def like_refusal_message(reason, _subject)
-      when reason in [:not_federating, :moved, :fediverse_disabled, :instance_blocked],
+      when reason in [:moved, :fediverse_disabled, :instance_blocked],
       do: FediverseComponents.refusal_message(reason)
 
   def like_refusal_message(_reason, _subject), do: gettext("That did not work.")

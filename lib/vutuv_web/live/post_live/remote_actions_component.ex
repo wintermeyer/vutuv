@@ -73,6 +73,7 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
      |> assign(:subject, assigns.subject)
      |> assign(:viewer, assigns[:viewer])
      |> assign_new(:notice, fn -> nil end)
+     |> assign_new(:notice_path, fn -> nil end)
      # `assign_new` like the marks below: a host re-render must not undo the
      # figure this bar has already nudged for the reader's own press.
      |> assign_new(:counts, fn -> Fediverse.counts(assigns.subject) end)
@@ -107,12 +108,25 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
         {:noreply,
          socket
          |> assign(:notice, confirmation(outcome))
+         |> assign(:notice_path, nil)
          |> assign(:marks, Map.put(marks, flag(act), not on?))
          |> assign(:counts, moved(socket.assigns.counts, act, outcome))}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :notice, like_refusal_message(reason, subject_kind(subject)))}
+        {:noreply, refusal(socket, reason, subject)}
     end
+  end
+
+  # A refusal, and for the one a member can do something about, the way there
+  # (issue #1349). A sentence that names a setting and then leaves them to find
+  # it is how "you do not take part in the Fediverse" turned into "vutuv does not
+  # know who I am" in the report: nothing on the page led anywhere, so logging
+  # out and back in was the only thing left to try. Every other reason is a
+  # statement about this act with nowhere to send anybody.
+  defp refusal(socket, reason, subject) do
+    socket
+    |> assign(:notice, like_refusal_message(reason, subject_kind(subject)))
+    |> assign(:notice_path, if(reason == :not_federating, do: ~p"/settings/fediverse"))
   end
 
   # The reader's own act, on the figure in front of them. Only for an act that
@@ -186,7 +200,18 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, :offer, offered_acts(assigns.subject))
+    # The page the sentence names, as a link in the words that name it (issue
+    # #1349). Split out of the translation rather than matched in it, so a `.po`
+    # slip cannot 500 the feed; a notice without the marker (every other
+    # refusal, and the reshare confirmation) comes back whole in `notice_pre`
+    # and renders exactly as before.
+    {notice_pre, notice_post} = split_marker(assigns.notice || "", "{settings}")
+
+    assigns =
+      assigns
+      |> assign(:offer, offered_acts(assigns.subject))
+      |> assign(:notice_pre, notice_pre)
+      |> assign(:notice_post, notice_post)
 
     ~H"""
     <div>
@@ -205,14 +230,21 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
       />
       <%!-- Beside the control that refused, in the reader's own words. The one
       refusal a member can act on says what to do about it; the rest say only
-      that it did not work (`like_refusal_message/2`). --%>
+      that it did not work (`like_refusal_message/2`). `text-sm`, not the
+      quieter `text-xs` a confirmation would take: this line is the whole answer
+      for the reader who gets it, and it carries the link they need to hit. --%>
       <p
         :if={@notice}
         role="status"
         data-remote-notice
-        class="mt-1 text-xs text-slate-600 dark:text-slate-400"
+        class="mt-1 text-sm text-slate-600 dark:text-slate-400"
       >
-        {@notice}
+        {@notice_pre}<.link
+          :if={@notice_path}
+          href={@notice_path}
+          data-remote-notice-link
+          class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >{gettext("Fediverse settings")}</.link>{@notice_post}
       </p>
     </div>
     """

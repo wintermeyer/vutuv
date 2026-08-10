@@ -251,13 +251,65 @@ defmodule VutuvWeb.FeedRemotePostsTest do
       # out that this exists and is one setting away.
       html = view |> element("[data-remote-act='like']") |> render_click()
 
-      # The wording is the one every other Fediverse refusal uses, and it must
-      # not claim the switch is off — `federated?/1` is also false for an
-      # unconfirmed address or a frozen account, whose switch is already on.
-      assert html =~ VutuvWeb.FediverseComponents.refusal_message(:not_federating)
+      # Issue #1349: it must not borrow the follow pages' wording any more.
+      # "There is no identity to sign the request with" is true of a follow
+      # request and reads, after a heart, as vutuv not knowing who pressed it —
+      # the member who reported this logged out and back in to fix that.
+      refute html =~ VutuvWeb.FediverseComponents.refusal_message(:not_federating)
+      # It must not claim the switch is off either — `federated?/1` is also
+      # false for an unconfirmed address or a frozen account, whose switch is
+      # already on.
+      assert html =~ "does not take part in the Fediverse at the moment"
+      # A sentence naming a setting owes the reader the way to it, in the words
+      # that name it — and no `{settings}` marker may survive into the page.
+      assert has_element?(view, "[data-remote-notice-link][href='/settings/fediverse']")
+      refute html =~ "{settings}"
+
       refute has_element?(view, "[data-remote-act='like'][data-on='on']")
       # And no marker is written for a like that never left.
       assert Repo.aggregate(Vutuv.Fediverse.PostLike, :count) == 0
+    end
+
+    test "switching participation on works on the page that refused", ctx do
+      ctx.user |> Ecto.Changeset.change(fediverse_followers?: false) |> Repo.update!()
+
+      {:ok, view, _html} = live(ctx.conn, ~p"/feed")
+
+      view |> element("[data-remote-act='like']") |> render_click()
+      refute has_element?(view, "[data-remote-act='like'][data-on='on']")
+
+      # The trip the refusal sends them on, in the other tab. The one that
+      # refused is still open, and the gate used to read the copy of them it was
+      # drawn with — so it kept refusing until the whole page was reloaded,
+      # which is what the member who reported issue #1349 had to work out.
+      # `Repo.reload!` first: `ctx.user` still carries the true this setup wrote,
+      # so a changeset built from that struct holds no change and writes nothing.
+      ctx.user
+      |> Repo.reload!()
+      |> Ecto.Changeset.change(fediverse_followers?: true)
+      |> Repo.update!()
+
+      view |> element("[data-remote-act='like']") |> render_click()
+
+      assert has_element?(view, "[data-remote-act='like'][data-on='on']")
+      assert Repo.aggregate(Vutuv.Fediverse.PostLike, :count) == 1
+    end
+
+    # vutuv is a German site, so the German render is the one real visitors get
+    # — and a brand-new msgid is exactly what `gettext.extract --merge` fills in
+    # fuzzily with some unrelated sentence it thinks looks similar.
+    test "the refusal reads right in German", ctx do
+      ctx.user
+      |> Ecto.Changeset.change(fediverse_followers?: false, locale: "de")
+      |> Repo.update!()
+
+      {:ok, view, _html} = live(ctx.conn, ~p"/feed")
+
+      html = view |> element("[data-remote-act='like']") |> render_click()
+
+      assert html =~ "Ihr Konto nimmt derzeit nicht am Fediverse teil"
+      assert html =~ "Fediverse-Einstellungen</a>"
+      refute html =~ "{settings}"
     end
   end
 

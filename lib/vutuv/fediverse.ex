@@ -5107,6 +5107,8 @@ defmodule Vutuv.Fediverse do
   # gate, the marker table and its subject column, which budget it spends, how
   # the activity is addressed, and the word for a row that really landed.
   defp outbound_act(user, subject, act) do
+    user = reload_member(user)
+
     with subject when not is_nil(subject) <- act.reload.(subject),
          :ok <- act.gate.(user, subject),
          {:ok, written} when written == act.written <-
@@ -5118,6 +5120,19 @@ defmodule Vutuv.Fediverse do
       {:error, _} = error -> error
     end
   end
+
+  # The member as they stand **now**, for the same reason the subject above is
+  # re-read: the card was rendered at some earlier moment (issue #1349). Their
+  # own copy came from a LiveView mount and every gate here asks about their
+  # Fediverse standing — which is a switch they own, and which the refusal sends
+  # them off to flip. Reading the copy from the mount meant the tab they left
+  # open went on refusing after they had turned it on, so the member who
+  # reported this had to reload the feed to be believed.
+  #
+  # The row going missing mid-act leaves the struct in hand: that is what every
+  # caller passed before this existed, and a member deleting their account in
+  # another tab is not a case for this function to invent an answer to.
+  defp reload_member(%User{} = user), do: Repo.reload(user) || user
 
   defp claim_and_deliver(user, subject, act) do
     case act.budget.(user) do

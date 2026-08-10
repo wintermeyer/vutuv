@@ -30,7 +30,6 @@ defmodule VutuvWeb.TagLive.Timeline do
   import VutuvWeb.PostComponents,
     only: [
       feed_filter_options: 0,
-      like_refusal_message: 1,
       post_filter_tabs: 1,
       post_list: 1,
       post_row_class: 0,
@@ -110,18 +109,6 @@ defmodule VutuvWeb.TagLive.Timeline do
     {:noreply, socket |> update(:page, &(&1 + 1)) |> load(reset: false)}
   end
 
-  # The heart on a cached post is the one the feed carries (issue #1164): it
-  # really delivers a `Like` and shows the reader's own state, with no count.
-  # Only a signed-in reader ever sees it (the card renders it for a viewer
-  # alone), so the handlers can assume there is one.
-  def handle_event("like-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_like(socket, id, true, &Fediverse.like_remote_post/2)}
-  end
-
-  def handle_event("unlike-remote-post", %{"id" => id}, socket) do
-    {:noreply, toggle_remote_like(socket, id, false, &Fediverse.unlike_remote_post/2)}
-  end
-
   # A report deletes our copy for everybody here, so the row leaves in the same
   # round trip rather than sitting there until the next load.
   def handle_event("report-remote-post", %{"id" => id}, socket) do
@@ -184,9 +171,14 @@ defmodule VutuvWeb.TagLive.Timeline do
   # the remote ones.
   defp decorate(entries, viewer) do
     engagement = Posts.post_engagement_map(for(%{post: post} <- entries, do: post.id), viewer)
-    remote_ids = for %{remote_post: post} <- entries, do: post.id
-    images = Fediverse.list_remote_images(remote_ids)
-    liked = Fediverse.liked_remote_post_ids(viewer, remote_ids)
+    remote = for %{remote_post: post} <- entries, do: post
+    images = Fediverse.list_remote_images(Enum.map(remote, & &1.id))
+    # Three reads for the whole page, handed to the bars. Without them each bar
+    # loads its own three (`VutuvWeb.PostLive.RemoteActionsComponent`), which is
+    # what this page did while it batched the reader's likes into a `:liked?`
+    # the card has not taken since the bar became a component (issues #1275,
+    # #1276) — a decoration nothing read, beside a lookup per card.
+    marks = Fediverse.mark_lookup(remote, viewer)
 
     Enum.map(entries, fn
       %{post: post} = entry ->
@@ -195,28 +187,9 @@ defmodule VutuvWeb.TagLive.Timeline do
       %{remote_post: post} = entry ->
         entry
         |> Map.put(:images, Map.get(images, post.id, []))
-        |> Map.put(:liked?, MapSet.member?(liked, post.id))
+        |> Map.put(:marks, marks.(post))
     end)
   end
-
-  defp toggle_remote_like(socket, remote_post_id, liked?, action) do
-    with %{} = entry <- find_remote_entry(socket, remote_post_id),
-         {:ok, _outcome} <- action.(socket.assigns.current_user, entry.remote_post) do
-      updated = Map.put(entry, :liked?, liked?)
-
-      socket
-      |> update(:entries, &replace_entry(&1, updated))
-      |> stream_insert(:entries, updated, update_only: true)
-    else
-      {:error, reason} -> put_flash(socket, :error, like_refusal_message(reason))
-      _ -> socket
-    end
-  end
-
-  # By the entry's own id, not the post's: an entry is one row of this list, and
-  # the id is what the stream knows it by.
-  defp replace_entry(entries, %{id: id} = updated),
-    do: Enum.map(entries, &if(&1.id == id, do: updated, else: &1))
 
   defp drop_remote_entry(socket, remote_post_id) do
     case find_remote_entry(socket, remote_post_id) do
