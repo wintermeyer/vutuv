@@ -243,8 +243,19 @@ defmodule VutuvWeb.OrganizationComponents do
   @doc "The human, localized label for an organization role."
   def role_label("owner"), do: gettext("Owner")
   def role_label("admin"), do: gettext("Admin")
+  # "Editorial" / "Redaktion" names the function rather than the person, which
+  # is the point: this role says "may write in our name" and must not read as
+  # seniority. The code name stays `publisher`.
+  def role_label("publisher"), do: gettext("Editorial")
   def role_label("recruiter"), do: gettext("Recruiter")
   def role_label(_), do: gettext("Member")
+
+  @doc "One line saying what a role may do, for the roster's checkboxes."
+  def role_hint("owner"), do: gettext("Manages the team and the domains, and edits the page.")
+  def role_hint("admin"), do: gettext("Edits the page and posts jobs.")
+  def role_hint("publisher"), do: gettext("Writes posts in the organization's name.")
+  def role_hint("recruiter"), do: gettext("Posts jobs.")
+  def role_hint(_), do: ""
 
   @doc "The human, localized label for an alias kind."
   def alias_kind_label("former"), do: gettext("Former name")

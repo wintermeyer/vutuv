@@ -109,14 +109,59 @@ defmodule Vutuv.OrganizationsManagementTest do
       refute Organizations.can_manage?(organization, stranger)
     end
 
-    test "add_role notifies the member and rejects a duplicate" do
+    test "add_role notifies the member, allows a second role and rejects the same one twice" do
       {organization, owner} = active_organization()
       member = insert(:activated_user)
 
       assert {:ok, _role} = Organizations.add_role(organization, member, "admin", owner)
 
+      # A member may hold several roles (issue #1333) …
+      assert {:ok, _role} = Organizations.add_role(organization, member, "publisher", owner)
+      assert Organizations.roles_of(organization, member) == ["admin", "publisher"]
+
+      # … but not the same one twice.
       assert {:error, :already_member} =
-               Organizations.add_role(organization, member, "recruiter", owner)
+               Organizations.add_role(organization, member, "admin", owner)
+    end
+
+    test "publisher is never implied by owner or admin" do
+      {organization, owner} = active_organization()
+      admin = insert(:activated_user)
+      {:ok, _} = Organizations.add_role(organization, admin, "admin", owner)
+
+      # The whole point of the role: administering a page is not speaking for it,
+      # so a freshly claimed page cannot post until its owner says so once.
+      refute Organizations.publisher?(organization, owner)
+      refute Organizations.publisher?(organization, admin)
+
+      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+      assert Organizations.publisher?(organization, owner)
+      # …and the grant does not cost them anything they already had.
+      assert Organizations.owner?(organization, owner)
+    end
+
+    test "set_roles adds, removes and leaves the rest alone" do
+      {organization, owner} = active_organization()
+      member = insert(:activated_user)
+
+      assert {:ok, ["admin", "publisher"]} =
+               Organizations.set_roles(organization, member, ["publisher", "admin"], owner)
+
+      granted_at =
+        Repo.get_by!(OrganizationRole,
+          organization_id: organization.id,
+          user_id: member.id,
+          role: "admin"
+        )
+
+      # Swapping publisher for recruiter must not disturb the untouched admin row.
+      assert {:ok, ["admin", "recruiter"]} =
+               Organizations.set_roles(organization, member, ["admin", "recruiter"], owner)
+
+      assert Repo.get(OrganizationRole, granted_at.id).inserted_at == granted_at.inserted_at
+
+      assert {:ok, []} = Organizations.set_roles(organization, member, [], owner)
+      assert Organizations.roles_of(organization, member) == []
     end
 
     test "the last owner cannot be removed or demoted" do
@@ -126,12 +171,35 @@ defmodule Vutuv.OrganizationsManagementTest do
         Repo.get_by(OrganizationRole, organization_id: organization.id, user_id: owner.id)
 
       assert {:error, :last_owner} = Organizations.remove_role(owner_role)
-      assert {:error, :last_owner} = Organizations.update_role(owner_role, "admin", owner)
 
-      # A second owner lifts the guard.
+      assert {:error, :last_owner} =
+               Organizations.set_roles(organization, owner, ["admin"], owner)
+
+      assert {:error, :last_owner} = Organizations.set_roles(organization, owner, [], owner)
+
+      # Holding another role beside owner does not weaken the guard.
+      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+
+      assert {:error, :last_owner} =
+               Organizations.set_roles(organization, owner, ["publisher"], owner)
+
+      # A second owner lifts it.
       other = insert(:activated_user)
       {:ok, _} = Organizations.add_role(organization, other, "owner", owner)
-      assert {:ok, _} = Organizations.update_role(owner_role, "admin", owner)
+      assert {:ok, ["admin"]} = Organizations.set_roles(organization, owner, ["admin"], owner)
+    end
+
+    test "list_team gives one entry per member with every role they hold" do
+      {organization, owner} = active_organization()
+      member = insert(:activated_user)
+      {:ok, _} = Organizations.set_roles(organization, member, ["recruiter", "publisher"], owner)
+
+      assert [%{user: first, roles: ["owner"]}, %{user: second, roles: roles}] =
+               Organizations.list_team(organization)
+
+      assert first.id == owner.id
+      assert second.id == member.id
+      assert roles == ["publisher", "recruiter"]
     end
 
     test "roles_of answers with a ranked list, and the permission predicates read it" do

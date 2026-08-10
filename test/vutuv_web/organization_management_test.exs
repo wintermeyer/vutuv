@@ -37,9 +37,41 @@ defmodule VutuvWeb.OrganizationManagementTest do
 
       view
       |> element("#add-member-form")
-      |> render_submit(%{"identifier" => "@" <> member.username, "role" => "admin"})
+      |> render_submit(%{
+        "identifier" => "@" <> member.username,
+        "roles" => %{"admin" => "true"}
+      })
 
       assert render(view) =~ member.username
+      assert Organizations.roles_of(organization, member) == ["admin"]
+    end
+
+    test "the roster grants several roles at once, and un-ticking one keeps the rest",
+         %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      organization = active_organization_for(owner)
+      member = insert(:activated_user)
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/roles")
+
+      view
+      |> element("#add-member-form")
+      |> render_submit(%{
+        "identifier" => "@" <> member.username,
+        "roles" => %{"admin" => "true", "publisher" => "true"}
+      })
+
+      assert Organizations.roles_of(organization, member) == ["admin", "publisher"]
+
+      # Clearing the publisher box must not take the admin role with it — the
+      # single-select roster this replaced would have done exactly that.
+      view
+      |> element("#member-#{member.id} form")
+      |> render_change(%{
+        "user_id" => member.id,
+        "roles" => %{"admin" => "true", "publisher" => "false"}
+      })
+
       assert Organizations.roles_of(organization, member) == ["admin"]
     end
 
@@ -47,12 +79,8 @@ defmodule VutuvWeb.OrganizationManagementTest do
       {conn, owner} = create_and_login_user(conn)
       organization = active_organization_for(owner)
 
-      role =
-        Organizations.roles_of(organization, owner) != [] and
-          hd(Organizations.list_roles(organization))
-
       {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/roles")
-      html = view |> element("#role-#{role.id} button", "Leave") |> render_click()
+      html = view |> element("#member-#{owner.id} button", "Leave") |> render_click()
 
       assert html =~ "at least one owner"
       assert Organizations.roles_of(organization, owner) == ["owner"]

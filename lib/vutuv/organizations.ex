@@ -37,6 +37,11 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Repo
   alias Vutuv.SlugHelpers
 
+  # The role vocabulary, taken from the schema so the two can never disagree.
+  # It has to be an attribute rather than a call because `add_role/4` guards on
+  # it, and a guard cannot call a remote function.
+  @roles OrganizationRole.roles()
+
   # Slugs that would shadow a /organizations/<word> route.
   @reserved_slugs ~w(new)
   @directory_per_page 24
@@ -127,9 +132,13 @@ defmodule Vutuv.Organizations do
 
   # --- roles ------------------------------------------------------------------
   #
-  # Powers (issue #930): owner = roles + domains + page + job postings; admin =
-  # page + job postings; recruiter = job postings only. Every role is a
-  # proof-derived power, not an employment claim.
+  # Powers (issues #930, #1333): owner = roles + domains + page + job postings;
+  # admin = page + job postings; recruiter = job postings only; publisher =
+  # speaking in the organization's name (its posts) and nothing administrative.
+  # Every role is a proof-derived power, not an employment claim.
+  #
+  # A member may hold several roles and the effective powers are the union, but
+  # `publisher` is never implied by another role — see `publisher?/2`.
 
   @doc """
   Whether `user` is organization staff (creator or any role holder). This is the
@@ -164,7 +173,10 @@ defmodule Vutuv.Organizations do
 
   def roles_of(_, _), do: []
 
-  @doc "Sorts a list of role strings into the canonical owner → admin → recruiter order."
+  @doc "The role vocabulary, ranked owner → admin → publisher → recruiter."
+  def roles, do: rank_roles(@roles)
+
+  @doc "Sorts a list of role strings into the canonical owner → admin → publisher → recruiter order."
   def rank_roles(roles), do: Enum.sort_by(roles, &role_rank/1)
 
   @doc "Whether `user` is an owner of `organization` (manage roles + domains)."
@@ -178,6 +190,22 @@ defmodule Vutuv.Organizations do
     do: Enum.any?(roles_of(organization, user), &(&1 in ["owner", "admin"]))
 
   def can_edit_page?(_, _), do: false
+
+  @doc """
+  Whether `user` may speak in `organization`'s name: publish, edit and delete
+  its posts, and switch into it (issue #1335).
+
+  Deliberately **not** implied by `owner` or `admin`. That is the entire point of
+  the role: administering a page and speaking for it are different powers, and
+  a freshly claimed page therefore cannot post until its owner grants this once,
+  which is a visible step rather than a silent default. The separation holds
+  structurally rather than by convention, because `can_manage_roles?/2` is
+  owner-only — an admin cannot grant themselves the right to post.
+  """
+  def publisher?(%Organization{} = organization, %User{} = user),
+    do: "publisher" in roles_of(organization, user)
+
+  def publisher?(_, _), do: false
 
   @doc "Whether `user` may manage the roster (owner only)."
   def can_manage_roles?(organization, user), do: owner?(organization, user)
@@ -230,16 +258,43 @@ defmodule Vutuv.Organizations do
     end)
   end
 
-  @doc "An organization's roles, owner → admin → recruiter, each oldest first, user preloaded."
+  @doc """
+  An organization's role rows, ranked owner → admin → publisher → recruiter and
+  then oldest first, user preloaded. A member holding two roles appears twice —
+  this is the raw row listing (the admin drawer reads it); the roster UI wants
+  one entry per member and uses `list_team/1`.
+  """
   def list_roles(%Organization{id: id}) do
     Repo.all(from(r in OrganizationRole, where: r.organization_id == ^id, preload: [:user]))
     |> Enum.sort_by(&{role_rank(&1.role), &1.id})
   end
 
+  @doc """
+  An organization's team, **one entry per member**: `%{user:, roles:, since:}`
+  with `roles` ranked, ordered by the member's highest role and then by when
+  they joined the team. This is what the roster renders, because with several
+  roles per member a row-per-role list would show the same person twice with
+  half their powers in each row.
+  """
+  def list_team(%Organization{} = organization) do
+    organization
+    |> list_roles()
+    |> Enum.group_by(& &1.user_id)
+    |> Enum.map(fn {_user_id, [first | _] = rows} ->
+      %{
+        user: first.user,
+        roles: rank_roles(Enum.map(rows, & &1.role)),
+        since: Enum.min_by(rows, & &1.id).id
+      }
+    end)
+    |> Enum.sort_by(&{role_rank(hd(&1.roles)), &1.since})
+  end
+
   defp role_rank("owner"), do: 0
   defp role_rank("admin"), do: 1
-  defp role_rank("recruiter"), do: 2
-  defp role_rank(_), do: 3
+  defp role_rank("publisher"), do: 2
+  defp role_rank("recruiter"), do: 3
+  defp role_rank(_), do: 4
 
   @doc """
   Up to six member suggestions for the roles typeahead, matched by `@handle` or
@@ -277,13 +332,13 @@ defmodule Vutuv.Organizations do
   end
 
   @doc """
-  Grants `user` a role on `organization`. Notifies the member (the derived
+  Grants `user` one role on `organization`. Notifies the member (the derived
   notification feed picks up the row; a live push updates the badge). Returns
-  `{:ok, role}`, `{:error, :already_member}` when they already hold a role, or
-  `{:error, changeset}`.
+  `{:ok, role}`, `{:error, :already_member}` when they already hold **that**
+  role, or `{:error, changeset}`.
   """
   def add_role(%Organization{} = organization, %User{} = user, role, %User{} = granted_by)
-      when role in ~w(owner admin recruiter) do
+      when role in @roles do
     %OrganizationRole{}
     |> OrganizationRole.changeset(%{
       organization_id: organization.id,
@@ -305,34 +360,63 @@ defmodule Vutuv.Organizations do
   end
 
   @doc """
-  Changes an existing role. Refuses to demote the last owner (keeps the
-  ≥ 1-owner invariant). Notifies the member of an upgrade/downgrade.
-  """
-  def update_role(%OrganizationRole{} = role_row, new_role, %User{} = actor)
-      when new_role in ~w(owner admin recruiter) do
-    cond do
-      role_row.role == new_role ->
-        {:ok, role_row}
+  Sets the complete set of roles `user` holds on `organization` — the checkbox
+  roster's one operation, and the successor to the old single-role
+  `update_role/3`. An empty list removes them from the team.
 
-      role_row.role == "owner" and new_role != "owner" ->
-        # Demoting an owner races with a concurrent demotion of a DIFFERENT owner:
-        # both could read owner_count > 1 and commit, orphaning the org with zero
-        # owners (write skew). Serialize the check and the write under a row lock.
-        guard_last_owner(role_row.organization_id, fn ->
-          apply_role_change(role_row, new_role, actor)
+  Adds what is missing, removes what is no longer ticked, leaves the rest
+  untouched (so an unchanged role keeps its `granted_by` and its age), and
+  notifies the member once per newly granted role. Returns `{:ok, roles}` with
+  the ranked new set, or `{:error, :last_owner}` when the change would leave the
+  organization without an owner.
+
+  Taking `owner` away runs under the same `guard_last_owner/2` row lock the
+  single-role path used: two concurrent edits each dropping a *different* owner
+  could otherwise both read "there are two owners" and both commit, leaving zero.
+  """
+  def set_roles(%Organization{} = organization, %User{} = user, roles, %User{} = actor) do
+    wanted = roles |> Enum.filter(&(&1 in @roles)) |> Enum.uniq()
+    held = roles_of(organization, user)
+
+    cond do
+      MapSet.new(wanted) == MapSet.new(held) ->
+        {:ok, rank_roles(held)}
+
+      "owner" in held and "owner" not in wanted ->
+        guard_last_owner(organization.id, fn ->
+          apply_role_set(organization, user, wanted, held, actor)
         end)
 
       true ->
-        apply_role_change(role_row, new_role, actor)
+        apply_role_set(organization, user, wanted, held, actor)
     end
   end
 
-  defp apply_role_change(role_row, new_role, actor) do
-    with {:ok, updated} <- role_row |> Ecto.Changeset.change(role: new_role) |> Repo.update() do
-      organization = get_organization!(updated.organization_id)
-      Vutuv.Activity.notify_organization_role(updated.user_id, actor, organization, new_role)
-      {:ok, updated}
-    end
+  defp apply_role_set(organization, user, wanted, held, actor) do
+    granted = wanted -- held
+    revoked = held -- wanted
+
+    Repo.delete_all(
+      from(r in OrganizationRole,
+        where:
+          r.organization_id == ^organization.id and r.user_id == ^user.id and r.role in ^revoked
+      )
+    )
+
+    Enum.each(granted, fn role ->
+      %OrganizationRole{}
+      |> OrganizationRole.changeset(%{
+        organization_id: organization.id,
+        user_id: user.id,
+        role: role,
+        granted_by_user_id: actor.id
+      })
+      |> Repo.insert(on_conflict: :nothing)
+
+      Vutuv.Activity.notify_organization_role(user.id, actor, organization, role)
+    end)
+
+    {:ok, rank_roles(wanted)}
   end
 
   @doc """

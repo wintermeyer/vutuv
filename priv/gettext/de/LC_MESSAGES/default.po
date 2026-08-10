@@ -21,7 +21,7 @@ msgstr "Impressum"
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:718
 #: lib/vutuv_web/live/organization_live/domains.ex:255
 #: lib/vutuv_web/live/organization_live/edit.ex:396
-#: lib/vutuv_web/live/organization_live/roles.ex:202
+#: lib/vutuv_web/live/organization_live/roles.ex:205
 #, elixir-autogen
 msgid "Add"
 msgstr "Eintrag hinzufügen"
@@ -1414,9 +1414,9 @@ msgstr "Tag-URLs"
 #: lib/vutuv_web/live/job_posting_live/form.ex:510
 #: lib/vutuv_web/live/search_live.ex:199
 #: lib/vutuv_web/live/search_live.ex:516
-#: lib/vutuv_web/live/tag_new_live.ex:34
-#: lib/vutuv_web/live/tag_new_live.ex:45
-#: lib/vutuv_web/live/tag_new_live.ex:52
+#: lib/vutuv_web/live/tag_new_live.ex:36
+#: lib/vutuv_web/live/tag_new_live.ex:47
+#: lib/vutuv_web/live/tag_new_live.ex:54
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:247
 #: lib/vutuv_web/templates/admin/tag/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:5
@@ -1556,7 +1556,7 @@ msgstr "Die am häufigsten empfohlenen Mitglieder mit diesem Tag"
 msgid "Unendorsed tag successfully."
 msgstr "Empfehlung zurückgenommen."
 
-#: lib/vutuv_web/live/tag_new_live.ex:127
+#: lib/vutuv_web/live/tag_new_live.ex:129
 #, elixir-autogen
 msgid "User tag created successfully."
 msgstr "Tag erfolgreich hinzugefügt."
@@ -1746,7 +1746,7 @@ msgstr ""
 msgid "Log out"
 msgstr "Ausloggen"
 
-#: lib/vutuv_web/components/organization_components.ex:247
+#: lib/vutuv_web/components/organization_components.ex:251
 #: lib/vutuv_web/live/admin/activity_live.ex:143
 #: lib/vutuv_web/live/admin/activity_live.ex:175
 #: lib/vutuv_web/live/admin/deliverability_live.ex:119
@@ -2264,7 +2264,7 @@ msgstr "Weniger anzeigen"
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:234
 #: lib/vutuv_web/live/organization_live/domains.ex:229
 #: lib/vutuv_web/live/organization_live/edit.ex:373
-#: lib/vutuv_web/live/organization_live/roles.ex:242
+#: lib/vutuv_web/live/organization_live/roles.ex:238
 #: lib/vutuv_web/live/post_live/composer.ex:1851
 #: lib/vutuv_web/live/post_live/saved.ex:619
 #: lib/vutuv_web/live/post_live/saved.ex:647
@@ -2779,7 +2779,7 @@ msgstr "Ersten Beitrag schreiben"
 #: lib/vutuv_web/components/ui.ex:3389
 #: lib/vutuv_web/templates/settings/apps.html.heex:14
 #: lib/vutuv_web/templates/settings/apps.html.heex:20
-#: lib/vutuv_web/templates/settings/organizations.html.heex:73
+#: lib/vutuv_web/templates/settings/organizations.html.heex:75
 #: lib/vutuv_web/templates/settings/privacy.html.heex:179
 #: lib/vutuv_web/templates/settings/security.html.heex:20
 #: lib/vutuv_web/templates/settings/security.html.heex:219
@@ -4556,7 +4556,7 @@ msgid "Edit the ad"
 msgstr "Anzeige bearbeiten"
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1004
-#: lib/vutuv_web/live/tag_new_live.ex:77
+#: lib/vutuv_web/live/tag_new_live.ex:79
 #: lib/vutuv_web/templates/ad/preview.html.heex:3
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:122
 #, elixir-autogen, elixir-format
@@ -4819,7 +4819,7 @@ msgid "searches first names only (last: for last names)"
 msgstr "sucht nur in Vornamen (nachname: für Nachnamen)"
 
 #: lib/vutuv_web/live/job_board_live.ex:388
-#: lib/vutuv_web/live/tag_new_live.ex:46
+#: lib/vutuv_web/live/tag_new_live.ex:48
 #: lib/vutuv_web/live/user_profile_live.ex:1259
 #: lib/vutuv_web/templates/user/show.html.heex:549
 #, elixir-autogen, elixir-format
@@ -8299,8 +8299,8 @@ msgstr "Identität verifiziert. Das Mitglied wurde per E-Mail benachrichtigt."
 msgid "Identity-verified"
 msgstr "Identität verifiziert"
 
-#: lib/vutuv/accounts.ex:1311
-#: lib/vutuv/accounts.ex:1360
+#: lib/vutuv/accounts.ex:1313
+#: lib/vutuv/accounts.ex:1362
 #: lib/vutuv_web/gettext_extraction_anchors.ex:42
 #, elixir-autogen, elixir-format
 msgid "Incorrect PIN"
@@ -8341,7 +8341,7 @@ msgstr "Nicht bestätigt"
 msgid "Open the member browser"
 msgstr "Mitgliederübersicht öffnen"
 
-#: lib/vutuv/accounts.ex:1328
+#: lib/vutuv/accounts.ex:1330
 #: lib/vutuv_web/gettext_extraction_anchors.ex:43
 #, elixir-autogen, elixir-format
 msgid "PIN expired"
@@ -9110,7 +9110,7 @@ msgstr "Social-Media-Konten verwalten"
 msgid "Your Fediverse handle"
 msgstr "Ihr Fediverse-Handle"
 
-#: lib/vutuv/accounts.ex:1323
+#: lib/vutuv/accounts.ex:1325
 #: lib/vutuv_web/gettext_extraction_anchors.ex:44
 #, elixir-autogen, elixir-format
 msgid "This PIN has already been used."
@@ -9203,12 +9203,12 @@ msgstr "Schulbildung"
 msgid "Vocational Training"
 msgstr "Berufsausbildung"
 
-#: lib/vutuv_web/live/tag_new_live.ex:78
+#: lib/vutuv_web/live/tag_new_live.ex:80
 #, elixir-autogen, elixir-format
 msgid "This will create the following tags:"
 msgstr "Die folgenden Tags werden erstellt:"
 
-#: lib/vutuv_web/live/tag_new_live.ex:54
+#: lib/vutuv_web/live/tag_new_live.ex:56
 #, elixir-autogen, elixir-format
 msgid "Tip:"
 msgstr "Tipp:"
@@ -9916,7 +9916,7 @@ msgstr "Yoruba"
 msgid "Employment status"
 msgstr "Beschäftigungsstatus"
 
-#: lib/vutuv/accounts/user.ex:1072
+#: lib/vutuv/accounts/user.ex:1084
 #: lib/vutuv_web/gettext_extraction_anchors.ex:47
 #, elixir-autogen, elixir-format
 msgid "Looking for a job"
@@ -9927,7 +9927,7 @@ msgstr "Auf Jobsuche"
 msgid "Not open to work"
 msgstr "Nicht offen für Angebote"
 
-#: lib/vutuv/accounts/user.ex:1069
+#: lib/vutuv/accounts/user.ex:1081
 #: lib/vutuv_web/gettext_extraction_anchors.ex:46
 #, elixir-autogen, elixir-format
 msgid "Open to offers"
@@ -11024,12 +11024,12 @@ msgstr ""
 msgid "At least three tags, separated by commas. A tag may be several words long, like Ruby on Rails."
 msgstr "Mindestens drei Tags, mit Komma getrennt. Ein Tag darf aus mehreren Wörtern bestehen, zum Beispiel Ruby on Rails."
 
-#: lib/vutuv_web/live/tag_new_live.ex:63
+#: lib/vutuv_web/live/tag_new_live.ex:65
 #, elixir-autogen, elixir-format
 msgid "PHP, JavaScript, Ruby on Rails"
 msgstr "PHP, JavaScript, Ruby on Rails"
 
-#: lib/vutuv_web/live/tag_new_live.ex:54
+#: lib/vutuv_web/live/tag_new_live.ex:56
 #, elixir-autogen, elixir-format
 msgid "Separate tags with a comma. A tag may be several words long, like Ruby on Rails."
 msgstr "Tags mit Komma trennen. Ein Tag darf aus mehreren Wörtern bestehen, zum Beispiel Ruby on Rails."
@@ -11418,19 +11418,19 @@ msgstr ""
 " Konto anlegen kann. Wählen Sie „Niemand“, um den Status zu speichern, ohne "
 "ihn anzuzeigen."
 
-#: lib/vutuv/accounts/user.ex:1110
+#: lib/vutuv/accounts/user.ex:1122
 #: lib/vutuv_web/gettext_extraction_anchors.ex:50
 #, elixir-autogen, elixir-format
 msgid "Everyone, including logged-out visitors"
 msgstr "Alle, auch nicht angemeldete Besucher"
 
-#: lib/vutuv/accounts/user.ex:1115
+#: lib/vutuv/accounts/user.ex:1127
 #: lib/vutuv_web/gettext_extraction_anchors.ex:52
 #, elixir-autogen, elixir-format
 msgid "No one"
 msgstr "Niemand"
 
-#: lib/vutuv/accounts/user.ex:1113
+#: lib/vutuv/accounts/user.ex:1125
 #: lib/vutuv_web/gettext_extraction_anchors.ex:51
 #: lib/vutuv_web/live/job_posting_live/form.ex:566
 #, elixir-autogen, elixir-format
@@ -11831,17 +11831,12 @@ msgstr ""
 msgid "with this exact content:"
 msgstr "mit genau diesem Inhalt:"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:130
-#, elixir-autogen, elixir-format
-msgid "@%{handle} is already on the team."
-msgstr "@%{handle} ist bereits im Team."
-
-#: lib/vutuv_web/live/organization_live/roles.ex:168
+#: lib/vutuv_web/live/organization_live/roles.ex:175
 #, elixir-autogen, elixir-format
 msgid "@handle or email"
 msgstr "@handle oder E-Mail"
 
-#: lib/vutuv_web/components/organization_components.ex:252
+#: lib/vutuv_web/components/organization_components.ex:263
 #: lib/vutuv_web/live/organization_live/edit.ex:390
 #, elixir-autogen, elixir-format
 msgid "Abbreviation"
@@ -11852,17 +11847,17 @@ msgstr "Abkürzung"
 msgid "Add a domain"
 msgstr "Domain hinzufügen"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:159
+#: lib/vutuv_web/live/organization_live/roles.ex:166
 #, elixir-autogen, elixir-format
 msgid "Add a member"
 msgstr "Mitglied hinzufügen"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:123
+#: lib/vutuv_web/live/organization_live/roles.ex:138
 #, elixir-autogen, elixir-format
 msgid "Added @%{handle} to the team."
 msgstr "@%{handle} zum Team hinzugefügt."
 
-#: lib/vutuv_web/components/organization_components.ex:253
+#: lib/vutuv_web/components/organization_components.ex:264
 #: lib/vutuv_web/live/organization_live/edit.ex:388
 #, elixir-autogen, elixir-format
 msgid "Alias"
@@ -11908,7 +11903,7 @@ msgstr "Diese Seite archivieren?"
 msgid "Archived"
 msgstr "Archiviert"
 
-#: lib/vutuv_web/components/organization_components.ex:251
+#: lib/vutuv_web/components/organization_components.ex:262
 #: lib/vutuv_web/live/organization_live/edit.ex:389
 #, elixir-autogen, elixir-format
 msgid "Brand"
@@ -11919,7 +11914,7 @@ msgstr "Marke"
 msgid "Claimed by"
 msgstr "Beansprucht von"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:209
+#: lib/vutuv_web/live/organization_live/roles.ex:211
 #, elixir-autogen, elixir-format
 msgid "Current team"
 msgstr "Aktuelles Team"
@@ -11961,7 +11956,7 @@ msgstr "Domains"
 msgid "Domains – %{name}"
 msgstr "Domains – %{name}"
 
-#: lib/vutuv_web/components/organization_components.ex:250
+#: lib/vutuv_web/components/organization_components.ex:261
 #, elixir-autogen, elixir-format
 msgid "Former name"
 msgstr "Früherer Name"
@@ -11980,21 +11975,13 @@ msgstr ""
 "Diese Seite einfrieren? Sie verschwindet für die Öffentlichkeit, bleibt aber "
 "für den Besitzer sichtbar."
 
-#: lib/vutuv_web/live/organization_live/roles.ex:155
-#, elixir-autogen, elixir-format
-msgid "Give members a role on this page. Owners manage the team and domains, admins edit the page, recruiters post jobs."
-msgstr ""
-"Geben Sie Mitgliedern eine Rolle auf dieser Seite. Besitzer verwalten Team "
-"und Domains, Administratoren bearbeiten die Seite, Recruiter schalten "
-"Stellenanzeigen."
-
 #: lib/vutuv_web/live/organization_live/domains.ex:189
 #: lib/vutuv_web/templates/settings/saved_searches.html.heex:36
 #, elixir-autogen, elixir-format
 msgid "Last checked"
 msgstr "Zuletzt geprüft"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:242
+#: lib/vutuv_web/live/organization_live/roles.ex:238
 #, elixir-autogen, elixir-format
 msgid "Leave"
 msgstr "Verlassen"
@@ -12014,7 +12001,7 @@ msgstr "Live"
 msgid "Make primary"
 msgstr "Als primär festlegen"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:107
+#: lib/vutuv_web/live/organization_live/roles.ex:94
 #, elixir-autogen, elixir-format
 msgid "Member removed."
 msgstr "Mitglied entfernt."
@@ -12029,7 +12016,7 @@ msgstr "Methode"
 msgid "Names & aliases"
 msgstr "Namen & Aliasse"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:72
+#: lib/vutuv_web/live/organization_live/roles.ex:81
 #, elixir-autogen, elixir-format
 msgid "No member found for “%{id}”."
 msgstr "Kein Mitglied für „%{id}“ gefunden."
@@ -12049,7 +12036,7 @@ msgstr "Primär"
 msgid "Primary domain updated."
 msgstr "Primäre Domain aktualisiert."
 
-#: lib/vutuv_web/components/organization_components.ex:246
+#: lib/vutuv_web/components/organization_components.ex:250
 #, elixir-autogen, elixir-format
 msgid "Recruiter"
 msgstr "Recruiter"
@@ -12059,7 +12046,7 @@ msgstr "Recruiter"
 msgid "Remove this domain?"
 msgstr "Diese Domain entfernen?"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:237
+#: lib/vutuv_web/live/organization_live/roles.ex:233
 #, elixir-autogen, elixir-format
 msgid "Remove this member from the team?"
 msgstr "Dieses Mitglied aus dem Team entfernen?"
@@ -12069,11 +12056,6 @@ msgstr "Dieses Mitglied aus dem Team entfernen?"
 msgid "Remove this name?"
 msgstr "Diesen Namen entfernen?"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:88
-#, elixir-autogen, elixir-format
-msgid "Role updated."
-msgstr "Rolle aktualisiert."
-
 #: lib/vutuv_web/live/admin/organization_live.ex:233
 #, elixir-autogen, elixir-format
 msgid "Search name, alias or domain"
@@ -12081,28 +12063,23 @@ msgstr "Name, Alias oder Domain suchen"
 
 #: lib/vutuv_web/components/organization_components.ex:208
 #: lib/vutuv_web/live/admin/organization_live.ex:321
-#: lib/vutuv_web/live/organization_live/roles.ex:153
+#: lib/vutuv_web/live/organization_live/roles.ex:160
 #: lib/vutuv_web/live/organization_live/show.ex:270
 #, elixir-autogen, elixir-format
 msgid "Team"
 msgstr "Team"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:31
+#: lib/vutuv_web/live/organization_live/roles.ex:36
 #, elixir-autogen, elixir-format
 msgid "Team – %{name}"
 msgstr "Team – %{name}"
-
-#: lib/vutuv_web/live/organization_live/roles.ex:94
-#, elixir-autogen, elixir-format
-msgid "That change could not be saved."
-msgstr "Diese Änderung konnte nicht gespeichert werden."
 
 #: lib/vutuv_web/live/organization_live/domains.ex:71
 #, elixir-autogen, elixir-format
 msgid "That is not a valid domain."
 msgstr "Das ist keine gültige Domain."
 
-#: lib/vutuv_web/live/organization_live/roles.ex:134
+#: lib/vutuv_web/live/organization_live/roles.ex:141
 #, elixir-autogen, elixir-format
 msgid "That member could not be added."
 msgstr "Dieses Mitglied konnte nicht hinzugefügt werden."
@@ -12355,7 +12332,7 @@ msgstr ""
 "Eine Organisation behält mindestens eine verifizierte Domain, daher kann diese "
 "nicht entfernt werden."
 
-#: lib/vutuv_web/live/organization_live/roles.ex:140
+#: lib/vutuv_web/live/organization_live/roles.ex:147
 #, elixir-autogen, elixir-format
 msgid "An organization must keep at least one owner, so the last owner cannot be changed."
 msgstr ""
@@ -12384,7 +12361,7 @@ msgstr "Reservieren Sie ein kurzes @handle, damit diese Organisation wie ein Mit
 #: lib/vutuv_web/live/organization_live/index.ex:101
 #: lib/vutuv_web/live/organization_live/new.ex:26
 #: lib/vutuv_web/live/organization_live/new.ex:80
-#: lib/vutuv_web/templates/settings/organizations.html.heex:87
+#: lib/vutuv_web/templates/settings/organizations.html.heex:89
 #, elixir-autogen, elixir-format
 msgid "Add your organization"
 msgstr "Ihre Organisation hinzufügen"
@@ -12430,7 +12407,7 @@ msgstr "Das Löschen dieser Organisationsseite ist endgültig. Ihre verifizierte
 msgid "Kind of organization"
 msgstr "Art der Organisation"
 
-#: lib/vutuv_web/live/organization_live/roles.ex:236
+#: lib/vutuv_web/live/organization_live/roles.ex:232
 #, elixir-autogen, elixir-format
 msgid "Leave this organization team?"
 msgstr "Dieses Organisations-Team verlassen?"
@@ -12844,7 +12821,7 @@ msgstr "Halten Sie Strg / Cmd gedrückt, um mehrere auszuwählen."
 msgid "How to apply"
 msgstr "So bewerben Sie sich"
 
-#: lib/vutuv/accounts/user.ex:1084
+#: lib/vutuv/accounts/user.ex:1096
 #: lib/vutuv/jobs/job_posting.ex:163
 #, elixir-autogen, elixir-format
 msgid "Hybrid"
@@ -12964,7 +12941,7 @@ msgstr "Hier ist noch nichts. Jobs, die Ihnen gefallen, erscheinen hier."
 msgid "Offer the machine-readable formats (.md/.txt/.json/.xml) to AI agents."
 msgstr "Die maschinenlesbaren Formate (.md/.txt/.json/.xml) für KI-Agenten anbieten."
 
-#: lib/vutuv/accounts/user.ex:1083
+#: lib/vutuv/accounts/user.ex:1095
 #: lib/vutuv/jobs/job_posting.ex:162
 #, elixir-autogen, elixir-format
 msgid "On-site"
@@ -13046,7 +13023,7 @@ msgstr "Anzeige nicht gefunden."
 msgid "Publish"
 msgstr "Veröffentlichen"
 
-#: lib/vutuv/accounts/user.ex:1085
+#: lib/vutuv/accounts/user.ex:1097
 #: lib/vutuv/jobs/job_posting.ex:164
 #: lib/vutuv/notifications/emailer.ex:497
 #: lib/vutuv_web/agent_docs/markdown.ex:353
@@ -13259,11 +13236,6 @@ msgstr "So funktioniert es"
 msgid "Whoever creates a page becomes its owner."
 msgstr "Wer eine Seite erstellt, wird ihr Besitzer."
 
-#: lib/vutuv_web/templates/settings/organizations.html.heex:26
-#, elixir-autogen, elixir-format
-msgid "The owner can invite other members onto the page as admins or recruiters, and can hand ownership over to someone else at any time."
-msgstr "Der Besitzer kann weitere Mitglieder als Admins oder Recruiter auf die Seite einladen und die Besitzerrolle jederzeit an eine andere Person übergeben."
-
 #: lib/vutuv_web/templates/settings/organizations.html.heex:30
 #, elixir-autogen, elixir-format
 msgid "A page can claim a short @handle, so it lives at a memorable address like %{example}."
@@ -13274,22 +13246,24 @@ msgstr "Eine Seite kann sich ein kurzes @handle sichern, sodass sie unter einer 
 msgid "Your organizations"
 msgstr "Ihre Organisationen"
 
-#: lib/vutuv_web/templates/settings/organizations.html.heex:64
+#: lib/vutuv_web/templates/settings/organizations.html.heex:66
 #, elixir-autogen, elixir-format
 msgid "Your role"
-msgstr "Ihre Rolle"
+msgid_plural "Your roles"
+msgstr[0] "Ihre Rolle"
+msgstr[1] "Ihre Rollen"
 
-#: lib/vutuv_web/templates/settings/organizations.html.heex:82
+#: lib/vutuv_web/templates/settings/organizations.html.heex:84
 #, elixir-autogen, elixir-format
 msgid "Add an organization"
 msgstr "Organisation hinzufügen"
 
-#: lib/vutuv_web/templates/settings/organizations.html.heex:84
+#: lib/vutuv_web/templates/settings/organizations.html.heex:86
 #, elixir-autogen, elixir-format
 msgid "Represent a company, association or other group? Add its page and verify the domain to become its owner."
 msgstr "Vertreten Sie ein Unternehmen, einen Verein oder eine andere Gruppe? Fügen Sie die Seite hinzu und verifizieren Sie die Domain, um ihr Besitzer zu werden."
 
-#: lib/vutuv_web/templates/settings/organizations.html.heex:94
+#: lib/vutuv_web/templates/settings/organizations.html.heex:96
 #, elixir-autogen, elixir-format
 msgid "Browse all organizations"
 msgstr "Alle Organisationen ansehen"
@@ -14076,7 +14050,7 @@ msgstr "Screenshot entfernt."
 msgid "This screenshot was captured automatically from the link in your post. If it turned out wrong (for example a cookie banner covering the page), you can remove it."
 msgstr "Dieser Screenshot wurde automatisch aus dem Link in Ihrem Beitrag erstellt. Falls er unbrauchbar ist (zum Beispiel weil ein Cookie-Banner die Seite verdeckt), können Sie ihn entfernen."
 
-#: lib/vutuv/accounts/user.ex:1128
+#: lib/vutuv/accounts/user.ex:1140
 #: lib/vutuv_web/gettext_extraction_anchors.ex:56
 #, elixir-autogen, elixir-format
 msgid "Age only, without the date"
@@ -14087,19 +14061,19 @@ msgstr "Nur das Alter, ohne das Datum"
 msgid "Choose how much of your birthday your profile shows. \"Age only\" hides the exact date, \"Day and month\" hides the year (and your age), and \"Do not show\" keeps it saved but off your profile."
 msgstr "Wählen Sie, wie viel von Ihrem Geburtstag Ihr Profil zeigt. „Nur das Alter“ verbirgt das genaue Datum, „Tag und Monat“ verbirgt das Jahr (und Ihr Alter), und „Nicht anzeigen“ speichert ihn weiterhin, hält ihn aber von Ihrem Profil fern."
 
-#: lib/vutuv/accounts/user.ex:1131
+#: lib/vutuv/accounts/user.ex:1143
 #: lib/vutuv_web/gettext_extraction_anchors.ex:57
 #, elixir-autogen, elixir-format
 msgid "Day and month, without the year"
 msgstr "Tag und Monat, ohne das Jahr"
 
-#: lib/vutuv/accounts/user.ex:1134
+#: lib/vutuv/accounts/user.ex:1146
 #: lib/vutuv_web/gettext_extraction_anchors.ex:58
 #, elixir-autogen, elixir-format
 msgid "Do not show my birthday"
 msgstr "Geburtstag nicht anzeigen"
 
-#: lib/vutuv/accounts/user.ex:1125
+#: lib/vutuv/accounts/user.ex:1137
 #: lib/vutuv_web/gettext_extraction_anchors.ex:55
 #, elixir-autogen, elixir-format
 msgid "Full date and age"
@@ -15712,7 +15686,7 @@ msgstr "Postleitzahl"
 msgid "Until"
 msgstr "Bis"
 
-#: lib/vutuv_web/live/tag_new_live.ex:84
+#: lib/vutuv_web/live/tag_new_live.ex:86
 #, elixir-autogen, elixir-format
 msgid "Add tags"
 msgstr "Tags hinzufügen"
@@ -20099,17 +20073,17 @@ msgstr ""
 "Kommt keine PIN an? Ist die E-Mail-Adresse {email} korrekt? Haben Sie einmal "
 "in Ihren Spam-Ordner geschaut?"
 
-#: lib/vutuv/accounts/user.ex:1231
+#: lib/vutuv/accounts/user.ex:1243
 #, elixir-autogen, elixir-format
 msgid "Diverse"
 msgstr "Divers"
 
-#: lib/vutuv/accounts/user.ex:1229
+#: lib/vutuv/accounts/user.ex:1241
 #, elixir-autogen, elixir-format
 msgid "Female"
 msgstr "Weiblich"
 
-#: lib/vutuv/accounts/user.ex:1230
+#: lib/vutuv/accounts/user.ex:1242
 #, elixir-autogen, elixir-format
 msgid "Male"
 msgstr "Männlich"
@@ -20801,3 +20775,53 @@ msgstr "Von vorn beginnen"
 #, elixir-autogen, elixir-format
 msgid "A like or a repost is sent back to the network this post came from, and your account does not take part in the Fediverse at the moment. You can switch it on in the {settings}."
 msgstr "Ein Herz oder ein Repost geht zurück in das Netzwerk, aus dem dieser Beitrag stammt. Ihr Konto nimmt derzeit nicht am Fediverse teil. Einschalten können Sie das in den {settings}."
+
+#: lib/vutuv_web/components/organization_components.ex:249
+#, elixir-autogen, elixir-format
+msgid "Editorial"
+msgstr "Redaktion"
+
+#: lib/vutuv_web/components/organization_components.ex:255
+#, elixir-autogen, elixir-format
+msgid "Edits the page and posts jobs."
+msgstr "Bearbeitet die Seite und schreibt Stellen aus."
+
+#: lib/vutuv_web/live/organization_live/roles.ex:162
+#, elixir-autogen, elixir-format
+msgid "Give members their roles on this page. Someone can hold several at once, and every role is granted on its own."
+msgstr "Geben Sie Mitgliedern ihre Rollen auf dieser Seite. Jemand kann mehrere gleichzeitig haben, und jede Rolle wird einzeln vergeben."
+
+#: lib/vutuv_web/components/organization_components.ex:254
+#, elixir-autogen, elixir-format
+msgid "Manages the team and the domains, and edits the page."
+msgstr "Verwaltet Team und Domains und bearbeitet die Seite."
+
+#: lib/vutuv_web/live/organization_live/roles.ex:74
+#, elixir-autogen, elixir-format
+msgid "Pick at least one role."
+msgstr "Wählen Sie mindestens eine Rolle."
+
+#: lib/vutuv_web/components/organization_components.ex:257
+#, elixir-autogen, elixir-format
+msgid "Posts jobs."
+msgstr "Schreibt Stellen aus."
+
+#: lib/vutuv_web/live/organization_live/roles.ex:265
+#, elixir-autogen, elixir-format
+msgid "Roles"
+msgstr "Rollen"
+
+#: lib/vutuv_web/live/organization_live/roles.ex:88
+#, elixir-autogen, elixir-format
+msgid "Roles updated."
+msgstr "Rollen aktualisiert."
+
+#: lib/vutuv_web/components/organization_components.ex:256
+#, elixir-autogen, elixir-format
+msgid "Writes posts in the organization's name."
+msgstr "Schreibt Beiträge im Namen der Organisation."
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:26
+#, elixir-autogen, elixir-format
+msgid "The owner gives other members their roles on the page, and can hand ownership over to someone else at any time. Someone can hold several roles, and writing in the organization's name is always granted on its own."
+msgstr "Der Besitzer vergibt die Rollen der anderen Mitglieder auf der Seite und kann den Besitz jederzeit an jemand anderen übergeben. Jemand kann mehrere Rollen haben, und das Schreiben im Namen der Organisation wird immer einzeln vergeben."

@@ -66,14 +66,26 @@ defmodule VutuvWeb.OrganizationVocabularyTest do
     # The creator-becomes-owner rule.
     assert de("Whoever creates a page becomes its owner.") =~ "Besitzer"
 
-    # Invite others + transfer ownership, fully translated.
-    invite =
+    # Grant roles + transfer ownership, fully translated.
+    roles =
       de(
-        "The owner can invite other members onto the page as admins or recruiters, and can hand ownership over to someone else at any time."
+        "The owner gives other members their roles on the page, and can hand ownership over to someone else at any time. Someone can hold several roles, and writing in the organization's name is always granted on its own."
       )
 
-    assert invite =~ "einladen"
-    assert invite =~ "übergeben"
-    refute invite =~ "invite other members", "the German msgstr must not fall back to English"
+    assert roles =~ "Rollen"
+    assert roles =~ "übergeben"
+    refute roles =~ "The owner gives", "the German msgstr must not fall back to English"
+  end
+
+  test "the roles read as German role names, and 'publisher' is 'Redaktion'" do
+    assert de("Owner") == "Besitzer"
+    # Names the function, not the person: this role says "may write in our name"
+    # and must not read as seniority. `mix gettext.extract --merge` fuzzy-filled
+    # it with "Ändern" ("change") the first time, which is why it is asserted.
+    assert de("Editorial") == "Redaktion"
+    refute de("Editorial") =~ "Ändern"
+
+    assert de("Writes posts in the organization's name.") ==
+             "Schreibt Beiträge im Namen der Organisation."
   end
 end
