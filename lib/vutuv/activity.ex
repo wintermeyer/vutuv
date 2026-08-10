@@ -1116,24 +1116,36 @@ defmodule Vutuv.Activity do
   # rows come from `post_mentions`, reconciled at save time by `Vutuv.Posts` —
   # deriving them here would mean an ILIKE over every post on every unread
   # count. Newest first, actor = the post's author.
+  # Both joins are LEFT: whoever named the member is a member or an
+  # organization (issue #1334), exactly one of the two per row, and an inner
+  # join to `users` dropped every mention a page made.
   defp mention_items(user_id, limit, cursor) do
     mention_events(user_id)
-    |> join(:inner, [mention_post: p], author in User, on: author.id == p.user_id, as: :author)
+    |> join(:left, [mention_post: p], author in User, on: author.id == p.user_id, as: :author)
+    |> join(:left, [mention_post: p], org in Organization,
+      on: org.id == p.organization_id,
+      as: :mention_organization
+    )
     |> order_by([mention: m], desc: m.inserted_at, desc: m.id)
     |> limit(^limit)
     |> select(
-      [mention: m, author: author],
-      {m.id, m.inserted_at, struct(author, ^User.listing_fields()), m.post_id}
+      [mention: m, author: author, mention_organization: org],
+      {m.id, m.inserted_at, struct(author, ^User.listing_fields()), org, m.post_id}
     )
     |> at_or_before(cursor)
     |> Repo.all()
-    |> Enum.map(fn {id, at, author, post_id} ->
+    |> Enum.map(fn {id, at, author, organization, post_id} ->
       "mention-#{id}"
-      |> actor_item("mention", at, author)
+      |> actor_item("mention", at, mention_actor(author, organization))
       # The post that named them — the author's, not the recipient's.
       |> Map.put(:post_id, post_id)
     end)
   end
+
+  # A missed LEFT join still yields a `%User{}` with every field nil rather than
+  # nil itself, so the id is what says which side actually matched.
+  defp mention_actor(%User{id: id} = author, _organization) when is_binary(id), do: author
+  defp mention_actor(_author, organization), do: organization
 
   # Replies written on other networks under the member's posts (issue #1069),
   # derived **straight from the notes table** rather than from a stored
@@ -1265,7 +1277,11 @@ defmodule Vutuv.Activity do
             select: 1
           )
         ),
-      where: p.user_id not in subquery(blocked_either_way(user_id))
+      # The block filter is about the *member* who named you. An organization
+      # post has no member author, and `NULL NOT IN (…)` is NULL — never true —
+      # so without the `is_nil` branch every mention by a page would silently
+      # vanish from both this list and its unread count (issue #1334).
+      where: is_nil(p.user_id) or p.user_id not in subquery(blocked_either_way(user_id))
     )
   end
 
@@ -1667,6 +1683,7 @@ defmodule Vutuv.Activity do
   end
 
   defp actor_id(%User{id: id}), do: id
+  defp actor_id(%Organization{id: id}), do: id
   defp actor_id(_), do: nil
 
   # Each count helper returns a query selecting a single count, so total_count/2
@@ -1819,6 +1836,9 @@ defmodule Vutuv.Activity do
   defp since(query, read_at), do: where(query, [event], event.inserted_at > ^read_at)
 
   defp actor_param(%User{} = user), do: Phoenix.Param.to_param(user)
+  # An organization is addressed by its slug; `Organizations.canonical_path/1`
+  # is what turns that into the page's URL, handle or not.
+  defp actor_param(%Organization{slug: slug}), do: slug
   defp actor_param(_), do: nil
 
   # nil (not the default-placeholder URL) when the actor has no picture, so
@@ -1829,7 +1849,13 @@ defmodule Vutuv.Activity do
   # as the grey placeholder display_url would fall back to.
   defp actor_avatar(%User{avatar_moderation: "pending"}), do: nil
   defp actor_avatar(%User{} = user), do: Vutuv.Avatar.display_url(user, :thumb)
+  # nil for an organization: the notifications page then draws its coloured kind
+  # glyph, which is honest, where a member's avatar helper would not know how to
+  # find a page's logo anyway.
+  defp actor_avatar(%Organization{}), do: nil
   defp actor_avatar(_), do: nil
+
+  defp display_name(%Organization{name: name}), do: name
 
   defp display_name(%{first_name: first, last_name: last}) do
     [first, last]

@@ -98,7 +98,18 @@ defmodule Vutuv.Webhooks do
   (whose grant authorizes the delivery). Cheap when nobody subscribed:
   one indexed existence check.
   """
-  # No guard on member_id: it is only dereferenced when subscriptions
+  # A **nil** member is a no-op, like `Vutuv.Activity.notify/2` and
+  # `broadcast/2` before it. An event can now happen to something that is not a
+  # member — a like on a post an organization published (issue #1334) — and a
+  # webhook is a delivery to an app the *member* authorized, so with no member
+  # there is nobody whose grant could authorize it. Answering :ok here rather
+  # than in each caller is what keeps `do_emit/3`'s `g.user_id == ^member_id`
+  # from meeting a nil, which Ecto **raises** on rather than matching nothing.
+  # It only bit once an installation had its first subscriber for the event,
+  # since that existence check is what gates the query at all.
+  def emit(nil, event, _data) when is_map_key(@events, event), do: :ok
+
+  # No guard on a present member_id: it is only dereferenced when subscriptions
   # exist, so unit tests with bare fixture ids pass through the fast path.
   def emit(member_id, event, data) when is_map_key(@events, event) do
     if subscriptions_exist?(event) do

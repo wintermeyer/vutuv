@@ -858,10 +858,29 @@ defmodule Vutuv.Posts do
   """
   def author?(%Post{organization_id: nil, user_id: author_id}, %User{id: author_id}), do: true
 
-  def author?(%Post{organization: %Organization{} = organization}, %User{} = viewer),
-    do: Organizations.publisher?(organization, viewer)
+  def author?(%Post{organization_id: id} = post, %User{} = viewer) when is_binary(id),
+    do: organization_author?(post, viewer)
 
   def author?(%Post{}, _viewer), do: false
+
+  # Whether `viewer` may currently speak for the post's organization. Takes the
+  # preloaded association when there is one and falls back to a lookup when
+  # there is not: several callers hand over a bare `%Post{}` from a query, and a
+  # permission answer must not depend on whether somebody remembered a preload.
+  defp organization_author?(
+         %Post{organization: %Organization{} = organization},
+         %User{} = viewer
+       ),
+       do: Organizations.publisher?(organization, viewer)
+
+  defp organization_author?(%Post{organization_id: id}, %User{} = viewer) when is_binary(id) do
+    case Organizations.get_organization(id) do
+      nil -> false
+      organization -> Organizations.publisher?(organization, viewer)
+    end
+  end
+
+  defp organization_author?(_post, _viewer), do: false
 
   @doc """
   Whether `viewer` (a `%User{}` or `nil` for anonymous) may see `post`.
@@ -876,8 +895,16 @@ defmodule Vutuv.Posts do
   # An organization post carries no denials (see `create_organization_post/3`),
   # so the only thing that can hide it is moderation — and its publishers still
   # see it while it is held, the way a member sees their own frozen post.
-  def visible_to?(%Post{organization: %Organization{}} = post, %User{} = viewer),
-    do: author?(post, viewer) or not moderation_hidden?(post)
+  #
+  # Matched on the **column**, not on a preloaded `:organization`. Half the
+  # callers here hand over a bare `%Post{}` straight from a query (the engage
+  # path does), and an association-shaped clause silently does not match those —
+  # which dropped them into the member branch and `Repo.get(User, nil)`.
+  def visible_to?(%Post{organization_id: id} = post, %User{} = viewer) when is_binary(id),
+    do: organization_author?(post, viewer) or not moderation_hidden?(post)
+
+  def visible_to?(%Post{organization_id: id} = post, nil) when is_binary(id),
+    do: not moderation_hidden?(post)
 
   def visible_to?(%Post{} = post, nil) do
     # Anonymous readers see a post only when it has no denials at all.
@@ -915,6 +942,12 @@ defmodule Vutuv.Posts do
   def moderation_hidden?(%Post{} = post) do
     post.frozen_at != nil or post.images_pending? == true or author_hidden?(post)
   end
+
+  # An organization is not an account and cannot be frozen, suspended or
+  # deactivated as one; whether its *page* is hidden is `organization_public_row`
+  # and belongs to the queries, not here. Answering false is also what keeps
+  # `Repo.get(User, nil)` out of every engagement path.
+  defp author_hidden?(%Post{organization_id: id}) when is_binary(id), do: false
 
   defp author_hidden?(%Post{user: %User{} = author}),
     do: Vutuv.Moderation.account_hidden?(author)
@@ -4821,9 +4854,16 @@ defmodule Vutuv.Posts do
     :ok
   end
 
+  # The actor is whoever the post is BY — the organization on an organization
+  # post, never the member who pressed publish, which is exactly the split
+  # `acting_user_id` exists to keep internal (issue #1334). `author/1` needs the
+  # preload, and the mention sync runs on a freshly preloaded post.
+  #
+  # A block only guards the member case: a block is a relationship between two
+  # people, and `blocked_between?/2` already answers false for a nil id.
   defp notify_mentioned(%Post{} = post, %User{} = mentioned) do
     unless Vutuv.Social.blocked_between?(mentioned.id, post.user_id) do
-      Vutuv.Activity.notify_mention(mentioned.id, post.user, post.id)
+      Vutuv.Activity.notify_mention(mentioned.id, author(post), post.id)
     end
   end
 
