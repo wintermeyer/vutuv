@@ -36,6 +36,54 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       }
     end
 
+    test "the page shows what a merge does before anything is picked", ctx do
+      # The screen was reported as not explaining itself: two column headings
+      # and no way to tell which of the two names disappears.
+      {:ok, lv, html} = live(ctx.conn, ~p"/admin/tag_merges")
+
+      assert has_element?(lv, "#merge-example")
+      assert html =~ "/tags/rubyonrails"
+      assert html =~ "/tags/ruby_on_rails"
+    end
+
+    test "a search result names the address and the profile count, not just the tag", ctx do
+      # Three spellings of one topic look identical by name alone; the number
+      # of profiles is usually what decides which one survives.
+      insert(:user_tag, user: insert(:activated_user), tag: ctx.canonical)
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+
+      html =
+        lv
+        |> form("#search-absorbed", %{"side" => "absorbed", "q" => ctx.canonical.name})
+        |> render_change()
+
+      assert html =~ "/tags/#{ctx.canonical.slug}"
+      assert html =~ "1 profile"
+    end
+
+    test "the pair can be turned round in one click", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+      pick(lv, ctx.absorbed, "absorbed")
+      pick(lv, ctx.canonical, "canonical")
+
+      html = lv |> element("#swap-sides") |> render_click()
+
+      # Which of the two survives is the real decision here, and it is usually
+      # made after seeing both.
+      assert html =~ "#{ctx.canonical.name} becomes an alternative name"
+    end
+
+    test "the preview says in words what pressing merge would do", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+      pick(lv, ctx.absorbed, "absorbed")
+      html = pick(lv, ctx.canonical, "canonical")
+
+      assert html =~ "#{ctx.absorbed.name} becomes an alternative name for #{ctx.canonical.name}"
+      assert html =~ "/tags/#{ctx.absorbed.slug}"
+      assert has_element?(lv, "#merge-sentence")
+    end
+
     test "shows what the merge would move before it is confirmed", ctx do
       insert(:user_tag, user: insert(:activated_user), tag: ctx.absorbed)
 
@@ -91,6 +139,11 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       assert html =~ "Tag, das aufgenommen wird"
       assert html =~ "Tag, das bleibt"
       assert html =~ "Vorschläge"
+      assert html =~ "Ein Beispiel"
+      assert html =~ "Nach der Zusammenlegung"
+      # The example's counts go through the plural formatter, which the extract
+      # had fuzzy-filled with "%{formatted} Likes".
+      assert html =~ "89 Profile"
       refute html =~ "Tag to absorb"
       refute html =~ "Look for proposals"
     end

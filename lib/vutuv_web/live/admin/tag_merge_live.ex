@@ -74,6 +74,17 @@ defmodule VutuvWeb.Admin.TagMergeLive do
     {:noreply, socket |> assign(:"#{side}", nil) |> load_preview()}
   end
 
+  # Which of two tags should survive is the actual decision on this screen, and
+  # it is usually made after seeing both: turning the pair round has to be one
+  # click, not two searches again.
+  def handle_event("swap", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:absorbed, socket.assigns.canonical)
+     |> assign(:canonical, socket.assigns.absorbed)
+     |> load_preview()}
+  end
+
   def handle_event("merge", _params, socket) do
     %{absorbed: absorbed, canonical: canonical} = socket.assigns
 
@@ -233,10 +244,19 @@ defmodule VutuvWeb.Admin.TagMergeLive do
     end
   end
 
+  # Each result carries the number of profiles carrying it, batched into one
+  # query for the whole list: with three spellings of one topic on screen, that
+  # number is usually what decides which of them should survive.
   defp search(query) do
     case String.trim(to_string(query)) do
-      "" -> []
-      q -> q |> Tags.admin_search(limit: @results_limit) |> Repo.all()
+      "" ->
+        []
+
+      q ->
+        tags = q |> Tags.admin_search(limit: @results_limit) |> Repo.all()
+        counts = Tags.member_counts(Enum.map(tags, & &1.id))
+
+        Enum.map(tags, &%{tag: &1, members: Map.get(counts, &1.id, 0)})
     end
   end
 
@@ -316,6 +336,16 @@ defmodule VutuvWeb.Admin.TagMergeLive do
   defp total(nil), do: 0
   defp total(counts), do: counts |> Map.values() |> Enum.sum()
 
+  # "N profiles", the one phrase the picker rows and the worked example share —
+  # so the example is written in the same words the real rows use, and the
+  # number goes through the formatter like every other count in the app
+  # (`ngettext` binds %{count} to the raw integer, hence the second placeholder).
+  defp profile_count(members) do
+    ngettext("%{formatted} profile", "%{formatted} profiles", members,
+      formatted: delimited_count(members)
+    )
+  end
+
   # Which rule found a pair, for the rows the model has not judged (or could
   # not): the reviewer should know whether they are looking at two spellings of
   # one string or at two names that merely share a word.
@@ -351,16 +381,54 @@ defmodule VutuvWeb.Admin.TagMergeLive do
         <h1>{gettext("Merge tags")}</h1>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
           {gettext(
-            "One topic sometimes ends up under several tags. Pick the tag to absorb and the tag that stays: everything filed under the first moves to the second, and the absorbed name becomes an alternative name that keeps pointing there. Every merge can be reverted below."
+            "One topic sometimes ends up under several tags, so its members and its posts are split over two pages that never show each other. Merging puts them on one page."
           )}
         </p>
+
+        <%!-- What a merge does, on a real pair. An abstract description of this
+        left the reader guessing which of the two names disappears, which is the
+        one thing the screen has to make obvious. --%>
+        <div
+          id="merge-example"
+          class="mt-4 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/60"
+        >
+          <h2 class="card__label">{gettext("An example")}</h2>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p class="mb-1 font-semibold">{gettext("Today")}</p>
+              <ul class="space-y-1 text-slate-600 dark:text-slate-400">
+                <li><code>/tags/ruby_on_rails</code> · {profile_count(89)}</li>
+                <li><code>/tags/rubyonrails</code> · {profile_count(12)}</li>
+              </ul>
+            </div>
+            <div>
+              <p class="mb-1 font-semibold">{gettext("After the merge")}</p>
+              <ul class="space-y-1 text-slate-600 dark:text-slate-400">
+                <li><code>/tags/ruby_on_rails</code> · {profile_count(101)}</li>
+                <li>
+                  <code>/tags/rubyonrails</code> {gettext("redirects there for good")}
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p class="mt-3 text-slate-600 dark:text-slate-400">
+            {gettext(
+              "\"rubyonrails\" was absorbed: nobody loses a tag, the name goes on working, and it is listed on the remaining page as an alternative name. Anyone typing it from now on gets the one page. Every merge can be undone at the bottom of this page."
+            )}
+          </p>
+        </div>
 
         <div class="mt-6 grid gap-6 md:grid-cols-2">
           <.tag_picker
             side="absorbed"
             id="absorbed"
+            step="1"
             label={gettext("Tag to absorb")}
-            hint={gettext("Its entries move away and its page redirects.")}
+            hint={
+              gettext(
+                "Stops being a topic of its own. Its profiles, posts and follows move over and its address redirects."
+              )
+            }
             tag={@absorbed}
             query={@absorbed_query}
             results={@absorbed_results}
@@ -368,12 +436,26 @@ defmodule VutuvWeb.Admin.TagMergeLive do
           <.tag_picker
             side="canonical"
             id="canonical"
+            step="2"
             label={gettext("Tag that stays")}
-            hint={gettext("The topic's one page from now on.")}
+            hint={
+              gettext("Keeps its page and its address and gains everything from the other one.")
+            }
             tag={@canonical}
             query={@canonical_query}
             results={@canonical_results}
           />
+        </div>
+
+        <div :if={@absorbed && @canonical} class="editform__actions mt-4">
+          <button
+            id="swap-sides"
+            type="button"
+            class="button button--cancel"
+            phx-click="swap"
+          >
+            {gettext("Swap: keep %{name} instead", name: @absorbed.name)}
+          </button>
         </div>
       </section>
 
@@ -384,7 +466,20 @@ defmodule VutuvWeb.Admin.TagMergeLive do
           <% {:error, reason} -> %>
             <p class="alert alert-danger" role="alert">{refusal(reason)}</p>
           <% preview -> %>
-            <div class="card__tablewrap">
+            <%!-- The table answers "how much"; this line answers "what am I
+            about to do", which is the question somebody presses the button
+            with. --%>
+            <p id="merge-sentence" class="text-sm">
+              {gettext(
+                "%{absorbed} becomes an alternative name for %{canonical}. %{absorbed_url} then redirects to %{canonical_url}.",
+                absorbed: preview.absorbed.name,
+                canonical: preview.canonical.name,
+                absorbed_url: "/tags/" <> preview.absorbed.slug,
+                canonical_url: "/tags/" <> preview.canonical.slug
+              )}
+            </p>
+
+            <div class="card__tablewrap mt-3">
               <table class="pure-table">
                 <thead>
                   <tr>
@@ -589,16 +684,26 @@ defmodule VutuvWeb.Admin.TagMergeLive do
 
   attr(:side, :string, required: true)
   attr(:id, :string, required: true)
+  attr(:step, :string, required: true)
   attr(:label, :string, required: true)
   attr(:hint, :string, required: true)
   attr(:tag, :any, default: nil)
   attr(:query, :string, default: "")
   attr(:results, :list, default: [])
 
+  # A search result is a **choice**, and it has to look like one. As a row of
+  # big blue chips the list read as a display of tags rather than as a picker,
+  # and it showed only the name — which is not enough to tell `rails` from
+  # `Ruby on Rails` from `rubyonrails` when all three are in the list. Each row
+  # is one wide button now, naming the tag, the address it lives at and how many
+  # profiles carry it, because that last number is usually what decides which of
+  # two spellings should survive.
   defp tag_picker(assigns) do
     ~H"""
     <div>
-      <h2 class="card__label">{@label}</h2>
+      <h2 class="card__label">
+        <span class="mr-1 text-slate-400 dark:text-slate-500">{@step}.</span>{@label}
+      </h2>
       <p class="text-sm text-slate-600 dark:text-slate-400">{@hint}</p>
 
       <div :if={@tag} class="mt-2 flex items-center gap-3" id={"picked-#{@id}"}>
@@ -613,7 +718,13 @@ defmodule VutuvWeb.Admin.TagMergeLive do
         </button>
       </div>
 
-      <form :if={is_nil(@tag)} id={"search-#{@id}"} phx-change="search" phx-submit="search" class="mt-2">
+      <form
+        :if={is_nil(@tag)}
+        id={"search-#{@id}"}
+        phx-change="search"
+        phx-submit="search"
+        class="mt-2"
+      >
         <input type="hidden" name="side" value={@side} />
         <input
           type="text"
@@ -625,17 +736,29 @@ defmodule VutuvWeb.Admin.TagMergeLive do
         />
       </form>
 
-      <ul :if={is_nil(@tag) and @results != []} class="thumbs mt-2">
+      <p
+        :if={is_nil(@tag) and @query != "" and @results == []}
+        class="card__empty"
+      >
+        {gettext("No tag matches that.")}
+      </p>
+
+      <ul :if={is_nil(@tag) and @results != []} class="mt-2 space-y-1">
         <li :for={result <- @results}>
           <button
             type="button"
-            id={"pick-#{@side}-#{result.id}"}
-            class="button button--small"
+            id={"pick-#{@side}-#{result.tag.id}"}
+            class="w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50 dark:hover:bg-brand-900/40"
             phx-click="pick"
             phx-value-side={@side}
-            phx-value-id={result.id}
+            phx-value-id={result.tag.id}
           >
-            {result.name}
+            <span class="block font-semibold text-brand-700 dark:text-brand-200">
+              {result.tag.name}
+            </span>
+            <span class="block text-xs text-slate-600 dark:text-slate-400">
+              /tags/{result.tag.slug} · {profile_count(result.members)}
+            </span>
           </button>
         </li>
       </ul>

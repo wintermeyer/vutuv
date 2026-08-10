@@ -155,6 +155,23 @@ defmodule Vutuv.Tags do
     from(t in query, order_by: [asc: t.name], limit: ^limit)
   end
 
+  @doc """
+  How many profiles carry each of `tag_ids`, as a map — one query for the whole
+  list, so a screen showing several tags side by side costs one lookup rather
+  than one per row. Tags nobody carries are absent from the map.
+  """
+  def member_counts([]), do: %{}
+
+  def member_counts(tag_ids) when is_list(tag_ids) do
+    from(ut in UserTag,
+      where: ut.tag_id in ^tag_ids,
+      group_by: ut.tag_id,
+      select: {ut.tag_id, count(ut.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
   @doc "The most tags one profile may carry (see `@max_user_tags`)."
   def max_user_tags, do: @max_user_tags
 
