@@ -1026,9 +1026,15 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
+  # The written hashtag keeps its casing in the text; the href is the slug
+  # `Tags.linkable_slugs/1` hands back, which is the canonical one when the
+  # author wrote an alternative name for a topic (issue #1338) — so the reader
+  # lands on the page rather than on a redirect to it.
   defp hashtag_link(whole, hashtag, tags) do
-    slug = String.downcase(hashtag)
-    if MapSet.member?(tags, slug), do: hashtag_anchor(slug, hashtag), else: whole
+    case Map.get(tags, String.downcase(hashtag)) do
+      nil -> whole
+      slug -> hashtag_anchor(slug, hashtag)
+    end
   end
 
   # The display text is the handle the author typed (case preserved); the href

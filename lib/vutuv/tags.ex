@@ -105,10 +105,15 @@ defmodule Vutuv.Tags do
       names ->
         downcased = Enum.map(names, &String.downcase/1)
 
+        # The displayed name is the topic's, not the typed spelling's: someone
+        # typing an alternative name (issue #1338) gets the chip they will
+        # actually end up with, the same way a case variant already resolves to
+        # the stored casing.
         display_by_key =
           from(t in Tag,
+            left_join: c in assoc(t, :merged_into),
             where: fragment("lower(?)", t.name) in ^downcased or t.slug in ^downcased,
-            select: {fragment("lower(?)", t.name), t.slug, t.name}
+            select: {fragment("lower(?)", t.name), t.slug, coalesce(c.name, t.name)}
           )
           |> Repo.all()
           |> Enum.flat_map(fn {lower_name, slug, name} -> [{lower_name, name}, {slug, name}] end)
@@ -263,7 +268,7 @@ defmodule Vutuv.Tags do
   "Honor tags" overview (`/admin/honor_tags`). Returns `[{%Tag{}, count}]`.
   """
   def honor_tags do
-    from(t in Tag,
+    from(t in Tag.not_merged(),
       where: t.honor?,
       left_join: ut in assoc(t, :user_tags),
       group_by: t.id,
@@ -275,7 +280,7 @@ defmodule Vutuv.Tags do
 
   @doc "How many honor tags exist (the dashboard tile's count)."
   def honor_tags_count do
-    Repo.aggregate(from(t in Tag, where: t.honor?), :count)
+    Repo.aggregate(from(t in Tag.not_merged(), where: t.honor?), :count)
   end
 
   @doc """
@@ -368,7 +373,11 @@ defmodule Vutuv.Tags do
 
     posted = from([post_tag: pt] in Posts.visible_tagged_posts_query(), select: pt.tag_id)
 
-    from(t in Tag,
+    # `not_merged/1`: an alternative name is not a page of its own, so it never
+    # enters the sitemap and its own URL is noindexed (issue #1338). It holds no
+    # rows after a merge anyway, but an alias added by hand to a busy topic
+    # would otherwise inherit the topic's numbers through the id it points at.
+    from(t in Tag.not_merged(),
       where: t.id in subquery(endorsed_enough) or t.id in subquery(posted)
     )
   end
@@ -379,13 +388,20 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
-  Given candidate tag slugs (the `#hashtags` in a Markdown body), returns the
-  `MapSet` of those whose `/tags/:slug` page actually shows something — a real
-  tag with **at least one visible member** (a confirmed, non-hidden user carries
-  it, the same gate the tag page lists by) **or at least one publicly visible
-  post** filed under it (`Posts.visible_tagged_posts_query/0`, the tag page's own
-  posts gate). Powers the hashtag links `VutuvWeb.Markdown` writes; an unknown or
-  empty tag is absent from the set, so it stays plain text.
+  Given candidate tag slugs (the `#hashtags` in a Markdown body), returns a map
+  from each written slug to the slug its link should point at — for those whose
+  `/tags/:slug` page actually shows something: a real tag with **at least one
+  visible member** (a confirmed, non-hidden user carries it, the same gate the
+  tag page lists by) **or at least one publicly visible post** filed under it
+  (`Posts.visible_tagged_posts_query/0`, the tag page's own posts gate). Powers
+  the hashtag links `VutuvWeb.Markdown` writes; an unknown or empty tag is
+  absent from the map, so it stays plain text.
+
+  The two slugs differ exactly when the written one names an **alternative name**
+  for a topic (issue #1338): `#rubyonrails` links straight to `/tags/ruby_on_rails`
+  rather than to a URL that redirects there, and the gate is applied to the
+  canonical tag, which is where the members and posts of an absorbed tag now sit.
+  That is also why the answer is a map and not a set.
 
   The post arm is what keeps the link and the listing honest in both directions:
   a post is filed under the tag its own `#hashtag` names, so a tag nobody has on
@@ -403,29 +419,35 @@ defmodule Vutuv.Tags do
 
     case slugs |> Enum.map(&String.downcase/1) |> Enum.uniq() do
       [] ->
-        MapSet.new()
+        %{}
 
       normalized ->
         held =
           from(t in Tag,
-            join: ut in assoc(t, :user_tags),
+            left_join: c in assoc(t, :merged_into),
+            join: ut in UserTag,
+            on: ut.tag_id == coalesce(c.id, t.id),
             join: u in assoc(ut, :user),
             where: t.slug in ^normalized,
             where: account_confirmed_row(u) and not account_hidden_row(u),
-            select: %{slug: t.slug}
+            select: %{slug: t.slug, target: coalesce(c.slug, t.slug)}
           )
 
         posted =
           from([post_tag: pt] in Posts.visible_tagged_posts_query(),
             join: t in Tag,
-            on: t.id == pt.tag_id,
+            on: pt.tag_id == coalesce(t.merged_into_id, t.id),
+            left_join: c in assoc(t, :merged_into),
             where: t.slug in ^normalized,
-            select: %{slug: t.slug}
+            select: %{slug: t.slug, target: coalesce(c.slug, t.slug)}
           )
 
-        from(row in subquery(union_all(held, ^posted)), distinct: true, select: row.slug)
+        from(row in subquery(union_all(held, ^posted)),
+          distinct: true,
+          select: {row.slug, row.target}
+        )
         |> Repo.all()
-        |> MapSet.new()
+        |> Map.new()
     end
   end
 
@@ -459,8 +481,14 @@ defmodule Vutuv.Tags do
 
     Repo.all(
       from(t in Tag,
+        # A body that writes an alternative name files the post under the topic
+        # (issue #1338), so `#rubyonrails` and `#RubyOnRails` land in the same
+        # timeline. `distinct` because two written spellings can now resolve to
+        # one tag, and `post_tags` has a unique index on (post_id, tag_id).
+        left_join: c in assoc(t, :merged_into),
         where: fragment("lower(?)", t.name) in ^names or t.slug in ^names,
-        select: t.id
+        distinct: true,
+        select: coalesce(c.id, t.id)
       )
     )
   end

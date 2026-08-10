@@ -7,6 +7,12 @@
   <% else %>
   <p><%= gettext("This tag doesn't have a description yet.") %></p>
 	<% end %>
+  <%!-- The other names this topic answers to (issue #1338), so a reader who
+  arrived by one of them knows where they ended up. --%>
+  <div :if={@tag_aliases != []} data-tag-aliases>
+    <h2 class="card__label">{gettext("Also known as")}</h2>
+    <p>{alias_names(@tag_aliases)}</p>
+  </div>
 	<%= if Enum.count(@related_users) > 0 do %>
 		<h2 class="card__label"><%= gettext("People you may know with this tag") %></h2>
 		{VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @related_users))}

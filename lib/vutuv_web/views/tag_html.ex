@@ -17,10 +17,21 @@ defmodule VutuvWeb.TagHTML do
     assigns
     |> Map.put(:related_users, related_users)
     |> Map.put(:recommended_users, recommended_users)
+    |> Map.put(:tag_aliases, Tag.aliases_of(assigns[:tag]))
     |> Map.put(:work_string_length, 45)
     |> Map.put(:work_info_by_id, work_information_map(users, 45))
     |> Map.put(:following_by_id, following_map(assigns[:current_user], users))
   end
+
+  @doc """
+  The other names this topic answers to, as one comma-separated line.
+
+  A reader who typed `ROR` and landed on Ruby on Rails has to be able to see
+  why, so the page says so plainly (issue #1338) rather than leaving the
+  redirect unexplained. The names are the alias rows' own, in the casing their
+  first writer used.
+  """
+  def alias_names(aliases), do: Enum.map_join(aliases, ", ", & &1.name)
 
   embed_templates("../templates/tag/*")
 end

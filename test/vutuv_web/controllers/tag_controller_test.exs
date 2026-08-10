@@ -114,6 +114,87 @@ defmodule VutuvWeb.TagControllerTest do
     end
   end
 
+  # Issue #1338: one page per topic. An absorbed tag keeps its own row and slug
+  # (that row IS the history), so its URL never dies — it leads to the topic.
+  describe "a merged tag's slug" do
+    setup do
+      canonical = insert(:tag, name: "Ruby on Rails", slug: "ruby_on_rails")
+
+      absorbed =
+        insert(:tag,
+          name: "rubyonrails",
+          slug: "rubyonrails",
+          merged_into_id: canonical.id,
+          alias_kind: "former"
+        )
+
+      %{canonical: canonical, absorbed: absorbed}
+    end
+
+    test "redirects permanently to the canonical page", ctx do
+      conn = get(ctx.conn, ~p"/tags/rubyonrails")
+
+      # 301, never 302: permanent is what passes the ranking signal on to the
+      # page that survived.
+      assert conn.status == 301
+      assert redirected_to(conn, 301) == ~p"/tags/ruby_on_rails"
+    end
+
+    test "carries the query string across", ctx do
+      conn = get(ctx.conn, ~p"/tags/rubyonrails?source=fediverse&page=2")
+
+      assert redirected_to(conn, 301) == ~p"/tags/ruby_on_rails?source=fediverse&page=2"
+    end
+
+    test "an agent format lands on the canonical page in the same format", ctx do
+      # The `.md` sibling must not fall back to HTML, and must not 404: the
+      # endpoint plug re-appends the extension to an in-app redirect, so the
+      # controller only has to name the canonical path.
+      conn = get(ctx.conn, "/tags/rubyonrails.md")
+
+      assert conn.status == 301
+      assert redirected_to(conn, 301) == "/tags/ruby_on_rails.md"
+    end
+
+    test "the canonical page names its aliases", ctx do
+      html = ctx.conn |> get(~p"/tags/#{ctx.canonical}") |> html_response(200)
+
+      # A reader who arrived via the other spelling has to be able to see where
+      # they ended up.
+      assert html =~ "rubyonrails"
+      assert html =~ ~s(data-tag-aliases)
+    end
+
+    test "the German page says it in German", ctx do
+      # vutuv is a German site, and an English-only check would not have caught
+      # a missing or fuzzy-filled translation of this label.
+      html =
+        ctx.conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/tags/#{ctx.canonical}")
+        |> html_response(200)
+
+      assert html =~ "Auch bekannt als"
+    end
+
+    test "the agent siblings carry the alternative names too", ctx do
+      md = ctx.conn |> get("/tags/ruby_on_rails.md") |> response(200)
+      txt = ctx.conn |> get("/tags/ruby_on_rails.txt") |> response(200)
+      json = ctx.conn |> get("/tags/ruby_on_rails.json") |> response(200) |> Jason.decode!()
+
+      assert md =~ "rubyonrails"
+      assert txt =~ "rubyonrails"
+      assert json["also_known_as"] == ["rubyonrails"]
+    end
+
+    test "the tag directory lists the topic once", ctx do
+      html = ctx.conn |> get(~p"/tags") |> html_response(200)
+
+      assert html =~ "Ruby on Rails"
+      refute html =~ ~s(href="/tags/rubyonrails")
+    end
+  end
+
   # Issue #877: the "Add this tag" button was removed from the public tag page.
   # "Add this tag" was ambiguous ("create/define this tag" vs "add it to my
   # profile" — it misled the #844 reporter into a 404), redundant with the

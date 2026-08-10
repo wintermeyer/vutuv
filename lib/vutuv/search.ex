@@ -23,6 +23,7 @@ defmodule Vutuv.Search do
   alias Vutuv.Search.SearchQuery
   alias Vutuv.Search.SearchQueryRequester
   alias Vutuv.Search.SearchQueryResult
+  alias Vutuv.Tags.Tag
 
   @min_chars 3
   @min_field_chars 2
@@ -527,15 +528,39 @@ defmodule Vutuv.Search do
     end
   end
 
+  # Tags match on their alternative names too (issue #1338) — searching "ROR"
+  # has to find the Ruby on Rails page — but the row that comes back is always
+  # the topic, never the alias, so one subject appears once. `alias_matches/1`
+  # is the id set of canonicals whose aliases match; the outer query keeps only
+  # unmerged rows.
   defp visible_tags(needle, true) do
-    from(t in Vutuv.Tags.Tag,
-      where: fragment("lower(?)", t.name) == ^needle or t.slug == ^needle
+    aliases =
+      from(a in Tag,
+        where: not is_nil(a.merged_into_id),
+        where: fragment("lower(?)", a.name) == ^needle or a.slug == ^needle,
+        select: a.merged_into_id
+      )
+
+    from(t in Tag.not_merged(),
+      where:
+        fragment("lower(?)", t.name) == ^needle or t.slug == ^needle or
+          t.id in subquery(aliases)
     )
   end
 
   defp visible_tags(needle, false) do
     infix = contains(needle)
-    from(t in Vutuv.Tags.Tag, where: ilike(t.name, ^infix) or ilike(t.slug, ^infix))
+
+    aliases =
+      from(a in Tag,
+        where: not is_nil(a.merged_into_id),
+        where: ilike(a.name, ^infix) or ilike(a.slug, ^infix),
+        select: a.merged_into_id
+      )
+
+    from(t in Tag.not_merged(),
+      where: ilike(t.name, ^infix) or ilike(t.slug, ^infix) or t.id in subquery(aliases)
+    )
   end
 
   # How many members carry each found tag - the number that makes a tag chip

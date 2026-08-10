@@ -10,22 +10,56 @@ defmodule VutuvWeb.TagController do
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ContentPolicy
 
-  plug(VutuvWeb.Plug.ResolveSlug,
-    slug: "slug",
-    model: Vutuv.Tags.Tag,
-    assign: :tag,
-    field: :slug
-  )
+  # Not the shared `ResolveSlug` plug: an alternative name for a topic keeps its
+  # own slug (issue #1338), and that URL must lead to the topic rather than 404
+  # or render a second page for it. So the resolution has three answers, not
+  # two — see `resolve_tag/2`.
+  plug(:resolve_tag)
 
   def index(conn, _params) do
-    tags_count = Repo.aggregate(Tag, :count)
+    listable = Tag.not_merged()
+    tags_count = Repo.aggregate(listable, :count)
 
     tags =
-      from(t in Tag, order_by: fragment("lower(coalesce(?, ?))", t.name, t.slug))
+      from(t in listable, order_by: fragment("lower(coalesce(?, ?))", t.name, t.slug))
       |> Pages.paginate(conn.params, tags_count)
       |> Repo.all()
 
     render(conn, "index.html", tags: tags, tags_count: tags_count)
+  end
+
+  # Resolves the `:slug` param: a topic is assigned and rendered; an alternative
+  # name **redirects permanently** to the topic it names; anything else is a
+  # clean 404. Actions without the param (`:index`) pass through.
+  #
+  # 301 and not 302, because the absorbed page's ranking signal should pass to
+  # the page that survived. The requested agent format rides along on its own:
+  # `VutuvWeb.Plug.AgentFormat` re-appends the extension to any in-app redirect,
+  # so `/tags/rubyonrails.md` lands on `/tags/ruby_on_rails.md` and never falls
+  # back to HTML. The query string is carried here, since the redirect is what
+  # loses it otherwise (`?source=fediverse` selects the timeline's half).
+  defp resolve_tag(%{params: %{"slug" => slug}} = conn, _opts) do
+    case Repo.get_by(Tag, slug: slug) do
+      nil ->
+        VutuvWeb.ControllerHelpers.render_error(conn, 404)
+
+      %Tag{merged_into_id: nil} = tag ->
+        assign(conn, :tag, tag)
+
+      %Tag{} = tag_alias ->
+        conn
+        |> put_status(:moved_permanently)
+        |> redirect(to: canonical_path(tag_alias, conn.query_string))
+        |> halt()
+    end
+  end
+
+  defp resolve_tag(conn, _opts), do: conn
+
+  defp canonical_path(tag_alias, query_string) do
+    path = ~p"/tags/#{Tag.canonical(tag_alias)}"
+
+    if query_string == "", do: path, else: path <> "?" <> query_string
   end
 
   # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs

@@ -22,6 +22,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
 
+  alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
 
   # The noindexed per-user people lists; the renderers derive their dispatch
@@ -81,6 +82,10 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   it reads one in the feed or an author's archive, and a fediverse entry carries
   the `network` / `account` facts that say where it came from. `post_count` is
   the total across all pages.
+
+  `also_known_as` are the topic's alternative names (issue #1338), the same line
+  the HTML page shows: an agent that met `ROR` elsewhere can tell it is reading
+  the page for it.
   """
   def build_tag(
         tag,
@@ -96,6 +101,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       description: tag.description,
       name: tag.name,
       slug: tag.slug,
+      also_known_as: tag |> Tag.aliases_of() |> Enum.map(& &1.name),
       most_endorsed_users: Enum.map(recommended_users, &person_entry(&1, work_info_by_id)),
       post_count: post_count,
       posts: Enum.map(entries, &PostDoc.timeline_entry/1),

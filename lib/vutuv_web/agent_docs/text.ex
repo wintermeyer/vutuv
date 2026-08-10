@@ -172,6 +172,9 @@ defmodule VutuvWeb.AgentDocs.Text do
     [
       heading(doc.name),
       doc.description,
+      # The other names this topic answers to (issue #1338); see the Markdown
+      # sibling, which states the same fact.
+      also_known_as(doc),
       section(
         gettext("Most endorsed members"),
         Enum.map(doc.most_endorsed_users, &person_line/1)

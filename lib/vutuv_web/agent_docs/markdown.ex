@@ -184,6 +184,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.name}",
       doc.description,
+      # The other names this topic answers to (issue #1338), so an agent that
+      # met one of them elsewhere can tell this is the page for it.
+      also_known_as(doc),
       section(
         gettext("Most endorsed members"),
         Enum.map(doc.most_endorsed_users, &person_line/1)

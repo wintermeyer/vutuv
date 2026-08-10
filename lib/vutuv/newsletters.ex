@@ -277,9 +277,15 @@ defmodule Vutuv.Newsletters do
         nil
 
       trimmed ->
-        Repo.one(
-          from(t in Tag, where: fragment("lower(?) = lower(?)", t.name, ^trimmed), limit: 1)
-        )
+        # An audience named by an alternative name is the topic's audience
+        # (issue #1338): the members are on the canonical tag, so a group built
+        # on "ROR" must resolve to Ruby on Rails or it would mail nobody.
+        from(t in Tag, where: fragment("lower(?) = lower(?)", t.name, ^trimmed), limit: 1)
+        |> Repo.one()
+        |> case do
+          nil -> nil
+          tag -> Tag.canonical(tag)
+        end
     end
   end
 

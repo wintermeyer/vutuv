@@ -30,6 +30,12 @@ defmodule Vutuv.Tags.Tag do
   # actually use and search for, unlike a run of question marks.
   @content_char ~r/[^\p{P}\p{Z}\p{C}]/u
 
+  # The three things an alternative name for a topic can be (issue #1338).
+  # There is deliberately no `misspelling`: a typo is unbounded, a near-miss
+  # pair is exactly where a wrong merge does the most damage, and catching one
+  # buys almost nothing — so a misspelled tag stays its own tag.
+  @alias_kinds ~w(alias abbreviation former)
+
   schema "tags" do
     field(:slug, :string)
     field(:name, :string)
@@ -39,10 +45,21 @@ defmodule Vutuv.Tags.Tag do
     # form / the generic changeset head — never the member "value" head below.
     field(:honor?, :boolean, default: false)
 
+    # Set when this tag is an alternative name for another one (issue #1338):
+    # `rails`, `ROR` and `rubyonrails` all point at `Ruby on Rails`. Such a row
+    # is never a topic of its own — it keeps its slug so old links resolve, and
+    # every listing leaves it out (`not_merged/1`).
+    belongs_to(:merged_into, __MODULE__)
+    field(:alias_kind, :string)
+
     has_many(:user_tags, Vutuv.Tags.UserTag)
+    has_many(:aliases, __MODULE__, foreign_key: :merged_into_id)
 
     timestamps()
   end
+
+  @doc "The kinds an alternative name can have: #{inspect(@alias_kinds)}."
+  def alias_kinds, do: @alias_kinds
 
   @doc """
   Builds a changeset based on the `struct` and `params`.
@@ -219,12 +236,69 @@ defmodule Vutuv.Tags.Tag do
   def find_by_value(value) when is_binary(value) do
     down = String.downcase(value)
 
-    Repo.one(
-      from(t in __MODULE__,
-        where: fragment("lower(?)", t.name) == ^down or t.slug == ^down,
-        limit: 1
-      )
+    from(t in __MODULE__,
+      where: fragment("lower(?)", t.name) == ^down or t.slug == ^down,
+      limit: 1
     )
+    |> Repo.one()
+    |> follow_alias()
+  end
+
+  # An alias is a tag row pointing at its canonical (issue #1338), so a value
+  # naming one resolves to the topic rather than to the alias. One hop is the
+  # whole rule — an alias may never point at another alias, which
+  # `Vutuv.Tags.Merge` refuses — so nothing here recurses. A canonical tag
+  # costs one query as before; only an alias costs the second.
+  defp follow_alias(nil), do: nil
+  defp follow_alias(%__MODULE__{merged_into_id: nil} = tag), do: tag
+  defp follow_alias(%__MODULE__{merged_into_id: id} = tag), do: Repo.get(__MODULE__, id) || tag
+
+  @doc """
+  The topic a tag stands for: itself, or the tag it is an alternative name for.
+
+  Takes a loaded `%Tag{}` and answers without a query when the association is
+  already loaded, which is the common case on a page that has just listed a
+  tag's aliases.
+  """
+  def canonical(%__MODULE__{merged_into_id: nil} = tag), do: tag
+  def canonical(%__MODULE__{merged_into: %__MODULE__{} = canonical}), do: canonical
+  def canonical(%__MODULE__{merged_into_id: id}), do: Repo.get(__MODULE__, id)
+
+  @doc """
+  Whether this tag is an alternative name for another one, rather than a topic
+  of its own.
+  """
+  def merged?(%__MODULE__{merged_into_id: id}), do: not is_nil(id)
+
+  @doc """
+  Narrows a tag query to real topics, leaving out every alternative name.
+
+  **Every listing, search and count owes this call.** A tag query that forgets
+  it puts the second page for one topic back in front of a reader, which is the
+  bug issue #1338 exists to remove and which nothing else would report.
+  `test/vutuv/tags/merged_tags_hidden_test.exs` walks the surfaces one by one.
+  """
+  def not_merged(query \\ __MODULE__), do: from(t in query, where: is_nil(t.merged_into_id))
+
+  @doc """
+  The alternative names filed under `tag`, oldest first.
+  """
+  def aliases_of(%__MODULE__{id: id}) do
+    Repo.all(from(t in __MODULE__, where: t.merged_into_id == ^id, order_by: t.id))
+  end
+
+  @doc """
+  Points `tag` at `canonical` as an alternative name of the given kind.
+
+  The kind is validated here rather than in `changeset/2` because it only means
+  anything alongside the pointer: a canonical tag carries neither.
+  """
+  def alias_changeset(%__MODULE__{} = tag, %__MODULE__{} = canonical, kind) do
+    tag
+    |> cast(%{alias_kind: kind}, [:alias_kind])
+    |> put_change(:merged_into_id, canonical.id)
+    |> validate_required([:alias_kind])
+    |> validate_inclusion(:alias_kind, @alias_kinds)
   end
 
   defp link_or_build_tag(changeset, value, params) do

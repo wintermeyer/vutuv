@@ -1426,8 +1426,10 @@ defmodule VutuvWeb.PostComponents do
     linkable = Tags.linkable_slugs(hashtags)
 
     Enum.map(hashtags, fn hashtag ->
-      slug = String.downcase(hashtag)
-      %{name: hashtag, path: if(MapSet.member?(linkable, slug), do: ~p"/tags/#{slug}")}
+      # The slug we link is the one the gate hands back, which is the canonical
+      # tag's when the remote server wrote an alternative name (issue #1338).
+      slug = Map.get(linkable, String.downcase(hashtag))
+      %{name: hashtag, path: slug && ~p"/tags/#{slug}"}
     end)
   end
 
