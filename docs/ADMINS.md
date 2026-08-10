@@ -160,6 +160,8 @@ Everything else has a default (the vutuv.de production value):
 | `OLLAMA_VISION_MODEL` | `qwen3-vl:8b` | The vision model used for the safety verdict. Pull it once (`ollama pull qwen3-vl:8b`); any Ollama vision model works (`qwen3-vl:4b` halves the load on CPU-only servers) |
 | `IMAGE_SCAN_VOTES` | `3` | How many opinions the vision model gives on an image it called **unsafe**. The first answer is deterministic and decides alone when it says "safe" (so an ordinary upload costs one inference); a suspicion buys this many opinions in total, sampled so they are genuinely independent. Raising it makes borderline cases slower but steadier |
 | `IMAGE_SCAN_REJECT_VOTES` | `3` | How many of those opinions must call the image unsafe before it is really deleted. The default is unanimous out of three: a model's answer on a harmless-but-dramatic picture (a cartoon skull, a horror-film still, a joke image) flips between runs, and deleting a member's picture on a coin flip is the worse error — a released image is still reportable by every reader. Set both vote variables to `1` for the old "one answer decides" behaviour, or lower this to `2` for a stricter installation |
+| `TAG_MERGE_ASSIST` | `true` | Whether the tag merge screen (`/admin/tag_merges`) may ask a local model which of its proposed tag pairs name one topic. It only ever **proposes**: an admin approves each merge and sees what it would move first. With this `false` (or Ollama unreachable) the queue still fills from the deterministic rules and is administered by hand, which is the air-gapped case. The one thing it costs: a pair found only because the two names share a word (`Linux` / `embedded linux`) is left out unless a model has vouched for it, since unjudged it is nearly always wrong |
+| `TAG_MERGE_ASSIST_MODEL` | `qwen3.5:9b` | The text model that judges those pairs. Pull it once (`ollama pull qwen3.5:9b`); it is asked one narrow question per pair and told to answer "different topics" whenever unsure |
 | `DEFAULT_COUNTRY` | `DE` | ISO 3166-1 alpha-2 code that preselects country inputs (job postings, organization pages, employment references) |
 | `REFERENCE_CHECKS_ENABLED` | `true` | Whether members may have an uploaded Arbeitszeugnis reviewed by a text model. Off = they can still upload, attach and publish references; only the review disappears |
 | `REFERENCE_CHECK_MODEL` | `qwen3.6:27b` | The text model that performs the review. Pull it once (`ollama pull qwen3.6:27b`). A smaller model fits the prompt but grades German wording measurably worse |
@@ -353,6 +355,11 @@ vutuv runs fine without internet access:
   while you still have internet access (`ollama pull qwen3-vl:8b`), and keep
   `IMAGE_MODERATION_ENABLED=true`. Only an installation without Ollama should
   set it to `false` (images then publish unmoderated, as before the feature).
+- The tag merge assistant works offline for the same reason (local inference),
+  so `TAG_MERGE_ASSIST=true` is fine with Ollama installed. Without Ollama, set
+  it to `false`: the merge screen still proposes the pairs its deterministic
+  rules find and an admin decides them by hand, which is the whole feature minus
+  the second opinion.
 - The map links on profile addresses (Google/OSM/Apple) are plain link-outs
   rendered in the visitor's browser; they simply won't resolve offline.
 - Job postings need no configuration to work offline: their zip → coordinate

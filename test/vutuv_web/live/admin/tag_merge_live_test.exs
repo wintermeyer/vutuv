@@ -8,6 +8,7 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Tags.Assistant
   alias Vutuv.Tags.Merge
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
@@ -89,7 +90,9 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       assert html =~ "Tags zusammenlegen"
       assert html =~ "Tag, das aufgenommen wird"
       assert html =~ "Tag, das bleibt"
+      assert html =~ "Vorschläge"
       refute html =~ "Tag to absorb"
+      refute html =~ "Look for proposals"
     end
 
     test "a merge can be reverted from the history", ctx do
@@ -114,6 +117,59 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       # And the merge is refused from now on, whoever tries it.
       assert {:error, :marked_distinct} =
                Merge.merge(ctx.absorbed, ctx.canonical, actor: ctx.admin)
+    end
+  end
+
+  describe "the proposal queue" do
+    setup %{conn: conn} do
+      {conn, admin} = create_and_login_admin(conn)
+      %{conn: conn, admin: admin}
+    end
+
+    test "scanning lists pairs, and opening one loads it into the preview", ctx do
+      a = tag("Ruby on Rails")
+      b = tag("rubyonrails")
+      insert(:user_tag, user: insert(:activated_user), tag: a)
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+      html = lv |> element("#scan-candidates") |> render_click()
+
+      assert html =~ "Ruby on Rails"
+      assert [candidate] = Assistant.queue()
+
+      # Opening a proposal does not merge it: it loads the pair above, where the
+      # preview says what a merge would move.
+      lv |> element("#candidate-#{candidate.id} button", "Review") |> render_click()
+
+      assert has_element?(lv, "#merge-preview")
+      assert is_nil(Repo.get!(Tag, b.id).merged_into_id)
+    end
+
+    test "rejecting a proposal records the pair as different topics", ctx do
+      a = tag("Ruby on Rails")
+      b = tag("rubyonrails")
+      Assistant.scan(judge: false)
+      [candidate] = Assistant.queue()
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+      lv |> element("#candidate-#{candidate.id} button", "Different topics") |> render_click()
+
+      assert Assistant.queue() == []
+      assert Merge.distinct?(a, b)
+    end
+
+    test "a merged pair leaves the queue", ctx do
+      a = tag("Ruby on Rails")
+      b = tag("rubyonrails")
+      Assistant.scan(judge: false)
+      assert [_] = Assistant.queue()
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+      pick(lv, b, "absorbed")
+      pick(lv, a, "canonical")
+      lv |> element("#do-merge") |> render_click()
+
+      assert Assistant.queue() == []
     end
   end
 

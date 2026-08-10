@@ -109,6 +109,15 @@ config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
 config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 
+# The assisted tag pass (Vutuv.Tags.Assistant, issue #1338): an admin-triggered
+# batch that proposes which tags name one topic. It never merges anything — a
+# human approves each proposal on /admin/tag_merges — and the candidate pairs
+# are generated deterministically, so with this off (or Ollama unreachable) the
+# queue still fills and is administered by hand. That is the air-gapped case.
+# Runtime overrides: TAG_MERGE_ASSIST, TAG_MERGE_ASSIST_MODEL.
+config :vutuv, :tag_merge_assist, true
+config :vutuv, :tag_merge_assist_model, "qwen3.5:9b"
+
 # Arbeitszeugnis analysis (Vutuv.References.Checks): a member may have an
 # uploaded employment reference reviewed by a text model against an open
 # skill. Shares :ollama_url with the image moderation above.

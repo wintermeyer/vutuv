@@ -181,6 +181,55 @@ Typos are deliberately out of scope. There is no `misspelling` kind: a typo is
 unbounded, a near-miss pair is exactly where a wrong merge does the most damage,
 and catching one buys almost nothing.
 
+### The assisted pass (`Vutuv.Tags.Assistant`)
+
+An admin-triggered batch that **proposes** merges and never applies one. Three
+deterministic rules over the tag *names* generate the candidates, and only then
+does a local model judge them:
+
+| rule | finds | measured on the real catalog |
+|---|---|---|
+| `same_key` | the names agree once case and separators are folded away (`javascript` / `java script`) | 318 pairs |
+| `acronym` | a multi-word name's initials are another tag's whole name (`ROR` / `Ruby on Rails`) | 496 pairs |
+| `token` | a short name is one whole word of a longer one (`rails` / `Ruby on Rails`) | 4,182 pairs |
+
+Those figures are why the code is shaped the way it is, and they came from
+running the generators against a copy of production rather than from reading
+them. `token` is four fifths of everything found and almost none of it is a
+merge: `Linux` shares a word with `embedded linux`, `arch linux`, `linux kernel`
+and twenty more, all of which are specializations, not spellings. So two things
+follow. A `token` pair is written **only** when the model has vouched for it —
+unjudged it is a chore, not a proposal. And the queue is ranked by **rule
+first**, size second: ordering by members affected alone (what the issue asked
+for) puts every one of those `Linux` rows above the obvious `javascript` /
+`java script`, because the biggest tag is exactly the one every specialization
+shares a word with.
+
+There is deliberately **no edit distance and no trigram similarity**, although
+`pg_trgm` is installed: both are typo catchers, and typos are out of scope.
+
+The cap (500 by default) is what one pass may **add**; pairs already waiting do
+not spend it, so scanning again reaches further down the list instead of
+re-offering the same top rows. What was dropped is reported and logged, never
+silently trimmed.
+
+The refusals from the merge apply to the proposal too, so the queue can never
+offer something that would be refused on approval — but they are applied in
+bulk, one query and a string comparison, **not** by calling `Merge.preview/2`
+per pair: the preview counts rows in seven tables and the catalog generates
+about 5,000 pairs. The preview belongs on the review screen, asked once about
+the pair an admin is actually looking at.
+
+The model (`:tag_merge_assist`, `Vutuv.Ollama`, structured output) is asked one
+narrow question per pair and told to answer "different topics" whenever unsure,
+because the two errors do not cost the same: a missed duplicate stays a
+duplicate, a wrong merge moves other people's rows. It is the guard for cases no
+rule can settle — the catalog offers `seo` / `search engine optimization` (a
+merge) beside `seo` / `search experience optimization` (not one). With the flag
+off or Ollama unreachable, the queue fills unjudged and a human decides.
+Approving a proposal does not merge it: it loads the pair into the pickers
+above, where the preview shows what would move.
+
 ## Blocking
 
 Reachable wherever you decide to block someone — a quiet "Block" next to the

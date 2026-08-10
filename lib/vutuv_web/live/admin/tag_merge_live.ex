@@ -27,6 +27,7 @@ defmodule VutuvWeb.Admin.TagMergeLive do
 
   alias Vutuv.Repo
   alias Vutuv.Tags
+  alias Vutuv.Tags.Assistant
   alias Vutuv.Tags.Merge
   alias Vutuv.Tags.Tag
 
@@ -46,8 +47,10 @@ defmodule VutuvWeb.Admin.TagMergeLive do
      |> assign(:absorbed_results, [])
      |> assign(:canonical_results, [])
      |> assign(:alias_name, "")
+     |> assign(:scanning?, false)
      |> load_preview()
-     |> load_history()}
+     |> load_history()
+     |> load_queue()}
   end
 
   @impl true
@@ -76,6 +79,10 @@ defmodule VutuvWeb.Admin.TagMergeLive do
 
     case Merge.merge(absorbed, canonical, actor: socket.assigns.current_user) do
       {:ok, _merge} ->
+        # Decided, so it leaves the proposal queue whether it came from there
+        # or was picked by hand.
+        Assistant.drop_pair(absorbed, canonical)
+
         {:noreply,
          socket
          |> put_flash(
@@ -88,7 +95,8 @@ defmodule VutuvWeb.Admin.TagMergeLive do
          |> assign(:absorbed, nil)
          |> assign(:canonical, Repo.get(Tag, canonical.id))
          |> load_preview()
-         |> load_history()}
+         |> load_history()
+         |> load_queue()}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, refusal(reason))}
@@ -98,6 +106,7 @@ defmodule VutuvWeb.Admin.TagMergeLive do
   def handle_event("mark-distinct", _params, socket) do
     %{absorbed: absorbed, canonical: canonical} = socket.assigns
     {:ok, _} = Merge.mark_distinct(absorbed, canonical, actor: socket.assigns.current_user)
+    Assistant.drop_pair(absorbed, canonical)
 
     {:noreply,
      socket
@@ -108,7 +117,8 @@ defmodule VutuvWeb.Admin.TagMergeLive do
          b: canonical.name
        )
      )
-     |> load_preview()}
+     |> load_preview()
+     |> load_queue()}
   end
 
   def handle_event("revert", %{"id" => id}, socket) do
@@ -132,6 +142,66 @@ defmodule VutuvWeb.Admin.TagMergeLive do
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, refusal(reason))}
         end
+    end
+  end
+
+  # The assisted pass (issue #1338): generate proposals, judge them with the
+  # local model where it is available, and put them in the queue below. Never a
+  # runtime path — it happens because an admin asked for it.
+  def handle_event("scan", _params, socket) do
+    report = Assistant.scan()
+
+    {:noreply,
+     socket
+     |> put_flash(
+       :info,
+       gettext(
+         "%{written} proposals, %{judged} of them judged by the model. %{dropped} more were found than the queue holds.",
+         written: report.written,
+         judged: report.judged,
+         dropped: report.dropped
+       )
+     )
+     |> load_queue()}
+  end
+
+  # Approving a proposal is the ordinary merge, so it goes through the same
+  # preview: the pair is loaded into the pickers instead of being merged on the
+  # spot. A one-click merge from a queue row is exactly the unreviewed merge
+  # this feature exists to avoid.
+  def handle_event("review", %{"id" => id}, socket) do
+    case Assistant.get_candidate(id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("That proposal is gone."))}
+
+      candidate ->
+        {absorbed, canonical} = sides(candidate)
+
+        {:noreply,
+         socket
+         |> assign(:absorbed, absorbed)
+         |> assign(:canonical, canonical)
+         |> load_preview()}
+    end
+  end
+
+  def handle_event("reject", %{"id" => id}, socket) do
+    case Assistant.get_candidate(id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("That proposal is gone."))}
+
+      candidate ->
+        {:ok, _} =
+          Merge.mark_distinct(candidate.tag_a, candidate.tag_b,
+            actor: socket.assigns.current_user
+          )
+
+        {:ok, _} = Assistant.drop(candidate)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Recorded as different topics."))
+         |> load_queue()}
     end
   end
 
@@ -188,6 +258,24 @@ defmodule VutuvWeb.Admin.TagMergeLive do
 
   defp load_history(socket), do: assign(socket, :history, Merge.history())
 
+  defp load_queue(socket) do
+    socket
+    |> assign(:queue, Assistant.queue())
+    |> assign(:queue_size, Assistant.queue_size())
+  end
+
+  # Which of a proposal's two tags is absorbed: the model's suggestion decides
+  # when there is one, otherwise the pair is handed over as it stands and the
+  # admin picks. Never guessed from the counts — "the smaller one loses" is a
+  # judgement, and this screen's whole point is that a human makes it.
+  defp sides(candidate) do
+    case candidate.suggested_canonical_id do
+      nil -> {candidate.tag_a, candidate.tag_b}
+      id when id == candidate.tag_a.id -> {candidate.tag_b, candidate.tag_a}
+      _ -> {candidate.tag_a, candidate.tag_b}
+    end
+  end
+
   # Why a merge is refused, in the reviewer's words rather than the code's.
   defp refusal(:same_tag), do: gettext("A tag cannot absorb itself.")
 
@@ -227,6 +315,14 @@ defmodule VutuvWeb.Admin.TagMergeLive do
 
   defp total(nil), do: 0
   defp total(counts), do: counts |> Map.values() |> Enum.sum()
+
+  # Which rule found a pair, for the rows the model has not judged (or could
+  # not): the reviewer should know whether they are looking at two spellings of
+  # one string or at two names that merely share a word.
+  defp generator_label("same_key"), do: gettext("the same name, written differently")
+  defp generator_label("acronym"), do: gettext("one is the other's initials")
+  defp generator_label("token"), do: gettext("one is a word of the other")
+  defp generator_label(other), do: other
 
   # The tables named in a preview, in the words an admin thinks in.
   defp row_label("user_tags"), do: gettext("profiles carrying the tag")
@@ -368,6 +464,73 @@ defmodule VutuvWeb.Admin.TagMergeLive do
             <button type="submit" class="button">{gettext("Add")}</button>
           </div>
         </form>
+      </section>
+
+      <%!-- The assisted pass: proposals a human approves, never applies
+      anything itself (issue #1338). --%>
+      <section class="card" id="candidate-queue">
+        <h2 class="card__label">{gettext("Proposals")}</h2>
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Pairs of tags that might be one topic, found by rule and, where a local model is available, judged by it. Nothing here has happened yet: opening one loads it above, where you see what a merge would move before confirming."
+          )}
+        </p>
+
+        <div class="editform__actions mt-3">
+          <button id="scan-candidates" type="button" class="button" phx-click="scan">
+            {gettext("Look for proposals")}
+          </button>
+          <span :if={not Assistant.enabled?()} class="text-sm text-slate-600 dark:text-slate-400">
+            {gettext("The model is switched off; proposals are listed unjudged.")}
+          </span>
+        </div>
+
+        <p :if={@queue == []} class="card__empty">{gettext("Nothing here yet.")}</p>
+
+        <div :if={@queue != []} class="card__tablewrap">
+          <table class="pure-table">
+            <thead>
+              <tr>
+                <th>{gettext("Pair")}</th>
+                <th>{gettext("Profiles")}</th>
+                <th>{gettext("Why")}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={candidate <- @queue} id={"candidate-#{candidate.id}"}>
+                <td>
+                  {candidate.tag_a.name} · {candidate.tag_b.name}
+                </td>
+                <td>{delimited_count(candidate.members_affected)}</td>
+                <td>
+                  <span :if={candidate.reason}>{candidate.reason}</span>
+                  <span :if={is_nil(candidate.reason)} class="text-slate-600 dark:text-slate-400">
+                    {generator_label(candidate.generator)}
+                  </span>
+                </td>
+                <td class="text-right">
+                  <button
+                    type="button"
+                    class="button button--small"
+                    phx-click="review"
+                    phx-value-id={candidate.id}
+                  >
+                    {gettext("Review")}
+                  </button>
+                  <button
+                    type="button"
+                    class="button button--cancel button--small"
+                    phx-click="reject"
+                    phx-value-id={candidate.id}
+                  >
+                    {gettext("Different topics")}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section class="card" id="merge-history">

@@ -364,6 +364,16 @@ if config_env() == :prod do
     config :vutuv, :ollama_url, ollama_url
   end
 
+  # TAG_MERGE_ASSIST=false leaves the tag merge queue to be filled by the
+  # deterministic rules alone and judged by a human (issue #1338).
+  if System.get_env("TAG_MERGE_ASSIST") == "false" do
+    config :vutuv, :tag_merge_assist, false
+  end
+
+  if model = System.get_env("TAG_MERGE_ASSIST_MODEL") do
+    config :vutuv, :tag_merge_assist_model, model
+  end
+
   if ollama_model = System.get_env("OLLAMA_VISION_MODEL") do
     config :vutuv, :ollama_vision_model, ollama_model
   end
