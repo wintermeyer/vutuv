@@ -25,7 +25,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [authentication.md](authentication.md) | passwordless PIN login, passkeys, server-side sessions |
 | [account-activity.md](account-activity.md) | the append-only account-activity log: what changed on an account, when, from where and how it was confirmed; the member's page, the admin's page, retention |
 | [moderation.md](moderation.md) | reports, freezes, the strike ladder, reporter trust, evidence screenshots |
-| [agents-and-seo.md](agents-and-seo.md) | agent formats (`.md`/`.txt`/`.json`/`.xml`/`.vcf`), the member directory, sitemap/RSS/JSON-LD, Open Graph |
+| [agents-and-seo.md](agents-and-seo.md) | agent formats (`.md`/`.txt`/`.json`/`.xml`/`.vcf`), the member directory, sitemap/RSS/JSON-LD, Open Graph, how to read the Search Console reports |
 | [email.md](email.md) | the Emailer chokepoint, multipart bodies, opt-outs, bounces & deliverability |
 | [images.md](images.md) | the AVIF pipeline, kept originals, fingerprinted filenames, URL screenshots, AI image moderation (Ollama) |
 | [admin.md](admin.md) | the admin panel: live dashboard, member browser, account deletion, newsletter & audiences, daily report |

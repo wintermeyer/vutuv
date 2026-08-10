@@ -161,6 +161,49 @@ near-duplicates of the profile's own cards; internal links and unique titles
 are the right treatment), and locale stays Accept-Language-negotiated on one
 URL (no hreflang variants).
 
+## Reading Search Console
+
+Google's index reports lag the site by weeks, so a red bucket here is normally
+Google catching up with a fix that already shipped, not a defect. What each one
+means for this installation, re-checked against production on 2026-08-10:
+
+- **"Indexed, though blocked by robots.txt"** holds legacy `/users/…` URLs
+  only, every one last crawled before the robots.txt fixes above. Nothing on
+  the site can add to it: robots.txt fences `/admin/` and nothing else,
+  `/users/:slug` 301s to the canonical `/:slug`, and `/login` answers 200 with
+  `X-Robots-Tag: noindex`. The important part is how validation behaves: a
+  "validate fix" pass **fails on the first URL whose last crawl still saw the
+  old state**, so it can go red long after the cause is gone. The July pass
+  failed on `/login` alone, crawled three days before v7.185.1 freed it.
+  Restarted 2026-08-10; Google takes weeks over such a run.
+- **"Crawled - currently not indexed"** is dominated by the profiles'
+  `.md`/`.txt`/`.json`/`.xml` siblings, and for them this bucket is the
+  *correct* end state, not a backlog: each answers with
+  `Link: <…>; rel="canonical"; type="text/html"`, so Google fetches the
+  document, learns the content belongs to the HTML page and files it here.
+  Leave it alone, and in particular never put `noindex` on those URLs: a
+  canonical says "index the other one", a noindex says "index neither", and a
+  page carrying both gives Google contradictory instructions. (The ~10K thin
+  tag pages that used to fill this bucket are a separate, solved story: the
+  indexability bar above.)
+- **The 404 and 403 buckets are intended** (agent-export opt-out, moderation
+  withholding), as documented above.
+- **The "Profile page" rich-result report can read 0 valid items with nothing
+  broken.** It counts freshly crawled pages, so at this crawl volume it drops
+  to zero on its own. Live, every indexable profile serves the full JSON-LD
+  (verified 2026-08-10: ProfilePage, Person, Organization, BreadcrumbList).
+  Check a real 200 profile before believing a regression, and mind the trap
+  that makes the check itself lie: a *guessed* handle 404s with a
+  fully-styled error page whose head carries a self-canonical, which reads
+  like a profile page with its structured data stripped out.
+- **Sitemap, HTTPS and breadcrumbs are green.** Core Web Vitals reports no
+  data, which is what too few CrUX samples look like at the current traffic,
+  not a measurement failure.
+
+The standing rule behind all of it: verify the live response before treating a
+Search Console bucket as a bug (`curl -sI`, the JSON-LD in the rendered page),
+because every report here describes the site as it was at the last crawl.
+
 ## Member directory (`/system/members`)
 
 The crawlable A-Z index of every member whose profile is open to search engines
