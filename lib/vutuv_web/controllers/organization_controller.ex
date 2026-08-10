@@ -19,6 +19,8 @@ defmodule VutuvWeb.OrganizationController do
 
   alias Vutuv.Organizations
   alias Vutuv.Pages
+  alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.OrganizationDoc
   alias VutuvWeb.ControllerHelpers
@@ -131,6 +133,31 @@ defmodule VutuvWeb.OrganizationController do
 
   def exclusions(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Exclusions, &Organizations.can_manage?/2)
+
+  @doc """
+  The permalink of a post published in this organization's name (issue #1334).
+  404s for an unknown page, a page this viewer may not see, or an id that is not
+  one of its posts — an id belonging to a member's post must not render under an
+  organization's name.
+  """
+  def post(conn, %{"slug" => slug, "id" => id}) do
+    viewer = conn.assigns[:current_user]
+
+    with {:ok, organization} <- Organizations.fetch_visible_organization(slug, viewer),
+         %Post{} <- Posts.get_organization_post(organization, id, viewer) do
+      conn
+      |> put_layout(html: false)
+      |> live_render(VutuvWeb.OrganizationLive.Post,
+        session:
+          conn
+          |> ControllerHelpers.live_render_session()
+          |> Map.put("organization_id", organization.id)
+          |> Map.put("post_id", id)
+      )
+    else
+      _ -> ControllerHelpers.render_error(conn, 404)
+    end
+  end
 
   # Shared gate for the owner/admin management pages: log-in required, then the
   # per-page permission (`can?`); otherwise a 404 (never reveal the page exists).

@@ -25,6 +25,9 @@ defmodule VutuvWeb.PostComponents do
 
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
+  # An organization post wears its organization's logo where a member's post
+  # wears an avatar (issue #1334).
+  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
@@ -35,9 +38,12 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Isbn
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PhotoLicense
+  alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
@@ -256,10 +262,20 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:time_id, "post-time-#{entry_key}")
       |> assign(:body_id, "post-body-#{entry_key}")
       |> assign(:author?, Posts.author?(post, viewer))
+      # Who this post is BY, resolved once (issue #1334): a member, or the
+      # organization it was published in the name of. Everything the header
+      # needs is derived here rather than branched at each of the half-dozen
+      # places that name the author, and `Posts.author/1` is the single decision
+      # about which of the two author columns speaks.
+      |> assign(:author, Posts.author(post))
+      |> assign(:organization_author?, Posts.organization_post?(post))
+      |> assign(:author_path, author_path(post))
+      |> assign(:author_name, author_name(post))
       # Whether this post is the one its author pinned to their profile (issue
       # #1110) — read off the already-preloaded author, so it costs no query.
       # Drives the menu's Pin / Unpin label and its "replaces the other one"
       # prompt; the visible banner is the caller's `pinned?` (see the attr).
+      # An organization has no profile to pin to, so it is simply false there.
       |> assign(:pinned_to_profile?, Posts.pinned?(post.user, post))
       |> assign(:pin_replaces_other?, pin_replaces_other?(post))
       # The visible marker: wherever the caller says the pin is in effect, plus
@@ -289,6 +305,20 @@ defmodule VutuvWeb.PostComponents do
     </div>
     """
   end
+
+  # Where the author's name and avatar link to. A member's profile lives at
+  # their handle; an organization's page at `Organizations.canonical_path/1`,
+  # which prefers its opt-in root handle over `/organizations/:slug`.
+  defp author_path(%Post{organization: %Organization{} = organization}),
+    do: Organizations.canonical_path(organization)
+
+  defp author_path(%Post{user: user}), do: "/#{user.username}"
+
+  # The visible author name. An organization is named by its own name and has no
+  # `@handle` line beside it: a page's identity is the name, and the handle is
+  # an optional address it may never have claimed.
+  defp author_name(%Post{organization: %Organization{name: name}}), do: name
+  defp author_name(%Post{user: user}), do: full_name(user)
 
   @doc """
   The shared shell for a threaded post list: a `divide-y` column of
@@ -2679,8 +2709,12 @@ defmodule VutuvWeb.PostComponents do
         <%!-- Decorative duplicate of the author-name link below; hidden from
         assistive tech and the tab order so the name link is the one profile
         link (otherwise the avatar link has no accessible name). --%>
-        <.link href={~p"/#{@post.user}"} class="shrink-0" aria-hidden="true" tabindex="-1">
-          <.avatar user={@post.user} size="sm" presence />
+        <.link href={@author_path} class="shrink-0" aria-hidden="true" tabindex="-1">
+          <%!-- An organization wears its logo, not an avatar: it has no
+          presence dot to carry either, since nobody is ever "online" as a
+          page. --%>
+          <.organization_logo :if={@organization_author?} organization={@author} class="h-10 w-10" />
+          <.avatar :if={!@organization_author?} user={@post.user} size="sm" presence />
         </.link>
 
         <div class="min-w-0 flex-1">
@@ -2691,10 +2725,10 @@ defmodule VutuvWeb.PostComponents do
           <div class="flex items-start gap-2">
             <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
               <.link
-                href={~p"/#{@post.user}"}
+                href={@author_path}
                 class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
               >
-                {full_name(@post.user)}
+                {@author_name}
               </.link>
               <.link href={@permalink} class="text-sm text-slate-600 dark:text-slate-400 hover:text-brand-700">
                 <.post_time id={@time_id} at={@post.inserted_at} />
@@ -2722,7 +2756,7 @@ defmodule VutuvWeb.PostComponents do
                 what it replaces — the rule is visible where it bites, not buried
                 in a help text. --%>
                 <:item
-                  :if={!@pinned_to_profile?}
+                  :if={!@organization_author? and !@pinned_to_profile?}
                   id={@pin_item_id}
                   href={~p"/posts/#{@post.id}/pin"}
                   method="put"
@@ -2738,7 +2772,7 @@ defmodule VutuvWeb.PostComponents do
                   {gettext("Pin to profile")}
                 </:item>
                 <:item
-                  :if={@pinned_to_profile?}
+                  :if={!@organization_author? and @pinned_to_profile?}
                   id={@unpin_item_id}
                   href={~p"/posts/#{@post.id}/pin"}
                   method="delete"
@@ -2763,7 +2797,7 @@ defmodule VutuvWeb.PostComponents do
             <div :if={@reporter?} class="-mr-1 -mt-1 shrink-0">
               <.card_menu id={@report_menu_id}>
                 <:item
-                  :if={@viewer_follow}
+                  :if={@viewer_follow && !@organization_author?}
                   href={~p"/follows/#{@viewer_follow.id}/mute"}
                   method="put"
                 >

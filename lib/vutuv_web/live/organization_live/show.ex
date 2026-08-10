@@ -16,10 +16,12 @@ defmodule VutuvWeb.OrganizationLive.Show do
 
   import VutuvWeb.OrganizationComponents
   import VutuvWeb.JobComponents, only: [job_card: 1]
+  import VutuvWeb.PostComponents, only: [post_card: 1]
 
   alias Vutuv.Countries
   alias Vutuv.Jobs
   alias Vutuv.Organizations
+  alias Vutuv.Posts
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.UserHelpers
@@ -37,8 +39,22 @@ defmodule VutuvWeb.OrganizationLive.Show do
       |> assign_organization(organization, current_user)
       |> assign_people(organization)
       |> assign_org_jobs(organization)
+      |> assign(:post_body, "")
+      |> assign_org_posts(organization)
 
     {:ok, socket}
+  end
+
+  # The organization's own posts (issue #1334), newest first, with their own
+  # "Load more" so it never collides with the People or Jobs lists'.
+  defp assign_org_posts(socket, organization) do
+    page = Posts.organization_posts_page(organization, socket.assigns.current_user)
+
+    socket
+    |> assign(:posts, page.entries)
+    |> assign(:posts_total, page.total)
+    |> assign(:posts_more?, page.more?)
+    |> assign(:posts_offset, page.next_offset)
   end
 
   # The organization page's "Offene Stellen" section (#933): the organization's
@@ -96,6 +112,10 @@ defmodule VutuvWeb.OrganizationLive.Show do
     |> assign(:can_manage?, Organizations.can_manage?(organization, viewer))
     |> assign(:can_edit?, Organizations.can_edit_page?(organization, viewer))
     |> assign(:owner?, Organizations.owner?(organization, viewer))
+    # Never implied by owner or admin (issue #1333): speaking for the page is
+    # its own grant, so this is asked on its own rather than derived from the
+    # two above.
+    |> assign(:publisher?, Organizations.publisher?(organization, viewer))
     |> assign(:pending?, organization.status == "pending")
     |> assign(:frozen?, not is_nil(organization.frozen_at))
     |> assign(:engagement, Organizations.organization_engagement(organization, viewer))
@@ -118,6 +138,46 @@ defmodule VutuvWeb.OrganizationLive.Show do
      |> assign(:people, socket.assigns.people ++ page.entries)
      |> assign(:people_more?, page.more?)
      |> assign(:people_offset, page.next_offset)}
+  end
+
+  def handle_event("publish", %{"body" => body}, socket) do
+    organization = socket.assigns.organization
+
+    # The role is re-checked by `create_organization_post/3` itself, so a
+    # withdrawn publisher cannot post through a page they still have open.
+    case Posts.create_organization_post(organization, socket.assigns.current_user, %{body: body}) do
+      {:ok, _post} ->
+        {:noreply,
+         socket
+         |> assign(:post_body, "")
+         |> assign_org_posts(organization)
+         |> put_flash(:info, gettext("Published as %{name}.", name: organization.name))}
+
+      {:error, :forbidden} ->
+        {:noreply,
+         socket
+         |> assign(:publisher?, false)
+         |> put_flash(:error, gettext("You may no longer write in this organization's name."))}
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> assign(:post_body, body)
+         |> put_flash(:error, gettext("That post could not be published."))}
+    end
+  end
+
+  def handle_event("load-more-posts", _params, socket) do
+    page =
+      Posts.organization_posts_page(socket.assigns.organization, socket.assigns.current_user,
+        offset: socket.assigns.posts_offset
+      )
+
+    {:noreply,
+     socket
+     |> assign(:posts, socket.assigns.posts ++ page.entries)
+     |> assign(:posts_more?, page.more?)
+     |> assign(:posts_offset, page.next_offset)}
   end
 
   def handle_event("load-more-jobs", _params, socket) do
@@ -290,6 +350,67 @@ defmodule VutuvWeb.OrganizationLive.Show do
           <.card :if={present?(@organization.description)}>
             <.section_title>{gettext("About")}</.section_title>
             <.markdown_prose text={@organization.description} class="mt-3 text-slate-800 dark:text-slate-200" />
+          </.card>
+
+          <%!-- Posts published in the organization's name (issue #1334). The
+          card shows for every viewer once there is something in it, and for a
+          publisher even when there is not — an empty card with a composer is
+          how they find out they may write here at all. --%>
+          <.card :if={@posts_total > 0 or @publisher?} id="organization-posts">
+            <div class="flex items-center justify-between">
+              <.section_title>{gettext("Posts")}</.section_title>
+              <span :if={@posts_total > 0} class="text-sm text-slate-600 dark:text-slate-400">
+                {compact_count(@posts_total)}
+              </span>
+            </div>
+
+            <%!-- The composer names the author right at the point of publishing,
+            in the button, because the characteristic failure of writing under a
+            brand is forgetting whose name is on it. --%>
+            <.form
+              :if={@publisher?}
+              for={%{}}
+              id="organization-post-form"
+              phx-submit="publish"
+              class="mt-3 space-y-3"
+            >
+              <textarea
+                name="body"
+                rows="3"
+                placeholder={gettext("Write something as %{name}", name: @organization.name)}
+                class={[input_class(), "resize-y"]}
+              >{@post_body}</textarea>
+              <div class="flex justify-end">
+                <button
+                  type="submit"
+                  class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                >
+                  {gettext("Post as %{name}", name: @organization.name)}
+                </button>
+              </div>
+            </.form>
+
+            <div :if={@posts != []} class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+              <div :for={post <- @posts} class="py-4 first:pt-0 last:pb-0">
+                <.post_card
+                  post={post}
+                  viewer={@current_user}
+                  conn_or_socket={@socket}
+                  mode={:preview}
+                  surface={:flat}
+                />
+              </div>
+            </div>
+
+            <p :if={@posts == [] and @publisher?} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+              {gettext("Nothing published yet.")}
+            </p>
+
+            <div :if={@posts_more?} class="mt-4 text-center">
+              <.button variant="secondary" phx-click="load-more-posts" id="load-more-posts">
+                {gettext("Load more")}
+              </.button>
+            </div>
           </.card>
 
           <%!-- People: members who list this organization as an employer (issue #931).

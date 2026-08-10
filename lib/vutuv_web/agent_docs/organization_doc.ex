@@ -14,6 +14,8 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
   alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobPostingDoc
   alias VutuvWeb.UserHelpers
@@ -33,7 +35,8 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
       Organizations.list_aliases(organization),
       Organizations.organization_people_page(organization, limit: 200).entries,
       Organizations.organization_people_count(organization),
-      Jobs.list_organization_postings(organization, nil, limit: 200).entries
+      Jobs.list_organization_postings(organization, nil, limit: 200).entries,
+      Posts.organization_posts_page(organization, nil, limit: 50).entries
     )
   end
 
@@ -48,7 +51,8 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
         aliases,
         people,
         people_total,
-        open_positions
+        open_positions,
+        posts
       ) do
     AgentDocs.doc_meta("organization", canonical_path(organization),
       noindex: not organization.seo?,
@@ -71,8 +75,21 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
       address_line: address_line(organization),
       people_total: people_total,
       people: Enum.map(people, &person_entry/1),
-      open_positions: Enum.map(open_positions, &JobPostingDoc.summary/1)
+      open_positions: Enum.map(open_positions, &JobPostingDoc.summary/1),
+      # What the page published in its own name (issue #1334). The anonymous
+      # view, like every other part of this doc: `organization_posts_page/3` is
+      # asked with a nil viewer, so a post still held by moderation is absent
+      # here even though the page's own publishers see it in the HTML.
+      posts: Enum.map(posts, &post_entry/1)
     })
+  end
+
+  defp post_entry(%Post{} = post) do
+    %{
+      url: AgentDocs.abs_url(Posts.path(post)),
+      published_on: post.published_on,
+      body_markdown: post.body
+    }
   end
 
   defp person_entry(%{user: user, title: title, current?: current?}) do

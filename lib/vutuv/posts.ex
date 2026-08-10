@@ -62,6 +62,8 @@ defmodule Vutuv.Posts do
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Mentions
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
   alias Vutuv.PostImageStore
   alias Vutuv.Posts.PhotoLicense
@@ -153,6 +155,46 @@ defmodule Vutuv.Posts do
   def create_post(%User{} = author, attrs) do
     with {:ok, denials} <- normalize_denials(author.id, fetch(attrs, :denials) || []) do
       do_create_post(author, attrs, denials, nil)
+    end
+  end
+
+  @doc """
+  Publishes a post in `organization`'s name, with `acting_user` recorded as the
+  member who pressed publish (issue #1334). Returns `{:error, :forbidden}` when
+  they do not hold the organization's `publisher` role.
+
+  An organization post is **public**: it carries no denials. The deny model is
+  built on the author's own follower graph and blocks, which an organization has
+  no equivalent of yet (that is issue #1336), and a half-applied audience would
+  read as a promise the site cannot keep. Publishing under a brand is a public
+  act; the way to say something to fewer people is to say it as yourself.
+  """
+  def create_organization_post(%Organization{} = organization, %User{} = acting_user, attrs) do
+    if Organizations.publisher?(organization, acting_user) do
+      do_create_organization_post(organization, acting_user, attrs)
+    else
+      {:error, :forbidden}
+    end
+  end
+
+  defp do_create_organization_post(organization, acting_user, attrs) do
+    image_ids = parse_ids(fetch(attrs, :image_ids) || [])
+    seed = %Post{organization_id: organization.id, acting_user_id: acting_user.id}
+
+    with :ok <- check_image_count(image_ids),
+         {:ok, changeset} <- build_changeset(seed, attrs, [], image_ids) do
+      case insert_post(changeset, image_ids, nil, nil) do
+        {:ok, post} ->
+          post = preload_post(post)
+          broadcast_new_post(post)
+          sync_mentions(post)
+          reconcile_screenshot(post)
+          ReviewCovers.reconcile(post)
+          {:ok, post}
+
+        {:error, _} = error ->
+          error
+      end
     end
   end
 
@@ -306,6 +348,13 @@ defmodule Vutuv.Posts do
 
   defp check_reply_allowed(%User{} = author, %Post{} = parent) do
     cond do
+      # An organization post cannot be answered yet (issue #1334). Everything
+      # downstream of a reply is member-shaped — the parent-author notification,
+      # the block check between the two authors, the thread's "Replying to
+      # @handle" line — and an organization has no inbox to be told about it
+      # until issue #1336 gives it a reading side. Refusing outright beats a
+      # reply that quietly reaches nobody.
+      organization_post?(parent) -> {:error, :restricted}
       not visible_to?(parent, author) -> {:error, :not_visible}
       # Query restriction fresh from the DB, not the (possibly stale) preloaded
       # denials: the reply LiveView holds the parent struct from mount, and the
@@ -768,13 +817,49 @@ defmodule Vutuv.Posts do
     if wildcard in PostDenial.wildcards(), do: {:ok, %{wildcard: wildcard}}, else: :error
   end
 
+  ## Authorship
+
+  @doc """
+  The post's author **as the world sees it**: the `%User{}` who wrote it, or the
+  `%Organization{}` it was published in the name of (issue #1334).
+
+  This is the one decision about which of the two nullable author columns
+  speaks, and roughly seventy places ask. Reading `post.user` directly is a bug
+  on an organization post: it is `nil` there, and the member who pressed publish
+  (`acting_user`) is deliberately **not** the public author — they are the
+  internal record of who spoke, kept for moderation, disputes and departures.
+
+  Needs `:user` / `:organization` preloaded, which `post_preloads/0` does.
+  """
+  def author(%Post{organization_id: nil} = post), do: post.user
+  def author(%Post{} = post), do: post.organization
+
+  @doc "The author's id, whichever kind of author it is."
+  def author_id(%Post{organization_id: nil, user_id: user_id}), do: user_id
+  def author_id(%Post{organization_id: organization_id}), do: organization_id
+
+  @doc "Whether this post was published in an organization's name rather than a member's."
+  def organization_post?(%Post{organization_id: nil}), do: false
+  def organization_post?(%Post{}), do: true
+
   ## Visibility
 
   @doc """
-  Whether `viewer` (a `%User{}` or `nil`) is the post's author — the one
+  Whether `viewer` (a `%User{}` or `nil`) may act as the post's author — the one
   predicate gating the Edit/Delete affordances wherever a post renders.
+
+  For an organization post that is every current **publisher** of the
+  organization, not the member who happened to press publish: the post belongs
+  to the organization, so the power to change it has to follow the role and not
+  the person, or it would walk out of the door with them. It is asked live
+  rather than from the stored `acting_user_id`, so a withdrawn role takes effect
+  at once.
   """
-  def author?(%Post{user_id: author_id}, %User{id: author_id}), do: true
+  def author?(%Post{organization_id: nil, user_id: author_id}, %User{id: author_id}), do: true
+
+  def author?(%Post{organization: %Organization{} = organization}, %User{} = viewer),
+    do: Organizations.publisher?(organization, viewer)
+
   def author?(%Post{}, _viewer), do: false
 
   @doc """
@@ -784,7 +869,14 @@ defmodule Vutuv.Posts do
   image proxy and the live-feed pill all call this. List queries use the
   equivalent `scope_visible/2`.
   """
-  def visible_to?(%Post{user_id: author_id}, %User{id: author_id}), do: true
+  def visible_to?(%Post{user_id: author_id}, %User{id: author_id}) when is_binary(author_id),
+    do: true
+
+  # An organization post carries no denials (see `create_organization_post/3`),
+  # so the only thing that can hide it is moderation — and its publishers still
+  # see it while it is held, the way a member sees their own frozen post.
+  def visible_to?(%Post{organization: %Organization{}} = post, %User{} = viewer),
+    do: author?(post, viewer) or not moderation_hidden?(post)
 
   def visible_to?(%Post{} = post, nil) do
     # Anonymous readers see a post only when it has no denials at all.
@@ -2892,15 +2984,19 @@ defmodule Vutuv.Posts do
   def recent_posts_by_authors(authors, viewer, opts \\ []) do
     per_author = Keyword.get(opts, :per_author, @posts_per_author)
     min_likes = Keyword.get(opts, :min_likes, @posts_min_likes)
-    author_ids = authors |> Enum.map(&author_id/1) |> Enum.uniq()
+    author_ids = authors |> Enum.map(&member_id/1) |> Enum.uniq()
 
     if author_ids == [],
       do: %{},
       else: fetch_recent_posts(author_ids, viewer, per_author, min_likes)
   end
 
-  defp author_id(%User{id: id}), do: id
-  defp author_id(id) when is_binary(id), do: id
+  # Normalizes the "authors" argument of the who-to-follow teaser rail, which
+  # its callers pass either as members or as bare ids. Renamed off `author_id`
+  # when that became the public accessor for a POST's author (issue #1334) —
+  # these two answer different questions and must not share a name.
+  defp member_id(%User{id: id}), do: id
+  defp member_id(id) when is_binary(id), do: id
 
   defp fetch_recent_posts(author_ids, viewer, per_author, min_likes) do
     candidates =
@@ -3001,6 +3097,69 @@ defmodule Vutuv.Posts do
       |> author_entries(author)
 
     {entries, total}
+  end
+
+  @organization_posts_per_page 10
+
+  @doc """
+  One page of `organization`'s own posts, newest first (issue #1334), in the
+  `%{entries:, total:, more?:, next_offset:}` shape the organization page's
+  other "Load more" lists use.
+
+  Much simpler than the member timeline: an organization publishes top-level
+  posts and nothing else — no reposts, no replies, no audience denials — so
+  there is one leg to page rather than a union to merge. Moderation-held posts
+  (a photo still in the AI scan, a frozen post) are kept for the organization's
+  own publishers and hidden from everyone else, the way a member sees their own.
+  """
+  def organization_posts_page(%Organization{} = organization, viewer, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @organization_posts_per_page)
+    offset = Keyword.get(opts, :offset, 0)
+    query = organization_posts_query(organization, viewer)
+    total = Repo.aggregate(query, :count)
+
+    entries =
+      query
+      |> order_by([p], desc: p.id)
+      |> limit(^(limit + 1))
+      |> offset(^offset)
+      |> Repo.all()
+      |> Enum.map(&preload_post/1)
+
+    {shown, rest} = Enum.split(entries, limit)
+
+    %{entries: shown, total: total, more?: rest != [], next_offset: offset + length(shown)}
+  end
+
+  @doc """
+  One of `organization`'s posts by id as `viewer` may see it, or `nil` — the
+  permalink's lookup.
+
+  Scoped to the organization, so an id belonging to a member's post or to
+  another page does not resolve rather than rendering under the wrong name, and
+  a garbage id is a miss instead of a cast error. Moderation-held posts stay
+  visible to the organization's own publishers, like a member's own frozen post.
+  """
+  def get_organization_post(%Organization{} = organization, id, viewer) do
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil ->
+        nil
+
+      uuid ->
+        organization
+        |> organization_posts_query(viewer)
+        |> where([p], p.id == ^uuid)
+        |> Repo.one()
+        |> preload_post()
+    end
+  end
+
+  defp organization_posts_query(%Organization{id: id} = organization, viewer) do
+    query = from(p in Post, where: p.organization_id == ^id)
+
+    if match?(%User{}, viewer) and Organizations.publisher?(organization, viewer),
+      do: query,
+      else: where(query, [p], not p.images_pending? and is_nil(p.frozen_at))
   end
 
   defp scope_period(query, nil), do: query
@@ -3735,6 +3894,11 @@ defmodule Vutuv.Posts do
     # where an unbounded walk up the chain would start.
     [
       :images,
+      # The other kind of author (issue #1334) — nil on a personal post, and the
+      # one `Vutuv.Posts.author/1` names on an organization post. Deliberately
+      # not `:acting_user`: who pressed publish is never rendered, so paying a
+      # query for it on every page would buy nothing.
+      :organization,
       # The auto link screenshot rendered beside a single-URL post (nil for
       # every other post); the card shows it only once `status: "ready"`.
       :screenshot,
@@ -3790,8 +3954,20 @@ defmodule Vutuv.Posts do
   The root-relative permalink path, e.g.
   `/stefan/posts/019748c8-1a2b-7c3d-8e4f-5a6b7c8d9e0f`. Lives under the
   author archive (`/:slug/posts`), whose year/month/day pages stay
-  date-scoped index views. Requires `:user` to be preloaded.
+  date-scoped index views. Requires `:user` / `:organization` to be preloaded.
+
+  An organization post lives under the **slug** path (`/organizations/acme/posts/…`)
+  rather than under the organization's opt-in root handle, even when it holds
+  one. The handle route dispatches an organization only on the bare `/:slug`
+  page (`VutuvWeb.Plug.UserResolveSlug`), everything deeper is member-only, and
+  a permalink is the least forgiving URL there is: it is what a federated Note
+  is identified by and what somebody pastes a year later. One shape that always
+  works beats two that depend on whether a handle was claimed.
   """
+  def path(%Post{organization: %Organization{slug: slug}, id: id}) do
+    "/organizations/#{slug}/posts/#{id}"
+  end
+
   def path(%Post{user: %User{} = user, id: id}) do
     "/#{user.username}/posts/#{id}"
   end
@@ -4357,6 +4533,13 @@ defmodule Vutuv.Posts do
   # new post" pill for a post the feed query then filters out would be a dead
   # end. The followers are told instead at the moment the last photo clears
   # (`broadcast_images_settled/1`).
+  # An organization post has nobody to push to yet: the live fan-out rides the
+  # member follower graph, and an organization cannot be followed until issue
+  # #1336 gives it a reading side. It is not merely a no-op either — with a nil
+  # author `follower_ids/1` would build `where: c.followee_id == ^nil`, which
+  # Ecto **raises** on rather than silently matching nothing.
+  defp broadcast_new_post(%Post{user_id: nil}), do: :ok
+
   defp broadcast_new_post(%Post{images_pending?: true} = post) do
     Vutuv.Activity.broadcast(post.user_id, new_post_event(post.id, post.user_id))
   end

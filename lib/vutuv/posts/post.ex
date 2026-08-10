@@ -50,7 +50,20 @@ defmodule Vutuv.Posts.Post do
     # only by search_public/2's fragments, never loaded or written by Ecto.
     field(:search_tsv, :string, load_in_query: false)
 
+    # The author, in exactly one of two shapes (issue #1334, CHECK-enforced):
+    # a member (`user`), or an organization (`organization`) with the member who
+    # pressed publish recorded beside it in `acting_user`. Never both, never
+    # neither. Read it through `Vutuv.Posts.author/1` rather than by picking one
+    # of these fields — that accessor is the single decision about which one
+    # speaks, and there are ~70 places that ask.
     belongs_to(:user, Vutuv.Accounts.User)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
+
+    # Who published this in the organization's name. Public rendering never
+    # shows it — the author is the organization — but it survives that member
+    # leaving (`nilify_all`), because the organization's content must outlive
+    # them while the record of who spoke stays as long as it can.
+    belongs_to(:acting_user, Vutuv.Accounts.User, foreign_key: :acting_user_id)
 
     # Present iff this post is a reply; survives parent deletion (see PostReply).
     has_one(:reply_ref, Vutuv.Posts.PostReply, foreign_key: :post_id)
