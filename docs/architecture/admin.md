@@ -118,11 +118,18 @@ names** (issue #1338), marked and linked to the topic they belong to, so a tag
 looked up under an absorbed name is still findable here.
 
 **`/admin/tag_merges`** (`VutuvWeb.Admin.TagMergeLive`) folds several tags for one
-topic into one page. Pick the tag to absorb and the one that stays, and the
-screen says what would move **before** anything happens: how many profiles,
-posts, follows and job postings change hands, and how many rows would be dropped
-because their owner already carries both spellings. Every merge is listed below
-the form with a "Revert" that puts all of it back. The same screen files a name
+topic into one page. It collects a **set**, not a pair: a topic is spread over
+`rails`, `rubyonrails`, `Ruby on Rails` and `ROR`, and gathering those takes
+several searches, because "rails" cannot turn up `ROR` and does turn up `grails`,
+which is a different topic. So a search adds to a list, any entry can be taken
+back out with one click, and only then is one of them picked to survive. Then the
+screen says what would move **before** anything happens: how many profiles, posts,
+follows and job postings change hands, and how many rows are dropped because
+their owner already carries the surviving tag — the counts the sequence really
+produces (`Merge.preview_many/2`), not the sum of the pairs. Each absorbed tag
+becomes its own recorded merge, so the history below the form can take one back
+without undoing the rest, and a tag the merge refuses is named with its reason
+rather than quietly skipped. The same screen files a name
 as an alternative *before* anyone types it (so `ROR` never becomes a page of its
 own) and marks a pair as deliberately distinct, which refuses the merge for good.
 The mechanics, the four refusals and why an alternative name is a tag row rather

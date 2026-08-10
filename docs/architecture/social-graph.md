@@ -153,7 +153,12 @@ their topic.
 
 **Merging** is `Vutuv.Tags.Merge`, driven from `/admin/tag_merges`
 (`VutuvWeb.Admin.TagMergeLive`; its own path segment because the earlier
-`resources("/tags", …)` in the router would read `merge` as a slug). It moves
+`resources("/tags", …)` in the router would read `merge` as a slug). The screen
+collects a **set** of spellings across several searches and absorbs them into
+one chosen survivor, each as its own recorded merge (`merge_all/3`), with
+`preview_many/2` counting what the sequence really does rather than summing the
+pairs — merging `A` and `B` into `C` for a member holding `A` and `B` moves one
+row and drops the other. A single merge moves
 every row filed under the absorbed tag — profile tags and the endorsements under
 them, post tags and body hashtags, tag follows, job postings, cached remote
 posts, newsletter audiences — and only deletes a row whose owner already holds

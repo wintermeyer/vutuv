@@ -1,8 +1,9 @@
 defmodule VutuvWeb.Admin.TagMergeLiveTest do
   @moduledoc """
-  The tag merge screen (`/admin/tags` → "Merge tags", issue #1338): admins only,
-  pick two tags, see what the merge would move before confirming, do it, and
-  take it back from the history below.
+  The tag merge screen (`/admin/tag_merges`, issue #1338): admins only. Collect
+  the tags that mean one topic over as many searches as it takes, drop the ones
+  that do not belong, pick which survives, see what the merge would move before
+  confirming, and take any of it back from the history below.
   """
   use VutuvWeb.ConnCase
 
@@ -55,29 +56,79 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
 
       html =
         lv
-        |> form("#search-absorbed", %{"side" => "absorbed", "q" => ctx.canonical.name})
+        |> form("#tag-search", %{"q" => ctx.canonical.name})
         |> render_change()
 
       assert html =~ "/tags/#{ctx.canonical.slug}"
       assert html =~ "1 profile"
     end
 
-    test "the pair can be turned round in one click", ctx do
+    test "which tag survives is chosen in the list, not by the order of picking", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
-      pick(lv, ctx.absorbed, "absorbed")
-      pick(lv, ctx.canonical, "canonical")
+      add(lv, ctx.absorbed)
+      add(lv, ctx.canonical)
 
-      html = lv |> element("#swap-sides") |> render_click()
+      # The first one added is the keeper until somebody says otherwise, and
+      # saying otherwise is one click on the row.
+      html = lv |> element("#basket-#{ctx.canonical.id} input[type=radio]") |> render_click()
 
-      # Which of the two survives is the real decision here, and it is usually
-      # made after seeing both.
-      assert html =~ "#{ctx.canonical.name} becomes an alternative name"
+      assert html =~ "#{ctx.absorbed.name} becomes an alternative name for #{ctx.canonical.name}"
+    end
+
+    test "a tag that does not belong can be taken back out", ctx do
+      # The reported case: searching "rails" also finds "grails", a different
+      # topic, and there was no way to drop it again.
+      grails = tag(unique_tag_name("grails"))
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+      add(lv, ctx.canonical)
+      add(lv, grails)
+      assert has_element?(lv, "#basket-#{grails.id}")
+
+      lv |> element("#remove-#{grails.id}") |> render_click()
+
+      # Out of the list, but still findable: removing it says "not this topic",
+      # not "never show me this tag".
+      refute has_element?(lv, "#basket-#{grails.id}")
+      assert has_element?(lv, "#basket-#{ctx.canonical.id}")
+    end
+
+    test "a tag the search cannot reach is collected by searching for it", ctx do
+      # "ROR" never turns up under "rails", which is exactly why the screen
+      # collects across searches instead of filling two slots from one.
+      ror = tag(unique_tag_name("ROR"))
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+      add(lv, ctx.canonical)
+      add(lv, ctx.absorbed)
+      add(lv, ror)
+
+      assert has_element?(lv, "#basket-#{ror.id}")
+
+      lv |> element("#do-merge") |> render_click()
+
+      assert Repo.get!(Tag, ror.id).merged_into_id == ctx.canonical.id
+      assert Repo.get!(Tag, ctx.absorbed.id).merged_into_id == ctx.canonical.id
+    end
+
+    test "several tags are absorbed in one go, each revertible on its own", ctx do
+      other = tag(unique_tag_name("rails"))
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+      add(lv, ctx.canonical)
+      add(lv, ctx.absorbed)
+      add(lv, other)
+
+      lv |> element("#do-merge") |> render_click()
+
+      assert Repo.get!(Tag, ctx.absorbed.id).merged_into_id == ctx.canonical.id
+      assert Repo.get!(Tag, other.id).merged_into_id == ctx.canonical.id
+      assert length(Merge.history()) == 2
     end
 
     test "the preview says in words what pressing merge would do", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
-      pick(lv, ctx.absorbed, "absorbed")
-      html = pick(lv, ctx.canonical, "canonical")
+      collect(lv, ctx.absorbed, ctx.canonical)
+      html = render(lv)
 
       assert html =~ "#{ctx.absorbed.name} becomes an alternative name for #{ctx.canonical.name}"
       assert html =~ "/tags/#{ctx.absorbed.slug}"
@@ -89,8 +140,8 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
 
-      pick(lv, ctx.absorbed, "absorbed")
-      html = pick(lv, ctx.canonical, "canonical")
+      collect(lv, ctx.absorbed, ctx.canonical)
+      html = render(lv)
 
       assert has_element?(lv, "#merge-preview")
       assert html =~ "profiles carrying the tag"
@@ -102,8 +153,7 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       user_tag = insert(:user_tag, user: insert(:activated_user), tag: ctx.absorbed)
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
-      pick(lv, ctx.absorbed, "absorbed")
-      pick(lv, ctx.canonical, "canonical")
+      collect(lv, ctx.absorbed, ctx.canonical)
 
       lv |> element("#do-merge") |> render_click()
 
@@ -117,8 +167,8 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       cpp = tag("c++")
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
-      pick(lv, cpp, "absorbed")
-      html = pick(lv, c, "canonical")
+      collect(lv, cpp, c)
+      html = render(lv)
 
       # The #1337 bucket: four languages one normalization would fold into one.
       assert html =~ "differ only in characters"
@@ -136,8 +186,8 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
         |> live(~p"/admin/tag_merges")
 
       assert html =~ "Tags zusammenlegen"
-      assert html =~ "Tag, das aufgenommen wird"
-      assert html =~ "Tag, das bleibt"
+      assert html =~ "Sammeln Sie die Tags"
+      assert html =~ "Wählen Sie das Tag, das bleibt"
       assert html =~ "Vorschläge"
       assert html =~ "Ein Beispiel"
       assert html =~ "Nach der Zusammenlegung"
@@ -161,8 +211,7 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
 
     test "a pair can be marked as different topics", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
-      pick(lv, ctx.absorbed, "absorbed")
-      pick(lv, ctx.canonical, "canonical")
+      collect(lv, ctx.absorbed, ctx.canonical)
 
       lv |> element("#mark-distinct") |> render_click()
 
@@ -218,8 +267,7 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       assert [_] = Assistant.queue()
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
-      pick(lv, b, "absorbed")
-      pick(lv, a, "canonical")
+      collect(lv, b, a)
       lv |> element("#do-merge") |> render_click()
 
       assert Assistant.queue() == []
@@ -234,7 +282,7 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
 
     test "a name nobody has typed yet can be filed pre-emptively", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
-      pick(lv, ctx.canonical, "canonical")
+      add(lv, ctx.canonical)
 
       name = unique_tag_name("ROR")
       lv |> form("#add-alias", %{"name" => name}) |> render_submit()
@@ -247,7 +295,7 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       existing = tag(unique_tag_name("rails"))
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
-      pick(lv, ctx.canonical, "canonical")
+      add(lv, ctx.canonical)
 
       html = lv |> form("#add-alias", %{"name" => existing.name}) |> render_submit()
 
@@ -256,10 +304,16 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
     end
   end
 
-  # Search for a tag and click its result, the way an admin picks one.
-  defp pick(lv, tag, side) do
-    lv |> form("#search-#{side}", %{"side" => side, "q" => tag.name}) |> render_change()
+  # Search for a tag and add it to the list, the way an admin collects one.
+  defp add(lv, tag) do
+    lv |> form("#tag-search", %{"q" => tag.name}) |> render_change()
+    lv |> element("#add-#{tag.id}") |> render_click()
+  end
 
-    lv |> element("#pick-#{side}-#{tag.id}") |> render_click()
+  # Collect a pair and say which of the two survives.
+  defp collect(lv, absorbed, keeper) do
+    add(lv, absorbed)
+    add(lv, keeper)
+    lv |> element("#basket-#{keeper.id} input[type=radio]") |> render_click()
   end
 end

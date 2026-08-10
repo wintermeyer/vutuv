@@ -1,13 +1,27 @@
 defmodule VutuvWeb.Admin.TagMergeLive do
   @moduledoc """
-  The tag merge screen (`/admin/tags/merge`, issue #1338): fold several tags for
+  The tag merge screen (`/admin/tag_merges`, issue #1338): fold several tags for
   one topic into one page.
 
-  Pick the tag to absorb and the tag that survives, and the screen says what the
-  merge would move **before** anything happens — how many profiles, posts,
-  follows and job postings change hands, and how many rows would be dropped
-  because their owner already carries both spellings. That preview is the point
+  **The screen collects a set, not a pair.** A topic is spread over `rails`,
+  `rubyonrails`, `Ruby on Rails` and `ROR`, and gathering those takes several
+  searches: "rails" cannot turn up `ROR`, and it does turn up `grails`, which is
+  a different topic. So a search **adds** to a list, every entry can be taken
+  back out with one click, and only then is one of them picked to survive. Its
+  first shape asked for one tag to absorb and one to keep, which made the
+  reviewer restart the whole thing whenever a search brought back the wrong
+  neighbour.
+
+  Once the list stands, the screen says what the merge would move **before**
+  anything happens: how many profiles, posts, follows and job postings change
+  hands, and how many rows are dropped because their owner already carries the
+  surviving tag. Those counts are the ones the sequence really produces
+  (`Merge.preview_many/2`), not the sum of the pairs. That preview is the point
   of the page: absorbing a tag moves rows people put there deliberately.
+
+  Each absorbed tag becomes its own recorded merge, so one of them can be taken
+  back without undoing the rest, and a tag the merge refuses is named with its
+  reason instead of being quietly skipped.
 
   Everything here is reversible. The merge history below the form lists what was
   done, by whom, and offers "Revert" on each entry, which puts every row back
@@ -40,94 +54,116 @@ defmodule VutuvWeb.Admin.TagMergeLive do
     {:ok,
      socket
      |> assign(:page_title, gettext("Merge tags"))
-     |> assign(:absorbed, nil)
-     |> assign(:canonical, nil)
-     |> assign(:absorbed_query, "")
-     |> assign(:canonical_query, "")
-     |> assign(:absorbed_results, [])
-     |> assign(:canonical_results, [])
+     # The tags collected so far, and which of them survives. A topic is spread
+     # over a *set* of spellings, so the screen collects a set.
+     |> assign(:basket, [])
+     |> assign(:keeper_id, nil)
+     |> assign(:query, "")
+     |> assign(:results, [])
      |> assign(:alias_name, "")
-     |> assign(:scanning?, false)
      |> load_preview()
      |> load_history()
      |> load_queue()}
   end
 
   @impl true
-  def handle_event("search", %{"side" => side, "q" => q}, socket) do
-    {:noreply,
-     socket
-     |> assign(:"#{side}_query", q)
-     |> assign(:"#{side}_results", search(q))}
+  def handle_event("search", %{"q" => q}, socket) do
+    {:noreply, socket |> assign(:query, q) |> assign(:results, search(q, socket.assigns.basket))}
   end
 
-  def handle_event("pick", %{"side" => side, "id" => id}, socket) do
-    {:noreply,
-     socket
-     |> assign(:"#{side}", Repo.get(Tag, id))
-     |> assign(:"#{side}_results", [])
-     |> assign(:"#{side}_query", "")
-     |> load_preview()}
-  end
+  # Collecting the spellings of one topic takes several searches — "rails" can
+  # never turn up "ROR" — so a result is **added** to the list rather than
+  # replacing a slot.
+  def handle_event("add", %{"id" => id}, socket) do
+    case Repo.get(Tag, id) do
+      nil ->
+        {:noreply, socket}
 
-  def handle_event("clear", %{"side" => side}, socket) do
-    {:noreply, socket |> assign(:"#{side}", nil) |> load_preview()}
-  end
-
-  # Which of two tags should survive is the actual decision on this screen, and
-  # it is usually made after seeing both: turning the pair round has to be one
-  # click, not two searches again.
-  def handle_event("swap", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:absorbed, socket.assigns.canonical)
-     |> assign(:canonical, socket.assigns.absorbed)
-     |> load_preview()}
-  end
-
-  def handle_event("merge", _params, socket) do
-    %{absorbed: absorbed, canonical: canonical} = socket.assigns
-
-    case Merge.merge(absorbed, canonical, actor: socket.assigns.current_user) do
-      {:ok, _merge} ->
-        # Decided, so it leaves the proposal queue whether it came from there
-        # or was picked by hand.
-        Assistant.drop_pair(absorbed, canonical)
+      tag ->
+        basket = socket.assigns.basket ++ [tag]
 
         {:noreply,
          socket
-         |> put_flash(
-           :info,
-           gettext("%{absorbed} is now an alternative name for %{canonical}.",
-             absorbed: absorbed.name,
-             canonical: canonical.name
-           )
-         )
-         |> assign(:absorbed, nil)
-         |> assign(:canonical, Repo.get(Tag, canonical.id))
-         |> load_preview()
-         |> load_history()
-         |> load_queue()}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, refusal(reason))}
+         |> assign(:basket, basket)
+         |> assign(:keeper_id, socket.assigns.keeper_id || tag.id)
+         |> assign(:results, search(socket.assigns.query, basket))
+         |> load_preview()}
     end
   end
 
-  def handle_event("mark-distinct", _params, socket) do
-    %{absorbed: absorbed, canonical: canonical} = socket.assigns
-    {:ok, _} = Merge.mark_distinct(absorbed, canonical, actor: socket.assigns.current_user)
-    Assistant.drop_pair(absorbed, canonical)
+  # A search for "rails" also finds "grails", which is a different topic. Taking
+  # one back out has to be as easy as putting it in, or the reviewer starts the
+  # whole list again.
+  def handle_event("remove", %{"id" => id}, socket) do
+    basket = Enum.reject(socket.assigns.basket, &(&1.id == id))
+
+    {:noreply,
+     socket
+     |> assign(:basket, basket)
+     |> assign(:keeper_id, keeper_after_removal(socket.assigns.keeper_id, id, basket))
+     |> assign(:results, search(socket.assigns.query, basket))
+     |> load_preview()}
+  end
+
+  def handle_event("clear-basket", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:basket, [])
+     |> assign(:keeper_id, nil)
+     |> assign(:results, search(socket.assigns.query, []))
+     |> load_preview()}
+  end
+
+  # Which of the collected spellings survives is the decision this screen is
+  # for, and it is made after seeing them all side by side with their counts.
+  def handle_event("keep", %{"id" => id}, socket) do
+    {:noreply, socket |> assign(:keeper_id, id) |> load_preview()}
+  end
+
+  def handle_event("merge", _params, socket) do
+    %{keeper: keeper, absorbed: absorbed} = split_basket(socket.assigns)
+
+    result = Merge.merge_all(absorbed, keeper, actor: socket.assigns.current_user)
+    Enum.each(result.merged, &Assistant.drop_pair(Repo.get(Tag, &1.absorbed_tag_id), keeper))
+
+    socket =
+      Enum.reduce(result.failed, socket, fn {tag, reason}, acc ->
+        put_flash(acc, :error, "#{tag.name}: #{refusal(reason)}")
+      end)
 
     {:noreply,
      socket
      |> put_flash(
        :info,
-       gettext("%{a} and %{b} are recorded as different topics.",
-         a: absorbed.name,
-         b: canonical.name
+       ngettext(
+         "%{count} tag is now an alternative name for %{canonical}.",
+         "%{count} tags are now alternative names for %{canonical}.",
+         length(result.merged),
+         canonical: keeper.name
        )
      )
+     |> assign(:basket, [Repo.get(Tag, keeper.id)])
+     |> assign(:keeper_id, keeper.id)
+     |> load_preview()
+     |> load_history()
+     |> load_queue()}
+  end
+
+  # Only meaningful for exactly two: "these are different topics" is a statement
+  # about a pair, and a list of five would mean ten of them.
+  def handle_event("mark-distinct", _params, socket) do
+    [a, b] = socket.assigns.basket
+    {:ok, _} = Merge.mark_distinct(a, b, actor: socket.assigns.current_user)
+    Assistant.drop_pair(a, b)
+
+    {:noreply,
+     socket
+     |> put_flash(
+       :info,
+       gettext("%{a} and %{b} are recorded as different topics.", a: a.name, b: b.name)
+     )
+     |> assign(:basket, [])
+     |> assign(:keeper_id, nil)
      |> load_preview()
      |> load_queue()}
   end
@@ -143,10 +179,7 @@ defmodule VutuvWeb.Admin.TagMergeLive do
             {:noreply,
              socket
              |> put_flash(:info, gettext("The merge was reverted."))
-             |> assign(
-               :canonical,
-               socket.assigns.canonical && Repo.get(Tag, socket.assigns.canonical.id)
-             )
+             |> reload_basket()
              |> load_preview()
              |> load_history()}
 
@@ -177,9 +210,9 @@ defmodule VutuvWeb.Admin.TagMergeLive do
   end
 
   # Approving a proposal is the ordinary merge, so it goes through the same
-  # preview: the pair is loaded into the pickers instead of being merged on the
-  # spot. A one-click merge from a queue row is exactly the unreviewed merge
-  # this feature exists to avoid.
+  # review: the pair lands in the list above, where it can be corrected, added
+  # to and previewed. A one-click merge from a queue row is exactly the
+  # unreviewed merge this feature exists to avoid.
   def handle_event("review", %{"id" => id}, socket) do
     case Assistant.get_candidate(id) do
       nil ->
@@ -190,8 +223,8 @@ defmodule VutuvWeb.Admin.TagMergeLive do
 
         {:noreply,
          socket
-         |> assign(:absorbed, absorbed)
-         |> assign(:canonical, canonical)
+         |> assign(:basket, [canonical, absorbed])
+         |> assign(:keeper_id, canonical.id)
          |> load_preview()}
     end
   end
@@ -221,7 +254,7 @@ defmodule VutuvWeb.Admin.TagMergeLive do
   end
 
   def handle_event("add-alias", %{"name" => name}, socket) do
-    case Merge.add_alias(socket.assigns.canonical, name) do
+    case Merge.add_alias(socket.assigns.keeper, name) do
       {:ok, _tag} ->
         {:noreply,
          socket
@@ -246,34 +279,60 @@ defmodule VutuvWeb.Admin.TagMergeLive do
 
   # Each result carries the number of profiles carrying it, batched into one
   # query for the whole list: with three spellings of one topic on screen, that
-  # number is usually what decides which of them should survive.
-  defp search(query) do
+  # number is usually what decides which of them should survive. Anything
+  # already collected drops out, so the list only ever offers something new.
+  defp search(query, basket) do
     case String.trim(to_string(query)) do
       "" ->
         []
 
       q ->
-        tags = q |> Tags.admin_search(limit: @results_limit) |> Repo.all()
+        collected = MapSet.new(basket, & &1.id)
+
+        tags =
+          q
+          |> Tags.admin_search(limit: @results_limit)
+          |> Repo.all()
+          |> Enum.reject(&MapSet.member?(collected, &1.id))
+
         counts = Tags.member_counts(Enum.map(tags, & &1.id))
 
         Enum.map(tags, &%{tag: &1, members: Map.get(counts, &1.id, 0)})
     end
   end
 
+  # A merge or a revert changes the rows the list is showing, so it is re-read
+  # rather than left holding what the tags looked like before.
+  defp reload_basket(socket) do
+    basket = socket.assigns.basket |> Enum.map(&Repo.get(Tag, &1.id)) |> Enum.reject(&is_nil/1)
+    assign(socket, :basket, basket)
+  end
+
+  # The collected tags split into the one that survives and the ones absorbed.
+  defp split_basket(%{basket: basket, keeper_id: keeper_id}) do
+    keeper = Enum.find(basket, &(&1.id == keeper_id))
+    %{keeper: keeper, absorbed: Enum.reject(basket, &(&1.id == keeper_id))}
+  end
+
+  # Removing the tag that was set to survive must not leave the list without a
+  # keeper: the next one takes over rather than the screen going blank.
+  defp keeper_after_removal(keeper_id, keeper_id, [next | _]), do: next.id
+  defp keeper_after_removal(keeper_id, keeper_id, []), do: nil
+  defp keeper_after_removal(keeper_id, _removed_id, _basket), do: keeper_id
+
   # The preview is recomputed on every pick, so what the screen shows is always
   # the answer for the pair currently named — including the refusal, which is
   # shown in place of the button rather than only after pressing it.
   defp load_preview(socket) do
-    %{absorbed: absorbed, canonical: canonical} = socket.assigns
+    %{keeper: keeper, absorbed: absorbed} = split_basket(socket.assigns)
 
-    preview =
-      case {absorbed, canonical} do
-        {%Tag{}, %Tag{}} -> Merge.preview(absorbed, canonical)
-        _ -> nil
-      end
+    preview = keeper && absorbed != [] && Merge.preview_many(absorbed, keeper)
 
-    assign(socket, :preview, preview)
-    |> assign(:aliases, canonical && Tag.aliases_of(canonical))
+    socket
+    |> assign(:keeper, keeper)
+    |> assign(:preview, preview || nil)
+    |> assign(:aliases, keeper && Tag.aliases_of(keeper))
+    |> assign(:members, Tags.member_counts(Enum.map(socket.assigns.basket, & &1.id)))
   end
 
   defp load_history(socket), do: assign(socket, :history, Merge.history())
@@ -419,113 +478,213 @@ defmodule VutuvWeb.Admin.TagMergeLive do
         </div>
 
         <div class="mt-6 grid gap-6 md:grid-cols-2">
-          <.tag_picker
-            side="absorbed"
-            id="absorbed"
-            step="1"
-            label={gettext("Tag to absorb")}
-            hint={
-              gettext(
-                "Stops being a topic of its own. Its profiles, posts and follows move over and its address redirects."
-              )
-            }
-            tag={@absorbed}
-            query={@absorbed_query}
-            results={@absorbed_results}
-          />
-          <.tag_picker
-            side="canonical"
-            id="canonical"
-            step="2"
-            label={gettext("Tag that stays")}
-            hint={
-              gettext("Keeps its page and its address and gains everything from the other one.")
-            }
-            tag={@canonical}
-            query={@canonical_query}
-            results={@canonical_results}
-          />
-        </div>
+          <%!-- Collecting the spellings of a topic takes several searches: a
+          search for "rails" can never turn up "ROR", and it does turn up
+          "grails", which is a different topic. So the search adds to a list
+          rather than filling one of two slots. --%>
+          <div>
+            <h2 class="card__label">
+              <span class="mr-1 text-slate-400 dark:text-slate-500">1.</span>{gettext(
+                "Collect the tags that mean one topic"
+              )}
+            </h2>
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+              {gettext(
+                "Search as often as you like and add what belongs. Abbreviations will not turn up under the full name, so look for them separately."
+              )}
+            </p>
 
-        <div :if={@absorbed && @canonical} class="editform__actions mt-4">
-          <button
-            id="swap-sides"
-            type="button"
-            class="button button--cancel"
-            phx-click="swap"
-          >
-            {gettext("Swap: keep %{name} instead", name: @absorbed.name)}
-          </button>
+            <form id="tag-search" phx-change="search" phx-submit="search" class="mt-2">
+              <input
+                type="text"
+                id="q"
+                name="q"
+                value={@query}
+                autocomplete="off"
+                placeholder={gettext("Search by name or slug")}
+              />
+            </form>
+
+            <p :if={@query != "" and @results == []} class="card__empty">
+              {gettext("No tag matches that.")}
+            </p>
+
+            <ul :if={@results != []} class="mt-2 space-y-1">
+              <li :for={result <- @results}>
+                <button
+                  type="button"
+                  id={"add-#{result.tag.id}"}
+                  class="w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50 dark:hover:bg-brand-900/40"
+                  phx-click="add"
+                  phx-value-id={result.tag.id}
+                >
+                  <span class="block font-semibold text-brand-700 dark:text-brand-200">
+                    + {result.tag.name}
+                  </span>
+                  <span class="block text-xs text-slate-600 dark:text-slate-400">
+                    /tags/{result.tag.slug} · {profile_count(result.members)}
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h2 class="card__label">
+              <span class="mr-1 text-slate-400 dark:text-slate-500">2.</span>{gettext(
+                "Pick the one that stays"
+              )}
+            </h2>
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+              {gettext(
+                "It keeps its page and its address; every other one becomes an alternative name pointing at it."
+              )}
+            </p>
+
+            <p :if={@basket == []} class="card__empty">
+              {gettext("Nothing collected yet.")}
+            </p>
+
+            <ul :if={@basket != []} id="basket" class="mt-2 space-y-1">
+              <li
+                :for={tag <- @basket}
+                id={"basket-#{tag.id}"}
+                class={[
+                  "flex items-start gap-3 rounded-lg px-3 py-2",
+                  tag.id == @keeper_id && "bg-brand-50 dark:bg-brand-900/40"
+                ]}
+              >
+                <label class="flex min-w-0 grow cursor-pointer items-start gap-3">
+                  <input
+                    type="radio"
+                    name="keeper"
+                    checked={tag.id == @keeper_id}
+                    phx-click="keep"
+                    phx-value-id={tag.id}
+                    class={checkbox_class()}
+                  />
+                  <span class="min-w-0">
+                    <span class="block font-semibold">{tag.name}</span>
+                    <span class="block text-xs text-slate-600 dark:text-slate-400">
+                      /tags/{tag.slug} · {profile_count(Map.get(@members, tag.id, 0))}
+                    </span>
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  id={"remove-#{tag.id}"}
+                  class="button button--cancel button--small"
+                  phx-click="remove"
+                  phx-value-id={tag.id}
+                  title={gettext("Does not belong here")}
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+
+            <div :if={@basket != []} class="editform__actions mt-3">
+              <button
+                id="clear-basket"
+                type="button"
+                class="button button--cancel"
+                phx-click="clear-basket"
+              >
+                {gettext("Start over")}
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
       <section :if={@preview} class="card" id="merge-preview">
         <h2 class="card__label">{gettext("What this merge would move")}</h2>
 
-        <%= case @preview do %>
-          <% {:error, reason} -> %>
-            <p class="alert alert-danger" role="alert">{refusal(reason)}</p>
-          <% preview -> %>
-            <%!-- The table answers "how much"; this line answers "what am I
-            about to do", which is the question somebody presses the button
-            with. --%>
-            <p id="merge-sentence" class="text-sm">
-              {gettext(
-                "%{absorbed} becomes an alternative name for %{canonical}. %{absorbed_url} then redirects to %{canonical_url}.",
-                absorbed: preview.absorbed.name,
-                canonical: preview.canonical.name,
-                absorbed_url: "/tags/" <> preview.absorbed.slug,
-                canonical_url: "/tags/" <> preview.canonical.slug
-              )}
-            </p>
+        <%!-- The table answers "how much"; this line answers "what am I about
+        to do", which is the question somebody presses the button with. --%>
+        <p :if={@preview.mergeable != []} id="merge-sentence" class="text-sm">
+          {ngettext(
+            "%{names} becomes an alternative name for %{canonical} and %{urls} redirects to /tags/%{slug}.",
+            "%{names} become alternative names for %{canonical}, and their addresses redirect to /tags/%{slug}.",
+            length(@preview.mergeable),
+            names: Enum.map_join(@preview.mergeable, ", ", & &1.name),
+            canonical: @preview.canonical.name,
+            urls: Enum.map_join(@preview.mergeable, ", ", &("/tags/" <> &1.slug)),
+            slug: @preview.canonical.slug
+          )}
+        </p>
 
-            <div class="card__tablewrap mt-3">
-              <table class="pure-table">
-                <thead>
-                  <tr>
-                    <th>{gettext("What")}</th>
-                    <th>{gettext("Moves")}</th>
-                    <th>{gettext("Dropped as duplicate")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr :for={{table, _} <- Map.merge(preview.moved, preview.dropped)}>
-                    <td>{row_label(table)}</td>
-                    <td>{delimited_count(Map.get(preview.moved, table, 0))}</td>
-                    <td>{delimited_count(Map.get(preview.dropped, table, 0))}</td>
-                  </tr>
-                  <tr :if={total(preview.moved) == 0 and total(preview.dropped) == 0}>
-                    <td colspan="3">{gettext("Nothing is filed under this tag.")}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+        <%!-- A tag the merge refuses is named with its reason rather than
+        quietly left out: the reviewer put it in the list on purpose. --%>
+        <ul :if={@preview.refused != []} id="refused" class="mt-3 space-y-1">
+          <li :for={{tag, reason} <- @preview.refused} class="alert alert-danger" role="alert">
+            <strong>{tag.name}:</strong> {refusal(reason)}
+          </li>
+        </ul>
 
-            <p :if={total(preview.dropped) > 0} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
-              {gettext(
-                "A dropped row belongs to somebody who already carries the surviving tag, so they end up carrying the topic once. Endorsements move to the row that stays."
-              )}
-            </p>
+        <div :if={@preview.mergeable != []} class="card__tablewrap mt-3">
+          <table class="pure-table">
+            <thead>
+              <tr>
+                <th>{gettext("What")}</th>
+                <th>{gettext("Moves")}</th>
+                <th>{gettext("Dropped as duplicate")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={{table, _} <- Map.merge(@preview.moved, @preview.dropped)}>
+                <td>{row_label(table)}</td>
+                <td>{delimited_count(Map.get(@preview.moved, table, 0))}</td>
+                <td>{delimited_count(Map.get(@preview.dropped, table, 0))}</td>
+              </tr>
+              <tr :if={total(@preview.moved) == 0 and total(@preview.dropped) == 0}>
+                <td colspan="3">{gettext("Nothing is filed under these tags.")}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-            <div class="editform__actions mt-4">
-              <button id="do-merge" type="button" class="button" phx-click="merge">
-                {gettext("Merge")}
-              </button>
-              <button
-                id="mark-distinct"
-                type="button"
-                class="button button--cancel"
-                phx-click="mark-distinct"
-              >
-                {gettext("These are different topics")}
-              </button>
-            </div>
-        <% end %>
+        <p
+          :if={total(@preview.dropped) > 0}
+          class="mt-3 text-sm text-slate-600 dark:text-slate-400"
+        >
+          {gettext(
+            "A dropped row belongs to somebody who already carries the surviving tag, so they end up carrying the topic once. Endorsements move to the row that stays."
+          )}
+        </p>
+
+        <div class="editform__actions mt-4">
+          <button
+            :if={@preview.mergeable != []}
+            id="do-merge"
+            type="button"
+            class="button"
+            phx-click="merge"
+          >
+            {ngettext(
+              "Merge %{count} tag into %{canonical}",
+              "Merge %{count} tags into %{canonical}",
+              length(@preview.mergeable),
+              canonical: @preview.canonical.name
+            )}
+          </button>
+          <%!-- Only for a pair: "these are different topics" is a statement
+          about two names, and a list of five would mean ten of them. --%>
+          <button
+            :if={length(@basket) == 2}
+            id="mark-distinct"
+            type="button"
+            class="button button--cancel"
+            phx-click="mark-distinct"
+          >
+            {gettext("These are different topics")}
+          </button>
+        </div>
       </section>
 
-      <section :if={@canonical} class="card" id="alias-editor">
+      <section :if={@keeper} class="card" id="alias-editor">
         <h2 class="card__label">
-          {gettext("Alternative names for %{tag}", tag: @canonical.name)}
+          {gettext("Alternative names for %{tag}", tag: @keeper.name)}
         </h2>
 
         <ul :if={@aliases != []} class="thumbs">
@@ -678,90 +837,6 @@ defmodule VutuvWeb.Admin.TagMergeLive do
           </table>
         </div>
       </section>
-    </div>
-    """
-  end
-
-  attr(:side, :string, required: true)
-  attr(:id, :string, required: true)
-  attr(:step, :string, required: true)
-  attr(:label, :string, required: true)
-  attr(:hint, :string, required: true)
-  attr(:tag, :any, default: nil)
-  attr(:query, :string, default: "")
-  attr(:results, :list, default: [])
-
-  # A search result is a **choice**, and it has to look like one. As a row of
-  # big blue chips the list read as a display of tags rather than as a picker,
-  # and it showed only the name — which is not enough to tell `rails` from
-  # `Ruby on Rails` from `rubyonrails` when all three are in the list. Each row
-  # is one wide button now, naming the tag, the address it lives at and how many
-  # profiles carry it, because that last number is usually what decides which of
-  # two spellings should survive.
-  defp tag_picker(assigns) do
-    ~H"""
-    <div>
-      <h2 class="card__label">
-        <span class="mr-1 text-slate-400 dark:text-slate-500">{@step}.</span>{@label}
-      </h2>
-      <p class="text-sm text-slate-600 dark:text-slate-400">{@hint}</p>
-
-      <div :if={@tag} class="mt-2 flex items-center gap-3" id={"picked-#{@id}"}>
-        <.chip navigate={~p"/tags/#{@tag}"}>{@tag.name}</.chip>
-        <button
-          type="button"
-          class="button button--cancel button--small"
-          phx-click="clear"
-          phx-value-side={@side}
-        >
-          {gettext("Change")}
-        </button>
-      </div>
-
-      <form
-        :if={is_nil(@tag)}
-        id={"search-#{@id}"}
-        phx-change="search"
-        phx-submit="search"
-        class="mt-2"
-      >
-        <input type="hidden" name="side" value={@side} />
-        <input
-          type="text"
-          id={"q-#{@id}"}
-          name="q"
-          value={@query}
-          autocomplete="off"
-          placeholder={gettext("Search by name or slug")}
-        />
-      </form>
-
-      <p
-        :if={is_nil(@tag) and @query != "" and @results == []}
-        class="card__empty"
-      >
-        {gettext("No tag matches that.")}
-      </p>
-
-      <ul :if={is_nil(@tag) and @results != []} class="mt-2 space-y-1">
-        <li :for={result <- @results}>
-          <button
-            type="button"
-            id={"pick-#{@side}-#{result.tag.id}"}
-            class="w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50 dark:hover:bg-brand-900/40"
-            phx-click="pick"
-            phx-value-side={@side}
-            phx-value-id={result.tag.id}
-          >
-            <span class="block font-semibold text-brand-700 dark:text-brand-200">
-              {result.tag.name}
-            </span>
-            <span class="block text-xs text-slate-600 dark:text-slate-400">
-              /tags/{result.tag.slug} · {profile_count(result.members)}
-            </span>
-          </button>
-        </li>
-      </ul>
     </div>
     """
   end

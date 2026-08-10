@@ -20,7 +20,7 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:3434
 #: lib/vutuv_web/components/ui.ex:3439
 #: lib/vutuv_web/live/admin/screenshot_live.ex:245
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:559
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:718
 #: lib/vutuv_web/live/organization_live/domains.ex:255
 #: lib/vutuv_web/live/organization_live/edit.ex:396
 #: lib/vutuv_web/live/organization_live/roles.ex:202
@@ -84,8 +84,8 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:3229
 #: lib/vutuv_web/components/ui.ex:3323
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:200
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:539
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:671
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:698
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:830
 #, elixir-autogen
 msgid "Are you sure?"
 msgstr ""
@@ -682,7 +682,7 @@ msgstr ""
 #: lib/vutuv_web/cv/html.ex:223
 #: lib/vutuv_web/cv/latex.ex:179
 #: lib/vutuv_web/cv/odt.ex:185
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:590
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:749
 #: lib/vutuv_web/live/cv_live.ex:410
 #: lib/vutuv_web/templates/social_media_account/edit.html.heex:4
 #: lib/vutuv_web/templates/social_media_account/index.html.heex:10
@@ -1158,7 +1158,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:693
 #: lib/vutuv_web/live/admin/organization_live.ex:189
 #: lib/vutuv_web/live/admin/screenshot_live.ex:172
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:373
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:432
 #: lib/vutuv_web/live/admin/user_delete_live.ex:104
 #: lib/vutuv_web/live/admin/user_detail_live.ex:68
 #: lib/vutuv_web/live/admin/user_live.ex:165
@@ -1381,7 +1381,7 @@ msgstr ""
 #: lib/vutuv_web/cv/html.ex:156
 #: lib/vutuv_web/cv/latex.ex:131
 #: lib/vutuv_web/cv/odt.ex:148
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:374
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:433
 #: lib/vutuv_web/live/cv_live.ex:315
 #: lib/vutuv_web/live/job_board_live.ex:277
 #: lib/vutuv_web/live/job_posting_live/form.ex:510
@@ -1747,9 +1747,9 @@ msgstr ""
 
 #: lib/vutuv_web/components/post_components.ex:391
 #: lib/vutuv_web/components/ui.ex:3436
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:546
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:583
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:634
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:705
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:742
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:793
 #: lib/vutuv_web/live/admin/user_live.ex:286
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:124
 #, elixir-autogen, elixir-format
@@ -2215,7 +2215,7 @@ msgstr ""
 #: lib/vutuv_web/components/job_exclusion_components.ex:194
 #: lib/vutuv_web/components/post_components.ex:1006
 #: lib/vutuv_web/live/admin/screenshot_live.ex:317
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:541
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:700
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:234
 #: lib/vutuv_web/live/organization_live/domains.ex:229
 #: lib/vutuv_web/live/organization_live/edit.ex:373
@@ -3241,7 +3241,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:2751
 #: lib/vutuv_web/live/admin/moderation_live.ex:89
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:614
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:773
 #: lib/vutuv_web/templates/moderation_case/index.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "Review"
@@ -5448,7 +5448,6 @@ msgstr ""
 msgid "Account"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:717
 #: lib/vutuv_web/live/organization_live/edit.ex:443
 #, elixir-autogen, elixir-format
 msgid "Change"
@@ -6497,7 +6496,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/activity_live.ex:142
 #: lib/vutuv_web/live/admin/deliverability_live.ex:213
 #: lib/vutuv_web/live/admin/deliverability_live.ex:250
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:643
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:802
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:189
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:230
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:27
@@ -6507,7 +6506,7 @@ msgid "When"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/deliverability_live.ex:216
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:591
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:750
 #, elixir-autogen, elixir-format
 msgid "Why"
 msgstr ""
@@ -7710,7 +7709,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/job_components.ex:173
 #: lib/vutuv_web/live/admin/dashboard_live.ex:287
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:398
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:457
 #: lib/vutuv_web/live/notification_live/index.ex:904
 #, elixir-autogen, elixir-format
 msgid "Today"
@@ -13106,7 +13105,7 @@ msgstr ""
 #: lib/vutuv_web/components/saved_search_components.ex:43
 #: lib/vutuv_web/controllers/settings_controller.ex:650
 #: lib/vutuv_web/controllers/settings_controller.ex:668
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:328
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:387
 #, elixir-autogen, elixir-format
 msgid "That did not work."
 msgstr ""
@@ -15569,7 +15568,7 @@ msgstr ""
 msgid "View the original"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:486
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:629
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:190
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:231
 #, elixir-autogen, elixir-format
@@ -19641,37 +19640,32 @@ msgstr ""
 msgid "delete remove erase posts age old expire automatic cleanup retention purge"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:101
-#, elixir-autogen, elixir-format
-msgid "%{absorbed} is now an alternative name for %{canonical}."
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:126
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:163
 #, elixir-autogen, elixir-format
 msgid "%{a} and %{b} are recorded as different topics."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:505
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:651
 #, elixir-autogen, elixir-format
 msgid "A dropped row belongs to somebody who already carries the surviving tag, so they end up carrying the topic once. Endorsements move to the row that stays."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:300
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:359
 #, elixir-autogen, elixir-format
 msgid "A tag cannot absorb itself."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:640
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:799
 #, elixir-autogen, elixir-format
 msgid "Absorbed"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:550
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:709
 #, elixir-autogen, elixir-format
 msgid "Add an alternative name"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:228
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:261
 #, elixir-autogen, elixir-format
 msgid "Added %{name} as an alternative name."
 msgstr ""
@@ -19681,35 +19675,30 @@ msgstr ""
 msgid "Alternative name for %{tag}"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:528
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:687
 #, elixir-autogen, elixir-format
 msgid "Alternative names for %{tag}"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:488
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:631
 #, elixir-autogen, elixir-format
 msgid "Dropped as duplicate"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:553
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:712
 #, elixir-autogen, elixir-format
 msgid "For a name nobody has typed yet, so it never becomes a page of its own. A name that is already a tag has to be merged instead."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:641
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:800
 #, elixir-autogen, elixir-format
 msgid "Into"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:512
-#, elixir-autogen, elixir-format
-msgid "Merge"
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:42
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:371
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:375
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:381
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:56
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:430
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:434
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:440
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:258
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:261
 #, elixir-autogen, elixir-format
@@ -19721,42 +19710,37 @@ msgstr ""
 msgid "Merge tags ›"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:632
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:791
 #, elixir-autogen, elixir-format
 msgid "Merges so far"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:487
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:630
 #, elixir-autogen, elixir-format
 msgid "Moves"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:498
-#, elixir-autogen, elixir-format
-msgid "Nothing is filed under this tag."
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:242
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:275
 #, elixir-autogen, elixir-format
 msgid "Removed."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:673
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:832
 #, elixir-autogen, elixir-format
 msgid "Revert"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:663
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:822
 #, elixir-autogen, elixir-format
 msgid "Reverted"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:642
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:801
 #, elixir-autogen, elixir-format
 msgid "Rows"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:735
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:504
 #, elixir-autogen, elixir-format
 msgid "Search by name or slug"
 msgstr ""
@@ -19766,230 +19750,261 @@ msgstr ""
 msgid "Several tags for one topic become one page: see what a merge would move, do it, and take it back if it was wrong."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:440
-#, elixir-autogen, elixir-format
-msgid "Tag that stays"
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:426
-#, elixir-autogen, elixir-format
-msgid "Tag to absorb"
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:138
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:174
 #, elixir-autogen, elixir-format
 msgid "That merge is no longer on record."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:327
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:386
 #, elixir-autogen, elixir-format
 msgid "That merge was already reverted."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:321
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:380
 #, elixir-autogen, elixir-format
 msgid "That name is already a tag. Merge it instead, so its entries come along."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:306
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:365
 #, elixir-autogen, elixir-format
 msgid "That tag is already an alternative name. Revert its merge first."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:326
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:385
 #, elixir-autogen, elixir-format
 msgid "That tag is not an alternative name."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:145
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:181
 #, elixir-autogen, elixir-format
 msgid "The merge was reverted."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:309
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:368
 #, elixir-autogen, elixir-format
 msgid "The surviving tag is itself an alternative name. Pick its topic instead."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:520
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:680
 #, elixir-autogen, elixir-format
 msgid "These are different topics"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:316
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:375
 #, elixir-autogen, elixir-format
 msgid "These names differ only in characters the slug drops (like + or #), which is how C, C++ and C# tell each other apart. They are not merged."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:312
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:371
 #, elixir-autogen, elixir-format
 msgid "These two are recorded as different topics."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:324
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:383
 #, elixir-autogen, elixir-format
 msgid "This name came from a merge. Revert that merge to take it back."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:463
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:601
 #, elixir-autogen, elixir-format
 msgid "What this merge would move"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:360
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:419
 #, elixir-autogen, elixir-format
 msgid "hashtags in post bodies"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:362
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:421
 #, elixir-autogen, elixir-format
 msgid "job postings"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:361
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:420
 #, elixir-autogen, elixir-format
 msgid "members following it"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:364
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:423
 #, elixir-autogen, elixir-format
 msgid "newsletter audiences"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:359
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:418
 #, elixir-autogen, elixir-format
 msgid "posts filed under it"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:363
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:422
 #, elixir-autogen, elixir-format
 msgid "posts from other networks"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:358
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:417
 #, elixir-autogen, elixir-format
 msgid "profiles carrying the tag"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:303
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:362
 #, elixir-autogen, elixir-format
 msgid "Honor tags are granted, not spelled. They are never merged."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:169
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:202
 #, elixir-autogen, elixir-format
 msgid "%{written} proposals, %{judged} of them judged by the model. %{dropped} more were found than the queue holds."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:622
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:781
 #, elixir-autogen, elixir-format
 msgid "Different topics"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:576
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:735
 #, elixir-autogen, elixir-format
 msgid "Look for proposals"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:589
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:748
 #, elixir-autogen, elixir-format
 msgid "Pair"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:569
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:728
 #, elixir-autogen, elixir-format
 msgid "Pairs of tags that might be one topic, found by rule and, where a local model is available, judged by it. Nothing here has happened yet: opening one loads it above, where you see what a merge would move before confirming."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:567
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:726
 #, elixir-autogen, elixir-format
 msgid "Proposals"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:214
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:247
 #, elixir-autogen, elixir-format
 msgid "Recorded as different topics."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:186
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:202
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:219
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:235
 #, elixir-autogen, elixir-format
 msgid "That proposal is gone."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:579
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:738
 #, elixir-autogen, elixir-format
 msgid "The model is switched off; proposals are listed unjudged."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:354
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:413
 #, elixir-autogen, elixir-format
 msgid "one is a word of the other"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:353
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:412
 #, elixir-autogen, elixir-format
 msgid "one is the other's initials"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:352
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:411
 #, elixir-autogen, elixir-format
 msgid "the same name, written differently"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:415
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:474
 #, elixir-autogen, elixir-format
 msgid "\"rubyonrails\" was absorbed: nobody loses a tag, the name goes on working, and it is listed on the remaining page as an alternative name. Anyone typing it from now on gets the one page. Every merge can be undone at the bottom of this page."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:473
-#, elixir-autogen, elixir-format
-msgid "%{absorbed} becomes an alternative name for %{canonical}. %{absorbed_url} then redirects to %{canonical_url}."
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:344
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:403
 #, elixir-autogen, elixir-format
 msgid "%{formatted} profile"
 msgid_plural "%{formatted} profiles"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:395
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:454
 #, elixir-autogen, elixir-format
 msgid "An example"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:442
-#, elixir-autogen, elixir-format
-msgid "Keeps its page and its address and gains everything from the other one."
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:743
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:509
 #, elixir-autogen, elixir-format
 msgid "No tag matches that."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:383
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:442
 #, elixir-autogen, elixir-format
 msgid "One topic sometimes ends up under several tags, so its members and its posts are split over two pages that never show each other. Merging puts them on one page."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:428
-#, elixir-autogen, elixir-format
-msgid "Stops being a topic of its own. Its profiles, posts and follows move over and its address redirects."
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:457
-#, elixir-autogen, elixir-format
-msgid "Swap: keep %{name} instead"
-msgstr ""
-
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:409
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:468
 #, elixir-autogen, elixir-format
 msgid "redirects there for good"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/tag_merge_live.ex:405
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:464
 #, elixir-autogen, elixir-format
 msgid "After the merge"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:138
+#, elixir-autogen, elixir-format
+msgid "%{count} tag is now an alternative name for %{canonical}."
+msgid_plural "%{count} tags are now alternative names for %{canonical}."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:606
+#, elixir-autogen, elixir-format
+msgid "%{names} becomes an alternative name for %{canonical} and %{urls} redirects to /tags/%{slug}."
+msgid_plural "%{names} become alternative names for %{canonical}, and their addresses redirect to /tags/%{slug}."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:487
+#, elixir-autogen, elixir-format
+msgid "Collect the tags that mean one topic"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:579
+#, elixir-autogen, elixir-format
+msgid "Does not belong here"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:539
+#, elixir-autogen, elixir-format
+msgid "It keeps its page and its address; every other one becomes an alternative name pointing at it."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:664
+#, elixir-autogen, elixir-format
+msgid "Merge %{count} tag into %{canonical}"
+msgid_plural "Merge %{count} tags into %{canonical}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:545
+#, elixir-autogen, elixir-format
+msgid "Nothing collected yet."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:641
+#, elixir-autogen, elixir-format
+msgid "Nothing is filed under these tags."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:534
+#, elixir-autogen, elixir-format
+msgid "Pick the one that stays"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:492
+#, elixir-autogen, elixir-format
+msgid "Search as often as you like and add what belongs. Abbreviations will not turn up under the full name, so look for them separately."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:593
+#, elixir-autogen, elixir-format
+msgid "Start over"
 msgstr ""

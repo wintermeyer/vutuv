@@ -68,20 +68,103 @@ defmodule Vutuv.Tags.Merge do
   """
   def preview(%Tag{} = absorbed, %Tag{} = canonical) do
     with :ok <- check(absorbed, canonical) do
-      counts =
-        Enum.reduce(@movable, %{moved: %{}, dropped: %{}}, fn {table, owner}, acc ->
-          moved = count_rows(movable_ids_sql(table, owner), params(owner, absorbed, canonical))
-
-          total =
-            count_rows("select 1 from #{table} where tag_id = $1::text::uuid", [absorbed.id])
-
-          acc
-          |> put_count(:moved, table, moved)
-          |> put_count(:dropped, table, total - moved)
-        end)
-
+      counts = count_move(List.wrap(absorbed.id), canonical)
       Map.merge(counts, %{absorbed: absorbed, canonical: canonical})
     end
+  end
+
+  @doc """
+  The same, for absorbing **several** tags into one — the way a topic is
+  actually tidied up, since `Ruby on Rails` is spread over four spellings and
+  not two.
+
+  Answers `%{moved:, dropped:, mergeable: [tag], refused: [{tag, reason}]}`: a
+  tag the merge would refuse is named with its reason rather than silently
+  dropped from the list, and the others can still go ahead.
+
+  The counts are the ones the sequence really produces, not the sum of the
+  pairs. Merging `A` and `B` into `C` for a member who holds `A` and `B` but not
+  `C` moves one row and drops the other, because by the time `B` is absorbed
+  that member already carries `C` — adding two separate previews would promise
+  two moves.
+  """
+  def preview_many(absorbed, %Tag{} = canonical) when is_list(absorbed) do
+    checked = Enum.map(absorbed, fn tag -> {tag, check(tag, canonical)} end)
+    mergeable = for {tag, :ok} <- checked, do: tag
+    refused = for {tag, {:error, reason}} <- checked, do: {tag, reason}
+
+    counts =
+      case mergeable do
+        [] -> %{moved: %{}, dropped: %{}}
+        tags -> count_move(Enum.map(tags, & &1.id), canonical)
+      end
+
+    Map.merge(counts, %{
+      mergeable: mergeable,
+      refused: refused,
+      canonical: canonical
+    })
+  end
+
+  # Per table: how many rows move and how many are dropped as duplicates when
+  # `absorbed_ids` are absorbed into `canonical`. One row per owner survives —
+  # the rest collide on the `(owner, tag)` unique index — which is what the
+  # window function counts, so the answer holds for one absorbed tag and for
+  # five.
+  defp count_move(absorbed_ids, canonical) do
+    Enum.reduce(@movable, %{moved: %{}, dropped: %{}}, fn {table, owner}, acc ->
+      %{rows: [[moved, dropped]]} =
+        Repo.query!(move_counts_sql(table, owner), [absorbed_ids, canonical.id])
+
+      acc
+      |> put_count(:moved, table, moved)
+      |> put_count(:dropped, table, dropped)
+    end)
+  end
+
+  # A table with no owner column cannot collide: every row simply moves.
+  defp move_counts_sql(table, nil) do
+    """
+    select count(*), 0
+    from #{table}
+    where tag_id = any($1::text[]::uuid[]) and $2::text::uuid is not null
+    """
+  end
+
+  defp move_counts_sql(table, owner) do
+    """
+    select
+      count(*) filter (where rn = 1 and not held),
+      count(*) filter (where rn > 1 or held)
+    from (
+      select
+        row_number() over (partition by a.#{owner} order by a.id) as rn,
+        exists (
+          select 1 from #{table} b
+          where b.tag_id = $2::text::uuid and b.#{owner} = a.#{owner}
+        ) as held
+      from #{table} a
+      where a.tag_id = any($1::text[]::uuid[])
+    ) rows
+    """
+  end
+
+  @doc """
+  Absorbs several tags into one, each as its own recorded merge so each can be
+  taken back on its own.
+
+  Answers `%{merged: [%TagMerge{}], failed: [{tag, reason}]}`. A refusal stops
+  that one tag, not the rest: the reviewer has already decided the others belong
+  together, and making them start over because one entry was an honor tag would
+  be the wrong lesson to teach.
+  """
+  def merge_all(absorbed, %Tag{} = canonical, opts \\ []) when is_list(absorbed) do
+    Enum.reduce(absorbed, %{merged: [], failed: []}, fn tag, acc ->
+      case merge(tag, canonical, opts) do
+        {:ok, merge} -> Map.update!(acc, :merged, &(&1 ++ [merge]))
+        {:error, reason} -> Map.update!(acc, :failed, &(&1 ++ [{tag, reason}]))
+      end
+    end)
   end
 
   @doc """
@@ -479,11 +562,6 @@ defmodule Vutuv.Tags.Merge do
   # takes one parameter; passing a second would be a bind error, not a no-op.
   defp params(nil, absorbed, _canonical), do: [absorbed.id]
   defp params(_owner, absorbed, canonical), do: [absorbed.id, canonical.id]
-
-  defp count_rows(sql, params) do
-    %{num_rows: count} = Repo.query!(sql, params)
-    count
-  end
 
   defp query_column(repo, sql, params) do
     %{rows: rows} = repo.query!(sql, params)

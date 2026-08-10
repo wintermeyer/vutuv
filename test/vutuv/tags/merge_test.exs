@@ -63,6 +63,67 @@ defmodule Vutuv.Tags.MergeTest do
     end
   end
 
+  describe "preview_many/2 and merge_all/3" do
+    test "counts what the sequence really does, not the sum of the pairs", ctx do
+      # A topic is spread over several spellings, so tidying it up is a set
+      # operation. One member carries two of the absorbed tags and not the
+      # surviving one: after the first is absorbed they already hold it, so the
+      # second row is dropped. Two independent previews would promise two moves.
+      other = tag(unique_tag_name("rails"))
+      both = insert(:activated_user)
+      insert(:user_tag, user: both, tag: ctx.absorbed)
+      insert(:user_tag, user: both, tag: other)
+
+      preview = Merge.preview_many([ctx.absorbed, other], ctx.canonical)
+
+      assert preview.moved["user_tags"] == 1
+      assert preview.dropped["user_tags"] == 1
+
+      %{merged: merged, failed: []} =
+        Merge.merge_all([ctx.absorbed, other], ctx.canonical, actor: ctx.admin)
+
+      assert length(merged) == 2
+      assert Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^both.id), :count) == 1
+    end
+
+    test "names the tags it would refuse instead of dropping them quietly", ctx do
+      honor =
+        tag(unique_tag_name("badge")) |> Ecto.Changeset.change(honor?: true) |> Repo.update!()
+
+      preview = Merge.preview_many([ctx.absorbed, honor], ctx.canonical)
+
+      assert preview.mergeable == [ctx.absorbed]
+      assert [{^honor, :honor_tag}] = preview.refused
+    end
+
+    test "one refusal does not stop the others", ctx do
+      honor =
+        tag(unique_tag_name("badge")) |> Ecto.Changeset.change(honor?: true) |> Repo.update!()
+
+      result = Merge.merge_all([ctx.absorbed, honor], ctx.canonical, actor: ctx.admin)
+
+      assert [%{absorbed_tag_id: absorbed_id}] = result.merged
+      assert absorbed_id == ctx.absorbed.id
+      assert [{_, :honor_tag}] = result.failed
+    end
+
+    test "each absorbed tag is its own recorded merge, so each reverts alone", ctx do
+      other = tag(unique_tag_name("rails"))
+      user_tag = insert(:user_tag, user: insert(:activated_user), tag: other)
+
+      %{merged: [first, second]} =
+        Merge.merge_all([ctx.absorbed, other], ctx.canonical, actor: ctx.admin)
+
+      {:ok, _} = Merge.revert(second)
+
+      # Taking one back leaves the other one merged.
+      assert Repo.get!(UserTag, user_tag.id).tag_id == other.id
+      assert is_nil(Repo.get!(Tag, other.id).merged_into_id)
+      assert Repo.get!(Tag, ctx.absorbed.id).merged_into_id == ctx.canonical.id
+      assert first.absorbed_tag_id == ctx.absorbed.id
+    end
+  end
+
   describe "merge/3" do
     test "moves every kind of row over and files the tag as an alias", ctx do
       holder = insert(:activated_user)
