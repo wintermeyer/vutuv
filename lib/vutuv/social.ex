@@ -16,6 +16,7 @@ defmodule Vutuv.Social do
 
   alias Vutuv.AccountEvents
   alias Vutuv.Accounts.User
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
   alias Vutuv.Repo
   alias Vutuv.Social.Block
@@ -75,6 +76,71 @@ defmodule Vutuv.Social do
     end
 
     result
+  end
+
+  @doc """
+  Follow an organization page (issue #1336), so its posts land in `follower`'s
+  feed. Idempotent: following twice returns the edge that already exists rather
+  than an error, because the control is a toggle and a double click must not
+  read as a failure.
+
+  There is no notification and no block check, and both are deliberate: a page
+  has no inbox to be told (that is the rest of #1336), and blocks are a
+  relationship between two people.
+  """
+  def follow_organization(follower, %Organization{} = organization) do
+    follower_id = follower_id(follower)
+
+    result =
+      %Follow{}
+      |> Follow.organization_changeset(%{
+        follower_id: follower_id,
+        followee_organization_id: organization.id
+      })
+      |> Repo.insert()
+
+    case result do
+      {:ok, _follow} = ok ->
+        broadcast_social_graph_changed([follower_id])
+        ok
+
+      {:error, _changeset} ->
+        case organization_follow(follower_id, organization.id) do
+          %Follow{} = existing -> {:ok, existing}
+          nil -> result
+        end
+    end
+  end
+
+  @doc "Drops `follower`'s follow of `organization`. Idempotent."
+  def unfollow_organization(follower, %Organization{} = organization) do
+    follower_id = follower_id(follower)
+
+    case organization_follow(follower_id, organization.id) do
+      %Follow{} = follow ->
+        Repo.delete!(follow)
+        broadcast_social_graph_changed([follower_id])
+        :ok
+
+      nil ->
+        :ok
+    end
+  end
+
+  @doc "The follower's edge to `organization_id`, or nil."
+  def organization_follow(follower_id, organization_id) do
+    Repo.get_by(Follow, follower_id: follower_id, followee_organization_id: organization_id)
+  end
+
+  @doc "Whether `follower` follows `organization`."
+  def follows_organization?(nil, _organization), do: false
+
+  def follows_organization?(follower, %Organization{id: organization_id}),
+    do: organization_follow(follower_id(follower), organization_id) != nil
+
+  @doc "How many members follow `organization`."
+  def organization_follower_count(%Organization{id: id}) do
+    Repo.aggregate(from(f in Follow, where: f.followee_organization_id == ^id), :count)
   end
 
   defp follower_id(%Vutuv.Accounts.User{id: id}), do: id
@@ -505,6 +571,7 @@ defmodule Vutuv.Social do
   # subscriber of the user topic ignores it (catch-all handle_info).
   defp broadcast_social_graph_changed(user_ids) do
     user_ids
+    |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
     |> Enum.each(&Vutuv.Activity.broadcast(&1, {:social_graph_changed, %{}}))
   end

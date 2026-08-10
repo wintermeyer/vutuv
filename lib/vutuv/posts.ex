@@ -52,6 +52,7 @@ defmodule Vutuv.Posts do
   import Vutuv.Moderation.Query,
     only: [account_hidden: 1, account_confirmed_row: 1, account_hidden_row: 1]
 
+  import Vutuv.Organizations.Query, only: [organization_public_row: 1]
   import Vutuv.SearchText, only: [contains: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
@@ -1903,6 +1904,7 @@ defmodule Vutuv.Posts do
   defp feed_sources(viewer, :vutuv) do
     [
       &feed_post_items(viewer, &1, &2),
+      &feed_organization_post_items(viewer, &1, &2),
       &feed_repost_items(viewer, &1, &2),
       &feed_tag_items(viewer, &1, &2),
       &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :local)
@@ -1921,6 +1923,8 @@ defmodule Vutuv.Posts do
   defp feed_sources(viewer, _all) do
     [
       &feed_post_items(viewer, &1, &2),
+      # What the organizations the viewer follows have published (issue #1336).
+      &feed_organization_post_items(viewer, &1, &2),
       &feed_repost_items(viewer, &1, &2),
       &feed_tag_items(viewer, &1, &2),
       &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
@@ -2097,6 +2101,31 @@ defmodule Vutuv.Posts do
     |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
   end
 
+  # Posts by the organizations the viewer follows (issue #1336). Its own source
+  # rather than a widened `feed_post_items/3`: that one inner-joins `users` to
+  # gate on the author's account standing, and an organization has no account
+  # standing — what stands in for it is `organization_public_row/1` (active and
+  # not frozen), which is a different table and a different question.
+  #
+  # No `scope_visible/2`: an organization post carries no denials by
+  # construction (`create_organization_post/3`), so the only thing that can hide
+  # one is moderation, and that is exactly what the two guards below are.
+  defp feed_organization_post_items(%User{id: viewer_id}, fetch_n, cursor) do
+    from(p in Post,
+      join: o in Organization,
+      as: :organization,
+      on: o.id == p.organization_id,
+      where: p.organization_id in subquery(followed_organizations_of(viewer_id)),
+      where: organization_public_row(o),
+      where: not p.images_pending? and is_nil(p.frozen_at),
+      order_by: [desc: p.inserted_at, desc: p.id],
+      limit: ^fetch_n
+    )
+    |> posts_at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
+  end
+
   # Reposts distribute through the reposter: their followers see the post,
   # stamped with the repost time. Both the reposter and the original author
   # must be activated (a repost must not amplify a hidden author), and the
@@ -2171,9 +2200,25 @@ defmodule Vutuv.Posts do
   defp followees_of(viewer_id) do
     # Muted follows stay in place (the relationship and any "vernetzt" status
     # are untouched) but their author's posts drop out of the viewer's feed.
+    #
+    # `not is_nil(followee_id)` keeps the organization follows (issue #1336) out
+    # of a **member** id list. It is not tidiness: these lists feed `IN` and —
+    # worse — `NOT IN` subqueries, and `x NOT IN (…, NULL)` is never true in
+    # SQL, so one organization follow would silently empty every discovery tier
+    # that excludes who you already follow.
+    from(c in Follow,
+      where: c.follower_id == ^viewer_id and c.muted == false and not is_nil(c.followee_id),
+      select: c.followee_id
+    )
+  end
+
+  # The organizations whose posts belong in this viewer's feed: the pages they
+  # follow and have not muted (issue #1336).
+  defp followed_organizations_of(viewer_id) do
     from(c in Follow,
       where: c.follower_id == ^viewer_id and c.muted == false,
-      select: c.followee_id
+      where: not is_nil(c.followee_organization_id),
+      select: c.followee_organization_id
     )
   end
 
@@ -2941,13 +2986,19 @@ defmodule Vutuv.Posts do
   # silences a followee's posts, it does not turn them back into a stranger
   # worth suggesting.
   defp all_followees_of(viewer_id) do
-    from(c in Follow, where: c.follower_id == ^viewer_id, select: c.followee_id)
+    from(c in Follow,
+      where: c.follower_id == ^viewer_id and not is_nil(c.followee_id),
+      select: c.followee_id
+    )
   end
 
   # The people the viewer told us to keep quiet — excluded from every
   # discovery tier, including the one that may otherwise suggest a followee.
   defp muted_followees_of(viewer_id) do
-    from(c in Follow, where: c.follower_id == ^viewer_id and c.muted, select: c.followee_id)
+    from(c in Follow,
+      where: c.follower_id == ^viewer_id and c.muted and not is_nil(c.followee_id),
+      select: c.followee_id
+    )
   end
 
   # How many posts a suggested profile previews by default, and the quality bar

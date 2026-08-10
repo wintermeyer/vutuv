@@ -18,10 +18,31 @@ defmodule Vutuv.Social.Follow do
 
   schema "follows" do
     belongs_to(:follower, Vutuv.Accounts.User)
+    # The followee is a member OR an organization (issue #1336), CHECK-enforced
+    # to exactly one. The follower stays a member: an organization *following*
+    # somebody is a later step and needs its own decisions about whose feed and
+    # whose notifications such a follow would feed.
     belongs_to(:followee, Vutuv.Accounts.User)
+    belongs_to(:followee_organization, Vutuv.Organizations.Organization)
     field(:muted, :boolean, default: false)
 
     timestamps()
+  end
+
+  @doc """
+  A follow of an organization page. Its own changeset rather than a widened
+  `changeset/2`, because the two have different required fields and different
+  unique constraints — and one cast that accepted either would also accept both
+  or neither, leaving only the database to catch it.
+  """
+  def organization_changeset(model, params \\ %{}) do
+    model
+    |> cast(params, [:follower_id, :followee_organization_id, :muted])
+    |> validate_required([:follower_id, :followee_organization_id])
+    |> unique_constraint([:follower_id, :followee_organization_id],
+      message: "You're already following this organization."
+    )
+    |> foreign_key_constraint(:followee_organization_id)
   end
 
   @required_fields ~w(follower_id followee_id)a

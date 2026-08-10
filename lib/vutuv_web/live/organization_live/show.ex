@@ -22,6 +22,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
   alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias Vutuv.Posts
+  alias Vutuv.Social
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.UserHelpers
@@ -116,6 +117,11 @@ defmodule VutuvWeb.OrganizationLive.Show do
     # its own grant, so this is asked on its own rather than derived from the
     # two above.
     |> assign(:publisher?, Organizations.publisher?(organization, viewer))
+    # Following a page (issue #1336): a private subscription that pulls its
+    # posts into your feed. No approval and no notification — a page has no
+    # inbox to be told, the same way following a member needs no permission.
+    |> assign(:following?, Social.follows_organization?(viewer, organization))
+    |> assign(:follower_count, Social.organization_follower_count(organization))
     |> assign(:pending?, organization.status == "pending")
     |> assign(:frozen?, not is_nil(organization.frozen_at))
     |> assign(:engagement, Organizations.organization_engagement(organization, viewer))
@@ -138,6 +144,23 @@ defmodule VutuvWeb.OrganizationLive.Show do
      |> assign(:people, socket.assigns.people ++ page.entries)
      |> assign(:people_more?, page.more?)
      |> assign(:people_offset, page.next_offset)}
+  end
+
+  def handle_event("toggle-follow", _params, socket) do
+    %{organization: organization, current_user: viewer} = socket.assigns
+
+    if viewer do
+      if socket.assigns.following?,
+        do: Social.unfollow_organization(viewer, organization),
+        else: Social.follow_organization(viewer, organization)
+
+      {:noreply,
+       socket
+       |> assign(:following?, Social.follows_organization?(viewer, organization))
+       |> assign(:follower_count, Social.organization_follower_count(organization))}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("publish", %{"body" => body}, socket) do
@@ -312,6 +335,47 @@ defmodule VutuvWeb.OrganizationLive.Show do
             </div>
 
             <div class="mt-6 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <%!-- Following a page (issue #1336). The same "one control, two
+              states" pill the member and tag follows use, so the act reads the
+              same wherever it appears: brand outline while you do not follow, a
+              calm slate "Following" that turns rose and says "Unfollow" on
+              hover once you do. `min-h-10` because it stands alone in a page
+              header rather than in a dense list row. --%>
+              <button
+                :if={@current_user}
+                type="button"
+                id="organization-follow"
+                phx-click="toggle-follow"
+                aria-pressed={to_string(@following?)}
+                class={[
+                  "group inline-flex min-h-10 min-w-[7rem] items-center justify-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors",
+                  if(@following?,
+                    do:
+                      "border-slate-300 text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-rose-500/60 dark:hover:bg-rose-950/40 dark:hover:text-rose-300",
+                    else:
+                      "border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-300 dark:hover:bg-brand-900/40"
+                  )
+                ]}
+              >
+                <span :if={!@following?}>{gettext("Follow")}</span>
+                <span :if={@following?} class="group-hover:hidden group-focus:hidden">
+                  {gettext("Following")}
+                </span>
+                <span :if={@following?} class="hidden group-hover:inline group-focus:inline">
+                  {gettext("Unfollow")}
+                </span>
+              </button>
+
+              <span
+                :if={@follower_count > 0}
+                data-organization-followers
+                class="text-sm text-slate-600 dark:text-slate-400"
+              >
+                {ngettext("%{formatted} follower", "%{formatted} followers", @follower_count,
+                  formatted: compact_count(@follower_count)
+                )}
+              </span>
+
               <.engagement_bar engagement={@engagement} />
 
               <div class="ml-auto flex flex-wrap items-center gap-4 text-sm">
