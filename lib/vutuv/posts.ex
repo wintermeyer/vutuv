@@ -4311,11 +4311,17 @@ defmodule Vutuv.Posts do
   # The count is NOT enforced here: the caller (`validate_tag_count/2`) turns a
   # sixth tag into a changeset error, so this returns everything that survived
   # normalisation and the dedupe.
+  #
+  # `Tags.canonical_tag_names/1` does that dedupe, and it dedupes by the tag a
+  # name resolves to rather than by the spelling: an alternative name is one
+  # writing of its topic (issue #1338), so "ROR, Ruby on Rails" is one tag —
+  # which matters here because the cap is counted on what comes back, and being
+  # refused a sixth tag for typing one tag twice is exactly what it must not do.
   defp parse_tag_values(values) when is_list(values) do
     values
     |> Enum.map(&Tag.normalize_value/1)
     |> Enum.reject(&(Tag.punctuation_only?(&1) or WebAddress.link_only?(&1)))
-    |> Enum.uniq_by(&String.downcase/1)
+    |> Tags.canonical_tag_names()
   end
 
   # Find-or-create by name/slug (case-insensitive), racing gracefully.

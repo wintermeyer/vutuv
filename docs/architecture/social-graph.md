@@ -142,6 +142,26 @@ That shape buys three things at once:
 
 `Tag.find_by_value/1` follows the pointer, so typing any spelling attaches the
 topic instead of minting a duplicate — that is what stops the sprawl regrowing.
+
+One name at a time is not enough, though: every tag field on the site takes a
+**batch** ("PHP, ROR, Ruby on Rails"), and once two of those names resolve to
+one topic the batch is naming it twice — which the member cannot see, the
+spellings looking nothing alike. So a batch goes through
+**`Vutuv.Tags.canonical_tag_names/1`** first: it resolves the whole list in one
+query, exactly the way `find_by_value/1` resolves one name, and drops the
+duplicates that resolution creates, keeping the first spelling typed. Without
+it the second spelling comes back as a failed duplicate on a form that had just
+promised both. Four callers owe it — the add-tag form's live preview and its
+save (`VutuvWeb.TagNewLive`), sign-up (`Accounts.register_user/3` **and**
+`User.registration_changeset/2`, so the three-tag minimum counts topics rather
+than spellings and an account can never land holding fewer tags than the form
+demanded), and the post composer (`Vutuv.Posts`, where the count is also the
+five-tag cap). It deliberately does not judge a name: a value `add_user_tag/2`
+refuses — a web address, punctuation — passes through untouched, so each caller
+keeps its own refusal and its own error message for it. Job postings resolve
+per name and dedupe on the resulting tag ids instead
+(`Vutuv.Jobs.resolve_tag_ids/1`), which lands in the same place.
+
 The price is one rule every tag query owes: **an alternative name is never a
 topic of its own** (`Tag.not_merged/1`). Forgetting it puts a second page for one
 topic back in front of a reader, silently, so

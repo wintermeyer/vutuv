@@ -19,6 +19,8 @@ defmodule VutuvWeb.TagNewLiveTest do
   defp tag_count(user),
     do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count)
 
+  defp slugify(name), do: Vutuv.SlugHelpers.gen_slug_unique(name, Vutuv.Tags.Tag, :slug)
+
   # Type `value` into the form and return the previewed chip texts, in order.
   defp preview(live, value) do
     live
@@ -202,6 +204,35 @@ defmodule VutuvWeb.TagNewLiveTest do
       flash = assert_redirect(live, ~p"/settings/tags")
       assert flash["info"] == "Added 1 of 2 tags (the rest were duplicates or invalid)."
       assert tag_count(user) == base + 2
+    end
+
+    test "attaches the topic once when both of its names are typed", %{
+      live: live,
+      user: user,
+      base: base
+    } do
+      # An alternative name (issue #1338) resolves to its topic, so typing both
+      # names is naming one tag twice — which a member cannot see, the two
+      # spellings looking nothing alike. The batch must collapse to the one tag
+      # instead of reporting its second half as a failed duplicate.
+      canonical_name = unique_tag_name("Ruby on Rails")
+      canonical = insert(:tag, name: canonical_name, slug: slugify(canonical_name))
+      abbreviation = unique_tag_name("ROR")
+
+      insert(:tag,
+        name: abbreviation,
+        slug: slugify(abbreviation),
+        merged_into_id: canonical.id,
+        alias_kind: "abbreviation"
+      )
+
+      live
+      |> form("#tag-form", tag_param: %{value: "#{abbreviation}, #{canonical_name}"})
+      |> render_submit()
+
+      flash = assert_redirect(live, ~p"/settings/tags")
+      assert flash["info"] == "User tag created successfully."
+      assert tag_count(user) == base + 1
     end
 
     test "previews no chip for a name the save would refuse", %{live: live} do

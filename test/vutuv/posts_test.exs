@@ -240,6 +240,29 @@ defmodule Vutuv.PostsTest do
       assert Enum.sort(Enum.map(post.tags, & &1.name)) == Enum.sort(names)
     end
 
+    test "an alternative name is the same tag, so typing both does not trip the cap" do
+      # Two names of one topic (issue #1338): the composer must file the topic
+      # once and count it once, or a member is refused a sixth tag for having
+      # typed a fifth one twice — under two spellings that look nothing alike.
+      canonical_name = unique_tag_name("Ruby on Rails")
+      canonical = insert(:tag, name: canonical_name, slug: canonical_name)
+      abbreviation = unique_tag_name("ROR")
+
+      insert(:tag,
+        name: abbreviation,
+        slug: abbreviation,
+        merged_into_id: canonical.id,
+        alias_kind: "abbreviation"
+      )
+
+      others = Enum.map(2..Posts.max_tags_per_post(), &unique_tag_name("tag#{&1}"))
+      tags = Enum.join([abbreviation | others] ++ [canonical_name], ", ")
+
+      post = create_post!(user(), %{body: "tagged", tags: tags})
+
+      assert Enum.sort(Enum.map(post.tags, & &1.name)) == Enum.sort([canonical_name | others])
+    end
+
     test "stores wildcard and per-user denials" do
       author = user()
       denied = user()

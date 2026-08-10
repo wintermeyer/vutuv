@@ -82,46 +82,84 @@ defmodule Vutuv.Tags do
   def parse_tag_names(_), do: []
 
   @doc """
+  The tags a batch of typed `names` really names, in typed order: every name
+  replaced by the display name of the tag it resolves to, and every duplicate
+  that resolution creates dropped.
+
+  Resolution is exactly what `Tag.create_or_link_tag/2` does one name at a
+  time, batched into a single query for the whole list: an existing tag matched
+  case-insensitively by name **or** slug contributes its stored display name
+  (typing `"AhmetSun"` when the tag `ahmetsun` exists yields `ahmetsun`), an
+  **alternative name** contributes the topic it points at (issue #1338, so
+  `"ROR"` yields `Ruby on Rails`), and a name nothing matches passes through
+  exactly as typed — it is about to become a fresh tag.
+
+  The dedupe is what an alias makes necessary. `"ROR, Ruby on Rails"` is one
+  topic under two names, and the member cannot see that: the two spellings look
+  nothing alike, so without this the second one comes back as a failed
+  duplicate on a form that had just promised both. Duplicates are dropped by
+  the tag they resolve to, keeping the first spelling typed, which also
+  subsumes the plain case-insensitive dedupe (`"php, PHP"`).
+
+  **Every entry point that takes a batch owes this call**: the add-tag form,
+  its live preview and sign-up all route through here, so the preview, the
+  minimum-tags rule and what actually lands on the profile agree. It does not
+  judge a name — a value `add_user_tag/2` refuses (a web address, punctuation)
+  passes through untouched, so each caller keeps its own refusal, and its
+  error, for it.
+  """
+  def canonical_tag_names([]), do: []
+
+  def canonical_tag_names(names) when is_list(names) do
+    resolved = resolution_by_key(names)
+
+    names
+    |> Enum.map(fn name ->
+      key = String.downcase(name)
+      Map.get(resolved, key, {{:new, key}, name})
+    end)
+    |> Enum.uniq_by(&elem(&1, 0))
+    |> Enum.map(&elem(&1, 1))
+  end
+
+  # `{typed key => {identity, display name}}` for every name that matches a
+  # stored tag, both by lowercased name and by slug (the two things
+  # `Tag.find_by_value/1` matches on). The identity is the **canonical** tag's
+  # id, which is what makes two different spellings of one topic collapse.
+  defp resolution_by_key(names) do
+    downcased = Enum.map(names, &String.downcase/1)
+
+    from(t in Tag,
+      left_join: c in assoc(t, :merged_into),
+      where: fragment("lower(?)", t.name) in ^downcased or t.slug in ^downcased,
+      select:
+        {fragment("lower(?)", t.name), t.slug, coalesce(c.id, t.id), coalesce(c.name, t.name)}
+    )
+    |> Repo.all()
+    |> Enum.flat_map(fn {lower_name, slug, id, name} ->
+      entry = {{:tag, id}, name}
+      [{lower_name, entry}, {slug, entry}]
+    end)
+    |> Map.new()
+  end
+
+  @doc """
   The display names a submit of `value` on the add-tag form will actually
-  attach, in typed order — the live preview of issue #848. Each parsed name is
-  resolved the way `Tag.create_or_link_tag/2` links: an existing tag matched
-  case-insensitively by name or slug keeps its stored display name (typing
-  `"AhmetSun"` when the tag `ahmetsun` exists yields the chip `ahmetsun`),
-  while an unmatched name becomes a fresh tag displaying exactly as typed.
-  Case-insensitive duplicates collapse to the first spelling, mirroring the
-  single row the profile would end up with (the form's save path dedupes the
-  same way, so preview and outcome always agree). A name `add_user_tag/2` would
-  refuse drops out for the same reason — one that is nothing but a web or email
-  address, or one that is only punctuation — since promising it here would be a
-  lie the submit then takes back.
+  attach, in typed order — the live preview of issue #848.
+
+  `canonical_tag_names/1` does the resolving and the deduping (and the save
+  path calls it too, so preview and outcome always agree); this only drops
+  first what `add_user_tag/2` would refuse — a name that is nothing but a web
+  or email address, or one that is only punctuation — since promising such a
+  name here would be a lie the submit then takes back. The drop happens on the
+  **typed** name, before resolution, because `Tag.create_or_link_tag/2` refuses
+  it before its lookup too.
   """
   def preview_tag_names(value) do
-    case value
-         |> parse_tag_names()
-         |> Enum.reject(&(WebAddress.link_only?(&1) or Tag.punctuation_only?(&1)))
-         |> Enum.uniq_by(&String.downcase/1) do
-      [] ->
-        []
-
-      names ->
-        downcased = Enum.map(names, &String.downcase/1)
-
-        # The displayed name is the topic's, not the typed spelling's: someone
-        # typing an alternative name (issue #1338) gets the chip they will
-        # actually end up with, the same way a case variant already resolves to
-        # the stored casing.
-        display_by_key =
-          from(t in Tag,
-            left_join: c in assoc(t, :merged_into),
-            where: fragment("lower(?)", t.name) in ^downcased or t.slug in ^downcased,
-            select: {fragment("lower(?)", t.name), t.slug, coalesce(c.name, t.name)}
-          )
-          |> Repo.all()
-          |> Enum.flat_map(fn {lower_name, slug, name} -> [{lower_name, name}, {slug, name}] end)
-          |> Map.new()
-
-        Enum.map(names, &Map.get(display_by_key, String.downcase(&1), &1))
-    end
+    value
+    |> parse_tag_names()
+    |> Enum.reject(&(WebAddress.link_only?(&1) or Tag.punctuation_only?(&1)))
+    |> canonical_tag_names()
   end
 
   @doc """

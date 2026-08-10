@@ -927,28 +927,42 @@ defmodule Vutuv.Accounts.User do
   def registration_changeset(model, params \\ %{}) do
     model
     |> changeset(params)
-    |> validate_minimum_tags()
-    |> validate_maximum_tags()
-    |> validate_usable_tags()
+    |> validate_tag_list()
     |> cast_assoc(:emails)
+  end
+
+  # The three tag rules share one resolved list: `distinct_tag_names/1` asks the
+  # database what each typed name really names, and running that per rule would
+  # cost three lookups for one sign-up.
+  defp validate_tag_list(changeset) do
+    names = distinct_tag_names(changeset)
+
+    changeset
+    |> validate_minimum_tags(names)
+    |> validate_maximum_tags(names)
+    |> validate_usable_tags(names)
   end
 
   # How many distinct tags a sign-up must bring.
   @min_registration_tags 3
 
   # Counts exactly what Accounts.register_user/3 later materializes as tags:
-  # the tag_list split on commas (Vutuv.Tags.parse_tag_names/1), then
-  # case-insensitively de-duplicated, so a padded "Go, go, GO" is one tag,
-  # not three.
+  # the tag_list split on commas (Vutuv.Tags.parse_tag_names/1), then resolved
+  # to the tags those names really name (Vutuv.Tags.canonical_tag_names/1), so
+  # a padded "Go, go, GO" is one tag and so is "ROR, Ruby on Rails" — two
+  # spellings of one topic (issue #1338), which the member cannot tell apart by
+  # looking. Counting them separately would pass the minimum below and then
+  # land an account holding one tag, the extra spellings dying silently on the
+  # unique index.
   defp distinct_tag_names(changeset) do
     changeset
     |> get_field(:tag_list)
     |> Vutuv.Tags.parse_tag_names()
-    |> Enum.uniq_by(&String.downcase/1)
+    |> Vutuv.Tags.canonical_tag_names()
   end
 
-  defp validate_minimum_tags(changeset) do
-    if length(distinct_tag_names(changeset)) >= @min_registration_tags do
+  defp validate_minimum_tags(changeset, names) do
+    if length(names) >= @min_registration_tags do
       changeset
     else
       add_error(
@@ -963,10 +977,10 @@ defmodule Vutuv.Accounts.User do
   # The profile tag ceiling (Vutuv.Tags.max_user_tags/0) applies to new accounts
   # too: account setup only materializes tags up to the cap, so rejecting the
   # excess here keeps the form honest instead of silently dropping tags.
-  defp validate_maximum_tags(changeset) do
+  defp validate_maximum_tags(changeset, names) do
     max = Vutuv.Tags.max_user_tags()
 
-    if length(distinct_tag_names(changeset)) <= max do
+    if length(names) <= max do
       changeset
     else
       add_error(changeset, :tag_list, "Please enter at most %{max} different tags.", max: max)
@@ -979,9 +993,7 @@ defmodule Vutuv.Accounts.User do
   # and ignores per-tag failures, so without this the account would be created
   # with that tag quietly missing. Naming the offending token here lets the
   # sign-up form say what to fix instead.
-  defp validate_usable_tags(changeset) do
-    names = distinct_tag_names(changeset)
-
+  defp validate_usable_tags(changeset, names) do
     cond do
       address = Enum.find(names, &WebAddress.link_only?/1) ->
         add_error(

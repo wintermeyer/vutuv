@@ -12,9 +12,11 @@ defmodule VutuvWeb.TagNewLive do
   Submitting saves over the socket through the same `Vutuv.Tags.add_user_tag/2`
   chokepoint the retired controller create action used: a single tag keeps the
   inline error re-render (duplicate / invalid), a batch redirects with a count.
-  The parsed names are deduplicated case-insensitively first, so the outcome
-  always matches the preview. Styled as a classic editform page
-  (components.css), like its /settings siblings.
+  The parsed names go through `Vutuv.Tags.canonical_tag_names/1` first — the
+  same call the preview uses, so the outcome always matches it: an alternative
+  name becomes its topic (typing `ROR` adds `Ruby on Rails`, issue #1338) and
+  the duplicates that creates collapse before anything is saved. Styled as a
+  classic editform page (components.css), like its /settings siblings.
   """
 
   use VutuvWeb, :live_view
@@ -112,7 +114,7 @@ defmodule VutuvWeb.TagNewLive do
   end
 
   defp save_tags(socket, user, value) do
-    case value |> Tags.parse_tag_names() |> Enum.uniq_by(&String.downcase/1) do
+    case value |> Tags.parse_tag_names() |> Tags.canonical_tag_names() do
       # Nothing usable typed: keep the form, show the error banner (the same
       # empty-changeset re-render the controller create used to do).
       [] ->

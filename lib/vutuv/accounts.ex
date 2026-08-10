@@ -64,15 +64,17 @@ defmodule Vutuv.Accounts do
         # it into real user tags now that the user row exists. The field is
         # split on commas only (`parse_tag_names/1`), so a member who types
         # "Ruby on Rails, Go" gets those two tags and not four;
-        # case-insensitive de-duplication then drops a repeated tag
-        # ("Go, go") before it can trip the unique constraint, so no per-tag
-        # insert error is silently swallowed here. The insert above only
-        # succeeds when this same parse+dedup yields at least three tags
+        # `canonical_tag_names/1` then resolves each name to the tag it really
+        # names — an alternative name becomes its topic (issue #1338) — and
+        # drops the repeats ("Go, go", "ROR, Ruby on Rails") before they can
+        # trip the unique constraint, so no per-tag insert error is silently
+        # swallowed here. The insert above only succeeds when this same
+        # parse+resolve yields at least three tags
         # (User.registration_changeset/2's minimum), so a fresh account always
         # lands with tags attached.
         user_params["tag_list"]
         |> Vutuv.Tags.parse_tag_names()
-        |> Enum.uniq_by(&String.downcase/1)
+        |> Vutuv.Tags.canonical_tag_names()
         |> Enum.each(&Vutuv.Tags.add_user_tag(user, &1))
 
         user = Repo.preload(user, user_tags: [:tag])
