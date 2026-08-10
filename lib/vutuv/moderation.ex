@@ -1339,6 +1339,17 @@ defmodule Vutuv.Moderation do
 
   defp content_id(%{id: id}), do: id
 
+  # A post published in an organization's name (issue #1334) answers to the same
+  # member the page itself does — whoever claimed it — rather than to whoever
+  # pressed publish. The page's content is the page's, so its accountability
+  # must not move from person to person with each post, and a publisher who has
+  # since lost the role would otherwise still carry strikes for it. When that
+  # member is gone (`nilify_all`) there is nobody to strike and the report is
+  # refused, exactly as it already is for the organization page itself.
+  defp owner_id(%Post{user_id: nil, organization_id: id}) when is_binary(id) do
+    Repo.one(from(o in Organization, where: o.id == ^id, select: o.created_by_user_id))
+  end
+
   defp owner_id(%Post{user_id: user_id}), do: user_id
   defp owner_id(%Message{sender_id: sender_id}), do: sender_id
   defp owner_id(%User{id: id}), do: id

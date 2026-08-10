@@ -77,6 +77,36 @@ defmodule Vutuv.OrganizationPostEngagementTest do
     end
   end
 
+  describe "reporting" do
+    test "an organization post is reportable, and answers to whoever claimed the page" do
+      {_organization, owner, post} = organization_post()
+      reporter = insert(:activated_user)
+
+      # Not merely "does not crash": content sitting in everybody's feed has to
+      # be reportable, and the ⋯ menu offers the control.
+      assert Vutuv.Moderation.can_report?(reporter, post)
+
+      assert {:ok, _case} =
+               Vutuv.Moderation.report_content(reporter, post, %{
+                 category: "spam",
+                 details: "Unerwünscht."
+               })
+
+      # The strike ladder sits with the member who claimed the page, the same
+      # rule the organization page itself already follows — not with whoever
+      # happened to press publish.
+      assert Vutuv.Moderation.open_case_for(post).owner_id == owner.id
+    end
+
+    test "the page's own publisher cannot report it" do
+      {_organization, owner, post} = organization_post()
+
+      # `owner_id/1` resolves to them, so this is the "own content" refusal.
+      assert {:error, :own_content} =
+               Vutuv.Moderation.report_content(owner, post, %{category: "spam"})
+    end
+  end
+
   describe "mentions" do
     test "a mention in an organization post names the organization, not nobody" do
       mentioned = insert(:activated_user, username: "mentionedmember")

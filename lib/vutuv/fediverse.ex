@@ -6726,6 +6726,13 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  # Nothing an organization publishes federates yet (issue #1334's fediverse half
+  # is not built), and this is the one gate all three outbound paths share —
+  # create, update and the unfreeze republish. Without it `Repo.get(User, nil)`
+  # **raises** rather than answering nil, so unfreezing an organization post
+  # would crash the moderation action rather than skip a delivery.
+  defp maybe_federate(%Post{user_id: nil}, _builder, _kind), do: :skip
+
   defp maybe_federate(%Post{} = post, builder, kind) do
     with true <- enabled?(),
          %User{} = user <- Repo.get(User, post.user_id),
@@ -6768,6 +6775,13 @@ defmodule Vutuv.Fediverse do
   see that function for why a takedown must not be blocked by the very state the
   takedown creates. Returns `:ok` or `:skip`.
   """
+  # A post published in an organization's name (issue #1334) has never left the
+  # building: organizations have no actor and no followers out there yet, so
+  # there is nothing to ask anybody to forget. **Revisit this the moment they
+  # federate** — this is the takedown chokepoint every path funnels through, so
+  # a stale `:skip` here would mean "taken down here, still published there".
+  def revoke_post(%Post{user_id: nil}), do: :skip
+
   def revoke_post(%Post{} = post) do
     with true <- enabled?(),
          %User{} = user <- Repo.get(User, post.user_id),
