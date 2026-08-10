@@ -79,6 +79,39 @@ defmodule VutuvWeb.ActingAsOrganizationTest do
     end
   end
 
+  describe "a member who speaks for several organizations" do
+    test "switches straight from one into the other", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+
+      first =
+        active_organization_for(owner, %{
+          "name" => "Erste AG",
+          "website_url" => "https://erste.example"
+        })
+
+      second =
+        active_organization_for(owner, %{
+          "name" => "Zweite AG",
+          "website_url" => "https://zweite.example"
+        })
+
+      {:ok, _} = Organizations.add_role(first, owner, "publisher", owner)
+      {:ok, _} = Organizations.add_role(second, owner, "publisher", owner)
+
+      conn = conn |> post(~p"/organizations/#{first.slug}/act_as") |> recycle_login()
+      html = conn |> get(~p"/feed") |> html_response(200)
+      assert html =~ first.name
+      refute html =~ second.name
+
+      # Switching again replaces the mode rather than stacking a second one:
+      # a member speaks in exactly one name at a time.
+      conn = conn |> post(~p"/organizations/#{second.slug}/act_as") |> recycle_login()
+      html = conn |> get(~p"/feed") |> html_response(200)
+      assert html =~ second.name
+      refute html =~ first.name
+    end
+  end
+
   describe "the mode is re-authorized, never trusted" do
     test "a withdrawn publisher role ends the mode on the next request", %{conn: conn} do
       %{conn: conn, owner: owner, organization: organization} = switched_in(conn)
