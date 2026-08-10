@@ -185,6 +185,13 @@ defmodule VutuvWeb.LayoutHTML do
           "user_avatar" => Vutuv.Avatar.user_url(user, :thumb),
           "user_admin?" => user.admin?,
           "show_online" => user.show_online_status?,
+          # The identity they are speaking as (issue #1335), for the throwaway
+          # dead render only — `VutuvWeb.Plug.ActingAs` verified it on this very
+          # request, which is the one sanctioned use of a curated display field.
+          # The connected shell re-resolves it from the cookie session and
+          # replaces these.
+          "acting_as_name" => acting_as_name(assigns),
+          "acting_as_path" => acting_as_path(assigns),
           "path" => current_path(assigns)
         }
 
@@ -192,6 +199,14 @@ defmodule VutuvWeb.LayoutHTML do
         %{}
     end
   end
+
+  defp acting_as_name(%{acting_as: %Vutuv.Organizations.Organization{name: name}}), do: name
+  defp acting_as_name(_assigns), do: nil
+
+  defp acting_as_path(%{acting_as: %Vutuv.Organizations.Organization{} = organization}),
+    do: Vutuv.Organizations.canonical_path(organization)
+
+  defp acting_as_path(_assigns), do: nil
 
   @doc """
   The `<title>` for the self-contained `error.html.heex` layout (the

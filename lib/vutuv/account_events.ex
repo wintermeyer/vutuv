@@ -144,7 +144,15 @@ defmodule Vutuv.AccountEvents do
     "account_restored" => [],
     "identity_verified" => [],
     "preferences_overridden" => ["fields"],
-    "activity_log_viewed" => ["member"]
+    "activity_log_viewed" => ["member"],
+    # Speaking in an organization's name (issue #1335). Their own kinds rather
+    # than folded into an existing one, because the log's closed vocabulary IS
+    # the security boundary: "this member spoke as Acme" is a different claim
+    # from anything already listed, and a reader has to be able to filter for
+    # it. Both name the organization, so the log answers "when was I acting as
+    # them" without a join.
+    "acted_as_organization" => ["organization", "organization_slug"],
+    "stopped_acting_as_organization" => ["organization", "organization_slug"]
   }
 
   @factors ~w(passkey authenticator list_code pin session admin)

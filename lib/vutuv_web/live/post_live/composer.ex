@@ -56,6 +56,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PhotoLicense
@@ -82,6 +83,9 @@ defmodule VutuvWeb.PostLive.Composer do
         Map.take(assigns, [
           :id,
           :current_user,
+          # The organization this member is writing as, or nil (issue #1335).
+          # Only the feed passes it; every other host composes personally.
+          :acting_as,
           :post,
           :parent,
           :remote_note,
@@ -90,6 +94,11 @@ defmodule VutuvWeb.PostLive.Composer do
           :preloaded_draft
         ])
       )
+
+    # Only the feed passes `acting_as`; every other host (edit, reply, the
+    # answer to a remote post) composes personally, so the key has to exist
+    # either way or the template raises on a missing assign.
+    socket = Phoenix.Component.assign_new(socket, :acting_as, fn -> nil end)
 
     socket =
       if socket.assigns[:composer_ready?] do
@@ -931,6 +940,17 @@ defmodule VutuvWeb.PostLive.Composer do
   defp save_post(%{post: nil, parent: %Post{} = parent, current_user: author}, attrs),
     do: Posts.create_reply(author, parent, attrs)
 
+  # Writing as an organization (issue #1335). Below the reply clauses on
+  # purpose: a reply is always personal, because an organization cannot answer
+  # anything until issue #1336 gives it a reading side. The role is re-checked
+  # inside `create_organization_post/3`, so a withdrawn publisher cannot publish
+  # through a composer they still have open.
+  defp save_post(
+         %{post: nil, acting_as: %Organization{} = organization, current_user: author},
+         attrs
+       ),
+       do: Posts.create_organization_post(organization, author, attrs)
+
   defp save_post(%{post: nil, current_user: author}, attrs), do: Posts.create_post(author, attrs)
   defp save_post(%{post: post}, attrs), do: Posts.update_post(post, attrs)
 
@@ -1764,9 +1784,15 @@ defmodule VutuvWeb.PostLive.Composer do
 
             <div class="ml-auto flex items-center gap-3">
               <span
-                :if={@audience_locked?}
+                :if={@audience_locked? or @acting_as}
                 id={"#{@id}-audience-locked"}
-                title={gettext("The audience cannot be restricted while reposts or replies exist.")}
+                title={
+                  if(@acting_as,
+                    do: gettext("A post in an organization's name is always public."),
+                    else:
+                      gettext("The audience cannot be restricted while reposts or replies exist.")
+                  )
+                }
                 class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
               >
                 🌐 {gettext("Public")}
@@ -1778,7 +1804,16 @@ defmodule VutuvWeb.PostLive.Composer do
                 disabled={@uploads.images.entries != []}
                 phx-disable-with={gettext("Saving…")}
               >
-                {if @post, do: gettext("Save"), else: gettext("Post")}
+                <%!-- The button names the author while writing as an
+                organization (issue #1335), so the last thing seen before
+                publishing is whose name goes on it. The mode's own banner is at
+                the top of the page and may well have scrolled away by now;
+                this is the reminder that cannot. --%>
+                {cond do
+                  @post -> gettext("Save")
+                  @acting_as -> gettext("Post as %{name}", name: @acting_as.name)
+                  true -> gettext("Post")
+                end}
               </.button>
             </div>
           </div>

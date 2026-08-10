@@ -1017,6 +1017,7 @@ defmodule VutuvWeb.PostLive.Feed do
               module={VutuvWeb.PostLive.Composer}
               id="composer"
               current_user={@current_user}
+              acting_as={@acting_as}
               post={nil}
               preloaded_draft={{:loaded, @draft}}
             />

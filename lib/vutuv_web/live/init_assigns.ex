@@ -24,6 +24,7 @@ defmodule VutuvWeb.Live.InitAssigns do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Moderation
+  alias Vutuv.Organizations
   alias Vutuv.Sessions
 
   def on_mount(:default, _params, session, socket) do
@@ -36,6 +37,7 @@ defmodule VutuvWeb.Live.InitAssigns do
     socket =
       socket
       |> assign(:current_user, user)
+      |> assign(:acting_as, acting_as(user, session))
       |> Phoenix.LiveView.attach_hook(:shell_path, :handle_params, &assign_shell_path/3)
 
     {:cont, socket}
@@ -104,9 +106,27 @@ defmodule VutuvWeb.Live.InitAssigns do
     socket
     |> assign(:current_user, user)
     |> assign(:current_user_id, user && user.id)
+    |> assign(:acting_as, acting_as(user, session))
     |> assign(:locale, session["locale"])
     |> assign(:shell_path, session["request_path"])
   end
+
+  @doc """
+  The organization this socket is acting as, or `nil` (issue #1335). The socket
+  twin of `VutuvWeb.Plug.ActingAs`, and it re-asks `organization_roles` for
+  exactly the same reason `session_user/1` re-asks the session rows: the mount
+  session map is signed but not encrypted, so the id in it is a hint and never a
+  credential. Reading it as one would let a captured payload keep speaking in an
+  organization's name after the role was withdrawn.
+
+  The cookie session is merged into every mount session — including the
+  off-router `live_render` children — so the id is there without anything having
+  to pass it along.
+  """
+  def acting_as(%User{} = user, session) when is_map(session),
+    do: Organizations.acting_organization(user, Map.get(session, "acting_as_organization_id"))
+
+  def acting_as(_user, _session), do: nil
 
   @doc """
   The one place a mount decides who the visitor is, shared by the `:default`

@@ -207,6 +207,51 @@ defmodule Vutuv.Organizations do
 
   def publisher?(_, _), do: false
 
+  @doc """
+  The organization `user` is currently acting as, given the id their session
+  carries — or `nil` (issue #1335).
+
+  **This is re-asked on every request and every socket mount, and the session's
+  value is never trusted on its own.** The session is signed but not encrypted
+  and stays valid for days, so a captured payload replays; that is the trap
+  #1034 and #1036 already cost. Two things follow from asking live rather than
+  from a stored claim: a withdrawn `publisher` role takes effect on the member's
+  very next action instead of at their next login, and a page that is frozen,
+  archived or otherwise no longer public stops being speakable-for at once.
+  """
+  def acting_organization(%User{} = user, organization_id) when is_binary(organization_id) do
+    case get_organization(organization_id) do
+      %Organization{} = organization ->
+        if publisher?(organization, user) and organization_visible_to?(organization, user),
+          do: organization,
+          else: nil
+
+      _ ->
+        nil
+    end
+  end
+
+  def acting_organization(_user, _organization_id), do: nil
+
+  @doc """
+  The organizations `user` may switch into (issue #1335): the pages they hold
+  the `publisher` role on and may see, by name. Powers the identity menu.
+  """
+  def actable_organizations(%User{id: user_id} = user) do
+    Repo.all(
+      from(r in OrganizationRole,
+        join: o in Organization,
+        on: o.id == r.organization_id,
+        where: r.user_id == ^user_id and r.role == "publisher",
+        order_by: [asc: fragment("lower(?)", o.name)],
+        select: o
+      )
+    )
+    |> Enum.filter(&organization_visible_to?(&1, user))
+  end
+
+  def actable_organizations(_user), do: []
+
   @doc "Whether `user` may manage the roster (owner only)."
   def can_manage_roles?(organization, user), do: owner?(organization, user)
 

@@ -30,6 +30,10 @@ defmodule VutuvWeb.Router do
     plug(Plugs.AgentLinks)
     plug(:put_root_layout, html: {VutuvWeb.LayoutHTML, :root})
     plug(Plugs.ConfigureSession, repo: Vutuv.Repo)
+    # Which identity the member is speaking as (issue #1335). Right after the
+    # plug that decides WHO they are, and re-asked here on every request rather
+    # than trusted from the session.
+    plug(Plugs.ActingAs)
     plug(Plugs.Locale)
     # The daily text ad between navigation and content (1/hour per session).
     plug(Plugs.AdBanner)
@@ -110,6 +114,7 @@ defmodule VutuvWeb.Router do
     plug(Plugs.ContentSecurityPolicy)
     plug(:put_root_layout, html: {VutuvWeb.LayoutHTML, :root})
     plug(Plugs.ConfigureSession, repo: Vutuv.Repo)
+    plug(Plugs.ActingAs)
     plug(Plugs.Locale)
   end
 
@@ -274,6 +279,15 @@ defmodule VutuvWeb.Router do
     # what a federated Note is identified by), so it gets the one shape that
     # works whether or not a handle was ever claimed.
     get("/organizations/:slug/posts/:id", OrganizationController, :post)
+
+    # Switching into an organization and back (issue #1335). Never GET: a
+    # request that changes whose name you are speaking in must not be fired by
+    # a link prefetch or a Back button.
+    post("/organizations/:slug/act_as", ActingAsController, :create)
+    # Under /system/, not at a root word: profiles own the URL root, so every
+    # new root segment permanently burns a handle a member could have claimed.
+    # `system` is already reserved (`Vutuv.Accounts.ReservedSlugs`).
+    delete("/system/act_as", ActingAsController, :delete)
 
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)

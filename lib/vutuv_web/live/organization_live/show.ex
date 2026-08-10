@@ -364,6 +364,20 @@ defmodule VutuvWeb.OrganizationLive.Show do
               </span>
             </div>
 
+            <%!-- Switching into the organization for the rest of the session
+            (issue #1335), offered where a publisher already is. A CSRF POST,
+            never a GET: a request that changes whose name you speak in must not
+            fire on a link prefetch or a Back button. --%>
+            <.link
+              :if={@publisher? and !@acting_as}
+              href={~p"/organizations/#{@organization.slug}/act_as"}
+              method="post"
+              id="start-acting-as"
+              class="mt-3 inline-flex min-h-10 items-center rounded-lg bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              {gettext("Write as %{name} for now", name: @organization.name)}
+            </.link>
+
             <%!-- The composer names the author right at the point of publishing,
             in the button, because the characteristic failure of writing under a
             brand is forgetting whose name is on it. --%>

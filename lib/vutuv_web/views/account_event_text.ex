@@ -72,6 +72,15 @@ defmodule VutuvWeb.AccountEventText do
     do: gettext("Employment reference reviewed by the AI")
 
   def event_label("activity_log_viewed"), do: gettext("Activity log opened")
+
+  # Issue #1335. Deliberately worded as speaking rather than as switching: what
+  # the reader needs to recognise months later is that anything published in
+  # that window carried the organization's name, not their own.
+  def event_label("acted_as_organization"), do: gettext("Started writing as an organization")
+
+  def event_label("stopped_acting_as_organization"),
+    do: gettext("Stopped writing as an organization")
+
   def event_label(other), do: other
 
   @doc """
@@ -130,6 +139,11 @@ defmodule VutuvWeb.AccountEventText do
 
   defp detail("activity_log_viewed", %{"member" => member}) when is_binary(member),
     do: "@" <> member
+
+  defp detail(kind, %{"organization" => name})
+       when kind in ~w(acted_as_organization stopped_acting_as_organization) and
+              is_binary(name),
+       do: name
 
   # How many posts that day's pass took (issue #1255). The count is the whole
   # detail the log keeps — which posts they were is what is gone.

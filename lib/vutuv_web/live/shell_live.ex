@@ -38,6 +38,7 @@ defmodule VutuvWeb.ShellLive do
   alias Vutuv.Activity
   alias Vutuv.Dashboard
   alias Vutuv.DayClock
+  alias Vutuv.Organizations
   alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Presence
@@ -70,7 +71,7 @@ defmodule VutuvWeb.ShellLive do
         # another member's chrome or subscribe to their "user:<id>" unread-badge
         # topic. All identity therefore comes from the resolved user, not the
         # curated map.
-        mount_authenticated(socket, InitAssigns.session_user(session), path)
+        mount_authenticated(socket, InitAssigns.session_user(session), session, path)
       else
         # The throwaway dead render, authenticated by the HTTP request that built
         # shell_session/1 from the validated current_user — so its curated
@@ -96,6 +97,10 @@ defmodule VutuvWeb.ShellLive do
     user_id = user_param && Vutuv.UUIDv7.cast_or_nil(session["user_id"])
 
     socket
+    # The mode the HTTP request behind this dead render already verified. It is
+    # replaced the instant the socket connects and re-asks the roles table.
+    |> assign(:acting_as_name, session["acting_as_name"])
+    |> assign(:acting_as_path, session["acting_as_path"])
     |> assign(:user_id, user_id)
     |> assign(:user_name, session["user_name"])
     # Initials are built from first+last (matching <.avatar>); fall back to the
@@ -110,8 +115,10 @@ defmodule VutuvWeb.ShellLive do
   # The connected socket, authenticated from the session token. A nil user
   # (missing / revoked / suspended / deactivated token) is the anonymous shell —
   # no subscriptions, no counts, no presence.
-  defp mount_authenticated(socket, nil, path) do
+  defp mount_authenticated(socket, nil, _session, path) do
     socket
+    |> assign(:acting_as_name, nil)
+    |> assign(:acting_as_path, nil)
     |> assign(:user_id, nil)
     |> assign(:user_name, nil)
     |> assign(:user_initials, nil)
@@ -124,11 +131,18 @@ defmodule VutuvWeb.ShellLive do
   # Everything the chrome shows is derived from the resolved user (recomputed the
   # same way shell_session/1 builds the curated map), so a replayed curated map
   # can neither render nor subscribe as another member.
-  defp mount_authenticated(socket, %User{} = user, path) do
+  defp mount_authenticated(socket, %User{} = user, session, path) do
     user_id = user.id
     Activity.subscribe(user_id)
+    # Re-asked from the cookie session's id against `organization_roles`, never
+    # taken from the curated map: the shell is on every page, so a mode it drew
+    # from a replayable payload would be the loudest possible lie about whose
+    # name the member is writing under (issue #1335).
+    acting_as = InitAssigns.acting_as(user, session)
 
     socket
+    |> assign(:acting_as_name, acting_as && acting_as.name)
+    |> assign(:acting_as_path, acting_as && Organizations.canonical_path(acting_as))
     |> assign(:user_id, user_id)
     |> assign(:user_name, full_name(user))
     |> assign(:user_initials, name_initials(user))
@@ -447,6 +461,42 @@ defmodule VutuvWeb.ShellLive do
       Fed by push_badge/1 + the {:new_post} handler; phx-update="ignore" because
       the hook owns document.title, not this node. --%>
       <div :if={@user_id} id="tab-badge" phx-hook="TabBadge" phx-update="ignore" class="hidden"></div>
+      <%!-- Writing as an organization (issue #1335). The characteristic failure
+      of this mode everywhere it exists is somebody posting something personal
+      from the brand account, and a discreet badge does not prevent it — so the
+      chrome changes unmistakably: a full-width brand bar above the top bar,
+      naming the organization, with the way out in it. It sits ABOVE the sticky
+      header rather than inside it so the bar's three-track width budget (see
+      the design rule) is untouched, and it scrolls away while the header stays,
+      which is right: the reminder is loudest where you start writing. --%>
+      <div
+        :if={@acting_as_name}
+        id="acting-as-banner"
+        class="bg-brand-700 text-white dark:bg-brand-800"
+      >
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm">
+          <span class="font-semibold">
+            {gettext("You are writing as %{name}.", name: @acting_as_name)}
+          </span>
+          <.link
+            navigate={@acting_as_path}
+            class="underline decoration-white/50 underline-offset-2 hover:decoration-white"
+          >
+            {gettext("Open the page")}
+          </.link>
+          <%!-- Leaving is reachable from anywhere the banner is, in one click.
+          A CSRF DELETE, never a GET: a link prefetch must not end the mode. --%>
+          <.link
+            href={~p"/system/act_as"}
+            method="delete"
+            id="stop-acting-as"
+            class="ml-auto inline-flex min-h-10 items-center rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25"
+          >
+            {gettext("Write as myself again")}
+          </.link>
+        </div>
+      </div>
+
       <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <%!-- Three tracks, so the member total in the middle one is centred on
         the bar itself rather than on whatever space the flanking content leaves
