@@ -113,7 +113,21 @@ before the DB lookup, like the sibling preferences page).
 `/admin/tags` is the classic CRUD over the shared global tag catalog
 (`Vutuv.Tags.Tag`: slug, name, description) — create, rename and delete the tags
 members share. Deleting a tag removes it from every member who holds it
-(cascading FK).
+(cascading FK). It is also the one listing that shows a tag's **alternative
+names** (issue #1338), marked and linked to the topic they belong to, so a tag
+looked up under an absorbed name is still findable here.
+
+**`/admin/tag_merges`** (`VutuvWeb.Admin.TagMergeLive`) folds several tags for one
+topic into one page. Pick the tag to absorb and the one that stays, and the
+screen says what would move **before** anything happens: how many profiles,
+posts, follows and job postings change hands, and how many rows would be dropped
+because their owner already carries both spellings. Every merge is listed below
+the form with a "Revert" that puts all of it back. The same screen files a name
+as an alternative *before* anyone types it (so `ROR` never becomes a page of its
+own) and marks a pair as deliberately distinct, which refuses the merge for good.
+The mechanics, the four refusals and why an alternative name is a tag row rather
+than a separate table are in
+[social-graph.md](social-graph.md#one-topic-one-tag-alternative-names-and-merges-issue-1338).
 
 A tag can be flagged an **honor tag** (`tags.honor?`, edited on the tag's page).
 That reserves the tag name site-wide as an **admin-granted badge** — think

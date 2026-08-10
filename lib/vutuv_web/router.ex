@@ -752,6 +752,13 @@ defmodule VutuvWeb.Router do
       # entry in the reading admin's own log.
       live("/activity", ActivityLive, :index)
 
+      # Folding several tags for one topic into one page (issue #1338): preview
+      # what a merge moves, do it, take it back. Its own path segment rather
+      # than `/admin/tags/merge`, because the `resources("/tags", …)` catalog is
+      # defined earlier in this router and would match `merge` as a tag slug —
+      # the same reason `/admin/honor_tags` is not `/admin/tags/honor`.
+      live("/tag_merges", TagMergeLive, :index)
+
       # The moderation queue + case page: rulings (uphold/reject) act reload-free
       # and drop back to the queue. /moderation/reporters + /:id/evidence stay
       # classic (defined earlier above, so they match before this :id route).

@@ -121,6 +121,66 @@ controller passes `?source=`, `?sort=`, `?q=`, `?from=` and `?until=` into the
 mount session, so a shared link opens on exactly that view, and the agent
 formats honour the same params.
 
+## One topic, one tag: alternative names and merges (issue #1338)
+
+A topic used to spread over several tags that share no letters — `Ruby on
+Rails`, `rails`, `ROR`, `rubyonrails` — each with its own page, its own members
+and its own half of the timeline. A tag can now carry **alternative names**, and
+an alternative name is **a tag row pointing at its topic**
+(`tags.merged_into_id` + `tags.alias_kind`, one of `alias` / `abbreviation` /
+`former`), not a row in a separate names table.
+
+That shape buys three things at once:
+
+- the absorbed **slug keeps resolving**, because the row that owns it is still
+  there — `VutuvWeb.TagController`'s `resolve_tag` plug answers `/tags/<alias>`
+  with a **301** to the topic, carrying the query string, and the endpoint's
+  `AgentFormat` plug re-appends the extension so `.md` lands on `.md`;
+- the absorbed **id survives**, so a merge is exactly revertible;
+- an alternative name **cannot collide** with a real tag, since both live under
+  the same unique index on `slug`.
+
+`Tag.find_by_value/1` follows the pointer, so typing any spelling attaches the
+topic instead of minting a duplicate — that is what stops the sprawl regrowing.
+The price is one rule every tag query owes: **an alternative name is never a
+topic of its own** (`Tag.not_merged/1`). Forgetting it puts a second page for one
+topic back in front of a reader, silently, so
+`test/vutuv/tags/merged_tags_hidden_test.exs` walks the surfaces one at a time —
+directory, search, the indexability bar and sitemap, hashtag links, the add-tag
+preview, honor tags, the newsletter audience builder. The admin catalog
+(`/admin/tags`) is the deliberate exception: it lists them, marked, linked to
+their topic.
+
+**Merging** is `Vutuv.Tags.Merge`, driven from `/admin/tag_merges`
+(`VutuvWeb.Admin.TagMergeLive`; its own path segment because the earlier
+`resources("/tags", …)` in the router would read `merge` as a slug). It moves
+every row filed under the absorbed tag — profile tags and the endorsements under
+them, post tags and body hashtags, tag follows, job postings, cached remote
+posts, newsletter audiences — and only deletes a row whose owner already holds
+the surviving tag, because of the `(owner, tag)` unique index. A member carrying
+both spellings ends up carrying the topic once, and their endorsers' vouches move
+onto the row that survives.
+
+Every merge is written to `tag_merges` with an `undo` payload — the ids it moved
+and the **whole content** of the rows it had to drop — and `revert/1` puts all of
+it back, re-inserting dropped rows verbatim through `jsonb_populate_record` so
+they keep their ids and anything pointing at them still does. The row-moving is
+SQL rather than Ecto for exactly that reason: a revert restores a *row*, not a
+schema's idea of one.
+
+Four refusals are rules rather than judgement calls: an **honor tag** never
+merges (it is granted, not spelled), an **alternative name** never merges again,
+a pair recorded in `tag_distinctions` as **different topics** stays refused
+whichever way round it is named, and a pair whose names differ **only in
+characters the slugifier deletes** is refused outright — that is the `c` / `c++`
+/ `c#` / `µc` bucket from issue #1337, four languages one normalization would
+fold into one. A separator is not such a character: `open source` and
+`OpenSource` are the ordinary mechanical variant a merge is *for*.
+
+Typos are deliberately out of scope. There is no `misspelling` kind: a typo is
+unbounded, a near-miss pair is exactly where a wrong merge does the most damage,
+and catching one buys almost nothing.
+
 ## Blocking
 
 Reachable wherever you decide to block someone — a quiet "Block" next to the

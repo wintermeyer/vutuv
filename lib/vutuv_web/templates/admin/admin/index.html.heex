@@ -254,6 +254,18 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
 
     <.admin_card
+      icon="tag"
+      title={gettext("Merge tags")}
+      href={~p"/admin/tag_merges"}
+      id="admin-tag-merges-link"
+      cta={gettext("Merge tags")}
+    >
+      {gettext(
+        "Several tags for one topic become one page: see what a merge would move, do it, and take it back if it was wrong."
+      )}
+    </.admin_card>
+
+    <.admin_card
       icon="medal"
       title={gettext("Honor tags")}
       count={@honor_tags_count}

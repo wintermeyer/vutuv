@@ -14,6 +14,7 @@ defmodule Vutuv.Tags do
   alias Vutuv.Accounts.User
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias Vutuv.SearchText
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.UserTag
@@ -121,6 +122,37 @@ defmodule Vutuv.Tags do
 
         Enum.map(names, &Map.get(display_by_key, String.downcase(&1), &1))
     end
+  end
+
+  @doc """
+  Tags whose name or slug contains `query`, for the admin screens.
+
+  One definition for the tag catalog and the merge screen, so an admin who found
+  a tag in one finds it in the other. `:merged` says what to do with alternative
+  names: `:include` (the catalog, which marks them and links their topic) or
+  `:exclude` (the merge screen, where only a real topic can be picked). A blank
+  query answers with every tag, which is what the catalog's unfiltered listing
+  is; pass a `:limit` where that would be too much.
+  """
+  def admin_search(query, opts \\ []) do
+    base = if opts[:merged] == :include, do: Tag, else: Tag.not_merged()
+
+    base
+    |> admin_search_filter(String.trim(to_string(query)))
+    |> admin_search_limit(opts[:limit])
+  end
+
+  defp admin_search_filter(base, ""), do: from(t in base)
+
+  defp admin_search_filter(base, query) do
+    infix = SearchText.contains(query)
+    from(t in base, where: ilike(t.name, ^infix) or ilike(t.slug, ^infix))
+  end
+
+  defp admin_search_limit(query, nil), do: query
+
+  defp admin_search_limit(query, limit) do
+    from(t in query, order_by: [asc: t.name], limit: ^limit)
   end
 
   @doc "The most tags one profile may carry (see `@max_user_tags`)."

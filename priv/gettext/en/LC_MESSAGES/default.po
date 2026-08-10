@@ -18,6 +18,7 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:3434
 #: lib/vutuv_web/components/ui.ex:3439
 #: lib/vutuv_web/live/admin/screenshot_live.ex:245
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:365
 #: lib/vutuv_web/live/organization_live/domains.ex:255
 #: lib/vutuv_web/live/organization_live/edit.ex:396
 #: lib/vutuv_web/live/organization_live/roles.ex:202
@@ -81,6 +82,8 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:3229
 #: lib/vutuv_web/components/ui.ex:3323
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:200
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:345
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:410
 #, elixir-autogen
 msgid "Are you sure?"
 msgstr ""
@@ -458,7 +461,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:590
 #: lib/vutuv_web/live/cv_live.ex:145
 #: lib/vutuv_web/templates/access_token/new.html.heex:11
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:50
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:51
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:17
 #: lib/vutuv_web/templates/dev_app/form_content.html.heex:5
 #: lib/vutuv_web/templates/qualification/form_content.html.heex:5
@@ -642,7 +645,7 @@ msgstr ""
 #: lib/vutuv_web/live/tag_live/timeline.ex:282
 #: lib/vutuv_web/templates/admin/account/index.html.heex:23
 #: lib/vutuv_web/templates/admin/account/index.html.heex:39
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:29
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:30
 #: lib/vutuv_web/templates/layout/app.html.heex:126
 #, elixir-autogen
 msgid "Search"
@@ -663,7 +666,7 @@ msgstr ""
 msgid "Sign up for a free account"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:51
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:52
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:24
 #, elixir-autogen
 msgid "Slug"
@@ -1152,6 +1155,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:693
 #: lib/vutuv_web/live/admin/organization_live.ex:189
 #: lib/vutuv_web/live/admin/screenshot_live.ex:172
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:244
 #: lib/vutuv_web/live/admin/user_delete_live.ex:104
 #: lib/vutuv_web/live/admin/user_detail_live.ex:68
 #: lib/vutuv_web/live/admin/user_live.ex:165
@@ -1235,7 +1239,7 @@ msgstr ""
 msgid "Enter your pin"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:84
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:93
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:2
 #, elixir-autogen
 msgid "New tag"
@@ -1279,12 +1283,12 @@ msgstr ""
 msgid "Show tag url"
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/tag_controller.ex:59
+#: lib/vutuv_web/controllers/admin/tag_controller.ex:52
 #, elixir-autogen
 msgid "Tag created successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/tag_controller.ex:96
+#: lib/vutuv_web/controllers/admin/tag_controller.ex:89
 #, elixir-autogen
 msgid "Tag deleted successfully."
 msgstr ""
@@ -1337,7 +1341,7 @@ msgstr ""
 msgid "Tag synonyms"
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/tag_controller.ex:83
+#: lib/vutuv_web/controllers/admin/tag_controller.ex:76
 #, elixir-autogen
 msgid "Tag updated successfully."
 msgstr ""
@@ -1374,6 +1378,7 @@ msgstr ""
 #: lib/vutuv_web/cv/html.ex:156
 #: lib/vutuv_web/cv/latex.ex:131
 #: lib/vutuv_web/cv/odt.ex:148
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:245
 #: lib/vutuv_web/live/cv_live.ex:315
 #: lib/vutuv_web/live/job_board_live.ex:277
 #: lib/vutuv_web/live/job_posting_live/form.ex:510
@@ -1739,6 +1744,8 @@ msgstr ""
 
 #: lib/vutuv_web/components/post_components.ex:391
 #: lib/vutuv_web/components/ui.ex:3436
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:352
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:373
 #: lib/vutuv_web/live/admin/user_live.ex:286
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:124
 #, elixir-autogen, elixir-format
@@ -2204,6 +2211,7 @@ msgstr ""
 #: lib/vutuv_web/components/job_exclusion_components.ex:194
 #: lib/vutuv_web/components/post_components.ex:1006
 #: lib/vutuv_web/live/admin/screenshot_live.ex:317
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:347
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:234
 #: lib/vutuv_web/live/organization_live/domains.ex:229
 #: lib/vutuv_web/live/organization_live/edit.ex:373
@@ -4113,7 +4121,7 @@ msgstr ""
 msgid "vutuv shows a single, text-only ad per calendar day: discreet, between the navigation and the content, in the style of classic text ads."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:420
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:432
 #, elixir-autogen, elixir-format
 msgid "%{formatted} ad is waiting for approval."
 msgid_plural "%{formatted} ads are waiting for approval."
@@ -4128,7 +4136,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:5
 #: lib/vutuv_web/templates/admin/ad/show.html.heex:5
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:410
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:422
 #, elixir-autogen, elixir-format
 msgid "Ads"
 msgstr ""
@@ -4193,7 +4201,7 @@ msgstr ""
 msgid "My bookings"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:418
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:430
 #, elixir-autogen, elixir-format
 msgid "No ads waiting for approval."
 msgstr ""
@@ -4203,7 +4211,7 @@ msgstr ""
 msgid "No upcoming ads."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:415
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:427
 #, elixir-autogen, elixir-format
 msgid "Open the ad review"
 msgstr ""
@@ -4848,7 +4856,7 @@ msgstr ""
 msgid "%{app} wants to access your vutuv account. It would be allowed to:"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:399
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:411
 #, elixir-autogen, elixir-format
 msgid "%{formatted} registered third-party application. Suspending one cuts off all of its tokens."
 msgid_plural "%{formatted} registered third-party applications. Suspending one cuts off all of its tokens."
@@ -4858,7 +4866,7 @@ msgstr[1] ""
 #: lib/vutuv_web/live/admin/api_app_live.ex:21
 #: lib/vutuv_web/live/admin/api_app_live.ex:57
 #: lib/vutuv_web/live/admin/api_app_live.ex:58
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:393
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:405
 #, elixir-autogen, elixir-format
 msgid "API applications"
 msgstr ""
@@ -4948,7 +4956,7 @@ msgstr ""
 msgid "Generate a new client secret? The current one stops working."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:397
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:409
 #, elixir-autogen, elixir-format
 msgid "Manage applications"
 msgstr ""
@@ -5435,6 +5443,7 @@ msgstr ""
 msgid "Account"
 msgstr ""
 
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:446
 #: lib/vutuv_web/live/organization_live/edit.ex:443
 #, elixir-autogen, elixir-format
 msgid "Change"
@@ -6105,7 +6114,7 @@ msgstr[1] ""
 msgid "Age"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:309
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:321
 #, elixir-autogen, elixir-format
 msgid "Confirmed new registrations and the day's posts, reposts, likes and bookmarks. Time-travel to any past day."
 msgstr ""
@@ -6115,7 +6124,7 @@ msgstr ""
 msgid "Count"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:304
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:316
 #: lib/vutuv_web/templates/admin/report/index.html.heex:2
 #: lib/vutuv_web/templates/admin/report/index.html.heex:5
 #, elixir-autogen, elixir-format
@@ -6162,7 +6171,7 @@ msgstr ""
 msgid "No activity on this day."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:307
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:319
 #, elixir-autogen, elixir-format
 msgid "Open the daily report"
 msgstr ""
@@ -6483,6 +6492,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/activity_live.ex:142
 #: lib/vutuv_web/live/admin/deliverability_live.ex:213
 #: lib/vutuv_web/live/admin/deliverability_live.ex:250
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:382
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:189
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:230
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:27
@@ -6988,7 +6998,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/cv_live.ex:241
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:281
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:35
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:36
 #, elixir-autogen, elixir-format
 msgid "Reset"
 msgstr ""
@@ -7516,7 +7526,7 @@ msgstr ""
 msgid "Content & taxonomy"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:301
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:313
 #, elixir-autogen, elixir-format
 msgid "System & insights"
 msgstr ""
@@ -7531,19 +7541,19 @@ msgstr ""
 msgid "Create, rename and remove the tags members can add to their profile."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:271
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:283
 #: lib/vutuv_web/templates/admin/username/index.html.heex:3
 #, elixir-autogen, elixir-format
 msgid "Usernames"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:274
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:286
 #: lib/vutuv_web/templates/admin/username/index.html.heex:2
 #, elixir-autogen, elixir-format
 msgid "Disable a username"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:276
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:288
 #, elixir-autogen, elixir-format
 msgid "Take an unwanted username away from a member by force-renaming the account."
 msgstr ""
@@ -8531,7 +8541,7 @@ msgstr ""
 msgid "Content"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:362
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:374
 #, elixir-autogen, elixir-format
 msgid "Edit the legal pages"
 msgstr ""
@@ -8546,7 +8556,7 @@ msgstr ""
 msgid "Impressum"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:364
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:376
 #, elixir-autogen, elixir-format
 msgid "Impressum, Datenschutzerklärung and Nutzungsbedingungen: every installation publishes its own operator identity here."
 msgstr ""
@@ -8557,7 +8567,7 @@ msgid "Last edited"
 msgstr ""
 
 #: lib/vutuv_web/controllers/admin/legal_page_controller.ex:22
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:359
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:371
 #: lib/vutuv_web/templates/admin/legal_page/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:2
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:3
@@ -8617,7 +8627,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/settings_controller.ex:389
 #: lib/vutuv_web/live/fediverse_followers_live.ex:169
 #: lib/vutuv_web/live/fediverse_following_live.ex:286
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:329
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:341
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:5
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:8
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:12
@@ -8990,7 +9000,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:1436
 #: lib/vutuv_web/components/ui.ex:1437
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:64
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:65
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "Honor tag"
@@ -9463,7 +9473,7 @@ msgstr ""
 msgid "Enter a single word with no spaces."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:258
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:270
 #: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:2
 #: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:5
 #, elixir-autogen, elixir-format
@@ -9480,7 +9490,7 @@ msgstr ""
 msgid "Honor tags ›"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:262
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:274
 #, elixir-autogen, elixir-format
 msgid "Manage honor tags"
 msgstr ""
@@ -9500,7 +9510,7 @@ msgstr ""
 msgid "No honor tags yet. Create one above."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:264
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:276
 #, elixir-autogen, elixir-format
 msgid "Official badges you grant, like vutuv_developer for the core team. See who holds each and add or remove members."
 msgstr ""
@@ -9772,44 +9782,44 @@ msgstr ""
 msgid "Copy"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:345
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:357
 #, elixir-autogen, elixir-format
 msgid "%{followers} remote followers, %{queue} queued for delivery."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:337
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:349
 #, elixir-autogen, elixir-format
 msgid "Attention:"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:343
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:355
 #, elixir-autogen, elixir-format
 msgid "Outbound federation is healthy."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:337
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:349
 #, elixir-autogen, elixir-format
 msgid "stuck outbound delivery."
 msgid_plural "stuck outbound deliveries."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:40
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:41
 #, elixir-autogen, elixir-format
 msgid "No tags match your search."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:43
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:44
 #, elixir-autogen, elixir-format
 msgid "No tags yet."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:18
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "Search tags"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:25
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "name or slug"
 msgstr ""
@@ -10547,7 +10557,7 @@ msgstr[1] ""
 msgid "Changed for this installation."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:375
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:387
 #, elixir-autogen, elixir-format
 msgid "Edit the defaults"
 msgstr ""
@@ -10557,14 +10567,14 @@ msgstr ""
 msgid "Follows the installation default."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:382
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:394
 #, elixir-autogen, elixir-format
 msgid "How posts and maps behave for everyone who has not chosen for themselves. %{formatted} default differs from the shipped value."
 msgid_plural "How posts and maps behave for everyone who has not chosen for themselves. %{formatted} defaults differ from the shipped values."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:378
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:390
 #, elixir-autogen, elixir-format
 msgid "How posts and maps behave for everyone who has not chosen for themselves. This installation runs on the shipped defaults."
 msgstr ""
@@ -10595,7 +10605,7 @@ msgid "Post display settings reset to the site defaults."
 msgstr ""
 
 #: lib/vutuv_web/controllers/admin/pref_controller.ex:55
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:371
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:383
 #: lib/vutuv_web/templates/admin/pref/index.html.heex:6
 #: lib/vutuv_web/templates/admin/pref/index.html.heex:7
 #, elixir-autogen, elixir-format
@@ -11660,7 +11670,7 @@ msgstr ""
 msgid "former"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:291
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:303
 #, elixir-autogen, elixir-format
 msgid "%{formatted} alias matches another verified organization and is flagged for review."
 msgid_plural "%{formatted} aliases match another verified organization and are flagged for review."
@@ -11799,7 +11809,7 @@ msgstr ""
 msgid "Nothing here yet. Organizations you like show up here."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:286
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:298
 #, elixir-autogen, elixir-format
 msgid "Open organization oversight"
 msgstr ""
@@ -11833,7 +11843,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/organization_live.ex:25
 #: lib/vutuv_web/live/admin/organization_live.ex:188
 #: lib/vutuv_web/live/admin/organization_live.ex:189
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:281
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:293
 #, elixir-autogen, elixir-format
 msgid "Organization pages"
 msgstr ""
@@ -11917,7 +11927,7 @@ msgstr ""
 msgid "Verified organization pages on vutuv."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:289
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:301
 #, elixir-autogen, elixir-format
 msgid "Verified organization pages: domains, team roles, aliases and rename history. Freeze, archive or delete a page."
 msgstr ""
@@ -13089,6 +13099,7 @@ msgstr ""
 #: lib/vutuv_web/components/saved_search_components.ex:43
 #: lib/vutuv_web/controllers/settings_controller.ex:650
 #: lib/vutuv_web/controllers/settings_controller.ex:668
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:217
 #, elixir-autogen, elixir-format
 msgid "That did not work."
 msgstr ""
@@ -14648,17 +14659,17 @@ msgstr ""
 msgid "How much each server has stored here. Use it to decide what to block."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:334
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:346
 #, elixir-autogen, elixir-format
 msgid "Block servers and see inbound volume"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:351
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:363
 #, elixir-autogen, elixir-format
 msgid "%{blocked} servers blocked, busiest inbound: %{host}."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:353
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:365
 #, elixir-autogen, elixir-format
 msgid "none yet"
 msgstr ""
@@ -15551,6 +15562,7 @@ msgstr ""
 msgid "View the original"
 msgstr ""
 
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:292
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:190
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:231
 #, elixir-autogen, elixir-format
@@ -17106,7 +17118,7 @@ msgstr ""
 msgid "Every logged-out visitor to the start page is shown one of two founder quotes at random and keeps it for their session. Counted per variant: the visitors who saw it, the sign-up forms that created an account, and the PINs that turned such an account into a real member."
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:316
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:328
 #: lib/vutuv_web/templates/admin/experiment/index.html.heex:5
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Headline test"
@@ -17133,7 +17145,7 @@ msgstr ""
 msgid "Result"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:319
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:331
 #, elixir-autogen, elixir-format
 msgid "See which start page wins"
 msgstr ""
@@ -17159,7 +17171,7 @@ msgstr ""
 msgid "Sign-ups:"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:321
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:333
 #, elixir-autogen, elixir-format
 msgid "The start page shows one of two founder quotes at random. Views, sign-ups and confirmed members per variant, and whether the difference is real yet."
 msgstr ""
@@ -19620,4 +19632,254 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:3686
 #, elixir-autogen, elixir-format
 msgid "delete remove erase posts age old expire automatic cleanup retention purge"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:83
+#, elixir-autogen, elixir-format
+msgid "%{absorbed} is now an alternative name for %{canonical}."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:106
+#, elixir-autogen, elixir-format
+msgid "%{a} and %{b} are recorded as different topics."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:311
+#, elixir-autogen, elixir-format
+msgid "A dropped row belongs to somebody who already carries the surviving tag, so they end up carrying the topic once. Endorsements move to the row that stays."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:189
+#, elixir-autogen, elixir-format
+msgid "A tag cannot absorb itself."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:379
+#, elixir-autogen, elixir-format
+msgid "Absorbed"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:356
+#, elixir-autogen, elixir-format
+msgid "Add an alternative name"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:144
+#, elixir-autogen, elixir-format
+msgid "Added %{name} as an alternative name."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:73
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Alternative name for %{tag}"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:334
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Alternative names for %{tag}"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:294
+#, elixir-autogen, elixir-format
+msgid "Dropped as duplicate"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:359
+#, elixir-autogen, elixir-format
+msgid "For a name nobody has typed yet, so it never becomes a page of its own. A name that is already a tag has to be merged instead."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:380
+#, elixir-autogen, elixir-format
+msgid "Into"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:264
+#, elixir-autogen, elixir-format
+msgid "Its entries move away and its page redirects."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:318
+#, elixir-autogen, elixir-format
+msgid "Merge"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:41
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:242
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:246
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:252
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:258
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:261
+#, elixir-autogen, elixir-format
+msgid "Merge tags"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:13
+#, elixir-autogen, elixir-format
+msgid "Merge tags ›"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:371
+#, elixir-autogen, elixir-format
+msgid "Merges so far"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:293
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Moves"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:304
+#, elixir-autogen, elixir-format
+msgid "Nothing is filed under this tag."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:254
+#, elixir-autogen, elixir-format
+msgid "One topic sometimes ends up under several tags. Pick the tag to absorb and the tag that stays: everything filed under the first moves to the second, and the absorbed name becomes an alternative name that keeps pointing there. Every merge can be reverted below."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:158
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Removed."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:412
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Revert"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:402
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Reverted"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:381
+#, elixir-autogen, elixir-format
+msgid "Rows"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:458
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Search by name or slug"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:263
+#, elixir-autogen, elixir-format
+msgid "Several tags for one topic become one page: see what a merge would move, do it, and take it back if it was wrong."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:272
+#, elixir-autogen, elixir-format
+msgid "Tag that stays"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:263
+#, elixir-autogen, elixir-format
+msgid "Tag to absorb"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:117
+#, elixir-autogen, elixir-format
+msgid "That merge is no longer on record."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:216
+#, elixir-autogen, elixir-format
+msgid "That merge was already reverted."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:210
+#, elixir-autogen, elixir-format
+msgid "That name is already a tag. Merge it instead, so its entries come along."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:195
+#, elixir-autogen, elixir-format
+msgid "That tag is already an alternative name. Revert its merge first."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:215
+#, elixir-autogen, elixir-format
+msgid "That tag is not an alternative name."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:124
+#, elixir-autogen, elixir-format
+msgid "The merge was reverted."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:198
+#, elixir-autogen, elixir-format
+msgid "The surviving tag is itself an alternative name. Pick its topic instead."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:273
+#, elixir-autogen, elixir-format
+msgid "The topic's one page from now on."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:326
+#, elixir-autogen, elixir-format
+msgid "These are different topics"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:205
+#, elixir-autogen, elixir-format
+msgid "These names differ only in characters the slug drops (like + or #), which is how C, C++ and C# tell each other apart. They are not merged."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:201
+#, elixir-autogen, elixir-format
+msgid "These two are recorded as different topics."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:213
+#, elixir-autogen, elixir-format
+msgid "This name came from a merge. Revert that merge to take it back."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:282
+#, elixir-autogen, elixir-format
+msgid "What this merge would move"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:231
+#, elixir-autogen, elixir-format
+msgid "hashtags in post bodies"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:233
+#, elixir-autogen, elixir-format, fuzzy
+msgid "job postings"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:232
+#, elixir-autogen, elixir-format, fuzzy
+msgid "members following it"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:235
+#, elixir-autogen, elixir-format, fuzzy
+msgid "newsletter audiences"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:230
+#, elixir-autogen, elixir-format
+msgid "posts filed under it"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:234
+#, elixir-autogen, elixir-format, fuzzy
+msgid "posts from other networks"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:229
+#, elixir-autogen, elixir-format
+msgid "profiles carrying the tag"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/tag_merge_live.ex:192
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Honor tags are granted, not spelled. They are never merged."
 msgstr ""

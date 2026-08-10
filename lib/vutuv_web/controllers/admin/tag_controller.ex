@@ -9,7 +9,6 @@ defmodule VutuvWeb.Admin.TagController do
   )
 
   alias Vutuv.Pages
-  alias Vutuv.SearchText
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias VutuvWeb.ControllerHelpers
@@ -22,11 +21,14 @@ defmodule VutuvWeb.Admin.TagController do
         _ -> ""
       end
 
-    base = search_tags(query)
+    # The catalog is the one screen that shows alternative names too (issue
+    # #1338), marked and linked to the topic they belong to — an admin looking
+    # for a tag by a name that was absorbed must still find it here.
+    base = Tags.admin_search(query, merged: :include)
     tags_count = Repo.aggregate(base, :count)
 
     tags =
-      from(t in base, order_by: t.slug)
+      from(t in base, order_by: t.slug, preload: [:merged_into])
       |> Pages.paginate(params, tags_count)
       |> Repo.all()
 
@@ -36,15 +38,6 @@ defmodule VutuvWeb.Admin.TagController do
       query: query,
       pager_query: (query != "" && %{"q" => query}) || %{}
     )
-  end
-
-  # Filter tags by a case-insensitive substring of name or slug (the same
-  # match the public tag search uses). An empty query lists every tag.
-  defp search_tags(""), do: from(t in Tag)
-
-  defp search_tags(query) do
-    infix = SearchText.contains(query)
-    from(t in Tag, where: ilike(t.name, ^infix) or ilike(t.slug, ^infix))
   end
 
   def new(conn, _params) do

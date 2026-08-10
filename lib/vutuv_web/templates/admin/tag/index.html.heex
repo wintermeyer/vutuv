@@ -10,6 +10,7 @@
   <section class="card">
     <p>
       <%= link gettext("Honor tags ›"), to: ~p"/admin/honor_tags", class: "card__morelink" %>
+      <%= link gettext("Merge tags ›"), to: ~p"/admin/tag_merges", class: "card__morelink" %>
     </p>
 
     <form method="get" action={~p"/admin/tags"} class="mb-4 flex flex-wrap items-end gap-3">
@@ -62,6 +63,14 @@
               :if={tag.honor?}
               class="ml-1 inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
             ><%= gettext "Honor tag" %></span>
+            <%!-- The catalog is the one listing that still shows alternative
+            names (issue #1338), so a tag looked up by an absorbed name is
+            findable — marked, and pointing at the topic it belongs to. --%>
+            <span
+              :if={tag.merged_into}
+              data-tag-alias-of={tag.merged_into.slug}
+              class="ml-1 text-xs text-slate-600 dark:text-slate-400"
+            >{gettext("Alternative name for %{tag}", tag: tag.merged_into.name)}</span>
           </td>
           <td><%= tag.slug %></td>
 
