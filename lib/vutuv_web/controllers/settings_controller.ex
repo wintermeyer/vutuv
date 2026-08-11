@@ -174,7 +174,8 @@ defmodule VutuvWeb.SettingsController do
 
     render(conn, "organizations.html",
       user: user,
-      organizations: Organizations.member_organizations(user),
+      organizations:
+        user |> Organizations.member_organizations() |> Organizations.with_activity_unread(),
       page_title: gettext("Organizations")
     )
   end

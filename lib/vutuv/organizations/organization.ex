@@ -68,6 +68,13 @@ defmodule Vutuv.Organizations.Organization do
     # params — `Vutuv.Organizations.mark_activity_read/1` owns it.
     field(:activity_read_at, :naive_datetime)
 
+    # How much has happened since the team last looked, filled in only where a
+    # page is listed for one of its own people (`with_activity_unread/1`).
+    # Virtual because it is a question about the reader's context, not a fact
+    # about the page — every other caller would be paying for an answer it
+    # never shows.
+    field(:activity_unread, :integer, virtual: true, default: 0)
+
     belongs_to(:created_by, Vutuv.Accounts.User, foreign_key: :created_by_user_id)
     has_many(:domains, Vutuv.Organizations.OrganizationDomain)
     has_many(:roles, Vutuv.Organizations.OrganizationRole)

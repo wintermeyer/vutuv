@@ -67,6 +67,20 @@ happen on the organization's own pages. --%>
               </span>
             </div>
           </div>
+          <%!-- What has happened to the page since anybody on its team last
+          looked (issue #1336). The count is the reason to go and look at all,
+          so it is a link to the list rather than a decoration. --%>
+          <.link
+            :if={organization.activity_unread > 0}
+            navigate={~p"/organizations/#{organization.slug}/activity"}
+            data-organization-activity
+            class="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
+          >
+            {ngettext("%{formatted} new", "%{formatted} new", organization.activity_unread,
+              formatted: compact_count(organization.activity_unread)
+            )}
+          </.link>
+
           <.link
             :if={Enum.any?(roles, &(&1 in ["owner", "admin"]))}
             navigate={~p"/organizations/#{organization.slug}/edit"}

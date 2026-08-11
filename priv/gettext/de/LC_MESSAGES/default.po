@@ -2786,7 +2786,7 @@ msgstr "Ersten Beitrag schreiben"
 #: lib/vutuv_web/components/ui.ex:3389
 #: lib/vutuv_web/templates/settings/apps.html.heex:14
 #: lib/vutuv_web/templates/settings/apps.html.heex:20
-#: lib/vutuv_web/templates/settings/organizations.html.heex:75
+#: lib/vutuv_web/templates/settings/organizations.html.heex:89
 #: lib/vutuv_web/templates/settings/privacy.html.heex:179
 #: lib/vutuv_web/templates/settings/security.html.heex:20
 #: lib/vutuv_web/templates/settings/security.html.heex:219
@@ -12375,7 +12375,7 @@ msgstr "Reservieren Sie ein kurzes @handle, damit diese Organisation wie ein Mit
 #: lib/vutuv_web/live/organization_live/index.ex:101
 #: lib/vutuv_web/live/organization_live/new.ex:26
 #: lib/vutuv_web/live/organization_live/new.ex:80
-#: lib/vutuv_web/templates/settings/organizations.html.heex:89
+#: lib/vutuv_web/templates/settings/organizations.html.heex:103
 #, elixir-autogen, elixir-format
 msgid "Add your organization"
 msgstr "Ihre Organisation hinzufügen"
@@ -12648,32 +12648,32 @@ msgstr ""
 "Suchergebnissen erscheinen oder von KI verwendet werden soll. Seriöse "
 "Suchmaschinen und KI-Anbieter befolgen das; erzwingen können wir es nicht."
 
-#: lib/vutuv/organizations/organization.ex:92
+#: lib/vutuv/organizations/organization.ex:99
 #, elixir-autogen, elixir-format
 msgid "Association"
 msgstr "Verein / Verband"
 
-#: lib/vutuv/organizations/organization.ex:91
+#: lib/vutuv/organizations/organization.ex:98
 #, elixir-autogen, elixir-format
 msgid "Business"
 msgstr "Unternehmen"
 
-#: lib/vutuv/organizations/organization.ex:94
+#: lib/vutuv/organizations/organization.ex:101
 #, elixir-autogen, elixir-format
 msgid "Education / research"
 msgstr "Bildung / Forschung"
 
-#: lib/vutuv/organizations/organization.ex:95
+#: lib/vutuv/organizations/organization.ex:102
 #, elixir-autogen, elixir-format
 msgid "NGO / foundation"
 msgstr "NGO / Stiftung"
 
-#: lib/vutuv/organizations/organization.ex:96
+#: lib/vutuv/organizations/organization.ex:103
 #, elixir-autogen, elixir-format
 msgid "Other organization"
 msgstr "Sonstige"
 
-#: lib/vutuv/organizations/organization.ex:93
+#: lib/vutuv/organizations/organization.ex:100
 #, elixir-autogen, elixir-format
 msgid "Public authority"
 msgstr "Behörde / Öffentlich"
@@ -13267,17 +13267,17 @@ msgid_plural "Your roles"
 msgstr[0] "Ihre Rolle"
 msgstr[1] "Ihre Rollen"
 
-#: lib/vutuv_web/templates/settings/organizations.html.heex:84
+#: lib/vutuv_web/templates/settings/organizations.html.heex:98
 #, elixir-autogen, elixir-format
 msgid "Add an organization"
 msgstr "Organisation hinzufügen"
 
-#: lib/vutuv_web/templates/settings/organizations.html.heex:86
+#: lib/vutuv_web/templates/settings/organizations.html.heex:100
 #, elixir-autogen, elixir-format
 msgid "Represent a company, association or other group? Add its page and verify the domain to become its owner."
 msgstr "Vertreten Sie ein Unternehmen, einen Verein oder eine andere Gruppe? Fügen Sie die Seite hinzu und verifizieren Sie die Domain, um ihr Besitzer zu werden."
 
-#: lib/vutuv_web/templates/settings/organizations.html.heex:96
+#: lib/vutuv_web/templates/settings/organizations.html.heex:110
 #, elixir-autogen, elixir-format
 msgid "Browse all organizations"
 msgstr "Alle Organisationen ansehen"
@@ -20945,3 +20945,10 @@ msgstr "Bisher ist nichts passiert."
 #, elixir-autogen, elixir-format
 msgid "What happened to this page. Everyone on the team sees the same list, and opening it marks it read for all of you."
 msgstr "Was auf dieser Seite passiert ist. Alle im Team sehen dieselbe Liste, und wer sie öffnet, markiert sie für alle als gelesen."
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:79
+#, elixir-autogen, elixir-format
+msgid "%{formatted} new"
+msgid_plural "%{formatted} new"
+msgstr[0] "%{formatted} neu"
+msgstr[1] "%{formatted} neu"

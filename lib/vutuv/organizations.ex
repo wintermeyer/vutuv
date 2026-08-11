@@ -402,6 +402,21 @@ defmodule Vutuv.Organizations do
     do: NaiveDateTime.compare(at, read_at) == :gt
 
   @doc """
+  Fills in `activity_unread` on each page of a `{organization, roles}` list —
+  the member's own "Your organizations" listing and nothing else.
+
+  Deliberately per page rather than one clever batched query: a member helps
+  run a handful of pages, this is a settings page and not a hot path, and the
+  shared read marker lives on each row so a batched version would have to carry
+  three per-organization joins to save queries nobody is counting.
+  """
+  def with_activity_unread(entries) do
+    Enum.map(entries, fn {organization, roles} ->
+      {%{organization | activity_unread: unread_activity_count(organization)}, roles}
+    end)
+  end
+
+  @doc """
   Stamps the shared read marker. Whoever on the team opens the list clears it
   for all of them — that is the point of one marker.
 

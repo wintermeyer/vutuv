@@ -59,6 +59,21 @@ defmodule VutuvWeb.OrganizationActivityWebTest do
            |> html_response(200) =~ "Activity"
   end
 
+  test "the member's own organizations list shows the count and links to it", %{conn: conn} do
+    {conn, owner} = create_and_login_user(conn)
+    organization = active_organization_for(owner)
+
+    # Nothing yet: no badge, so the row stays quiet.
+    refute conn |> get(~p"/settings/organizations") |> html_response(200) =~
+             "data-organization-activity"
+
+    {:ok, _} = Social.follow_organization(insert(:activated_user), organization)
+
+    html = conn |> get(~p"/settings/organizations") |> html_response(200)
+    assert html =~ "data-organization-activity"
+    assert html =~ "/organizations/#{organization.slug}/activity"
+  end
+
   test "someone outside the team gets a 404", %{conn: conn} do
     {stranger_conn, _stranger} = create_and_login_user(conn)
     owner = insert(:activated_user)
