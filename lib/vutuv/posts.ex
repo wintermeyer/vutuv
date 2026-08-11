@@ -190,6 +190,10 @@ defmodule Vutuv.Posts do
           post = preload_post(post)
           broadcast_new_post(post)
           sync_mentions(post)
+          # A federating page's post goes out to its remote followers (issue
+          # #1334); a no-op for every page that has not opted in, which is all
+          # of them until an owner switches it on.
+          Vutuv.Fediverse.federate_new_post(post)
           reconcile_screenshot(post)
           ReviewCovers.reconcile(post)
           {:ok, post}

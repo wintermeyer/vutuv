@@ -47,6 +47,12 @@ defmodule VutuvWeb.Fediverse.Docs do
   def actor_url(%Organization{slug: slug}), do: "#{base()}/organizations/#{slug}/actor"
   def actor_url(user), do: "#{base()}/#{user.username}/actor"
   def key_id(user), do: actor_url(user) <> "#main-key"
+  # A page's post lives under its slug, matching `Vutuv.Posts.path/1` — the
+  # permalink is what a federated Note is identified BY, so the two spellings
+  # must not drift.
+  def note_url(%Organization{slug: slug}, post_id),
+    do: "#{base()}/organizations/#{slug}/posts/#{post_id}"
+
   def note_url(user, post_id), do: "#{base()}/#{user.username}/posts/#{post_id}"
 
   @doc """

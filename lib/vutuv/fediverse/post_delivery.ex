@@ -32,6 +32,11 @@ defmodule Vutuv.Fediverse.PostDelivery do
   schema "fediverse_post_deliveries" do
     field(:post_id, :binary_id)
     field(:user_id, :binary_id)
+    # The page that sent it (issue #1334). Exactly one of the two is set — an
+    # invariant of `record_post_deliveries/3`, not of the schema, because a
+    # revocation has to outlive both the post and its author and a foreign key
+    # would take these rows with them.
+    field(:organization_id, :binary_id)
     field(:inbox_uri, :string)
     field(:object_uri, :string)
 

@@ -700,6 +700,17 @@ defmodule Vutuv.Fediverse do
     )
   end
 
+  @doc "The distinct inboxes of a page's remote followers (issue #1334)."
+  def organization_delivery_inboxes(%Organization{id: id}) do
+    Repo.all(
+      from(f in Follower,
+        where: f.organization_id == ^id,
+        distinct: true,
+        select: coalesce(f.shared_inbox_uri, f.inbox_uri)
+      )
+    )
+  end
+
   # The distinct inboxes of the accounts this member **follows** (issue #1160).
   #
   # Deliberately separate from `delivery_inboxes/1` and never used for posts: an
@@ -6853,6 +6864,24 @@ defmodule Vutuv.Fediverse do
   # create, update and the unfreeze republish. Without it `Repo.get(User, nil)`
   # **raises** rather than answering nil, so unfreezing an organization post
   # would crash the moderation action rather than skip a delivery.
+  # A page's post (issue #1334). The member branch below cannot serve it: it
+  # loads a %User{} from `post.user_id`, and every gate it applies afterwards is
+  # about an account. What a page needs instead is its own opt-in and its own
+  # followers — and no `restricted?` check, because an organization post carries
+  # no audience by construction.
+  defp maybe_federate(%Post{organization_id: id} = post, builder, kind) when is_binary(id) do
+    with true <- enabled?(),
+         %Organization{} = page <- Organizations.get_organization(id),
+         true <- federated?(page),
+         post = Repo.preload(post, Docs.note_preloads()),
+         [_ | _] = inboxes <- organization_delivery_inboxes(page) do
+      record_post_deliveries(page, post, inboxes)
+      enqueue(page, inboxes, builder.(post, page), hold_opts(post, kind))
+    else
+      _ -> :skip
+    end
+  end
+
   defp maybe_federate(%Post{user_id: nil}, _builder, _kind), do: :skip
 
   defp maybe_federate(%Post{} = post, builder, kind) do
@@ -6993,6 +7022,13 @@ defmodule Vutuv.Fediverse do
     count
   end
 
+  # The page twin. Explicit rather than a cascade for the reason the column has
+  # no foreign key: these rows outlive the post and its author on purpose.
+  def drop_post_deliveries(%Organization{id: id}) do
+    {count, _} = Repo.delete_all(from(d in PostDelivery, where: d.organization_id == ^id))
+    count
+  end
+
   @doc """
   The takedowns that never arrived, newest first — a `Delete` or `Flag` dropped
   after the last attempt. The operator's list on `/admin/fediverse`, so an
@@ -7035,20 +7071,27 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  defp record_post_deliveries(%Organization{} = page, %Post{} = post, inboxes) do
+    record_post_deliveries(page, post, inboxes, organization_id: page.id)
+  end
+
   defp record_post_deliveries(%User{} = user, %Post{} = post, inboxes) do
-    object_uri = Docs.note_url(user, post.id)
+    record_post_deliveries(user, post, inboxes, user_id: user.id)
+  end
+
+  defp record_post_deliveries(sender, %Post{} = post, inboxes, owner) do
+    object_uri = Docs.note_url(sender, post.id)
     stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
 
     rows =
       Enum.map(inboxes, fn inbox ->
-        %{
+        Enum.into(owner, %{
           id: UUIDv7.generate(),
           post_id: post.id,
-          user_id: user.id,
           inbox_uri: inbox,
           object_uri: object_uri,
           inserted_at: stamp
-        }
+        })
       end)
 
     Repo.insert_all(PostDelivery, rows,
