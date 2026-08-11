@@ -2756,9 +2756,19 @@ defmodule Vutuv.Posts do
   end
 
   def recent_public_posts(:all, opts) do
+    # LEFT joins, so a page's posts join the aggregate too (issue #1334). The
+    # gate is the same idea on both sides — only authors who opted out of
+    # nothing — spelled with each side's own switches: `noindex?`/`noai?` for a
+    # member, `seo?`/`geo?` for a page. That is what keeps this feed's
+    # permissive Content-Signal honest.
     Post
-    |> join(:inner, [p], u in assoc(p, :user), as: :author)
-    |> where([p, u], u.email_confirmed? and not u.noindex? and not u.noai?)
+    |> join(:left, [p], u in assoc(p, :user), as: :author)
+    |> join(:left, [p], o in assoc(p, :organization), as: :site_feed_organization)
+    |> where(
+      [p, author: u, site_feed_organization: o],
+      (not is_nil(p.user_id) and u.email_confirmed? and not u.noindex? and not u.noai?) or
+        (not is_nil(p.organization_id) and organization_public_row(o) and o.seo? and o.geo?)
+    )
     |> recent_public(opts)
   end
 

@@ -221,6 +221,33 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
     end
   end
 
+  describe "the site-wide feed" do
+    setup do
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+      {:ok, post} = Posts.create_organization_post(organization, owner, %{body: "Für alle."})
+
+      %{organization: organization, owner: owner, post: post}
+    end
+
+    test "carries a page's post", %{conn: conn, organization: organization} do
+      body = conn |> get(~p"/posts/feed.xml") |> response(200)
+
+      assert body =~ "Für alle."
+      assert body =~ "<dc:creator>#{organization.name}</dc:creator>"
+    end
+
+    test "leaves out a page that opted out of either machine channel", ctx do
+      %{conn: conn, organization: organization} = ctx
+
+      # The site feed aggregates only authors who opted out of nothing — for a
+      # member that is `noindex?`/`noai?`, for a page `seo?`/`geo?`.
+      {:ok, _} = Organizations.update_organization(organization, %{"geo?" => false})
+      refute conn |> get(~p"/posts/feed.xml") |> response(200) =~ "Für alle."
+    end
+  end
+
   describe "replies" do
     test "an organization post cannot be answered yet", %{conn: _conn} do
       owner = insert(:activated_user)
