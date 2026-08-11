@@ -10,6 +10,8 @@ defmodule VutuvWeb.Feeds do
   `published_on` is date-only and RSS wants a timestamp.
   """
 
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.PostComponents
@@ -28,6 +30,15 @@ defmodule VutuvWeb.Feeds do
   """
   def user_feed_suffix, do: "/posts/feed.xml"
 
+  @doc """
+  The one source of an organization's feed path (issue #1334). Built on the
+  **slug** path, like the post permalinks it lists, rather than on the page's
+  opt-in root handle: a feed URL is subscribed to once and then re-fetched for
+  years, so it gets the shape that works whether or not a handle was claimed.
+  """
+  def organization_feed_path(organization),
+    do: "/organizations/#{organization.slug}" <> user_feed_suffix()
+
   @doc "The site-wide feed path."
   def site_feed_path, do: "/posts/feed.xml"
 
@@ -39,6 +50,21 @@ defmodule VutuvWeb.Feeds do
       link: AgentDocs.abs_url("/" <> author.username),
       self: AgentDocs.abs_url(user_feed_path(author)),
       description: "Posts by #{name} on vutuv",
+      posts: posts
+    )
+  end
+
+  @doc """
+  The feed of a page's own posts (issue #1334). An organization publishes under
+  one name, which is the whole point of the feature, so a feed is the one
+  distribution channel it should not have to do without.
+  """
+  def render_organization_feed(organization, posts) do
+    render_feed(
+      title: "#{organization.name} · vutuv",
+      link: AgentDocs.abs_url(Organizations.canonical_path(organization)),
+      self: AgentDocs.abs_url(organization_feed_path(organization)),
+      description: "Posts by #{organization.name} on vutuv",
       posts: posts
     )
   end
@@ -81,7 +107,8 @@ defmodule VutuvWeb.Feeds do
 
   defp item(post) do
     permalink = AgentDocs.abs_url(Posts.path(post))
-    title = "#{UserHelpers.full_name(post.user)} · #{Date.to_iso8601(post.published_on)}"
+    author = author_name(post)
+    title = "#{author} · #{Date.to_iso8601(post.published_on)}"
 
     [
       "  <item>\n",
@@ -89,12 +116,22 @@ defmodule VutuvWeb.Feeds do
       "    <link>#{Xml.escape(permalink)}</link>\n",
       ~s(    <guid isPermaLink="true">#{Xml.escape(permalink)}</guid>\n),
       "    <pubDate>#{rfc1123(post.inserted_at)}</pubDate>\n",
-      "    <dc:creator>#{Xml.escape(UserHelpers.full_name(post.user))}</dc:creator>\n",
+      "    <dc:creator>#{Xml.escape(author)}</dc:creator>\n",
       Enum.map(post.tags, &"    <category>#{Xml.escape(&1.name)}</category>\n"),
       "    <description>#{html_text(AgentDocs.excerpt(post.body))}</description>\n",
       "    <content:encoded><![CDATA[#{cdata_safe(rendered_body(post))}]]></content:encoded>\n",
       "  </item>\n"
     ]
+  end
+
+  # Whichever kind of author the post has (issue #1334). A reader sees the name
+  # the post is signed with; the member who pressed publish for an organization
+  # is internal and never appears in a feed.
+  defp author_name(post) do
+    case Posts.author(post) do
+      %Organization{name: name} -> name
+      author -> UserHelpers.full_name(author)
+    end
   end
 
   defp rendered_body(post) do

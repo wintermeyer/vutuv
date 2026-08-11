@@ -152,6 +152,8 @@ defmodule VutuvWeb.Router do
     # must beat the catch-all /:slug routes further down, and feed readers
     # send Accept: application/rss+xml, which the browser pipeline rejects.
     get("/posts/feed.xml", FeedController, :site)
+    # Before /:slug/posts/feed.xml, or "organizations" would be read as a handle.
+    get("/organizations/:slug/posts/feed.xml", FeedController, :organization)
     get("/:slug/posts/feed.xml", FeedController, :user)
     # Link-preview images (VutuvWeb.OpenGraph): the brand card and the
     # member avatar as a scraper-friendly JPEG. The consumers are the

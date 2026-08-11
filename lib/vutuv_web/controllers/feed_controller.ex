@@ -32,6 +32,36 @@ defmodule VutuvWeb.FeedController do
     end
   end
 
+  @doc """
+  A page's own posts (issue #1334). The **anonymous** view — the same set the
+  page's agent formats serve — so a post still held by moderation is absent
+  here even though the organization's own publishers see it on the page.
+
+  Gated on `public_visible?/1` rather than on `agent_visible?/1`: a feed is a
+  subscription somebody asked for, not a crawl, so the page's `geo?` opt-out
+  (which is about machine readers helping themselves) does not silence it. The
+  page's `seo?` choice still rides along in the headers below, exactly as a
+  member's `noindex?` does on theirs.
+  """
+  def organization(conn, %{"slug" => slug}) do
+    organization = Vutuv.Organizations.get_organization_by_slug(slug)
+
+    if organization && Vutuv.Organizations.public_visible?(organization) do
+      posts = Posts.organization_posts_page(organization, nil, limit: @feed_limit).entries
+
+      send_feed(
+        conn,
+        Feeds.render_organization_feed(organization, posts),
+        not organization.seo?,
+        not organization.geo?
+      )
+    else
+      conn
+      |> put_resp_content_type("text/plain")
+      |> send_resp(404, "Not Found")
+    end
+  end
+
   # The site-wide feed only aggregates members who opted out of nothing
   # (Posts.recent_public_posts/2), so it carries the permissive signals.
   def site(conn, _params) do

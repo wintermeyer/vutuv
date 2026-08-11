@@ -170,6 +170,37 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
     end
   end
 
+  describe "the RSS feed" do
+    test "serves the page's own posts, signed by the page", %{conn: conn} do
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+      {:ok, _} = Posts.create_organization_post(organization, owner, %{body: "Neuigkeit."})
+
+      path = VutuvWeb.Feeds.organization_feed_path(organization)
+      assert path == "/organizations/#{organization.slug}/posts/feed.xml"
+
+      conn = get(conn, path)
+      assert response_content_type(conn, :xml) =~ "application/rss+xml"
+
+      body = response(conn, 200)
+      assert body =~ "Neuigkeit."
+      assert body =~ "<dc:creator>#{organization.name}</dc:creator>"
+      # The member who pressed publish never appears in a feed.
+      refute body =~ owner.username
+    end
+
+    test "a page still in the moderation freezer serves no feed", %{conn: conn} do
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+      {:ok, _} = Organizations.admin_set_frozen(organization, true)
+
+      conn
+      |> get(VutuvWeb.Feeds.organization_feed_path(organization))
+      |> response(404)
+    end
+  end
+
   describe "replies" do
     test "an organization post cannot be answered yet", %{conn: _conn} do
       owner = insert(:activated_user)

@@ -421,11 +421,20 @@ defmodule VutuvWeb.OrganizationLive.Show do
           publisher even when there is not — an empty card with a composer is
           how they find out they may write here at all. --%>
           <.card :if={@posts_total > 0 or @publisher?} id="organization-posts">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-3">
               <.section_title>{gettext("Posts")}</.section_title>
-              <span :if={@posts_total > 0} class="text-sm text-slate-600 dark:text-slate-400">
-                {compact_count(@posts_total)}
-              </span>
+              <div class="flex items-center gap-3">
+                <span :if={@posts_total > 0} class="text-sm text-slate-600 dark:text-slate-400">
+                  {compact_count(@posts_total)}
+                </span>
+                <%!-- The page's own feed, the same pill the profile's Posts card
+                carries. Shown once there is something to subscribe to. --%>
+                <.feed_button
+                  :if={@posts_total > 0}
+                  id="organization-posts-feed"
+                  href={VutuvWeb.Feeds.organization_feed_path(@organization)}
+                />
+              </div>
             </div>
 
             <%!-- Switching into the organization for the rest of the session
