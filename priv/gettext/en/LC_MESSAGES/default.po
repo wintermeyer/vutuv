@@ -1690,6 +1690,7 @@ msgstr ""
 #: lib/vutuv_web/live/fediverse_account_live.ex:375
 #: lib/vutuv_web/live/fediverse_following_live.ex:313
 #: lib/vutuv_web/live/fediverse_lookup_live.ex:363
+#: lib/vutuv_web/live/organization_live/following.ex:218
 #: lib/vutuv_web/live/organization_live/show.ex:402
 #: lib/vutuv_web/templates/user/show.html.heex:1069
 #: lib/vutuv_web/templates/user/show.html.heex:1322
@@ -2458,7 +2459,8 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:1936
 #: lib/vutuv_web/components/ui.ex:1936
 #: lib/vutuv_web/components/ui.ex:2073
-#: lib/vutuv_web/live/organization_live/following.ex:138
+#: lib/vutuv_web/live/organization_live/following.ex:197
+#: lib/vutuv_web/live/organization_live/following.ex:256
 #: lib/vutuv_web/live/organization_live/show.ex:407
 #: lib/vutuv_web/live/post_live/feed.ex:1187
 #: lib/vutuv_web/templates/followee/index.html.heex:44
@@ -4545,7 +4547,7 @@ msgid "Find members"
 msgstr ""
 
 #: lib/vutuv_web/components/organization_components.ex:233
-#: lib/vutuv_web/live/organization_live/following.ex:95
+#: lib/vutuv_web/live/organization_live/following.ex:154
 #: lib/vutuv_web/templates/followee/index.html.heex:4
 #: lib/vutuv_web/templates/followee/index.html.heex:53
 #: lib/vutuv_web/templates/user/show.html.heex:955
@@ -13109,6 +13111,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/settings_controller.ex:651
 #: lib/vutuv_web/controllers/settings_controller.ex:669
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:387
+#: lib/vutuv_web/live/organization_live/following.ex:140
 #, elixir-autogen, elixir-format
 msgid "That did not work."
 msgstr ""
@@ -16747,6 +16750,7 @@ msgid "Mastodon and the other networks work like email: an address is enough. Pa
 msgstr ""
 
 #: lib/vutuv_web/components/fediverse_components.ex:224
+#: lib/vutuv_web/live/organization_live/following.ex:247
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Requested"
 msgstr ""
@@ -20201,7 +20205,7 @@ msgstr ""
 msgid "Follow as %{name}"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/following.ex:101
+#: lib/vutuv_web/live/organization_live/following.ex:160
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Members and organizations"
 msgstr ""
@@ -20211,28 +20215,28 @@ msgstr ""
 msgid "Nothing here yet. This page does not follow anyone, or nobody it follows has published."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/following.ex:97
+#: lib/vutuv_web/live/organization_live/following.ex:156
 #, elixir-autogen, elixir-format
 msgid "The members, organizations and topics this page follows. Everything here shapes its feed, and only the team can see this list."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/following.ex:148
+#: lib/vutuv_web/live/organization_live/following.ex:266
 #, elixir-autogen, elixir-format, fuzzy
 msgid "This page does not follow any topics yet."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/following.ex:104
+#: lib/vutuv_web/live/organization_live/following.ex:163
 #, elixir-autogen, elixir-format, fuzzy
 msgid "This page does not follow anyone yet."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/following.ex:145
+#: lib/vutuv_web/live/organization_live/following.ex:263
 #, elixir-autogen, elixir-format
 msgid "Topics"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/following.ex:158
-#: lib/vutuv_web/live/organization_live/following.ex:159
+#: lib/vutuv_web/live/organization_live/following.ex:276
+#: lib/vutuv_web/live/organization_live/following.ex:277
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Unfollow %{tag}"
 msgstr ""
@@ -20242,7 +20246,7 @@ msgstr ""
 msgid "What the members and organizations this page follows have published. Liking or saving something here is done from your own account, not the page's."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/following.ex:43
+#: lib/vutuv_web/live/organization_live/following.ex:52
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Follows – %{name}"
 msgstr ""
@@ -20310,4 +20314,44 @@ msgstr ""
 #: lib/vutuv_web/live/organization_live/fediverse.ex:115
 #, elixir-autogen, elixir-format
 msgid "This page is not being federated. Nothing of it is visible on other networks."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:206
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Accounts on other networks"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:216
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Fediverse address"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:126
+#, elixir-autogen, elixir-format
+msgid "That does not look like a Fediverse address."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:132
+#, elixir-autogen, elixir-format
+msgid "That server did not answer."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:138
+#, elixir-autogen, elixir-format, fuzzy
+msgid "That server is blocked on this installation."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:129
+#, elixir-autogen, elixir-format
+msgid "This page already follows that account."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:226
+#, elixir-autogen, elixir-format, fuzzy
+msgid "This page does not follow anyone on another network yet."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:135
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Too many attempts for now. Try again later."
 msgstr ""

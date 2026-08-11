@@ -13,6 +13,14 @@ defmodule VutuvWeb.OrganizationLive.Following do
   and nothing in #1336 asks for it to be on show. Making it public later is an
   easy step; taking it back would not be.
 
+  **Accounts on other networks live here too**, not on the Fediverse page beside
+  it. A member's equivalent sits under their fediverse settings because their
+  own following list is public and about people here; this page is already
+  publishers-only and already mixes members, pages and topics, so one list of
+  "what this page reads" is the honest shape — and it is exactly what the page's
+  feed is built from. The section shows only while the page federates, because
+  asking to follow somebody out there is impossible otherwise.
+
   Embedded via `live_render` from `VutuvWeb.OrganizationController`, which gates
   it before this ever mounts.
   """
@@ -25,6 +33,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Social
@@ -41,6 +50,8 @@ defmodule VutuvWeb.OrganizationLive.Following do
      |> assign(:organization, organization)
      |> assign(:owner?, Organizations.owner?(organization, socket.assigns.current_user))
      |> assign(:page_title, gettext("Follows – %{name}", name: organization.name))
+     |> assign(:address, "")
+     |> assign(:follow_error, nil)
      |> load_following()}
   end
 
@@ -50,6 +61,8 @@ defmodule VutuvWeb.OrganizationLive.Following do
     socket
     |> assign(:followees, Social.organization_followees(organization))
     |> assign(:tags, Tags.organization_followed_tags(organization))
+    |> assign(:federated?, Fediverse.federated?(organization))
+    |> assign(:remote_follows, Fediverse.list_organization_remote_follows(organization))
   end
 
   @impl true
@@ -69,6 +82,33 @@ defmodule VutuvWeb.OrganizationLive.Following do
     {:noreply, load_following(socket)}
   end
 
+  def handle_event("follow-remote", %{"address" => address}, socket) do
+    case Fediverse.follow_remote_as_organization(socket.assigns.organization, address) do
+      {:ok, _follow} ->
+        {:noreply,
+         socket
+         |> assign(:address, "")
+         |> assign(:follow_error, nil)
+         |> load_following()}
+
+      {:error, reason} ->
+        # The address stays in the box: a refusal usually means a typo, and
+        # emptying it would make the reader retype what they just wrote.
+        {:noreply, socket |> assign(:address, address) |> assign(:follow_error, reason)}
+    end
+  end
+
+  # Typing again clears the last refusal, so the box is not still shouting about
+  # an address that has since been corrected.
+  def handle_event("typing", %{"address" => address}, socket) do
+    {:noreply, socket |> assign(:address, address) |> assign(:follow_error, nil)}
+  end
+
+  def handle_event("unfollow-remote", %{"id" => id}, socket) do
+    Fediverse.unfollow_remote_as_organization(socket.assigns.organization, id)
+    {:noreply, load_following(socket)}
+  end
+
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
 
@@ -79,6 +119,25 @@ defmodule VutuvWeb.OrganizationLive.Following do
     do: Organizations.canonical_path(organization)
 
   defp followee_path(%User{username: username}), do: "/#{username}"
+
+  # `follow_remote_as_organization/2` speaks the same refusal vocabulary as the
+  # member path, so each one gets a sentence rather than an atom on screen.
+  defp follow_error_message(:invalid_address),
+    do: gettext("That does not look like a Fediverse address.")
+
+  defp follow_error_message(:already_following),
+    do: gettext("This page already follows that account.")
+
+  defp follow_error_message(:unreachable_actor),
+    do: gettext("That server did not answer.")
+
+  defp follow_error_message(:follow_capped),
+    do: gettext("Too many attempts for now. Try again later.")
+
+  defp follow_error_message(:blocked_instance),
+    do: gettext("That server is blocked on this installation.")
+
+  defp follow_error_message(_other), do: gettext("That did not work.")
 
   @impl true
   def render(assigns) do
@@ -133,6 +192,65 @@ defmodule VutuvWeb.OrganizationLive.Following do
               variant="secondary"
               phx-click="unfollow"
               phx-value-id={follow_id}
+              class="shrink-0"
+            >
+              {gettext("Unfollow")}
+            </.button>
+          </li>
+        </ul>
+      </.card>
+
+      <%!-- Only while the page federates: without that there is no actor to sign
+      a Follow with, so the box could not do anything but refuse. --%>
+      <.card :if={@federated?} class="mt-4" id="organization-remote-follows">
+        <.section_title>{gettext("Accounts on other networks")}</.section_title>
+
+        <form phx-submit="follow-remote" phx-change="typing" class="mt-3 flex flex-wrap gap-2">
+          <input
+            type="text"
+            name="address"
+            value={@address}
+            placeholder="@name@server.example"
+            autocomplete="off"
+            class={[input_class(), "min-w-0 flex-1"]}
+            aria-label={gettext("Fediverse address")}
+          />
+          <.button type="submit">{gettext("Follow")}</.button>
+        </form>
+
+        <p :if={@follow_error} class="editform__error mt-2" role="alert">
+          {follow_error_message(@follow_error)}
+        </p>
+
+        <p :if={@remote_follows == []} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+          {gettext("This page does not follow anyone on another network yet.")}
+        </p>
+
+        <ul :if={@remote_follows != []} class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+          <li :for={follow <- @remote_follows} class="flex items-center gap-4 py-3">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {follow.remote_account.name || follow.remote_account.handle}
+              </p>
+              <p class="truncate text-sm text-slate-600 dark:text-slate-400">
+                {follow.remote_account.handle}
+              </p>
+            </div>
+
+            <%!-- "Requested" is the truth until the other server answers, and
+            an account that approves by hand may never do so. Showing
+            "Following" for an unanswered request would be a lie. --%>
+            <span
+              :if={follow.state == "requested"}
+              class="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            >
+              {gettext("Requested")}
+            </span>
+
+            <.button
+              variant="secondary"
+              phx-click="unfollow-remote"
+              phx-value-id={follow.id}
               class="shrink-0"
             >
               {gettext("Unfollow")}

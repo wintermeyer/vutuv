@@ -1596,6 +1596,41 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  @doc """
+  Drops a page's follow of a remote account: withdraws it out there (`Undo`) and
+  removes the row. Scoped to the page, so an id belonging to somebody else's
+  follow removes nothing.
+  """
+  def unfollow_remote_as_organization(%Organization{id: page_id} = page, follow_id) do
+    case Repo.get_by(Follow, id: follow_id, organization_id: page_id) do
+      nil ->
+        {:error, :not_found}
+
+      follow ->
+        follow = Repo.preload(follow, :remote_account)
+
+        # Best effort, and gated on `ever_federated?/1` rather than
+        # `federated?/1`: switching federation off is exactly when a page's
+        # follows are withdrawn, and that is the moment `federated?/1` turns
+        # false — the same trap the member path documents.
+        if ever_federated?(page) and follow.remote_account do
+          enqueue(
+            page,
+            [follow.remote_account.inbox_uri],
+            Docs.undo_follow_activity(
+              page,
+              follow.remote_account.actor_uri,
+              follow.follow_activity_id
+            )
+          )
+        end
+
+        Repo.delete(follow)
+        purge_unfollowed_remote_posts([follow.remote_account_id])
+        :ok
+    end
+  end
+
   @doc "Whether `page` already follows (or has asked to follow) this account."
   def organization_remote_follow_for(%Organization{id: id}, %RemoteAccount{id: account_id}) do
     Repo.get_by(Follow, organization_id: id, remote_account_id: account_id)
