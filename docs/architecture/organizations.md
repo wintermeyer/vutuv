@@ -194,26 +194,95 @@ mail's recipient would arrive at a green "Verified" badge contradicting it.
 A page is run by a team, not just its claimant. Each `OrganizationRole` grants a
 proof-derived **power**, never an employment claim:
 
-- **owner** — everything: roles, domains, the page + aliases, and (from issue 5)
-  job postings.
+- **owner** — everything: roles, domains, the page + aliases, and job postings.
 - **admin** — the page + aliases and job postings, but not roles or domains.
+- **publisher** — speaking in the organization's name: publishing, editing and
+  deleting its posts, and switching into it (#1333, #1334, #1335). Nothing
+  administrative.
 - **recruiter** — job postings only.
 
-The predicates live in `Vutuv.Organizations`: `owner?/2`, `can_edit_page?/2`
-(owner ∪ admin), `can_manage_roles?/2` and `can_manage_domains?/2` (owner). The
-older `can_manage?/2` is the *staff* predicate (creator ∪ any role holder) used
-for **visibility** — a recruiter still sees a pending/frozen page — not for
-writes.
+**A member holds any number of roles on any number of pages** (#1333). The
+unique index is `[organization_id, user_id, role]`, effective powers are the
+union, and `roles_of/2` answers with a ranked list. It was renamed from
+`role_of/2` rather than quietly re-typed: a permission accessor whose return
+moves from `"owner" | nil` to a list under the same name is how a check ends up
+reading a non-empty list as truthy.
 
-Invariant: **every organization keeps ≥ 1 owner.** `remove_role/1` and `update_role/3`
-refuse to remove or demote the last owner (`{:error, :last_owner}`), exactly like
-the last-domain rule. A grant is a notification: the `organization_roles` row is a
+**`publisher` is never implied**, not by `owner` and not by `admin`. Speaking
+for a page and administering it are different powers that usually belong to
+different people, so a freshly claimed page cannot post until its owner grants
+it once. The separation holds structurally rather than by convention, because
+`can_manage_roles?/2` is owner-only: an admin cannot grant themselves the right
+to post. German label "Redaktion" — it names the function, not a rank.
+
+The predicates live in `Vutuv.Organizations`: `owner?/2`, `can_edit_page?/2`
+(owner ∪ admin), `publisher?/2`, `can_manage_roles?/2` and
+`can_manage_domains?/2` (owner). The older `can_manage?/2` is the *staff*
+predicate (creator ∪ any role holder) used for **visibility** — a recruiter
+still sees a pending/frozen page — not for writes.
+
+Invariant: **every organization keeps ≥ 1 owner.** `remove_role/1` and
+`set_roles/4` refuse to remove or demote the last owner (`{:error, :last_owner}`),
+exactly like the last-domain rule. `set_roles/4` is the roster's one write — it
+diffs against what is held, so an unchanged role keeps its `granted_by` and its
+age — and it replaced the single-role `update_role/3` when the roster became a
+checkbox set. That shape is deliberate: with a select, granting `publisher` to
+an admin would silently have taken their `admin` away. A grant is a notification: the `organization_roles` row is a
 source of the derived notification feed (`Vutuv.Activity.organization_role_items/3`,
 self-grants excluded so the claim wizard's owner row is not "news"), and
 `Activity.notify_organization_role/4` pushes the live badge/toast at grant time. The
 owner-only roster lives at `/organizations/:slug/roles`
 (`VutuvWeb.OrganizationLive.Roles`, add by `@handle`/email with a live typeahead
-`Organizations.suggest_members/2`).
+`Organizations.suggest_members/2`). It is **one row per member with a checkbox
+set** (`list_team/1`), not one row per role; nothing is pre-ticked on the add
+form, because with four roles a guessed default is wrong more often than right
+and `publisher` must never arrive by accident.
+
+## Speaking as a page (#1334, #1335, #1336)
+
+A page is an identity, not only a brochure. What it can do now, and where each
+piece lives:
+
+- **It publishes.** `posts` carries `user_id | organization_id` (CHECK exactly
+  one) plus `acting_user_id` — who pressed publish, `nilify_all`, never shown.
+  **`Vutuv.Posts.author/1` is the one accessor**; reading `post.user` on an
+  organization post is the bug to look for. Editing and deleting follow the
+  **role, not the person**: any current publisher may, because the post belongs
+  to the page. Organization posts carry no audience and cannot be replied to
+  (both refused outright rather than half-working).
+- **A member switches into it** for a session (#1335). The session carries only
+  `acting_as_organization_id`, and it is a **hint, never a credential**:
+  `VutuvWeb.Plug.ActingAs` and `Live.InitAssigns.acting_as/2` re-ask
+  `organization_roles` on every request and every socket mount, so a withdrawn
+  role ends the mode on the next action. Both directions are in the account
+  activity log under their own kinds.
+- **Members follow it.** `follows.followee_organization_id` (nullable pair +
+  CHECK, #1336) — only the followee side; a page following somebody is not built.
+  Its posts then reach the follower's feed through `feed_organization_post_items/3`.
+- **It sees what happens to it** at `/organizations/:slug/activity`: new
+  followers, likes and reposts of its posts, and posts naming it by handle.
+  Derived from the source tables, so an unliked post is not "read" — it never
+  happened. **One read marker for the whole team** (`activity_read_at`): read
+  means somebody read it, never that everybody did, which is why it is a column
+  on the page and not a row per member. The marker is the newest entry's
+  timestamp rather than the wall clock (second-precision tables + a strict `>`),
+  and an empty list stamps nothing.
+- **It is mentionable** by its root handle, and reachable from search, the tag
+  pages, the sitemap, `/llms.txt`, its own RSS feed and the agent formats.
+
+### The trap this shape carries
+
+Every one of those surfaces reaches the author. Widening `posts.user_id` to
+nullable produced **eleven silent failures**, in three flavours: `NOT IN` over a
+nullable column (never true — it emptied the discovery rail), an inner join
+through `users` (dropped the rows entirely — search, reposts, the saved list,
+tag pages, the site feed), and reading `post.user` or hand-building
+`~p"/#{post.user}/posts/…"` (raised — notifications, the admin gallery, the
+daily report mail). None was reported by a user; all were found by sweeping.
+
+So when the next kind of actor arrives: enumerate every module that **reads**
+the thing, not the one that stores it, and route the URL through the function
+that owns it.
 
 ## Multi-domain management (`/organizations/:slug/domains`, #930)
 

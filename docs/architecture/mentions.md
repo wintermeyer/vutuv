@@ -39,6 +39,24 @@ them). Without it, a bad actor could seed `@wanted` into a post to *reserve* it
 — the availability rule below would then treat `@wanted` as "used in a post" and
 block everyone, forever.
 
+**An organization handle is a real mention** (#1336), not merely a valid one.
+For a long while validation accepted it — members and pages share one handle
+namespace — while the renderer looked handles up among members only, so `@acme`
+saved and then rendered as plain text: accepted as real and drawn as if it were
+not. It links to the page now, with the page's name as the `title`, and
+`Mentions.mentioned_organizations/1` resolves the page side while
+`mentioned_users/2` resolves the member side. The two never overlap, because a
+handle belongs to at most one of them; members win the merge anyway, since a
+person's profile is the destination you do not want to get wrong. A page nobody
+may see (pending, frozen, archived) is deliberately **not** linked — the text
+stays readable, but no link leads where the reader would be turned away.
+
+Such a mention is recorded: `post_mentions` carries `user_id | organization_id`
+(CHECK exactly one), and the page's own `/organizations/:slug/activity` list
+reads it. The rows are a reconciled index of the body, so editing the mention
+out takes the entry with it, and a page naming *itself* is not news to its own
+team.
+
 - Detection skips code spans/blocks, emails and fediverse handles, and matches
   whole handles (so `@old` is not found inside `@older`).
 - Detection **sees through a Markdown escape** inside a handle. The Milkdown

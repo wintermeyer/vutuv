@@ -44,6 +44,41 @@ or an inline code span a URL is sample text, so it is left verbatim
 (`VutuvWeb.Markdown.map_outside_code/2`); rewriting it turned `curl
 https://vutuv.de` into visible Markdown link syntax.
 
+### Who a post is by (issue #1334)
+
+A post is authored by a **member or an organization**, never both and never
+neither:
+
+| column | personal post | organization post |
+|---|---|---|
+| `user_id` | the member, `delete_all` | NULL |
+| `organization_id` | NULL | the page, `delete_all` |
+| `acting_user_id` | NULL | who pressed publish, `nilify_all` |
+
+Three columns rather than one because two promises collide. `posts.user_id` was
+`null: false, on_delete: :delete_all` — deleting your account deletes your posts
+— but a post published for a page must survive the person who wrote it leaving.
+Keeping the human in `user_id` would delete the page's content with their
+account; dropping the human entirely would leave nobody accountable for what was
+said in the page's name.
+
+**`Vutuv.Posts.author/1` is the single accessor.** The author is read in ~70
+places; reading `post.user` directly is a bug on an organization post, and so is
+hand-building `~p"/#{post.user}/posts/#{post.id}"` instead of calling
+`Posts.path/1`. Both mistakes shipped and broke live pages — see the trap
+section in `organizations.md`.
+
+Consequences worth knowing:
+
+- Organization posts carry **no audience** (the deny model is built on the
+  author's own follower graph and blocks) and **cannot be replied to**. Both are
+  refused outright rather than silently reaching nobody.
+- They have their own feed source (`feed_organization_post_items/3`), so
+  `feed_post_items/3` stays deliberately the member half.
+- Personal scopes exclude them: a member's profile, archive and feed never show
+  what they published for a page. That association is what `acting_user_id`
+  keeps internal.
+
 ### The author's own, proven webpage (issue #1246)
 
 A link in a post that points at a webpage the **post's author** has proved is
