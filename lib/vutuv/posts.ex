@@ -473,7 +473,7 @@ defmodule Vutuv.Posts do
         if post.screenshot, do: Screenshots.delete(post.screenshot)
         # Same for a book review's fetched cover files.
         if post.review, do: ReviewCovers.delete_files(post.review)
-        broadcast_post_deleted(post.id, post.user_id)
+        broadcast_post_deleted(post.id, deletion_recipients(post))
         if parent_id, do: broadcast_reply_count(parent_id)
         # Deleting reported content settles its moderation case.
         Vutuv.Moderation.content_deleted(deleted)
@@ -4964,6 +4964,26 @@ defmodule Vutuv.Posts do
     event = {:post_deleted, %{post_id: post_id}}
     Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(post_id), event)
     Enum.each(recipient_ids, &Vutuv.Activity.broadcast(&1, event))
+  end
+
+  # Whose open feed has to drop this entry. A member's post reaches them and
+  # their followers; an organization post reaches the people who follow the
+  # **page** (issue #1336) — it never sat in the publishers' own feeds, so
+  # there is nobody else to tell. Without this clause a nil author matched
+  # neither head and deleting an organization post raised (issue #1334).
+  defp deletion_recipients(%Post{organization_id: id}) when is_binary(id),
+    do: organization_follower_ids(id)
+
+  defp deletion_recipients(%Post{user_id: user_id}),
+    do: [user_id | follower_ids(user_id)]
+
+  defp organization_follower_ids(organization_id) do
+    Repo.all(
+      from(f in Follow,
+        where: f.followee_organization_id == ^organization_id,
+        select: f.follower_id
+      )
+    )
   end
 
   @doc """
