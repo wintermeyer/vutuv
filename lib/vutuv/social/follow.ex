@@ -45,6 +45,21 @@ defmodule Vutuv.Social.Follow do
     |> foreign_key_constraint(:followee_organization_id)
   end
 
+  @doc """
+  Flips the follower's own mute flag on a row that already exists.
+
+  Its own changeset because `changeset/2` re-validates the identity columns, and
+  an organization follow legitimately has no `followee_id` — so muting a page
+  raised `Ecto.InvalidChangesetError`, i.e. a 500 on `PUT /follows/:id/mute`,
+  which is reachable with any follow id the member owns. Nothing here may cast
+  an identity column: who follows whom is not what a mute changes.
+  """
+  def mute_changeset(model, params \\ %{}) do
+    model
+    |> cast(params, [:muted])
+    |> validate_required([:muted])
+  end
+
   @required_fields ~w(follower_id followee_id)a
   @optional_fields ~w(muted)a
 

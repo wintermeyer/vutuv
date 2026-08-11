@@ -181,7 +181,7 @@ defmodule Vutuv.Social do
     follow = Repo.get_by!(Follow, id: follow_id, follower_id: follower_id)
 
     follow
-    |> Follow.changeset(%{muted: not follow.muted})
+    |> Follow.mute_changeset(%{muted: not follow.muted})
     |> Repo.update!()
   end
 
@@ -260,16 +260,38 @@ defmodule Vutuv.Social do
   Drives where a member's "home" is (`VutuvWeb.Home`): the newsfeed only has
   something to show once you follow someone, so until then (most visibly right
   after sign-up) home is the member's own profile instead of an empty feed.
+
+  **A followed page counts** (issue #1336). The member arm reaches the followee
+  through an inner join to `users`, so an organization follow — `followee_id IS
+  NULL` — was invisible to it, and somebody who followed three company pages was
+  told they follow nobody and sent to their own profile while their feed was
+  filling up with those pages' posts. The two arms are separate `EXISTS` queries
+  rather than one union because `or` short-circuits: the ordinary case (a member
+  who follows members) costs exactly what it cost before.
   """
   def follows_anyone?(%User{id: id}), do: follows_anyone?(id)
 
   def follows_anyone?(user_id) do
-    Repo.exists?(
-      from(c in Follow,
-        join: u in assoc(c, :followee),
-        where: account_confirmed_row(u) and not account_hidden_row(u),
-        where: c.follower_id == ^user_id
-      )
+    Repo.exists?(followed_member_query(user_id)) or
+      Repo.exists?(followed_page_query(user_id))
+  end
+
+  defp followed_member_query(user_id) do
+    from(c in Follow,
+      join: u in assoc(c, :followee),
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      where: c.follower_id == ^user_id
+    )
+  end
+
+  # A page the member follows that is still shown. `status` is the page's own
+  # gate, the organization twin of the confirmed/not-hidden pair above: a
+  # follower of a frozen page should not be sent to a feed it cannot fill.
+  defp followed_page_query(user_id) do
+    from(c in Follow,
+      join: o in Organization,
+      on: o.id == c.followee_organization_id,
+      where: c.follower_id == ^user_id and o.status == "active"
     )
   end
 
