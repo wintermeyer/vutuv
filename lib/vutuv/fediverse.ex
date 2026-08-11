@@ -1728,9 +1728,16 @@ defmodule Vutuv.Fediverse do
 
   # The same rule the local feed uses: a muted follow keeps the relationship and
   # drops that member's posts out of this feed — including what they reshare.
+  # The `not is_nil` is not decoration: since #1336 a followed **page** leaves
+  # `followee_id` NULL, so this list carries nils. Both current callers use a
+  # positive `in subquery(...)`, where a nil is merely ignored — but the same
+  # list negated (`not in`) is false for every row, silently, which is how the
+  # discovery rail emptied itself for anyone who followed a page. Guarding here
+  # means the next caller cannot inherit that, whichever way it asks.
   defp unmuted_followees(viewer_id) do
     from(f in Vutuv.Social.Follow,
       where: f.follower_id == ^viewer_id and f.muted == false,
+      where: not is_nil(f.followee_id),
       select: f.followee_id
     )
   end

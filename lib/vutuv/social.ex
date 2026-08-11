@@ -138,9 +138,26 @@ defmodule Vutuv.Social do
   def follows_organization?(follower, %Organization{id: organization_id}),
     do: organization_follow(follower_id(follower), organization_id) != nil
 
-  @doc "How many members follow `organization`."
+  @doc """
+  How many members follow `organization`.
+
+  Gated exactly like the follower rows on the page's activity list
+  (`Organizations.activity_follows/3`), which is the member-side rule too: a
+  count and the list it stands for must agree. Without the join this counted
+  every row — unconfirmed and moderation-hidden members, and now that the column
+  exists, a page following a page — so the figure above the page could promise
+  followers it would never name.
+  """
   def organization_follower_count(%Organization{id: id}) do
-    Repo.aggregate(from(f in Follow, where: f.followee_organization_id == ^id), :count)
+    Repo.aggregate(
+      from(f in Follow,
+        join: u in User,
+        on: u.id == f.follower_id,
+        where: f.followee_organization_id == ^id,
+        where: account_confirmed_row(u) and not account_hidden_row(u)
+      ),
+      :count
+    )
   end
 
   defp follower_id(%Vutuv.Accounts.User{id: id}), do: id
