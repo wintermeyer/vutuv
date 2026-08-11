@@ -79,13 +79,20 @@ defmodule Vutuv.MentionNotificationsTest do
       assert kinds(mentioned.id) == %{}
     end
 
-    test "an organization handle notifies nobody (organizations have no feed)" do
+    test "an organization handle is recorded for the page, and pushes to no member" do
       author = mentionable()
       org = insert(:organization, username: unique_username())
 
       create_post!(author, %{body: "Now hiring at @#{org.username}."})
 
-      assert Repo.all(PostMention) == []
+      # It used to be recorded nowhere, on the grounds that organizations had no
+      # feed to read it in. They have one now (issue #1336), so the row exists
+      # and points at the page — but it is still a **member** id that is nil,
+      # and no member notification goes out: a page is nobody's mailbox.
+      assert [%PostMention{user_id: nil, organization_id: organization_id}] =
+               Repo.all(PostMention)
+
+      assert organization_id == org.id
     end
 
     test "an edit that adds a mention notifies the newly named member only" do

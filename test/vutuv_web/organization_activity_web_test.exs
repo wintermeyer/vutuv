@@ -46,6 +46,20 @@ defmodule VutuvWeb.OrganizationActivityWebTest do
     refute has_element?(view, "[data-activity-new]")
   end
 
+  test "an entry that points at a post renders its link", %{conn: conn} do
+    {conn, owner} = create_and_login_user(conn)
+    organization = active_organization_for(owner)
+    {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+    {:ok, post} = Vutuv.Posts.create_organization_post(organization, owner, %{body: "Gefällt?"})
+    :ok = Vutuv.Posts.like_post(insert(:activated_user), post)
+
+    # `Posts.path/1` matches on the preloaded author, so an entry whose post
+    # arrived from a bare query would raise here rather than render.
+    {:ok, _view, html} = live(conn, ~p"/organizations/#{organization.slug}/activity")
+
+    assert html =~ Vutuv.Posts.path(post)
+  end
+
   test "an admin who is not a publisher still reaches it", %{conn: conn} do
     {conn, admin} = create_and_login_user(conn)
     owner = insert(:activated_user)

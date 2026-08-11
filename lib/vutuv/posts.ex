@@ -4812,12 +4812,74 @@ defmodule Vutuv.Posts do
       |> Mentions.mentioned_users(post.user_id)
       |> Enum.filter(&visible_to?(post, &1))
 
-    existing = Repo.all(from(m in PostMention, where: m.post_id == ^post.id, select: m.user_id))
+    existing =
+      Repo.all(
+        from(m in PostMention,
+          where: m.post_id == ^post.id and not is_nil(m.user_id),
+          select: m.user_id
+        )
+      )
+
     added = Enum.reject(wanted, &(&1.id in existing))
 
     drop_mentions(post, existing -- Enum.map(wanted, & &1.id))
     insert_mentions(post, added)
     Enum.each(added, &notify_mentioned(post, &1))
+    sync_organization_mentions(post)
+    :ok
+  end
+
+  # The same reconcile for the pages a body names by their root handle (issue
+  # #1336). Its own pass rather than a widened one above: an organization has no
+  # visibility to check (a page is public or it is not, which
+  # `mentioned_organizations/1` already asked) and nobody to notify — the
+  # mention shows up in the page's own activity list, which reads these rows.
+  defp sync_organization_mentions(%Post{} = post) do
+    wanted = post.body |> Mentions.mentioned_organizations() |> Enum.map(& &1.id)
+
+    existing =
+      Repo.all(
+        from(m in PostMention,
+          where: m.post_id == ^post.id and not is_nil(m.organization_id),
+          select: m.organization_id
+        )
+      )
+
+    drop_organization_mentions(post, existing -- wanted)
+    insert_organization_mentions(post, wanted -- existing)
+    :ok
+  end
+
+  defp drop_organization_mentions(_post, []), do: :ok
+
+  defp drop_organization_mentions(%Post{} = post, organization_ids) do
+    Repo.delete_all(
+      from(m in PostMention,
+        where: m.post_id == ^post.id and m.organization_id in ^organization_ids
+      )
+    )
+
+    :ok
+  end
+
+  defp insert_organization_mentions(_post, []), do: :ok
+
+  defp insert_organization_mentions(%Post{} = post, organization_ids) do
+    now = NaiveDateTime.utc_now(:second)
+
+    rows =
+      Enum.map(
+        organization_ids,
+        &%{
+          id: Vutuv.UUIDv7.generate(),
+          post_id: post.id,
+          organization_id: &1,
+          inserted_at: now,
+          updated_at: now
+        }
+      )
+
+    Repo.insert_all(PostMention, rows, on_conflict: :nothing)
     :ok
   end
 

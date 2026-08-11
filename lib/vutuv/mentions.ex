@@ -50,6 +50,7 @@ defmodule Vutuv.Mentions do
   alias Vutuv.Chat.Message
   alias Vutuv.Handles
   alias Vutuv.Jobs.JobPosting
+  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts.Post
   alias Vutuv.Profiles.Education
@@ -152,10 +153,9 @@ defmodule Vutuv.Mentions do
   The **members** `text` names, as `%User{}` structs, excluding `except_id`.
 
   The resolution behind the `"mention"` notification kind (`Vutuv.Posts`
-  reconciles `post_mentions` from it). Organizations share the handle
-  namespace but have no notification feed, so only the member table is
-  queried — a `@acme_gmbh` in a body resolves to nobody here, even though the
-  renderer links it.
+  reconciles `post_mentions` from it). Organizations share the handle namespace
+  and are resolved separately by `mentioned_organizations/1` — one handle is a
+  member's or a page's, never both, so the two never overlap.
   """
   def mentioned_users(text, except_id \\ nil) do
     case local_handles(text) do
@@ -171,6 +171,21 @@ defmodule Vutuv.Mentions do
 
   defp reject_user(query, nil), do: query
   defp reject_user(query, id), do: where(query, [u], u.id != ^id)
+
+  @doc """
+  The **publicly visible** organizations `text` names by their root handle
+  (issue #1336) — the organization twin of `mentioned_users/2`.
+
+  A handle belongs to a member or to a page, never both (one namespace, the
+  `handles` registry), so the two lists cannot overlap and no precedence rule
+  is needed here.
+  """
+  def mentioned_organizations(text) do
+    case local_handles(text) do
+      [] -> []
+      handles -> handles |> Organizations.get_organizations_by_usernames() |> Map.values()
+    end
+  end
 
   ## Rewrite ----------------------------------------------------------------
 

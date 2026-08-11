@@ -1,7 +1,8 @@
 defmodule VutuvWeb.OrganizationLive.Activity do
   @moduledoc """
   What happened to an organization page (`/organizations/:slug/activity`,
-  issue #1336): who followed it, and who liked or reposted what it published.
+  issue #1336): who followed it, who liked or reposted what it published, and
+  who named it by its handle.
 
   **One read marker for the whole team.** Opening this page stamps
   `organizations.activity_read_at`, and it is stamped for everybody — "read"
@@ -78,6 +79,9 @@ defmodule VutuvWeb.OrganizationLive.Activity do
 
   defp line(%{kind: "post_repost"} = entry),
     do: gettext("%{name} reposted a post.", name: full_name(entry.actor))
+
+  defp line(%{kind: "mention"} = entry),
+    do: gettext("%{name} mentioned this page.", name: full_name(entry.actor))
 
   @impl true
   def render(assigns) do

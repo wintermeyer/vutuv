@@ -62,6 +62,43 @@ defmodule Vutuv.OrganizationActivityTest do
     assert Enum.find(entries, &(&1.kind == "follow")).post == nil
   end
 
+  test "a post naming the page by its handle reaches its activity, and an edit undoes it" do
+    {organization, owner} = active_organization()
+    {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "genanntag"})
+    author = insert(:activated_user)
+
+    {:ok, post} = Posts.create_post(author, %{body: "Schönes Ding von @genanntag."})
+
+    assert [%{kind: "mention", actor: actor, post: mentioned}] =
+             Organizations.activity_page(organization).entries
+
+    assert actor.id == author.id
+    assert mentioned.id == post.id
+    # The link the page's team clicks needs the post's own author preloaded.
+    assert Posts.path(mentioned) =~ author.username
+
+    # Editing the mention out takes the entry with it — the rows are a
+    # reconciled index of the body, never a log of what was once written.
+    {:ok, _} = Posts.update_post(post, %{body: "Schönes Ding."})
+    assert Organizations.activity_page(organization).entries == []
+
+    # The owner is untouched by all of this; it is the page that was named.
+    assert owner.id != author.id
+  end
+
+  test "the page naming itself is not news to its own team" do
+    {organization, owner} = active_organization()
+    {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "selbstag"})
+    {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+
+    {:ok, _} =
+      Posts.create_organization_post(organization, owner, %{body: "Wir bei @selbstag freuen uns."})
+
+    # Its own post is already on the page above; a mention of itself inside it
+    # would be the same news twice.
+    assert Organizations.activity_page(organization).entries == []
+  end
+
   test "an event disappears with the row behind it" do
     {organization, owner} = publishing_organization()
     {:ok, post} = Posts.create_organization_post(organization, owner, %{body: "Kurz."})

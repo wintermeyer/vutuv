@@ -35,6 +35,7 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Pages
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostLike
+  alias Vutuv.Posts.PostMention
   alias Vutuv.Posts.PostRepost
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
@@ -400,7 +401,8 @@ defmodule Vutuv.Organizations do
         [
           &activity_follows(organization, &1, &2),
           &activity_post_engagement(organization, PostLike, "post_like", &1, &2),
-          &activity_post_engagement(organization, PostRepost, "post_repost", &1, &2)
+          &activity_post_engagement(organization, PostRepost, "post_repost", &1, &2),
+          &activity_mentions(organization, &1, &2)
         ],
         limit,
         offset
@@ -487,9 +489,48 @@ defmodule Vutuv.Organizations do
     end)
   end
 
+  # Posts that named the page by its root handle (issue #1336). Read off the
+  # `post_mentions` rows `Vutuv.Posts` reconciles at save time, so an edit that
+  # drops the mention drops the entry with it.
+  #
+  # The page's OWN posts are excluded: a page naming itself is not news to its
+  # team, and every organization post already sits on the page above.
+  defp activity_mentions(%Organization{id: id}, fetch_n, _cursor) do
+    from(m in PostMention,
+      join: p in Post,
+      on: p.id == m.post_id,
+      # Inner join, so a mention written BY another organization's page is not
+      # listed. Accepted for now: a page cannot yet name another page (its
+      # composer has no mention flow of its own), so there is nothing to miss.
+      join: u in User,
+      on: u.id == p.user_id,
+      where: m.organization_id == ^id,
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      where: not p.images_pending? and is_nil(p.frozen_at),
+      order_by: [desc: m.inserted_at, desc: m.id],
+      limit: ^fetch_n,
+      select: {m.id, m.inserted_at, u, p}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {row_id, at, actor, post} ->
+      # `Vutuv.Posts.path/1` matches on the preloaded author, so the post has to
+      # carry one or the link raises rather than renders. Here the actor IS that
+      # author (the join is on `p.user_id`), so no query and no `preload:` —
+      # which a tuple `select` could not have carried anyway.
+      post = %{post | user: actor}
+      %{id: "mention-#{row_id}", kind: "mention", at: at, actor: actor, post: post}
+    end)
+  end
+
   # Likes and reposts of the page's own posts. One function for both because
   # the two tables are the same shape and the only difference is the word.
-  defp activity_post_engagement(%Organization{id: id}, schema, kind, fetch_n, _cursor) do
+  defp activity_post_engagement(
+         %Organization{id: id} = organization,
+         schema,
+         kind,
+         fetch_n,
+         _cursor
+       ) do
     from(e in schema,
       join: p in Post,
       on: p.id == e.post_id,
@@ -503,6 +544,9 @@ defmodule Vutuv.Organizations do
     )
     |> Repo.all()
     |> Enum.map(fn {row_id, at, actor, post} ->
+      # Same reason as above, without the query: these are the page's OWN
+      # posts, and the caller is holding the page.
+      post = %{post | organization: organization}
       %{id: "#{kind}-#{row_id}", kind: kind, at: at, actor: actor, post: post}
     end)
   end

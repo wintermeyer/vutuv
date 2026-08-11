@@ -1,6 +1,7 @@
 defmodule Vutuv.Posts.PostMention do
   @moduledoc """
-  One member a post names with `@handle`, resolved at save time.
+  One member **or organization** a post names with `@handle`, resolved at save
+  time.
 
   The mention itself stays plain text in the body (`Vutuv.Mentions` owns the
   grammar); this row is only the resolved index behind the `"mention"`
@@ -13,7 +14,11 @@ defmodule Vutuv.Posts.PostMention do
 
   schema "post_mentions" do
     belongs_to(:post, Vutuv.Posts.Post)
+    # A member OR an organization (issue #1336), CHECK-enforced to exactly one:
+    # members and organizations share one handle namespace, so `@acme` names
+    # one of the two and never both.
     belongs_to(:user, Vutuv.Accounts.User)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
 
     timestamps()
   end
