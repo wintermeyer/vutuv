@@ -36,7 +36,10 @@ defmodule Vutuv.Fediverse.Follower do
     field(:name, :string)
     field(:last_checked_at, :naive_datetime)
 
+    # A remote follower follows a member OR a page (issue #1334),
+    # CHECK-enforced to exactly one.
     belongs_to(:user, Vutuv.Accounts.User)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
 
     timestamps()
   end
@@ -51,6 +54,7 @@ defmodule Vutuv.Fediverse.Follower do
     |> validate_length(:handle, max: @max_display)
     |> validate_length(:name, max: @max_display)
     |> unique_constraint([:user_id, :actor_uri])
+    |> unique_constraint([:organization_id, :actor_uri])
   end
 
   @doc """

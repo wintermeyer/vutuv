@@ -282,11 +282,63 @@ defmodule Vutuv.Fediverse do
            |> Repo.insert(
              on_conflict:
                {:replace, [:inbox_uri, :shared_inbox_uri, :handle, :name, :updated_at]},
-             conflict_target: [:user_id, :actor_uri]
+             conflict_target: [:user_id, :actor_uri],
+             # Without this a repeat Follow hands back the id Ecto minted for
+             # the INSERT that lost the conflict — an id no row ever had. The
+             # stored row is correct either way, so it stayed invisible; it
+             # would stop being invisible the first time a caller used the id.
+             returning: true
            ) do
       broadcast_remote_followers_changed([user.id])
       {:ok, follower}
     end
+  end
+
+  @doc """
+  The page twin of `add_follower/2` (issue #1334): records a remote follower of
+  an organization page, idempotent per remote actor.
+
+  Its own function rather than a widened `add_follower/2` because the upsert
+  target differs — `[:organization_id, :actor_uri]` against
+  `[:user_id, :actor_uri]` — and that target is what makes a repeat Follow a
+  re-sync instead of a duplicate. A repeat Follow from the same server is the
+  normal case, not the exception.
+  """
+  def add_organization_follower(%Organization{} = organization, attrs) do
+    with :ok <- check_inbound_cap(attrs[:actor_uri] || attrs["actor_uri"]) do
+      %Follower{organization_id: organization.id}
+      |> Follower.changeset(attrs)
+      |> Repo.insert(
+        on_conflict: {:replace, [:inbox_uri, :shared_inbox_uri, :handle, :name, :updated_at]},
+        conflict_target: [:organization_id, :actor_uri],
+        returning: true
+      )
+    end
+  end
+
+  @doc "Drops a page's remote follower (the inbox's Undo). Idempotent."
+  def remove_organization_follower(%Organization{id: id}, actor_uri) do
+    {count, _} =
+      Repo.delete_all(
+        from(f in Follower, where: f.organization_id == ^id and f.actor_uri == ^actor_uri)
+      )
+
+    count
+  end
+
+  @doc "How many remote accounts follow this page."
+  def organization_remote_follower_count(%Organization{id: id}),
+    do: Repo.aggregate(from(f in Follower, where: f.organization_id == ^id), :count)
+
+  @doc "A page's remote followers, newest first."
+  def list_organization_followers(%Organization{id: id}, limit \\ 50) do
+    Repo.all(
+      from(f in Follower,
+        where: f.organization_id == ^id,
+        order_by: [desc: f.inserted_at, desc: f.id],
+        limit: ^limit
+      )
+    )
   end
 
   @doc """
