@@ -76,6 +76,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Handles
+  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
   alias Vutuv.Posts
@@ -133,13 +134,25 @@ defmodule Vutuv.Fediverse do
   def enabled?, do: Application.get_env(:vutuv, :fediverse_enabled, true)
 
   @doc """
-  Whether this member takes part: the global switch, their opt-in, a
-  confirmed address and an account in good standing (a frozen, suspended or
-  deactivated profile is hidden on vutuv, so it must not keep federating).
+  Whether this member or **page** takes part.
+
+  For a member: the global switch, their opt-in, a confirmed address and an
+  account in good standing (a frozen, suspended or deactivated profile is hidden
+  on vutuv, so it must not keep federating).
+
+  For a page (issue #1334): the global switch, its opt-in, and
+  `Organizations.public_visible?/1` — active **and** not frozen. `status` stays
+  "active" through a freeze, so a gate reading only that would keep answering
+  for a page vutuv is hiding, on a network where nobody can see why.
   """
   def federated?(%User{} = user) do
     enabled?() and user.fediverse_followers? and user.email_confirmed? and
       is_nil(user.frozen_at) and is_nil(user.deactivated_at) and not suspended?(user)
+  end
+
+  def federated?(%Organization{} = organization) do
+    enabled?() and organization.fediverse_followers? and
+      Organizations.public_visible?(organization)
   end
 
   defp suspended?(%User{suspended_until: nil}), do: false
@@ -163,6 +176,12 @@ defmodule Vutuv.Fediverse do
   followed them still hold everything published before the move.
   """
   def ever_federated?(%User{} = user), do: enabled?() and get_actor(user) != nil
+
+  # The page twin (issue #1334): it holds a keypair, whatever its switch says
+  # now. Turning the switch off does not unsend what other servers already have,
+  # so anything that still has to reach them keys on this, not on `federated?/1`.
+  def ever_federated?(%Organization{} = organization),
+    do: enabled?() and get_organization_actor(organization) != nil
 
   ## Actors
 

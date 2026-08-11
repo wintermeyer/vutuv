@@ -59,6 +59,11 @@ defmodule Vutuv.Organizations.Organization do
     field(:country, :string)
     field(:seo?, :boolean, default: true)
     field(:geo?, :boolean, default: true)
+    # Whether this page federates (issue #1334), the twin of
+    # `users.fediverse_followers?`. Off until somebody deliberately turns it on:
+    # every externally visible part of that half is gated on it, and federating
+    # cannot be fully taken back once a remote server holds a copy.
+    field(:fediverse_followers?, :boolean, default: false)
     field(:status, :string, default: "pending")
     field(:verified_at, :naive_datetime)
     field(:frozen_at, :naive_datetime)
