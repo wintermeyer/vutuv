@@ -666,7 +666,8 @@ defmodule Vutuv.Posts.Screenshots do
 
   @doc """
   One page of the admin gallery: captured (`ready`) screenshots, newest capture
-  first, post + author preloaded. Returns `{rows, total}`.
+  first, post + author preloaded (member **or** organization). Returns
+  `{rows, total}`.
   """
   def gallery_page(params) do
     page(from(ps in PostScreenshot, where: ps.status == "ready"), params, desc: :captured_at)
@@ -693,7 +694,11 @@ defmodule Vutuv.Posts.Screenshots do
       base
       |> order_by(^order)
       |> Vutuv.Pages.paginate(params, total, @per_page)
-      |> preload(post: :user, remote_post: :remote_account)
+      # Both kinds of author: an organization post gets a link screenshot the
+      # same way a member's does (issue #1334), and `Vutuv.Posts.path/1` — which
+      # the gallery links every row with — matches on whichever one is
+      # preloaded. With only `:user` the page raised on the first such row.
+      |> preload(post: [:user, :organization], remote_post: :remote_account)
       |> Repo.all()
 
     {rows, total}

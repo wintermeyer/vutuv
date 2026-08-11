@@ -1256,7 +1256,7 @@ defmodule VutuvWeb.PostLive.Feed do
                 links in the body sit above it (relative + z-20) so they keep
                 their own targets. --%>
                 <.link
-                  href={~p"/#{post.user}/posts/#{post.id}"}
+                  href={Posts.path(post)}
                   aria-label={gettext("View post")}
                   class="absolute inset-0 z-10"
                 >

@@ -28,6 +28,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
 
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Organizations.Organization
   alias Vutuv.PageScreenshot
   alias Vutuv.Posts
   alias Vutuv.Posts.Screenshots
@@ -162,6 +163,26 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
     |> assign(:total, total)
     |> assign(:counts, Screenshots.counts())
     |> load_blocklist()
+  end
+
+  # Whichever kind of author the post has (issue #1334). A post published in an
+  # organization's name has no member behind it here — `post.user` is nil — and
+  # a link screenshot is taken for it exactly as it is for a member's post, so
+  # both rows on this page meet one.
+  defp author_name(post) do
+    case Posts.author(post) do
+      %Organization{name: name} -> name
+      author -> full_name(author)
+    end
+  end
+
+  # The compact queue-table form: a member is named by handle, a page by name
+  # (it may not have claimed a handle at all).
+  defp author_label(post) do
+    case Posts.author(post) do
+      %Organization{name: name} -> name
+      author -> "@" <> author.username
+    end
   end
 
   @impl true
@@ -367,7 +388,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                   navigate={Posts.path(ps.post)}
                   class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
-                  {gettext("Post by %{name}", name: full_name(ps.post.user))}
+                  {gettext("Post by %{name}", name: author_name(ps.post))}
                 </.link>
                 <a
                   :if={ps.remote_post}
@@ -418,7 +439,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                   </td>
                   <td>
                     <.link :if={ps.post} navigate={Posts.path(ps.post)}>
-                      @{ps.post.user.username}
+                      {author_label(ps.post)}
                     </.link>
                     <a
                       :if={ps.remote_post}

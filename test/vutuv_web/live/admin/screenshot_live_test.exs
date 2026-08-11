@@ -105,6 +105,39 @@ defmodule VutuvWeb.Admin.ScreenshotLiveTest do
     end
   end
 
+  describe "a screenshot of an organization post" do
+    test "the gallery renders it instead of crashing", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+
+      # The factory row directly rather than the claim helper: that one needs
+      # the global `:verify_organization_domains` flag, and flipping a global
+      # from here would reach every other module running beside it.
+      organization = insert(:organization)
+
+      post =
+        Repo.insert!(%Post{
+          organization_id: organization.id,
+          body: "https://shot.test",
+          published_on: Vutuv.BerlinTime.today()
+        })
+
+      Repo.insert!(%PostScreenshot{
+        post_id: post.id,
+        url: "https://shot.test",
+        status: "ready",
+        screenshot: "abcdef012345.avif",
+        captured_at: now()
+      })
+
+      # An organization post reaches this page like any other — it gets a link
+      # screenshot the same way. The row's post has to arrive with the author
+      # `Posts.path/1` matches on, or the whole page raises (issue #1334).
+      {:ok, _view, html} = live(conn, ~p"/admin/screenshots?tab=gallery")
+
+      assert html =~ Vutuv.Posts.path(Repo.preload(post, :organization))
+    end
+  end
+
   describe "gallery tab" do
     setup %{conn: conn} do
       {conn, _admin} = create_and_login_admin(conn)

@@ -483,11 +483,13 @@ defmodule VutuvWeb.NotificationLive.Index do
         />
 
         <%!-- A mention quotes the post that named the reader. Its permalink
-        lives under the post's own author, not under the reader. --%>
+        lives under the post's own author, not under the reader — and that
+        author may be an organization (issue #1334), so it is asked of
+        `Posts.path/1` rather than assembled here from a member handle. --%>
         <.quoted_post
           :if={@group.kind == "mention" and @n[:post_preview]}
           id={"quote-#{@group.id}"}
-          href={~p"/#{@n.post_preview.post.user}/posts/#{@n.post_preview.post.id}"}
+          href={Posts.path(@n.post_preview.post)}
           html={@n.post_preview.html}
           quote_lines={@quote_lines}
           class="mt-1.5"
@@ -513,7 +515,7 @@ defmodule VutuvWeb.NotificationLive.Index do
             :if={@n[:reply_preview]}
             id={"quote-reply-#{@group.id}"}
             data-reply-preview="true"
-            href={~p"/#{@n.reply_preview.post.user}/posts/#{@n.reply_preview.post.id}"}
+            href={Posts.path(@n.reply_preview.post)}
             html={@n.reply_preview.html}
             quote_lines={@quote_lines}
           />

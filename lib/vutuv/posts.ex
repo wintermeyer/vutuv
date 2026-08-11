@@ -3936,7 +3936,11 @@ defmodule Vutuv.Posts do
       from(p in Post, where: p.id in ^ids)
       |> scope_visible(viewer)
       |> Repo.all()
-      |> Repo.preload(:user)
+      # Both kinds of author (issue #1334): a quoted post may have been
+      # published in an organization's name, and `path/1` matches on whichever
+      # one is loaded. With `:user` alone the notifications page raised on the
+      # first mention written by a page.
+      |> Repo.preload([:user, :organization])
       |> Map.new(&{&1.id, &1})
     end
   end
