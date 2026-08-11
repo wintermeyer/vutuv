@@ -1875,13 +1875,21 @@ defmodule Vutuv.Posts do
         ^from(ph in PostHashtag, select: %{post_id: ph.post_id, tag_id: ph.tag_id})
       )
 
+    # LEFT joins, because a page files posts under tags exactly as a member
+    # does — a `#hashtag` in the body writes the same `post_hashtags` row. With
+    # an inner join to `users` the filing happened and the tag page did not show
+    # it, which is the worst of the two states: the data says it is there.
     from(p in Post,
-      join: u in assoc(p, :user),
+      left_join: u in assoc(p, :user),
       as: :author,
+      left_join: o in assoc(p, :organization),
+      as: :tag_organization,
       join: pt in subquery(filings),
       as: :post_tag,
       on: pt.post_id == p.id,
-      where: u.email_confirmed? == true
+      where:
+        (not is_nil(p.user_id) and u.email_confirmed? == true) or
+          (not is_nil(p.organization_id) and organization_public_row(o))
     )
     |> scope_visible(nil)
   end
@@ -2239,12 +2247,12 @@ defmodule Vutuv.Posts do
 
         from(p in Post,
           as: :post,
-          join: u in assoc(p, :user),
+          left_join: u in assoc(p, :user),
           as: :author,
-          where: p.user_id != ^viewer_id,
-          where: p.user_id not in subquery(all_followees_of(viewer_id)),
-          where: p.user_id not in subquery(blocked_either_way(viewer_id)),
-          where: account_confirmed_row(u),
+          left_join: o in assoc(p, :organization),
+          as: :tag_organization,
+          where: ^tag_source_member_gate(viewer_id),
+          where: ^tag_source_organization_gate(viewer_id),
           where: exists(subquery(tag_match)),
           order_by: [desc: p.inserted_at, desc: p.id],
           limit: ^fetch_n
@@ -2268,6 +2276,47 @@ defmodule Vutuv.Posts do
     from(c in Follow,
       where: c.follower_id == ^viewer_id and c.muted == false and not is_nil(c.followee_id),
       select: c.followee_id
+    )
+  end
+
+  # "Somebody new to me, whom I am allowed to see", for a post written by a
+  # member. Guarded by `is_nil(p.user_id)` first, because `NULL != id` and
+  # `NULL NOT IN (…)` are both NULL: without the guard all three conditions
+  # would read false on an organization post and drop it — three separate
+  # silent exclusions in one query.
+  defp tag_source_member_gate(viewer_id) do
+    dynamic(
+      [post: p, author: u],
+      is_nil(p.user_id) or
+        (p.user_id != ^viewer_id and
+           p.user_id not in subquery(all_followees_of(viewer_id)) and
+           p.user_id not in subquery(blocked_either_way(viewer_id)) and
+           account_confirmed_row(u))
+    )
+  end
+
+  # The same rule for a post written by a page: it must be public, and it must
+  # not be one I already follow — a page I follow reaches me through
+  # `feed_organization_post_items/3`, so letting its tagged posts in here too
+  # would show them twice. Muted follows count as followed, exactly as
+  # `all_followees_of/1` treats members.
+  defp tag_source_organization_gate(viewer_id) do
+    dynamic(
+      [post: p, tag_organization: o],
+      is_nil(p.organization_id) or
+        (organization_public_row(o) and
+           p.organization_id not in subquery(all_followed_organizations_of(viewer_id)))
+    )
+  end
+
+  # Every page the viewer follows, muted or not — the dedupe set for the tag
+  # source, the organization twin of `all_followees_of/1`. Muting a page means
+  # "not in my feed", so a muted page's tagged post must not sneak back in by
+  # the side door.
+  defp all_followed_organizations_of(viewer_id) do
+    from(c in Follow,
+      where: c.follower_id == ^viewer_id and not is_nil(c.followee_organization_id),
+      select: c.followee_organization_id
     )
   end
 
