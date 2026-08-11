@@ -2185,11 +2185,22 @@ defmodule Vutuv.Posts do
       on: r.post_id == p.id,
       join: reposter in User,
       on: reposter.id == r.user_id,
-      join: u in assoc(p, :user),
+      # LEFT, because the reposted post may have been published by an
+      # organization (issue #1334). An inner join here meant a member could
+      # repost a page's news and it reached nobody — the act succeeded and its
+      # whole point silently did not.
+      left_join: u in assoc(p, :user),
       as: :author,
+      left_join: o in assoc(p, :organization),
+      as: :repost_organization,
       where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
       where: r.user_id == ^viewer_id or account_confirmed_row(reposter),
-      where: p.user_id == ^viewer_id or account_confirmed_row(u),
+      # A repost must not amplify an author the site hides. For a member that is
+      # their account standing; for a page it is the page's own
+      # (`organization_public_row/1`), so a frozen page stops being passed on.
+      where:
+        (not is_nil(p.user_id) and (p.user_id == ^viewer_id or account_confirmed_row(u))) or
+          (not is_nil(p.organization_id) and organization_public_row(o)),
       # A third party's repost must not carry a blocked author's post into
       # the viewer's feed (the direct path is already cut: blocking severed
       # the follow).
@@ -3870,8 +3881,13 @@ defmodule Vutuv.Posts do
         join: e in ^schema,
         as: :engagement,
         on: e.post_id == p.id,
-        join: a in assoc(p, :user),
+        # LEFT for the same reason as the repost source: a bookmarked
+        # organization post used to vanish from the saved list, and an empty
+        # saved list looks exactly like an empty saved list.
+        left_join: a in assoc(p, :user),
         as: :author,
+        left_join: o in assoc(p, :organization),
+        as: :engaged_organization,
         where: e.user_id == ^user_id,
         select: {p, e.inserted_at, e.id}
       )
@@ -3893,8 +3909,14 @@ defmodule Vutuv.Posts do
   defp filter_engaged_search(query, term) do
     pattern = contains(term)
 
-    from([p, author: a] in query,
-      where: ilike(p.body, ^pattern) or name_ilike(a.first_name, a.last_name, ^pattern)
+    # The page's name is searchable beside the member's: somebody looking for
+    # what they saved from a company types the company. Without the third arm
+    # an organization post could only be found by its body, which is the same
+    # silent half-answer the inner join used to give.
+    from([p, author: a, engaged_organization: o] in query,
+      where:
+        ilike(p.body, ^pattern) or name_ilike(a.first_name, a.last_name, ^pattern) or
+          ilike(o.name, ^pattern)
     )
   end
 
