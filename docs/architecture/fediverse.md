@@ -820,6 +820,73 @@ passes straight through. What the words say is what vutuv cannot do: a delivered
 post is beyond reach for good, and leaving is a request to those servers, not a
 guarantee.
 
+## A page federates too (issue #1334)
+
+An organization page can be an actor of its own: findable from Mastodon,
+followable, and its posts reach the accounts that follow it. Everything below is
+the member machinery with one owner column swapped, so what follows is only
+where a page differs and why.
+
+**The switch is the architecture.** `organizations.fediverse_followers?` ships
+`false`, and every externally visible part reads it: WebFinger, the actor
+document, the collections, the inbox and the delivery path. That is what let
+this land in six pieces without any of them being visible to another server
+before the chain was complete — a page that never switches it on answers `404`
+exactly as an un-federated member does. It is owner-only
+(`/organizations/:slug/fediverse`), unlike the feed and the follows list beside
+it, because it decides how the page appears on servers we do not run.
+
+**A handle is required.** `Fediverse.federated?/1` refuses a page that has not
+claimed one. The handle *is* the address out there — WebFinger's `subject` and
+the actor document's `preferredUsername` are both built from it — so opting in
+without one would not federate the page, it would publish an actor nobody can
+name. The switch page says so and links to where a handle is claimed.
+
+**Six tables took the nullable pair** on the way: `fediverse_actors` (the
+keypair), `fediverse_followers` (who follows the page), `fediverse_deliveries`
+(the outbound queue) and `fediverse_post_deliveries` (the takedown ledger),
+beside `follows` and `tag_follows` from #1336. Each carries a CHECK for exactly
+one owner — except `fediverse_post_deliveries`, where the pair is a **writer**
+invariant rather than a schema one, because those rows deliberately outlive the
+post and its author and a foreign key would delete what a revocation still
+needs.
+
+**The documents differ where a page differs.** `Docs.organization_actor/2` is
+its own builder, not a widened `actor/2`: AP type `Organization` (which is what
+makes a remote server render it as an organisation), no `alsoKnownAs`/`movedTo`
+(account migration is a person's decision about their own identity), and no
+`featured` collection (a page pins nothing — `pinned_post_id` hangs off a
+member). It keeps the shared inbox and `manuallyApprovesFollowers`, which are
+facts about this installation rather than about the actor. Everything else was
+already general: `note/2`, `create_activity/2` and `envelope/4` read the author
+only through `actor_url/1`, so only `note_url/2` needed to learn the page's
+permalink shape.
+
+**The inbox is deliberately narrower.** A page accepts `Follow` and
+`Undo(Follow)` and acknowledges everything else with the same `202` the member
+inbox gives anything it does not handle. It holds no conversations, answers no
+Follow of its own and does not migrate, so `Like`, `Announce`, `Create(Note)`,
+`Accept`/`Reject` and `Move` would have nothing to act on. Signature
+verification is unchanged — same keyId/actor host pinning, same refusal to
+believe an `actor` field the signature does not cover.
+
+**Answering a Follow is not optional politeness.** An unanswered Follow shows on
+Mastodon as pending forever, which is the "pressed Follow and nothing happened"
+failure the whole gate exists to prevent — which is why the delivery queue was
+widened together with the inbox rather than after it.
+
+### What is not built
+
+A page cannot **follow** a remote account. That needs it to send a signed
+`Follow`, which it can now do in principle, but the member-side plumbing for
+answering `Accept`/`Reject` and tracking a pending request
+(`fediverse_remote_follows`) is still member-shaped. It is the last open point
+of #1336 and the natural next step.
+
+A page also receives no reactions or replies from other networks: those land
+against a member's post today, and giving a page the same would mean widening
+the reaction and remote-reply tables plus the surfaces that render them.
+
 ## Deliberate v1 limits
 
 Inbound **reply text** is stored now (issues #1069 and #1071, see the bullet

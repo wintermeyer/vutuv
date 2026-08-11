@@ -1844,6 +1844,15 @@ defmodule Vutuv.Organizations do
     end
   end
 
+  @doc """
+  Turns federating on or off for a page (issue #1334). Owner's decision: it
+  changes how the page appears on servers we do not run, and it cannot be fully
+  undone — a copy another server already holds can only be asked to go.
+  """
+  def set_fediverse_opt_in(%Organization{} = organization, on?) when is_boolean(on?) do
+    organization |> Ecto.Changeset.change(fediverse_followers?: on?) |> Repo.update()
+  end
+
   @doc "Admin freeze/unfreeze: sets/clears `frozen_at` (same effect as the report freeze)."
   def admin_set_frozen(%Organization{} = organization, frozen?) do
     frozen_at = if frozen?, do: now()

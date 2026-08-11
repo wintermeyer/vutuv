@@ -270,6 +270,15 @@ piece lives:
 - **It is mentionable** by its root handle, and reachable from search, the tag
   pages, the sitemap, `/llms.txt`, its own RSS feed and the agent formats.
 
+### It federates (issue #1334)
+
+A page can be an ActivityPub actor: findable from Mastodon, followable, and its
+posts reach the accounts that follow it. The whole of it hangs off one
+owner-only switch that ships **off** (`organizations.fediverse_followers?`), and
+a page must have claimed a handle first, because the handle is its address out
+there. The details live in `fediverse.md` under "A page federates too" — this
+note is here so nobody has to guess which document to open.
+
 ### The trap this shape carries
 
 Every one of those surfaces reaches the author. Widening `posts.user_id` to

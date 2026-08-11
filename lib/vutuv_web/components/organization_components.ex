@@ -232,6 +232,11 @@ defmodule VutuvWeb.OrganizationComponents do
         <.manage_tab :if={@publisher?} active={@active == :following} navigate={"/organizations/#{@organization.slug}/following"}>
           {gettext("Follows")}
         </.manage_tab>
+        <%!-- Owner-only (issue #1334): federating decides how the page appears
+        on servers we do not run, and cannot be fully taken back. --%>
+        <.manage_tab :if={@owner?} active={@active == :fediverse} navigate={"/organizations/#{@organization.slug}/fediverse"}>
+          {gettext("Fediverse")}
+        </.manage_tab>
       </nav>
     </div>
     """

@@ -132,6 +132,14 @@ defmodule VutuvWeb.OrganizationController do
     do:
       manage(conn, slug, VutuvWeb.OrganizationLive.Domains, &Organizations.can_manage_domains?/2)
 
+  @doc """
+  The owner's federation switch (issue #1334). Owner-only, unlike the feed and
+  the following list: it decides how the page appears on servers we do not run,
+  and it cannot be fully taken back.
+  """
+  def fediverse(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.OrganizationLive.Fediverse, &Organizations.owner?/2)
+
   def exclusions(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Exclusions, &Organizations.can_manage?/2)
 

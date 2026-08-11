@@ -284,6 +284,7 @@ defmodule VutuvWeb.Router do
     get("/organizations/:slug/activity", OrganizationController, :activity)
     get("/organizations/:slug/feed", OrganizationController, :feed)
     get("/organizations/:slug/following", OrganizationController, :following)
+    get("/organizations/:slug/fediverse", OrganizationController, :fediverse)
     # The permalink of a post published in the organization's name (issue #1334).
     # Deliberately under the slug and not under the organization's opt-in root
     # handle: the handle route dispatches an organization only on the bare
