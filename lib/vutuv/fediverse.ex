@@ -669,6 +669,16 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  How many posts a **page** has published (issue #1334) — what its `outbox`
+  collection reports.
+
+  No denial check, unlike the member twin: an organization post carries no
+  audience by construction, so every one of them is public.
+  """
+  def organization_public_post_count(%Organization{id: id}),
+    do: Repo.aggregate(from(p in Post, where: p.organization_id == ^id), :count)
+
+  @doc """
   What the `featured` collection holds (issue #1110): the member's pinned post
   when the **anonymous public** may see it, else nothing. A list, because that
   is the collection's shape — one entry today.

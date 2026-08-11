@@ -121,4 +121,26 @@ defmodule VutuvWeb.OrganizationFediverseActorWebTest do
 
     assert conn |> ap() |> get(~p"/organizations/#{page.slug}/actor") |> response(404)
   end
+
+  test "every endpoint the actor document advertises actually answers", %{conn: conn} do
+    page = federating_page()
+
+    json = conn |> ap() |> get(~p"/organizations/#{page.slug}/actor") |> json_response(200)
+
+    # The document is a promise to strangers: a remote server fetches these
+    # while building its picture of an account, so one that 404s reads as a
+    # broken actor from outside. The outbox did exactly that for one commit,
+    # which is why this walks the document instead of naming paths by hand.
+    for key <- ~w(followers outbox) do
+      url = json[key]
+      assert is_binary(url), "the actor document names no #{key}"
+
+      path = URI.parse(url).path
+      assert conn |> ap() |> get(path) |> json_response(200)
+    end
+
+    # The inbox is a POST target, so a GET is not the check — but it must at
+    # least be a route, not a 404 from the router.
+    assert json["inbox"] =~ "/organizations/#{page.slug}/actor/inbox"
+  end
 end

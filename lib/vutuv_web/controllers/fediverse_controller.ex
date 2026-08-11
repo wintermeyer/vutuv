@@ -652,6 +652,27 @@ defmodule VutuvWeb.FediverseController do
     end
   end
 
+  @doc """
+  The page's outbox, count-only like a member's.
+
+  It exists because the actor document names it. An actor that advertises an
+  endpoint answering 404 is not merely untidy — a remote server fetches the
+  outbox while building its picture of an account, and a page whose own document
+  points at nothing reads as broken from outside. This shipped that way for one
+  commit; the check is now part of the test.
+  """
+  def organization_outbox(conn, %{"slug" => slug}) do
+    with_federated_organization(conn, slug, fn organization ->
+      send_activity_json(
+        conn,
+        Docs.count_collection(
+          Docs.actor_url(organization) <> "/outbox",
+          Fediverse.organization_public_post_count(organization)
+        )
+      )
+    end)
+  end
+
   defp with_federated_organization(conn, slug, fun) do
     with true <- Fediverse.enabled?(),
          %Organization{} = organization <- Organizations.get_organization_by_slug(slug) do
