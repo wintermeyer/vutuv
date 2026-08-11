@@ -17,6 +17,11 @@ defmodule Vutuv.Chat.Message do
     belongs_to(:conversation, Vutuv.Chat.Conversation)
     # Nullable: a deleted sender's messages survive for the other participant.
     belongs_to(:sender, Vutuv.Accounts.User)
+    # Sent in a page's name (issue #1336), with the member who wrote it kept
+    # internally — the same split `posts` uses for authorship: the message
+    # belongs to the page, so it must not leave with the person who typed it.
+    belongs_to(:sender_organization, Vutuv.Organizations.Organization)
+    belongs_to(:acting_user, Vutuv.Accounts.User)
 
     # Microsecond precision (not the default second) so the read marker
     # `max(inserted_at)` can distinguish a message arriving in the same

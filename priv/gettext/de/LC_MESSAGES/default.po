@@ -484,11 +484,6 @@ msgstr "Name"
 msgid "New"
 msgstr "Neu"
 
-#: lib/vutuv/notifications/emailer.ex:281
-#, elixir-autogen
-msgid "New message from @%{slug} on vutuv"
-msgstr "Neue Nachricht von @%{slug} auf vutuv"
-
 #: lib/vutuv_web/agent_docs/markdown.ex:514
 #: lib/vutuv_web/templates/user/edit.html.heex:140
 #, elixir-autogen
@@ -1074,22 +1069,22 @@ msgstr "Allgemeines"
 msgid "Verify"
 msgstr "Verifizieren"
 
-#: lib/vutuv/notifications/emailer.ex:212
+#: lib/vutuv/notifications/emailer.ex:213
 #, elixir-autogen
 msgid "Confirm your account deletion"
 msgstr "PIN zum Löschen eines vutuv-Kontos"
 
-#: lib/vutuv/notifications/emailer.ex:206
+#: lib/vutuv/notifications/emailer.ex:207
 #, elixir-autogen
 msgid "Confirm your email"
 msgstr "Weitere E-Mail-Adresse für ein vutuv-Konto bestätigen"
 
-#: lib/vutuv/notifications/emailer.ex:194
+#: lib/vutuv/notifications/emailer.ex:195
 #, elixir-autogen
 msgid "Confirm your vutuv account"
 msgstr "vutuv-Konto einrichten"
 
-#: lib/vutuv/notifications/emailer.ex:200
+#: lib/vutuv/notifications/emailer.ex:201
 #, elixir-autogen
 msgid "Login to vutuv"
 msgstr "vutuv Login-PIN"
@@ -1582,7 +1577,7 @@ msgstr "Verwandte Tags anzeigen"
 msgid "tag name"
 msgstr "Tag-Name"
 
-#: lib/vutuv/notifications/emailer.ex:252
+#: lib/vutuv/notifications/emailer.ex:253
 #, elixir-autogen
 msgid "vutuv Account verified"
 msgstr "verifizierter Account"
@@ -3589,42 +3584,42 @@ msgstr ""
 msgid "yes"
 msgstr "ja"
 
-#: lib/vutuv/notifications/emailer.ex:901
+#: lib/vutuv/notifications/emailer.ex:900
 #, elixir-autogen, elixir-format
 msgid "A warning for your vutuv account"
 msgstr "Eine Verwarnung für Ihr vutuv-Konto"
 
-#: lib/vutuv/notifications/emailer.ex:985
+#: lib/vutuv/notifications/emailer.ex:984
 #, elixir-autogen, elixir-format
 msgid "Moderation: %{count} cases are waiting"
 msgstr "Moderation: %{count} Fälle warten"
 
-#: lib/vutuv/notifications/emailer.ex:963
+#: lib/vutuv/notifications/emailer.ex:962
 #, elixir-autogen, elixir-format
 msgid "Moderation: a profile was reported"
 msgstr "Moderation: Ein Profil wurde gemeldet"
 
-#: lib/vutuv/notifications/emailer.ex:875
+#: lib/vutuv/notifications/emailer.ex:874
 #, elixir-autogen, elixir-format
 msgid "The content you reported was revised"
 msgstr "Der von Ihnen gemeldete Inhalt wurde überarbeitet"
 
-#: lib/vutuv/notifications/emailer.ex:868
+#: lib/vutuv/notifications/emailer.ex:867
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv is under review"
 msgstr "Ihr Inhalt auf vutuv wird geprüft"
 
-#: lib/vutuv/notifications/emailer.ex:861
+#: lib/vutuv/notifications/emailer.ex:860
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv was reported and is hidden"
 msgstr "Ihr Inhalt auf vutuv wurde gemeldet und ist verborgen"
 
-#: lib/vutuv/notifications/emailer.ex:915
+#: lib/vutuv/notifications/emailer.ex:914
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account has been deactivated"
 msgstr "Ihr vutuv-Konto wurde deaktiviert"
 
-#: lib/vutuv/notifications/emailer.ex:908
+#: lib/vutuv/notifications/emailer.ex:907
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account is suspended"
 msgstr "Ihr vutuv-Konto ist gesperrt"
@@ -5647,7 +5642,7 @@ msgstr "Fußzeilen-Navigation"
 msgid "View post"
 msgstr "Beitrag ansehen"
 
-#: lib/vutuv/notifications/emailer.ex:244
+#: lib/vutuv/notifications/emailer.ex:245
 #, elixir-autogen, elixir-format
 msgid "Someone tried to register with your email address"
 msgstr "Registrierungsversuch mit Ihrer E-Mail-Adresse"
@@ -5844,12 +5839,12 @@ msgstr "z. B. Dr. oder Prof."
 msgid "e.g. Jr. or PhD"
 msgstr "z. B. jun. oder B.Sc."
 
-#: lib/vutuv/notifications/emailer.ex:347
+#: lib/vutuv/notifications/emailer.ex:346
 #, elixir-autogen, elixir-format
 msgid "@%{slug} endorsed you on vutuv"
 msgstr "@%{slug} hat Sie auf vutuv empfohlen"
 
-#: lib/vutuv/notifications/emailer.ex:333
+#: lib/vutuv/notifications/emailer.ex:332
 #, elixir-autogen, elixir-format
 msgid "@%{slug} started following you on vutuv"
 msgstr "@%{slug} folgt Ihnen jetzt auf vutuv"
@@ -6094,7 +6089,7 @@ msgstr[1] "vor %{count} Minuten"
 msgid "All other devices have been logged out."
 msgstr "Alle anderen Geräte wurden abgemeldet."
 
-#: lib/vutuv/notifications/emailer.ex:645
+#: lib/vutuv/notifications/emailer.ex:644
 #, elixir-autogen, elixir-format
 msgid "Another session was already active on your account."
 msgstr "Auf Ihrem Konto war bereits eine andere Sitzung aktiv."
@@ -6119,7 +6114,7 @@ msgstr "Von allen Geräten außer diesem abmelden?"
 msgid "Log this device out of your account?"
 msgstr "Dieses Gerät von Ihrem Konto abmelden?"
 
-#: lib/vutuv/notifications/emailer.ex:620
+#: lib/vutuv/notifications/emailer.ex:619
 #, elixir-autogen, elixir-format
 msgid "New sign-in to your vutuv account"
 msgstr "Neue Anmeldung bei Ihrem vutuv-Konto"
@@ -6134,7 +6129,7 @@ msgstr "Angemeldete Geräte"
 msgid "That device has been logged out."
 msgstr "Dieses Gerät wurde abgemeldet."
 
-#: lib/vutuv/notifications/emailer.ex:648
+#: lib/vutuv/notifications/emailer.ex:647
 #, elixir-autogen, elixir-format
 msgid "The location looks different from where you usually sign in."
 msgstr "Der Ort weicht von dem ab, von dem Sie sich üblicherweise anmelden."
@@ -6144,7 +6139,7 @@ msgstr "Der Ort weicht von dem ab, von dem Sie sich üblicherweise anmelden."
 msgid "This device"
 msgstr "Dieses Gerät"
 
-#: lib/vutuv/notifications/emailer.ex:642
+#: lib/vutuv/notifications/emailer.ex:641
 #, elixir-autogen, elixir-format
 msgid "This is the first sign-in we have seen from this device or browser."
 msgstr ""
@@ -13055,7 +13050,7 @@ msgstr "Veröffentlichen"
 
 #: lib/vutuv/accounts/user.ex:1097
 #: lib/vutuv/jobs/job_posting.ex:164
-#: lib/vutuv/notifications/emailer.ex:497
+#: lib/vutuv/notifications/emailer.ex:496
 #: lib/vutuv_web/agent_docs/markdown.ex:388
 #: lib/vutuv_web/agent_docs/markdown.ex:390
 #: lib/vutuv_web/agent_docs/text.ex:408
@@ -13190,12 +13185,12 @@ msgstr "Arbeitsort"
 msgid "You already have the maximum number of published postings."
 msgstr "Sie haben bereits die maximale Anzahl veröffentlichter Anzeigen."
 
-#: lib/vutuv/notifications/emailer.ex:931
+#: lib/vutuv/notifications/emailer.ex:930
 #, elixir-autogen, elixir-format
 msgid "Your job posting on vutuv expires soon"
 msgstr "Ihre Stellenanzeige auf vutuv läuft bald ab"
 
-#: lib/vutuv/notifications/emailer.ex:834
+#: lib/vutuv/notifications/emailer.ex:833
 #, elixir-autogen, elixir-format
 msgid "A domain of your organization page on vutuv is about to be dropped"
 msgstr "Eine Domain Ihrer Organisationsseite auf vutuv entfällt bald"
@@ -13215,12 +13210,12 @@ msgstr "Nachweis fehlt"
 msgid "We could not read this domain's proof on the last check. Restore it and check again, or the domain loses its verification."
 msgstr "Der Nachweis dieser Domain war bei der letzten Prüfung nicht abrufbar. Stellen Sie ihn wieder her und prüfen Sie erneut, sonst verliert die Domain ihre Verifizierung."
 
-#: lib/vutuv/notifications/emailer.ex:831
+#: lib/vutuv/notifications/emailer.ex:830
 #, elixir-autogen, elixir-format
 msgid "Your organization page on vutuv is about to lose its verification"
 msgstr "Ihre Organisationsseite auf vutuv verliert bald ihre Verifizierung"
 
-#: lib/vutuv/notifications/emailer.ex:852
+#: lib/vutuv/notifications/emailer.ex:851
 #, elixir-autogen, elixir-format
 msgid "Your organization page on vutuv is no longer public"
 msgstr "Ihre Organisationsseite auf vutuv ist nicht mehr öffentlich"
@@ -13670,7 +13665,7 @@ msgstr "verifizierte Organisationsseite"
 msgid "—"
 msgstr "—"
 
-#: lib/vutuv/notifications/emailer.ex:446
+#: lib/vutuv/notifications/emailer.ex:445
 #, elixir-autogen, elixir-format
 msgid "%{count} new match for your saved searches"
 msgid_plural "%{count} new matches for your saved searches"
@@ -14810,7 +14805,7 @@ msgstr "Bevorzugte Arbeitsform"
 msgid "Availability"
 msgstr "Verfügbarkeit"
 
-#: lib/vutuv/notifications/emailer.ex:893
+#: lib/vutuv/notifications/emailer.ex:892
 #, elixir-autogen, elixir-format
 msgid "An automated check removed an image from your vutuv account"
 msgstr "Eine automatische Prüfung hat ein Bild aus Ihrem vutuv-Konto entfernt"
@@ -16394,7 +16389,7 @@ msgstr "Bitte bestätigen Sie die Änderung, bevor wir Ihr Konto umbenennen."
 msgid "This confirmation expired. Please start again."
 msgstr "Diese Bestätigung ist abgelaufen. Bitte beginnen Sie von vorn."
 
-#: lib/vutuv/notifications/emailer.ex:226
+#: lib/vutuv/notifications/emailer.ex:227
 #, elixir-autogen, elixir-format
 msgid "Confirm your new username"
 msgstr "Bestätigen Sie Ihren neuen Benutzernamen"
@@ -19705,7 +19700,7 @@ msgstr "Wenn die Prüfung eines Ihrer Arbeitszeugnisse fertig ist. Das dauert ei
 msgid "Your employment reference has been reviewed."
 msgstr "Ihr Arbeitszeugnis wurde geprüft."
 
-#: lib/vutuv/notifications/emailer.ex:410
+#: lib/vutuv/notifications/emailer.ex:409
 #, elixir-autogen, elixir-format
 msgid "Your reference “%{title}” has been reviewed"
 msgstr "Ihr Zeugnis „%{title}“ wurde geprüft"
@@ -19780,7 +19775,7 @@ msgstr "Nur nötig, wenn Sie keine Datei zum Hochladen haben."
 msgid "Upload the PDF or the scan. We read the text out of it, and the review always reads that text, never the file itself."
 msgstr "Laden Sie das PDF oder den Scan hoch. Wir lesen den Text daraus aus, und die Prüfung liest immer diesen Text, nie die Datei selbst."
 
-#: lib/vutuv/notifications/emailer.ex:391
+#: lib/vutuv/notifications/emailer.ex:390
 #, elixir-autogen, elixir-format
 msgid "%{count} new notification on vutuv"
 msgid_plural "%{count} new notifications on vutuv"
@@ -21141,3 +21136,8 @@ msgstr "Diese Seite folgt noch niemandem auf einem anderen Netzwerk."
 #, elixir-autogen, elixir-format
 msgid "Too many attempts for now. Try again later."
 msgstr "Zu viele Versuche. Bitte versuchen Sie es später erneut."
+
+#: lib/vutuv/notifications/emailer.ex:282
+#, elixir-autogen, elixir-format
+msgid "New message from %{sender} on vutuv"
+msgstr "Neue Nachricht von %{sender} auf vutuv"

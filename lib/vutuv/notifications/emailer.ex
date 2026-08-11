@@ -26,6 +26,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Bounces
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Reports.DailyReport
   alias Vutuv.SavedSearches
   alias VutuvWeb.EmailComponents
@@ -278,14 +279,12 @@ defmodule Vutuv.Notifications.Emailer do
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(
       recipient_subject(locale, fn ->
-        gettext("New message from @%{slug} on vutuv",
-          slug: other.username
-        )
+        gettext("New message from %{sender} on vutuv", sender: sender_label(other))
       end)
     )
     |> render_bodies("unread_messages", locale, %{
       user: user,
-      other_slug: other.username,
+      other_label: sender_label(other),
       conversation_id: conversation_id,
       # A DM is Markdown source (the composer is Milkdown), so the quote is
       # rendered, not printed: the HTML body runs the source through
@@ -1037,6 +1036,19 @@ defmodule Vutuv.Notifications.Emailer do
   # The body template is selected by the recipient's locale; render the
   # subject in that same locale, not the ambient process locale (which is the
   # *sender's* — e.g. the admin verifying another member).
+  # How the counterpart of a conversation is named in a message email. A member
+  # is always an @handle (the system-message convention: never the clear name).
+  # A page's handle is OPTIONAL - it only has one once it claims a root word -
+  # so a page without one is named by its name, which is the only thing it is
+  # certain to have. Hence the label carries its own "@" rather than the
+  # templates hardcoding one.
+  defp sender_label(%User{username: username}), do: "@" <> username
+
+  defp sender_label(%Organization{username: username}) when is_binary(username),
+    do: "@" <> username
+
+  defp sender_label(%Organization{name: name}), do: name
+
   defp recipient_subject(locale, subject_fun) do
     in_locale(locale, subject_fun)
   end

@@ -6,11 +6,21 @@ defmodule Vutuv.Chat.Conversation do
   @statuses ~w(pending accepted declined)
 
   schema "conversations" do
-    # The unordered pair stored sorted (user_a_id < user_b_id, enforced by a
-    # check constraint) so the unique index allows exactly one conversation
-    # per pair. All four user fields are set programmatically, never cast.
+    # Two shapes (issue #1336):
+    #
+    #   member <-> member: user_a + user_b, stored SORTED (user_a_id <
+    #     user_b_id, CHECK-enforced) so one unique index allows exactly one
+    #     conversation per pair. Sorting breaks a symmetry: two ids from the
+    #     same table mean (a, b) and (b, a) name the same conversation.
+    #   member <-> page:   user_a is the member, user_b NULL, organization set.
+    #     No sorting, because two ids from DIFFERENT tables carry no such
+    #     symmetry — the pair is already canonical.
+    #
+    # A CHECK says the other side is exactly one of the two. All of these are
+    # set programmatically, never cast.
     belongs_to(:user_a, Vutuv.Accounts.User)
     belongs_to(:user_b, Vutuv.Accounts.User)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
     # The party who opened the conversation (set when the first message is
     # sent). A standing role on the conversation, not a per-message field.
     belongs_to(:initiator, Vutuv.Accounts.User)

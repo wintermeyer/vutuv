@@ -23,6 +23,8 @@ defmodule Vutuv.Chat do
   alias Vutuv.Activity
   alias Vutuv.Chat.{Conversation, Message, Participant}
   alias Vutuv.Notifications.Emailer
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
 
   @pubsub Vutuv.PubSub
@@ -82,6 +84,137 @@ defmodule Vutuv.Chat do
 
       true ->
         find_or_create_unblocked(me, other)
+    end
+  end
+
+  # The page clause (issue #1336). Simpler than the member one above, and every
+  # omission is a real difference rather than a shortcut. No sorted pair: the
+  # two sides come from different tables, so `(user_a_id, organization_id)` is
+  # already canonical. No block check: a block is between two people. No
+  # request/accept dance either — a page publishes to be addressed, so there is
+  # nothing for it to approve, and a "pending" state would only make its team's
+  # first message look like an acceptance.
+  #
+  # The one gate is that the page is one anybody may see: writing into a frozen
+  # or not-yet-active page would put a message where nobody can answer it.
+  def find_or_create_conversation(%User{} = me, %Organization{} = page) do
+    cond do
+      not me.email_confirmed? ->
+        {:error, :not_activated}
+
+      # Re-read rather than trust the struct handed in: this decides whether a
+      # message may be planted, and a caller holding a copy loaded before a
+      # freeze would otherwise walk straight past the gate. Same reasoning as
+      # the acting-as session id being a hint rather than a credential.
+      not page_visible?(page) ->
+        {:error, :frozen}
+
+      true ->
+        find_or_create_organization_conversation(me, page)
+    end
+  end
+
+  defp page_visible?(%Organization{id: id}) do
+    case Organizations.get_organization(id) do
+      %Organization{} = fresh -> Organizations.public_visible?(fresh)
+      nil -> false
+    end
+  end
+
+  defp find_or_create_organization_conversation(%User{} = me, %Organization{} = page) do
+    case Repo.get_by(Conversation, user_a_id: me.id, organization_id: page.id) do
+      %Conversation{frozen_at: %NaiveDateTime{}} ->
+        {:error, :frozen}
+
+      %Conversation{} = conversation ->
+        {:ok, conversation}
+
+      nil ->
+        insert_organization_conversation(me, page)
+    end
+  end
+
+  defp insert_organization_conversation(%User{} = me, %Organization{} = page) do
+    changeset =
+      %Conversation{
+        user_a_id: me.id,
+        organization_id: page.id,
+        initiator_id: me.id,
+        status: "accepted"
+      }
+      |> Conversation.changeset()
+
+    result =
+      Repo.transaction(fn ->
+        case Repo.insert(changeset) do
+          {:ok, conversation} ->
+            Repo.insert!(%Participant{conversation_id: conversation.id, user_id: me.id})
+            # One row for the page, not one per publisher.
+            Repo.insert!(%Participant{
+              conversation_id: conversation.id,
+              organization_id: page.id
+            })
+
+            conversation
+
+          {:error, _changeset} ->
+            Repo.rollback(:exists)
+        end
+      end)
+
+    case result do
+      {:ok, conversation} ->
+        {:ok, conversation}
+
+      {:error, :exists} ->
+        {:ok, Repo.get_by(Conversation, user_a_id: me.id, organization_id: page.id)}
+    end
+  end
+
+  @doc """
+  A publisher answers in the **page's** name (issue #1336).
+
+  `acting_user` is recorded and never shown, the same split `posts` makes for
+  authorship: the message belongs to the page, so it must not walk out of the
+  door with the person who typed it. The right to send follows the **role**, not
+  the person, so it is asked live — a withdrawn publisher stops being able to
+  answer at once.
+  """
+  def send_message_as_organization(%Organization{} = page, %User{} = acting_user, id, body) do
+    conversation = Repo.get_by(Conversation, id: id, organization_id: page.id)
+
+    cond do
+      is_nil(conversation) ->
+        {:error, :not_participant}
+
+      not Organizations.publisher?(page, acting_user) ->
+        {:error, :not_allowed}
+
+      not is_nil(conversation.frozen_at) ->
+        {:ok, :dropped}
+
+      true ->
+        deliver_as_organization(conversation, page, acting_user, body)
+    end
+  end
+
+  defp deliver_as_organization(conversation, page, acting_user, body) do
+    changeset =
+      %Message{
+        conversation_id: conversation.id,
+        sender_organization_id: page.id,
+        acting_user_id: acting_user.id
+      }
+      |> Message.changeset(%{body: body})
+
+    case Repo.transaction(fn -> insert_and_bump(changeset, conversation, false) end) do
+      {:ok, message} ->
+        message = %{message | sender_organization: page}
+        broadcast_new_message(conversation, message)
+        {:ok, message}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, changeset}
     end
   end
 
@@ -232,6 +365,29 @@ defmodule Vutuv.Chat do
     # listing columns rather than the whole wide user row.
     Repo.one!(from(u in User, where: u.id == ^id, select: struct(u, ^User.listing_fields())))
   end
+
+  @doc """
+  The other side of a conversation - a member **or a page** (issue #1336).
+
+  `other_user/2` above cannot answer this: for a member-page conversation it
+  resolves a nil id, and `Repo.one!(where: u.id == ^nil)` RAISES rather than
+  answering nothing. Every caller that can see a page conversation must come
+  through here.
+  """
+  def other_party(%Conversation{} = conversation, me_id) do
+    case other_key(conversation, party(me_id, conversation)) do
+      {:user, id} ->
+        Repo.one!(from(u in User, where: u.id == ^id, select: struct(u, ^User.listing_fields())))
+
+      {:organization, id} ->
+        Repo.get!(Organization, id)
+    end
+  end
+
+  # `me_id` names either the member or the page, and only the conversation can
+  # say which - a page conversation's `user_a_id` is always the member.
+  defp party(me_id, %Conversation{organization_id: me_id}), do: {:organization, me_id}
+  defp party(me_id, %Conversation{}), do: {:user, me_id}
 
   @doc """
   The status a conversation shows to its initiator: a declined request
@@ -404,6 +560,24 @@ defmodule Vutuv.Chat do
   end
 
   @doc """
+  A page's inbox (issue #1336) - every conversation addressed to it.
+
+  No request/accept dance and so no pending state to filter: a page publishes
+  in order to be addressed. The whole team sees one list, the same shared view
+  as the page's activity.
+  """
+  def list_organization_conversations(%Organization{id: page_id}) do
+    from(c in Conversation,
+      where: c.organization_id == ^page_id,
+      where: is_nil(c.frozen_at),
+      where: not is_nil(c.last_message_at),
+      order_by: [desc_nulls_last: c.last_message_at, desc: c.id]
+    )
+    |> Repo.all()
+    |> hydrate({:organization, page_id})
+  end
+
+  @doc """
   Message requests: pending conversations with at least one message where
   `me` is the recipient.
   """
@@ -419,22 +593,30 @@ defmodule Vutuv.Chat do
     |> hydrate(me_id)
   end
 
-  # Resolve the other user, last-message preview and unread count for a page
-  # of conversations in three batched queries — no per-row queries.
-  defp hydrate([], _me_id), do: []
+  # Resolve the other side, last-message preview and unread count for a page of
+  # conversations in three batched queries — no per-row queries. `party` is
+  # `{:user, id}` or `{:organization, id}`: since issue #1336 the viewer of a
+  # conversation list is a member or a page, and so is the other side.
+  defp hydrate([], _party), do: []
 
-  defp hydrate(conversations, me_id) do
+  defp hydrate(conversations, me_id) when is_binary(me_id),
+    do: hydrate(conversations, {:user, me_id})
+
+  defp hydrate(conversations, party) do
     ids = Enum.map(conversations, & &1.id)
-    other_ids = Enum.map(conversations, &other_user_id(&1, me_id))
-
-    others = listing_users_by_id(other_ids)
+    keys = Enum.map(conversations, &other_key(&1, party))
+    others = parties_by_key(keys)
+    # A dynamic composes only inside another dynamic, never inline in a query
+    # expression, so the whole condition is built here.
+    mine = own_message(party)
+    shown = dynamic([m], is_nil(m.frozen_at) or ^mine)
 
     previews =
       from(m in Message,
         where: m.conversation_id in ^ids,
         # A frozen message must not leak into the sidebar preview of the
         # other participant; the sender still sees their own.
-        where: is_nil(m.frozen_at) or m.sender_id == ^me_id,
+        where: ^shown,
         distinct: m.conversation_id,
         order_by: [asc: m.conversation_id, desc: m.inserted_at, desc: m.id],
         # Only a short prefix leaves Postgres: the sidebar CSS-truncates to one
@@ -445,20 +627,72 @@ defmodule Vutuv.Chat do
       |> Repo.all()
       |> Map.new()
 
-    unreads = unread_counts(ids, me_id)
+    unreads = unread_counts(ids, party)
 
-    Enum.map(conversations, fn conversation ->
+    Enum.zip_with(conversations, keys, fn conversation, key ->
       {last_body, last_at} = Map.get(previews, conversation.id, {nil, nil})
 
       %{
         conversation: conversation,
-        other: Map.fetch!(others, other_user_id(conversation, me_id)),
+        other: Map.fetch!(others, key),
         last_body: last_body,
         last_at: last_at,
         unread: Map.get(unreads, conversation.id, 0)
       }
     end)
   end
+
+  # Who is on the far side, as a `{kind, id}` key. `user_a_id` is always the
+  # member, so a page conversation reads the answer off a column rather than
+  # arriving at it by elimination.
+  defp other_key(%Conversation{organization_id: page_id} = conversation, {:user, me_id})
+       when is_binary(page_id) do
+    if conversation.user_a_id == me_id, do: {:organization, page_id}, else: {:user, me_id}
+  end
+
+  defp other_key(%Conversation{} = conversation, {:user, me_id}),
+    do: {:user, other_user_id(conversation, me_id)}
+
+  defp other_key(%Conversation{user_a_id: member_id}, {:organization, _page_id}),
+    do: {:user, member_id}
+
+  # One batched load per kind, into a single `{kind, id} => struct` map.
+  defp parties_by_key(keys) do
+    grouped = Enum.group_by(keys, &elem(&1, 0), &elem(&1, 1))
+
+    users =
+      grouped
+      |> Map.get(:user, [])
+      |> listing_users_by_id()
+      |> Map.new(fn {id, user} -> {{:user, id}, user} end)
+
+    pages =
+      case Map.get(grouped, :organization, []) do
+        [] ->
+          %{}
+
+        ids ->
+          from(o in Organization, where: o.id in ^ids)
+          |> Repo.all()
+          |> Map.new(&{{:organization, &1.id}, &1})
+      end
+
+    Map.merge(users, pages)
+  end
+
+  # "Sent by me", as a query fragment. Since issue #1336 exactly one of the two
+  # sender columns is filled, so **both** arms must survive the other being
+  # NULL: a bare `m.sender_id == ^id` answers NULL rather than false for a
+  # page's message, and the `not (…)` in unread_counts/2 below then answers
+  # NULL too, which excludes the row. Written this way the negation is honest
+  # in both directions, and the unread badge counts what the reader has not
+  # read whichever side wrote it.
+  defp own_message({:user, me_id}),
+    do: dynamic([m], not is_nil(m.sender_id) and m.sender_id == ^me_id)
+
+  defp own_message({:organization, page_id}),
+    do:
+      dynamic([m], not is_nil(m.sender_organization_id) and m.sender_organization_id == ^page_id)
 
   # Load the listing columns for a set of user ids into an id->user map.
   # The email/sidebar only needs the narrow listing_fields, not the wide row.
@@ -468,12 +702,23 @@ defmodule Vutuv.Chat do
     |> Map.new(&{&1.id, &1})
   end
 
-  defp unread_counts(conversation_ids, me_id) do
+  defp unread_counts(conversation_ids, me_id) when is_binary(me_id),
+    do: unread_counts(conversation_ids, {:user, me_id})
+
+  defp unread_counts(conversation_ids, party) do
+    from_them = dynamic([m], not (^own_message(party)))
+    joined = dynamic([m, p], p.conversation_id == m.conversation_id and ^participant_is(party))
+
     from(m in Message,
       join: p in Participant,
-      on: p.conversation_id == m.conversation_id and p.user_id == ^me_id,
+      on: ^joined,
       where: m.conversation_id in ^conversation_ids,
-      where: m.sender_id != ^me_id,
+      # NOT `m.sender_id != ^me_id`: a page's message has a NULL `sender_id`,
+      # and `NULL != <id>` is NULL rather than true, so a page's reply would
+      # never have counted as unread for the member it answered. The same trap
+      # as the `NOT IN (…, NULL)` ones this milestone has already paid for, and
+      # just as quiet — the badge simply stays at zero.
+      where: ^from_them,
       # Frozen messages are invisible to the recipient, so they must not
       # count as unread either (the badge would point at nothing).
       where: is_nil(m.frozen_at),
@@ -484,6 +729,11 @@ defmodule Vutuv.Chat do
     |> Repo.all()
     |> Map.new()
   end
+
+  defp participant_is({:user, me_id}), do: dynamic([_m, p], p.user_id == ^me_id)
+
+  defp participant_is({:organization, page_id}),
+    do: dynamic([_m, p], p.organization_id == ^page_id)
 
   ## Thread pagination
 
@@ -659,7 +909,7 @@ defmodule Vutuv.Chat do
             """
             EXISTS (SELECT 1 FROM messages m
                     WHERE m.conversation_id = ?
-                      AND m.sender_id <> ?
+                      AND (m.sender_id IS NULL OR m.sender_id <> ?)
                       AND m.frozen_at IS NULL
                       AND (? IS NULL OR m.inserted_at > ?)
                       AND (? IS NULL OR m.inserted_at > ?)
@@ -678,20 +928,22 @@ defmodule Vutuv.Chat do
       )
 
     # The recipient rides along on the join (its settings drive everything); the
-    # counterpart (named by @handle in the email) is the one per-row lookup left,
-    # resolved once per row here and batch-loaded, the way hydrate/2 does.
+    # counterpart the email names is the one per-row lookup left, resolved once
+    # per row here and batch-loaded, the way hydrate/2 does. Since issue #1336
+    # that counterpart can be a page, so it is a `{kind, id}` key - resolving it
+    # as a bare user id used to yield nil and take the whole batch down with a
+    # KeyError on the very first page conversation.
     rows =
       Repo.all(query)
       |> Enum.map(fn {participant, conversation, recipient} ->
-        {participant, conversation, recipient, other_user_id(conversation, participant.user_id)}
+        {participant, conversation, recipient,
+         other_key(conversation, {:user, participant.user_id})}
       end)
 
-    # The email only names this counterpart by @handle, so load just the listing
-    # columns (see listing_users_by_id/1) rather than the whole wide user row.
-    others = listing_users_by_id(Enum.map(rows, &elem(&1, 3)))
+    others = parties_by_key(Enum.map(rows, &elem(&1, 3)))
 
-    Enum.reduce(rows, 0, fn {participant, conversation, recipient, other_id}, sent ->
-      other = Map.fetch!(others, other_id)
+    Enum.reduce(rows, 0, fn {participant, conversation, recipient, key}, sent ->
+      other = Map.fetch!(others, key)
       sent + notify_participant(participant, conversation, recipient, other, now)
     end)
   end
@@ -739,7 +991,10 @@ defmodule Vutuv.Chat do
     query =
       from(m in Message,
         where: m.conversation_id == ^participant.conversation_id,
-        where: m.sender_id != ^participant.user_id,
+        # A page's message has a NULL `sender_id`, and `NULL != <id>` is NULL,
+        # not true - without the is_nil arm the burst would find no bodies and
+        # the member would never hear that the page had answered.
+        where: is_nil(m.sender_id) or m.sender_id != ^participant.user_id,
         where: is_nil(m.frozen_at),
         where: m.inserted_at < ^cutoff,
         order_by: [asc: m.inserted_at],

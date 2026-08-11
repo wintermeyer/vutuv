@@ -1,6 +1,6 @@
 <.email_layout preheader="You have a new message on vutuv" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
-  <.email_p>you have a new message from @{@other_slug} on vutuv:</.email_p>
+  <.email_p>you have a new message from {@other_label} on vutuv:</.email_p>
   <.email_markdown :if={@message_body} body={@message_body} />
   <.email_button href={"#{@url}messages/#{@conversation_id}"}>Read and reply</.email_button>
   <.email_p>

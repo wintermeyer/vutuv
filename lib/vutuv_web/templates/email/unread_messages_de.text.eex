@@ -1,6 +1,6 @@
 <%= email_greeting(@user) %>,
 
-Sie haben eine neue Nachricht von @<%= @other_slug %> auf vutuv:
+Sie haben eine neue Nachricht von <%= @other_label %> auf vutuv:
 <%= if @message_body do %>
 <%= @message_text %>
 <% end %>
