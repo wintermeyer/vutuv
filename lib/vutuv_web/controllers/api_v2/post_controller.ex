@@ -19,6 +19,7 @@ defmodule VutuvWeb.ApiV2.PostController do
 
   use VutuvWeb, :controller
 
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias VutuvWeb.AgentDocs.PostDoc
@@ -29,12 +30,19 @@ defmodule VutuvWeb.ApiV2.PostController do
 
   def show(conn, %{"id" => id}) do
     with_visible_post(conn, id, fn conn, post ->
-      ApiV2.send_json(
-        conn,
-        PostDoc.build(post.user, post, viewer: conn.assigns.current_user)
-      )
+      ApiV2.send_json(conn, post_doc(post, conn.assigns.current_user))
     end)
   end
+
+  # A post is by a member or by an organization (issue #1334), and the two have
+  # genuinely different documents: an organization post has no audience, no
+  # conversation and no remote reactions, so it gets the smaller builder rather
+  # than the full one with every field nil. Handing `build/3` a nil author
+  # simply raised.
+  defp post_doc(%Post{organization: %Organization{} = organization} = post, _viewer),
+    do: PostDoc.build_organization_post(organization, post)
+
+  defp post_doc(%Post{} = post, viewer), do: PostDoc.build(post.user, post, viewer: viewer)
 
   def archive(conn, %{"slug" => slug} = params) do
     viewer = conn.assigns.current_user
