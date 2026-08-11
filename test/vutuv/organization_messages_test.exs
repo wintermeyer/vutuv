@@ -200,4 +200,42 @@ defmodule Vutuv.OrganizationMessagesTest do
     # Any publisher, not only whoever happened to be addressed.
     assert Organizations.publisher?(page, owner)
   end
+
+  test "the page reads its own thread, and only its own" do
+    {page, _owner} = page_with_publisher()
+    member = insert(:activated_user)
+
+    {:ok, conversation} = Chat.find_or_create_conversation(member, page)
+    {:ok, _} = Chat.send_message(member, conversation.id, "Guten Tag.")
+
+    assert %Conversation{id: id} = Chat.get_conversation(page, conversation.id)
+    assert id == conversation.id
+
+    page_of_messages = Chat.messages_page(page, conversation, limit: 20)
+    assert [%{body: "Guten Tag."}] = page_of_messages.entries
+
+    # Somebody else's conversation is not the page's to read.
+    other_member = insert(:activated_user)
+    third = insert(:activated_user)
+    {:ok, foreign} = Chat.find_or_create_conversation(other_member, third)
+    assert is_nil(Chat.get_conversation(page, foreign.id))
+  end
+
+  test "reading marks the thread read for the whole team, not for one publisher" do
+    {page, owner} = page_with_publisher()
+    second = insert(:activated_user)
+    {:ok, _} = Organizations.add_role(page, second, "publisher", owner)
+    member = insert(:activated_user)
+
+    {:ok, conversation} = Chat.find_or_create_conversation(member, page)
+    {:ok, _} = Chat.send_message(member, conversation.id, "Guten Tag.")
+
+    assert [%{unread: 1}] = Chat.list_organization_conversations(page)
+
+    :ok = Chat.mark_read(page, conversation.id)
+
+    # One marker for the page, so the colleague who did not open it sees the
+    # same thing — the model `organizations.activity_read_at` already sets.
+    assert [%{unread: 0}] = Chat.list_organization_conversations(page)
+  end
 end

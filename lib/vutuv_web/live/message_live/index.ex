@@ -17,8 +17,12 @@ defmodule VutuvWeb.MessageLive.Index do
   """
   use VutuvWeb, :live_view
 
+  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
+
   alias Vutuv.Chat
   alias Vutuv.Chat.{Conversation, Message}
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias VutuvWeb.{Markdown, Presence}
 
   @typing_clear_ms 2500
@@ -42,6 +46,7 @@ defmodule VutuvWeb.MessageLive.Index do
 
     {:ok,
      socket
+     |> assign_viewer()
      |> assign(:page_title, gettext("Messages"))
      |> assign(:user_name, display_name(user))
      |> assign(:typing_tokens, %{})
@@ -54,6 +59,17 @@ defmodule VutuvWeb.MessageLive.Index do
      |> stream(:messages, [], dom_id: &"message-#{&1.id}")
      |> assign_form()}
   end
+
+  # Whose inbox this is. A publisher who switched into a page (issue #1335)
+  # reads the PAGE's messages at this same URL and answers in its name; anybody
+  # else reads their own. `:acting_as` is resolved by `Live.InitAssigns` from
+  # the roles on every mount, never trusted out of the session, so a stale
+  # session naming a page the member no longer speaks for lands on themselves.
+  defp assign_viewer(socket),
+    do: assign(socket, :viewer, socket.assigns[:acting_as] || socket.assigns.current_user)
+
+  defp page_viewer?(%Organization{}), do: true
+  defp page_viewer?(_), do: false
 
   # The sidebar lists load only on the connected mount (the page is
   # login-required, so the static render is replaced a moment later — no
@@ -77,25 +93,28 @@ defmodule VutuvWeb.MessageLive.Index do
   end
 
   defp apply_action(socket, :show, %{"id" => id} = params) do
-    user = socket.assigns.current_user
+    viewer = socket.assigns.viewer
 
-    case Chat.get_conversation(user, id) do
+    case Chat.get_conversation(viewer, id) do
       nil ->
         push_navigate(socket, to: ~p"/messages")
 
       %Conversation{} = conversation ->
         if connected?(socket) do
           Chat.subscribe(conversation.id)
-          Chat.mark_read(user, conversation.id)
+          Chat.mark_read(viewer, conversation.id)
         end
 
         # Pass the already-authorized conversation so messages_page doesn't
         # re-run get_conversation for the same row.
-        page = Chat.messages_page(user, conversation, limit: @page_size)
+        page = Chat.messages_page(viewer, conversation, limit: @page_size)
 
         socket
         |> assign(:conversation, conversation)
-        |> assign(:other, Chat.other_user(conversation, user.id))
+        # `other_user/2` cannot answer here: on a member-page conversation it
+        # resolves a nil id and `Repo.one!` RAISES rather than answering
+        # nothing, which was a 500 on this page for anybody who wrote to a page.
+        |> assign(:other, Chat.other_party(conversation, viewer.id))
         |> assign(:more?, page.more?)
         |> assign(:cursor, page.next_cursor)
         |> stream(:messages, Enum.reverse(page.entries), reset: true)
@@ -133,6 +152,29 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
+  # The page's "Message" button, the twin of the profile one above.
+  defp apply_action(socket, :new_organization, %{"slug" => slug} = params) do
+    viewer = socket.assigns.current_user
+
+    case Organizations.fetch_visible_organization(slug, viewer) do
+      {:error, :not_found} ->
+        socket
+        |> put_flash(:error, gettext("This page cannot receive messages."))
+        |> push_navigate(to: ~p"/messages")
+
+      {:ok, page} ->
+        case Chat.find_or_create_conversation(viewer, page) do
+          {:ok, conversation} ->
+            push_navigate(socket, to: new_conversation_path(conversation.id, params["body"]))
+
+          {:error, _reason} ->
+            socket
+            |> put_flash(:error, gettext("This page cannot receive messages."))
+            |> push_navigate(to: ~p"/messages")
+        end
+    end
+  end
+
   # A `?body=` param prefills the composer once, on open.
   defp seed_draft(socket, body) when is_binary(body) and body != "",
     do: assign(socket, :form, to_form(%{"body" => body}, as: :message))
@@ -146,6 +188,25 @@ defmodule VutuvWeb.MessageLive.Index do
 
   ## Events
 
+  # Sent in the page's name, with the member who typed it recorded internally -
+  # the same split `posts` makes for authorship. The right follows the ROLE, so
+  # `send_message_as_organization/4` asks for it live rather than trusting the
+  # identity this socket mounted with.
+  defp send_as(socket, body) do
+    case socket.assigns.viewer do
+      %Organization{} = page ->
+        Chat.send_message_as_organization(
+          page,
+          socket.assigns.current_user,
+          socket.assigns.conversation.id,
+          body
+        )
+
+      user ->
+        Chat.send_message(user, socket.assigns.conversation.id, body)
+    end
+  end
+
   @impl true
   def handle_event("send", %{"message" => %{"body" => body}}, socket) do
     body = String.trim(body)
@@ -153,7 +214,7 @@ defmodule VutuvWeb.MessageLive.Index do
     if body == "" or is_nil(socket.assigns.conversation) do
       {:noreply, socket}
     else
-      case Chat.send_message(socket.assigns.current_user, socket.assigns.conversation.id, body) do
+      case send_as(socket, body) do
         # The echo arrives via the conversation topic broadcast, so all
         # sessions (including this one) render it the same way — its handler
         # runs the one refresh_conversation, so none is needed here (this
@@ -233,7 +294,7 @@ defmodule VutuvWeb.MessageLive.Index do
 
   def handle_event("load-older", _params, socket) do
     page =
-      Chat.messages_page(socket.assigns.current_user, socket.assigns.conversation,
+      Chat.messages_page(socket.assigns.viewer, socket.assigns.conversation,
         limit: @page_size,
         cursor: socket.assigns.cursor
       )
@@ -271,14 +332,14 @@ defmodule VutuvWeb.MessageLive.Index do
   @impl true
   # Full message on the open conversation's topic (sender or recipient side).
   def handle_info({:new_message, %Message{} = message}, socket) do
-    user = socket.assigns.current_user
+    viewer = socket.assigns.viewer
 
-    # The member is watching the message arrive, so it is already read; this
+    # The reader is watching the message arrive, so it is already read; this
     # also broadcasts :messages_read, keeping the shell badge at zero. The
     # arriving message is the newest, so hand its time straight to mark_read
     # instead of making it re-scan the thread for the max.
-    if message.sender_id != user.id && socket.assigns.conversation do
-      Chat.mark_read(user, socket.assigns.conversation.id, message.inserted_at)
+    if not mine?(message, viewer) && socket.assigns.conversation do
+      Chat.mark_read(viewer, socket.assigns.conversation.id, message.inserted_at)
     end
 
     {:noreply,
@@ -361,11 +422,19 @@ defmodule VutuvWeb.MessageLive.Index do
   ## Helpers
 
   defp assign_lists(socket) do
-    user = socket.assigns.current_user
+    case socket.assigns.viewer do
+      %Organization{} = page ->
+        # A page publishes in order to be addressed, so it has no request queue
+        # to triage - see `Chat.find_or_create_conversation/2`.
+        socket
+        |> assign(:conversations, put_previews(Chat.list_organization_conversations(page)))
+        |> assign(:requests, [])
 
-    socket
-    |> assign(:conversations, put_previews(Chat.list_conversations(user)))
-    |> assign(:requests, put_previews(Chat.list_requests(user)))
+      user ->
+        socket
+        |> assign(:conversations, put_previews(Chat.list_conversations(user)))
+        |> assign(:requests, put_previews(Chat.list_requests(user)))
+    end
   end
 
   # A message body is Markdown *source* (the composer is Milkdown), so a sidebar
@@ -436,7 +505,7 @@ defmodule VutuvWeb.MessageLive.Index do
         socket
 
       %Conversation{id: id} ->
-        case Chat.get_conversation(socket.assigns.current_user, id) do
+        case Chat.get_conversation(socket.assigns.viewer, id) do
           nil -> socket
           conversation -> assign(socket, :conversation, conversation)
         end
@@ -450,6 +519,8 @@ defmodule VutuvWeb.MessageLive.Index do
 
   defp display_name(nil), do: gettext("Deleted account")
 
+  defp display_name(%Organization{name: name}), do: name
+
   defp display_name(user) do
     case VutuvWeb.UserHelpers.full_name(user) do
       "" -> gettext("Member")
@@ -457,7 +528,46 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
-  defp mine?(%Message{sender_id: sender_id}, user_id),
+  # The picture of whichever kind of party this is. A page has a logo, not an
+  # avatar, and no online state - it is a desk, not a person, so a presence dot
+  # on it would be a promise nobody is keeping.
+  attr(:party, :any, required: true)
+  attr(:size, :string, default: "sm")
+
+  defp party_avatar(%{party: %Organization{}} = assigns) do
+    ~H"""
+    <.organization_logo organization={@party} class={logo_class(@size)} />
+    """
+  end
+
+  defp party_avatar(assigns) do
+    ~H"""
+    <.avatar user={@party} size={@size} />
+    """
+  end
+
+  defp logo_class("sm"), do: "h-9 w-9 shrink-0"
+  defp logo_class(_), do: "h-10 w-10 shrink-0"
+
+  # Where the name links to. A page lives under /organizations/<slug>, and a
+  # member at the root - one function so no call site has to remember which.
+  defp party_path(%Organization{} = page), do: Organizations.canonical_path(page)
+  defp party_path(user), do: ~p"/#{user}"
+
+  # Only a member can be online, blocked, or the far side of a request.
+  defp member_party?(%Organization{}), do: false
+  defp member_party?(nil), do: false
+  defp member_party?(_), do: true
+
+  # Exactly one of the two sender columns is filled, so each side asks about
+  # its own; a bare `sender_id == id` would answer NULL for the other's rows.
+  defp mine?(%Message{sender_organization_id: page_id}, %Organization{id: page_id})
+       when is_binary(page_id),
+       do: true
+
+  defp mine?(%Message{}, %Organization{}), do: false
+
+  defp mine?(%Message{sender_id: sender_id}, %{id: user_id}),
     do: not is_nil(sender_id) and sender_id == user_id
 
   # The Accept/Decline pair, shared by the sidebar request rows and the
@@ -524,7 +634,7 @@ defmodule VutuvWeb.MessageLive.Index do
           <ul>
             <li :for={entry <- @requests} class="px-4 py-3">
               <.link navigate={~p"/messages/#{entry.conversation.id}"} class="flex items-center gap-3">
-                <.avatar user={entry.other} size="sm" />
+                <.party_avatar party={entry.other} />
                 <span class="min-w-0">
                   <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
                     {display_name(entry.other)}
@@ -548,8 +658,12 @@ defmodule VutuvWeb.MessageLive.Index do
               ]}
             >
               <span class="relative shrink-0">
-                <.avatar user={entry.other} size="sm" />
-                <.presence_dot online={Presence.online?(@online_ids, entry.other.id)} size="sm" />
+                <.party_avatar party={entry.other} />
+                <.presence_dot
+                  :if={member_party?(entry.other)}
+                  online={Presence.online?(@online_ids, entry.other.id)}
+                  size="sm"
+                />
               </span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
@@ -593,8 +707,8 @@ defmodule VutuvWeb.MessageLive.Index do
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </.link>
-            <.link navigate={~p"/#{@other}"} class="flex min-w-0 items-center gap-2">
-              <.avatar user={@other} size="sm" />
+            <.link navigate={party_path(@other)} class="flex min-w-0 items-center gap-2">
+              <.party_avatar party={@other} />
               <h1 class="truncate font-semibold text-slate-800 dark:text-slate-100">
                 {display_name(@other)}
               </h1>
@@ -605,7 +719,7 @@ defmodule VutuvWeb.MessageLive.Index do
               <span class="text-xs font-medium text-brand-600 dark:text-brand-400">{typing_label(@typing_tokens)}</span>
             <% else %>
               <span
-                :if={Presence.online?(@online_ids, @other.id)}
+                :if={member_party?(@other) and Presence.online?(@online_ids, @other.id)}
                 id="other-online"
                 class="text-xs text-emerald-600 dark:text-emerald-400"
               >
@@ -618,7 +732,7 @@ defmodule VutuvWeb.MessageLive.Index do
             <details data-menu>; app.js closes it on outside click and Escape).
             Blocking severs follows + the connection, freezes this conversation
             and stops all interaction both ways; unblocking restores nothing. --%>
-            <.card_menu :if={@other} id="thread-menu">
+            <.card_menu :if={member_party?(@other)} id="thread-menu">
               <:item
                 id="block-from-thread"
                 click="block"
@@ -641,7 +755,7 @@ defmodule VutuvWeb.MessageLive.Index do
           <div
             :for={{dom_id, m} <- @streams.messages}
             id={dom_id}
-            class={["group flex items-center gap-1.5", mine?(m, @current_user.id) && "justify-end"]}
+            class={["group flex items-center gap-1.5", mine?(m, @viewer) && "justify-end"]}
           >
             <div class={[
               "max-w-[75%] break-words rounded-2xl px-3 py-2 text-sm",
@@ -649,13 +763,13 @@ defmodule VutuvWeb.MessageLive.Index do
               "[&_code]:rounded [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]",
               "[&_ol]:list-decimal [&_ol]:pl-[2.25em] [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-[2.25em]",
               m.frozen_at && "opacity-60",
-              if(mine?(m, @current_user.id),
+              if(mine?(m, @viewer),
                 do: "bg-brand-600 text-white [&_a]:text-white [&_code]:bg-white/20",
                 else:
                   "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100 [&_a]:text-brand-700 dark:[&_a]:text-brand-300 [&_code]:bg-black/10 dark:[&_code]:bg-white/10"
               )
             ]}>
-              <span :if={not mine?(m, @current_user.id)} class="mb-0.5 block text-xs font-semibold text-brand-700 dark:text-brand-300">
+              <span :if={not mine?(m, @viewer)} class="mb-0.5 block text-xs font-semibold text-brand-700 dark:text-brand-300">
                 {display_name(m.sender)}
               </span>
               {VutuvWeb.Markdown.render(m.body)}
@@ -670,7 +784,7 @@ defmodule VutuvWeb.MessageLive.Index do
                 format="%d.%m.%Y %H:%M"
                 class={[
                   "mt-1 block text-right text-[10px] leading-none",
-                  if(mine?(m, @current_user.id), do: "text-white/70", else: "text-slate-600 dark:text-slate-400")
+                  if(mine?(m, @viewer), do: "text-white/70", else: "text-slate-600 dark:text-slate-400")
                 ]}
               />
             </div>
@@ -678,7 +792,7 @@ defmodule VutuvWeb.MessageLive.Index do
             bubbles. Faint until the row is hovered or the flag is focused, so
             it never crowds the conversation; always tappable on touch. --%>
             <.link
-              :if={not mine?(m, @current_user.id)}
+              :if={not mine?(m, @viewer)}
               id={"#{dom_id}-report"}
               navigate={~p"/reports/new?#{[type: "message", id: m.id, return_to: "/messages/#{m.conversation_id}"]}"}
               title={gettext("Report this message")}
@@ -714,7 +828,7 @@ defmodule VutuvWeb.MessageLive.Index do
         </div>
 
         <div
-          :if={Chat.request_recipient?(@conversation, @current_user.id)}
+          :if={member_party?(@other) and Chat.request_recipient?(@conversation, @viewer.id)}
           id="request-banner"
           class="flex flex-wrap items-center justify-center gap-2 border-t border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300"
         >
@@ -730,7 +844,7 @@ defmodule VutuvWeb.MessageLive.Index do
         (flex-col): the editor takes the full width on top and the Send button sits
         below it as a full-width horizontal bar, rather than riding beside it. --%>
         <.form
-          :if={Chat.can_send?(@conversation, @current_user.id)}
+          :if={page_viewer?(@viewer) or Chat.can_send?(@conversation, @viewer.id)}
           for={@form}
           id="message-form"
           phx-submit="send"
@@ -758,8 +872,9 @@ defmodule VutuvWeb.MessageLive.Index do
 
         <p
           :if={
-            not Chat.can_send?(@conversation, @current_user.id) and
-              not Chat.request_recipient?(@conversation, @current_user.id)
+            member_party?(@other) and
+              not Chat.can_send?(@conversation, @viewer.id) and
+              not Chat.request_recipient?(@conversation, @viewer.id)
           }
           id="awaiting-acceptance"
           class="border-t border-slate-200 p-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:border-slate-800"

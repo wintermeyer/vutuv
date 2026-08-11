@@ -60,3 +60,50 @@ emailed about **every** unread message or only the **first** of a burst (the
 default), and how long a message may sit unread before the email goes out (0 to
 120 minutes, default 15); every such email says which mode is active and
 deep-links to those settings.
+
+## Writing to a page (issue #1336)
+
+A conversation can have a **page** on the other side. `conversations` grew a
+nullable `organization_id` beside `user_b_id` with a CHECK that exactly one of
+them is set, so there are two shapes:
+
+    member <-> member: user_a_id + user_b_id (sorted), organization_id NULL
+    member <-> page:   user_a_id = the member, user_b_id NULL, organization set
+
+`user_a_id` is always the member. The sorted pair was **not** generalised:
+sorting exists to break the symmetry between two ids from the same table, and
+these two come from different ones, so the pair is already canonical and a
+second unique index is the whole story.
+
+**There is no second messages page.** A publisher who switched into a page
+(`acting_as`, issue #1335) opens the same `/messages` and finds the *page's*
+inbox; everybody else finds their own. `MessageLive.Index` resolves one
+`:viewer` assign at mount — `acting_as || current_user` — and every `Chat` call
+on the page goes through it. That identity is re-derived from the roles on every
+mount, so a withdrawn publisher lands on their own inbox rather than the page's.
+
+What differs on the page's side, and why:
+
+  * **No request/accept dance.** A page publishes in order to be addressed, so
+    there is nothing for it to approve, and a "pending" state would make its
+    team's first reply look like an acceptance.
+  * **One participant row for the whole team**, not one per publisher: read
+    means somebody read it, never that everybody did — the model
+    `organizations.activity_read_at` already sets. A row per publisher would
+    also have to be minted and retired as roles change.
+  * **A reply is the page's**, with `messages.acting_user_id` recording who
+    typed it and never showing it — the same split `posts` makes for authorship,
+    so the message does not walk out of the door with the person.
+  * **No block, no online dot.** Both are about people.
+  * **The right to answer follows the role**, asked live on every send.
+
+### The nullable column charged its usual toll
+
+Everything above is cheap. The readers were not. `conversations.user_b_id`
+became nullable, and a member's own list matches on `user_a_id`, so a page
+conversation turned up in it immediately — where `other_user/2` resolved a nil
+id and `Repo.one!` **raised**. Three more places tested `sender_id != <id>`,
+which is NULL and not true for a page's message, so its reply counted as unread
+nowhere and its notification mail never went out. `Chat.other_party/2` and
+`Chat.own_message/1` are the two functions that now own those questions; a call
+site naming either column directly is the bug to look for.

@@ -99,6 +99,11 @@ defmodule VutuvWeb.OrganizationLive.Show do
     |> assign(:people_offset, page.next_offset)
   end
 
+  # Am I currently speaking as the very page I am looking at? Then a "Message"
+  # button would open a conversation with myself.
+  defp own_page?(%{acting_as: %Organization{id: id}, organization: %{id: id}}), do: true
+  defp own_page?(_assigns), do: false
+
   defp assign_organization(socket, organization, viewer) do
     # One query for every domain, partitioned in memory (an organization has few).
     domains = Organizations.list_domains(organization)
@@ -407,6 +412,21 @@ defmodule VutuvWeb.OrganizationLive.Show do
                   {gettext("Unfollow")}
                 </span>
               </button>
+
+              <%!-- Writing to the page (issue #1336). A quiet secondary next to
+              the follow pill: following is the act this header is built around,
+              and a second brand-weight control beside it would make the reader
+              choose. Hidden while you are writing AS this page, where it would
+              offer a conversation with yourself. --%>
+              <.link
+                :if={@current_user && not own_page?(assigns)}
+                navigate={~p"/messages/organization/#{@organization.slug}"}
+                id="message-organization"
+                data-message-organization
+                class="inline-flex min-h-10 items-center rounded-full bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {gettext("Message")}
+              </.link>
 
               <span
                 :if={@follower_count > 0}

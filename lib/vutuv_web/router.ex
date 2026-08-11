@@ -547,6 +547,10 @@ defmodule VutuvWeb.Router do
       # The profile "Message" button: open my conversation with that member
       # (find-or-create), then land in the thread.
       live("/messages/with/:slug", MessageLive.Index, :new)
+      # The same for a page (issue #1336). A separate segment rather than
+      # reusing `/with/:slug`: a page's slug and a member's handle are
+      # different namespaces, so one path could name both.
+      live("/messages/organization/:slug", MessageLive.Index, :new_organization)
       live("/messages/:id", MessageLive.Index, :show)
 
       # The post editor ("posts" is a ReservedSlug). Auth is checked in the

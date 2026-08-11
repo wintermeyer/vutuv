@@ -335,6 +335,20 @@ defmodule Vutuv.Chat do
     end)
   end
 
+  def get_conversation(%Organization{id: page_id}, conversation_id) do
+    # No status arm: a page conversation is never a request, so there is no
+    # declined state for it to be hidden by (see find_or_create_conversation/2).
+    Vutuv.UUIDv7.with_cast(conversation_id, fn conversation_id ->
+      Repo.one(
+        from(c in Conversation,
+          where: c.id == ^conversation_id,
+          where: c.organization_id == ^page_id,
+          where: is_nil(c.frozen_at)
+        )
+      )
+    end)
+  end
+
   # The participant-scoped fetch every conversation action starts from;
   # `narrow` adds the action's extra conditions. cast_or_nil: ids arrive from
   # URLs and phx-value attributes; garbage must read as "no such
@@ -754,19 +768,30 @@ defmodule Vutuv.Chat do
   # When the caller already holds an authorized conversation (e.g. MessageLive
   # just loaded it to render the thread), pass the struct so this skips the
   # second get_conversation lookup the id form would run.
+  def messages_page(%Organization{id: page_id}, %Conversation{} = conversation, opts) do
+    thread_page({:organization, page_id}, conversation, opts)
+  end
+
   def messages_page(%User{} = me, %Conversation{} = conversation, opts) do
+    thread_page({:user, me.id}, conversation, opts)
+  end
+
+  defp thread_page(party, %Conversation{} = conversation, opts) do
     limit = Keyword.get(opts, :limit, 30)
     cursor = Keyword.get(opts, :cursor)
+    # The moderation freezer: a frozen message is hidden from the other
+    # participant but stays visible to its sender — which since issue #1336 can
+    # be a page, so the test goes through own_message/1 rather than naming a
+    # column that would be NULL on the other side's rows.
+    shown = dynamic([m], is_nil(m.frozen_at) or ^own_message(party))
 
     entries =
       from(m in Message,
         where: m.conversation_id == ^conversation.id,
-        # The moderation freezer: a frozen message is hidden from the
-        # other participant but stays visible to its sender.
-        where: is_nil(m.frozen_at) or m.sender_id == ^me.id,
+        where: ^shown,
         order_by: [desc: m.inserted_at, desc: m.id],
         limit: ^(limit + 1),
-        preload: :sender
+        preload: [:sender, :sender_organization]
       )
       |> before_cursor(cursor)
       |> Repo.all()
@@ -814,14 +839,22 @@ defmodule Vutuv.Chat do
   # read marker, looked up with a MAX. A caller already holding the just-arrived
   # message passes its inserted_at (the new newest) to skip that scan.
   def mark_read(%User{} = me, conversation_id, nil) do
-    marker =
-      from(m in Message,
-        where: m.conversation_id == ^conversation_id,
-        select: max(m.inserted_at)
-      )
-      |> Repo.one() || NaiveDateTime.utc_now(:microsecond)
+    mark_read(me, conversation_id, newest_message_at(conversation_id))
+  end
 
-    mark_read(me, conversation_id, marker)
+  def mark_read(%Organization{} = page, conversation_id, nil) do
+    mark_read(page, conversation_id, newest_message_at(conversation_id))
+  end
+
+  # ONE marker for the page, not one per publisher: read means somebody on the
+  # team read it, the same model as `organizations.activity_read_at`.
+  def mark_read(%Organization{id: page_id}, conversation_id, %NaiveDateTime{} = marker) do
+    from(p in Participant,
+      where: p.conversation_id == ^conversation_id and p.organization_id == ^page_id
+    )
+    |> Repo.update_all(set: [last_read_at: marker, notified_at: nil])
+
+    :ok
   end
 
   def mark_read(%User{id: me_id}, conversation_id, %NaiveDateTime{} = marker) do
@@ -832,6 +865,14 @@ defmodule Vutuv.Chat do
 
     Activity.mark_messages_read(me_id)
     :ok
+  end
+
+  defp newest_message_at(conversation_id) do
+    from(m in Message,
+      where: m.conversation_id == ^conversation_id,
+      select: max(m.inserted_at)
+    )
+    |> Repo.one() || NaiveDateTime.utc_now(:microsecond)
   end
 
   @doc """

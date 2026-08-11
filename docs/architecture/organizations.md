@@ -267,6 +267,18 @@ piece lives:
   on the page and not a row per member. The marker is the newest entry's
   timestamp rather than the wall clock (second-precision tables + a strict `>`),
   and an empty list stamps nothing.
+- **It can be written to** (#1336). `conversations` carries a nullable
+  `organization_id` beside `user_b_id` (CHECK: exactly one other side), so a
+  member↔page conversation is `user_a_id` = the member, `user_b_id` NULL. The
+  sorted pair did **not** have to be generalised: sorting exists to break the
+  symmetry between two ids from the *same* table, and a member and a page come
+  from different ones, so `(user_a_id, organization_id)` is already canonical.
+  There is no request/accept dance (a page publishes in order to be addressed),
+  the page's side of `conversation_participants` is **one row for the whole
+  team** like `activity_read_at`, and a reply is sent in the page's name with
+  `messages.acting_user_id` recorded and never shown. Reading and answering
+  happen at the ordinary `/messages`, whose inbox is whichever identity the
+  session is currently speaking as — see `messages.md`.
 - **It is mentionable** by its root handle, and reachable from search, the tag
   pages, the sitemap, `/llms.txt`, its own RSS feed and the agent formats.
 
@@ -292,6 +304,16 @@ daily report mail). None was reported by a user; all were found by sweeping.
 So when the next kind of actor arrives: enumerate every module that **reads**
 the thing, not the one that stores it, and route the URL through the function
 that owns it.
+
+`conversations` then charged the same toll a second time, in the same three
+flavours: `Repo.one!(where: u.id == ^nil)` **raised** (the member's whole
+`/messages` was a 500 once they had written to a page), and three separate
+`sender_id != <id>` tests answered NULL rather than true for a page's message,
+so its reply counted as unread nowhere and the notification mail for it was
+never sent. A fourth hid in the *fix* and was caught only because the test
+asserted both directions. The lesson holds: for a column that is now nullable,
+`x != v` and `x == v` both need an explicit `is_nil` arm, and the test has to
+watch the un-fixed code fail.
 
 ## Multi-domain management (`/organizations/:slug/domains`, #930)
 
