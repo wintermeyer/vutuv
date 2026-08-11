@@ -225,6 +225,27 @@ defmodule Vutuv.Social do
     end
   end
 
+  @doc """
+  Drops one of `page`'s own follow edges by id. Idempotent, and scoped to the
+  page: an id belonging to somebody else's edge removes nothing, so the client
+  cannot be trusted with more than a hint about which row it meant.
+  """
+  def unfollow_edge_as_organization(%Organization{id: page_id}, follow_id) do
+    case Vutuv.UUIDv7.cast_or_nil(follow_id) do
+      nil ->
+        0
+
+      follow_id ->
+        {count, _} =
+          from(f in Follow,
+            where: f.id == ^follow_id and f.follower_organization_id == ^page_id
+          )
+          |> Repo.delete_all()
+
+        count
+    end
+  end
+
   @doc "Whether `page` follows `followee`."
   def organization_follows?(%Organization{} = page, followee) do
     {column, followee_id} = followee_column(followee)
@@ -714,12 +735,19 @@ defmodule Vutuv.Social do
     # Count each followee's *visible* followers, so the ranking matches the
     # follower_count/1 shown on each profile and can't be inflated by
     # mass-registering never-activated follower accounts.
+    #
+    # That promise is why this counts pages too (issue #1336): the profile
+    # figure started counting them in v7.249.0, so an inner join to `users`
+    # here would have quietly ranked by a different number than the one beside
+    # each name. Same two LEFT joins and same gate per kind as
+    # `follower_count_query/1`.
     follower_counts =
       from(fl in Follow,
-        join: fr in Vutuv.Accounts.User,
-        on:
-          fr.id == fl.follower_id and account_confirmed_row(fr) and
-            not account_hidden_row(fr),
+        left_join: fr in User,
+        on: fr.id == fl.follower_id,
+        left_join: fo in Organization,
+        on: fo.id == fl.follower_organization_id,
+        where: visible_member(fr) or visible_page(fo),
         group_by: fl.followee_id,
         select: %{followee_id: fl.followee_id, count: count()}
       )

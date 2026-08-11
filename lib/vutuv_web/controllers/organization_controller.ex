@@ -146,6 +146,10 @@ defmodule VutuvWeb.OrganizationController do
   def feed(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Feed, &Organizations.publisher?/2)
 
+  @doc "What the page follows (issue #1336). Publishers only, like the feed."
+  def following(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.OrganizationLive.Following, &Organizations.publisher?/2)
+
   @doc """
   The permalink of a post published in this organization's name (issue #1334).
   404s for an unknown page, a page this viewer may not see, or an id that is not

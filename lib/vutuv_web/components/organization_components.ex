@@ -226,6 +226,9 @@ defmodule VutuvWeb.OrganizationComponents do
         <.manage_tab :if={@publisher?} active={@active == :feed} navigate={"/organizations/#{@organization.slug}/feed"}>
           {gettext("Feed")}
         </.manage_tab>
+        <.manage_tab :if={@publisher?} active={@active == :following} navigate={"/organizations/#{@organization.slug}/following"}>
+          {gettext("Following")}
+        </.manage_tab>
       </nav>
     </div>
     """

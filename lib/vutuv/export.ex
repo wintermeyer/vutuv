@@ -37,7 +37,11 @@ defmodule Vutuv.Export do
   # 7: the accounts followed on other networks (issue #1160).
   # 8: `fediverse_likes` covers liked **replies** too (issue #1270) and every
   #    entry names which it is in `kind`.
-  @schema_version 8
+  # 9: the organization pages on either side of a follow (issue #1336) —
+  #    `follower_organizations` and `following_organizations`. Their own keys
+  #    rather than rows in `followers` / `following`, which carry a `username` a
+  #    page need never have claimed.
+  @schema_version 9
 
   def build(%User{} = user) do
     user =
@@ -147,6 +151,14 @@ defmodule Vutuv.Export do
         Enum.map(user.username_changes, &%{username: &1.value, changed_at: &1.inserted_at}),
       followers: follow_side(user, :followee_id, :follower),
       following: follow_side(user, :follower_id, :followee),
+      # Pages are their own keys rather than rows in the two lists above (issue
+      # #1336): those carry a `username`, and a page need never have claimed
+      # one. Leaving them out entirely was the real problem — an export that
+      # answers "who follows me" has to name the pages too.
+      follower_organizations:
+        organization_follow_side(user, :followee_id, :follower_organization_id),
+      following_organizations:
+        organization_follow_side(user, :follower_id, :followee_organization_id),
       connections: connections(user),
       posts: posts(user),
       # Posts that were started and never sent (issue #1148). The composer
@@ -335,6 +347,19 @@ defmodule Vutuv.Export do
       where: field(f, ^filter_field) == ^user.id,
       join: u in assoc(f, ^other_assoc),
       select: %{username: u.username, since: f.inserted_at}
+    )
+    |> Repo.all()
+  end
+
+  # The organization half of the same two questions. Named by `name` + `slug`:
+  # a page is identified by its name, and its handle is an optional address it
+  # may never have claimed.
+  defp organization_follow_side(user, filter_field, organization_field) do
+    from(f in Follow,
+      join: o in Vutuv.Organizations.Organization,
+      on: o.id == field(f, ^organization_field),
+      where: field(f, ^filter_field) == ^user.id,
+      select: %{name: o.name, slug: o.slug, since: f.inserted_at}
     )
     |> Repo.all()
   end
