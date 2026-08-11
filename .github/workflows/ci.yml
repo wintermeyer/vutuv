@@ -1,12 +1,37 @@
 name: CI
 
 # Runs the same checks as `mix precommit` (compile --warnings-as-errors,
-# unused-deps, format, credo --strict, tests) on every PR and on pushes to
-# main, so the deploy on main only fires for code that already passed.
+# unused-deps, format, credo --strict, tests) on every pull request, which is
+# the gate: the only way into main is a merged, CI-green PR.
+#
+# The push-to-main run is deliberately NOT the belt-and-braces copy it used to
+# be. With the squash-merge flow it re-tested the same tree the PR had just
+# tested green, so every change cost two full runs and the second one had
+# almost nothing left to catch. What it *did* still earn is the shared build
+# cache: a cache written on a PR branch is not visible to other PRs, so only a
+# run on the default branch refreshes the one every branch restores from. That
+# cache is keyed on `mix.lock` + `config/*.exs`, so main now runs exactly when
+# its key changes — which is both when the cache needs refreshing and when the
+# change is riskiest.
+#
+# The trade this accepts: two PRs that are each green alone but conflict once
+# merged are no longer caught here. The deploy's own build and `/health` gate
+# is what stands behind that, and the version-bump race the flow already warns
+# about is the same shape of problem.
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
+    paths:
+      - "mix.lock"
+      - "config/*.exs"
+
+# A second push to the same branch makes the first run pointless — cancel it
+# rather than paying for a verdict on a tree nobody will merge. Keyed on the
+# ref, so runs on different PRs never cancel each other.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   precommit:
