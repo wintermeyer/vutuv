@@ -309,16 +309,20 @@ defmodule VutuvWeb.PostComponents do
   # Where the author's name and avatar link to. A member's profile lives at
   # their handle; an organization's page at `Organizations.canonical_path/1`,
   # which prefers its opt-in root handle over `/organizations/:slug`.
-  defp author_path(%Post{organization: %Organization{} = organization}),
-    do: Organizations.canonical_path(organization)
-
-  defp author_path(%Post{user: user}), do: "/#{user.username}"
+  # Both dispatch on what `Posts.author/1` hands back rather than on a pattern
+  # over the preloaded association: the association-shaped clause reads as a
+  # type check but behaves as a preload check, so a bare %Post{} from a query
+  # drew a page's post as a nil member's.
+  defp author_path(%Post{} = post), do: author_path(Posts.author(post))
+  defp author_path(%Organization{} = organization), do: Organizations.canonical_path(organization)
+  defp author_path(%User{} = user), do: "/#{user.username}"
 
   # The visible author name. An organization is named by its own name and has no
   # `@handle` line beside it: a page's identity is the name, and the handle is
   # an optional address it may never have claimed.
-  defp author_name(%Post{organization: %Organization{name: name}}), do: name
-  defp author_name(%Post{user: user}), do: full_name(user)
+  defp author_name(%Post{} = post), do: author_name(Posts.author(post))
+  defp author_name(%Organization{name: name}), do: name
+  defp author_name(%User{} = user), do: full_name(user)
 
   @doc """
   The shared shell for a threaded post list: a `divide-y` column of
@@ -2556,68 +2560,6 @@ defmodule VutuvWeb.PostComponents do
       {:parent, parent} -> [parent]
       _ -> []
     end
-  end
-
-  @doc """
-  A compact, read-only, linked preview of one post — the shared "referenced post"
-  rendering. Its home is the notification page's quoted post. Read-only on
-  purpose (no action bar, no live component), so a 50-row notification page stays
-  cheap. (The feed/profile thread used to nest the parent through this too, but
-  now renders it as a full `<.post_card>` so every element of a thread keeps its
-  own action bar.)
-
-  Renders the author (linked avatar + name → profile, `@handle` · time) and a
-  clamped excerpt that links to the post permalink. `text` is the already-prepared
-  excerpt: the notification page pre-clamps to three lines server-side (its own
-  visibility rules must strip a denied body) and passes
-  `clamp="line-clamp-3 whitespace-pre-line"` + `truncated?`. `label` is the
-  optional uppercase caption that tells a reply notification's two quotes apart
-  ("Your post" / "Reply"); the global `rest` carries the
-  `data-post-preview` / `data-reply-preview` hooks onto the excerpt link (the
-  element that owns the permalink).
-  """
-  attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{} with :user")
-  attr(:time_id, :string, required: true)
-  attr(:text, :string, required: true)
-  attr(:truncated?, :boolean, default: false)
-  attr(:clamp, :string, default: "truncate")
-  attr(:label, :any, default: nil)
-  attr(:class, :string, default: nil, doc: "outer wrapper utilities (e.g. mt-2 in notifications)")
-  attr(:rest, :global, doc: "data-* hooks land on the excerpt link, which owns the permalink")
-
-  def post_preview(assigns) do
-    ~H"""
-    <div class={["flex items-start gap-3", @class]}>
-      <.link href={~p"/#{@post.user}"} class="shrink-0" aria-hidden="true" tabindex="-1">
-        <.avatar user={@post.user} size="sm" />
-      </.link>
-      <div class="min-w-0 flex-1">
-        <div class="flex flex-wrap items-baseline gap-x-2">
-          <.link
-            href={~p"/#{@post.user}"}
-            class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
-          >
-            {full_name(@post.user)}
-          </.link>
-          <span class="text-xs text-slate-600 dark:text-slate-400">
-            {"@" <> @post.user.username} ·
-            <.post_time id={@time_id} at={@post.inserted_at} />
-          </span>
-        </div>
-        <span
-          :if={@label}
-          class="mt-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-        >
-          {@label}
-        </span>
-        <.link href={Posts.path(@post)} class="mt-0.5 block" {@rest}>
-          <p class={["text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300", @clamp]}>
-            {@text}<span :if={@truncated?}>…</span>
-          </p>
-        </.link>
-      </div>
-    </div>
-    """
   end
 
   attr(:variant, :string, required: true)

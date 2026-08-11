@@ -39,10 +39,11 @@ defmodule VutuvWeb.ApiV2.PostController do
   # conversation and no remote reactions, so it gets the smaller builder rather
   # than the full one with every field nil. Handing `build/3` a nil author
   # simply raised.
-  defp post_doc(%Post{organization: %Organization{} = organization} = post, _viewer),
-    do: PostDoc.build_organization_post(organization, post)
+  defp post_doc(%Post{organization_id: id} = post, _viewer) when is_binary(id),
+    do: PostDoc.build_organization_post(Posts.author(post), post)
 
-  defp post_doc(%Post{} = post, viewer), do: PostDoc.build(post.user, post, viewer: viewer)
+  defp post_doc(%Post{} = post, viewer),
+    do: PostDoc.build(Posts.author(post), post, viewer: viewer)
 
   def archive(conn, %{"slug" => slug} = params) do
     viewer = conn.assigns.current_user

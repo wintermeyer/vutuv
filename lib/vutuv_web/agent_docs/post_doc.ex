@@ -176,8 +176,10 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
 
   # The name a timeline entry is signed with. A page is named by its own name;
   # the member who published for it stays internal, exactly as on the HTML card.
-  defp timeline_author(%Post{organization: %Organization{name: name}}), do: name
-  defp timeline_author(%Post{user: user}), do: UserHelpers.full_name(user)
+  defp timeline_author(%Post{} = post), do: author_label(Posts.author(post))
+
+  defp author_label(%Organization{name: name}), do: name
+  defp author_label(author), do: UserHelpers.full_name(author)
 
   # The organization's own reference, the counterpart of `AgentDocs.person_ref/1`.
   # `canonical_path/1` prefers the page's opt-in root handle, so the URL here is

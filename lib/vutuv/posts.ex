@@ -55,6 +55,7 @@ defmodule Vutuv.Posts do
   import Vutuv.Organizations.Query, only: [organization_public_row: 1]
   import Vutuv.SearchText, only: [contains: 1, normalize_search: 1, name_ilike: 3]
 
+  alias Ecto.Association.NotLoaded
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.PostRepost, as: FediversePostRepost
@@ -830,9 +831,23 @@ defmodule Vutuv.Posts do
   (`acting_user`) is deliberately **not** the public author — they are the
   internal record of who spoke, kept for moderation, disputes and departures.
 
-  Needs `:user` / `:organization` preloaded, which `post_preloads/0` does.
+  `:user` / `:organization` are normally preloaded (`post_preloads/0` does it);
+  when they are not, this loads the one it needs rather than handing back an
+  `%Ecto.Association.NotLoaded{}`. That costs a query on the paths that forgot,
+  and it is worth it: the alternative shipped twice already, as clauses like
+  `def f(%Post{organization: %Organization{}})` written all over the display
+  layer. Those read as a *type* check and behave as a *preload* check — hand one
+  a bare `%Post{}` from a query and the organization branch quietly does not
+  match, so the post is drawn as a member's and the member is `nil`.
   """
+  def author(%Post{organization_id: nil, user: %NotLoaded{}, user_id: user_id}),
+    do: Repo.get(User, user_id)
+
   def author(%Post{organization_id: nil} = post), do: post.user
+
+  def author(%Post{organization: %NotLoaded{}, organization_id: organization_id}),
+    do: Repo.get(Organization, organization_id)
+
   def author(%Post{} = post), do: post.organization
 
   @doc "The author's id, whichever kind of author it is."
@@ -2892,6 +2907,12 @@ defmodule Vutuv.Posts do
 
     from(p in Post,
       as: :post,
+      # An INNER join, so the rail is members only — and that is the intent, not
+      # an oversight of #1334: every tier here is about people (strangers you do
+      # not follow, one post per author), and `Enum.uniq_by(& &1.user_id)` in the
+      # caller would collapse every page's post into one. Widening it to pages
+      # means giving them their own tier and their own uniqueness key; until
+      # then, keep the join inner — the rail's template reads `post.user`.
       join: u in assoc(p, :user),
       as: :author,
       left_join: f in Follow,
@@ -4016,7 +4037,7 @@ defmodule Vutuv.Posts do
   @doc """
   The given post ids **visible to `viewer`** as a `%{id => %Post{}}` map with
   `:user` preloaded, for building the notification-page post previews (the shared
-  `<.post_preview>` needs the author + permalink, not just the body) in one round
+  the row needs the author + permalink, not just the body) in one round
   trip. Missing, deleted or denied ids are simply absent; a `nil`/empty id list
   makes no query. `viewer`'s own posts always pass (so the recipient's own post
   that a reply/like is about is always quotable), while another member's post (a
@@ -4148,12 +4169,15 @@ defmodule Vutuv.Posts do
   is identified by and what somebody pastes a year later. One shape that always
   works beats two that depend on whether a handle was claimed.
   """
-  def path(%Post{organization: %Organization{slug: slug}, id: id}) do
+  def path(%Post{organization_id: organization_id, id: id} = post)
+      when is_binary(organization_id) do
+    %Organization{slug: slug} = author(post)
     "/organizations/#{slug}/posts/#{id}"
   end
 
-  def path(%Post{user: %User{} = user, id: id}) do
-    "/#{user.username}/posts/#{id}"
+  def path(%Post{id: id} = post) do
+    %User{username: username} = author(post)
+    "/#{username}/posts/#{id}"
   end
 
   ## Images
