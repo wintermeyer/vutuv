@@ -37,6 +37,7 @@ defmodule VutuvWeb.OrganizationLive.Post do
        socket
        |> assign(:organization, organization)
        |> assign(:post, post)
+       |> assign(:formats?, Organizations.agent_visible?(organization))
        |> assign(:page_title, organization.name)}
     else
       # The controller already refused an id that does not resolve, so reaching
@@ -64,6 +65,17 @@ defmodule VutuvWeb.OrganizationLive.Post do
       <div class="mt-4">
         <.post_card post={@post} viewer={@current_user} conn_or_socket={@socket} mode={:full} />
       </div>
+
+      <%!-- The agent-format siblings of this permalink. Shown only when they
+      actually serve: a page that is not active + `geo?` 404s them, and a `.md`
+      chip that leads to a 404 is worse than no chip. --%>
+      <.other_formats_card
+        :if={@formats?}
+        id="organization-post-formats"
+        base_path={Vutuv.Posts.path(@post)}
+        locale={@locale}
+        class="mt-6"
+      />
     </div>
     """
   end

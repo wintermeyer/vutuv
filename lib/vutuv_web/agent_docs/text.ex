@@ -121,6 +121,23 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
+  # The plain-text twin of the Markdown organization-post block (issue #1334):
+  # the same fields in the same order, minus the ones such a post cannot have.
+  def render(%{type: "organization_post"} = doc) do
+    [
+      heading("#{gettext("Post by %{name}", name: doc.author.name)} · #{doc.published_on}"),
+      doc.body_markdown,
+      Markdown.review_line(doc.review),
+      tags_line(doc.tags),
+      Markdown.engagement_line(doc),
+      Markdown.likers_line(doc),
+      section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
+      license_text(doc.license),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
   def render(%{type: "post_archive"} = doc) do
     [
       heading(doc.title),

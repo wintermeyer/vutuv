@@ -23,6 +23,7 @@ defmodule VutuvWeb.OrganizationController do
   alias Vutuv.Posts.Post
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.OrganizationDoc
+  alias VutuvWeb.AgentDocs.PostDoc
   alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
@@ -144,18 +145,37 @@ defmodule VutuvWeb.OrganizationController do
     viewer = conn.assigns[:current_user]
 
     with {:ok, organization} <- Organizations.fetch_visible_organization(slug, viewer),
-         %Post{} <- Posts.get_organization_post(organization, id, viewer) do
-      conn
-      |> put_layout(html: false)
-      |> live_render(VutuvWeb.OrganizationLive.Post,
-        session:
+         %Post{} = post <- Posts.get_organization_post(organization, id, viewer) do
+      case AgentDocs.negotiate(conn) do
+        :html ->
           conn
-          |> ControllerHelpers.live_render_session()
-          |> Map.put("organization_id", organization.id)
-          |> Map.put("post_id", id)
-      )
+          |> AgentDocs.put_html_alternates()
+          |> put_layout(html: false)
+          |> live_render(VutuvWeb.OrganizationLive.Post,
+            session:
+              conn
+              |> ControllerHelpers.live_render_session()
+              |> Map.put("organization_id", organization.id)
+              |> Map.put("post_id", id)
+          )
+
+        format ->
+          send_organization_post_doc(conn, format, organization, post)
+      end
     else
       _ -> ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  # The agent formats render the **anonymous public** view, like every other doc
+  # here, so they 404 for anything a logged-out reader could not open no matter
+  # who asks: a page that is not active + `geo?`, and a post still held by
+  # moderation — which its own publishers do keep seeing in the HTML.
+  defp send_organization_post_doc(conn, format, organization, post) do
+    if Organizations.agent_visible?(organization) and not Posts.moderation_hidden?(post) do
+      AgentDocs.send_doc(conn, format, PostDoc.build_organization_post(organization, post))
+    else
+      ControllerHelpers.render_error(conn, 404)
     end
   end
 

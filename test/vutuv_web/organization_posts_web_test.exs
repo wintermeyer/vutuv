@@ -104,6 +104,47 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
     end
   end
 
+  describe "the permalink's agent formats" do
+    setup do
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+
+      {:ok, post} =
+        Posts.create_organization_post(organization, owner, %{body: "Maschinenlesbar."})
+
+      %{organization: organization, owner: owner, post: post}
+    end
+
+    test "serves .md/.txt/.json/.xml, signed by the organization", ctx do
+      %{post: post, organization: organization, conn: conn} = ctx
+      path = Posts.path(post)
+
+      for extension <- ~w(.md .txt .json) do
+        body = conn |> get(path <> extension) |> response(200)
+        assert body =~ "Maschinenlesbar."
+        assert body =~ organization.name
+      end
+
+      json = conn |> get(path <> ".json") |> json_response(200)
+      assert json["type"] == "organization_post"
+      assert json["author"]["slug"] == organization.slug
+
+      # The member who pressed publish is internal and must not leak into a
+      # document anybody can fetch — that split is what `acting_user_id` is for.
+      refute json |> Jason.encode!() |> String.contains?(ctx.owner.username)
+    end
+
+    test "a page with the agent formats switched off 404s them", ctx do
+      %{post: post, organization: organization, conn: conn} = ctx
+      {:ok, _} = Organizations.update_organization(organization, %{"geo?" => false})
+
+      conn |> get(Posts.path(post) <> ".md") |> response(404)
+      # …while the HTML page itself still renders.
+      assert conn |> get(Posts.path(post)) |> html_response(200) =~ "Maschinenlesbar."
+    end
+  end
+
   describe "replies" do
     test "an organization post cannot be answered yet", %{conn: _conn} do
       owner = insert(:activated_user)

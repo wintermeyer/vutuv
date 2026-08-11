@@ -17,6 +17,8 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
@@ -130,6 +132,57 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       fediverse_reply_count: engagement.fediverse_replies,
       fediverse_replies: remote_replies
     })
+  end
+
+  @doc """
+  A post published in an organization's name (issue #1334).
+
+  Deliberately a much smaller document than `build/3`, because the page it
+  describes is much smaller: an organization post carries no audience, so there
+  is nothing to say about restriction; it cannot be answered, so there is no
+  reply list and no thread; and it does not federate yet, so there are no remote
+  reactions. Every field that *is* here means the same thing it does on a
+  member's post, so a reader can treat the two alike.
+
+  The author is the organization. The member who pressed publish is **not** in
+  this document and must never be: that split is the whole point of
+  `acting_user_id`, and a `.json` sibling that leaked it would undo it.
+  """
+  def build_organization_post(%Organization{} = organization, %Post{} = post) do
+    engagement = Posts.engagement_counts(post.id)
+    counts = Posts.shown_counts(engagement)
+
+    AgentDocs.doc_meta("organization_post", Posts.path(post),
+      noindex: not organization.seo?,
+      noai: not organization.geo?
+    )
+    |> Map.merge(%{
+      id: post.id,
+      title: "#{organization.name} · #{Date.to_iso8601(post.published_on)}",
+      description: AgentDocs.excerpt(post.body),
+      author: organization_ref(organization),
+      published_on: post.published_on,
+      body_markdown: post.body,
+      review: review_entry(post.review),
+      tags: Enum.map(post.tags, & &1.name),
+      images: post |> Posts.released_images() |> Enum.map(&image_entry/1),
+      license: license_entry(post),
+      like_count: counts.likes,
+      likers: Enum.map(Posts.post_likers(post.id), &AgentDocs.person_ref/1),
+      repost_count: counts.reposts,
+      bookmark_count: engagement.bookmarks
+    })
+  end
+
+  # The organization's own reference, the counterpart of `AgentDocs.person_ref/1`.
+  # `canonical_path/1` prefers the page's opt-in root handle, so the URL here is
+  # the one the page answers to rather than the slug form the post lives under.
+  defp organization_ref(%Organization{} = organization) do
+    %{
+      name: organization.name,
+      slug: organization.slug,
+      url: AgentDocs.abs_url(Organizations.canonical_path(organization))
+    }
   end
 
   @doc """

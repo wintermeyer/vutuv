@@ -129,6 +129,27 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
+  # A post an organization published (issue #1334). The same blocks as a
+  # member's post minus the ones such a post cannot have — no reply-to line, no
+  # conversation, no replies from other networks — so a reader parsing both
+  # meets the same field under the same heading wherever it applies.
+  def render(%{type: "organization_post"} = doc) do
+    author_link = "[#{md_text(doc.author.name)}](#{doc.author.url})"
+
+    [
+      frontmatter(doc),
+      "# #{gettext("Post by %{name}", name: author_link)} · #{doc.published_on}",
+      doc.body_markdown,
+      review_line(doc.review),
+      tags_line(doc.tags),
+      engagement_line(doc),
+      likers_line(doc),
+      section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
+      license_line(doc.license)
+    ]
+    |> join_blocks()
+  end
+
   def render(%{type: "post_archive"} = doc) do
     author_link = "[#{md_text(doc.author.name)}](#{doc.author.url})"
 
