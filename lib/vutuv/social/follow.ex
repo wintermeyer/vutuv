@@ -52,6 +52,33 @@ defmodule Vutuv.Social.Follow do
   end
 
   @doc """
+  A follow **by** a page (issue #1336): of a member when `followee` is
+  `:followee_id`, of another page when it is `:followee_organization_id`.
+
+  One function with the target column as an argument rather than a fourth
+  near-identical changeset — the two differ only in which column carries the
+  target, and a copy would be a fourth place to forget a constraint. A page
+  cannot follow itself; the pair is unique per spelling.
+  """
+  def organization_follower_changeset(model, followee, params \\ %{})
+      when followee in [:followee_id, :followee_organization_id] do
+    model
+    |> cast(params, [:follower_organization_id, followee, :muted])
+    |> validate_required([:follower_organization_id, followee])
+    |> validate_page_not_following_itself()
+    |> unique_constraint([:follower_organization_id, followee])
+    |> foreign_key_constraint(:follower_organization_id)
+    |> foreign_key_constraint(followee)
+  end
+
+  defp validate_page_not_following_itself(
+         %{changes: %{follower_organization_id: same, followee_organization_id: same}} = changeset
+       ),
+       do: add_error(changeset, :follower_organization_id, "Cannot follow yourself")
+
+  defp validate_page_not_following_itself(changeset), do: changeset
+
+  @doc """
   Flips the follower's own mute flag on a row that already exists.
 
   Its own changeset because `changeset/2` re-validates the identity columns, and

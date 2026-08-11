@@ -84,24 +84,26 @@ defmodule Vutuv.OrganizationFollowerRowsTest do
   end
 
   describe "the readers of the follower side" do
-    test "a member's follower count and list both leave a page out, and agree" do
+    test "a member's follower count and list now show the page" do
       member = insert(:activated_user)
       person = insert(:activated_user)
       {:ok, _} = Social.follow(person, member.id)
       {_organization, _follow} = page_follows(member)
 
-      # Shape 2, and the reason this whole step needed no sweep: every reader of
-      # the follower side reaches it through an INNER JOIN to `users`, so they
-      # all drop an organization follower *consistently*. Count and list agree
-      # at 1, the member, and nothing renders a nil row.
+      # This test used to assert the opposite, and the reversal is Stefan's
+      # call (v7.248.3): a page that follows you is counted and shown, because
+      # hiding it makes the number lie and lets a page know something about you
+      # that you cannot see. The follower-side joins are LEFT joins now.
       #
-      # This is the current behaviour, not a verdict. When a page can really
-      # follow (the writer is the next step), decide then whether it belongs in
-      # a member's follower list — hiding it would make the count lie — and that
-      # decision is what turns those inner joins into left joins. Until then,
-      # excluding it everywhere is the coherent answer.
+      # The header counts both kinds; the page splits them into two sections,
+      # so `follows_page/3` still answers with people alone. The full behaviour
+      # lives in organization_as_follower_test.exs — what this file still owns
+      # is that a raw row inserted straight into the table behaves the same as
+      # one the writer made.
+      assert Social.follower_count(member) == 2
+      assert Social.follower_organization_count(member) == 1
+
       page = Social.follows_page(member, :followers, %{})
-      assert Social.follower_count(member) == 1
       assert page.total == 1
       assert [%Vutuv.Accounts.User{id: id}] = page.users
       assert id == person.id

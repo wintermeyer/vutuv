@@ -14,11 +14,17 @@ defmodule VutuvWeb.FollowerController do
     %{user: user, users: followers, total: total} =
       Vutuv.Social.follows_page(conn.assigns[:user], :followers, conn.params)
 
+    # The pages that follow this member are their own section (issue #1336),
+    # the mirror of the Following page's.
+    organizations = Vutuv.Social.follower_organizations(user)
+
     AgentDocs.respond(conn,
       html: fn conn ->
         render(conn, "index.html",
           user: user,
           followers: followers,
+          organizations: organizations,
+          total_organizations: Vutuv.Social.follower_organization_count(user),
           total_followers: total,
           page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Followers")),
           work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followers, 45),
@@ -30,7 +36,9 @@ defmodule VutuvWeb.FollowerController do
         )
       end,
       doc: fn ->
-        ListDocs.build_follow_list(user, :followers, followers, total)
+        ListDocs.build_follow_list(user, :followers, followers, total,
+          organizations: organizations
+        )
       end
     )
   end

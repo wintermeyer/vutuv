@@ -26,6 +26,24 @@ defmodule Vutuv.Social do
   alias Vutuv.Social.UserLike
   alias Vutuv.UUIDv7
 
+  # The two halves of "this follow names somebody who may still be shown", as
+  # macros so both the count and the list read the same rule. A page is gated
+  # exactly like `Organizations.public_visible?/1`: active AND not frozen — the
+  # frozen half is easy to forget, because `status` stays "active" through a
+  # freeze.
+  defmacrop visible_member(u) do
+    quote do
+      not is_nil(unquote(u).id) and account_confirmed_row(unquote(u)) and
+        not account_hidden_row(unquote(u))
+    end
+  end
+
+  defmacrop visible_page(o) do
+    quote do
+      not is_nil(unquote(o).id) and unquote(o).status == "active" and is_nil(unquote(o).frozen_at)
+    end
+  end
+
   # ── Follows ──
 
   @doc """
@@ -160,6 +178,101 @@ defmodule Vutuv.Social do
     )
   end
 
+  @doc """
+  A page follows a member or another page (issue #1336) — the writer for the
+  column that shipped in v7.248.1. Idempotent, like its member twin.
+
+  No notification and no block check, for the same reasons `follow_organization/2`
+  has neither: a page has no inbox, and a block is between two people.
+  """
+  def follow_as_organization(%Organization{} = page, followee) do
+    {column, followee_id} = followee_column(followee)
+
+    result =
+      %Follow{}
+      |> Follow.organization_follower_changeset(column, %{
+        :follower_organization_id => page.id,
+        column => followee_id
+      })
+      |> Repo.insert()
+
+    case result do
+      {:ok, _follow} = ok ->
+        # The followee's own profile recomputes: a page counts as a follower.
+        broadcast_social_graph_changed([followee_id])
+        ok
+
+      {:error, _changeset} ->
+        case organization_follow_edge(page.id, column, followee_id) do
+          %Follow{} = existing -> {:ok, existing}
+          nil -> result
+        end
+    end
+  end
+
+  @doc "Drops a page's follow of `followee`. Idempotent."
+  def unfollow_as_organization(%Organization{} = page, followee) do
+    {column, followee_id} = followee_column(followee)
+
+    case organization_follow_edge(page.id, column, followee_id) do
+      %Follow{} = follow ->
+        Repo.delete!(follow)
+        broadcast_social_graph_changed([followee_id])
+        :ok
+
+      nil ->
+        :ok
+    end
+  end
+
+  @doc "Whether `page` follows `followee`."
+  def organization_follows?(%Organization{} = page, followee) do
+    {column, followee_id} = followee_column(followee)
+    organization_follow_edge(page.id, column, followee_id) != nil
+  end
+
+  defp followee_column(%Organization{id: id}), do: {:followee_organization_id, id}
+  defp followee_column(%User{id: id}), do: {:followee_id, id}
+
+  defp organization_follow_edge(page_id, column, followee_id) do
+    Repo.get_by(Follow, [{:follower_organization_id, page_id}, {column, followee_id}])
+  end
+
+  @doc """
+  What `page` follows, newest first, as `[{follow_id, member_or_page}]` — the
+  page's own Following list. Only followees that are still shown, the same gate
+  a member's list applies to each kind.
+  """
+  def organization_followees(%Organization{id: page_id}, limit \\ 100) do
+    Repo.all(
+      from(f in Follow,
+        left_join: u in assoc(f, :followee),
+        left_join: o in Organization,
+        on: o.id == f.followee_organization_id,
+        where: f.follower_organization_id == ^page_id,
+        where: visible_member(u) or visible_page(o),
+        order_by: [desc: f.inserted_at, desc: f.id],
+        limit: ^limit,
+        select: {f.id, u, o}
+      )
+    )
+    |> Enum.map(fn {id, user, organization} -> {id, user || organization} end)
+  end
+
+  @doc "How many things `page` follows."
+  def organization_followee_count(%Organization{id: page_id}) do
+    Repo.aggregate(
+      from(f in Follow,
+        left_join: u in assoc(f, :followee),
+        left_join: o in Organization,
+        on: o.id == f.followee_organization_id,
+        where: f.follower_organization_id == ^page_id,
+        where: visible_member(u) or visible_page(o)
+      ),
+      :count
+    )
+  end
+
   defp follower_id(%Vutuv.Accounts.User{id: id}), do: id
   defp follower_id(id), do: id
 
@@ -252,11 +365,17 @@ defmodule Vutuv.Social do
   # The tagged single-count queries behind both the single accessors and
   # `social_counts/1`'s union (a union's arms must share one select shape, so
   # the singles carry the tag too and read `.total` off the one row).
+  # Followers are members **and** pages (issue #1336). A page that follows you
+  # is shown and counted: hiding it would make the number lie, and would let a
+  # page know something about you that you cannot see. Hence LEFT joins and one
+  # gate per kind — the inner join this used to be dropped a page silently.
   defp follower_count_query(user_id) do
     from(c in Follow,
-      join: u in assoc(c, :follower),
-      where: account_confirmed_row(u) and not account_hidden_row(u),
+      left_join: u in assoc(c, :follower),
+      left_join: o in Organization,
+      on: o.id == c.follower_organization_id,
       where: c.followee_id == ^user_id,
+      where: visible_member(u) or visible_page(o),
       select: %{kind: type(^"followers", :string), total: count(c.id)}
     )
   end
@@ -276,10 +395,17 @@ defmodule Vutuv.Social do
       left_join: o in Organization,
       on: o.id == c.followee_organization_id,
       where: c.follower_id == ^user_id,
-      where:
-        (not is_nil(u.id) and account_confirmed_row(u) and not account_hidden_row(u)) or
-          (not is_nil(o.id) and o.status == "active"),
+      where: visible_member(u) or visible_page(o),
       select: %{kind: type(^"followees", :string), total: count(c.id)}
+    )
+  end
+
+  defp follower_member_count_query(user_id) do
+    from(c in Follow,
+      join: u in assoc(c, :follower),
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      where: c.followee_id == ^user_id,
+      select: %{kind: type(^"followers", :string), total: count(c.id)}
     )
   end
 
@@ -330,7 +456,8 @@ defmodule Vutuv.Social do
     from(c in Follow,
       join: o in Organization,
       on: o.id == c.followee_organization_id,
-      where: c.follower_id == ^user_id and o.status == "active"
+      where: c.follower_id == ^user_id,
+      where: visible_page(o)
     )
   end
 
@@ -345,11 +472,12 @@ defmodule Vutuv.Social do
   def follows_page(%User{} = user, side, params) when side in [:followers, :followees] do
     {total, assoc, person} =
       case side do
+        # Members only on both sides. Pages are their own section on each page
+        # (`follower_organizations/1`, `followed_organizations/1`), so neither
+        # pager may count them; the profile-header figures do.
         :followers ->
-          {follower_count(user), :inbound_follows, :follower}
+          {Repo.one(follower_member_count_query(user.id)).total, :inbound_follows, :follower}
 
-        # Members only: the pages this member follows are their own section
-        # (`followed_organizations/1`), so this pager must not count them.
         :followees ->
           {Repo.one(followee_member_count_query(user.id)).total, :outbound_follows, :followee}
       end
@@ -386,11 +514,48 @@ defmodule Vutuv.Social do
       from(c in Follow,
         join: o in Organization,
         on: o.id == c.followee_organization_id,
-        where: c.follower_id == ^user_id and o.status == "active",
+        where: c.follower_id == ^user_id,
+        where: visible_page(o),
         order_by: [desc: c.inserted_at, desc: c.id],
         limit: ^limit,
         select: {c.id, o}
       )
+    )
+  end
+
+  @doc """
+  The pages that follow `user`, newest first, as `[{follow_id, organization}]` —
+  the "Organizations" section of their Followers page (issue #1336), the mirror
+  of `followed_organizations/1`.
+
+  No unfollow control here: this follow belongs to the page, not to the member
+  being followed. A member who does not want it has blocking, which is a
+  different question and not yet answered for pages.
+  """
+  def follower_organizations(%User{id: user_id}, limit \\ 100) do
+    Repo.all(
+      from(c in Follow,
+        join: o in Organization,
+        on: o.id == c.follower_organization_id,
+        where: c.followee_id == ^user_id,
+        where: visible_page(o),
+        order_by: [desc: c.inserted_at, desc: c.id],
+        limit: ^limit,
+        select: {c.id, o}
+      )
+    )
+  end
+
+  @doc "How many shown pages follow `user`."
+  def follower_organization_count(%User{id: user_id}) do
+    Repo.aggregate(
+      from(c in Follow,
+        join: o in Organization,
+        on: o.id == c.follower_organization_id,
+        where: c.followee_id == ^user_id,
+        where: visible_page(o)
+      ),
+      :count
     )
   end
 
@@ -400,7 +565,8 @@ defmodule Vutuv.Social do
       from(c in Follow,
         join: o in Organization,
         on: o.id == c.followee_organization_id,
-        where: c.follower_id == ^user_id and o.status == "active"
+        where: c.follower_id == ^user_id,
+        where: visible_page(o)
       ),
       :count
     )
