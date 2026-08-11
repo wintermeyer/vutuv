@@ -182,7 +182,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{doc.title}",
       gettext("%{count} total", count: doc.total) <>
         page_hint(doc.total, doc.people, &paren_hint/1),
-      Enum.map_join(doc.people, "\n\n", &person_line/1)
+      Enum.map_join(doc.people, "\n\n", &person_line/1),
+      followed_organizations(doc)
     ]
     |> join_blocks()
   end
@@ -337,6 +338,19 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     ]
     |> join_blocks()
   end
+
+  # The pages this member follows (issue #1336), under their own heading rather
+  # than among the people: a reader has to be able to tell a person from an
+  # organization. Only the Following document carries the key, so every other
+  # people list skips the block entirely.
+  defp followed_organizations(%{organizations: [_ | _] = organizations}) do
+    join_blocks([
+      "## " <> gettext("Organizations"),
+      Enum.map_join(organizations, "\n", &"- [#{&1.name}](#{&1.url})")
+    ])
+  end
+
+  defp followed_organizations(_doc), do: nil
 
   # An organization's alternative names (issue #930), or nil when it has none.
   defp also_known_as(%{also_known_as: [_ | _] = names}),

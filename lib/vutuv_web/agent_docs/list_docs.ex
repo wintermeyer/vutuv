@@ -22,6 +22,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
 
+  alias Vutuv.Organizations
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
 
@@ -39,7 +40,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   One page of `/:slug/followers`, `/:slug/following` or `/:slug/connections`
   (for connections: the accepted ones — the public part of the page).
   """
-  def build_follow_list(user, side, people, total) when side in @sides do
+  def build_follow_list(user, side, people, total, opts \\ []) when side in @sides do
     path = "/#{user.username}/#{side}"
     name = UserHelpers.full_name(user)
 
@@ -70,6 +71,28 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       total: total,
       people: Enum.map(people, &person_entry(&1, work_info_by_id, tags_by_id))
     })
+    |> put_followed_organizations(opts[:organizations])
+  end
+
+  # The pages a member follows (issue #1336), as their own key rather than mixed
+  # into `people`: an agent reading this document must be able to tell a person
+  # from an organization, and `person_ref/1` cannot describe a page anyway. Only
+  # the Following list has them, so the key is absent everywhere else instead of
+  # being an empty list on the follower and connection documents.
+  defp put_followed_organizations(doc, nil), do: doc
+
+  defp put_followed_organizations(doc, organizations) do
+    Map.put(
+      doc,
+      :organizations,
+      Enum.map(organizations, fn {_follow_id, organization} ->
+        %{
+          name: organization.name,
+          slug: organization.slug,
+          url: AgentDocs.abs_url(Organizations.canonical_path(organization))
+        }
+      end)
+    )
   end
 
   @doc """

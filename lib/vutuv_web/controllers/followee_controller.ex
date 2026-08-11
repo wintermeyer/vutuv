@@ -14,11 +14,17 @@ defmodule VutuvWeb.FolloweeController do
     %{user: user, users: followees, total: total} =
       Vutuv.Social.follows_page(conn.assigns[:user], :followees, conn.params)
 
+    # The pages this member follows are their own section (issue #1336) — a page
+    # has a logo and neither work history nor tags, so it is not a card_list row.
+    organizations = Vutuv.Social.followed_organizations(user)
+
     AgentDocs.respond(conn,
       html: fn conn ->
         render(conn, "index.html",
           user: user,
           followees: followees,
+          organizations: organizations,
+          total_organizations: Vutuv.Social.followed_organization_count(user),
           total_followees: total,
           page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Following")),
           work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followees, 45),
@@ -34,7 +40,9 @@ defmodule VutuvWeb.FolloweeController do
         )
       end,
       doc: fn ->
-        ListDocs.build_follow_list(user, :following, followees, total)
+        ListDocs.build_follow_list(user, :following, followees, total,
+          organizations: organizations
+        )
       end
     )
   end

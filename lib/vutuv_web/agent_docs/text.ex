@@ -167,6 +167,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       gettext("%{count} total", count: doc.total) <>
         Markdown.page_hint(doc.total, doc.people, &dash_hint/1),
       Enum.map(doc.people, &person_line/1),
+      followed_organizations(doc),
       footer(doc)
     ]
     |> join_blocks()
@@ -312,6 +313,18 @@ defmodule VutuvWeb.AgentDocs.Text do
     ]
     |> join_blocks()
   end
+
+  # The pages this member follows (issue #1336) — the plain-text twin of the
+  # Markdown block, under their own heading so a reader can tell a person from
+  # an organization. Absent on every other people list.
+  defp followed_organizations(%{organizations: [_ | _] = organizations}) do
+    join_blocks([
+      gettext("Organizations"),
+      Enum.map(organizations, &"- #{&1.name} — #{&1.url}")
+    ])
+  end
+
+  defp followed_organizations(_doc), do: nil
 
   # Hard-wraps `text` at @width columns. Existing newlines are kept;
   # wrapped continuation lines get `indent`. A single word longer than the

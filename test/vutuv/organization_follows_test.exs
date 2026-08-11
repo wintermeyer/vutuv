@@ -141,7 +141,7 @@ defmodule Vutuv.OrganizationFollowsTest do
       assert post.id in discovered_ids(member)
     end
 
-    test "the member following-count ignores organizations" do
+    test "the member following-count includes organizations" do
       {organization, _owner} = publishing_organization()
       member = insert(:activated_user)
       friend = insert(:activated_user)
@@ -149,9 +149,14 @@ defmodule Vutuv.OrganizationFollowsTest do
       {:ok, _} = Social.follow(member, friend.id)
       {:ok, _} = Social.follow_organization(member, organization)
 
-      # "Following" on a profile means people. The organization follow is a
-      # subscription, counted on the page rather than on the member.
-      assert Social.followee_count(member) == 1
+      # This reverses the earlier decision that "Following" on a profile means
+      # people and a page is counted on the page instead. The Following list now
+      # has an Organizations section, and the two have to agree: a member who
+      # follows only pages would otherwise read "Following 0" above a link to a
+      # page that lists them. A total of both is not a contradiction — the list
+      # underneath splits it and counts each section.
+      assert Social.followee_count(member) == 2
+      assert Social.followed_organization_count(member) == 1
     end
   end
 

@@ -4,6 +4,50 @@
   if(same_user?(@user, @current_user), do: gettext("Following"), else: gettext("Follows"))
 ]} />
 
+<%!-- The pages this member follows (issue #1336), above the people and in their
+own card: a page has a logo and neither work history nor tags, so it is not a
+`card_list` row. Before this section existed a followed page appeared nowhere at
+all, and the only way to unfollow one was to find it again. --%>
+<div :if={@organizations != []} class="card-list">
+  <section class="card" id="followed-organizations">
+    <h2 class="card__label">
+      {gettext("Organizations")} ({compact_count(@total_organizations)})
+    </h2>
+
+    <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+      <li :for={{follow_id, organization} <- @organizations} class="flex items-center gap-4 py-4">
+        <.link navigate={Vutuv.Organizations.canonical_path(organization)} class="shrink-0">
+          <.organization_logo organization={organization} class="h-12 w-12" />
+        </.link>
+        <div class="min-w-0 flex-1">
+          <.link
+            navigate={Vutuv.Organizations.canonical_path(organization)}
+            class="block truncate font-semibold text-slate-900 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-300"
+          >
+            {organization.name}
+          </.link>
+          <.organization_location
+            organization={organization}
+            class="truncate text-sm text-slate-600 dark:text-slate-400"
+          />
+        </div>
+        <%!-- Owner only: unfollowing is the whole reason this list is reachable.
+        `DELETE /follows/:id` already handles a page follow — its broadcast drops
+        the nil followee — so no second route is needed. --%>
+        <.button
+          :if={same_user?(@user, @current_user)}
+          href={~p"/follows/#{follow_id}"}
+          method="delete"
+          variant="secondary"
+          class="shrink-0"
+        >
+          {gettext("Unfollow")}
+        </.button>
+      </li>
+    </ul>
+  </section>
+</div>
+
 <div class="card-list">
   <section class="card">
     <h1><%= if same_user?(@user, @current_user), do: gettext("Following"), else: gettext("Follows") %></h1>
