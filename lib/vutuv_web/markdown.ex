@@ -30,6 +30,8 @@ defmodule VutuvWeb.Markdown do
 
   alias Vutuv.Accounts
   alias Vutuv.Fediverse
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts.PostImage
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.VerifiedLinks
@@ -912,7 +914,7 @@ defmodule VutuvWeb.Markdown do
         # carrying only fediverse handles still reaches here (they need no
         # lookup, so both `mentions` and `hashtags` stay empty) and gets linked.
         users =
-          if mode == :all, do: Accounts.get_users_by_usernames(mentions), else: %{}
+          if mode == :all, do: mention_targets(mentions), else: %{}
 
         tags = Tags.linkable_slugs(hashtags)
 
@@ -1022,8 +1024,21 @@ defmodule VutuvWeb.Markdown do
   defp mention_link(whole, handle, users) do
     case Map.get(users, String.downcase(handle)) do
       nil -> whole
-      user -> mention_anchor(user, handle)
+      target -> mention_anchor(target, handle)
     end
+  end
+
+  # Members and organizations share one handle namespace (the `handles`
+  # registry, issue #941), so a handle belongs to at most one of them and the
+  # two maps cannot disagree. Merging members **over** organizations anyway is
+  # the safe direction if that invariant were ever broken: a person's profile
+  # is the more sensitive destination to get right.
+  #
+  # Two batched queries per rendered body, never one per mention.
+  defp mention_targets(handles) do
+    handles
+    |> Organizations.get_organizations_by_usernames()
+    |> Map.merge(Accounts.get_users_by_usernames(handles))
   end
 
   # The written hashtag keeps its casing in the text; the href is the slug
@@ -1040,6 +1055,11 @@ defmodule VutuvWeb.Markdown do
   # The display text is the handle the author typed (case preserved); the href
   # is the canonical lowercase slug; the title is the member's full name (or the
   # handle itself for a nameless member).
+  defp mention_anchor(%Organization{} = organization, typed_handle) do
+    ~s(<a href="#{Organizations.canonical_path(organization)}" ) <>
+      ~s(title="#{escape(organization.name)}" class="mention">@#{typed_handle}</a>)
+  end
+
   defp mention_anchor(user, typed_handle) do
     name =
       case UserHelpers.full_name(user) do

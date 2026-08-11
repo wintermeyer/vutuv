@@ -76,6 +76,32 @@ defmodule Vutuv.Organizations do
 
   def get_organization_by_slug(_), do: nil
 
+  @doc """
+  The **publicly visible** organizations holding any of `usernames`, as a map
+  keyed by the lowercase handle — the batched lookup behind linking `@acme` in
+  a body (issue #1336), the organization twin of
+  `Vutuv.Accounts.get_users_by_usernames/1`.
+
+  One query per rendered body, never one per mention. A page that is pending,
+  frozen or archived is simply absent, so the mention stays plain text rather
+  than linking somewhere a reader cannot go.
+  """
+  def get_organizations_by_usernames(usernames) when is_list(usernames) do
+    case usernames |> Enum.map(&String.downcase/1) |> Enum.uniq() do
+      [] ->
+        %{}
+
+      names ->
+        from(o in Organization,
+          where: o.username in ^names,
+          where: organization_public_row(o),
+          select: struct(o, [:id, :name, :slug, :username])
+        )
+        |> Repo.all()
+        |> Map.new(&{&1.username, &1})
+    end
+  end
+
   @doc "Fetches an organization by its opt-in root handle (issue #941), or nil."
   def get_organization_by_username(username) when is_binary(username),
     do: Repo.get_by(Organization, username: username)
