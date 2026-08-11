@@ -55,7 +55,9 @@ defmodule Vutuv.Reports do
       spam_removals: count_spam_removals(day_start, day_end),
       details: %{
         registrations: registration_sample(day_start, day_end, limit),
-        posts: sample(Post, [:user], day_start, day_end, limit),
+        # Both author kinds (issue #1334): the day's posts include what
+        # organizations published, and the detail lines name whoever wrote them.
+        posts: sample(Post, [:user, :organization], day_start, day_end, limit),
         reposts: sample(PostRepost, [:user, :post], day_start, day_end, limit),
         likes: sample(PostLike, [:user, :post], day_start, day_end, limit),
         bookmarks: sample(PostBookmark, [:user, :post], day_start, day_end, limit),

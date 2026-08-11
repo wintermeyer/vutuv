@@ -11,6 +11,7 @@ defmodule VutuvWeb.PostJSON do
   """
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
@@ -24,7 +25,7 @@ defmodule VutuvWeb.PostJSON do
     %{
       id: post.id,
       url: VutuvWeb.Endpoint.url() <> Posts.path(post),
-      author: author_ref(post.user),
+      author: author_ref(Posts.author(post)),
       body_markdown: post.body,
       body_html:
         post.body
@@ -84,6 +85,12 @@ defmodule VutuvWeb.PostJSON do
 
   defp author_ref(%User{} = user) do
     %{username: user.username, name: VutuvWeb.UserHelpers.full_name(user)}
+  end
+
+  # A page has a name and a slug where a member has a handle (issue #1334); it
+  # may hold no handle at all, so `username` would be a lie rather than a gap.
+  defp author_ref(%Organization{} = organization) do
+    %{slug: organization.slug, name: organization.name}
   end
 
   defp image(%PostImage{} = image) do

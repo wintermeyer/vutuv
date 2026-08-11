@@ -54,6 +54,43 @@ defmodule VutuvWeb.OrganizationPostDocsTest do
     refute json |> Jason.encode!() |> String.contains?(owner.username)
   end
 
+  test "the daily admin report names the page instead of crashing" do
+    {organization, owner} = active_organization()
+    {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+    {:ok, _} = Posts.create_organization_post(organization, owner, %{body: "Tagesmeldung."})
+
+    # The report samples the day's posts. Once any page publishes, an entry has
+    # no member behind it — and the line was built from `actor.username`, so the
+    # operator's daily mail stopped arriving rather than merely reading oddly.
+    sections =
+      Vutuv.BerlinTime.today() |> Vutuv.Reports.daily() |> VutuvWeb.ReportDetails.sections()
+
+    posts = Enum.find(sections, &(&1.key == :posts))
+    assert posts
+    assert Enum.any?(posts.entries, &(&1.primary =~ "Tagesmeldung."))
+  end
+
+  test "the API feed names the page", %{conn: conn} do
+    {organization, owner} = active_organization()
+    {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+    {:ok, _} = Posts.create_organization_post(organization, owner, %{body: "Im API-Feed."})
+
+    reader = insert(:activated_user)
+    {:ok, _} = Social.follow_organization(reader, organization)
+
+    {:ok, token, _} =
+      Vutuv.ApiAuth.create_pat(reader, %{"name" => "t", "scopes" => ["posts:read"]})
+
+    json =
+      conn
+      |> Plug.Conn.put_req_header("authorization", "Bearer " <> token)
+      |> get("/api/2.0/feed")
+      |> json_response(200)
+
+    entry = Enum.find(json["posts"], &(&1["body_markdown"] =~ "Im API-Feed."))
+    assert entry["author"]["name"] == organization.name
+  end
+
   test "a follower's feed documents render the page's post", %{conn: conn} do
     {conn, member} = create_and_login_user(conn)
     {organization, owner} = active_organization()

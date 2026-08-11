@@ -174,6 +174,11 @@ defmodule VutuvWeb.ApiV2.PostController do
     end
   end
 
+  defp author_ref(%Organization{} = organization),
+    do: %{name: organization.name, slug: organization.slug}
+
+  defp author_ref(author), do: VutuvWeb.AgentDocs.person_ref(author)
+
   defp engagement_doc(%Post{} = post, viewer) do
     post.id
     |> Posts.post_engagement(viewer)
@@ -187,7 +192,9 @@ defmodule VutuvWeb.ApiV2.PostController do
     %{
       id: post.id,
       url: VutuvWeb.AgentDocs.abs_url(Posts.path(post)),
-      author: VutuvWeb.AgentDocs.person_ref(post.user),
+      # A feed entry may be by a page (issue #1336), which `person_ref/1`
+      # cannot describe — `Posts.author/1` decides which of the two speaks.
+      author: author_ref(Posts.author(post)),
       published_on: post.published_on,
       body_markdown: post.body,
       tags: Enum.map(post.tags, & &1.name),

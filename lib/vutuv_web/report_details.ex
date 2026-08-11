@@ -94,7 +94,7 @@ defmodule VutuvWeb.ReportDetails do
   defp entry(:registrations, user), do: person_entry(user)
   defp entry(:spam_removals, event), do: person_entry(event.case.owner)
 
-  defp entry(:posts, post), do: post_entry(post, post.user)
+  defp entry(:posts, post), do: post_entry(post, Vutuv.Posts.author(post))
   defp entry(:reposts, repost), do: post_entry(repost.post, repost.user)
   defp entry(:likes, like), do: post_entry(like.post, like.user)
   defp entry(:bookmarks, bookmark), do: post_entry(bookmark.post, bookmark.user)
@@ -138,10 +138,16 @@ defmodule VutuvWeb.ReportDetails do
   # line.
   defp post_entry(post, actor) do
     case AgentDocs.excerpt(post.body) do
-      "" -> %{primary: "@" <> actor.username, secondary: nil, path: "/posts/" <> post.id}
-      line -> %{primary: line, secondary: "@" <> actor.username, path: "/posts/" <> post.id}
+      "" -> %{primary: actor_label(actor), secondary: nil, path: "/posts/" <> post.id}
+      line -> %{primary: line, secondary: actor_label(actor), path: "/posts/" <> post.id}
     end
   end
+
+  # A member is named by handle, an organization by its name — it may never have
+  # claimed a handle. Without this the daily report crashed on the first day any
+  # page published (issue #1334).
+  defp actor_label(%Vutuv.Organizations.Organization{name: name}), do: name
+  defp actor_label(actor), do: "@" <> actor.username
 
   # The remote actor's own label, best first: its @handle, then its display
   # name, falling back to the raw actor URI (always present).
