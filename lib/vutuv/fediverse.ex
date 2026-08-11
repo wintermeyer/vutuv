@@ -3693,6 +3693,32 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  A reply from another network under a **page's** post (issue #1334, completing
+  #1069 for pages).
+
+  `insert_note/5` needed no change: a note hangs off the post, and the audience
+  it records is decided through `Docs.actor_url/1`, which knows both kinds. What
+  is missing on the member version is deliberate — no `fediverse_replies?`
+  switch (a page that publishes outward has no comparable reason to want the
+  traffic and not the answers), no `restricted?` check (an organization post
+  carries no audience by construction), and no per-member notification, because
+  a page's news reaches its team through its own activity list.
+  """
+  def record_organization_reply(%Organization{} = page, activity, actor) do
+    with true <- enabled?(),
+         true <- federated?(page),
+         %{} = object <- note_object(activity["object"]),
+         %Post{} = post <- resolve_own_organization_note(page, object["inReplyTo"]),
+         :ok <- check_inbound_cap(actor.uri),
+         {:ok, _note} <- insert_note(page, post, activity, object, actor) do
+      Posts.broadcast_post_counters(post.id)
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  @doc """
   Applies an author's edit of a reply they already sent (`Update(Note)`).
 
   Scoped to the actor that wrote it, so one server cannot rewrite another's

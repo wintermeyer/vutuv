@@ -627,6 +627,21 @@ defmodule VutuvWeb.FediverseController do
     :ok
   end
 
+  # Somebody on another network answered one of the page's posts (issue #1334,
+  # completing #1069 for pages). Stored under the same retention model as a
+  # member's: the text expires unless its origin keeps confirming it, and the
+  # takedown ledger can reach it.
+  defp perform_for_organization(organization, %{"type" => "Create"} = activity, remote) do
+    Fediverse.record_organization_reply(organization, activity, %{
+      uri: remote.id,
+      handle: remote.preferred_username,
+      name: remote.name,
+      inbox: remote.inbox
+    })
+
+    :ok
+  end
+
   # Everything else: acknowledged and dropped, like the member inbox.
   defp perform_for_organization(_organization, _activity, _remote), do: :ok
 

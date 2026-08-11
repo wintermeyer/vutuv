@@ -888,11 +888,23 @@ inbox takes `Like` and `Announce` (and their `Undo`), and the counts need no
 special handling because `fediverse_reactions` hangs off the post rather than
 off a member, so `Posts.shown_counts/1` folds them in by itself.
 
-What a page still does not receive is **replies** from other networks. Those are
-stored text from a stranger under a retention model with a takedown ledger and a
-six-month expiry (issues #1069/#1071), and the surfaces that render them —
-the permalink's conversation, the notification quote — are member-shaped
-throughout. That is its own feature, not a widened column.
+**Replies** from other networks arrive too, under the same retention model as a
+member's (issues #1069/#1071): the text expires unless its origin keeps
+confirming it, and the takedown ledger reaches it. They render read-only on the
+page's permalink — removing, reporting and the heart all belong to a person, and
+a page has nobody behind those buttons.
+
+I had this written up here as its own feature and it was not. `fediverse_notes`
+hangs off the **post**, not off a member, and the audience a note records is
+decided through `Docs.actor_url/1`, which knows both kinds — so `insert_note/5`
+needed no change at all. Worth remembering as a pattern: on this milestone the
+tables keyed to the *thing* rather than to its *owner* (notes, reactions) cost
+almost nothing to widen, while the ones keyed to a member (follows, followers,
+deliveries, actors) each needed a nullable pair and a sweep.
+
+What a page still cannot do is **answer** one. Replying outward is
+`check_reply_allowed/2` territory and member-shaped end to end, and an
+organization post carries no conversation here either.
 
 ## Deliberate v1 limits
 
