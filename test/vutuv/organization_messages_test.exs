@@ -20,11 +20,15 @@ defmodule Vutuv.OrganizationMessagesTest do
 
   import Vutuv.OrganizationsHelpers
 
+  alias Vutuv.ApiAuth
+  alias Vutuv.ApiAuth.OAuth
   alias Vutuv.Chat
   alias Vutuv.Chat.Conversation
   alias Vutuv.Chat.Participant
   alias Vutuv.Organizations
   alias Vutuv.Repo
+  alias Vutuv.Webhooks
+  alias Vutuv.Webhooks.Delivery
 
   setup do
     Application.put_env(:vutuv, :verify_organization_domains, true)
@@ -138,6 +142,11 @@ defmodule Vutuv.OrganizationMessagesTest do
 
     assert {:error, :not_participant} =
              Chat.send_message_as_organization(page, owner, foreign.id, "Nicht meins.")
+
+    # And a malformed id is "no such conversation", not a crash — the read path
+    # has always answered that way, and the send path used to skip the cast.
+    assert {:error, :not_participant} =
+             Chat.send_message_as_organization(page, owner, "not-a-uuid", "Nicht meins.")
   end
 
   test "a page nobody may see cannot be written to" do
@@ -167,7 +176,7 @@ defmodule Vutuv.OrganizationMessagesTest do
     assert %Vutuv.Organizations.Organization{} = entry.other
 
     assert %Vutuv.Organizations.Organization{id: id} =
-             Chat.other_party(conversation, member.id)
+             Chat.other_party(conversation, member)
 
     assert id == page.id
 
@@ -194,7 +203,7 @@ defmodule Vutuv.OrganizationMessagesTest do
     # The member wrote it, so it is unread for the page's whole team.
     assert entry.unread == 1
 
-    assert %Vutuv.Accounts.User{id: id} = Chat.other_party(conversation, page.id)
+    assert %Vutuv.Accounts.User{id: id} = Chat.other_party(conversation, page)
     assert id == member.id
 
     # Any publisher, not only whoever happened to be addressed.
@@ -237,5 +246,54 @@ defmodule Vutuv.OrganizationMessagesTest do
     # One marker for the page, so the colleague who did not open it sees the
     # same thing — the model `organizations.activity_read_at` already sets.
     assert [%{unread: 0}] = Chat.list_organization_conversations(page)
+  end
+
+  test "a page's reply reaches the member's webhook like any other message" do
+    {page, owner} = page_with_publisher()
+    member = insert(:activated_user)
+    developer = insert(:activated_user)
+
+    redirect = "https://app.example.org/callback"
+
+    {:ok, app, _secret} =
+      ApiAuth.create_app(developer, %{"name" => "Hook App", "redirect_uris" => [redirect]})
+
+    {:ok, _subscription, _secret} =
+      Webhooks.create_subscription(app, %{
+        "url" => "https://hooks.example.org/vutuv",
+        "events" => ["message.created"]
+      })
+
+    {:ok, request} =
+      OAuth.validate_authorize(%{
+        "response_type" => "code",
+        "client_id" => app.client_id,
+        "redirect_uri" => redirect,
+        "scope" => "messages:read",
+        "code_challenge" => Base.url_encode64(:crypto.hash(:sha256, "vvvvv"), padding: false),
+        "code_challenge_method" => "S256"
+      })
+
+    {:ok, _code} = OAuth.approve(member, request)
+
+    {:ok, conversation} = Chat.find_or_create_conversation(member, page)
+
+    # The member's own send tells the PAGE, which has no webhooks of its own -
+    # so nothing is queued and the recipient id is nil rather than wrong.
+    {:ok, _} = Chat.send_message(member, conversation.id, "Guten Tag.")
+    assert Repo.aggregate(Delivery, :count) == 0
+
+    # The page answering is an ordinary incoming message for the member, and it
+    # was silently the one kind of send that told nobody: the organization path
+    # was a second copy of `deliver/4` that had simply left the emit out.
+    {:ok, _} = Chat.send_message_as_organization(page, owner, conversation.id, "Ja, gerne.")
+
+    assert [delivery] = Repo.all(Delivery)
+    assert delivery.event == "message.created"
+    assert delivery.payload["member"] == member.username
+    assert delivery.payload["data"]["conversation_id"] == conversation.id
+    # A page names itself by its handle when it has claimed one, by its slug
+    # when it has not - never nil, which is what `username` alone would give.
+    assert delivery.payload["data"]["from"] == page.slug
   end
 end

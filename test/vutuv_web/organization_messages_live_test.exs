@@ -75,8 +75,9 @@ defmodule VutuvWeb.OrganizationMessagesLiveTest do
       {:ok, _} = Chat.send_message(member, conversation.id, "Haben Sie offene Stellen?")
       {:ok, _} = Chat.send_message_as_organization(page, owner, conversation.id, "Ja, mehrere.")
 
-      # The list. `other_user/2` used to resolve a nil id here and RAISE, so
-      # this whole page was a 500 for anybody who had written to a page.
+      # The list. Resolving the far side by elimination used to hand a nil id
+      # to a lookup that RAISES, so this whole page was a 500 for anybody who
+      # had written to a page.
       {:ok, _live, html} = live(conn, ~p"/messages")
       assert html =~ page.name
 
@@ -87,6 +88,13 @@ defmodule VutuvWeb.OrganizationMessagesLiveTest do
 
       # A page is not a member, so nothing offers to block it.
       refute html =~ ~s(id="thread-menu")
+
+      # And the reply's bubble is labelled with the PAGE, not "Deleted account".
+      # A page's message has a NULL `sender_id`, so a label reading that column
+      # reports the sender as gone - and the thread header carrying the page's
+      # name right above it is exactly what hid this from the first version of
+      # this test.
+      refute html =~ "Deleted account"
     end
 
     test "the member can still write into it", %{conn: conn} do

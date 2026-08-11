@@ -100,9 +100,11 @@ defmodule VutuvWeb.OrganizationLive.Show do
   end
 
   # Am I currently speaking as the very page I am looking at? Then a "Message"
-  # button would open a conversation with myself.
-  defp own_page?(%{acting_as: %Organization{id: id}, organization: %{id: id}}), do: true
-  defp own_page?(_assigns), do: false
+  # button would open a conversation with myself. Takes the two things it
+  # compares rather than the whole assigns map, so the template expression stays
+  # change-tracked and the clause head cannot drift from `follower_of/1`'s.
+  defp own_page?(%Organization{id: id}, %Organization{id: id}), do: true
+  defp own_page?(_acting_as, _organization), do: false
 
   defp assign_organization(socket, organization, viewer) do
     # One query for every domain, partitioned in memory (an organization has few).
@@ -419,7 +421,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
               choose. Hidden while you are writing AS this page, where it would
               offer a conversation with yourself. --%>
               <.link
-                :if={@current_user && not own_page?(assigns)}
+                :if={@current_user && not own_page?(@acting_as, @organization)}
                 navigate={~p"/messages/organization/#{@organization.slug}"}
                 id="message-organization"
                 data-message-organization

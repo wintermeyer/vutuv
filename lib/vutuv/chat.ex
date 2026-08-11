@@ -19,6 +19,7 @@ defmodule Vutuv.Chat do
 
   import Ecto.Query
 
+  alias Ecto.Association.NotLoaded
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Chat.{Conversation, Message, Participant}
@@ -181,7 +182,11 @@ defmodule Vutuv.Chat do
   answer at once.
   """
   def send_message_as_organization(%Organization{} = page, %User{} = acting_user, id, body) do
-    conversation = Repo.get_by(Conversation, id: id, organization_id: page.id)
+    # Through the same participant-scoped fetch the read path uses, rather than
+    # a fourth hand-rolled `Repo.get_by`: that one skipped the `UUIDv7.with_cast`
+    # guard, so a malformed id RAISED here where everywhere else it simply means
+    # "no such conversation", and it did not filter a moderation-frozen thread.
+    conversation = get_conversation(page, id)
 
     cond do
       is_nil(conversation) ->
@@ -208,13 +213,8 @@ defmodule Vutuv.Chat do
       |> Message.changeset(%{body: body})
 
     case Repo.transaction(fn -> insert_and_bump(changeset, conversation, false) end) do
-      {:ok, message} ->
-        message = %{message | sender_organization: page}
-        broadcast_new_message(conversation, message)
-        {:ok, message}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, changeset}
+      {:ok, message} -> delivered(conversation, message, page)
+      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
     end
   end
 
@@ -365,7 +365,12 @@ defmodule Vutuv.Chat do
   end
 
   @doc """
-  The other user of a 1:1 conversation, from `me`'s perspective.
+  The other **member's id** in a conversation, from `me`'s perspective.
+
+  Answers `nil` for the page side of a member-page conversation (issue #1336),
+  which is what the delivery chokepoints want - `Activity.broadcast/2` and
+  `Webhooks.emit/3` both treat a nil recipient as "nobody to tell". Anything
+  that needs the other *party* rather than a member id wants `other_party/2`.
   """
   def other_user_id(%Conversation{} = conversation, me_id) do
     if conversation.user_a_id == me_id,
@@ -373,23 +378,49 @@ defmodule Vutuv.Chat do
       else: conversation.user_a_id
   end
 
-  def other_user(%Conversation{} = conversation, me_id) do
-    id = other_user_id(conversation, me_id)
-    # The thread header only renders the avatar, name and @handle, so select the
-    # listing columns rather than the whole wide user row.
-    Repo.one!(from(u in User, where: u.id == ^id, select: struct(u, ^User.listing_fields())))
-  end
+  @doc """
+  Who sent a message - a member **or a page** (issue #1336).
+
+  The twin of `Vutuv.Posts.author/1`, and here for the same reason: `messages`
+  carries the nullable pair `sender_id | sender_organization_id`, so a call site
+  reading either column directly is right for one kind of sender and silently
+  wrong for the other. Reading `message.sender` on a page's message hands back
+  `nil`, which the display layer renders as "Deleted account" - the page's own
+  reply attributed to a departed member.
+
+  Takes the preload when it is there (`thread_page/3` loads both sides) and
+  falls back to a lookup when it is not, rather than handing back an
+  `%Ecto.Association.NotLoaded{}`.
+  """
+  def sender(%Message{sender_organization_id: nil, sender: %NotLoaded{}, sender_id: nil}), do: nil
+
+  def sender(%Message{sender_organization_id: nil, sender: %NotLoaded{}, sender_id: id}),
+    do: Repo.get(User, id)
+
+  def sender(%Message{sender_organization_id: nil} = message), do: message.sender
+
+  def sender(%Message{sender_organization: %NotLoaded{}, sender_organization_id: id}),
+    do: Repo.get(Organization, id)
+
+  def sender(%Message{} = message), do: message.sender_organization
 
   @doc """
   The other side of a conversation - a member **or a page** (issue #1336).
 
-  `other_user/2` above cannot answer this: for a member-page conversation it
-  resolves a nil id, and `Repo.one!(where: u.id == ^nil)` RAISES rather than
-  answering nothing. Every caller that can see a page conversation must come
-  through here.
+  Resolving the far side by elimination cannot work: for a member-page
+  conversation there is no second user id, and a lookup on the nil it produces
+  RAISES rather than answering nothing (`Repo.one!(where: u.id == ^nil)`), which
+  is how the whole messages page became a 500 for anybody who wrote to a page.
+  Every caller that can see a page conversation must come through here.
   """
-  def other_party(%Conversation{} = conversation, me_id) do
-    case other_key(conversation, party(me_id, conversation)) do
+  def other_party(%Conversation{} = conversation, %User{id: id}),
+    do: other_party(conversation, {:user, id})
+
+  def other_party(%Conversation{} = conversation, %Organization{id: id}),
+    do: other_party(conversation, {:organization, id})
+
+  def other_party(%Conversation{} = conversation, party) do
+    case other_key(conversation, party) do
       {:user, id} ->
         Repo.one!(from(u in User, where: u.id == ^id, select: struct(u, ^User.listing_fields())))
 
@@ -397,11 +428,6 @@ defmodule Vutuv.Chat do
         Repo.get!(Organization, id)
     end
   end
-
-  # `me_id` names either the member or the page, and only the conversation can
-  # say which - a page conversation's `user_a_id` is always the member.
-  defp party(me_id, %Conversation{organization_id: me_id}), do: {:organization, me_id}
-  defp party(me_id, %Conversation{}), do: {:user, me_id}
 
   @doc """
   The status a conversation shows to its initiator: a declined request
@@ -484,23 +510,40 @@ defmodule Vutuv.Chat do
       |> Message.changeset(%{body: body})
 
     case Repo.transaction(fn -> insert_and_bump(changeset, conversation, accept?) end) do
-      {:ok, message} ->
-        message = %{message | sender: sender}
-        broadcast_new_message(conversation, message)
-
-        # Webhooks hear about it on the recipient's side (their grant, their
-        # messages:read scope) — a thin envelope, never the message body.
-        Vutuv.Webhooks.emit(other_user_id(conversation, sender.id), "message.created", %{
-          "conversation_id" => conversation.id,
-          "from" => sender.username
-        })
-
-        {:ok, message}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, changeset}
+      {:ok, message} -> delivered(conversation, message, sender)
+      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
     end
   end
+
+  # Everything that happens once a message is in the table, for BOTH kinds of
+  # sender. It lives in one place because the organization path started life as
+  # a copy of the member one and quietly left the webhook out: a page's reply
+  # was the single kind of message that told nobody.
+  defp delivered(conversation, message, sender) do
+    message = put_sender(message, sender)
+    broadcast_new_message(conversation, message)
+
+    # Webhooks hear about it on the recipient's side (their grant, their
+    # messages:read scope) — a thin envelope, never the message body. The
+    # recipient is read off the stored row rather than from the sender we were
+    # handed, so a page (whose `sender_id` is NULL) resolves to the member it
+    # answered instead of to nobody.
+    Vutuv.Webhooks.emit(other_user_id(conversation, message.sender_id), "message.created", %{
+      "conversation_id" => conversation.id,
+      "from" => sender_handle(sender)
+    })
+
+    {:ok, message}
+  end
+
+  defp put_sender(message, %Organization{} = page), do: %{message | sender_organization: page}
+  defp put_sender(message, %User{} = user), do: %{message | sender: user}
+
+  # A page has a handle only once it has claimed a root word, so it falls back
+  # to its slug — the payload names the sender, and nil would name nobody.
+  defp sender_handle(%Organization{username: nil, slug: slug}), do: slug
+  defp sender_handle(%Organization{username: username}), do: username
+  defp sender_handle(%User{username: username}), do: username
 
   # Message insert + the conversation bump (last_message_at, plus the implicit
   # accept when the request's recipient replies) — one transaction.
@@ -570,7 +613,7 @@ defmodule Vutuv.Chat do
       order_by: [desc_nulls_last: c.last_message_at, desc: c.id]
     )
     |> Repo.all()
-    |> hydrate(me_id)
+    |> hydrate({:user, me_id})
   end
 
   @doc """
@@ -604,7 +647,7 @@ defmodule Vutuv.Chat do
       order_by: [desc: c.last_message_at, desc: c.id]
     )
     |> Repo.all()
-    |> hydrate(me_id)
+    |> hydrate({:user, me_id})
   end
 
   # Resolve the other side, last-message preview and unread count for a page of
@@ -613,17 +656,11 @@ defmodule Vutuv.Chat do
   # conversation list is a member or a page, and so is the other side.
   defp hydrate([], _party), do: []
 
-  defp hydrate(conversations, me_id) when is_binary(me_id),
-    do: hydrate(conversations, {:user, me_id})
-
   defp hydrate(conversations, party) do
     ids = Enum.map(conversations, & &1.id)
     keys = Enum.map(conversations, &other_key(&1, party))
     others = parties_by_key(keys)
-    # A dynamic composes only inside another dynamic, never inline in a query
-    # expression, so the whole condition is built here.
-    mine = own_message(party)
-    shown = dynamic([m], is_nil(m.frozen_at) or ^mine)
+    shown = visible_message(party)
 
     previews =
       from(m in Message,
@@ -672,24 +709,15 @@ defmodule Vutuv.Chat do
 
   # One batched load per kind, into a single `{kind, id} => struct` map.
   defp parties_by_key(keys) do
-    grouped = Enum.group_by(keys, &elem(&1, 0), &elem(&1, 1))
-
     users =
-      grouped
-      |> Map.get(:user, [])
+      for({:user, id} <- keys, do: id)
       |> listing_users_by_id()
       |> Map.new(fn {id, user} -> {{:user, id}, user} end)
 
     pages =
-      case Map.get(grouped, :organization, []) do
-        [] ->
-          %{}
-
-        ids ->
-          from(o in Organization, where: o.id in ^ids)
-          |> Repo.all()
-          |> Map.new(&{{:organization, &1.id}, &1})
-      end
+      for({:organization, id} <- keys, do: id)
+      |> listing_organizations_by_id()
+      |> Map.new(fn {id, page} -> {{:organization, id}, page} end)
 
     Map.merge(users, pages)
   end
@@ -701,6 +729,13 @@ defmodule Vutuv.Chat do
   # NULL too, which excludes the row. Written this way the negation is honest
   # in both directions, and the unread badge counts what the reader has not
   # read whichever side wrote it.
+  # A frozen message is hidden from the other participant but stays visible to
+  # its sender - which since issue #1336 can be a page, so the test goes through
+  # own_message/1 rather than naming a column that is NULL on the other's rows.
+  # A dynamic composes only inside another dynamic, never inline in a query
+  # expression, which is why this is built rather than written at the two sites.
+  defp visible_message(party), do: dynamic([m], is_nil(m.frozen_at) or ^own_message(party))
+
   defp own_message({:user, me_id}),
     do: dynamic([m], not is_nil(m.sender_id) and m.sender_id == ^me_id)
 
@@ -710,22 +745,38 @@ defmodule Vutuv.Chat do
 
   # Load the listing columns for a set of user ids into an id->user map.
   # The email/sidebar only needs the narrow listing_fields, not the wide row.
+  #
+  # The empty clause is not just a shortcut: a PINNED empty list is not folded
+  # away, it compiles to `= ANY($1)` with an empty array and costs a real round
+  # trip. A sidebar whose every counterpart is a page hits exactly that.
+  defp listing_users_by_id([]), do: %{}
+
   defp listing_users_by_id(ids) do
     from(u in User, where: u.id in ^ids, select: struct(u, ^User.listing_fields()))
     |> Repo.all()
     |> Map.new(&{&1.id, &1})
   end
 
-  defp unread_counts(conversation_ids, me_id) when is_binary(me_id),
-    do: unread_counts(conversation_ids, {:user, me_id})
+  # The same narrowing for pages: a sidebar row needs the name, the logo and
+  # the handle, never the whole wide row with its 10k-char description.
+  defp listing_organizations_by_id([]), do: %{}
+
+  defp listing_organizations_by_id(ids) do
+    from(o in Organization,
+      where: o.id in ^ids,
+      select: struct(o, [:id, :name, :username, :slug, :logo])
+    )
+    |> Repo.all()
+    |> Map.new(&{&1.id, &1})
+  end
 
   defp unread_counts(conversation_ids, party) do
     from_them = dynamic([m], not (^own_message(party)))
-    joined = dynamic([m, p], p.conversation_id == m.conversation_id and ^participant_is(party))
 
     from(m in Message,
       join: p in Participant,
-      on: ^joined,
+      on: p.conversation_id == m.conversation_id,
+      where: ^participant_is(party),
       where: m.conversation_id in ^conversation_ids,
       # NOT `m.sender_id != ^me_id`: a page's message has a NULL `sender_id`,
       # and `NULL != <id>` is NULL rather than true, so a page's reply would
@@ -779,11 +830,7 @@ defmodule Vutuv.Chat do
   defp thread_page(party, %Conversation{} = conversation, opts) do
     limit = Keyword.get(opts, :limit, 30)
     cursor = Keyword.get(opts, :cursor)
-    # The moderation freezer: a frozen message is hidden from the other
-    # participant but stays visible to its sender — which since issue #1336 can
-    # be a page, so the test goes through own_message/1 rather than naming a
-    # column that would be NULL on the other side's rows.
-    shown = dynamic([m], is_nil(m.frozen_at) or ^own_message(party))
+    shown = visible_message(party)
 
     entries =
       from(m in Message,
@@ -838,12 +885,8 @@ defmodule Vutuv.Chat do
   # No marker given (opening a conversation): the newest message's time is the
   # read marker, looked up with a MAX. A caller already holding the just-arrived
   # message passes its inserted_at (the new newest) to skip that scan.
-  def mark_read(%User{} = me, conversation_id, nil) do
-    mark_read(me, conversation_id, newest_message_at(conversation_id))
-  end
-
-  def mark_read(%Organization{} = page, conversation_id, nil) do
-    mark_read(page, conversation_id, newest_message_at(conversation_id))
+  def mark_read(party, conversation_id, nil) do
+    mark_read(party, conversation_id, newest_message_at(conversation_id))
   end
 
   # ONE marker for the page, not one per publisher: read means somebody on the
