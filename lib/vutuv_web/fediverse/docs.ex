@@ -23,6 +23,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   """
 
   alias Vutuv.Fediverse.Actor
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
@@ -43,6 +44,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   @doc "The associations `note/2` needs loaded on a post."
   def note_preloads, do: @note_preloads
 
+  def actor_url(%Organization{slug: slug}), do: "#{base()}/organizations/#{slug}/actor"
   def actor_url(user), do: "#{base()}/#{user.username}/actor"
   def key_id(user), do: actor_url(user) <> "#main-key"
   def note_url(user, post_id), do: "#{base()}/#{user.username}/posts/#{post_id}"
@@ -153,6 +155,53 @@ defmodule VutuvWeb.Fediverse.Docs do
     }
     |> put_also_known_as(user)
     |> put_moved_to(user)
+  end
+
+  @doc """
+  A **page's** actor document (issue #1334): AP type `Organization`, which is
+  what tells a remote server to render it as an organisation rather than as a
+  person.
+
+  Its own builder rather than a widened `actor/2`, because half of the member
+  document has no meaning here and silently emitting those fields as nil would
+  be worse than leaving them out: no `alsoKnownAs`/`movedTo` (account migration
+  is a person's decision about their own identity, issue #986), and no
+  `featured` collection (a page pins nothing — `posts.pinned_post_id` hangs off
+  a member).
+
+  What it does keep is the shared inbox and `manuallyApprovesFollowers: false`,
+  because both are facts about this installation rather than about who the actor
+  is.
+  """
+  def organization_actor(%Organization{} = organization, %Actor{} = actor) do
+    actor_url = actor_url(organization)
+
+    %{
+      "@context" => [
+        "https://www.w3.org/ns/activitystreams",
+        "https://w3id.org/security/v1"
+      ],
+      "id" => actor_url,
+      "type" => "Organization",
+      # The page's claimed handle. Federating without one is not possible —
+      # WebFinger's `subject` and this field both need an address — which is why
+      # `Fediverse.federated?/1` refuses a page that has not claimed one.
+      "preferredUsername" => organization.username,
+      "name" => organization.name,
+      "summary" => organization.description,
+      "url" => "#{base()}/organizations/#{organization.slug}",
+      "inbox" => actor_url <> "/inbox",
+      "outbox" => actor_url <> "/outbox",
+      "followers" => actor_url <> "/followers",
+      "endpoints" => %{"sharedInbox" => shared_inbox_url()},
+      "manuallyApprovesFollowers" => false,
+      "published" => iso8601(organization.inserted_at),
+      "publicKey" => %{
+        "id" => actor_url <> "#main-key",
+        "owner" => actor_url,
+        "publicKeyPem" => actor.public_key_pem
+      }
+    }
   end
 
   # The accounts the member is migrating *from* (issue #986). Rendered only

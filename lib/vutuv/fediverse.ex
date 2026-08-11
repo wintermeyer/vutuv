@@ -140,10 +140,15 @@ defmodule Vutuv.Fediverse do
   account in good standing (a frozen, suspended or deactivated profile is hidden
   on vutuv, so it must not keep federating).
 
-  For a page (issue #1334): the global switch, its opt-in, and
-  `Organizations.public_visible?/1` — active **and** not frozen. `status` stays
-  "active" through a freeze, so a gate reading only that would keep answering
-  for a page vutuv is hiding, on a network where nobody can see why.
+  For a page (issue #1334): the global switch, its opt-in, a **claimed handle**,
+  and `Organizations.public_visible?/1` — active **and** not frozen.
+
+  Two of those are easy to get wrong. `status` stays "active" through a freeze,
+  so a gate reading only it would keep answering for a page vutuv is hiding, on
+  a network where nobody can see why. And the handle is not decoration: it is
+  the page's address out there — WebFinger's `subject` and the actor document's
+  `preferredUsername` are both built from it — so a page that never claimed one
+  cannot be federated, only unreachable.
   """
   def federated?(%User{} = user) do
     enabled?() and user.fediverse_followers? and user.email_confirmed? and
@@ -152,6 +157,7 @@ defmodule Vutuv.Fediverse do
 
   def federated?(%Organization{} = organization) do
     enabled?() and organization.fediverse_followers? and
+      is_binary(organization.username) and
       Organizations.public_visible?(organization)
   end
 

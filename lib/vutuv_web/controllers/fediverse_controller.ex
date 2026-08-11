@@ -35,6 +35,8 @@ defmodule VutuvWeb.FediverseController do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.HttpSignature
   alias Vutuv.Handles
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.RawBodyReader
 
@@ -48,13 +50,13 @@ defmodule VutuvWeb.FediverseController do
 
   def webfinger(conn, params) do
     with true <- Fediverse.enabled?(),
-         %User{} = user <- resolve_resource(params["resource"]) do
-      if Fediverse.federated?(user) do
+         subject when not is_nil(subject) <- resolve_resource(params["resource"]) do
+      if Fediverse.federated?(subject) do
         conn
         |> put_resp_content_type("application/jrd+json")
-        |> send_resp(200, Jason.encode!(jrd(user)))
+        |> send_resp(200, Jason.encode!(jrd(subject)))
       else
-        refuse(conn, user)
+        refuse(conn, subject)
       end
     else
       _ -> send_resp(conn, 404, "")
@@ -492,6 +494,43 @@ defmodule VutuvWeb.FediverseController do
 
   defp signer([]), do: nil
 
+  @doc """
+  A page's actor document (issue #1334). 404s for a page that has not opted in,
+  exactly as a member's does — which is what lets every piece of this half land
+  on its own without being visible to another server first.
+  """
+  def organization_actor(conn, %{"slug" => slug}) do
+    with_federated_organization(conn, slug, fn organization ->
+      {:ok, actor} = Fediverse.ensure_organization_actor(organization)
+
+      send_activity_json(conn, Docs.organization_actor(organization, actor))
+    end)
+  end
+
+  @doc "The page's followers collection — count only, like a member's."
+  def organization_followers(conn, %{"slug" => slug}) do
+    with_federated_organization(conn, slug, fn organization ->
+      send_activity_json(
+        conn,
+        Docs.count_collection(
+          Docs.actor_url(organization) <> "/followers",
+          Fediverse.organization_remote_follower_count(organization)
+        )
+      )
+    end)
+  end
+
+  defp with_federated_organization(conn, slug, fun) do
+    with true <- Fediverse.enabled?(),
+         %Organization{} = organization <- Organizations.get_organization_by_slug(slug) do
+      if Fediverse.federated?(organization),
+        do: fun.(organization),
+        else: send_resp(conn, 404, "")
+    else
+      _ -> send_resp(conn, 404, "")
+    end
+  end
+
   defp with_federated_user(conn, slug, fun) do
     with true <- Fediverse.enabled?(),
          %User{} = user <- Accounts.get_user_by_username(slug) do
@@ -541,7 +580,7 @@ defmodule VutuvWeb.FediverseController do
          # `local_host?/1` folds case, port and the `www.` alias — a member
          # pastes whatever spelling their browser showed them (issue #1211).
          true <- Fediverse.local_host?(host) do
-      Accounts.get_user_by_username(Handles.normalize(handle))
+      by_handle(Handles.normalize(handle))
     else
       _ -> nil
     end
@@ -552,13 +591,45 @@ defmodule VutuvWeb.FediverseController do
     # what somebody pastes; the trailing slash a browser adds falls away in
     # `local_path/1`, which also accepts the `www.`/`http` spellings.
     case Fediverse.local_path(url) do
-      [handle] -> Accounts.get_user_by_username(Handles.normalize(handle))
-      [handle, "actor"] -> Accounts.get_user_by_username(Handles.normalize(handle))
+      [handle] -> by_handle(Handles.normalize(handle))
+      [handle, "actor"] -> by_handle(Handles.normalize(handle))
+      # The page's own URLs, which is what somebody pastes after finding it on
+      # this site rather than through search.
+      ["organizations", slug] -> Organizations.get_organization_by_slug(slug)
+      ["organizations", slug, "actor"] -> Organizations.get_organization_by_slug(slug)
       _ -> nil
     end
   end
 
   defp resolve_resource(_), do: nil
+
+  # Members and pages share one handle namespace (issue #941), so a handle
+  # resolves to at most one of them and the order is a fast path, not a
+  # precedence rule.
+  defp by_handle(handle) do
+    Accounts.get_user_by_username(handle) || Organizations.get_organization_by_username(handle)
+  end
+
+  # A page's JRD (issue #1334). Shorter than a member's by two links: no
+  # `subscribe` template, because that is where a *member* confirms a follow
+  # they started elsewhere, and a page starts none.
+  defp jrd(%Organization{} = organization) do
+    page_url =
+      "#{String.trim_trailing(VutuvWeb.Endpoint.url(), "/")}/organizations/#{organization.slug}"
+
+    %{
+      "subject" => "acct:#{organization.username}@#{VutuvWeb.Endpoint.host()}",
+      "aliases" => [page_url, Docs.actor_url(organization)],
+      "links" => [
+        %{"rel" => "self", "type" => @activity_json, "href" => Docs.actor_url(organization)},
+        %{
+          "rel" => "http://webfinger.net/rel/profile-page",
+          "type" => "text/html",
+          "href" => page_url
+        }
+      ]
+    }
+  end
 
   defp jrd(user) do
     base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/")

@@ -180,6 +180,11 @@ defmodule VutuvWeb.Router do
     # The pinned post (issue #1110), at the path other servers already look for.
     get("/:slug/actor/collections/featured", FediverseController, :featured)
     post("/:slug/actor/inbox", FediverseController, :inbox)
+    # A page's ActivityPub identity (issue #1334). Under /organizations/ rather
+    # than at a root word, like every other page URL: the root belongs to member
+    # handles. 404s until the page opts in.
+    get("/organizations/:slug/actor", FediverseController, :organization_actor)
+    get("/organizations/:slug/actor/followers", FediverseController, :organization_followers)
     # The installation-wide inbox (issue #1073), so a server with many
     # followers here delivers a broadcast once instead of once per member.
     # Under /system/ rather than at a root word, which profiles own; remote

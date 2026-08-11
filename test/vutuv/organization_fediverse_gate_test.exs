@@ -37,9 +37,11 @@ defmodule Vutuv.OrganizationFediverseGateTest do
     :ok
   end
 
-  defp opted_in(organization) do
+  # Opting in AND claiming a handle: the handle is the page's address out there,
+  # so both are required before it federates.
+  defp opted_in(organization, handle \\ "acme") do
     organization
-    |> Ecto.Changeset.change(%{fediverse_followers?: true})
+    |> Ecto.Changeset.change(%{fediverse_followers?: true, username: handle})
     |> Repo.update!()
   end
 
@@ -54,6 +56,19 @@ defmodule Vutuv.OrganizationFediverseGateTest do
     organization = active_organization_for(insert(:activated_user)) |> opted_in()
 
     assert Fediverse.federated?(organization)
+  end
+
+  test "an opted-in page without a handle does not federate" do
+    organization =
+      active_organization_for(insert(:activated_user))
+      |> Ecto.Changeset.change(%{fediverse_followers?: true})
+      |> Repo.update!()
+
+    # WebFinger's `subject` and the actor document's `preferredUsername` are
+    # both built from the handle, so opting in without one would not federate
+    # the page — it would publish an actor nobody can address.
+    assert is_nil(organization.username)
+    refute Fediverse.federated?(organization)
   end
 
   test "a frozen page does not, however it is flagged" do
