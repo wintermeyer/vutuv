@@ -20,8 +20,12 @@ defmodule VutuvWeb.SearchLive do
 
   import VutuvWeb.SavedSearchComponents
 
+  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
+
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteFollow
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Search
   alias VutuvWeb.UserHelpers
@@ -370,6 +374,22 @@ defmodule VutuvWeb.SearchLive do
     """
   end
 
+  # Where a result's author link goes and what it reads, for whichever kind of
+  # author the post has (issue #1334).
+  defp author_path(post) do
+    case Posts.author(post) do
+      %Organization{} = organization -> Organizations.canonical_path(organization)
+      author -> "/" <> author.username
+    end
+  end
+
+  defp author_name(post) do
+    case Posts.author(post) do
+      %Organization{name: name} -> name
+      author -> UserHelpers.full_name(author)
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -532,16 +552,32 @@ defmodule VutuvWeb.SearchLive do
           </.section_title>
           <ul class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
             <li :for={post <- @results.posts} class="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
-              <.avatar user={post.user} size="sm" shape="circle" presence />
+              <%!-- A post is by a member or by an organization (issue #1334):
+              an organization wears its logo and has no @handle line beside its
+              name, which it may never have claimed. --%>
+              <.organization_logo
+                :if={Posts.organization_post?(post)}
+                organization={post.organization}
+                class="h-8 w-8"
+              />
+              <.avatar
+                :if={!Posts.organization_post?(post)}
+                user={post.user}
+                size="sm"
+                shape="circle"
+                presence
+              />
               <div class="min-w-0">
                 <p class="mb-0 text-sm">
                   <.link
-                    href={~p"/#{post.user}"}
+                    href={author_path(post)}
                     class="font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
                   >
-                    {UserHelpers.full_name(post.user)}
+                    {author_name(post)}
                   </.link>
-                  <span class="text-slate-600 dark:text-slate-400">@{post.user.username}</span>
+                  <span :if={!Posts.organization_post?(post)} class="text-slate-600 dark:text-slate-400">
+                    @{post.user.username}
+                  </span>
                   <span class="text-slate-600 dark:text-slate-400">· {post.published_on}</span>
                 </p>
                 <.link

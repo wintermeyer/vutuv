@@ -1768,17 +1768,32 @@ defmodule Vutuv.Posts do
     # (no denials, unfrozen, non-hidden author); only the search-specific
     # filters stay here. Search keeps the stricter `email_confirmed? == true`
     # (not the confirmed-or-legacy-NULL gate) deliberately.
+    #
+    # Both joins are LEFT because a post has one of two kinds of author (issue
+    # #1334) and the `where` below then says which one this row must satisfy.
+    # An inner join to `users` was what kept every organization post out of
+    # search — silently, since a missing result looks like a missing post.
+    #
+    # `scope_visible(nil)` needs nothing added for them: an organization post
+    # carries no denials, and the author-hidden arm reads the left-joined row
+    # with `IS NOT NULL` tests, which are `false` (never NULL) on the absent
+    # row — so the post passes rather than being swallowed by three-valued
+    # logic. The page's own standing is the `organization_public_row/1` below.
     from(p in Post,
       as: :post,
-      join: u in assoc(p, :user),
+      left_join: u in assoc(p, :user),
       as: :author,
-      where: u.email_confirmed? == true
+      left_join: o in assoc(p, :organization),
+      as: :search_organization,
+      where:
+        (not is_nil(p.user_id) and u.email_confirmed? == true) or
+          (not is_nil(p.organization_id) and organization_public_row(o))
     )
     |> filter_body_search(value)
     |> filter_posts_by_tag(tag, Keyword.get(opts, :exact, false))
     |> order_public_search(value)
     |> limit(^limit)
-    |> preload([p, u], user: u)
+    |> preload([author: u, search_organization: o], user: u, organization: o)
     |> scope_visible(nil)
     |> Repo.all()
   end

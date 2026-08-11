@@ -201,6 +201,26 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
     end
   end
 
+  describe "public search" do
+    test "the results page renders an organization row without a member author",
+         %{conn: conn} do
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+
+      {:ok, _} =
+        Posts.create_organization_post(organization, owner, %{body: "Quantenkompressor."})
+
+      # The query change is only half of it: the last three crashes in this
+      # milestone were all a page reading `post.user` on an organization post,
+      # so the row has to draw as well as be found.
+      {:ok, _view, html} = live(conn, ~p"/search?q=Quantenkompressor")
+
+      assert html =~ organization.name
+      assert html =~ "Quantenkompressor"
+    end
+  end
+
   describe "replies" do
     test "an organization post cannot be answered yet", %{conn: _conn} do
       owner = insert(:activated_user)
