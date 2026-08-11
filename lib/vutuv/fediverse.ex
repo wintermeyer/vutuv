@@ -76,6 +76,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Handles
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -182,6 +183,40 @@ defmodule Vutuv.Fediverse do
   end
 
   def get_actor(%User{id: user_id}), do: Repo.get_by(Actor, user_id: user_id)
+
+  @doc """
+  A **page's** actor (issue #1334), created on first use. Race-safe, and the
+  exact twin of `ensure_actor/1` — the keypair is the same thing, only its
+  owner column differs.
+
+  Nothing calls this from a user-facing path yet, and that is deliberate. A
+  keypair is invisible outside this database, so it can exist alone; the parts
+  other servers see (WebFinger, the actor document, delivery, an inbox that
+  answers Follow) have to arrive together, because being findable without a
+  working inbox means somebody presses Follow and nothing ever happens.
+  """
+  def ensure_organization_actor(%Organization{} = organization) do
+    case get_organization_actor(organization) do
+      nil ->
+        {private_pem, public_pem} = Keys.generate()
+
+        %Actor{
+          organization_id: organization.id,
+          private_key_pem: private_pem,
+          public_key_pem: public_pem
+        }
+        |> Repo.insert(on_conflict: :nothing, conflict_target: [:organization_id])
+
+        {:ok, get_organization_actor(organization)}
+
+      actor ->
+        {:ok, actor}
+    end
+  end
+
+  @doc "The page's actor, or nil."
+  def get_organization_actor(%Organization{id: id}),
+    do: Repo.get_by(Actor, organization_id: id)
 
   ## Remote followers
 
