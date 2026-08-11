@@ -12,6 +12,7 @@ defmodule Vutuv.Tags do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.SearchText
@@ -681,9 +682,85 @@ defmodule Vutuv.Tags do
     Repo.all(from(tf in TagFollow, where: tf.user_id == ^user_id, select: tf.tag_id))
   end
 
-  @doc "How many members follow `tag` (the public aggregate on the tag page)."
+  @doc """
+  How many follow `tag` (the public aggregate on the tag page) — members and
+  pages alike, since both are subscriptions to the same topic.
+  """
   def tag_follower_count(%Tag{} = tag) do
     Repo.aggregate(from(tf in TagFollow, where: tf.tag_id == ^tag.id), :count)
+  end
+
+  @doc """
+  A page follows a tag (issue #1336), so the topic reaches its own feed.
+  Idempotent, like the member twin, and silent for the same reason: a tag has
+  no owner to notify.
+  """
+  def follow_tag_as_organization(%Organization{} = page, tag_id) when is_binary(tag_id) do
+    with tag_id when not is_nil(tag_id) <- Vutuv.UUIDv7.cast_or_nil(tag_id),
+         {:ok, _} <- insert_organization_tag_follow(page.id, tag_id),
+         %TagFollow{} = follow <-
+           Repo.get_by(TagFollow, organization_id: page.id, tag_id: tag_id) do
+      {:ok, follow}
+    else
+      nil -> {:error, :invalid}
+      {:error, _} = error -> error
+    end
+  end
+
+  def follow_tag_as_organization(%Organization{} = page, %Tag{id: id}),
+    do: follow_tag_as_organization(page, id)
+
+  defp insert_organization_tag_follow(organization_id, tag_id) do
+    %TagFollow{}
+    |> TagFollow.organization_changeset(%{organization_id: organization_id, tag_id: tag_id})
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:organization_id, :tag_id])
+  end
+
+  @doc "Unfollows a tag as `page`. Idempotent; returns the number of rows removed."
+  def unfollow_tag_as_organization(%Organization{} = page, %Tag{} = tag),
+    do: unfollow_tag_as_organization(page, tag.id)
+
+  def unfollow_tag_as_organization(%Organization{} = page, tag_id) do
+    case Vutuv.UUIDv7.cast_or_nil(tag_id) do
+      nil ->
+        0
+
+      tag_id ->
+        {count, _} =
+          from(tf in TagFollow,
+            where: tf.organization_id == ^page.id and tf.tag_id == ^tag_id
+          )
+          |> Repo.delete_all()
+
+        count
+    end
+  end
+
+  @doc "Whether `page` currently follows `tag`."
+  def tag_followed_by_organization?(%Organization{} = page, %Tag{} = tag),
+    do: tag_followed_by_organization?(page, tag.id)
+
+  def tag_followed_by_organization?(%Organization{} = page, tag_id) do
+    Repo.exists?(
+      from(tf in TagFollow, where: tf.organization_id == ^page.id and tf.tag_id == ^tag_id)
+    )
+  end
+
+  @doc "The tags `page` follows, most-recently-followed first."
+  def organization_followed_tags(%Organization{id: page_id}) do
+    Repo.all(
+      from(tf in TagFollow,
+        join: t in assoc(tf, :tag),
+        where: tf.organization_id == ^page_id,
+        order_by: [desc: tf.inserted_at, desc: tf.id],
+        select: t
+      )
+    )
+  end
+
+  @doc "The ids of the tags `page` follows — the set its feed's tag source joins against."
+  def organization_followed_tag_ids(%Organization{id: page_id}) do
+    Repo.all(from(tf in TagFollow, where: tf.organization_id == ^page_id, select: tf.tag_id))
   end
 
   @doc """

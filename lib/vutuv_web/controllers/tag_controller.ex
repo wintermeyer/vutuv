@@ -1,7 +1,9 @@
 defmodule VutuvWeb.TagController do
   use VutuvWeb, :controller
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Jobs
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
@@ -75,7 +77,11 @@ defmodule VutuvWeb.TagController do
     # viewer-specific, so it rides only on the HTML branch (the agent formats are
     # the anonymous public view). The count is a public aggregate shown as social
     # proof; it is UI chrome, not tag content, so it stays out of the agent docs.
-    following_tag? = not is_nil(current_user) and Tags.tag_followed?(current_user, tag)
+    # While speaking for a page the pill shows the **page's** subscription
+    # (issue #1336) — that is whose feed the topic would reach, so showing the
+    # member's state here would offer to unfollow something the page never
+    # followed.
+    following_tag? = tag_followed?(conn.assigns[:acting_as], current_user, tag)
     tag_follower_count = Tags.tag_follower_count(tag)
 
     # A tag page below the search-engine bar (fewer than
@@ -161,4 +167,13 @@ defmodule VutuvWeb.TagController do
 
     Timeline.page(tag, Keyword.put(opts, :page, page))
   end
+
+  # Who the pill speaks for: the page being acted as, else the member, else
+  # nobody. One decider, so the shown state and the toggle behind it cannot
+  # disagree — the same shape `follower_of/1` has on the organization page.
+  defp tag_followed?(%Organization{} = page, _member, tag),
+    do: Tags.tag_followed_by_organization?(page, tag)
+
+  defp tag_followed?(_acting_as, %User{} = member, tag), do: Tags.tag_followed?(member, tag)
+  defp tag_followed?(_acting_as, _member, _tag), do: false
 end

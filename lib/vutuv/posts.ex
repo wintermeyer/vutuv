@@ -1952,7 +1952,8 @@ defmodule Vutuv.Posts do
 
     sources = [
       &organization_feed_member_posts(page, &1, &2),
-      &organization_feed_page_posts(page, &1, &2)
+      &organization_feed_page_posts(page, &1, &2),
+      &organization_feed_tag_posts(page, &1, &2)
     ]
 
     page_result = Vutuv.FeedPage.paginate(sources, limit, cursor)
@@ -1989,6 +1990,38 @@ defmodule Vutuv.Posts do
     |> posts_at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
+  end
+
+  # Posts carrying a tag the page follows (issue #1336) — the topic source, the
+  # third and last one a page can fill today. Members' posts only: a page's own
+  # posts already arrive through the source above when it follows that page, and
+  # letting a tag pull them in as well would show the same post twice.
+  #
+  # Public posts only, for the same reason as the member source: a page can
+  # never be a denial's audience.
+  defp organization_feed_tag_posts(%Organization{id: page_id}, fetch_n, cursor) do
+    from(p in Post,
+      join: u in assoc(p, :user),
+      as: :author,
+      join: pt in PostTag,
+      on: pt.post_id == p.id,
+      where: pt.tag_id in subquery(tags_followed_by_organization(page_id)),
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      distinct: true,
+      order_by: [desc: p.inserted_at, desc: p.id],
+      limit: ^fetch_n
+    )
+    |> scope_visible(nil)
+    |> posts_at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
+  end
+
+  defp tags_followed_by_organization(page_id) do
+    from(tf in Vutuv.Tags.TagFollow,
+      where: tf.organization_id == ^page_id,
+      select: tf.tag_id
+    )
   end
 
   # The two halves of a page's follow graph. Named functions rather than inline

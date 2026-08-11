@@ -14,7 +14,11 @@ defmodule Vutuv.Tags.TagFollow do
   use VutuvWeb, :model
 
   schema "tag_follows" do
+    # The follower is a member OR an organization page (issue #1336),
+    # CHECK-enforced to exactly one — a page follows a topic so its own feed
+    # can carry it.
     belongs_to(:user, Vutuv.Accounts.User)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
     belongs_to(:tag, Vutuv.Tags.Tag)
 
     timestamps()
@@ -32,5 +36,23 @@ defmodule Vutuv.Tags.TagFollow do
     )
     |> foreign_key_constraint(:tag_id)
     |> foreign_key_constraint(:user_id)
+  end
+
+  @doc """
+  A page's subscription to a tag. Its own changeset rather than a widened
+  `changeset/2`: the two have different required fields and different unique
+  constraints, and one cast accepting either would also accept both or neither,
+  leaving only the database to catch it.
+  """
+  def organization_changeset(model, params \\ %{}) do
+    model
+    |> cast(params, [:organization_id, :tag_id])
+    |> validate_required([:organization_id, :tag_id])
+    |> unique_constraint(:tag_id,
+      name: :tag_follows_organization_id_tag_id_index,
+      message: "This page already follows this tag."
+    )
+    |> foreign_key_constraint(:tag_id)
+    |> foreign_key_constraint(:organization_id)
   end
 end
