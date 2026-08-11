@@ -135,6 +135,9 @@ defmodule VutuvWeb.OrganizationController do
   def exclusions(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Exclusions, &Organizations.can_manage?/2)
 
+  def activity(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.OrganizationLive.Activity, &Organizations.can_manage?/2)
+
   @doc """
   The permalink of a post published in this organization's name (issue #1334).
   404s for an unknown page, a page this viewer may not see, or an id that is not

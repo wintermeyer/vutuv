@@ -274,6 +274,8 @@ defmodule VutuvWeb.Router do
     # The role-holder standing job-exclusion default (issue #939), live_render
     # like roles/domains. Inherited by every posting attributed to the organization.
     get("/organizations/:slug/exclusions", OrganizationController, :exclusions)
+    # What happened to the page (issue #1336), for its whole team.
+    get("/organizations/:slug/activity", OrganizationController, :activity)
     # The permalink of a post published in the organization's name (issue #1334).
     # Deliberately under the slug and not under the organization's opt-in root
     # handle: the handle route dispatches an organization only on the bare

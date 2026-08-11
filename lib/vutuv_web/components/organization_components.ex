@@ -213,6 +213,12 @@ defmodule VutuvWeb.OrganizationComponents do
         <.manage_tab :if={@manage?} active={@active == :exclusions} navigate={"/organizations/#{@organization.slug}/exclusions"}>
           {gettext("Job exclusions")}
         </.manage_tab>
+        <%!-- What happened to the page (issue #1336). Open to the whole team,
+        not only its publishers: this is news ABOUT the page rather than
+        speaking FOR it. --%>
+        <.manage_tab :if={@manage?} active={@active == :activity} navigate={"/organizations/#{@organization.slug}/activity"}>
+          {gettext("Activity")}
+        </.manage_tab>
       </nav>
     </div>
     """

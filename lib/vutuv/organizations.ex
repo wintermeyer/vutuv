@@ -33,6 +33,9 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Organizations.Verification
   alias Vutuv.Pages
+  alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostLike
+  alias Vutuv.Posts.PostRepost
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.SlugHelpers
@@ -340,6 +343,128 @@ defmodule Vutuv.Organizations do
   defp role_rank("publisher"), do: 2
   defp role_rank("recruiter"), do: 3
   defp role_rank(_), do: 4
+
+  # --- the page's own activity (issue #1336) ------------------------------
+  #
+  # What happened TO the page: somebody followed it, or liked or reposted
+  # something it published. Derived from the source tables the way
+  # `Vutuv.Activity` derives a member's notifications, so nothing has to be
+  # written twice and an event disappears with the row behind it — an unliked
+  # post is not "read", it simply never happened.
+  #
+  # The read marker is ONE timestamp on the page (`activity_read_at`), shared
+  # by the whole team. That is the model the issue asks for and it is a
+  # different one, not a wider one: "read" means somebody read it, never that
+  # everybody did.
+
+  @activity_per_page 25
+
+  @doc """
+  One page of `organization`'s activity, newest first, in the
+  `%{entries:, more?:}` shape. Each entry is
+  `%{id:, kind:, at:, actor:, post: }` — `kind` one of `"follow"`,
+  `"post_like"`, `"post_repost"`, `post` nil on a follow.
+  """
+  def activity_page(%Organization{} = organization, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @activity_per_page)
+    offset = Keyword.get(opts, :offset, 0)
+
+    page =
+      Vutuv.FeedPage.paginate_offset(
+        [
+          &activity_follows(organization, &1, &2),
+          &activity_post_engagement(organization, PostLike, "post_like", &1, &2),
+          &activity_post_engagement(organization, PostRepost, "post_repost", &1, &2)
+        ],
+        limit,
+        offset
+      )
+
+    %{entries: page.entries, more?: page.more?, next_offset: offset + length(page.entries)}
+  end
+
+  @doc """
+  How many activity entries are newer than the team's shared read marker,
+  capped so a page nobody has looked at in a year does not turn the badge into
+  a census. `nil` marker means everything counts, which is right for a page
+  whose team has never opened the list.
+  """
+  def unread_activity_count(%Organization{} = organization) do
+    organization
+    |> activity_page(limit: @activity_per_page)
+    |> Map.fetch!(:entries)
+    |> Enum.count(&newer_than_marker?(&1, organization.activity_read_at))
+  end
+
+  defp newer_than_marker?(_entry, nil), do: true
+
+  defp newer_than_marker?(%{at: at}, read_at),
+    do: NaiveDateTime.compare(at, read_at) == :gt
+
+  @doc """
+  Stamps the shared read marker. Whoever on the team opens the list clears it
+  for all of them — that is the point of one marker.
+
+  The marker is the timestamp of the **newest entry**, not the wall clock, for
+  the same reason `Vutuv.Activity.mark_notifications_read/1` does it that way:
+  the source tables keep second precision and the unread test is a strict `>`,
+  so a wall-clock marker swallows anything that lands in the same second the
+  page was opened.
+
+  An **empty** list stamps nothing at all and leaves the marker NULL, which is
+  where this parts company with the member version. There the clock is written
+  because a NULL marker would read as "never read"; here NULL and a stamp
+  behave identically while the list is empty (both count zero), and NULL is
+  strictly better the moment something arrives — a follow one second after the
+  team looked at an empty page is news, and a wall-clock marker would have
+  swallowed it.
+  """
+  def mark_activity_read(%Organization{} = organization) do
+    case activity_page(organization, limit: 1) do
+      %{entries: [%{at: at} | _]} ->
+        organization |> Ecto.Changeset.change(activity_read_at: at) |> Repo.update()
+
+      _ ->
+        {:ok, organization}
+    end
+  end
+
+  # Members who followed the page.
+  defp activity_follows(%Organization{id: id}, fetch_n, _cursor) do
+    from(f in Vutuv.Social.Follow,
+      join: u in User,
+      on: u.id == f.follower_id,
+      where: f.followee_organization_id == ^id,
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      order_by: [desc: f.inserted_at, desc: f.id],
+      limit: ^fetch_n,
+      select: {f.id, f.inserted_at, u}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, at, actor} ->
+      %{id: "follow-#{id}", kind: "follow", at: at, actor: actor, post: nil}
+    end)
+  end
+
+  # Likes and reposts of the page's own posts. One function for both because
+  # the two tables are the same shape and the only difference is the word.
+  defp activity_post_engagement(%Organization{id: id}, schema, kind, fetch_n, _cursor) do
+    from(e in schema,
+      join: p in Post,
+      on: p.id == e.post_id,
+      join: u in User,
+      on: u.id == e.user_id,
+      where: p.organization_id == ^id,
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      order_by: [desc: e.inserted_at, desc: e.id],
+      limit: ^fetch_n,
+      select: {e.id, e.inserted_at, u, p}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {row_id, at, actor, post} ->
+      %{id: "#{kind}-#{row_id}", kind: kind, at: at, actor: actor, post: post}
+    end)
+  end
 
   @doc """
   Up to six member suggestions for the roles typeahead, matched by `@handle` or

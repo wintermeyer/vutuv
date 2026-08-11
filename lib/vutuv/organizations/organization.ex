@@ -63,6 +63,11 @@ defmodule Vutuv.Organizations.Organization do
     field(:verified_at, :naive_datetime)
     field(:frozen_at, :naive_datetime)
 
+    # The team's ONE read marker for the page's activity (issue #1336):
+    # everything older than this counts as read, by everybody. Never cast from
+    # params — `Vutuv.Organizations.mark_activity_read/1` owns it.
+    field(:activity_read_at, :naive_datetime)
+
     belongs_to(:created_by, Vutuv.Accounts.User, foreign_key: :created_by_user_id)
     has_many(:domains, Vutuv.Organizations.OrganizationDomain)
     has_many(:roles, Vutuv.Organizations.OrganizationRole)

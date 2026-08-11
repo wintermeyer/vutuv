@@ -1,0 +1,71 @@
+defmodule VutuvWeb.OrganizationActivityWebTest do
+  @moduledoc """
+  The organization activity page (issue #1336). `async: false` because the
+  organization helpers flip the global `:verify_organization_domains` flag.
+  """
+  use VutuvWeb.ConnCase, async: false
+
+  import Phoenix.LiveViewTest
+  import Vutuv.OrganizationsHelpers
+
+  alias Vutuv.Organizations
+  alias Vutuv.Social
+
+  setup do
+    Application.put_env(:vutuv, :verify_organization_domains, true)
+
+    on_exit(fn ->
+      Application.put_env(:vutuv, :verify_organization_domains, false)
+      Application.delete_env(:vutuv, :organizations_dns_resolver)
+    end)
+
+    :ok
+  end
+
+  test "the team sees what happened, marked new, and opening it clears the marker",
+       %{conn: conn} do
+    {conn, owner} = create_and_login_user(conn)
+    organization = active_organization_for(owner)
+    follower = insert(:activated_user, first_name: "Frida", last_name: "Folger")
+    {:ok, _} = Social.follow_organization(follower, organization)
+
+    {:ok, view, html} = live(conn, ~p"/organizations/#{organization.slug}/activity")
+
+    assert html =~ "Frida Folger"
+    # Nobody had looked, so the entry is marked new …
+    assert has_element?(view, "[data-activity-new]")
+
+    # … and the marker was stamped for the whole team, not for this member.
+    assert Organizations.get_organization!(organization.id).activity_read_at
+
+    assert Organizations.unread_activity_count(Organizations.get_organization!(organization.id)) ==
+             0
+
+    # A second visit shows the same entry without the new mark.
+    {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/activity")
+    refute has_element?(view, "[data-activity-new]")
+  end
+
+  test "an admin who is not a publisher still reaches it", %{conn: conn} do
+    {conn, admin} = create_and_login_user(conn)
+    owner = insert(:activated_user)
+    organization = active_organization_for(owner)
+    {:ok, _} = Organizations.add_role(organization, admin, "admin", owner)
+
+    # Deliberately not gated on `publisher`: this is news ABOUT the page, not
+    # speaking FOR it, so it follows team membership.
+    assert conn
+           |> get(~p"/organizations/#{organization.slug}/activity")
+           |> html_response(200) =~ "Activity"
+  end
+
+  test "someone outside the team gets a 404", %{conn: conn} do
+    {stranger_conn, _stranger} = create_and_login_user(conn)
+    owner = insert(:activated_user)
+    organization = active_organization_for(owner)
+
+    stranger_conn
+    |> get(~p"/organizations/#{organization.slug}/activity")
+    |> response(404)
+  end
+end
