@@ -59,6 +59,23 @@ defmodule Vutuv.Activity do
   def subscribe(nil), do: :ok
   def subscribe(user_id), do: Phoenix.PubSub.subscribe(@pubsub, topic(user_id))
 
+  # Whether a follow row has a follower worth showing. The member side is left
+  # exactly as it was — the row existing is the whole test, no moderation gate,
+  # which is what the old inner join amounted to — so this changes nothing for
+  # members. The page side additionally has to be one a reader may open, or the
+  # notification would link somewhere they are turned away from.
+  #
+  # It lives here, shared by the list and both badge queries, because those
+  # three drifting apart is exactly the bug: a badge counting what the list
+  # cannot show.
+  defmacrop shown_follower(u, o) do
+    quote do
+      not is_nil(unquote(u).id) or
+        (not is_nil(unquote(o).id) and unquote(o).status == "active" and
+           is_nil(unquote(o).frozen_at))
+    end
+  end
+
   @doc "Broadcast a raw event to a user's topic (no-op for a nil recipient)."
   def broadcast(nil, _event), do: :ok
   def broadcast(user_id, event), do: Phoenix.PubSub.broadcast(@pubsub, topic(user_id), event)
@@ -106,8 +123,17 @@ defmodule Vutuv.Activity do
   # The read-marker MAX arms, one `%{ts: ...}` query per event family. Each
   # mirrors the filters of its kind's items/count queries below.
 
-  defp follower_max(user_id),
-    do: from(c in Follow, where: c.followee_id == ^user_id, select: %{ts: max(c.inserted_at)})
+  defp follower_max(user_id) do
+    from(c in Follow,
+      left_join: u in User,
+      on: u.id == c.follower_id,
+      left_join: o in Organization,
+      on: o.id == c.follower_organization_id,
+      where: c.followee_id == ^user_id,
+      where: shown_follower(u, o),
+      select: %{ts: max(c.inserted_at)}
+    )
+  end
 
   defp endorsement_max(user_id) do
     from(e in UserTagEndorsement,
@@ -970,25 +996,38 @@ defmodule Vutuv.Activity do
   # the cheap follows rows first and attaching the actor to the survivors turns
   # it into `limit` primary-key lookups: measured 9.4 ms -> 0.6 ms on the
   # production data. `connection_items/3` below is the same shape.
+  # A follower is a member **or** a page (issue #1336). Both id columns ride
+  # along and the outer query LEFT joins each, so a page row is built from the
+  # organization rather than dropped — which is what it used to be, while
+  # `count_followers/2` counted it: badge one, list empty, and a badge that lies
+  # once is a badge nobody trusts again.
   defp follower_items(user_id, limit, cursor) do
     newest =
       from(c in Follow,
         where: c.followee_id == ^user_id,
         order_by: [desc: c.inserted_at, desc: c.id],
         limit: ^limit,
-        select: %{id: c.id, at: c.inserted_at, actor_id: c.follower_id}
+        select: %{
+          id: c.id,
+          at: c.inserted_at,
+          actor_id: c.follower_id,
+          actor_organization_id: c.follower_organization_id
+        }
       )
       |> at_or_before(cursor)
 
     from(e in subquery(newest),
-      join: f in User,
+      left_join: f in User,
       on: f.id == e.actor_id,
+      left_join: o in Organization,
+      on: o.id == e.actor_organization_id,
+      where: shown_follower(f, o),
       order_by: [desc: e.at, desc: e.id],
-      select: {e.id, e.at, struct(f, ^User.listing_fields())}
+      select: {e.id, e.at, struct(f, ^User.listing_fields()), o}
     )
     |> Repo.all()
-    |> Enum.map(fn {id, at, follower} ->
-      actor_item("follower-#{id}", "follower", at, follower)
+    |> Enum.map(fn {id, at, follower, organization} ->
+      actor_item("follower-#{id}", "follower", at, follower || organization)
     end)
   end
 
@@ -1676,11 +1715,21 @@ defmodule Vutuv.Activity do
   defp actor_fields(actor) do
     %{
       actor_id: actor_id(actor),
+      actor_kind: actor_kind(actor),
       actor_name: display_name(actor),
       actor_param: actor_param(actor),
       actor_avatar: actor_avatar(actor)
     }
   end
+
+  # Which sort of actor this is (issue #1336), because `actor_param` alone
+  # cannot say: a member's param is their handle and lives at `/handle`, while a
+  # page's is a slug that lives under `/organizations/:slug`. Building the link
+  # from the param alone would send a reader into the member namespace, at a
+  # word somebody else may hold.
+  defp actor_kind(%Organization{}), do: "organization"
+  defp actor_kind(%User{}), do: "user"
+  defp actor_kind(_), do: "user"
 
   defp actor_id(%User{id: id}), do: id
   defp actor_id(%Organization{id: id}), do: id
@@ -1689,7 +1738,15 @@ defmodule Vutuv.Activity do
   # Each count helper returns a query selecting a single count, so total_count/2
   # can fold all three into one round trip via scalar subqueries.
   defp count_followers(user_id, read_at) do
-    from(c in Follow, where: c.followee_id == ^user_id, select: %{count: count()})
+    from(c in Follow,
+      left_join: u in User,
+      on: u.id == c.follower_id,
+      left_join: o in Organization,
+      on: o.id == c.follower_organization_id,
+      where: c.followee_id == ^user_id,
+      where: shown_follower(u, o),
+      select: %{count: count()}
+    )
     |> since(read_at)
   end
 

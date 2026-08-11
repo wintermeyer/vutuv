@@ -92,6 +92,9 @@ defmodule VutuvWeb.NotificationDigestText do
   # Handles, never display names: the house rule for anything the system says
   # about somebody, and the only name a reader can act on. `actor_param` is the
   # handle `Vutuv.Activity.actor_fields/1` puts on every actor-bearing item.
+  # A page is named, not @-handled: its param is a slug, and it may never have
+  # claimed a handle at all (issue #1336).
+  defp handle(%{actor_kind: "organization", actor_name: name}) when is_binary(name), do: name
   defp handle(%{actor_param: param}) when is_binary(param), do: "@" <> param
   defp handle(%{username: username}) when is_binary(username), do: "@" <> username
   defp handle(_item), do: gettext("Somebody")

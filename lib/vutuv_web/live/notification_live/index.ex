@@ -780,8 +780,12 @@ defmodule VutuvWeb.NotificationLive.Index do
     ~H"""
     <%= cond do %>
       <% @actor.param -> %>
+        <%!-- `actor_path/1`, never `~p"/#{@actor.param}"`: a page's param is a
+        slug under /organizations/:slug, and the root belongs to member handles
+        (issue #1336). This is the second link on the row and the one that is
+        easy to miss — `actor_target/1` below covers the row's own href. --%>
         <.link
-          href={~p"/#{@actor.param}"}
+          href={actor_path(@actor)}
           class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
         >{@actor.name}</.link>
       <% @actor[:url] -> %>
@@ -1213,9 +1217,25 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
+  # A member's param is their handle and lives at the root; a page's is a slug
+  # that lives under /organizations/:slug (issue #1336). Building this from the
+  # param alone would point into the member namespace, at a word somebody else
+  # may hold — so the row's own `actor_kind` decides, and a row without one
+  # reads as the member it was.
+  defp actor_target(%{actor_kind: "organization", actor_param: slug}) when is_binary(slug),
+    do: ~p"/organizations/#{slug}"
+
   defp actor_target(n) do
     if is_binary(n[:actor_param]), do: ~p"/#{n.actor_param}"
   end
+
+  # The same decision for the grouped-actor shape, whose keys are `kind` /
+  # `param` rather than the row's `actor_*`. One function per shape, both
+  # branching on the kind, so neither can be the one that forgets.
+  defp actor_path(%{kind: "organization", param: slug}) when is_binary(slug),
+    do: ~p"/organizations/#{slug}"
+
+  defp actor_path(%{param: param}), do: ~p"/#{param}"
 
   # The event text for the ungrouped kinds, rendered from the kind (not
   # stored) so it translates with the viewer's locale. Unknown kinds fall

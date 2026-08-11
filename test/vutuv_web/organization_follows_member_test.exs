@@ -96,4 +96,20 @@ defmodule VutuvWeb.OrganizationFollowsMemberTest do
     back = conn |> get(~p"/#{member}") |> html_response(200)
     refute back =~ "follow-as-page"
   end
+
+  test "the notification links to the page, not into the handle namespace", %{conn: conn} do
+    # Log the member in FIRST: creating a page mails its owner, and `sent_pin/0`
+    # reads the oldest email in the mailbox.
+    {conn, member} = create_and_login_user(conn)
+    page = active_organization_for(insert(:activated_user))
+    {:ok, _} = Social.follow_as_organization(page, member)
+
+    html = conn |> get(~p"/notifications") |> html_response(200)
+
+    assert html =~ page.name
+    assert html =~ "/organizations/#{page.slug}"
+    # `/<slug>` at the root is the member handle namespace, where another member
+    # may hold that very word — the link must not be built from the param alone.
+    refute html =~ ~s(href="/#{page.slug}")
+  end
 end

@@ -163,6 +163,9 @@ defmodule VutuvWeb.NotificationLive.Groups do
         id: &1[:actor_id],
         name: &1[:actor_name],
         param: &1[:actor_param],
+        # Which namespace `param` belongs to (issue #1336): a member's handle
+        # lives at the root, a page's slug under /organizations/:slug.
+        kind: &1[:actor_kind],
         avatar: &1[:actor_avatar],
         # Somebody on another network (issue #1069): no vutuv profile to link
         # to, so the row links out to their account instead and names them by

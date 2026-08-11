@@ -198,6 +198,11 @@ defmodule Vutuv.Social do
 
     case result do
       {:ok, _follow} = ok ->
+        # A member learns that a page followed them, the same way they learn
+        # about a person (issue #1336). A page has no inbox, so the mirror case
+        # (following a page) still notifies nobody.
+        notify_new_page_follower(page, followee)
+
         # The followee's own profile recomputes: a page counts as a follower.
         broadcast_social_graph_changed([followee_id])
         ok
@@ -251,6 +256,11 @@ defmodule Vutuv.Social do
     {column, followee_id} = followee_column(followee)
     organization_follow_edge(page.id, column, followee_id) != nil
   end
+
+  defp notify_new_page_follower(%Organization{} = page, %User{id: id}),
+    do: Vutuv.Activity.notify_new_follower(id, page)
+
+  defp notify_new_page_follower(_page, _followee), do: :ok
 
   defp followee_column(%Organization{id: id}), do: {:followee_organization_id, id}
   defp followee_column(%User{id: id}), do: {:followee_id, id}
