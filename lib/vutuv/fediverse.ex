@@ -898,14 +898,14 @@ defmodule Vutuv.Fediverse do
   Returns `{:ok, account}` or the same `{:error, reason}` vocabulary
   `follow_remote/2` speaks.
   """
-  def resolve_remote_account(%User{} = user, address) do
+  def resolve_remote_account(follower, address) do
     with :ok <- check_can_resolve(),
          {:ok, {_name, host}} <- RemoteFollow.parse_address(address),
          :ok <- check_follow_host(host),
-         :ok <- claim_remote_follow_budget(user),
+         :ok <- claim_remote_follow_budget(follower),
          {:ok, actor_uri} <- RemoteFollow.resolve_actor(address),
          :ok <- check_follow_host(actor_uri),
-         {:ok, remote} <- fetch_follow_target(actor_uri, user),
+         {:ok, remote} <- fetch_follow_target(actor_uri, follower),
          :ok <- check_follow_host(remote.id) do
       upsert_remote_account(remote)
     end
@@ -1068,6 +1068,31 @@ defmodule Vutuv.Fediverse do
     if follow = find_answered_follow(user, activity, actor_uri) do
       Repo.delete(follow)
       broadcast_remote_follows_changed([user.id])
+    end
+
+    :ok
+  end
+
+  @doc """
+  The other server said yes to a **page's** Follow (issue #1336).
+
+  Its own pair rather than a widened member one: the member versions also settle
+  a moved account and broadcast to the member's open following browser, and a
+  page has neither. What they share is `find_answered_follow/3`, which is where
+  the row is actually identified.
+  """
+  def accept_organization_remote_follow(%Organization{} = page, activity, actor_uri) do
+    if follow = find_answered_follow(page, activity, actor_uri) do
+      follow |> Follow.accept() |> Repo.update()
+    end
+
+    :ok
+  end
+
+  @doc "The other server said no to a page's Follow: the row goes, like the member twin."
+  def reject_organization_remote_follow(%Organization{} = page, activity, actor_uri) do
+    if follow = find_answered_follow(page, activity, actor_uri) do
+      Repo.delete(follow)
     end
 
     :ok
@@ -1425,9 +1450,15 @@ defmodule Vutuv.Fediverse do
   defp strip_www("www." <> rest), do: rest
   defp strip_www(host), do: host
 
-  defp claim_remote_follow_budget(%User{id: user_id}) do
+  # Keyed on whoever is asking — a member or a page (issue #1336) — so a page
+  # gets its own hourly budget rather than spending somebody's.
+  defp claim_remote_follow_budget(%User{id: id}), do: claim_remote_follow_budget(id)
+
+  defp claim_remote_follow_budget(%Organization{id: id}), do: claim_remote_follow_budget(id)
+
+  defp claim_remote_follow_budget(id) when is_binary(id) do
     case RateLimiter.hit(
-           {:fediverse_remote_follow, user_id},
+           {:fediverse_remote_follow, id},
            remote_follow_limit(),
            @inbound_window_ms
          ) do
@@ -1444,6 +1475,13 @@ defmodule Vutuv.Fediverse do
 
   # Signed with the member's own key: instances in authorized-fetch mode refuse
   # an anonymous GET, and this is the one fetch we make on their behalf.
+  defp fetch_follow_target(actor_uri, %Organization{} = page) do
+    case fetch_remote_actor(actor_uri, signer_for(page, get_organization_actor(page))) do
+      {:ok, remote} -> {:ok, remote}
+      _error -> {:error, :unreachable_actor}
+    end
+  end
+
   defp fetch_follow_target(actor_uri, %User{} = user) do
     case fetch_remote_actor(actor_uri, signer(user)) do
       {:ok, remote} -> {:ok, remote}
@@ -1517,6 +1555,63 @@ defmodule Vutuv.Fediverse do
     }
   end
 
+  @doc """
+  A **page** follows an account on another network (issue #1336's last point).
+
+  Blocked until #1334 gave a page an actor: a Follow has to be signed by
+  somebody. Narrower than the member twin on purpose — no local-address branch,
+  because "follow a vutuv member" for a page is `Social.follow_as_organization/2`
+  and belongs on the page's own controls, not behind a fediverse address box.
+  """
+  def follow_remote_as_organization(%Organization{} = page, address) do
+    with :ok <- check_can_resolve(),
+         true <- federated?(page),
+         {:ok, account} <- resolve_remote_account(page, address),
+         {:ok, follow} <- insert_organization_remote_follow(page, account) do
+      enqueue(
+        page,
+        [account.inbox_uri],
+        Docs.follow_activity(page, account.actor_uri, follow.follow_activity_id)
+      )
+
+      {:ok, %{follow | remote_account: account}}
+    else
+      false -> {:error, :not_federated}
+      other -> other
+    end
+  end
+
+  defp insert_organization_remote_follow(%Organization{} = page, %RemoteAccount{} = account) do
+    id = UUIDv7.generate()
+
+    %Follow{id: id, organization_id: page.id, remote_account_id: account.id}
+    |> Follow.changeset(%{
+      state: "requested",
+      follow_activity_id: Docs.follow_activity_id(page, id)
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, follow} -> {:ok, follow}
+      {:error, _changeset} -> {:error, :already_following}
+    end
+  end
+
+  @doc "Whether `page` already follows (or has asked to follow) this account."
+  def organization_remote_follow_for(%Organization{id: id}, %RemoteAccount{id: account_id}) do
+    Repo.get_by(Follow, organization_id: id, remote_account_id: account_id)
+  end
+
+  @doc "The accounts `page` follows out there, newest first."
+  def list_organization_remote_follows(%Organization{id: id}) do
+    Repo.all(
+      from(f in Follow,
+        where: f.organization_id == ^id,
+        order_by: [desc: f.inserted_at, desc: f.id],
+        preload: [:remote_account]
+      )
+    )
+  end
+
   defp insert_remote_follow(%User{} = user, %RemoteAccount{} = account) do
     # The activity id names the row, so the id is minted before the insert
     # rather than read back after it: an `Accept` finds its follow by this
@@ -1580,13 +1675,14 @@ defmodule Vutuv.Fediverse do
   # minted and the other server echoed back; failing that (servers differ in how
   # faithfully they echo a Follow) by the pair, which is just as safe because
   # both arms are scoped to the actor that answered.
-  defp find_answered_follow(%User{id: user_id}, activity, actor_uri) when is_binary(actor_uri) do
+  defp find_answered_follow(follower, activity, actor_uri) when is_binary(actor_uri) do
     base =
       from(f in Follow,
         join: a in RemoteAccount,
         on: a.id == f.remote_account_id,
-        where: f.user_id == ^user_id and a.actor_uri == ^actor_uri
+        where: a.actor_uri == ^actor_uri
       )
+      |> scope_follower(follower)
 
     case activity_object_id(activity["object"]) do
       id when is_binary(id) ->
@@ -1598,6 +1694,14 @@ defmodule Vutuv.Fediverse do
   end
 
   defp find_answered_follow(_user, _activity, _actor_uri), do: nil
+
+  # Which side's follows to look in. Named rather than inlined because the
+  # answer must be scoped to exactly one follower — an `Accept` from one server
+  # settling somebody else's request would be the whole bug.
+  defp scope_follower(query, %User{id: id}), do: where(query, [f], f.user_id == ^id)
+
+  defp scope_follower(query, %Organization{id: id}),
+    do: where(query, [f], f.organization_id == ^id)
 
   # ── The following browser (/settings/fediverse/following) ─────────────────
 
@@ -1786,6 +1890,31 @@ defmodule Vutuv.Fediverse do
   `at` is the author's own `published_at` as a naive UTC stamp, because that is
   what the merged feed sorts on.
   """
+  # The page twin (issue #1336): what the accounts a PAGE follows out there have
+  # published. Same gate as the member version, which is the part worth keeping
+  # in step — a post from a locked account shows only once the follow was really
+  # ACCEPTED, so a request nobody answered never leaks that account's posts.
+  def organization_feed_remote_posts(%Organization{id: page_id}, fetch_n, cursor) do
+    if enabled?() do
+      from(p in RemotePost,
+        join: a in RemoteAccount,
+        on: a.id == p.remote_account_id,
+        join: f in Follow,
+        on: f.remote_account_id == a.id,
+        where: f.organization_id == ^page_id and f.muted == false,
+        where: p.audience in ^RemotePost.open_audiences() or f.state == "accepted",
+        order_by: [desc: p.published_at, desc: p.id],
+        limit: ^fetch_n,
+        preload: [:screenshot, remote_account: a]
+      )
+      |> utc_at_or_before(cursor, :published_at)
+      |> Repo.all()
+      |> Enum.map(&remote_feed_entry/1)
+    else
+      []
+    end
+  end
+
   def feed_remote_posts(%User{id: viewer_id}, fetch_n, cursor) do
     if enabled?() do
       from(p in RemotePost,

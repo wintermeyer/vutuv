@@ -524,9 +524,12 @@ defmodule VutuvWeb.FediverseController do
   A page's inbox (issue #1334): signed `Follow` and `Undo(Follow)` addressed to
   the page.
 
-  Deliberately narrower than the member inbox. A page has no conversations, no
+  Since #1336's last point it also takes the `Accept`/`Reject` answering a
+  Follow the page itself sent.
+
+  Still narrower than the member inbox. A page has no conversations, no
   reactions of its own to receive and no account migration, so `Like`,
-  `Announce`, `Create(Note)`, `Accept`/`Reject` and `Move` have nothing to act
+  `Announce`, `Create(Note)` and `Move` have nothing to act
   on here — they are acknowledged with the same `202` and dropped, which is what
   the member inbox does with anything it does not handle either. That keeps the
   surface a page exposes to strangers as small as what it actually offers.
@@ -575,6 +578,20 @@ defmodule VutuvWeb.FediverseController do
          remote
        ) do
     Fediverse.remove_organization_follower(organization, remote.id)
+    :ok
+  end
+
+  # The answer to a Follow the PAGE sent out (issue #1336's last point). Only
+  # meaningful since a page can follow at all; before that these fell into the
+  # "acknowledged and dropped" clause below, and leaving them there now would
+  # strand every request the page makes on "asked" forever.
+  defp perform_for_organization(organization, %{"type" => "Accept"} = activity, remote) do
+    Fediverse.accept_organization_remote_follow(organization, activity, remote.id)
+    :ok
+  end
+
+  defp perform_for_organization(organization, %{"type" => "Reject"} = activity, remote) do
+    Fediverse.reject_organization_remote_follow(organization, activity, remote.id)
     :ok
   end
 

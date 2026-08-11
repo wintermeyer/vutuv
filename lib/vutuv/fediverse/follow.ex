@@ -38,7 +38,12 @@ defmodule Vutuv.Fediverse.Follow do
     field(:follow_activity_id, :string)
     field(:muted, :boolean, default: false)
 
+    # The follower is a member OR a page (issue #1336), CHECK-enforced to
+    # exactly one. `follow_activity_id` stays unique across both: it is the
+    # string the other server echoes back inside its Accept, so two rows sharing
+    # one would make that answer ambiguous.
     belongs_to(:user, Vutuv.Accounts.User)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
     belongs_to(:remote_account, Vutuv.Fediverse.RemoteAccount)
 
     timestamps()
@@ -51,6 +56,7 @@ defmodule Vutuv.Fediverse.Follow do
     |> validate_inclusion(:state, @states)
     |> validate_length(:follow_activity_id, max: @max_uri, count: :bytes)
     |> unique_constraint([:user_id, :remote_account_id])
+    |> unique_constraint([:organization_id, :remote_account_id])
     |> unique_constraint(:follow_activity_id)
   end
 

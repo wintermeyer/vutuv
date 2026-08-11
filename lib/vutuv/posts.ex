@@ -1932,11 +1932,12 @@ defmodule Vutuv.Posts do
   The feed a **page** reads (issue #1336): what the members and pages it follows
   have published, newest first, same entry shape and cursor as `feed_page/2`.
 
-  Two sources, not six. A page can only follow members and other pages today, so
-  it has no tags, no reposts of its own and no fediverse follows to draw from —
-  a parallel copy of the member feed's other four sources would be four empty
-  queries per page load. When a page can follow tags and remote accounts, this
-  grows the sources it can actually fill.
+  Four sources, not six: posts by the members and pages it follows, posts
+  carrying a tag it follows, and posts from the accounts it follows on other
+  networks. The two it does not have are reposts (a page reposts nothing) and
+  remote boosts, which travel through a member's repost. The rule throughout has
+  been to add a source only once a page can actually fill it, rather than
+  shipping empty queries per page load.
 
   **A member's post is visible here only if it is public.** Denials name users,
   groups and follow relationships, and a page is none of those, so it can never
@@ -1957,7 +1958,10 @@ defmodule Vutuv.Posts do
     sources = [
       &organization_feed_member_posts(page, &1, &2),
       &organization_feed_page_posts(page, &1, &2),
-      &organization_feed_tag_posts(page, &1, &2)
+      &organization_feed_tag_posts(page, &1, &2),
+      # The accounts it follows on other networks (issue #1336's last point).
+      # The fourth and last source a page can fill.
+      &Vutuv.Fediverse.organization_feed_remote_posts(page, &1, &2)
     ]
 
     page_result = Vutuv.FeedPage.paginate(sources, limit, cursor)
