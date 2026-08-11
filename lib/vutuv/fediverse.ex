@@ -2801,6 +2801,9 @@ defmodule Vutuv.Fediverse do
   defp signer_for(%User{} = user, %Actor{} = actor),
     do: {Docs.key_id(user), actor.private_key_pem}
 
+  defp signer_for(%Organization{} = organization, %Actor{} = actor),
+    do: {Docs.actor_url(organization) <> "#main-key", actor.private_key_pem}
+
   defp signer_for(_user, _actor), do: nil
 
   ## Blocked instances and inbound caps (issue #1067)
@@ -7227,6 +7230,15 @@ defmodule Vutuv.Fediverse do
     enqueue(user, [inbox_uri], Docs.accept_activity(user, follow_object))
   end
 
+  # The page twin (issue #1334). Not optional politeness: an unanswered Follow
+  # shows on Mastodon as pending forever, which is exactly the "pressed Follow
+  # and nothing happened" failure the opt-in gate exists to prevent.
+  # `Docs.accept_activity/2` already names the right actor, because
+  # `actor_url/1` knows both kinds.
+  def accept_follow(%Organization{} = organization, follow_object, inbox_uri) do
+    enqueue(organization, [inbox_uri], Docs.accept_activity(organization, follow_object))
+  end
+
   # One document to many inboxes — the usual case, so it is encoded once.
   defp enqueue(user, inboxes, activity, opts \\ []) do
     json = Jason.encode!(activity)
@@ -7254,7 +7266,8 @@ defmodule Vutuv.Fediverse do
       Enum.map(pairs, fn {inbox, json} ->
         %{
           id: Vutuv.UUIDv7.generate(),
-          user_id: user.id,
+          user_id: sender_column(user, :user),
+          organization_id: sender_column(user, :organization),
           inbox_uri: inbox,
           activity_json: json,
           rebuild_from: rebuild_from,
@@ -7269,6 +7282,12 @@ defmodule Vutuv.Fediverse do
     Deliverer.nudge()
     :ok
   end
+
+  # Exactly one of the two sender columns is set, whichever kind was handed in.
+  defp sender_column(%Organization{id: id}, :organization), do: id
+  defp sender_column(%Organization{}, :user), do: nil
+  defp sender_column(%User{id: id}, :user), do: id
+  defp sender_column(%User{}, :organization), do: nil
 
   ## Account deletion broadcast (issue #985)
 
@@ -7357,16 +7376,19 @@ defmodule Vutuv.Fediverse do
         from(d in Delivery,
           where: d.attempts < @max_attempts and d.next_attempt_at <= ^now,
           limit: 100,
-          preload: [:user]
+          preload: [:user, :organization]
         )
       )
 
-    # Load each user's actor once — a burst of deliveries for one member all
-    # share the same actor row — instead of re-querying it per delivery.
+    # Load each sender's actor once — a burst of deliveries for one member (or
+    # one page) all share the same actor row — instead of re-querying per
+    # delivery. Two maps rather than one keyed on a mixed id, so a page and a
+    # member can never collide on a lookup.
     actors = actors_by_user_id(due)
+    organization_actors = actors_by_organization_id(due)
 
     due
-    |> Task.async_stream(&attempt(&1, actors[&1.user_id]),
+    |> Task.async_stream(&attempt(&1, signing_actor(&1, actors, organization_actors)),
       max_concurrency: 5,
       timeout: 30_000,
       on_timeout: :kill_task
@@ -7384,6 +7406,35 @@ defmodule Vutuv.Fediverse do
     from(a in Actor, where: a.user_id in ^user_ids)
     |> Repo.all()
     |> Map.new(&{&1.user_id, &1})
+  end
+
+  defp actors_by_organization_id(rows) do
+    ids = rows |> Enum.map(& &1.organization_id) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    from(a in Actor, where: a.organization_id in ^ids)
+    |> Repo.all()
+    |> Map.new(&{&1.organization_id, &1})
+  end
+
+  defp signing_actor(%Delivery{organization_id: id}, _actors, organization_actors)
+       when is_binary(id),
+       do: organization_actors[id]
+
+  defp signing_actor(%Delivery{user_id: id}, actors, _organization_actors), do: actors[id]
+
+  # A page's delivery (issue #1334). Same guards as a member's — https, no
+  # internal address, not a blocked instance — minus `rebuilt/2`: that re-renders
+  # a held post, and the only thing a page sends today is an `Accept`, which has
+  # nothing to rebuild. When a page publishes (F5) this grows the same branch.
+  defp attempt(%Delivery{organization: %Organization{} = organization} = delivery, actor) do
+    with %Actor{} = actor <- actor,
+         %URI{scheme: "https", host: host} <- URI.parse(delivery.inbox_uri),
+         false <- Vutuv.Ssrf.resolves_to_internal?(host),
+         false <- instance_blocked?(delivery.inbox_uri) do
+      post_activity(delivery, organization, actor)
+    else
+      _ -> Repo.delete(delivery)
+    end
   end
 
   defp attempt(%Delivery{user: %User{} = user} = delivery, actor) do

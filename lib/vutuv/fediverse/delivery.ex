@@ -24,7 +24,10 @@ defmodule Vutuv.Fediverse.Delivery do
     field(:next_attempt_at, :utc_datetime)
     field(:last_error, :string)
 
+    # The sender is a member OR a page (issue #1334), CHECK-enforced to exactly
+    # one. No unique index: a delivery row is a queue entry, not a relationship.
     belongs_to(:user, Vutuv.Accounts.User)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
 
     timestamps()
   end

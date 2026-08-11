@@ -520,6 +520,74 @@ defmodule VutuvWeb.FediverseController do
     end)
   end
 
+  @doc """
+  A page's inbox (issue #1334): signed `Follow` and `Undo(Follow)` addressed to
+  the page.
+
+  Deliberately narrower than the member inbox. A page has no conversations, no
+  reactions of its own to receive and no account migration, so `Like`,
+  `Announce`, `Create(Note)`, `Accept`/`Reject` and `Move` have nothing to act
+  on here — they are acknowledged with the same `202` and dropped, which is what
+  the member inbox does with anything it does not handle either. That keeps the
+  surface a page exposes to strangers as small as what it actually offers.
+  """
+  def organization_inbox(conn, %{"slug" => slug}) do
+    with_federated_organization(conn, slug, fn organization ->
+      guarded(conn, fn -> verify_and_perform_for_organization(conn, organization) end)
+    end)
+  end
+
+  # The member path's `verify_and_perform/2` shape, with the page as the signer
+  # for the actor fetch and the page's own two handlers after it. Verification
+  # itself is identical — same signature check, same keyId/actor host pinning,
+  # same refusal to trust an `actor` the signature does not cover.
+  defp verify_and_perform_for_organization(conn, organization) do
+    activity = conn.body_params
+
+    with {:ok, key_id} <- signature_key_id(conn),
+         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, organization_signer(organization)),
+         true <- Fediverse.same_host?(remote.id, key_id),
+         :ok <- verify_signature(conn, remote),
+         true <- activity["actor"] == remote.id do
+      perform_for_organization(organization, activity, remote)
+      send_resp(conn, 202, "")
+    else
+      _ -> send_resp(conn, 401, "")
+    end
+  end
+
+  defp perform_for_organization(organization, %{"type" => "Follow"} = activity, remote) do
+    # The object must be THIS page's actor: a signed Follow naming somebody
+    # else's actor is not a follow of this page, whoever delivered it here.
+    if activity["object"] == Docs.actor_url(organization) do
+      case Fediverse.add_organization_follower(organization, follower_attrs(remote)) do
+        {:ok, _} -> Fediverse.accept_follow(organization, activity, remote.inbox)
+        {:error, _} -> :ok
+      end
+    end
+
+    :ok
+  end
+
+  defp perform_for_organization(
+         organization,
+         %{"type" => "Undo", "object" => %{"type" => "Follow"}},
+         remote
+       ) do
+    Fediverse.remove_organization_follower(organization, remote.id)
+    :ok
+  end
+
+  # Everything else: acknowledged and dropped, like the member inbox.
+  defp perform_for_organization(_organization, _activity, _remote), do: :ok
+
+  defp organization_signer(organization) do
+    case Fediverse.get_organization_actor(organization) do
+      nil -> nil
+      actor -> {Docs.actor_url(organization) <> "#main-key", actor.private_key_pem}
+    end
+  end
+
   defp with_federated_organization(conn, slug, fun) do
     with true <- Fediverse.enabled?(),
          %Organization{} = organization <- Organizations.get_organization_by_slug(slug) do

@@ -185,6 +185,7 @@ defmodule VutuvWeb.Router do
     # handles. 404s until the page opts in.
     get("/organizations/:slug/actor", FediverseController, :organization_actor)
     get("/organizations/:slug/actor/followers", FediverseController, :organization_followers)
+    post("/organizations/:slug/actor/inbox", FediverseController, :organization_inbox)
     # The installation-wide inbox (issue #1073), so a server with many
     # followers here delivers a broadcast once instead of once per member.
     # Under /system/ rather than at a root word, which profiles own; remote
