@@ -1,12 +1,24 @@
 name: CI
 
 # Runs the same checks as `mix precommit` (compile --warnings-as-errors,
-# unused-deps, format, credo --strict, tests) on every PR and on pushes to
-# main, so the deploy on main only fires for code that already passed.
+# unused-deps, format, credo --strict, tests) on every PR. `precommit` is a
+# required status check on main, so nothing reaches main without a green run
+# here.
+#
+# Deliberately NOT triggered on pushes to main. Every merge used to run this
+# job a second time on the resulting main commit, ~6 minutes of duplicate work
+# per deploy, and that second run gated nothing: `deploy.yml` triggers on the
+# same push with no `needs:`/`workflow_run:` dependency, so CI and Deploy start
+# in the same second and race. The PR's required check is the real gate.
 on:
-  push:
-    branches: [main]
   pull_request:
+
+# One CI run per pull request. Pushing a fixup to a PR branch supersedes the
+# previous run, which otherwise keeps a runner busy for its full ~6 minutes
+# testing a tree nobody will merge.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   precommit:
