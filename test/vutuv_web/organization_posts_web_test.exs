@@ -145,6 +145,31 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
     end
   end
 
+  describe "discoverability" do
+    test "an organization post is in the sitemap, and drops out when the page opts out", ctx do
+      %{conn: conn} = ctx
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+      {:ok, post} = Posts.create_organization_post(organization, owner, %{body: "Findbar."})
+
+      # `post_entries/1` inner-joins users to build the URL, so an organization
+      # post is invisible to it — silently. Its own chunk type is what puts it
+      # in front of a crawler at all.
+      paths = Vutuv.Sitemap.organization_post_entries(1) |> Enum.map(&elem(&1, 0))
+      assert Posts.path(post) in paths
+
+      {:ok, _} = Organizations.update_organization(organization, %{"seo?" => false})
+
+      refute Posts.path(post) in (Vutuv.Sitemap.organization_post_entries(1)
+                                  |> Enum.map(&elem(&1, 0)))
+
+      # And /llms.txt names the shape so an agent knows the URL exists.
+      assert conn |> get(~p"/llms.txt") |> response(200) =~
+               "/organizations/<slug>/posts/<id>"
+    end
+  end
+
   describe "replies" do
     test "an organization post cannot be answered yet", %{conn: _conn} do
       owner = insert(:activated_user)

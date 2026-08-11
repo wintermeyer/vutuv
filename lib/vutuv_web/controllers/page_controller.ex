@@ -311,6 +311,8 @@ defmodule VutuvWeb.PageController do
   - `/system/markdown` — what members may write in a post: the Markdown
     reference, also raw at `/system/markdown.md` (`?lang=de` for German)
   - `/organizations` — the verified organization directory; one organization at `/organizations/<slug>`
+  - `/organizations/<slug>/posts/<id>` — a post published in an organization's own
+    name; the organization is the author, so there is no member behind it to look up
   - `/jobs` — the public job board: open positions, filterable, newest first
   - `/jobs/<slug>` — a job posting: role, location, pay range, tags and how to apply
   {{ads}}

@@ -15,6 +15,7 @@ defmodule Vutuv.Sitemap do
 
   import Ecto.Query
 
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -68,6 +69,7 @@ defmodule Vutuv.Sitemap do
       posts: chunks(Repo.aggregate(indexable_posts(), :count)),
       tags: chunks(Repo.aggregate(Tags.indexable_tags_query(), :count)),
       organizations: chunks(Repo.aggregate(indexable_organizations(), :count)),
+      organization_posts: chunks(Repo.aggregate(indexable_organization_posts(), :count)),
       jobs: chunks(Repo.aggregate(indexable_jobs(), :count))
     }
   end
@@ -91,6 +93,26 @@ defmodule Vutuv.Sitemap do
     |> Repo.all()
     |> Enum.map(fn {slug, id, updated_at} ->
       {"/#{slug}/posts/#{id}", NaiveDateTime.to_date(updated_at)}
+    end)
+  end
+
+  @doc """
+  `{path, lastmod_date}` entries of one organization-posts chunk (1-based).
+
+  Its own type rather than a widened `post_entries/1`: that one inner-joins
+  `users` to read the author's handle for the URL and to honour their
+  `noindex?`, and an organization post has neither — its URL is built from the
+  page's slug and its indexability is the page's `seo?` flag. Without this the
+  join simply dropped every one of them from the sitemap, silently.
+  """
+  def organization_post_entries(chunk) do
+    indexable_organization_posts()
+    |> order_by([p], p.id)
+    |> window(chunk)
+    |> select([p, o], {o.slug, p.id, p.updated_at})
+    |> Repo.all()
+    |> Enum.map(fn {slug, id, updated_at} ->
+      {"/organizations/#{slug}/posts/#{id}", NaiveDateTime.to_date(updated_at)}
     end)
   end
 
@@ -156,6 +178,16 @@ defmodule Vutuv.Sitemap do
     |> Posts.scope_visible(nil)
     |> join(:inner, [p], u in assoc(p, :user))
     |> where([p, u], u.email_confirmed? and not u.noindex?)
+  end
+
+  # A post published in an organization's name (issue #1334) is public by
+  # construction — it carries no denials — so what decides indexability is the
+  # page (active, not frozen, `seo?`) plus the post's own moderation state.
+  defp indexable_organization_posts do
+    Post
+    |> join(:inner, [p], o in Organization, on: o.id == p.organization_id)
+    |> where([p, o], o.status == "active" and is_nil(o.frozen_at) and o.seo?)
+    |> where([p], not p.images_pending? and is_nil(p.frozen_at))
   end
 
   defp chunks(0), do: 0
