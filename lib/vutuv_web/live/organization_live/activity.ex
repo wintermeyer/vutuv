@@ -43,6 +43,7 @@ defmodule VutuvWeb.OrganizationLive.Activity do
      socket
      |> assign(:organization, organization)
      |> assign(:owner?, Organizations.owner?(organization, socket.assigns.current_user))
+     |> assign(:publisher?, Organizations.publisher?(organization, socket.assigns.current_user))
      |> assign(:marker, marker)
      |> assign(:page_title, gettext("Activity – %{name}", name: organization.name))
      |> load_activity(0)}
@@ -87,7 +88,13 @@ defmodule VutuvWeb.OrganizationLive.Activity do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-2xl py-6">
-      <.manage_header organization={@organization} active={:activity} owner?={@owner?} manage?={true} />
+      <.manage_header
+        organization={@organization}
+        active={:activity}
+        owner?={@owner?}
+        manage?={true}
+        publisher?={@publisher?}
+      />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Activity")}</h1>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">

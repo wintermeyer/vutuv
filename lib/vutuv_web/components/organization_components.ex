@@ -183,6 +183,7 @@ defmodule VutuvWeb.OrganizationComponents do
   attr(:active, :atom, required: true)
   attr(:owner?, :boolean, default: false)
   attr(:manage?, :boolean, default: false)
+  attr(:publisher?, :boolean, default: false)
 
   @doc """
   The header + tab bar shared by the organization management pages (issue #930): a
@@ -218,6 +219,12 @@ defmodule VutuvWeb.OrganizationComponents do
         speaking FOR it. --%>
         <.manage_tab :if={@manage?} active={@active == :activity} navigate={"/organizations/#{@organization.slug}/activity"}>
           {gettext("Activity")}
+        </.manage_tab>
+        <%!-- What the page reads (issue #1336). Publishers only, unlike
+        Activity beside it: this is the page's own reading, part of speaking
+        for it, not news about it. --%>
+        <.manage_tab :if={@publisher?} active={@active == :feed} navigate={"/organizations/#{@organization.slug}/feed"}>
+          {gettext("Feed")}
         </.manage_tab>
       </nav>
     </div>

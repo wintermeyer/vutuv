@@ -21,6 +21,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
   alias Vutuv.Countries
   alias Vutuv.Jobs
   alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Social
   alias VutuvWeb.JsonLd
@@ -120,7 +121,21 @@ defmodule VutuvWeb.OrganizationLive.Show do
     # Following a page (issue #1336): a private subscription that pulls its
     # posts into your feed. No approval and no notification — a page has no
     # inbox to be told, the same way following a member needs no permission.
-    |> assign(:following?, Social.follows_organization?(viewer, organization))
+    # While acting as another page, the pill follows **as that page** (the last
+    # writer #1336 needed): the follow belongs to whoever is speaking, and the
+    # feed it fills is that page's. `follower_of/1` is the one place that
+    # decides, so the state, the toggle and the label cannot disagree.
+    |> assign(
+      :following?,
+      follows?(
+        follower_of(%{
+          acting_as: socket.assigns[:acting_as],
+          organization: organization,
+          current_user: viewer
+        }),
+        organization
+      )
+    )
     |> assign(:follower_count, Social.organization_follower_count(organization))
     |> assign(:pending?, organization.status == "pending")
     |> assign(:frozen?, not is_nil(organization.frozen_at))
@@ -147,16 +162,15 @@ defmodule VutuvWeb.OrganizationLive.Show do
   end
 
   def handle_event("toggle-follow", _params, socket) do
-    %{organization: organization, current_user: viewer} = socket.assigns
+    organization = socket.assigns.organization
+    follower = follower_of(socket.assigns)
 
-    if viewer do
-      if socket.assigns.following?,
-        do: Social.unfollow_organization(viewer, organization),
-        else: Social.follow_organization(viewer, organization)
+    if follower do
+      toggle_follow(follower, organization, socket.assigns.following?)
 
       {:noreply,
        socket
-       |> assign(:following?, Social.follows_organization?(viewer, organization))
+       |> assign(:following?, follows?(follower, organization))
        |> assign(:follower_count, Social.organization_follower_count(organization))}
     else
       {:noreply, socket}
@@ -254,6 +268,34 @@ defmodule VutuvWeb.OrganizationLive.Show do
       {:noreply, socket}
     end
   end
+
+  # Who the follow belongs to: the page being acted as, else the member. A page
+  # can never follow itself, so acting as *this* page falls back to nobody
+  # rather than offering a control that could only fail.
+  defp follower_of(%{acting_as: %Organization{id: id}, organization: %Organization{id: id}}),
+    do: nil
+
+  defp follower_of(%{acting_as: %Organization{} = page}), do: page
+  defp follower_of(%{current_user: viewer}), do: viewer
+
+  defp follows?(nil, _organization), do: false
+
+  defp follows?(%Organization{} = page, organization),
+    do: Social.organization_follows?(page, organization)
+
+  defp follows?(viewer, organization), do: Social.follows_organization?(viewer, organization)
+
+  defp toggle_follow(%Organization{} = page, organization, true),
+    do: Social.unfollow_as_organization(page, organization)
+
+  defp toggle_follow(%Organization{} = page, organization, false),
+    do: Social.follow_as_organization(page, organization)
+
+  defp toggle_follow(viewer, organization, true),
+    do: Social.unfollow_organization(viewer, organization)
+
+  defp toggle_follow(viewer, organization, false),
+    do: Social.follow_organization(viewer, organization)
 
   @impl true
   def handle_info({:organization_counters, %{likes: likes}}, socket) do

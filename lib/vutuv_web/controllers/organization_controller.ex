@@ -139,6 +139,14 @@ defmodule VutuvWeb.OrganizationController do
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Activity, &Organizations.can_manage?/2)
 
   @doc """
+  What the page reads (issue #1336). **Publishers only**, where the activity
+  list above takes any role holder: activity is news about the page, this is
+  the page's own reading, which is part of speaking for it.
+  """
+  def feed(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.OrganizationLive.Feed, &Organizations.publisher?/2)
+
+  @doc """
   The permalink of a post published in this organization's name (issue #1334).
   404s for an unknown page, a page this viewer may not see, or an id that is not
   one of its posts — an id belonging to a member's post must not render under an

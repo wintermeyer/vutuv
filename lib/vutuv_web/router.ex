@@ -276,6 +276,7 @@ defmodule VutuvWeb.Router do
     get("/organizations/:slug/exclusions", OrganizationController, :exclusions)
     # What happened to the page (issue #1336), for its whole team.
     get("/organizations/:slug/activity", OrganizationController, :activity)
+    get("/organizations/:slug/feed", OrganizationController, :feed)
     # The permalink of a post published in the organization's name (issue #1334).
     # Deliberately under the slug and not under the organization's opt-in root
     # handle: the handle route dispatches an organization only on the bare

@@ -1925,6 +1925,92 @@ defmodule Vutuv.Posts do
   def render_preloads, do: post_preloads()
 
   @doc """
+  The feed a **page** reads (issue #1336): what the members and pages it follows
+  have published, newest first, same entry shape and cursor as `feed_page/2`.
+
+  Two sources, not six. A page can only follow members and other pages today, so
+  it has no tags, no reposts of its own and no fediverse follows to draw from —
+  a parallel copy of the member feed's other four sources would be four empty
+  queries per page load. When a page can follow tags and remote accounts, this
+  grows the sources it can actually fill.
+
+  **A member's post is visible here only if it is public.** Denials name users,
+  groups and follow relationships, and a page is none of those, so it can never
+  *be* the audience of a restricted post — `scope_visible(query, nil)`, the
+  anonymous public gate, is the honest reading rather than something new.
+
+  `viewer:` is the member currently acting as the page. It decorates the entries
+  (their own likes, bookmarks and reposts), because the action bar under each
+  card belongs to the person, not to the page: a page has no likes of its own.
+  It never widens what the feed contains — that is the page's follow graph
+  alone, so two publishers reading it see the same posts.
+  """
+  def organization_feed_page(%Organization{} = page, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @default_feed_limit)
+    cursor = Keyword.get(opts, :cursor)
+    viewer = Keyword.get(opts, :viewer)
+
+    sources = [
+      &organization_feed_member_posts(page, &1, &2),
+      &organization_feed_page_posts(page, &1, &2)
+    ]
+
+    page_result = Vutuv.FeedPage.paginate(sources, limit, cursor)
+
+    %{page_result | entries: decorate_feed_entries(page_result.entries, viewer)}
+  end
+
+  defp organization_feed_member_posts(%Organization{id: page_id}, fetch_n, cursor) do
+    from(p in Post,
+      join: u in assoc(p, :user),
+      as: :author,
+      where: p.user_id in subquery(members_followed_by_organization(page_id)),
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      order_by: [desc: p.inserted_at, desc: p.id],
+      limit: ^fetch_n
+    )
+    |> scope_visible(nil)
+    |> posts_at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
+  end
+
+  defp organization_feed_page_posts(%Organization{id: page_id}, fetch_n, cursor) do
+    from(p in Post,
+      join: o in Organization,
+      as: :organization,
+      on: o.id == p.organization_id,
+      where: p.organization_id in subquery(pages_followed_by_organization(page_id)),
+      where: organization_public_row(o),
+      where: not p.images_pending? and is_nil(p.frozen_at),
+      order_by: [desc: p.inserted_at, desc: p.id],
+      limit: ^fetch_n
+    )
+    |> posts_at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
+  end
+
+  # The two halves of a page's follow graph. Named functions rather than inline
+  # subqueries for the reason the milestone keeps relearning: a nullable column
+  # feeding an `IN` needs one place to fix, not several.
+  defp members_followed_by_organization(page_id) do
+    from(c in Follow,
+      where: c.follower_organization_id == ^page_id and c.muted == false,
+      where: not is_nil(c.followee_id),
+      select: c.followee_id
+    )
+  end
+
+  defp pages_followed_by_organization(page_id) do
+    from(c in Follow,
+      where: c.follower_organization_id == ^page_id and c.muted == false,
+      where: not is_nil(c.followee_organization_id),
+      select: c.followee_organization_id
+    )
+  end
+
+  @doc """
   One page of `viewer`'s newsfeed: own posts plus posts **and reposts** of
   followed (activated) authors, visibility-filtered, newest first.
 
@@ -2494,6 +2580,11 @@ defmodule Vutuv.Posts do
   # whole page, regardless of which repost happened to carry the entry. The
   # roster is deliberately follow-scoped: it explains why the post is in
   # *this* feed; the global repost count already lives on the action bar.
+  # A page's feed carries no reposts (a page cannot repost, and it does not read
+  # the members' repost source), so there is no roster to attach and no viewer
+  # whose follow graph would scope one. Nil is a real case here, not a slip.
+  defp attach_reposters(entries, nil), do: Enum.map(entries, &Map.put(&1, :reposters, []))
+
   defp attach_reposters(entries, %User{} = viewer) do
     post_ids = for %{reposted_by: %User{}} = entry <- entries, do: entry.post.id
     rosters = reposter_rosters(post_ids, viewer)
