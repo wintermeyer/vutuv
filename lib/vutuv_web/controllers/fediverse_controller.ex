@@ -595,6 +595,38 @@ defmodule VutuvWeb.FediverseController do
     :ok
   end
 
+  # Somebody on another network favourited or re-shared one of the page's posts
+  # (issue #1334, completing #1068 for pages). Without this a page publishes
+  # outward and learns nothing back: its post could travel and the team would
+  # see a flat zero.
+  defp perform_for_organization(organization, %{"type" => kind} = activity, remote)
+       when kind in ["Like", "Announce"] do
+    Fediverse.record_organization_reaction(
+      organization,
+      activity["object"],
+      String.downcase(kind),
+      %{uri: remote.id, handle: remote.preferred_username}
+    )
+
+    :ok
+  end
+
+  defp perform_for_organization(
+         organization,
+         %{"type" => "Undo", "object" => %{"type" => kind} = object},
+         remote
+       )
+       when kind in ["Like", "Announce"] do
+    Fediverse.remove_organization_reaction(
+      organization,
+      object["object"],
+      String.downcase(kind),
+      remote.id
+    )
+
+    :ok
+  end
+
   # Everything else: acknowledged and dropped, like the member inbox.
   defp perform_for_organization(_organization, _activity, _remote), do: :ok
 

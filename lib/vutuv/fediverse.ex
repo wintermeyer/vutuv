@@ -3452,6 +3452,74 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  @doc """
+  A favourite or re-share of a **page's** post, from another network (issue
+  #1334 completing #1068 for pages).
+
+  Without this a page publishes outward and learns nothing back: its post can
+  travel and be re-shared and the team would see a flat zero. The counts need no
+  work — `fediverse_reactions` hangs off the post, not off a member, so
+  `Posts.shown_counts/1` folds a stored row in by itself. What was missing was
+  only the way in.
+
+  There is no per-page reactions switch to check. `users.fediverse_reactions?`
+  lets a member federate without collecting strangers' reactions; a page that
+  deliberately publishes outward has no comparable reason to want the traffic
+  and not the tally, so it is not asked twice.
+  """
+  def record_organization_reaction(%Organization{} = page, object, kind, actor)
+      when kind in ~w(like announce) do
+    %{uri: actor_uri} = actor = actor_attrs(actor)
+
+    with true <- enabled?(),
+         true <- federated?(page),
+         %Post{} = post <- resolve_own_organization_note(page, object),
+         :ok <- check_inbound_cap(actor_uri),
+         {:ok, _reaction} <- insert_reaction(post, actor, kind) do
+      Posts.broadcast_post_counters(post.id)
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  @doc """
+  The page twin of `remove_reaction/4`. Unconditional like its sibling: an
+  upstream withdrawal is the deletion path that makes storing the row
+  defensible, so it must not depend on any switch still being on.
+  """
+  def remove_organization_reaction(%Organization{} = page, object, kind, actor_uri)
+      when kind in ~w(like announce) do
+    with %Post{} = post <- resolve_own_organization_note(page, object) do
+      {count, _} =
+        Repo.delete_all(
+          from(r in Reaction,
+            where: r.post_id == ^post.id and r.actor_uri == ^actor_uri and r.kind == ^kind
+          )
+        )
+
+      if count > 0, do: Posts.broadcast_post_counters(post.id)
+    end
+
+    :ok
+  end
+
+  # The page's own note, by the permalink shape `Docs.note_url/2` mints for it.
+  # A member's note lives at `/:handle/posts/:id`, a page's under
+  # `/organizations/:slug/posts/:id`, so this cannot share `resolve_own_note/2`
+  # — and the ownership check is the point: a Like naming somebody else's post
+  # must not be recorded against this page.
+  defp resolve_own_organization_note(%Organization{id: page_id, slug: slug}, object) do
+    with uri when is_binary(uri) <- activity_object_id(object),
+         ["organizations", ^slug, "posts", post_id] <- local_path(uri),
+         %Post{organization_id: ^page_id} = post <-
+           UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
+      post
+    else
+      _ -> nil
+    end
+  end
+
   # Both call shapes as one map. A bare URI is what an `Undo` and the tests
   # carry; the inbox passes the actor document's `preferredUsername` along.
   defp actor_attrs(uri) when is_binary(uri), do: %{uri: uri, handle: nil}

@@ -883,9 +883,16 @@ answering `Accept`/`Reject` and tracking a pending request
 (`fediverse_remote_follows`) is still member-shaped. It is the last open point
 of #1336 and the natural next step.
 
-A page also receives no reactions or replies from other networks: those land
-against a member's post today, and giving a page the same would mean widening
-the reaction and remote-reply tables plus the surfaces that render them.
+A page **does** receive favourites and re-shares from other networks now: its
+inbox takes `Like` and `Announce` (and their `Undo`), and the counts need no
+special handling because `fediverse_reactions` hangs off the post rather than
+off a member, so `Posts.shown_counts/1` folds them in by itself.
+
+What a page still does not receive is **replies** from other networks. Those are
+stored text from a stranger under a retention model with a takedown ledger and a
+six-month expiry (issues #1069/#1071), and the surfaces that render them —
+the permalink's conversation, the notification quote — are member-shaped
+throughout. That is its own feature, not a widened column.
 
 ## Deliberate v1 limits
 
