@@ -40,7 +40,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
      socket
      |> assign(:organization, organization)
      |> assign(:owner?, Organizations.owner?(organization, socket.assigns.current_user))
-     |> assign(:page_title, gettext("Following – %{name}", name: organization.name))
+     |> assign(:page_title, gettext("Follows – %{name}", name: organization.name))
      |> load_following()}
   end
 
@@ -92,7 +92,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
         publisher?={true}
       />
 
-      <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Following")}</h1>
+      <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Follows")}</h1>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
         {gettext("The members, organizations and topics this page follows. Everything here shapes its feed, and only the team can see this list.")}
       </p>

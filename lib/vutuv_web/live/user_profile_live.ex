@@ -31,6 +31,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.CodeStats
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteFollow
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
@@ -153,6 +154,19 @@ defmodule VutuvWeb.UserProfileLive do
       true ->
         {:noreply, put_flash(socket, :error, gettext("Something went wrong"))}
     end
+  end
+
+  # Following a member **as the page you are speaking for** (issue #1336). Its
+  # own pair of events rather than a branch inside the two above: the member
+  # path carries a follow id and the page path does not need one (the page plus
+  # this profile decide the edge), and folding them together would mean an
+  # id-shaped parameter that is sometimes ignored.
+  def handle_event("follow-as-page", _params, socket) do
+    {:noreply, toggle_page_follow(socket, &Social.follow_as_organization/2)}
+  end
+
+  def handle_event("unfollow-as-page", _params, socket) do
+    {:noreply, toggle_page_follow(socket, &Social.unfollow_as_organization/2)}
   end
 
   def handle_event("unfollow", %{"id" => follow_id}, socket) do
@@ -558,6 +572,9 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:connection_count, counts.connections)
     |> assign(:header_follow_id, rel.follow_id)
     |> assign(:header_follows_viewer?, rel.follows_viewer?)
+    # Whether the page being spoken for follows this member. Only asked while
+    # acting as one, so an ordinary visit pays no extra query.
+    |> assign(:page_follows?, page_follows?(socket.assigns[:acting_as], user))
     |> assign(:header_connected?, rel.connected?)
     |> assign(:header_follow_muted?, rel.follow_muted?)
     |> assign(:followers, followers)
@@ -1084,6 +1101,25 @@ defmodule VutuvWeb.UserProfileLive do
       }
     else
       %{follow_id: false, follow_muted?: false, connected?: false, follows_viewer?: false}
+    end
+  end
+
+  defp page_follows?(%Organization{} = page, %User{} = user),
+    do: Social.organization_follows?(page, user)
+
+  defp page_follows?(_acting_as, _user), do: false
+
+  # Both page-follow events go through here: resolve who is speaking, refuse
+  # anything but a page, act, then re-read the state from the database rather
+  # than assuming the write landed.
+  defp toggle_page_follow(socket, fun) do
+    case socket.assigns[:acting_as] do
+      %Organization{} = page ->
+        fun.(page, socket.assigns.user)
+        assign(socket, :page_follows?, page_follows?(page, socket.assigns.user))
+
+      _not_acting ->
+        socket
     end
   end
 

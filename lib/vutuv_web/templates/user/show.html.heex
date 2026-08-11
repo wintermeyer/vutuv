@@ -131,6 +131,33 @@ the resulting ~200px rail width. --%>
                 >
                   {gettext("Unblock")}
                 </button>
+              <% @acting_as && not same_user?(@user, @current_user) -> %>
+                <%!-- Speaking for a page (issue #1336): one plain follow pill,
+                not the two-direction relationship one. That pill's inbound half
+                states whether this member follows YOU, and while speaking for a
+                page "you" is ambiguous — the member may follow the page, which
+                is a different relation from the one the outbound half controls.
+                Mutual ("vernetzt") is between people. So the honest control here
+                is a single toggle, labelled with the name being spoken for. --%>
+                <button
+                  type="button"
+                  id="follow-as-page"
+                  phx-click={if @page_follows?, do: "unfollow-as-page", else: "follow-as-page"}
+                  aria-pressed={to_string(@page_follows?)}
+                  class={[
+                    "inline-flex min-h-10 items-center justify-center rounded-full border px-4 text-sm font-semibold",
+                    if(@page_follows?,
+                      do:
+                        "border-slate-300 bg-white text-slate-700 hover:border-rose-300 hover:text-rose-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
+                      else:
+                        "border-brand-600 bg-white text-brand-700 hover:bg-brand-50 dark:bg-slate-900 dark:text-brand-300"
+                    )
+                  ]}
+                >
+                  {if @page_follows?,
+                    do: gettext("%{name} follows", name: @acting_as.name),
+                    else: gettext("Follow as %{name}", name: @acting_as.name)}
+                </button>
               <% can_act? -> %>
                 <%!-- Directional relationship as one always-full segmented pill:
                 the clickable Follow / Following half (you follow him), a seam

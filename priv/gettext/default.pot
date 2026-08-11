@@ -19,7 +19,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:3434
 #: lib/vutuv_web/components/ui.ex:3439
-#: lib/vutuv_web/live/admin/screenshot_live.ex:245
+#: lib/vutuv_web/live/admin/screenshot_live.ex:266
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:718
 #: lib/vutuv_web/live/organization_live/domains.ex:255
 #: lib/vutuv_web/live/organization_live/edit.ex:396
@@ -28,18 +28,18 @@ msgstr ""
 msgid "Add"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:243
+#: lib/vutuv_web/agent_docs/markdown.ex:244
 #: lib/vutuv_web/agent_docs/section_docs.ex:127
-#: lib/vutuv_web/agent_docs/text.ex:227
+#: lib/vutuv_web/agent_docs/text.ex:228
 #: lib/vutuv_web/live/admin/deliverability_live.ex:170
 #: lib/vutuv_web/live/admin/deliverability_live.ex:251
 #: lib/vutuv_web/live/cv_live.ex:151
-#: lib/vutuv_web/live/organization_live/show.ex:558
+#: lib/vutuv_web/live/organization_live/show.ex:600
 #: lib/vutuv_web/templates/address/card_list.html.heex:6
 #: lib/vutuv_web/templates/address/card_list.html.heex:16
 #: lib/vutuv_web/templates/address/show.html.heex:2
 #: lib/vutuv_web/templates/address/show.html.heex:7
-#: lib/vutuv_web/templates/user/show.html.heex:1471
+#: lib/vutuv_web/templates/user/show.html.heex:1498
 #, elixir-autogen
 msgid "Address"
 msgid_plural "Addresses"
@@ -100,11 +100,11 @@ msgstr ""
 msgid "Birthdate"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:510
-#: lib/vutuv_web/agent_docs/markdown.ex:511
-#: lib/vutuv_web/agent_docs/text.ex:476
-#: lib/vutuv_web/agent_docs/text.ex:477
-#: lib/vutuv_web/templates/user/show.html.heex:1103
+#: lib/vutuv_web/agent_docs/markdown.ex:524
+#: lib/vutuv_web/agent_docs/markdown.ex:525
+#: lib/vutuv_web/agent_docs/text.ex:489
+#: lib/vutuv_web/agent_docs/text.ex:490
+#: lib/vutuv_web/templates/user/show.html.heex:1130
 #, elixir-autogen
 msgid "Birthday"
 msgstr ""
@@ -151,7 +151,7 @@ msgstr ""
 #: lib/vutuv_web/templates/messenger/card_list.html.heex:6
 #: lib/vutuv_web/templates/messenger/form_content.html.heex:12
 #: lib/vutuv_web/templates/messenger/show.html.heex:21
-#: lib/vutuv_web/templates/user/show.html.heex:1141
+#: lib/vutuv_web/templates/user/show.html.heex:1168
 #, elixir-autogen
 msgid "Contact"
 msgstr ""
@@ -160,7 +160,7 @@ msgstr ""
 msgid "Couldn't follow back to %{name}."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2788
+#: lib/vutuv_web/components/post_components.ex:2730
 #: lib/vutuv_web/components/ui.ex:3326
 #: lib/vutuv_web/live/admin/job_live.ex:493
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:622
@@ -203,19 +203,19 @@ msgstr ""
 #: lib/vutuv_web/live/cv_live.ex:438
 #: lib/vutuv_web/live/post_live/composer.ex:1694
 #: lib/vutuv_web/templates/export/index.html.heex:41
-#: lib/vutuv_web/templates/user/show.html.heex:310
+#: lib/vutuv_web/templates/user/show.html.heex:337
 #: lib/vutuv_web/views/qualification_html.ex:237
 #, elixir-autogen
 msgid "Download"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2753
+#: lib/vutuv_web/components/post_components.ex:2695
 #: lib/vutuv_web/components/ui.ex:3317
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:613
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:653
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:149
 #: lib/vutuv_web/live/job_posting_live/show.ex:178
-#: lib/vutuv_web/live/organization_live/show.ex:387
+#: lib/vutuv_web/live/organization_live/show.ex:429
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:50
 #: lib/vutuv_web/templates/admin/newsletter/edit.html.heex:7
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:19
@@ -223,7 +223,7 @@ msgstr ""
 #: lib/vutuv_web/templates/dev_app/edit.html.heex:7
 #: lib/vutuv_web/templates/dev_app/show.html.heex:58
 #: lib/vutuv_web/templates/moderation_case/show.html.heex:45
-#: lib/vutuv_web/templates/user/show.html.heex:1126
+#: lib/vutuv_web/templates/user/show.html.heex:1153
 #, elixir-autogen
 msgid "Edit"
 msgstr ""
@@ -288,7 +288,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/work_experience_controller.ex:44
 #: lib/vutuv_web/controllers/work_experience_controller.ex:61
 #: lib/vutuv_web/controllers/work_experience_controller.ex:152
-#: lib/vutuv_web/templates/user/show.html.heex:582
+#: lib/vutuv_web/templates/user/show.html.heex:609
 #: lib/vutuv_web/templates/work_experience/edit.html.heex:4
 #: lib/vutuv_web/templates/work_experience/index.html.heex:10
 #: lib/vutuv_web/templates/work_experience/manage.html.heex:4
@@ -304,26 +304,26 @@ msgstr ""
 msgid "Fax"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:496
+#: lib/vutuv_web/agent_docs/markdown.ex:510
 #: lib/vutuv_web/templates/user/edit.html.heex:125
 #, elixir-autogen
 msgid "First Name"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:531
-#: lib/vutuv_web/agent_docs/text.ex:497
-#: lib/vutuv_web/controllers/follower_controller.ex:23
+#: lib/vutuv_web/agent_docs/markdown.ex:545
+#: lib/vutuv_web/agent_docs/text.ex:510
+#: lib/vutuv_web/controllers/follower_controller.ex:29
 #: lib/vutuv_web/live/fediverse_followers_live.ex:170
-#: lib/vutuv_web/live/notification_live/index.ex:954
+#: lib/vutuv_web/live/notification_live/index.ex:956
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:148
 #: lib/vutuv_web/templates/follower/index.html.heex:4
-#: lib/vutuv_web/templates/follower/index.html.heex:9
+#: lib/vutuv_web/templates/follower/index.html.heex:40
 #, elixir-autogen
 msgid "Followers"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:532
-#: lib/vutuv_web/agent_docs/text.ex:498
+#: lib/vutuv_web/agent_docs/markdown.ex:546
+#: lib/vutuv_web/agent_docs/text.ex:511
 #: lib/vutuv_web/components/fediverse_components.ex:223
 #: lib/vutuv_web/components/ui.ex:1976
 #: lib/vutuv_web/components/ui.ex:2001
@@ -331,11 +331,11 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:2011
 #: lib/vutuv_web/components/ui.ex:2014
 #: lib/vutuv_web/components/ui.ex:2072
-#: lib/vutuv_web/controllers/followee_controller.ex:23
-#: lib/vutuv_web/live/organization_live/show.ex:362
+#: lib/vutuv_web/controllers/followee_controller.ex:29
+#: lib/vutuv_web/live/organization_live/show.ex:404
 #: lib/vutuv_web/templates/followee/index.html.heex:4
-#: lib/vutuv_web/templates/followee/index.html.heex:9
-#: lib/vutuv_web/templates/user/show.html.heex:928
+#: lib/vutuv_web/templates/followee/index.html.heex:53
+#: lib/vutuv_web/templates/user/show.html.heex:955
 #, elixir-autogen
 msgid "Following"
 msgstr ""
@@ -382,7 +382,7 @@ msgstr ""
 msgid "Language"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:498
+#: lib/vutuv_web/agent_docs/markdown.ex:512
 #: lib/vutuv_web/templates/user/edit.html.heex:130
 #, elixir-autogen
 msgid "Last Name"
@@ -449,13 +449,13 @@ msgstr ""
 msgid "Log in"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:497
+#: lib/vutuv_web/agent_docs/markdown.ex:511
 #: lib/vutuv_web/templates/user/edit.html.heex:135
 #, elixir-autogen
 msgid "Middle Name"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:878
+#: lib/vutuv_web/live/notification_live/index.ex:880
 #, elixir-autogen
 msgid "More"
 msgstr ""
@@ -472,8 +472,8 @@ msgstr ""
 msgid "Name"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:636
-#: lib/vutuv_web/live/organization_live/activity.ex:116
+#: lib/vutuv_web/live/notification_live/index.ex:638
+#: lib/vutuv_web/live/organization_live/activity.ex:123
 #: lib/vutuv_web/templates/access_token/new.html.heex:3
 #: lib/vutuv_web/templates/ad/new.html.heex:5
 #: lib/vutuv_web/templates/admin/newsletter/new.html.heex:3
@@ -488,7 +488,7 @@ msgstr ""
 msgid "New message from @%{slug} on vutuv"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:500
+#: lib/vutuv_web/agent_docs/markdown.ex:514
 #: lib/vutuv_web/templates/user/edit.html.heex:140
 #, elixir-autogen
 msgid "Nickname"
@@ -569,7 +569,7 @@ msgstr ""
 msgid "Phone number updated successfully."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:495
+#: lib/vutuv_web/agent_docs/markdown.ex:509
 #: lib/vutuv_web/templates/user/edit.html.heex:145
 #, elixir-autogen
 msgid "Prefix"
@@ -642,8 +642,8 @@ msgstr ""
 #: lib/vutuv_web/live/admin/user_delete_live.ex:118
 #: lib/vutuv_web/live/admin/user_live.ex:219
 #: lib/vutuv_web/live/job_board_live.ex:418
-#: lib/vutuv_web/live/search_live.ex:37
-#: lib/vutuv_web/live/search_live.ex:378
+#: lib/vutuv_web/live/search_live.ex:42
+#: lib/vutuv_web/live/search_live.ex:399
 #: lib/vutuv_web/live/shell_live.ex:636
 #: lib/vutuv_web/live/shell_live.ex:788
 #: lib/vutuv_web/live/tag_live/timeline.ex:255
@@ -655,7 +655,7 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1399
+#: lib/vutuv_web/components/post_components.ex:1403
 #: lib/vutuv_web/templates/admin/report/index.html.heex:45
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:6
 #: lib/vutuv_web/templates/tag/show.html.heex:23
@@ -691,13 +691,13 @@ msgstr ""
 #: lib/vutuv_web/templates/social_media_account/manage.html.heex:4
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:4
 #: lib/vutuv_web/templates/social_media_account/show.html.heex:6
-#: lib/vutuv_web/templates/user/show.html.heex:1255
+#: lib/vutuv_web/templates/user/show.html.heex:1282
 #, elixir-autogen, elixir-format
 msgid "Profiles"
 msgstr ""
 
 #: lib/vutuv_web/templates/social_media_account/manage.html.heex:8
-#: lib/vutuv_web/templates/user/show.html.heex:1257
+#: lib/vutuv_web/templates/user/show.html.heex:1284
 #, elixir-autogen, elixir-format
 msgid "Add a profile"
 msgstr ""
@@ -741,7 +741,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/follow_controller.ex:24
 #: lib/vutuv_web/controllers/remote_follow_controller.ex:125
 #: lib/vutuv_web/controllers/user_save_controller.ex:45
-#: lib/vutuv_web/live/user_profile_live.ex:154
+#: lib/vutuv_web/live/user_profile_live.ex:155
 #, elixir-autogen
 msgid "Something went wrong"
 msgstr ""
@@ -750,7 +750,7 @@ msgstr ""
 msgid "Submit a bugreport or a feature request."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:499
+#: lib/vutuv_web/agent_docs/markdown.ex:513
 #: lib/vutuv_web/templates/user/edit.html.heex:150
 #, elixir-autogen
 msgid "Suffix"
@@ -767,7 +767,7 @@ msgstr ""
 msgid "Type of Number"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:405
+#: lib/vutuv_web/live/admin/screenshot_live.ex:426
 #: lib/vutuv_web/templates/url/form_content.html.heex:5
 #: lib/vutuv_web/templates/url/show.html.heex:19
 #, elixir-autogen
@@ -798,7 +798,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:837
 #: lib/vutuv_web/live/admin/user_delete_live.ex:144
 #: lib/vutuv_web/live/admin/user_live.ex:155
-#: lib/vutuv_web/live/notification_live/index.ex:1033
+#: lib/vutuv_web/live/notification_live/index.ex:1035
 #: lib/vutuv_web/templates/admin/account/frozen.html.heex:33
 #: lib/vutuv_web/templates/admin/account/index.html.heex:56
 #: lib/vutuv_web/templates/admin/username/form_content.html.heex:10
@@ -845,14 +845,14 @@ msgid "Users"
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:911
-#: lib/vutuv_web/templates/user/show.html.heex:316
+#: lib/vutuv_web/templates/user/show.html.heex:343
 #, elixir-autogen
 msgid "vCard"
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:3387
-#: lib/vutuv_web/templates/user/show.html.heex:922
-#: lib/vutuv_web/templates/user/show.html.heex:945
+#: lib/vutuv_web/templates/user/show.html.heex:949
+#: lib/vutuv_web/templates/user/show.html.heex:972
 #, elixir-autogen
 msgid "View All"
 msgstr ""
@@ -917,7 +917,7 @@ msgstr ""
 msgid "You don't have a passkey yet, so we've emailed you a one-time PIN to sign in instead."
 msgstr ""
 
-#: lib/vutuv_web/templates/follower/index.html.heex:15
+#: lib/vutuv_web/templates/follower/index.html.heex:46
 #, elixir-autogen
 msgid "You don't have any followers yet! If you want more followers, you could follow others, invite your friends, or link your Vutuv profile on other social media websites."
 msgstr ""
@@ -1041,7 +1041,7 @@ msgstr ""
 msgid "An error occurred"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1092
+#: lib/vutuv_web/templates/user/show.html.heex:1119
 #, elixir-autogen
 msgid "General Info"
 msgstr ""
@@ -1088,7 +1088,7 @@ msgstr ""
 msgid "The 1,000 Users with the most Followers"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:153
+#: lib/vutuv_web/agent_docs/list_docs.ex:176
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:12
 #, elixir-autogen
 msgid "We haven't yet figured out the best way to help everyone discover other interesting vutuv users. So for now, this page simply lists the 1,000 users with the most followers."
@@ -1125,13 +1125,13 @@ msgstr ""
 msgid "Can't find URL"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:220
+#: lib/vutuv_web/live/search_live.ex:225
 #, elixir-autogen
 msgid "Our search will try to match similar names to your search, so don't worry about spelling."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:431
-#: lib/vutuv_web/live/search_live.ex:456
+#: lib/vutuv_web/live/search_live.ex:452
+#: lib/vutuv_web/live/search_live.ex:477
 #, elixir-autogen
 msgid "Search Tips"
 msgstr ""
@@ -1146,7 +1146,7 @@ msgstr ""
 msgid "Add Localization"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:251
+#: lib/vutuv_web/components/organization_components.ex:264
 #: lib/vutuv_web/live/admin/activity_live.ex:153
 #: lib/vutuv_web/live/admin/api_app_live.ex:58
 #: lib/vutuv_web/live/admin/deliverability_live.ex:96
@@ -1159,7 +1159,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:638
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:693
 #: lib/vutuv_web/live/admin/organization_live.ex:189
-#: lib/vutuv_web/live/admin/screenshot_live.ex:172
+#: lib/vutuv_web/live/admin/screenshot_live.ex:193
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:432
 #: lib/vutuv_web/live/admin/user_delete_live.ex:104
 #: lib/vutuv_web/live/admin/user_detail_live.ex:68
@@ -1207,7 +1207,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:2
 #: lib/vutuv_web/templates/tag/index.html.heex:1
-#: lib/vutuv_web/templates/user/show.html.heex:576
+#: lib/vutuv_web/templates/user/show.html.heex:603
 #, elixir-autogen
 msgid "All tags"
 msgstr ""
@@ -1371,11 +1371,11 @@ msgid "Tag urls"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:33
-#: lib/vutuv_web/agent_docs/markdown.ex:403
-#: lib/vutuv_web/agent_docs/markdown.ex:944
+#: lib/vutuv_web/agent_docs/markdown.ex:417
+#: lib/vutuv_web/agent_docs/markdown.ex:958
 #: lib/vutuv_web/agent_docs/text.ex:30
-#: lib/vutuv_web/agent_docs/text.ex:424
-#: lib/vutuv_web/agent_docs/text.ex:643
+#: lib/vutuv_web/agent_docs/text.ex:437
+#: lib/vutuv_web/agent_docs/text.ex:656
 #: lib/vutuv_web/components/ui.ex:3616
 #: lib/vutuv_web/controllers/user_tag_controller.ex:43
 #: lib/vutuv_web/controllers/user_tag_controller.ex:60
@@ -1387,8 +1387,8 @@ msgstr ""
 #: lib/vutuv_web/live/cv_live.ex:315
 #: lib/vutuv_web/live/job_board_live.ex:277
 #: lib/vutuv_web/live/job_posting_live/form.ex:510
-#: lib/vutuv_web/live/search_live.ex:199
-#: lib/vutuv_web/live/search_live.ex:516
+#: lib/vutuv_web/live/search_live.ex:204
+#: lib/vutuv_web/live/search_live.ex:537
 #: lib/vutuv_web/live/tag_new_live.ex:36
 #: lib/vutuv_web/live/tag_new_live.ex:47
 #: lib/vutuv_web/live/tag_new_live.ex:54
@@ -1403,7 +1403,7 @@ msgstr ""
 #: lib/vutuv_web/templates/tag/index.html.heex:1
 #: lib/vutuv_web/templates/tag/show.html.heex:23
 #: lib/vutuv_web/templates/tag/show.html.heex:25
-#: lib/vutuv_web/templates/user/show.html.heex:546
+#: lib/vutuv_web/templates/user/show.html.heex:573
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:4
 #: lib/vutuv_web/templates/user_tag/index.html.heex:26
 #: lib/vutuv_web/templates/user_tag/manage.html.heex:4
@@ -1616,7 +1616,7 @@ msgstr ""
 msgid "Check your inbox"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3236
+#: lib/vutuv_web/components/post_components.ex:3178
 #: lib/vutuv_web/components/ui.ex:280
 #: lib/vutuv_web/live/admin/job_live.ex:325
 #: lib/vutuv_web/live/admin/job_live.ex:484
@@ -1691,9 +1691,9 @@ msgstr ""
 #: lib/vutuv_web/live/fediverse_account_live.ex:375
 #: lib/vutuv_web/live/fediverse_following_live.ex:313
 #: lib/vutuv_web/live/fediverse_lookup_live.ex:363
-#: lib/vutuv_web/live/organization_live/show.ex:360
-#: lib/vutuv_web/templates/user/show.html.heex:1042
-#: lib/vutuv_web/templates/user/show.html.heex:1295
+#: lib/vutuv_web/live/organization_live/show.ex:402
+#: lib/vutuv_web/templates/user/show.html.heex:1069
+#: lib/vutuv_web/templates/user/show.html.heex:1322
 #, elixir-autogen, elixir-format
 msgid "Follow"
 msgstr ""
@@ -1703,7 +1703,7 @@ msgstr ""
 msgid "If you think this is a bug, please"
 msgstr ""
 
-#: lib/vutuv_web/templates/followee/index.html.heex:15
+#: lib/vutuv_web/templates/followee/index.html.heex:59
 #, elixir-autogen, elixir-format
 msgid "It doesn't look like you're following anyone yet. Open the profile of someone you know or find interesting and click the follow button!"
 msgstr ""
@@ -1714,7 +1714,7 @@ msgstr ""
 msgid "Log out"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:257
+#: lib/vutuv_web/components/organization_components.ex:270
 #: lib/vutuv_web/live/admin/activity_live.ex:143
 #: lib/vutuv_web/live/admin/activity_live.ex:175
 #: lib/vutuv_web/live/admin/deliverability_live.ex:119
@@ -1729,7 +1729,7 @@ msgstr ""
 msgid "Member"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:180
+#: lib/vutuv_web/templates/user/show.html.heex:207
 #, elixir-autogen, elixir-format
 msgid "Message"
 msgstr ""
@@ -1748,7 +1748,7 @@ msgstr ""
 msgid "Network"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:421
+#: lib/vutuv_web/components/post_components.ex:425
 #: lib/vutuv_web/components/ui.ex:3436
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:705
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:742
@@ -1837,7 +1837,7 @@ msgstr ""
 #: lib/vutuv_web/templates/social_media_account/card_list.html.heex:19
 #: lib/vutuv_web/templates/social_media_account/show.html.heex:27
 #: lib/vutuv_web/templates/social_media_account/verify.html.heex:17
-#: lib/vutuv_web/templates/user/show.html.heex:170
+#: lib/vutuv_web/templates/user/show.html.heex:197
 #: lib/vutuv_web/views/user_html.ex:664
 #, elixir-autogen, elixir-format
 msgid "Verified profile"
@@ -1878,14 +1878,14 @@ msgstr ""
 
 #: lib/vutuv_web/open_graph.ex:256
 #: lib/vutuv_web/templates/tag/show.html.heex:13
-#: lib/vutuv_web/templates/user/show.html.heex:276
+#: lib/vutuv_web/templates/user/show.html.heex:303
 #, elixir-autogen, elixir-format
 msgid "follower"
 msgid_plural "followers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:280
+#: lib/vutuv_web/templates/user/show.html.heex:307
 #, elixir-autogen, elixir-format
 msgid "following"
 msgstr ""
@@ -1895,17 +1895,17 @@ msgstr ""
 msgid "submit a bug report"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1055
+#: lib/vutuv_web/live/notification_live/index.ex:1057
 #, elixir-autogen, elixir-format
 msgid "endorsed you for %{tag}."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1050
+#: lib/vutuv_web/live/notification_live/index.ex:1052
 #, elixir-autogen, elixir-format
 msgid "is now connected with you."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1045
+#: lib/vutuv_web/live/notification_live/index.ex:1047
 #, elixir-autogen, elixir-format
 msgid "started following you."
 msgstr ""
@@ -1918,8 +1918,9 @@ msgid "Pagination"
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:3461
-#: lib/vutuv_web/live/organization_live/activity.ex:139
-#: lib/vutuv_web/live/organization_live/show.ex:498
+#: lib/vutuv_web/live/organization_live/activity.ex:146
+#: lib/vutuv_web/live/organization_live/feed.ex:101
+#: lib/vutuv_web/live/organization_live/show.ex:540
 #, elixir-autogen, elixir-format
 msgid "Load more"
 msgstr ""
@@ -2097,7 +2098,7 @@ msgstr ""
 msgid "Delete post"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2785
+#: lib/vutuv_web/components/post_components.ex:2727
 #: lib/vutuv_web/live/post_live/edit.ex:151
 #, elixir-autogen, elixir-format
 msgid "Delete this post permanently?"
@@ -2109,6 +2110,8 @@ msgstr ""
 msgid "Edit post"
 msgstr ""
 
+#: lib/vutuv_web/components/organization_components.ex:227
+#: lib/vutuv_web/live/organization_live/feed.ex:79
 #: lib/vutuv_web/live/post_live/feed.ex:158
 #: lib/vutuv_web/live/post_live/feed.ex:952
 #: lib/vutuv_web/live/shell_live.ex:526
@@ -2138,8 +2141,8 @@ msgstr ""
 msgid "Hide this post from…"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2739
-#: lib/vutuv_web/components/post_components.ex:2741
+#: lib/vutuv_web/components/post_components.ex:2681
+#: lib/vutuv_web/components/post_components.ex:2683
 #, elixir-autogen, elixir-format
 msgid "Limited audience"
 msgstr ""
@@ -2175,7 +2178,7 @@ msgstr ""
 msgid "People who don't follow me"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:406
+#: lib/vutuv_web/live/admin/screenshot_live.ex:427
 #: lib/vutuv_web/live/post_live/composer.ex:1815
 #: lib/vutuv_web/views/admin/moderation_html.ex:26
 #, elixir-autogen, elixir-format
@@ -2187,31 +2190,31 @@ msgstr ""
 msgid "Post deleted successfully."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/post_doc.ex:198
+#: lib/vutuv_web/agent_docs/post_doc.ex:205
 #: lib/vutuv_web/controllers/post_controller.ex:60
 #: lib/vutuv_web/controllers/post_controller.ex:69
 #: lib/vutuv_web/controllers/user_controller.ex:77
 #: lib/vutuv_web/gettext_extraction_anchors.ex:83
 #: lib/vutuv_web/live/admin/dashboard_live.ex:155
 #: lib/vutuv_web/live/fediverse_account_live.ex:382
-#: lib/vutuv_web/live/notification_live/index.ex:876
-#: lib/vutuv_web/live/organization_live/show.ex:425
+#: lib/vutuv_web/live/notification_live/index.ex:878
+#: lib/vutuv_web/live/organization_live/show.ex:467
 #: lib/vutuv_web/live/post_live/saved.ex:495
-#: lib/vutuv_web/live/search_live.ex:200
-#: lib/vutuv_web/live/search_live.ex:530
+#: lib/vutuv_web/live/search_live.ex:205
+#: lib/vutuv_web/live/search_live.ex:551
 #: lib/vutuv_web/templates/settings/preferences.html.heex:118
 #: lib/vutuv_web/views/admin/report_html.ex:35
 #, elixir-autogen, elixir-format
 msgid "Posts"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3172
-#: lib/vutuv_web/components/post_components.ex:3176
+#: lib/vutuv_web/components/post_components.ex:3114
+#: lib/vutuv_web/components/post_components.ex:3118
 #, elixir-autogen, elixir-format
 msgid "Read more"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3173
+#: lib/vutuv_web/components/post_components.ex:3115
 #: lib/vutuv_web/live/fediverse_account_live.ex:320
 #, elixir-autogen, elixir-format
 msgid "Show less"
@@ -2219,8 +2222,8 @@ msgstr ""
 
 #: lib/vutuv_web/components/fediverse_components.ex:252
 #: lib/vutuv_web/components/job_exclusion_components.ex:194
-#: lib/vutuv_web/components/post_components.ex:1036
-#: lib/vutuv_web/live/admin/screenshot_live.ex:317
+#: lib/vutuv_web/components/post_components.ex:1040
+#: lib/vutuv_web/live/admin/screenshot_live.ex:338
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:700
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:234
 #: lib/vutuv_web/live/organization_live/domains.ex:229
@@ -2301,27 +2304,27 @@ msgstr ""
 msgid "What's new? Markdown is supported."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2736
+#: lib/vutuv_web/components/post_components.ex:2678
 #, elixir-autogen, elixir-format
 msgid "edited"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4380
+#: lib/vutuv_web/components/post_components.ex:4322
 #, elixir-autogen, elixir-format
 msgid "everyone else"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4384
+#: lib/vutuv_web/components/post_components.ex:4326
 #, elixir-autogen, elixir-format
 msgid "logged-out visitors"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4382
+#: lib/vutuv_web/components/post_components.ex:4324
 #, elixir-autogen, elixir-format
 msgid "people who don't follow you"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4383
+#: lib/vutuv_web/components/post_components.ex:4325
 #, elixir-autogen, elixir-format
 msgid "people you don't follow"
 msgstr ""
@@ -2352,7 +2355,7 @@ msgstr ""
 msgid "Posts by %{name}"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:536
+#: lib/vutuv_web/templates/user/show.html.heex:563
 #, elixir-autogen, elixir-format
 msgid "View all %{count} posts"
 msgstr ""
@@ -2362,15 +2365,15 @@ msgstr ""
 msgid "All posts"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1583
-#: lib/vutuv_web/components/post_components.ex:4464
+#: lib/vutuv_web/components/post_components.ex:1587
+#: lib/vutuv_web/components/post_components.ex:4406
 #: lib/vutuv_web/components/ui.ex:2851
 #: lib/vutuv_web/views/user_html.ex:333
 #, elixir-autogen, elixir-format
 msgid "Bookmark"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:982
+#: lib/vutuv_web/agent_docs/markdown.ex:996
 #: lib/vutuv_web/live/post_live/saved.ex:175
 #: lib/vutuv_web/live/post_live/saved.ex:488
 #: lib/vutuv_web/live/shell_live.ex:645
@@ -2381,18 +2384,18 @@ msgstr ""
 msgid "Bookmarks"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1547
-#: lib/vutuv_web/components/post_components.ex:4687
+#: lib/vutuv_web/components/post_components.ex:1551
+#: lib/vutuv_web/components/post_components.ex:4629
 #: lib/vutuv_web/components/ui.ex:2837
-#: lib/vutuv_web/live/notification_live/index.ex:1023
+#: lib/vutuv_web/live/notification_live/index.ex:1025
 #: lib/vutuv_web/views/user_html.ex:343
 #, elixir-autogen, elixir-format
 msgid "Like"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:981
-#: lib/vutuv_web/components/post_components.ex:4696
-#: lib/vutuv_web/live/notification_live/index.ex:956
+#: lib/vutuv_web/agent_docs/markdown.ex:995
+#: lib/vutuv_web/components/post_components.ex:4638
+#: lib/vutuv_web/live/notification_live/index.ex:958
 #: lib/vutuv_web/live/post_live/saved.ex:174
 #: lib/vutuv_web/live/post_live/saved.ex:485
 #: lib/vutuv_web/live/shell_live.ex:714
@@ -2413,39 +2416,39 @@ msgstr ""
 msgid "Nothing here yet. Posts you like show up here."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4453
+#: lib/vutuv_web/components/post_components.ex:4395
 #, elixir-autogen, elixir-format
 msgid "Only public posts can be reposted."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1583
-#: lib/vutuv_web/components/post_components.ex:4464
+#: lib/vutuv_web/components/post_components.ex:1587
+#: lib/vutuv_web/components/post_components.ex:4406
 #: lib/vutuv_web/live/post_live/saved.ex:775
 #: lib/vutuv_web/views/user_html.ex:333
 #, elixir-autogen, elixir-format
 msgid "Remove bookmark"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1571
-#: lib/vutuv_web/components/post_components.ex:4450
+#: lib/vutuv_web/components/post_components.ex:1575
+#: lib/vutuv_web/components/post_components.ex:4392
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:169
 #, elixir-autogen, elixir-format
 msgid "Repost"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1761
-#: lib/vutuv_web/components/post_components.ex:3752
+#: lib/vutuv_web/components/post_components.ex:1765
+#: lib/vutuv_web/components/post_components.ex:3694
 #, elixir-autogen, elixir-format
 msgid "Reposted by %{name}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1571
-#: lib/vutuv_web/components/post_components.ex:4450
+#: lib/vutuv_web/components/post_components.ex:1575
+#: lib/vutuv_web/components/post_components.ex:4392
 #, elixir-autogen, elixir-format
 msgid "Undo repost"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4687
+#: lib/vutuv_web/components/post_components.ex:4629
 #: lib/vutuv_web/live/post_live/saved.ex:774
 #: lib/vutuv_web/views/user_html.ex:343
 #, elixir-autogen, elixir-format
@@ -2456,8 +2459,10 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:1936
 #: lib/vutuv_web/components/ui.ex:1936
 #: lib/vutuv_web/components/ui.ex:2073
-#: lib/vutuv_web/live/organization_live/show.ex:365
+#: lib/vutuv_web/live/organization_live/following.ex:138
+#: lib/vutuv_web/live/organization_live/show.ex:407
 #: lib/vutuv_web/live/post_live/feed.ex:1187
+#: lib/vutuv_web/templates/followee/index.html.heex:44
 #: lib/vutuv_web/templates/settings/followed_tags.html.heex:41
 #, elixir-autogen, elixir-format
 msgid "Unfollow"
@@ -2468,27 +2473,27 @@ msgstr ""
 msgid "Welcome to vutuv!"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4740
+#: lib/vutuv_web/components/post_components.ex:4682
 #, elixir-autogen, elixir-format
 msgid "Only public posts can be answered."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:379
-#: lib/vutuv_web/live/notification_live/index.ex:957
+#: lib/vutuv_web/components/post_components.ex:383
+#: lib/vutuv_web/live/notification_live/index.ex:959
 #, elixir-autogen, elixir-format
 msgid "Replies"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1558
-#: lib/vutuv_web/components/post_components.ex:4723
-#: lib/vutuv_web/components/post_components.ex:4724
-#: lib/vutuv_web/live/notification_live/index.ex:1020
+#: lib/vutuv_web/components/post_components.ex:1562
+#: lib/vutuv_web/components/post_components.ex:4665
+#: lib/vutuv_web/components/post_components.ex:4666
+#: lib/vutuv_web/live/notification_live/index.ex:1022
 #: lib/vutuv_web/live/post_live/reply.ex:36
 #, elixir-autogen, elixir-format
 msgid "Reply"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2703
+#: lib/vutuv_web/components/post_components.ex:2645
 #, elixir-autogen, elixir-format
 msgid "Reply to a deleted post"
 msgstr ""
@@ -2504,12 +2509,12 @@ msgstr ""
 msgid "This post has been reposted or answered. Its audience stays public while reposts or replies exist; you can still delete the post."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1239
+#: lib/vutuv_web/live/notification_live/index.ex:1241
 #, elixir-autogen, elixir-format
 msgid "replied to your post."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2197
+#: lib/vutuv_web/components/post_components.ex:2201
 #: lib/vutuv_web/live/post_live/remote_post_reply.ex:59
 #: lib/vutuv_web/live/post_live/remote_reply.ex:58
 #: lib/vutuv_web/live/post_live/reply.ex:50
@@ -2517,14 +2522,14 @@ msgstr ""
 msgid "Reply to %{handle}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2679
+#: lib/vutuv_web/components/post_components.ex:2621
 #, elixir-autogen, elixir-format
 msgid "Reply to a now-deleted post by %{handle}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2673
-#: lib/vutuv_web/components/post_components.ex:2695
-#: lib/vutuv_web/components/post_components.ex:2698
+#: lib/vutuv_web/components/post_components.ex:2615
+#: lib/vutuv_web/components/post_components.ex:2637
+#: lib/vutuv_web/components/post_components.ex:2640
 #, elixir-autogen, elixir-format
 msgid "Replying to %{handle}"
 msgstr ""
@@ -2690,45 +2695,45 @@ msgstr ""
 
 #: lib/vutuv_web/templates/url/manage.html.heex:8
 #: lib/vutuv_web/templates/url/new.html.heex:5
-#: lib/vutuv_web/templates/user/show.html.heex:858
+#: lib/vutuv_web/templates/user/show.html.heex:885
 #, elixir-autogen, elixir-format
 msgid "Add a link"
 msgstr ""
 
 #: lib/vutuv_web/templates/phone_number/manage.html.heex:8
 #: lib/vutuv_web/templates/phone_number/new.html.heex:5
-#: lib/vutuv_web/templates/user/show.html.heex:1215
+#: lib/vutuv_web/templates/user/show.html.heex:1242
 #, elixir-autogen, elixir-format
 msgid "Add a phone number"
 msgstr ""
 
 #: lib/vutuv_web/templates/address/manage.html.heex:8
 #: lib/vutuv_web/templates/address/new.html.heex:5
-#: lib/vutuv_web/templates/user/show.html.heex:1473
+#: lib/vutuv_web/templates/user/show.html.heex:1500
 #, elixir-autogen, elixir-format
 msgid "Add an address"
 msgstr ""
 
 #: lib/vutuv_web/templates/email/manage.html.heex:8
 #: lib/vutuv_web/templates/email/new.html.heex:5
-#: lib/vutuv_web/templates/user/show.html.heex:1143
+#: lib/vutuv_web/templates/user/show.html.heex:1170
 #, elixir-autogen, elixir-format
 msgid "Add an email address"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1094
+#: lib/vutuv_web/templates/user/show.html.heex:1121
 #, elixir-autogen, elixir-format
 msgid "Add personal details"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:585
+#: lib/vutuv_web/templates/user/show.html.heex:612
 #: lib/vutuv_web/templates/work_experience/manage.html.heex:8
 #: lib/vutuv_web/templates/work_experience/new.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Add work experience"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:447
+#: lib/vutuv_web/templates/user/show.html.heex:474
 #, elixir-autogen, elixir-format
 msgid "Write your first post"
 msgstr ""
@@ -2741,13 +2746,13 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/privacy.html.heex:179
 #: lib/vutuv_web/templates/settings/security.html.heex:20
 #: lib/vutuv_web/templates/settings/security.html.heex:219
-#: lib/vutuv_web/templates/user/show.html.heex:576
+#: lib/vutuv_web/templates/user/show.html.heex:603
 #, elixir-autogen, elixir-format
 msgid "Manage"
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/feed.ex:977
-#: lib/vutuv_web/templates/user/show.html.heex:447
+#: lib/vutuv_web/templates/user/show.html.heex:474
 #, elixir-autogen, elixir-format
 msgid "Write a post"
 msgstr ""
@@ -2778,10 +2783,10 @@ msgid_plural "+%{formatted} more tags"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:533
-#: lib/vutuv_web/agent_docs/text.ex:499
+#: lib/vutuv_web/agent_docs/markdown.ex:547
+#: lib/vutuv_web/agent_docs/text.ex:512
 #: lib/vutuv_web/controllers/connection_controller.ex:37
-#: lib/vutuv_web/live/notification_live/index.ex:955
+#: lib/vutuv_web/live/notification_live/index.ex:957
 #: lib/vutuv_web/templates/connection/index.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Connections"
@@ -2817,7 +2822,7 @@ msgstr ""
 msgid "This post is for the connections of %{name}"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:289
+#: lib/vutuv_web/templates/user/show.html.heex:316
 #: lib/vutuv_web/views/admin/moderation_html.ex:81
 #, elixir-autogen, elixir-format
 msgid "connection"
@@ -2825,7 +2830,7 @@ msgid_plural "connections"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:4381
+#: lib/vutuv_web/components/post_components.ex:4323
 #, elixir-autogen, elixir-format
 msgid "people who aren't your connections"
 msgstr ""
@@ -2835,25 +2840,25 @@ msgstr ""
 msgid "Open someone's profile to message them."
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:220
-#: lib/vutuv_web/live/notification_live/index.ex:1035
-#: lib/vutuv_web/live/organization_live/activity.ex:92
+#: lib/vutuv_web/components/organization_components.ex:221
+#: lib/vutuv_web/live/notification_live/index.ex:1037
+#: lib/vutuv_web/live/organization_live/activity.ex:99
 #, elixir-autogen, elixir-format
 msgid "Activity"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1026
+#: lib/vutuv_web/live/notification_live/index.ex:1028
 #, elixir-autogen, elixir-format
 msgid "Connection"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1019
+#: lib/vutuv_web/live/notification_live/index.ex:1021
 #, elixir-autogen, elixir-format
 msgid "Endorsement"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1018
-#: lib/vutuv_web/templates/user/show.html.heex:906
+#: lib/vutuv_web/live/notification_live/index.ex:1020
+#: lib/vutuv_web/templates/user/show.html.heex:933
 #, elixir-autogen, elixir-format
 msgid "Follower"
 msgid_plural "Followers"
@@ -2865,7 +2870,7 @@ msgstr[1] ""
 msgid "Welcome to vutuv, %{name}!"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1052
+#: lib/vutuv_web/live/notification_live/index.ex:1054
 #, elixir-autogen, elixir-format
 msgid "liked your post."
 msgstr ""
@@ -2897,12 +2902,12 @@ msgstr ""
 msgid "(no text)"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1275
+#: lib/vutuv_web/live/notification_live/index.ex:1277
 #, elixir-autogen, elixir-format
 msgid "A report about your content was confirmed."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1276
+#: lib/vutuv_web/live/notification_live/index.ex:1278
 #, elixir-autogen, elixir-format
 msgid "A report about your content was dismissed; it is visible again."
 msgstr ""
@@ -2932,8 +2937,8 @@ msgstr ""
 msgid "Bullying or harassment"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:322
-#: lib/vutuv_web/agent_docs/text.ex:302
+#: lib/vutuv_web/agent_docs/markdown.ex:323
+#: lib/vutuv_web/agent_docs/text.ex:303
 #: lib/vutuv_web/controllers/page_controller.ex:83
 #: lib/vutuv_web/templates/layout/app.html.heex:91
 #: lib/vutuv_web/templates/page/community.html.heex:4
@@ -3008,7 +3013,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/admin/moderation_case_live.ex:136
 #: lib/vutuv_web/live/admin/moderation_live.ex:30
-#: lib/vutuv_web/live/notification_live/index.ex:1027
+#: lib/vutuv_web/live/notification_live/index.ex:1029
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:46
 #: lib/vutuv_web/templates/admin/moderation/reporters.html.heex:5
 #, elixir-autogen, elixir-format
@@ -3082,13 +3087,13 @@ msgstr ""
 msgid "Nudity, violence or other content that does not belong on vutuv."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1183
-#: lib/vutuv_web/templates/user/show.html.heex:1184
+#: lib/vutuv_web/templates/user/show.html.heex:1210
+#: lib/vutuv_web/templates/user/show.html.heex:1211
 #, elixir-autogen, elixir-format
 msgid "Only visible to you"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2649
+#: lib/vutuv_web/components/post_components.ex:2591
 #, elixir-autogen, elixir-format
 msgid "Only you can see this post while a report about it is handled."
 msgstr ""
@@ -3114,7 +3119,7 @@ msgstr ""
 msgid "Opened"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:250
+#: lib/vutuv_web/components/organization_components.ex:263
 #: lib/vutuv_web/live/admin/api_app_live.ex:72
 #: lib/vutuv_web/live/admin/deliverability_live.ex:171
 #: lib/vutuv_web/live/admin/moderation_live.ex:56
@@ -3163,11 +3168,11 @@ msgstr ""
 msgid "Remove it. That settles the report, no questions asked."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1046
-#: lib/vutuv_web/components/post_components.ex:2022
-#: lib/vutuv_web/components/post_components.ex:2809
-#: lib/vutuv_web/live/organization_live/show.ex:408
-#: lib/vutuv_web/templates/user/show.html.heex:192
+#: lib/vutuv_web/components/post_components.ex:1050
+#: lib/vutuv_web/components/post_components.ex:2026
+#: lib/vutuv_web/components/post_components.ex:2751
+#: lib/vutuv_web/live/organization_live/show.ex:450
+#: lib/vutuv_web/templates/user/show.html.heex:219
 #, elixir-autogen, elixir-format
 msgid "Report"
 msgstr ""
@@ -3297,7 +3302,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/job_live.ex:365
 #: lib/vutuv_web/live/admin/moderation_live.ex:53
 #: lib/vutuv_web/live/admin/organization_live.ex:246
-#: lib/vutuv_web/live/admin/screenshot_live.ex:404
+#: lib/vutuv_web/live/admin/screenshot_live.ex:425
 #: lib/vutuv_web/live/admin/user_live.ex:299
 #: lib/vutuv_web/templates/admin/account/index.html.heex:57
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:59
@@ -3432,12 +3437,12 @@ msgstr ""
 msgid "You cannot report your own content."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1278
+#: lib/vutuv_web/live/notification_live/index.ex:1280
 #, elixir-autogen, elixir-format
 msgid "You deleted reported content; the case is closed."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1277
+#: lib/vutuv_web/live/notification_live/index.ex:1279
 #, elixir-autogen, elixir-format
 msgid "You revised reported content; the case is closed."
 msgstr ""
@@ -3447,7 +3452,7 @@ msgstr ""
 msgid "Your content was reported"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1279
+#: lib/vutuv_web/live/notification_live/index.ex:1281
 #, elixir-autogen, elixir-format
 msgid "Your content was reported and is hidden while the report is handled."
 msgstr ""
@@ -3631,7 +3636,7 @@ msgstr ""
 msgid "Open the profile"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1303
+#: lib/vutuv_web/live/notification_live/index.ex:1305
 #, elixir-autogen, elixir-format
 msgid "Our admins found your report unfounded; the paused connection between you two is restored."
 msgstr ""
@@ -3656,7 +3661,7 @@ msgstr ""
 msgid "Report filed"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1029
+#: lib/vutuv_web/live/notification_live/index.ex:1031
 #, elixir-autogen, elixir-format
 msgid "Report protection"
 msgstr ""
@@ -3731,7 +3736,7 @@ msgstr ""
 msgid "Waiting for the owner"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1308
+#: lib/vutuv_web/live/notification_live/index.ex:1310
 #, elixir-autogen, elixir-format
 msgid "Your report paused the connection between you two - no contact in either direction for now. If our admins find the report unfounded, this is undone."
 msgstr ""
@@ -3816,12 +3821,12 @@ msgstr ""
 msgid "Scroll inside the frame, or click to open the full image."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:625
+#: lib/vutuv_web/agent_docs/markdown.ex:639
 #, elixir-autogen, elixir-format
 msgid "%{count} endorsements"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1103
+#: lib/vutuv_web/agent_docs/markdown.ex:1117
 #, elixir-autogen, elixir-format
 msgid "%{count} on this page, use ?page=N"
 msgstr ""
@@ -3834,17 +3839,17 @@ msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:82
 #: lib/vutuv_web/agent_docs/markdown.ex:183
-#: lib/vutuv_web/agent_docs/markdown.ex:196
-#: lib/vutuv_web/agent_docs/markdown.ex:944
+#: lib/vutuv_web/agent_docs/markdown.ex:197
+#: lib/vutuv_web/agent_docs/markdown.ex:958
 #: lib/vutuv_web/agent_docs/text.ex:79
 #: lib/vutuv_web/agent_docs/text.ex:167
-#: lib/vutuv_web/agent_docs/text.ex:180
-#: lib/vutuv_web/agent_docs/text.ex:643
+#: lib/vutuv_web/agent_docs/text.ex:181
+#: lib/vutuv_web/agent_docs/text.ex:656
 #, elixir-autogen, elixir-format
 msgid "%{count} total"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:48
+#: lib/vutuv_web/agent_docs/list_docs.ex:49
 #, elixir-autogen, elixir-format
 msgid "Followers of %{name}"
 msgstr ""
@@ -3858,49 +3863,49 @@ msgstr ""
 msgid "Images"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:962
-#: lib/vutuv_web/agent_docs/text.ex:654
+#: lib/vutuv_web/agent_docs/markdown.ex:976
+#: lib/vutuv_web/agent_docs/text.ex:667
 #, elixir-autogen, elixir-format
 msgid "In reply to a deleted post by %{name}."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:959
-#: lib/vutuv_web/agent_docs/text.ex:651
+#: lib/vutuv_web/agent_docs/markdown.ex:973
+#: lib/vutuv_web/agent_docs/text.ex:664
 #, elixir-autogen, elixir-format
 msgid "In reply to a deleted post."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:966
-#: lib/vutuv_web/agent_docs/markdown.ex:1180
-#: lib/vutuv_web/agent_docs/text.ex:657
-#: lib/vutuv_web/agent_docs/text.ex:701
+#: lib/vutuv_web/agent_docs/markdown.ex:980
+#: lib/vutuv_web/agent_docs/markdown.ex:1194
+#: lib/vutuv_web/agent_docs/text.ex:670
+#: lib/vutuv_web/agent_docs/text.ex:714
 #, elixir-autogen, elixir-format
 msgid "In reply to a post by %{name}."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:468
-#: lib/vutuv_web/agent_docs/text.ex:462
+#: lib/vutuv_web/agent_docs/markdown.ex:482
+#: lib/vutuv_web/agent_docs/text.ex:475
 #, elixir-autogen, elixir-format
 msgid "Member since"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:212
-#: lib/vutuv_web/agent_docs/text.ex:196
+#: lib/vutuv_web/agent_docs/markdown.ex:213
+#: lib/vutuv_web/agent_docs/text.ex:197
 #, elixir-autogen, elixir-format
 msgid "Most endorsed members"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:151
+#: lib/vutuv_web/agent_docs/list_docs.ex:174
 #, elixir-autogen, elixir-format
 msgid "Most followed members"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:49
+#: lib/vutuv_web/agent_docs/list_docs.ex:50
 #, elixir-autogen, elixir-format
 msgid "People %{name} follows"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/post_doc.ex:199
+#: lib/vutuv_web/agent_docs/post_doc.ex:206
 #, elixir-autogen, elixir-format
 msgid "Post archive of %{name}"
 msgstr ""
@@ -3909,8 +3914,8 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/markdown.ex:141
 #: lib/vutuv_web/agent_docs/text.ex:97
 #: lib/vutuv_web/agent_docs/text.ex:128
-#: lib/vutuv_web/live/admin/screenshot_live.ex:370
-#: lib/vutuv_web/live/admin/screenshot_live.ex:379
+#: lib/vutuv_web/live/admin/screenshot_live.ex:391
+#: lib/vutuv_web/live/admin/screenshot_live.ex:400
 #: lib/vutuv_web/templates/post/show.html.heex:10
 #, elixir-autogen, elixir-format
 msgid "Post by %{name}"
@@ -3922,23 +3927,23 @@ msgstr ""
 msgid "Posts (%{count} total)"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:462
-#: lib/vutuv_web/agent_docs/text.ex:456
+#: lib/vutuv_web/agent_docs/markdown.ex:476
+#: lib/vutuv_web/agent_docs/text.ex:469
 #, elixir-autogen, elixir-format
 msgid "Verified profile: yes"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:913
+#: lib/vutuv_web/agent_docs/markdown.ex:927
 #, elixir-autogen, elixir-format
 msgid "reposted by %{name}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:813
+#: lib/vutuv_web/agent_docs/markdown.ex:827
 #, elixir-autogen, elixir-format
 msgid "today"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:814
+#: lib/vutuv_web/agent_docs/markdown.ex:828
 #, elixir-autogen, elixir-format
 msgid "until %{date}"
 msgstr ""
@@ -3948,7 +3953,7 @@ msgstr ""
 msgid "This page in %{language}: %{url}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:50
+#: lib/vutuv_web/agent_docs/list_docs.ex:51
 #, elixir-autogen, elixir-format
 msgid "Connections of %{name}"
 msgstr ""
@@ -4013,8 +4018,8 @@ msgstr ""
 msgid "Billing name"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:336
-#: lib/vutuv_web/agent_docs/text.ex:310
+#: lib/vutuv_web/agent_docs/markdown.ex:337
+#: lib/vutuv_web/agent_docs/text.ex:311
 #, elixir-autogen, elixir-format
 msgid "Book online (login required): %{url}"
 msgstr ""
@@ -4067,8 +4072,8 @@ msgstr ""
 msgid "Markdown is supported. At most %{max} characters."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:326
-#: lib/vutuv_web/agent_docs/text.ex:306
+#: lib/vutuv_web/agent_docs/markdown.ex:327
+#: lib/vutuv_web/agent_docs/text.ex:307
 #: lib/vutuv_web/templates/ad/index.html.heex:43
 #, elixir-autogen, elixir-format
 msgid "Next available day"
@@ -4084,8 +4089,8 @@ msgstr ""
 msgid "One text-only ad per calendar day, seen by every visitor."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:323
-#: lib/vutuv_web/agent_docs/text.ex:303
+#: lib/vutuv_web/agent_docs/markdown.ex:324
+#: lib/vutuv_web/agent_docs/text.ex:304
 #: lib/vutuv_web/templates/ad/index.html.heex:35
 #: lib/vutuv_web/templates/ad/preview.html.heex:32
 #: lib/vutuv_web/views/admin/ad_html.ex:59
@@ -4299,14 +4304,14 @@ msgstr ""
 msgid "deleted account"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:328
-#: lib/vutuv_web/agent_docs/text.ex:308
+#: lib/vutuv_web/agent_docs/markdown.ex:329
+#: lib/vutuv_web/agent_docs/text.ex:309
 #, elixir-autogen, elixir-format
 msgid "Already booked"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:324
-#: lib/vutuv_web/agent_docs/text.ex:304
+#: lib/vutuv_web/agent_docs/markdown.ex:325
+#: lib/vutuv_web/agent_docs/text.ex:305
 #, elixir-autogen, elixir-format
 msgid "Booking window"
 msgstr ""
@@ -4457,28 +4462,28 @@ msgstr ""
 msgid "Undeliverable"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:283
+#: lib/vutuv_web/live/search_live.ex:288
 #, elixir-autogen, elixir-format
 msgid "You can search for a name, email, or tag, or for words in public posts."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:278
+#: lib/vutuv_web/live/search_live.ex:283
 #, elixir-autogen, elixir-format
 msgid "Search for people by name, email, or username."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:279
+#: lib/vutuv_web/live/search_live.ex:284
 #, elixir-autogen, elixir-format
 msgid "Search for tags by name."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:280
+#: lib/vutuv_web/live/search_live.ex:285
 #, elixir-autogen, elixir-format
 msgid "Search for words in public posts."
 msgstr ""
 
 #: lib/vutuv_web/templates/block/index.html.heex:36
-#: lib/vutuv_web/templates/user/show.html.heex:194
+#: lib/vutuv_web/templates/user/show.html.heex:221
 #, elixir-autogen, elixir-format
 msgid "Block"
 msgstr ""
@@ -4525,7 +4530,7 @@ msgid "You have not blocked anyone."
 msgstr ""
 
 #: lib/vutuv_web/controllers/block_controller.ex:89
-#: lib/vutuv_web/live/user_profile_live.ex:290
+#: lib/vutuv_web/live/user_profile_live.ex:304
 #, elixir-autogen, elixir-format
 msgid "You unblocked @%{slug}."
 msgstr ""
@@ -4540,9 +4545,11 @@ msgstr ""
 msgid "Find members"
 msgstr ""
 
+#: lib/vutuv_web/components/organization_components.ex:233
+#: lib/vutuv_web/live/organization_live/following.ex:95
 #: lib/vutuv_web/templates/followee/index.html.heex:4
-#: lib/vutuv_web/templates/followee/index.html.heex:9
-#: lib/vutuv_web/templates/user/show.html.heex:928
+#: lib/vutuv_web/templates/followee/index.html.heex:53
+#: lib/vutuv_web/templates/user/show.html.heex:955
 #, elixir-autogen, elixir-format
 msgid "Follows"
 msgstr ""
@@ -4557,12 +4564,12 @@ msgstr ""
 msgid "Legal notice"
 msgstr ""
 
-#: lib/vutuv_web/templates/follower/index.html.heex:17
+#: lib/vutuv_web/templates/follower/index.html.heex:48
 #, elixir-autogen, elixir-format
 msgid "No followers yet."
 msgstr ""
 
-#: lib/vutuv_web/templates/followee/index.html.heex:17
+#: lib/vutuv_web/templates/followee/index.html.heex:61
 #, elixir-autogen, elixir-format
 msgid "Not following anyone yet."
 msgstr ""
@@ -4572,99 +4579,99 @@ msgstr ""
 msgid "This area is reserved for administrators."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:562
+#: lib/vutuv_web/live/search_live.ex:599
 #, elixir-autogen, elixir-format
 msgid "No results for \"%{query}\""
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:499
+#: lib/vutuv_web/live/search_live.ex:520
 #, elixir-autogen, elixir-format
 msgid "Not an exact match, but sounds like your search."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:351
-#: lib/vutuv_web/agent_docs/text.ex:372
+#: lib/vutuv_web/agent_docs/markdown.ex:365
+#: lib/vutuv_web/agent_docs/text.ex:385
 #: lib/vutuv_web/components/saved_search_components.ex:57
 #: lib/vutuv_web/components/ui.ex:516
-#: lib/vutuv_web/live/notification_live/index.ex:877
-#: lib/vutuv_web/live/organization_live/show.ex:508
+#: lib/vutuv_web/live/notification_live/index.ex:879
+#: lib/vutuv_web/live/organization_live/show.ex:550
 #: lib/vutuv_web/live/post_live/saved.ex:498
-#: lib/vutuv_web/live/search_live.ex:198
-#: lib/vutuv_web/live/search_live.ex:472
+#: lib/vutuv_web/live/search_live.ex:203
+#: lib/vutuv_web/live/search_live.ex:493
 #, elixir-autogen, elixir-format
 msgid "People"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:425
+#: lib/vutuv_web/live/search_live.ex:446
 #, elixir-autogen, elixir-format
 msgid "Results appear once you have typed at least three letters."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:496
+#: lib/vutuv_web/live/search_live.ex:517
 #, elixir-autogen, elixir-format
 msgid "Similar names"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:376
-#: lib/vutuv_web/components/post_components.ex:395
+#: lib/vutuv_web/components/post_components.ex:380
+#: lib/vutuv_web/components/post_components.ex:399
 #: lib/vutuv_web/live/admin/job_live.ex:159
 #: lib/vutuv_web/live/admin/organization_live.ex:163
-#: lib/vutuv_web/live/notification_live/index.ex:875
-#: lib/vutuv_web/live/search_live.ex:197
+#: lib/vutuv_web/live/notification_live/index.ex:877
+#: lib/vutuv_web/live/search_live.ex:202
 #: lib/vutuv_web/views/qualification_html.ex:90
 #, elixir-autogen, elixir-format
 msgid "All"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:408
+#: lib/vutuv_web/live/search_live.ex:429
 #, elixir-autogen, elixir-format
 msgid "Exact matches only"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:269
+#: lib/vutuv_web/live/search_live.ex:274
 #, elixir-autogen, elixir-format
 msgid "in quotes: exact matches only, no similar names"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:266
+#: lib/vutuv_web/live/search_live.ex:271
 #, elixir-autogen, elixir-format
 msgid "searches usernames"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:258
+#: lib/vutuv_web/live/search_live.ex:263
 #, elixir-autogen, elixir-format
 msgid "only people with an address in this city"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:257
+#: lib/vutuv_web/live/search_live.ex:262
 #, elixir-autogen, elixir-format
 msgid "city:koblenz"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:247
+#: lib/vutuv_web/live/search_live.ex:252
 #, elixir-autogen, elixir-format
 msgid "first:stefan"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:268
+#: lib/vutuv_web/live/search_live.ex:273
 #, elixir-autogen, elixir-format
 msgid "miller"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:248
+#: lib/vutuv_web/live/search_live.ex:253
 #, elixir-autogen, elixir-format
 msgid "searches first names only (last: for last names)"
 msgstr ""
 
 #: lib/vutuv_web/live/job_board_live.ex:388
 #: lib/vutuv_web/live/tag_new_live.ex:48
-#: lib/vutuv_web/live/user_profile_live.ex:1259
-#: lib/vutuv_web/templates/user/show.html.heex:549
+#: lib/vutuv_web/live/user_profile_live.ex:1295
+#: lib/vutuv_web/templates/user/show.html.heex:576
 #, elixir-autogen, elixir-format
 msgid "Add a tag"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:385
+#: lib/vutuv_web/live/search_live.ex:406
 #, elixir-autogen, elixir-format
 msgid "Search for people, tags, or posts"
 msgstr ""
@@ -4708,8 +4715,8 @@ msgstr ""
 msgid "Edit your profile and its sections"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:265
-#: lib/vutuv_web/agent_docs/text.ex:248
+#: lib/vutuv_web/agent_docs/markdown.ex:266
+#: lib/vutuv_web/agent_docs/text.ex:249
 #: lib/vutuv_web/live/admin/job_live.ex:393
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:142
 #: lib/vutuv_web/live/job_posting_live/show.ex:136
@@ -5301,8 +5308,8 @@ msgstr ""
 msgid "Account menu"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:300
-#: lib/vutuv_web/live/admin/screenshot_live.ex:410
+#: lib/vutuv_web/live/admin/screenshot_live.ex:321
+#: lib/vutuv_web/live/admin/screenshot_live.ex:431
 #: lib/vutuv_web/templates/layout/app.html.heex:128
 #, elixir-autogen, elixir-format
 msgid "Actions"
@@ -5366,17 +5373,17 @@ msgstr ""
 msgid "Your profile"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:342
+#: lib/vutuv_web/templates/user/show.html.heex:369
 #, elixir-autogen, elixir-format
 msgid "Complete your profile"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:364
+#: lib/vutuv_web/templates/user/show.html.heex:391
 #, elixir-autogen, elixir-format
 msgid "A few quick steps so people can find and recognize you."
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:1265
+#: lib/vutuv_web/live/user_profile_live.ex:1301
 #, elixir-autogen, elixir-format
 msgid "Add a profile photo"
 msgstr ""
@@ -5402,10 +5409,10 @@ msgstr ""
 msgid "Footer navigation"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2872
-#: lib/vutuv_web/components/post_components.ex:2924
-#: lib/vutuv_web/components/post_components.ex:3316
-#: lib/vutuv_web/live/notification_live/index.ex:680
+#: lib/vutuv_web/components/post_components.ex:2814
+#: lib/vutuv_web/components/post_components.ex:2866
+#: lib/vutuv_web/components/post_components.ex:3258
+#: lib/vutuv_web/live/notification_live/index.ex:682
 #: lib/vutuv_web/live/post_live/feed.ex:1260
 #: lib/vutuv_web/views/user_html.ex:111
 #, elixir-autogen, elixir-format
@@ -5532,7 +5539,7 @@ msgstr ""
 msgid "Your name"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:509
+#: lib/vutuv_web/live/notification_live/index.ex:511
 #, elixir-autogen, elixir-format
 msgid "Your post"
 msgstr ""
@@ -5628,7 +5635,7 @@ msgid "Apps & API"
 msgstr ""
 
 #: lib/vutuv_web/controllers/user_tag_controller.ex:127
-#: lib/vutuv_web/live/notification_live/index.ex:958
+#: lib/vutuv_web/live/notification_live/index.ex:960
 #: lib/vutuv_web/templates/settings/notifications.html.heex:51
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:6
 #: lib/vutuv_web/templates/user_tag/show.html.heex:17
@@ -5939,7 +5946,7 @@ msgid "Add a passkey"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1114
-#: lib/vutuv_web/live/admin/screenshot_live.ex:299
+#: lib/vutuv_web/live/admin/screenshot_live.ex:320
 #: lib/vutuv_web/live/fediverse_following_live.ex:273
 #: lib/vutuv_web/views/settings_html.ex:293
 #, elixir-autogen, elixir-format
@@ -6037,7 +6044,7 @@ msgstr ""
 msgid "or"
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:1270
+#: lib/vutuv_web/live/user_profile_live.ex:1306
 #, elixir-autogen, elixir-format
 msgid "Add a tagline"
 msgstr ""
@@ -6052,14 +6059,14 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:296
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:29
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:88
-#: lib/vutuv_web/templates/user/show.html.heex:856
+#: lib/vutuv_web/templates/user/show.html.heex:883
 #, elixir-autogen, elixir-format
 msgid "Link"
 msgid_plural "Links"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:421
+#: lib/vutuv_web/templates/user/show.html.heex:448
 #, elixir-autogen, elixir-format
 msgctxt "profile"
 msgid "Post"
@@ -6073,7 +6080,7 @@ msgstr[1] ""
 msgid "After choosing a file you can reposition and zoom it."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1524
+#: lib/vutuv_web/templates/user/show.html.heex:1551
 #, elixir-autogen, elixir-format
 msgid "Also on"
 msgstr ""
@@ -6117,16 +6124,16 @@ msgstr ""
 msgid "Zoom"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1109
-#: lib/vutuv_web/templates/user/show.html.heex:1119
+#: lib/vutuv_web/templates/user/show.html.heex:1136
+#: lib/vutuv_web/templates/user/show.html.heex:1146
 #, elixir-autogen, elixir-format
 msgid "%{count} year old"
 msgid_plural "%{count} years old"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:512
-#: lib/vutuv_web/agent_docs/text.ex:478
+#: lib/vutuv_web/agent_docs/markdown.ex:526
+#: lib/vutuv_web/agent_docs/text.ex:491
 #, elixir-autogen, elixir-format
 msgid "Age"
 msgstr ""
@@ -6158,12 +6165,12 @@ msgstr ""
 msgid "Jump to a day"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1231
+#: lib/vutuv_web/templates/user/show.html.heex:1258
 #, elixir-autogen, elixir-format
 msgid "Manage emails"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1242
+#: lib/vutuv_web/templates/user/show.html.heex:1269
 #, elixir-autogen, elixir-format
 msgid "Manage phone numbers"
 msgstr ""
@@ -6198,15 +6205,15 @@ msgstr ""
 msgid "Previous day"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:981
-#: lib/vutuv_web/components/post_components.ex:378
+#: lib/vutuv_web/agent_docs/markdown.ex:995
+#: lib/vutuv_web/components/post_components.ex:382
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:185
 #: lib/vutuv_web/views/admin/report_html.ex:36
 #, elixir-autogen, elixir-format
 msgid "Reposts"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1240
+#: lib/vutuv_web/templates/user/show.html.heex:1267
 #, elixir-autogen, elixir-format
 msgid "View all phone numbers"
 msgstr ""
@@ -6260,9 +6267,9 @@ msgstr ""
 msgid "Maps"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1510
-#: lib/vutuv_web/templates/user/show.html.heex:1518
-#: lib/vutuv_web/templates/user/show.html.heex:1530
+#: lib/vutuv_web/templates/user/show.html.heex:1537
+#: lib/vutuv_web/templates/user/show.html.heex:1545
+#: lib/vutuv_web/templates/user/show.html.heex:1557
 #, elixir-autogen, elixir-format
 msgid "Open in %{name}"
 msgstr ""
@@ -6283,7 +6290,7 @@ msgstr ""
 msgid "Endorsed"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:124
+#: lib/vutuv_web/agent_docs/list_docs.ex:147
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:11
 #, elixir-autogen, elixir-format
 msgid "Members who endorsed %{name} for %{tag}"
@@ -6295,15 +6302,15 @@ msgid "No endorsements yet."
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:1757
-#: lib/vutuv_web/live/notification_live/index.ex:614
-#: lib/vutuv_web/live/notification_live/index.ex:629
-#: lib/vutuv_web/live/notification_live/index.ex:767
+#: lib/vutuv_web/live/notification_live/index.ex:616
+#: lib/vutuv_web/live/notification_live/index.ex:631
 #: lib/vutuv_web/live/notification_live/index.ex:769
+#: lib/vutuv_web/live/notification_live/index.ex:771
 #, elixir-autogen, elixir-format
 msgid "and %{count} more"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:957
+#: lib/vutuv_web/agent_docs/markdown.ex:971
 #, elixir-autogen, elixir-format
 msgid "endorsed %{date}"
 msgstr ""
@@ -6592,13 +6599,13 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:2261
 #: lib/vutuv_web/live/fediverse_account_live.ex:369
 #: lib/vutuv_web/templates/settings/filters.html.heex:58
-#: lib/vutuv_web/templates/user/show.html.heex:185
+#: lib/vutuv_web/templates/user/show.html.heex:212
 #, elixir-autogen, elixir-format
 msgid "Mute"
 msgstr ""
 
 #: lib/vutuv_web/controllers/follow_controller.ex:49
-#: lib/vutuv_web/live/user_profile_live.ex:231
+#: lib/vutuv_web/live/user_profile_live.ex:245
 #, elixir-autogen, elixir-format
 msgid "Muted. Their posts no longer appear in your feed."
 msgstr ""
@@ -6616,13 +6623,13 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:2260
 #: lib/vutuv_web/live/fediverse_account_live.ex:367
 #: lib/vutuv_web/templates/settings/filters.html.heex:81
-#: lib/vutuv_web/templates/user/show.html.heex:185
+#: lib/vutuv_web/templates/user/show.html.heex:212
 #, elixir-autogen, elixir-format
 msgid "Unmute"
 msgstr ""
 
 #: lib/vutuv_web/controllers/follow_controller.ex:51
-#: lib/vutuv_web/live/user_profile_live.ex:233
+#: lib/vutuv_web/live/user_profile_live.ex:247
 #, elixir-autogen, elixir-format
 msgid "Unmuted. Their posts appear in your feed again."
 msgstr ""
@@ -6637,7 +6644,7 @@ msgstr ""
 msgid "Go to profile to follow"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2806
+#: lib/vutuv_web/components/post_components.ex:2748
 #, elixir-autogen, elixir-format
 msgid "Mute @%{handle}"
 msgstr ""
@@ -6647,7 +6654,7 @@ msgstr ""
 msgid "Professional"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2805
+#: lib/vutuv_web/components/post_components.ex:2747
 #, elixir-autogen, elixir-format
 msgid "Unmute @%{handle}"
 msgstr ""
@@ -6842,8 +6849,8 @@ msgstr ""
 msgid "Filters"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:239
-#: lib/vutuv_web/agent_docs/text.ex:223
+#: lib/vutuv_web/agent_docs/markdown.ex:240
+#: lib/vutuv_web/agent_docs/text.ex:224
 #: lib/vutuv_web/live/account_activity_live.ex:167
 #: lib/vutuv_web/live/admin/activity_live.ex:211
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:254
@@ -7329,7 +7336,7 @@ msgstr ""
 msgid "applies to the whole list, not just this page"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4609
+#: lib/vutuv_web/components/post_components.ex:4551
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:985
 #, elixir-autogen, elixir-format
 msgid "+%{count} more"
@@ -7504,17 +7511,17 @@ msgstr ""
 msgid "The vutuv newsfeed of %{name}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1108
+#: lib/vutuv_web/agent_docs/markdown.ex:1122
 #, elixir-autogen, elixir-format
 msgid "Your feed is empty."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1111
+#: lib/vutuv_web/agent_docs/markdown.ex:1125
 #, elixir-autogen, elixir-format
 msgid "%{count} posts on this page"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1118
+#: lib/vutuv_web/agent_docs/markdown.ex:1132
 #, elixir-autogen, elixir-format
 msgid "more posts available, append ?cursor=%{cursor}"
 msgstr ""
@@ -7723,13 +7730,13 @@ msgstr ""
 #: lib/vutuv_web/components/job_components.ex:173
 #: lib/vutuv_web/live/admin/dashboard_live.ex:287
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:457
-#: lib/vutuv_web/live/notification_live/index.ex:904
+#: lib/vutuv_web/live/notification_live/index.ex:906
 #, elixir-autogen, elixir-format
 msgid "Today"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/dashboard_live.ex:291
-#: lib/vutuv_web/live/notification_live/index.ex:907
+#: lib/vutuv_web/live/notification_live/index.ex:909
 #, elixir-autogen, elixir-format
 msgid "Yesterday"
 msgstr ""
@@ -8121,7 +8128,7 @@ msgstr[1] ""
 
 #: lib/vutuv_web/templates/education/manage.html.heex:8
 #: lib/vutuv_web/templates/education/new.html.heex:5
-#: lib/vutuv_web/templates/user/show.html.heex:642
+#: lib/vutuv_web/templates/user/show.html.heex:669
 #, elixir-autogen, elixir-format
 msgid "Add education"
 msgstr ""
@@ -8146,7 +8153,7 @@ msgstr ""
 #: lib/vutuv_web/templates/education/show.html.heex:6
 #: lib/vutuv_web/templates/import/new.html.heex:10
 #: lib/vutuv_web/templates/import/preview.html.heex:23
-#: lib/vutuv_web/templates/user/show.html.heex:639
+#: lib/vutuv_web/templates/user/show.html.heex:666
 #: lib/vutuv_web/views/job_reference_html.ex:265
 #, elixir-autogen, elixir-format
 msgid "Education"
@@ -8197,7 +8204,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/import_controller.ex:121
 #: lib/vutuv_web/templates/import/new.html.heex:1
 #: lib/vutuv_web/templates/import/preview.html.heex:1
-#: lib/vutuv_web/templates/user/show.html.heex:405
+#: lib/vutuv_web/templates/user/show.html.heex:432
 #, elixir-autogen, elixir-format
 msgid "Import from LinkedIn"
 msgstr ""
@@ -8329,7 +8336,7 @@ msgid "Loading posts"
 msgstr ""
 
 #: lib/vutuv_web/templates/settings/privacy.html.heex:140
-#: lib/vutuv_web/templates/user/show.html.heex:1377
+#: lib/vutuv_web/templates/user/show.html.heex:1404
 #, elixir-autogen, elixir-format
 msgid "Social media posts"
 msgstr ""
@@ -8500,12 +8507,12 @@ msgstr ""
 msgid "All %{count} members whose profiles are open to search engines, filed alphabetically by last name."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:187
+#: lib/vutuv_web/agent_docs/list_docs.ex:210
 #, elixir-autogen, elixir-format
 msgid "All members who allow search engines to index their profile, grouped by the first letter of their last name."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:172
+#: lib/vutuv_web/agent_docs/list_docs.ex:195
 #: lib/vutuv_web/controllers/directory_controller.ex:35
 #: lib/vutuv_web/templates/directory/index.html.heex:2
 #: lib/vutuv_web/templates/directory/index.html.heex:3
@@ -8521,7 +8528,7 @@ msgstr ""
 msgid "Members by initial"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:204
+#: lib/vutuv_web/agent_docs/list_docs.ex:227
 #: lib/vutuv_web/controllers/directory_controller.ex:62
 #: lib/vutuv_web/templates/directory/show.html.heex:2
 #, elixir-autogen, elixir-format
@@ -8540,7 +8547,7 @@ msgid_plural "%{formatted} members"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:210
+#: lib/vutuv_web/agent_docs/list_docs.ex:233
 #, elixir-autogen, elixir-format
 msgid "The member directory's %{letter} page, sorted by last name."
 msgstr ""
@@ -8604,7 +8611,7 @@ msgstr ""
 msgid "Not written yet"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:205
+#: lib/vutuv_web/components/organization_components.ex:206
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:18
 #, elixir-autogen, elixir-format
 msgid "Page"
@@ -8636,10 +8643,10 @@ msgstr ""
 msgid "Write it under Admin › Legal pages"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:522
-#: lib/vutuv_web/agent_docs/markdown.ex:526
-#: lib/vutuv_web/agent_docs/text.ex:488
-#: lib/vutuv_web/agent_docs/text.ex:492
+#: lib/vutuv_web/agent_docs/markdown.ex:536
+#: lib/vutuv_web/agent_docs/markdown.ex:540
+#: lib/vutuv_web/agent_docs/text.ex:501
+#: lib/vutuv_web/agent_docs/text.ex:505
 #: lib/vutuv_web/components/ui.ex:3688
 #: lib/vutuv_web/controllers/admin/fediverse_controller.ex:38
 #: lib/vutuv_web/controllers/settings_controller.ex:323
@@ -8651,8 +8658,8 @@ msgstr ""
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:8
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:12
 #: lib/vutuv_web/templates/settings/fediverse_confirm.html.heex:9
-#: lib/vutuv_web/templates/user/show.html.heex:970
-#: lib/vutuv_web/templates/user/show.html.heex:1282
+#: lib/vutuv_web/templates/user/show.html.heex:997
+#: lib/vutuv_web/templates/user/show.html.heex:1309
 #, elixir-autogen, elixir-format
 msgid "Fediverse"
 msgstr ""
@@ -8712,7 +8719,7 @@ msgid "Employment"
 msgstr ""
 
 #: lib/vutuv/jobs/job_posting.ex:153
-#: lib/vutuv_web/agent_docs/markdown.ex:685
+#: lib/vutuv_web/agent_docs/markdown.ex:699
 #: lib/vutuv_web/views/work_experience_html.ex:27
 #, elixir-autogen, elixir-format
 msgid "Internship"
@@ -8733,14 +8740,14 @@ msgstr ""
 msgid "Professional Experience"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:686
+#: lib/vutuv_web/agent_docs/markdown.ex:700
 #: lib/vutuv_web/views/work_experience_html.ex:31
 #: lib/vutuv_web/views/work_experience_html.ex:38
 #, elixir-autogen, elixir-format
 msgid "Volunteering & hobbies"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:400
+#: lib/vutuv_web/live/search_live.ex:421
 #, elixir-autogen, elixir-format
 msgid "Not available while the search uses a people filter."
 msgstr ""
@@ -8764,13 +8771,13 @@ msgstr ""
 msgid "Higher Education"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:723
+#: lib/vutuv_web/agent_docs/markdown.ex:737
 #: lib/vutuv_web/views/education_html.ex:23
 #, elixir-autogen, elixir-format
 msgid "School Education"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:722
+#: lib/vutuv_web/agent_docs/markdown.ex:736
 #: lib/vutuv_web/views/education_html.ex:22
 #, elixir-autogen, elixir-format
 msgid "Vocational Training"
@@ -8796,14 +8803,14 @@ msgstr ""
 msgid "CV download"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3755
+#: lib/vutuv_web/components/post_components.ex:3697
 #, elixir-autogen, elixir-format
 msgid "Reposted by %{name} and %{formatted} other"
 msgid_plural "Reposted by %{name} and %{formatted} others"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:916
+#: lib/vutuv_web/agent_docs/markdown.ex:930
 #, elixir-autogen, elixir-format
 msgid "reposted by %{name} and %{count} more"
 msgstr ""
@@ -8881,14 +8888,14 @@ msgstr ""
 msgid "The CV of %{name} on vutuv: work experience, education and skills to view and download."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:684
+#: lib/vutuv_web/agent_docs/markdown.ex:698
 #: lib/vutuv_web/views/work_experience_html.ex:26
 #: lib/vutuv_web/views/work_experience_html.ex:36
 #, elixir-autogen, elixir-format
 msgid "Freelance / Self-employed"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:687
+#: lib/vutuv_web/agent_docs/markdown.ex:701
 #: lib/vutuv_web/views/work_experience_html.ex:32
 #: lib/vutuv_web/views/work_experience_html.ex:39
 #, elixir-autogen, elixir-format
@@ -9030,8 +9037,8 @@ msgstr ""
 msgid "Honor tag (only site admins can assign it)"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:542
-#: lib/vutuv_web/agent_docs/text.ex:506
+#: lib/vutuv_web/agent_docs/markdown.ex:556
+#: lib/vutuv_web/agent_docs/text.ex:519
 #, elixir-autogen, elixir-format
 msgid "honor tag"
 msgstr ""
@@ -9048,7 +9055,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/language/manage.html.heex:8
 #: lib/vutuv_web/templates/language/new.html.heex:5
-#: lib/vutuv_web/templates/user/show.html.heex:704
+#: lib/vutuv_web/templates/user/show.html.heex:731
 #, elixir-autogen, elixir-format
 msgid "Add a language"
 msgstr ""
@@ -9272,7 +9279,7 @@ msgstr ""
 #: lib/vutuv_web/templates/language/manage.html.heex:4
 #: lib/vutuv_web/templates/language/new.html.heex:4
 #: lib/vutuv_web/templates/language/show.html.heex:6
-#: lib/vutuv_web/templates/user/show.html.heex:701
+#: lib/vutuv_web/templates/user/show.html.heex:728
 #, elixir-autogen, elixir-format
 msgid "Languages"
 msgstr ""
@@ -9453,8 +9460,8 @@ msgstr ""
 msgid "Yoruba"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:464
-#: lib/vutuv_web/agent_docs/text.ex:458
+#: lib/vutuv_web/agent_docs/markdown.ex:478
+#: lib/vutuv_web/agent_docs/text.ex:471
 #, elixir-autogen, elixir-format
 msgid "Employment status"
 msgstr ""
@@ -9552,12 +9559,12 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: lib/vutuv_web/templates/qualification/manage.html.heex:8
-#: lib/vutuv_web/templates/user/show.html.heex:810
+#: lib/vutuv_web/templates/user/show.html.heex:837
 #, elixir-autogen, elixir-format
 msgid "Add a certificate or license"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:807
+#: lib/vutuv_web/agent_docs/markdown.ex:821
 #: lib/vutuv_web/views/qualification_html.ex:11
 #, elixir-autogen, elixir-format
 msgid "Certificate"
@@ -9600,7 +9607,7 @@ msgstr ""
 #: lib/vutuv_web/templates/qualification/manage.html.heex:4
 #: lib/vutuv_web/templates/qualification/new.html.heex:4
 #: lib/vutuv_web/templates/qualification/show.html.heex:6
-#: lib/vutuv_web/templates/user/show.html.heex:807
+#: lib/vutuv_web/templates/user/show.html.heex:834
 #: lib/vutuv_web/views/job_reference_html.ex:266
 #, elixir-autogen, elixir-format
 msgid "Certificates & licenses"
@@ -9635,7 +9642,7 @@ msgstr ""
 msgid "Expired"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:782
+#: lib/vutuv_web/agent_docs/markdown.ex:796
 #, elixir-autogen, elixir-format
 msgid "ID: %{id}"
 msgstr ""
@@ -9652,7 +9659,7 @@ msgstr ""
 msgid "Issuer"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:806
+#: lib/vutuv_web/agent_docs/markdown.ex:820
 #: lib/vutuv_web/views/qualification_html.ex:12
 #, elixir-autogen, elixir-format
 msgid "License"
@@ -9679,7 +9686,7 @@ msgstr ""
 msgid "Verification link"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:780
+#: lib/vutuv_web/agent_docs/markdown.ex:794
 #, elixir-autogen, elixir-format
 msgid "awarded %{date}"
 msgstr ""
@@ -9694,7 +9701,7 @@ msgstr ""
 msgid "e.g. Amazon Web Services"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:781
+#: lib/vutuv_web/agent_docs/markdown.ex:795
 #: lib/vutuv_web/views/qualification_html.ex:77
 #: lib/vutuv_web/views/qualification_html.ex:80
 #, elixir-autogen, elixir-format
@@ -9711,15 +9718,15 @@ msgstr ""
 msgid "Preferred"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:642
+#: lib/vutuv_web/agent_docs/markdown.ex:656
 #: lib/vutuv_web/live/section_reorder_live.ex:280
 #: lib/vutuv_web/views/language_html.ex:79
 #, elixir-autogen, elixir-format
 msgid "Preferred contact language"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1205
-#: lib/vutuv_web/templates/user/show.html.heex:1206
+#: lib/vutuv_web/templates/user/show.html.heex:1232
+#: lib/vutuv_web/templates/user/show.html.heex:1233
 #, elixir-autogen, elixir-format
 msgid "+%{code} is the calling code of %{region}"
 msgstr ""
@@ -9772,15 +9779,15 @@ msgstr ""
 msgid "Permanent profile link"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:353
-#: lib/vutuv_web/templates/user/show.html.heex:354
+#: lib/vutuv_web/templates/user/show.html.heex:380
+#: lib/vutuv_web/templates/user/show.html.heex:381
 #, elixir-autogen, elixir-format
 msgid "Dismiss"
 msgstr ""
 
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:131
 #: lib/vutuv_web/templates/totp/new.html.heex:58
-#: lib/vutuv_web/templates/user/show.html.heex:1006
+#: lib/vutuv_web/templates/user/show.html.heex:1033
 #: lib/vutuv_web/templates/username/new.html.heex:27
 #: lib/vutuv_web/templates/username/new.html.heex:114
 #, elixir-autogen, elixir-format
@@ -9791,8 +9798,8 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:134
 #: lib/vutuv_web/templates/totp/new.html.heex:57
 #: lib/vutuv_web/templates/totp/new.html.heex:61
-#: lib/vutuv_web/templates/user/show.html.heex:1005
-#: lib/vutuv_web/templates/user/show.html.heex:1009
+#: lib/vutuv_web/templates/user/show.html.heex:1032
+#: lib/vutuv_web/templates/user/show.html.heex:1036
 #: lib/vutuv_web/templates/username/new.html.heex:26
 #: lib/vutuv_web/templates/username/new.html.heex:30
 #: lib/vutuv_web/templates/username/new.html.heex:113
@@ -10214,28 +10221,28 @@ msgstr ""
 msgid "set it up on this device"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:602
+#: lib/vutuv_web/agent_docs/markdown.ex:616
 #, elixir-autogen, elixir-format
 msgid "%{count} follower"
 msgid_plural "%{count} followers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:600
+#: lib/vutuv_web/agent_docs/markdown.ex:614
 #, elixir-autogen, elixir-format
 msgid "%{count} repository"
 msgid_plural "%{count} repositories"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:598
+#: lib/vutuv_web/agent_docs/markdown.ex:612
 #, elixir-autogen, elixir-format
 msgid "%{count} star"
 msgid_plural "%{count} stars"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:374
+#: lib/vutuv_web/live/organization_live/show.ex:416
 #: lib/vutuv_web/views/user_html.ex:534
 #: lib/vutuv_web/views/user_html.ex:713
 #, elixir-autogen, elixir-format
@@ -10253,7 +10260,7 @@ msgstr[1] ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:62
 #: lib/vutuv_web/agent_docs/text.ex:59
-#: lib/vutuv_web/templates/user/show.html.heex:1351
+#: lib/vutuv_web/templates/user/show.html.heex:1378
 #, elixir-autogen, elixir-format
 msgid "Code"
 msgstr ""
@@ -10284,12 +10291,12 @@ msgstr ""
 msgid "When off, the Social Media card lists your accounts as plain links only."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:616
+#: lib/vutuv_web/agent_docs/markdown.ex:630
 #, elixir-autogen, elixir-format
 msgid "last active %{date}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:603
+#: lib/vutuv_web/agent_docs/markdown.ex:617
 #, elixir-autogen, elixir-format
 msgid "since %{date}"
 msgstr ""
@@ -10434,7 +10441,7 @@ msgstr ""
 msgid "Manage your vutuv account: profile, privacy, notifications and sign-in."
 msgstr ""
 
-#: lib/vutuv_web/controllers/tag_controller.ex:108
+#: lib/vutuv_web/controllers/tag_controller.ex:114
 #, elixir-autogen, elixir-format
 msgid "Members on vutuv tagged %{tag}."
 msgstr ""
@@ -10717,50 +10724,50 @@ msgstr ""
 msgid "Auto-generated screenshots for single-link posts: watch the capture queue and browse the gallery of finished shots, each linked to its post."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:343
+#: lib/vutuv_web/live/admin/screenshot_live.ex:364
 #, elixir-autogen, elixir-format
 msgid "Captured screenshots"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:515
+#: lib/vutuv_web/live/admin/screenshot_live.ex:536
 #, elixir-autogen, elixir-format
 msgid "Capturing"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:345
+#: lib/vutuv_web/live/admin/screenshot_live.ex:366
 #, elixir-autogen, elixir-format
 msgid "Every captured link screenshot, newest first. Each links to the page and its post."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:517
+#: lib/vutuv_web/live/admin/screenshot_live.ex:538
 #, elixir-autogen, elixir-format
 msgid "Failed"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:188
+#: lib/vutuv_web/live/admin/screenshot_live.ex:209
 #, elixir-autogen, elixir-format
 msgid "Gallery"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:395
+#: lib/vutuv_web/live/admin/screenshot_live.ex:416
 #, elixir-autogen, elixir-format
 msgid "Jobs waiting, in flight, or given up. The worker retries transient failures with backoff and re-queues anything a restart left mid-capture."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:408
+#: lib/vutuv_web/live/admin/screenshot_live.ex:429
 #, elixir-autogen, elixir-format
 msgid "Last error"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:49
-#: lib/vutuv_web/live/admin/screenshot_live.ex:171
-#: lib/vutuv_web/live/admin/screenshot_live.ex:172
+#: lib/vutuv_web/live/admin/screenshot_live.ex:50
+#: lib/vutuv_web/live/admin/screenshot_live.ex:192
+#: lib/vutuv_web/live/admin/screenshot_live.ex:193
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:192
 #, elixir-autogen, elixir-format
 msgid "Link screenshots"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:348
+#: lib/vutuv_web/live/admin/screenshot_live.ex:369
 #, elixir-autogen, elixir-format
 msgid "No screenshots captured yet."
 msgstr ""
@@ -10773,60 +10780,60 @@ msgstr ""
 #: lib/vutuv_web/live/admin/organization_live.ex:165
 #: lib/vutuv_web/live/admin/organization_live.ex:179
 #: lib/vutuv_web/live/admin/organization_live.ex:194
-#: lib/vutuv_web/live/admin/screenshot_live.ex:514
+#: lib/vutuv_web/live/admin/screenshot_live.ex:535
 #: lib/vutuv_web/live/organization_live/domains.ex:184
 #, elixir-autogen, elixir-format
 msgid "Pending"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:181
-#: lib/vutuv_web/live/admin/screenshot_live.ex:393
+#: lib/vutuv_web/live/admin/screenshot_live.ex:202
+#: lib/vutuv_web/live/admin/screenshot_live.ex:414
 #, elixir-autogen, elixir-format
 msgid "Queue"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:409
+#: lib/vutuv_web/live/admin/screenshot_live.ex:430
 #: lib/vutuv_web/views/job_reference_html.ex:529
 #, elixir-autogen, elixir-format
 msgid "Queued"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:516
+#: lib/vutuv_web/live/admin/screenshot_live.ex:537
 #, elixir-autogen, elixir-format
 msgid "Ready"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:443
+#: lib/vutuv_web/live/admin/screenshot_live.ex:464
 #, elixir-autogen, elixir-format
 msgid "Retry"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:441
+#: lib/vutuv_web/live/admin/screenshot_live.ex:462
 #, elixir-autogen, elixir-format
 msgid "Retrying…"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:86
+#: lib/vutuv_web/live/admin/screenshot_live.ex:87
 #, elixir-autogen, elixir-format
 msgid "Screenshot job queued again."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:398
+#: lib/vutuv_web/live/admin/screenshot_live.ex:419
 #, elixir-autogen, elixir-format
 msgid "The queue is empty."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:89
+#: lib/vutuv_web/live/admin/screenshot_live.ex:90
 #, elixir-autogen, elixir-format
 msgid "This job cannot be queued again."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:407
+#: lib/vutuv_web/live/admin/screenshot_live.ex:428
 #, elixir-autogen, elixir-format
 msgid "Tries"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:175
+#: lib/vutuv_web/live/admin/screenshot_live.ex:196
 #: lib/vutuv_web/templates/admin/experiment/index.html.heex:56
 #: lib/vutuv_web/templates/admin/experiment/index.html.heex:102
 #, elixir-autogen, elixir-format
@@ -10899,7 +10906,7 @@ msgstr ""
 msgid "Per"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:246
+#: lib/vutuv_web/templates/user/show.html.heex:273
 #, elixir-autogen, elixir-format
 msgid "Salary expectation from %{amount} %{currency} per %{period}"
 msgstr ""
@@ -11040,7 +11047,7 @@ msgstr ""
 msgid "AI agents"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:415
+#: lib/vutuv_web/live/organization_live/show.ex:457
 #, elixir-autogen, elixir-format
 msgid "About"
 msgstr ""
@@ -11053,7 +11060,7 @@ msgstr ""
 #: lib/vutuv_web/live/organization_live/domains.ex:248
 #: lib/vutuv_web/live/organization_live/domains.ex:288
 #: lib/vutuv_web/live/organization_live/new.ex:146
-#: lib/vutuv_web/live/organization_live/show.ex:632
+#: lib/vutuv_web/live/organization_live/show.ex:674
 #: lib/vutuv_web/templates/url/verify.html.heex:46
 #, elixir-autogen, elixir-format
 msgid "DNS TXT record"
@@ -11061,8 +11068,8 @@ msgstr ""
 
 #: lib/vutuv_web/live/organization_live/domains.ex:153
 #: lib/vutuv_web/live/organization_live/domains.ex:167
-#: lib/vutuv_web/live/organization_live/show.ex:286
-#: lib/vutuv_web/live/organization_live/show.ex:691
+#: lib/vutuv_web/live/organization_live/show.ex:328
+#: lib/vutuv_web/live/organization_live/show.ex:733
 #, elixir-autogen, elixir-format
 msgid "Domain verification is disabled on this installation."
 msgstr ""
@@ -11093,13 +11100,13 @@ msgstr ""
 msgid "Offer the machine-readable formats (.md/.txt/.json/.xml) and list them for AI agents."
 msgstr ""
 
-#: lib/vutuv_web/controllers/organization_controller.ex:194
+#: lib/vutuv_web/controllers/organization_controller.ex:206
 #: lib/vutuv_web/live/job_posting_live/exclusions.ex:31
 #, elixir-autogen, elixir-format
 msgid "Please log in first."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:605
+#: lib/vutuv_web/live/organization_live/show.ex:647
 #, elixir-autogen, elixir-format
 msgid "Prove you control %{domain} to publish this page."
 msgstr ""
@@ -11126,7 +11133,7 @@ msgid "Select a country"
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/domains.ex:307
-#: lib/vutuv_web/live/organization_live/show.ex:667
+#: lib/vutuv_web/live/organization_live/show.ex:709
 #, elixir-autogen, elixir-format
 msgid "Serve this file at:"
 msgstr ""
@@ -11153,18 +11160,18 @@ msgid "The upload failed."
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/new.ex:131
-#: lib/vutuv_web/live/organization_live/show.ex:620
+#: lib/vutuv_web/live/organization_live/show.ex:662
 #, elixir-autogen, elixir-format
 msgid "Verification method"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:580
+#: lib/vutuv_web/live/organization_live/show.ex:622
 #, elixir-autogen, elixir-format
 msgid "Verified domains"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:240
-#: lib/vutuv_web/agent_docs/text.ex:224
+#: lib/vutuv_web/agent_docs/markdown.ex:241
+#: lib/vutuv_web/agent_docs/text.ex:225
 #, elixir-autogen, elixir-format
 msgid "Verified via"
 msgstr ""
@@ -11174,25 +11181,25 @@ msgstr ""
 msgid "Verified via %{domain}"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:602
+#: lib/vutuv_web/live/organization_live/show.ex:644
 #, elixir-autogen, elixir-format
 msgid "Verify %{name}"
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/domains.ex:320
-#: lib/vutuv_web/live/organization_live/show.ex:687
+#: lib/vutuv_web/live/organization_live/show.ex:729
 #, elixir-autogen, elixir-format
 msgid "Verify now"
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/domains.ex:149
-#: lib/vutuv_web/live/organization_live/show.ex:281
+#: lib/vutuv_web/live/organization_live/show.ex:323
 #, elixir-autogen, elixir-format
 msgid "We could not find the record or file yet. It can take a while to propagate. Please try again."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:242
-#: lib/vutuv_web/agent_docs/text.ex:226
+#: lib/vutuv_web/agent_docs/markdown.ex:243
+#: lib/vutuv_web/agent_docs/text.ex:227
 #: lib/vutuv_web/live/organization_live/edit.ex:287
 #: lib/vutuv_web/live/organization_live/new.ex:115
 #, elixir-autogen, elixir-format
@@ -11201,7 +11208,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/organization_live/domains.ex:249
 #: lib/vutuv_web/live/organization_live/domains.ex:298
-#: lib/vutuv_web/live/organization_live/show.ex:643
+#: lib/vutuv_web/live/organization_live/show.ex:685
 #: lib/vutuv_web/templates/url/verify.html.heex:99
 #, elixir-autogen, elixir-format
 msgid "Website file"
@@ -11223,7 +11230,7 @@ msgid "You will publish a record or file to prove control of the domain on the n
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/domains.ex:309
-#: lib/vutuv_web/live/organization_live/show.ex:673
+#: lib/vutuv_web/live/organization_live/show.ex:715
 #: lib/vutuv_web/templates/url/verify.html.heex:105
 #, elixir-autogen, elixir-format
 msgid "with this exact content:"
@@ -11234,7 +11241,7 @@ msgstr ""
 msgid "@handle or email"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:269
+#: lib/vutuv_web/components/organization_components.ex:282
 #: lib/vutuv_web/live/organization_live/edit.ex:390
 #, elixir-autogen, elixir-format
 msgid "Abbreviation"
@@ -11255,7 +11262,7 @@ msgstr ""
 msgid "Added @%{handle} to the team."
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:270
+#: lib/vutuv_web/components/organization_components.ex:283
 #: lib/vutuv_web/live/organization_live/edit.ex:388
 #, elixir-autogen, elixir-format
 msgid "Alias"
@@ -11271,10 +11278,10 @@ msgstr ""
 msgid "Alias removed."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:343
-#: lib/vutuv_web/agent_docs/text.ex:365
+#: lib/vutuv_web/agent_docs/markdown.ex:357
+#: lib/vutuv_web/agent_docs/text.ex:378
 #: lib/vutuv_web/live/organization_live/edit.ex:353
-#: lib/vutuv_web/live/organization_live/show.ex:568
+#: lib/vutuv_web/live/organization_live/show.ex:610
 #: lib/vutuv_web/templates/tag/single_card.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "Also known as"
@@ -11301,7 +11308,7 @@ msgstr ""
 msgid "Archived"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:268
+#: lib/vutuv_web/components/organization_components.ex:281
 #: lib/vutuv_web/live/organization_live/edit.ex:389
 #, elixir-autogen, elixir-format
 msgid "Brand"
@@ -11337,10 +11344,10 @@ msgstr ""
 msgid "Domain verified."
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:211
+#: lib/vutuv_web/components/organization_components.ex:212
 #: lib/vutuv_web/live/admin/organization_live.ex:305
 #: lib/vutuv_web/live/organization_live/domains.ex:161
-#: lib/vutuv_web/live/organization_live/show.ex:401
+#: lib/vutuv_web/live/organization_live/show.ex:443
 #, elixir-autogen, elixir-format
 msgid "Domains"
 msgstr ""
@@ -11350,7 +11357,7 @@ msgstr ""
 msgid "Domains – %{name}"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:267
+#: lib/vutuv_web/components/organization_components.ex:280
 #, elixir-autogen, elixir-format
 msgid "Former name"
 msgstr ""
@@ -11428,7 +11435,7 @@ msgstr ""
 msgid "Primary domain updated."
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:256
+#: lib/vutuv_web/components/organization_components.ex:269
 #, elixir-autogen, elixir-format
 msgid "Recruiter"
 msgstr ""
@@ -11453,10 +11460,10 @@ msgstr ""
 msgid "Search name, alias or domain"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:208
+#: lib/vutuv_web/components/organization_components.ex:209
 #: lib/vutuv_web/live/admin/organization_live.ex:321
 #: lib/vutuv_web/live/organization_live/roles.ex:165
-#: lib/vutuv_web/live/organization_live/show.ex:394
+#: lib/vutuv_web/live/organization_live/show.ex:436
 #, elixir-autogen, elixir-format
 msgid "Team"
 msgstr ""
@@ -11493,8 +11500,8 @@ msgstr ""
 msgid "primary"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:364
-#: lib/vutuv_web/agent_docs/text.ex:385
+#: lib/vutuv_web/agent_docs/markdown.ex:378
+#: lib/vutuv_web/agent_docs/text.ex:398
 #: lib/vutuv_web/live/admin/organization_live.ex:311
 #, elixir-autogen, elixir-format
 msgid "verified"
@@ -11627,8 +11634,8 @@ msgstr ""
 msgid "We could not find the proof yet. It can take a while to propagate. Please try again."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:827
-#: lib/vutuv_web/agent_docs/text.ex:616
+#: lib/vutuv_web/agent_docs/markdown.ex:841
+#: lib/vutuv_web/agent_docs/text.ex:629
 #, elixir-autogen, elixir-format
 msgid "verified webpage"
 msgstr ""
@@ -11638,7 +11645,7 @@ msgstr ""
 msgid "%{min} to %{max} characters: letters (a-z), numbers (0-9) and underscores."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:523
+#: lib/vutuv_web/live/organization_live/show.ex:565
 #, elixir-autogen, elixir-format
 msgid "Former"
 msgstr ""
@@ -11664,8 +11671,8 @@ msgstr ""
 msgid "Remove link"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:355
-#: lib/vutuv_web/agent_docs/text.ex:376
+#: lib/vutuv_web/agent_docs/markdown.ex:369
+#: lib/vutuv_web/agent_docs/text.ex:389
 #, elixir-autogen, elixir-format
 msgid "former"
 msgstr ""
@@ -11748,7 +11755,7 @@ msgstr ""
 msgid "The proof is a small technical change to your domain: a DNS entry or a file on your website. If you don't manage the website yourself, ask the person or team who does. That is usually your IT department or the company that runs your website. We show the exact instructions on the next step, so you can simply pass them on."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:614
+#: lib/vutuv_web/live/organization_live/show.ex:656
 #, elixir-autogen, elixir-format
 msgid "These steps are technical. If you don't manage %{domain} yourself, copy the record or file shown below and send it to your IT team or whoever runs your website. Once they have added it, come back here and press Verify now."
 msgstr ""
@@ -11848,7 +11855,7 @@ msgstr ""
 msgid "Organization pages"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1030
+#: lib/vutuv_web/live/notification_live/index.ex:1032
 #, elixir-autogen, elixir-format
 msgid "Organization role"
 msgstr ""
@@ -11858,13 +11865,17 @@ msgstr ""
 msgid "Organization unfrozen."
 msgstr ""
 
+#: lib/vutuv_web/agent_docs/markdown.ex:348
 #: lib/vutuv_web/agent_docs/organization_doc.ex:108
+#: lib/vutuv_web/agent_docs/text.ex:322
 #: lib/vutuv_web/components/ui.ex:3719
 #: lib/vutuv_web/controllers/settings_controller.ex:179
 #: lib/vutuv_web/live/organization_live/index.ex:30
 #: lib/vutuv_web/live/organization_live/index.ex:61
 #: lib/vutuv_web/live/post_live/saved.ex:501
 #: lib/vutuv_web/live/shell_live.ex:721
+#: lib/vutuv_web/templates/followee/index.html.heex:14
+#: lib/vutuv_web/templates/follower/index.html.heex:13
 #: lib/vutuv_web/templates/layout/app.html.heex:83
 #: lib/vutuv_web/templates/settings/organizations.html.heex:6
 #, elixir-autogen, elixir-format
@@ -11912,7 +11923,7 @@ msgstr ""
 msgid "The organization page was deleted."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:293
+#: lib/vutuv_web/live/organization_live/show.ex:335
 #, elixir-autogen, elixir-format
 msgid "This organization page was reported and is hidden while it is reviewed. Only you and the moderators can see it."
 msgstr ""
@@ -11942,7 +11953,7 @@ msgstr ""
 msgid "Your organization handle is set."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:247
+#: lib/vutuv_web/live/organization_live/show.ex:261
 #, elixir-autogen, elixir-format
 msgid "Your organization page is verified and now live."
 msgstr ""
@@ -11952,22 +11963,22 @@ msgstr ""
 msgid "Your organization page was updated."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1267
+#: lib/vutuv_web/live/notification_live/index.ex:1269
 #, elixir-autogen, elixir-format
 msgid "gave you a role at %{organization}."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1264
+#: lib/vutuv_web/live/notification_live/index.ex:1266
 #, elixir-autogen, elixir-format
 msgid "made you a recruiter for %{organization}."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1261
+#: lib/vutuv_web/live/notification_live/index.ex:1263
 #, elixir-autogen, elixir-format
 msgid "made you an admin of %{organization}."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1258
+#: lib/vutuv_web/live/notification_live/index.ex:1260
 #, elixir-autogen, elixir-format
 msgid "made you an owner of %{organization}."
 msgstr ""
@@ -12110,10 +12121,10 @@ msgstr ""
 msgid "Edit posting"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:259
-#: lib/vutuv_web/agent_docs/markdown.ex:388
-#: lib/vutuv_web/agent_docs/text.ex:242
-#: lib/vutuv_web/agent_docs/text.ex:409
+#: lib/vutuv_web/agent_docs/markdown.ex:260
+#: lib/vutuv_web/agent_docs/markdown.ex:402
+#: lib/vutuv_web/agent_docs/text.ex:243
+#: lib/vutuv_web/agent_docs/text.ex:422
 #: lib/vutuv_web/live/admin/job_live.ex:344
 #: lib/vutuv_web/templates/job_reference/form_content.html.heex:17
 #: lib/vutuv_web/views/account_event_text.ex:202
@@ -12126,10 +12137,10 @@ msgstr ""
 msgid "Employer name (optional)"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:260
-#: lib/vutuv_web/agent_docs/markdown.ex:389
-#: lib/vutuv_web/agent_docs/text.ex:243
-#: lib/vutuv_web/agent_docs/text.ex:410
+#: lib/vutuv_web/agent_docs/markdown.ex:261
+#: lib/vutuv_web/agent_docs/markdown.ex:403
+#: lib/vutuv_web/agent_docs/text.ex:244
+#: lib/vutuv_web/agent_docs/text.ex:423
 #: lib/vutuv_web/live/job_board_live.ex:367
 #: lib/vutuv_web/live/job_posting_live/form.ex:345
 #, elixir-autogen, elixir-format
@@ -12207,12 +12218,12 @@ msgstr ""
 msgid "Let search engines index this posting."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:370
-#: lib/vutuv_web/agent_docs/markdown.ex:374
-#: lib/vutuv_web/agent_docs/markdown.ex:376
-#: lib/vutuv_web/agent_docs/text.ex:391
-#: lib/vutuv_web/agent_docs/text.ex:395
-#: lib/vutuv_web/agent_docs/text.ex:397
+#: lib/vutuv_web/agent_docs/markdown.ex:384
+#: lib/vutuv_web/agent_docs/markdown.ex:388
+#: lib/vutuv_web/agent_docs/markdown.ex:390
+#: lib/vutuv_web/agent_docs/text.ex:404
+#: lib/vutuv_web/agent_docs/text.ex:408
+#: lib/vutuv_web/agent_docs/text.ex:410
 #: lib/vutuv_web/live/job_posting_live/form.ex:386
 #, elixir-autogen, elixir-format
 msgid "Location"
@@ -12261,8 +12272,8 @@ msgstr ""
 msgid "New posting"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:271
-#: lib/vutuv_web/agent_docs/text.ex:253
+#: lib/vutuv_web/agent_docs/markdown.ex:272
+#: lib/vutuv_web/agent_docs/text.ex:254
 #: lib/vutuv_web/live/job_posting_live/form.ex:525
 #: lib/vutuv_web/live/job_posting_live/show.ex:154
 #, elixir-autogen, elixir-format
@@ -12346,10 +12357,10 @@ msgstr ""
 msgid "Postal code"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:264
-#: lib/vutuv_web/agent_docs/markdown.ex:393
-#: lib/vutuv_web/agent_docs/text.ex:247
-#: lib/vutuv_web/agent_docs/text.ex:414
+#: lib/vutuv_web/agent_docs/markdown.ex:265
+#: lib/vutuv_web/agent_docs/markdown.ex:407
+#: lib/vutuv_web/agent_docs/text.ex:248
+#: lib/vutuv_web/agent_docs/text.ex:427
 #: lib/vutuv_web/live/job_posting_live/show.ex:133
 #, elixir-autogen, elixir-format
 msgid "Posted"
@@ -12374,10 +12385,10 @@ msgstr ""
 #: lib/vutuv/accounts/user.ex:1097
 #: lib/vutuv/jobs/job_posting.ex:164
 #: lib/vutuv/notifications/emailer.ex:497
-#: lib/vutuv_web/agent_docs/markdown.ex:374
-#: lib/vutuv_web/agent_docs/markdown.ex:376
-#: lib/vutuv_web/agent_docs/text.ex:395
-#: lib/vutuv_web/agent_docs/text.ex:397
+#: lib/vutuv_web/agent_docs/markdown.ex:388
+#: lib/vutuv_web/agent_docs/markdown.ex:390
+#: lib/vutuv_web/agent_docs/text.ex:408
+#: lib/vutuv_web/agent_docs/text.ex:410
 #: lib/vutuv_web/components/job_components.ex:132
 #: lib/vutuv_web/components/job_components.ex:133
 #, elixir-autogen, elixir-format
@@ -12389,18 +12400,18 @@ msgstr ""
 msgid "Report this posting"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:270
-#: lib/vutuv_web/agent_docs/text.ex:252
+#: lib/vutuv_web/agent_docs/markdown.ex:271
+#: lib/vutuv_web/agent_docs/text.ex:253
 #: lib/vutuv_web/live/job_posting_live/form.ex:515
 #: lib/vutuv_web/live/job_posting_live/show.ex:149
 #, elixir-autogen, elixir-format
 msgid "Required"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:263
-#: lib/vutuv_web/agent_docs/markdown.ex:392
-#: lib/vutuv_web/agent_docs/text.ex:246
-#: lib/vutuv_web/agent_docs/text.ex:413
+#: lib/vutuv_web/agent_docs/markdown.ex:264
+#: lib/vutuv_web/agent_docs/markdown.ex:406
+#: lib/vutuv_web/agent_docs/text.ex:247
+#: lib/vutuv_web/agent_docs/text.ex:426
 #, elixir-autogen, elixir-format
 msgid "Salary"
 msgstr ""
@@ -12494,10 +12505,10 @@ msgstr ""
 msgid "Working student"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:261
-#: lib/vutuv_web/agent_docs/markdown.ex:390
-#: lib/vutuv_web/agent_docs/text.ex:244
-#: lib/vutuv_web/agent_docs/text.ex:411
+#: lib/vutuv_web/agent_docs/markdown.ex:262
+#: lib/vutuv_web/agent_docs/markdown.ex:404
+#: lib/vutuv_web/agent_docs/text.ex:245
+#: lib/vutuv_web/agent_docs/text.ex:424
 #: lib/vutuv_web/live/job_posting_live/form.ex:360
 #, elixir-autogen, elixir-format
 msgid "Workplace"
@@ -12642,13 +12653,13 @@ msgid "Getting an error, or is %{host} a CNAME / alias to another address? A TXT
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/domains.ex:305
-#: lib/vutuv_web/live/organization_live/show.ex:660
+#: lib/vutuv_web/live/organization_live/show.ex:702
 #, elixir-autogen, elixir-format
 msgid "If %{domain} is a CNAME / alias (a TXT record cannot share a name with a CNAME), put the record on %{name} instead, with the same value."
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/domains.ex:303
-#: lib/vutuv_web/live/organization_live/show.ex:651
+#: lib/vutuv_web/live/organization_live/show.ex:693
 #, elixir-autogen, elixir-format
 msgid "In your DNS settings, create a TXT record on the name %{domain} with this value:"
 msgstr ""
@@ -12697,13 +12708,13 @@ msgstr ""
 msgid "All countries"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:411
+#: lib/vutuv_web/agent_docs/markdown.ex:425
 #: lib/vutuv_web/templates/tag/show.html.heex:51
 #, elixir-autogen, elixir-format
 msgid "All jobs with this tag"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/text.ex:431
+#: lib/vutuv_web/agent_docs/text.ex:444
 #, elixir-autogen, elixir-format
 msgid "All jobs with this tag: %{url}"
 msgstr ""
@@ -12744,17 +12755,17 @@ msgid "Minimum yearly salary"
 msgstr ""
 
 #: lib/vutuv_web/live/job_board_live.ex:324
-#: lib/vutuv_web/live/organization_live/show.ex:550
+#: lib/vutuv_web/live/organization_live/show.ex:592
 #, elixir-autogen, elixir-format
 msgid "More jobs"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:283
+#: lib/vutuv_web/agent_docs/markdown.ex:284
 #, elixir-autogen, elixir-format
 msgid "Next page"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/text.ex:265
+#: lib/vutuv_web/agent_docs/text.ex:266
 #, elixir-autogen, elixir-format
 msgid "Next page: %{url}"
 msgstr ""
@@ -12769,11 +12780,11 @@ msgstr ""
 msgid "No matching positions. Try adjusting the filters."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:409
-#: lib/vutuv_web/agent_docs/markdown.ex:421
-#: lib/vutuv_web/agent_docs/text.ex:429
-#: lib/vutuv_web/agent_docs/text.ex:441
-#: lib/vutuv_web/live/organization_live/show.ex:537
+#: lib/vutuv_web/agent_docs/markdown.ex:423
+#: lib/vutuv_web/agent_docs/markdown.ex:435
+#: lib/vutuv_web/agent_docs/text.ex:442
+#: lib/vutuv_web/agent_docs/text.ex:454
+#: lib/vutuv_web/live/organization_live/show.ex:579
 #: lib/vutuv_web/templates/tag/show.html.heex:45
 #, elixir-autogen, elixir-format
 msgid "Open positions"
@@ -13092,7 +13103,7 @@ msgstr ""
 msgid "Stop e-mail alerts for your saved search \"%{label}\"?"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2156
+#: lib/vutuv_web/components/post_components.ex:2160
 #: lib/vutuv_web/components/saved_search_components.ex:43
 #: lib/vutuv_web/controllers/settings_controller.ex:651
 #: lib/vutuv_web/controllers/settings_controller.ex:669
@@ -13142,7 +13153,7 @@ msgstr ""
 msgid "job search"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:263
+#: lib/vutuv_web/live/search_live.ex:268
 #, elixir-autogen, elixir-format
 msgid "only people open to offers (status:open) or looking (status:looking)"
 msgstr ""
@@ -13229,7 +13240,7 @@ msgstr ""
 msgid "Inherited from the organization"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:214
+#: lib/vutuv_web/components/organization_components.ex:215
 #: lib/vutuv_web/live/organization_live/exclusions.ex:103
 #, elixir-autogen, elixir-format
 msgid "Job exclusions"
@@ -13343,7 +13354,7 @@ msgstr ""
 msgid "Image awaiting review, visible only to you"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1028
+#: lib/vutuv_web/live/notification_live/index.ex:1030
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:68
 #, elixir-autogen, elixir-format
 msgid "Image review"
@@ -13354,7 +13365,7 @@ msgstr ""
 msgid "No images waiting for the AI scan. %{formatted} rejected in the last 7 days."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:159
+#: lib/vutuv_web/templates/user/show.html.heex:186
 #, elixir-autogen, elixir-format
 msgid "Profile picture awaiting review, visible only to you"
 msgstr ""
@@ -13430,7 +13441,7 @@ msgstr[1] ""
 msgid "Changing it automatically rewrites every mention of your old handle in posts to the new one and notifies those posts' authors. Your old profile address stops working."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1031
+#: lib/vutuv_web/live/notification_live/index.ex:1033
 #, elixir-autogen, elixir-format
 msgid "Handle change"
 msgstr ""
@@ -13442,7 +13453,7 @@ msgid_plural "We updated %{formatted} posts that mentioned your old handle and n
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1317
+#: lib/vutuv_web/live/notification_live/index.ex:1319
 #, elixir-autogen, elixir-format
 msgid "changed their handle from @%{old} to @%{new}."
 msgstr ""
@@ -13477,19 +13488,19 @@ msgstr ""
 msgid "Insert into text"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:215
-#: lib/vutuv_web/agent_docs/text.ex:199
+#: lib/vutuv_web/agent_docs/markdown.ex:216
+#: lib/vutuv_web/agent_docs/text.ex:200
 #: lib/vutuv_web/live/tag_live/timeline.ex:228
 #, elixir-autogen, elixir-format
 msgid "Posts with this tag"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:417
+#: lib/vutuv_web/live/search_live.ex:438
 #, elixir-autogen, elixir-format
 msgid "Your search uses a people-only filter such as city: or status:, so it only finds people."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:253
+#: lib/vutuv_web/live/search_live.ex:258
 #, elixir-autogen, elixir-format
 msgid "people and posts with this tag, combinable: miller tag:php"
 msgstr ""
@@ -13504,22 +13515,22 @@ msgstr ""
 msgid "Work mobile"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:418
+#: lib/vutuv_web/components/post_components.ex:422
 #, elixir-autogen, elixir-format
 msgid "No posts yet."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:420
+#: lib/vutuv_web/components/post_components.ex:424
 #, elixir-autogen, elixir-format
 msgid "No replies yet."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:419
+#: lib/vutuv_web/components/post_components.ex:423
 #, elixir-autogen, elixir-format
 msgid "No reposts yet."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:377
+#: lib/vutuv_web/components/post_components.ex:381
 #, elixir-autogen, elixir-format
 msgid "Own posts"
 msgstr ""
@@ -13580,7 +13591,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/messenger/manage.html.heex:8
 #: lib/vutuv_web/templates/messenger/new.html.heex:5
-#: lib/vutuv_web/templates/user/show.html.heex:1317
+#: lib/vutuv_web/templates/user/show.html.heex:1344
 #, elixir-autogen, elixir-format
 msgid "Add a messenger"
 msgstr ""
@@ -13617,7 +13628,7 @@ msgstr ""
 #: lib/vutuv_web/templates/messenger/manage.html.heex:4
 #: lib/vutuv_web/templates/messenger/new.html.heex:4
 #: lib/vutuv_web/templates/messenger/show.html.heex:6
-#: lib/vutuv_web/templates/user/show.html.heex:1315
+#: lib/vutuv_web/templates/user/show.html.heex:1342
 #, elixir-autogen, elixir-format
 msgid "Messengers"
 msgstr ""
@@ -13649,22 +13660,22 @@ msgstr[1] ""
 msgid "They see one notification linking to this entry. No email is sent, and it only ever happens for a new entry."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1032
+#: lib/vutuv_web/live/notification_live/index.ex:1034
 #, elixir-autogen, elixir-format
 msgid "CV update"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1337
+#: lib/vutuv_web/live/notification_live/index.ex:1339
 #, elixir-autogen, elixir-format
 msgid "added a new position to their CV: %{entry}"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1329
+#: lib/vutuv_web/live/notification_live/index.ex:1331
 #, elixir-autogen, elixir-format
 msgid "added a new education entry to their CV: %{entry}"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1334
+#: lib/vutuv_web/live/notification_live/index.ex:1336
 #, elixir-autogen, elixir-format
 msgid "added a new certificate to their CV: %{entry}"
 msgstr ""
@@ -13689,39 +13700,39 @@ msgstr ""
 msgid "When off, you never see this kind of notification, whoever sends it."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1342
+#: lib/vutuv_web/live/notification_live/index.ex:1344
 #, elixir-autogen, elixir-format
 msgid "added %{count} new entries to their CV:"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4243
+#: lib/vutuv_web/components/post_components.ex:4185
 #, elixir-autogen, elixir-format
 msgid "Audiobook"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1070
-#: lib/vutuv_web/components/post_components.ex:4200
+#: lib/vutuv_web/agent_docs/markdown.ex:1084
+#: lib/vutuv_web/components/post_components.ex:4142
 #, elixir-autogen, elixir-format
 msgid "Book review"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4244
+#: lib/vutuv_web/components/post_components.ex:4186
 #, elixir-autogen, elixir-format
 msgid "Cinema"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4246
+#: lib/vutuv_web/components/post_components.ex:4188
 #, elixir-autogen, elixir-format
 msgid "DVD/Blu-ray"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4242
+#: lib/vutuv_web/components/post_components.ex:4184
 #, elixir-autogen, elixir-format
 msgid "E-book"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1070
-#: lib/vutuv_web/components/post_components.ex:4199
+#: lib/vutuv_web/agent_docs/markdown.ex:1084
+#: lib/vutuv_web/components/post_components.ex:4141
 #, elixir-autogen, elixir-format
 msgid "Film review"
 msgstr ""
@@ -13732,12 +13743,12 @@ msgstr ""
 msgid "Look up"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4241
+#: lib/vutuv_web/components/post_components.ex:4183
 #, elixir-autogen, elixir-format
 msgid "Printed book"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4245
+#: lib/vutuv_web/components/post_components.ex:4187
 #, elixir-autogen, elixir-format
 msgid "Streaming"
 msgstr ""
@@ -13757,7 +13768,7 @@ msgstr ""
 msgid "Year"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4282
+#: lib/vutuv_web/components/post_components.ex:4224
 #: lib/vutuv_web/views/job_reference_html.ex:180
 #, elixir-autogen, elixir-format
 msgid "%{formatted} page"
@@ -13765,27 +13776,27 @@ msgid_plural "%{formatted} pages"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:4312
+#: lib/vutuv_web/components/post_components.ex:4254
 #, elixir-autogen, elixir-format
 msgid "%{hours} h"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4313
+#: lib/vutuv_web/components/post_components.ex:4255
 #, elixir-autogen, elixir-format
 msgid "%{hours} h %{minutes} min"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4311
+#: lib/vutuv_web/components/post_components.ex:4253
 #, elixir-autogen, elixir-format
 msgid "%{minutes} min"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4271
+#: lib/vutuv_web/components/post_components.ex:4213
 #, elixir-autogen, elixir-format
 msgid "(print edition)"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4318
+#: lib/vutuv_web/components/post_components.ex:4260
 #, elixir-autogen, elixir-format
 msgid "approx. %{duration}"
 msgstr ""
@@ -13810,24 +13821,24 @@ msgstr ""
 msgid "With qualification:"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:671
+#: lib/vutuv_web/agent_docs/markdown.ex:685
 #, elixir-autogen, elixir-format
 msgid "With qualification: %{name}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4085
+#: lib/vutuv_web/components/post_components.ex:4027
 #, elixir-autogen, elixir-format
 msgid "Publisher:"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:896
+#: lib/vutuv_web/live/notification_live/index.ex:898
 #, elixir-autogen, elixir-format
 msgid "%{formatted} new notification"
 msgid_plural "%{formatted} new notifications"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:910
+#: lib/vutuv_web/live/notification_live/index.ex:912
 #, elixir-autogen, elixir-format
 msgid "%{month} %{day}, %{year}"
 msgstr ""
@@ -13842,28 +13853,28 @@ msgstr ""
 msgid "Last 30 days"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:862
-#: lib/vutuv_web/live/notification_live/index.ex:1111
+#: lib/vutuv_web/live/notification_live/index.ex:864
+#: lib/vutuv_web/live/notification_live/index.ex:1113
 #, elixir-autogen, elixir-format
 msgid "and"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1048
+#: lib/vutuv_web/live/notification_live/index.ex:1050
 #, elixir-autogen, elixir-format
 msgid "are now connected with you."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1043
+#: lib/vutuv_web/live/notification_live/index.ex:1045
 #, elixir-autogen, elixir-format
 msgid "are now following you."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1058
+#: lib/vutuv_web/live/notification_live/index.ex:1060
 #, elixir-autogen, elixir-format
 msgid "endorsed you for %{tags}."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4076
+#: lib/vutuv_web/components/post_components.ex:4018
 #, elixir-autogen, elixir-format
 msgid "by:"
 msgstr ""
@@ -13906,19 +13917,19 @@ msgid_plural "Used for %{formatted} jobs"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:796
+#: lib/vutuv_web/agent_docs/markdown.ex:810
 #, elixir-autogen, elixir-format
 msgid "currently in use"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:795
+#: lib/vutuv_web/agent_docs/markdown.ex:809
 #, elixir-autogen, elixir-format
 msgid "used for %{count} job"
 msgid_plural "used for %{count} jobs"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:801
+#: lib/vutuv_web/agent_docs/markdown.ex:815
 #, elixir-autogen, elixir-format
 msgctxt "qualification job usage"
 msgid "last used %{date}"
@@ -13998,8 +14009,8 @@ msgstr ""
 msgid "View the uploaded proof (%{label})"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:764
-#: lib/vutuv_web/agent_docs/text.ex:608
+#: lib/vutuv_web/agent_docs/markdown.ex:778
+#: lib/vutuv_web/agent_docs/text.ex:621
 #, elixir-autogen, elixir-format
 msgid "proof document"
 msgstr ""
@@ -14082,8 +14093,8 @@ msgstr ""
 msgid "Skip for now"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:466
-#: lib/vutuv_web/agent_docs/text.ex:460
+#: lib/vutuv_web/agent_docs/markdown.ex:480
+#: lib/vutuv_web/agent_docs/text.ex:473
 #, elixir-autogen, elixir-format
 msgid "Preferred workplace"
 msgstr ""
@@ -14099,17 +14110,17 @@ msgstr ""
 msgid "An automated check removed an image from your vutuv account"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1291
+#: lib/vutuv_web/live/notification_live/index.ex:1293
 #, elixir-autogen, elixir-format
 msgid "An AI, not a person, removed %{what}: it judged the image not family-friendly enough for a work environment. It can be wrong, so reply to our email if you disagree."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1021
+#: lib/vutuv_web/live/notification_live/index.ex:1023
 #, elixir-autogen, elixir-format
 msgid "Thread reply"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1098
+#: lib/vutuv_web/live/notification_live/index.ex:1100
 #, elixir-autogen, elixir-format
 msgid "replied in a thread you posted in."
 msgid_plural "replied in a thread you posted in."
@@ -14128,12 +14139,12 @@ msgstr ""
 msgid "Only part of this long conversation is shown."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1022
+#: lib/vutuv_web/live/notification_live/index.ex:1024
 #, elixir-autogen, elixir-format
 msgid "Mention"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1241
+#: lib/vutuv_web/live/notification_live/index.ex:1243
 #, elixir-autogen, elixir-format
 msgid "mentioned you in a post."
 msgstr ""
@@ -14233,14 +14244,14 @@ msgstr ""
 msgid "See all frozen accounts"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2420
+#: lib/vutuv_web/components/post_components.ex:2424
 #, elixir-autogen, elixir-format
 msgid "Show %{formatted} earlier post"
 msgid_plural "Show %{formatted} earlier posts"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:2442
+#: lib/vutuv_web/components/post_components.ex:2446
 #, elixir-autogen, elixir-format
 msgid "Show %{formatted} more reply"
 msgid_plural "Show %{formatted} more replies"
@@ -14267,7 +14278,7 @@ msgstr ""
 msgid "Type a name, @handle or email to find an account to freeze."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4695
+#: lib/vutuv_web/components/post_components.ex:4637
 #, elixir-autogen, elixir-format
 msgid "You can't like your own post."
 msgstr ""
@@ -14477,7 +14488,7 @@ msgstr ""
 msgid "Thread replies"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:592
+#: lib/vutuv_web/live/notification_live/index.ex:594
 #, elixir-autogen, elixir-format
 msgid "Turn off thread notifications"
 msgstr ""
@@ -14528,7 +14539,7 @@ msgstr ""
 msgid "You have reached the maximum of %{count} filters."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:587
+#: lib/vutuv_web/live/notification_live/index.ex:589
 #, elixir-autogen, elixir-format
 msgid "You wrote in this thread."
 msgstr ""
@@ -14624,8 +14635,8 @@ msgstr ""
 msgid "Server"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:240
-#: lib/vutuv_web/live/admin/screenshot_live.ex:298
+#: lib/vutuv_web/live/admin/screenshot_live.ex:261
+#: lib/vutuv_web/live/admin/screenshot_live.ex:319
 #: lib/vutuv_web/templates/admin/fediverse/index.html.heex:97
 #, elixir-autogen, elixir-format
 msgid "Note"
@@ -14671,7 +14682,7 @@ msgstr ""
 msgid "none yet"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1017
+#: lib/vutuv_web/agent_docs/markdown.ex:1031
 #, elixir-autogen, elixir-format
 msgid "Reactions from other networks"
 msgstr ""
@@ -15004,27 +15015,27 @@ msgstr ""
 msgid "Book an ad"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:974
+#: lib/vutuv_web/templates/user/show.html.heex:1001
 #, elixir-autogen, elixir-format
 msgid "%{name} moved this Fediverse account. Follow the new address instead:"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:990
+#: lib/vutuv_web/templates/user/show.html.heex:1017
 #, elixir-autogen, elixir-format
 msgid "Are you on Mastodon or another Fediverse app? Follow %{name} from there and new public posts arrive in your timeline. No vutuv account needed."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1027
+#: lib/vutuv_web/templates/user/show.html.heex:1054
 #, elixir-autogen, elixir-format
 msgid "Follow from your own server"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1038
+#: lib/vutuv_web/templates/user/show.html.heex:1065
 #, elixir-autogen, elixir-format
 msgid "@you@example.social"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:1046
+#: lib/vutuv_web/templates/user/show.html.heex:1073
 #, elixir-autogen, elixir-format
 msgid "Your address is used once, to send you to your own server's follow dialog. It is never stored here."
 msgstr ""
@@ -15054,8 +15065,8 @@ msgstr ""
 msgid "Your server"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:523
-#: lib/vutuv_web/agent_docs/text.ex:489
+#: lib/vutuv_web/agent_docs/markdown.ex:537
+#: lib/vutuv_web/agent_docs/text.ex:502
 #, elixir-autogen, elixir-format
 msgid "moved to %{address}"
 msgstr ""
@@ -15438,29 +15449,29 @@ msgstr ""
 msgid "Your public posts are copied to other servers. Once a copy is there we cannot delete it, we cannot change it, and we cannot see where it travels next. Editing or deleting a post on vutuv is only a request to those servers, and not every server honours it."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4654
+#: lib/vutuv_web/components/post_components.ex:4596
 #, elixir-autogen, elixir-format
 msgid "%{formatted} reply"
 msgid_plural "%{formatted} replies"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:4658
+#: lib/vutuv_web/components/post_components.ex:4600
 #, elixir-autogen, elixir-format
 msgid "%{formatted} like"
 msgid_plural "%{formatted} likes"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:4662
+#: lib/vutuv_web/components/post_components.ex:4604
 #, elixir-autogen, elixir-format
 msgid "%{formatted} repost"
 msgid_plural "%{formatted} reposts"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1019
-#: lib/vutuv_web/components/post_components.ex:4613
+#: lib/vutuv_web/agent_docs/markdown.ex:1033
+#: lib/vutuv_web/components/post_components.ex:4555
 #, elixir-autogen, elixir-format
 msgid "Already counted in the numbers above."
 msgstr ""
@@ -15470,20 +15481,20 @@ msgstr ""
 msgid "Answers people write out there appear under your post, marked as coming from another network. We keep a copy for up to six months and check now and then whether it is still published; if the author deletes it, ours goes too. You can remove any single reply, and switching this off deletes all of them."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1201
-#: lib/vutuv_web/agent_docs/text.ex:715
+#: lib/vutuv_web/agent_docs/markdown.ex:1215
+#: lib/vutuv_web/agent_docs/text.ex:728
 #, elixir-autogen, elixir-format
 msgid "Content warning"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1147
-#: lib/vutuv_web/components/post_components.ex:1703
+#: lib/vutuv_web/components/post_components.ex:1151
+#: lib/vutuv_web/components/post_components.ex:1707
 #: lib/vutuv_web/live/fediverse_account_live.ex:282
 #, elixir-autogen, elixir-format
 msgid "From another network"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1034
+#: lib/vutuv_web/components/post_components.ex:1038
 #, elixir-autogen, elixir-format
 msgid "Remove this reply from your post?"
 msgstr ""
@@ -15494,13 +15505,13 @@ msgid "Removed by the member"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:125
-#: lib/vutuv_web/agent_docs/markdown.ex:1018
+#: lib/vutuv_web/agent_docs/markdown.ex:1032
 #: lib/vutuv_web/agent_docs/text.ex:116
 #, elixir-autogen, elixir-format
 msgid "Replies from other networks"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1024
+#: lib/vutuv_web/live/notification_live/index.ex:1026
 #, elixir-autogen, elixir-format
 msgid "Reply from another network"
 msgstr ""
@@ -15510,7 +15521,7 @@ msgstr ""
 msgid "Reply removed."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1043
+#: lib/vutuv_web/components/post_components.ex:1047
 #, elixir-autogen, elixir-format
 msgid "Report this reply as not appropriate? It is deleted right away."
 msgstr ""
@@ -15520,8 +15531,8 @@ msgstr ""
 msgid "Reported as not appropriate"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1057
-#: lib/vutuv_web/live/notification_live/index.ex:534
+#: lib/vutuv_web/components/post_components.ex:1061
+#: lib/vutuv_web/live/notification_live/index.ex:536
 #, elixir-autogen, elixir-format
 msgid "Sent to you only, visible to nobody else"
 msgstr ""
@@ -15551,10 +15562,10 @@ msgstr ""
 msgid "That reply is not yours to remove."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1203
-#: lib/vutuv_web/components/post_components.ex:1078
-#: lib/vutuv_web/components/post_components.ex:1278
-#: lib/vutuv_web/components/post_components.ex:2076
+#: lib/vutuv_web/agent_docs/markdown.ex:1217
+#: lib/vutuv_web/components/post_components.ex:1082
+#: lib/vutuv_web/components/post_components.ex:1282
+#: lib/vutuv_web/components/post_components.ex:2080
 #, elixir-autogen, elixir-format
 msgid "View the original"
 msgstr ""
@@ -15576,7 +15587,7 @@ msgstr ""
 msgid "You have reported a lot today. Please try again tomorrow."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1244
+#: lib/vutuv_web/live/notification_live/index.ex:1246
 #, elixir-autogen, elixir-format
 msgid "replied to your post from another network."
 msgstr ""
@@ -16216,22 +16227,22 @@ msgstr ""
 msgid "device or detail"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2661
+#: lib/vutuv_web/components/post_components.ex:2603
 #, elixir-autogen, elixir-format
 msgid "Pinned post"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2772
+#: lib/vutuv_web/components/post_components.ex:2714
 #, elixir-autogen, elixir-format
 msgid "Pin to profile"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2780
+#: lib/vutuv_web/components/post_components.ex:2722
 #, elixir-autogen, elixir-format
 msgid "Unpin from profile"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2766
+#: lib/vutuv_web/components/post_components.ex:2708
 #, elixir-autogen, elixir-format
 msgid "Only one post can be pinned to your profile. Pin this one and release the other?"
 msgstr ""
@@ -16251,15 +16262,15 @@ msgstr ""
 msgid "Unpinned. The post is a normal post again."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:899
+#: lib/vutuv_web/agent_docs/markdown.ex:913
 #, elixir-autogen, elixir-format
 msgid "pinned post"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:460
-#: lib/vutuv_web/agent_docs/text.ex:451
+#: lib/vutuv_web/agent_docs/markdown.ex:474
+#: lib/vutuv_web/agent_docs/text.ex:464
 #: lib/vutuv_web/templates/user/edit.html.heex:180
-#: lib/vutuv_web/templates/user/show.html.heex:217
+#: lib/vutuv_web/templates/user/show.html.heex:244
 #: lib/vutuv_web/views/account_event_text.ex:190
 #, elixir-autogen, elixir-format
 msgid "Name pronunciation"
@@ -16315,9 +16326,9 @@ msgstr ""
 msgid "Describe the photo for people who can't see it"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1131
-#: lib/vutuv_web/agent_docs/text.ex:682
-#: lib/vutuv_web/components/post_components.ex:3239
+#: lib/vutuv_web/agent_docs/markdown.ex:1145
+#: lib/vutuv_web/agent_docs/text.ex:695
+#: lib/vutuv_web/components/post_components.ex:3181
 #, elixir-autogen, elixir-format
 msgid "Download the original"
 msgstr ""
@@ -16347,7 +16358,7 @@ msgstr ""
 msgid "Just the picture"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3238
+#: lib/vutuv_web/components/post_components.ex:3180
 #, elixir-autogen, elixir-format
 msgid "Next photo"
 msgstr ""
@@ -16357,29 +16368,29 @@ msgstr ""
 msgid "No image description yet"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3619
+#: lib/vutuv_web/components/post_components.ex:3561
 #, elixir-autogen, elixir-format
 msgid "Only you can see this post so far."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2209
+#: lib/vutuv_web/components/post_components.ex:2213
 #, elixir-autogen, elixir-format
 msgid "Open Fediverse settings"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3622
+#: lib/vutuv_web/components/post_components.ex:3564
 #, elixir-autogen, elixir-format
 msgid "Our AI is checking the photo. As soon as it is through, the post goes live by itself."
 msgid_plural "Our AI is checking the photos, %{done} of %{total} done. As soon as the last one is through, the post goes live by itself."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:3445
+#: lib/vutuv_web/components/post_components.ex:3387
 #, elixir-autogen, elixir-format
 msgid "Photo %{n} of %{total}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2981
+#: lib/vutuv_web/components/post_components.ex:2923
 #, elixir-autogen, elixir-format
 msgid "Photo is being checked"
 msgstr ""
@@ -16390,14 +16401,14 @@ msgstr ""
 msgid "Photo options"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1164
-#: lib/vutuv_web/agent_docs/text.ex:669
-#: lib/vutuv_web/components/post_components.ex:3656
+#: lib/vutuv_web/agent_docs/markdown.ex:1178
+#: lib/vutuv_web/agent_docs/text.ex:682
+#: lib/vutuv_web/components/post_components.ex:3598
 #, elixir-autogen, elixir-format
 msgid "Photos:"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3237
+#: lib/vutuv_web/components/post_components.ex:3179
 #, elixir-autogen, elixir-format
 msgid "Previous photo"
 msgstr ""
@@ -16418,7 +16429,7 @@ msgstr ""
 msgid "Show camera settings"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2262
+#: lib/vutuv_web/components/post_components.ex:2266
 #, elixir-autogen, elixir-format
 msgid "That server is blocked on this site, so no answer can be sent to it."
 msgstr ""
@@ -16438,7 +16449,7 @@ msgstr ""
 msgid "This photo carries the location it was taken at. Anyone who downloads the exact file can read it."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2253
+#: lib/vutuv_web/components/post_components.ex:2257
 #, elixir-autogen, elixir-format
 msgid "This reply was sent to you alone, so it cannot be answered publicly."
 msgstr ""
@@ -16448,12 +16459,12 @@ msgstr ""
 msgid "This reply was written on another network. Answering it means sending your words to that network, which vutuv only does for members who have switched Fediverse participation on."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2271
+#: lib/vutuv_web/components/post_components.ex:2275
 #, elixir-autogen, elixir-format
 msgid "This site does not take part in the Fediverse."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2205
+#: lib/vutuv_web/components/post_components.ex:2209
 #, elixir-autogen, elixir-format
 msgid "Turn on Fediverse participation to answer"
 msgstr ""
@@ -16468,7 +16479,7 @@ msgstr ""
 msgid "You have sent a lot of answers to other networks in the past hour. Please try again later."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2266
+#: lib/vutuv_web/components/post_components.ex:2270
 #, elixir-autogen, elixir-format
 msgid "You moved your Fediverse account to another server, so answers are no longer sent from here."
 msgstr ""
@@ -16478,7 +16489,7 @@ msgstr ""
 msgid "Your Fediverse settings do not allow sending an answer right now."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2219
+#: lib/vutuv_web/components/post_components.ex:2223
 #, elixir-autogen, elixir-format
 msgid "Your answer goes to %{handle} on their own server and to your Fediverse followers. It is a public post on vutuv as well."
 msgstr ""
@@ -16564,14 +16575,14 @@ msgid_plural "Some of these photos carry the location they were taken at, and th
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1037
-#: lib/vutuv_web/components/post_components.ex:4651
+#: lib/vutuv_web/agent_docs/markdown.ex:1051
+#: lib/vutuv_web/components/post_components.ex:4593
 #, elixir-autogen, elixir-format
 msgid "%{handle} liked this"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1035
-#: lib/vutuv_web/components/post_components.ex:4648
+#: lib/vutuv_web/agent_docs/markdown.ex:1049
+#: lib/vutuv_web/components/post_components.ex:4590
 #, elixir-autogen, elixir-format
 msgid "%{handle} shared this"
 msgstr ""
@@ -16581,12 +16592,12 @@ msgstr ""
 msgid "Fediverse reactions"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:4540
+#: lib/vutuv_web/components/post_components.ex:4482
 #, elixir-autogen, elixir-format
 msgid "From other networks"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1025
+#: lib/vutuv_web/live/notification_live/index.ex:1027
 #, elixir-autogen, elixir-format
 msgid "Reaction from another network"
 msgstr ""
@@ -16601,21 +16612,21 @@ msgstr ""
 msgid "Show under each of your posts who out there liked or shared it, by their account address on their own server, linked to that account. Visible to everyone who sees the post. We keep nothing else about these people: no name, no picture, no text. Switching it off deletes what is stored for it."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1079
+#: lib/vutuv_web/live/notification_live/index.ex:1081
 #, elixir-autogen, elixir-format
 msgid "liked your post on another network."
 msgid_plural "liked your post on another network."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1087
+#: lib/vutuv_web/live/notification_live/index.ex:1089
 #, elixir-autogen, elixir-format
 msgid "reacted to your post from another network."
 msgid_plural "reacted to your post from another network."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1071
+#: lib/vutuv_web/live/notification_live/index.ex:1073
 #, elixir-autogen, elixir-format
 msgid "shared your post on another network."
 msgid_plural "shared your post on another network."
@@ -16687,7 +16698,7 @@ msgstr ""
 msgid "Address of the account"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:341
+#: lib/vutuv_web/live/search_live.ex:346
 #, elixir-autogen, elixir-format
 msgid "An account on another network"
 msgstr ""
@@ -16714,7 +16725,7 @@ msgstr ""
 msgid "Follow somebody out there"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:357
+#: lib/vutuv_web/live/search_live.ex:362
 #, elixir-autogen, elixir-format
 msgid "Follow this account"
 msgstr ""
@@ -16754,7 +16765,7 @@ msgstr ""
 msgid "Show only accounts on this server"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:365
+#: lib/vutuv_web/live/search_live.ex:370
 #, elixir-autogen, elixir-format
 msgid "Sign in to follow this account"
 msgstr ""
@@ -16784,7 +16795,7 @@ msgstr ""
 msgid "That does not look like an address on another network. They look like @name@server."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:346
+#: lib/vutuv_web/live/search_live.ex:351
 #, elixir-autogen, elixir-format
 msgid "That is an address on Mastodon or one of the other networks, so nobody here carries it. You can follow it from vutuv."
 msgstr ""
@@ -16918,7 +16929,7 @@ msgstr ""
 msgid "Cached posts"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2031
+#: lib/vutuv_web/components/post_components.ex:2035
 #, elixir-autogen, elixir-format
 msgid "Only for this account's followers"
 msgstr ""
@@ -16932,7 +16943,7 @@ msgstr ""
 msgid "Thank you. Our copy was deleted right away."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2075
+#: lib/vutuv_web/components/post_components.ex:2079
 #, elixir-autogen, elixir-format
 msgid "Vote on the original"
 msgstr ""
@@ -16952,17 +16963,17 @@ msgstr ""
 msgid "Content from other networks taken down by members"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1402
+#: lib/vutuv_web/components/post_components.ex:1406
 #, elixir-autogen, elixir-format
 msgid "Hide"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2048
+#: lib/vutuv_web/components/post_components.ex:2052
 #, elixir-autogen, elixir-format
 msgid "Marked as sensitive by its author"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2010
+#: lib/vutuv_web/components/post_components.ex:2014
 #, elixir-autogen, elixir-format
 msgid "Mute %{handle}"
 msgstr ""
@@ -16979,7 +16990,7 @@ msgstr ""
 msgid "Nobody has removed or reported anything yet."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2017
+#: lib/vutuv_web/components/post_components.ex:2021
 #, elixir-autogen, elixir-format
 msgid "Report this post as not appropriate? Our copy is deleted for everyone on this vutuv right away."
 msgstr ""
@@ -17194,34 +17205,34 @@ msgstr ""
 msgid "What is being measured"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:894
+#: lib/vutuv_web/agent_docs/markdown.ex:908
 #, elixir-autogen, elixir-format
 msgid "(a picture)"
 msgid_plural "(%{count} pictures)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:1806
+#: lib/vutuv_web/components/post_components.ex:1810
 #, elixir-autogen, elixir-format
 msgid "A picture is on its way."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1835
+#: lib/vutuv_web/components/post_components.ex:1839
 #, elixir-autogen, elixir-format
 msgid "Cover it again"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1830
+#: lib/vutuv_web/components/post_components.ex:1834
 #, elixir-autogen, elixir-format
 msgid "Sensitive. Show the picture."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2112
+#: lib/vutuv_web/components/post_components.ex:2116
 #, elixir-autogen, elixir-format
 msgid "That is a lot of likes in one hour. Please try again later."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2118
+#: lib/vutuv_web/components/post_components.ex:2122
 #, elixir-autogen, elixir-format
 msgid "That post is not here any more."
 msgstr ""
@@ -17231,7 +17242,7 @@ msgstr ""
 msgid "Back to the feed"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2257
+#: lib/vutuv_web/components/post_components.ex:2261
 #, elixir-autogen, elixir-format
 msgid "This post was published to that account's followers only, so it cannot be answered with a public post here."
 msgstr ""
@@ -17271,7 +17282,7 @@ msgstr ""
 msgid "That link points at a single post. You can follow its author, %{account}, from here."
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:1305
+#: lib/vutuv_web/live/user_profile_live.ex:1341
 #, elixir-autogen, elixir-format
 msgid "You already follow one member."
 msgid_plural "You already follow %{count} members."
@@ -17365,8 +17376,8 @@ msgstr ""
 msgid "We could not reach the network just now. Please try again in a moment."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:841
-#: lib/vutuv_web/agent_docs/text.ex:535
+#: lib/vutuv_web/agent_docs/markdown.ex:855
+#: lib/vutuv_web/agent_docs/text.ex:548
 #, elixir-autogen, elixir-format
 msgid "verified profile"
 msgstr ""
@@ -17809,129 +17820,129 @@ msgstr ""
 msgid "You are on this vutuv yourself, so you now follow @%{handle} right here."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:118
+#: lib/vutuv_web/live/admin/screenshot_live.ex:119
 #, elixir-autogen, elixir-format
 msgid "%{pattern} is off the blocklist."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:103
+#: lib/vutuv_web/live/admin/screenshot_live.ex:104
 #, elixir-autogen, elixir-format
 msgid "%{pattern} is on the blocklist now."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:471
+#: lib/vutuv_web/live/admin/screenshot_live.ex:492
 #, elixir-autogen, elixir-format
 msgid "* stands for exactly one path segment"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:327
+#: lib/vutuv_web/live/admin/screenshot_live.ex:348
 #, elixir-autogen, elixir-format
 msgid "Adding an entry stops new captures, but a page captured before it stays on the profile or post that shows it, because nothing re-captures a link whose URL has not changed. This removes every stored screenshot of a page that is on the list today."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:281
+#: lib/vutuv_web/live/admin/screenshot_live.ex:302
 #, elixir-autogen, elixir-format
 msgid "Blocked: no screenshot is taken of this page."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:196
-#: lib/vutuv_web/live/admin/screenshot_live.ex:205
+#: lib/vutuv_web/live/admin/screenshot_live.ex:217
+#: lib/vutuv_web/live/admin/screenshot_live.ex:226
 #, elixir-autogen, elixir-format
 msgid "Blocklist"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:226
-#: lib/vutuv_web/live/admin/screenshot_live.ex:297
+#: lib/vutuv_web/live/admin/screenshot_live.ex:247
+#: lib/vutuv_web/live/admin/screenshot_live.ex:318
 #, elixir-autogen, elixir-format
 msgid "Domain or URL"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:288
+#: lib/vutuv_web/live/admin/screenshot_live.ex:309
 #, elixir-autogen, elixir-format
 msgid "Entries"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:284
+#: lib/vutuv_web/live/admin/screenshot_live.ex:305
 #, elixir-autogen, elixir-format
 msgid "Not blocked: this page is captured as usual."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:207
+#: lib/vutuv_web/live/admin/screenshot_live.ex:228
 #, elixir-autogen, elixir-format
 msgid "Pages this installation never screenshots. Some sites answer a headless capture with a cookie banner, a login wall or a bot check, so the picture shows the dialog instead of the page. Nothing else changes for a listed link: a post shows the plain link, and a profile link shows the site's name in place of a thumbnail."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:314
+#: lib/vutuv_web/live/admin/screenshot_live.ex:335
 #, elixir-autogen, elixir-format
 msgid "Remove %{pattern} from the blocklist?"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:337
+#: lib/vutuv_web/live/admin/screenshot_live.ex:358
 #, elixir-autogen, elixir-format
 msgid "Remove the stored screenshots of every blocklisted page?"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:339
+#: lib/vutuv_web/live/admin/screenshot_live.ex:360
 #, elixir-autogen, elixir-format
 msgid "Remove them now"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:139
+#: lib/vutuv_web/live/admin/screenshot_live.ex:140
 #, elixir-autogen, elixir-format
 msgid "Removed %{links} link screenshot(s) and %{posts} post screenshot(s)."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:336
+#: lib/vutuv_web/live/admin/screenshot_live.ex:357
 #, elixir-autogen, elixir-format
 msgid "Removing…"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:325
+#: lib/vutuv_web/live/admin/screenshot_live.ex:346
 #, elixir-autogen, elixir-format
 msgid "Screenshots taken earlier"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:290
+#: lib/vutuv_web/live/admin/screenshot_live.ex:311
 #, elixir-autogen, elixir-format
 msgid "The blocklist is empty, so every link is captured."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:259
+#: lib/vutuv_web/live/admin/screenshot_live.ex:280
 #, elixir-autogen, elixir-format
 msgid "Try a URL"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:275
+#: lib/vutuv_web/live/admin/screenshot_live.ex:296
 #, elixir-autogen, elixir-format
 msgid "URL to check"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:250
+#: lib/vutuv_web/live/admin/screenshot_live.ex:271
 #, elixir-autogen, elixir-format
 msgid "What an entry can look like"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:238
+#: lib/vutuv_web/live/admin/screenshot_live.ex:259
 #, elixir-autogen, elixir-format
 msgid "Why (optional)"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:472
+#: lib/vutuv_web/live/admin/screenshot_live.ex:493
 #, elixir-autogen, elixir-format
 msgid "one page (the scheme is ignored)"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:470
+#: lib/vutuv_web/live/admin/screenshot_live.ex:491
 #, elixir-autogen, elixir-format
 msgid "that path and everything below it"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:469
+#: lib/vutuv_web/live/admin/screenshot_live.ex:490
 #, elixir-autogen, elixir-format
 msgid "the same rule spelled out"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:468
+#: lib/vutuv_web/live/admin/screenshot_live.ex:489
 #, elixir-autogen, elixir-format
 msgid "the site: the domain, every subdomain, every path"
 msgstr ""
@@ -17951,17 +17962,17 @@ msgstr ""
 msgid "Screenshot blocklist"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:410
+#: lib/vutuv_web/components/post_components.ex:414
 #, elixir-autogen, elixir-format
 msgid "Nothing from the fediverse yet. Follow accounts out there to fill this tab."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:407
+#: lib/vutuv_web/components/post_components.ex:411
 #, elixir-autogen, elixir-format
 msgid "Nothing from vutuv yet. Follow people here to fill this tab."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:564
+#: lib/vutuv_web/live/notification_live/index.ex:566
 #, elixir-autogen, elixir-format
 msgid "View the conversation"
 msgstr ""
@@ -17998,7 +18009,7 @@ msgstr ""
 msgid "word in a post"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2115
+#: lib/vutuv_web/components/post_components.ex:2119
 #, elixir-autogen, elixir-format
 msgid "That reply is not here any more."
 msgstr ""
@@ -18309,24 +18320,24 @@ msgstr ""
 msgid "A post's page shows the members who liked it, right under the count. This is whether you are one of the faces."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1005
+#: lib/vutuv_web/agent_docs/markdown.ex:1019
 #, elixir-autogen, elixir-format
 msgid "Liked by"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3822
+#: lib/vutuv_web/components/post_components.ex:3764
 #, elixir-autogen, elixir-format
 msgid "Liked by %{name}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:3824
+#: lib/vutuv_web/components/post_components.ex:3766
 #, elixir-autogen, elixir-format
 msgid "Liked by %{name} and %{formatted} other"
 msgid_plural "Liked by %{name} and %{formatted} others"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:3835
+#: lib/vutuv_web/components/post_components.ex:3777
 #, elixir-autogen, elixir-format
 msgid "Only you see everyone here: some of these members are not named to other readers."
 msgstr ""
@@ -18351,12 +18362,12 @@ msgstr ""
 msgid "Your likes follow the site default again."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1060
+#: lib/vutuv_web/agent_docs/markdown.ex:1074
 #, elixir-autogen, elixir-format
 msgid "%{address} (this page only)"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1057
+#: lib/vutuv_web/agent_docs/markdown.ex:1071
 #, elixir-autogen, elixir-format
 msgid "%{address} (whole website)"
 msgstr ""
@@ -18366,12 +18377,12 @@ msgstr ""
 msgid "Verified webpage of the author (%{address})"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:1049
+#: lib/vutuv_web/agent_docs/markdown.ex:1063
 #, elixir-autogen, elixir-format
 msgid "Verified webpages of the author linked here: %{addresses}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:191
+#: lib/vutuv_web/agent_docs/list_docs.ex:214
 #, elixir-autogen, elixir-format
 msgid "%{listed} of %{total} members are listed here; the others do not open their profile to search engines."
 msgstr ""
@@ -18396,7 +18407,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/job_reference_controller.ex:144
 #: lib/vutuv_web/templates/job_reference/manage.html.heex:18
 #: lib/vutuv_web/templates/job_reference/new.html.heex:5
-#: lib/vutuv_web/templates/user/show.html.heex:744
+#: lib/vutuv_web/templates/user/show.html.heex:771
 #, elixir-autogen, elixir-format
 msgid "Add an employment reference"
 msgstr ""
@@ -18471,7 +18482,7 @@ msgstr ""
 #: lib/vutuv_web/templates/job_reference/new.html.heex:4
 #: lib/vutuv_web/templates/job_reference/show.html.heex:12
 #: lib/vutuv_web/templates/job_reference/view.html.heex:11
-#: lib/vutuv_web/templates/user/show.html.heex:741
+#: lib/vutuv_web/templates/user/show.html.heex:768
 #, elixir-autogen, elixir-format
 msgid "Employment references"
 msgstr ""
@@ -18721,7 +18732,7 @@ msgstr ""
 msgid "Employment references of %{name}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:747
+#: lib/vutuv_web/agent_docs/markdown.ex:761
 #, elixir-autogen, elixir-format
 msgid "document"
 msgstr ""
@@ -18869,7 +18880,7 @@ msgstr ""
 msgid "Employment reference deleted"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1034
+#: lib/vutuv_web/live/notification_live/index.ex:1036
 #, elixir-autogen, elixir-format
 msgid "Employment reference review"
 msgstr ""
@@ -18894,13 +18905,13 @@ msgstr ""
 msgid "Reviewing your reference. This usually takes about %{duration}."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1232
+#: lib/vutuv_web/live/notification_live/index.ex:1234
 #: lib/vutuv_web/views/notification_digest_text.ex:84
 #, elixir-autogen, elixir-format
 msgid "The review of “%{title}” is ready."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1229
+#: lib/vutuv_web/live/notification_live/index.ex:1231
 #: lib/vutuv_web/views/notification_digest_text.ex:81
 #, elixir-autogen, elixir-format
 msgid "The review of “%{title}” is ready: %{grade}."
@@ -18916,7 +18927,7 @@ msgstr ""
 msgid "When the review of one of your employment references is finished. It takes minutes, so you can close the page and wait for the email."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:1235
+#: lib/vutuv_web/live/notification_live/index.ex:1237
 #, elixir-autogen, elixir-format
 msgid "Your employment reference has been reviewed."
 msgstr ""
@@ -19119,7 +19130,7 @@ msgstr ""
 msgid "by the lawyer Tom Braegelmann"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:785
+#: lib/vutuv_web/templates/user/show.html.heex:812
 #, elixir-autogen, elixir-format
 msgid "Documents:"
 msgstr ""
@@ -19290,12 +19301,12 @@ msgstr ""
 msgid "Cancel registration"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:829
+#: lib/vutuv_web/live/notification_live/index.ex:831
 #, elixir-autogen, elixir-format
 msgid "Welcome to vutuv! You can change your username {handle} at {url}, and at {import_url} you can import an existing LinkedIn profile."
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:1290
+#: lib/vutuv_web/live/user_profile_live.ex:1326
 #, elixir-autogen, elixir-format
 msgid "Follow other members"
 msgstr ""
@@ -20001,17 +20012,17 @@ msgstr ""
 msgid "Start over"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:2145
+#: lib/vutuv_web/components/post_components.ex:2149
 #, elixir-autogen, elixir-format
 msgid "A like or a repost is sent back to the network this post came from, and your account does not take part in the Fediverse at the moment. You can switch it on in the {settings}."
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:255
+#: lib/vutuv_web/components/organization_components.ex:268
 #, elixir-autogen, elixir-format
 msgid "Editorial"
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:261
+#: lib/vutuv_web/components/organization_components.ex:274
 #, elixir-autogen, elixir-format
 msgid "Edits the page and posts jobs."
 msgstr ""
@@ -20021,7 +20032,7 @@ msgstr ""
 msgid "Give members their roles on this page. Someone can hold several at once, and every role is granted on its own."
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:260
+#: lib/vutuv_web/components/organization_components.ex:273
 #, elixir-autogen, elixir-format
 msgid "Manages the team and the domains, and edits the page."
 msgstr ""
@@ -20031,7 +20042,7 @@ msgstr ""
 msgid "Pick at least one role."
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:263
+#: lib/vutuv_web/components/organization_components.ex:276
 #, elixir-autogen, elixir-format
 msgid "Posts jobs."
 msgstr ""
@@ -20046,7 +20057,7 @@ msgstr ""
 msgid "Roles updated."
 msgstr ""
 
-#: lib/vutuv_web/components/organization_components.ex:262
+#: lib/vutuv_web/components/organization_components.ex:275
 #, elixir-autogen, elixir-format
 msgid "Writes posts in the organization's name."
 msgstr ""
@@ -20056,33 +20067,33 @@ msgstr ""
 msgid "The owner gives other members their roles on the page, and can hand ownership over to someone else at any time. Someone can hold several roles, and writing in the organization's name is always granted on its own."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:493
+#: lib/vutuv_web/live/organization_live/show.ex:535
 #, elixir-autogen, elixir-format
 msgid "Nothing published yet."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:475
+#: lib/vutuv_web/live/organization_live/show.ex:517
 #: lib/vutuv_web/live/post_live/composer.ex:1814
 #, elixir-autogen, elixir-format
 msgid "Post as %{name}"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:177
+#: lib/vutuv_web/live/organization_live/show.ex:191
 #, elixir-autogen, elixir-format
 msgid "Published as %{name}."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:189
+#: lib/vutuv_web/live/organization_live/show.ex:203
 #, elixir-autogen, elixir-format
 msgid "That post could not be published."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:467
+#: lib/vutuv_web/live/organization_live/show.ex:509
 #, elixir-autogen, elixir-format
 msgid "Write something as %{name}"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:183
+#: lib/vutuv_web/live/organization_live/show.ex:197
 #, elixir-autogen, elixir-format
 msgid "You may no longer write in this organization's name."
 msgstr ""
@@ -20107,7 +20118,7 @@ msgstr ""
 msgid "Stopped writing as an organization"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/show.ex:451
+#: lib/vutuv_web/live/organization_live/show.ex:493
 #, elixir-autogen, elixir-format
 msgid "Write as %{name} for now"
 msgstr ""
@@ -20132,32 +20143,32 @@ msgstr ""
 msgid "You are yourself again."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/activity.ex:75
+#: lib/vutuv_web/live/organization_live/activity.ex:76
 #, elixir-autogen, elixir-format
 msgid "%{name} follows this page."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/activity.ex:78
+#: lib/vutuv_web/live/organization_live/activity.ex:79
 #, elixir-autogen, elixir-format
 msgid "%{name} liked a post."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/activity.ex:81
+#: lib/vutuv_web/live/organization_live/activity.ex:82
 #, elixir-autogen, elixir-format
 msgid "%{name} reposted a post."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/activity.ex:47
+#: lib/vutuv_web/live/organization_live/activity.ex:48
 #, elixir-autogen, elixir-format
 msgid "Activity – %{name}"
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/activity.ex:99
+#: lib/vutuv_web/live/organization_live/activity.ex:106
 #, elixir-autogen, elixir-format
 msgid "Nothing has happened yet."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/activity.ex:94
+#: lib/vutuv_web/live/organization_live/activity.ex:101
 #, elixir-autogen, elixir-format
 msgid "What happened to this page. Everyone on the team sees the same list, and opening it marks it read for all of you."
 msgstr ""
@@ -20169,7 +20180,68 @@ msgid_plural "%{formatted} new"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/organization_live/activity.ex:84
+#: lib/vutuv_web/live/organization_live/activity.ex:85
 #, elixir-autogen, elixir-format
 msgid "%{name} mentioned this page."
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:158
+#, elixir-autogen, elixir-format
+msgid "%{name} follows"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/feed.ex:41
+#, elixir-autogen, elixir-format
+msgid "Feed – %{name}"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:159
+#, elixir-autogen, elixir-format
+msgid "Follow as %{name}"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:101
+#, elixir-autogen, elixir-format
+msgid "Members and organizations"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/feed.ex:85
+#, elixir-autogen, elixir-format
+msgid "Nothing here yet. This page does not follow anyone, or nobody it follows has published."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:97
+#, elixir-autogen, elixir-format
+msgid "The members, organizations and topics this page follows. Everything here shapes its feed, and only the team can see this list."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:148
+#, elixir-autogen, elixir-format
+msgid "This page does not follow any topics yet."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:104
+#, elixir-autogen, elixir-format
+msgid "This page does not follow anyone yet."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:145
+#, elixir-autogen, elixir-format
+msgid "Topics"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:158
+#: lib/vutuv_web/live/organization_live/following.ex:159
+#, elixir-autogen, elixir-format
+msgid "Unfollow %{tag}"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/feed.ex:81
+#, elixir-autogen, elixir-format
+msgid "What the members and organizations this page follows have published. Liking or saving something here is done from your own account, not the page's."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/following.ex:43
+#, elixir-autogen, elixir-format
+msgid "Follows – %{name}"
 msgstr ""

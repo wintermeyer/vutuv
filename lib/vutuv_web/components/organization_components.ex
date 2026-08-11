@@ -226,8 +226,11 @@ defmodule VutuvWeb.OrganizationComponents do
         <.manage_tab :if={@publisher?} active={@active == :feed} navigate={"/organizations/#{@organization.slug}/feed"}>
           {gettext("Feed")}
         </.manage_tab>
+        <%!-- "Follows", not "Following": the member-voiced msgid translates to
+        "Folge ich" (I follow), which is the wrong voice under a page's nav —
+        this list is what the PAGE follows, not what the reader does. --%>
         <.manage_tab :if={@publisher?} active={@active == :following} navigate={"/organizations/#{@organization.slug}/following"}>
-          {gettext("Following")}
+          {gettext("Follows")}
         </.manage_tab>
       </nav>
     </div>
