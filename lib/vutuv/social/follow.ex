@@ -17,7 +17,13 @@ defmodule Vutuv.Social.Follow do
   import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
 
   schema "follows" do
+    # The follower is a member OR an organization (issue #1336), CHECK-enforced
+    # to exactly one — the same nullable pair the followee side carries, so the
+    # table has four legal combinations. Nothing writes an organization follower
+    # yet: the column shipped ahead of its writer so every reader could be
+    # taught about the row shape first.
     belongs_to(:follower, Vutuv.Accounts.User)
+    belongs_to(:follower_organization, Vutuv.Organizations.Organization)
     # The followee is a member OR an organization (issue #1336), CHECK-enforced
     # to exactly one. The follower stays a member: an organization *following*
     # somebody is a later step and needs its own decisions about whose feed and
