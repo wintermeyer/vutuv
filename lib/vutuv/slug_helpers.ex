@@ -49,12 +49,20 @@ defmodule Vutuv.SlugHelpers do
   """
   def handleize(text) do
     text
+    |> handle_body()
+    |> String.slice(0, @handle_max_length)
+    |> String.trim("_")
+  end
+
+  # The grammar itself, without the handle's length ceiling: a tag slug shares
+  # it (`tagify/1`) and may run to 60 characters.
+  defp handle_body(text) do
+    text
     |> String.downcase()
     |> transliterate()
     |> String.replace(~r/[^a-z0-9\s_-]/u, "")
     |> String.replace(~r/[\s-]+/, "_")
-    |> String.trim("_")
-    |> String.slice(0, @handle_max_length)
+    |> String.replace(~r/_+/, "_")
     |> String.trim("_")
   end
 
@@ -71,13 +79,94 @@ defmodule Vutuv.SlugHelpers do
     |> String.replace(~r/\p{Mn}/u, "")
   end
 
+  # The symbols that are part of a technology's name rather than punctuation in
+  # it (issue #1337). Deleting them made `c++`, `c#`, `c` and `µc` slugify to
+  # the same `c`, so three of the four lived behind a random collision suffix
+  # and the readable `/tags/c` belonged to C++. Deliberately a short, explicit
+  # list and not a general rule: each entry is a name people actually write.
+  #
+  # Each is anchored so a stray symbol does not turn into a word — a `#` only
+  # counts when it follows the name it belongs to, a `+` when it follows the
+  # name or another `+`, and a `.` only at the very front (`.net`, while
+  # `node.js` keeps the separator it has always had).
+  @tag_symbol_words [
+    {~r/^\./, "dot"},
+    {~r/(?<=[a-z0-9])#/u, "sharp"},
+    {~r/(?<=[a-z0-9+])\+/u, "p"},
+    {~r{/}, "_"}
+  ]
+
+  @doc """
+  A **tag** slug: the handle grammar, `^[a-z0-9_]+$`, with the technology
+  symbols spelled out first.
+
+      iex> Vutuv.SlugHelpers.tagify("C++")
+      "cpp"
+
+      iex> Vutuv.SlugHelpers.tagify("Machine Learning")
+      "machine_learning"
+
+  Tags have their own slugifier rather than sharing `slugify_downcase/1` with
+  organizations, job postings and CV sections, because only a tag slug is also
+  the name of that tag's fediverse actor (#1330). That name has to survive
+  every server out there, which means the narrowest local part any of them
+  accepts — the same grammar `Vutuv.Handles` already enforces for a member
+  handle. A hyphen is the better character for the other three: it is the web's
+  word separator and reads to a crawler as one, and nothing federates them.
+
+  Answers `""` when nothing keyable is left, which is the caller's cue to fall
+  back to a generated slug (`gen_tag_slug_unique/3`).
+  """
+  def tagify(text) do
+    text
+    |> to_string()
+    |> String.downcase()
+    |> String.trim()
+    |> apply_symbol_words()
+    |> handle_body()
+  end
+
+  defp apply_symbol_words(text) do
+    Enum.reduce(@tag_symbol_words, text, fn {pattern, word}, acc ->
+      String.replace(acc, pattern, word)
+    end)
+  end
+
+  @doc """
+  Like `gen_slug_unique/4` but for tags: `tagify/1` for the body, and a
+  collision suffix joined with `_` rather than `.` so the result stays inside
+  the actor grammar.
+  """
+  def gen_tag_slug_unique(value, model, slug_field) do
+    slug = tagify(value)
+
+    taken =
+      Repo.one(
+        from(s in model,
+          where: field(s, ^slug_field) == ^slug,
+          limit: 1,
+          select: field(s, ^slug_field)
+        )
+      )
+
+    case {taken, slug} do
+      {_, ""} -> short_sha()
+      {nil, slug} -> slug
+      {_, slug} -> "#{slug}_#{short_sha()}"
+    end
+  end
+
   defp gen_slug(resource) do
     resource
     |> to_string()
     |> slugify_downcase()
   end
 
-  defp slugify_downcase(text) do
+  @doc """
+  The slug of everything that is **not** a tag — organizations, job postings,
+  CV sections: downcased, transliterated, separator runs to `-`.
+  """
+  def slugify_downcase(text) do
     text
     |> String.downcase()
     |> transliterate()

@@ -30,7 +30,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       {:ok, user_tag} = Vutuv.Tags.add_user_tag(user, name)
       tag_id = user_tag.tag_id
 
-      conn = delete(conn, ~p"/settings/tags/#{String.downcase(name)}")
+      conn = delete(conn, ~p"/settings/tags/#{Vutuv.SlugHelpers.tagify(name)}")
 
       assert redirected_to(conn) == ~p"/settings/tags"
 

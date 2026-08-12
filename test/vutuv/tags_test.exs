@@ -383,7 +383,7 @@ defmodule Vutuv.TagsTest do
       assert {:ok, user_tag} = Tags.add_user_tag(user, "#" <> name)
       tag = Repo.preload(user_tag, :tag).tag
       assert tag.name == name
-      assert tag.slug == name
+      assert tag.slug == String.replace(name, "-", "_")
     end
 
     test "add_user_tag keeps a trailing # (C# stays C#)" do
@@ -705,7 +705,8 @@ defmodule Vutuv.TagsTest do
       assert {:ok, tag} = Tags.declare_honor_tag("vutuv_contributor")
       assert tag.honor?
       assert tag.name == "vutuv_contributor"
-      assert tag.slug == "vutuv-contributor"
+      # Underscore since #1337: the slug is also a fediverse actor name.
+      assert tag.slug == "vutuv_contributor"
     end
 
     test "declare_honor_tag/1 flips an existing holder-less tag" do
@@ -1082,7 +1083,7 @@ defmodule Vutuv.TagsTest do
       name = unique_tag_name("Posted")
       Vutuv.PostsHelpers.create_post!(author, %{"body" => "words", "tags" => name})
 
-      tag = Repo.get_by!(Tag, slug: String.downcase(name))
+      tag = Repo.get_by!(Tag, slug: name |> String.downcase() |> String.replace("-", "_"))
       assert Tags.indexable_tag?(tag)
     end
 
@@ -1096,7 +1097,7 @@ defmodule Vutuv.TagsTest do
         "denials" => [%{"wildcard" => "everyone"}]
       })
 
-      tag = Repo.get_by!(Tag, slug: String.downcase(name))
+      tag = Repo.get_by!(Tag, slug: name |> String.downcase() |> String.replace("-", "_"))
       refute Tags.indexable_tag?(tag)
     end
   end

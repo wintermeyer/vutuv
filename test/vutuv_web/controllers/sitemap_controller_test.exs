@@ -120,7 +120,7 @@ defmodule VutuvWeb.SitemapControllerTest do
 
       assert conn.status == 200
       assert conn.resp_body =~ "<loc>#{@base}/tags/elixir-mapped</loc>"
-      assert conn.resp_body =~ "<loc>#{@base}/tags/#{String.downcase(posted_name)}</loc>"
+      assert conn.resp_body =~ "<loc>#{@base}/tags/#{Vutuv.SlugHelpers.tagify(posted_name)}</loc>"
       refute conn.resp_body =~ empty.slug
       refute conn.resp_body =~ thin.slug
     end

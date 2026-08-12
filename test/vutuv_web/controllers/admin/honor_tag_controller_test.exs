@@ -31,8 +31,8 @@ defmodule VutuvWeb.Admin.HonorTagControllerTest do
     test "creating a new honor tag lands on its roster", %{conn: conn} do
       conn = post(conn, ~p"/admin/honor_tags", honor_tag: %{name: "vutuv_contributor"})
 
-      assert redirected_to(conn) == ~p"/admin/tags/vutuv-contributor"
-      tag = Repo.get_by(Tag, slug: "vutuv-contributor")
+      assert redirected_to(conn) == ~p"/admin/tags/vutuv_contributor"
+      tag = Repo.get_by(Tag, slug: "vutuv_contributor")
       assert tag.honor?
     end
 

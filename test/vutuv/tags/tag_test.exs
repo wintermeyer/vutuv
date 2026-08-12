@@ -19,7 +19,9 @@ defmodule Vutuv.Tags.TagTest do
     test "keeps a multi-word name and slugifies it" do
       changeset = Tag.changeset(%Tag{}, %{"value" => "Ruby on Rails"})
       assert get_change(changeset, :name) == "Ruby on Rails"
-      assert get_change(changeset, :slug) == "ruby-on-rails"
+      # Underscore, not hyphen: a tag slug is also the name of that tag's
+      # fediverse actor (#1330), so it lives in the handle grammar (#1337).
+      assert get_change(changeset, :slug) == "ruby_on_rails"
     end
 
     test "collapses internal whitespace runs to a single space" do

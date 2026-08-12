@@ -83,7 +83,7 @@ defmodule VutuvWeb.TagControllerTest do
       post =
         Vutuv.PostsHelpers.create_post!(author, %{body: "Elixir meetup notes", tags: tag_name})
 
-      html = conn |> get(~p"/tags/#{String.downcase(tag_name)}") |> html_response(200)
+      html = conn |> get(~p"/tags/#{Vutuv.SlugHelpers.tagify(tag_name)}") |> html_response(200)
 
       assert html =~ "tag-timeline"
       assert html =~ "Elixir meetup notes"

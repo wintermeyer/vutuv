@@ -152,7 +152,7 @@ defmodule Vutuv.Tags.Tag do
   end
 
   def gen_slug(changeset, value) do
-    slug = Vutuv.SlugHelpers.gen_slug_unique(value, __MODULE__, :slug)
+    slug = Vutuv.SlugHelpers.gen_tag_slug_unique(value, __MODULE__, :slug)
     put_change(changeset, :slug, slug)
   end
 
