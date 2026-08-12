@@ -164,7 +164,7 @@ defmodule Vutuv.PostsTest do
 
     test "creates tags from a comma-separated list, reusing tags case-insensitively" do
       name = unique_tag_name("Elixir")
-      slug = String.downcase(name)
+      slug = Vutuv.SlugHelpers.tagify(name)
       existing = insert(:tag, name: name, slug: slug)
 
       # Only a comma splits, so "Phoenix Ecto" would be one tag; these are two.
@@ -185,7 +185,7 @@ defmodule Vutuv.PostsTest do
 
     test "strips a leading # from post tags and reuses the bare tag" do
       name = unique_tag_name("Elixir")
-      existing = insert(:tag, name: name, slug: String.downcase(name))
+      existing = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       # A member types the hashtag form in the composer; it stores the bare tags
       # and links #Elixir to the existing Elixir tag rather than a # duplicate.
@@ -245,7 +245,10 @@ defmodule Vutuv.PostsTest do
       # once and count it once, or a member is refused a sixth tag for having
       # typed a fifth one twice — under two spellings that look nothing alike.
       canonical_name = unique_tag_name("Ruby on Rails")
-      canonical = insert(:tag, name: canonical_name, slug: canonical_name)
+
+      canonical =
+        insert(:tag, name: canonical_name, slug: Vutuv.SlugHelpers.tagify(canonical_name))
+
       abbreviation = unique_tag_name("ROR")
 
       insert(:tag,
@@ -976,7 +979,7 @@ defmodule Vutuv.PostsTest do
       viewer = user()
       stranger = user()
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       Vutuv.Tags.follow_tag(viewer, tag)
 
       tagged = create_post!(stranger, %{body: "elixir news", tags: String.downcase(name)})
@@ -991,7 +994,7 @@ defmodule Vutuv.PostsTest do
       friend = user()
       follow!(viewer, friend)
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       Vutuv.Tags.follow_tag(viewer, tag)
 
       post = create_post!(friend, %{body: "elixir by a friend", tags: String.downcase(name)})
@@ -1005,7 +1008,7 @@ defmodule Vutuv.PostsTest do
       noisy = user()
       follow!(viewer, noisy)
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       Vutuv.Tags.follow_tag(viewer, tag)
 
       fid = Vutuv.Social.follow_id(viewer.id, noisy.id)
@@ -1019,7 +1022,7 @@ defmodule Vutuv.PostsTest do
       viewer = user()
       blocked = user()
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       Vutuv.Tags.follow_tag(viewer, tag)
       {:ok, _} = Vutuv.Social.block_user(viewer, blocked)
 
@@ -1031,7 +1034,7 @@ defmodule Vutuv.PostsTest do
       viewer = user()
       stranger = user()
       name = unique_tag_name("Elixir")
-      insert(:tag, name: name, slug: String.downcase(name))
+      insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       tagged = create_post!(stranger, %{body: "elixir news", tags: String.downcase(name)})
 

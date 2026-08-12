@@ -26,6 +26,10 @@ defmodule Vutuv.Tags.Tag do
   # (see `punctuation_only?/1` and the guard in `create_or_link_tag/2`).
   @punctuation_message "must not be only punctuation"
 
+  # A live tag's slug doubles as its fediverse actor name (#1330), so it may
+  # hold only what the narrowest local part out there accepts.
+  @slug_grammar_message "may contain only lowercase letters, digits and underscores"
+
   # What counts as content: anything that is not punctuation (`\p{P}`), a
   # separator/whitespace (`\p{Z}`) or an invisible control character (`\p{C}`).
   # Letters and digits, of course — and **symbols** (`\p{S}`), which is what
@@ -102,7 +106,30 @@ defmodule Vutuv.Tags.Tag do
     |> validate_punctuation_only()
     |> validate_length(:slug, max: 60)
     |> validate_length(:name, max: 255)
+    |> validate_slug_grammar()
     |> unique_constraint(:slug)
+    |> check_constraint(:slug,
+      name: :tags_slug_actor_grammar,
+      message: @slug_grammar_message
+    )
+  end
+
+  # A live tag's slug is also the name of its fediverse actor (#1330), so it
+  # lives in the narrowest local part any server accepts — the same grammar
+  # `Vutuv.Handles` enforces for a member handle. `gen_slug/2` produces nothing
+  # else; this is here for the admin edit form, which casts `:slug` straight
+  # from a text field, and it runs only on a **change**, so an alias row keeping
+  # its retired spelling is untouched (that spelling is the whole reason the row
+  # exists).
+  #
+  # The database says the same thing (`tags_slug_actor_grammar`); the
+  # `check_constraint` above turns a race into a field error rather than a 500.
+  defp validate_slug_grammar(changeset) do
+    if get_field(changeset, :merged_into_id) do
+      changeset
+    else
+      validate_format(changeset, :slug, ~r/^[a-z0-9_]+$/, message: @slug_grammar_message)
+    end
   end
 
   # A name that is nothing but a URL, a domain or an email address is refused

@@ -118,7 +118,7 @@ defmodule Vutuv.SearchTest do
 
     test "tags match by name or slug prefix, case-insensitively" do
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       insert(:tag)
 
       assert Enum.map(Search.instant("eLi").tags, & &1.id) == [tag.id]
@@ -126,7 +126,7 @@ defmodule Vutuv.SearchTest do
 
     test "the tag member count excludes unactivated and moderation-hidden members" do
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       visible = searchable_user("Vera", "Visible")
       unactivated = insert(:user, email_confirmed?: false)
@@ -263,7 +263,7 @@ defmodule Vutuv.SearchTest do
 
     test "status combines with a tag filter", ctx do
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       insert(:user_tag, tag: tag, user: ctx.looking)
       # A looking member without the tag must not match.
       insert(:activated_user,
@@ -314,7 +314,7 @@ defmodule Vutuv.SearchTest do
 
     test "tag: lists people with that tag, not the tag itself" do
       name = unique_tag_name("PHP")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       with_tag = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
       insert(:user_tag, tag: tag, user: with_tag)
       insert(:activated_user, first_name: "Norbert", last_name: "NoTag")
@@ -330,7 +330,7 @@ defmodule Vutuv.SearchTest do
 
     test "a name combines with the tag filter" do
       name = unique_tag_name("PHP")
-      php_tag = insert(:tag, name: name, slug: String.downcase(name))
+      php_tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       php_mueller = searchable_user("Hans", "Müller")
       insert(:user_tag, tag: php_tag, user: php_mueller)
       searchable_user("Heike", "Müller")
@@ -342,7 +342,7 @@ defmodule Vutuv.SearchTest do
 
     test "tag: also finds posts carrying that tag, matching the tag not the body (issue #946)" do
       name = unique_tag_name("PHP")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       with_tag = insert(:activated_user)
       insert(:user_tag, tag: tag, user: with_tag)
 
@@ -362,7 +362,7 @@ defmodule Vutuv.SearchTest do
 
     test "the Posts scope with a tag: filter returns only posts" do
       name = unique_tag_name("PHP")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       with_tag = insert(:activated_user)
       insert(:user_tag, tag: tag, user: with_tag)
 
@@ -408,7 +408,7 @@ defmodule Vutuv.SearchTest do
 
     test "tags carry their member counts" do
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       insert(:user_tag, tag: tag, user: insert(:activated_user))
       insert(:user_tag, tag: tag, user: insert(:activated_user))
 
@@ -420,7 +420,7 @@ defmodule Vutuv.SearchTest do
     test "the scope filter limits what is searched" do
       searchable_user("Elia", "Tester")
       name = unique_tag_name("Elixir")
-      insert(:tag, name: name, slug: String.downcase(name))
+      insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       author = insert(:activated_user)
       Vutuv.PostsHelpers.create_post!(author, %{body: "All about elixir and more"})
 

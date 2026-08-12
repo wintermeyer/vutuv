@@ -138,7 +138,10 @@ defmodule VutuvWeb.AgentDocs.MarkdownFormatTest do
       beta = unique_tag_name("beta")
 
       for name <- [alpha, beta] do
-        insert(:user_tag, user: user, tag: insert(:tag, name: name, slug: name))
+        insert(:user_tag,
+          user: user,
+          tag: insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
+        )
       end
 
       body = get(build_conn(), "/#{user.username}.md").resp_body

@@ -109,11 +109,15 @@ defmodule VutuvWeb.SearchLiveTest do
 
     test "matching tags show as chips linking to the tag page", %{conn: conn} do
       name = unique_tag_name("Elixir")
-      insert(:tag, name: name, slug: String.downcase(name))
+      insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       {:ok, view, _html} = live(conn, ~p"/search?q=eli")
 
-      assert has_element?(view, ~s(#search-tags a[href="/tags/#{String.downcase(name)}"]), name)
+      assert has_element?(
+               view,
+               ~s(#search-tags a[href="/tags/#{Vutuv.SlugHelpers.tagify(name)}"]),
+               name
+             )
     end
 
     test "matching public posts show with author and permalink", %{conn: conn} do
@@ -196,7 +200,7 @@ defmodule VutuvWeb.SearchLiveTest do
 
     test "tag and post matches are marked too", %{conn: conn} do
       name = unique_tag_name("Elixir")
-      insert(:tag, name: name, slug: String.downcase(name))
+      insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       author = insert(:activated_user)
       create_post!(author, %{body: "Quantum gardening tips for beginners"})
 
@@ -222,7 +226,7 @@ defmodule VutuvWeb.SearchLiveTest do
     test "the scope chips narrow the search and the URL carries the filter", %{conn: conn} do
       searchable_user("Elia", "Tester")
       name = unique_tag_name("Elixir")
-      insert(:tag, name: name, slug: String.downcase(name))
+      insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       {:ok, view, _html} = live(conn, ~p"/search?q=eli")
       assert has_element?(view, "#search-people")
@@ -287,7 +291,7 @@ defmodule VutuvWeb.SearchLiveTest do
 
     test "tag chips carry member counts", %{conn: conn} do
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       insert(:user_tag, tag: tag, user: insert(:activated_user))
 
       {:ok, view, _html} = live(conn, ~p"/search?q=elixir")
@@ -334,7 +338,7 @@ defmodule VutuvWeb.SearchLiveTest do
 
     test "tag: lists the people with that tag, not the tag itself", %{conn: conn} do
       name = unique_tag_name("PHP")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       tagged = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
       insert(:user_tag, tag: tag, user: tagged)
       insert(:activated_user, first_name: "Norbert", last_name: "NoTag")
@@ -349,7 +353,7 @@ defmodule VutuvWeb.SearchLiveTest do
     test "tag: also lists posts carrying that tag, and keeps the chips enabled (issue #946)",
          %{conn: conn} do
       name = unique_tag_name("PHP")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       tagged = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
       insert(:user_tag, tag: tag, user: tagged)
       author = insert(:activated_user)
@@ -367,7 +371,7 @@ defmodule VutuvWeb.SearchLiveTest do
 
     test "a name combines with tag and city filters", %{conn: conn} do
       name = unique_tag_name("PHP")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       php_mueller = searchable_user("Hans", "Müller")
       insert(:user_tag, tag: tag, user: php_mueller)
       koblenz_mueller = searchable_user("Klara", "Müller")

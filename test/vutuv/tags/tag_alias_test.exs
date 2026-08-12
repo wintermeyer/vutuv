@@ -21,14 +21,14 @@ defmodule Vutuv.Tags.TagAliasTest do
     name = unique_tag_name("Ruby on Rails")
 
     canonical =
-      insert(:tag, name: name, slug: Vutuv.SlugHelpers.gen_slug_unique(name, Tag, :slug))
+      insert(:tag, name: name, slug: Vutuv.SlugHelpers.gen_tag_slug_unique(name, Tag, :slug))
 
     alias_name = unique_tag_name("ROR")
 
     tag_alias =
       insert(:tag,
         name: alias_name,
-        slug: Vutuv.SlugHelpers.gen_slug_unique(alias_name, Tag, :slug),
+        slug: Vutuv.SlugHelpers.gen_tag_slug_unique(alias_name, Tag, :slug),
         merged_into_id: canonical.id,
         alias_kind: kind
       )

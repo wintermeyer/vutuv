@@ -114,7 +114,11 @@ defmodule VutuvWeb.UserProfileLiveTest do
       # 31 tags (all zero-endorsement, so slug-alphabetical): tag01 .. tag31.
       for i <- 1..31 do
         slug = "tag" <> String.pad_leading(Integer.to_string(i), 2, "0")
-        insert(:user_tag, user: owner, tag: insert(:tag, name: slug, slug: slug))
+
+        insert(:user_tag,
+          user: owner,
+          tag: insert(:tag, name: slug, slug: Vutuv.SlugHelpers.tagify(slug))
+        )
       end
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")

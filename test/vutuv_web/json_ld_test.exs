@@ -44,7 +44,7 @@ defmodule VutuvWeb.JsonLdTest do
       )
 
       insert(:social_media_account, user: user, provider: "GitHub", value: "lara")
-      tag = insert(:tag, name: "Elixir", slug: "elixir-ld")
+      tag = insert(:tag, name: "Elixir", slug: "elixir_ld")
       insert(:user_tag, user: user, tag: tag)
 
       html = build_conn() |> get("/ld_member") |> html_response(200)

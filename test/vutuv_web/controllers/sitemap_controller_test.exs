@@ -102,14 +102,14 @@ defmodule VutuvWeb.SitemapControllerTest do
       # advertised: at least Tags.min_indexable_members/0 visible members or
       # one public post. Advertising all ~10K tags put most of them into
       # Search Console as "crawled - currently not indexed".
-      rich = insert(:tag, slug: "elixir-mapped")
+      rich = insert(:tag, slug: "elixir_mapped")
 
       for _ <- 1..Vutuv.Tags.min_indexable_members() do
         insert(:user_tag, user: insert_activated_user(), tag: rich)
       end
 
-      empty = insert(:tag, slug: unique_tag_name("unused"))
-      thin = insert(:tag, slug: unique_tag_name("thin"))
+      empty = insert(:tag, slug: Vutuv.SlugHelpers.tagify(unique_tag_name("unused")))
+      thin = insert(:tag, slug: Vutuv.SlugHelpers.tagify(unique_tag_name("thin")))
       insert(:user_tag, user: insert_activated_user(), tag: thin)
 
       author = insert_activated_user()
@@ -119,7 +119,7 @@ defmodule VutuvWeb.SitemapControllerTest do
       conn = get(build_conn(), "/sitemaps/tags-1.xml")
 
       assert conn.status == 200
-      assert conn.resp_body =~ "<loc>#{@base}/tags/elixir-mapped</loc>"
+      assert conn.resp_body =~ "<loc>#{@base}/tags/elixir_mapped</loc>"
       assert conn.resp_body =~ "<loc>#{@base}/tags/#{Vutuv.SlugHelpers.tagify(posted_name)}</loc>"
       refute conn.resp_body =~ empty.slug
       refute conn.resp_body =~ thin.slug

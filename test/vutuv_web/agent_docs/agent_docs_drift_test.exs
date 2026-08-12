@@ -165,7 +165,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     insert(:messenger, user: user, provider: "Telegram", value: "gretachats")
 
     tag_name = unique_tag_name("Bridgebuilding")
-    tag = insert(:tag, name: tag_name, slug: String.downcase(tag_name))
+    tag = insert(:tag, name: tag_name, slug: Vutuv.SlugHelpers.tagify(tag_name))
     insert(:user_tag, user: user, tag: tag)
 
     follower = insert_activated_user(first_name: "Fanny", last_name: "Follower")
@@ -1327,14 +1327,17 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     gamma = unique_tag_name("Gamma")
 
     for name <- [beta, alpha, gamma] do
-      insert(:user_tag, user: user, tag: insert(:tag, name: name, slug: String.downcase(name)))
+      insert(:user_tag,
+        user: user,
+        tag: insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
+      )
     end
 
     [gamma_ut] =
       Repo.all(
         from(u in Vutuv.Tags.UserTag,
           join: t in assoc(u, :tag),
-          where: t.slug == ^String.downcase(gamma)
+          where: t.slug == ^Vutuv.SlugHelpers.tagify(gamma)
         )
       )
 

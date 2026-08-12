@@ -112,7 +112,7 @@ defmodule Vutuv.Repo.MergeTagSpellingVariantsTest do
       untouched = tag(second, second)
 
       # Somebody put this one somewhere else already.
-      elsewhere = tag("elsewhere-#{System.unique_integer([:positive])}", "Elsewhere")
+      elsewhere = tag("elsewhere_#{System.unique_integer([:positive])}", "Elsewhere")
       {:ok, _} = Merge.merge(already, elsewhere)
 
       report = @migration.apply_merges(Repo)

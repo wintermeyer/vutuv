@@ -25,7 +25,7 @@ defmodule Vutuv.HashtagFilingTest do
   # the tag at — so `#berlin-7` would name the tag `berlin`, not this one.
   defp tag_named(base) do
     name = "#{base}_#{System.unique_integer([:positive])}"
-    insert(:tag, name: name, slug: String.downcase(name))
+    insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
   end
 
   defp filed_tag_ids(%Vutuv.Posts.Post{} = post) do

@@ -37,7 +37,7 @@ defmodule Vutuv.Tags.TagAliasInputTest do
     )
   end
 
-  defp slugify(name), do: Vutuv.SlugHelpers.gen_slug_unique(name, Tag, :slug)
+  defp slugify(name), do: Vutuv.SlugHelpers.gen_tag_slug_unique(name, Tag, :slug)
 
   describe "canonical_tag_names/1" do
     test "replaces an alternative name with the topic it points at", ctx do

@@ -29,7 +29,7 @@ defmodule Vutuv.Tags.AssistantTest do
   end
 
   defp tag(name) do
-    insert(:tag, name: name, slug: Vutuv.SlugHelpers.gen_slug_unique(name, Tag, :slug))
+    insert(:tag, name: name, slug: Vutuv.SlugHelpers.gen_tag_slug_unique(name, Tag, :slug))
   end
 
   defp entry(name), do: %{id: Vutuv.UUIDv7.generate(), name: name}

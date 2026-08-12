@@ -36,7 +36,7 @@ defmodule Vutuv.OrganizationPostTagsTest do
   # A `#hashtag` files a post only against a tag that already exists, so each
   # test mints its own first. Hardcoded literals are safe here because the
   # module is `async: false` (see the tag-uniqueness rule in the Elixir rules).
-  defp tag!(slug), do: insert(:tag, name: slug, slug: slug)
+  defp tag!(slug), do: insert(:tag, name: slug, slug: Vutuv.SlugHelpers.tagify(slug))
 
   # Filed through the composer's tag field, which is what the tag feed reads.
   defp tagged_organization_post_with_tag(tag_name) do

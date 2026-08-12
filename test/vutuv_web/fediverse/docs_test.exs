@@ -195,7 +195,7 @@ defmodule VutuvWeb.Fediverse.DocsTest do
     test "a multi-word tag loses its separator instead of breaking in half" do
       author = insert(:activated_user)
       n = System.unique_integer([:positive])
-      tag = insert(:tag, name: "Machine Learning #{n}", slug: "machine-learning-#{n}")
+      tag = insert(:tag, name: "Machine Learning #{n}", slug: "machine_learning_#{n}")
 
       note = tagged_note(author, %{body: "Kurz notiert.", tags: tag.name})
 
@@ -212,7 +212,7 @@ defmodule VutuvWeb.Fediverse.DocsTest do
     test "a tag that cannot become a hashtag is left out, never sent as a bare #" do
       author = insert(:activated_user)
       n = System.unique_integer([:positive])
-      tag = insert(:tag, name: "***", slug: "sternchen-#{n}")
+      tag = insert(:tag, name: "***", slug: "sternchen_#{n}")
       {:ok, post} = Vutuv.Posts.create_post(author, %{body: "Kurz notiert."})
 
       # Filed directly: a punctuation-only name is legacy data the composer no

@@ -460,7 +460,7 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     # against another async module inserting the same one.
     defp linkable_tag do
       name = "Berlin_#{System.unique_integer([:positive])}"
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       insert(:user_tag, user: insert(:activated_user), tag: tag)
       tag
     end

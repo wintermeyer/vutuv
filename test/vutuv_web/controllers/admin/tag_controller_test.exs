@@ -22,14 +22,14 @@ defmodule VutuvWeb.Admin.TagControllerTest do
     test "paginates: rows past the first page land on page 2", %{conn: conn} do
       # 250/page (max_page_items); the slug-ordered listing puts the marker last.
       insert_list(250, :tag)
-      insert(:tag, name: "Zzz Marker", slug: "zzz-marker")
+      insert(:tag, name: "Zzz Marker", slug: "zzz_marker")
 
       page1 = conn |> get(~p"/admin/tags") |> html_response(200)
-      refute page1 =~ "zzz-marker"
+      refute page1 =~ "zzz_marker"
       assert page1 =~ "page=2"
 
       page2 = conn |> recycle() |> get(~p"/admin/tags?page=2") |> html_response(200)
-      assert page2 =~ "zzz-marker"
+      assert page2 =~ "zzz_marker"
     end
   end
 
@@ -37,8 +37,8 @@ defmodule VutuvWeb.Admin.TagControllerTest do
     test "filters the listing by name (case-insensitive substring)", %{conn: conn} do
       elixir_name = unique_tag_name("Elixir")
       ruby_name = unique_tag_name("Ruby")
-      insert(:tag, name: elixir_name, slug: String.downcase(elixir_name))
-      insert(:tag, name: ruby_name, slug: String.downcase(ruby_name))
+      insert(:tag, name: elixir_name, slug: Vutuv.SlugHelpers.tagify(elixir_name))
+      insert(:tag, name: ruby_name, slug: Vutuv.SlugHelpers.tagify(ruby_name))
 
       html = conn |> get(~p"/admin/tags?q=eli") |> html_response(200)
       assert html =~ elixir_name
@@ -46,10 +46,10 @@ defmodule VutuvWeb.Admin.TagControllerTest do
     end
 
     test "filters the listing by slug", %{conn: conn} do
-      insert(:tag, name: "C Sharp", slug: "c-sharp")
+      insert(:tag, name: "C Sharp", slug: "c_sharp")
       insert(:tag, name: "Go", slug: "golang")
 
-      html = conn |> get(~p"/admin/tags?q=c-sharp") |> html_response(200)
+      html = conn |> get(~p"/admin/tags?q=c_sharp") |> html_response(200)
       assert html =~ "C Sharp"
       refute html =~ "golang"
     end
@@ -90,15 +90,15 @@ defmodule VutuvWeb.Admin.TagControllerTest do
 
     test "pagination keeps the search filter", %{conn: conn} do
       insert_list(250, :tag)
-      insert(:tag, name: "Tag Zzz Marker", slug: "tag-zzz-marker")
+      insert(:tag, name: "Tag Zzz Marker", slug: "tag_zzz_marker")
 
       page1 = conn |> get(~p"/admin/tags?q=tag") |> html_response(200)
-      refute page1 =~ "tag-zzz-marker"
+      refute page1 =~ "tag_zzz_marker"
       assert page1 =~ "q=tag"
       assert page1 =~ "page=2"
 
       page2 = conn |> recycle() |> get(~p"/admin/tags?q=tag&page=2") |> html_response(200)
-      assert page2 =~ "tag-zzz-marker"
+      assert page2 =~ "tag_zzz_marker"
     end
   end
 

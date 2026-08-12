@@ -29,7 +29,7 @@ defmodule Vutuv.Tags.TimelineTest do
   # The module's own tag, whether a post in this test already minted it or not.
   defp elixir_tag do
     Repo.get_by(Tag, name: @elixir_tag) ||
-      insert(:tag, name: @elixir_tag, slug: @elixir_tag)
+      insert(:tag, name: @elixir_tag, slug: Vutuv.SlugHelpers.tagify(@elixir_tag))
   end
 
   defp ids(%{entries: entries}), do: Enum.map(entries, & &1.id)
@@ -128,7 +128,7 @@ defmodule Vutuv.Tags.TimelineTest do
     test "a post reaching the tag through a body hashtag is listed once" do
       a = author()
       tag = insert(:tag, name: "berlin_#{System.unique_integer([:positive])}")
-      tag = Repo.update!(Ecto.Changeset.change(tag, slug: String.downcase(tag.name)))
+      tag = Repo.update!(Ecto.Changeset.change(tag, slug: Vutuv.SlugHelpers.tagify(tag.name)))
 
       # Both filings at once: the composer's field and the body's hashtag. One
       # entry, or the tag page would print the post twice.

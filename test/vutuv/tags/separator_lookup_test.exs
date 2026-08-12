@@ -3,11 +3,15 @@ defmodule Vutuv.Tags.SeparatorLookupTest do
   One topic, however its separator is typed (issue #1332, want 1).
 
   `Tag.find_by_value/1` used to key on the exact lowercased name or the exact
-  slug, so space against hyphen resolved by accident (the slugifier writes
-  hyphens, and the slug is one of the two keys) while **underscore against
-  anything did not** — in either direction. That is the shape the older half of
-  the catalog carries, so the lookup kept minting a second page for a topic that
+  slug, so space against hyphen resolved by accident (the slugifier wrote
+  hyphens then, and the slug is one of the two keys) while **underscore against
+  anything did not** — in either direction. That was the shape the older half of
+  the catalog carried, so the lookup kept minting a second page for a topic that
   already had one, which is the sprawl #1338's merge pass had just cleaned up.
+
+  Since v7.276.2 a live slug can only be `^[a-z0-9_]+$`, so the spellings that
+  differ now sit on the **name** (which keeps whatever its first writer typed)
+  and on the retired alias rows — and that is where this still has to hold.
 
   Every tag here is minted per test with a unique name, because the tag name is
   a shared lookup key and the slug a unique index (the async rule in
@@ -18,14 +22,17 @@ defmodule Vutuv.Tags.SeparatorLookupTest do
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
 
+  # A live tag's slug is an actor name now (`tags_slug_actor_grammar`), so the
+  # old spellings live on the **name** and on retired alias rows. That is
+  # exactly where the folding still has to work.
   defp seed(name, slug) do
     n = System.unique_integer([:positive])
     insert(:tag, name: "#{name} #{n}", slug: "#{slug}#{n}")
   end
 
   describe "find_by_value/1 folds separators" do
-    test "a hyphen-slug topic is found however the separator is typed" do
-      tag = seed("Probe Framework", "probe-framework-")
+    test "a topic is found however the separator is typed" do
+      tag = seed("Probe Framework", "probe_framework_")
       base = tag.name
 
       for typed <- [
@@ -58,7 +65,7 @@ defmodule Vutuv.Tags.SeparatorLookupTest do
     end
 
     test "a run of separators collapses to one, but a missing one is not invented" do
-      tag = seed("Open Source Software", "open-source-software-")
+      tag = seed("Open Source Software", "open_source_software_")
 
       assert %Tag{id: id} = Tag.find_by_value(String.replace(tag.name, " ", " - _ "))
       assert id == tag.id
@@ -69,7 +76,7 @@ defmodule Vutuv.Tags.SeparatorLookupTest do
     end
 
     test "a zero-width character is invisible to a reader and must be to the lookup" do
-      tag = seed("Zero Width", "zero-width-")
+      tag = seed("Zero Width", "zero_width_")
 
       assert %Tag{id: id} = Tag.find_by_value(String.replace(tag.name, " ", "​ "))
       assert id == tag.id
@@ -78,7 +85,7 @@ defmodule Vutuv.Tags.SeparatorLookupTest do
     test "a name with nothing to key on matches nothing, rather than grouping" do
       # These normalize to an empty key. Bucketing them would make every one of
       # them the same topic as every other.
-      seed("Dash", "dash-")
+      seed("Dash", "dash_")
 
       for value <- ["-", "--", "_", " ", "."] do
         refute Tag.find_by_value(value), "#{inspect(value)} resolved to a tag"
@@ -86,7 +93,7 @@ defmodule Vutuv.Tags.SeparatorLookupTest do
     end
 
     test "an alias still resolves to its canonical topic, whatever the spelling" do
-      canonical = seed("Canonical Topic", "canonical-topic-")
+      canonical = seed("Canonical Topic", "canonical_topic_")
       n = System.unique_integer([:positive])
 
       alias_tag =
@@ -103,7 +110,7 @@ defmodule Vutuv.Tags.SeparatorLookupTest do
 
   describe "canonical_tag_names/1 uses the same key" do
     test "two spellings of one topic count once" do
-      tag = seed("Batch Topic", "batch-topic-")
+      tag = seed("Batch Topic", "batch_topic_")
       spaced = tag.name
       underscored = String.replace(tag.name, " ", "_")
 

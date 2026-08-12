@@ -30,6 +30,16 @@ defmodule Vutuv.Repo.RetagSlugsToActorGrammarTest do
     :ok
   end
 
+  setup do
+    # This migration predates `tags_slug_actor_grammar`, so testing it means
+    # building the world it ran in — which that constraint forbids. Dropping it
+    # here is safe and self-cleaning: the SQL sandbox wraps each test in a
+    # transaction that never commits, so the constraint is back the moment the
+    # test ends.
+    Repo.query!("ALTER TABLE tags DROP CONSTRAINT tags_slug_actor_grammar")
+    :ok
+  end
+
   defp tag(name, slug, attrs \\ []), do: insert(:tag, [name: name, slug: slug] ++ attrs)
 
   defp reload(%Tag{id: id}), do: Repo.get!(Tag, id)

@@ -22,7 +22,7 @@ defmodule Vutuv.TagsTest do
 
     test "links to an existing tag whose name matches case-insensitively" do
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       changeset = link(String.downcase(name))
       assert get_change(changeset, :tag_id) == tag.id
     end
@@ -72,7 +72,7 @@ defmodule Vutuv.TagsTest do
       # existing spaced tag (matched case-insensitively by name), it does not
       # mint a duplicate.
       name = unique_tag_name("Ruby on Rails")
-      slug = name |> String.downcase() |> String.replace(" ", "-")
+      slug = Vutuv.SlugHelpers.tagify(name)
       tag = insert(:tag, name: name, slug: slug)
 
       changeset = link(String.downcase(name))
@@ -135,7 +135,7 @@ defmodule Vutuv.TagsTest do
     test "the admin edit form can recapitalize a legacy lowercase name" do
       name = unique_tag_name("Elixir")
       legacy = String.downcase(name)
-      tag = insert(:tag, name: legacy, slug: legacy)
+      tag = insert(:tag, name: legacy, slug: Vutuv.SlugHelpers.tagify(legacy))
 
       assert {:ok, updated} = tag |> Tag.edit_changeset(%{"name" => name}) |> Repo.update()
       assert updated.name == name
@@ -167,7 +167,7 @@ defmodule Vutuv.TagsTest do
       # The lookup in create_or_link_tag/2 would otherwise attach one of the
       # legacy URL tags in production without ever building a changeset.
       name = "www.legacy-#{System.unique_integer([:positive])}.com"
-      legacy = insert(:tag, name: name, slug: String.replace(name, ".", "_"))
+      legacy = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       assert {:error, changeset} = Tags.add_user_tag(insert(:user), name)
       assert "must not be a web or email address" in errors_on(changeset).tag_id
@@ -206,7 +206,7 @@ defmodule Vutuv.TagsTest do
     end
 
     test "a punctuation tag minted before the rule can't be linked either" do
-      legacy = insert(:tag, name: "-", slug: "-")
+      legacy = insert(:tag, name: "-", slug: "_")
 
       assert {:error, changeset} = Tags.add_user_tag(insert(:user), "-")
       assert "must not be only punctuation" in errors_on(changeset).tag_id
@@ -368,7 +368,7 @@ defmodule Vutuv.TagsTest do
 
     test "create_or_link_tag links #Elixir to the existing Elixir tag" do
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       changeset =
         %UserTag{} |> change(%{}) |> Tag.create_or_link_tag(%{"value" => "#" <> name})
@@ -608,7 +608,7 @@ defmodule Vutuv.TagsTest do
     test "add_user_tag/2 refuses a reserved (honor) tag" do
       user = insert(:user)
       name = unique_tag_name("vutuv_developer")
-      insert(:tag, name: name, slug: name, honor?: true)
+      insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name), honor?: true)
 
       assert {:error, changeset} = Tags.add_user_tag(user, name)
       assert %{tag_id: [_ | _]} = errors_on(changeset)
@@ -619,7 +619,7 @@ defmodule Vutuv.TagsTest do
     test "add_user_tag/2 refuses a reserved tag matched case-insensitively" do
       user = insert(:user)
       name = unique_tag_name("vutuv_developer")
-      insert(:tag, name: name, slug: name, honor?: true)
+      insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name), honor?: true)
 
       assert {:error, _changeset} = Tags.add_user_tag(user, String.upcase(name))
       refute Repo.exists?(from(ut in UserTag, where: ut.user_id == ^user.id))
@@ -628,7 +628,7 @@ defmodule Vutuv.TagsTest do
     test "add_user_tag/2 still links a normal (not honor) existing tag" do
       user = insert(:user)
       name = unique_tag_name("Elixir")
-      tag = insert(:tag, name: name, slug: String.downcase(name))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       assert {:ok, user_tag} = Tags.add_user_tag(user, String.downcase(name))
       assert user_tag.tag_id == tag.id
@@ -711,7 +711,7 @@ defmodule Vutuv.TagsTest do
 
     test "declare_honor_tag/1 flips an existing holder-less tag" do
       name = unique_tag_name("mentor")
-      existing = insert(:tag, name: name, slug: name)
+      existing = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       assert {:ok, tag} = Tags.declare_honor_tag(String.capitalize(name))
       assert tag.id == existing.id
@@ -720,7 +720,7 @@ defmodule Vutuv.TagsTest do
 
     test "declare_honor_tag/1 is idempotent on an existing honor tag" do
       name = unique_tag_name("mentor")
-      existing = insert(:tag, name: name, slug: name, honor?: true)
+      existing = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name), honor?: true)
 
       assert {:ok, tag} = Tags.declare_honor_tag(name)
       assert tag.id == existing.id
@@ -728,7 +728,7 @@ defmodule Vutuv.TagsTest do
 
     test "declare_honor_tag/1 refuses to silently flip a tag members already hold" do
       name = unique_tag_name("elixir")
-      existing = insert(:tag, name: name, slug: name)
+      existing = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
       insert(:user_tag, user: insert(:user), tag: existing)
 
       assert {:error, :has_holders, tag} = Tags.declare_honor_tag(name)
@@ -903,7 +903,7 @@ defmodule Vutuv.TagsTest do
 
     test "leaves a clean multi-word name untouched and is idempotent" do
       name = unique_tag_name("Ruby on Rails")
-      tag = insert(:tag, name: name, slug: name |> String.downcase() |> String.replace(" ", "_"))
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
 
       assert {0, 0} = Tags.normalize_legacy_tag_whitespace()
       assert Repo.get(Tag, tag.id).name == name

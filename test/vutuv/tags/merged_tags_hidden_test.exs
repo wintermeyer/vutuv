@@ -33,7 +33,7 @@ defmodule Vutuv.Tags.MergedTagsHiddenTest do
     %{canonical: canonical, absorbed: absorbed}
   end
 
-  defp slugify(name), do: Vutuv.SlugHelpers.gen_slug_unique(name, Tag, :slug)
+  defp slugify(name), do: Vutuv.SlugHelpers.gen_tag_slug_unique(name, Tag, :slug)
 
   defp with_two_visible_members(tag) do
     for _ <- 1..2, do: insert(:user_tag, user: insert(:activated_user), tag: tag)

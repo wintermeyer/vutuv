@@ -68,7 +68,7 @@ defmodule VutuvWeb.ListingBatchingTest do
 
       # Five more tags, so the member has six in all: four are shown, two overflow.
       for n <- 1..5 do
-        insert(:user_tag, user: star, tag: insert(:tag, name: "Extra #{n}", slug: "extra-#{n}"))
+        insert(:user_tag, user: star, tag: insert(:tag, name: "Extra #{n}", slug: "extra_#{n}"))
       end
 
       body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
@@ -168,7 +168,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       for n <- 1..5 do
         insert(:user_tag,
           user: follower,
-          tag: insert(:tag, name: "Extra #{n}", slug: "f-extra-#{n}")
+          tag: insert(:tag, name: "Extra #{n}", slug: "f_extra_#{n}")
         )
       end
 
@@ -191,7 +191,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       insert(:user_tag_endorsement, user_tag: popular_ut, user: owner)
 
       for n <- 1..5 do
-        insert(:user_tag, user: idol, tag: insert(:tag, name: "More #{n}", slug: "g-more-#{n}"))
+        insert(:user_tag, user: idol, tag: insert(:tag, name: "More #{n}", slug: "g_more_#{n}"))
       end
 
       body = conn |> get(~p"/#{owner}/following") |> html_response(200)

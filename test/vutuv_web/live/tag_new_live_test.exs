@@ -19,7 +19,7 @@ defmodule VutuvWeb.TagNewLiveTest do
   defp tag_count(user),
     do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count)
 
-  defp slugify(name), do: Vutuv.SlugHelpers.gen_slug_unique(name, Vutuv.Tags.Tag, :slug)
+  defp slugify(name), do: Vutuv.SlugHelpers.gen_tag_slug_unique(name, Vutuv.Tags.Tag, :slug)
 
   # Type `value` into the form and return the previewed chip texts, in order.
   defp preview(live, value) do
@@ -98,7 +98,7 @@ defmodule VutuvWeb.TagNewLiveTest do
     end
 
     test "a space no longer splits, so a multi-word tag stays one chip", %{live: live} do
-      insert(:tag, name: "ruby on rails", slug: "ruby-on-rails")
+      insert(:tag, name: "ruby on rails", slug: "ruby_on_rails")
 
       assert preview(live, "Ruby on Rails") == ["ruby on rails"]
     end

@@ -278,7 +278,9 @@ defmodule Vutuv.Factory do
   def tag_factory do
     %Vutuv.Tags.Tag{
       name: sequence(:tag_name, &"Tag Name #{&1}"),
-      slug: sequence(:tag_slug, &"tag-#{&1}")
+      # Underscore, because a live tag's slug is its fediverse actor name and
+      # the database now says so (`tags_slug_actor_grammar`, #1332/#1330).
+      slug: sequence(:tag_slug, &"tag_#{&1}")
     }
   end
 
