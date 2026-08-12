@@ -2457,18 +2457,23 @@ defmodule Vutuv.Posts do
       join: r in PostRepost,
       as: :repost,
       on: r.post_id == p.id,
-      join: reposter in User,
+      # LEFT on the resharer too (issue #1336): a page can repost now, and its
+      # row has a NULL `user_id`. An inner join to `users` was right while only
+      # a member could reshare and became a silent filter the day a page could —
+      # the same shape that, one join down, meant a member could repost a page's
+      # news and it reached nobody.
+      left_join: reposter in User,
       on: reposter.id == r.user_id,
+      left_join: rp in assoc(r, :organization),
+      as: :resharer_organization,
       # LEFT, because the reposted post may have been published by an
-      # organization (issue #1334). An inner join here meant a member could
-      # repost a page's news and it reached nobody — the act succeeded and its
-      # whole point silently did not.
+      # organization (issue #1334).
       left_join: u in assoc(p, :user),
       as: :author,
       left_join: o in assoc(p, :organization),
       as: :repost_organization,
-      where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
-      where: r.user_id == ^viewer_id or account_confirmed_row(reposter),
+      where: ^repost_reaches_me(viewer_id),
+      where: ^resharer_is_shown(viewer_id),
       # A repost must not amplify an author the site hides. For a member that is
       # their account standing; for a page it is the page's own
       # (`organization_public_row/1`), so a frozen page stops being passed on.
@@ -2481,14 +2486,41 @@ defmodule Vutuv.Posts do
       where: p.user_id not in subquery(blocked_either_way(viewer_id)),
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^fetch_n,
-      select: {r.id, r.inserted_at, p, reposter}
+      select: {r.id, r.inserted_at, p, reposter, rp}
     )
     |> scope_visible(viewer)
     |> reposts_at_or_before(cursor)
     |> Repo.all()
-    |> Enum.map(fn {id, at, post, reposter} ->
-      %{id: "repost-#{id}", post: post, reposted_by: reposter, at: at}
+    |> Enum.map(fn {id, at, post, reposter, page} ->
+      %{id: "repost-#{id}", post: post, reposted_by: reposter || page, at: at}
     end)
+  end
+
+  # Reshared by me, by somebody I follow, or by a page I follow (issue #1336).
+  defp repost_reaches_me(viewer_id) do
+    dynamic(
+      [_p, r],
+      r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)) or
+        r.organization_id in subquery(followed_organizations_of(viewer_id))
+    )
+  end
+
+  # A reshare must not amplify a resharer the site hides: account standing for a
+  # member, the page's own standing for a page.
+  #
+  # Each gate is scoped to the actor it is about (`not is_nil(r.user_id) and …`)
+  # and never OR-ed bare. `account_confirmed_row/1` reads
+  # `is_nil(u.email_confirmed?) or …`, and on a LEFT-joined **missing** row that
+  # `is_nil` is TRUE — so the member gate passed vacuously for every page
+  # reshare and a frozen page kept being amplified. The macro was written for an
+  # inner join, where the row always exists.
+  defp resharer_is_shown(viewer_id) do
+    dynamic(
+      [_p, r, reposter, rp],
+      r.user_id == ^viewer_id or
+        (not is_nil(r.user_id) and account_confirmed_row(reposter)) or
+        (not is_nil(r.organization_id) and organization_public_row(rp))
+    )
   end
 
   # Third feed source (issue #872): posts carrying a tag the viewer follows, from
@@ -2745,39 +2777,53 @@ defmodule Vutuv.Posts do
   # whole page, regardless of which repost happened to carry the entry. The
   # roster is deliberately follow-scoped: it explains why the post is in
   # *this* feed; the global repost count already lives on the action bar.
-  # A page's feed carries no reposts (a page cannot repost, and it does not read
-  # the members' repost source), so there is no roster to attach and no viewer
-  # whose follow graph would scope one. Nil is a real case here, not a slip.
+  # A page reading its OWN feed carries no reposts (it does not read the
+  # members' repost source), so there is no roster to attach and no viewer whose
+  # follow graph would scope one. Nil is a real case here, not a slip.
   defp attach_reposters(entries, nil), do: Enum.map(entries, &Map.put(&1, :reposters, []))
 
   defp attach_reposters(entries, %User{} = viewer) do
-    post_ids = for %{reposted_by: %User{}} = entry <- entries, do: entry.post.id
+    # Keyed on "there is a resharer", not on "the resharer is a member": since
+    # issue #1336 a page can reshare too, and a `%User{}` pattern here quietly
+    # dropped those entries back to an empty roster — the banner then named
+    # nobody on a post that was in the feed precisely because a page reshared it.
+    post_ids = for %{reposted_by: by} = entry <- entries, not is_nil(by), do: entry.post.id
     rosters = reposter_rosters(post_ids, viewer)
 
     Enum.map(entries, fn
-      %{reposted_by: %User{}} = entry ->
-        reposters = Map.get(rosters, entry.post.id, [entry.reposted_by])
-        entry |> Map.put(:reposters, reposters) |> Map.put(:reposted_by, hd(reposters))
+      %{reposted_by: nil} = entry ->
+        Map.put(entry, :reposters, [])
 
       entry ->
-        Map.put(entry, :reposters, [])
+        reposters = Map.get(rosters, entry.post.id, [entry.reposted_by])
+        entry |> Map.put(:reposters, reposters) |> Map.put(:reposted_by, hd(reposters))
     end)
   end
 
   defp reposter_rosters([], _viewer), do: %{}
 
   defp reposter_rosters(post_ids, %User{id: viewer_id}) do
+    # Same widening as `feed_repost_items/3` above, and for the same reason: the
+    # banner names who reshared, and a page is now one of the answers.
     from(r in PostRepost,
-      join: u in User,
+      left_join: u in User,
       on: u.id == r.user_id,
+      left_join: rp in assoc(r, :organization),
       where: r.post_id in ^post_ids,
-      where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
-      where: r.user_id == ^viewer_id or account_confirmed_row(u),
+      where:
+        r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)) or
+          r.organization_id in subquery(followed_organizations_of(viewer_id)),
+      # Scoped per actor kind — see the note in `feed_repost_items/3`: a bare
+      # `account_confirmed_row(u)` is TRUE on a left-joined missing row.
+      where:
+        r.user_id == ^viewer_id or
+          (not is_nil(r.user_id) and account_confirmed_row(u)) or
+          (not is_nil(r.organization_id) and organization_public_row(rp)),
       order_by: [desc: r.inserted_at, desc: r.id],
-      select: {r.post_id, u}
+      select: {r.post_id, u, rp}
     )
     |> Repo.all()
-    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.group_by(&elem(&1, 0), fn {_post_id, user, page} -> user || page end)
   end
 
   # The posts `post` answers, oldest first. Walk up the reply chain, preferring

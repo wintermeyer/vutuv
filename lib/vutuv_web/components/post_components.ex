@@ -74,6 +74,12 @@ defmodule VutuvWeb.PostComponents do
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
 
+  attr(:acting_as, :any,
+    default: nil,
+    doc:
+      "the page the viewer is currently speaking as (issue #1336) — the action bar then likes and reshares in ITS name, the same way the composer already posts in it"
+  )
+
   attr(:viewer_follow, :any,
     default: nil,
     doc:
@@ -253,6 +259,10 @@ defmodule VutuvWeb.PostComponents do
       # the `false` an `&&` would yield) — Posts.post_engagement/2 only accepts a
       # user id or nil.
       |> assign(:viewer_id, if(user?, do: viewer.id))
+      # The identity the bar ACTS as. `/feed` stays the member's own reading
+      # surface while they are switched into a page — what changes is whose
+      # name the act goes out under, exactly the split the composer makes.
+      |> assign(:acting_as_id, assigns.acting_as && assigns.acting_as.id)
       |> assign(:menu_id, "post-menu-#{entry_key}")
       # Keyed on the timeline entry like every other id here, so the same post
       # rendered twice on a page keeps unique pin controls.
@@ -647,6 +657,8 @@ defmodule VutuvWeb.PostComponents do
   """
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
+
+  attr(:acting_as, :any, default: nil)
   attr(:viewer_follow, :any, default: nil)
   attr(:engagement, :any, default: nil)
 
@@ -687,6 +699,7 @@ defmodule VutuvWeb.PostComponents do
       <.post_card
         post={@post}
         viewer={@viewer}
+        acting_as={@acting_as}
         viewer_follow={@viewer_follow}
         engagement={@engagement}
         reposted_by={@reposted_by}
@@ -787,6 +800,8 @@ defmodule VutuvWeb.PostComponents do
     doc: "these nodes answer a card above them, so each draws its connector back into its column"
   )
 
+  attr(:acting_as, :any, default: nil)
+
   defp thread_chain(assigns) do
     # `@thread_indent_cap` is a module attribute, not an assign, so resolve the
     # "still indenting?" flag here — inside ~H, `@name` would mean assigns.name.
@@ -885,6 +900,7 @@ defmodule VutuvWeb.PostComponents do
           <.post_card
             post={node.post}
             viewer={@viewer}
+            acting_as={@acting_as}
             viewer_follow={node.viewer_follow}
             engagement={node.engagement}
             reposted_by={node.reposted_by}
@@ -2966,6 +2982,7 @@ defmodule VutuvWeb.PostComponents do
               id={@actions_id}
               post_id={@post.id}
               viewer_id={@viewer_id}
+              acting_as_id={@acting_as_id}
               engagement={@engagement}
             />
           <% else %>
@@ -4343,6 +4360,11 @@ defmodule VutuvWeb.PostComponents do
     doc: "the viewer's user id (nil when logged out), to detect their own post"
   )
 
+  attr(:acting_as_id, :any,
+    default: nil,
+    doc: "the page this bar acts as, when the viewer is speaking as one (issue #1336)"
+  )
+
   attr(:target, :any,
     default: nil,
     doc: "phx-target: the LiveComponent's @myself on a host page, nil on a dead page"
@@ -4353,8 +4375,7 @@ defmodule VutuvWeb.PostComponents do
       assigns
       |> assign(
         :own?,
-        assigns.engagement != nil and assigns.viewer_id != nil and
-          assigns.engagement.author_id == assigns.viewer_id
+        own_post?(assigns)
       )
       # One number per act, vutuv's own and the other networks' together
       # (`Posts.shown_counts/1`); the panel below breaks it back down.
@@ -4604,6 +4625,17 @@ defmodule VutuvWeb.PostComponents do
     ngettext("%{formatted} repost", "%{formatted} reposts", count,
       formatted: compact_count(count)
     )
+  end
+
+  # Whether the acting identity is the post's own author, which is what turns
+  # the heart into a plain count. While speaking as a page the actor is the
+  # page, so that is the id to compare — asking about the member would offer a
+  # page a live heart on its own post and then refuse the click.
+  defp own_post?(%{engagement: nil}), do: false
+
+  defp own_post?(assigns) do
+    actor_id = assigns[:acting_as_id] || assigns.viewer_id
+    actor_id != nil and assigns.engagement.author_id == actor_id
   end
 
   # The Like control: a real toggle for everyone but the author. On your OWN

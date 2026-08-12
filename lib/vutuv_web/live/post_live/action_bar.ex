@@ -20,6 +20,7 @@ defmodule VutuvWeb.PostLive.ActionBar do
     statics: ~w(assets fonts images favicon.ico)
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -49,23 +50,47 @@ defmodule VutuvWeb.PostLive.ActionBar do
   defp do_toggle(kind, viewer_id, engagement, socket) do
     user = Repo.get(User, viewer_id)
     post = Repo.get(Post, socket.assigns.post_id)
+    page = acting_page(socket)
 
     if user && post do
-      # Errors (:not_visible, :restricted) mean the button should not have been
-      # live — the reload below shows the truth either way.
-      _ =
-        case {kind, engagement} do
-          {"like", %{liked?: true}} -> Posts.unlike_post(user, post)
-          {"like", _} -> Posts.like_post(user, post)
-          {"bookmark", %{bookmarked?: true}} -> Posts.unbookmark_post(user, post)
-          {"bookmark", _} -> Posts.bookmark_post(user, post)
-          {"repost", %{reposted?: true}} -> Posts.unrepost_post(user, post)
-          {"repost", _} -> Posts.repost_post(user, post)
-        end
+      # Errors (:not_visible, :restricted, :not_allowed) mean the button should
+      # not have been live — the reload below shows the truth either way.
+      _ = act(kind, engagement, page || user, user, post)
     end
 
     # The viewer's own filled-in flags are not in any broadcast, so reload them.
     load_engagement(socket)
+  end
+
+  # Undoing needs only the actor; doing it needs the acting member too, so the
+  # page's act can record who pressed the button (issue #1336). `actor` is the
+  # page when one is being spoken as, otherwise the member themselves.
+  defp act("like", %{liked?: true}, actor, _by, post), do: Posts.unlike_post(actor, post)
+
+  defp act("bookmark", %{bookmarked?: true}, actor, _by, post),
+    do: Posts.unbookmark_post(actor, post)
+
+  defp act("repost", %{reposted?: true}, actor, _by, post), do: Posts.unrepost_post(actor, post)
+
+  defp act("like", _, %Organization{} = page, by, post), do: Posts.like_post(page, by, post)
+  defp act("like", _, actor, _by, post), do: Posts.like_post(actor, post)
+
+  defp act("bookmark", _, %Organization{} = page, by, post),
+    do: Posts.bookmark_post(page, by, post)
+
+  defp act("bookmark", _, actor, _by, post), do: Posts.bookmark_post(actor, post)
+
+  defp act("repost", _, %Organization{} = page, by, post), do: Posts.repost_post(page, by, post)
+  defp act("repost", _, actor, _by, post), do: Posts.repost_post(actor, post)
+
+  # Re-read rather than trusted: the assign arrives from the host's own
+  # re-authorized `:acting_as`, but the row is what the act is written against,
+  # and `Posts` asks the role again before letting it through.
+  defp acting_page(socket) do
+    case socket.assigns[:acting_as_id] do
+      nil -> nil
+      id -> Repo.get(Organization, id)
+    end
   end
 
   @doc """
@@ -124,7 +149,10 @@ defmodule VutuvWeb.PostLive.ActionBar do
     assign(
       socket,
       :engagement,
-      Posts.post_engagement(socket.assigns.post_id, socket.assigns.viewer_id)
+      Posts.post_engagement(
+        socket.assigns.post_id,
+        socket.assigns[:acting_as_id] || socket.assigns.viewer_id
+      )
     )
   end
 end

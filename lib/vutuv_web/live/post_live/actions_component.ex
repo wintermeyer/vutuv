@@ -49,8 +49,13 @@ defmodule VutuvWeb.PostLive.ActionsComponent do
      |> assign(:id, assigns.id)
      |> assign(:post_id, assigns.post_id)
      |> assign(:viewer_id, assigns.viewer_id)
+     |> assign(:acting_as_id, assigns[:acting_as_id])
      |> assign_new(:engagement, fn ->
-       ActionBar.engagement_or_load(assigns[:engagement], assigns.post_id, assigns.viewer_id)
+       ActionBar.engagement_or_load(
+         assigns[:engagement],
+         assigns.post_id,
+         assigns[:acting_as_id] || assigns.viewer_id
+       )
      end)}
   end
 
@@ -68,6 +73,7 @@ defmodule VutuvWeb.PostLive.ActionsComponent do
         post_id={@post_id}
         engagement={@engagement}
         viewer_id={@viewer_id}
+        acting_as_id={@acting_as_id}
         target={@myself}
       />
     </div>

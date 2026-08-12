@@ -163,4 +163,54 @@ defmodule Vutuv.OrganizationEngagementTest do
     # named in the notification at all.
     assert entry.actor_name == page.name
   end
+
+  describe "a page's repost in the feed" do
+    test "reaches the page's followers, carrying the page as the resharer" do
+      {page, owner} = page_with_publisher()
+      {post, _author} = a_post()
+
+      follower = insert(:activated_user)
+      {:ok, _} = Vutuv.Social.follow_organization(follower, page)
+
+      assert :ok = Posts.repost_post(page, owner, post)
+
+      %{entries: entries} = Posts.feed_page(follower)
+      assert [entry] = Enum.filter(entries, &(&1.post.id == post.id))
+
+      # The reshare is the page's, so the card's banner names the page. The
+      # feed's repost source joined `users` on the reposter and filtered on
+      # member follows, so this entry did not exist at all: the act succeeded
+      # and its whole point silently did not happen.
+      assert %Vutuv.Organizations.Organization{id: id} = entry.reposted_by
+      assert id == page.id
+      assert [%Vutuv.Organizations.Organization{}] = entry.reposters
+    end
+
+    test "does not reach somebody who follows neither the page nor the author" do
+      {page, owner} = page_with_publisher()
+      {post, _author} = a_post()
+
+      stranger = insert(:activated_user)
+      assert :ok = Posts.repost_post(page, owner, post)
+
+      %{entries: entries} = Posts.feed_page(stranger)
+      assert Enum.filter(entries, &(&1.post.id == post.id)) == []
+    end
+
+    test "stops being passed on once the page is frozen" do
+      {page, owner} = page_with_publisher()
+      {post, _author} = a_post()
+
+      follower = insert(:activated_user)
+      {:ok, _} = Vutuv.Social.follow_organization(follower, page)
+      assert :ok = Posts.repost_post(page, owner, post)
+
+      {:ok, _} = Organizations.admin_set_frozen(page, true)
+
+      # The same rule a member's repost follows: a reshare must not amplify an
+      # author (or here a resharer) the site is hiding.
+      %{entries: entries} = Posts.feed_page(follower)
+      assert Enum.filter(entries, &(&1.post.id == post.id)) == []
+    end
+  end
 end

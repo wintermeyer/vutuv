@@ -1106,6 +1106,7 @@ defmodule VutuvWeb.PostLive.Feed do
                   <.post_thread_entry
                     post={entry.post}
                     viewer={@current_user}
+                    acting_as={@acting_as}
                     viewer_follow={entry[:viewer_follow]}
                     ancestors={entry[:ancestors]}
                     ancestor_engagement={entry[:ancestor_engagement] || %{}}
