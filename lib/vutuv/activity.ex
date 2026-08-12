@@ -54,10 +54,11 @@ defmodule Vutuv.Activity do
   @pubsub Vutuv.PubSub
   @default_limit 50
 
+  defp topic(%Vutuv.Organizations.Organization{id: id}), do: "organization:#{id}"
   defp topic(user_id), do: "user:#{user_id}"
 
   def subscribe(nil), do: :ok
-  def subscribe(user_id), do: Phoenix.PubSub.subscribe(@pubsub, topic(user_id))
+  def subscribe(party), do: Phoenix.PubSub.subscribe(@pubsub, topic(party))
 
   # Whether a follow row has a follower worth showing. The member side is left
   # exactly as it was — the row existing is the whole test, no moderation gate,
@@ -78,7 +79,7 @@ defmodule Vutuv.Activity do
 
   @doc "Broadcast a raw event to a user's topic (no-op for a nil recipient)."
   def broadcast(nil, _event), do: :ok
-  def broadcast(user_id, event), do: Phoenix.PubSub.broadcast(@pubsub, topic(user_id), event)
+  def broadcast(party, event), do: Phoenix.PubSub.broadcast(@pubsub, topic(party), event)
 
   @doc """
   Persist the read marker (`users.notifications_read_at`) and tell the user's
@@ -325,7 +326,7 @@ defmodule Vutuv.Activity do
   def subject_post_id(_item), do: nil
 
   @doc "Tell a user's shell their messages were just read (clears the badge)."
-  def mark_messages_read(user_id), do: broadcast(user_id, :messages_read)
+  def mark_messages_read(party), do: broadcast(party, :messages_read)
 
   @doc "Push a new in-app notification to `user_id`."
   def notify(nil, _notification), do: :ok

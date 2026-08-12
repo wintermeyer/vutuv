@@ -93,6 +93,8 @@ defmodule VutuvWeb.ShellLive do
   # the logged-in chrome that would crash on `~p"/#{nil}"`. cast_or_nil also
   # tolerates the integer ids in cookies from before the UUID cutover.
   defp mount_static(socket, session, path) do
+    socket = assign(socket, :acting_as, nil)
+
     user_param = session["user_param"]
     user_id = user_param && Vutuv.UUIDv7.cast_or_nil(session["user_id"])
 
@@ -117,6 +119,7 @@ defmodule VutuvWeb.ShellLive do
   # no subscriptions, no counts, no presence.
   defp mount_authenticated(socket, nil, _session, path) do
     socket
+    |> assign(:acting_as, nil)
     |> assign(:acting_as_name, nil)
     |> assign(:acting_as_path, nil)
     |> assign(:user_id, nil)
@@ -140,7 +143,13 @@ defmodule VutuvWeb.ShellLive do
     # name the member is writing under (issue #1335).
     acting_as = InitAssigns.acting_as(user, session)
 
+    # The page's own topic, so a message addressed to it moves the badge without
+    # a reload. Subscribed to only while really speaking as it — the assign
+    # above is the re-authorized answer, not the session's claim.
+    Activity.subscribe(acting_as)
+
     socket
+    |> assign(:acting_as, acting_as)
     |> assign(:acting_as_name, acting_as && acting_as.name)
     |> assign(:acting_as_path, acting_as && Organizations.canonical_path(acting_as))
     |> assign(:user_id, user_id)
@@ -203,8 +212,17 @@ defmodule VutuvWeb.ShellLive do
     if connected?(socket) do
       socket
       |> assign(
+        # Whichever identity is speaking owns the inbox this badge counts: a
+        # publisher who switched into a page is shown the PAGE's unread, the
+        # same inbox `/messages` gives them. Notifications stay personal - news
+        # about a page has its own list and its own read marker.
         :messages_count,
-        initial_count(path, "/messages", user.id, &Vutuv.Chat.unread_conversations_count/1)
+        initial_count(
+          path,
+          "/messages",
+          socket.assigns.acting_as || user.id,
+          &Vutuv.Chat.unread_conversations_count/1
+        )
       )
       |> assign(
         # The full struct, so the count skips the read-marker re-read the
@@ -382,7 +400,10 @@ defmodule VutuvWeb.ShellLive do
 
   defp recount_messages(socket) do
     socket
-    |> assign(:messages_count, Vutuv.Chat.unread_conversations_count(socket.assigns.user_id))
+    |> assign(
+      :messages_count,
+      Vutuv.Chat.unread_conversations_count(socket.assigns.acting_as || socket.assigns.user_id)
+    )
     |> push_badge()
   end
 

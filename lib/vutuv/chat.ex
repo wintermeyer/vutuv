@@ -891,12 +891,13 @@ defmodule Vutuv.Chat do
 
   # ONE marker for the page, not one per publisher: read means somebody on the
   # team read it, the same model as `organizations.activity_read_at`.
-  def mark_read(%Organization{id: page_id}, conversation_id, %NaiveDateTime{} = marker) do
+  def mark_read(%Organization{id: page_id} = page, conversation_id, %NaiveDateTime{} = marker) do
     from(p in Participant,
       where: p.conversation_id == ^conversation_id and p.organization_id == ^page_id
     )
     |> Repo.update_all(set: [last_read_at: marker, notified_at: nil])
 
+    Activity.mark_messages_read(page)
     :ok
   end
 
@@ -919,13 +920,43 @@ defmodule Vutuv.Chat do
   end
 
   @doc """
-  How many conversations hold unread messages for the user — the shell badge.
-  Pending requests count for their recipient (that is how requests get
-  noticed); declined conversations count for nobody.
+  How many conversations hold unread messages for a party — the shell badge.
+
+  For a **member**: pending requests count for their recipient (that is how
+  requests get noticed); declined conversations count for nobody.
+
+  For a **page** (issue #1336) it is a separate query rather than a party
+  argument on the member one, because the member version carries a
+  request-state clause that a page conversation has no analogue for (it is
+  created `accepted` and cannot leave that state) and the EXISTS gate has to
+  test the other sender column. Sharing one query would mean two dead branches.
   """
   def unread_conversations_count(nil), do: 0
 
   def unread_conversations_count(%User{id: me_id}), do: unread_conversations_count(me_id)
+
+  def unread_conversations_count(%Organization{id: page_id}) do
+    from(c in Conversation,
+      join: p in Participant,
+      on: p.conversation_id == c.id and p.organization_id == ^page_id,
+      where: is_nil(c.frozen_at),
+      where:
+        fragment(
+          """
+          EXISTS (SELECT 1 FROM messages m
+                  WHERE m.conversation_id = ?
+                    AND m.sender_organization_id IS NULL
+                    AND m.frozen_at IS NULL
+                    AND (? IS NULL OR m.inserted_at > ?))
+          """,
+          c.id,
+          p.last_read_at,
+          p.last_read_at
+        ),
+      select: count(c.id)
+    )
+    |> Repo.one()
+  end
 
   def unread_conversations_count(me_id) do
     # An EXISTS test per conversation instead of joining messages: it stops at the
@@ -1229,6 +1260,17 @@ defmodule Vutuv.Chat do
     )
   end
 
+  # Who a message is FOR: the other member, or the page it was addressed to.
+  defp recipient(%Conversation{organization_id: page_id} = conversation, %Message{} = message)
+       when is_binary(page_id) do
+    if is_nil(message.sender_organization_id),
+      do: Repo.get(Organization, page_id),
+      else: conversation.user_a_id
+  end
+
+  defp recipient(%Conversation{} = conversation, %Message{} = message),
+    do: other_user_id(conversation, message.sender_id)
+
   defp topic(conversation_id), do: "conversation:#{conversation_id}"
 
   # The open thread gets the full message; the recipient's activity topic gets
@@ -1236,8 +1278,16 @@ defmodule Vutuv.Chat do
   defp broadcast_new_message(conversation, message) do
     Phoenix.PubSub.broadcast(@pubsub, topic(conversation.id), {:new_message, message})
 
-    recipient_id = other_user_id(conversation, message.sender_id)
-    Activity.broadcast(recipient_id, {:new_message, %{conversation_id: conversation.id}})
+    # `other_user_id/2` answers nil when the far side is a page, so the recipient
+    # is the page itself — its team's shell subscribes to that topic while they
+    # are speaking as it. Without this the badge only moved on a full reload.
+    Activity.broadcast(
+      recipient(conversation, message),
+      {:new_message,
+       %{
+         conversation_id: conversation.id
+       }}
+    )
   end
 
   # A request was accepted: nudge the conversation's open threads (the
