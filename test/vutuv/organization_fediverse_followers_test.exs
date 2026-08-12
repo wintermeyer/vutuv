@@ -134,4 +134,77 @@ defmodule Vutuv.OrganizationFediverseFollowersTest do
 
     assert Fediverse.organization_remote_follower_count(organization) == 0
   end
+
+  describe "browsing them" do
+    setup do
+      organization = page()
+      member = insert(:activated_user)
+
+      # One follower of a MEMBER on the same server, to prove the scoping: the
+      # browser reads one shared table where a page's rows hang off
+      # `organization_id` and a member's off `user_id`.
+      {:ok, _} = Fediverse.add_follower(member, attrs())
+
+      {:ok, _} =
+        Fediverse.add_organization_follower(
+          organization,
+          attrs(%{
+            actor_uri: "https://remote.example/users/hans",
+            handle: "@hans@remote.example",
+            name: "Hans"
+          })
+        )
+
+      {:ok, _} =
+        Fediverse.add_organization_follower(
+          organization,
+          attrs(%{
+            actor_uri: "https://andere.example/users/ida",
+            inbox_uri: "https://andere.example/users/ida/inbox",
+            handle: "@ida@andere.example",
+            name: "Ida"
+          })
+        )
+
+      {:ok, organization: organization, member: member}
+    end
+
+    test "the page's own rows, and nobody else's", %{organization: organization, member: member} do
+      filters = Fediverse.browse_filters(%{})
+
+      assert Fediverse.count_followers(organization, filters) == 2
+      assert Fediverse.count_followers(member, filters) == 1
+
+      names =
+        organization
+        |> Fediverse.list_followers_page(filters)
+        |> Enum.map(& &1.name)
+        |> Enum.sort()
+
+      assert names == ["Hans", "Ida"]
+    end
+
+    test "searching and filtering by server work on a page too", %{organization: organization} do
+      assert [%Follower{name: "Ida"}] =
+               Fediverse.list_followers_page(
+                 organization,
+                 Fediverse.browse_filters(%{"q" => "ida"})
+               )
+
+      assert [%Follower{name: "Hans"}] =
+               Fediverse.list_followers_page(
+                 organization,
+                 Fediverse.browse_filters(%{"server" => "remote.example"})
+               )
+    end
+
+    test "the server list counts only the page's followers", %{organization: organization} do
+      hosts = Fediverse.follower_hosts(organization)
+
+      assert Enum.sort_by(hosts, & &1.host) == [
+               %{host: "andere.example", count: 1},
+               %{host: "remote.example", count: 1}
+             ]
+    end
+  end
 end

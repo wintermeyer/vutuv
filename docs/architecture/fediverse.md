@@ -326,17 +326,25 @@ every activity of a member it finds no key for, silently.
     we can make, which the checker would read as "deleted upstream" and act on,
     and asking would tell the origin we hold it. They live by the ceiling and an
     upstream `Delete` alone.
-  - **Takedown, with no workflow.** The member removes a reply from their own
-    post; anyone who can see it reports it, which **deletes it immediately** —
-    no case, no freezer, because unlike a member's own post this is a cache of
-    something that still exists at its origin. Both write one
-    `Vutuv.Fediverse.NoteEvent` row, which keeps **no content and no URIs**
-    (following `FollowerPrune`, #1072): action, host, a keyed HMAC of the actor
-    URI, who acted, when. That is enough for the only decision it serves — one
-    troll or the whole server — without holding an identifier of somebody whose
-    words we just deleted. Reports are rate limited per reporter. Automatic
-    deletions are **not** logged per row (an expiry run would drown it); they go
-    to the log in aggregate.
+  - **Takedown, with no workflow.** Whoever may act as the post's author removes
+    a reply from it; anyone who can see it reports it, which **deletes it
+    immediately** — no case, no freezer, because unlike a member's own post this
+    is a cache of something that still exists at its origin. "May act as the
+    author" is `Vutuv.Posts.author?/2`, so for an **organization** post that is
+    every current publisher of the page. It has to be: a page has no replies
+    switch of its own (see below), so the single reply is the team's whole lever
+    — and until this the gate compared `posts.user_id`, which an organization
+    post leaves NULL, leaving them with nothing but "Report", which also
+    accuses the author to their own server. The `Flag` that report files is
+    signed by the post's author too (`Posts.author/1`), a member or a page.
+    Both write one `Vutuv.Fediverse.NoteEvent` row, which keeps **no content and
+    no URIs** (following `FollowerPrune`, #1072): action, host, a keyed HMAC of
+    the actor URI, whose page it sat on (`user_id` *or* `organization_id`), who
+    acted, when. That is enough for the only decision it serves — one troll or
+    the whole server — without holding an identifier of somebody whose words we
+    just deleted. Reports are rate limited per reporter. Automatic deletions are
+    **not** logged per row (an expiry run would drown it); they go to the log in
+    aggregate.
   - Everything else that deletes: the post, the account (both by FK cascade),
     `purge_instance/1` when the server is blocked, and switching the opt-in off
     (`drop_notes/1`) — the switch is a delete lever, not a display toggle.
@@ -614,6 +622,18 @@ every activity of a member it finds no key for, silently.
   followers collection stays
   count-only, so the list lives in the private settings area, never under
   `/:slug`.
+- **A page has the same list**, at `/organizations/:slug/fediverse/followers`
+  (`VutuvWeb.OrganizationLive.FediverseFollowers`), reached from the Fediverse
+  card once somebody follows: the card knew the number and not one name. Same
+  `BrowseTable` components, same queries (`count_followers/2`,
+  `list_followers_page/4` and `follower_hosts/2` take a member *or* a page and
+  scope through one private `follower_scope/1`, the nullable pair again), and
+  **owner-only** like the switch it hangs off. One structural difference: every
+  organization manage page is embedded by its controller through `live_render`,
+  so it is not mounted at the router and `push_patch/2` is unavailable — the
+  view lives in the socket and pages with `<.admin_pager>` instead of in the
+  URL, which costs a shareable filtered link. Nothing broadcasts a page's new
+  follower either, so the list is as fresh as the last load.
 - **The operator** sees federation health on `/admin`: `Fediverse.stats/0`
   reports federating members (the SQL mirror of `federated?/1`), total remote
   followers, delivery-queue depth, how many rows are stuck (carry a
@@ -849,7 +869,9 @@ beside `follows` and `tag_follows` from #1336. Each carries a CHECK for exactly
 one owner — except `fediverse_post_deliveries`, where the pair is a **writer**
 invariant rather than a schema one, because those rows deliberately outlive the
 post and its author and a foreign key would delete what a revocation still
-needs.
+needs. `fediverse_note_events` (the takedown ledger) carries the pair too and
+deliberately has **neither** column set for a cached post, which sits on nobody's
+page — so a NULL `user_id` there does not mean "nobody's".
 
 **The documents differ where a page differs.** `Docs.organization_actor/2` is
 its own builder, not a widened `actor/2`: AP type `Organization` (which is what
@@ -958,9 +980,17 @@ off a member, so `Posts.shown_counts/1` folds them in by itself.
 
 **Replies** from other networks arrive too, under the same retention model as a
 member's (issues #1069/#1071): the text expires unless its origin keeps
-confirming it, and the takedown ledger reaches it. They render read-only on the
-page's permalink — removing, reporting and the heart all belong to a person, and
-a page has nobody behind those buttons.
+confirming it, and the takedown ledger reaches it. The heart is still a person's
+(a page has nobody behind that button), but **removing one is the team's**:
+`Posts.author?/2` gates it, so every current publisher gets it. That is not
+symmetry for its own sake — a page is the one author with **no replies switch**
+(`users.fediverse_replies?` has no page twin, because a page that deliberately
+publishes outward has no comparable reason to want the reach and not the
+answers), so if the single reply cannot be taken down the team has no lever at
+all. It shipped without one: the gate compared `posts.user_id`, NULL on an
+organization post, which left "Report" as the only control — and Report deletes
+the reply *and* files a `Flag` with its author's server, so taking something off
+your own page meant accusing somebody.
 
 I had this written up here as its own feature and it was not. `fediverse_notes`
 hangs off the **post**, not off a member, and the audience a note records is

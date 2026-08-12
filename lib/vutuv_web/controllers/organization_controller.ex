@@ -167,6 +167,20 @@ defmodule VutuvWeb.OrganizationController do
   def fediverse(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Fediverse, &Organizations.owner?/2)
 
+  @doc """
+  Who follows the page from other networks. Owner-only like the switch it hangs
+  off: these are names of people who never signed up here, and the page itself
+  publishes only the count.
+  """
+  def fediverse_followers(conn, %{"slug" => slug}),
+    do:
+      manage(
+        conn,
+        slug,
+        VutuvWeb.OrganizationLive.FediverseFollowers,
+        &Organizations.owner?/2
+      )
+
   def exclusions(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Exclusions, &Organizations.can_manage?/2)
 

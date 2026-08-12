@@ -10,10 +10,12 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
   use VutuvWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import Vutuv.OrganizationsHelpers
   import Vutuv.PostsHelpers
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Organizations
   alias Vutuv.Posts
 
   @actor "https://social.example/users/alice"
@@ -70,6 +72,25 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       build_conn() |> Plug.Test.init_test_session(%{}) |> create_and_login_user()
 
     {user, Plug.Conn.get_session(conn)}
+  end
+
+  # A federating page with a post of its own, plus the cookie session of a
+  # member who may speak for it. Returns `{page, post, publisher_session}`.
+  defp page_post do
+    {conn, owner} =
+      build_conn() |> Plug.Test.init_test_session(%{}) |> create_and_login_user()
+
+    page = active_organization_for(owner)
+    {:ok, _} = Organizations.add_role(page, owner, "publisher", owner)
+
+    page =
+      page
+      |> Ecto.Changeset.change(%{fediverse_followers?: true, username: "acme"})
+      |> Repo.update!()
+
+    {:ok, post} = Posts.create_organization_post(page, owner, %{body: "Nach draußen."})
+
+    {page, post, Plug.Conn.get_session(conn)}
   end
 
   describe "a public reply" do
@@ -306,6 +327,74 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       encoded = inspect(Map.from_struct(event))
       refute encoded =~ "Sturdier than they look."
       refute encoded =~ @actor
+    end
+  end
+
+  describe "takedown under a page's post" do
+    setup do
+      Application.put_env(:vutuv, :verify_organization_domains, true)
+
+      on_exit(fn ->
+        Application.put_env(:vutuv, :verify_organization_domains, false)
+        Application.delete_env(:vutuv, :organizations_dns_resolver)
+      end)
+
+      :ok
+    end
+
+    test "a publisher removes it, quietly" do
+      # A page has no replies switch, so this single control is its team's whole
+      # say over what strangers write under its posts. It used to be missing:
+      # the gate compared `posts.user_id`, which an organization post leaves
+      # NULL, leaving the team only "Report" — which deletes the reply AND
+      # accuses its author to their own server.
+      {_page, post, publisher} = page_post()
+      note = note!(post)
+
+      {:ok, view, html} = thread_view(post, publisher)
+      assert html =~ "Sturdier than they look."
+
+      html =
+        view
+        |> element(~s([phx-click="remove-remote-reply"][phx-value-id="#{note.id}"]))
+        |> render_click()
+
+      refute html =~ "Sturdier than they look."
+      refute Repo.get(Note, note.id)
+    end
+
+    test "a member who does not speak for the page has no Remove" do
+      # The bystander is logged in first on purpose: `sent_pin/0` reads the
+      # OLDEST mail in this process's mailbox, and creating a page mails its
+      # owner, so a login after that would read the page notice and find no PIN.
+      {_other, cookie} = other_member()
+      {_page, post, _publisher} = page_post()
+      note!(post)
+
+      {:ok, _view, html} = thread_view(post, cookie)
+
+      assert html =~ ~s(phx-click="report-remote-reply")
+      refute html =~ ~s(phx-click="remove-remote-reply")
+    end
+
+    test "reporting one signs the Flag in the page's name" do
+      {_other, cookie} = other_member()
+      {page, post, _publisher} = page_post()
+      note = note!(post)
+
+      {:ok, _} = Fediverse.ensure_organization_actor(page)
+      {:ok, view, _html} = thread_view(post, cookie)
+
+      view
+      |> element(~s([phx-click="report-remote-reply"][phx-value-id="#{note.id}"]))
+      |> render_click()
+
+      refute Repo.get(Note, note.id)
+
+      delivery =
+        Repo.one!(from(d in Vutuv.Fediverse.Delivery, where: d.organization_id == ^page.id))
+
+      assert Jason.decode!(delivery.activity_json)["type"] == "Flag"
     end
   end
 

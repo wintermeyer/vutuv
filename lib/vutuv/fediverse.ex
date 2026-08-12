@@ -513,19 +513,22 @@ defmodule Vutuv.Fediverse do
   def browse_default_dir(@browse_default_sort), do: "desc"
   def browse_default_dir(_text_column), do: "asc"
 
-  @doc "How many of the member's remote followers match `filters` (for the pager)."
-  def count_followers(%User{id: user_id}, filters \\ %{}) do
-    user_id |> followers_base(filters) |> Repo.aggregate(:count)
+  @doc """
+  How many of `owner`'s remote followers match `filters` (for the pager).
+  `owner` is a member or a page (issue #1334).
+  """
+  def count_followers(owner, filters \\ %{}) do
+    owner |> followers_base(filters) |> Repo.aggregate(:count)
   end
 
   @doc """
-  One page of the member's follower browser: filtered, searched, sorted and
+  One page of `owner`'s follower browser: filtered, searched, sorted and
   paginated. `opts` may carry `:total` (skip the recount) and `:per_page`
   (default `browse_per_page/0`).
   """
-  def list_followers_page(%User{id: user_id}, filters, params \\ %{}, opts \\ []) do
+  def list_followers_page(owner, filters, params \\ %{}, opts \\ []) do
     per_page = Keyword.get(opts, :per_page, @browse_per_page)
-    base = followers_base(user_id, filters)
+    base = followers_base(owner, filters)
     total = Keyword.get(opts, :total) || Repo.aggregate(base, :count)
 
     base
@@ -535,20 +538,18 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  The servers this member's remote followers live on, biggest first - the
+  The servers `owner`'s remote followers live on, biggest first - the
   follower browser's server filter, and the answer to "where are they coming
   from". Capped at `limit` hosts.
   """
-  def follower_hosts(%User{id: user_id}, limit \\ @browse_host_choices) do
-    Repo.all(
-      from(f in Follower,
-        where: f.user_id == ^user_id,
-        group_by: uri_host(f.actor_uri),
-        order_by: [desc: count(f.id), asc: uri_host(f.actor_uri)],
-        limit: ^limit,
-        select: %{host: uri_host(f.actor_uri), count: count(f.id)}
-      )
-    )
+  def follower_hosts(owner, limit \\ @browse_host_choices) do
+    owner
+    |> follower_scope()
+    |> group_by([f], uri_host(f.actor_uri))
+    |> order_by([f], desc: count(f.id), asc: uri_host(f.actor_uri))
+    |> limit(^limit)
+    |> select([f], %{host: uri_host(f.actor_uri), count: count(f.id)})
+    |> Repo.all()
   end
 
   defp validated_browse_sort(sort) when sort in @browse_sort_columns, do: sort
@@ -560,8 +561,18 @@ defmodule Vutuv.Fediverse do
   defp normalize_browse_server(nil), do: nil
   defp normalize_browse_server(host), do: String.downcase(host)
 
-  defp followers_base(user_id, filters) do
-    from(f in Follower, where: f.user_id == ^user_id)
+  # The one place a follower query names its owner's column. A member's
+  # followers hang off `user_id` and a page's off `organization_id` — the
+  # nullable pair again — so every browser query goes through here rather than
+  # writing the `where` itself.
+  defp follower_scope(%User{id: id}), do: from(f in Follower, where: f.user_id == ^id)
+
+  defp follower_scope(%Organization{id: id}),
+    do: from(f in Follower, where: f.organization_id == ^id)
+
+  defp followers_base(owner, filters) do
+    owner
+    |> follower_scope()
     |> filter_follower_server(Map.get(filters, :server))
     |> search_followers(Map.get(filters, :q))
   end
@@ -3894,15 +3905,20 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  The member takes a reply off their own post. Deletes it at once and records
-  the takedown in `Vutuv.Fediverse.NoteEvent`.
+  Whoever may act as the post's author takes a reply off it. Deletes it at once
+  and records the takedown in `Vutuv.Fediverse.NoteEvent`.
+
+  For an **organization** post that is every current publisher of the page, the
+  same rule `Posts.author?/2` applies to editing it — and for a page this is the
+  *only* lever there is, since a page has no replies switch to turn the whole
+  stream off the way a member does (`users.fediverse_replies?`).
 
   Nothing leaves the building: removing a reply from your own post is a decision
   about *your* page, not an accusation, so the origin server is not told. Saying
   "this is not appropriate" is `report_note/2`, which does tell them.
   """
   def remove_note(note_id, %User{} = actor) do
-    with {:ok, _note, _author_id} <-
+    with {:ok, _note, _post} <-
            take_down_note(note_id, actor, "removed_by_member", &note_owner?/3),
          do: :ok
   end
@@ -3931,9 +3947,9 @@ defmodule Vutuv.Fediverse do
            :timer.hours(24)
          ) do
       :ok ->
-        with {:ok, note, author_id} <-
+        with {:ok, note, post} <-
                take_down_note(note_id, reporter, "reported", &note_visible?/3) do
-          flag_note(note, author_id, reporter)
+          flag_note(note, post, reporter)
           :ok
         end
 
@@ -3944,26 +3960,32 @@ defmodule Vutuv.Fediverse do
 
   # Files the report with the server the reply came from (issue #1102).
   #
-  # Signed by the member whose post the reply sat under, never by the reporter.
-  # A `Flag` is a signed statement, so it has to come from an actor we serve a
-  # key for, and vutuv has no installation-wide actor to file from (Mastodon uses
-  # its instance actor for exactly this). The thread's owner is the party that
-  # server already knows in this conversation, and using them keeps a bystander
-  # reporter out of a message that travels to strangers: nothing in the `Flag`
-  # names who reported it, and no content rides along — the reported object's own
-  # id is the whole reference.
+  # Signed by the **author of the post the reply sat under** — a member or a
+  # page — never by the reporter. A `Flag` is a signed statement, so it has to
+  # come from an actor we serve a key for, and vutuv has no installation-wide
+  # actor to file from (Mastodon uses its instance actor for exactly this). The
+  # thread's owner is the party that server already knows in this conversation,
+  # and using them keeps a bystander reporter out of a message that travels to
+  # strangers: nothing in the `Flag` names who reported it, and no content rides
+  # along — the reported object's own id is the whole reference.
+  #
+  # `Posts.author/1` is what makes the page case work at all. Reading the signer
+  # off `posts.user_id` handed `Repo.get(User, nil)` a NULL for an organization
+  # post, which RAISES rather than answering nothing: a 500 on the report button
+  # under every page post, and behind a gate (the note needs an inbox) that no
+  # member-side test could reach.
   #
   # Skipped when the note carried no answerable inbox (`own_inbox/1` refuses an
   # inbox on a host the actor does not control), when the post's author never
   # federated (no key to sign with), or when the operator has blocked that server
   # — a block is both ears and mouth shut.
-  defp flag_note(%Note{} = note, author_id, %User{} = reporter) do
+  defp flag_note(%Note{} = note, %Post{} = post, %User{} = reporter) do
     with inbox when is_binary(inbox) <- note.inbox_uri,
-         %User{} = author <- Repo.get(User, author_id),
+         author when not is_nil(author) <- Posts.author(post),
          true <- ever_federated?(author),
          false <- instance_blocked?(note.actor_uri) do
       enqueue(author, [inbox], Docs.flag_activity(author, note.object_uri, note.actor_uri))
-      log_note_event(note, author_id, reporter, "flagged")
+      log_note_event(note, post, reporter, "flagged")
       :ok
     else
       _ -> :skip
@@ -4250,14 +4272,18 @@ defmodule Vutuv.Fediverse do
   defp note_viewer_id(id) when is_binary(id), do: id
   defp note_viewer_id(_), do: "00000000-0000-0000-0000-000000000000"
 
-  # Only the member whose post it sits under (or an admin) may remove a reply.
-  defp note_owner?(_note, author_id, %User{} = actor),
-    do: actor.id == author_id or actor.admin? == true
+  # Whoever may act as the post's author may take a reply off it (or an admin).
+  # `Posts.author?/2` is the one predicate for that, which is what widens this
+  # to a page's publishers: an organization post leaves `posts.user_id` NULL, so
+  # comparing ids here used to answer false for everybody but an admin, and a
+  # page's team had no lever at all over what strangers wrote under its posts.
+  defp note_owner?(_note, %Post{} = post, %User{} = actor),
+    do: Posts.author?(post, actor) or actor.admin? == true
 
   # Anyone who can see it may report it, which for a private reply is its
   # addressee alone.
-  defp note_visible?(note, author_id, %User{} = actor),
-    do: Note.public?(note) or note_owner?(note, author_id, actor)
+  defp note_visible?(note, %Post{} = post, %User{} = actor),
+    do: Note.public?(note) or note_owner?(note, post, actor)
 
   defp take_down_note(note_id, %User{} = actor, action, authorized?) do
     query =
@@ -4265,19 +4291,20 @@ defmodule Vutuv.Fediverse do
         join: p in Post,
         on: p.id == n.post_id,
         where: n.id == ^to_string(note_id),
-        select: {n, p.user_id}
+        select: {n, p}
       )
 
     case UUIDv7.with_cast(note_id, fn _ -> Repo.one(query) end) do
-      {%Note{} = note, author_id} ->
-        if authorized?.(note, author_id, actor) do
+      {%Note{} = note, %Post{} = post} ->
+        if authorized?.(note, post, actor) do
           Repo.delete(note)
-          log_note_event(note, author_id, actor, action)
+          log_note_event(note, post, actor, action)
           Posts.broadcast_post_counters(note.post_id)
           # The deleted row is handed back so the caller can still address the
           # origin server (`flag_note/3`) — after this it is the only copy of
-          # that address left.
-          {:ok, note, author_id}
+          # that address left. The post rides along because the `Flag` has to be
+          # signed by its author, whichever kind of author that is.
+          {:ok, note, post}
         else
           {:error, :not_allowed}
         end
@@ -4287,21 +4314,23 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  defp log_note_event(%Note{} = note, author_id, %User{} = actor, action) do
+  defp log_note_event(%Note{} = note, %Post{} = post, %User{} = actor, action) do
     log_takedown(%{
       action: action,
       host: Note.host(note.actor_uri) || "unknown",
       actor_uri: note.actor_uri,
       audience: note.audience,
-      user_id: author_id,
+      user_id: post.user_id,
+      organization_id: post.organization_id,
       actor_id: actor.id
     })
   end
 
   # The one writer of the content-free takedown ledger, so its field set — and
   # the keyed digest that stands in for the actor — has a single definition
-  # whatever kind of cached content was taken down. `user_id` is the member
-  # whose page it sat on, and is absent for content that sat on nobody's (a
+  # whatever kind of cached content was taken down. `user_id` /
+  # `organization_id` is whose page it sat on — exactly one of them for a reply
+  # under a post — and both are absent for content that sat on nobody's (a
   # cached post from a followed account, issue #1161).
   defp log_takedown(attrs) do
     Repo.insert!(%NoteEvent{
@@ -4310,6 +4339,7 @@ defmodule Vutuv.Fediverse do
       actor_digest: note_actor_digest(attrs.actor_uri),
       audience: attrs.audience,
       user_id: attrs[:user_id],
+      organization_id: attrs[:organization_id],
       actor_id: attrs.actor_id
     })
   end

@@ -22,10 +22,13 @@ defmodule Vutuv.Fediverse.NoteEvent do
   `secret_key_base`, per the project rule that a bare hash of a guessable value
   is not privacy), which groups repeat offenders without holding the identifier.
 
-  `user_id` (whose post it sat under) and `actor_id` (who acted) are plain
-  values, not associations, like the deliverability and admin-action ledgers:
-  an audit row must stay readable after the rows it references are gone. Rows
-  are written by `Vutuv.Fediverse` only, never built from user params.
+  `user_id` / `organization_id` (whose post it sat under) and `actor_id` (who
+  acted) are plain values, not associations, like the deliverability and
+  admin-action ledgers: an audit row must stay readable after the rows it
+  references are gone. Rows are written by `Vutuv.Fediverse` only, never built
+  from user params. Exactly one of the two owner columns is set for a reply
+  under a post, and **neither** for a cached post, which sits on nobody's page
+  (issue #1161) — so a NULL `user_id` alone does not mean "nobody's".
 
   Automatic deletions are deliberately **not** recorded here. An expiry sweep, a
   server block or an upstream `Delete` can remove thousands of rows at once and
@@ -52,6 +55,7 @@ defmodule Vutuv.Fediverse.NoteEvent do
     field(:actor_digest, :string)
     field(:audience, :string)
     field(:user_id, :binary_id)
+    field(:organization_id, :binary_id)
     field(:actor_id, :binary_id)
 
     timestamps(updated_at: false)

@@ -76,6 +76,67 @@ defmodule VutuvWeb.OrganizationPagesGermanTest do
     assert html =~ "aus dem eigenen Konto"
   end
 
+  test "the remote-follower list reads as German", %{conn: conn} do
+    {conn, owner} = create_and_login_user(conn)
+
+    organization =
+      owner
+      |> active_organization_for()
+      |> Ecto.Changeset.change(%{username: "acme", fediverse_followers?: true})
+      |> Repo.update!()
+
+    {:ok, _} =
+      Vutuv.Fediverse.add_organization_follower(organization, %{
+        actor_uri: "https://remote.example/users/frida",
+        inbox_uri: "https://remote.example/users/frida/inbox",
+        handle: "@frida@remote.example",
+        name: "Frida Fern"
+      })
+
+    html =
+      conn
+      |> german()
+      |> get(~p"/organizations/#{organization.slug}/fediverse/followers")
+      |> html_response(200)
+
+    assert html =~ "Follower aus anderen Netzwerken"
+    assert html =~ "Zurück zur Fediverse-Seite"
+    assert html =~ "Nach außen veröffentlicht die Seite die Anzahl, nie die Namen."
+
+    # What the merge filled these two with: a link back to the start page, and a
+    # sentence about the READER's own vutuv posts on a page's list.
+    refute html =~ "Zur Startseite"
+    refute html =~ "Ihren vutuv-Beiträgen"
+  end
+
+  test "the Fediverse card offers the list in German", %{conn: conn} do
+    {conn, owner} = create_and_login_user(conn)
+
+    organization =
+      owner
+      |> active_organization_for()
+      |> Ecto.Changeset.change(%{username: "acme", fediverse_followers?: true})
+      |> Repo.update!()
+
+    {:ok, _} =
+      Vutuv.Fediverse.add_organization_follower(organization, %{
+        actor_uri: "https://remote.example/users/frida",
+        inbox_uri: "https://remote.example/users/frida/inbox",
+        handle: "@frida@remote.example",
+        name: "Frida Fern"
+      })
+
+    html =
+      conn
+      |> german()
+      |> get(~p"/organizations/#{organization.slug}/fediverse")
+      |> html_response(200)
+
+    assert html =~ "Wer dieser Seite folgt"
+    # The merge made this link a sentence about somebody following the page.
+    refute html =~ "folgt dieser Seite."
+  end
+
   test "the follow-as-page pill names the page in German", %{conn: conn} do
     {conn, owner} = create_and_login_user(conn)
     organization = active_organization_for(owner)

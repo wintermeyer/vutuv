@@ -130,6 +130,19 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
           <% end %>
         </p>
 
+        <%!-- The number is not the interesting half once it moves: who these
+        accounts are is, and until this link the page had no way to ask. Shown
+        only once there is somebody to look at, so an empty list is never
+        offered as a destination. --%>
+        <.link
+          :if={@remote_followers > 0}
+          navigate={~p"/organizations/#{@organization.slug}/fediverse/followers"}
+          id="all-followers-link"
+          class="mt-1 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Who follows this page")}
+        </.link>
+
         <%!-- The thing people are surprised by afterwards, so it is said before
         rather than after: switching off stops new posts leaving, but a copy
         another server already keeps can only be ASKED to go. --%>

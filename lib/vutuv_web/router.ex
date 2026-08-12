@@ -285,6 +285,13 @@ defmodule VutuvWeb.Router do
     get("/organizations/:slug/activity", OrganizationController, :activity)
     get("/organizations/:slug/feed", OrganizationController, :feed)
     get("/organizations/:slug/following", OrganizationController, :following)
+    # Before the bare /fediverse page, so the longer path is matched first.
+    get(
+      "/organizations/:slug/fediverse/followers",
+      OrganizationController,
+      :fediverse_followers
+    )
+
     get("/organizations/:slug/fediverse", OrganizationController, :fediverse)
     # The permalink of a post published in the organization's name (issue #1334).
     # Deliberately under the slug and not under the organization's opt-in root

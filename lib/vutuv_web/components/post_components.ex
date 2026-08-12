@@ -2529,7 +2529,12 @@ defmodule VutuvWeb.PostComponents do
   defp merge_remote_nodes(children, [], _post, _viewer, _marks), do: children
 
   defp merge_remote_nodes(children, notes, post, viewer, marks) do
-    owner? = match?(%User{}, viewer) and viewer.id == post.user_id
+    # Who gets the "Remove" item — `Posts.author?/2`, the same predicate that
+    # gates Edit and Delete, so a page's publishers get it too. Comparing
+    # `post.user_id` here left an organization post's team with only "Report",
+    # which deletes the reply AND files an accusation with the origin server:
+    # there was no way to quietly take something off your own page.
+    owner? = match?(%User{}, viewer) and Posts.author?(post, viewer)
 
     # An answer to one of these notes (issue #1070) is, underneath, an ordinary
     # reply to the same vutuv post — so `thread_forest/1` made it a *sibling* of
