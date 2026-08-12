@@ -92,7 +92,7 @@ defmodule VutuvWeb.OrganizationLive.Activity do
         organization={@organization}
         active={:activity}
         owner?={@owner?}
-        manage?={true}
+       
         publisher?={@publisher?}
       />
 

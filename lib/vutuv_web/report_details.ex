@@ -136,10 +136,18 @@ defmodule VutuvWeb.ReportDetails do
   # liker / bookmarker) is the muted suffix. A text-less (photo-only) post has no
   # first line, so the actor's handle becomes the link text instead of a blank
   # line.
+  #
+  # The permalink is asked of `Vutuv.Posts.path/1` rather than built here: this
+  # spelled `"/posts/" <> id`, which is a route only `/api/2.0` serves, so every
+  # post line in the daily report page and its email led nowhere. The actor
+  # above is the reposter or liker, not necessarily the author, so the path has
+  # to come from the post.
   defp post_entry(post, actor) do
+    path = Vutuv.Posts.path(post)
+
     case AgentDocs.excerpt(post.body) do
-      "" -> %{primary: actor_label(actor), secondary: nil, path: "/posts/" <> post.id}
-      line -> %{primary: line, secondary: actor_label(actor), path: "/posts/" <> post.id}
+      "" -> %{primary: actor_label(actor), secondary: nil, path: path}
+      line -> %{primary: line, secondary: actor_label(actor), path: path}
     end
   end
 

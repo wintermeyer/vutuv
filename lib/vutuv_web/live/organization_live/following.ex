@@ -147,7 +147,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
         organization={@organization}
         active={:following}
         owner?={@owner?}
-        manage?={true}
+       
         publisher?={true}
       />
 

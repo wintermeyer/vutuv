@@ -310,7 +310,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
               <span class={["text-xs font-semibold", if(domain.verified_at, do: "text-emerald-600 dark:text-emerald-300", else: "text-slate-500")]}>
                 {if domain.verified_at, do: gettext("verified"), else: gettext("pending")}
               </span>
-              <span :if={domain.last_checked_at} class="text-xs text-slate-500">
+              <span :if={domain.last_checked_at} class="text-xs text-slate-600 dark:text-slate-400">
                 <.local_time at={domain.last_checked_at} id={"detail-checked-#{domain.id}"} format="%Y-%m-%d" />
               </span>
             </p>
@@ -322,9 +322,9 @@ defmodule VutuvWeb.Admin.OrganizationLive do
           <dd class="mt-1 space-y-1 text-sm text-slate-700 dark:text-slate-300">
             <p :for={role <- @detail.roles}>
               <.link navigate={"/#{role.user.username}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">@{role.user.username}</.link>
-              <span class="text-xs text-slate-500">{role_label(role.role)}</span>
+              <span class="text-xs text-slate-600 dark:text-slate-400">{role_label(role.role)}</span>
             </p>
-            <p :if={@detail.claimed_by} class="text-xs text-slate-500">
+            <p :if={@detail.claimed_by} class="text-xs text-slate-600 dark:text-slate-400">
               {gettext("Claimed by")}: {member_name(@detail.claimed_by)}
             </p>
           </dd>

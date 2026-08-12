@@ -8,7 +8,7 @@ defmodule VutuvWeb.Admin.FediverseHTML do
 
   @doc """
   What a takedown row means, in words. The stored `action` values are the closed
-  set `Vutuv.Fediverse.NoteEvent.actions/0` holds; an unknown one still renders
+  set `Vutuv.Fediverse.NoteEvent` documents; an unknown one still renders
   something rather than leaking a raw string at the operator.
   """
   def note_event_label(%{action: "reported"}), do: gettext("Reported as not appropriate")

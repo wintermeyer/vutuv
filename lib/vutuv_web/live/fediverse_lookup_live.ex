@@ -157,14 +157,13 @@ defmodule VutuvWeb.FediverseLookupLive do
     viewer = socket.assigns.current_user
     ids = [post.id]
 
+    # No like/repost marks are read here: the card embeds `RemoteActionsComponent`,
+    # which loads its own. Assigning them cost two queries per lookup for values
+    # nothing rendered — and `clear_result/1` never set them, so no template
+    # could have read them without crashing on the empty state.
     socket
     |> assign(:post, post)
     |> assign(:images, Map.get(Fediverse.list_remote_images(ids), post.id, []))
-    |> assign(:liked?, MapSet.member?(Fediverse.liked_remote_post_ids(viewer, ids), post.id))
-    |> assign(
-      :reposted?,
-      MapSet.member?(Fediverse.reposted_remote_post_ids(viewer, ids), post.id)
-    )
     |> assign(:follow, Fediverse.remote_follow_for(viewer, post.remote_account))
   end
 

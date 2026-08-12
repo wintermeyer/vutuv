@@ -47,12 +47,9 @@ who still looks here first. --%>
         <li :for={event <- @recent_activity} id={"recent-event-#{event.id}"} class="py-2">
           <span class="block text-sm font-medium text-slate-800 dark:text-slate-100">
             {event_label(event)}
-            <span
-              :if={by_someone_else?(event)}
-              class="ml-1 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
-            >
+            <.by_other_badge :if={by_someone_else?(event)} class="ml-1">
               {gettext("Not by you")}
-            </span>
+            </.by_other_badge>
           </span>
           <span class="block text-xs text-slate-600 dark:text-slate-400">
             <.local_time at={event.inserted_at} precision="second" format="%Y-%m-%d %H:%M:%S" />

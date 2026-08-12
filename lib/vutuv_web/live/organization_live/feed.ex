@@ -72,7 +72,7 @@ defmodule VutuvWeb.OrganizationLive.Feed do
         organization={@organization}
         active={:feed}
         owner?={@owner?}
-        manage?={true}
+       
         publisher?={true}
       />
 

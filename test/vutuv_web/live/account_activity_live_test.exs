@@ -142,5 +142,10 @@ defmodule VutuvWeb.AccountActivityLiveTest do
     {:ok, live, _html} = live(conn, ~p"/settings/activity")
 
     assert has_element?(live, "[data-event-by-other]")
+
+    # …and on the security page's short recap of the same events, which wrote
+    # its own copy of the badge without the marker, so this assertion silently
+    # did not cover it. Both render `<.by_other_badge>` now.
+    assert conn |> get(~p"/settings/security") |> html_response(200) =~ "data-event-by-other"
   end
 end

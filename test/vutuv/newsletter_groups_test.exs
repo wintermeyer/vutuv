@@ -105,6 +105,12 @@ defmodule Vutuv.NewsletterGroupsTest do
 
       assert Newsletters.audience_count(%{tag_id: tag.id}) == 1
       assert Newsletters.find_tag("elixir").id == tag.id
+
+      # The slug spelling names the same topic everywhere else in the app
+      # (`Tag.find_by_value/1` is what the tag pages, the composer and the
+      # search box all use), so an admin who types it here must not be told the
+      # tag does not exist.
+      assert Newsletters.find_tag(tag.slug).id == tag.id
     end
 
     test "only counts emailable, subscribed members" do

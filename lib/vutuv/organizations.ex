@@ -239,6 +239,34 @@ defmodule Vutuv.Organizations do
   def publisher?(_, _), do: false
 
   @doc """
+  Every permission answer for one `(organization, viewer)` pair, from a single
+  read of the role table.
+
+  The four predicates above each run their own query, which is right for a
+  caller with one question and wrong for a page that asks them all: the
+  organization page asked five times (`owner?/2` twice), so one row set cost
+  five round trips. They stay the public API; this is for the caller that wants
+  the whole answer.
+
+  `can_manage?` keeps its `created_by_user_id` leg — the member who claimed the
+  page can always reach its settings, role row or not.
+  """
+  def role_powers(%Organization{} = organization, %User{} = user) do
+    roles = roles_of(organization, user)
+
+    %{
+      roles: roles,
+      owner?: "owner" in roles,
+      can_edit?: Enum.any?(roles, &(&1 in ["owner", "admin"])),
+      publisher?: "publisher" in roles,
+      can_manage?: organization.created_by_user_id == user.id or roles != []
+    }
+  end
+
+  def role_powers(_, _),
+    do: %{roles: [], owner?: false, can_edit?: false, publisher?: false, can_manage?: false}
+
+  @doc """
   The organization `user` is currently acting as, given the id their session
   carries — or `nil` (issue #1335).
 
@@ -575,16 +603,6 @@ defmodule Vutuv.Organizations do
         )
       )
     end
-  end
-
-  @doc "Fetches one role row scoped to an organization (owner-management actions)."
-  def get_role(%Organization{id: id}, role_id) do
-    Repo.one(
-      from(r in OrganizationRole,
-        where: r.organization_id == ^id and r.id == ^role_id,
-        preload: [:user]
-      )
-    )
   end
 
   @doc """
@@ -1518,17 +1536,6 @@ defmodule Vutuv.Organizations do
     Repo.aggregate(from(n in OrganizationName, where: not is_nil(n.flagged_at)), :count, :id)
   end
 
-  @doc "All flagged aliases (newest first), each with its organization, for the admin queue."
-  def list_flagged_aliases do
-    Repo.all(
-      from(n in OrganizationName,
-        where: not is_nil(n.flagged_at),
-        order_by: [desc: n.flagged_at],
-        preload: [:organization]
-      )
-    )
-  end
-
   @doc "Fetches one alias row by id for the admin queue, or nil."
   def get_alias(id), do: Vutuv.UUIDv7.with_cast(id, &Repo.get(OrganizationName, &1))
 
@@ -1582,9 +1589,6 @@ defmodule Vutuv.Organizations do
       )
     end
   end
-
-  @doc "The organization page's per-page size for its People section."
-  def people_per_page, do: @people_per_page
 
   @doc """
   The number of members whose linked work experience is at `organization` and who are

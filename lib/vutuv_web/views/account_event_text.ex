@@ -18,6 +18,7 @@ defmodule VutuvWeb.AccountEventText do
   context decided not to keep.
   """
 
+  use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.AccountEvents.AccountEvent
@@ -254,4 +255,33 @@ defmodule VutuvWeb.AccountEventText do
   def by_someone_else?(%AccountEvent{actor_user_id: nil}), do: false
   def by_someone_else?(%AccountEvent{user_id: id, actor_user_id: id}), do: false
   def by_someone_else?(%AccountEvent{}), do: true
+
+  attr(:class, :any, default: "mt-1")
+  slot(:inner_block, required: true)
+
+  @doc """
+  The amber marker on a row somebody else caused — the one line on those pages
+  that has to shout.
+
+  The wording differs by page (the member is told it was not them, the admin is
+  told who it was), which is the slot; everything else is the same badge, and
+  keeping it in one place is what puts `data-event-by-other` on all three. The
+  `/settings/security` copy was written without that attribute, so the test
+  asserting the marker exists never covered that page at all.
+
+  Guard the call site with `:if={by_someone_else?(event)}` as before.
+  """
+  def by_other_badge(assigns) do
+    ~H"""
+    <span
+      data-event-by-other
+      class={[
+        "inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+        @class
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </span>
+    """
+  end
 end

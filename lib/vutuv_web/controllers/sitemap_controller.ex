@@ -45,18 +45,22 @@ defmodule VutuvWeb.SitemapController do
     send_xml(conn, urlset(Enum.map(Sitemap.static_paths(), &{&1, nil})))
   end
 
+  # The type is matched loosely and then looked up in `@entry_funs`, rather than
+  # spelled out a second time in the pattern: the alternation had never learned
+  # about `organization_posts`, so `index/2` advertised that child (it builds
+  # its list from `Sitemap.chunk_counts/0`) and this action answered it 404.
+  # One list decides what exists.
   def show(conn, %{"name" => name}) do
     with %{"type" => type, "chunk" => chunk} <-
-           Regex.named_captures(
-             ~r/^(?<type>users|posts|tags|organizations|jobs)-(?<chunk>[1-9]\d*)\.xml$/,
-             name
-           ),
-         [_ | _] = entries <- Map.fetch!(@entry_funs, type).(String.to_integer(chunk)) do
+           Regex.named_captures(~r/^(?<type>[a-z_]+)-(?<chunk>[1-9]\d*)\.xml$/, name),
+         {:ok, entries_fun} <- Map.fetch(@entry_funs, type),
+         [_ | _] = entries <- entries_fun.(String.to_integer(chunk)) do
       send_xml(conn, urlset(entries))
     else
-      # nil (bad name) or [] (chunk beyond the data) — nothing to serve. A
-      # plain 404, not the HTML error page: the consumer is a crawler, and
-      # outside the browser pipeline there is no flash for the app layout.
+      # nil (bad name), :error (unknown type) or [] (chunk beyond the data) —
+      # nothing to serve. A plain 404, not the HTML error page: the consumer is
+      # a crawler, and outside the browser pipeline there is no flash for the
+      # app layout.
       _ ->
         conn
         |> put_resp_content_type("text/plain")

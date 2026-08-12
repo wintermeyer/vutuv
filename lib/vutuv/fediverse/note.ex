@@ -48,9 +48,6 @@ defmodule Vutuv.Fediverse.Note do
   # A content warning is a headline, not a second post.
   @max_summary 500
 
-  @doc "The audience values a delivered note is classified into."
-  def audiences, do: @audiences
-
   @doc "The longest remote text a note may carry."
   def max_content, do: @max_content
 

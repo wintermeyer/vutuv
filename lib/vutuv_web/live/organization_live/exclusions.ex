@@ -97,7 +97,7 @@ defmodule VutuvWeb.OrganizationLive.Exclusions do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-2xl py-6">
-      <.manage_header organization={@organization} active={:exclusions} owner?={@owner?} manage?={true} />
+      <.manage_header organization={@organization} active={:exclusions} owner?={@owner?} />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">
         {gettext("Job exclusions")}

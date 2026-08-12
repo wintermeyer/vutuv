@@ -268,9 +268,6 @@ defmodule VutuvWeb.JobReferenceHTML do
   @doc "The form value for one CV entry, as the controller parses it back."
   def link_value(kind, entry), do: "#{kind}:#{entry.id}"
 
-  @doc "Whether the AI check applies to this entry's country."
-  def check_supported?(reference), do: References.check_supported?(reference)
-
   @doc "Whether this installation offers the check at all."
   def checks_enabled?, do: Checks.enabled?()
 
@@ -413,19 +410,6 @@ defmodule VutuvWeb.JobReferenceHTML do
   defp hours_phrase(count),
     do: ngettext("%{formatted} hour", "%{formatted} hours", count, formatted: count)
 
-  @doc "The queue position of a waiting check, or nil."
-  def queue_position(%Check{} = check), do: Checks.queue_position(check)
-  def queue_position(_none), do: nil
-
-  @doc """
-  Whether a finished check still describes the entry's current text.
-
-  A stale result is shown, not hidden: the earlier reading is still worth
-  having, it simply no longer matches what is on screen.
-  """
-  def current_result?(%Check{} = check, reference), do: Check.current_for?(check, reference)
-  def current_result?(_none, _reference), do: false
-
   @doc """
   The one-line fact strip under a Zeugnis title: kind · employer · issue date.
 
@@ -523,12 +507,4 @@ defmodule VutuvWeb.JobReferenceHTML do
   defp grade_tint(_neutral),
     do:
       "bg-slate-100 text-slate-800 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700"
-
-  @doc "A short state label for the check badge on a card."
-  def check_state_label(nil), do: nil
-  def check_state_label(%Check{status: "pending"}), do: gettext("Queued")
-  def check_state_label(%Check{status: "running"}), do: gettext("Reviewing")
-  def check_state_label(%Check{status: "done"}), do: gettext("Reviewed")
-  def check_state_label(%Check{status: "failed"}), do: gettext("Review failed")
-  def check_state_label(%Check{}), do: nil
 end

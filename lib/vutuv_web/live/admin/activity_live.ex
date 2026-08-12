@@ -27,7 +27,7 @@ defmodule VutuvWeb.Admin.ActivityLive do
   use VutuvWeb, :live_view
 
   import VutuvWeb.AccountEventText,
-    only: [event_label: 1, detail: 1, factor_label: 1, by_someone_else?: 1]
+    only: [event_label: 1, detail: 1, factor_label: 1, by_someone_else?: 1, by_other_badge: 1]
 
   import VutuvWeb.BrowseTable
   import VutuvWeb.UserHelpers, only: [member_name: 1]
@@ -294,13 +294,9 @@ defmodule VutuvWeb.Admin.ActivityLive do
                   >
                     {gettext("Confirmed")} {factor_label(event)}
                   </span>
-                  <span
-                    :if={by_someone_else?(event)}
-                    data-event-by-other
-                    class="mt-1 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
-                  >
+                  <.by_other_badge :if={by_someone_else?(event)}>
                     {gettext("By %{name}", name: "@#{actor_handle(event)}")}
-                  </span>
+                  </.by_other_badge>
                 </td>
                 <td class="align-top text-slate-600 dark:text-slate-400">
                   {event.device}

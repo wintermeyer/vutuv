@@ -126,25 +126,25 @@ defmodule VutuvWeb.Admin.UserDetailLive do
           <p class="card__label">{gettext("Jobs footprint")}</p>
           <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
             <div>
-              <dt class="text-xs text-slate-500">{gettext("Live postings")}</dt>
+              <dt class="text-xs text-slate-600 dark:text-slate-400">{gettext("Live postings")}</dt>
               <dd id="footprint-active" class="font-semibold tabular-nums">
                 {delimited_count(@footprint.active)}
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-slate-500">{gettext("Total postings")}</dt>
+              <dt class="text-xs text-slate-600 dark:text-slate-400">{gettext("Total postings")}</dt>
               <dd id="footprint-total" class="font-semibold tabular-nums">
                 {delimited_count(@footprint.total)}
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-slate-500">{gettext("Open job cases")}</dt>
+              <dt class="text-xs text-slate-600 dark:text-slate-400">{gettext("Open job cases")}</dt>
               <dd id="footprint-cases" class="font-semibold tabular-nums">
                 {delimited_count(@footprint.open_cases)}
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-slate-500">{gettext("Cold outreach")}</dt>
+              <dt class="text-xs text-slate-600 dark:text-slate-400">{gettext("Cold outreach")}</dt>
               <dd
                 id="footprint-cold"
                 class={[

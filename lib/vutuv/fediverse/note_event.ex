@@ -38,16 +38,18 @@ defmodule Vutuv.Fediverse.NoteEvent do
 
   use VutuvWeb, :model
 
+  # `action` is one of `reported`, `reported_post`, `removed_by_member` or
+  # `flagged`. Rows are written by direct insert, so that set is a convention
+  # rather than a validation — `VutuvWeb.Admin.FediverseHTML.note_event_label/1`
+  # is what has to know it, and it renders an unknown value rather than leaking
+  # a raw string at the operator.
+  #
   # `reported_post` is its own value rather than a second `reported` (issue
   # #1161): a reply sat under one member's post and only that member's page
   # changed, while a cached post is shared by everybody who follows its author,
   # so one report takes it out of every one of their feeds. An operator reading
   # this ledger has to be able to tell those two apart at a glance, and the
   # heading above the table cannot name both if the rows do not distinguish them.
-  @actions ~w(reported reported_post removed_by_member flagged)
-
-  @doc "The closed set of `action` values this ledger records."
-  def actions, do: @actions
 
   schema "fediverse_note_events" do
     field(:action, :string)

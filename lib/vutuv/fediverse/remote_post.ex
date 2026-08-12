@@ -104,12 +104,6 @@ defmodule Vutuv.Fediverse.RemotePost do
     has_one(:screenshot, Vutuv.Posts.PostScreenshot, foreign_key: :remote_post_id)
   end
 
-  @doc "The audiences a stored post can have."
-  def audiences, do: @audiences
-
-  @doc "The object types a stored post can have."
-  def kinds, do: @kinds
-
   @doc "The longest remote text a post may carry."
   def max_content, do: @max_content
 

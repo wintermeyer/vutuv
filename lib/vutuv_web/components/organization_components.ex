@@ -182,15 +182,19 @@ defmodule VutuvWeb.OrganizationComponents do
   attr(:organization, :map, required: true)
   attr(:active, :atom, required: true)
   attr(:owner?, :boolean, default: false)
-  attr(:manage?, :boolean, default: false)
   attr(:publisher?, :boolean, default: false)
 
   @doc """
   The header + tab bar shared by the organization management pages (issue #930): a
   back link to the public page and tabs for Page (edit), Team (roles), Domains and
   Job exclusions. Team/Domains show only for an owner (admins may edit the page
-  only); Job exclusions (issue #939) shows for any role holder (`manage?`), since
+  only); Job exclusions (issue #939) and Activity show for any role holder, since
   the standing default governs the postings they can already manage.
+
+  Every page that renders this header is already behind a `can_manage?/2` gate,
+  which is why those two tabs are unconditional here: the `manage?` attribute
+  they used to be guarded by was passed `true` by all nine call sites, so it was
+  a knob that only ever read one way.
   """
   def manage_header(assigns) do
     ~H"""
@@ -211,13 +215,13 @@ defmodule VutuvWeb.OrganizationComponents do
         <.manage_tab :if={@owner?} active={@active == :domains} navigate={"/organizations/#{@organization.slug}/domains"}>
           {gettext("Domains")}
         </.manage_tab>
-        <.manage_tab :if={@manage?} active={@active == :exclusions} navigate={"/organizations/#{@organization.slug}/exclusions"}>
+        <.manage_tab active={@active == :exclusions} navigate={"/organizations/#{@organization.slug}/exclusions"}>
           {gettext("Job exclusions")}
         </.manage_tab>
         <%!-- What happened to the page (issue #1336). Open to the whole team,
         not only its publishers: this is news ABOUT the page rather than
         speaking FOR it. --%>
-        <.manage_tab :if={@manage?} active={@active == :activity} navigate={"/organizations/#{@organization.slug}/activity"}>
+        <.manage_tab active={@active == :activity} navigate={"/organizations/#{@organization.slug}/activity"}>
           {gettext("Activity")}
         </.manage_tab>
         <%!-- What the page reads (issue #1336). Publishers only, unlike

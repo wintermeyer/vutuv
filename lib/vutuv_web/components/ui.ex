@@ -2591,6 +2591,51 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  A value the member is meant to hand out — a profile address, a Fediverse
+  handle, an authenticator key — in a tinted box beside a Copy button.
+
+  The button is the `data-copy` enhancement in `app.js`, which swaps its label
+  to "Copied" for a moment; with JavaScript off the `<code>` is still
+  `select-all`, so the value is one click and a keystroke away either way. Pass
+  `copy_text` when what belongs in the clipboard differs from what is shown (the
+  TOTP key is displayed in groups of four and copied without the spaces).
+
+  Distinct from `secret_once/1`, which is the brand-tinted one-shot reveal of a
+  credential that will never be shown again; this box is for a value the member
+  can come back and read any time.
+  """
+  attr(:id, :string, required: true)
+  attr(:class, :any, default: "mt-3 items-start")
+  attr(:code_class, :any, default: "text-sm")
+  attr(:copy_text, :string, default: nil)
+  slot(:inner_block, required: true)
+
+  def copy_field(assigns) do
+    ~H"""
+    <div class={[
+      "flex gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
+      @class
+    ]}>
+      <code
+        id={@id}
+        class={["min-w-0 flex-1 select-all break-all text-slate-800 dark:text-slate-100", @code_class]}
+      >{render_slot(@inner_block)}</code>
+      <button
+        type="button"
+        data-copy
+        data-copy-target={@id}
+        data-copy-text={@copy_text}
+        data-label-copy={gettext("Copy")}
+        data-label-copied={gettext("Copied")}
+        class="shrink-0 rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
+      >
+        {gettext("Copy")}
+      </button>
+    </div>
+    """
+  end
+
+  @doc """
   The single rendering of a viewer-localized timestamp — the `<time>` element
   the `LocalTime` pass rewrites into the viewer's timezone (the LiveView hook on
   live pages, the `time[data-localtime]` DOMContentLoaded sweep on classic ones;

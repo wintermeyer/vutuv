@@ -5,6 +5,7 @@ defmodule VutuvWeb.ReportDetailsTest do
   """
   use Vutuv.DataCase, async: false
 
+  alias Vutuv.Posts
   alias Vutuv.Reports
   alias Vutuv.Reports.DailyReport
   alias VutuvWeb.ReportDetails
@@ -40,9 +41,14 @@ defmodule VutuvWeb.ReportDetailsTest do
       author = insert(:user, username: "bob")
       post = insert(:post, [user: author, body: "First line\nSecond line"] ++ at(@on_day))
 
+      # Asserted against `Posts.path/1`, not a hand-written path: this line used
+      # to read `/posts/<id>`, which only `/api/2.0` serves, so the report and
+      # its email linked nowhere — and the test agreed with the bug.
       assert section(Reports.daily(@date), :posts).entries == [
-               %{primary: "First line", secondary: "@bob", path: "/posts/#{post.id}"}
+               %{primary: "First line", secondary: "@bob", path: Posts.path(post)}
              ]
+
+      assert Posts.path(post) == "/bob/posts/#{post.id}"
     end
 
     test "a text-less (photo-only) post falls back to the author handle as the line" do
@@ -50,7 +56,20 @@ defmodule VutuvWeb.ReportDetailsTest do
       post = insert(:post, [user: author, body: ""] ++ at(@on_day))
 
       assert section(Reports.daily(@date), :posts).entries == [
-               %{primary: "@carol", secondary: nil, path: "/posts/#{post.id}"}
+               %{primary: "@carol", secondary: nil, path: Posts.path(post)}
+             ]
+    end
+
+    test "a page's post links under the organization permalink shape" do
+      organization = insert(:organization)
+      post = insert(:post, [user: nil, organization: organization, body: "Neu."] ++ at(@on_day))
+
+      assert section(Reports.daily(@date), :posts).entries == [
+               %{
+                 primary: "Neu.",
+                 secondary: organization.name,
+                 path: "/organizations/#{organization.slug}/posts/#{post.id}"
+               }
              ]
     end
 

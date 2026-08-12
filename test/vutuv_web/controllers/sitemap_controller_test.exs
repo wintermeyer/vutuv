@@ -126,6 +126,26 @@ defmodule VutuvWeb.SitemapControllerTest do
     end
   end
 
+  describe "GET /sitemaps/organization_posts-N.xml" do
+    test "serves the chunk the index advertises" do
+      organization = insert(:organization)
+      insert(:post, user: nil, organization: organization, body: "Wir stellen ein.")
+
+      index = get(build_conn(), "/sitemap.xml").resp_body
+      assert index =~ "#{@base}/sitemaps/organization_posts-1.xml"
+
+      # The index published this child from `Sitemap.chunk_counts/0` while the
+      # controller matched the name against a second, hand-written list that
+      # never learned about organization posts — so every page's post was
+      # offered to crawlers and then answered 404.
+      conn = get(build_conn(), "/sitemaps/organization_posts-1.xml")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "<urlset"
+      assert conn.resp_body =~ "/organizations/#{organization.slug}/posts/"
+    end
+  end
+
   describe "GET /sitemaps/static.xml" do
     test "lists the public static pages" do
       conn = get(build_conn(), "/sitemaps/static.xml")

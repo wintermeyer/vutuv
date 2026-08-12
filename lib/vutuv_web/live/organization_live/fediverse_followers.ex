@@ -155,7 +155,7 @@ defmodule VutuvWeb.OrganizationLive.FediverseFollowers do
         organization={@organization}
         active={:fediverse}
         owner?={true}
-        manage?={true}
+       
         publisher?={@publisher?}
       />
 

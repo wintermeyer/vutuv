@@ -113,6 +113,9 @@ defmodule VutuvWeb.OrganizationLive.Show do
     # One query for every domain, partitioned in memory (an organization has few).
     domains = Organizations.list_domains(organization)
     primary = Enum.find(domains, & &1.primary?)
+    # …and one for every permission answer this page needs. Asked separately
+    # these were five reads of the same single row set.
+    powers = Organizations.role_powers(organization, viewer)
 
     socket
     |> assign(:organization, organization)
@@ -121,13 +124,13 @@ defmodule VutuvWeb.OrganizationLive.Show do
     |> assign(:primary_domain, primary)
     |> assign(:aliases, Organizations.list_aliases(organization))
     |> assign(:country_name, Countries.name(organization.country))
-    |> assign(:can_manage?, Organizations.can_manage?(organization, viewer))
-    |> assign(:can_edit?, Organizations.can_edit_page?(organization, viewer))
-    |> assign(:owner?, Organizations.owner?(organization, viewer))
+    |> assign(:can_manage?, powers.can_manage?)
+    |> assign(:can_edit?, powers.can_edit?)
+    |> assign(:owner?, powers.owner?)
     # Never implied by owner or admin (issue #1333): speaking for the page is
-    # its own grant, so this is asked on its own rather than derived from the
-    # two above.
-    |> assign(:publisher?, Organizations.publisher?(organization, viewer))
+    # its own grant, so `role_powers/2` reads it from the role list on its own
+    # rather than deriving it from the two above.
+    |> assign(:publisher?, powers.publisher?)
     # Following a page (issue #1336): a private subscription that pulls its
     # posts into your feed. No approval and no notification — a page has no
     # inbox to be told, the same way following a member needs no permission.
@@ -164,10 +167,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
     # own: the installation must federate at all, and this must be the owner
     # (federating decides how the page appears on servers we do not run, which
     # is why the switch itself is owner-only rather than publisher-wide).
-    |> assign(
-      :fediverse_invite?,
-      Fediverse.enabled?() and Organizations.owner?(organization, viewer)
-    )
+    |> assign(:fediverse_invite?, Fediverse.enabled?() and powers.owner?)
     |> assign(:engagement, Organizations.organization_engagement(organization, viewer))
     |> assign(:dns_value, primary && Organizations.dns_txt_value(primary))
     |> assign(:dns_challenge_name, primary && Organizations.dns_challenge_name(primary))

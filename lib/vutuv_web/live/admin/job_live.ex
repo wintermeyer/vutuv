@@ -334,9 +334,9 @@ defmodule VutuvWeb.Admin.JobLive do
               <.link navigate={~p"/#{@detail.posting.user.username}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                 @{@detail.posting.user.username}
               </.link>
-              <span class="text-slate-500">{member_name(@detail.posting.user)}</span>
+              <span class="text-slate-600 dark:text-slate-400">{member_name(@detail.posting.user)}</span>
             </p>
-            <p :if={is_nil(@detail.posting.user)} class="text-slate-500">{gettext("(deleted account)")}</p>
+            <p :if={is_nil(@detail.posting.user)} class="text-slate-600 dark:text-slate-400">{gettext("(deleted account)")}</p>
           </dd>
         </div>
 
@@ -356,7 +356,7 @@ defmodule VutuvWeb.Admin.JobLive do
             </p>
             <p :if={is_nil(@detail.posting.organization)}>
               {employer(@detail.posting)}
-              <span class="ml-1 text-xs text-slate-500">{gettext("(free text, unverified)")}</span>
+              <span class="ml-1 text-xs text-slate-600 dark:text-slate-400">{gettext("(free text, unverified)")}</span>
             </p>
           </dd>
         </div>
@@ -385,7 +385,7 @@ defmodule VutuvWeb.Admin.JobLive do
             <span :if={@detail.posting.first_published_at}>
               <.local_time at={@detail.posting.first_published_at} id="job-published" format="%Y-%m-%d" />
             </span>
-            <span :if={is_nil(@detail.posting.first_published_at)} class="text-slate-500">{gettext("never")}</span>
+            <span :if={is_nil(@detail.posting.first_published_at)} class="text-slate-600 dark:text-slate-400">{gettext("never")}</span>
           </dd>
         </div>
 
@@ -403,19 +403,19 @@ defmodule VutuvWeb.Admin.JobLive do
         <p class="card__label">{gettext("Poster footprint")}</p>
         <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
           <div>
-            <dt class="text-xs text-slate-500">{gettext("Live postings")}</dt>
+            <dt class="text-xs text-slate-600 dark:text-slate-400">{gettext("Live postings")}</dt>
             <dd class="font-semibold tabular-nums">{delimited_count(@detail.footprint.active)}</dd>
           </div>
           <div>
-            <dt class="text-xs text-slate-500">{gettext("Total postings")}</dt>
+            <dt class="text-xs text-slate-600 dark:text-slate-400">{gettext("Total postings")}</dt>
             <dd class="font-semibold tabular-nums">{delimited_count(@detail.footprint.total)}</dd>
           </div>
           <div>
-            <dt class="text-xs text-slate-500">{gettext("Open job cases")}</dt>
+            <dt class="text-xs text-slate-600 dark:text-slate-400">{gettext("Open job cases")}</dt>
             <dd class="font-semibold tabular-nums">{delimited_count(@detail.footprint.open_cases)}</dd>
           </div>
           <div>
-            <dt class="text-xs text-slate-500">{gettext("Cold outreach")}</dt>
+            <dt class="text-xs text-slate-600 dark:text-slate-400">{gettext("Cold outreach")}</dt>
             <dd class={[
               "font-semibold tabular-nums",
               @detail.footprint.cold_outreach >= Vutuv.Chat.new_conversation_limit() &&
@@ -436,10 +436,10 @@ defmodule VutuvWeb.Admin.JobLive do
           >
             <span>
               <span class="font-semibold">{status_badge(mod_case)}</span>
-              <span class="ml-2 text-slate-500">
+              <span class="ml-2 text-slate-600 dark:text-slate-400">
                 {ngettext("%{count} report", "%{count} reports", length(mod_case.reports))}
               </span>
-              <span class="ml-2 text-slate-500">
+              <span class="ml-2 text-slate-600 dark:text-slate-400">
                 <.local_time at={mod_case.inserted_at} id={"case-#{mod_case.id}-at"} format="%Y-%m-%d" />
               </span>
             </span>

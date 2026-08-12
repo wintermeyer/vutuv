@@ -15,7 +15,8 @@ defmodule VutuvWeb.SettingsHTML do
 
   # The account-activity wording (issue #1087), so the recap on the security
   # page reads exactly like the full log at /settings/activity.
-  import VutuvWeb.AccountEventText, only: [event_label: 1, detail: 1, by_someone_else?: 1]
+  import VutuvWeb.AccountEventText,
+    only: [event_label: 1, detail: 1, by_someone_else?: 1, by_other_badge: 1]
 
   # A `<label for=…>` has to name the id the form really generated, and that is
   # not `user_<field>`: a `<.form id=…>` prefixes every input id with its own

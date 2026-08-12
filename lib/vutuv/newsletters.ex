@@ -270,26 +270,29 @@ defmodule Vutuv.Newsletters do
     end
   end
 
-  @doc "Finds a tag by exact (case-insensitive) name, or nil."
-  def find_tag(name) when is_binary(name) do
-    case String.trim(name) do
-      "" ->
-        nil
+  @doc """
+  Finds a tag by what an admin typed — its name or its slug, case-insensitively
+  — following an alternative name to the topic it stands for. Nil for no match.
 
-      trimmed ->
-        # An audience named by an alternative name is the topic's audience
-        # (issue #1338): the members are on the canonical tag, so a group built
-        # on "ROR" must resolve to Ruby on Rails or it would mail nobody.
-        from(t in Tag, where: fragment("lower(?) = lower(?)", t.name, ^trimmed), limit: 1)
-        |> Repo.one()
-        |> case do
-          nil -> nil
-          tag -> Tag.canonical(tag)
-        end
+  An audience named by an alternative name is the topic's audience (issue
+  #1338): the members are on the canonical tag, so a group built on "ROR" must
+  resolve to Ruby on Rails or it would mail nobody.
+
+  `Tag.find_by_value/1` is that lookup everywhere else in the app. This kept its
+  own copy that matched the name alone, so the slug spelling an admin sees on
+  every tag page was rejected here as "no tag with that name"; its copy also
+  resolved an alias with `Tag.canonical/1`, which answers nil when the canonical
+  row is gone, where `find_by_value/1` falls back to the alias itself.
+  """
+  def find_tag(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> Tag.find_by_value(trimmed)
     end
   end
 
-  def find_tag(_name), do: nil
+  # The admin group form reaches here with no tag named at all.
+  def find_tag(_value), do: nil
 
   @doc "The distinct, non-blank country values present on member addresses, sorted."
   def country_options do
