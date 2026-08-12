@@ -386,4 +386,46 @@ defmodule Vutuv.FediversePostRepostsTest do
       assert Repo.get(RemotePost, ctx.post.id)
     end
   end
+
+  describe "the re-verification queue" do
+    # A skip that stamps no clock holds the front of every later batch: the due
+    # query serves the least recently checked first, and nothing about an
+    # unworkable copy changes between two runs. The cap is then spent on work
+    # that can never complete, while the copies somebody is actually reading sit
+    # behind it and are never reached. `refresh_counts/1` in the same module
+    # carries a long note about having shipped exactly this once; these two arms
+    # are the same shape, so they get the same guard.
+
+    test "an origin that does not answer does not hold the front of it" do
+      user = federating_member()
+      post = cached_post(account())
+      {:ok, :reposted} = Fediverse.repost_remote_post(user, post)
+
+      Application.put_env(:vutuv, :fediverse_req_options,
+        plug: fn conn -> Plug.Conn.send_resp(conn, 500, "") end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
+
+      assert %{skipped: 1} = Fediverse.refresh_reposted_posts()
+
+      # Stamped, so it rejoins the rotation at its own pace instead of being due
+      # again immediately. The copy stays: an outage is not a takedown.
+      assert %{skipped: 0} = Fediverse.refresh_reposted_posts()
+      assert Repo.get(RemotePost, post.id)
+    end
+
+    test "and neither does a copy nobody here can sign for" do
+      post = cached_post(account())
+      user = insert(:activated_user)
+
+      # No keypair, so there is no actor to sign the fetch as — the copy can
+      # never be verified until somebody who federates reshares it too.
+      Repo.insert!(%PostRepost{user_id: user.id, remote_post_id: post.id})
+
+      assert :skip = Fediverse.refresh_reposted_post(post)
+      assert %{skipped: 0} = Fediverse.refresh_reposted_posts()
+      assert Repo.get(RemotePost, post.id)
+    end
+  end
 end

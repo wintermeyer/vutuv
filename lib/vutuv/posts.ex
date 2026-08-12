@@ -352,6 +352,19 @@ defmodule Vutuv.Posts do
     end
   end
 
+  @doc """
+  Whether this post is a kind of post that accepts replies at all — the half of
+  the reply rule that depends on the post alone, with nobody asking yet.
+
+  Public because the reply **page** must ask it too. That page cannot run the
+  whole of `check_reply_allowed/2` (a quiet block has to let the blocked member
+  reach the composer and be refused on submit, or the block leaks), so without a
+  named predicate it kept its own weaker copy of the rule — and offered a
+  composer for a page's post, whose heading then dereferenced the member author
+  that a page's post does not have.
+  """
+  def replyable?(%Post{} = post), do: not organization_post?(post)
+
   defp check_reply_allowed(%User{} = author, %Post{} = parent) do
     cond do
       # An organization post cannot be answered yet (issue #1334). Everything
@@ -360,7 +373,7 @@ defmodule Vutuv.Posts do
       # @handle" line — and an organization has no inbox to be told about it
       # until issue #1336 gives it a reading side. Refusing outright beats a
       # reply that quietly reaches nobody.
-      organization_post?(parent) -> {:error, :restricted}
+      not replyable?(parent) -> {:error, :restricted}
       not visible_to?(parent, author) -> {:error, :not_visible}
       # Query restriction fresh from the DB, not the (possibly stale) preloaded
       # denials: the reply LiveView holds the parent struct from mount, and the
@@ -3630,7 +3643,7 @@ defmodule Vutuv.Posts do
       |> limit(^(limit + 1))
       |> offset(^offset)
       |> Repo.all()
-      |> Enum.map(&preload_post/1)
+      |> preload_posts()
 
     {shown, rest} = Enum.split(entries, limit)
 
@@ -4400,6 +4413,13 @@ defmodule Vutuv.Posts do
   defp preload_post(nil), do: nil
   defp preload_post(%Post{} = post), do: Repo.preload(post, post_preloads(), force: true)
 
+  # The whole page in one set of preload queries. `post_preloads/0` expands to
+  # roughly twenty associations, so preloading post by post costs that many
+  # queries per row — 50 rows of an organization's agent-format page came to a
+  # four-figure query count for one request.
+  defp preload_posts(posts) when is_list(posts),
+    do: Repo.preload(posts, post_preloads(), force: true)
+
   defp post_preloads do
     # denials with group/denied_user: the author-facing audience display
     # names them (never shown to other viewers). The parent carries :images +
@@ -4485,16 +4505,19 @@ defmodule Vutuv.Posts do
   is identified by and what somebody pastes a year later. One shape that always
   works beats two that depend on whether a handle was claimed.
   """
-  def path(%Post{organization_id: organization_id, id: id} = post)
-      when is_binary(organization_id) do
-    %Organization{slug: slug} = author(post)
-    "/organizations/#{slug}/posts/#{id}"
-  end
+  def path(%Post{id: id} = post), do: path(author(post), id)
 
-  def path(%Post{id: id} = post) do
-    %User{username: username} = author(post)
-    "/#{username}/posts/#{id}"
-  end
+  @doc """
+  The same permalink, for a caller that holds the **author and the id** but no
+  `%Post{}` — a notification row selected straight out of the database, or a
+  federated Note whose `id` is its permanent identity.
+
+  Those callers used to spell one of the two shapes out themselves, which is how
+  a mention written by a page came to link into the member namespace
+  (`/acme/posts/…`, a 404) on the reader's own notifications page.
+  """
+  def path(%Organization{slug: slug}, post_id), do: "/organizations/#{slug}/posts/#{post_id}"
+  def path(%User{username: username}, post_id), do: "/#{username}/posts/#{post_id}"
 
   ## Images
 

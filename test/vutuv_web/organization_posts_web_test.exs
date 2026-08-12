@@ -261,5 +261,19 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
       # motion is member-shaped, and an organization has no inbox until #1336.
       assert {:error, :restricted} = Posts.create_reply(reader, post, %{body: "Antwort"})
     end
+
+    test "and the reply page turns that refusal away instead of crashing", %{conn: conn} do
+      {conn, _reader} = create_and_login_user(conn)
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+      {:ok, post} = Posts.create_organization_post(organization, owner, %{body: "Hallo."})
+
+      # `Posts.restricted?/1` only knows about denial rows, so the page's own
+      # gate lets a page's post through and the composer would then be offered
+      # for something `create_reply/3` refuses one submit later. Reaching it by
+      # URL must land somewhere sensible, not on a crash.
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/posts/#{post.id}/reply")
+    end
   end
 end

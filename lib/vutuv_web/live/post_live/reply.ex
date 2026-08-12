@@ -1,9 +1,14 @@
 defmodule VutuvWeb.PostLive.Reply do
   @moduledoc """
   Reply page — the parent post (read-only preview) above the same composer
-  as the feed. Only visible, **public** parents can be answered
-  (`Vutuv.Posts.create_reply/3` enforces the same rule); everything else is
-  sent away with the unknown-id flash, so existence never leaks.
+  as the feed. Only visible, **public**, `Vutuv.Posts.replyable?/1` parents can
+  be answered; everything else is sent away with the unknown-id flash, so
+  existence never leaks. `replyable?/1` is shared with `create_reply/3`'s own
+  gate, which is what keeps a page's post (issue #1334) off this page — the
+  heading below names the parent's **member** author, which such a post has not
+  got. A block is deliberately *not* part of the gate: quiet blocking has to let
+  the blocked member reach the composer and be refused on submit, or the block
+  leaks.
 
   **Quoting a passage** (issue #1114): a reader who marks part of a post before
   pressing Reply arrives here with that text in the `quote` parameter, and the
@@ -30,7 +35,8 @@ defmodule VutuvWeb.PostLive.Reply do
     user = socket.assigns.current_user
     parent = Posts.get_post(id)
 
-    if parent && Posts.visible_to?(parent, user) && not Posts.restricted?(parent) do
+    if parent && Posts.replyable?(parent) && Posts.visible_to?(parent, user) &&
+         not Posts.restricted?(parent) do
       {:ok,
        socket
        |> assign(:page_title, gettext("Reply"))

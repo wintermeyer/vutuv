@@ -74,14 +74,23 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   # The filter tabs: each maps to the event kinds `notifications_page`'s
   # `kinds:` option keeps. "all" passes nil (every source).
+  #
+  # Every kind in `Vutuv.Activity.kinds/0` must appear under exactly one tab, or
+  # it is unreachable from the tabs AND `filtered_out?/2` drops it from the live
+  # push for any reader not on "All" — which is what happened to
+  # `reference_check`. `notification_filter_coverage_test.exs` fails the build
+  # when the two lists drift apart again.
   @filters %{
     "all" => nil,
     "posts" => ~w(reply thread mention like fediverse_reply fediverse_reaction),
     "people" => ~w(follower connection endorsement),
     "other" =>
       ~w(organization_role moderation image_rejected report_protection handle_change cv_update
-         username)
+         username reference_check)
   }
+
+  @doc false
+  def filters, do: @filters
 
   @impl true
   def mount(_params, _session, socket) do
@@ -1163,25 +1172,13 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # A mention opens the post that named the reader. That post belongs to the
-  # *actor*, not to the reader, so the permalink is built under the actor's
-  # handle — unlike reply/like, which point at the reader's own post.
-  defp notification_target(%{kind: "mention"} = n, _viewer) do
-    if is_binary(n[:post_id]) and is_binary(n[:actor_param]) do
-      ~p"/#{n.actor_param}/posts/#{n.post_id}"
-    else
-      actor_target(n)
-    end
-  end
-
-  # A thread event opens the new reply itself (on the replier's profile) —
-  # the thing the recipient has not read yet.
-  defp notification_target(%{kind: "thread"} = n, _viewer) do
-    if is_binary(n[:reply_post_id]) and is_binary(n[:actor_param]) do
-      ~p"/#{n.actor_param}/posts/#{n.reply_post_id}"
-    else
-      actor_target(n)
-    end
+  # A mention opens the post that named the reader, and a thread event the new
+  # reply — both belong to the *actor*, not to the reader, unlike reply/like
+  # below. The row carries that permalink ready-made (`Vutuv.Activity`, built
+  # through `Posts.path/2`): assembling it here from `actor_param` linked a
+  # page's mention into the member namespace, where nothing answers.
+  defp notification_target(%{kind: kind} = n, _viewer) when kind in ["mention", "thread"] do
+    n[:post_path] || actor_target(n)
   end
 
   defp notification_target(n, viewer) do

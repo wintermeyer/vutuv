@@ -52,5 +52,11 @@ defmodule VutuvWeb.OrganizationMentionNotificationTest do
     refute html =~ owner.username
     # …and the quote links to the post under the organization's own permalink.
     assert html =~ Posts.path(post)
+
+    # The row's own sentence must land there too. It built its link from the
+    # actor's param, which for a page is the slug, so it pointed at
+    # `/acme/posts/<id>` — the member namespace, where nothing answers. Two
+    # links in one row, one of them dead.
+    refute html =~ ~s|"/#{organization.slug}/posts/#{post.id}"|
   end
 end

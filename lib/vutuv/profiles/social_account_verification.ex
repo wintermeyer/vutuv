@@ -158,7 +158,8 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
   @doc """
   Re-checks one verified account. A proof still in place refreshes
   `last_checked_at` and clears any grace window; a vanished one starts the
-  window, waits it out, then drops the mark. A network failure changes nothing.
+  window, waits it out, then drops the mark. A network failure leaves the mark
+  and the window alone, and only advances the clock.
 
   Returns `:ok`, `:grace_started`, `:in_grace`, `:demoted` or `:unreachable`.
   """
@@ -179,9 +180,18 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
       {:ok, false} ->
         handle_recheck_failure(account, now)
 
-      # We learned nothing about the bio, so we hold the mark and try again on
-      # the next sweep — an AppView outage must not un-verify the whole network.
+      # We learned nothing about the bio, so we hold the mark and the grace
+      # window — an AppView outage must not un-verify the whole network. The
+      # clock is still stamped: it is the scheduler's, not a claim that anything
+      # was verified, and without it the row stays due on every hourly sweep
+      # while the interval is a week, so one erroring provider is re-fetched
+      # 168x more often than intended, forever. Nothing degrades meanwhile —
+      # the mark keeps standing until a check actually reads the bio.
       {:error, _reason} ->
+        account
+        |> SocialMediaAccount.verification_changeset(%{last_checked_at: now})
+        |> Repo.update()
+
         :unreachable
     end
   end

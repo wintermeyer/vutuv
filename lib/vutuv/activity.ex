@@ -41,6 +41,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationRole
+  alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostMention
@@ -771,6 +772,18 @@ defmodule Vutuv.Activity do
   #   * The fediverse kinds key on `received_at` (a :utc_datetime), `username`
   #     on `welcome_notified_at`, `connection` on the GREATEST of the two
   #     follow times — each per-kind helper owns its own boundary comparison.
+  @doc """
+  Every notification kind the registry produces.
+
+  Derived from `kind_specs/3` itself, so a presentation surface can check its
+  own coverage instead of keeping a second hand-maintained list — which had
+  already drifted: `reference_check` was in the registry and in none of the
+  notification page's filter tabs, so a live-pushed one was dropped for any
+  reader not sitting on "All". The ids here only shape queries that are never
+  run; the vocabulary is what is being asked for.
+  """
+  def kinds, do: Vutuv.UUIDv7.generate() |> kind_specs() |> Enum.map(& &1.kind)
+
   defp kind_specs(user_id, read_at \\ nil, unread? \\ false) do
     [
       %{
@@ -1149,6 +1162,10 @@ defmodule Vutuv.Activity do
       # The thread (grouping key) and the reply itself (the quote + link).
       |> Map.put(:root_post_id, root_post_id)
       |> Map.put(:reply_post_id, reply_post_id)
+      # A replier is always a member today (a page's post cannot be answered),
+      # so this matches what the view built by hand — it just stops being a
+      # second place that has to be remembered if that ever widens.
+      |> Map.put(:post_path, post_path(replier, reply_post_id))
     end)
   end
 
@@ -1175,12 +1192,23 @@ defmodule Vutuv.Activity do
     |> at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, author, organization, post_id} ->
+      actor = mention_actor(author, organization)
+
       "mention-#{id}"
-      |> actor_item("mention", at, mention_actor(author, organization))
+      |> actor_item("mention", at, actor)
       # The post that named them — the author's, not the recipient's.
       |> Map.put(:post_id, post_id)
+      |> Map.put(:post_path, post_path(actor, post_id))
     end)
   end
+
+  # The row carries its own link, because the view cannot build one: it holds
+  # `actor_param`, which for a page is the slug, and the deeper post path is
+  # member-only — so a mention written by a page linked into the member
+  # namespace and 404ed. `Posts.path/2` owns both shapes; here is the one place
+  # that has the actor struct to hand it.
+  defp post_path(actor, post_id) when is_binary(post_id), do: Posts.path(actor, post_id)
+  defp post_path(_actor, _post_id), do: nil
 
   # A missed LEFT join still yields a `%User{}` with every field nil rather than
   # nil itself, so the id is what says which side actually matched.

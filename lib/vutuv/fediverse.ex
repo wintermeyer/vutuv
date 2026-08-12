@@ -4497,16 +4497,21 @@ defmodule Vutuv.Fediverse do
 
   @doc "One reposted cached post, verified against its origin. See `refresh_reposted_posts/1`."
   def refresh_reposted_post(%RemotePost{} = post) do
-    with true <- enabled?(),
-         %User{} = reposter <- any_reposter(post),
-         # An unsigned GET is not a question this can act on: an
-         # authorized-fetch server answers it 403, which `fetch_remote_note/2`
-         # reads as "gone" — and that would delete a perfectly live public post
-         # plus everybody's reshares of it, on nothing but our own missing key.
-         signer when not is_nil(signer) <- signer(reposter) do
-      apply_repost_refresh(post, fetch_remote_note(post.object_uri, signer))
+    if enabled?() do
+      with %User{} = reposter <- any_reposter(post),
+           # An unsigned GET is not a question this can act on: an
+           # authorized-fetch server answers it 403, which `fetch_remote_note/2`
+           # reads as "gone" — and that would delete a perfectly live public post
+           # plus everybody's reshares of it, on nothing but our own missing key.
+           signer when not is_nil(signer) <- signer(reposter) do
+        apply_repost_refresh(post, fetch_remote_note(post.object_uri, signer))
+      else
+        _ ->
+          stamp_repost_check(post)
+          :skip
+      end
     else
-      _ -> :skip
+      :skip
     end
   end
 
@@ -4589,7 +4594,24 @@ defmodule Vutuv.Fediverse do
     :deleted
   end
 
-  defp apply_repost_refresh(%RemotePost{}, _other), do: :skip
+  defp apply_repost_refresh(%RemotePost{} = post, _other) do
+    stamp_repost_check(post)
+    :skip
+  end
+
+  # The scheduler's clock, not a claim that the origin was reached. Without it a
+  # copy nobody can sign for — or whose server is down — stays due on every run,
+  # and since `due_reposted_posts/1` serves the least recently checked first it
+  # holds the front of every batch from then on, spending the cap on work that
+  # cannot complete while genuinely due copies behind it are never re-verified.
+  # No strike: the origin did nothing wrong, and a signer can appear the moment
+  # somebody who federates reshares the same post. See `refresh_counts/1`, which
+  # carries the long version of this lesson.
+  defp stamp_repost_check(%RemotePost{id: id}) do
+    Repo.update_all(from(p in RemotePost, where: p.id == ^id),
+      set: [checked_at: DateTime.utc_now(:second)]
+    )
+  end
 
   defp picture_only_doc?(doc),
     do: doc["attachment"] |> List.wrap() |> Enum.any?(&Media.image_attachment?/1)

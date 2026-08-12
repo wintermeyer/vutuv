@@ -202,6 +202,21 @@ defmodule Vutuv.Profiles.SocialAccountVerificationTest do
       assert reloaded.verified_at
       refute reloaded.grace_deadline_at
     end
+
+    test "an unreachable provider still leaves the rotation", ctx do
+      serve_status(500)
+
+      assert :unreachable = Verification.recheck(ctx.account)
+
+      # The sweeper runs hourly but the interval is a week, so a row that keeps
+      # its old clock is re-fetched every single hour, forever, against a third
+      # party that is telling us it has nothing to say. Stamping the scheduler's
+      # clock is not a claim that we verified anything (the mark and the grace
+      # window are deliberately untouched above) — it only puts the account back
+      # into the normal rotation.
+      due = Verification.accounts_due_for_recheck() |> Enum.map(& &1.id)
+      refute ctx.account.id in due
+    end
   end
 
   describe "accounts_due_for_recheck/1" do
