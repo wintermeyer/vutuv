@@ -575,13 +575,13 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {:ok, _live, html} = live(conn, ~p"/feed")
 
       # The tag chips sit inside the clamp block right after the text (beside
-      # the float), so they come before the fade/read-more markup that follows
-      # the block and before the unreferenced-attachment tile row — a tall
-      # float used to push them below the whole picture…
+      # the float), so they come before the "Read more" control that follows the
+      # block and before the unreferenced-attachment tile row — a tall float
+      # used to push them below the whole picture…
       {tag_pos, _} = :binary.match(html, ~s(href="/tags/elixir"))
-      {fade_pos, _} = :binary.match(html, "post-preview__fade")
+      {more_pos, _} = :binary.match(html, "post-preview__more")
       {gallery_pos, _} = :binary.match(html, "/post_images/tagfeedgal/feed.avif")
-      assert tag_pos < fade_pos
+      assert tag_pos < more_pos
       assert tag_pos < gallery_pos
 
       # …and a second, CSS-toggled copy below the block stands in while the

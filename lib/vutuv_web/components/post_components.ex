@@ -3044,8 +3044,13 @@ defmodule VutuvWeb.PostComponents do
 
   # The clamped preview body: the Markdown cut by the `.post-clamp` line clamp
   # (the reader's per-breakpoint line budget, default 6 desktop / 8 mobile, fed
-  # in via @body_style), faded at the bottom, with a "Read more" affordance
+  # in via @body_style), faded out at the bottom, with a "Read more" affordance
   # riding the last line.
+  #
+  # The fade is a mask on this body (components.css), not an overlay element, so
+  # it lands on the cut in the height-clamping wrap/media variants too — those
+  # cut mid-line, since a post body's paragraph margins make the box more than N
+  # whole line boxes, and the slice used to be shown bare.
   #
   # The WHOLE body is always in the DOM (post_card renders it uncut for every
   # preview) and is merely CSS-clamped, so "Read more" is a single in-place
@@ -3122,10 +3127,9 @@ defmodule VutuvWeb.PostComponents do
           {@body_html}
           <.post_tags :if={@wrap or @media} tags={@tags} class="post-preview__tags-inline" />
         </div>
-        <%!-- Fades the clamp cut into the card so it reads as intentional; only
-        visible once the hook sets `is-clamped`, and cleared again while
-        `is-expanded`. --%>
-        <div class="post-preview__fade" aria-hidden="true"></div>
+        <%!-- The cut fades out (a mask on the clamp body itself, gated on the
+        `is-clamped` the hook sets — see components.css), so it needs no overlay
+        element here and works the same in every clamp variant. --%>
         <%!-- The whole body is present, so "Read more" expands it in place. --%>
         <button
           type="button"

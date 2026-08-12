@@ -1588,24 +1588,42 @@ ul.thumbs li .text .url a {
   --clamp-bg: #eff6ff;
 }
 
-/* Truncated feed/profile post preview: fade the clamp into the card so the cut
-   reads as intentional, then a quiet muted "Read more" sits under it (see
-   VutuvWeb.PostComponents). The fade shows only when the body is really clamped
-   AND not expanded — `.is-clamped` is set by the server (@truncated?) and toggled
-   by the PostPreviewClamp hook when a longer body overflows the clamp; expanding
-   drops it — so short posts get no phantom fade. Fades to the card background
-   (white / slate-900 dark). */
-.post-preview__fade {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2em;
-  pointer-events: none;
-  opacity: 0;
-  background: linear-gradient(to bottom, transparent, #fff 92%);
+/* Truncated feed/profile post preview: the body FADES OUT into the cut, so a
+   preview dissolves instead of stopping dead, and a quiet muted "Read more"
+   sits under it (see VutuvWeb.PostComponents). The fade shows only when the
+   body is really clamped AND not expanded — the PostPreviewClamp hook sets
+   `is-clamped` when a longer body overflows the clamp, expanding drops it — so
+   a short post gets no phantom fade (the shape of issue #880) and an opened one
+   is not faded over the text the reader just asked for.
+
+   It is a `mask-image` on the clamp body itself, the very element app.js
+   measures (`[data-clamp-body]`), and NOT an overlay gradient painted in the
+   card's colour, which is what this was until 2026-08-12. Three things follow,
+   and the first is why it changed.
+
+   (1) It covers every clamp variant. The overlay was anchored to the bottom of
+   the preview, which is the cut only for the line-clamp variant, where "Read
+   more" rides the last line; the wrap/media variants put "Read more" on its own
+   in-flow line below the block, so there the overlay landed under that line
+   instead of on the cut and was switched off for them. Those are exactly the
+   two that cut by HEIGHT — the box is N line heights while the content carries
+   `.markdown p`'s paragraph margins, so the cut is not on a line boundary and
+   slices the last line through the middle of its letters. A member reported
+   that naked slice on a feed post carrying a link screenshot.
+
+   (2) It needs no surface colour, so there is no light/dark pair to keep in
+   step, and it is right on a flat (uncarded) post and over the floated image
+   the clamp block clips: the content goes transparent rather than being painted
+   over.
+
+   (3) The ramp is measured in `em` off the body's own text, so it covers
+   roughly the last line and a half whatever size the reader reads at, and it
+   reaches FULLY transparent at the box edge — which is what hides the sliced
+   half-line. */
+.post-preview.is-clamped:not(.is-expanded) [data-clamp-body] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5em), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5em), transparent);
 }
-.post-preview.is-clamped:not(.is-expanded) .post-preview__fade { opacity: 1; }
 
 /* Reader expanded a non-truncated preview: drop the line clamp and show the
    whole body. Two-class specificity beats `.post-clamp`, so this wins. The
@@ -1682,12 +1700,18 @@ ul.thumbs li .text .url a {
    unsupported the max-height calc is dropped and the full body simply shows
    (graceful) — the server-truncation floor still bounds very long bodies.
 
-   This is the one clamp left counting in `lh`, and it can be, because a post
-   body declares no type size of its own: it renders at the line height it
-   inherits, so Safari's "`1lh` = the inherited line-height" reading (which cut
-   a sliver of a fourth line into the `.teaser-clamp` teasers) resolves to the
-   same number here. Put a `text-*` / `leading-*` utility on this body and that
-   stops holding — convert it to the rem arithmetic `.teaser-clamp` uses. */
+   This is the one clamp left counting in `lh`, and unlike `.teaser-clamp` it
+   could not land on a line boundary even if it did not: a post body keeps its
+   paragraph spacing (that is what makes it read as a post), so no fixed height
+   is a whole number of line boxes for every body. Two measurements to have in
+   hand before touching the number (Chrome, /wintermeyer/posts, 2026-08-12):
+   `1lh` here is 24px — this element's own 16px/1.5 — while the paragraphs
+   inside render at the legacy element default `p { font-size: 15px }` with a
+   21px line, so N `lh` is about N × 1.14 lines of actual text and the reader's
+   "15 lines" setting shows nearer 17. Both facts end in the same place, a cut
+   through the middle of a line, which is why the fade above is not decoration
+   here. Aligning the box with the text it holds would change how much of every
+   post the feed shows, so it is a product decision, not a tidy-up. */
 .post-clamp--wrap {
   display: flow-root;
   overflow: hidden;
@@ -1724,11 +1748,13 @@ ul.thumbs li .text .url a {
     max-height: calc(var(--post-clamp-mobile, 8) * 1lh + 24rem);
   }
 }
-/* In wrap mode the fade + "Read more" cannot ride the clamped text's last line —
-   the floated image (contained + clipped inside the clamp block) would share it,
-   so an absolute control would land on the image. The fade is dropped and
-   "Read more" becomes a plain in-flow line below the whole clamp block instead. */
-.post-preview--wrap .post-preview__fade { display: none; }
+/* In wrap mode "Read more" cannot ride the clamped text's last line — the
+   floated image (contained + clipped inside the clamp block) would share it, so
+   an absolute control would land on the image. It becomes a plain in-flow line
+   below the whole clamp block instead. The FADE is not affected by any of that
+   any more: it is a mask on the clamp body, so it sits on the cut in every
+   variant (see the `.post-preview` fade rule above — dropping it here is what
+   left this variant's sliced last line naked). */
 .post-preview--wrap.is-clamped:not(.is-expanded) .post-preview__more,
 .post-preview--wrap.is-expanded .post-preview__more {
   position: static;
@@ -2878,10 +2904,11 @@ html.lightbox-open { overflow: hidden; }
   .button--icon { color: #94a3b8; }
   .tags .tag, .badges .badge { background: rgb(30 58 138 / 0.4); color: #dbeafe; }
   .card__empty { color: #64748b; }
-  /* Post preview fade + collapsed "Read more" blend: to the dark card background
-     (slate-900). The control's blend only applies in the collapsed state, matching
-     the light rule, so an expanded "Show less" carries no stray gradient. */
-  .post-preview__fade { background: linear-gradient(to bottom, transparent, #0f172a 92%); }
+  /* The collapsed "Read more" blend: to the dark card background (slate-900).
+     It applies only in the collapsed state, matching the light rule, so an
+     expanded "Show less" carries no stray gradient. The preview's own bottom
+     fade needs no counterpart here — it is a mask, so it fades the content to
+     transparent instead of painting a surface colour over it. */
   .post-preview.is-clamped:not(.is-expanded) .post-preview__more {
     background: linear-gradient(to right, transparent, #0f172a 1.5rem);
   }

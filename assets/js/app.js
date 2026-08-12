@@ -71,13 +71,13 @@ onReady(() => {
 // full content height (scrollHeight) is taller than its painted box
 // (clientHeight); the +1 absorbs sub-pixel rounding.
 //
-// Both the fade and the control are shown/hidden purely by this `is-clamped`
-// class on the WRAPPER (see .post-preview__more / .post-preview__fade in
-// components.css) — the control carries no competing `hidden`/`inline-block`
-// display utilities, so the cascade conflict that made "Read more" appear on
-// every post (issue #880) is structurally gone. Once the reader has expanded a
-// preview (`is-expanded`) we leave it alone: a later resize/font sweep must not
-// re-clamp it out from under them.
+// Both the bottom fade (a mask on [data-clamp-body]) and the control are shown
+// or hidden purely by this `is-clamped` class on the WRAPPER (see the
+// .post-preview rules in components.css) — the control carries no competing
+// `hidden`/`inline-block` display utilities, so the cascade conflict that made
+// "Read more" appear on every post (issue #880) is structurally gone. Once the
+// reader has expanded a preview (`is-expanded`) we leave it alone: a later
+// resize/font sweep must not re-clamp it out from under them.
 function revealPreviewClamp(el) {
   if (el.classList.contains("is-expanded")) return
   const body = el.querySelector("[data-clamp-body]")
