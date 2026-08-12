@@ -1406,19 +1406,25 @@ defmodule Vutuv.Activity do
   # can link to it. No self-like filter: a member cannot like their own post
   # (enforced in Posts.like_post/2, issue #1030).
   defp like_items(user_id, limit, cursor) do
+    # LEFT joins on both actor sides (issue #1336). An inner join to `users` was
+    # right while only a member could like, and became a silent filter the day a
+    # page could: the row simply never reached the list, so the author was never
+    # told. The same shape emptied search, the saved list and the tag pages when
+    # `posts.user_id` went nullable.
     from(l in PostLike,
       join: p in assoc(l, :post),
-      join: liker in assoc(l, :user),
+      left_join: liker in assoc(l, :user),
+      left_join: page in assoc(l, :organization),
       where: p.user_id == ^user_id,
       order_by: [desc: l.inserted_at, desc: l.id],
       limit: ^limit,
-      select: {l.id, l.inserted_at, struct(liker, ^User.listing_fields()), p.id}
+      select: {l.id, l.inserted_at, struct(liker, ^User.listing_fields()), page, p.id}
     )
     |> at_or_before(cursor)
     |> Repo.all()
-    |> Enum.map(fn {id, at, liker, post_id} ->
+    |> Enum.map(fn {id, at, liker, page, post_id} ->
       "like-#{id}"
-      |> actor_item("like", at, liker)
+      |> actor_item("like", at, liker || page)
       |> Map.put(:post_id, post_id)
     end)
   end

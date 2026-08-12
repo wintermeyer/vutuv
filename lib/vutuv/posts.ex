@@ -880,6 +880,11 @@ defmodule Vutuv.Posts do
   def author?(%Post{organization_id: id} = post, %User{} = viewer) when is_binary(id),
     do: organization_author?(post, viewer)
 
+  # A page asking about its OWN post (issue #1336). Without this clause the
+  # catch-all below answered false, and the self-vote rule that stops a member
+  # inflating their own like count would not have applied to a page at all.
+  def author?(%Post{organization_id: id}, %Organization{id: id}) when is_binary(id), do: true
+
   def author?(%Post{}, _viewer), do: false
 
   # Whether `viewer` may currently speak for the post's organization. Takes the
@@ -910,6 +915,17 @@ defmodule Vutuv.Posts do
   """
   def visible_to?(%Post{user_id: author_id}, %User{id: author_id}) when is_binary(author_id),
     do: true
+
+  # A page as the VIEWER (issue #1336). It is not a member: no block applies to
+  # it and no denial can name it, so it sees exactly what an anonymous reader
+  # sees - deliberately conservative, since a restricted audience is a list of
+  # members and a page is not on it. Plus its own posts while moderation holds
+  # them, the way an author sees theirs.
+  def visible_to?(%Post{organization_id: id}, %Organization{id: id}) when is_binary(id),
+    do: true
+
+  def visible_to?(%Post{} = post, %Organization{}),
+    do: not moderation_hidden?(post) and not restricted?(post)
 
   # An organization post carries no denials (see `create_organization_post/3`),
   # so the only thing that can hide it is moderation — and its publishers still
@@ -1139,6 +1155,43 @@ defmodule Vutuv.Posts do
     end
   end
 
+  @doc """
+  The same, as a **page** (issue #1336). `acting_user` is the publisher who
+  pressed it: recorded, never shown.
+
+  The self-vote rule is about the **author**, so a page cannot like its own
+  post — its publishers personally still can, because they are not the author.
+  There is no block arm: a block is between two people.
+  """
+  def like_post(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
+    cond do
+      not Organizations.publisher?(page, acting_user) -> {:error, :not_allowed}
+      author?(post, page) -> {:error, :self}
+      true -> do_page_like(page, acting_user, post)
+    end
+  end
+
+  defp do_page_like(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
+    case engage(PostLike, :like, page, post, acting_user) do
+      {:ok, %PostLike{}} ->
+        Vutuv.Activity.notify_like(post.user_id, page, post.id)
+        :ok
+
+      {:ok, :noop} ->
+        :ok
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  # The right to act in a page's name follows the ROLE, so it is asked live
+  # rather than trusted from whatever identity the caller arrived with — a
+  # withdrawn publisher stops being able to act at once.
+  defp may_act_as(%Organization{} = page, %User{} = user) do
+    if Organizations.publisher?(page, user), do: :ok, else: {:error, :not_allowed}
+  end
+
   defp do_like_post(%User{} = user, %Post{} = post) do
     case engage(PostLike, :like, user, post) do
       {:ok, %PostLike{}} ->
@@ -1155,17 +1208,28 @@ defmodule Vutuv.Posts do
     end
   end
 
-  @doc "Removes `user`'s like (idempotent)."
-  def unlike_post(%User{} = user, %Post{} = post), do: disengage(PostLike, :like, user, post)
+  @doc "Removes the actor's like (idempotent)."
+  def unlike_post(actor, %Post{} = post), do: disengage(PostLike, :like, actor, post)
 
   @doc "Bookmarks `post` for `user` (idempotent). Only visible posts."
   def bookmark_post(%User{} = user, %Post{} = post) do
     with {:ok, _} <- engage(PostBookmark, :bookmark, user, post), do: :ok
   end
 
-  @doc "Removes `user`'s bookmark (idempotent)."
-  def unbookmark_post(%User{} = user, %Post{} = post),
-    do: disengage(PostBookmark, :bookmark, user, post)
+  @doc """
+  The same, as a **page** — a shared reading list for its team (issue #1336).
+  Private, so unlike a like it needs no self-vote rule: a page may save its own
+  post the way a member may save theirs.
+  """
+  def bookmark_post(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
+    with :ok <- may_act_as(page, acting_user),
+         {:ok, _} <- engage(PostBookmark, :bookmark, page, post, acting_user),
+         do: :ok
+  end
+
+  @doc "Removes the actor's bookmark (idempotent)."
+  def unbookmark_post(actor, %Post{} = post),
+    do: disengage(PostBookmark, :bookmark, actor, post)
 
   @doc """
   Reposts `post` as `user` (idempotent). Only **public** posts (no denials)
@@ -1200,7 +1264,36 @@ defmodule Vutuv.Posts do
     end
   end
 
-  @doc "Removes `user`'s repost (idempotent). The last one lifts the audience lock."
+  @doc """
+  The same, as a **page** (issue #1336) — a company amplifying a member's post
+  to its own followers.
+
+  It deliberately does **not** federate. A member's repost sends an `Announce`
+  from their actor; the page equivalent needs the page's actor and its own
+  delivery run, which is its own piece of work. Until that exists a page's
+  repost is a vutuv-side reshare, which is the honest subset rather than a
+  half-built one.
+  """
+  def repost_post(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
+    cond do
+      not Organizations.publisher?(page, acting_user) -> {:error, :not_allowed}
+      restricted?(post) -> {:error, :restricted}
+      true -> do_page_repost(page, acting_user, post)
+    end
+  end
+
+  defp do_page_repost(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
+    case engage(PostRepost, :repost, page, post, acting_user) do
+      {:ok, %PostRepost{} = repost} -> broadcast_new_repost(repost)
+      {:ok, :noop} -> :ok
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc "Removes the actor's repost (idempotent). The last one lifts the audience lock."
+  def unrepost_post(%Organization{} = page, %Post{} = post),
+    do: disengage(PostRepost, :repost, page, post)
+
   def unrepost_post(%User{} = user, %Post{} = post) do
     # Only federate the Undo when there really was a repost to undo, so an
     # idempotent unrepost of a post the member never boosted stays silent.
@@ -1352,24 +1445,22 @@ defmodule Vutuv.Posts do
     end
   end
 
-  defp engage(schema, kind, %User{} = user, %Post{} = post) do
-    if visible_to?(post, user) do
-      # Liking, bookmarking or reposting a post is proof the member read it, so
+  defp engage(schema, kind, actor, %Post{} = post, acting_user \\ nil) do
+    if visible_to?(post, actor) do
+      # Liking, bookmarking or reposting a post is proof the actor read it, so
       # whatever the notifications feed has to say about that post is old news
-      # — including on the idempotent repeat, which is still a member acting on
-      # a post in front of them.
-      Vutuv.Activity.mark_post_seen(user.id, post.id)
+      # — including on the idempotent repeat, which is still somebody acting on
+      # a post in front of them. A page has no such feed, so nothing to mark.
+      if match?(%User{}, actor), do: Vutuv.Activity.mark_post_seen(actor.id, post.id)
 
-      case Vutuv.Engagement.insert_if_new(
-             schema,
-             %{user_id: user.id, post_id: post.id},
-             [:post_id, :user_id]
-           ) do
+      {fields, conflict_target} = engagement_keys(actor, post, acting_user)
+
+      case Vutuv.Engagement.insert_if_new(schema, fields, conflict_target) do
         :exists ->
           {:ok, :noop}
 
         {:inserted, row} ->
-          broadcast_engagement(kind, user.id, post.id, true)
+          broadcast_engagement(kind, actor.id, post.id, true)
           {:ok, row}
       end
     else
@@ -1377,14 +1468,38 @@ defmodule Vutuv.Posts do
     end
   end
 
-  # Removing your own engagement needs no visibility check.
-  defp disengage(schema, kind, %User{} = user, %Post{} = post) do
-    {count, _} =
-      Repo.delete_all(from(e in schema, where: e.post_id == ^post.id and e.user_id == ^user.id))
+  # Which actor column the row is keyed on — and therefore which unique index
+  # the upsert has to name. `(post_id, user_id)` cannot serve both: Postgres
+  # treats NULLs as distinct, so a page's rows would not conflict with each
+  # other at all and it could like the same post without limit.
+  defp engagement_keys(%User{} = user, %Post{} = post, _acting_user),
+    do: {%{user_id: user.id, post_id: post.id}, [:post_id, :user_id]}
 
-    if count > 0, do: broadcast_engagement(kind, user.id, post.id, false)
+  defp engagement_keys(%Organization{} = page, %Post{} = post, acting_user) do
+    {%{
+       organization_id: page.id,
+       post_id: post.id,
+       acting_user_id: acting_user && acting_user.id
+     }, [:post_id, :organization_id]}
+  end
+
+  # Removing your own engagement needs no visibility check.
+  defp disengage(schema, kind, actor, %Post{} = post) do
+    # Built as one dynamic: a dynamic composes only inside another dynamic,
+    # never inline in a query expression.
+    mine = dynamic([e], e.post_id == ^post.id and ^engaged_by(actor))
+
+    {count, _} = Repo.delete_all(from(e in schema, where: ^mine))
+
+    if count > 0, do: broadcast_engagement(kind, actor.id, post.id, false)
     :ok
   end
+
+  # "This actor's row", as a query fragment. Never a bare `e.user_id == ^id`:
+  # that column is NULL on a page's row, and the comparison would answer NULL
+  # rather than false — the trap this milestone has already paid for repeatedly.
+  defp engaged_by(%User{id: id}), do: dynamic([e], e.user_id == ^id)
+  defp engaged_by(%Organization{id: id}), do: dynamic([e], e.organization_id == ^id)
 
   # The four engagement counters (likes / bookmarks / reposts / replies),
   # counted live from the rows. Defined once here so both `engagement_counts/1`
@@ -1582,12 +1697,18 @@ defmodule Vutuv.Posts do
   end
 
   defp engagement_viewer_id(%User{id: id}), do: id
+  defp engagement_viewer_id(%Organization{id: id}), do: id
   defp engagement_viewer_id(id) when is_binary(id), do: id
   # The nil UUID can never match a row: "anonymous" without a NULL arm.
   defp engagement_viewer_id(nil), do: "00000000-0000-0000-0000-000000000000"
 
   # The shared SELECT behind post_engagement/2 and post_engagement_map/2, so the
   # single-post and batched paths can never drift in what the action bar reads.
+  #
+  # Each EXISTS tests BOTH actor columns against the one viewer id (issue
+  # #1336). That is safe because ids are UUIDs drawn from different tables, so a
+  # value can only ever match one of them, and both columns carry a unique index
+  # on `(post_id, <actor>)` for the planner to use.
   defp engagement_select(query, viewer_id) do
     query
     |> select([p], engagement_count_select(p))
@@ -1595,20 +1716,23 @@ defmodule Vutuv.Posts do
       id: p.id,
       liked?:
         fragment(
-          "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND l.user_id = ?)",
+          "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND ((l.user_id = ?) OR (l.organization_id = ?)))",
           p.id,
+          type(^viewer_id, UUIDv7),
           type(^viewer_id, UUIDv7)
         ),
       bookmarked?:
         fragment(
-          "EXISTS (SELECT 1 FROM post_bookmarks b WHERE b.post_id = ? AND b.user_id = ?)",
+          "EXISTS (SELECT 1 FROM post_bookmarks b WHERE b.post_id = ? AND ((b.user_id = ?) OR (b.organization_id = ?)))",
           p.id,
+          type(^viewer_id, UUIDv7),
           type(^viewer_id, UUIDv7)
         ),
       reposted?:
         fragment(
-          "EXISTS (SELECT 1 FROM post_reposts r WHERE r.post_id = ? AND r.user_id = ?)",
+          "EXISTS (SELECT 1 FROM post_reposts r WHERE r.post_id = ? AND ((r.user_id = ?) OR (r.organization_id = ?)))",
           p.id,
+          type(^viewer_id, UUIDv7),
           type(^viewer_id, UUIDv7)
         ),
       restricted?: fragment("EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id),
@@ -4981,10 +5105,12 @@ defmodule Vutuv.Posts do
   # A fresh repost distributes like a fresh post — to the reposter's own
   # sessions and their followers' feeds.
   defp broadcast_new_repost(%PostRepost{} = repost) do
-    event =
-      {:new_repost, %{repost_id: repost.id, post_id: repost.post_id, reposter_id: repost.user_id}}
+    reposter_id = repost.user_id || repost.organization_id
 
-    broadcast_to_followers(repost.user_id, event)
+    event =
+      {:new_repost, %{repost_id: repost.id, post_id: repost.post_id, reposter_id: reposter_id}}
+
+    broadcast_to_followers(repost, event)
   end
 
   # A new reply ticks the parent's open action bars, notifies its author
@@ -5257,6 +5383,18 @@ defmodule Vutuv.Posts do
 
     %{post_ids: post_ids, follower_ids: follower_ids(user_id), reply_parent_ids: reply_parent_ids}
   end
+
+  defp broadcast_to_followers(%PostRepost{organization_id: page_id}, event)
+       when is_binary(page_id) do
+    # The people to tell are the PAGE's followers, and they hang off
+    # `followee_organization_id`. Handing the page's id to the member query
+    # would have compared `followee_id` with a nil reposter and RAISED - the
+    # `where: x == ^nil` trap this milestone has paid for more than once.
+    Enum.each(organization_follower_ids(page_id), &Vutuv.Activity.broadcast(&1, event))
+  end
+
+  defp broadcast_to_followers(%PostRepost{user_id: user_id}, event),
+    do: broadcast_to_followers(user_id, event)
 
   defp broadcast_to_followers(user_id, event) do
     Enum.each([user_id | follower_ids(user_id)], &Vutuv.Activity.broadcast(&1, event))
