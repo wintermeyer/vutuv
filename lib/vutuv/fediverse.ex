@@ -91,6 +91,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.SearchText
   alias Vutuv.Social
   alias Vutuv.SocialFeed.Http
+  alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
   alias VutuvWeb.Fediverse.Docs
 
@@ -242,6 +243,48 @@ defmodule Vutuv.Fediverse do
   @doc "The page's actor, or nil."
   def get_organization_actor(%Organization{id: id}),
     do: Repo.get_by(Actor, organization_id: id)
+
+  @doc """
+  The keypair a **tag** signs with, minted on first use (issue #1330).
+
+  A topic becomes an actor anyone on any server can follow without an account
+  here, and its actor name is the tag's slug with no mapping in between — which
+  is why this waited for the slug grammar to be settled (#1337/#1332): renaming
+  an actor other servers already follow costs a `Move` per tag.
+
+  Like the page's, the keypair can exist before anything is federated: it is
+  invisible outside this database. What a remote server sees — WebFinger on the
+  tag host, the `Group` document, the inbox that answers `Follow`, the
+  `Announce` of a tagged post — has to arrive together, because a Follow nobody
+  answers stays pending forever on the other side.
+
+  Only a **canonical** tag gets one. An alias is another name for a topic
+  (#1338), not a topic, so it must never become a second address for the same
+  posts.
+  """
+  def ensure_tag_actor(%Tag{merged_into_id: id}) when is_binary(id), do: {:error, :alias}
+
+  def ensure_tag_actor(%Tag{} = tag) do
+    case get_tag_actor(tag) do
+      nil ->
+        {private_pem, public_pem} = Keys.generate()
+
+        %Actor{
+          tag_id: tag.id,
+          private_key_pem: private_pem,
+          public_key_pem: public_pem
+        }
+        |> Repo.insert(on_conflict: :nothing, conflict_target: [:tag_id])
+
+        {:ok, get_tag_actor(tag)}
+
+      actor ->
+        {:ok, actor}
+    end
+  end
+
+  @doc "The tag's actor, or nil."
+  def get_tag_actor(%Tag{id: id}), do: Repo.get_by(Actor, tag_id: id)
 
   ## Remote followers
 
