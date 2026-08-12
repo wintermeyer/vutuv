@@ -22,6 +22,7 @@ defmodule VutuvWeb.OrganizationController do
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Repo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.OrganizationDoc
   alias VutuvWeb.AgentDocs.PostDoc
@@ -210,24 +211,61 @@ defmodule VutuvWeb.OrganizationController do
 
     with {:ok, organization} <- Organizations.fetch_visible_organization(slug, viewer),
          %Post{} = post <- Posts.get_organization_post(organization, id, viewer) do
-      case AgentDocs.negotiate(conn) do
-        :html ->
-          conn
-          |> AgentDocs.put_html_alternates()
-          |> put_layout(html: false)
-          |> live_render(VutuvWeb.OrganizationLive.Post,
-            session:
-              conn
-              |> ControllerHelpers.live_render_session()
-              |> Map.put("organization_id", organization.id)
-              |> Map.put("post_id", id)
-          )
+      cond do
+        # This URL is the **id** every page post carries into the fediverse
+        # (`Docs.note_url/2`), so it is what a remote server fetches to verify
+        # the object, thread a reply under it or check it still exists. Until
+        # this branch existed the accept header fell through to
+        # `AgentDocs.negotiate/1`, which knows nothing about
+        # `application/activity+json`, and the request 500ed — on the id of
+        # every post a page had ever federated. The member permalink
+        # (`VutuvWeb.PostController`) has answered the same request with the
+        # Note from the start; this is that arrangement for a page.
+        FediverseController.ap_request?(conn) and Fediverse.federated?(organization) and
+            not Posts.moderation_hidden?(post) ->
+          send_note(conn, organization, post)
 
-        format ->
-          send_organization_post_doc(conn, format, organization, post)
+        FediverseController.ap_request?(conn) ->
+          FediverseController.refuse(conn, organization)
+
+        true ->
+          send_post_document(conn, organization, post, id)
       end
     else
       _ -> ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  # The ActivityPub rendering of a page's post, the twin of
+  # `VutuvWeb.PostController`'s.
+  defp send_note(conn, organization, post) do
+    note =
+      post
+      |> Repo.preload(Docs.note_preloads())
+      |> Docs.note(organization)
+      |> Map.put("@context", "https://www.w3.org/ns/activitystreams")
+
+    conn
+    |> put_resp_content_type("application/activity+json")
+    |> send_resp(200, Jason.encode!(note))
+  end
+
+  defp send_post_document(conn, organization, post, id) do
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> put_layout(html: false)
+        |> live_render(VutuvWeb.OrganizationLive.Post,
+          session:
+            conn
+            |> ControllerHelpers.live_render_session()
+            |> Map.put("organization_id", organization.id)
+            |> Map.put("post_id", id)
+        )
+
+      format ->
+        send_organization_post_doc(conn, format, organization, post)
     end
   end
 

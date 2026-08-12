@@ -1049,8 +1049,20 @@ in the sentence has no row there at all.
 
 Pleasing symmetry, and the reason a closing line is the right shape: that is
 exactly what `Markdown.split_trailing_hashtags/1` folds back into chips when a
-remote post arrives here, so a vutuv post landing on another vutuv installation
-comes out as chips again.
+remote post arrives here (`RemoteHtml.to_text/3` turns the `</p>` into a line
+break first), so a vutuv post landing on another vutuv installation comes out as
+chips again.
+
+**A page post's permalink answers ActivityPub too.** Found while checking the
+above against production: `note_url/2` makes `/organizations/:slug/posts/:id`
+the **id** of every page post we federate, which is what a remote server fetches
+to verify the object, thread a reply under it or see whether it still exists —
+and that URL answered **500**. The action ran the accept header through
+`AgentDocs.negotiate/1`, which knows nothing about `application/activity+json`,
+while the member permalink had had its own branch from the start. It has one
+now, with the page's own gates in front of it: the page must federate, the post
+must not be held by moderation, and a page that switched federation off gets the
+same `410`/`404` refusal its actor endpoint gives.
 
 ## Deliberate v1 limits
 
