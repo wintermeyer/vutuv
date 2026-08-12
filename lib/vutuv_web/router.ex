@@ -159,6 +159,10 @@ defmodule VutuvWeb.Router do
     # member avatar as a scraper-friendly JPEG. The consumers are the
     # WhatsApp/Facebook/... scrapers, not browsers.
     get("/og-card.png", PageController, :og_card)
+    # A page's logo, same job: its own link previews and the `icon` its
+    # ActivityPub actor document points at. Before /:slug/avatar.jpg only for
+    # readability — the paths differ in length and cannot collide.
+    get("/organizations/:slug/avatar.jpg", OrganizationAvatarController, :show)
     get("/:slug/avatar.jpg", AvatarController, :show)
     # Agent-skills discovery (Cloudflare draft) + security.txt (RFC 9116).
     get("/.well-known/agent-skills/index.json", WellKnownController, :agent_skills_index)

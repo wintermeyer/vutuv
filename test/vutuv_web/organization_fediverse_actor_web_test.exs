@@ -73,6 +73,31 @@ defmodule VutuvWeb.OrganizationFediverseActorWebTest do
     refute Map.has_key?(json, "movedTo")
   end
 
+  test "the page's description travels as HTML, not as its Markdown source", %{conn: conn} do
+    page =
+      federating_page()
+      |> Ecto.Changeset.change(%{description: "**Wir** bauen vutuv. 5 < 6"})
+      |> Repo.update!()
+
+    json = conn |> ap() |> get(~p"/organizations/#{page.slug}/actor") |> json_response(200)
+
+    # `summary` is an HTML field, and a description is Markdown. Putting the
+    # stored source on the wire showed a remote reader the markup characters
+    # themselves — and shipped a bare `<` into a field the other side parses.
+    assert json["summary"] =~ "<strong>Wir</strong>"
+    refute json["summary"] =~ "**Wir**"
+    assert json["summary"] =~ "5 &lt; 6"
+    assert json["summary"] =~ "<p>"
+  end
+
+  test "a page with no description says so with an empty summary", %{conn: conn} do
+    page = federating_page()
+
+    json = conn |> ap() |> get(~p"/organizations/#{page.slug}/actor") |> json_response(200)
+
+    assert json["summary"] == ""
+  end
+
   test "the followers collection counts the remote followers", %{conn: conn} do
     page = federating_page()
 
@@ -124,7 +149,7 @@ defmodule VutuvWeb.OrganizationFediverseActorWebTest do
     page = federating_page()
     {:ok, _} = Vutuv.Fediverse.ensure_organization_actor(page)
 
-    page = page |> Ecto.Changeset.change(%{fediverse_followers?: false}) |> Repo.update!()
+    _page = page |> Ecto.Changeset.change(%{fediverse_followers?: false}) |> Repo.update!()
 
     # The same distinction a member gets: a `410` tells a remote server that
     # knows this actor to drop it and the copies it kept, and that is the page

@@ -194,7 +194,7 @@ defmodule VutuvWeb.Fediverse.Docs do
       # `Fediverse.federated?/1` refuses a page that has not claimed one.
       "preferredUsername" => organization.username,
       "name" => organization.name,
-      "summary" => organization.description,
+      "summary" => organization_summary(organization),
       "url" => "#{base()}/organizations/#{organization.slug}",
       "inbox" => actor_url <> "/inbox",
       "outbox" => actor_url <> "/outbox",
@@ -208,6 +208,40 @@ defmodule VutuvWeb.Fediverse.Docs do
         "publicKeyPem" => actor.public_key_pem
       }
     }
+    |> put_organization_icon(organization)
+  end
+
+  # A page's description is Markdown, and `summary` is HTML — the first cut put
+  # the stored source straight on the wire, so a bio written with a link or a
+  # list travelled as its own markup characters, unescaped and unwrapped. It
+  # goes through the renderer the page itself uses (`<.markdown_prose>`), so
+  # what a remote server shows is what a visitor here reads, and through the
+  # same absolutizer the post bodies use, because a root-relative `/handle`
+  # means nothing on another server. The member half already did this with its
+  # headline (`summary/1`), plainer only because a headline is one line of text.
+  defp organization_summary(%Organization{description: description})
+       when description in [nil, ""],
+       do: ""
+
+  defp organization_summary(%Organization{description: description}) do
+    description
+    |> VutuvWeb.Markdown.render()
+    |> Phoenix.HTML.safe_to_string()
+    |> absolutize()
+  end
+
+  # The page's logo, which is the avatar a remote server shows beside its name.
+  # Rendered only when there is one: the document is a promise to strangers, and
+  # `/organizations/:slug/avatar.jpg` answers for a page with a logo and nothing
+  # else, so naming it unconditionally would advertise a 404.
+  defp put_organization_icon(doc, %Organization{logo: nil}), do: doc
+
+  defp put_organization_icon(doc, %Organization{} = organization) do
+    Map.put(doc, "icon", %{
+      "type" => "Image",
+      "mediaType" => "image/jpeg",
+      "url" => "#{base()}/organizations/#{organization.slug}/avatar.jpg"
+    })
   end
 
   # The accounts the member is migrating *from* (issue #986). Rendered only

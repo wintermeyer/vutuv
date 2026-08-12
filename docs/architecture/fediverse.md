@@ -884,6 +884,18 @@ already general: `note/2`, `create_activity/2` and `envelope/4` read the author
 only through `actor_url/1`, so only `note_url/2` needed to learn the page's
 permalink shape.
 
+**The one field it was missing was the face.** The first cut carried no `icon`,
+so a page federated faceless however good its logo was and no upload could
+change it. It has one now, and the two halves of that are worth keeping
+together: the document names `/organizations/:slug/avatar.jpg`
+(`VutuvWeb.OrganizationAvatarController`), which derives a 512px square JPEG on
+the fly from the kept private original, because whoever fetches an avatar from
+outside does it anonymously and does not decode the AVIF versions the site
+serves itself — the member endpoint's arrangement one to one. The field is
+**absent** for a page with no logo rather than pointing at a URL that 404s, and
+the endpoint applies the page's own visibility, so a pending or frozen page
+keeps its picture private like every other byte of it.
+
 **The inbox is deliberately narrower.** A page accepts `Follow` and
 `Undo(Follow)` and acknowledges everything else with the same `202` the member
 inbox gives anything it does not handle. It holds no conversations, answers no

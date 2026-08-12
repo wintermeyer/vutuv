@@ -15,10 +15,12 @@ defmodule Vutuv.OrganizationImageStore do
   is shared with `Vutuv.PostImageStore`.
   """
 
+  alias Vix.Vips.Operation
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
 
   @versions ~w(thumb feed large)
+  @og_size 512
 
   defdelegate extension_whitelist, to: Vutuv.PostImageStore
 
@@ -70,6 +72,45 @@ defmodule Vutuv.OrganizationImageStore do
   def accel_path(token, version) when is_binary(token) and version in @versions do
     "/internal_organization_images/#{token}/#{version}#{Spec.served_ext()}"
   end
+
+  @doc """
+  A stored image as JPEG bytes for `/organizations/:slug/avatar.jpg`
+  (`VutuvWeb.OrganizationAvatarController`): the `icon` of a page's ActivityPub
+  actor document, and whatever else fetches a picture from outside. Neither a
+  remote server nor a link-preview scraper decodes the AVIF versions served
+  above, so the JPEG is derived on the fly from the kept private original,
+  metadata-stripped, at #{@og_size}px square — `Vutuv.Avatar.og_jpeg/1` for a
+  page instead of a member.
+
+  There is no served-version fallback: unlike avatars, organization images have
+  kept an original since the day the store existed, so a token with no original
+  has nothing on disk at all. `:error` then, and for an unknown token.
+
+  Who may see it is the caller's decision (`Organizations.image_visible_to?/2`
+  and the page's own visibility); this only answers whether bytes exist.
+  """
+  def og_jpeg(token) when is_binary(token) do
+    case original_path(token) do
+      nil ->
+        :error
+
+      path ->
+        with {:ok, rotated} <- Spec.open_rotated(path),
+             {:ok, square} <-
+               Image.thumbnail(rotated, "#{@og_size}x#{@og_size}", crop: :center),
+             {:ok, data} <- Operation.jpegsave_buffer(square, keep: [], Q: 80) do
+          {:ok, data}
+        else
+          _ -> :error
+        end
+    end
+  end
+
+  def og_jpeg(_), do: :error
+
+  @doc "Absolute path of the kept private original, or `nil` when there is none."
+  def original_path(token) when is_binary(token), do: Originals.path(storage_dir(token))
+  def original_path(_), do: nil
 
   @doc "Removes every stored file of `token`. A no-op when nothing is stored."
   def delete(token) when is_binary(token) do
