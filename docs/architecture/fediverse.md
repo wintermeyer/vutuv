@@ -902,6 +902,21 @@ hazard: that owner row and the tab bar are two hand-kept lists of one map and
 they had already drifted. Rendering both from a single source is the real fix,
 and it is a nav change to agree on rather than to slip in.
 
+**The question is asked in the claim wizard, pre-ticked** (`/organizations/new`),
+which is the member sign-up's shape and the same reasoning: the switch page
+exists for changing the answer, not for discovering the question, and most pages
+want the reach. It is safe to ask that early although the page cannot federate
+yet — the box only records an intention, and `federated?/1` still wants a
+verified, publicly visible page with a claimed `@name`, so nothing about a
+pending page reaches another server.
+
+That makes `Organizations.claim_handle/2` the moment the intention turns real,
+and therefore the moment the **keypair** has to exist: it mints one when the page
+federates. This is the page half of the invariant the member sign-up wrote down —
+*any path that can set the opt-in owes an answer to "where does the key come
+from"* — and the cost of missing it is silent: the delivery worker **deletes**
+the activities of a keyless actor as undeliverable for good.
+
 **And the words had to change with it**, because the owner this now reaches is
 the secretary of a Verein, not somebody who knows the protocol. Every sentence on
 the switch page was built on the verb *federate* ("Föderieren starten", "Diese

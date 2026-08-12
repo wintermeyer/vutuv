@@ -147,7 +147,13 @@ defmodule Vutuv.Organizations.Organization do
       :zip_code,
       :city,
       :state,
-      :country
+      :country,
+      # Asked in the claim wizard, pre-ticked (the member sign-up's shape). It
+      # only records the intention: `Fediverse.federated?/1` still wants a
+      # verified, publicly visible page with a claimed @name, so nothing about a
+      # pending page reaches another server. `Organizations.claim_handle/2` is
+      # where that intention turns real, and where the keypair is minted.
+      :fediverse_followers?
     ])
     |> validate_required([:name, :kind, :city, :country])
     |> shared_validations()

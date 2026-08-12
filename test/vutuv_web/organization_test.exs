@@ -144,6 +144,93 @@ defmodule VutuvWeb.OrganizationTest do
       organization = Organizations.get_organization_by_slug("widgets-inc")
       assert organization.status == "pending"
       assert organization.kind == :association
+      # The Fediverse box is pre-ticked and rides along with the rest of the
+      # form, so a page created without touching it takes part.
+      assert organization.fediverse_followers?
+    end
+
+    test "the Fediverse question is asked here, pre-ticked", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/organizations/new")
+
+      # Asked at the one moment somebody is already deciding what this page is:
+      # the switch page exists for changing the answer, not for discovering the
+      # question. Pre-ticked because most pages want the reach, and reversible
+      # at any time (which the box's own text says).
+      assert has_element?(view, "#organization-fediverse-optin[checked]")
+    end
+
+    test "a member who unticks it gets a page that stays here", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/organizations/new")
+
+      view
+      |> form("#organization-form",
+        organization: %{
+          name: "Quiet Corp",
+          kind: "company",
+          website_url: "https://quiet.example",
+          city: "Köln",
+          country: "DE",
+          fediverse_followers?: "false"
+        }
+      )
+      |> render_submit()
+
+      refute Organizations.get_organization_by_slug("quiet-corp").fediverse_followers?
+    end
+
+    test "the German wizard asks it in German", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      html =
+        conn
+        |> Phoenix.ConnTest.recycle()
+        |> Plug.Conn.put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/organizations/new")
+        |> html_response(200)
+
+      assert html =~ "Dieser Seite darf man aus anderen Netzwerken folgen"
+      assert html =~ "Auch Menschen ohne vutuv-Konto können dieser Seite folgen"
+      refute html =~ "öderier"
+    end
+
+    test "the question is left out where the installation federates nothing", %{conn: conn} do
+      Application.put_env(:vutuv, :fediverse_enabled, false)
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_enabled) end)
+
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/organizations/new")
+
+      refute has_element?(view, "#organization-fediverse-optin")
+    end
+
+    test "ticking it shows nothing outside until the page is verified and named",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/organizations/new")
+
+      view
+      |> form("#organization-form",
+        organization: %{
+          name: "Widgets Inc",
+          kind: "company",
+          website_url: "https://widgets.example",
+          city: "Köln",
+          country: "DE"
+        }
+      )
+      |> render_submit()
+
+      page = Organizations.get_organization_by_slug("widgets-inc")
+
+      # The box records an intention; `federated?/1` still wants a verified,
+      # publicly visible page with a claimed @name. So a pending page answers
+      # nothing outside, which is what keeps this box from being a way to
+      # publish an unverified page to other servers.
+      assert page.fediverse_followers?
+      refute Vutuv.Fediverse.federated?(page)
+      assert is_nil(Vutuv.Fediverse.get_organization_actor(page))
     end
   end
 

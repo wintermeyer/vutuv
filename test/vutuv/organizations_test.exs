@@ -595,6 +595,10 @@ defmodule Vutuv.OrganizationsTest do
   end
 
   describe "claim_handle/2" do
+    # The two keypair tests need a real (DNS-verified) page, and the helper that
+    # builds one runs the verification the global flag gates.
+    setup [:enable_verification]
+
     test "a pending (unverified) organization cannot claim a root handle" do
       user = insert(:activated_user)
 
@@ -605,6 +609,36 @@ defmodule Vutuv.OrganizationsTest do
       # Otherwise anyone could register a pending "Lufthansa" and squat @lufthansa.
       assert {:error, :not_verified} =
                Organizations.claim_handle(pending, %{"username" => "squatco"})
+    end
+
+    test "claiming the @name mints the keypair of a page that opted in at creation" do
+      page =
+        insert(:activated_user)
+        |> Vutuv.OrganizationsHelpers.active_organization_for()
+        |> Ecto.Changeset.change(%{fediverse_followers?: true})
+        |> Repo.update!()
+
+      # The invariant every path that can set `fediverse_followers?` owes an
+      # answer to: where does the key come from. The switch page mints on the
+      # way in; the claim wizard cannot, because a page has no @name yet and
+      # `federated?/1` refuses it without one. So this is the moment the page
+      # becomes reachable, and the keypair has to exist by then — a federating
+      # page without one has its deliveries DELETED as undeliverable, silently.
+      refute Vutuv.Fediverse.federated?(page)
+      assert is_nil(Vutuv.Fediverse.get_organization_actor(page))
+
+      {:ok, page} = Organizations.claim_handle(page, %{"username" => "acme"})
+
+      assert Vutuv.Fediverse.federated?(page)
+      assert %Vutuv.Fediverse.Actor{} = Vutuv.Fediverse.get_organization_actor(page)
+    end
+
+    test "a page that did not opt in gets no keypair from claiming its @name" do
+      page = Vutuv.OrganizationsHelpers.active_organization_for(insert(:activated_user))
+
+      {:ok, page} = Organizations.claim_handle(page, %{"username" => "quietco"})
+
+      assert is_nil(Vutuv.Fediverse.get_organization_actor(page))
     end
   end
 end

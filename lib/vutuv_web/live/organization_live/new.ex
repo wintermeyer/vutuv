@@ -12,7 +12,9 @@ defmodule VutuvWeb.OrganizationLive.New do
   import VutuvWeb.OrganizationComponents
 
   alias Vutuv.Countries
+  alias Vutuv.Fediverse
   alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias VutuvWeb.Live.InitAssigns
 
   @impl true
@@ -26,7 +28,12 @@ defmodule VutuvWeb.OrganizationLive.New do
       |> assign(:page_title, gettext("Add your organization"))
       |> assign(:method, "dns")
       |> assign(:countries, Countries.select_options(locale))
-      |> assign_form(Organizations.change_new_organization())
+      # The Fediverse box starts ticked, and it starts ticked from the STRUCT
+      # rather than from a `checked` attribute in the markup: a `phx-change`
+      # re-render reads the form's own value, so a default that lives only in
+      # the template would tick itself again the moment the member unticks it
+      # and types one more character.
+      |> assign_form(fediverse_default_changeset())
 
     {:ok, socket}
   end
@@ -71,6 +78,14 @@ defmodule VutuvWeb.OrganizationLive.New do
     socket
     |> assign(:changeset, changeset)
     |> assign(:form, to_form(changeset, as: :organization))
+  end
+
+  # The empty form, with participation pre-selected where the installation
+  # federates at all (`Fediverse.enabled?()` false leaves the question out of the
+  # markup too, so the value it carries never reaches anybody).
+  defp fediverse_default_changeset do
+    %Organization{fediverse_followers?: Fediverse.enabled?()}
+    |> Organization.create_changeset(%{})
   end
 
   @impl true
@@ -157,6 +172,49 @@ defmodule VutuvWeb.OrganizationLive.New do
               /> {gettext("Website file (.well-known)")}
             </label>
           </div>
+        </fieldset>
+
+        <%!-- The Fediverse question, asked at the one moment somebody is already
+        deciding what this page is. It used to be asked nowhere: the switch sat
+        behind the manage tab bar, which only renders on the manage pages, so a
+        page owner had to go looking for something they had no reason to know
+        existed. Pre-ticked, like the member sign-up's box, because reach beyond
+        vutuv is what most pages want and the answer is reversible at any time.
+
+        It is safe to ask this early although the page cannot federate yet: the
+        box records an intention, and `Fediverse.federated?/1` still wants a
+        verified, publicly visible page with a claimed @name, so nothing about a
+        pending page reaches another server. `Organizations.claim_handle/2` is
+        where the intention turns real and the keypair is minted. Left out
+        entirely where the installation federates nothing. --%>
+        <fieldset :if={Fediverse.enabled?()}>
+          <legend class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            {gettext("Other networks")}
+          </legend>
+          <label class="mt-2 flex items-start gap-2 text-sm font-normal text-slate-700 dark:text-slate-300">
+            <input
+              type="hidden"
+              name="organization[fediverse_followers?]"
+              value="false"
+            />
+            <input
+              type="checkbox"
+              id="organization-fediverse-optin"
+              name="organization[fediverse_followers?]"
+              value="true"
+              checked={Phoenix.HTML.Form.normalize_value("checkbox", @form[:fediverse_followers?].value)}
+              class={checkbox_class()}
+            />
+            <span>
+              {gettext("Let people follow this page from other networks")}
+              <span class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
+                {gettext(
+                  "People who have no vutuv account can follow this page and read its posts, in networks like Mastodon."
+                )}
+                {gettext("You can change this at any time on the page's Fediverse settings.")}
+              </span>
+            </span>
+          </label>
         </fieldset>
 
         <div class="flex items-center gap-3 pt-2">

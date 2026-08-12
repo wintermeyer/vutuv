@@ -21,6 +21,7 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Engagement
+  alias Vutuv.Fediverse
   alias Vutuv.Handles
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Emailer
@@ -861,6 +862,16 @@ defmodule Vutuv.Organizations do
     |> Repo.transaction()
     |> case do
       {:ok, %{organization: updated}} ->
+        # The @name is the last thing a page needs to federate, so claiming one
+        # is the moment a wizard opt-in becomes real — and the moment the
+        # keypair has to exist. A federating page without one has its deliveries
+        # deleted as undeliverable, with no error anywhere (the member twin of
+        # this is `Accounts.activate_user/1`, which mints on confirmation for
+        # the same reason). Minted here rather than lazily on the first request,
+        # so a remote server that resolves the handle a second later finds a
+        # complete actor instead of waiting on an RSA keygen.
+        if Fediverse.federated?(updated), do: Fediverse.ensure_organization_actor(updated)
+
         {:ok, updated}
 
       {:error, :organization, changeset, _} ->
