@@ -16,6 +16,9 @@ defmodule Vutuv.Tags do
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.SearchText
+  require Vutuv.Tags.MatchKey
+
+  alias Vutuv.Tags.MatchKey
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.UserTag
@@ -116,7 +119,11 @@ defmodule Vutuv.Tags do
 
     names
     |> Enum.map(fn name ->
-      key = String.downcase(name)
+      # The same folded key the single lookup uses (`Vutuv.Tags.MatchKey`), or a
+      # batch goes on counting spellings where one lookup counts topics — which
+      # is what sign-up's three-tag minimum and the composer's cap of five are
+      # counting. A name with nothing to key on stands for itself.
+      key = MatchKey.normalize(name) || String.downcase(name)
       Map.get(resolved, key, {{:new, key}, name})
     end)
     |> Enum.uniq_by(&elem(&1, 0))
@@ -128,18 +135,19 @@ defmodule Vutuv.Tags do
   # `Tag.find_by_value/1` matches on). The identity is the **canonical** tag's
   # id, which is what makes two different spellings of one topic collapse.
   defp resolution_by_key(names) do
-    downcased = Enum.map(names, &String.downcase/1)
+    keys = names |> Enum.map(&MatchKey.normalize/1) |> Enum.reject(&is_nil/1)
 
     from(t in Tag,
       left_join: c in assoc(t, :merged_into),
-      where: fragment("lower(?)", t.name) in ^downcased or t.slug in ^downcased,
+      where: MatchKey.sql(t.name) in ^keys or MatchKey.sql(t.slug) in ^keys,
       select:
-        {fragment("lower(?)", t.name), t.slug, coalesce(c.id, t.id), coalesce(c.name, t.name)}
+        {MatchKey.sql(t.name), MatchKey.sql(t.slug), coalesce(c.id, t.id),
+         coalesce(c.name, t.name)}
     )
     |> Repo.all()
-    |> Enum.flat_map(fn {lower_name, slug, id, name} ->
+    |> Enum.flat_map(fn {name_key, slug_key, id, name} ->
       entry = {{:tag, id}, name}
-      [{lower_name, entry}, {slug, entry}]
+      for key <- Enum.uniq([name_key, slug_key]), is_binary(key), do: {key, entry}
     end)
     |> Map.new()
   end

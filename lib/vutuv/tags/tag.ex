@@ -4,8 +4,11 @@ defmodule Vutuv.Tags.Tag do
   use VutuvWeb, :model
   @derive {Phoenix.Param, key: :slug}
 
+  require Vutuv.Tags.MatchKey
+
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
+  alias Vutuv.Tags.MatchKey
   alias Vutuv.WebAddress
 
   # A tag names a skill, a topic or an interest. A member who pastes their
@@ -234,14 +237,36 @@ defmodule Vutuv.Tags.Tag do
   larger query rather than fetching a single row.
   """
   def find_by_value(value) when is_binary(value) do
+    case MatchKey.normalize(value) do
+      nil -> nil
+      key -> value |> by_match_key(key) |> follow_alias()
+    end
+  end
+
+  # The catalog still holds both spellings of a few topics (#1332 normalizes the
+  # column; until it has, `phoenix-framework` and `phoenix_framework` are two
+  # rows with one key), so which row a folded key finds must not depend on the
+  # planner: an exact hit on the name wins, then an exact hit on the slug, then
+  # the oldest row — ids are UUID v7, so that is the first spelling written.
+  defp by_match_key(value, key) do
     down = String.downcase(value)
 
     from(t in __MODULE__,
-      where: fragment("lower(?)", t.name) == ^down or t.slug == ^down,
+      where: MatchKey.sql(t.name) == ^key or MatchKey.sql(t.slug) == ^key,
+      order_by: [
+        asc:
+          fragment(
+            "case when lower(?) = ? then 0 when ? = ? then 1 else 2 end",
+            t.name,
+            ^down,
+            t.slug,
+            ^down
+          ),
+        asc: t.id
+      ],
       limit: 1
     )
     |> Repo.one()
-    |> follow_alias()
   end
 
   # An alias is a tag row pointing at its canonical (issue #1338), so a value
