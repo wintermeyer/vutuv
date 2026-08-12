@@ -233,6 +233,19 @@ undigested, so hard-reload (Cmd+Shift+R) after a rebuild. **Dev does not use
 build on every CSS/template/JS change instead. Edits to `components.css` reach
 the browser within ~2s; if they ever don't, suspect that watcher first.
 
+**Text colour is never inherited onto a link or a button — every control on a
+coloured surface names its own.** `components.css` sets `a, button { color:
+var(--color-brand-600) }` for the classic pages, and *any* rule on the element
+beats a colour the element merely **inherits** from an ancestor — specificity
+never enters into it, so the utility layer winning over the components layer does
+not help here. Put `text-white` on the coloured bar and the link inside it still
+renders brand-600: that is how the acting-as banner shipped a brand-600 link and
+button on a brand-700 bar, blue on blue and barely legible, while the sentence
+beside them (a `<span>`, which no element rule names) was correctly white. So
+when a surface sets a text colour for its contents, repeat that colour on every
+`<a>` and `<button>` inside it; `<.button>` and the kit's other controls already
+do. `acting_as_organization_test.exs` guards the banner's two.
+
 ### Don'ts
 
 - No theme toggle (dark = system).

@@ -499,9 +499,17 @@ defmodule VutuvWeb.ShellLive do
           <span class="font-semibold">
             {gettext("You are writing as %{name}.", name: @acting_as_name)}
           </span>
+          <%!-- Both controls name `text-white` themselves rather than taking it
+          from the bar. `components.css` styles the classic pages with
+          `a, button { color: var(--color-brand-600) }`, and a rule on the
+          element beats a colour INHERITED from an ancestor — so on this
+          brand-700 bar the link and the button came out brand-600 on brand-700,
+          which is barely legible. The same trap waits for any control on a
+          coloured surface. --%>
           <.link
             navigate={@acting_as_path}
-            class="underline decoration-white/50 underline-offset-2 hover:decoration-white"
+            id="open-acting-as-page"
+            class="font-medium text-white underline decoration-white/60 underline-offset-2 hover:decoration-white"
           >
             {gettext("Open the page")}
           </.link>
@@ -511,7 +519,7 @@ defmodule VutuvWeb.ShellLive do
             href={~p"/system/act_as"}
             method="delete"
             id="stop-acting-as"
-            class="ml-auto inline-flex min-h-10 items-center rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25"
+            class="ml-auto inline-flex min-h-10 items-center rounded-lg bg-white/20 px-3 font-semibold text-white hover:bg-white/30"
           >
             {gettext("Write as myself again")}
           </.link>

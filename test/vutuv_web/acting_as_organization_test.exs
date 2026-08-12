@@ -56,6 +56,25 @@ defmodule VutuvWeb.ActingAsOrganizationTest do
       assert html =~ "stop-acting-as"
     end
 
+    test "both controls in the banner set their own text colour", %{conn: conn} do
+      %{conn: conn} = switched_in(conn)
+
+      doc = conn |> get(~p"/feed") |> html_response(200) |> LazyHTML.from_document()
+
+      # Not cosmetics: `components.css` styles the legacy pages with
+      # `a, button { color: var(--color-brand-600) }`, and a rule on the element
+      # beats a colour INHERITED from an ancestor — so on the brand-700 bar both
+      # controls came out brand-600 on brand-700, which is unreadable. Every
+      # control on a coloured surface has to name its own colour.
+      for id <- ~w(open-acting-as-page stop-acting-as) do
+        assert [class] = doc |> LazyHTML.query("##{id}") |> LazyHTML.attribute("class"),
+               "the banner has no ##{id}"
+
+        assert class =~ "text-white",
+               "##{id} inherits its colour, so the legacy `a, button` rule wins"
+      end
+    end
+
     test "a member without the publisher role cannot", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       organization = active_organization_for(owner)
