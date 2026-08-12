@@ -1016,6 +1016,42 @@ What a page still cannot do is **answer** one. Replying outward is
 `check_reply_allowed/2` territory and member-shaped end to end, and an
 organization post carries no conversation here either.
 
+## Hashtags on the way out (issue #1421)
+
+We read hashtags from the fediverse in both spellings it uses and sent neither
+back, so a `#tag` written here was invisible to hashtag search and hashtag
+follows everywhere else. An outgoing note now carries both halves, and they are
+not interchangeable: the **`tag` array** (`Hashtag` objects beside any
+`Mention`) is what a remote server *indexes*, and a **closing line of
+`#hashtags`** in the content is what a reader *sees*. Mastodon's spec describes
+`Hashtag` only as a Link subtype whose name carries the `#hashtag` microsyntax
+and promises nothing about a tag present in the array alone, while a server that
+simply renders `content` shows none of them.
+
+**The name cannot come from the slug.** Mastodon's hashtag charset is
+alphanumerics, `_` and a couple of Unicode separators; everything else is
+stripped from the name it stores (`HASHTAG_INVALID_CHARS_RE`), and a **hyphen is
+not in it**. `#machine-learning` would arrive over there as the tag "machine"
+followed by loose text. So the name is built from the tag's **display name**
+with its separators removed and its casing kept (`Machine Learning` becomes
+`#MachineLearning`, which is also what makes a multi-word tag readable aloud),
+while `href` keeps pointing at our tag page, whose spelling is #1332's business.
+A name with nothing left after the strip (a punctuation-only legacy tag) is
+dropped rather than sent as a bare `#`.
+
+**The line is added on the wire only**, the same seam the answered account's
+`@user@host` uses: on vutuv these are chips under the post, and nobody's stored
+body grows a line they did not write. Only tags the body does not already name
+are appended, and "already names" is read off the **body**, not off the
+`post_hashtags` rows — `Posts.put_body_hashtags/2` deliberately skips a hashtag
+the composer's tag field already filed, so a tag that is both a chip and written
+in the sentence has no row there at all.
+
+Pleasing symmetry, and the reason a closing line is the right shape: that is
+exactly what `Markdown.split_trailing_hashtags/1` folds back into chips when a
+remote post arrives here, so a vutuv post landing on another vutuv installation
+comes out as chips again.
+
 ## Deliberate v1 limits
 
 Inbound **reply text** is stored now (issues #1069 and #1071, see the bullet

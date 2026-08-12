@@ -125,6 +125,121 @@ defmodule VutuvWeb.Fediverse.DocsTest do
     end
   end
 
+  describe "hashtags on an outgoing note (#1421)" do
+    # The composer's chips and a `#hashtag` in the body are two different
+    # tables here (`post_tags` / `post_hashtags`), and only the second is
+    # written in the text. Both have to reach the other side, in the two ways
+    # the fediverse spells this.
+    defp tagged_note(author, attrs) do
+      {:ok, post} = Vutuv.Posts.create_post(author, attrs)
+
+      post
+      |> Vutuv.Repo.preload(Docs.note_preloads())
+      |> Docs.create_activity(author)
+      |> Map.fetch!("object")
+    end
+
+    defp hashtag_names(note) do
+      note["tag"]
+      |> List.wrap()
+      |> Enum.filter(&(&1["type"] == "Hashtag"))
+      |> Enum.map(& &1["name"])
+    end
+
+    # A tag name is a shared LOOKUP key even though only the slug is unique, so
+    # every tag here is minted per test (the async rule in the Elixir guidelines).
+    defp mint_tag(prefix) do
+      n = System.unique_integer([:positive])
+      insert(:tag, name: "#{prefix}#{n}", slug: "#{String.downcase(prefix)}#{n}")
+    end
+
+    test "a chip travels as a Hashtag object and as a closing line" do
+      author = insert(:activated_user)
+      tag = mint_tag("Elixir")
+
+      note = tagged_note(author, %{body: "Wir bauen etwas.", tags: tag.name})
+
+      # What a remote server indexes, and what makes a hashtag follow reach it.
+      assert hashtag_names(note) == ["##{tag.name}"]
+      assert [object] = note["tag"]
+      assert object["href"] == "#{base()}/tags/#{tag.slug}"
+
+      # And what a reader sees: a chip stands nowhere in the text, so the note
+      # ends with it. Mastodon's spec promises nothing about a tag that appears
+      # only in the array, and a server that merely renders `content` shows none.
+      assert note["content"] =~ ~s(rel="tag")
+      assert note["content"] =~ "##{tag.name}"
+    end
+
+    test "a hashtag already written in the body gets an object but no second line" do
+      author = insert(:activated_user)
+      tag = mint_tag("elixir")
+
+      note = tagged_note(author, %{body: "Wir bauen mit ##{tag.name}."})
+
+      assert hashtag_names(note) == ["##{tag.name}"]
+      # Exactly one occurrence: appending it again would print it twice.
+      assert note["content"] |> String.split("##{tag.name}") |> length() == 2
+    end
+
+    test "the same tag as chip and hashtag is one object and is not appended" do
+      author = insert(:activated_user)
+      tag = mint_tag("elixir")
+
+      note = tagged_note(author, %{body: "Wir bauen mit ##{tag.name}.", tags: tag.name})
+
+      assert hashtag_names(note) == ["##{tag.name}"]
+      assert note["content"] |> String.split("##{tag.name}") |> length() == 2
+    end
+
+    test "a multi-word tag loses its separator instead of breaking in half" do
+      author = insert(:activated_user)
+      n = System.unique_integer([:positive])
+      tag = insert(:tag, name: "Machine Learning #{n}", slug: "machine-learning-#{n}")
+
+      note = tagged_note(author, %{body: "Kurz notiert.", tags: tag.name})
+
+      # Mastodon's hashtag charset is alphanumerics, `_` and a couple of Unicode
+      # separators; a hyphen is not in it (`HASHTAG_INVALID_CHARS_RE`), so the
+      # slug is the wrong source — `#machine-learning` would arrive as the tag
+      # "machine" with loose text trailing it.
+      assert hashtag_names(note) == ["#MachineLearning#{n}"]
+      # The link still points at the tag page, which keeps its own spelling.
+      assert [object] = note["tag"]
+      assert object["href"] == "#{base()}/tags/#{tag.slug}"
+    end
+
+    test "a tag that cannot become a hashtag is left out, never sent as a bare #" do
+      author = insert(:activated_user)
+      n = System.unique_integer([:positive])
+      tag = insert(:tag, name: "***", slug: "sternchen-#{n}")
+      {:ok, post} = Vutuv.Posts.create_post(author, %{body: "Kurz notiert."})
+
+      # Filed directly: a punctuation-only name is legacy data the composer no
+      # longer mints, and going through it would make this pass for the wrong
+      # reason (no tag attached at all).
+      Vutuv.Repo.insert!(%Vutuv.Posts.PostTag{post_id: post.id, tag_id: tag.id})
+
+      note =
+        post
+        |> Vutuv.Repo.preload(Docs.note_preloads())
+        |> Docs.create_activity(author)
+        |> Map.fetch!("object")
+
+      assert hashtag_names(note) == []
+      refute note["content"] =~ ~s(rel="tag")
+    end
+
+    test "a post without tags carries no tag array at all" do
+      author = insert(:activated_user)
+
+      note = tagged_note(author, %{body: "Nichts weiter."})
+
+      refute Map.has_key?(note, "tag")
+      refute note["content"] =~ ~s(rel="tag")
+    end
+  end
+
   describe "update_activity/2 and delete_activity/2" do
     test "update wraps the same note under an Update id" do
       user = insert(:activated_user)

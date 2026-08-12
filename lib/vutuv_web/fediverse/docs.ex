@@ -23,6 +23,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   """
 
   alias Vutuv.Fediverse.Actor
+  alias Vutuv.Mentions
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -30,6 +31,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.ReviewCover
+  alias Vutuv.Tags.Tag
   alias VutuvWeb.PostComponents
   alias VutuvWeb.UserHelpers
 
@@ -39,7 +41,14 @@ defmodule VutuvWeb.Fediverse.Docs do
   # it, because two call sites load it (the delivery queue and the permalink's
   # ActivityPub rendering) and a field added to the Note must not silently render
   # as `NotLoaded` at one of them.
-  @note_preloads [:images, :review, :remote_reply_ref, reply_ref: [:parent_author]]
+  @note_preloads [
+    :images,
+    :review,
+    :remote_reply_ref,
+    :tags,
+    {:post_hashtags, :tag},
+    {:reply_ref, [:parent_author]}
+  ]
 
   @doc "The associations `note/2` needs loaded on a post."
   def note_preloads, do: @note_preloads
@@ -635,19 +644,20 @@ defmodule VutuvWeb.Fediverse.Docs do
   @doc "The Note a public post federates as."
   def note(%Post{} = post, user) do
     remote = remote_target(post)
+    hashtags = hashtags(post)
 
     %{
       "id" => note_url(user, post.id),
       "type" => "Note",
       "attributedTo" => actor_url(user),
-      "content" => content_html(post, remote),
+      "content" => content_html(post, remote, hashtags),
       "published" => iso8601(post.inserted_at),
       "to" => [@public],
       "cc" => cc(user, remote),
       "url" => note_url(user, post.id)
     }
     |> put_in_reply_to(post, remote)
-    |> put_tag(remote)
+    |> put_tag(remote, hashtags)
     |> put_attachments(post)
   end
 
@@ -673,17 +683,94 @@ defmodule VutuvWeb.Fediverse.Docs do
   # typed text. Parsing would let anyone put `@someone@anywhere` in a post body
   # and have vutuv mint a verified-looking Mention at an actor nobody ever
   # checked, which is mention spam with our signature on it.
-  defp put_tag(note, nil), do: note
+  #
+  # It shares the array with the post's hashtags (issue #1421), so both are
+  # written here rather than each overwriting the other's key.
+  defp put_tag(note, remote, hashtags) do
+    case mention_tag(remote) ++ Enum.map(hashtags, &hashtag_tag/1) do
+      [] -> note
+      tags -> Map.put(note, "tag", tags)
+    end
+  end
 
-  defp put_tag(note, %PostRemoteReply{} = ref) do
-    Map.put(note, "tag", [
+  defp mention_tag(nil), do: []
+
+  defp mention_tag(%PostRemoteReply{} = ref) do
+    [
       %{
         "type" => "Mention",
         "href" => ref.actor_uri,
         "name" => mention_handle(ref)
       }
-    ])
+    ]
   end
+
+  defp hashtag_tag(%{name: name, href: href}),
+    do: %{"type" => "Hashtag", "href" => href, "name" => name}
+
+  # Every tag this post carries, in the shape a remote server can index it
+  # (issue #1421). Two sources, and the difference between them matters only for
+  # the closing line below: a `#hashtag` is already written in the body, the
+  # composer's chips are not. Deduplicated by tag with the in-body spelling
+  # winning, so a tag that is both is announced once and printed once.
+  defp hashtags(%Post{} = post) do
+    written = written_hashtags(post)
+
+    in_body = for %{tag: %Tag{} = tag} <- loaded(post.post_hashtags), do: {tag, true}
+    chips = for %Tag{} = tag <- loaded(post.tags), do: {tag, written?(tag, written)}
+
+    (in_body ++ chips)
+    |> Enum.uniq_by(fn {tag, _in_body?} -> tag.id end)
+    |> Enum.flat_map(&hashtag/1)
+  end
+
+  # Whether the body already writes this tag out as a `#hashtag`, which the
+  # `post_hashtags` rows alone cannot answer: `Vutuv.Posts.put_body_hashtags/2`
+  # deliberately skips a hashtag the composer's field already filed, so a tag
+  # that is *both* a chip and written in the sentence has a `post_tags` row and
+  # no `post_hashtags` row at all. Reading the body settles it, and both of the
+  # keys a hashtag resolves by (`Tag.find_by_value/1`: the name and the slug)
+  # are checked, so a `#elixir` in the text covers the chip named `Elixir`.
+  defp written_hashtags(%Post{body: body}) do
+    body |> to_string() |> Mentions.hashtags() |> Enum.map(&String.downcase/1) |> MapSet.new()
+  end
+
+  defp written?(%Tag{name: name, slug: slug}, written) do
+    MapSet.member?(written, String.downcase(to_string(name))) or
+      MapSet.member?(written, String.downcase(to_string(slug)))
+  end
+
+  defp hashtag({%Tag{} = tag, in_body?}) do
+    case hashtag_name(tag.name) do
+      nil -> []
+      name -> [%{name: "#" <> name, href: "#{base()}/tags/#{tag.slug}", in_body?: in_body?}]
+    end
+  end
+
+  # Mastodon's charset for a hashtag is alphanumerics, `_` and a couple of
+  # Unicode separators; everything else is stripped from the name it stores
+  # (`HASHTAG_INVALID_CHARS_RE`). A hyphen is **not** in it, which rules out the
+  # slug as the source: `machine-learning` would arrive over there as the tag
+  # "machine" with loose text after it. The display name is the source instead,
+  # with its separators removed and its casing kept, which is also what makes a
+  # multi-word tag readable aloud: `Machine Learning` becomes `#MachineLearning`.
+  # A name that has nothing left afterwards (a punctuation-only legacy tag) is
+  # dropped rather than sent as a bare `#`.
+  defp hashtag_name(name) when is_binary(name) do
+    case String.replace(name, ~r/[^\p{L}\p{N}_]/u, "") do
+      "" -> nil
+      cleaned -> cleaned
+    end
+  end
+
+  defp hashtag_name(_), do: nil
+
+  # A `Post` handed over by a caller that forgot the preload must not crash the
+  # delivery: no tags is the safe reading, and `note_preloads/0` is what keeps
+  # the real paths honest.
+  defp loaded(%Ecto.Association.NotLoaded{}), do: []
+  defp loaded(list) when is_list(list), do: list
+  defp loaded(_), do: []
 
   # How the answered account is written: the `@user@host` captured with the note.
   # Falls back to the bare host when the remote document carried no
@@ -715,15 +802,43 @@ defmodule VutuvWeb.Fediverse.Docs do
   # sidecar is rendered INTO the content: the Note is one more rendering of
   # the post (like the agent docs), so a Mastodon reader gets the reviewed
   # work's facts even though remote software knows nothing of review cards.
-  defp content_html(post, remote) do
+  defp content_html(post, remote, hashtags) do
     body_html =
       post.body
       |> VutuvWeb.Markdown.render_post(images(post))
       |> Phoenix.HTML.safe_to_string()
 
-    (mention_html(remote) <> body_html <> PostComponents.review_content_html(post))
+    (mention_html(remote) <>
+       body_html <> PostComponents.review_content_html(post) <> hashtag_line(hashtags))
     |> absolutize()
   end
+
+  # The chips as a closing line of `#hashtags`, added **here, on the wire, only**
+  # (issue #1421) — the same seam `mention_html/1` above uses, and for the same
+  # reason: on vutuv these are chips under the post, and nobody's stored body
+  # grows a line it was not written with. Only the tags the body does not
+  # already name, or the post would print them twice.
+  #
+  # The `tag` array beside it is what a server *indexes*; this line is what a
+  # reader *sees*, and the two are not interchangeable. Mastodon's spec
+  # describes `Hashtag` as a Link subtype whose name carries the `#hashtag`
+  # microsyntax and promises nothing about a tag that appears only in the array,
+  # while a server that simply renders `content` shows none of them.
+  defp hashtag_line(hashtags) do
+    case Enum.reject(hashtags, & &1.in_body?) do
+      [] ->
+        ""
+
+      appended ->
+        "<p>" <> Enum.map_join(appended, " ", &hashtag_link/1) <> "</p>"
+    end
+  end
+
+  defp hashtag_link(%{name: name, href: href}) do
+    ~s(<a href="#{escape(href)}" class="hashtag" rel="tag">#{escape(name)}</a>)
+  end
+
+  defp escape(value), do: value |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
 
   # The answered account, written into the outgoing HTML the way these networks
   # write a reply: a leading linked `@user@host`.
