@@ -415,9 +415,22 @@ defmodule Vutuv.Fediverse do
   erase members' remote presence), and every *temporary* state — frozen,
   suspended, deactivated, unconfirmed. Those keep answering `404`, because a
   three-day suspension must never tell the network to delete the account.
+
+  The **page** clause (issue #1334) reads the same three things off the page,
+  and it is not decoration: pages and members share one handle namespace, so
+  WebFinger resolves `acct:<handle>@<host>` to either kind and hands whatever it
+  found to the refusal path. Without this clause that path raised
+  `FunctionClauseError` — a **500** — for every page that had claimed a handle
+  and not switched federation on, which is the state every page starts in.
+  Production answered exactly that for `acct:vutuv@vutuv.de`.
   """
   def departed?(%User{} = user) do
     enabled?() and not user.fediverse_followers? and get_actor(user) != nil
+  end
+
+  def departed?(%Organization{} = organization) do
+    enabled?() and not organization.fediverse_followers? and
+      get_organization_actor(organization) != nil
   end
 
   @doc """

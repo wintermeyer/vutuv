@@ -100,6 +100,41 @@ defmodule VutuvWeb.OrganizationFediverseActorWebTest do
            |> response(404)
   end
 
+  test "a page that claimed a handle but does not federate answers 404", %{conn: conn} do
+    page =
+      active_organization_for(insert(:activated_user))
+      |> Ecto.Changeset.change(%{username: "acme"})
+      |> Repo.update!()
+
+    # The combination the test above cannot reach: the handle RESOLVES (pages
+    # and members share one namespace), so the lookup succeeds and the refusal
+    # path runs — which asked `departed?/1`, a `%User{}`-only function, and blew
+    # up with a FunctionClauseError. Every remote server that ever WebFingered a
+    # page handle got a 500 out of it; production answered exactly that for
+    # `acct:vutuv@vutuv.de`.
+    assert page.username == "acme"
+    refute Vutuv.Fediverse.federated?(page)
+
+    assert conn
+           |> get(~p"/.well-known/webfinger", resource: "acct:acme@#{VutuvWeb.Endpoint.host()}")
+           |> response(404)
+  end
+
+  test "a page that switched federation off answers 410, not 404", %{conn: conn} do
+    page = federating_page()
+    {:ok, _} = Vutuv.Fediverse.ensure_organization_actor(page)
+
+    page = page |> Ecto.Changeset.change(%{fediverse_followers?: false}) |> Repo.update!()
+
+    # The same distinction a member gets: a `410` tells a remote server that
+    # knows this actor to drop it and the copies it kept, and that is the page
+    # owner's own decision to leave. A page that never federated is a plain
+    # `404` (above) — nothing out there knows it, and there is nothing to forget.
+    assert conn
+           |> get(~p"/.well-known/webfinger", resource: "acct:acme@#{VutuvWeb.Endpoint.host()}")
+           |> response(410)
+  end
+
   test "a page without a claimed handle cannot federate", %{conn: conn} do
     page =
       active_organization_for(insert(:activated_user))
