@@ -41,6 +41,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
+  alias VutuvWeb.Live.RemotePostActions
   alias VutuvWeb.UserHelpers
 
   # The origin's like/repost figures on a card from another network tick
@@ -415,24 +416,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # still exists at its origin, so there is no case and no freezer — and the
   # row leaves the feed in the same round trip.
   def handle_event("report-remote-post", %{"id" => id}, socket) do
-    case Fediverse.report_remote_post(id, socket.assigns.current_user) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
-         |> drop_remote_entry(id)}
-
-      {:error, :rate_limited} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("You have reported a lot today. Please try again tomorrow.")
-         )}
-
-      {:error, :not_found} ->
-        {:noreply, drop_remote_entry(socket, id)}
-    end
+    RemotePostActions.report(socket, id, &drop_remote_entry(&1, id))
   end
 
   # "Not this account today": the private, reversible lever beside Report. The

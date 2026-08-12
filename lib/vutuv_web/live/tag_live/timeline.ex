@@ -47,6 +47,7 @@ defmodule VutuvWeb.TagLive.Timeline do
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.Timeline
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.RemotePostActions
 
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
@@ -112,26 +113,7 @@ defmodule VutuvWeb.TagLive.Timeline do
   # A report deletes our copy for everybody here, so the row leaves in the same
   # round trip rather than sitting there until the next load.
   def handle_event("report-remote-post", %{"id" => id}, socket) do
-    # The same three answers, in the same words, as the feed's report control:
-    # one act, described once, wherever a member meets a cached post.
-    case Fediverse.report_remote_post(id, socket.assigns.current_user) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
-         |> drop_remote_entry(id)}
-
-      {:error, :rate_limited} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("You have reported a lot today. Please try again tomorrow.")
-         )}
-
-      {:error, :not_found} ->
-        {:noreply, drop_remote_entry(socket, id)}
-    end
+    RemotePostActions.report(socket, id, &drop_remote_entry(&1, id))
   end
 
   # ── Loading ───────────────────────────────────────────────────────────────

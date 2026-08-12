@@ -4794,14 +4794,8 @@ defmodule Vutuv.Posts do
     # AI-moderation limbo: until released, the bytes are owner/admin-only
     # (everyone else gets the gallery placecard, and this proxy 404s).
     visible_to?(post, viewer) and
-      (ImageScans.released?(image.moderation) or privileged_image_viewer?(image, viewer))
+      (ImageScans.released?(image.moderation) or ImageScans.privileged_viewer?(image, viewer))
   end
-
-  defp privileged_image_viewer?(%PostImage{user_id: uploader_id}, %User{id: uploader_id}),
-    do: true
-
-  defp privileged_image_viewer?(_image, %User{admin?: true}), do: true
-  defp privileged_image_viewer?(_image, _viewer), do: false
 
   @doc """
   Removes pending images older than a day (abandoned composer sessions),

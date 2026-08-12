@@ -645,14 +645,8 @@ defmodule Vutuv.Jobs do
 
   def image_visible_to?(%JobPostingImage{job_posting: posting} = image, viewer) do
     visible_to?(posting, viewer) and
-      (ImageScans.released?(image.moderation) or privileged_image_viewer?(image, viewer))
+      (ImageScans.released?(image.moderation) or ImageScans.privileged_viewer?(image, viewer))
   end
-
-  defp privileged_image_viewer?(%JobPostingImage{user_id: uploader_id}, %User{id: uploader_id}),
-    do: true
-
-  defp privileged_image_viewer?(_image, %User{admin?: true}), do: true
-  defp privileged_image_viewer?(_image, _viewer), do: false
 
   # Attach the chosen pending images to the posting; delete + purge those the
   # editor removed.

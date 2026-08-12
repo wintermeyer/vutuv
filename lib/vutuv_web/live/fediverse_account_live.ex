@@ -47,6 +47,7 @@ defmodule VutuvWeb.FediverseAccountLive do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.RemotePostActions
 
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
@@ -156,24 +157,7 @@ defmodule VutuvWeb.FediverseAccountLive do
   # are cached because somebody else does), so it is the only place those will
   # ever be seen — and a card nobody can report is not a card, it is a display.
   def handle_event("report-remote-post", %{"id" => id}, socket) do
-    case Fediverse.report_remote_post(id, socket.assigns.current_user) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
-         |> load_posts()}
-
-      {:error, :rate_limited} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("You have reported a lot today. Please try again tomorrow.")
-         )}
-
-      {:error, :not_found} ->
-        {:noreply, load_posts(socket)}
-    end
+    RemotePostActions.report(socket, id, &load_posts/1)
   end
 
   # The heart (issue #1164): the local marker plus a signed `Like` to this

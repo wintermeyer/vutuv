@@ -23,6 +23,8 @@ defmodule VutuvWeb.ErrorHTML do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias VutuvWeb.PageHTML
+
   # A request the server could not read (issue #1227): a mangled multipart
   # body raises in the endpoint (invalid UTF-8 in a text part, or all fields
   # dropped over a defective Content-Disposition) before any controller runs,
@@ -155,7 +157,8 @@ defmodule VutuvWeb.ErrorHTML do
   # example. The prominent note owns up to a newsletter that once shipped this
   # exact broken link. Rendered with a 404 status by VutuvWeb.PageController.
   def render("username_placeholder.html", assigns) do
-    assigns = Map.new(assigns)
+    assigns =
+      assigns |> Map.new() |> Map.put(:example_profile_url, PageHTML.example_profile_url())
 
     ~H"""
     <div class="error-page">
@@ -172,12 +175,16 @@ defmodule VutuvWeb.ErrorHTML do
           "in this address is only a placeholder. Replace it with the actual username of the person whose profile you want to visit."
         )}
       </p>
-      <%!-- The example must exist on every installation, so it points at the
-            founder's profile on vutuv.de absolutely instead of assuming this
-            host has a member called wintermeyer. --%>
-      <p class="error-page__hint">
+      <%!-- The example must exist on every installation, so it is an absolute
+            URL rather than an assumption that this host has a member called
+            wintermeyer. Which profile it is belongs to the operator
+            (`:landing_example_profile_url`, LANDING_EXAMPLE_PROFILE_URL): the
+            vutuv.de founder profile is only its default, and an installation
+            that cleared the key gets no line at all rather than a link into
+            somebody else's site. --%>
+      <p :if={@example_profile_url} class="error-page__hint">
         {gettext("For example, this profile really exists:")}
-        <a href="https://vutuv.de/wintermeyer">vutuv.de/wintermeyer</a>
+        <a href={@example_profile_url}>{PageHTML.example_profile_label(@example_profile_url)}</a>
       </p>
       <p class="error-page__hint">
         {gettext("Do not know the username? Try the")}

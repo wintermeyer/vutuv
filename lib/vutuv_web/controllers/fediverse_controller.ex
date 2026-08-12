@@ -767,11 +767,15 @@ defmodule VutuvWeb.FediverseController do
   # `subscribe` template, because that is where a *member* confirms a follow
   # they started elsewhere, and a page starts none.
   defp jrd(%Organization{} = organization) do
+    # `canonical_path/1`, not the slug shape spelled out: a page that claimed a
+    # root handle is served at that handle everywhere else, and this document is
+    # what remote servers are told to show a human.
     page_url =
-      "#{String.trim_trailing(VutuvWeb.Endpoint.url(), "/")}/organizations/#{organization.slug}"
+      String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <>
+        Organizations.canonical_path(organization)
 
     %{
-      "subject" => "acct:#{organization.username}@#{VutuvWeb.Endpoint.host()}",
+      "subject" => "acct:" <> Docs.acct(organization),
       "aliases" => [page_url, Docs.actor_url(organization)],
       "links" => [
         %{"rel" => "self", "type" => @activity_json, "href" => Docs.actor_url(organization)},
@@ -789,7 +793,7 @@ defmodule VutuvWeb.FediverseController do
     profile_url = "#{base}/#{user.username}"
 
     %{
-      "subject" => "acct:#{user.username}@#{VutuvWeb.Endpoint.host()}",
+      "subject" => "acct:" <> Docs.acct(user),
       "aliases" => [profile_url, Docs.actor_url(user)],
       "links" => [
         %{"rel" => "self", "type" => @activity_json, "href" => Docs.actor_url(user)},

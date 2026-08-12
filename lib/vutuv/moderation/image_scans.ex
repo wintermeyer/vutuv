@@ -32,6 +32,7 @@ defmodule Vutuv.Moderation.ImageScans do
 
   require Logger
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Moderation.ImageScan
   alias Vutuv.Moderation.ImageScanWorker
   alias Vutuv.Moderation.ImageSubjects
@@ -75,6 +76,19 @@ defmodule Vutuv.Moderation.ImageScans do
   def released?(nil), do: true
   def released?("approved"), do: true
   def released?(_state), do: false
+
+  @doc """
+  Who may see an image the scan has **not** released: the member who uploaded
+  it, and an admin. Everyone else waits for the verdict.
+
+  Matched on the `user_id` key rather than a struct type, so the one rule serves
+  post images, organization images and job-posting images — it was written out
+  once per image kind, which is three places for a moderation-visibility answer
+  to be changed in.
+  """
+  def privileged_viewer?(%{user_id: uploader_id}, %User{id: uploader_id}), do: true
+  def privileged_viewer?(_image, %User{admin?: true}), do: true
+  def privileged_viewer?(_image, _viewer), do: false
 
   @doc """
   Queues (or re-queues) the scan for one asset. `fingerprint` binds the

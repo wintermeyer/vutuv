@@ -21,6 +21,7 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
 
   alias Vutuv.Fediverse
   alias Vutuv.Organizations
+  alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.Live.InitAssigns
 
   @impl true
@@ -117,7 +118,7 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
       <.card :if={@enabled? and not is_nil(@organization.username)} class="mt-6">
         <.section_title>{gettext("Address")}</.section_title>
         <p class="mt-2 font-mono text-sm text-slate-800 dark:text-slate-200" id="fediverse-handle">
-          @{@organization.username}@{VutuvWeb.Endpoint.host()}
+          {Docs.handle(@organization)}
         </p>
 
         <p class="mt-4 text-sm text-slate-700 dark:text-slate-300">

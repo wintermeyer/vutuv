@@ -46,6 +46,7 @@ defmodule VutuvWeb.FediverseLookupLive do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Posts
+  alias VutuvWeb.Live.RemotePostActions
 
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
@@ -107,24 +108,7 @@ defmodule VutuvWeb.FediverseLookupLive do
   end
 
   def handle_event("report-remote-post", _params, socket) do
-    case Fediverse.report_remote_post(socket.assigns.post.id, socket.assigns.current_user) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
-         |> clear_result()}
-
-      {:error, :rate_limited} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("You have reported a lot today. Please try again tomorrow.")
-         )}
-
-      {:error, :not_found} ->
-        {:noreply, clear_result(socket)}
-    end
+    RemotePostActions.report(socket, socket.assigns.post.id, &clear_result/1)
   end
 
   def handle_event("follow", _params, %{assigns: %{post: nil}} = socket), do: {:noreply, socket}

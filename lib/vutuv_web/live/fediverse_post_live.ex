@@ -46,6 +46,7 @@ defmodule VutuvWeb.FediversePostLive do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.RemotePostActions
 
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
@@ -86,26 +87,13 @@ defmodule VutuvWeb.FediversePostLive do
 
   @impl true
   def handle_event("report-remote-post", _params, socket) do
-    case Fediverse.report_remote_post(socket.assigns.remote_post.id, socket.assigns.current_user) do
-      :ok ->
-        # The copy this page is about is gone, so there is no page left to stay
-        # on. The feed is where the card was met.
-        {:noreply,
-         socket
-         |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
-         |> push_navigate(to: ~p"/feed")}
-
-      {:error, :rate_limited} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("You have reported a lot today. Please try again tomorrow.")
-         )}
-
-      {:error, :not_found} ->
-        {:noreply, push_navigate(socket, to: ~p"/feed")}
-    end
+    # The copy this page is about is gone, so there is no page left to stay on.
+    # The feed is where the card was met.
+    RemotePostActions.report(
+      socket,
+      socket.assigns.remote_post.id,
+      &push_navigate(&1, to: ~p"/feed")
+    )
   end
 
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do

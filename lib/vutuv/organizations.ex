@@ -1987,17 +1987,9 @@ defmodule Vutuv.Organizations do
       organization ->
         # AI-moderation limbo: until released, the bytes are uploader/admin-only.
         organization_visible_to?(organization, viewer) and
-          (ImageScans.released?(image.moderation) or privileged_image_viewer?(image, viewer))
+          (ImageScans.released?(image.moderation) or ImageScans.privileged_viewer?(image, viewer))
     end
   end
-
-  defp privileged_image_viewer?(%OrganizationImage{user_id: uploader_id}, %User{
-         id: uploader_id
-       }),
-       do: true
-
-  defp privileged_image_viewer?(_image, %User{admin?: true}), do: true
-  defp privileged_image_viewer?(_image, _viewer), do: false
 
   # --- deletion ---------------------------------------------------------------
 

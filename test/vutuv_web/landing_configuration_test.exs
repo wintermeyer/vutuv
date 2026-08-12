@@ -125,6 +125,29 @@ defmodule VutuvWeb.LandingConfigurationTest do
       assert html =~ ~s(href="/llms.txt")
     end
 
+    # The /username helper page offers the same example and had spelled the
+    # vutuv.de founder profile out in its markup, so an installation that
+    # configured its own — or cleared it — still sent people to vutuv.de.
+    test "the /username helper page offers the configured example too", %{conn: conn} do
+      example("https://vutuv.example/ada")
+
+      html = conn |> get(~p"/username") |> response(404)
+
+      assert html =~ "https://vutuv.example/ada"
+      assert html =~ "vutuv.example/ada"
+      refute html =~ "vutuv.de/wintermeyer"
+    end
+
+    test "and drops the example line where the installation cleared the URL", %{conn: conn} do
+      example("")
+
+      html = conn |> get(~p"/username") |> response(404)
+
+      refute html =~ "really exists"
+      # The rest of the explanation stays — that is the point of the page.
+      assert html =~ "only a placeholder"
+    end
+
     # An intranet installation federates nothing: every endpoint behind that
     # section 404s there, so promising Mastodon on the operator's front page
     # would be a straight lie. The sign-up form already gates its Fediverse
