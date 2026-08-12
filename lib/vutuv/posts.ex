@@ -1268,11 +1268,9 @@ defmodule Vutuv.Posts do
   The same, as a **page** (issue #1336) — a company amplifying a member's post
   to its own followers.
 
-  It deliberately does **not** federate. A member's repost sends an `Announce`
-  from their actor; the page equivalent needs the page's actor and its own
-  delivery run, which is its own piece of work. Until that exists a page's
-  repost is a vutuv-side reshare, which is the honest subset rather than a
-  half-built one.
+  It federates like a member's does when the page has opted in and claimed a
+  handle: an `Announce` from the page's own actor to the page's own remote
+  followers.
   """
   def repost_post(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
     cond do
@@ -1284,15 +1282,31 @@ defmodule Vutuv.Posts do
 
   defp do_page_repost(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
     case engage(PostRepost, :repost, page, post, acting_user) do
-      {:ok, %PostRepost{} = repost} -> broadcast_new_repost(repost)
-      {:ok, :noop} -> :ok
-      {:error, _} = error -> error
+      {:ok, %PostRepost{} = repost} ->
+        Vutuv.Fediverse.federate_repost(post, page)
+        broadcast_new_repost(repost)
+
+      {:ok, :noop} ->
+        :ok
+
+      {:error, _} = error ->
+        error
     end
   end
 
   @doc "Removes the actor's repost (idempotent). The last one lifts the audience lock."
-  def unrepost_post(%Organization{} = page, %Post{} = post),
-    do: disengage(PostRepost, :repost, page, post)
+  def unrepost_post(%Organization{} = page, %Post{} = post) do
+    # Only federate the Undo when there really was a reshare to undo, so an
+    # idempotent unrepost of a post the page never boosted stays silent.
+    reposted? =
+      Repo.exists?(
+        from(r in PostRepost, where: r.post_id == ^post.id and r.organization_id == ^page.id)
+      )
+
+    :ok = disengage(PostRepost, :repost, page, post)
+    if reposted?, do: Vutuv.Fediverse.federate_unrepost(post, page)
+    :ok
+  end
 
   def unrepost_post(%User{} = user, %Post{} = post) do
     # Only federate the Undo when there really was a repost to undo, so an

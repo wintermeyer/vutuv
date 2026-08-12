@@ -7473,26 +7473,38 @@ defmodule Vutuv.Fediverse do
   id, which a non-federating author does not serve). Best effort like every
   other outbound activity.
   """
-  def federate_repost(%Post{} = post, %User{} = reposter),
+  def federate_repost(%Post{} = post, reposter),
     do: maybe_federate_repost(post, reposter, &Docs.announce_activity/3)
 
-  @doc "The member un-reposts -> `Undo(Announce)` with the matching id."
-  def federate_unrepost(%Post{} = post, %User{} = reposter),
+  @doc "The resharer takes it back -> `Undo(Announce)` with the matching id."
+  def federate_unrepost(%Post{} = post, reposter),
     do: maybe_federate_repost(post, reposter, &Docs.undo_announce_activity/3)
 
-  defp maybe_federate_repost(%Post{} = post, %User{} = reposter, builder) do
+  defp maybe_federate_repost(%Post{} = post, reposter, builder) do
     with true <- enabled?(),
          true <- federated?(reposter),
-         false <- moved?(reposter),
+         false <- resharer_moved?(reposter),
          false <- Posts.restricted?(post),
-         %User{} = author <- Repo.get(User, post.user_id),
+         # `Posts.author/1`, never `Repo.get(User, post.user_id)`: that column is
+         # NULL on a page's post and `Repo.get/2` RAISES on nil rather than
+         # answering nothing. It only fired for a federated member resharing a
+         # page's post, so it sat here unnoticed from the day pages could
+         # publish (issue #1334).
+         author when not is_nil(author) <- Posts.author(post),
          true <- federated?(author),
-         [_ | _] = inboxes <- delivery_inboxes(reposter) do
+         [_ | _] = inboxes <- repost_inboxes(reposter) do
       enqueue(reposter, inboxes, builder.(post, author, reposter))
     else
       _ -> :skip
     end
   end
+
+  # Only a member can have moved to another server; a page has no `moved_to`.
+  defp resharer_moved?(%User{} = user), do: moved?(user)
+  defp resharer_moved?(%Organization{}), do: false
+
+  defp repost_inboxes(%User{} = user), do: delivery_inboxes(user)
+  defp repost_inboxes(%Organization{} = page), do: organization_delivery_inboxes(page)
 
   ## The pinned post as the `featured` collection (issue #1110)
 

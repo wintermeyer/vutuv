@@ -125,4 +125,84 @@ defmodule Vutuv.OrganizationFediversePublishTest do
     delivery = Repo.one!(from(d in Delivery, where: d.user_id == ^author.id))
     assert is_nil(delivery.organization_id)
   end
+
+  describe "a page reshares" do
+    test "the Announce goes out from the page's actor" do
+      {page, owner} = publishing_page()
+      remote_follower(page)
+
+      author = insert(:activated_user, fediverse_followers?: true)
+      {:ok, _} = Fediverse.ensure_actor(author)
+      {:ok, post} = Posts.create_post(author, %{body: "Ein Beitrag."})
+
+      assert :ok = Posts.repost_post(page, owner, post)
+
+      delivery =
+        Repo.one!(
+          from(d in Delivery,
+            where: d.organization_id == ^page.id,
+            where: like(d.activity_json, "%Announce%")
+          )
+        )
+
+      assert is_nil(delivery.user_id)
+
+      activity = Jason.decode!(delivery.activity_json)
+      assert activity["type"] == "Announce"
+      # The boost is the PAGE's, so the actor is the page's actor and not the
+      # publisher who pressed the button.
+      assert activity["actor"] == Docs.actor_url(page)
+    end
+
+    test "taking it back sends the Undo with the same id" do
+      {page, owner} = publishing_page()
+      remote_follower(page)
+
+      author = insert(:activated_user, fediverse_followers?: true)
+      {:ok, _} = Fediverse.ensure_actor(author)
+      {:ok, post} = Posts.create_post(author, %{body: "Ein Beitrag."})
+
+      assert :ok = Posts.repost_post(page, owner, post)
+      :ok = Posts.unrepost_post(page, post)
+
+      undo =
+        Repo.one!(
+          from(d in Delivery,
+            where: d.organization_id == ^page.id,
+            where: like(d.activity_json, "%Undo%")
+          )
+        )
+
+      activity = Jason.decode!(undo.activity_json)
+      assert activity["type"] == "Undo"
+      assert activity["object"]["type"] == "Announce"
+    end
+
+    test "a page that never opted in sends nothing" do
+      {page, owner} = publishing_page(fediverse_followers?: false)
+
+      author = insert(:activated_user, fediverse_followers?: true)
+      {:ok, _} = Fediverse.ensure_actor(author)
+      {:ok, post} = Posts.create_post(author, %{body: "Ein Beitrag."})
+
+      assert :ok = Posts.repost_post(page, owner, post)
+
+      assert Repo.aggregate(from(d in Delivery, where: d.organization_id == ^page.id), :count) ==
+               0
+    end
+  end
+
+  test "a federated member resharing a PAGE's post does not crash" do
+    {page, owner} = publishing_page()
+    {:ok, post} = Posts.create_organization_post(page, owner, %{body: "Unser Beitrag."})
+
+    member = insert(:activated_user, fediverse_followers?: true)
+    {:ok, _} = Fediverse.ensure_actor(member)
+
+    # The repost path looked the author up with `Repo.get(User, post.user_id)`,
+    # and that column is NULL on a page's post - so this RAISED rather than
+    # answering nothing. It only ever fired for a federated member resharing a
+    # page's post, which is why no test had met it.
+    assert :ok = Posts.repost_post(member, post)
+  end
 end
