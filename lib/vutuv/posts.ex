@@ -893,12 +893,35 @@ defmodule Vutuv.Posts do
   def author?(%Post{organization_id: id} = post, %User{} = viewer) when is_binary(id),
     do: organization_author?(post, viewer)
 
-  # A page asking about its OWN post (issue #1336). Without this clause the
-  # catch-all below answered false, and the self-vote rule that stops a member
-  # inflating their own like count would not have applied to a page at all.
+  # A page asking about its OWN post (issue #1336): it may edit, delete and
+  # revoke what it published, like any author.
   def author?(%Post{organization_id: id}, %Organization{id: id}) when is_binary(id), do: true
 
   def author?(%Post{}, _viewer), do: false
+
+  @doc """
+  Whether `actor` **is** the post's author, as opposed to being entitled to act
+  in the author's name.
+
+  These are two questions and a page is where they part. `author?/2` answers the
+  second one, which is right for editing, deleting and pinning: the power
+  follows the role. The self-vote rule behind `like_post/2` needs the first one,
+  and for a while it borrowed `author?/2` as well — so every publisher of every
+  page was quietly barred from liking their own page's posts, although the like
+  would have been theirs and not the page's, while a colleague without the role
+  could press the heart. The button was rendered either way and the refusal was
+  swallowed, so it read as a dead control.
+
+  A member's own post and a page's own post are both self-votes; a member and
+  the page they publish for are not the same identity.
+  """
+  def self_vote?(%Post{organization_id: nil, user_id: author_id}, %User{id: author_id})
+      when is_binary(author_id),
+      do: true
+
+  def self_vote?(%Post{organization_id: id}, %Organization{id: id}) when is_binary(id), do: true
+
+  def self_vote?(%Post{}, _actor), do: false
 
   # Whether `viewer` may currently speak for the post's organization. Takes the
   # preloaded association when there is one and falls back to a lookup when
@@ -1159,10 +1182,13 @@ defmodule Vutuv.Posts do
   A member cannot like their **own** post (`{:error, :self}`): a self-vote
   inflating your own like count is not a real endorsement (issue #1030).
   Bookmarking your own post stays fine — that is a private save.
+
+  "Own" here means `self_vote?/2`, not `author?/2`: on a page's post the author
+  is the page, so its publishers are liking somebody else's post, and may.
   """
   def like_post(%User{} = user, %Post{} = post) do
     cond do
-      author?(post, user) -> {:error, :self}
+      self_vote?(post, user) -> {:error, :self}
       blocked?(user, post) -> {:error, :blocked}
       true -> do_like_post(user, post)
     end
@@ -1179,7 +1205,7 @@ defmodule Vutuv.Posts do
   def like_post(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
     cond do
       not Organizations.publisher?(page, acting_user) -> {:error, :not_allowed}
-      author?(post, page) -> {:error, :self}
+      self_vote?(post, page) -> {:error, :self}
       true -> do_page_like(page, acting_user, post)
     end
   end

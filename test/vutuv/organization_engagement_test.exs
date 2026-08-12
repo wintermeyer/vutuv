@@ -81,7 +81,7 @@ defmodule Vutuv.OrganizationEngagementTest do
     assert engagement.liked?
   end
 
-  test "the page's own count is not inflated by its own like" do
+  test "the page cannot like its own post, its publishers personally can" do
     {page, owner} = page_with_publisher()
     {:ok, post} = Posts.create_organization_post(page, owner, %{body: "Unser Beitrag"})
 
@@ -89,17 +89,22 @@ defmodule Vutuv.OrganizationEngagementTest do
     # author is the page.
     assert {:error, :self} = Posts.like_post(page, owner, post)
 
-    # Its publishers are refused too, and that is the pre-existing rule rather
-    # than a new one: `author?/2` already treats anybody who may currently speak
-    # for the page as the post's author, which is what gives them edit and
-    # delete rights. A publisher liking the page's post is the same self-vote.
-    assert {:error, :self} = Posts.like_post(owner, post)
-    assert Posts.post_engagement(post.id, page).likes == 0
+    # Its publishers are **not** refused, and this reverses what this test
+    # asserted until v7.273.1. The old reading leaned on `author?/2` treating
+    # anybody who may currently speak for the page as the post's author — right
+    # for edit and delete, wrong here, because the person and the page are two
+    # identities and the like belongs to the person (named under the post since
+    # #1233). It also protected nothing: a colleague without the role could
+    # always press the heart, so the rule fell on exactly the people who work on
+    # the page. `self_vote?/2` asks the identity question now.
+    assert :ok = Posts.like_post(owner, post)
+    assert Posts.post_engagement(post.id, owner).liked?
+    assert Posts.post_engagement(post.id, page).likes == 1
 
     # Somebody outside the team is an ordinary reader.
     outsider = insert(:activated_user)
     assert :ok = Posts.like_post(outsider, post)
-    assert Posts.post_engagement(post.id, outsider).likes == 1
+    assert Posts.post_engagement(post.id, outsider).likes == 2
   end
 
   test "somebody who may not speak for the page cannot act as it" do

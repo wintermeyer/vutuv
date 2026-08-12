@@ -735,6 +735,18 @@ Counters are counted live from the `post_likes` / `post_bookmarks` /
 `post_reposts` rows and broadcast as absolute values on the post topic
 (`"post:<id>"`).
 
+**Nobody likes their own post, and "own" is a narrower word than it looks.**
+The self-vote rule (issue #1030) asks `Posts.self_vote?/2`, which is about
+**identity**: a member and their post, a page and its post. It is deliberately
+not `Posts.author?/2`, which asks whether somebody may act *in the author's
+name* and therefore answers yes for every publisher of a page. The two are the
+same question for a member and part company on a page, and while the rule
+borrowed `author?/2` every publisher was barred from the heart on their own
+page's posts — their like, not the page's, and named under the post since
+#1233 — while a colleague without the role could press it. The action bar
+renders the heart either way and swallows the refusal, so the symptom was a
+control that did nothing rather than an error anyone could report.
+
 ### Who liked it (issue #1233)
 
 The **post permalink** — and only the permalink — names the members behind the
