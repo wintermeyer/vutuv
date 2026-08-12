@@ -11,6 +11,7 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Countries
+  alias Vutuv.Fediverse
   alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -18,6 +19,7 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
   alias Vutuv.Posts.Post
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobPostingDoc
+  alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.UserHelpers
 
   @doc """
@@ -80,8 +82,21 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
       # view, like every other part of this doc: `organization_posts_page/3` is
       # asked with a nil viewer, so a post still held by moderation is absent
       # here even though the page's own publishers see it in the HTML.
-      posts: Enum.map(posts, &post_entry/1)
+      posts: Enum.map(posts, &post_entry/1),
+      # The page's Fediverse address, the same fact its card shows (nil unless
+      # it federates). It belongs in the doc for the reason the whole system
+      # exists: an agent reading the `.md` should be able to say where to follow
+      # this page, and it is the one address here that is not a vutuv URL.
+      fediverse: fediverse_entry(organization)
     })
+  end
+
+  # No `moved_to` arm, unlike `ProfileDoc`: a page cannot move its account
+  # elsewhere, so the entry is the address or nothing.
+  defp fediverse_entry(organization) do
+    if Fediverse.federated?(organization) do
+      %{handle: Docs.handle(organization), actor_url: Docs.actor_url(organization)}
+    end
   end
 
   defp post_entry(%Post{} = post) do

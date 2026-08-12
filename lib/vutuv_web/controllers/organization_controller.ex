@@ -17,6 +17,7 @@ defmodule VutuvWeb.OrganizationController do
 
   import Phoenix.LiveView.Controller, only: [live_render: 3]
 
+  alias Vutuv.Fediverse
   alias Vutuv.Organizations
   alias Vutuv.Pages
   alias Vutuv.Posts
@@ -25,6 +26,8 @@ defmodule VutuvWeb.OrganizationController do
   alias VutuvWeb.AgentDocs.OrganizationDoc
   alias VutuvWeb.AgentDocs.PostDoc
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.Fediverse.Docs
+  alias VutuvWeb.FediverseController
 
   def index(conn, _params) do
     case AgentDocs.negotiate(conn) do
@@ -69,6 +72,30 @@ defmodule VutuvWeb.OrganizationController do
   `/organizations/:slug` serve the identical page.
   """
   def render_page(conn, organization) do
+    cond do
+      # An ActivityPub Accept on the page URL gets the actor document — what
+      # Mastodon fetches when somebody pastes the page's address into its search,
+      # which is the other half of showing that address on the page at all. A
+      # page that does not federate gets the same refusal its actor endpoint
+      # gives (410 once its owner switched federation off, so remote servers drop
+      # their copies; 404 otherwise), which reads to an AP client as "nothing
+      # here" rather than choking on HTML. The member twin is `UserController`.
+      FediverseController.ap_request?(conn) and Fediverse.federated?(organization) ->
+        {:ok, actor} = Fediverse.ensure_organization_actor(organization)
+
+        conn
+        |> put_resp_content_type("application/activity+json")
+        |> send_resp(200, Jason.encode!(Docs.organization_actor(organization, actor)))
+
+      FediverseController.ap_request?(conn) ->
+        FediverseController.refuse(conn, organization)
+
+      true ->
+        render_page_document(conn, organization)
+    end
+  end
+
+  defp render_page_document(conn, organization) do
     case AgentDocs.negotiate(conn) do
       :html ->
         conn

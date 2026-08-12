@@ -15,15 +15,18 @@ defmodule VutuvWeb.OrganizationLive.Show do
   use VutuvWeb, :live_view
 
   import VutuvWeb.OrganizationComponents
+  import VutuvWeb.FediverseComponents, only: [follow_us_from_elsewhere: 1]
   import VutuvWeb.JobComponents, only: [job_card: 1]
   import VutuvWeb.PostComponents, only: [post_card: 1]
 
   alias Vutuv.Countries
+  alias Vutuv.Fediverse
   alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Social
+  alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.UserHelpers
@@ -146,6 +149,16 @@ defmodule VutuvWeb.OrganizationLive.Show do
     |> assign(:follower_count, Social.organization_follower_count(organization))
     |> assign(:pending?, organization.status == "pending")
     |> assign(:frozen?, not is_nil(organization.frozen_at))
+    # The page's Fediverse address, or nil (issue #1334). `federated?/1` already
+    # answers for a page — installation switch, its own opt-in, a claimed handle
+    # and public visibility — so this is a field read and costs no query. Unlike
+    # a member there is no `moved_to` arm: moving an account elsewhere is a
+    # person's decision about their own identity and a page carries no such
+    # column, so the card never has a forwarding address to show.
+    |> assign(
+      :fediverse,
+      if(Fediverse.federated?(organization), do: %{handle: Docs.handle(organization)})
+    )
     |> assign(:engagement, Organizations.organization_engagement(organization, viewer))
     |> assign(:dns_value, primary && Organizations.dns_txt_value(primary))
     |> assign(:dns_challenge_name, primary && Organizations.dns_challenge_name(primary))
@@ -379,6 +392,29 @@ defmodule VutuvWeb.OrganizationLive.Show do
                   class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
                   {display_url(@organization.website_url)}
+                </a>
+
+                <%!-- The Fediverse address where a visitor scans for "where else
+                is this page". The card at the foot of the column carries the
+                whole explanation — copy button and remote-follow tool — and
+                repeating that here would say the same thing twice on one screen,
+                so this is one line that names the address and jumps to it. It is
+                the shortcut row the member profile keeps in its Profiles card:
+                the card alone was not findable, which is what was reported. --%>
+                <a
+                  :if={@fediverse}
+                  id="organization-fediverse-shortcut"
+                  href="#organization-fediverse"
+                  class="group mt-2 flex items-center gap-2 text-sm text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
+                >
+                  <.detail_icon
+                    name="globe"
+                    class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
+                  />
+                  <span class="truncate font-medium">{@fediverse.handle}</span>
+                  <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                    {gettext("Follow")} ›
+                  </span>
                 </a>
               </div>
             </div>
@@ -615,6 +651,30 @@ defmodule VutuvWeb.OrganizationLive.Show do
               </button>
             </div>
           </section>
+
+          <%!-- The page's Fediverse address (@fediverse is nil unless the page
+          federates, which is off until an owner switches it on, so most pages
+          never render this). Same card, same wording and same remote-follow
+          tool as a member's profile, from one component: a visitor arriving
+          from Mastodon asks the same thing of a person and of a page, and until
+          this shipped the page answered it nowhere — its handle existed, was
+          WebFingered, and appeared on no page a human reads.
+
+          It closes the main column for the profile's reason: the page itself is
+          what a visitor came for and this is the "take me with you" footer under
+          it. The header card's one-line shortcut is what makes it findable
+          without scrolling past the posts; `scroll-mt-24` keeps the sticky top
+          bar off the title when that shortcut (or the controller's error
+          redirect) lands on the anchor. --%>
+          <.card :if={@fediverse} id="organization-fediverse" class="scroll-mt-24">
+            <.section_title>{gettext("Fediverse")}</.section_title>
+            <.follow_us_from_elsewhere
+              id="organization-fediverse"
+              handle={@fediverse.handle}
+              name={@organization.name}
+              action={~p"/organizations/#{@organization.slug}/fediverse/follow"}
+            />
+          </.card>
         </div>
 
         <aside class="space-y-6">

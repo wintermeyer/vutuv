@@ -294,6 +294,13 @@ defmodule VutuvWeb.Router do
     # works whether or not a handle was ever claimed.
     get("/organizations/:slug/posts/:id", OrganizationController, :post)
 
+    # "Follow from your own server" on the page's Fediverse card (issue #1334),
+    # the page twin of `POST /:slug/fediverse/follow`: a visitor from another
+    # network posts their OWN address and we redirect them to their server's
+    # follow dialog. No login (the whole point is that their account is
+    # elsewhere); refused unless this page federates.
+    post("/organizations/:slug/fediverse/follow", RemoteFollowController, :create_organization)
+
     # Switching into an organization and back (issue #1335). Never GET: a
     # request that changes whose name you are speaking in must not be fired by
     # a link prefetch or a Back button.

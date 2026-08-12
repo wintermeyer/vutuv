@@ -241,7 +241,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         doc.primary_domain && "- #{gettext("Verified via")}: #{doc.primary_domain}",
         also_known_as(doc),
         doc.website_url && "- #{gettext("Website")}: #{doc.website_url}",
-        "- #{gettext("Address")}: #{doc.address_line}"
+        "- #{gettext("Address")}: #{doc.address_line}",
+        fediverse_fact(doc[:fediverse])
       ]
       |> Enum.filter(&is_binary/1)
       |> Enum.join("\n"),

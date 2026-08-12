@@ -18,6 +18,11 @@ defmodule VutuvWeb.FediverseComponents do
 
   Sibling of `VutuvWeb.BrowseTable`, which does the same job for the two
   relationship tables.
+
+  `follow_us_from_elsewhere/1` faces the other way — it is what a visitor who is
+  already on Mastodon reads on a member's profile and on an organization page —
+  but it lives here for the same reason: those two pages describe one act, and a
+  member's address and a page's address are the same kind of thing.
   """
 
   use Phoenix.Component
@@ -115,6 +120,101 @@ defmodule VutuvWeb.FediverseComponents do
       {refusal_message(@error)}
       {render_slot(@error_detail)}
     </p>
+    """
+  end
+
+  attr(:id, :string,
+    required: true,
+    doc: "the card's id; the handle's `<code>` takes `<id>-handle`, which the copy button targets"
+  )
+
+  attr(:handle, :string, required: true, doc: "`@name@host`, from `VutuvWeb.Fediverse.Docs`")
+
+  attr(:name, :string,
+    required: true,
+    doc: "who is being followed, as the sentence names them: a member's full name, a page's name"
+  )
+
+  attr(:action, :string,
+    required: true,
+    doc: "where the visitor's own address is posted (`RemoteFollowController`)"
+  )
+
+  @doc """
+  **The two questions a visitor arriving from Mastodon has**: what is this
+  account's address over there, and how do I follow it without leaving my own
+  app. One markup for a member's profile and for an organization page, because
+  the visitor is the same person asking the same thing and neither answer is
+  about vutuv.
+
+  The handle is a copy target — that is the action people come for — and the form
+  below it resolves the visitor's **own** server's follow dialog and sends them
+  there, so the follow is confirmed where their account lives. Deliberately a
+  classic form post and not a `phx-submit`: the answer is a redirect to another
+  server, and someone arriving from a network we know nothing about is exactly
+  the visitor we cannot assume JavaScript for. Phoenix stamps the CSRF token; a
+  LiveView render loads the session's CSRF state, so the token is valid from both
+  page styles.
+
+  The form's own ids stay `remote-follow-*` rather than deriving from `@id`: no
+  page shows two of these, the redirect targets are written against them, and
+  they are what the tests key on.
+  """
+  def follow_us_from_elsewhere(assigns) do
+    ~H"""
+    <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Are you on Mastodon or another Fediverse app? Follow %{name} from there and new public posts arrive in your timeline. No vutuv account needed.",
+        name: @name
+      )}
+    </p>
+
+    <div class="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700">
+      <code
+        id={"#{@id}-handle"}
+        class="min-w-0 flex-1 select-all break-all text-sm text-slate-800 dark:text-slate-100"
+      >{@handle}</code>
+      <button
+        type="button"
+        data-copy
+        data-copy-target={"#{@id}-handle"}
+        data-label-copy={gettext("Copy")}
+        data-label-copied={gettext("Copied")}
+        class="shrink-0 rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
+      >
+        {gettext("Copy")}
+      </button>
+    </div>
+
+    <.form for={%{}} action={@action} id="remote-follow-form" class="mt-4">
+      <label
+        for="remote-follow-address"
+        class="block text-sm font-semibold text-slate-900 dark:text-white"
+      >
+        {gettext("Follow from your own server")}
+      </label>
+      <div class="mt-1.5 flex flex-col gap-2 sm:flex-row">
+        <input
+          type="text"
+          id="remote-follow-address"
+          name="address"
+          inputmode="email"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+          placeholder={gettext("@you@example.social")}
+          class={[input_class(), "sm:min-w-0 sm:flex-1"]}
+        />
+        <.button type="submit" id="remote-follow-submit" class="shrink-0">
+          {gettext("Follow")}
+        </.button>
+      </div>
+      <p class="mt-1.5 text-xs text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Your address is used once, to send you to your own server's follow dialog. It is never stored here."
+        )}
+      </p>
+    </.form>
     """
   end
 

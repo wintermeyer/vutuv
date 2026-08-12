@@ -870,6 +870,27 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  The same for a **page** (issue #1334): a member typed an address on this very
+  vutuv into an organization page's remote-follow box, so what they asked for is
+  a plain vutuv follow of that page.
+
+  Answers in `follow_local_member/2`'s vocabulary so one caller can speak to
+  both — minus `:own_account`, which cannot arise: a member is never a page.
+  `Social.follow_organization/2` is idempotent by design (the pill is a toggle),
+  so the already-following case is asked before, not read off the result.
+  """
+  def follow_local_organization(%User{} = user, %Organization{} = organization) do
+    if Social.follows_organization?(user, organization) do
+      {:error, :already_following}
+    else
+      case Social.follow_organization(user, organization) do
+        {:ok, _follow} -> {:ok, {:local_follow, organization}}
+        {:error, _refused} -> {:error, :follow_failed}
+      end
+    end
+  end
+
+  @doc """
   The member of this installation a pasted Fediverse address names, or nil —
   nil for every remote address too, so it doubles as "is this one of ours, and
   whose". Pure string work plus one lookup; no network.

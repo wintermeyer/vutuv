@@ -875,6 +875,31 @@ Mastodon as pending forever, which is the "pressed Follow and nothing happened"
 failure the whole gate exists to prevent — which is why the delivery queue was
 widened together with the inbox rather than after it.
 
+**The address has to appear on the page a human reads.** All of the above shipped
+first and the page said none of it: `acct:<handle>@<host>` resolved, the actor
+document served, and a visitor looking at the page found no address anywhere —
+reported as "I cannot see what this page's Fediverse account is". The page now
+carries the profile's Fediverse card at the foot of its main column, plus a
+one-line shortcut to it in the header card (the card alone was not findable —
+the member profile learned the same thing). Both surfaces render **one**
+component, `FediverseComponents.follow_us_from_elsewhere/1`, and post to **one**
+controller, `RemoteFollowController`, which takes a `%User{}` or an
+`%Organization{}` and branches only where the two genuinely differ: a page cannot
+have moved away, its refusal says "page" rather than "profile", and an address
+that turns out to be local follows the page here
+(`Fediverse.follow_local_organization/2`). The doc builders carry the same fact,
+so `.md`/`.txt`/`.json`/`.xml` name the address too.
+
+Two things ride along with it. The page URL now answers an **ActivityPub
+`Accept`** with the actor document (`404`/`410` when it does not federate), which
+is what Mastodon fetches when somebody pastes the URL rather than the handle —
+without it the address on the card is findable and the URL beside it is not. And
+`Fediverse.departed?/1` learned the page clause it was missing: members and pages
+share one handle namespace, so WebFinger hands the refusal path either kind, and
+a page with a claimed handle and federation off produced a `FunctionClauseError`
+— a **500** on `acct:vutuv@vutuv.de` in production, i.e. on the state every page
+starts in.
+
 ### What is not built
 
 A page cannot **follow** a remote account. That needs it to send a signed
