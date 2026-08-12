@@ -159,6 +159,15 @@ defmodule VutuvWeb.OrganizationLive.Show do
       :fediverse,
       if(Fediverse.federated?(organization), do: %{handle: Docs.handle(organization)})
     )
+    # Whether to offer the owner the switch instead of an address. Read off the
+    # same two facts the card needs, so the template asks no questions of its
+    # own: the installation must federate at all, and this must be the owner
+    # (federating decides how the page appears on servers we do not run, which
+    # is why the switch itself is owner-only rather than publisher-wide).
+    |> assign(
+      :fediverse_invite?,
+      Fediverse.enabled?() and Organizations.owner?(organization, viewer)
+    )
     |> assign(:engagement, Organizations.organization_engagement(organization, viewer))
     |> assign(:dns_value, primary && Organizations.dns_txt_value(primary))
     |> assign(:dns_challenge_name, primary && Organizations.dns_challenge_name(primary))
@@ -500,6 +509,21 @@ defmodule VutuvWeb.OrganizationLive.Show do
                 >
                   {gettext("Domains")}
                 </.link>
+                <%!-- This row and the manage pages' tab bar are two hand-kept
+                lists of the same map, and they had drifted: the tab bar names
+                eight areas, this row named three, and Fediverse was among the
+                five an owner could only reach by opening one of the three and
+                noticing a tab. Adding one link is the small fix; the real one is
+                to render both from a single source, which is a nav change worth
+                agreeing on first. Until then, keep them in step by hand. --%>
+                <.link
+                  :if={@owner?}
+                  id="organization-manage-fediverse"
+                  navigate={~p"/organizations/#{@organization.slug}/fediverse"}
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                >
+                  {gettext("Fediverse")}
+                </.link>
                 <.link
                   :if={@current_user && !@can_manage?}
                   href={~p"/reports/new?#{[type: "organization", id: @organization.id, return_to: "/organizations/#{@organization.slug}"]}"}
@@ -666,14 +690,57 @@ defmodule VutuvWeb.OrganizationLive.Show do
           without scrolling past the posts; `scroll-mt-24` keeps the sticky top
           bar off the title when that shortcut (or the controller's error
           redirect) lands on the anchor. --%>
-          <.card :if={@fediverse} id="organization-fediverse" class="scroll-mt-24">
+          <%!-- Without an address the card is an EMPTY SECTION, and this app
+          teaches an empty section to its owner rather than hiding it: the same
+          dashed `<.empty_add>` scaffold every profile section shows while it has
+          nothing in it. It is needed here more than anywhere, because the switch
+          is otherwise unreachable by accident — it lives behind the manage tab
+          bar, which renders only on the manage pages themselves, so an owner had
+          to open "Edit" and notice a tab to learn that a page can federate at
+          all. Owners only, and only where the installation federates: a visitor
+          has nothing to do with it, and where the operator switched federation
+          off there is nothing to switch on. --%>
+          <.card
+            :if={@fediverse || @fediverse_invite?}
+            id="organization-fediverse"
+            class="scroll-mt-24"
+          >
             <.section_title>{gettext("Fediverse")}</.section_title>
-            <.follow_us_from_elsewhere
-              id="organization-fediverse"
-              handle={@fediverse.handle}
-              name={@organization.name}
-              action={~p"/organizations/#{@organization.slug}/fediverse/follow"}
-            />
+
+            <%= if @fediverse do %>
+              <.follow_us_from_elsewhere
+                id="organization-fediverse"
+                handle={@fediverse.handle}
+                name={@organization.name}
+                action={~p"/organizations/#{@organization.slug}/fediverse/follow"}
+              />
+            <% else %>
+              <%!-- Says what this does for the organization before it names
+              anything: reach past vutuv. "Fediverse" is the heading and the word
+              the owner will meet again on the switch page and in the tab bar, so
+              it is worth teaching once, in the one place where it is explained.
+              The first sentence is shared with that switch page (one msgid), so
+              the offer and the page it leads to cannot describe the same thing
+              in two different ways. The second is the mental model people
+              actually have for an `@name@host` address. --%>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                {gettext(
+                  "People who have no vutuv account can follow this page and read its posts, in networks like Mastodon."
+                )}
+              </p>
+              <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                {gettext(
+                  "The page gets an address of its own for that, written like an email address."
+                )}
+              </p>
+              <.empty_add
+                href={~p"/organizations/#{@organization.slug}/fediverse"}
+                id="organization-fediverse-enable"
+                class="mt-3"
+              >
+                {gettext("Set this page up for other networks")}
+              </.empty_add>
+            <% end %>
           </.card>
         </div>
 

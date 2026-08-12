@@ -125,8 +125,14 @@ defmodule VutuvWeb.OrganizationFediverseSwitchTest do
       |> get(~p"/organizations/#{page.slug}/fediverse")
       |> html_response(200)
 
-    assert html =~ "Föderieren starten"
-    assert html =~ "Diese Seite föderiert nicht."
+    # The page is written for the owner of a company or an association, not for
+    # somebody who already knows the protocol: it says what this does for the
+    # organization (reach past vutuv) and never asks them to know the verb
+    # "föderieren", which is what every sentence here used to be built on.
+    assert html =~ "Auch Menschen ohne vutuv-Konto können dieser Seite folgen"
+    assert html =~ "Einschalten"
+    assert html =~ "Diese Seite ist auf anderen Netzwerken nicht sichtbar."
+    refute html =~ "öderier"
 
     # The merge filled this one from "Einstellungen durchsuchen" (search
     # settings) and "Fediverse" without the page name; both are named here so

@@ -890,6 +890,34 @@ that turns out to be local follows the page here
 (`Fediverse.follow_local_organization/2`). The doc builders carry the same fact,
 so `.md`/`.txt`/`.json`/`.xml` name the address too.
 
+**And the owner has to be able to find the switch.** It sits at
+`/organizations/:slug/fediverse`, which was linked from exactly one place: the
+manage pages' tab bar, which renders **only on the manage pages themselves**. The
+page's own owner row named Edit / Team / Domains, so the way in was to open one
+of those three and notice a tab — five of the eight areas were unreachable by
+anything but accident. The page now names Fediverse in that row, and the empty
+Fediverse card carries the app's ordinary `<.empty_add>` scaffold for its owner,
+the same way an empty profile section teaches what goes in it. Note the standing
+hazard: that owner row and the tab bar are two hand-kept lists of one map and
+they had already drifted. Rendering both from a single source is the real fix,
+and it is a nav change to agree on rather than to slip in.
+
+**And the words had to change with it**, because the owner this now reaches is
+the secretary of a Verein, not somebody who knows the protocol. Every sentence on
+the switch page was built on the verb *federate* ("Föderieren starten", "Diese
+Seite föderiert nicht"), which is not a word in ordinary German or English. The
+whole owner path now leads with what it does for the organization — *people who
+have no vutuv account can follow this page and read its posts, in networks like
+Mastodon* — and names the address by its shape (`@name@host`, "written like an
+email address") rather than by a term. The invitation on the page and the switch
+page share that first sentence as **one msgid**, so the offer and the page it
+leads to cannot describe the same thing in two ways. "Fediverse" survives as the
+heading, the tab and the section name: it is what the thing is called, and one
+place that explains it beats hiding it and meeting it again unexplained. The edit
+form's "Root handle" became "The organization's @name" for the same reason — the
+switch page sends the owner there to claim one, and a handoff that renames the
+thing mid-flow is where people give up.
+
 Two things ride along with it. The page URL now answers an **ActivityPub
 `Accept`** with the actor document (`404`/`410` when it does not federate), which
 is what Mastodon fetches when somebody pastes the URL rather than the handle —

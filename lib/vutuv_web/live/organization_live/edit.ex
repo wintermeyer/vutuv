@@ -399,10 +399,14 @@ defmodule VutuvWeb.OrganizationLive.Edit do
       </.card>
 
       <.card :if={@owner? and @organization.status == "active"} class="mt-8">
-        <.section_title>{gettext("Root handle")}</.section_title>
+        <%!-- "@name", not "root handle": the Fediverse page sends its owner here
+        to claim one, and it would be a poor handoff to name the same thing twice
+        in two words, one of which ("Root-URL") describes our routing rather than
+        what the owner gets. What they get is a short address of their own. --%>
+        <.section_title>{gettext("The organization's @name")}</.section_title>
         <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
           {gettext(
-            "Claim a short @handle so this organization has its own root URL, like a member profile. Letters, numbers and underscores, %{min} to %{max} characters.",
+            "Claim a short @name so this organization has an address of its own, like a member. Letters, numbers and underscores, %{min} to %{max} characters.",
             min: Vutuv.Handles.min_length(),
             max: Vutuv.Handles.max_length()
           )}

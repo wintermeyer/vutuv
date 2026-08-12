@@ -77,20 +77,34 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Fediverse")}</h1>
+      <%!-- The same sentence the page's own empty Fediverse card shows, from one
+      msgid: the owner arrives here from that card, and a page that greeted them
+      by restating the offer in different words would read as a different
+      feature. It says what this does for the organization (reach past vutuv)
+      before it names anything, because "federate" is a word almost nobody
+      outside this protocol knows, in English or in German. --%>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {gettext("Let people on Mastodon and other networks follow this page and receive its posts.")}
+        {gettext(
+          "People who have no vutuv account can follow this page and read its posts, in networks like Mastodon."
+        )}
       </p>
 
       <.card :if={!@enabled?} class="mt-6">
         <p class="text-sm text-slate-700 dark:text-slate-300">
-          {gettext("This installation has federation switched off, so nothing here has any effect.")}
+          {gettext("This vutuv exchanges nothing with other networks, so nothing here has any effect.")}
         </p>
       </.card>
 
       <.card :if={@enabled? and is_nil(@organization.username)} class="mt-6" id="needs-handle">
-        <.section_title>{gettext("A handle is needed first")}</.section_title>
+        <.section_title>{gettext("A short @name is needed first")}</.section_title>
+        <%!-- Showing the shape of the address teaches more than naming the
+        concept does: everybody has seen an email address, and this is written
+        the same way. --%>
         <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">
-          {gettext("Out there this page is addressed by its handle, the way a member is. Claim one on the page settings, then come back.")}
+          {gettext(
+            "Other networks address this page as @name@%{host}, the way they address a member. So it needs a short @name of its own first. Claim one in the page settings, then come back.",
+            host: VutuvWeb.Endpoint.host()
+          )}
         </p>
         <.link
           navigate={~p"/organizations/#{@organization.slug}/edit"}
@@ -108,11 +122,11 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
 
         <p class="mt-4 text-sm text-slate-700 dark:text-slate-300">
           <%= if @federated? do %>
-            {gettext("This page is being federated. %{count} accounts on other networks follow it.",
+            {gettext("This page is visible on other networks. %{count} accounts there follow it.",
               count: delimited_count(@remote_followers)
             )}
           <% else %>
-            {gettext("This page is not being federated. Nothing of it is visible on other networks.")}
+            {gettext("This page is not visible on other networks. Nothing of it leaves vutuv.")}
           <% end %>
         </p>
 
@@ -131,11 +145,13 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
             if @federated?,
               do: nil,
               else:
-                gettext("Posts of this page will be sent to other servers from now on. Continue?")
+                gettext(
+                  "From now on, posts of this page also go to other networks. Continue?"
+                )
           }
           class="mt-4"
         >
-          {if @federated?, do: gettext("Stop federating"), else: gettext("Start federating")}
+          {if @federated?, do: gettext("Switch it off"), else: gettext("Switch it on")}
         </.button>
       </.card>
 
@@ -143,7 +159,7 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
         :if={@ever_federated? and not @federated?}
         class="mt-4 text-sm text-slate-600 dark:text-slate-400"
       >
-        {gettext("This page federated before. Servers that still hold copies keep them until they act on a deletion request.")}
+        {gettext("This page was visible on other networks before. Servers that still hold copies keep them until they act on a deletion request.")}
       </p>
     </div>
     """

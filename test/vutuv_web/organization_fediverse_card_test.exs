@@ -29,6 +29,7 @@ defmodule VutuvWeb.OrganizationFediverseCardTest do
   @handle "#organization-fediverse-handle"
   @form "#remote-follow-form"
   @shortcut "#organization-fediverse-shortcut"
+  @invite "#organization-fediverse-enable"
 
   setup do
     Application.put_env(:vutuv, :verify_organization_domains, true)
@@ -88,6 +89,60 @@ defmodule VutuvWeb.OrganizationFediverseCardTest do
 
       refute has_element?(view, @card)
       refute has_element?(view, @shortcut)
+    end
+
+    test "invites the owner of a page that does not federate, and nobody else", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      page = active_organization_for(owner)
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{page.slug}")
+
+      # The whole feature was unreachable: the switch lives behind the manage
+      # tab bar, which only renders on the manage pages themselves, and the
+      # page's own owner row named Edit / Team / Domains and nothing else. An
+      # owner had to click "Edit" and notice a tab to learn that their page can
+      # federate at all. So the empty section teaches it, the way every other
+      # empty section on this app teaches what goes in it.
+      assert has_element?(view, "#{@card} [data-empty-add]")
+      assert has_element?(view, @invite)
+      assert view |> element(@invite) |> render() =~ "/organizations/#{page.slug}/fediverse"
+
+      # And it is scaffolding for the owner, not something a visitor reads.
+      {:ok, visitor, _html} = live(build_conn(), ~p"/organizations/#{page.slug}")
+      refute has_element?(visitor, @card)
+    end
+
+    test "no invitation while the installation switch is off", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      page = active_organization_for(owner)
+      Application.put_env(:vutuv, :fediverse_enabled, false)
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_enabled) end)
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{page.slug}")
+
+      # There is nothing to switch on: this installation exchanges nothing with
+      # other networks, and the switch page itself says so.
+      refute has_element?(view, @card)
+    end
+
+    test "the owner row on the page names the Fediverse", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      page = active_organization_for(owner)
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{page.slug}")
+
+      # The row beside Edit / Team / Domains, so the switch is reachable from
+      # the top of the page too, not only from the card at its foot.
+      assert has_element?(view, ~s|#organization-manage-fediverse|)
+    end
+
+    test "the owner row keeps the Fediverse to the owner", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      page = active_organization_for(insert(:activated_user))
+
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{page.slug}")
+
+      refute has_element?(view, ~s|#organization-manage-fediverse|)
     end
 
     test "is absent for a page that never claimed a handle", %{conn: conn} do
@@ -325,6 +380,27 @@ defmodule VutuvWeb.OrganizationFediverseCardTest do
       assert html =~ "Sie sind auf Mastodon oder in einer anderen Fediverse-App?"
       assert html =~ "Folgen Sie #{page.name} von dort aus"
       assert html =~ "Von Ihrem eigenen Server aus folgen"
+    end
+
+    test "the owner's invitation reads as German", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      page = active_organization_for(owner)
+
+      html =
+        conn
+        |> Phoenix.ConnTest.recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/organizations/#{page.slug}")
+        |> html_response(200)
+
+      # The offer leads with what it does for the organization (reach past
+      # vutuv), not with the name of a protocol. "Föderieren" is the word this
+      # path used to be written in and almost nobody outside the Fediverse knows
+      # it, so it is named here to keep it out.
+      assert html =~ "Seite für andere Netzwerke einrichten"
+      assert html =~ "Auch Menschen ohne vutuv-Konto können dieser Seite folgen"
+      assert html =~ "wie eine E-Mail-Adresse aussieht"
+      refute html =~ "öderier"
     end
 
     test "the refusal for a page that does not federate is German", %{conn: conn} do
