@@ -36,10 +36,11 @@ defmodule Vutuv.Fediverse.Follower do
     field(:name, :string)
     field(:last_checked_at, :naive_datetime)
 
-    # A remote follower follows a member OR a page (issue #1334),
-    # CHECK-enforced to exactly one.
+    # A remote follower follows a member, a page (issue #1334) or a topic
+    # (issue #1330), CHECK-enforced to exactly one.
     belongs_to(:user, Vutuv.Accounts.User)
     belongs_to(:organization, Vutuv.Organizations.Organization)
+    belongs_to(:tag, Vutuv.Tags.Tag)
 
     timestamps()
   end
