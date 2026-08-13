@@ -22,6 +22,22 @@
       )}
     </p>
 
+    <%!-- The other half of the top bar's people total, which links here: this
+    is where a visitor who clicked that figure finds out what the number is
+    made of. Only when there is somebody to name — an installation nobody
+    follows from the Fediverse would otherwise read "0 accounts". --%>
+    <p :if={@fediverse_total > 0} class="text-sm text-slate-600 dark:text-slate-400">
+      <%!-- ngettext binds %{count} to the raw integer, so the formatted figure
+      rides its own placeholder. --%>
+      {ngettext(
+        "%{fediverse} account from the Fediverse follows members, pages or topics here; together that is %{people} people.",
+        "%{fediverse} accounts from the Fediverse follow members, pages or topics here; together that is %{people} people.",
+        @fediverse_total,
+        fediverse: delimited_count(@fediverse_total),
+        people: delimited_count(@members_total + @fediverse_total)
+      )}
+    </p>
+
     <%!-- The A-Z strip: letters with members link to their page, empty ones
     render as muted tiles so the strip always shows the whole alphabet. Plain
     <a>/<span> tags keep the attribute order stable for the tests. --%>

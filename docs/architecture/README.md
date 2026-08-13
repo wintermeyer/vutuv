@@ -10,7 +10,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 
 | Document | Covers |
 |---|---|
-| [realtime.md](realtime.md) | the LiveView app shell, live pages, reload-free updates over PubSub, presence & online dots, notifications, Berlin-time post stamps, the live member counter |
+| [realtime.md](realtime.md) | the LiveView app shell, live pages, reload-free updates over PubSub, presence & online dots, notifications, Berlin-time post stamps, the live people counter |
 | [social-graph.md](social-graph.md) | follows, vernetzt (mutual follows), per-follow mute, blocking |
 | [fediverse.md](fediverse.md) | follow-only ActivityPub federation: WebFinger, actors, the inbox, signed deliveries |
 | [posts-and-feed.md](posts-and-feed.md) | posts, deny-based audiences, the `/feed` timeline, likes/bookmarks/reposts, reply threads, post images |
@@ -63,9 +63,9 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
   "Load 50 of 80 more" button that appends to the stream. Displayed counts
   (badges, follower numbers) are compacted site-wide via
   `VutuvWeb.UI.compact_count/1`: exact up to 999, then 1K/80K/5M. The one
-  exception is the member counter — the landing page's pill and the top bar's
-  total — which shows the **exact** figure via `delimited_count/1` so it
-  visibly ticks (see [realtime.md](realtime.md))
+  exception is the people counter — the top bar's total of members here plus
+  the Fediverse accounts following them — which shows the **exact** figure via
+  `delimited_count/1` so it visibly ticks (see [realtime.md](realtime.md))
 - **Ids**: all database ids are UUID v7 (`Vutuv.UUIDv7`): time-ordered, minted
   in the app, never integers or UUID v4.
 

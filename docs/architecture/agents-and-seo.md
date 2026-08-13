@@ -225,13 +225,19 @@ name, so only the visible listing changes.
 Members with `noindex?` never appear here or in the sitemap, and their profile
 answers with the robots meta tag *and* an `X-Robots-Tag` header.
 
-The overview therefore prints **two** figures: what it lists, and the whole
-membership (`Vutuv.Accounts.count_users/0`, the same definition behind the top
-bar's live member total). Without the second one the directory's count reads
-as the site's size, and every member who keeps their profile out of search
-engines looks like a member the site does not have. The agent formats carry
-both as `total` and `members_total`, and the doc description spells the gap out
-in words for the Markdown and text renderings, which print no counts of their own.
+The overview therefore prints **three** figures: what it lists, the whole
+membership (`Vutuv.Accounts.count_users/0`, the same definition behind the
+member half of the top bar's live people total), and — when there is anybody to
+name — the distinct Fediverse accounts following members, pages or topics here
+(`Vutuv.Fediverse.distinct_follower_count/0`), with the two added up. Without
+the second one the directory's count reads as the site's size, and every member
+who keeps their profile out of search engines looks like a member the site does
+not have; without the third, a visitor who clicked the top bar's "5,920 people"
+lands on a page whose largest number is 5,508 and looks like it lost 412 of
+them. The agent formats carry all of it as `total`, `members_total`,
+`fediverse_followers` and `people_total`, and the doc description spells the
+gaps out in words for the Markdown and text renderings, which print no counts
+of their own.
 
 It lives under `/system/` — the one reserved word all future site pages share,
 so new pages stop burning root path words members could have as handles.

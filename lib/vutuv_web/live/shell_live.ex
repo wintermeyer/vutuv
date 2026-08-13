@@ -33,12 +33,12 @@ defmodule VutuvWeb.ShellLive do
 
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
-  alias Vutuv.Accounts.MemberCounter
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Dashboard
   alias Vutuv.DayClock
   alias Vutuv.Organizations
+  alias Vutuv.PeopleCounter
   alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Presence
@@ -54,11 +54,11 @@ defmodule VutuvWeb.ShellLive do
     # shell's subscribe on full page loads (the broadcast can fire first).
     path = session["path"] || ""
 
-    # The member total in the middle of the bar is public and on every page, so
-    # every socket subscribes — logged in or not. `Vutuv.Accounts.MemberCounter`
+    # The people total in the middle of the bar is public and on every page, so
+    # every socket subscribes — logged in or not. `Vutuv.PeopleCounter`
     # coalesces a burst of sign-ups into at most one message per second, so this
     # fan-out costs one message per connected tab per second of actual change.
-    if connected?(socket), do: MemberCounter.subscribe()
+    if connected?(socket), do: PeopleCounter.subscribe()
 
     socket =
       if connected?(socket) do
@@ -187,16 +187,17 @@ defmodule VutuvWeb.ShellLive do
     # Admins get one more figure: how many sign-ups confirmed so far today.
     # Zero renders nothing, so it is also the starting value for everyone else.
     |> assign(:new_members_today, 0)
-    # The registered-member total. An O(1) atomics read, so the throwaway dead
-    # render can afford it too and a classic controller page shows the figure
-    # before its socket connects. Zero (the sub-second before the counter's
-    # first reconcile seeds the cell) renders nothing.
-    |> assign(:member_count, MemberCounter.count())
+    # The people total (members here plus the distinct Fediverse accounts
+    # following them). Two O(1) atomics reads, so the throwaway dead render can
+    # afford it too and a classic controller page shows the figure before its
+    # socket connects. Zero (the sub-second before the counter's first reconcile
+    # seeds the cell) renders nothing.
+    |> assign(:people_count, PeopleCounter.counts())
     # False until the first broadcast: the figure's span is keyed on its value
-    # (see .member-total__figure in components.css), so without this gate the
+    # (see .people-total__figure in components.css), so without this gate the
     # first render would look like an insert and every page load would open with
     # the number sliding in.
-    |> assign(:member_count_ticked?, false)
+    |> assign(:people_count_ticked?, false)
   end
 
   # Site-wide online presence. The shell is the one component on every page, so
@@ -238,9 +239,10 @@ defmodule VutuvWeb.ShellLive do
   # The admin-only sign-up pulse in the top bar: how many members confirmed
   # their registration since Berlin midnight. Only an admin socket runs the
   # query, so nobody else pays for it. Two feeds keep it true: the
-  # `{:member_count, n}` messages every socket already receives (the total moves
-  # the moment a sign-up confirms) and `Vutuv.DayClock` (Berlin midnight, when
-  # the tally starts over) — which only an admin socket subscribes to.
+  # `{:people_count, counts}` messages every socket already receives (the member
+  # half moves the moment a sign-up confirms) and `Vutuv.DayClock` (Berlin
+  # midnight, when the tally starts over) — which only an admin socket
+  # subscribes to.
   defp maybe_start_new_members(socket) do
     if connected?(socket) and socket.assigns.user_admin? do
       DayClock.subscribe()
@@ -369,17 +371,25 @@ defmodule VutuvWeb.ShellLive do
     {:noreply, socket |> assign(:self_online?, show_online?) |> push_online()}
   end
 
-  # The live member total moved — a sign-up confirmed, an account was deleted,
-  # or the counter reconciled itself against the database. Every socket shows
-  # the total, so every socket takes the new figure; only an admin's socket also
-  # re-reads today's tally, which is a database query the rest must not pay for.
-  def handle_info({:member_count, total}, socket) do
+  # The live people total moved — a sign-up confirmed, an account was deleted,
+  # or the counter reconciled one of its two halves against the database. Every
+  # socket shows the total, so every socket takes the new figures; only an
+  # admin's socket also re-reads today's sign-up tally, and only when the
+  # *member* half is what moved: a Fediverse follower arriving says nothing
+  # about today's registrations, and the recount is a database query.
+  def handle_info({:people_count, counts}, socket) do
+    members_moved? = counts.members != socket.assigns.people_count.members
+
     socket =
       socket
-      |> assign(:member_count, total)
-      |> assign(:member_count_ticked?, true)
+      |> assign(:people_count, counts)
+      |> assign(:people_count_ticked?, true)
 
-    {:noreply, if(socket.assigns.user_admin?, do: recount_new_members(socket), else: socket)}
+    {:noreply,
+     if(socket.assigns.user_admin? and members_moved?,
+       do: recount_new_members(socket),
+       else: socket
+     )}
   end
 
   # Berlin midnight: yesterday's sign-ups stop counting, so the pill empties out
@@ -433,18 +443,37 @@ defmodule VutuvWeb.ShellLive do
   # glyph and a bare number read as a version string as easily as a head count
   # (reported 2026-08-01), and the accessible name below only ever said so to a
   # screen reader or a hovering mouse.
-  defp member_total_word(count), do: ngettext("member", "members", count)
+  #
+  # "People" and not "members", because the figure is no longer only members:
+  # it is the members here plus the distinct Fediverse accounts following them
+  # (see `Vutuv.PeopleCounter`). One word cannot say that, so the word names
+  # what both halves have in common and the label below spells the mixture out.
+  defp people_total_word(count), do: ngettext("person", "people", count)
 
   # The pill's accessible name and hover title, which carry the word at every
-  # width — including the phone, where it does not fit on screen. `ngettext/4`
-  # binds the raw integer to %{count}, hence the separate %{formatted}
-  # placeholder for the grouped figure.
-  defp member_total_label(count) do
+  # width — including the phone, where it does not fit on screen.
+  #
+  # Two shapes, because the composition is only worth explaining when there is
+  # something to explain: an installation nobody follows from the Fediverse
+  # (and every intranet installation, where the feature is off) gets the plain
+  # sentence rather than a breakdown ending in "and 0 accounts".
+  # `ngettext/4` binds the raw integer to %{count}, hence the separate
+  # %{formatted} placeholder for the grouped figure.
+  defp people_total_label(%{fediverse: 0, total: total}) do
     ngettext(
-      "%{formatted} member",
-      "%{formatted} members",
-      count,
-      formatted: delimited_count(count)
+      "%{formatted} person",
+      "%{formatted} people",
+      total,
+      formatted: delimited_count(total)
+    )
+  end
+
+  defp people_total_label(%{members: members, fediverse: fediverse, total: total}) do
+    gettext(
+      "%{formatted} people: %{members} members here and %{fediverse} Fediverse accounts that follow them",
+      formatted: delimited_count(total),
+      members: delimited_count(members),
+      fediverse: delimited_count(fediverse)
     )
   end
 
@@ -584,15 +613,17 @@ defmodule VutuvWeb.ShellLive do
             </nav>
           </div>
 
-          <%!-- The registered-member total, the one figure that belongs to the
-          whole site rather than to the viewer, so it sits in the middle of the
-          bar on every page. It is the exact, grouped number (never a compacted
-          "60K"): it ticks up the moment a sign-up confirms and back down when an
-          account is deleted, live from Vutuv.Accounts.MemberCounter over PubSub,
-          and a rounded figure would never visibly move. The slot is always
-          rendered so the bar keeps its shape while the counter has nothing to
-          show, and the pill links to the public member directory — the page that
-          answers "who are those members?".
+          <%!-- The people total, the one figure that belongs to the whole site
+          rather than to the viewer, so it sits in the middle of the bar on every
+          page: the members here plus the distinct Fediverse accounts that follow
+          a member, a page or a topic of this installation, counted once per
+          account. It is the exact, grouped number (never a compacted "60K"): it
+          ticks up the moment a sign-up confirms or a remote Follow is counted,
+          and back down when an account is deleted, live from Vutuv.PeopleCounter
+          over PubSub, and a rounded figure would never visibly move. The slot is
+          always rendered so the bar keeps its shape while the counter has
+          nothing to show, and the pill links to the public member directory —
+          the page that answers "who are those people?" and names both halves.
 
           The visible word rides along for logged-out visitors at every width and
           from `lg` for members (see member_total_word/1); the
@@ -602,13 +633,13 @@ defmodule VutuvWeb.ShellLive do
           the width does not grow until lg). Below md the nav is hidden and
           there is ~72px to spare; at lg there is ~219px. So it shows
           everywhere except that one band, where nothing would fit anyway. --%>
-          <div id="member-total-slot" class="flex justify-center">
+          <div id="people-total-slot" class="flex justify-center">
             <.link
-              :if={@member_count > 0}
-              id="member-total"
+              :if={@people_count.total > 0}
+              id="people-total"
               href={~p"/system/members"}
-              title={member_total_label(@member_count)}
-              aria-label={member_total_label(@member_count)}
+              title={people_total_label(@people_count)}
+              aria-label={people_total_label(@people_count)}
               class="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-brand-700 sm:px-3 md:hidden lg:inline-flex dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-brand-100"
             >
               <.icon_users />
@@ -616,13 +647,13 @@ defmodule VutuvWeb.ShellLive do
                     place and a patched text node animates nothing, so a changed
                     figure has to be a NEW node for the tick to play. --%>
               <span
-                id={"member-total-figure-#{@member_count}"}
+                id={"people-total-figure-#{@people_count.total}"}
                 class={[
-                  "member-total__figure tabular-nums",
-                  @member_count_ticked? && "member-total__figure--tick"
+                  "people-total__figure tabular-nums",
+                  @people_count_ticked? && "people-total__figure--tick"
                 ]}
               >
-                {delimited_count(@member_count)}
+                {delimited_count(@people_count.total)}
               </span>
               <%!-- Gated on who is looking, not on the breakpoint, because that
                     is what the width actually depends on. The documented ~72px
@@ -637,14 +668,14 @@ defmodule VutuvWeb.ShellLive do
                     utility, so the #880 two-competing-utilities trap cannot
                     form. --%>
               <span class={@user_id && "hidden lg:inline"}>
-                {member_total_word(@member_count)}
+                {people_total_word(@people_count.total)}
               </span>
             </.link>
           </div>
 
           <div class="flex items-center justify-end gap-1">
             <%!-- Admins only: today's confirmed sign-ups (German calendar day),
-            live from MemberCounter and reset by the DayClock at Berlin
+            live from PeopleCounter and reset by the DayClock at Berlin
             midnight. Rendered only when there is something to report, so a
             quiet day adds no chrome. Links into /admin, where the dashboard
             tile shows the same figure next to yesterday's. --%>

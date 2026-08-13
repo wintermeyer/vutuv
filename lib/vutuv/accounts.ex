@@ -17,7 +17,6 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.LoginPin
-  alias Vutuv.Accounts.MemberCounter
   alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
@@ -34,6 +33,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Ordering
   alias Vutuv.Pages
+  alias Vutuv.PeopleCounter
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.WorkExperience
@@ -425,7 +425,7 @@ defmodule Vutuv.Accounts do
         welcome_notified_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
       )
 
-    MemberCounter.increment()
+    PeopleCounter.increment()
 
     # The sign-up form's Fediverse box is the second way a member can be opted
     # in, and unlike /settings/fediverse it cannot mint the actor keypair
@@ -862,13 +862,13 @@ defmodule Vutuv.Accounts do
     # FK from blocking the cascade; that column is gone (drop_audience_groups).
     {:ok, _} = Repo.delete(user)
 
-    # The live member total (the landing-page pill and the top bar's figure)
-    # counts confirmed accounts, so a deletion takes one back out the moment it
-    # commits rather than waiting for the counter's five-minute reconcile. Only
+    # The member half of the top bar's live people total counts confirmed
+    # accounts, so a deletion takes one back out the moment it commits rather
+    # than waiting for the counter's five-minute reconcile. Only
     # for an account that was ever counted, though: the abandoned-sign-up sweep
     # deletes unconfirmed registrations through this same function, and those
     # were never in the total.
-    if counted_member?(user), do: MemberCounter.decrement()
+    if counted_member?(user), do: PeopleCounter.decrement()
 
     Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
     Enum.each(job_image_tokens, &Vutuv.JobPostingImageStore.delete/1)

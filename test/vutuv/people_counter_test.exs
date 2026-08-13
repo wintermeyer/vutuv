@@ -1,10 +1,11 @@
-defmodule Vutuv.Accounts.MemberCounterTest do
+defmodule Vutuv.PeopleCounterTest do
   # async: false — the increment/count assertions read the process-global
   # counter before and after, so no other test may register a user in between.
   use Vutuv.DataCase, async: false
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.MemberCounter
+  alias Vutuv.Fediverse.Follower
+  alias Vutuv.PeopleCounter
 
   @valid_registration %{
     "emails" => %{"0" => %{"value" => "counted@example.com"}},
@@ -21,45 +22,47 @@ defmodule Vutuv.Accounts.MemberCounterTest do
     |> Plug.Test.init_test_session(%{})
   end
 
+  defp members, do: PeopleCounter.counts().members
+
   describe "the lock-free counter" do
-    test "increment/0 bumps count/0 by one without touching the database" do
-      before = MemberCounter.count()
+    test "increment/0 bumps the member half by one without touching the database" do
+      before = members()
 
-      assert :ok = MemberCounter.increment()
+      assert :ok = PeopleCounter.increment()
 
-      assert MemberCounter.count() == before + 1
+      assert members() == before + 1
     end
 
     test "an unconfirmed sign-up does not tick the counter; confirming it does (issue #781)" do
-      before = MemberCounter.count()
+      before = members()
 
       assert {:ok, user} = Accounts.register_user(build_conn(), @valid_registration)
       # The advertised total counts confirmed members, so a sign-up that has not
       # confirmed its PIN must not move the live counter.
-      assert MemberCounter.count() == before
+      assert members() == before
       refute user.email_confirmed?
 
       # First login confirms the account (email_confirmed? false -> true) and counts it.
       Accounts.login(build_conn(), user)
-      assert MemberCounter.count() == before + 1
+      assert members() == before + 1
     end
 
     test "a returning login of an already-confirmed member does not re-count" do
       user = insert(:activated_user)
-      before = MemberCounter.count()
+      before = members()
 
       Accounts.login(build_conn(), user)
 
-      assert MemberCounter.count() == before
+      assert members() == before
     end
 
     test "a legacy nil-activated account is not re-counted when it logs in" do
       user = insert(:user, email_confirmed?: nil)
-      before = MemberCounter.count()
+      before = members()
 
       Accounts.login(build_conn(), user)
 
-      assert MemberCounter.count() == before
+      assert members() == before
     end
   end
 
@@ -68,22 +71,22 @@ defmodule Vutuv.Accounts.MemberCounterTest do
       user = insert(:activated_user)
       # The factory writes the row straight to the database, so count the member
       # the way a real confirmation would before deleting them again.
-      MemberCounter.increment()
-      before = MemberCounter.count()
+      PeopleCounter.increment()
+      before = members()
 
       assert {:ok, _user} = Accounts.delete_user(user)
 
-      assert MemberCounter.count() == before - 1
+      assert members() == before - 1
     end
 
     test "deleting a legacy nil-activated account ticks the total down too" do
       user = insert(:user, email_confirmed?: nil)
-      MemberCounter.increment()
-      before = MemberCounter.count()
+      PeopleCounter.increment()
+      before = members()
 
       assert {:ok, _user} = Accounts.delete_user(user)
 
-      assert MemberCounter.count() == before - 1
+      assert members() == before - 1
     end
 
     test "deleting an abandoned sign-up leaves the total alone" do
@@ -91,29 +94,29 @@ defmodule Vutuv.Accounts.MemberCounterTest do
       # counts confirmed accounts), and the abandoned-sign-up sweep deletes it
       # through this same function — so its deletion must not tick anything down.
       user = insert(:user, email_confirmed?: false)
-      MemberCounter.increment()
-      before = MemberCounter.count()
+      PeopleCounter.increment()
+      before = members()
 
       assert {:ok, _user} = Accounts.delete_user(user)
 
-      assert MemberCounter.count() == before
+      assert members() == before
     end
 
     test "decrement/0 stops at zero instead of wrapping the unsigned cell around" do
       # Zero is only reachable in the sub-second before the first reconcile
       # seeds the cell, but an unsigned atomic wraps to 2^64-1 on a subtraction
       # that would go negative, so without the guard one stray delete would
-      # advertise eighteen quintillion members. This module is synchronous, so
+      # advertise eighteen quintillion people. This module is synchronous, so
       # draining and refilling the process-global cell is safe here.
-      start = MemberCounter.count()
-      for _ <- 1..start//1, do: MemberCounter.decrement()
-      assert MemberCounter.count() == 0
+      start = members()
+      for _ <- 1..start//1, do: PeopleCounter.decrement()
+      assert members() == 0
 
-      assert :ok = MemberCounter.decrement()
-      assert MemberCounter.count() == 0
+      assert :ok = PeopleCounter.decrement()
+      assert members() == 0
 
-      for _ <- 1..start//1, do: MemberCounter.increment()
-      assert MemberCounter.count() == start
+      for _ <- 1..start//1, do: PeopleCounter.increment()
+      assert members() == start
     end
   end
 
@@ -121,12 +124,12 @@ defmodule Vutuv.Accounts.MemberCounterTest do
     # An isolated instance with its own atomic cell and topic, so it neither
     # disturbs nor depends on the application-wide singleton.
     setup do
-      ref = :atomics.new(1, signed: false)
-      topic = "member_count:test:#{System.unique_integer([:positive])}"
+      ref = :atomics.new(2, signed: false)
+      topic = "people_count:test:#{System.unique_integer([:positive])}"
 
       pid =
         start_supervised!(
-          {MemberCounter,
+          {PeopleCounter,
            name: nil,
            ref: ref,
            topic: topic,
@@ -148,31 +151,51 @@ defmodule Vutuv.Accounts.MemberCounterTest do
       :atomics.add(ref, 1, 1)
       :atomics.add(ref, 1, 1)
 
-      assert_receive {:member_count, 3}, 500
+      assert_receive {:people_count, %{members: 3, fediverse: 0, total: 3}}, 500
 
       # While the value is stable it stops broadcasting — no per-tick spam.
-      refute_receive {:member_count, _}, 100
+      refute_receive {:people_count, _}, 100
     end
 
     test "broadcasts again when the value changes", %{ref: ref} do
       :atomics.add(ref, 1, 1)
-      assert_receive {:member_count, 1}, 500
+      assert_receive {:people_count, %{total: 1}}, 500
 
       :atomics.add(ref, 1, 1)
-      assert_receive {:member_count, 2}, 500
+      assert_receive {:people_count, %{total: 2}}, 500
+    end
+
+    test "a Fediverse account arriving moves the total on its own", %{ref: ref} do
+      :atomics.add(ref, 1, 2)
+      assert_receive {:people_count, %{members: 2, fediverse: 0, total: 2}}, 500
+
+      # The second slot is the distinct Fediverse head count; the pill adds the
+      # two halves, so a remote Follow ticks the same figure a sign-up does.
+      :atomics.add(ref, 2, 1)
+      assert_receive {:people_count, %{members: 2, fediverse: 1, total: 3}}, 500
     end
   end
 
   describe "reconciling from the database" do
-    test "seeds the cell from the authoritative user count" do
-      insert_list(3, :activated_user)
+    test "seeds both halves and advertises their sum" do
+      users = insert_list(3, :activated_user)
 
-      ref = :atomics.new(1, signed: false)
-      topic = "member_count:reconcile:#{System.unique_integer([:positive])}"
+      # One remote account following two of those members: two follower rows,
+      # one person. A row count would advertise four people here.
+      for user <- Enum.take(users, 2) do
+        Repo.insert!(%Follower{
+          user_id: user.id,
+          actor_uri: "https://remote.example/users/frida",
+          inbox_uri: "https://remote.example/users/frida/inbox"
+        })
+      end
+
+      ref = :atomics.new(2, signed: false)
+      topic = "people_count:reconcile:#{System.unique_integer([:positive])}"
       Phoenix.PubSub.subscribe(Vutuv.PubSub, topic)
 
       start_supervised!(
-        {MemberCounter,
+        {PeopleCounter,
          name: nil,
          ref: ref,
          topic: topic,
@@ -180,10 +203,11 @@ defmodule Vutuv.Accounts.MemberCounterTest do
          reconcile?: true,
          broadcast?: true,
          reconcile_interval: 60_000,
+         fediverse_interval: 60_000,
          broadcast_interval: 30}
       )
 
-      assert_receive {:member_count, 3}, 1000
+      assert_receive {:people_count, %{members: 3, fediverse: 1, total: 4}}, 1000
     end
   end
 end

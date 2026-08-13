@@ -675,14 +675,14 @@ defmodule VutuvWeb.ShellLiveTest do
 
       refute has_element?(view, @pill)
 
-      # Vutuv.Accounts.MemberCounter broadcasts the new member total the moment
-      # a sign-up confirms; the shell recomputes today's figure from it.
+      # Vutuv.PeopleCounter broadcasts the new figures the moment a sign-up
+      # confirms; the shell recomputes today's tally from the member half.
       joined_today(1)
-      send(view.pid, {:member_count, 1})
+      send(view.pid, {:people_count, %{members: 1, fediverse: 0, total: 1}})
       assert has_element?(view, @pill, "1")
 
       joined_today(1)
-      send(view.pid, {:member_count, 2})
+      send(view.pid, {:people_count, %{members: 2, fediverse: 0, total: 2}})
       assert has_element?(view, @pill, "2")
     end
 
@@ -728,13 +728,20 @@ defmodule VutuvWeb.ShellLiveTest do
     end
   end
 
-  describe "the member total in the top bar" do
-    @total "#member-total"
+  describe "the people total in the top bar" do
+    @total "#people-total"
 
-    # The application-wide MemberCounter is quiet in tests (its timers are off),
-    # so the only `{:member_count, n}` on the topic is the one each test sends.
-    defp broadcast_total(n),
-      do: Phoenix.PubSub.broadcast(Vutuv.PubSub, "member_count", {:member_count, n})
+    # The application-wide PeopleCounter is quiet in tests (its timers are off),
+    # so the only `{:people_count, …}` on the topic is the one each test sends.
+    defp broadcast_counts(members, fediverse \\ 0) do
+      Phoenix.PubSub.broadcast(
+        Vutuv.PubSub,
+        "people_count",
+        {:people_count, %{members: members, fediverse: fediverse, total: members + fediverse}}
+      )
+    end
+
+    defp broadcast_total(n), do: broadcast_counts(n)
 
     test "ticks the exact total up when the counter broadcasts a new value", %{conn: conn} do
       {:ok, view, _html} =
@@ -750,9 +757,37 @@ defmodule VutuvWeb.ShellLiveTest do
       assert has_element?(view, @total, "60,124")
     end
 
+    test "adds the Fediverse accounts to the members and explains the mixture", %{conn: conn} do
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: %{"locale" => "de"})
+
+      # 5.508 members here and 412 distinct accounts following them from other
+      # servers: one figure, because a reader asking how big this place is does
+      # not care which side of the fence somebody stands on.
+      broadcast_counts(5_508, 412)
+
+      assert has_element?(view, @total, "5.920")
+
+      assert has_element?(
+               view,
+               ~s(#{@total}[title="5.920 Personen: 5.508 Mitglieder hier und 412 Fediverse-Accounts, die ihnen folgen"])
+             )
+    end
+
+    test "keeps the plain label while nobody follows from the Fediverse", %{conn: conn} do
+      # An installation with no remote followers (every intranet one, and this
+      # one before it federated) would otherwise read "… and 0 accounts".
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: %{"locale" => "de"})
+
+      broadcast_counts(5_508, 0)
+
+      assert has_element?(view, ~s(#{@total}[title="5.508 Personen"]))
+    end
+
     test "shows the total to a logged-out visitor too", %{conn: conn} do
-      # The member total is public (the landing page has advertised it all
-      # along), so the chrome carries it whether or not anyone is signed in.
+      # The people total is public (the landing page has advertised the figure
+      # all along), so the chrome carries it whether or not anyone is signed in.
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
 
       broadcast_total(60_123)
@@ -767,7 +802,7 @@ defmodule VutuvWeb.ShellLiveTest do
       broadcast_total(60_123)
 
       assert has_element?(view, @total, "60.123")
-      assert has_element?(view, ~s(#{@total}[title="60.123 Mitglieder"]))
+      assert has_element?(view, ~s(#{@total}[title="60.123 Personen"]))
     end
 
     test "links to the public member directory", %{conn: conn} do
@@ -797,7 +832,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
       broadcast_total(60_123)
 
-      assert has_element?(view, @total, "Mitglieder")
+      assert has_element?(view, @total, "Personen")
       # No breakpoint gate for a visitor: their bar holds a wordmark, this pill
       # and a Log in button, with room to spare even on a phone. Asserted on the
       # word's own span — the pill's `md:hidden lg:inline-flex` contains the
@@ -816,7 +851,7 @@ defmodule VutuvWeb.ShellLiveTest do
       # search, bookmarks, messages, alerts and an avatar, and the documented
       # spare room below md was measured with exactly that.
       assert has_element?(view, "#{@total} span.hidden")
-      assert has_element?(view, @total, "members")
+      assert has_element?(view, @total, "people")
     end
 
     # The figure arrives over PubSub while the reader is looking elsewhere, so a
@@ -827,11 +862,11 @@ defmodule VutuvWeb.ShellLiveTest do
 
       # Not on the first render: that would make every page load open with the
       # number sliding in, which reads as a page still loading.
-      refute html =~ "member-total__figure--tick"
+      refute html =~ "people-total__figure--tick"
 
       broadcast_total(60_123)
 
-      assert has_element?(view, "#{@total} span.member-total__figure--tick")
+      assert has_element?(view, "#{@total} span.people-total__figure--tick")
     end
 
     # LiveView patches text in place and a patched text node animates nothing,
@@ -840,11 +875,11 @@ defmodule VutuvWeb.ShellLiveTest do
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
 
       broadcast_total(60_123)
-      assert has_element?(view, "#member-total-figure-60123")
+      assert has_element?(view, "#people-total-figure-60123")
 
       broadcast_total(60_124)
-      assert has_element?(view, "#member-total-figure-60124")
-      refute has_element?(view, "#member-total-figure-60123")
+      assert has_element?(view, "#people-total-figure-60124")
+      refute has_element?(view, "#people-total-figure-60123")
     end
 
     test "keeps the account controls at the right edge without it", %{conn: conn} do
@@ -854,7 +889,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
       broadcast_total(0)
 
-      assert has_element?(view, "#member-total-slot")
+      assert has_element?(view, "#people-total-slot")
     end
   end
 end

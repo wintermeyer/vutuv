@@ -115,7 +115,7 @@ config :vutuv, :ssrf_resolver, fn _host, _family -> {:ok, [{93, 184, 216, 34}]} 
 # Moderation emails deliver inline in tests: the async task would swallow the
 # Swoosh test adapter's {:email, ...} message (it goes to the calling process).
 config :vutuv, :async_email, false
-config :vutuv, :reconcile_member_count, false
+config :vutuv, :reconcile_people_count, false
 config :vutuv, :refresh_popular_users, false
 config :vutuv, :refresh_top_posters, false
 config :vutuv, :refresh_popular_posts, false

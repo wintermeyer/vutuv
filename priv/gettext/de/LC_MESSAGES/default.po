@@ -442,8 +442,8 @@ msgstr "Einloggen"
 msgid "Log Out"
 msgstr "Ausloggen"
 
-#: lib/vutuv_web/live/shell_live.ex:797
-#: lib/vutuv_web/live/shell_live.ex:834
+#: lib/vutuv_web/live/shell_live.ex:828
+#: lib/vutuv_web/live/shell_live.ex:865
 #: lib/vutuv_web/templates/post/teaser.html.heex:34
 #: lib/vutuv_web/templates/session/new.html.heex:38
 #, elixir-autogen
@@ -640,8 +640,8 @@ msgstr "Speichern"
 #: lib/vutuv_web/live/job_board_live.ex:418
 #: lib/vutuv_web/live/search_live.ex:42
 #: lib/vutuv_web/live/search_live.ex:399
-#: lib/vutuv_web/live/shell_live.ex:665
-#: lib/vutuv_web/live/shell_live.ex:817
+#: lib/vutuv_web/live/shell_live.ex:696
+#: lib/vutuv_web/live/shell_live.ex:848
 #: lib/vutuv_web/live/tag_live/timeline.ex:237
 #: lib/vutuv_web/templates/admin/account/index.html.heex:23
 #: lib/vutuv_web/templates/admin/account/index.html.heex:39
@@ -1185,7 +1185,7 @@ msgstr "Lokalisierung hinzufügen"
 #: lib/vutuv_web/live/admin/user_delete_live.ex:104
 #: lib/vutuv_web/live/admin/user_detail_live.ex:68
 #: lib/vutuv_web/live/admin/user_live.ex:165
-#: lib/vutuv_web/live/shell_live.ex:769
+#: lib/vutuv_web/live/shell_live.ex:800
 #: lib/vutuv_web/templates/admin/account/frozen.html.heex:3
 #: lib/vutuv_web/templates/admin/account/index.html.heex:3
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:4
@@ -1626,7 +1626,7 @@ msgstr "Adressen von %{name}"
 msgid "Admin control panel"
 msgstr "Admin-Bereich"
 
-#: lib/vutuv_web/live/shell_live.ex:820
+#: lib/vutuv_web/live/shell_live.ex:851
 #, elixir-autogen, elixir-format
 msgid "Alerts"
 msgstr "Mitteilungen"
@@ -1742,7 +1742,7 @@ msgstr ""
 " von jemandem, den Sie kennen oder interessant finden, und klicken Sie auf "
 "Folgen!"
 
-#: lib/vutuv_web/live/shell_live.ex:788
+#: lib/vutuv_web/live/shell_live.ex:819
 #: lib/vutuv_web/views/settings_html.ex:262
 #, elixir-autogen, elixir-format
 msgid "Log out"
@@ -1771,14 +1771,14 @@ msgstr "Nachricht"
 
 #: lib/vutuv_web/live/message_live/index.ex:50
 #: lib/vutuv_web/live/message_live/index.ex:622
-#: lib/vutuv_web/live/shell_live.ex:681
-#: lib/vutuv_web/live/shell_live.ex:819
+#: lib/vutuv_web/live/shell_live.ex:712
+#: lib/vutuv_web/live/shell_live.ex:850
 #: lib/vutuv_web/templates/layout/app.html.heex:123
 #, elixir-autogen, elixir-format
 msgid "Messages"
 msgstr "Nachrichten"
 
-#: lib/vutuv_web/live/shell_live.ex:575
+#: lib/vutuv_web/live/shell_live.ex:604
 #, elixir-autogen, elixir-format
 msgid "Network"
 msgstr "Netzwerk"
@@ -1802,7 +1802,7 @@ msgstr "Noch nichts Neues."
 #: lib/vutuv_web/components/ui.ex:3855
 #: lib/vutuv_web/live/notification_live/index.ex:114
 #: lib/vutuv_web/live/notification_live/index.ex:338
-#: lib/vutuv_web/live/shell_live.ex:692
+#: lib/vutuv_web/live/shell_live.ex:723
 #: lib/vutuv_web/templates/layout/app.html.heex:124
 #: lib/vutuv_web/templates/settings/notifications.html.heex:8
 #, elixir-autogen, elixir-format
@@ -2157,8 +2157,8 @@ msgstr "Beitrag bearbeiten"
 #: lib/vutuv_web/live/organization_live/feed.ex:79
 #: lib/vutuv_web/live/post_live/feed.ex:159
 #: lib/vutuv_web/live/post_live/feed.ex:936
-#: lib/vutuv_web/live/shell_live.ex:555
-#: lib/vutuv_web/live/shell_live.ex:815
+#: lib/vutuv_web/live/shell_live.ex:584
+#: lib/vutuv_web/live/shell_live.ex:846
 #: lib/vutuv_web/templates/layout/app.html.heex:122
 #, elixir-autogen, elixir-format
 msgid "Feed"
@@ -2333,7 +2333,7 @@ msgid "Upload failed."
 msgstr "Upload fehlgeschlagen."
 
 #: lib/vutuv_web/components/ui.ex:4119
-#: lib/vutuv_web/live/shell_live.ex:735
+#: lib/vutuv_web/live/shell_live.ex:766
 #: lib/vutuv_web/templates/post/index.html.heex:17
 #: lib/vutuv_web/templates/post/teaser.html.heex:55
 #: lib/vutuv_web/views/settings_html.ex:209
@@ -2423,8 +2423,8 @@ msgstr "Lesezeichen setzen"
 #: lib/vutuv_web/agent_docs/markdown.ex:997
 #: lib/vutuv_web/live/post_live/saved.ex:175
 #: lib/vutuv_web/live/post_live/saved.ex:488
-#: lib/vutuv_web/live/shell_live.ex:674
-#: lib/vutuv_web/live/shell_live.ex:740
+#: lib/vutuv_web/live/shell_live.ex:705
+#: lib/vutuv_web/live/shell_live.ex:771
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:172
 #: lib/vutuv_web/views/admin/report_html.ex:38
 #, elixir-autogen, elixir-format
@@ -2445,7 +2445,7 @@ msgstr "Gefällt mir"
 #: lib/vutuv_web/live/notification_live/index.ex:971
 #: lib/vutuv_web/live/post_live/saved.ex:174
 #: lib/vutuv_web/live/post_live/saved.ex:485
-#: lib/vutuv_web/live/shell_live.ex:743
+#: lib/vutuv_web/live/shell_live.ex:774
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:159
 #: lib/vutuv_web/templates/settings/privacy.html.heex:91
 #: lib/vutuv_web/views/admin/report_html.ex:37
@@ -3217,8 +3217,8 @@ msgid "Private message"
 msgstr "Private Nachricht"
 
 #: lib/vutuv_web/components/ui.ex:3787
-#: lib/vutuv_web/live/shell_live.ex:568
-#: lib/vutuv_web/live/shell_live.ex:824
+#: lib/vutuv_web/live/shell_live.ex:597
+#: lib/vutuv_web/live/shell_live.ex:855
 #: lib/vutuv_web/templates/import/new.html.heex:15
 #: lib/vutuv_web/templates/import/preview.html.heex:55
 #: lib/vutuv_web/views/admin/moderation_html.ex:28
@@ -5529,7 +5529,7 @@ msgstr "Sie können auf diesen Beitrag nicht mehr antworten."
 msgid "Content under review"
 msgstr "Inhalte in Prüfung"
 
-#: lib/vutuv_web/live/shell_live.ex:722
+#: lib/vutuv_web/live/shell_live.ex:753
 #, elixir-autogen, elixir-format
 msgid "Account menu"
 msgstr "Kontomenü"
@@ -5551,7 +5551,7 @@ msgstr "Menüs und Dialoge schließen"
 msgid "General"
 msgstr "Allgemeines"
 
-#: lib/vutuv_web/live/shell_live.ex:779
+#: lib/vutuv_web/live/shell_live.ex:810
 #: lib/vutuv_web/templates/layout/app.html.heex:154
 #, elixir-autogen, elixir-format
 msgid "Keyboard shortcuts"
@@ -5570,7 +5570,7 @@ msgstr "Navigation"
 #: lib/vutuv_web/live/account_activity_live.ex:115
 #: lib/vutuv_web/live/fediverse_followers_live.ex:168
 #: lib/vutuv_web/live/fediverse_following_live.ex:303
-#: lib/vutuv_web/live/shell_live.ex:759
+#: lib/vutuv_web/live/shell_live.ex:790
 #: lib/vutuv_web/templates/email/confirm.html.heex:7
 #: lib/vutuv_web/templates/export/index.html.heex:11
 #: lib/vutuv_web/templates/job_reference/check.html.heex:10
@@ -5624,8 +5624,8 @@ msgstr "Nächster Beitrag im Feed"
 msgid "Previous post in the feed"
 msgstr "Vorheriger Beitrag im Feed"
 
-#: lib/vutuv_web/live/shell_live.ex:548
-#: lib/vutuv_web/live/shell_live.ex:808
+#: lib/vutuv_web/live/shell_live.ex:577
+#: lib/vutuv_web/live/shell_live.ex:839
 #, elixir-autogen, elixir-format
 msgid "Main navigation"
 msgstr "Hauptnavigation"
@@ -8925,15 +8925,15 @@ msgstr ""
 "Alle %{count} Mitglieder, deren Profile für Suchmaschinen freigegeben sind, "
 "alphabetisch nach Nachnamen sortiert."
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:210
+#: lib/vutuv_web/agent_docs/list_docs.ex:216
 #, elixir-autogen, elixir-format
 msgid "All members who allow search engines to index their profile, grouped by the first letter of their last name."
 msgstr ""
 "Alle Mitglieder, die die Indexierung ihres Profils durch Suchmaschinen "
 "erlauben, gruppiert nach dem Anfangsbuchstaben des Nachnamens."
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:195
-#: lib/vutuv_web/controllers/directory_controller.ex:35
+#: lib/vutuv_web/agent_docs/list_docs.ex:198
+#: lib/vutuv_web/controllers/directory_controller.ex:44
 #: lib/vutuv_web/templates/directory/index.html.heex:2
 #: lib/vutuv_web/templates/directory/index.html.heex:3
 #: lib/vutuv_web/templates/directory/show.html.heex:5
@@ -8942,14 +8942,14 @@ msgstr ""
 msgid "Member directory"
 msgstr "Mitgliederverzeichnis"
 
-#: lib/vutuv_web/templates/directory/index.html.heex:29
+#: lib/vutuv_web/templates/directory/index.html.heex:45
 #: lib/vutuv_web/templates/directory/show.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Members by initial"
 msgstr "Mitglieder nach Anfangsbuchstaben"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:227
-#: lib/vutuv_web/controllers/directory_controller.ex:62
+#: lib/vutuv_web/agent_docs/list_docs.ex:253
+#: lib/vutuv_web/controllers/directory_controller.ex:74
 #: lib/vutuv_web/templates/directory/show.html.heex:2
 #, elixir-autogen, elixir-format
 msgid "Members: %{letter}"
@@ -8967,7 +8967,7 @@ msgid_plural "%{formatted} members"
 msgstr[0] "Ein Mitglied"
 msgstr[1] "%{formatted} Mitglieder"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:233
+#: lib/vutuv_web/agent_docs/list_docs.ex:259
 #, elixir-autogen, elixir-format
 msgid "The member directory's %{letter} page, sorted by last name."
 msgstr ""
@@ -12509,7 +12509,7 @@ msgstr "Organisation wieder freigegeben."
 #: lib/vutuv_web/live/organization_live/index.ex:30
 #: lib/vutuv_web/live/organization_live/index.ex:61
 #: lib/vutuv_web/live/post_live/saved.ex:501
-#: lib/vutuv_web/live/shell_live.ex:750
+#: lib/vutuv_web/live/shell_live.ex:781
 #: lib/vutuv_web/templates/followee/index.html.heex:14
 #: lib/vutuv_web/templates/follower/index.html.heex:13
 #: lib/vutuv_web/templates/layout/app.html.heex:83
@@ -12855,7 +12855,7 @@ msgstr "Stellenbezeichnung"
 #: lib/vutuv_web/live/job_board_live.ex:45
 #: lib/vutuv_web/live/job_board_live.ex:211
 #: lib/vutuv_web/live/post_live/saved.ex:504
-#: lib/vutuv_web/live/shell_live.ex:582
+#: lib/vutuv_web/live/shell_live.ex:611
 #: lib/vutuv_web/templates/layout/app.html.heex:81
 #: lib/vutuv_web/templates/qualification/show.html.heex:38
 #, elixir-autogen, elixir-format
@@ -14562,7 +14562,7 @@ msgid_plural "Endorsed by %{name} and %{formatted} others"
 msgstr[0] "Empfohlen von %{name} und %{formatted} weiteren"
 msgstr[1] "Empfohlen von %{name} und %{formatted} weiteren"
 
-#: lib/vutuv_web/live/shell_live.ex:424
+#: lib/vutuv_web/live/shell_live.ex:434
 #, elixir-autogen, elixir-format
 msgid "%{formatted} new member today"
 msgid_plural "%{formatted} new members today"
@@ -18773,13 +18773,6 @@ msgstr "Noch nichts aus anderen Netzwerken gespeichert. Das Lesezeichen an einem
 msgid "Other networks"
 msgstr "Andere Netzwerke"
 
-#: lib/vutuv_web/live/shell_live.ex:443
-#, elixir-autogen, elixir-format
-msgid "%{formatted} member"
-msgid_plural "%{formatted} members"
-msgstr[0] "%{formatted} Mitglied"
-msgstr[1] "%{formatted} Mitglieder"
-
 #: lib/vutuv_web/live/fediverse_post_live.ex:75
 #, elixir-autogen, elixir-format
 msgid "A post by %{name} (another network)"
@@ -18987,13 +18980,6 @@ msgstr "Beiträge, Nachrichten und das Fediverse gleich dazu"
 msgid "Write a post, react with a heart, a repost or a reply, or message somebody privately. And you are not stuck among vutuv members: vutuv is part of the Fediverse, the union of independent networks that Mastodon belongs to as well. Follow an account over there and its posts arrive in your feed; the other way round, people there can follow you and see your public posts. Both directions, and entirely your choice: at sign-up you decide whether to use vutuv with or without the Fediverse, and you can change that at any time in the settings."
 msgstr "Beitrag schreiben, mit Herz, Repost oder Antwort reagieren, oder jemandem privat schreiben. Und Sie bleiben nicht unter vutuv-Mitgliedern: vutuv gehört zum Fediverse, dem Verbund unabhängiger Netzwerke, zu dem auch Mastodon zählt. Folgen Sie dort einem Konto, und dessen Beiträge landen in Ihrem Feed; umgekehrt können Leute von dort Ihnen folgen und Ihre öffentlichen Beiträge sehen. In beide Richtungen, und ganz Ihre Entscheidung: Sie wählen bei der Anmeldung, ob Sie vutuv mit oder ohne Fediverse benutzen möchten, und können das jederzeit in den Einstellungen ändern."
 
-#: lib/vutuv_web/live/shell_live.ex:436
-#, elixir-autogen, elixir-format
-msgid "member"
-msgid_plural "members"
-msgstr[0] "Mitglied"
-msgstr[1] "Mitglieder"
-
 #: lib/vutuv_web/templates/page/index.html.heex:510
 #, elixir-autogen, elixir-format
 msgid "Download everything you have here at any time, in a machine-readable file. Not on request, not after a waiting period: from your settings, whenever you like."
@@ -19128,7 +19114,7 @@ msgstr ""
 "Verifizierte Webseiten der Autorin oder des Autors, hier verlinkt: "
 "%{addresses}"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:214
+#: lib/vutuv_web/agent_docs/list_docs.ex:219
 #, elixir-autogen, elixir-format
 msgid "%{listed} of %{total} members are listed here; the others do not open their profile to search engines."
 msgstr ""
@@ -20856,7 +20842,7 @@ msgstr "Sie dürfen nicht mehr im Namen dieser Organisation schreiben."
 msgid "A post in an organization's name is always public."
 msgstr "Ein Beitrag im Namen einer Organisation ist immer öffentlich."
 
-#: lib/vutuv_web/live/shell_live.ex:514
+#: lib/vutuv_web/live/shell_live.ex:543
 #, elixir-autogen, elixir-format
 msgid "Open the page"
 msgstr "Seite öffnen"
@@ -20876,7 +20862,7 @@ msgstr "Beendet, im Namen einer Organisation zu schreiben"
 msgid "Write as %{name} for now"
 msgstr "Vorerst als %{name} schreiben"
 
-#: lib/vutuv_web/live/shell_live.ex:524
+#: lib/vutuv_web/live/shell_live.ex:553
 #, elixir-autogen, elixir-format
 msgid "Write as myself again"
 msgstr "Wieder als ich selbst schreiben"
@@ -20886,7 +20872,7 @@ msgstr "Wieder als ich selbst schreiben"
 msgid "You are writing as %{name} now."
 msgstr "Sie schreiben jetzt als %{name}."
 
-#: lib/vutuv_web/live/shell_live.ex:500
+#: lib/vutuv_web/live/shell_live.ex:529
 #, elixir-autogen, elixir-format
 msgid "You are writing as %{name}."
 msgstr "Sie schreiben als %{name}."
@@ -21249,3 +21235,36 @@ msgstr "Sie folgen #%{tag} hier bereits."
 #, elixir-autogen, elixir-format
 msgid "You are on this vutuv yourself, so you now follow #%{tag} right here."
 msgstr "Sie sind selbst auf diesem vutuv. Sie folgen #%{tag} jetzt direkt hier."
+
+#: lib/vutuv_web/agent_docs/list_docs.ex:238
+#: lib/vutuv_web/templates/directory/index.html.heex:32
+#, elixir-autogen, elixir-format
+msgid "%{fediverse} account from the Fediverse follows members, pages or topics here; together that is %{people} people."
+msgid_plural "%{fediverse} accounts from the Fediverse follow members, pages or topics here; together that is %{people} people."
+msgstr[0] ""
+"%{fediverse} Account aus dem Fediverse folgt Mitgliedern, Seiten oder Themen "
+"hier; zusammen sind das %{people} Personen."
+msgstr[1] ""
+"%{fediverse} Accounts aus dem Fediverse folgen Mitgliedern, Seiten oder "
+"Themen hier; zusammen sind das %{people} Personen."
+
+#: lib/vutuv_web/live/shell_live.ex:472
+#, elixir-autogen, elixir-format
+msgid "%{formatted} people: %{members} members here and %{fediverse} Fediverse accounts that follow them"
+msgstr ""
+"%{formatted} Personen: %{members} Mitglieder hier und %{fediverse} "
+"Fediverse-Accounts, die ihnen folgen"
+
+#: lib/vutuv_web/live/shell_live.ex:463
+#, elixir-autogen, elixir-format
+msgid "%{formatted} person"
+msgid_plural "%{formatted} people"
+msgstr[0] "%{formatted} Person"
+msgstr[1] "%{formatted} Personen"
+
+#: lib/vutuv_web/live/shell_live.ex:451
+#, elixir-autogen, elixir-format
+msgid "person"
+msgid_plural "people"
+msgstr[0] "Person"
+msgstr[1] "Personen"

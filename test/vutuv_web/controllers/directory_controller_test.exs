@@ -62,6 +62,47 @@ defmodule VutuvWeb.DirectoryControllerTest do
       assert html =~ "Wer sein Profil nicht für Suchmaschinen freigibt, erscheint hier nicht."
     end
 
+    test "names the Fediverse accounts the top bar's people total adds in", %{
+      conn: conn,
+      adler: adler,
+      ozil: ozil
+    } do
+      # This is the page the pill links to, so the figure it advertises has to
+      # be findable here: three members plus one remote account (following two
+      # of them, hence one person and not two) is the "4 people" in the bar.
+      for user <- [adler, ozil] do
+        Repo.insert!(%Vutuv.Fediverse.Follower{
+          user_id: user.id,
+          actor_uri: "https://remote.example/users/frida",
+          inbox_uri: "https://remote.example/users/frida/inbox"
+        })
+      end
+
+      html = get(conn, ~p"/system/members") |> html_response(200)
+
+      assert html =~ "1 account from the Fediverse follows members, pages or topics here"
+      assert html =~ "together that is 4 people"
+
+      german =
+        conn
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> get(~p"/system/members")
+        |> html_response(200)
+
+      assert german =~
+               "1 Account aus dem Fediverse folgt Mitgliedern, Seiten oder Themen hier"
+
+      assert german =~ "zusammen sind das 4 Personen."
+    end
+
+    test "says nothing about the Fediverse when nobody follows from there", %{conn: conn} do
+      # An installation with no remote followers (every intranet one) would
+      # otherwise carry a sentence about zero accounts.
+      html = get(conn, ~p"/system/members") |> html_response(200)
+
+      refute html =~ "from the Fediverse"
+    end
+
     test "the directory page itself is indexable", %{conn: conn} do
       conn = get(conn, ~p"/system/members")
 

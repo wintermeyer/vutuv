@@ -343,17 +343,35 @@ Regression tests in `user_profile_perf_test.exs` and
 `post_feed_live_test.exs` pin both sides: a hit connects on a handful of
 queries, a consumed stash still full-loads.
 
-## Live member counter
+## Live people counter
 
-The logged-out landing page shows the **exact** number of members and ticks it
-up in real time as people register, and so does the middle of the top bar on
-every page. `Vutuv.Accounts.MemberCounter` keeps the total in a lock-free
-`:atomics` cell (ref in `:persistent_term`), so the per-render read (`count/0`)
-and the two writes are O(1) and never hit the database — a signup spike just
-races on one atomic add.
+The middle of the top bar shows, on every page, the **exact** number of people
+around this installation and ticks it up in real time. That figure is two
+populations added up, because a reader asking how big this place is does not
+care which side of the fence somebody stands on:
 
-Both writes are conditional on the account being one the advertised total
-counts, i.e. a **confirmed** one (`Accounts.count_users/0` counts by
+* the confirmed **members** here (`Vutuv.Accounts.count_users/0`), and
+* the distinct remote **accounts** that follow a member, a page or a topic of
+  this installation from the Fediverse
+  (`Vutuv.Fediverse.distinct_follower_count/0`).
+
+**Nobody is counted twice.** `fediverse_followers` holds one row per (actor,
+followed thing), so one Mastodon account subscribed to two members and three
+tags owns five rows and is one person — hence a `count(distinct actor_uri)`
+rather than a row count (the row figure is what `Fediverse.stats/0` reports to
+the admin dashboard as `remote_followers`, and it stays that). Actors on our
+own hosts (the site, its `www.` alias, the tag host) are left out: such a
+person is already in the member half. What the count cannot see is one human
+running two Mastodon accounts, or a member who also follows us from elsewhere —
+those are two accounts, and two is what it says.
+
+`Vutuv.PeopleCounter` keeps both halves in a lock-free `:atomics` cell (slot 1
+members, slot 2 Fediverse accounts, ref in `:persistent_term`), so the
+per-render read (`counts/0`) and the two member writes are O(1) and never hit
+the database — a signup spike just races on one atomic add.
+
+Both member writes are conditional on the account being one the advertised
+total counts, i.e. a **confirmed** one (`Accounts.count_users/0` counts by
 `account_confirmed_row/1`):
 
 * `increment/0` is called from `Accounts.activate_user/1`, on a genuine first
@@ -367,33 +385,49 @@ counts, i.e. a **confirmed** one (`Accounts.count_users/0` counts by
   subtraction that would cross zero — only reachable in the sub-second before
   the first reconcile seeds it — is clamped instead of wrapping to 2^64-1.
 
-A single owner GenServer seeds the cell from the DB at boot, re-reads the
-authoritative count on a slow timer (self-healing against any out-of-band
-change), and broadcasts the value only when it changed, so a burst of signups
-coalesces into at most one PubSub message per tick instead of a fan-out storm.
+The two halves move in deliberately different ways. A sign-up or a deletion
+happens in this application, so it ticks the member slot at once. A remote
+Follow arrives in the inbox, where the interesting question is not "one more"
+but "is this account already counted somewhere else" — a question only the
+database can answer. Rather than teach eight write paths (three add, three
+remove, the pruner, an instance block) to ask it and risk one of them
+forgetting, the owner process re-reads the whole head count **once a minute**.
+So a new Fediverse follower shows up within a minute rather than instantly, and
+there is exactly one place that decides what the figure means. The read is a
+single aggregate over `fediverse_followers`, served by that table's
+`actor_uri` index.
 
-Three readers consume that broadcast:
+A single owner GenServer seeds both slots from the DB at boot, re-reads the
+authoritative member count on a slow timer (self-healing against any
+out-of-band change) and the Fediverse head count on the one-minute timer, and
+broadcasts `{:people_count, %{members:, fediverse:, total:}}` only when the
+figures changed, so a burst coalesces into at most one PubSub message per tick
+instead of a fan-out storm.
 
-The landing page's hero pill is the embedded `VutuvWeb.MemberCountLive`
-(rendered via `live_render`, like the shell).
+Two readers consume that broadcast:
 
-The top bar's member total (`#member-total` in `ShellLive`) is the same figure
-in the site chrome, so it is on every page. **Every** socket subscribes —
-logged in or not, since the total is public — and takes the new number straight
-from the message. It is `delimited_count/1`, the exact grouped figure, never a
-compacted "60K": a rounded total would never visibly move, and moving is the
-point. Zero renders nothing (the window before the first reconcile), and the
-slot around it is always rendered so the bar keeps its shape either way. The
-pill links to the public member directory at `/system/members`.
+The top bar's people total (`#people-total` in `ShellLive`) is on every page.
+**Every** socket subscribes — logged in or not, since the total is public — and
+takes the new figures straight from the message. It is `delimited_count/1`, the
+exact grouped figure, never a compacted "60K": a rounded total would never
+visibly move, and moving is the point. The visible word beside it is
+"people"/"Personen", and the pill's `title` spells the mixture out ("5,920
+people: 5,508 members here and 412 Fediverse accounts that follow them")
+whenever the Fediverse half is not zero — an installation nobody follows from
+out there keeps the plain "5,508 people". Zero renders nothing (the window
+before the first reconcile), and the slot around it is always rendered so the
+bar keeps its shape either way. The pill links to the public member directory
+at `/system/members`, which prints the same breakdown in words so the figure a
+visitor clicked can be found on the page it takes them to.
 
-The same broadcast drives a third, **admin-only** reader: the top bar's "new
-members today" pill (`#new-members-today` in `ShellLive`), which shows how many
-sign-ups confirmed since Berlin midnight and links into `/admin`. Only an admin
-socket runs its query (every socket now receives the messages, but the
-`recount` is gated on `user_admin?`), so nobody else pays for it, and the pill
-is rendered only above zero — a quiet day adds no chrome. Each
-`{:member_count, n}` message makes an admin socket re-read
-`Vutuv.Dashboard.registrations_today/0` (the figure the admin
-dashboard's "New members" tile shows) rather than adjusting a running tally, so
-it cannot drift; `Vutuv.DayClock`'s midnight tick empties it out for the new
-day.
+The second reader is **admin-only**: the top bar's "new members today" pill
+(`#new-members-today` in `ShellLive`), which shows how many sign-ups confirmed
+since Berlin midnight and links into `/admin`. Only an admin socket runs its
+query (every socket receives the messages, but the `recount` is gated on
+`user_admin?`), and only when the **member** half is what moved — a Fediverse
+follower arriving says nothing about today's registrations. The pill is
+rendered only above zero, so a quiet day adds no chrome. Each such message
+makes an admin socket re-read `Vutuv.Dashboard.registrations_today/0` (the
+figure the admin dashboard's "New members" tile shows) rather than adjusting a
+running tally, so it cannot drift; `Vutuv.DayClock`'s midnight tick empties it
+out for the new day.

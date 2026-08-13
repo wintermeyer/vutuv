@@ -41,9 +41,10 @@ defmodule Vutuv.Application do
       [
         Vutuv.Repo,
         {Phoenix.PubSub, name: Vutuv.PubSub},
-        # Owns the live member counter behind the landing page. Starts after the
-        # Repo (it seeds from it) and PubSub (it broadcasts over it).
-        Vutuv.Accounts.MemberCounter,
+        # Owns the live people counter in the top bar (members here plus the
+        # distinct Fediverse accounts following them). Starts after the Repo (it
+        # seeds from it) and PubSub (it broadcasts over it).
+        Vutuv.PeopleCounter,
         # Snapshots the "most followed members" pool for the who-to-follow
         # rails and the public listing. Starts after the Repo (it seeds the
         # snapshot from it).

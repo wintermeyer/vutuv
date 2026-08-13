@@ -760,6 +760,50 @@ defmodule Vutuv.Fediverse do
     }
   end
 
+  @doc """
+  How many distinct remote **accounts** follow anything on this installation —
+  a member, a page or a topic.
+
+  The people half of the top bar's total (`Vutuv.PeopleCounter`), which is why
+  it counts accounts and not rows: `fediverse_followers` holds one row per
+  (actor, followed thing), so one Mastodon account subscribed to two members
+  and three tags owns five rows and is one person. `Repo.aggregate(Follower,
+  :count)` — what `stats/0` reports as `remote_followers` — is the *follow*
+  figure and stays that; this is the head count.
+
+  Actors on our own hosts (the site, its `www.` alias, the tag host) are left
+  out. Nothing writes such a row today, but if one ever arrives it names
+  somebody who is already in the member half, and counting them here would be
+  the very double count this function exists to avoid.
+
+  Zero while the fediverse is switched off (an intranet installation): rows
+  stored before the switch describe follows no server can act on any more, so
+  they are not reach.
+  """
+  def distinct_follower_count do
+    if enabled?() do
+      Repo.one(
+        from(f in Follower,
+          # coalesce, because `NULL not in (…)` is NULL and would silently drop
+          # every row whose actor URI has no parseable host.
+          where: fragment("coalesce(?, '')", uri_host(f.actor_uri)) not in ^own_hosts(),
+          select: count(f.actor_uri, :distinct)
+        )
+      ) || 0
+    else
+      0
+    end
+  end
+
+  # Every spelling of "this installation" a stored actor URI could carry, as
+  # plain lowercase hosts for a SQL comparison — the list `own_host?/1` answers
+  # for one URI at a time.
+  defp own_hosts do
+    [String.downcase(VutuvWeb.Endpoint.host()), tag_host()]
+    |> Enum.flat_map(&[&1, "www." <> &1, String.replace_prefix(&1, "www.", "")])
+    |> Enum.uniq()
+  end
+
   # Members in good standing who opted in — the SQL mirror of `federated?/1`.
   # The good-standing arm delegates to `Vutuv.Moderation.Query.account_hidden_row/1`
   # (the one spelling of frozen/deactivated/suspended), so a changed suspension

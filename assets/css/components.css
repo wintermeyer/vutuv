@@ -3032,16 +3032,17 @@ html.lightbox-open { overflow: hidden; }
   .emoji-picker__empty { color: #94a3b8; }
 }
 
-/* The member total ticking over in the top bar (VutuvWeb.ShellLive).
+/* The people total ticking over in the top bar (VutuvWeb.ShellLive).
 
-   The figure changes when somebody confirms an account or deletes one, which
-   arrives over PubSub while the reader is looking at something else entirely.
+   The figure changes when somebody confirms an account, deletes one, or a
+   Fediverse account starts (or stops) following something here, all of which
+   arrive over PubSub while the reader is looking at something else entirely.
    Without a cue the number simply *is* different the next time you glance at
    it, and the whole point of an exact, live total is watching it move.
 
    How it is triggered: LiveView patches the text of a span in place, and a
    patched text node runs no animation. So the span's `id` carries the figure
-   (`member-total-figure-5873`) — a new value is therefore a new node, morphdom
+   (`people-total-figure-5873`) — a new value is therefore a new node, morphdom
    inserts it, and the animation plays on insert. That is also why the class is
    only present after the first broadcast: without that gate the very first
    render would count as an insert and every page load would open with the
@@ -3051,7 +3052,7 @@ html.lightbox-open { overflow: hidden; }
    inherited colour. It sits in the chrome of every page, so anything longer or
    louder would be a nag. Under prefers-reduced-motion it does not move at all —
    an unannounced number is better than an unwanted animation. */
-.member-total__figure {
+.people-total__figure {
   /* Kept as a safeguard, not as a fix: inside the pill this span is a flex item
      and is already blockified, so `transform` works without it. It matters only
      if the figure is ever rendered outside a flex parent, where an inline box
@@ -3059,7 +3060,7 @@ html.lightbox-open { overflow: hidden; }
   display: inline-block;
 }
 
-@keyframes member-total-tick {
+@keyframes people-total-tick {
   0% {
     transform: translateY(0.3em);
     opacity: 0;
@@ -3079,12 +3080,12 @@ html.lightbox-open { overflow: hidden; }
   }
 }
 
-.member-total__figure--tick {
-  animation: member-total-tick 520ms ease-out;
+.people-total__figure--tick {
+  animation: people-total-tick 520ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .member-total__figure--tick {
+  .people-total__figure--tick {
     animation: none;
   }
 }

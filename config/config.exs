@@ -443,10 +443,11 @@ config :vutuv, :account_event_retention_days, 365
 # agent document and feed sends — one policy, declared everywhere.
 config :vutuv, :ai_crawler_policy, :permissive
 
-# The live member counter (Vutuv.Accounts.MemberCounter) re-reads the
-# authoritative user count from the database on a slow timer. Tests turn this
-# off so its process never uses the SQL Sandbox connection it does not own.
-config :vutuv, :reconcile_member_count, true
+# The live people counter (Vutuv.PeopleCounter) re-reads the authoritative
+# member count and the Fediverse head count from the database on slow timers.
+# Tests turn this off so its process never uses the SQL Sandbox connection it
+# does not own.
+config :vutuv, :reconcile_people_count, true
 
 # The "most followed members" pool (Vutuv.Social.PopularUsers) re-ranks on a
 # slow timer. Tests turn this off (sandbox ownership); every call then falls
