@@ -7334,8 +7334,83 @@ defmodule Vutuv.Fediverse do
   ## Federating posts (called from Vutuv.Posts after commit)
 
   @doc "A freshly published post -> Create(Note) to every follower inbox."
-  def federate_new_post(%Post{} = post),
-    do: maybe_federate(post, &Docs.create_activity/2, "post_create")
+  def federate_new_post(%Post{} = post) do
+    # The author's own delivery decides what this function answers; the topics
+    # carrying the post are a second, independent audience and must not change
+    # what a caller reads about the first.
+    result = maybe_federate(post, &Docs.create_activity/2, "post_create")
+    announce_to_tag_followers(post)
+    result
+  end
+
+  @doc """
+  The topics a post carries announce it to **their** followers (issue #1330):
+  somebody who followed `@elixir@tags.<host>` from their own server gets it,
+  without an account here. A tag actor boosting a note is exactly an `Announce`,
+  so it reuses the one the repost path already builds.
+
+  Three gates, and each is load-bearing:
+
+  - **The author must federate.** A tag actor announcing indiscriminately would
+    carry out the posts of the very members who chose not to, which is why there
+    is no per-tag opt-in and why this check cannot move.
+  - **The post must be public.** `restricted?/1` is the same gate the author's
+    own delivery passes; an audience the author narrowed must not widen because
+    a topic was attached.
+  - **Only the tags of a post published here.** A cached post from another
+    server (`Vutuv.Fediverse.RemotePostTag`) never reaches this path, and must
+    not: re-announcing it would be redistributing somebody else's content from
+    our own actor.
+
+  A topic nobody follows queues nothing, so the common case costs one query and
+  no delivery.
+  """
+  def announce_to_tag_followers(%Post{} = post) do
+    with true <- enabled?(),
+         false <- Posts.restricted?(post),
+         author when not is_nil(author) <- Posts.author(post),
+         true <- federated?(author) do
+      post |> announceable_tags() |> Enum.each(&announce_to_tag(&1, post, author))
+      :ok
+    else
+      _ -> :skip
+    end
+  end
+
+  # Both ways a post carries a tag — the composer's chips and a `#hashtag` in
+  # the body — and canonical tags only: an alias is another name for a topic,
+  # never a second actor announcing the same post twice.
+  defp announceable_tags(%Post{id: post_id}) do
+    Repo.all(
+      from(t in Tag,
+        where: is_nil(t.merged_into_id),
+        where:
+          t.id in subquery(
+            from(pt in "post_tags",
+              where: pt.post_id == type(^post_id, Vutuv.UUIDv7),
+              select: pt.tag_id
+            )
+          ) or
+            t.id in subquery(
+              from(ph in "post_hashtags",
+                where: ph.post_id == type(^post_id, Vutuv.UUIDv7),
+                select: ph.tag_id
+              )
+            )
+      )
+    )
+  end
+
+  defp announce_to_tag(%Tag{} = tag, %Post{} = post, author) do
+    case tag_follower_inboxes(tag) do
+      [] ->
+        :skip
+
+      inboxes ->
+        {:ok, _actor} = ensure_tag_actor(tag)
+        enqueue(tag, inboxes, Docs.announce_activity(post, author, tag))
+    end
+  end
 
   @doc """
   An edited post -> Update(Note); one whose audience closed -> Delete, so

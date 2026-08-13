@@ -1120,13 +1120,30 @@ optional politeness — unanswered, it shows on Mastodon as pending forever — 
 the delivery queue took a third owner (`fediverse_deliveries.tag_id`) in the
 same change that gave the tag an inbox, exactly as the page's did.
 
+### Carrying the posts out
+
+A public post reaches the followers of every topic it carries, as an `Announce`
+from that topic's actor — the same activity the repost path builds, because a
+tag actor boosting a note is exactly that. Both ways a post carries a tag count:
+the composer's chips and a `#hashtag` in the body.
+
+Three gates, and each is load-bearing. **The author must federate**, which is
+the one thing standing between a member who chose not to and the open internet —
+a tag has no opt-in of its own precisely because this check exists.
+**The post must be public**: an audience its author narrowed must not widen
+because a topic was attached. And **only posts published here**: a cached post
+from another server (`RemotePostTag`) never reaches this path and must not,
+since re-announcing it would be redistributing somebody else's content from our
+own actor. An alias announces nothing — its canonical already did.
+
+A topic nobody follows queues nothing and does not even mint a keypair, so the
+common case costs one query.
+
 ### What is not built yet
 
-`Announce`: a public post carrying the tag does not yet reach the topic's
-followers, and the outbox is an empty collection. That is the next slice, and
-the gate it must respect is the one above — only posts by members who federate,
-and never a cached post from another server (`RemotePostTag`), which would be
-redistributing somebody else's content from our own actor.
+The tag page's own half: a remote-follow entry point for a logged-out visitor
+(the button renders only for members today) and a follower count that sums the
+local `TagFollow` rows with the remote ones.
 
 ## Deliberate v1 limits
 

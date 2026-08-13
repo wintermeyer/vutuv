@@ -468,7 +468,13 @@ defmodule VutuvWeb.Fediverse.Docs do
   # Stable per (reposted note, reposter), so the Undo references the same
   # Announce the repost sent.
   defp announce_id(%Post{id: post_id}, author, reposter),
-    do: note_url(author, post_id) <> "#announce-" <> reposter.username
+    do: note_url(author, post_id) <> "#announce-" <> announcer_name(reposter)
+
+  # Whoever is doing the announcing, named the way their own actor is: a member
+  # and a page by their handle, a topic by its slug (issue #1330), which is the
+  # tag actor's name.
+  defp announcer_name(%Tag{slug: slug}), do: slug
+  defp announcer_name(actor), do: actor.username
 
   @doc """
   The `featured` collection document (issue #1110): the member's pinned post
