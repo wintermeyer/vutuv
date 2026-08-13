@@ -150,6 +150,13 @@ defmodule Vutuv.Fediverse do
   the page's address out there — WebFinger's `subject` and the actor document's
   `preferredUsername` are both built from it — so a page that never claimed one
   cannot be federated, only unreachable.
+
+  For a **topic** (issue #1330): the global switch, and the tag being a topic of
+  its own rather than another name for one (#1338) — an alias must never become
+  a second address for the same posts. Deliberately no per-tag opt-in: a tag is
+  not somebody's account, and nobody's content is published by its existence,
+  because what a tag actor announces is filtered by each author's own
+  `users.fediverse_followers?` at announce time.
   """
   def federated?(%User{} = user) do
     enabled?() and user.fediverse_followers? and user.email_confirmed? and
@@ -161,6 +168,9 @@ defmodule Vutuv.Fediverse do
       is_binary(organization.username) and
       Organizations.public_visible?(organization)
   end
+
+  def federated?(%Tag{merged_into_id: id}) when is_binary(id), do: false
+  def federated?(%Tag{}), do: enabled?()
 
   defp suspended?(%User{suspended_until: nil}), do: false
 
@@ -378,6 +388,45 @@ defmodule Vutuv.Fediverse do
   @doc "How many remote accounts follow this page."
   def organization_remote_follower_count(%Organization{id: id}),
     do: Repo.aggregate(from(f in Follower, where: f.organization_id == ^id), :count)
+
+  @doc """
+  Records a remote follower of a **topic** (issue #1330), idempotently: a server
+  that re-delivers its `Follow` refreshes the row it already has rather than
+  adding a second.
+  """
+  def add_tag_follower(%Tag{} = tag, attrs) do
+    with :ok <- check_inbound_cap(attrs[:actor_uri] || attrs["actor_uri"]) do
+      %Follower{tag_id: tag.id}
+      |> Follower.changeset(attrs)
+      |> Repo.insert(
+        on_conflict: {:replace, [:inbox_uri, :shared_inbox_uri, :handle, :name, :updated_at]},
+        conflict_target: [:tag_id, :actor_uri],
+        returning: true
+      )
+    end
+  end
+
+  @doc "Drops a topic's remote follower (the inbox's Undo). Idempotent."
+  def remove_tag_follower(%Tag{id: id}, actor_uri) do
+    {count, _} =
+      Repo.delete_all(from(f in Follower, where: f.tag_id == ^id and f.actor_uri == ^actor_uri))
+
+    count
+  end
+
+  @doc "How many remote accounts follow this topic."
+  def tag_remote_follower_count(%Tag{id: id}),
+    do: Repo.aggregate(from(f in Follower, where: f.tag_id == ^id), :count)
+
+  @doc "The inboxes a topic's activities go to, one per remote follower."
+  def tag_follower_inboxes(%Tag{id: id}) do
+    from(f in Follower,
+      where: f.tag_id == ^id,
+      select: coalesce(f.shared_inbox_uri, f.inbox_uri),
+      distinct: true
+    )
+    |> Repo.all()
+  end
 
   @doc "A page's remote followers, newest first."
   def list_organization_followers(%Organization{id: id}, limit \\ 50) do
@@ -1488,7 +1537,7 @@ defmodule Vutuv.Fediverse do
   defp check_follow_host(uri) do
     cond do
       instance_blocked?(uri) -> {:error, :instance_blocked}
-      local_host?(uri) -> {:error, :local_account}
+      own_host?(uri) -> {:error, :local_account}
       true -> :ok
     end
   end
@@ -1510,6 +1559,48 @@ defmodule Vutuv.Fediverse do
       host -> same_site?(host, String.downcase(VutuvWeb.Endpoint.host()))
     end
   end
+
+  @doc """
+  The host a **topic's** actor lives on: `tags.<our host>` (issue #1330).
+
+  Its own WebFinger authority, and that is the whole reason for it. Members and
+  pages share one handle namespace (`Vutuv.Handles`), tags are member-creatable,
+  and `ReservedSlugs` guards only route words — so a tag `elixir` and a member
+  `elixir` would otherwise want the same address. A separate host cannot
+  collide, and needs no reserved-prefix list anybody has to maintain.
+
+  Configurable per installation (`FEDIVERSE_TAG_HOST`), defaulting to the `tags.`
+  subdomain of whatever `PHX_HOST` says, so nothing has to be set to run this
+  elsewhere. What an installation does owe is the DNS record, the certificate
+  and an nginx server name — see `docs/ADMINS.md`.
+  """
+  def tag_host do
+    Application.get_env(:vutuv, :fediverse_tag_host) ||
+      "tags." <> String.downcase(VutuvWeb.Endpoint.host())
+  end
+
+  @doc "Whether `uri` names this installation's tag host."
+  def tag_host?(uri) do
+    case BlockedInstance.normalize_host(uri) do
+      nil -> false
+      host -> same_site?(host, tag_host())
+    end
+  end
+
+  @doc """
+  Whether `uri` is **this installation at all** — the main host or the tag host.
+
+  Deliberately a third function rather than a widening of `local_host?/1`.
+  That one is shared with `local_path/1`, which asks the narrower question
+  "which member or page of ours does this URL name", and a tag-host URL is
+  none: `https://tags.<host>/hund` would come back as the member `hund`.
+
+  This is what the questions about the installation as a whole ask — the follow
+  gate, the search page's follow offer, `own_object?/3` — because signing a
+  request to ourselves and waiting for an Accept our own inbox would have to
+  invent is the failure v7.197.0 already produced once, via `www.`.
+  """
+  def own_host?(uri), do: local_host?(uri) or tag_host?(uri)
 
   @doc """
   The path segments of one of **our own** URLs, or nil for any other server's.
@@ -3076,6 +3167,9 @@ defmodule Vutuv.Fediverse do
 
   defp signer_for(%Organization{} = organization, %Actor{} = actor),
     do: {Docs.actor_url(organization) <> "#main-key", actor.private_key_pem}
+
+  defp signer_for(%Tag{} = tag, %Actor{} = actor),
+    do: {Docs.actor_url(tag) <> "#main-key", actor.private_key_pem}
 
   defp signer_for(_user, _actor), do: nil
 
@@ -6734,7 +6828,7 @@ defmodule Vutuv.Fediverse do
     object_id = SearchText.normalize_search(doc["id"]) || uri
 
     same_host?(uri, object_id) and same_host?(object_id, author_uri) and
-      not local_host?(author_uri)
+      not own_host?(author_uri)
   end
 
   # The author of the boosted post, as an account row. Usually a **third**
@@ -7691,6 +7785,13 @@ defmodule Vutuv.Fediverse do
     enqueue(organization, [inbox_uri], Docs.accept_activity(organization, follow_object))
   end
 
+  # The topic twin (issue #1330), and the reason the delivery queue had to learn
+  # a third owner in the same change: an inbox that records a Follow but cannot
+  # answer it leaves the other side on "pending" forever.
+  def accept_follow(%Tag{} = tag, follow_object, inbox_uri) do
+    enqueue(tag, [inbox_uri], Docs.accept_activity(tag, follow_object))
+  end
+
   # One document to many inboxes — the usual case, so it is encoded once.
   defp enqueue(user, inboxes, activity, opts \\ []) do
     json = Jason.encode!(activity)
@@ -7720,6 +7821,7 @@ defmodule Vutuv.Fediverse do
           id: Vutuv.UUIDv7.generate(),
           user_id: sender_column(user, :user),
           organization_id: sender_column(user, :organization),
+          tag_id: sender_column(user, :tag),
           inbox_uri: inbox,
           activity_json: json,
           rebuild_from: rebuild_from,
@@ -7740,6 +7842,9 @@ defmodule Vutuv.Fediverse do
   defp sender_column(%Organization{}, :user), do: nil
   defp sender_column(%User{id: id}, :user), do: id
   defp sender_column(%User{}, :organization), do: nil
+  defp sender_column(%Tag{id: id}, :tag), do: id
+  defp sender_column(_sender, :tag), do: nil
+  defp sender_column(%Tag{}, _column), do: nil
 
   ## Account deletion broadcast (issue #985)
 
@@ -7828,7 +7933,7 @@ defmodule Vutuv.Fediverse do
         from(d in Delivery,
           where: d.attempts < @max_attempts and d.next_attempt_at <= ^now,
           limit: 100,
-          preload: [:user, :organization]
+          preload: [:user, :organization, :tag]
         )
       )
 
@@ -7838,9 +7943,10 @@ defmodule Vutuv.Fediverse do
     # member can never collide on a lookup.
     actors = actors_by_user_id(due)
     organization_actors = actors_by_organization_id(due)
+    tag_actors = actors_by_tag_id(due)
 
     due
-    |> Task.async_stream(&attempt(&1, signing_actor(&1, actors, organization_actors)),
+    |> Task.async_stream(&attempt(&1, signing_actor(&1, actors, organization_actors, tag_actors)),
       max_concurrency: 5,
       timeout: 30_000,
       on_timeout: :kill_task
@@ -7868,11 +7974,24 @@ defmodule Vutuv.Fediverse do
     |> Map.new(&{&1.organization_id, &1})
   end
 
-  defp signing_actor(%Delivery{organization_id: id}, _actors, organization_actors)
+  defp actors_by_tag_id(rows) do
+    ids = rows |> Enum.map(& &1.tag_id) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    from(a in Actor, where: a.tag_id in ^ids)
+    |> Repo.all()
+    |> Map.new(&{&1.tag_id, &1})
+  end
+
+  defp signing_actor(%Delivery{organization_id: id}, _actors, organization_actors, _tag_actors)
        when is_binary(id),
        do: organization_actors[id]
 
-  defp signing_actor(%Delivery{user_id: id}, actors, _organization_actors), do: actors[id]
+  defp signing_actor(%Delivery{tag_id: id}, _actors, _organization_actors, tag_actors)
+       when is_binary(id),
+       do: tag_actors[id]
+
+  defp signing_actor(%Delivery{user_id: id}, actors, _organization_actors, _tag_actors),
+    do: actors[id]
 
   # A page's delivery (issue #1334). Same guards as a member's — https, no
   # internal address, not a blocked instance — minus `rebuilt/2`: that re-renders
@@ -7884,6 +8003,19 @@ defmodule Vutuv.Fediverse do
          false <- Vutuv.Ssrf.resolves_to_internal?(host),
          false <- instance_blocked?(delivery.inbox_uri) do
       post_activity(delivery, organization, actor)
+    else
+      _ -> Repo.delete(delivery)
+    end
+  end
+
+  # A topic's delivery (issue #1330). Same guards as the page's, and like it no
+  # `rebuilt/2`: a tag actor sends an `Accept`, which has nothing to re-render.
+  defp attempt(%Delivery{tag: %Tag{} = tag} = delivery, actor) do
+    with %Actor{} = actor <- actor,
+         %URI{scheme: "https", host: host} <- URI.parse(delivery.inbox_uri),
+         false <- Vutuv.Ssrf.resolves_to_internal?(host),
+         false <- instance_blocked?(delivery.inbox_uri) do
+      post_activity(delivery, tag, actor)
     else
       _ -> Repo.delete(delivery)
     end

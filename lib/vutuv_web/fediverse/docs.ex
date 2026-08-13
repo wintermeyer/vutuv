@@ -53,6 +53,14 @@ defmodule VutuvWeb.Fediverse.Docs do
   @doc "The associations `note/2` needs loaded on a post."
   def note_preloads, do: @note_preloads
 
+  # A topic's actor lives on the tag host, and its id is the slug itself
+  # (issue #1330). It has to be **that** host: Mastodon confirms an account by
+  # re-resolving `preferredUsername@<host of the actor id>`, so an id on the
+  # apex would advertise `hund@tags.<host>` and canonicalise to `hund@<host>` —
+  # back into the member handle namespace, which is the collision the separate
+  # host exists to prevent.
+  def actor_url(%Tag{slug: slug}), do: "#{tag_base()}/#{slug}"
+
   def actor_url(%Organization{slug: slug}), do: "#{base()}/organizations/#{slug}/actor"
   def actor_url(user), do: "#{base()}/#{user.username}/actor"
   def key_id(user), do: actor_url(user) <> "#main-key"
@@ -119,6 +127,11 @@ defmodule VutuvWeb.Fediverse.Docs do
   servers resolve. The host is this installation's, so it is right on
   vutuv.de and on anybody else's vutuv.
   """
+  # A topic's address lives on the tag host, which is its own WebFinger
+  # authority (issue #1330) — that is what keeps `elixir` the topic and
+  # `elixir` the member from wanting one address.
+  def acct(%Tag{slug: slug}), do: "#{slug}@#{Vutuv.Fediverse.tag_host()}"
+
   def acct(user), do: "#{user.username}@#{VutuvWeb.Endpoint.host()}"
 
   @doc "The same address the way it is written for humans: `@member@vutuv.de`."
@@ -170,6 +183,61 @@ defmodule VutuvWeb.Fediverse.Docs do
     }
     |> put_also_known_as(user)
     |> put_moved_to(user)
+  end
+
+  @doc """
+  A **topic's** actor document (issue #1330): AP type `Group`, which is what
+  tells a remote server this is a thing to subscribe to rather than a person.
+
+  Its own builder for the same reason the page's is: half of the member document
+  has no meaning here. A topic has no `alsoKnownAs`/`movedTo` (nothing migrates
+  a topic), no `featured` (nothing pins to it), and no name of its own beyond the
+  one the catalogue gives it. What it keeps is the shared inbox and
+  `manuallyApprovesFollowers: false`, both facts about this installation.
+
+  The `url` deliberately points at the tag page on the **main** host: that is
+  where a human reads the topic, and it is the one link a remote reader wants.
+  """
+  def tag_actor(%Tag{} = tag, %Actor{} = actor) do
+    actor_url = actor_url(tag)
+
+    %{
+      "@context" => [
+        "https://www.w3.org/ns/activitystreams",
+        "https://w3id.org/security/v1"
+      ],
+      "id" => actor_url,
+      "type" => "Group",
+      "preferredUsername" => tag.slug,
+      "name" => tag.name,
+      "summary" => tag_summary(tag),
+      "url" => "#{base()}/tags/#{tag.slug}",
+      "inbox" => actor_url <> "/inbox",
+      "outbox" => actor_url <> "/outbox",
+      "followers" => actor_url <> "/followers",
+      "endpoints" => %{"sharedInbox" => shared_inbox_url()},
+      "manuallyApprovesFollowers" => false,
+      "published" => iso8601(tag.inserted_at),
+      "publicKey" => %{
+        "id" => actor_url <> "#main-key",
+        "owner" => actor_url,
+        "publicKeyPem" => actor.public_key_pem
+      }
+    }
+  end
+
+  # One sentence saying what following this address does, because a `Group`
+  # actor with a bare topic name tells a stranger nothing about what will arrive
+  # in their timeline.
+  defp tag_summary(%Tag{name: name}) do
+    escaped = name |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+    "<p>" <>
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "Posts tagged %{tag}. Follow this address to receive them, wherever your account lives.",
+        tag: escaped
+      ) <> "</p>"
   end
 
   @doc """
@@ -959,4 +1027,10 @@ defmodule VutuvWeb.Fediverse.Docs do
     do: at |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601() |> Kernel.<>("Z")
 
   defp base, do: String.trim_trailing(VutuvWeb.Endpoint.url(), "/")
+
+  # The same scheme and port as the main host, with the tag host in place of it,
+  # so a dev server on :4000 and production both build a reachable URL.
+  defp tag_base do
+    %URI{URI.parse(base()) | host: Vutuv.Fediverse.tag_host()} |> URI.to_string()
+  end
 end

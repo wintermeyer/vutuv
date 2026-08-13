@@ -84,7 +84,7 @@ defmodule VutuvWeb.SearchLive do
          # Through the context, so "is this our own installation?" is answered
          # the same way here as in the follow gate — otherwise this card offers
          # to follow an address `follow_remote/2` then refuses.
-         false <- Fediverse.local_host?(host) do
+         false <- Fediverse.own_host?(host) do
       "@#{name}@#{host}"
     else
       _ -> nil

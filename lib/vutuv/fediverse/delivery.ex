@@ -28,6 +28,7 @@ defmodule Vutuv.Fediverse.Delivery do
     # one. No unique index: a delivery row is a queue entry, not a relationship.
     belongs_to(:user, Vutuv.Accounts.User)
     belongs_to(:organization, Vutuv.Organizations.Organization)
+    belongs_to(:tag, Vutuv.Tags.Tag)
 
     timestamps()
   end

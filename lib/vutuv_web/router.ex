@@ -138,6 +138,26 @@ defmodule VutuvWeb.Router do
   # browser pipeline, so crawlers that send "Accept: text/plain" are not turned
   # away by its `accepts ["html"]`. :machine_docs adds back the one secure
   # header these documents cannot do without (see the pipeline).
+  # A topic's ActivityPub identity lives on its own host (issue #1330):
+  # `tags.<our host>`, which is its own WebFinger authority and therefore cannot
+  # collide with the member/page handle namespace. Phoenix matches a `host:`
+  # ending in a dot as a **prefix**, so this holds for every installation
+  # without naming one — and it must come before the scope below, whose
+  # `/:slug` would otherwise swallow these paths on that host.
+  #
+  # The actor's id is the slug itself, because Mastodon re-resolves
+  # `preferredUsername@<host of the actor id>` to confirm an account: an id on
+  # the apex would canonicalise the handle back into the member namespace.
+  scope "/", VutuvWeb, host: "tags." do
+    pipe_through(:machine_docs)
+
+    get("/.well-known/webfinger", FediverseController, :webfinger)
+    get("/:slug", FediverseController, :tag_actor)
+    get("/:slug/followers", FediverseController, :tag_followers)
+    get("/:slug/outbox", FediverseController, :tag_outbox)
+    post("/:slug/inbox", FediverseController, :tag_inbox)
+  end
+
   scope "/", VutuvWeb do
     pipe_through(:machine_docs)
 

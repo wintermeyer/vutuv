@@ -153,6 +153,23 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
+  The **topic** a slug names, or nil.
+
+  Only a canonical one: an alias is another name for a topic (#1338), and the
+  fediverse actor built on this (#1330) must never become a second address for
+  the same posts. Callers that want the alias itself — the tag page, which 301s
+  from it — look the row up directly.
+  """
+  def get_canonical_tag_by_slug(slug) when is_binary(slug) do
+    case Repo.get_by(Tag, slug: slug) do
+      %Tag{merged_into_id: nil} = tag -> tag
+      _ -> nil
+    end
+  end
+
+  def get_canonical_tag_by_slug(_), do: nil
+
+  @doc """
   The display names a submit of `value` on the add-tag form will actually
   attach, in typed order — the live preview of issue #848.
 

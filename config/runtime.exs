@@ -35,6 +35,15 @@ if config_env() == :prod do
       """
 
   host = System.get_env("PHX_HOST") || "vutuv.de"
+
+  # A topic's fediverse address lives on its own host (issue #1330), which is
+  # its own WebFinger authority — that is what keeps the tag `elixir` and a
+  # member called `elixir` from wanting one address. Unset derives
+  # `tags.<PHX_HOST>`, so an installation only sets this to pick another name.
+  if tag_host = System.get_env("FEDIVERSE_TAG_HOST") do
+    config :vutuv, :fediverse_tag_host, String.downcase(tag_host)
+  end
+
   port = String.to_integer(System.get_env("PORT") || "4003")
 
   # The public scheme. https is the right answer on the internet; an intranet

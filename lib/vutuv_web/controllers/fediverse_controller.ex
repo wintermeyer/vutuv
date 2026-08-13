@@ -37,6 +37,8 @@ defmodule VutuvWeb.FediverseController do
   alias Vutuv.Handles
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Tags
+  alias Vutuv.Tags.Tag
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.RawBodyReader
 
@@ -521,6 +523,116 @@ defmodule VutuvWeb.FediverseController do
   end
 
   @doc """
+  A topic's actor document, served on the tag host (issue #1330).
+
+  Minted on first ask, like a page's: a keypair is cheap and a topic nobody has
+  ever looked up needs none. An **alias** answers 404 — it is another name for a
+  topic, not a second address for the same posts.
+  """
+  def tag_actor(conn, %{"slug" => slug}) do
+    with_federated_tag(conn, slug, fn tag ->
+      {:ok, actor} = Fediverse.ensure_tag_actor(tag)
+
+      send_activity_json(conn, Docs.tag_actor(tag, actor))
+    end)
+  end
+
+  @doc "How many accounts out there follow this topic. Count only, like the rest."
+  def tag_followers(conn, %{"slug" => slug}) do
+    with_federated_tag(conn, slug, fn tag ->
+      send_activity_json(
+        conn,
+        Docs.count_collection(
+          Docs.actor_url(tag) <> "/followers",
+          Fediverse.tag_remote_follower_count(tag)
+        )
+      )
+    end)
+  end
+
+  @doc """
+  The topic's outbox, empty for now.
+
+  Advertised because the actor document names it and a document that names a
+  collection which 404s reads as a broken actor from outside. What a topic
+  sends is `Announce`, and that is the next slice.
+  """
+  def tag_outbox(conn, %{"slug" => slug}) do
+    with_federated_tag(conn, slug, fn tag ->
+      send_activity_json(conn, Docs.count_collection(Docs.actor_url(tag) <> "/outbox", 0))
+    end)
+  end
+
+  @doc """
+  The topic's inbox: `Follow` and `Undo(Follow)`, and nothing else.
+
+  Narrower than a page's, which is already narrow. A topic holds no
+  conversation, follows nobody and migrates nowhere, so `Like`, `Announce`,
+  `Create`, `Accept` and `Move` have nothing to act on here and are
+  acknowledged with the same `202` the other inboxes give what they do not
+  handle.
+  """
+  def tag_inbox(conn, %{"slug" => slug}) do
+    with_federated_tag(conn, slug, fn tag ->
+      guarded(conn, fn -> verify_and_perform_for_tag(conn, tag) end)
+    end)
+  end
+
+  defp verify_and_perform_for_tag(conn, tag) do
+    activity = conn.body_params
+
+    with {:ok, key_id} <- signature_key_id(conn),
+         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, tag_signer(tag)),
+         true <- Fediverse.same_host?(remote.id, key_id),
+         :ok <- verify_signature(conn, remote),
+         true <- activity["actor"] == remote.id do
+      perform_for_tag(tag, activity, remote)
+      send_resp(conn, 202, "")
+    else
+      _ -> send_resp(conn, 401, "")
+    end
+  end
+
+  defp perform_for_tag(tag, %{"type" => "Follow"} = activity, remote) do
+    # The object must be THIS topic's actor: a signed Follow naming somebody
+    # else's actor is not a follow of this topic, whoever delivered it here.
+    if activity["object"] == Docs.actor_url(tag) do
+      case Fediverse.add_tag_follower(tag, follower_attrs(remote)) do
+        {:ok, _} -> Fediverse.accept_follow(tag, activity, remote.inbox)
+        {:error, _} -> :ok
+      end
+    end
+
+    :ok
+  end
+
+  defp perform_for_tag(tag, %{"type" => "Undo", "object" => %{"type" => "Follow"}}, remote) do
+    Fediverse.remove_tag_follower(tag, remote.id)
+    :ok
+  end
+
+  defp perform_for_tag(_tag, _activity, _remote), do: :ok
+
+  # A topic signs with its own key, the same shape the page's fetch uses.
+  defp tag_signer(tag) do
+    case Fediverse.ensure_tag_actor(tag) do
+      {:ok, actor} -> {Docs.actor_url(tag) <> "#main-key", actor.private_key_pem}
+      _ -> nil
+    end
+  end
+
+  # A topic is federated when the installation is and the tag is a topic rather
+  # than another name for one. There is no per-tag switch: nobody's content is
+  # published by a tag actor existing, because what it announces is filtered by
+  # each author's own opt-in at announce time.
+  defp with_federated_tag(conn, slug, fun) do
+    case Tags.get_canonical_tag_by_slug(slug) do
+      nil -> send_resp(conn, 404, "")
+      tag -> if Fediverse.federated?(tag), do: fun.(tag), else: send_resp(conn, 404, "")
+    end
+  end
+
+  @doc """
   A page's inbox (issue #1334): signed `Follow` and `Undo(Follow)` addressed to
   the page.
 
@@ -729,12 +841,8 @@ defmodule VutuvWeb.FediverseController do
   # dead-ends the whole remote-follow flow before it starts, and none of the
   # accepted spellings is ambiguous about who is meant.
   defp resolve_resource("acct:" <> acct) do
-    with [handle, host] <- acct |> String.trim_leading("@") |> String.split("@", parts: 2),
-         # `local_host?/1` folds case, port and the `www.` alias — a member
-         # pastes whatever spelling their browser showed them (issue #1211).
-         true <- Fediverse.local_host?(host) do
-      by_handle(Handles.normalize(handle))
-    else
+    case acct |> String.trim_leading("@") |> String.split("@", parts: 2) do
+      [name, host] -> resolve_acct(name, host)
       _ -> nil
     end
   end
@@ -755,6 +863,20 @@ defmodule VutuvWeb.FediverseController do
   end
 
   defp resolve_resource(_), do: nil
+
+  # Two WebFinger authorities on one installation (issue #1330). The tag host is
+  # asked first because it is the narrower question: on `tags.<host>` an address
+  # names a topic and nothing else, while the main host is where members and
+  # pages share a namespace. `local_host?/1` folds case, port and the `www.`
+  # alias — somebody pastes whatever spelling their browser showed them
+  # (issue #1211) — and `tag_host?/1` does the same for its own host.
+  defp resolve_acct(name, host) do
+    cond do
+      Fediverse.tag_host?(host) -> Tags.get_canonical_tag_by_slug(name)
+      Fediverse.local_host?(host) -> by_handle(Handles.normalize(name))
+      true -> nil
+    end
+  end
 
   # Members and pages share one handle namespace (issue #941), so a handle
   # resolves to at most one of them and the order is a fast path, not a
@@ -779,6 +901,25 @@ defmodule VutuvWeb.FediverseController do
       "aliases" => [page_url, Docs.actor_url(organization)],
       "links" => [
         %{"rel" => "self", "type" => @activity_json, "href" => Docs.actor_url(organization)},
+        %{
+          "rel" => "http://webfinger.net/rel/profile-page",
+          "type" => "text/html",
+          "href" => page_url
+        }
+      ]
+    }
+  end
+
+  defp jrd(%Tag{} = tag) do
+    # The `self` link is the actor on the tag host; the human link is the tag
+    # page on the main host, which is where a reader wants to land.
+    page_url = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/tags/#{tag.slug}"
+
+    %{
+      "subject" => "acct:" <> Docs.acct(tag),
+      "aliases" => [page_url, Docs.actor_url(tag)],
+      "links" => [
+        %{"rel" => "self", "type" => @activity_json, "href" => Docs.actor_url(tag)},
         %{
           "rel" => "http://webfinger.net/rel/profile-page",
           "type" => "text/html",

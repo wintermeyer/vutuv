@@ -95,7 +95,7 @@ defmodule VutuvWeb.RemoteFollowController do
   # ever route the visitor back here — so no request leaves.
   defp local_address?(address) do
     case RemoteFollow.parse_address(address) do
-      {:ok, {_user, host}} -> Fediverse.local_host?(host)
+      {:ok, {_user, host}} -> Fediverse.own_host?(host)
       _ -> false
     end
   end

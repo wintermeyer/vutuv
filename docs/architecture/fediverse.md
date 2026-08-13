@@ -1064,6 +1064,70 @@ now, with the page's own gates in front of it: the page must federate, the post
 must not be held by moderation, and a page that switched federation off gets the
 same `410`/`404` refusal its actor endpoint gives.
 
+## A topic federates too (issue #1330)
+
+A tag is an ActivityPub `Group` actor, so anybody on any server can follow a
+topic and receive its posts **without an account here**. That is a thing a
+centralised network cannot offer at all, and it costs the reader nothing: they
+already have somewhere to read it.
+
+**It lives on its own host, `tags.<our host>`.** Members and pages share one
+handle namespace (`Vutuv.Handles`), tags are member-creatable, and
+`ReservedSlugs` guards only route words — so the tag `elixir` and a member
+called `elixir` would otherwise want one address. A separate host is its own
+WebFinger authority, which cannot collide and needs no reserved-prefix list
+anybody has to maintain. The router matches it with `scope "/", host: "tags."`,
+a prefix match, so no installation's host is named in the code;
+`FEDIVERSE_TAG_HOST` overrides it and `docs/ADMINS.md` says what an operator
+owes it (a DNS record, a certificate, an nginx `server_name`).
+
+**The actor's id is on that host too, and that is not cosmetic.** Mastodon
+confirms an account by re-resolving `preferredUsername@<host of the actor id>`:
+an id on the apex advertising `hund@tags.<host>` would canonicalise straight
+back into the member namespace, which is the collision the subdomain exists to
+prevent. So the id is `https://tags.<host>/<slug>` and WebFinger answers for it
+there. The `url` still points at `/tags/<slug>` on the main host, because that
+is where a human reads the topic.
+
+**Three host predicates, not one.** `local_host?/1` keeps its narrow meaning
+because `local_path/1` shares it and asks *which member or page of ours* a URL
+names — widened, `https://tags.<host>/hund` would come back as the member
+`hund`. `tag_host?/1` is the new one, and `own_host?/1` is "this installation at
+all", which is what the questions about the installation as a whole ask: the
+follow gate, the search page's follow offer, `own_object?/3`. Signing a request
+to ourselves and waiting for an Accept our own inbox would have to invent is the
+failure v7.197.0 already produced once, via `www.`.
+
+**The slug is the actor name, character for character**, which is why this
+waited for #1337/#1332 to settle the slug grammar to `^[a-z0-9_]+$` — the
+narrowest local part any server accepts. Renaming an actor other servers already
+follow costs a `Move` per tag.
+
+**An alias gets no actor.** Another name for a topic (#1338) is not a topic, and
+must never become a second address for the same posts: `federated?/1` answers
+false for it, and both WebFinger and the actor endpoint 404.
+
+**No per-tag opt-in, and that is deliberate.** A tag is not somebody's account,
+so nobody's content is published by its existence. What protects a member who
+chose not to federate is the announce step, which reads each author's own
+`users.fediverse_followers?` — the tag actor may only carry outward what already
+goes outward.
+
+**The inbox is narrower than the page's**, which was already narrow: `Follow`
+and `Undo(Follow)`, and a `202` for everything else. A topic holds no
+conversation, follows nobody and migrates nowhere. Answering the Follow is not
+optional politeness — unanswered, it shows on Mastodon as pending forever — so
+the delivery queue took a third owner (`fediverse_deliveries.tag_id`) in the
+same change that gave the tag an inbox, exactly as the page's did.
+
+### What is not built yet
+
+`Announce`: a public post carrying the tag does not yet reach the topic's
+followers, and the outbox is an empty collection. That is the next slice, and
+the gate it must respect is the one above — only posts by members who federate,
+and never a cached post from another server (`RemotePostTag`), which would be
+redistributing somebody else's content from our own actor.
+
 ## Deliberate v1 limits
 
 Inbound **reply text** is stored now (issues #1069 and #1071, see the bullet
