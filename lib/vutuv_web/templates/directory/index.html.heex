@@ -5,36 +5,15 @@
 
 <div class="card-list">
   <section class="card">
+    <%!-- One line, and it says what the page is. The membership total and the
+    Fediverse head count used to follow it in two more paragraphs; they are the
+    top bar's business (`#people-total`, on this page like every other), and
+    three figures above an A-Z strip read as a statistics page rather than as a
+    directory (Stefan, 2026-08-13). --%>
     <p>
       {gettext(
-        "All %{count} members whose profiles are open to search engines, filed alphabetically by last name.",
+        "%{count} vutuv members whose profiles are open to search engines, filed alphabetically by last name.",
         count: delimited_count(@total)
-      )}
-    </p>
-
-    <%!-- Without this line the listed count reads as the whole membership, so
-    every member who keeps their profile out of search engines looks like a
-    member the site does not have. --%>
-    <p class="text-sm text-slate-600 dark:text-slate-400">
-      {gettext(
-        "There are %{total} members in total; anyone who does not open their profile to search engines is not listed here.",
-        total: delimited_count(@members_total)
-      )}
-    </p>
-
-    <%!-- The other half of the top bar's people total, which links here: this
-    is where a visitor who clicked that figure finds out what the number is
-    made of. Only when there is somebody to name — an installation nobody
-    follows from the Fediverse would otherwise read "0 accounts". --%>
-    <p :if={@fediverse_total > 0} class="text-sm text-slate-600 dark:text-slate-400">
-      <%!-- ngettext binds %{count} to the raw integer, so the formatted figure
-      rides its own placeholder. --%>
-      {ngettext(
-        "%{fediverse} account from the Fediverse follows members, pages or topics here; together that is %{people} people.",
-        "%{fediverse} accounts from the Fediverse follow members, pages or topics here; together that is %{people} people.",
-        @fediverse_total,
-        fediverse: delimited_count(@fediverse_total),
-        people: delimited_count(@members_total + @fediverse_total)
       )}
     </p>
 

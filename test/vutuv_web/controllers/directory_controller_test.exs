@@ -38,17 +38,25 @@ defmodule VutuvWeb.DirectoryControllerTest do
       assert html =~ ~s(data-letter="x" data-count="0")
     end
 
-    test "names the whole membership beside the listed count", %{conn: conn} do
-      # Two of the three confirmed members allow search engines. Naming only
-      # the listed figure would read as the whole membership, so the page
-      # says both and explains who is missing.
+    test "opens with the listed count and nothing else", %{conn: conn, adler: adler} do
+      # Two of the three confirmed members allow search engines. The page used
+      # to name the whole membership and the Fediverse head count below that;
+      # both are the top bar's business, and three figures above an A-Z strip
+      # read as a statistics page (Stefan, 2026-08-13).
+      Repo.insert!(%Vutuv.Fediverse.Follower{
+        user_id: adler.id,
+        actor_uri: "https://remote.example/users/frida",
+        inbox_uri: "https://remote.example/users/frida/inbox"
+      })
+
       html = get(conn, ~p"/system/members") |> html_response(200)
 
-      assert html =~ "All 2 members"
-      assert html =~ "There are 3 members in total"
+      assert html =~ "2 vutuv members whose profiles are open to search engines"
+      refute html =~ "members in total"
+      refute html =~ "from the Fediverse"
     end
 
-    test "explains the gap in German too", %{conn: conn} do
+    test "says the same in German", %{conn: conn} do
       # The German render is what real visitors get, and a gettext merge can
       # fuzzy-fill a fresh msgid with an unrelated translation, so the
       # sentence is asserted by name rather than trusted.
@@ -58,49 +66,8 @@ defmodule VutuvWeb.DirectoryControllerTest do
         |> get(~p"/system/members")
         |> html_response(200)
 
-      assert html =~ "Insgesamt gibt es 3 Mitglieder."
-      assert html =~ "Wer sein Profil nicht für Suchmaschinen freigibt, erscheint hier nicht."
-    end
-
-    test "names the Fediverse accounts the top bar's people total adds in", %{
-      conn: conn,
-      adler: adler,
-      ozil: ozil
-    } do
-      # This is the page the pill links to, so the figure it advertises has to
-      # be findable here: three members plus one remote account (following two
-      # of them, hence one person and not two) is the "4 people" in the bar.
-      for user <- [adler, ozil] do
-        Repo.insert!(%Vutuv.Fediverse.Follower{
-          user_id: user.id,
-          actor_uri: "https://remote.example/users/frida",
-          inbox_uri: "https://remote.example/users/frida/inbox"
-        })
-      end
-
-      html = get(conn, ~p"/system/members") |> html_response(200)
-
-      assert html =~ "1 account from the Fediverse follows members, pages or topics here"
-      assert html =~ "together that is 4 people"
-
-      german =
-        conn
-        |> put_req_header("accept-language", "de-DE,de;q=0.9")
-        |> get(~p"/system/members")
-        |> html_response(200)
-
-      assert german =~
-               "1 Account aus dem Fediverse folgt Mitgliedern, Seiten oder Themen hier"
-
-      assert german =~ "zusammen sind das 4 Personen."
-    end
-
-    test "says nothing about the Fediverse when nobody follows from there", %{conn: conn} do
-      # An installation with no remote followers (every intranet one) would
-      # otherwise carry a sentence about zero accounts.
-      html = get(conn, ~p"/system/members") |> html_response(200)
-
-      refute html =~ "from the Fediverse"
+      assert html =~ "2 vutuv Mitglieder, deren Profile für Suchmaschinen freigegeben sind"
+      refute html =~ "Insgesamt gibt es"
     end
 
     test "the directory page itself is indexable", %{conn: conn} do

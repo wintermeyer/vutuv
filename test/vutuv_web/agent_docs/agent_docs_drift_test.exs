@@ -1072,11 +1072,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     doc = Jason.decode!(rendered.json)
     assert doc["type"] == "directory"
 
-    # The listed count is only part of the picture: every format also names
-    # the whole membership, so the members who keep their profile out of
-    # search engines are explained rather than silently absent.
-    assert doc["members_total"] >= doc["total"]
-    assert_fact_everywhere(rendered, "#{doc["members_total"]} member")
+    # The one figure the page states, in every format. It named the whole
+    # membership and the Fediverse head count beside it until 2026-08-13; those
+    # moved out of this page entirely (the top bar's people pill carries them),
+    # so no format may reintroduce them here.
+    assert_fact_everywhere(rendered, "#{doc["total"]} vutuv member")
+    refute Map.has_key?(doc, "members_total")
   end
 
   test "member directory letter page in every format", %{tag: tag} do

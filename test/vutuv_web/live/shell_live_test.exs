@@ -768,9 +768,28 @@ defmodule VutuvWeb.ShellLiveTest do
 
       assert has_element?(view, @total, "5.920")
 
+      # The breakdown rides the hover title and does not repeat the figure the
+      # cursor is already on.
       assert has_element?(
                view,
-               ~s(#{@total}[title="5.920 Personen: 5.508 Mitglieder hier und 412 Fediverse-Accounts, die ihnen folgen"])
+               ~s(#{@total}[title="5.508 vutuv-Mitglieder plus 412 Fediverse-Accounts, die folgen"])
+             )
+
+      # The accessible name stays the plain total: an aria-label replaces the
+      # element's own text for a screen reader, so the visible figure has to be
+      # inside it (WCAG 2.5.3).
+      assert has_element?(view, ~s(#{@total}[aria-label="5.920 Personen"]))
+    end
+
+    test "names a single Fediverse follower in the singular", %{conn: conn} do
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: %{"locale" => "de"})
+
+      broadcast_counts(5_508, 1)
+
+      assert has_element?(
+               view,
+               ~s(#{@total}[title="5.508 vutuv-Mitglieder plus 1 Fediverse-Account, der folgt"])
              )
     end
 

@@ -411,14 +411,23 @@ The top bar's people total (`#people-total` in `ShellLive`) is on every page.
 takes the new figures straight from the message. It is `delimited_count/1`, the
 exact grouped figure, never a compacted "60K": a rounded total would never
 visibly move, and moving is the point. The visible word beside it is
-"people"/"Personen", and the pill's `title` spells the mixture out ("5,920
-people: 5,508 members here and 412 Fediverse accounts that follow them")
-whenever the Fediverse half is not zero — an installation nobody follows from
-out there keeps the plain "5,508 people". Zero renders nothing (the window
-before the first reconcile), and the slot around it is always rendered so the
-bar keeps its shape either way. The pill links to the public member directory
-at `/system/members`, which prints the same breakdown in words so the figure a
-visitor clicked can be found on the page it takes them to.
+"people"/"Personen".
+
+**The breakdown rides the `title`, the plain total rides the `aria-label`**,
+and that split is deliberate. Hovering asks "what is this number made of", and
+the answer does not need to repeat the figure the cursor is on, so the title is
+"5,508 vutuv members plus 412 Fediverse accounts that follow them" (the plural
+follows the *Fediverse* half — that is the number that is genuinely 1 on a
+young installation). An `aria-label`, though, **replaces** the element's own
+text for a screen reader, so it stays the plain "5,950 people": the visible
+label has to be inside the accessible name (WCAG 2.5.3), and the breakdown
+would push the figure out of it. An installation nobody follows from out there
+gets the plain total in both. Zero renders nothing (the window before the first
+reconcile), and the slot around it is always rendered so the bar keeps its
+shape either way. The pill links to the public member directory at
+`/system/members`, which deliberately does **not** repeat the breakdown — that
+page prints the count it lists and nothing else (see
+[agents-and-seo.md](agents-and-seo.md)).
 
 The second reader is **admin-only**: the top bar's "new members today" pill
 (`#new-members-today` in `ShellLive`), which shows how many sign-ups confirmed

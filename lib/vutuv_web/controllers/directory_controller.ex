@@ -10,9 +10,7 @@ defmodule VutuvWeb.DirectoryController do
 
   use VutuvWeb, :controller
 
-  alias Vutuv.Accounts
   alias Vutuv.Directory
-  alias Vutuv.Fediverse
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.UserHelpers
@@ -24,33 +22,19 @@ defmodule VutuvWeb.DirectoryController do
     entries = Directory.letter_entries()
     total = Directory.total(entries)
 
-    # The whole membership beside the listed part, so the directory's total
-    # cannot be read as "this is how many members there are". It comes from
-    # Accounts.count_users/0, the same definition the member half of the top
-    # bar's live people total uses, or the two figures on one page would
-    # disagree.
-    members_total = Accounts.count_users()
-
-    # The other half of that pill, and the reason this page names it at all:
-    # the top bar advertises members plus the distinct Fediverse accounts
-    # following them, and this is the page it links to. Without the third
-    # figure a visitor clicking "5,920 people" would land on a page that only
-    # ever says 5,508 and looks like it lost 412 of them.
-    fediverse_total = Fediverse.distinct_follower_count()
-
+    # Deliberately the listed count and nothing else. The whole membership and
+    # the Fediverse head count sat beside it until 2026-08-13; both are the top
+    # bar's business (`#people-total` is on this page too), and three figures
+    # above the A-Z strip turned a directory into a statistics page.
     AgentDocs.respond(conn,
       html: fn conn ->
         render(conn, "index.html",
           page_title: gettext("Member directory"),
           entries: entries,
-          total: total,
-          members_total: members_total,
-          fediverse_total: fediverse_total
+          total: total
         )
       end,
-      doc: fn ->
-        ListDocs.build_directory_index(entries, total, members_total, fediverse_total)
-      end
+      doc: fn -> ListDocs.build_directory_index(entries, total) end
     )
   end
 

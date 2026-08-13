@@ -185,22 +185,17 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   with its member count and letter-page URL. Zero-count letters ride along
   so the doc mirrors the HTML page's full A-Z strip.
 
-  `total` is what the directory lists, `members_total` the whole membership
-  (`Vutuv.Accounts.count_users/0`) — a reader that only saw the first would
-  take it for the site's size. `fediverse_total` is the third figure the page
-  shows: the distinct remote accounts following members, pages or topics here
-  (`Vutuv.Fediverse.distinct_follower_count/0`), which added to the membership
-  gives the people total the top bar advertises.
+  `total` is what the directory lists — the one figure the page itself states.
+  It carried the whole membership and the Fediverse head count beside it until
+  2026-08-13; those belong to the top bar's people pill, and a page whose job
+  is an A-Z index should not open with three numbers.
   """
-  def build_directory_index(entries, total, members_total, fediverse_total) do
+  def build_directory_index(entries, total) do
     AgentDocs.doc_meta("directory", "/system/members")
     |> Map.merge(%{
       title: gettext("Member directory"),
-      description: directory_description(total, members_total, fediverse_total),
+      description: directory_description(total),
       total: total,
-      members_total: members_total,
-      fediverse_followers: fediverse_total,
-      people_total: members_total + fediverse_total,
       letters:
         Enum.map(entries, fn %{letter: letter, count: count} ->
           %{letter: letter, count: count, url: AgentDocs.abs_url("/system/members/#{letter}")}
@@ -209,38 +204,12 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   end
 
   # The Markdown and text renderings carry no counts of their own, so the
-  # gap between the figures has to live in the description — the same
-  # explanation the HTML page prints under its heading.
-  defp directory_description(total, members_total, fediverse_total) do
-    [
-      gettext(
-        "All members who allow search engines to index their profile, grouped by the first letter of their last name."
-      ),
-      gettext(
-        "%{listed} of %{total} members are listed here; the others do not open their profile to search engines.",
-        listed: UI.delimited_count(total),
-        total: UI.delimited_count(members_total)
-      ),
-      fediverse_sentence(fediverse_total, members_total)
-    ]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join(" ")
-  end
-
-  # Only when there is somebody to name: an installation nobody follows from
-  # the Fediverse (and every intranet one, where the feature is off) would
-  # otherwise carry a sentence about zero accounts.
-  defp fediverse_sentence(0, _members_total), do: nil
-
-  defp fediverse_sentence(fediverse_total, members_total) do
-    # ngettext binds %{count} to the raw integer, so the formatted figure rides
-    # its own placeholder.
-    ngettext(
-      "%{fediverse} account from the Fediverse follows members, pages or topics here; together that is %{people} people.",
-      "%{fediverse} accounts from the Fediverse follow members, pages or topics here; together that is %{people} people.",
-      fediverse_total,
-      fediverse: UI.delimited_count(fediverse_total),
-      people: UI.delimited_count(members_total + fediverse_total)
+  # listed figure has to live in the description — the same sentence the HTML
+  # page prints under its heading.
+  defp directory_description(total) do
+    gettext(
+      "%{listed} vutuv members are listed here, grouped by the first letter of their last name; anyone who does not open their profile to search engines is not among them.",
+      listed: UI.delimited_count(total)
     )
   end
 

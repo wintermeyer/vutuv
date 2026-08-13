@@ -450,16 +450,17 @@ defmodule VutuvWeb.ShellLive do
   # what both halves have in common and the label below spells the mixture out.
   defp people_total_word(count), do: ngettext("person", "people", count)
 
-  # The pill's accessible name and hover title, which carry the word at every
-  # width — including the phone, where it does not fit on screen.
+  # The pill's **accessible name**, which carries the word at every width —
+  # including the phone, where it does not fit on screen. It stays the plain
+  # total on purpose: an `aria-label` replaces the element's own text for a
+  # screen reader, so the visible "5,950 people" has to be inside it (WCAG
+  # 2.5.3), and the breakdown below would push the figure out of it. Whoever
+  # wants the composition follows the pill to `/system/members`, which spells
+  # it out in ordinary text for everybody.
   #
-  # Two shapes, because the composition is only worth explaining when there is
-  # something to explain: an installation nobody follows from the Fediverse
-  # (and every intranet installation, where the feature is off) gets the plain
-  # sentence rather than a breakdown ending in "and 0 accounts".
   # `ngettext/4` binds the raw integer to %{count}, hence the separate
   # %{formatted} placeholder for the grouped figure.
-  defp people_total_label(%{fediverse: 0, total: total}) do
+  defp people_total_label(total) do
     ngettext(
       "%{formatted} person",
       "%{formatted} people",
@@ -468,10 +469,24 @@ defmodule VutuvWeb.ShellLive do
     )
   end
 
-  defp people_total_label(%{members: members, fediverse: fediverse, total: total}) do
-    gettext(
-      "%{formatted} people: %{members} members here and %{fediverse} Fediverse accounts that follow them",
-      formatted: delimited_count(total),
+  # The hover title, where the breakdown belongs: a mouse pointer asks "what is
+  # this number made of", and the answer does not need to repeat the number the
+  # cursor is already sitting on.
+  #
+  # Two shapes, because the composition is only worth explaining when there is
+  # something to explain: an installation nobody follows from the Fediverse
+  # (and every intranet installation, where the feature is off) gets the plain
+  # total rather than a sentence ending in "plus 0 accounts".
+  defp people_total_title(%{fediverse: 0, total: total}), do: people_total_label(total)
+
+  defp people_total_title(%{members: members, fediverse: fediverse}) do
+    # Plural on the Fediverse half: that is the number that is genuinely small
+    # on a young installation ("plus 1 Fediverse-Account, der folgt"), while
+    # the member count reaching 1 means nobody is reading this pill anyway.
+    ngettext(
+      "%{members} vutuv members plus %{fediverse} Fediverse account that follows them",
+      "%{members} vutuv members plus %{fediverse} Fediverse accounts that follow them",
+      fediverse,
       members: delimited_count(members),
       fediverse: delimited_count(fediverse)
     )
@@ -638,8 +653,8 @@ defmodule VutuvWeb.ShellLive do
               :if={@people_count.total > 0}
               id="people-total"
               href={~p"/system/members"}
-              title={people_total_label(@people_count)}
-              aria-label={people_total_label(@people_count)}
+              title={people_total_title(@people_count)}
+              aria-label={people_total_label(@people_count.total)}
               class="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-brand-700 sm:px-3 md:hidden lg:inline-flex dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-brand-100"
             >
               <.icon_users />
