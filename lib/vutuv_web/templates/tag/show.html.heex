@@ -18,6 +18,20 @@ card stretch edge to edge with a huge line length and dead space. --%>
       </p>
     </div>
     <.tag_follow_button :if={@current_user} following?={@following_tag?} tag={@tag} />
+
+  <%!-- A visitor who arrived from another server wants two things: this topic's
+  address, and to follow it where their own account lives. The follow button
+  above renders only for a signed-in member, so without this the page showed
+  such a visitor a follower count and no way in short of registering — the exact
+  friction issue #1330 removes. Same markup as the profile and the page card,
+  because the visitor is the same person asking the same thing. --%>
+  <.follow_us_from_elsewhere
+    :if={@fediverse_handle}
+    id="tag-fediverse"
+    handle={@fediverse_handle}
+    name={"#" <> @tag.slug}
+    action={~p"/tags/#{@tag.slug}/fediverse/follow"}
+  />
   </div>
   <div class="breadcrumbs">
     {gen_breadcrumbs([{gettext("Tags"), ~p"/tags"}, gettext("Show")])}

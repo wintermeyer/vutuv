@@ -331,6 +331,11 @@ defmodule VutuvWeb.Router do
     # follow dialog. No login (the whole point is that their account is
     # elsewhere); refused unless this page federates.
     post("/organizations/:slug/fediverse/follow", RemoteFollowController, :create_organization)
+    # And the topic twin (issue #1330): a visitor who arrived from another
+    # server follows `#elixir` where their own account lives, without
+    # registering here — the acquisition path a centralised network cannot
+    # offer at all.
+    post("/tags/:slug/fediverse/follow", RemoteFollowController, :create_tag)
 
     # Switching into an organization and back (issue #1335). Never GET: a
     # request that changes whose name you are speaking in must not be fired by

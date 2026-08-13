@@ -33,6 +33,8 @@ defmodule VutuvWeb.RemoteFollowController do
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Tags
+  alias Vutuv.Tags.Tag
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.RateLimit
@@ -53,6 +55,13 @@ defmodule VutuvWeb.RemoteFollowController do
     case Organizations.fetch_visible_organization(slug, conn.assigns[:current_user]) do
       {:error, :not_found} -> ControllerHelpers.render_error(conn, 404)
       {:ok, organization} -> follow(conn, organization, params["address"] || "")
+    end
+  end
+
+  def create_tag(conn, %{"slug" => slug} = params) do
+    case Tags.get_canonical_tag_by_slug(slug) do
+      nil -> ControllerHelpers.render_error(conn, 404)
+      tag -> follow(conn, tag, params["address"] || "")
     end
   end
 
@@ -117,6 +126,16 @@ defmodule VutuvWeb.RemoteFollowController do
     end
   end
 
+  defp flash_local_follow(conn, %Tag{} = tag, {:ok, {:local_follow, _follow}}) do
+    put_flash(
+      conn,
+      :info,
+      gettext("You are on this vutuv yourself, so you now follow #%{tag} right here.",
+        tag: tag.slug
+      )
+    )
+  end
+
   defp flash_local_follow(conn, subject, {:ok, {:local_follow, _followee}}) do
     put_flash(
       conn,
@@ -129,6 +148,10 @@ defmodule VutuvWeb.RemoteFollowController do
 
   defp flash_local_follow(conn, _subject, {:error, :own_account}) do
     put_flash(conn, :error, gettext("That is your own profile. You cannot follow yourself."))
+  end
+
+  defp flash_local_follow(conn, %Tag{} = tag, {:error, :already_following}) do
+    put_flash(conn, :info, gettext("You already follow #%{tag} here.", tag: tag.slug))
   end
 
   defp flash_local_follow(conn, subject, {:error, :already_following}) do
@@ -147,20 +170,35 @@ defmodule VutuvWeb.RemoteFollowController do
   # account away is followed at the new address, not here; a page cannot move
   # (`moved_to` is a person's decision about their own identity and pages carry
   # no such column), so its gate is the plain one.
+  defp followable?(%Tag{} = tag), do: Fediverse.federated?(tag)
   defp followable?(%Organization{} = organization), do: Fediverse.federated?(organization)
   defp followable?(user), do: Fediverse.federated?(user) and not Fediverse.moved?(user)
 
   defp local_follow(viewer, %Organization{} = organization),
     do: Fediverse.follow_local_organization(viewer, organization)
 
+  # A member whose "own server" is this one gets the plain vutuv tag follow —
+  # the same subscription the button on the page makes.
+  defp local_follow(viewer, %Tag{} = tag), do: local_tag_follow(Tags.follow_tag(viewer, tag.id))
+
   defp local_follow(viewer, user), do: Fediverse.follow_local_member(viewer, user)
+
+  defp local_tag_follow({:ok, follow}), do: {:ok, {:local_follow, follow}}
+  defp local_tag_follow(other), do: other
 
   # The two sentences that name what the visitor is looking at. Their own
   # msgids rather than an interpolated word: German inflects around it.
+  defp not_federating_message(%Tag{}),
+    do: gettext("This topic is not on the Fediverse.")
+
   defp not_federating_message(%Organization{}),
     do: gettext("This page is not on the Fediverse.")
 
   defp not_federating_message(_user), do: gettext("This profile is not on the Fediverse.")
+
+  defp sign_in_message(%Tag{}) do
+    gettext("That address is on this vutuv. Sign in and use the Follow button on this page.")
+  end
 
   defp sign_in_message(%Organization{}) do
     gettext("That address is on this vutuv. Sign in and use the Follow button on this page.")
@@ -197,6 +235,9 @@ defmodule VutuvWeb.RemoteFollowController do
       _ -> gettext("Your server")
     end
   end
+
+  defp back_to(conn, %Tag{} = tag),
+    do: redirect(conn, to: ~p"/tags/#{tag.slug}" <> "#tag-fediverse")
 
   defp back_to(conn, %Organization{} = organization) do
     redirect(conn, to: Organizations.canonical_path(organization) <> "#organization-fediverse")

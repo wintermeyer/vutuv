@@ -2,6 +2,7 @@ defmodule VutuvWeb.TagController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Jobs
   alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
@@ -11,6 +12,7 @@ defmodule VutuvWeb.TagController do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ContentPolicy
+  alias VutuvWeb.Fediverse.Docs
 
   # Not the shared `ResolveSlug` plug: an alternative name for a topic keeps its
   # own slug (issue #1338), and that URL must lead to the topic rather than 404
@@ -82,7 +84,11 @@ defmodule VutuvWeb.TagController do
     # member's state here would offer to unfollow something the page never
     # followed.
     following_tag? = tag_followed?(conn.assigns[:acting_as], current_user, tag)
-    tag_follower_count = Tags.tag_follower_count(tag)
+    # The public figure is everyone following this topic, wherever their account
+    # lives (issue #1330): the local `TagFollow` rows plus the remote actors.
+    # Splitting them would ask a reader to add two numbers that mean one thing.
+    tag_follower_count =
+      Tags.tag_follower_count(tag) + Fediverse.tag_remote_follower_count(tag)
 
     # A tag page below the search-engine bar (fewer than
     # Tags.min_indexable_members/0 visible members and no public post) is a
@@ -105,6 +111,9 @@ defmodule VutuvWeb.TagController do
           current_user: current_user,
           following_tag?: following_tag?,
           tag_follower_count: tag_follower_count,
+          # nil unless this installation federates, in which case the card shows
+          # the topic's address and the "follow from your own server" form.
+          fediverse_handle: tag_fediverse_handle(tag),
           open_positions: Jobs.list_tag_postings(tag, conn.assigns[:current_user]),
           # The timeline itself is the embedded VutuvWeb.TagLive.Timeline
           # LiveView; the controller only hands it the tag and the controls a
@@ -171,6 +180,12 @@ defmodule VutuvWeb.TagController do
   # Who the pill speaks for: the page being acted as, else the member, else
   # nobody. One decider, so the shown state and the toggle behind it cannot
   # disagree — the same shape `follower_of/1` has on the organization page.
+  # `@name@tags.<host>`, or nil when the installation does not federate — which
+  # is what the card renders on.
+  defp tag_fediverse_handle(tag) do
+    if Fediverse.federated?(tag), do: "@" <> Docs.acct(tag)
+  end
+
   defp tag_followed?(%Organization{} = page, _member, tag),
     do: Tags.tag_followed_by_organization?(page, tag)
 

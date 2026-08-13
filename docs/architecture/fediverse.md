@@ -1139,11 +1139,25 @@ own actor. An alias announces nothing — its canonical already did.
 A topic nobody follows queues nothing and does not even mint a keypair, so the
 common case costs one query.
 
-### What is not built yet
+### The tag page's own half
 
-The tag page's own half: a remote-follow entry point for a logged-out visitor
-(the button renders only for members today) and a follower count that sums the
-local `TagFollow` rows with the remote ones.
+A visitor who arrived from another server gets the two things they came for, in
+the same card the profile and the organization page use
+(`<.follow_us_from_elsewhere>`): the topic's address to copy, and a form that
+resolves **their** server's follow dialog and sends them there, so the follow is
+confirmed where their account lives. Before this the page showed such a visitor
+a follower count and no way in short of registering, since the follow button
+renders only for a signed-in member — the exact friction this issue set out to
+remove.
+
+The follower figure is **one number**: the local `TagFollow` rows plus the
+remote actors. They are the same thing — people following this topic — and
+splitting them would ask a reader to add two numbers up.
+
+One case the shared controller had to learn: an address on **our** tag host is
+us. Asking it over the network would be vutuv WebFingering itself and could only
+route the visitor back here, so a signed-in member naming it simply gets the
+plain vutuv tag follow. That is `own_host?/1` again, in its third caller.
 
 ## Deliberate v1 limits
 
