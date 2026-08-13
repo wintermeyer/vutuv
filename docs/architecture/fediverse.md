@@ -1098,6 +1098,40 @@ follow gate, the search page's follow offer, `own_object?/3`. Signing a request
 to ourselves and waiting for an Accept our own inbox would have to invent is the
 failure v7.197.0 already produced once, via `www.`.
 
+**On vutuv, a tag address is a tag — it never sends the reader out.** The
+address exists so somebody on another server can follow the topic, so members
+write it in posts ("dem Account `@php@tags.vutuv.de` folgen"), and it then has
+to behave sensibly for the readers who are *already here*. Two places answer it,
+both by resolving the topic locally rather than treating our own host as
+somebody else's:
+
+- **Rendered text.** `VutuvWeb.Markdown` links `@<slug>@tags.<host>` to
+  `/tags/<slug>`, same tab and no `rel`, exactly like the `#hashtag` that means
+  the same thing. The generic `@user@host` rule pointed at the Mastodon-web
+  convention `https://tags.<host>/@<slug>`, which is not a route on that host at
+  all — it serves the actor document at `/<slug>`, and `@<slug>` fails the tag
+  slug grammar — so the one clickable thing in a sentence about a vutuv topic
+  left vutuv and 404ed, for remote readers of the federated copy too. The slug
+  joins the body's hashtags, so it is resolved by the same single
+  `Tags.linkable_slugs/1` call: one query, the non-empty-tag gate, and alias
+  redirects included. The **address stays the visible text** — the author wrote
+  it for the reader who has to copy it.
+- **A pasted address.** `follow_remote/2` grew a tag branch beside the member
+  one: `@php@tags.<host>` becomes a plain `Vutuv.Tags` subscription
+  (`follow_local_tag/2` → `{:ok, {:local_tag_follow, tag}}`), never a Follow. It
+  could not have been anything else — `own_host?/1` refuses to sign a request to
+  ourselves — so the only choice was between doing the real thing and a dead
+  end. The account lookup box likewise navigates such an address to the tag page
+  instead of refusing (`local_tag_for_address/1`, the twin of
+  `local_member_for_address/1`).
+
+Both resolve an **alias** to the topic it was merged into
+(`Tags.resolve_tag_by_slug/1`), which `get_canonical_tag_by_slug/1` deliberately
+does not: that one guards what vutuv *publishes* (one topic, one address, so an
+alias must never federate as a second one), while these answer "which topic did
+the member mean", where an old spelling copied out of an old post should reach
+the topic — the same courtesy the tag page's 301 already does.
+
 **The slug is the actor name, character for character**, which is why this
 waited for #1337/#1332 to settle the slug grammar to `^[a-z0-9_]+$` — the
 narrowest local part any server accepts. Renaming an actor other servers already

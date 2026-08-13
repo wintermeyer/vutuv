@@ -140,6 +140,16 @@ defmodule VutuvWeb.FediverseFollowingLive do
          |> put_flash(:info, local_follow_message(member))
          |> patch_browse(%{}, &browse_path/1)}
 
+      # Same again for a topic on our own tag host (issue #1330): what the
+      # member asked for is a tag subscription, and that is what they got.
+      {:ok, {:local_tag_follow, tag}} ->
+        {:noreply,
+         socket
+         |> assign(:address, "")
+         |> assign_error(nil)
+         |> put_flash(:info, local_tag_follow_message(tag))
+         |> patch_browse(%{}, &browse_path/1)}
+
       {:ok, follow} ->
         # Patch rather than reload in place: it keeps any active filter and
         # drops the `?address=` the search page may have arrived with, so a
@@ -230,6 +240,14 @@ defmodule VutuvWeb.FediverseFollowingLive do
     gettext("@%{handle} is on this vutuv, so you now follow them here.",
       handle: member.username
     )
+  end
+
+  # The tag twin: the address named a topic of this installation, so the member
+  # got the subscription rather than a request that could never be sent. It
+  # names the tag page, because the table below will not list this either — and
+  # because a subscription is silent, so the link is the only way to check.
+  defp local_tag_follow_message(tag) do
+    gettext("#%{tag} is a topic on this vutuv, so you now follow the tag here.", tag: tag.slug)
   end
 
   # A Follow is a request, so the confirmation says what really happened rather

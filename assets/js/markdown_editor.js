@@ -549,7 +549,9 @@ export const MarkdownEditor = {
   // VutuvWeb.Markdown, the rendering-side guard.
   normalizeMarkdown(md) {
     return this.mapOutsideFences(md, (part) =>
-      this.canonicalizeFootnotes(this.canonicalizeMentions(this.canonicalizeUrls(part)))
+      this.canonicalizeFootnotes(
+        this.canonicalizeMentions(this.canonicalizeAddresses(this.canonicalizeUrls(part)))
+      )
         .replace(/<br\s*\/?>/gi, "")
         .replace(/\n{3,}/g, "\n\n")
     )
@@ -592,6 +594,41 @@ export const MarkdownEditor = {
       .replace(/[a-z][a-z0-9+.-]*\\?:\/\/[^\s<>]*/gi, (url) =>
         url.replace(/\\(.)/g, "$1")
       )
+  },
+
+  // A **fediverse handle** (`@php@tags.vutuv.de`, `@hostsharing@geno.social`)
+  // and a plain **email address** are the same shape to GFM: its autolink
+  // literal extension parses `user@host.tld` into a link node with a `mailto:`
+  // url. vutuv stores neither as a link — the renderer turns a bare
+  // `@user@host` into the account link itself and leaves an email as text — so
+  // remark's two serializations of that node are both corruption here, and the
+  // spelling depends only on which path the body took:
+  //
+  //   * a re-parse (draft restore, post edit, or any re-seed) gives a link
+  //     node, serialized as an autolink `<php@tags.vutuv.de>` — and vutuv
+  //     escapes `<` at render time (typed HTML must show as text), so the
+  //     member's sentence read `@<php@tags.vutuv.de>` on the page; and
+  //   * freshly typed text stays a plain text node, which
+  //     mdast-util-gfm-autolink-literal escapes so it cannot re-parse as an
+  //     autolink — `php\@tags.vutuv.de`, a visible backslash in the post.
+  //
+  // The second is worse than it looks: `Vutuv.Mentions` reads the raw source,
+  // where that backslash splits one fediverse handle into the two LOCAL
+  // handles `@php` and `@tags`, so the mention-existence check refuses to save
+  // the post ("the handle @php does not exist") — the exact shape of the
+  // `@ulrich\_wolf` bug `canonicalizeMentions` below exists for.
+  //
+  // Canonicalize both back to the bare form: drop the autolink brackets, then
+  // drop the backslash escaping the `@`. Same trade-off as `canonicalizeUrls`
+  // above, including its one blind spot — an INLINE code span is not skipped
+  // (only fenced blocks are), so a literal `<user@host>` shown as a sample
+  // inside backticks loses its brackets. Lifting all four canonicalizers onto
+  // a code-region split (the server's `split_code_regions/1`) would close that
+  // for good.
+  canonicalizeAddresses(md) {
+    return md
+      .replace(/<([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)>/g, "$1")
+      .replace(/([A-Za-z0-9._%+-]+)\\@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/g, "$1@$2")
   },
 
   // vutuv stores **bare** `@handle` / `#hashtag` mentions and links them

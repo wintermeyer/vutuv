@@ -946,9 +946,17 @@ defmodule VutuvWeb.Markdown do
   # which group is set. A fediverse handle needs no DB lookup, so it only raises
   # the `fediverse?` flag — that keeps the token walk from being skipped for a
   # body whose only entities are fediverse handles.
+  #
+  # The one exception is our **own tag host** (issue #1330): `@php@tags.<host>`
+  # is a topic of this installation wearing a Fediverse address, so its user
+  # part is a tag slug and joins the hashtags — resolved by the same single
+  # `Tags.linkable_slugs/1` call, alias redirects included.
   defp collect_candidate([user, host | _], {mentions, hashtags, _fediverse?})
-       when user != "" and host != "",
-       do: {mentions, hashtags, true}
+       when user != "" and host != "" do
+    if Fediverse.tag_host?(host),
+      do: {mentions, [String.downcase(user) | hashtags], true},
+      else: {mentions, hashtags, true}
+  end
 
   defp collect_candidate([_, _, handle | _], {mentions, hashtags, fediverse?})
        when handle != "",
@@ -1001,21 +1009,51 @@ defmodule VutuvWeb.Markdown do
 
   defp link_entities_in_text(text, users, tags) do
     Regex.replace(@entity, text, fn
-      _whole, user, host, "", "" -> fediverse_link(user, host)
+      whole, user, host, "", "" -> fediverse_link(whole, user, host, tags)
       whole, "", "", handle, "" -> mention_link(whole, handle, users)
       whole, "", "", "", hashtag -> hashtag_link(whole, hashtag, tags)
     end)
   end
 
-  # A fediverse handle `@user@host` links to that remote account's profile at
-  # the Mastodon-web convention `https://host/@user` (geno.social and the vast
-  # majority of servers). This is a pure string mapping — no WebFinger lookup —
-  # so it also works on air-gapped installs and never leaks a reader's request
-  # to the remote host at render time. The host is lowercased (hostnames are
+  # A fully-qualified `@user@host` address. Almost always somebody else's
+  # account — but our **own tag host** wears the same shape, and there the
+  # reader wants the tag page here rather than a trip to another server.
+  defp fediverse_link(whole, user, host, tags) do
+    if Fediverse.tag_host?(host),
+      do: tag_actor_link(whole, user, tags),
+      else: remote_actor_link(user, host)
+  end
+
+  # A topic's Fediverse address (issue #1330) is `@<slug>@tags.<our host>`, so a
+  # member who writes one is naming a tag of **this** installation. Sending the
+  # reader to the Mastodon-web convention `https://tags.<host>/@<slug>` was
+  # doubly wrong: that host serves the actor's ActivityPub JSON at `/<slug>` and
+  # nothing a person can read, and `@<slug>` is not even a legal tag slug there,
+  # so the one clickable thing in a sentence about a vutuv topic left vutuv and
+  # 404ed. It links to `/tags/:slug` instead — same tab, no `rel`, exactly like
+  # the `#hashtag` that means the same thing.
+  #
+  # The **address stays the visible text**: the author wrote it so a reader on
+  # another network can copy it, and rewriting it to `#slug` would take that
+  # away. Gated on the same non-empty-tag rule as `hashtag_link/3` (an
+  # unresolved slug stays plain text), and `Tags.linkable_slugs/1` hands back
+  # the canonical slug, so an alias lands on the page rather than a redirect.
+  defp tag_actor_link(whole, user, tags) do
+    case Map.get(tags, String.downcase(user)) do
+      nil -> whole
+      slug -> ~s(<a href="/tags/#{slug}" class="hashtag">#{whole}</a>)
+    end
+  end
+
+  # Any other host: link to that remote account's profile at the Mastodon-web
+  # convention `https://host/@user` (geno.social and the vast majority of
+  # servers). This is a pure string mapping — no WebFinger lookup — so it also
+  # works on air-gapped installs and never leaks a reader's request to the
+  # remote host at render time. The host is lowercased (hostnames are
   # case-insensitive); the typed user case is kept in both the URL and the
   # label. Opens in a new tab like other external links; both parts are a
   # validated charset (`[A-Za-z0-9_]` / `[A-Za-z0-9.-]`), so no escaping needed.
-  defp fediverse_link(user, host) do
+  defp remote_actor_link(user, host) do
     href = "https://#{String.downcase(host)}/@#{user}"
 
     ~s(<a href="#{href}" target="_blank" rel="noopener noreferrer" class="mention">@#{user}@#{host}</a>)

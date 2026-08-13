@@ -182,13 +182,12 @@ defmodule VutuvWeb.FediverseAccountLive do
         {:noreply, push_navigate(socket, to: ~p"/system/fediverse/account/#{account.id}")}
 
       {:error, :local_account} ->
-        # An address on this very vutuv: when it names a member, their page is
-        # their profile, so go there instead of refusing; the refusal stays for
-        # a handle that resolves to nobody.
-        case Fediverse.local_member_for_address(address) do
-          nil -> {:noreply, socket |> assign(:address, address) |> assign(:error, :local_account)}
-          member -> {:noreply, push_navigate(socket, to: ~p"/#{member.username}")}
-        end
+        # An address on one of this vutuv's own hosts already HAS a page here,
+        # so go to it instead of explaining why we will not fetch ourselves: a
+        # member's is their profile, a tag actor's (`@php@tags.<host>`, issue
+        # #1330) is the tag page. The refusal stays for a name nothing here
+        # answers to.
+        local_destination(socket, address)
 
       {:error, reason} ->
         {:noreply, socket |> assign(:address, address) |> assign(:error, reason)}
@@ -197,6 +196,23 @@ defmodule VutuvWeb.FediverseAccountLive do
 
   def handle_event("typing", %{"address" => address}, socket) do
     {:noreply, socket |> assign(:address, address) |> assign(:error, nil)}
+  end
+
+  # Where an address on one of our own hosts really points (defined below the
+  # last `handle_event/3` clause so the group is not split). Members are asked
+  # first: they and the tag actors live on different hosts, so at most one can
+  # answer, and the order only decides which lookup is spent.
+  defp local_destination(socket, address) do
+    cond do
+      member = Fediverse.local_member_for_address(address) ->
+        {:noreply, push_navigate(socket, to: ~p"/#{member.username}")}
+
+      tag = Fediverse.local_tag_for_address(address) ->
+        {:noreply, push_navigate(socket, to: ~p"/tags/#{tag.slug}")}
+
+      true ->
+        {:noreply, socket |> assign(:address, address) |> assign(:error, :local_account)}
+    end
   end
 
   # Every act on a card here, one shape (below the last `handle_event/3` clause,

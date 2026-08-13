@@ -91,6 +91,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.SearchText
   alias Vutuv.Social
   alias Vutuv.SocialFeed.Http
+  alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
   alias VutuvWeb.Fediverse.Docs
@@ -900,8 +901,9 @@ defmodule Vutuv.Fediverse do
       this account no longer acts out there.
     * `:invalid_address` / `:unreachable` / `:no_actor` — from the address parse
       and the WebFinger lookup (`RemoteFollow`).
-    * `:local_account` — the address is on this very installation but names no
-      member (a typo, a renamed handle).
+    * `:local_account` — the address is on one of this installation's own hosts
+      but names nothing here (a typo, a renamed handle, a tag that never
+      existed).
     * `:own_account` — the address is the member's very own. Nobody follows
       themselves, on either network.
     * `:instance_blocked` — the operator shut that server out.
@@ -911,11 +913,19 @@ defmodule Vutuv.Fediverse do
       answer whether the pair is a remote follow or a vutuv one).
     * `:unreachable_actor` — WebFinger answered but the actor document did not.
 
-  **An address that names a member of this installation never federates**:
-  following them is a plain vutuv follow, so that is what happens —
-  `follow_local_member/2` runs and `{:ok, {:local_follow, member}}` comes back
-  instead of a follow row. Doing the real thing beats both a signed request to
-  ourselves and a refusal that sends the member off to do it by hand.
+  **An address on one of our own hosts never federates**, so instead of a
+  signed request to ourselves it becomes the local thing the member asked for:
+
+    * a member here → a plain vutuv follow, `{:ok, {:local_follow, member}}`
+      (`follow_local_member/2`);
+    * a topic on our tag host (`@php@tags.<our host>`, issue #1330) → a plain
+      tag subscription, `{:ok, {:local_tag_follow, tag}}`
+      (`follow_local_tag/2`). A member who reads "follow @php@tags.vutuv.de" in
+      a post and pastes it here means "subscribe me to #php", and that address
+      is the only spelling the post can offer a reader on another network.
+
+  Doing the real thing beats both the request to ourselves and a refusal that
+  sends the member off to do it by hand.
 
   The state a remote row starts in is `requested`, because that is the truth:
   an account that approves its followers by hand may never answer, and a page
@@ -943,7 +953,10 @@ defmodule Vutuv.Fediverse do
       {:member, member} ->
         with :ok <- check_can_resolve(), do: follow_local_member(user, member)
 
-      :unknown_member ->
+      {:tag, tag} ->
+        with :ok <- check_can_resolve(), do: follow_local_tag(user, tag)
+
+      :unknown ->
         with :ok <- check_can_resolve(), do: {:error, :local_account}
     end
   end
@@ -994,6 +1007,33 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  The vutuv **tag subscription** behind a Fediverse address that turned out to
+  name a topic of this very installation (`@php@tags.<our host>`, issue #1330):
+  a plain `Vutuv.Tags.follow_tag/2`, no signed request, no remote rows.
+
+  The tag twin of `follow_local_member/2`, and there for the same reason. A tag
+  actor lives on *our* tag host, so a Follow could only ever be vutuv signing a
+  request to itself — which is precisely what `own_host?/1` refuses. Refusing
+  was therefore the whole answer, and a dead end for the one thing the member
+  asked for; doing the real thing is better than sending them off to find the
+  tag page and press a different button.
+
+  Answers in `follow_local_member/2`'s vocabulary so one caller speaks to both.
+  `Tags.follow_tag/2` is idempotent by design (the pill is a toggle), so the
+  already-following case is asked before, not read off the result.
+  """
+  def follow_local_tag(%User{} = user, %Tag{} = tag) do
+    if Tags.tag_followed?(user, tag) do
+      {:error, :already_following}
+    else
+      case Tags.follow_tag(user, tag) do
+        {:ok, _tag_follow} -> {:ok, {:local_tag_follow, tag}}
+        {:error, _refused} -> {:error, :follow_failed}
+      end
+    end
+  end
+
+  @doc """
   The member of this installation a pasted Fediverse address names, or nil —
   nil for every remote address too, so it doubles as "is this one of ours, and
   whose". Pure string work plus one lookup; no network.
@@ -1008,20 +1048,66 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  @doc """
+  The **tag** of this installation a pasted Fediverse address names, or nil —
+  the topic twin of `local_member_for_address/1`, answering nil for a member
+  address and for every remote one.
+
+  Canonical: an address naming an alias of a merged topic (issue #1338) answers
+  the tag the alias points at, so a subscription and a link both land on the
+  page that actually holds the posts.
+  """
+  def local_tag_for_address(address) do
+    case local_follow_target(address) do
+      {:tag, tag} -> tag
+      _ -> nil
+    end
+  end
+
   # Whether the pasted address stays on this installation, answered before any
-  # Fediverse gate: `{:member, user}` when it names a member here,
-  # `:unknown_member` when the host is ours but the handle resolves to nobody,
-  # `:remote` for everything else (including whatever does not parse — the
-  # remote chain owns those refusals).
+  # Fediverse gate: `{:member, user}` when it names a member here, `{:tag, tag}`
+  # when it names a topic on our tag host, `:unknown` when one of our hosts owns
+  # it but nothing here answers to that name, `:remote` for everything else
+  # (including whatever does not parse — the remote chain owns those refusals).
+  #
+  # Both of our hosts are asked, because both are us: the apex carries the
+  # member/page handle namespace and `tags.<host>` carries the topics (issue
+  # #1330). Asking only the apex is what left a tag address falling through to
+  # the remote chain, where it could only be refused.
   defp local_follow_target(address) do
-    with {:ok, {name, host}} <- RemoteFollow.parse_address(address),
-         true <- local_host?(host) do
-      case Accounts.get_user_by_username(Handles.normalize(name)) do
-        %User{} = member -> {:member, member}
-        nil -> :unknown_member
-      end
-    else
+    case RemoteFollow.parse_address(address) do
+      {:ok, {name, host}} -> local_host_target(name, host)
       _ -> :remote
+    end
+  end
+
+  defp local_host_target(name, host) do
+    cond do
+      local_host?(host) -> member_target(name)
+      tag_host?(host) -> tag_target(name)
+      true -> :remote
+    end
+  end
+
+  defp member_target(name) do
+    case Accounts.get_user_by_username(Handles.normalize(name)) do
+      %User{} = member -> {:member, member}
+      nil -> :unknown
+    end
+  end
+
+  # A tag slug is lowercase (`^[a-z0-9_]+$`, issue #1332), and a pasted address
+  # may not be, so it is downcased like the handle beside it.
+  #
+  # `resolve_tag_by_slug/1`, not `get_canonical_tag_by_slug/1`: the strict one
+  # guards what vutuv *publishes* as an actor (one topic, one address), while
+  # this is a member telling us which topic they meant — and an old spelling
+  # they copied out of an old post should reach the topic, exactly as the tag
+  # page's 301 and the `#hashtag` link already take them there.
+  defp tag_target(name) do
+    case Tags.resolve_tag_by_slug(String.downcase(name)) do
+      %Tag{} = tag -> {:tag, tag}
+      nil -> :unknown
     end
   end
 

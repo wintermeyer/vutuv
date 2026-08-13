@@ -41,7 +41,16 @@ defmodule VutuvWeb.GermanCatalogTest do
     # plainly that nothing has changed yet: the merge that added those labels
     # fuzzy-filled "Now" with "Nein" (No) and "Not yours yet." with "Noch keine
     # Reposts.", which is precisely the failure this test exists to fail on.
-    "lib/vutuv_web/templates/username/confirm.html.heex"
+    "lib/vutuv_web/templates/username/confirm.html.heex",
+    # The two surfaces that answer a pasted Fediverse address. They joined when
+    # a tag actor's address became a tag subscription rather than a refusal, and
+    # they earned their place on the way in: extracting that one new sentence
+    # fuzzy-filled THREE of the tag wordings #1330 had shipped untranslated —
+    # "This topic is not on the Fediverse." with the German for "This profile
+    # …", and both `#%{tag}` sentences with the `@%{handle}` ones, i.e. a
+    # translation interpolating a binding its own msgid does not carry.
+    "lib/vutuv_web/live/fediverse_following_live.ex",
+    "lib/vutuv_web/controllers/remote_follow_controller.ex"
   ]
 
   # `gettext("…")` / `ngettext("…", …)` with a plain literal. A string built at

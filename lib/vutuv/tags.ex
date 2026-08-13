@@ -170,6 +170,28 @@ defmodule Vutuv.Tags do
   def get_canonical_tag_by_slug(_), do: nil
 
   @doc """
+  The topic a slug names, **following an alias** to the tag it was merged into
+  (#1338) — exactly where `get_canonical_tag_by_slug/1` deliberately answers
+  nil.
+
+  The two sit side by side because they answer different questions. That one
+  guards what vutuv **publishes**: a topic's fediverse actor may have one
+  address only, so an alias must never federate as a second one (#1330). This
+  one answers "which topic did the member mean", where an old spelling landing
+  on the topic beats a dead end — the same courtesy the tag page's 301 from an
+  alias already does, and what `linkable_slugs/1` does for a `#hashtag`.
+  """
+  def resolve_tag_by_slug(slug) when is_binary(slug) do
+    case Repo.get_by(Tag, slug: slug) do
+      %Tag{merged_into_id: nil} = tag -> tag
+      %Tag{merged_into_id: canonical_id} -> Repo.get(Tag, canonical_id)
+      nil -> nil
+    end
+  end
+
+  def resolve_tag_by_slug(_), do: nil
+
+  @doc """
   The display names a submit of `value` on the add-tag form will actually
   attach, in typed order — the live preview of issue #848.
 

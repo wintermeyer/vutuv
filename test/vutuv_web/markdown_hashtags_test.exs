@@ -134,4 +134,83 @@ defmodule VutuvWeb.MarkdownHashtagsTest do
 
     assert html =~ ~s(href="/tags/#{@elixir_tag_down}")
   end
+
+  describe "a tag actor's address (@slug@tags.<host>)" do
+    # A topic's Fediverse address (issue #1330) is `@<slug>@tags.<our host>`, and
+    # a member writing one is naming a **tag of this installation**, not a
+    # stranger's account. The generic `@user@host` rule sent the reader to the
+    # Mastodon-web convention `https://tags.<host>/@<slug>` — which on that host
+    # is not even a route (it serves the actor's ActivityPub JSON at
+    # `/<slug>`, and `@php` is no legal tag slug), so the one link a reader
+    # could click about a vutuv topic left vutuv and 404ed.
+    #
+    # No app-env flip is needed and the file stays async: `tag_host/0` defaults
+    # to the `tags.` subdomain of the endpoint host, which is `tags.localhost`
+    # here — a real two-label host the `@user@host` grammar matches.
+    defp tag_address(slug), do: "@#{slug}@#{Vutuv.Fediverse.tag_host()}"
+
+    test "links to the local tag page, not out to the tag host" do
+      populated_tag(@elixir_tag)
+      html = render("Abonnieren: #{tag_address(@elixir_tag_down)}")
+
+      assert html =~ ~s(href="/tags/#{@elixir_tag_down}")
+      assert html =~ ~s(class="hashtag")
+      # the address the author typed stays the visible text — it is what a
+      # reader on another network has to copy
+      assert html =~ ">#{tag_address(@elixir_tag_down)}</a>"
+      refute html =~ "https://#{Vutuv.Fediverse.tag_host()}"
+    end
+
+    test "stays in the same tab (it is one of our own pages)" do
+      populated_tag(@elixir_tag)
+      html = render(tag_address(@elixir_tag_down))
+
+      refute html =~ ~s(target="_blank")
+      refute html =~ ~s(rel="noopener noreferrer")
+    end
+
+    test "matches the slug case-insensitively" do
+      populated_tag("PHP")
+      html = render("dem Account #{tag_address("PHP")} folgen")
+
+      assert html =~ ~s(href="/tags/php")
+      assert html =~ ">#{tag_address("PHP")}</a>"
+    end
+
+    test "resolves in a post body too" do
+      populated_tag(@elixir_tag)
+      html = render_post("Folgt #{tag_address(@elixir_tag_down)}")
+
+      assert html =~ ~s(href="/tags/#{@elixir_tag_down}")
+    end
+
+    # `render_remote/1` links hashtags but deliberately never a bare `@name`.
+    # A fully-qualified address on OUR tag host is not ambiguous, though: it
+    # names one tag of ours, so a cached remote post links it here as well.
+    test "a remote post's mention of one of our tags links here too" do
+      populated_tag(@elixir_tag)
+      html = Markdown.render_remote("boost: #{tag_address(@elixir_tag_down)}")
+
+      assert html =~ ~s(href="/tags/#{@elixir_tag_down}")
+      # our own page is never nofollowed — the same rule `#hashtag` follows
+      refute html =~ "ugc nofollow"
+    end
+
+    test "a tag address nobody has posted or claimed stays plain text" do
+      slug = "lonely#{System.unique_integer([:positive])}"
+      insert(:tag, name: slug, slug: slug)
+      html = render("siehe #{tag_address(slug)}")
+
+      refute html =~ "<a"
+      assert html =~ tag_address(slug)
+    end
+
+    test "an address on any OTHER host still links out to that account" do
+      populated_tag(@elixir_tag)
+      html = render("Follow @#{@elixir_tag_down}@geno.social today")
+
+      assert html =~ ~s(href="https://geno.social/@#{@elixir_tag_down}")
+      refute html =~ ~s(href="/tags/#{@elixir_tag_down}")
+    end
+  end
 end

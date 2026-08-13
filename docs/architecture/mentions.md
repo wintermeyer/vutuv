@@ -68,6 +68,22 @@ team.
   drops the escape before scanning; the editor also stores the bare handle
   (`assets/js/markdown_editor.js` `canonicalizeMentions`, backfilled by the
   `RepairMilkdownEscapedMentions` migration), so the source stays canonical too.
+- A **fediverse handle round-tripped the same way, and worse**. GFM's autolink
+  literal reads `user@host.tld` as an email, so remark parses `@php@tags.vutuv.de`
+  into a `mailto:` link node and serializes it back in one of two shapes,
+  depending only on which path the body took: `@<php@tags.vutuv.de>` after a
+  re-parse (a draft restore, a post edit), and `@php\@tags.vutuv.de` on a first
+  write. The first shipped and was reported — vutuv escapes `<` at render time,
+  so the sentence read `@<php@tags.vutuv.de>` on the page. The second is the
+  dangerous one here: that backslash splits **one fediverse handle into the two
+  local handles** `@php` and `@tags`, so the existence check refuses to save the
+  body at all ("the handle @php does not exist"), which is the `@ulrich\_wolf`
+  failure again with a different escape. Both are canonicalized away by
+  `canonicalizeAddresses` in the editor and backfilled by
+  `RepairMilkdownEscapedAddresses`. The pattern to carry forward: **any Markdown
+  syntax remark knows and vutuv does not store is a round-trip hazard**, and
+  each one costs an editor transform plus a repair migration (URLs, `_` in
+  handles, footnotes, now addresses).
 - The check runs only when the field actually **changed**; editing an old body
   with a since-dead mention is not forced to clean up unless you touch it.
 - The bulk **LinkedIn import** carries arbitrary external prose ("Managed the
