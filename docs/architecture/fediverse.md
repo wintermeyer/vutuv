@@ -1139,6 +1139,25 @@ own actor. An alias announces nothing — its canonical already did.
 A topic nobody follows queues nothing and does not even mint a keypair, so the
 common case costs one query.
 
+### Two server blocks, one federation
+
+Worth knowing before anybody touches the webserver: a topic's `inbox`, `outbox`
+and `followers` live on `tags.<host>` and are served by that host's own nginx
+block, while the `sharedInbox` the same actor document advertises points at
+`/system/inbox` on the **apex** and is served by the apex block. Both paths are
+part of one federation, so a change to either block can break half of it while
+the other half keeps answering — which is the kind of failure that looks like
+"some servers can follow us and some cannot".
+
+The tag host has its own certificate rather than joining the apex's
+`server_name`: sharing one would mean reissuing the production certificate of
+vutuv.de, a risk at the running apex for no gain. Two operational details from
+setting it up, both the sort that fail silently: the `return 301` on port 80
+belongs in `location /` and not at server level, or the http-01 challenge is
+swallowed and renewal quietly stops working weeks later; and the new access log
+has to be caught by the logrotation and IP-anonymisation jobs, which it is
+because both match by wildcard rather than by a list of names.
+
 ### The tag page's own half
 
 A visitor who arrived from another server gets the two things they came for, in
