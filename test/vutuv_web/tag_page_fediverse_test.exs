@@ -46,6 +46,37 @@ defmodule VutuvWeb.TagPageFediverseTest do
     assert html =~ ~s(action="/tags/#{tag.slug}/fediverse/follow")
   end
 
+  test "the card sits below the header, not inside it", %{conn: conn} do
+    tag = topic()
+
+    doc = conn |> get(~p"/tags/#{tag.slug}") |> html_response(200) |> LazyHTML.from_document()
+
+    assert LazyHTML.query(doc, "#tag-fediverse") |> Enum.any?(),
+           "the fediverse card is missing"
+
+    # It shipped inside `.profile-header` once, which is a flex row for the
+    # title and the follow pill: as a third child there the card was squeezed to
+    # a column and the handle rendered one character per line. The member's own
+    # pill has to stay in that header, the card must not.
+    assert LazyHTML.query(doc, ".profile-header #tag-fediverse") |> Enum.empty?(),
+           "the fediverse card is inside the header again"
+
+    assert LazyHTML.query(doc, ".profile-header") |> Enum.any?()
+  end
+
+  test "a signed-in member still gets the plain follow pill", %{conn: conn} do
+    tag = topic()
+    {conn, _member} = create_and_login_user(conn)
+
+    html = conn |> get(~p"/tags/#{tag.slug}") |> html_response(200)
+
+    # The fediverse card is for people who are somewhere else. A member of this
+    # installation subscribes with one click (#872), and that must not be the
+    # thing that got pushed aside by it.
+    assert html =~ "/tag_follows"
+    assert html =~ ~s(id="tag-fediverse")
+  end
+
   test "the follower count sums the members and the remote accounts", %{conn: conn} do
     tag = topic()
     member = insert(:activated_user)

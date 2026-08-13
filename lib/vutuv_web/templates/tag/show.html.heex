@@ -18,20 +18,6 @@ card stretch edge to edge with a huge line length and dead space. --%>
       </p>
     </div>
     <.tag_follow_button :if={@current_user} following?={@following_tag?} tag={@tag} />
-
-  <%!-- A visitor who arrived from another server wants two things: this topic's
-  address, and to follow it where their own account lives. The follow button
-  above renders only for a signed-in member, so without this the page showed
-  such a visitor a follower count and no way in short of registering — the exact
-  friction issue #1330 removes. Same markup as the profile and the page card,
-  because the visitor is the same person asking the same thing. --%>
-  <.follow_us_from_elsewhere
-    :if={@fediverse_handle}
-    id="tag-fediverse"
-    handle={@fediverse_handle}
-    name={"#" <> @tag.slug}
-    action={~p"/tags/#{@tag.slug}/fediverse/follow"}
-  />
   </div>
   <div class="breadcrumbs">
     {gen_breadcrumbs([{gettext("Tags"), ~p"/tags"}, gettext("Show")])}
@@ -42,6 +28,30 @@ card stretch edge to edge with a huge line length and dead space. --%>
   <div class="card-list">
     <%= render "single_card.html", assigns %>
   </div>
+
+  <%!-- A visitor who arrived from another server wants two things: this topic's
+  address, and to follow it where their own account lives. The pill in the
+  header is for signed-in members only, so without this the page showed such a
+  visitor a follower count and no way in short of registering — the friction
+  issue #1330 removes. Same markup as the profile and the page card, because it
+  is the same person asking the same thing.
+
+  Below the front matter and above the timeline, and **outside** the header:
+  `.profile-header` is a flex row for the title and the pill, and a card as a
+  third child there squeezed the handle into one character per line. The topic's
+  own content stays first, the way the profile keeps its fediverse card among
+  the content rather than in the header.
+
+  The `<.card>` around it is the profile's arrangement too: the component draws
+  the address box and the form, the caller supplies the surface they sit on. --%>
+  <.card :if={@fediverse_handle} id="tag-fediverse" class="mt-6">
+    <.follow_us_from_elsewhere
+      id="tag-fediverse"
+      handle={@fediverse_handle}
+      name={"#" <> @tag.slug}
+      action={~p"/tags/#{@tag.slug}/fediverse/follow"}
+    />
+  </.card>
 
   <%!-- Everything written about this tag — vutuv posts and posts cached from
   other networks in one list — as the embedded VutuvWeb.TagLive.Timeline
