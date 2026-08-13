@@ -4,7 +4,8 @@ Thank you for joining vutuv. Here is the PIN you need to log in:
 
   <%= @pin %>
 
-You can always get a new one by returning to vutuv and logging in again.
+The PIN expires after 30 minutes. You can always get a new one by
+returning to vutuv and logging in again.
 
 If you like our service, feel free to share us with your friends!
 

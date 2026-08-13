@@ -1,34 +1,105 @@
-<.auth_layout
-  title={gettext("Please check your INBOX.")}
-  subtitle={gettext("Your account has been created, and an email with a PIN has been sent. No passwords to remember! Once you enter your PIN below, you'll be logged in on this device for the next 90 days, or until you log out.")}
->
-  <%!-- "Enter your PIN" alone can be read as an instruction to invent one, and
-        somebody who skims this page sees little else. The heading now says
-        where the PIN comes from, and the placeholder says what it looks like,
-        so the two lines answer different questions instead of repeating one. --%>
-  <h2 class="text-xl font-bold text-slate-900 dark:text-white">
-    {gettext("Enter the PIN from the email")}
-  </h2>
+<%!-- The screen has two states, and the browser swaps between them (app.js,
+      [data-pin-live] / [data-pin-expired]) when the PIN's window closes. Both
+      are rendered here so the whole page is one server render: a member with no
+      JavaScript keeps the live half and its plain "valid for 30 minutes"
+      sentence, which is exactly what this page said nothing about until now.
 
-  <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="mt-5 space-y-4" id="pin-form" method="post">
-    <%!-- Greet first-time members as new, not with "Welcome back!". --%>
-    <%= hidden_input f, :context, value: "registration" %>
-    <%= text_input f, :pin, class: input_class(), autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("6-digit PIN") %>
-    <.button type="submit" class="w-full">{gettext("submit")}</.button>
-  </.form>
+      The swap spans the hero as well as the card, which is why the markers are
+      a pair of plain attributes rather than one wrapper: leaving "Please check
+      your INBOX." beside a card announcing that the PIN is dead is a page
+      arguing with itself. Each state keeps the split the live one already had,
+      the hero saying what the situation is and the card what to do about it, so
+      neither sentence is written twice.
 
-  <.pin_actions email={@pending_email} context={@pin_flow} />
+      Hiding the LIVE half is the point of the swap, not a nicety. All three
+      controls in it are dead by then: the PIN can no longer verify, "Resend
+      PIN" reads its address from the same cookie that has just expired, and
+      "Cancel registration" would send somebody with no account yet to the login
+      form. A screen full of controls that quietly do nothing is what made this
+      read as the site being broken. --%>
+<.auth_layout title={gettext("Please check your INBOX.")}>
+  <:headline>
+    <div data-pin-live>
+      <h1 class="text-2xl font-bold leading-tight md:text-3xl">
+        {gettext("Please check your INBOX.")}
+      </h1>
+      <p class="mt-4 max-w-sm text-base leading-relaxed text-brand-50">
+        {gettext("Your account has been created, and an email with a PIN has been sent. No passwords to remember! Once you enter your PIN below, you'll be logged in on this device for the next 90 days, or until you log out.")}
+      </p>
+    </div>
 
-  <%= if dev_mailbox?() do %>
-    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-      <a
-        href="/sent_emails"
-        target="_blank"
-        rel="noopener"
-        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >
-        Open the dev email inbox
-      </a>
+    <%!-- Plain `hidden`, and deliberately no display utility on this element or
+          the one above: two classes that both set `display` is the issue #880
+          trap, where the one Tailwind emits later silently wins.
+
+          `tabindex="-1"` is here so app.js can move focus onto the panel when it
+          takes over. A screen-reader user is mid-form when the field
+          disappears, and an `aria-live` region announces content changes, not a
+          sibling quietly being hidden. --%>
+    <div data-pin-expired hidden tabindex="-1" class="focus:outline-none">
+      <h1 class="text-2xl font-bold leading-tight md:text-3xl">
+        {gettext("The PIN has expired.")}
+      </h1>
+      <%!-- The deletion is real and it is close, so it is said plainly rather
+            than softened away. The figure comes from the sweeper's own
+            constants (Accounts.unconfirmed_registration_grace_minutes/0), and
+            "about" is honest rather than vague: that job wakes every 15
+            minutes, so no single minute is the truth. --%>
+      <p class="mt-4 max-w-sm text-base leading-relaxed text-brand-50">
+        {ngettext(
+          "Your sign-up was never confirmed, so we delete it automatically in about one minute.",
+          "Your sign-up was never confirmed, so we delete it automatically in about %{count} minutes.",
+          Vutuv.Accounts.unconfirmed_registration_grace_minutes()
+        )}
+      </p>
+    </div>
+  </:headline>
+
+  <div data-pin-live>
+    <%!-- "Enter your PIN" alone can be read as an instruction to invent one, and
+          somebody who skims this page sees little else. The heading now says
+          where the PIN comes from, and the placeholder says what it looks like,
+          so the two lines answer different questions instead of repeating one. --%>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("Enter the PIN from the email")}
+    </h2>
+
+    <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="mt-5 space-y-4" id="pin-form" method="post">
+      <%!-- Greet first-time members as new, not with "Welcome back!". --%>
+      <%= hidden_input f, :context, value: "registration" %>
+      <%= text_input f, :pin, class: input_class(), autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("6-digit PIN"), "aria-describedby": "pin-time-left" %>
+      <.button type="submit" class="w-full">{gettext("submit")}</.button>
+    </.form>
+
+    <.pin_time_left expires_at={@pin_expires_at} />
+
+    <.pin_actions email={@pending_email} context={@pin_flow} />
+
+    <%= if dev_mailbox?() do %>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <a
+          href="/sent_emails"
+          target="_blank"
+          rel="noopener"
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          Open the dev email inbox
+        </a>
+      </p>
+    <% end %>
+  </div>
+
+  <%!-- The way out, and better news than the hero above it: an abandoned
+        sign-up is handed a fresh PIN when the same address comes back
+        (Accounts.notify_registration_attempt/3), so nobody has to sit out the
+        deletion first. --%>
+  <div data-pin-expired hidden>
+    <p class="text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "You can sign up again right away with the same email address, and we will send you a new PIN."
+      )}
     </p>
-  <% end %>
+
+    <.button href={~p"/"} class="mt-5 w-full">{gettext("Register again")}</.button>
+  </div>
 </.auth_layout>

@@ -453,6 +453,15 @@ defmodule Vutuv.Accounts do
   # How long a login PIN stays valid (also used further down by check_pin/3).
   @pin_expire_time 1800
 
+  @doc """
+  How long a freshly minted login PIN stays valid, in minutes.
+
+  The PIN screens say this out loud and count it down, so the number has to come
+  from the same constant `pin_expired?/1` judges by rather than being retyped
+  into a translation and left to drift.
+  """
+  def pin_validity_minutes, do: div(@pin_expire_time, 60)
+
   # Name of the signed cookie that carries the pending login identity (the typed
   # email) between the email-entry step and the PIN-entry step. Short-lived: it
   # is only valid while a PIN is, so it shares the PIN's expiry window — bumping
@@ -473,8 +482,19 @@ defmodule Vutuv.Accounts do
   # is the enumeration oracle the whole flow is built to avoid. Both registration
   # branches (fresh address and already-taken address) pass :registration, so the
   # cookie stays byte-indistinguishable between them.
+  #
+  # It carries the PIN's **deadline** as the third element, because the screen
+  # counts the PIN down and the deadline is the one fact a re-render must not
+  # invent: computing it as "now + 30 minutes" at render time would restart the
+  # countdown on every reload of "/", which is exactly the page a member comes
+  # back to. It is a wall-clock stamp rather than a remaining duration so that
+  # every later read shrinks. This is minted in the same request as the PIN
+  # itself (`advance_to_pin_screen/4` mails it a line earlier), so the two
+  # windows agree; and it is computed from our clock, never from the account, so
+  # it stays identical for an address that has no account at all.
   defp put_pin_cookie(conn, email, flow) do
-    payload = Phoenix.Token.sign(@token_context, pin_cookie_salt(), {email, flow})
+    expires_at = System.system_time(:second) + @pin_expire_time
+    payload = Phoenix.Token.sign(@token_context, pin_cookie_salt(), {email, flow, expires_at})
 
     conn
     |> Conn.delete_resp_cookie(@pin_cookie, pin_cookie_opts())
@@ -507,39 +527,58 @@ defmodule Vutuv.Accounts do
   end
 
   @doc """
-  The pending identity as `{email, flow}`, or `nil` when there is none.
+  Everything the signed cookie says about the PIN in flight, as
+  `%{email:, flow:, expires_at:}`, or `nil` when there is none.
 
-  One verification for both halves, and the only way to get them as a pair: a
-  caller that needs the flow almost always needs the address too, and reading
-  them through two separate verifies would let it pair a flow from one read with
-  an address from another.
+  One verification for all three, and the only way to get them: a caller that
+  needs the flow almost always needs the address too, and reading them through
+  separate verifies would let it pair a flow from one read with an address from
+  another — or, now, count down a deadline belonging to a different address.
 
-  `flow` is `:registration` or `:login`, and `:login` is also the answer for a
-  cookie minted before the flow was recorded — the shape this must keep
-  accepting for as long as one of those can still be in a browser
-  (`@pin_cookie_max_age`, 30 minutes). That legacy clause covers a new release
-  meeting an old cookie. It cannot cover the mirror case, an old release meeting
-  a new cookie, where the old code binds the whole tuple as the address: that
-  needs no shim during a normal blue/green switch, which moves traffic one way,
-  but it is what a **rollback** would hit for anyone holding a pending PIN.
-  Delete the clause, and this paragraph, once no such cookie can exist.
+  `flow` is `:registration` or `:login`; `expires_at` is a `DateTime` (UTC) or
+  `nil`. Both fall back for a cookie minted before they were recorded — the
+  shapes this must keep accepting for as long as one of those can still be in a
+  browser (`@pin_cookie_max_age`, 30 minutes): `:login` for a missing flow, and
+  a `nil` deadline, which the screens render as the plain "valid for 30 minutes"
+  sentence with no countdown. Those legacy clauses cover a new release meeting
+  an old cookie. They cannot cover the mirror case, an old release meeting a new
+  cookie, where the old code binds the whole tuple as the address: that needs no
+  shim during a normal blue/green switch, which moves traffic one way, but it is
+  what a **rollback** would hit for anyone holding a pending PIN. Delete the
+  clauses, and this paragraph, once no such cookie can exist.
   """
-  def pending_pin_identity(%{cookies: %{@pin_cookie => payload}}) do
+  def pending_pin(%{cookies: %{@pin_cookie => payload}}) do
     case Phoenix.Token.verify(@token_context, pin_cookie_salt(), payload,
            max_age: @pin_cookie_max_age
          ) do
+      {:ok, {email, flow, expires_at}}
+      when is_binary(email) and flow in [:login, :registration] and is_integer(expires_at) ->
+        %{email: email, flow: flow, expires_at: DateTime.from_unix!(expires_at)}
+
       {:ok, {email, flow}} when is_binary(email) and flow in [:login, :registration] ->
-        {email, flow}
+        %{email: email, flow: flow, expires_at: nil}
 
       {:ok, email} when is_binary(email) ->
-        {email, :login}
+        %{email: email, flow: :login, expires_at: nil}
 
       _ ->
         nil
     end
   end
 
-  def pending_pin_identity(_conn), do: nil
+  def pending_pin(_conn), do: nil
+
+  @doc """
+  The pending identity as `{email, flow}`, or `nil` when there is none — the
+  pair half of `pending_pin/1`, for the callers that do not care when the PIN
+  runs out.
+  """
+  def pending_pin_identity(conn) do
+    case pending_pin(conn) do
+      %{email: email, flow: flow} -> {email, flow}
+      nil -> nil
+    end
+  end
 
   @doc "Drops the login-identity cookie (after a successful login or lockout)."
   def delete_pin_cookie(conn) do
@@ -928,6 +967,21 @@ defmodule Vutuv.Accounts do
 
   # How long after sign-up an unconfirmed registration is swept.
   @unconfirmed_registration_max_age_minutes 60
+
+  @doc """
+  How much longer a half-finished sign-up survives after its PIN has run out, in
+  minutes.
+
+  What the expired-PIN screen promises before
+  `Vutuv.Accounts.UnconfirmedRegistrationSweeper` reaps the account: derived
+  from the two constants that actually decide it — the PIN's own window and the
+  sweep threshold above — so the sentence cannot drift away from the job that
+  does the deleting. It is a **floor**: the sweeper only wakes every 15 minutes,
+  which is why the copy says "about" rather than naming a minute.
+  """
+  def unconfirmed_registration_grace_minutes do
+    @unconfirmed_registration_max_age_minutes - pin_validity_minutes()
+  end
 
   @doc """
   Deletes accounts that registered but never confirmed their PIN (so they are

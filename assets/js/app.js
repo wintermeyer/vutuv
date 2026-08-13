@@ -1334,6 +1334,75 @@ function setupCharCounters() {
 }
 onReady(setupCharCounters)
 
+// The PIN countdown on the sign-up PIN screen (VutuvWeb.UI.pin_time_left/1 plus
+// the [data-pin-live] / [data-pin-expired] blocks in
+// page/pin_new_registration.html.heex). A PIN is good for 30 minutes; the
+// server renders the remaining seconds and the four translated sentences, this
+// ticks them down and, at zero, swaps every live block on the page for its
+// expired counterpart. Every block, not one wrapper's worth: the swap spans the
+// hero panel as well as the form card, since a hero still saying "check your
+// inbox" beside a card announcing the PIN is dead is a page arguing with
+// itself.
+//
+// Three deliberate details. The clock is anchored to the browser's OWN Date.now()
+// at load rather than to an absolute server stamp, so a device whose clock runs
+// fast cannot blank a form that is still perfectly good. Every tick recomputes
+// from that anchor instead of decrementing a counter, so a backgrounded tab
+// (whose timers are throttled to about one a minute) is simply correct again on
+// return rather than minutes behind. And the text is only written when it
+// actually changes, which for all but the last minute is once every 60 ticks.
+function pinTimeLeftText(el, seconds) {
+  const d = el.dataset
+  if (seconds >= 60) {
+    const minutes = Math.ceil(seconds / 60)
+    return minutes === 1
+      ? d.labelMinuteOne
+      : d.labelMinuteOther.replace("{n}", String(minutes))
+  }
+  return seconds === 1 ? d.labelSecondOne : d.labelSecondOther.replace("{n}", String(seconds))
+}
+
+function setupPinCountdown() {
+  const line = document.querySelector("[data-pin-time-left]")
+  if (!line || !once(line, "pinCountdown")) return
+
+  const total = parseInt(line.dataset.pinSecondsLeft, 10)
+  // No deadline in the cookie (a legacy one, mid-deploy): the server sentence
+  // stands as it is rather than counting down from a number we invented.
+  if (!Number.isFinite(total)) return
+
+  const live = document.querySelectorAll("[data-pin-live]")
+  const expired = document.querySelectorAll("[data-pin-expired]")
+  const deadline = Date.now() + total * 1000
+  let timer = null
+
+  const expire = () => {
+    if (timer) clearInterval(timer)
+    if (live.length === 0 || expired.length === 0) return
+    live.forEach((el) => (el.hidden = true))
+    expired.forEach((el) => (el.hidden = false))
+    // The field they were typing into has just gone; put them at the top of
+    // what replaced it, instead of leaving the caret on a removed input. An
+    // aria-live region would not carry this: it announces content changes, not
+    // a sibling quietly being hidden.
+    expired[0].focus()
+  }
+
+  const tick = () => {
+    const left = Math.round((deadline - Date.now()) / 1000)
+    if (left <= 0) {
+      expire()
+      return
+    }
+    const text = pinTimeLeftText(line, left)
+    if (line.textContent !== text) line.textContent = text
+  }
+
+  timer = setInterval(tick, 1000)
+  tick()
+}
+onReady(setupPinCountdown)
+
 // The tag pill box (VutuvWeb.UI.tag_input/1) on classic controller pages — the
 // sign-up landing page and the invitation form. Inside a LiveView the same
 // element carries phx-hook="TagInput" and is enhanced there instead;

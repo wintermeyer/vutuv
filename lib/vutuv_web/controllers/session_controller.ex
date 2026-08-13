@@ -342,12 +342,19 @@ defmodule VutuvWeb.SessionController do
         )
         |> redirect(to: ~p"/login")
 
-      # expired, drop cookie
+      # expired, drop cookie. Where that leaves them follows the flow, for the
+      # same reason `cancel/2` below does it: somebody whose *sign-up* PIN ran
+      # out has no account to sign in to, so the login form is the one page that
+      # cannot help them, and "/" is where they can start over (an abandoned
+      # sign-up is handed a fresh PIN when the same address comes back). The
+      # flow has to be read before the cookie carrying it is dropped.
       {:expired, message} ->
+        {_email, flow} = Accounts.pending_pin_identity(conn) || {nil, :login}
+
         conn
         |> Accounts.delete_pin_cookie()
         |> put_flash(:error, message)
-        |> redirect(to: ~p"/login")
+        |> redirect(to: cancel_return_path(flow))
 
       # locked out (a real account's per-PIN counter tripped), drop cookie
       :lockout ->

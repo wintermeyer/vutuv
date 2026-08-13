@@ -702,6 +702,102 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The quiet line under the PIN field saying how much of the PIN's life is left,
+  and the anchor the countdown in `app.js` ticks.
+
+  A PIN is good for 30 minutes and the screen used to say nothing about it, so a
+  member who came back to the tab later met a form that refused their PIN with
+  no word about why. It is deliberately **one muted line and no clock face**: the
+  window is half an hour, and a digit ticking away every second beside a field
+  somebody is trying to read a number into is a nag, not information. It counts
+  in whole minutes almost all the way down and only switches to seconds inside
+  the last one, where the number finally means something.
+
+  `expires_at` is the deadline out of the signed pending-PIN cookie
+  (`Vutuv.Accounts.pending_pin/1`, assigned as `:pin_expires_at` by
+  `VutuvWeb.ControllerHelpers.render_pin_screen/2`). What reaches the browser is
+  the **remaining seconds**, not that timestamp: a countdown against an absolute
+  server stamp is only as good as the reader's own clock, and a device running a
+  few minutes fast would blank a perfectly valid form. Anchoring the client to
+  its own `Date.now()` at load costs nothing and cannot be skewed, while the
+  server keeps recomputing the true remainder on every render.
+
+  With no JavaScript, or with a legacy cookie that carries no deadline
+  (`expires_at` is nil), the server-rendered sentence stands on its own and
+  simply does not tick.
+
+  The four label strings ride the element because the server is the only side
+  that knows the reader's language (the lightbox and emoji picker do the same).
+  Each is a **whole** sentence per plural form rather than a unit word the JS
+  glues onto a number: word order and plural rules are not ours to assemble.
+  `{n}` is the project's plain-text marker convention (see `split_marker/2`),
+  which gettext leaves alone because it only ever interpolates `%{…}`.
+  """
+  attr(:expires_at, :any,
+    default: nil,
+    doc: "the PIN's deadline as a DateTime, or nil for a cookie that carries none"
+  )
+
+  attr(:id, :string, default: "pin-time-left")
+  attr(:class, :string, default: nil)
+
+  def pin_time_left(assigns) do
+    labels = pin_time_left_labels()
+    seconds = pin_seconds_left(assigns.expires_at)
+
+    assigns =
+      assign(assigns,
+        labels: labels,
+        seconds: seconds,
+        text: pin_time_left_text(labels, seconds || Vutuv.Accounts.pin_validity_minutes() * 60)
+      )
+
+    ~H"""
+    <p
+      id={@id}
+      class={["mt-2 text-xs text-slate-600 dark:text-slate-400", @class]}
+      data-pin-time-left
+      data-pin-seconds-left={@seconds}
+      data-label-minute-one={@labels.minute_one}
+      data-label-minute-other={@labels.minute_other}
+      data-label-second-one={@labels.second_one}
+      data-label-second-other={@labels.second_other}
+    >{@text}</p>
+    """
+  end
+
+  defp pin_time_left_labels do
+    %{
+      minute_one: gettext("The PIN is valid for one more minute."),
+      minute_other: gettext("The PIN is valid for {n} more minutes."),
+      second_one: gettext("The PIN is valid for one more second."),
+      second_other: gettext("The PIN is valid for {n} more seconds.")
+    }
+  end
+
+  defp pin_seconds_left(nil), do: nil
+
+  defp pin_seconds_left(%DateTime{} = expires_at) do
+    max(DateTime.diff(expires_at, DateTime.utc_now()), 0)
+  end
+
+  # Whole minutes down to the last one, then seconds. Rounded up, the ordinary
+  # countdown convention: it never says "one minute" while the member still has
+  # nearly two.
+  defp pin_time_left_text(labels, seconds) when seconds >= 60 do
+    case ceil(seconds / 60) do
+      1 -> labels.minute_one
+      minutes -> String.replace(labels.minute_other, "{n}", Integer.to_string(minutes))
+    end
+  end
+
+  defp pin_time_left_text(labels, 1), do: labels.second_one
+
+  defp pin_time_left_text(labels, seconds) do
+    String.replace(labels.second_other, "{n}", Integer.to_string(seconds))
+  end
+
+  @doc """
   Logged-out auth / welcome shell (Direction A): a brand-gradient hero panel
   beside a white form card, stacking to a single column on mobile. Shared by the
   sign-up, login and PIN screens so the logged-out entry flow matches the rest

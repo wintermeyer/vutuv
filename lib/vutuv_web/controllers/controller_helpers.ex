@@ -15,7 +15,8 @@ defmodule VutuvWeb.ControllerHelpers do
 
   @doc """
   Renders the PIN-entry screen belonging to the flow the pending identity is in,
-  and assigns what that screen needs (`:pending_email`, `:pin_flow`).
+  and assigns what that screen needs (`:pending_email`, `:pin_flow`,
+  `:pin_expires_at`).
 
   **Every place that renders a PIN screen goes through here.** There are five,
   across two controllers, and the rule they share — a registration in flight
@@ -29,21 +30,24 @@ defmodule VutuvWeb.ControllerHelpers do
 
   Assigning the address here is the second half: the templates used to re-read
   the cookie themselves, so a page verified the same token three times and could
-  in principle contradict the screen it was rendering.
+  in principle contradict the screen it was rendering. The deadline joins them
+  from the same single read, so a screen can never count down one address's PIN
+  while naming another's.
   """
   def render_pin_screen(%Conn{} = conn, opts \\ []) do
-    {email, flow} = Vutuv.Accounts.pending_pin_identity(conn) || {nil, :login}
+    pending = Vutuv.Accounts.pending_pin(conn) || %{email: nil, flow: :login, expires_at: nil}
 
     conn
-    |> Conn.assign(:pending_email, email)
-    |> Conn.assign(:pin_flow, flow)
+    |> Conn.assign(:pending_email, pending.email)
+    |> Conn.assign(:pin_flow, pending.flow)
+    |> Conn.assign(:pin_expires_at, pending.expires_at)
     |> then(fn conn ->
       case opts[:status] do
         nil -> conn
         status -> Conn.put_status(conn, status)
       end
     end)
-    |> pin_view(flow)
+    |> pin_view(pending.flow)
   end
 
   # The two templates live in different view modules, so the branch has to pick

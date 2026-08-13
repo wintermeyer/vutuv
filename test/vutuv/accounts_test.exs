@@ -631,6 +631,24 @@ defmodule Vutuv.AccountsTest do
       assert Accounts.delete_unconfirmed_registrations() == 0
       assert Repo.get(User, user.id)
     end
+
+    # The expired-PIN screen promises "we delete it automatically in about N
+    # minutes", with N from `unconfirmed_registration_grace_minutes/0`. That is
+    # a promise about *this* function, so pin the two to each other rather than
+    # letting the sentence and the sweep drift apart: a sign-up a minute short
+    # of the promised total is still here, one a minute past it is gone.
+    test "the grace the PIN screen promises is the grace this sweep leaves" do
+      total = Accounts.pin_validity_minutes() + Accounts.unconfirmed_registration_grace_minutes()
+
+      still_promised = pending_registration(age_minutes: total - 1)
+      assert Accounts.delete_unconfirmed_registrations() == 0
+      assert Repo.get(User, still_promised.id)
+
+      past_the_promise = pending_registration(age_minutes: total + 1)
+      assert Accounts.delete_unconfirmed_registrations() == 1
+      refute Repo.get(User, past_the_promise.id)
+      assert Repo.get(User, still_promised.id)
+    end
   end
 
   describe "delete_unconfirmed_legacy_registrations/1" do
