@@ -15,7 +15,10 @@ lands here). --%>
         <%!-- Avatar: preview the current avatar (the real photo, or the initials
         tile visitors currently see) above the upload, so the owner sees what
         they are replacing. --%>
-        <div>
+        <%!-- id + scroll-mt: the gravatar lookup redirects to #avatar, so the
+        member lands on the picture they just changed instead of the top of a
+        long settings page; scroll-mt keeps the sticky top bar off it. --%>
+        <div id="avatar" class="scroll-mt-24">
           <%= label f, :avatar, gettext("Avatar"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
           <% avatar_pending? = @user.avatar_moderation == "pending" %>
           <div class="mt-2 flex items-center gap-3">
@@ -61,6 +64,28 @@ lands here). --%>
             class="mt-3 h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
           />
           <%= error_tag f, :avatar %>
+
+          <%!-- The gravatar.com offer, and the whole reason it is a button:
+          registration used to do this by itself for every sign-up, which told a
+          US service that this address had just joined vutuv. Nothing leaves
+          this server now until somebody presses it, so the sentence says
+          plainly what pressing it sends. Submits #gravatar-form, which is
+          rendered below the main form (a form cannot nest). --%>
+          <div :if={Vutuv.Accounts.gravatar_import_available?()} class="mt-4">
+            <button
+              type="submit"
+              form="gravatar-form"
+              id="import-gravatar"
+              class="inline-flex min-h-10 items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              {gettext("Fetch my picture from gravatar.com")}
+            </button>
+            <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              {gettext(
+                "Only when you press this: we ask gravatar.com whether there is a picture for your email address, sending a hash of the address rather than the address itself. Nothing leaves this server otherwise."
+              )}
+            </p>
+          </div>
         </div>
         <%!-- Cover photo: preview the current cover (the same object-cover crop
         as the profile banner) only when one is uploaded; the gradient default
@@ -423,6 +448,20 @@ lands here). --%>
         {gettext("Cancel")}
       </.link>
     </div>
+  </.form>
+
+  <%!-- The gravatar lookup is its own form, and it sits out here because a form
+  may not nest inside another one. The button stays up in the avatar block,
+  wired to this one by its `form=` attribute — so the control is where the
+  member is looking, and it still works with JS off. --%>
+  <.form
+    :if={Vutuv.Accounts.gravatar_import_available?()}
+    :let={_gravatar}
+    for={%{}}
+    as={:gravatar}
+    id="gravatar-form"
+    action={~p"/settings/profile/gravatar"}
+  >
   </.form>
 
   <%!-- "Are you sure?" dialog for removing the date of birth. Rendered only while

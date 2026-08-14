@@ -247,16 +247,6 @@ defmodule Vutuv.Activity do
     )
   end
 
-  # The "we took your picture from gravatar.com" note (see gravatar_items/3),
-  # keyed on gravatar_imported_at; MAX skips the NULL of an account whose
-  # avatar did not come from there.
-  defp gravatar_max(user_id) do
-    from(u in User,
-      where: u.id == ^user_id,
-      select: %{ts: max(u.gravatar_imported_at)}
-    )
-  end
-
   @doc """
   Record that `user_id` has seen `post_id`, so the notifications *about* that
   post stop counting as unread (`notification_post_reads`).
@@ -780,9 +770,8 @@ defmodule Vutuv.Activity do
   #   * `cv_update` counts sittings, not rows: its read-marker filter lives
   #     inside the grouped query (`CvUpdates.count_query/2`), not in `since/2`.
   #   * The fediverse kinds key on `received_at` (a :utc_datetime), `username`
-  #     on `welcome_notified_at`, `gravatar` on `gravatar_imported_at`,
-  #     `connection` on the GREATEST of the two follow times — each per-kind
-  #     helper owns its own boundary comparison.
+  #     on `welcome_notified_at`, `connection` on the GREATEST of the two
+  #     follow times — each per-kind helper owns its own boundary comparison.
   @doc """
   Every notification kind the registry produces.
 
@@ -908,13 +897,6 @@ defmodule Vutuv.Activity do
         max_arms: [username_max(user_id)],
         items: &username_items(user_id, &1, &2),
         counts: [count_username(user_id, read_at)]
-      },
-      %{
-        kind: "gravatar",
-        email_pref: nil,
-        max_arms: [gravatar_max(user_id)],
-        items: &gravatar_items(user_id, &1, &2),
-        counts: [count_gravatar(user_id, read_at)]
       },
       %{
         kind: "reference_check",
@@ -1716,36 +1698,6 @@ defmodule Vutuv.Activity do
   defp at_or_before_welcome(query, %{at: at}),
     do: where(query, [u], u.welcome_notified_at <= ^at)
 
-  # "We found a picture for your email address at gravatar.com and used it."
-  # Registration quietly fetches an avatar from there (Accounts.store_gravatar/1),
-  # so without this note a member's first look at their own profile shows a
-  # photo they never uploaded here, from a service they may not remember using.
-  # The silence is what makes that unsettling, not the import.
-  #
-  # Same shape as the welcome note above: derived from the member's own users
-  # row, no notification table, no push (the import runs during registration,
-  # before the first login, so the note is already waiting) and deliberately
-  # **no email** — one more message on top of the PIN mail would be the wrong
-  # size for it. `gravatar_imported_at` is both the gate and the timestamp, so
-  # only an import that really happened produces a row.
-  defp gravatar_items(user_id, limit, cursor) do
-    from(u in User,
-      where: u.id == ^user_id and not is_nil(u.gravatar_imported_at),
-      limit: ^limit,
-      select: {u.id, u.gravatar_imported_at}
-    )
-    |> at_or_before_gravatar(cursor)
-    |> Repo.all()
-    |> Enum.map(fn {id, at} ->
-      %{id: "gravatar-#{id}", kind: "gravatar", at: at}
-    end)
-  end
-
-  defp at_or_before_gravatar(query, nil), do: query
-
-  defp at_or_before_gravatar(query, %{at: at}),
-    do: where(query, [u], u.gravatar_imported_at <= ^at)
-
   defp at_or_before(query, nil), do: query
   defp at_or_before(query, %{at: at}), do: where(query, [event], event.inserted_at <= ^at)
 
@@ -1970,16 +1922,6 @@ defmodule Vutuv.Activity do
       )
 
     if read_at, do: where(query, [u], u.welcome_notified_at > ^read_at), else: query
-  end
-
-  defp count_gravatar(user_id, read_at) do
-    query =
-      from(u in User,
-        where: u.id == ^user_id and not is_nil(u.gravatar_imported_at),
-        select: %{count: count()}
-      )
-
-    if read_at, do: where(query, [u], u.gravatar_imported_at > ^read_at), else: query
   end
 
   defp since(query, nil), do: query

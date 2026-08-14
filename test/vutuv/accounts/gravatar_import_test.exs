@@ -1,15 +1,18 @@
 defmodule Vutuv.Accounts.GravatarImportTest do
   @moduledoc """
-  The avatar registration fetches from gravatar.com (issue #1447): that it is
-  stored, and that `gravatar_imported_at` is stamped **only** when an image
-  really arrived — the stamp is what tells the member about it, so a 404 or a
-  failed fetch must leave it NULL and say nothing.
+  The gravatar.com avatar import (issue #1447), which is now a thing a member
+  asks for and never something registration does behind their back.
+
+  Two claims are worth a test each. That the import works and stores the
+  picture, and that each failure is told apart from the others — "gravatar.com
+  has nothing for your address" and "gravatar.com did not answer" are different
+  news for the member, so the function must not collapse them into one error.
 
   Not async: sets the global `:uploads_dir_prefix` (so the avatar files land in
   a temp dir instead of the checkout) and `:gravatar_req_options` (the `plug:`
   responder standing in for gravatar.com). Nothing else in the suite reads the
-  latter; `:uploads_dir_prefix` is shared with
-  `Vutuv.UploadsIntegrationTest`, which is sync for the same reason.
+  latter; `:uploads_dir_prefix` is shared with `Vutuv.UploadsIntegrationTest`,
+  which is sync for the same reason.
   """
   use Vutuv.DataCase, async: false
 
@@ -29,45 +32,41 @@ defmodule Vutuv.Accounts.GravatarImportTest do
       restore(:gravatar_req_options, options)
     end)
 
-    user = insert(:user, emails: [build(:email)])
-    {:ok, user: user}
+    {:ok, user: insert(:user, emails: [build(:email)])}
   end
 
-  test "an imported picture becomes the avatar and stamps the import", %{user: user} do
+  test "an imported picture becomes the avatar", %{user: user} do
     stub_gravatar(200, png_bytes(), "image/png")
 
-    assert {:ok, imported} = Accounts.store_gravatar(user)
+    assert {:ok, imported} = Accounts.import_gravatar_avatar(user)
     assert imported.avatar == "#{user.username}.png"
-    assert %NaiveDateTime{} = imported.gravatar_imported_at
-
-    assert Repo.reload!(user).gravatar_imported_at == imported.gravatar_imported_at
+    assert Repo.reload!(user).avatar == imported.avatar
   end
 
   # 404 is gravatar's answer for "no picture for this address" (the `d=404`
-  # parameter asks for it), and it is the common case. Nothing was imported, so
-  # there is nothing to tell the member about.
-  test "no picture at gravatar.com leaves the stamp NULL", %{user: user} do
+  # parameter asks for it), and it is by far the common case.
+  test "no picture there is :not_found, and the avatar is untouched", %{user: user} do
     stub_gravatar(404, "", "text/plain")
 
-    assert Accounts.store_gravatar(user) == nil
-    assert Repo.reload!(user).gravatar_imported_at == nil
+    assert Accounts.import_gravatar_avatar(user) == {:error, :not_found}
+    assert Repo.reload!(user).avatar == nil
   end
 
-  test "a failed fetch leaves the stamp NULL", %{user: user} do
+  test "an unreachable gravatar.com is :unavailable, not :not_found", %{user: user} do
     stub_gravatar(500, "", "text/plain")
 
-    assert Accounts.store_gravatar(user) == nil
-    assert Repo.reload!(user).gravatar_imported_at == nil
+    assert Accounts.import_gravatar_avatar(user) == {:error, :unavailable}
+    assert Repo.reload!(user).avatar == nil
   end
 
-  # `retry: false` only so the 500 case does not sit through Req's default
-  # backoff ladder; what the stub proves is the branch taken after the last
-  # answer, which the retries do not change. The content type is real
-  # (`image/png`), because Req's decode_body step branches on it — a bare
-  # send_resp would hand the code a differently shaped body than gravatar does.
+  # A member with no address at all cannot be looked up; that must answer, not
+  # raise (the old code took `hd/1` of the list).
+  test "a member without an email address is :not_found" do
+    assert Accounts.import_gravatar_avatar(insert(:user)) == {:error, :not_found}
+  end
+
   defp stub_gravatar(status, body, content_type) do
     Application.put_env(:vutuv, :gravatar_req_options,
-      retry: false,
       plug: fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type(content_type)

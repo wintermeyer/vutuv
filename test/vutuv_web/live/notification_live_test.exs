@@ -89,63 +89,6 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute html =~ "/settings/username</a>."
     end
 
-    # Registration quietly fetches an avatar from gravatar.com, so a member who
-    # once used that service arrives to a photo they never uploaded here. Our
-    # silence is what made that unsettling (issue #1447).
-    test "tells a member their picture was imported from gravatar.com", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      stamp_gravatar_import(user, ~N[2026-08-14 09:00:00])
-
-      {:ok, live, _html} = live(conn, ~p"/notifications")
-
-      assert has_element?(live, ~s([data-notification-row][data-kind="gravatar"]))
-      html = render(live)
-      # It names the source; a picture "we found somewhere" would be worse than
-      # saying nothing.
-      assert html =~ "gravatar.com"
-
-      # The link sits inside the sentence (the row itself is not one link) and
-      # leads where the picture can be replaced or removed.
-      settings_url = VutuvWeb.Endpoint.url() <> "/settings/profile"
-
-      assert has_element?(
-               live,
-               ~s([data-kind="gravatar"] a[href="#{settings_url}"]),
-               settings_url
-             )
-
-      # Same rule as the welcome note: never end the sentence on the URL, or the
-      # full stop reads as part of the address.
-      refute html =~ "/settings/profile</a>."
-    end
-
-    # The German render is the one real visitors get, and a fuzzy-filled msgstr
-    # would only show here (an English-only assertion passes either way).
-    test "says it in German for a German browser", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      stamp_gravatar_import(user, ~N[2026-08-14 09:00:00])
-
-      body =
-        conn
-        |> recycle()
-        |> put_req_header("accept-language", "de-DE,de")
-        |> get(~p"/notifications")
-        |> html_response(200)
-
-      assert body =~ "gravatar.com gefunden"
-      assert body =~ "Profilbild"
-      refute body =~ "/settings/profile</a>."
-    end
-
-    # Nobody is told about an import that never happened.
-    test "says nothing when the avatar did not come from gravatar", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-
-      {:ok, live, _html} = live(conn, ~p"/notifications")
-
-      refute has_element?(live, ~s([data-kind="gravatar"]))
-    end
-
     test "lists real events derived from the database", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
@@ -1323,15 +1266,6 @@ defmodule VutuvWeb.NotificationLiveTest do
     Vutuv.Repo.update_all(
       from(u in Vutuv.Accounts.User, where: u.id == ^id),
       set: [welcome_notified_at: at]
-    )
-  end
-
-  defp stamp_gravatar_import(%{id: id}, at) do
-    import Ecto.Query
-
-    Vutuv.Repo.update_all(
-      from(u in Vutuv.Accounts.User, where: u.id == ^id),
-      set: [gravatar_imported_at: at]
     )
   end
 

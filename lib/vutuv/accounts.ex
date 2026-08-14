@@ -78,7 +78,10 @@ defmodule Vutuv.Accounts do
         |> Enum.each(&Vutuv.Tags.add_user_tag(user, &1))
 
         user = Repo.preload(user, user_tags: [:tag])
-        maybe_fetch_gravatar(user)
+        # Registration deliberately talks to nobody outside this server. It used
+        # to fetch a gravatar.com picture here in a background task, which told
+        # a US service that this email address had just signed up — see
+        # import_gravatar_avatar/1, which is now the member's own button.
         # The landing-page counter is bumped on confirmation, not here (issue
         # #781) — see activate_user/1. A sign-up that never confirms is swept by
         # delete_unconfirmed_registrations/1 and must not inflate the total.
@@ -160,79 +163,97 @@ defmodule Vutuv.Accounts do
     |> Ecto.Changeset.unique_constraint(:username)
   end
 
-  # Best-effort gravatar import: spawned (when enabled) under the app-wide
-  # Task.Supervisor rather than an orphaned `Task.start/3`, and disabled in
-  # tests via `:fetch_gravatar` so the SQL Sandbox connection is never used by
-  # a process that does not own it and no live HTTP request is made. A test
-  # that wants the import itself calls `store_gravatar/1` and stubs the fetch
-  # through `:gravatar_req_options` (a `plug:` responder).
-  defp maybe_fetch_gravatar(user) do
-    if Application.get_env(:vutuv, :fetch_gravatar, true) do
-      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn -> store_gravatar(user) end)
-    end
+  @doc """
+  Whether this installation offers the gravatar.com avatar import at all
+  (`:fetch_gravatar`, off on an air-gapped intranet install).
 
-    :ok
+  The settings page asks this before rendering the button, so an installation
+  that cannot reach the internet offers nothing it can never deliver.
+  """
+  def gravatar_import_available?, do: Application.get_env(:vutuv, :fetch_gravatar, true)
+
+  @doc """
+  Fetches the member's gravatar.com picture and stores it as their avatar.
+
+  **Only ever called because the member asked for it** — the button on
+  /settings/profile. Registration used to do this by itself, in a background
+  task, for every sign-up: an MD5 of the address went to gravatar.com (a US
+  service) before the member had heard of the feature, which handed a third
+  party the fact that this address had just joined vutuv, and made a liar of
+  the "no data goes to third parties" promise on the privacy page for the sake
+  of a convenience nobody had asked for. Nothing reaches gravatar.com now
+  unless somebody presses the button; that press is the consent, and it is the
+  only thing that makes the transfer honest.
+
+  Returns:
+
+    * `{:ok, user}` — a picture came back and is now the avatar
+    * `{:error, :not_found}` — gravatar.com has nothing for this address
+      (its own answer to the `d=404` parameter, and the common case)
+    * `{:error, :unavailable}` — gravatar.com could not be reached, or
+      answered with something we could not use
+    * `{:error, changeset}` — the picture arrived but would not store
+
+  The caller says which of those the member reads; each one is a different
+  sentence, because "we found nothing" and "we could not ask" are different
+  news and a single "didn't work" would leave them guessing.
+  """
+  def import_gravatar_avatar(%User{} = user) do
+    user = Repo.preload(user, :emails)
+
+    case user.emails do
+      [%{md5sum: md5} | _] when is_binary(md5) -> do_import_gravatar(user, md5)
+      _no_address -> {:error, :not_found}
+    end
   end
 
-  # Public only so a test can drive it in a process that owns the sandbox
-  # connection — `maybe_fetch_gravatar/1` is the caller, and it is off in tests.
-  @doc false
-  def store_gravatar(user) do
-    url = "https://www.gravatar.com/avatar/#{hd(user.emails).md5sum}?s=130&d=404"
+  defp do_import_gravatar(user, md5) do
+    url = "https://www.gravatar.com/avatar/#{md5}?s=130&d=404"
 
     options =
       Keyword.merge(
-        [url: url, receive_timeout: 1000, connect_options: [timeout: 1000]],
+        # A member is sitting in front of this waiting for an answer, so it
+        # stays on the request path with the short timeouts the background
+        # task used — and `retry: false`, because Req's default ladder would
+        # hold the page for several seconds before saying "not reachable".
+        [url: url, receive_timeout: 2000, connect_options: [timeout: 2000], retry: false],
         Application.get_env(:vutuv, :gravatar_req_options, [])
       )
 
     case Req.get(options) do
       {:ok, %Req.Response{status: 404}} ->
-        nil
+        {:error, :not_found}
 
-      {:ok, %Req.Response{status: 200, body: body, headers: headers}} ->
-        content_type = find_content_type(headers)
-        # Path.join, not `tmp_dir <> "/" <> name`: the leading slash used to
-        # live in `filename` itself, so the users row ended up holding
-        # "/handle.jpg" where an ordinary upload stores "handle.jpg".
-        filename = "#{user.username}.#{gravatar_extension(content_type)}"
-        path = Path.join(System.tmp_dir(), filename)
+      {:ok, %Req.Response{status: 200, body: body, headers: headers}} when is_binary(body) ->
+        store_gravatar_body(user, body, find_content_type(headers))
 
-        upload = %Plug.Upload{
-          content_type: content_type,
-          filename: filename,
-          path: path
-        }
-
-        File.write(path, body)
-
-        # Through update_user/2 so the avatar file is written only after the row
-        # commits (issue #776), the same as the edit-profile path.
-        with {:ok, imported} <- update_user(user, %{avatar: upload}) do
-          {:ok, stamp_gravatar_import(imported)}
-        end
-
-      _ ->
-        nil
+      _other ->
+        {:error, :unavailable}
     end
   rescue
     error ->
       Logger.warning("gravatar import failed for user ##{user.id}: #{inspect(error)}")
-      nil
+      {:error, :unavailable}
   end
 
-  # The member never uploaded this picture, so silence about it is what makes
-  # a stranger's face on their fresh profile unsettling (issue #1447). The
-  # stamp is set in its own write, after the avatar is safely stored, and only
-  # on that path — a 404 or a failed fetch leaves it NULL and says nothing. It
-  # both gates and dates the in-app note in `Vutuv.Activity`; there is no email
-  # beside it, the way the welcome note has none either.
-  defp stamp_gravatar_import(user) do
-    user
-    |> Ecto.Changeset.change(
-      gravatar_imported_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
-    )
-    |> Repo.update!()
+  defp store_gravatar_body(user, body, content_type) do
+    # Path.join, not `tmp_dir <> "/" <> name`: the leading slash used to live in
+    # `filename` itself, so the users row ended up holding "/handle.jpg" where
+    # an ordinary upload stores "handle.jpg".
+    filename = "#{user.username}.#{gravatar_extension(content_type)}"
+    path = Path.join(System.tmp_dir(), filename)
+
+    upload = %Plug.Upload{content_type: content_type, filename: filename, path: path}
+
+    with :ok <- File.write(path, body),
+         # Through update_user/2 so the avatar file is written only after the
+         # row commits (issue #776), the same as the edit-profile path.
+         {:ok, imported} <- update_user(user, %{avatar: upload}) do
+      {:ok, imported}
+    else
+      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+      _write_failed -> {:error, :unavailable}
+    end
   end
 
   defp find_content_type(headers) do

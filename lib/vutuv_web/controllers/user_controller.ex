@@ -151,6 +151,59 @@ defmodule VutuvWeb.UserController do
     )
   end
 
+  @doc """
+  Fetches the member's picture from gravatar.com, because they asked.
+
+  A POST, never a GET: it reaches out to a third party and changes the avatar,
+  so it must not be something a prefetch, a Back button or a crawler can fire.
+  Each outcome gets its own sentence — "we found nothing for your address" and
+  "we could not reach gravatar.com" are different news, and one shared "that
+  didn't work" would leave the member guessing which.
+  """
+  def import_gravatar(conn, _params) do
+    user = conn.assigns[:user]
+
+    if Accounts.gravatar_import_available?() do
+      conn |> gravatar_flash(Accounts.import_gravatar_avatar(user), user) |> gravatar_back()
+    else
+      conn
+      |> put_flash(
+        :error,
+        gettext("The gravatar.com lookup is switched off on this installation.")
+      )
+      |> gravatar_back()
+    end
+  end
+
+  defp gravatar_flash(conn, {:ok, updated}, _user) do
+    AccountEvents.record(updated, "profile_updated",
+      conn: conn,
+      details: %{fields: ["avatar"]}
+    )
+
+    put_flash(conn, :info, gettext("We took your picture from gravatar.com."))
+  end
+
+  defp gravatar_flash(conn, {:error, :not_found}, _user) do
+    put_flash(
+      conn,
+      :error,
+      gettext("gravatar.com has no picture for your email address.")
+    )
+  end
+
+  defp gravatar_flash(conn, {:error, :unavailable}, _user) do
+    put_flash(conn, :error, gettext("gravatar.com could not be reached. Please try again later."))
+  end
+
+  defp gravatar_flash(conn, {:error, _changeset}, _user) do
+    put_flash(conn, :error, gettext("The picture from gravatar.com could not be saved."))
+  end
+
+  # Back to the form, and to the avatar block in it, so the member lands on the
+  # picture they just changed rather than at the top of a long settings page.
+  defp gravatar_back(conn), do: redirect(conn, to: ~p"/settings/profile#avatar")
+
   def update(conn, %{"user" => user_params} = params) do
     user = conn.assigns[:user]
     user_params = clear_birthdate_if_requested(user_params, params)

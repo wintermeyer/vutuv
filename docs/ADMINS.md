@@ -344,10 +344,10 @@ vutuv runs fine without internet access:
   that could work air-gapped — the check simply fails. Turn it off so the verify
   page says so plainly instead of offering a button that can never succeed.
 - Turn off the features that call out to the internet (compile-time flags in
-  `config/config.exs`): `:fetch_gravatar` (avatar lookup at registration — when
-  a picture is found, the member gets an in-app notification naming
-  gravatar.com and pointing at `/settings/profile`, so your privacy policy
-  should describe the lookup too),
+  `config/config.exs`): `:fetch_gravatar` (the member's own "Fetch my picture
+  from gravatar.com" button on `/settings/profile` — off, the button is not
+  rendered at all; nothing contacts gravatar.com unless a member presses it,
+  and registration never does),
   `:fetch_mastodon_posts` / `:fetch_bluesky_posts` (the social-feed card on
   profiles), `:fetch_code_stats` (the profile "Code" card's GitHub/GitLab/
   Codeberg statistics — off, the accounts stay plain links), and

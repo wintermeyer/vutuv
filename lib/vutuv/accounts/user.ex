@@ -356,12 +356,6 @@ defmodule Vutuv.Accounts.User do
     # the notifications feed; NULL = no note, which is what every account
     # predating the feature keeps.
     field(:welcome_notified_at, :naive_datetime)
-    # When registration imported this member's avatar from gravatar.com
-    # (issue #1447). Stamped by Accounts.store_gravatar/1 only once an image was
-    # really stored, never cast from params. It dates the "we found a picture
-    # for your email address" note; NULL = no import and no note, which is what
-    # every account predating the feature keeps.
-    field(:gravatar_imported_at, :naive_datetime)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
     # How far the digest mail has got (`Vutuv.Activity.Digest`). The feed is

@@ -1054,6 +1054,11 @@ defmodule VutuvWeb.Router do
     put("/profile", UserController, :update)
     patch("/profile", UserController, :update)
 
+    # The member's own gravatar.com lookup (issue #1447). A POST: it hands an
+    # MD5 of their address to a third party and replaces their avatar, so it
+    # happens only on a deliberate press, never on a GET a prefetch could fire.
+    post("/profile/gravatar", UserController, :import_gravatar)
+
     # The owner's preview of their own avatar/cover while it waits in
     # AI-moderation limbo (the quarantine tree nginx never serves) — see
     # Vutuv.Moderation.ImageScans. Everyone else sees a placeholder until
