@@ -925,9 +925,16 @@ defmodule VutuvWeb.UI do
   attr(:class, :any, default: nil)
 
   def link_thumb(assigns) do
+    src = Vutuv.Screenshot.url({assigns.url.screenshot, assigns.url}, :thumb)
+
     assigns =
       assigns
-      |> assign(:src, Vutuv.Screenshot.url({assigns.url.screenshot, assigns.url}, :thumb))
+      |> assign(:src, src)
+      # A row can name a capture whose file is not on disk, and `url/2` then
+      # answers the placeholder (issue #1443) — so the state is read off the
+      # resolved src, not off the column. Calling that tile "shot" while the
+      # placeholder renders would be a state nobody could act on.
+      |> assign(:stored?, src != Vutuv.Screenshot.placeholder_url())
       |> assign(:blocklisted?, Vutuv.ScreenshotBlocklist.blocked?(assigns.url.value))
 
     ~H"""
@@ -945,7 +952,7 @@ defmodule VutuvWeb.UI do
     </div>
     <img
       :if={not (is_nil(@url.screenshot) and @blocklisted?)}
-      data-link-thumb={if @url.screenshot, do: "shot", else: "pending"}
+      data-link-thumb={if @stored?, do: "shot", else: "pending"}
       src={@src}
       alt={@url.description || VutuvWeb.UrlHTML.display_url(@url.value)}
       width="400"

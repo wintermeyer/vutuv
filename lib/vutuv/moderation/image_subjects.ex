@@ -677,6 +677,86 @@ defmodule Vutuv.Moderation.ImageSubjects do
   ## Drift repair source
 
   @doc """
+  Settles every screenshot left behind in the quarantine tree, and answers
+  `%{promoted: n, dropped: n}`.
+
+  The twin of `stranded_pending/0` for the opposite drift (issue #1443).
+  `apply_approved/1` flips the row and promotes the file in that order, so a
+  release that dies in between — or an `update_all` that matches nothing and
+  answers `:stale` — leaves a subject that is no longer `pending` with its
+  bytes still in quarantine. `stranded_pending/0` cannot see it (that query
+  selects rows that ARE pending), so until this existed the picture came back
+  only when the next deploy's image regeneration happened to rebuild it from
+  the kept original.
+
+  Driven off the **tree**, not the table: a stuck directory is the state
+  itself, where a query would have to test every screenshot row on disk to
+  infer it (there is normally not a single one).
+
+  Fail-closed in both directions. A subject still `pending` is left strictly
+  alone — promoting it would publish an image no verdict has cleared — and
+  bytes whose subject is gone, or whose subject now names a different capture,
+  are deleted rather than published. Idempotent, so the hourly repair can run
+  it forever.
+  """
+  def settle_stranded_quarantine do
+    Enum.reduce(Vutuv.Screenshot.quarantined_ids(), %{promoted: 0, dropped: 0}, fn id, acc ->
+      case stranded_verdict(id) do
+        {:promote, subject} ->
+          Vutuv.Screenshot.promote_from_quarantine(subject)
+          Map.update!(acc, :promoted, &(&1 + 1))
+
+        :drop ->
+          Vutuv.Screenshot.drop_quarantine(id)
+          Map.update!(acc, :dropped, &(&1 + 1))
+
+        :skip ->
+          acc
+      end
+    end)
+  end
+
+  defp stranded_verdict(id) do
+    case screenshot_subject(id) do
+      nil ->
+        :drop
+
+      subject ->
+        cond do
+          screenshot_moderation(subject) == "pending" -> :skip
+          holds_quarantined_capture?(subject, id) -> {:promote, subject}
+          true -> :drop
+        end
+    end
+  end
+
+  # A quarantine directory is named after its subject's id, and the two
+  # screenshot kinds share the tree, so the id is looked up in both tables. A
+  # directory name that is not even a UUID belongs to neither.
+  defp screenshot_subject(id) do
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil -> nil
+      uuid -> Repo.get(Url, uuid) || Repo.get(PostScreenshot, uuid)
+    end
+  end
+
+  defp screenshot_moderation(%Url{screenshot_moderation: state}), do: state
+  defp screenshot_moderation(%PostScreenshot{moderation: state}), do: state
+
+  # The stored value is `<hash><ext>`; the quarantined thumb carries the hash
+  # alone. Comparing them is what keeps a re-capture from publishing the
+  # picture it replaced.
+  defp holds_quarantined_capture?(subject, id) do
+    case {subject.screenshot, Vutuv.Screenshot.quarantined_hash(id)} do
+      {stored, hash} when is_binary(stored) and is_binary(hash) ->
+        stored |> Uploads.strip_query() |> Path.rootname() == hash
+
+      _ ->
+        false
+    end
+  end
+
+  @doc """
   Every asset stuck in `pending` with no open scan, as
   `{kind, subject_id, owner_user_id, fingerprint}` — what
   `Vutuv.Moderation.ImageScans.repair_drift/0` re-enqueues.

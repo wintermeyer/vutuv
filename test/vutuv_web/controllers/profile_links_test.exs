@@ -11,10 +11,34 @@ defmodule VutuvWeb.ProfileLinksTest do
   test "links render their screenshot thumbnails as preview cards", %{conn: conn} do
     user = insert_activated_user()
     url = insert(:url, user: user, screenshot: "b0efec47a6e9.webp")
+    # The thumb has to be on disk: since issue #1443 a row naming a file that
+    # is not there renders the placeholder rather than a URL that would 404.
+    write_thumb(url, "thumb-b0efec47a6e9.avif")
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
     assert html =~ ~s(src="/screenshots/#{url.id}/thumb-b0efec47a6e9.avif")
+  end
+
+  test "a link whose stored capture is missing on disk falls back too", %{conn: conn} do
+    user = insert_activated_user()
+    url = insert(:url, user: user, screenshot: "b0efec47a6e9.webp")
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    assert html =~ ~s(src="/images/screenshot.png")
+    refute html =~ "/screenshots/#{url.id}/"
+  end
+
+  # The test env's uploads prefix is the checkout itself, and `/screenshots` is
+  # gitignored; the directory is named after a fresh UUID, so no two tests can
+  # collide and this stays async.
+  defp write_thumb(url, filename) do
+    dir = Path.join(Vutuv.Uploads.uploads_dir_prefix(), "screenshots/#{url.id}")
+    File.mkdir_p!(dir)
+    {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+    {:ok, _} = Image.write(img, Path.join(dir, filename))
+    on_exit(fn -> File.rm_rf(dir) end)
   end
 
   test "links whose capture is still on its way fall back to the placeholder image", %{conn: conn} do

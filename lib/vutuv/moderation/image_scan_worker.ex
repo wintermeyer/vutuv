@@ -8,6 +8,11 @@ defmodule Vutuv.Moderation.ImageScanWorker do
   (`repair_drift/0`), so a restart or re-deploy never leaves an image in
   limbo forever; the drift repair re-runs hourly as the standing backstop.
 
+  That hour also settles the **opposite** drift (issue #1443):
+  `ImageSubjects.settle_stranded_quarantine/0`, an asset whose row already
+  left `pending` while its bytes stayed in quarantine. `repair_drift/0` is
+  blind to it, because it looks for rows that are still pending.
+
   Gated by the `:image_scan_worker` config flag (off in tests, which call
   `ImageScans.deliver_due/1` directly with a stubbed judge); the actual
   Ollama call is additionally gated by `:moderate_images`.
@@ -18,6 +23,7 @@ defmodule Vutuv.Moderation.ImageScanWorker do
   require Logger
 
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Moderation.ImageSubjects
 
   @default_interval :timer.seconds(15)
   # Polls between drift repairs (~hourly at the default interval).
@@ -71,6 +77,18 @@ defmodule Vutuv.Moderation.ImageScanWorker do
     case ImageScans.repair_drift() do
       0 -> :ok
       count -> Logger.info("image moderation drift repair re-enqueued #{count} scan(s)")
+    end
+
+    # The opposite drift (issue #1443): a subject that already left `pending`
+    # while its bytes stayed in quarantine, which `repair_drift/0` cannot see.
+    case ImageSubjects.settle_stranded_quarantine() do
+      %{promoted: 0, dropped: 0} ->
+        :ok
+
+      %{promoted: promoted, dropped: dropped} ->
+        Logger.info(
+          "image moderation settled stranded quarantine: #{promoted} promoted, #{dropped} dropped"
+        )
     end
   rescue
     error -> Logger.error("image moderation drift repair failed: #{inspect(error)}")

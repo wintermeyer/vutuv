@@ -31,8 +31,19 @@ defmodule Vutuv.ScreenshotTest do
     {:ok, tmp: tmp}
   end
 
+  # A URL is only ever built for a file that is really there (issue #1443), so
+  # every naming assertion below puts one on disk first.
+  defp write_thumb(tmp, filename) do
+    dir = Path.join(tmp, "screenshots/42")
+    File.mkdir_p!(dir)
+    {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+    {:ok, _} = Image.write(img, Path.join(dir, filename))
+  end
+
   describe "url/2" do
-    test "thumb filename is fingerprinted from the stored hash, served as .avif" do
+    test "thumb filename is fingerprinted from the stored hash, served as .avif", %{tmp: tmp} do
+      write_thumb(tmp, "thumb-a1b2c3d4e5f6.avif")
+
       assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.webp", @url}, :thumb) ==
                "/screenshots/42/thumb-a1b2c3d4e5f6.avif"
     end
@@ -45,7 +56,17 @@ defmodule Vutuv.ScreenshotTest do
       assert Vutuv.Screenshot.url({nil, @url}, :thumb) == "/images/screenshot.png"
     end
 
-    test "tolerates a legacy '?<timestamp>' suffix in the stored value" do
+    # Issue #1443: a row can outlive its bytes (a release flipped the
+    # moderation state and died before promoting the file out of quarantine).
+    # Naming the file anyway put a URL that 404s on a public profile.
+    test "falls back to the placeholder when the named file is not on disk" do
+      assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.webp", @url}, :thumb) ==
+               "/images/screenshot.png"
+    end
+
+    test "tolerates a legacy '?<timestamp>' suffix in the stored value", %{tmp: tmp} do
+      write_thumb(tmp, "thumb-shot.avif")
+
       assert Vutuv.Screenshot.url({"shot.png?63876543210", @url}, :thumb) ==
                "/screenshots/42/thumb-shot.avif"
     end

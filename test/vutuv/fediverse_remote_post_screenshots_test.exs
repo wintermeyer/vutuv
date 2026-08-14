@@ -116,6 +116,14 @@ defmodule Vutuv.FediverseRemotePostScreenshotsTest do
       )
       |> Repo.update()
 
+    # The row and the disk have to agree: since issue #1443 a row naming a file
+    # that is not there renders the placeholder, not a URL that would 404.
+    dir = Path.join(Vutuv.Uploads.uploads_dir_prefix(), "screenshots/#{ready.id}")
+    File.mkdir_p!(dir)
+    {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+    {:ok, _} = Image.write(img, Path.join(dir, "thumb-0123456789ab.avif"))
+    on_exit(fn -> File.rm_rf(dir) end)
+
     ready
   end
 

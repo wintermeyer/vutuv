@@ -297,7 +297,8 @@ The moving parts (all under `Vutuv.Moderation`):
   released).
 - `ImageScanWorker` — boot-resume + poll + nudge, mirroring
   `Vutuv.Posts.ScreenshotWorker`; hourly `repair_drift/0` re-enqueues any
-  asset stranded in `pending`.
+  asset stranded in `pending`, and `ImageSubjects.settle_stranded_quarantine/0`
+  settles the **opposite** drift (below).
 
 **Limbo.** A fresh image starts `pending`: the owner sees it (avatar/cover
 through the authenticated `/settings/pending_image/...` quarantine preview,
@@ -312,6 +313,25 @@ the asset's reference and notifies the owner (in-app + email, both derived
 from the audit row). Organization logos differ deliberately: the
 `organizations.logo` pointer only ever names a released image, so the old
 logo keeps showing while the new one is scanned.
+
+**The two drifts, and why the second one hurt (issue #1443).** Approval is two
+writes in one order: `apply_approved/1` flips the row with `update_all`, then
+promotes the files. A release that dies in between — or an `update_all` that
+matches nothing and answers `:stale` — leaves the subject **no longer pending
+with its bytes still in quarantine**, and `repair_drift/0` is blind to it,
+because that query looks for rows that ARE pending. On production one profile
+link sat like that for ten hours showing a broken image, and it came back only
+because a deploy's `Vutuv.Uploads.Regenerator` rebuilt the thumb from the kept
+original by accident. Two defences now: `Vutuv.Screenshot.url/2` **fails
+closed** (a row naming a file that is not on disk renders the placeholder, not
+a URL that 404s — and `<.link_thumb>` reads its `shot`/`pending` state off that
+resolved src rather than off the column), and the hourly repair runs
+`settle_stranded_quarantine/0`, which walks the quarantine tree (the stuck
+state itself, where a query would have to test every row on disk to infer it)
+and promotes a directory whose subject left `pending` and still names that
+capture. It is fail-closed both ways: a subject still `pending` is left
+strictly alone, and bytes no row claims — or whose row now names a different
+capture — are deleted rather than published.
 
 **Fail-closed by construction.** The gallery tables default `moderation` to
 `pending` (an upload path that forgot to enqueue leaves the image invisible,
