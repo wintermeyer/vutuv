@@ -651,6 +651,18 @@ config :vutuv, :operator_recipient, {"Stefan Wintermeyer", "sw@wintermeyer-consu
 config :vutuv, :operator_name, "Wintermeyer Consulting"
 config :vutuv, :operator_url, "https://wintermeyer-consulting.de"
 config :vutuv, :operator_address, "Johannes-Müller-Str. 10 - 56068 Koblenz - Germany"
+
+# How this installation names and describes itself to the fediverse's directory
+# layer (`Vutuv.NodeInfo`, the /.well-known/nodeinfo document). FediDB,
+# the-federation.info and Fediverse Observer print these two strings beside the
+# entry, so they are the installation's own words, not vutuv's — one language,
+# since NodeInfo has no locale negotiation. (NODE_NAME / NODE_DESCRIPTION)
+config :vutuv, :node_name, "vutuv"
+
+config :vutuv,
+       :node_description,
+       "The open business network where professionals connect, share, and get found."
+
 # -----------------------------------------------------------------------------
 
 # Mail is delivered via SMTP (prod) and the Local/Test adapters elsewhere, none

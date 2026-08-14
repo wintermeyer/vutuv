@@ -189,6 +189,14 @@ defmodule VutuvWeb.Router do
     get("/.well-known/agent-skills/vutuv/SKILL.md", WellKnownController, :agent_skill)
     get("/.well-known/security.txt", WellKnownController, :security_txt)
     get("/security.txt", WellKnownController, :security_txt)
+    # NodeInfo (issue #1448): how a fediverse directory learns this
+    # installation exists. The well-known document only carries links; the
+    # documents themselves sit under /system/ rather than at a `/nodeinfo`
+    # root word, which member handles own. The specification fixes no path
+    # for them — every consumer follows the link — which is why Mastodon,
+    # Pleroma and Misskey each serve them somewhere different.
+    get("/.well-known/nodeinfo", WellKnownController, :nodeinfo_links)
+    get("/system/nodeinfo/:version", WellKnownController, :nodeinfo)
     # ActivityPub follow-only federation (Vutuv.Fediverse): WebFinger
     # discovery plus the per-member actor endpoints. Machine-to-machine like
     # the feeds above — no session/CSRF; the inbox authenticates remote

@@ -1997,3 +1997,72 @@ free, since by then the post is cached.
 Deliberately **not** built: backfilling an account's outbox history. The lookup
 is one post the member named; walking somebody's archive because a member
 followed them is a different bargain.
+
+## Saying this installation exists: NodeInfo (issue #1448)
+
+Everything above is federation between servers that already know about each
+other. The fediverse also has a directory layer — FediDB, the-federation.info,
+Fediverse Observer — and it works by scanning: fetch `/.well-known/nodeinfo`
+from a host, follow the highest-version link in it, read the document. An
+installation without that document can federate perfectly, be followed from
+anywhere, and still be invisible to every list a person consults when they go
+looking for federated software. There is nothing to detect.
+
+`Vutuv.NodeInfo` owns the document, `VutuvWeb.WellKnownController` serves it:
+
+| URL | What it is |
+| --- | --- |
+| `/.well-known/nodeinfo` | the link document, one entry per served version |
+| `/system/nodeinfo/2.1` | the document, with `software.repository`/`homepage` |
+| `/system/nodeinfo/2.0` | the same document without those two fields |
+
+Both schema versions are served because they cost one route: 2.0 is what every
+consumer understands, 2.1 adds the two pointers that send a directory straight
+at the source of an open-source project. The documents live under `/system/`
+rather than at a `/nodeinfo` root word, which member handles own — the
+specification fixes no path for them, which is why Mastodon, Pleroma and Misskey
+each serve them somewhere different, and every consumer follows the link.
+
+**What the figures mean** is the part worth getting right, because a number that
+does not mean what other implementations mean by it is worse than an absent
+field:
+
+* `usage.users.total` is the **members here** (`Accounts.count_users/0`), never
+  the top bar's people total. That one adds the remote accounts following this
+  installation, and those are other servers' accounts — publishing them here
+  would double-count them across the network. The exact query is used rather
+  than the cached `Vutuv.PeopleCounter`, both because the document is fetched a
+  handful of times a day and because that cell reads 0 for the first moments
+  after a deploy, which is exactly when a polling directory would record this
+  installation as empty.
+* `activeMonth` / `activeHalfyear` are the members with a signed-in device seen
+  inside the window (`user_sessions.last_seen_at`, bumped on every request) —
+  the specification's "signed in at least once in the last 30 / 180 days". A
+  revoked session still counts: the member did sign in, and logging out
+  afterwards does not undo that. Both are drawn from the same member population
+  as `total`, so neither can exceed it.
+* `localPosts` / `localComments` count what an **anonymous** reader can see
+  (`Posts.scope_visible/2` with no viewer), split on whether the post answers
+  another one. Nothing new is disclosed — those posts are already in the sitemap
+  and the RSS feeds — and a private, frozen or still-moderated post is in
+  neither figure.
+
+`openRegistrations` is `true` and hardcoded, because it is true: vutuv has no
+registration gate, so anybody who reaches an installation can sign up. It is
+deliberately not a config flag — one that changed the advertised value while the
+sign-up form kept accepting everybody would be a worse answer than the honest
+one. The day a real gate exists, this reads it.
+
+`protocols` says `activitypub` on every installation, including one running
+`FEDIVERSE_ENABLED=false`. It names the protocol the software speaks, the schema
+requires at least one entry, and a directory that follows it finds the actor
+endpoints answering 404 — the same thing said twice.
+
+`software.name`, `repository` and `homepage` describe vutuv **the software** and
+are literals: every installation runs the same software, developed in the same
+repository. What names the operator — `metadata.nodeName` and `nodeDescription`
+— sits behind the Operator identity block in `config/config.exs` like every
+other such value, env-overridable as `NODE_NAME` / `NODE_DESCRIPTION`.
+
+Submitting anything anywhere is not part of this. Once the document is served,
+the directories that scan for it find the installation on their own.

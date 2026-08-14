@@ -138,6 +138,8 @@ Everything else has a default (the vutuv.de production value):
 | `FEDIVERSE_COUNTS_BATCH` | `60` | How many cached objects one refresh run (every two minutes) may ask about. Protects your own machine as much as anybody else's: a backlog drains over several runs instead of in one spike. The run interval is deliberately well under the ladder's shortest tier: a run stamps an object a few seconds after it became due, so polling *at* the tier length would leave it a few seconds short on the next run and silently double the real interval |
 | `FEDIVERSE_COUNTS_PER_HOST` | `10` | How many of that batch may belong to a single host, so one instance that happens to host many of the accounts your members follow is spread over several runs rather than fetched in a burst. What the cap holds back is written to the log |
 | `FEDIVERSE_IMAGE_HOLD_SECONDS` | `90` | How long a post whose picture the AI image scan has not judged yet waits before it federates **without** the picture. This is a ceiling, not the usual wait: the post goes out the moment the scan settles, normally within seconds. It only bites when the scanner is down, and then the choice is "the post without its picture" over "no post at all". Raise it if you run image moderation on slow hardware; irrelevant when `MODERATE_IMAGES` is off |
+| `NODE_NAME` | `vutuv` | What the fediverse directories call your installation. They fetch `/.well-known/nodeinfo` on their own and print this string beside the entry, so make it the name you want people to see in a list of servers — your organization, your community, your domain |
+| `NODE_DESCRIPTION` | (vutuv.de's pitch) | The one sentence those directories print under the name. Say what your installation is *for*; the default describes vutuv.de and is almost certainly not what you want on your own server. NodeInfo has no notion of language, so write it in the one your visitors read |
 | `ACCOUNT_EVENT_RETENTION_DAYS` | `365` | How long the **account-activity log** keeps an event, in days (see `docs/architecture/account-activity.md`). It records what changed on an account, when, from which coarse device (never an IP address), and how it was confirmed, so it is personal data with a clock on it: a year covers the "this happened months ago and I only noticed now" support case without becoming a permanent movement profile. The daily sweeper deletes anything older |
 | `FETCH_BOOK_METADATA` | `true` | `false` turns the catalogue lookups behind post **book reviews** off (the cover image, page count and publisher from Open Library, and an audiobook's running time). New reviews can no longer be created (the composer's review form was removed), but existing review posts keep rendering their card — with the flag off it shows no cover and none of those details. Set it on installations that must not call out (intranets) |
 | `DNB_SRU_URL` | `https://services.dnb.de/sru/dnb` | Where an **audiobook's running time** is looked up by ISBN: an SRU endpoint answering MARC21-xml (the Deutsche Nationalbibliothek by default — Open Library records no durations). Point it at another catalogue's SRU endpoint, or set it **empty** (`DNB_SRU_URL=`) to switch that one lookup off while the rest of the book metadata keeps working |
@@ -313,6 +315,9 @@ those directories itself.
    responsibility.
 4. **Review the operator variables** (`OPERATOR_*`, `MAILER_FROM_ADDRESS`,
    `BOUNCE_ADDRESS`) so system mail carries your identity, not vutuv.de's.
+5. **Set `NODE_NAME` and `NODE_DESCRIPTION`** if your installation is on the
+   internet — that is how the fediverse directories will name and describe it
+   (see below). The defaults describe vutuv.de.
 
 ## Intranet installations
 
@@ -590,6 +595,29 @@ The badge shows on the member's profile (and its `.md`/`.json`/… siblings) wit
 small "honor tag" marker. Reserve honor for **new** tag names: flipping a
 tag that members already hold makes them keep it but blocks them from removing it
 themselves.
+
+## Being listed in the fediverse directories
+
+Sites like FediDB, the-federation.info and Fediverse Observer keep the public
+lists of what runs on the fediverse. They find a server by fetching
+`/.well-known/nodeinfo` from it and reading the small JSON document it points
+at, so your installation appears on those lists on its own — there is nothing to
+submit, and nothing to switch on. If you would rather not be listed, block that
+path in nginx.
+
+What the document says about you:
+
+- your name and one sentence, from `NODE_NAME` and `NODE_DESCRIPTION`;
+- the software and its version, so a directory can tell vutuv from anything
+  else;
+- how many members you have, how many of them signed in over the last 30 and
+  180 days, and how many public posts and replies they have written.
+
+Everything in it is an aggregate and nobody is named. The post counts cover
+exactly what a logged-out visitor can already read — private, frozen and
+unmoderated posts are in neither — and the member figures are the same kind of
+number your top bar and your member directory already show. Check yours at
+`https://<your host>/system/nodeinfo/2.1`.
 
 ## Federation: blocking a remote server
 

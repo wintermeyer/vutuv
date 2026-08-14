@@ -165,6 +165,15 @@ if config_env() == :prod do
     config :vutuv, :operator_address, operator_address
   end
 
+  # How the fediverse directories name this installation (Vutuv.NodeInfo).
+  if node_name = System.get_env("NODE_NAME") do
+    config :vutuv, :node_name, node_name
+  end
+
+  if node_description = System.get_env("NODE_DESCRIPTION") do
+    config :vutuv, :node_description, node_description
+  end
+
   # Follow-only ActivityPub federation. FEDIVERSE_ENABLED=false turns every
   # Fediverse endpoint and delivery off — for installations that must not
   # call out (intranets). Per member it is opt-in either way.
