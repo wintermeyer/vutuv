@@ -52,8 +52,12 @@ defmodule Vutuv.Uploads do
 
   @doc """
   The absolute storage root, configured per environment via
-  `config :vutuv, :uploads_dir_prefix`. Empty in dev/test and
-  `/srv/legacy-vutuv` in production.
+  `config :vutuv, :uploads_dir_prefix` (env var `UPLOADS_DIR_PREFIX`). Empty in
+  dev/test; every installation sets its own in production, and vutuv.de's is
+  `/srv/vutuv3`. `/srv/legacy-vutuv` is only the fallback `runtime.exs` names
+  when the env var is absent — this doc used to quote it as if it were the
+  production path, which sent an investigation looking for a member's files in
+  a directory that does not exist on the server.
   """
   def uploads_dir_prefix, do: Application.get_env(:vutuv, :uploads_dir_prefix, "")
 

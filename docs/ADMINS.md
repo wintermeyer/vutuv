@@ -94,7 +94,7 @@ Everything else has a default (the vutuv.de production value):
 | `DB_NAME` | `vutuv3_prod` | PostgreSQL database |
 | `DB_HOST` | `127.0.0.1` | PostgreSQL host |
 | `POOL_SIZE` | `10` | DB connection pool |
-| `UPLOADS_DIR_PREFIX` | `/srv/legacy-vutuv` | **Set this.** Root directory for uploaded images (avatars, covers, screenshots, post images, private originals) |
+| `UPLOADS_DIR_PREFIX` | `/srv/legacy-vutuv` (fallback only) | **Set this.** Root directory for uploaded images (avatars, covers, screenshots, post images, private originals). The default is a historical fallback, not a recommendation: pick a directory your app user owns (vutuv.de uses `/srv/vutuv3`) |
 | `CHROMIUM_PATH` | – | Chromium binary, if not on `$PATH` |
 | `SCREENSHOT_BLOCKLIST` | – | Extra pages never to take a link-preview screenshot of, on top of the shipped `reddit.com` and `heise.de`. Comma-separated domains and/or URLs, copied into the blocklist table the first time you migrate; afterwards the live list is edited in the admin area (see "Screenshot blocklist" below) and this variable is inert. `SCREENSHOT_BLOCKED_HOSTS` is the older name and still works |
 | `SMTP_RELAY` | `127.0.0.1` | SMTP server |
