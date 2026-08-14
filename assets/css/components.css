@@ -164,12 +164,17 @@ dl dd a {
 /* ---------- Stretch layout (full-height pages, e.g. account deletion) ---------- */
 /* Pages rendered with `body_class: "stretch"` fill the viewport so a lone
    centered card can sit vertically centered. Growth is scoped to <main>
-   (legacy grew every body child and then had to clamp the header back down). */
-html {
-  height: 100%;
-}
+   (legacy grew every body child and then had to clamp the header back down).
+   The viewport height is measured on <body> itself and NOT as a `height: 100%`
+   on <html>: a document element that is exactly one viewport tall while its
+   content overflows it is a long-standing iOS trigger for anchoring a
+   `position: fixed; bottom: 0` element to the html box instead of the
+   viewport, which walks the phone tab bar up the screen as you scroll. `dvh`
+   follows the shrinking/growing browser chrome, with `vh` as the fallback for
+   anything that doesn't know the unit. */
 body {
-  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 body.stretch {
   display: flex;

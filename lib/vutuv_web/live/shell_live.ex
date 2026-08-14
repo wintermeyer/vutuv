@@ -850,10 +850,19 @@ defmodule VutuvWeb.ShellLive do
       <%!-- Mobile bottom tab bar (fixed; content in the layout reserves space) --%>
       <%!-- Logged out, Messages/Alerts would only bounce the visitor to the
       login page, so the anonymous bar offers Log in directly instead. --%>
+      <%!-- The bar is OPAQUE, not the frosted `bg-white/95 backdrop-blur` the
+      top bar wears, and that is not a taste decision. A `backdrop-filter` has
+      to be re-rasterized against the scrolling content on every frame, and
+      that is the path iOS 26 Safari gets wrong on a `position: fixed` element:
+      the bar stops following the viewport mid-scroll and hangs in the middle
+      of the screen with the feed running on underneath it (reported on an
+      iPhone 2026-08-14; the frosted bars of the sites in Apple's own bug
+      reports are the tell). Opaque also reads better here — this bar sits over
+      dense feed content, where the top bar sits over the page's own top. --%>
       <nav
         aria-label={gettext("Main navigation")}
         class={[
-          "fixed inset-x-0 bottom-0 z-30 grid h-16 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95",
+          "fixed inset-x-0 bottom-0 z-30 grid h-16 border-t border-slate-200 bg-white md:hidden dark:border-slate-800 dark:bg-slate-900",
           if(@user_id, do: "grid-cols-5", else: "grid-cols-2")
         ]}
       >
