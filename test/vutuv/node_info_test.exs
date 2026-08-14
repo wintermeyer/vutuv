@@ -15,6 +15,7 @@ defmodule Vutuv.NodeInfoTest do
 
   alias Vutuv.Accounts
   alias Vutuv.Fediverse.Follower
+  alias Vutuv.Legal
   alias Vutuv.NodeInfo
   alias Vutuv.Posts
   alias Vutuv.Posts.PostDenial
@@ -44,7 +45,8 @@ defmodule Vutuv.NodeInfoTest do
       assert doc["software"]["name"] == "vutuv"
       assert doc["software"]["version"] == to_string(Application.spec(:vutuv, :vsn))
       assert doc["software"]["repository"] == "https://github.com/wintermeyer/vutuv"
-      assert doc["software"]["homepage"] == "https://www.vutuv.de"
+      # The apex, never the `www.` alias, which only 301s here.
+      assert doc["software"]["homepage"] == "https://vutuv.de"
 
       assert doc["metadata"]["nodeName"] == "vutuv"
       assert doc["metadata"]["nodeDescription"] =~ "business network"
@@ -66,6 +68,53 @@ defmodule Vutuv.NodeInfoTest do
     test "an unknown schema version has no document" do
       assert NodeInfo.document("1.0") == nil
       assert NodeInfo.document("2.2") == nil
+    end
+  end
+
+  describe "metadata" do
+    test "the description states what is true of the software everywhere" do
+      description = NodeInfo.document("2.1")["metadata"]["nodeDescription"]
+
+      assert description =~ "open-source"
+      assert description =~ "no third-party cookies"
+    end
+
+    test "the hosting claim names the operator's own data location" do
+      # The one claim in the description that is NOT a property of the
+      # software: `data_location` is the operator's own, exactly as on the
+      # start page.
+      assert NodeInfo.document("2.1")["metadata"]["nodeDescription"] =~
+               "on our own hardware in Deutschland"
+    end
+
+    test "langs lists the locales this installation serves" do
+      assert NodeInfo.document("2.1")["metadata"]["langs"] == ["en", "de"]
+    end
+
+    test "maintainer is the operator contact, the one security.txt already names" do
+      maintainer = NodeInfo.document("2.1")["metadata"]["maintainer"]
+
+      assert maintainer == %{
+               "name" => "Stefan Wintermeyer",
+               "email" => "sw@wintermeyer-consulting.de"
+             }
+    end
+
+    test "an unwritten legal page is not advertised" do
+      metadata = NodeInfo.document("2.1")["metadata"]
+
+      refute Map.has_key?(metadata, "tosUrl")
+      refute Map.has_key?(metadata, "privacyPolicyUrl")
+    end
+
+    test "a written legal page is linked absolutely" do
+      {:ok, _} = Legal.upsert_page("nutzungsbedingungen", %{"body" => "# Terms"})
+      {:ok, _} = Legal.upsert_page("datenschutzerklaerung", %{"body" => "# Privacy"})
+
+      metadata = NodeInfo.document("2.1")["metadata"]
+
+      assert metadata["tosUrl"] == "http://localhost:4001/nutzungsbedingungen"
+      assert metadata["privacyPolicyUrl"] == "http://localhost:4001/datenschutzerklaerung"
     end
   end
 

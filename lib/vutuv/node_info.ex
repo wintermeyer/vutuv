@@ -24,6 +24,31 @@ defmodule Vutuv.NodeInfo do
   `nodeDescription`) sits behind the Operator identity block in
   `config/config.exs` like every other such value.
 
+  ## What the description claims, and who may claim it
+
+  A directory prints `nodeDescription` verbatim beside the entry, so every word
+  of it is a public claim made in the operator's name — which is why the default
+  states only what is true of the **software** on every installation: it is
+  MIT-licensed, it sets one first-party cookie and it loads nothing from another
+  host. An operator who never edits the string still says nothing false.
+
+  Where the servers stand is the one claim of the four that is **not** a
+  property of the software, so it is not in the string: `node_description/0`
+  appends it from `:data_location`, which drops out entirely for an operator on
+  rented cloud infrastructure. That is the same split the start page's "Your
+  data" cards make, and `VutuvWeb.PageHTML.data_location/0` is the single place
+  that decides whether the claim was made at all. What this deliberately does
+  **not** say is that we are the good ones: every server in that list claims as
+  much, so the claim carries no information, and the facts above are the same
+  statement in a form a reader can check.
+
+  The rest of `metadata` is what a person reading a directory entry can act on:
+  `langs` (the locales served), `maintainer` (the operator contact
+  `/.well-known/security.txt` already publishes), and `tosUrl` /
+  `privacyPolicyUrl` — the last two only once that page has actually been
+  written, since a link to a "not published yet" placeholder is worse than no
+  link at all.
+
   The figures are the part worth being careful about:
 
     * **`usage.users.total` is the members here** (`Accounts.count_users/0`) and
@@ -66,12 +91,15 @@ defmodule Vutuv.NodeInfo do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Legal
+  alias Vutuv.Legal.LegalPage
   alias Vutuv.Moderation.Query, as: ModerationQuery
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Sessions.UserSession
   alias VutuvWeb.Endpoint
+  alias VutuvWeb.PageHTML
 
   require ModerationQuery
 
@@ -88,7 +116,9 @@ defmodule Vutuv.NodeInfo do
   # Properties of the software, identical on every installation.
   @software_name "vutuv"
   @repository "https://github.com/wintermeyer/vutuv"
-  @homepage "https://www.vutuv.de"
+  # The apex, not the `www.` alias: production 301s `www.` here, so the alias
+  # would send every directory through a redirect to reach the same page.
+  @homepage "https://vutuv.de"
 
   # The active-user windows the specification defines.
   @month_days 30
@@ -129,14 +159,61 @@ defmodule Vutuv.NodeInfo do
         "localPosts" => usage.local_posts,
         "localComments" => usage.local_comments
       },
-      "metadata" => %{
-        "nodeName" => Application.fetch_env!(:vutuv, :node_name),
-        "nodeDescription" => Application.fetch_env!(:vutuv, :node_description)
-      }
+      "metadata" => metadata()
     }
   end
 
   def document(_version), do: nil
+
+  # `metadata` is the schema's free-form half. Four of these are what a person
+  # reading a directory entry can act on; the two legal URLs appear only once
+  # the operator has actually written that page, because a link to a
+  # "not published yet" placeholder is worse than no link.
+  defp metadata do
+    {maintainer_name, maintainer_email} = Application.fetch_env!(:vutuv, :operator_recipient)
+
+    %{
+      "nodeName" => Application.fetch_env!(:vutuv, :node_name),
+      "nodeDescription" => node_description(),
+      "langs" => locales(),
+      "maintainer" => %{"name" => maintainer_name, "email" => maintainer_email}
+    }
+    |> put_legal_url("tosUrl", "nutzungsbedingungen")
+    |> put_legal_url("privacyPolicyUrl", "datenschutzerklaerung")
+  end
+
+  # The configured description says what is true of vutuv on **every**
+  # installation (open source, no tracking, no third-party cookies). Where the
+  # servers stand is not: it is a promise only the operator can make, so it is
+  # appended from `:data_location` and drops out entirely for an operator who
+  # cleared it — the same split the start page's "Your data" cards make, and
+  # `VutuvWeb.PageHTML.data_location/0` is the one place that decides whether
+  # the claim was made at all.
+  defp node_description do
+    description = Application.fetch_env!(:vutuv, :node_description)
+
+    case PageHTML.data_location() do
+      nil -> description
+      place -> description <> " Hosted on our own hardware in #{place}."
+    end
+  end
+
+  defp locales do
+    {:ok, config} = Application.fetch_env(:vutuv, Endpoint)
+    config[:locales]
+  end
+
+  defp put_legal_url(metadata, key, slug) do
+    case Legal.get_page(slug) do
+      %LegalPage{body: body} when is_binary(body) ->
+        if String.trim(body) == "",
+          do: metadata,
+          else: Map.put(metadata, key, Endpoint.url() <> "/" <> slug)
+
+      _unwritten ->
+        metadata
+    end
+  end
 
   @doc """
   The figures behind `usage`: `%{users: %{total:, active_month:,

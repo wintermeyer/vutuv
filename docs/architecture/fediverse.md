@@ -2060,9 +2060,58 @@ endpoints answering 404 — the same thing said twice.
 
 `software.name`, `repository` and `homepage` describe vutuv **the software** and
 are literals: every installation runs the same software, developed in the same
-repository. What names the operator — `metadata.nodeName` and `nodeDescription`
-— sits behind the Operator identity block in `config/config.exs` like every
-other such value, env-overridable as `NODE_NAME` / `NODE_DESCRIPTION`.
+repository. `homepage` is the apex `https://vutuv.de`, never the `www.` alias,
+which only 301s there. What names the operator — `metadata.nodeName` and
+`nodeDescription` — sits behind the Operator identity block in
+`config/config.exs` like every other such value, env-overridable as `NODE_NAME`
+/ `NODE_DESCRIPTION`.
+
+### What the description claims, and who may claim it
+
+A directory prints `nodeDescription` verbatim, so every word of it is a public
+claim made in the **operator's** name. That is the whole reason the string is
+split the way it is.
+
+The configured default claims only what is true of the software wherever it
+runs, so an operator who never edits it still says nothing false:
+
+- **open source** — MIT, verified against `LICENSE` and the repository metadata,
+  not merely "the code is public";
+- **no tracking, no third-party cookies** — verified against production: exactly
+  one cookie is set (`_vutuv_key`, first-party, HttpOnly, SameSite=Lax) and no
+  template loads an asset from another host.
+
+**Where the servers stand is the one claim of the three that belongs to the
+operator rather than to vutuv**, so it is deliberately not in the string:
+`node_description/0` appends it from `:data_location`, and it drops out entirely
+for an operator who cleared that variable. This is the same split
+`lib/vutuv_web/templates/page/index.html.heex` makes between its "Your data"
+cards, and `VutuvWeb.PageHTML.data_location/0` is the single place that decides
+whether the claim was made at all — the two surfaces cannot drift, and no
+installation publishes an infrastructure claim about itself that its operator
+never made. Keep it short, too: real entries run 10 to 20 words
+(mastodon.social 12, chaos.social 10, norden.social 17) and the directories
+truncate.
+
+What the description deliberately does **not** say is that we are the good ones.
+Every server in that list claims as much, so the claim carries no information,
+and in the fediverse specifically self-praise reads as a warning sign;
+mastodon.social's own line says who runs it and what for, never that it is the
+good one. The three facts above are the same statement in a form a reader can
+check.
+
+### The rest of `metadata`
+
+The schema leaves `metadata` free-form, and implementations use it (GoToSocial
+ships `maintainer`, `tosUrl`, `langs` and more). vutuv carries what a person
+reading a directory entry can act on: **`langs`** (the locales this installation
+serves, from the endpoint's `:locales`), **`maintainer`** (`:operator_recipient`
+— the same contact `/.well-known/security.txt` already publishes, so this is no
+new disclosure), and **`tosUrl`** / **`privacyPolicyUrl`**. The last two appear
+**only once that page has actually been written** (`Vutuv.Legal.get_page/1` with
+a non-blank body): the legal pages are per-installation data and a fresh
+installation renders a "not published yet" placeholder, so advertising the URL
+would point a directory at an empty page.
 
 Submitting anything anywhere is not part of this. Once the document is served,
 the directories that scan for it find the installation on their own.

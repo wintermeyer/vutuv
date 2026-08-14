@@ -659,9 +659,17 @@ config :vutuv, :operator_address, "Johannes-Müller-Str. 10 - 56068 Koblenz - Ge
 # since NodeInfo has no locale negotiation. (NODE_NAME / NODE_DESCRIPTION)
 config :vutuv, :node_name, "vutuv"
 
+# Keep it to a sentence or two: real entries run 10-20 words (mastodon.social
+# 12, chaos.social 10, norden.social 17) and directories truncate. Everything
+# claimed here is true of the SOFTWARE on every installation — MIT-licensed, one
+# first-party cookie and nothing loaded from another host — so it stays honest
+# for an operator who never edits it. Where the servers stand is deliberately
+# NOT in here: `Vutuv.NodeInfo` appends that from :data_location, which is the
+# only claim of the four that belongs to the operator rather than to vutuv.
 config :vutuv,
        :node_description,
-       "The open business network where professionals connect, share, and get found."
+       "The open-source business network: a professional profile and posts you can " <>
+         "follow from anywhere in the fediverse. No tracking, no third-party cookies."
 
 # -----------------------------------------------------------------------------
 

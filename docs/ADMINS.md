@@ -139,7 +139,7 @@ Everything else has a default (the vutuv.de production value):
 | `FEDIVERSE_COUNTS_PER_HOST` | `10` | How many of that batch may belong to a single host, so one instance that happens to host many of the accounts your members follow is spread over several runs rather than fetched in a burst. What the cap holds back is written to the log |
 | `FEDIVERSE_IMAGE_HOLD_SECONDS` | `90` | How long a post whose picture the AI image scan has not judged yet waits before it federates **without** the picture. This is a ceiling, not the usual wait: the post goes out the moment the scan settles, normally within seconds. It only bites when the scanner is down, and then the choice is "the post without its picture" over "no post at all". Raise it if you run image moderation on slow hardware; irrelevant when `MODERATE_IMAGES` is off |
 | `NODE_NAME` | `vutuv` | What the fediverse directories call your installation. They fetch `/.well-known/nodeinfo` on their own and print this string beside the entry, so make it the name you want people to see in a list of servers — your organization, your community, your domain |
-| `NODE_DESCRIPTION` | (vutuv.de's pitch) | The one sentence those directories print under the name. Say what your installation is *for*; the default describes vutuv.de and is almost certainly not what you want on your own server. NodeInfo has no notion of language, so write it in the one your visitors read |
+| `NODE_DESCRIPTION` | (see below) | The sentence or two those directories print under the name. Keep it short — real entries run 10 to 20 words and the sites truncate — and say what your installation is *for*. The default claims only what is true of vutuv wherever it runs (open source, no tracking, no third-party cookies), so it stays honest if you never touch it, but it says nothing about *you*. **Where your servers stand is not part of this string**: vutuv appends that sentence from `DATA_LOCATION`, so clearing that one variable removes the hosting claim from your start page and from this document together. NodeInfo has no notion of language, so write it in the one your visitors read |
 | `ACCOUNT_EVENT_RETENTION_DAYS` | `365` | How long the **account-activity log** keeps an event, in days (see `docs/architecture/account-activity.md`). It records what changed on an account, when, from which coarse device (never an IP address), and how it was confirmed, so it is personal data with a clock on it: a year covers the "this happened months ago and I only noticed now" support case without becoming a permanent movement profile. The daily sweeper deletes anything older |
 | `FETCH_BOOK_METADATA` | `true` | `false` turns the catalogue lookups behind post **book reviews** off (the cover image, page count and publisher from Open Library, and an audiobook's running time). New reviews can no longer be created (the composer's review form was removed), but existing review posts keep rendering their card — with the flag off it shows no cover and none of those details. Set it on installations that must not call out (intranets) |
 | `DNB_SRU_URL` | `https://services.dnb.de/sru/dnb` | Where an **audiobook's running time** is looked up by ISBN: an SRU endpoint answering MARC21-xml (the Deutsche Nationalbibliothek by default — Open Library records no durations). Point it at another catalogue's SRU endpoint, or set it **empty** (`DNB_SRU_URL=`) to switch that one lookup off while the rest of the book metadata keeps working |
@@ -607,17 +607,33 @@ path in nginx.
 
 What the document says about you:
 
-- your name and one sentence, from `NODE_NAME` and `NODE_DESCRIPTION`;
+- your name and a sentence or two, from `NODE_NAME` and `NODE_DESCRIPTION`;
 - the software and its version, so a directory can tell vutuv from anything
-  else;
+  else, plus a link to its source;
 - how many members you have, how many of them signed in over the last 30 and
-  180 days, and how many public posts and replies they have written.
+  180 days, and how many public posts and replies they have written;
+- the languages you serve, your operator contact (the same one
+  `/.well-known/security.txt` already publishes), and links to your
+  Nutzungsbedingungen and Datenschutzerklärung — those two only once you have
+  actually written them at `/admin/legal`, since a link to a placeholder is
+  worse than no link.
 
 Everything in it is an aggregate and nobody is named. The post counts cover
 exactly what a logged-out visitor can already read — private, frozen and
 unmoderated posts are in neither — and the member figures are the same kind of
 number your top bar and your member directory already show. Check yours at
 `https://<your host>/system/nodeinfo/2.1`.
+
+**Two claims in the default description are worth understanding before you
+publish them under your own name.** "Open source" and "no tracking, no
+third-party cookies" are properties of the software: vutuv is MIT-licensed, it
+sets exactly one first-party cookie, and its pages load nothing from another
+host, so those hold on your installation too. "Hosted on our own hardware in X"
+is **not** a property of the software, so it is not in the description string at
+all — vutuv appends it from `DATA_LOCATION`, the same variable that drives the
+"Where your data lives" card on your start page. Run on rented cloud
+infrastructure and you clear that one variable, and the claim disappears from
+both places at once rather than being made in your name.
 
 ## Federation: blocking a remote server
 
