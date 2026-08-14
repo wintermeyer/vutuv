@@ -47,3 +47,45 @@ page's "Posts with this tag" section (`Vutuv.Posts.list_tag_posts/3`, issue
 posts no longer opens an empty page. The tag page offset-paginates those posts
 with the numbered `<.pager>` (`?page`, like the tag index); its front matter
 (description, most-endorsed members, jobs) rides only on page 1.
+
+## What is pasted here but is not a query
+
+Two things people put in the box are addresses rather than words, and no amount
+of full-text search will ever match either. Both are recognised by **pure string
+work** in `SearchLive` — a keystroke must never become an outbound request — and
+both render as a card **above** the results, because they are the answer to what
+was pasted:
+
+* an **account address** (`@name@server`, or a profile URL, issue #1160):
+  `#search-remote-address` names it and hands it to the follow box at
+  `/settings/fediverse/following?address=`.
+* the address of a **single post** out there (issue #1211):
+  `#search-remote-post` offers the fetch that used to live only at
+  `/system/fediverse/lookup` — a page under `/system/` that nobody finds, while
+  the address they want to look up is already in their clipboard and a search
+  box is in front of them. Pressing Enter on it does the same as the card's
+  button, since a submit means "get me that"; `phx-change` deliberately does
+  not, or typing a URL out by hand would fetch every prefix of it.
+
+The two are told apart the way `Vutuv.Fediverse.look_up_post/2` tells them
+apart — `RemoteFollow.parse_address/1` accepts exactly `@you@server`,
+`you@server` and `https://server/@you`, and a post URL has one path segment too
+many for all three — and **our own** addresses are excluded from both by
+`Fediverse.own_host?/1`, `www.` alias included.
+
+The fetch itself is `look_up_post/2` unchanged: signed in the member's name,
+metered against their hourly `FEDIVERSE_LOOKUP_LIMIT`, free for a post already
+cached here. So the card never fetches on render; it waits for the click or the
+submit, and a member who cannot sign such a request (they do not federate, they
+moved away) reads why, plus the switch, from the one wording table in
+`VutuvWeb.FediverseComponents` that the lookup page reads too. A resolved post
+does **not** get a second result view here: the reader is sent to our copy's own
+page at `/system/fediverse/post/:id`, the one every remote card's timestamp
+points at, which already carries the action bar, the ⋯ menu and the way on to
+the account.
+
+The search tips list both, and only where they apply: the account row under
+`all`/`people`, the post row under `all`/`posts`, and neither on an installation
+with the Fediverse switched off, where both cards are unreachable. The
+placeholder names the address too, since that is the help a member reads before
+typing.

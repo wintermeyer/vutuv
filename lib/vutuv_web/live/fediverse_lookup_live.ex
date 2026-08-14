@@ -34,6 +34,13 @@ defmodule VutuvWeb.FediverseLookupLive do
 
   Signed-in only and `noindex`, like the account page and for the same reason:
   it is assembled from what somebody else wrote on somebody else's server.
+
+  This is no longer the only door: a post address pasted into **`/search`** is
+  offered the same lookup, because that is where somebody with an address in the
+  clipboard goes, and a page under `/system/` is not something anybody finds. The
+  wording both surfaces need lives in `VutuvWeb.FediverseComponents`; what the
+  search box does with a resolved post is send the reader to our copy's own page
+  (`/system/fediverse/post/:id`) rather than growing a second result view.
   """
 
   use VutuvWeb, :live_view
@@ -151,75 +158,15 @@ defmodule VutuvWeb.FediverseLookupLive do
     |> assign(:follow, Fediverse.remote_follow_for(viewer, post.remote_account))
   end
 
-  # Why this member cannot look anything up. Its own three sentences rather than
-  # `<.follow_refusal_panel>`: that one explains why a *follow* cannot be signed,
-  # and telling somebody who pasted a post link that they need an identity "to
-  # follow an account out there" answers a question they did not ask. The switch
-  # behind it is the same one.
-  defp refusal_title(:not_federating), do: gettext("Turn on Fediverse participation to look up")
-  defp refusal_title(:moved), do: gettext("This account no longer acts out there")
-  defp refusal_title(_disabled), do: gettext("This vutuv stays to itself")
-
-  defp refusal_text(:not_federating),
-    do:
-      gettext(
-        "Fetching a post asks its server for it in your name, signed with your own key, so there is no such thing as an anonymous lookup here."
-      )
-
-  defp refusal_text(:moved),
-    do:
-      gettext(
-        "You redirected your Fediverse followers to another account, so nothing is fetched or sent from this one any more."
-      )
-
-  defp refusal_text(_disabled),
-    do:
-      gettext(
-        "This vutuv does not exchange anything with other networks. That is an operator setting, not yours."
-      )
-
-  defp refusal_link(:not_federating), do: {~p"/settings/fediverse", gettext("Fediverse settings")}
-
-  defp refusal_link(:moved),
-    do: {~p"/settings/fediverse/move", gettext("Your account move")}
-
-  defp refusal_link(_disabled), do: nil
-
-  # The sentence for one `{:error, reason}` the lookup itself came back with.
-  # Its own table, like every other act in this subsystem has: the states a
-  # member is in are named once in `FediverseComponents.refusal_message/1` and
-  # taken from there, while what is wrong with *this URL* is only ever asked
-  # here, and the follow table's fallback would tell somebody to check an
-  # address they never typed.
-  defp lookup_refusal_message(:invalid_post_url),
-    do:
-      gettext(
-        "That does not look like a link to a post. Copy the address of the post itself, for example https://server/@name/12345."
-      )
-
-  defp lookup_refusal_message(:local_url),
-    do: gettext("That is a link on this vutuv, not on another network.")
-
-  defp lookup_refusal_message(:post_unreachable),
-    do: gettext("That server did not answer. Check the address, and that the server is online.")
-
-  defp lookup_refusal_message(:not_a_post),
-    do: gettext("There is no post to show at that address.")
-
-  defp lookup_refusal_message(:post_not_public),
-    do:
-      gettext(
-        "Its author published this post to their followers alone, so vutuv does not keep a copy of it."
-      )
-
-  defp lookup_refusal_message(:lookup_capped),
-    do: gettext("You have looked a lot of posts up in the last hour. Please try again later.")
-
-  defp lookup_refusal_message(reason), do: refusal_message(reason)
+  # Why this member cannot look anything up, and what is wrong with one pasted
+  # URL, both live in `VutuvWeb.FediverseComponents` (imported above): the
+  # search box offers the same lookup for a pasted address (issue #1211), and a
+  # refusal explained in two places is a refusal explained twice, once badly.
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, :refusal_link, assigns.refusal && refusal_link(assigns.refusal))
+    assigns =
+      assign(assigns, :refusal_link, assigns.refusal && lookup_refusal_link(assigns.refusal))
 
     ~H"""
     <div id="fediverse-lookup" class="mx-auto max-w-2xl space-y-6 py-6">
@@ -240,9 +187,9 @@ defmodule VutuvWeb.FediverseLookupLive do
             class="mt-4 rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:ring-slate-700"
           >
             <h2 class="mb-2 text-base font-semibold text-slate-900 dark:text-white">
-              {refusal_title(@refusal)}
+              {lookup_refusal_title(@refusal)}
             </h2>
-            <p class="mb-0">{refusal_text(@refusal)}</p>
+            <p class="mb-0">{lookup_refusal_text(@refusal)}</p>
             <p :if={@refusal_link} class="mb-0 mt-3">
               <.link
                 navigate={elem(@refusal_link, 0)}

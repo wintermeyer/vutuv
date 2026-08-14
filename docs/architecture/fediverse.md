@@ -1896,10 +1896,10 @@ account's whole back catalogue is invisible here: no `fediverse_posts` row,
 nothing to reply to, like or reshare. The account page (#1162) deliberately
 makes that worse rather than better, since it fetches nothing on view.
 
-`/system/fediverse/lookup` (`VutuvWeb.FediverseLookupLive`) is the one pull. A
-member pastes the address of a post they are reading out there, and it comes
-back as the ordinary remote card with its ordinary action bar. Four things can
-be pasted and `Vutuv.Fediverse.look_up_post/2` answers each of them:
+`Vutuv.Fediverse.look_up_post/2` is the one pull. A member pastes the address of
+a post they are reading out there, and it comes back as the ordinary remote card
+with its ordinary action bar. Four things can be pasted and it answers each of
+them:
 
 | Pasted | Answer |
 | --- | --- |
@@ -1907,6 +1907,22 @@ be pasted and `Vutuv.Fediverse.look_up_post/2` answers each of them:
 | a vutuv post URL | `{:local, post}` — the page navigates to its permalink |
 | an account address or profile URL | `{:account, address}` — handed to the follow box at `/settings/fediverse/following?address=` |
 | anything else | `{:error, reason}` |
+
+**Two doors lead to it.** `/system/fediverse/lookup`
+(`VutuvWeb.FediverseLookupLive`) is the box built for it, and **`/search`** is
+where people actually arrive: somebody who is reading a post out there and wants
+to answer it has the address in their clipboard and a search box in front of
+them, and a page under `/system/` is not something anybody finds. So a pasted
+post address is recognised in `SearchLive` — pure string work, beside the
+`@name@server` card that has been there since #1160 — and offered the same
+fetch, on the member's click or their Enter, never on a keystroke. The two
+surfaces read their refusals and their per-URL error sentences out of one table
+in `VutuvWeb.FediverseComponents` (`lookup_refusal_*`), because a refusal
+explained in two places is a refusal explained twice, once badly. What differs
+is only where a resolved post lands: the lookup page renders it inline (below),
+the search page navigates to our copy's own page at `/system/fediverse/post/:id`
+rather than growing a second result view. See
+[search.md](search.md#what-is-pasted-here-but-is-not-a-query).
 
 **Our own link is recognised on host plus path, never on a prefix of
 `Endpoint.url()`.** A member pastes what their browser or their mail client gave
@@ -1963,9 +1979,10 @@ is the third exemption in `spare_held/1` beside a reshare (#1166) and a boost
 never extra time, and `expires_at` counts from **receipt**, so an old post lives
 its full retention from the lookup rather than arriving already expired.
 
-The result renders **inline**. There is no permalink of ours for it and no
-anchor on the account page: a copy of somebody else's post is not a page we
-publish. The card's ⋯ menu drops **Mute** here (`mute?={@follow != nil}`), since
+On the lookup page the result renders **inline**, which is what it meant in 2026
+when a cached remote post had no page of its own; `/system/fediverse/post/:id`
+gave it one, and that is where the search door sends the reader. The
+card's ⋯ menu drops **Mute** here (`mute?={@follow != nil}`), since
 muting a follow that does not exist is a control that does nothing under a flash
 saying it did; the follow itself is offered right below the card, because
 somebody who came here for one post is somebody deciding about its author — and

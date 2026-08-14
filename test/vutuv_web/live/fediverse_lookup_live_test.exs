@@ -245,4 +245,132 @@ defmodule VutuvWeb.FediverseLookupLiveTest do
 
     assert has_element?(view, "#fediverse-lookup-link[href='/system/fediverse/lookup']")
   end
+
+  describe "the same lookup from the search box" do
+    test "a pasted post address offers the fetch", %{conn: conn} do
+      {conn, _user} = federating(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: @display]}")
+
+      assert has_element?(view, "#search-remote-post")
+      assert has_element?(view, "#search-lookup-post")
+      # Nothing is fetched while the page merely names what was pasted.
+      refute Repo.get_by(RemotePost, object_uri: @object)
+    end
+
+    test "the fetch lands on our copy of the post", %{conn: conn} do
+      serve()
+      {conn, _user} = federating(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: @display]}")
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view |> element("#search-lookup-post") |> render_click()
+
+      post = Repo.get_by!(RemotePost, object_uri: @object)
+      assert to == "/system/fediverse/post/#{post.id}"
+    end
+
+    test "pressing Enter on the address fetches it too", %{conn: conn} do
+      serve()
+      {conn, _user} = federating(conn)
+
+      # The submit carries the pasted value, which is what a paste followed
+      # straight away by Enter looks like: `phx-debounce` holds the change
+      # event back, so the address reaches the server here first.
+      {:ok, view, _html} = live(conn, ~p"/search")
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view |> form("#search-form") |> render_submit(%{q: @display})
+
+      post = Repo.get_by!(RemotePost, object_uri: @object)
+      assert to == "/system/fediverse/post/#{post.id}"
+    end
+
+    test "an ordinary query offers nothing of the sort", %{conn: conn} do
+      {conn, _user} = federating(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: "meier"]}")
+
+      refute has_element?(view, "#search-remote-post")
+    end
+
+    test "a link of our own is never offered as somebody else's post", %{conn: conn} do
+      {conn, _user} = federating(conn)
+      author = insert(:activated_user)
+      post = insert(:post, user: author)
+
+      # Both spellings of the same page: a card that opened here would be
+      # offering to fetch this installation from itself.
+      for host <- ["localhost", "www.localhost"] do
+        {:ok, view, _html} =
+          live(conn, ~p"/search?#{[q: "https://#{host}/#{author.username}/posts/#{post.id}"]}")
+
+        refute has_element?(view, "#search-remote-post")
+      end
+    end
+
+    test "an account address keeps the follow offer, not the fetch", %{conn: conn} do
+      {conn, _user} = federating(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: "https://weit.example/@autorin"]}")
+
+      assert has_element?(view, "#search-remote-address")
+      refute has_element?(view, "#search-remote-post")
+    end
+
+    test "a member who does not federate gets the switch, not the button", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: @display]}")
+
+      assert has_element?(view, "#search-remote-post")
+      assert has_element?(view, "#search-lookup-refusal-link[href='/settings/fediverse']")
+      refute has_element?(view, "#search-lookup-post")
+    end
+
+    test "a signed-out visitor is asked to sign in first", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: @display]}")
+
+      assert has_element?(view, "#search-lookup-login")
+      refute has_element?(view, "#search-lookup-post")
+    end
+
+    test "a server that does not answer says so in the card", %{conn: conn} do
+      Application.put_env(:vutuv, :fediverse_req_options,
+        plug: fn conn -> Plug.Conn.send_resp(conn, 404, "") end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
+      {conn, _user} = federating(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: @display]}")
+      view |> element("#search-lookup-post") |> render_click()
+
+      assert has_element?(view, "#search-lookup-error")
+      refute Repo.get_by(RemotePost, object_uri: @object)
+    end
+
+    test "it reads German for a German visitor", %{conn: conn} do
+      {conn, _user} = federating(conn)
+
+      {:ok, _view, html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> live(~p"/search?#{[q: @display]}")
+
+      assert html =~ "Ein Beitrag aus einem anderen Netzwerk"
+      assert html =~ "Diesen Beitrag holen"
+    end
+
+    test "the tips name what an address does, in the active scope", %{conn: conn} do
+      {conn, _user} = federating(conn)
+
+      {:ok, _view, html} = live(conn, ~p"/search")
+
+      assert html =~ "https://server/@name/12345"
+      assert html =~ "@name@server"
+    end
+  end
 end

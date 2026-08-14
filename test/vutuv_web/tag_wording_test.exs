@@ -51,7 +51,10 @@ defmodule VutuvWeb.TagWordingTest do
     test "speaks of tags, not skills", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/search")
 
-      assert html =~ "Search for people, tags, or posts"
+      # Only the opening of the placeholder is pinned here: issue #1211 appended
+      # the Fediverse address to it, and what this test is about is the word
+      # "tags" being there and "skill" not.
+      assert html =~ "Search for people, tags"
       refute html =~ ~r/skill/i
     end
   end

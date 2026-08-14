@@ -23,6 +23,11 @@ defmodule VutuvWeb.FediverseComponents do
   already on Mastodon reads on a member's profile and on an organization page —
   but it lives here for the same reason: those two pages describe one act, and a
   member's address and a page's address are the same kind of thing.
+
+  The `lookup_refusal_*` half at the bottom does the same job for the other act
+  this subsystem offers a member — fetching one post by its address — which has
+  likewise grown a second surface: the lookup page and, since a URL means
+  nothing to a text search, the search box itself (issue #1211).
   """
 
   use Phoenix.Component
@@ -413,4 +418,88 @@ defmodule VutuvWeb.FediverseComponents do
 
   def refusal_message(_other),
     do: gettext("That did not work. Check the address and try again.")
+
+  @doc """
+  The sentence for one `{:error, reason}` from `Vutuv.Fediverse.look_up_post/2`.
+
+  Its own table beside `refusal_message/1`, and one table for both places a post
+  address can be pasted — the lookup page and the search box (issue #1211). The
+  states a member is in are named once above and taken from there; what is wrong
+  with **this URL** is only ever asked here, and the follow table's fallback
+  would tell somebody to check an address they never typed.
+  """
+  def lookup_refusal_message(:invalid_post_url),
+    do:
+      gettext(
+        "That does not look like a link to a post. Copy the address of the post itself, for example https://server/@name/12345."
+      )
+
+  def lookup_refusal_message(:local_url),
+    do: gettext("That is a link on this vutuv, not on another network.")
+
+  def lookup_refusal_message(:post_unreachable),
+    do: gettext("That server did not answer. Check the address, and that the server is online.")
+
+  def lookup_refusal_message(:not_a_post),
+    do: gettext("There is no post to show at that address.")
+
+  def lookup_refusal_message(:post_not_public),
+    do:
+      gettext(
+        "Its author published this post to their followers alone, so vutuv does not keep a copy of it."
+      )
+
+  def lookup_refusal_message(:lookup_capped),
+    do: gettext("You have looked a lot of posts up in the last hour. Please try again later.")
+
+  def lookup_refusal_message(reason), do: refusal_message(reason)
+
+  @doc """
+  Why this member cannot look a post up at all, in words: the heading, the
+  explanation and where to go instead (`{path, label}`, or `nil` when there is
+  nowhere to go). The data half is `Vutuv.Fediverse.lookup_refusal/1`.
+
+  Deliberately not `follow_refusal_panel/1`'s wording: that one explains why a
+  **follow** cannot be signed, and telling somebody who pasted a post link that
+  they need an identity "to follow an account out there" answers a question they
+  did not ask. The switch behind it is the same one.
+
+  Three functions rather than one panel, because the two pages that render it
+  give it different weight: the lookup page puts a titled panel where the form
+  would be, the search page appends two lines to a card that already has a
+  heading.
+  """
+  def lookup_refusal_title(:not_federating),
+    do: gettext("Turn on Fediverse participation to look up")
+
+  def lookup_refusal_title(:moved), do: gettext("This account no longer acts out there")
+  def lookup_refusal_title(_disabled), do: gettext("This vutuv stays to itself")
+
+  @doc "The explanation under `lookup_refusal_title/1`."
+  def lookup_refusal_text(:not_federating),
+    do:
+      gettext(
+        "Fetching a post asks its server for it in your name, signed with your own key, so there is no such thing as an anonymous lookup here."
+      )
+
+  def lookup_refusal_text(:moved),
+    do:
+      gettext(
+        "You redirected your Fediverse followers to another account, so nothing is fetched or sent from this one any more."
+      )
+
+  def lookup_refusal_text(_disabled),
+    do:
+      gettext(
+        "This vutuv does not exchange anything with other networks. That is an operator setting, not yours."
+      )
+
+  @doc "Where a refused member can act on it, as `{path, label}` — `nil` when nowhere."
+  def lookup_refusal_link(:not_federating),
+    do: {~p"/settings/fediverse", gettext("Fediverse settings")}
+
+  def lookup_refusal_link(:moved),
+    do: {~p"/settings/fediverse/move", gettext("Your account move")}
+
+  def lookup_refusal_link(_disabled), do: nil
 end

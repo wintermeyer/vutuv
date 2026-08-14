@@ -15,8 +15,20 @@ defmodule VutuvWeb.SearchLive do
 
   A query is recorded for the search history only after it settles (no
   keystroke for two seconds), so typing "meier" stores one query, not five.
+
+  Two things people paste in here are not queries at all, and both get named
+  and answered instead of searched: an `@name@server` address (the follow
+  hand-off, issue #1160) and the address of a **post** on another network, which
+  is offered the lookup that used to live at `/system/fediverse/lookup` alone
+  (issue #1211). Recognising either is pure string work, so a keystroke never
+  becomes an outbound request; the fetch behind the post address is a signed
+  request in the member's name against their hourly budget, so it happens on
+  their explicit submit or click and never while they type.
   """
   use VutuvWeb, :live_view
+
+  import VutuvWeb.FediverseComponents,
+    only: [lookup_refusal_link: 1, lookup_refusal_message: 1, lookup_refusal_text: 1]
 
   import VutuvWeb.SavedSearchComponents
 
@@ -43,6 +55,11 @@ defmodule VutuvWeb.SearchLive do
      |> assign(:current_user_id, current_user && current_user.id)
      |> assign(:show_save?, false)
      |> assign(:saved?, false)
+     # Whether this member could look a post up at all, asked once here rather
+     # than per keystroke: it reads their federation state, and the answer is
+     # the same for every query they type. `look_up_post/2` asks again at the
+     # click, so participation ending in another tab is still refused.
+     |> assign(:lookup_refusal, current_user && Fediverse.lookup_refusal(current_user))
      |> assign(:record_timer, nil)}
   end
 
@@ -52,6 +69,7 @@ defmodule VutuvWeb.SearchLive do
     scope = parse_scope(params["scope"])
     exact = params["exact"] == "1"
     results = Search.instant(q, scope: scope, exact: exact, viewer: socket.assigns[:current_user])
+    post_url = remote_post_url(q)
 
     {:noreply,
      socket
@@ -68,9 +86,20 @@ defmodule VutuvWeb.SearchLive do
      |> assign(:scope_pinned?, (results && results.parsed.scope_pinned?) || false)
      |> assign(:results, results)
      |> assign(:remote_address, remote_address(q))
+     |> assign(:remote_post_url, post_url)
+     # A refusal belongs to the address it was about: it survives the patch the
+     # debounced keystroke sends after a submit, and dies the moment the pasted
+     # address changes, so the card is never still shouting about a URL the
+     # member has since corrected.
+     |> assign(:remote_post_error, kept_post_error(socket, post_url))
      |> assign_needles(results)
      |> assign_people_maps(results)
      |> schedule_record(results)}
+  end
+
+  defp kept_post_error(socket, post_url) do
+    if post_url && post_url == socket.assigns[:remote_post_url],
+      do: socket.assigns[:remote_post_error]
   end
 
   # A full `@name@server` typed into the search box is not a vutuv query at all
@@ -86,6 +115,31 @@ defmodule VutuvWeb.SearchLive do
          # to follow an address `follow_remote/2` then refuses.
          false <- Fediverse.own_host?(host) do
       "@#{name}@#{host}"
+    else
+      _ -> nil
+    end
+  end
+
+  # The other thing that is an answer rather than a query: the address of a
+  # single post out there (issue #1211). Somebody reading a post on Mastodon and
+  # wanting to answer it from here has the URL in their clipboard and a search
+  # box in front of them, so this is where they paste it — a page under
+  # `/system/` is not something anybody finds.
+  #
+  # Pure string work again, and told apart from the sibling above the way
+  # `Fediverse.look_up_post/2` does it: a post URL has one path segment too many
+  # for every shape `parse_address/1` accepts. Ours is excluded outright rather
+  # than handed on with a "that is a link on this vutuv" — this card offers a
+  # fetch from another network and must not open by misreading what was pasted.
+  # `https` only, because that is what the fetch speaks.
+  defp remote_post_url(q) do
+    url = String.trim(q)
+
+    with true <- Fediverse.enabled?(),
+         %URI{scheme: "https", host: host} when is_binary(host) and host != "" <- URI.parse(url),
+         false <- Fediverse.own_host?(url),
+         {:error, _address} <- RemoteFollow.parse_address(url) do
+      url
     else
       _ -> nil
     end
@@ -116,12 +170,25 @@ defmodule VutuvWeb.SearchLive do
   end
 
   @impl true
-  def handle_event("search", %{"q" => q}, socket) do
-    {:noreply,
-     push_patch(socket,
-       to: search_path(q, socket.assigns.scope, socket.assigns.exact),
-       replace: true
-     )}
+  def handle_event("search", %{"q" => q}, socket), do: {:noreply, patch_search(socket, q)}
+
+  # Enter on a pasted post address means "get me that post", which is the one
+  # thing a text search can never do with it, so a submit takes the lookup where
+  # a keystroke takes the search. Recomputed from the submitted value rather
+  # than read off the assign: `phx-debounce` holds the change event back, so a
+  # paste followed straight away by Enter arrives here first.
+  def handle_event("submit-search", %{"q" => q}, socket) do
+    socket = socket |> assign(:q, q) |> assign(:remote_post_url, remote_post_url(q))
+
+    if lookup_offered?(socket),
+      do: {:noreply, fetch_pasted_post(socket)},
+      else: {:noreply, patch_search(socket, q)}
+  end
+
+  def handle_event("look-up-post", _params, socket) do
+    if lookup_offered?(socket),
+      do: {:noreply, fetch_pasted_post(socket)},
+      else: {:noreply, socket}
   end
 
   def handle_event("toggle_save_search", _params, socket),
@@ -129,6 +196,43 @@ defmodule VutuvWeb.SearchLive do
 
   def handle_event("save_search", %{"notify" => notify}, socket),
     do: {:noreply, save_current_search(socket, notify)}
+
+  defp patch_search(socket, q) do
+    push_patch(socket,
+      to: search_path(q, socket.assigns.scope, socket.assigns.exact),
+      replace: true
+    )
+  end
+
+  # Whether the button is really there to press: a post address, a member, and
+  # nothing standing in the way of signing the request for them.
+  defp lookup_offered?(socket) do
+    socket.assigns.remote_post_url != nil and socket.assigns.current_user != nil and
+      socket.assigns.lookup_refusal == nil
+  end
+
+  # The one outbound request this page can make, and only ever on an act of the
+  # member's. The two answers the detector already rules out are still handled:
+  # it and `look_up_post/2` ask the same two questions today, and a `case` that
+  # assumed they always will would raise rather than navigate.
+  defp fetch_pasted_post(socket) do
+    case Fediverse.look_up_post(socket.assigns.current_user, socket.assigns.remote_post_url) do
+      # Our copy has a page of its own — the one every remote card's timestamp
+      # points at — so the reader lands somewhere they can come back to, with
+      # the action bar, the ⋯ menu and the way on to the account.
+      {:ok, post} ->
+        push_navigate(socket, to: ~p"/system/fediverse/post/#{post.id}")
+
+      {:local, post} ->
+        push_navigate(socket, to: Posts.path(post))
+
+      {:account, address} ->
+        push_navigate(socket, to: ~p"/settings/fediverse/following?#{[address: address]}")
+
+      {:error, reason} ->
+        assign(socket, :remote_post_error, reason)
+    end
+  end
 
   # Only a people search with a structured operator (tag:/ort:/status:) is worth
   # saving as an alert — a bare free-text or name search never triggers a
@@ -274,7 +378,40 @@ defmodule VutuvWeb.SearchLive do
         desc: gettext("in quotes: exact matches only, no similar names"),
         scopes: [:all, :people, :tags, :posts]
       }
-    ]
+    ] ++ fediverse_tips()
+  end
+
+  # What the box does with an address from another network — neither of which is
+  # a query, and neither of which anybody guesses is offered here. Dropped
+  # entirely on an installation that does not federate (an intranet), where both
+  # cards are unreachable and the rows would advertise nothing.
+  defp fediverse_tips do
+    if Fediverse.enabled?() do
+      [
+        %{
+          term: "@name@server",
+          desc: gettext("an address on another network: vutuv offers you the follow"),
+          scopes: [:all, :people]
+        },
+        %{
+          term: "https://server/@name/12345",
+          desc:
+            gettext("the address of a post out there: vutuv fetches it so you can answer it here"),
+          scopes: [:all, :posts]
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  # The box takes three kinds of thing now, and the third is the one nobody
+  # guesses. It is named in the placeholder because that is the help a member
+  # reads *before* typing; the tips below are read after, if at all.
+  defp search_placeholder do
+    if Fediverse.enabled?(),
+      do: gettext("Search for people, tags, posts, or paste a Fediverse address"),
+      else: gettext("Search for people, tags, or posts")
   end
 
   # One intro sentence describing what the active scope searches. The generic
@@ -374,6 +511,83 @@ defmodule VutuvWeb.SearchLive do
     """
   end
 
+  attr(:url, :string, default: nil)
+  attr(:signed_in?, :boolean, default: false)
+  attr(:refusal, :atom, default: nil)
+  attr(:error, :any, default: nil)
+
+  # The offer for a pasted post address. It sits above the vutuv results for the
+  # same reason the address card does — it is the *answer* to what was pasted —
+  # and it always ends in one clear next step: the fetch, the sign-in, or the
+  # switch that makes the fetch possible. What it never does is fetch by itself:
+  # the request is signed in the member's name and metered against their hourly
+  # budget, so it waits for their submit or their click.
+  defp remote_post_result(%{url: nil} = assigns) do
+    ~H""
+  end
+
+  defp remote_post_result(assigns) do
+    assigns =
+      assign(assigns, :refusal_link, assigns.refusal && lookup_refusal_link(assigns.refusal))
+
+    ~H"""
+    <.card id="search-remote-post" class="mt-6">
+      <.section_title>{gettext("A post on another network")}</.section_title>
+      <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+        <span class="font-semibold break-all">{@url}</span>
+      </p>
+      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "That is a link to somewhere else, not something anybody here wrote. vutuv can fetch the post behind it so you can read it, answer it, like it or repost it from here."
+        )}
+      </p>
+
+      <p :if={@signed_in? and @refusal} class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {lookup_refusal_text(@refusal)}
+      </p>
+
+      <p class="mt-3">
+        <%!-- Full width on a phone, like the lookup page's own submit: it is
+        this card's single call to action, and the standard pill is a small
+        target for a thumb. --%>
+        <.button
+          :if={@signed_in? and is_nil(@refusal)}
+          id="search-lookup-post"
+          phx-click="look-up-post"
+          class="w-full sm:w-auto"
+        >
+          {gettext("Fetch this post")}
+        </.button>
+        <.link
+          :if={@signed_in? and @refusal_link}
+          navigate={elem(@refusal_link, 0)}
+          id="search-lookup-refusal-link"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {elem(@refusal_link, 1)} ›
+        </.link>
+        <.link
+          :if={!@signed_in?}
+          navigate={~p"/login"}
+          id="search-lookup-login"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Sign in to fetch this post")} ›
+        </.link>
+      </p>
+
+      <p
+        :if={@error}
+        id="search-lookup-error"
+        role="alert"
+        class="mt-2 text-sm font-medium text-red-700 dark:text-red-300"
+      >
+        {lookup_refusal_message(@error)}
+      </p>
+    </.card>
+    """
+  end
+
   # Where a result's author link goes and what it reads, for whichever kind of
   # author the post has (issue #1334).
   defp author_path(post) do
@@ -398,12 +612,12 @@ defmodule VutuvWeb.SearchLive do
     <div id="search" class="mx-auto max-w-2xl py-8">
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{gettext("Search")}</h1>
 
-      <form id="search-form" phx-change="search" phx-submit="search" class="mt-4">
+      <form id="search-form" phx-change="search" phx-submit="submit-search" class="mt-4">
         <input
           type="search"
           name="q"
           value={@q}
-          placeholder={gettext("Search for people, tags, or posts")}
+          placeholder={search_placeholder()}
           autocomplete="off"
           autofocus
           phx-debounce="250"
@@ -447,6 +661,13 @@ defmodule VutuvWeb.SearchLive do
       </p>
 
       <.remote_address_result address={@remote_address} signed_in?={@current_user_id != nil} />
+
+      <.remote_post_result
+        url={@remote_post_url}
+        signed_in?={@current_user_id != nil}
+        refusal={@lookup_refusal}
+        error={@remote_post_error}
+      />
 
       <.card :if={@q == ""} id="search-tips-empty" class="mt-6">
         <.section_title>{gettext("Search Tips")}</.section_title>
