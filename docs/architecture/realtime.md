@@ -302,8 +302,11 @@ instead of stacking another one.
 The very first thing a confirmed account finds in its feed is not about someone
 else: **"Ihr vutuv-Username ist @egon_mueller."** vutuv *generates* the handle
 from the member's name (`Vutuv.Handles`), so nothing in sign-up ever told them
-what it is — this row does, and it opens `/settings/security`, where they can
-change it.
+what it is — this row does. Its links sit inside the sentence rather than
+wrapping the whole row: the handle goes to the member's own profile,
+`/settings/username` changes it, and `/settings/import/linkedin` rides along
+because this is the one moment somebody arriving from LinkedIn still has that
+profile in mind.
 
 It is derived like every other kind, straight from the member's own `users`
 row: no notification table, no live push and, deliberately, **no email** — the
@@ -314,6 +317,23 @@ stamped once, by the same `Accounts.activate_user/1` branch that flips
 exactly at that moment. A NULL means no note, which is what every account
 predating the feature keeps — the derived feed is otherwise retroactive, and a
 welcome years after the fact would be nonsense.
+
+### The imported-gravatar note (issue #1447)
+
+Registration fetches an avatar from gravatar.com for the address somebody
+signed up with (`Accounts.store_gravatar/1`, off when `:fetch_gravatar` is
+false). When one comes back, the member's first look at their own profile shows
+a photograph they never uploaded here, from a service they may not remember
+using. The import is fine; the silence around it was not. So an in-app note
+names the source and links to `/settings/profile`, where the picture can be
+replaced or removed — inside the sentence, like the welcome note above.
+
+Same derived shape: no notification table, no push (the fetch runs during
+registration, before the first login, so the note is already waiting) and
+**no email**. `users.gravatar_imported_at` is the gate and the timestamp,
+stamped by `store_gravatar/1` only on the branch that really stored an image —
+a 404 (gravatar's answer for "no picture for this address") or a failed fetch
+leaves it NULL, and NULL means no note.
 
 ## The dead-render → socket-mount handoff (profile + feed)
 

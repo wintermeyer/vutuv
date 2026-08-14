@@ -122,6 +122,26 @@ defmodule Vutuv.ActivityTest do
       assert recent_notifications(me.id) == []
     end
 
+    test "an imported gravatar leaves a note about where the picture came from" do
+      me = insert(:user, gravatar_imported_at: ~N[2026-08-14 09:00:00])
+
+      assert [n] = recent_notifications(me.id)
+      assert n.kind == "gravatar"
+      assert n.id == "gravatar-#{me.id}"
+      assert n.at == ~N[2026-08-14 09:00:00]
+      # The installation did this, not another member: no actor at all.
+      refute Map.has_key?(n, :actor_name)
+    end
+
+    # The vast majority of sign-ups have no gravatar, and their avatar is their
+    # own upload — telling them about an import that never happened would be
+    # both wrong and alarming.
+    test "an account whose avatar did not come from gravatar gets no such note" do
+      me = insert(:user, avatar: "selfie.jpg")
+
+      assert recent_notifications(me.id) == []
+    end
+
     test "a self-endorsement produces no notification" do
       me = insert(:user)
       tag = insert(:tag)

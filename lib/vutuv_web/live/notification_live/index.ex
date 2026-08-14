@@ -86,7 +86,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     "people" => ~w(follower connection endorsement),
     "other" =>
       ~w(organization_role moderation image_rejected report_protection handle_change cv_update
-         username reference_check)
+         username gravatar reference_check)
   }
 
   @doc false
@@ -468,9 +468,12 @@ defmodule VutuvWeb.NotificationLive.Index do
           <.actor_links group={@group} current_user={@current_user} />
           <% target = notification_target(@n, @current_user) %>
           <%= cond do %>
-            <%!-- The one row that is not a single link: see username_line/1. --%>
+            <%!-- The two rows that are not a single link: see username_line/1
+            and gravatar_line/1, which carry their links inside the sentence. --%>
             <% @group.kind == "username" -> %>
               <.username_line handle={@n.username} />
+            <% @group.kind == "gravatar" -> %>
+              <.gravatar_line />
             <% target -> %>
               <.link href={target} class="hover:text-brand-700 hover:underline dark:hover:text-brand-300">
                 {group_text(@group)}
@@ -865,6 +868,39 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
+  # "We found a picture for your address at gravatar.com" (issue #1447).
+  # Registration fetches an avatar from gravatar.com for the address somebody
+  # signed up with, so a member who once used that service arrives to find a
+  # photo on their profile that they never uploaded here. This row is the whole
+  # point of the note: it names where the picture came from and where to get
+  # rid of it, so nothing about their own profile is a mystery.
+  #
+  # Like username_line/1 it is not one big link — the settings URL sits inside
+  # the sentence, split out of the translation with split_marker/2 (total, so a
+  # botched .po cannot raise) — and for the same reason it must not END on that
+  # URL: a full stop flush against an address reads as part of it. Keep a space
+  # and at least one word after {url} in both languages.
+  defp gravatar_line(assigns) do
+    {before_url, tail} =
+      split_marker(
+        gettext(
+          "When you signed up we found a picture for your email address at gravatar.com and used it as your profile picture. At {url} you can replace or remove it at any time."
+        ),
+        "{url}"
+      )
+
+    assigns =
+      assign(assigns,
+        before_url: before_url,
+        tail: tail,
+        settings_url: url(~p"/settings/profile")
+      )
+
+    ~H"""
+    {@before_url}<.link href={@settings_url} class={inline_link_class()}>{@settings_url}</.link>{@tail}
+    """
+  end
+
   defp inline_link_class,
     do:
       "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
@@ -1022,6 +1058,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("cv_update"), do: "📄"
   # The welcome note naming the member's own handle.
   defp kind_glyph("username"), do: "👋"
+  # The avatar registration brought over from gravatar.com — the note is about
+  # a picture, so the same frame the image-review note uses.
+  defp kind_glyph("gravatar"), do: "🖼"
   # The finished AI reading of an Arbeitszeugnis. The magnifier, not a robot:
   # what arrived is a close reading of wording, and the member is being told to
   # go and read it.
@@ -1046,6 +1085,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("handle_change"), do: gettext("Handle change")
   defp kind_label("cv_update"), do: gettext("CV update")
   defp kind_label("username"), do: gettext("Username")
+  defp kind_label("gravatar"), do: gettext("Imported profile picture")
   defp kind_label("reference_check"), do: gettext("Employment reference review")
   defp kind_label(_), do: gettext("Activity")
 
@@ -1153,8 +1193,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   end
 
   # The username note carries its own two links inside the sentence
-  # (username_line/1), so the row itself must not be one.
+  # (username_line/1), so the row itself must not be one. Same for the gravatar
+  # note and its settings link (gravatar_line/1).
   defp notification_target(%{kind: "username"}, _viewer), do: nil
+  defp notification_target(%{kind: "gravatar"}, _viewer), do: nil
 
   # Straight to the report the member has been waiting for.
   defp notification_target(%{kind: "reference_check"} = n, viewer) do

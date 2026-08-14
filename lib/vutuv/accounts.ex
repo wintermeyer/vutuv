@@ -163,7 +163,9 @@ defmodule Vutuv.Accounts do
   # Best-effort gravatar import: spawned (when enabled) under the app-wide
   # Task.Supervisor rather than an orphaned `Task.start/3`, and disabled in
   # tests via `:fetch_gravatar` so the SQL Sandbox connection is never used by
-  # a process that does not own it and no live HTTP request is made.
+  # a process that does not own it and no live HTTP request is made. A test
+  # that wants the import itself calls `store_gravatar/1` and stubs the fetch
+  # through `:gravatar_req_options` (a `plug:` responder).
   defp maybe_fetch_gravatar(user) do
     if Application.get_env(:vutuv, :fetch_gravatar, true) do
       Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn -> store_gravatar(user) end)
@@ -172,29 +174,43 @@ defmodule Vutuv.Accounts do
     :ok
   end
 
-  defp store_gravatar(user) do
+  # Public only so a test can drive it in a process that owns the sandbox
+  # connection — `maybe_fetch_gravatar/1` is the caller, and it is off in tests.
+  @doc false
+  def store_gravatar(user) do
     url = "https://www.gravatar.com/avatar/#{hd(user.emails).md5sum}?s=130&d=404"
 
-    case Req.get(url, receive_timeout: 1000, connect_options: [timeout: 1000]) do
+    options =
+      Keyword.merge(
+        [url: url, receive_timeout: 1000, connect_options: [timeout: 1000]],
+        Application.get_env(:vutuv, :gravatar_req_options, [])
+      )
+
+    case Req.get(options) do
       {:ok, %Req.Response{status: 404}} ->
         nil
 
       {:ok, %Req.Response{status: 200, body: body, headers: headers}} ->
         content_type = find_content_type(headers)
-        filename = "/#{user.username}.#{gravatar_extension(content_type)}"
-        path = System.tmp_dir()
+        # Path.join, not `tmp_dir <> "/" <> name`: the leading slash used to
+        # live in `filename` itself, so the users row ended up holding
+        # "/handle.jpg" where an ordinary upload stores "handle.jpg".
+        filename = "#{user.username}.#{gravatar_extension(content_type)}"
+        path = Path.join(System.tmp_dir(), filename)
 
         upload = %Plug.Upload{
           content_type: content_type,
           filename: filename,
-          path: path <> filename
+          path: path
         }
 
-        File.write(path <> filename, body)
+        File.write(path, body)
 
         # Through update_user/2 so the avatar file is written only after the row
         # commits (issue #776), the same as the edit-profile path.
-        update_user(user, %{avatar: upload})
+        with {:ok, imported} <- update_user(user, %{avatar: upload}) do
+          {:ok, stamp_gravatar_import(imported)}
+        end
 
       _ ->
         nil
@@ -203,6 +219,20 @@ defmodule Vutuv.Accounts do
     error ->
       Logger.warning("gravatar import failed for user ##{user.id}: #{inspect(error)}")
       nil
+  end
+
+  # The member never uploaded this picture, so silence about it is what makes
+  # a stranger's face on their fresh profile unsettling (issue #1447). The
+  # stamp is set in its own write, after the avatar is safely stored, and only
+  # on that path — a 404 or a failed fetch leaves it NULL and says nothing. It
+  # both gates and dates the in-app note in `Vutuv.Activity`; there is no email
+  # beside it, the way the welcome note has none either.
+  defp stamp_gravatar_import(user) do
+    user
+    |> Ecto.Changeset.change(
+      gravatar_imported_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    )
+    |> Repo.update!()
   end
 
   defp find_content_type(headers) do
