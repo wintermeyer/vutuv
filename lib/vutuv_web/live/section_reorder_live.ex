@@ -202,6 +202,19 @@ defmodule VutuvWeb.SectionReorderLive do
           {gettext("Verify this is your page")} →
         </.link>
       </div>
+      <%!-- A messenger address filed as a webpage link (issue #1442). Signal
+      refused its own contact link until then, so members put it here, where it
+      is in the wrong card and gets a screenshot of a page that says nothing
+      about them. Only an offer: moving it is theirs to decide. --%>
+      <div :if={Messenger.from_url(@entry.value)} class="reorder__sub">
+        <.link
+          navigate={~p"/settings/messengers/new?#{[from_link: @entry.id]}"}
+          data-messenger-suggestion
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Add this under Messengers")} →
+        </.link>
+      </div>
     </div>
     """
   end

@@ -553,7 +553,11 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp social_line(account), do: "* #{account.provider}: #{account.url}"
 
   # A messenger: provider, contact (phone number or handle), and its deep link
-  # in parentheses (absent for Session, which has no web link).
+  # in parentheses (absent for Session, which has no web link). A contact link
+  # IS its own address, so it is printed once instead of twice over.
+  defp messenger_line(%{provider: provider, kind: "link", url: url}),
+    do: "* #{provider}: #{url}"
+
   defp messenger_line(%{provider: provider, contact: contact, url: ""}),
     do: "* #{provider}: #{contact}"
 

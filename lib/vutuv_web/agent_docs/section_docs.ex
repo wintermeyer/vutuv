@@ -412,13 +412,17 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   end
 
   @doc false
-  # `contact` is the human-readable address (a spaced phone number or the bare
-  # handle); `url` is the deep link that opens the messenger at that contact, or
-  # "" for a provider without a public web resolver (Session).
+  # `contact` is the human-readable address (a spaced phone number, a bare
+  # handle, or a contact link); `url` is the deep link that opens the messenger
+  # at that contact, or "" for a provider without a public web resolver
+  # (Session). `kind` says which of the three shapes `contact` is, so a reader
+  # need not guess — and so the renderers below can print a contact link once
+  # instead of twice, `contact` and `url` being the same string for it.
   def messenger_entry(messenger) do
     %{
       id: messenger.id,
       provider: messenger.provider,
+      kind: to_string(Messenger.kind(messenger)),
       contact: Messenger.display(messenger),
       url: Messenger.url(messenger)
     }

@@ -858,7 +858,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   # A messenger: the provider, its contact (a phone number or handle), and the
   # deep link that opens the app at that contact. Session has no web link, so it
-  # shows the bare contact.
+  # shows the bare contact. A contact link IS its own address, so it is printed
+  # once rather than as a link labelled with itself.
+  defp messenger_line(%{provider: provider, kind: "link", url: "http" <> _ = url}),
+    do: "- #{provider}: <#{md_url(url)}>"
+
   defp messenger_line(%{provider: provider, contact: contact, url: "http" <> _ = url}),
     do: "- #{provider}: [#{contact}](#{md_url(url)})"
 

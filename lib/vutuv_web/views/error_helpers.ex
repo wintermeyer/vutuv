@@ -121,7 +121,9 @@ defmodule VutuvWeb.ErrorHelpers do
       dgettext_noop("errors", "Please use at most %{max} tags."),
       # Vutuv.Accounts.User, the Fediverse aliases (issue #986, alsoKnownAs).
       dgettext_noop("errors", "Please list at most %{max} accounts."),
-      dgettext_noop("errors", "\"%{uri}\" is not a valid https account address.")
+      dgettext_noop("errors", "\"%{uri}\" is not a valid https account address."),
+      # Vutuv.Profiles.Messenger, the Signal contact link (issue #1442).
+      dgettext_noop("errors", "Enter your Signal link, it starts with https://signal.me/#")
     ]
   end
 end

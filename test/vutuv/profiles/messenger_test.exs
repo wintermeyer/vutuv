@@ -45,6 +45,125 @@ defmodule Vutuv.Profiles.MessengerTest do
     end
   end
 
+  describe "Signal also accepts its contact link" do
+    @long_link "https://signal.me/#eu/" <> String.duplicate("aB3-_", 12)
+
+    test "a signal.me link is stored as given" do
+      cs = changeset(%{"provider" => "Signal", "value" => @long_link})
+      assert cs.valid?
+      assert get_change(cs, :value) == @long_link
+    end
+
+    test "the host is compared and stored case-insensitively, the token verbatim" do
+      cs = changeset(%{"provider" => "Signal", "value" => "https://Signal.me/#eu/aB3-_xY"})
+      assert cs.valid?
+      assert get_change(cs, :value) == "https://signal.me/#eu/aB3-_xY"
+    end
+
+    test "the app scheme, a missing scheme and a www host all canonicalise to https" do
+      for typed <- [
+            "sgnl://signal.me/#eu/aB3",
+            "signal.me/#eu/aB3",
+            "https://www.signal.me/#eu/aB3",
+            "  https://signal.me/#eu/aB3  "
+          ] do
+        cs = changeset(%{"provider" => "Signal", "value" => typed})
+        assert cs.valid?, "expected #{typed} to be accepted"
+        assert get_change(cs, :value) == "https://signal.me/#eu/aB3"
+      end
+    end
+
+    test "anything before the fragment is dropped, since the fragment is the whole address" do
+      cs =
+        changeset(%{"provider" => "Signal", "value" => "https://signal.me/?utm_source=x#eu/aB3"})
+
+      assert cs.valid?
+      assert get_change(cs, :value) == "https://signal.me/#eu/aB3"
+    end
+
+    test "a link to another host, or one with no fragment, is rejected as a link" do
+      for typed <- ["https://example.com/#eu/aB3", "https://signal.me/", "signal.me/#"] do
+        cs = changeset(%{"provider" => "Signal", "value" => typed})
+        refute cs.valid?, "expected #{typed} to be rejected"
+
+        assert %{value: ["Enter your Signal link, it starts with https://signal.me/#"]} =
+                 errors_on(cs)
+      end
+    end
+
+    test "a provider without a contact link keeps rejecting a pasted URL" do
+      cs = changeset(%{"provider" => "Telegram", "value" => "https://t.me/ada"})
+      refute cs.valid?
+      assert %{value: [_]} = errors_on(cs)
+    end
+
+    test "a username that merely looks host-like is still a username" do
+      cs = changeset(%{"provider" => "Signal", "value" => "signal.me"})
+      assert cs.valid?
+      assert get_change(cs, :value) == "signal.me"
+    end
+  end
+
+  describe "kind/1 tells the three address shapes apart" do
+    test "link, phone and username" do
+      assert Messenger.kind(%Messenger{provider: "Signal", value: "https://signal.me/#eu/aB3"}) ==
+               :link
+
+      assert Messenger.kind(%Messenger{provider: "Signal", value: "+49261123456"}) == :phone
+      assert Messenger.kind(%Messenger{provider: "Signal", value: "ada.99"}) == :username
+      assert Messenger.kind(%Messenger{provider: "Threema", value: "ABCD1234"}) == :username
+    end
+  end
+
+  describe "a contact link reads as an action, never as its token" do
+    @signal_link "https://signal.me/#eu/aB3"
+
+    test "url/1 is the link itself" do
+      assert Messenger.url(%Messenger{provider: "Signal", value: @signal_link}) == @signal_link
+    end
+
+    test "label/1 says what the link does, since it names no address" do
+      assert Messenger.label(%Messenger{provider: "Signal", value: @signal_link}) == "Open chat"
+    end
+
+    test "label/1 shows the address for every other shape" do
+      assert Messenger.label(%Messenger{provider: "Signal", value: "ada.99"}) == "ada.99"
+
+      assert Messenger.label(%Messenger{provider: "Signal", value: "+49261123456"}) ==
+               "+49 261 123456"
+    end
+
+    test "display/1 keeps the address itself, so agents and the vCard get the link" do
+      assert Messenger.display(%Messenger{provider: "Signal", value: @signal_link}) ==
+               @signal_link
+    end
+  end
+
+  describe "from_url/1 recognises a messenger address pasted as a link" do
+    test "signal.me yields the canonical link, the others the address inside the URL" do
+      assert Messenger.from_url("https://signal.me/#eu/aB3") ==
+               {"Signal", "https://signal.me/#eu/aB3"}
+
+      assert Messenger.from_url("https://t.me/ada_lovelace") == {"Telegram", "ada_lovelace"}
+      assert Messenger.from_url("https://threema.id/ABCD1234") == {"Threema", "ABCD1234"}
+
+      assert Messenger.from_url("https://matrix.to/#/@you:matrix.org") ==
+               {"Matrix", "@you:matrix.org"}
+    end
+
+    test "an ordinary webpage, a bare host and junk yield nothing" do
+      assert Messenger.from_url("https://example.com/contact") == nil
+      assert Messenger.from_url("https://signal.me/") == nil
+      assert Messenger.from_url("https://t.me/") == nil
+      assert Messenger.from_url(nil) == nil
+    end
+
+    test "what it returns is accepted by the changeset" do
+      {provider, value} = Messenger.from_url("https://Signal.me/#eu/aB3")
+      assert changeset(%{"provider" => provider, "value" => value}).valid?
+    end
+  end
+
   describe "handle-based providers" do
     test "Telegram stores the username without a leading @" do
       cs = changeset(%{"provider" => "Telegram", "value" => "@ada_lovelace"})

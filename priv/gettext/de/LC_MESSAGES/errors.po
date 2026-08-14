@@ -246,3 +246,8 @@ msgstr "muss beschreiben, wie der Name klingt"
 #, elixir-autogen, elixir-format
 msgid "Please use at most %{max} tags."
 msgstr "Bitte verwenden Sie höchstens %{max} Tags."
+
+#: lib/vutuv_web/views/error_helpers.ex:126
+#, elixir-autogen, elixir-format
+msgid "Enter your Signal link, it starts with https://signal.me/#"
+msgstr "Bitte geben Sie Ihren Signal-Link ein, er beginnt mit https://signal.me/#"

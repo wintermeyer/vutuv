@@ -660,10 +660,36 @@ never wrongly rejected as "not a phone number". A phone value gets the
 resolver, so it shows the bare handle (copyable), the same as Session. The other
 providers carry a service-specific id/username with its own format check.
 
+**Signal takes a third shape, its contact link** (`https://signal.me/#eu/…`,
+issue #1442): the one Signal address that names neither the phone number nor the
+username, and one the member can reset inside the app at any time. Until it was
+accepted here, a pasted link was refused (it carries letters, so the username
+branch took it and choked on `:` and `/`), and members filed it under their
+webpage links instead, where it sat in the wrong card and collected a screenshot
+of a page that says nothing about them. `Messenger.kind/1` is the single
+discriminator between the three shapes — `:link`, `:phone`, `:username` — and
+`label/1` is what a link to the contact says: a contact link has no address to
+show, so it reads as "Open chat" rather than as its 64-character token. The
+validation is deliberately lenient (the provider's host plus a non-empty
+fragment, no token grammar): the link format has changed five times since 2022,
+so a strict pattern would only be the next thing to break. Storage is canonical
+(`https://<host>/#<fragment>`, host lowercased, fragment byte for byte, anything
+before the fragment dropped — the fragment *is* the address, which is why it
+never reaches Signal's server). WhatsApp's `wa.me/qr/…` short link is
+deliberately **not** in `@link_hosts`: WhatsApp shows the number in the chat
+regardless, so storing it as a link would promise a privacy it does not deliver.
+
+`Messenger.from_url/1` reads the messenger address out of a pasted URL
+(`signal.me`, `t.me`, `threema.id`, `matrix.to`) and drives the links editor's
+quiet "Add this under Messengers" offer, which seeds `/settings/messengers/new`
+from the member's own stored link (`?from_link=<url id>`, never an address in
+the query). It is an offer: moving the entry stays the member's decision.
+
 Like the other sections it has a Messengers card on the profile, owner CRUD on
 `/settings/messengers` (public showcase at `/:slug/messengers`), an ordered
 `position` (see below), agent-format siblings (`SectionDocs.messenger_entry/1`,
-kept in sync by the agent-docs drift test) carrying the deep link, `IMPP` lines
+kept in sync by the agent-docs drift test) carrying the deep link and a `kind`
+saying which of the three shapes the contact is, `IMPP` lines
 on the vCard (RFC 4770), and an `/api/2.0` read+write section.
 
 ## Tags and their endorsements (issue #895)

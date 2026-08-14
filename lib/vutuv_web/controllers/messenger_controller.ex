@@ -37,8 +37,14 @@ defmodule VutuvWeb.MessengerController do
     )
   end
 
-  def new(conn, _params) do
-    changeset = Messenger.changeset(%Messenger{})
+  # `from_link` arrives from the links editor's "this belongs under Messengers"
+  # suggestion (issue #1442) and carries the id of one of the member's OWN
+  # links, never an address: the form is seeded from what `Messenger.from_url/1`
+  # reads out of that stored URL, so nothing a visitor typed into the query is
+  # reflected back into the form. Seeded on the struct rather than as params, so
+  # a prefilled form opens clean instead of pre-scolding.
+  def new(conn, params) do
+    changeset = Messenger.changeset(seed(conn, params["from_link"]))
     render(conn, "new.html", changeset: changeset)
   end
 
@@ -103,6 +109,17 @@ defmodule VutuvWeb.MessengerController do
       redirect_to: ~p"/settings/messengers"
     )
   end
+
+  defp seed(conn, id) when is_binary(id) do
+    url = ControllerHelpers.get_owned!(conn, :urls, id)
+
+    case Messenger.from_url(url.value) do
+      {provider, value} -> %Messenger{provider: provider, value: value}
+      nil -> %Messenger{}
+    end
+  end
+
+  defp seed(_conn, _id), do: %Messenger{}
 
   defp user_with_messengers(conn),
     do: Repo.preload(conn.assigns[:user], messengers: Messenger.ordered())
