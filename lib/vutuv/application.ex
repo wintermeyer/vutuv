@@ -113,6 +113,10 @@ defmodule Vutuv.Application do
         optional_child(:sweep_unreachable_accounts, Vutuv.Deliverability.Sweeper) ++
         optional_child(:resume_stuck_broadcasts, Vutuv.Newsletters.BroadcastResumer) ++
         optional_child(:recheck_organization_domains, Vutuv.Organizations.DomainRecheckSweeper) ++
+        optional_child(
+          :recheck_organization_domains,
+          Vutuv.Organizations.PendingDomainSweeper
+        ) ++
         optional_child(:recheck_user_links, Vutuv.Profiles.LinkRecheckSweeper) ++
         optional_child(
           :recheck_social_accounts,

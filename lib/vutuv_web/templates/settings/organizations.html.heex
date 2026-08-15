@@ -81,8 +81,23 @@ happen on the organization's own pages. --%>
             )}
           </.link>
 
+          <%!-- A page still waiting for its domain proof needs the way back to
+          the verification panel spelled out (issue #1466): its URL is permanent
+          and it is the page itself, but nothing said so, and the reporter found
+          the panel again only by editing and saving the page. The status chip
+          alone is a label, not a way in, so the pending row swaps the generic
+          "Manage" for the one thing left to do. --%>
+          <% manages? = Enum.any?(roles, &(&1 in ["owner", "admin"])) %>
           <.link
-            :if={Enum.any?(roles, &(&1 in ["owner", "admin"]))}
+            :if={manages? and organization.status == "pending"}
+            navigate={~p"/organizations/#{organization.slug}"}
+            data-finish-verification
+            class="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            {gettext("Finish verification")}
+          </.link>
+          <.link
+            :if={manages? and organization.status != "pending"}
             navigate={~p"/organizations/#{organization.slug}/edit"}
             class="shrink-0 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >

@@ -57,6 +57,29 @@ defmodule Vutuv.Organizations do
   @recheck_interval_hours 24 * 7
   @grace_days 7
 
+  # How often a domain that is still waiting for its proof is looked at, by how
+  # long ago the claim was started: `{claim younger than, check every}` in
+  # seconds (issue #1466). Somebody who has just been shown the record is
+  # publishing it right now, so the first quarter of an hour is checked hard and
+  # the ladder then flattens out. Past the last step the claim is abandoned
+  # rather than swept for ever — the owner can still press "Verify now", which
+  # is what they will do if they ever come back to it.
+  @pending_backoff [
+    {900, 120},
+    {7_200, 600},
+    {86_400, 3_600},
+    {30 * 86_400, 6 * 3_600}
+  ]
+  # The smallest interval on the ladder and the age past its last step, both
+  # derived so the SQL prefilter and the ladder cannot drift apart.
+  @pending_min_interval @pending_backoff |> Enum.map(&elem(&1, 1)) |> Enum.min()
+  @pending_abandon_after @pending_backoff |> List.last() |> elem(0)
+  # Rows read per pass, and how many of them are actually checked. The scan is
+  # oldest-checked-first, so the rows most likely to be due come first and a
+  # pass never walks the whole table.
+  @pending_scan 200
+  @pending_batch 50
+
   @doc """
   The canonical URL path of an organization page: its opt-in root handle when claimed
   (`/:username`, issue #941), otherwise `/organizations/:slug`. The one definition
@@ -1095,6 +1118,43 @@ defmodule Vutuv.Organizations do
     end
   end
 
+  @doc """
+  Runs the domain's proof and **says what it saw** (issue #1466):
+  `{:ok, organization}` once the page is live, or `{:error, report}` with the
+  names queried, the value we wanted and the records actually found — the
+  difference between "not yet" and "you published it one label too deep".
+
+  It also stamps `last_checked_at` on a failure, which `verify_domain/2` never
+  did, so a pending domain can say when it was last looked at and the background
+  pass can back off from it.
+
+  `report.disabled?` marks the one case that is not about the domain at all:
+  domain verification is switched off on this installation.
+  """
+  def check_domain(%Organization{} = organization, %OrganizationDomain{} = domain) do
+    if verification_enabled?() do
+      domain |> run_check() |> record_check(organization, domain)
+    else
+      {:error, %{method: domain.method, disabled?: true}}
+    end
+  end
+
+  defp run_check(%OrganizationDomain{method: "dns"} = domain),
+    do: Verification.dns_check(domain.domain, domain.verification_token)
+
+  defp run_check(%OrganizationDomain{method: "well_known"} = domain),
+    do: Verification.well_known_check(domain.domain, domain.verification_token)
+
+  defp record_check({:ok, _report}, organization, domain), do: activate(organization, domain)
+
+  defp record_check({:error, report}, _organization, domain) do
+    domain
+    |> OrganizationDomain.check_changeset(%{last_checked_at: now()})
+    |> Repo.update()
+
+    {:error, Map.put(report, :disabled?, false)}
+  end
+
   # Flips a pending organization to active off a freshly verified domain, stamps
   # verified_at once, and alerts the operator on first verification.
   defp activate(%Organization{} = organization, %OrganizationDomain{} = domain) do
@@ -1128,6 +1188,101 @@ defmodule Vutuv.Organizations do
     end
 
     {:ok, organization}
+  end
+
+  # --- finishing a claim in the background (issue #1466) ----------------------
+  #
+  # Until this existed, a pending domain was checked exactly when somebody
+  # pressed the button and never otherwise: `domains_due_for_recheck/1` below
+  # only guards domains that are already verified. So a member who published the
+  # record and closed the tab was never verified, and nothing on the page told
+  # them that clicking again was the only way. These two functions are the other
+  # half of that promise, and the mail on success is what lets them close the
+  # tab at all.
+
+  @doc """
+  Pending domains that are due for a background check: never verified, the claim
+  not yet abandoned, and last looked at longer ago than the backoff step its age
+  puts it on.
+
+  The interval is applied in memory because it depends on the row's own age; the
+  query narrows to rows that could possibly be due (the shortest step) and reads
+  them oldest-checked-first, so the ones most likely due are at the front.
+  """
+  def pending_domains_due(now \\ NaiveDateTime.utc_now()) do
+    now = NaiveDateTime.truncate(now, :second)
+    abandoned_before = NaiveDateTime.add(now, -@pending_abandon_after)
+    checked_before = NaiveDateTime.add(now, -@pending_min_interval)
+
+    from(d in OrganizationDomain,
+      where:
+        d.method in ["dns", "well_known"] and is_nil(d.verified_at) and
+          d.inserted_at > ^abandoned_before and
+          (is_nil(d.last_checked_at) or d.last_checked_at < ^checked_before),
+      order_by: [asc_nulls_first: d.last_checked_at, asc: d.id],
+      limit: @pending_scan
+    )
+    |> Repo.all()
+    |> Enum.filter(&pending_due?(&1, now))
+    |> Enum.take(@pending_batch)
+  end
+
+  @doc """
+  Checks every due pending domain and returns how many pages went live this
+  pass. No-op when network verification is disabled.
+  """
+  def check_pending_domains do
+    if verification_enabled?() do
+      pending_domains_due()
+      |> Task.async_stream(&check_pending_domain/1,
+        max_concurrency: 10,
+        ordered: false,
+        timeout: :infinity
+      )
+      |> Enum.count(fn {:ok, outcome} -> outcome == :verified end)
+    else
+      0
+    end
+  end
+
+  defp check_pending_domain(%OrganizationDomain{} = domain) do
+    organization = get_organization!(domain.organization_id)
+
+    # `check_domain/2` stamps `last_checked_at` on the failing branch too, so a
+    # domain whose record is still missing leaves the due set for this step's
+    # interval instead of holding the front of every batch.
+    case check_domain(organization, domain) do
+      {:ok, organization} ->
+        notify_owners_of_verified(organization, domain)
+        broadcast_verified(organization)
+        :verified
+
+      {:error, _report} ->
+        :pending
+    end
+  end
+
+  defp pending_due?(%OrganizationDomain{} = domain, now) do
+    case pending_interval(NaiveDateTime.diff(now, domain.inserted_at)) do
+      :abandoned ->
+        false
+
+      interval ->
+        is_nil(domain.last_checked_at) or
+          NaiveDateTime.diff(now, domain.last_checked_at) >= interval
+    end
+  end
+
+  defp pending_interval(age_in_seconds) do
+    Enum.find_value(@pending_backoff, :abandoned, fn {younger_than, interval} ->
+      age_in_seconds < younger_than && interval
+    end)
+  end
+
+  defp notify_owners_of_verified(organization, domain) do
+    notify_owners(organization, fn user, address ->
+      Emailer.organization_domain_verified_email(user, address, organization, domain)
+    end)
   end
 
   # --- periodic re-check ------------------------------------------------------
@@ -1401,6 +1556,18 @@ defmodule Vutuv.Organizations do
 
   @doc "Subscribes to an organization's live counter topic."
   def subscribe(organization_id), do: Engagement.subscribe(organization_id, @engagement_cfg)
+
+  # Tells an open page that the background pass finished its claim, so somebody
+  # who published the record and left the tab sitting there watches it go live
+  # instead of reloading to find out (issue #1466). Lives here rather than with
+  # the pending pass above because `@engagement_cfg` owns the topic name.
+  defp broadcast_verified(%Organization{id: id}) do
+    Phoenix.PubSub.broadcast(
+      Vutuv.PubSub,
+      Engagement.topic(id, @engagement_cfg),
+      {:organization_verified, id}
+    )
+  end
 
   @doc """
   One page of the member's liked / bookmarked organizations for the `/bookmarks`

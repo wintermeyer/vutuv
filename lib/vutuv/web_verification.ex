@@ -26,7 +26,13 @@ defmodule Vutuv.WebVerification do
 
   require Logger
 
+  alias Vutuv.Dns
   alias Vutuv.Ssrf
+
+  # How much of an unexpected answer is quoted back to the member in a check
+  # report. Enough to recognise the record or page they published by mistake,
+  # short enough that a hostile body cannot fill their screen.
+  @max_excerpt 160
 
   @max_well_known_bytes 4_096
   # rel=me links can sit anywhere in the page (a footer, an "about" sidebar), so
@@ -70,12 +76,48 @@ defmodule Vutuv.WebVerification do
   def dns_verified?(host, prefix, token, resolver)
       when is_binary(host) and is_binary(prefix) and is_binary(token) and
              is_function(resolver, 1) do
-    expected = dns_txt_value(prefix, token)
+    match?({:ok, _report}, dns_check(host, prefix, token, resolver))
+  end
 
-    # The bare host is checked first, so the common (non-CNAME) case verifies in
-    # a single lookup and only a miss pays for the second, alternate-name query.
-    [host, dns_challenge_name(host)]
-    |> Enum.any?(fn name -> Enum.any?(txt_records(name, resolver), &(&1 == expected)) end)
+  @doc """
+  The `dns` check plus a report of what was actually read: which names were
+  queried, the value we wanted, and **every** TXT record we saw there.
+
+  The report is the whole point of this function existing beside
+  `dns_verified?/4`. A bare "not found yet" leaves a member re-reading their own
+  zone file; being told that we see their SPF record and their Google
+  verification but not ours tells them in one line that they published to the
+  wrong name, or with a typo, or on a zone that is not the live one.
+  """
+  def dns_check(host, prefix, token, resolver)
+      when is_binary(host) and is_binary(prefix) and is_binary(token) and
+             is_function(resolver, 1) do
+    expected = dns_txt_value(prefix, token)
+    names = [host, dns_challenge_name(host)]
+
+    # The bare host is read first and a hit stops there, so the common
+    # (non-CNAME) case still verifies in a single lookup and only a miss pays
+    # for the second, alternate-name query — the one that then also fills the
+    # report.
+    {found, matched?} =
+      Enum.reduce_while(names, {[], false}, fn name, {seen, _matched?} ->
+        records = txt_records(name, resolver)
+
+        if expected in records do
+          {:halt, {seen ++ records, true}}
+        else
+          {:cont, {seen ++ records, false}}
+        end
+      end)
+
+    report = %{
+      method: "dns",
+      names: names,
+      expected: expected,
+      found: found |> Enum.uniq() |> Enum.map(&excerpt/1)
+    }
+
+    if matched?, do: {:ok, report}, else: {:error, report}
   end
 
   defp txt_records(host, resolver) do
@@ -86,9 +128,14 @@ defmodule Vutuv.WebVerification do
     _ -> []
   end
 
-  @doc "The default DNS TXT resolver (`:inet_res.lookup/3`)."
+  @doc """
+  The default DNS TXT resolver. Reads the record from the zone's **own** name
+  servers where it can reach them (`Vutuv.Dns`), because a recursive resolver
+  answers a freshly published record from its negative cache for the zone's
+  negative TTL — hours, in the case that produced issue #1466.
+  """
   def default_txt_lookup(host) do
-    :inet_res.lookup(to_charlist(host), :in, :txt)
+    Dns.txt_records(host)
   end
 
   # --- well-known file --------------------------------------------------------
@@ -104,9 +151,33 @@ defmodule Vutuv.WebVerification do
   """
   def well_known_verified?(host, path, token, req_options)
       when is_binary(host) and is_binary(path) and is_binary(token) do
-    case fetch(well_known_url(host, path), host, req_options, @max_well_known_bytes, "text/plain") do
-      {:ok, body} -> String.trim(body) == token
-      {:error, _} -> false
+    match?({:ok, _report}, well_known_check(host, path, token, req_options))
+  end
+
+  @doc """
+  The `well_known` check plus a report of what the fetch actually got: the URL,
+  the HTTP status, and the first line of the body when there was one.
+
+  One fetch answers both halves, so a failing check costs no more than it did
+  before it started explaining itself. `status: nil` means the request never
+  produced a response at all (DNS, TLS, connection, the SSRF guard).
+  """
+  def well_known_check(host, path, token, req_options)
+      when is_binary(host) and is_binary(path) and is_binary(token) do
+    url = well_known_url(host, path)
+
+    case fetch(url, host, req_options, @max_well_known_bytes, "text/plain") do
+      {:ok, body} ->
+        served = String.trim(body)
+        report = %{method: "well_known", url: url, status: 200, found: excerpt(served)}
+
+        if served == token, do: {:ok, report}, else: {:error, report}
+
+      {:error, {:status, status}} ->
+        {:error, %{method: "well_known", url: url, status: status, found: nil}}
+
+      {:error, _reason} ->
+        {:error, %{method: "well_known", url: url, status: nil, found: nil}}
     end
   end
 
@@ -226,6 +297,18 @@ defmodule Vutuv.WebVerification do
     error ->
       Logger.warning("web verification fetch failed for #{url}: #{inspect(error)}")
       {:error, :exception}
+  end
+
+  # One short, printable line out of whatever a third party served us. It goes
+  # straight into a page the member reads, so it is cut to a length that cannot
+  # take the layout over and stripped of the control characters an HTML escape
+  # would leave as invisible junk.
+  defp excerpt(value) do
+    value
+    |> to_string()
+    |> String.replace(~r/[[:cntrl:]]+/u, " ")
+    |> String.trim()
+    |> String.slice(0, @max_excerpt)
   end
 
   defp user_agent do

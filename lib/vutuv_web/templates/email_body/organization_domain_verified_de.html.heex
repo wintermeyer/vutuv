@@ -1,0 +1,30 @@
+<.email_layout preheader="Ihre Organisationsseite ist verifiziert" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    der Nachweis für <strong>{@domain}</strong> ist da: Ihre Organisationsseite
+    „{@organization_name}" ist verifiziert und ab sofort öffentlich sichtbar.
+  </.email_p>
+  <.email_p>
+    Sie mussten nichts weiter tun. Wir haben nach Ihrem Eintrag von selbst weiter gesucht, weil
+    ein neuer
+    <%= if @method == "dns" do %>
+      DNS-Eintrag
+    <% else %>
+      Server-Eintrag
+    <% end %>
+    je nach Anbieter eine Weile braucht, bis er überall ankommt.
+  </.email_p>
+  <.email_p>
+    <%= if @method == "dns" do %>
+      Bitte lassen Sie den TXT-Eintrag stehen. Wir prüfen ihn wöchentlich, und ohne ihn verliert
+      die Seite ihre Verifizierung wieder.
+    <% else %>
+      Bitte lassen Sie die Prüfdatei liegen. Wir prüfen sie wöchentlich, und ohne sie verliert
+      die Seite ihre Verifizierung wieder.
+    <% end %>
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}"}>
+    Zur Seite
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

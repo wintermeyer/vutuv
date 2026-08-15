@@ -45,6 +45,14 @@ defmodule Vutuv.Organizations.Verification do
     WebVerification.dns_verified?(host, @dns_prefix, token, dns_resolver())
   end
 
+  @doc """
+  The `dns` check with a report of the names queried and the TXT records found
+  there — what the verification panel shows the member after a failed attempt.
+  """
+  def dns_check(host, token) when is_binary(host) and is_binary(token) do
+    WebVerification.dns_check(host, @dns_prefix, token, dns_resolver())
+  end
+
   # --- well-known file --------------------------------------------------------
 
   @doc "The URL fetched for the `well_known` method."
@@ -55,6 +63,15 @@ defmodule Vutuv.Organizations.Verification do
   """
   def well_known_verified?(host, token) when is_binary(host) and is_binary(token) do
     WebVerification.well_known_verified?(host, @well_known_path, token, req_options())
+  end
+
+  @doc """
+  The `well_known` check with a report of the URL fetched, the status it
+  answered and the first line it served — the file half of what the
+  verification panel shows after a failed attempt.
+  """
+  def well_known_check(host, token) when is_binary(host) and is_binary(token) do
+    WebVerification.well_known_check(host, @well_known_path, token, req_options())
   end
 
   defp dns_resolver do

@@ -11,7 +11,8 @@ defmodule VutuvWeb.OrganizationLive.Domains do
 
   use VutuvWeb, :live_view
 
-  import VutuvWeb.OrganizationComponents, only: [manage_header: 1]
+  import VutuvWeb.OrganizationComponents,
+    only: [manage_header: 1, check_report: 1, check_reassurance: 1]
 
   alias Vutuv.Organizations
   alias VutuvWeb.Live.InitAssigns
@@ -27,6 +28,9 @@ defmodule VutuvWeb.OrganizationLive.Domains do
      |> assign(:page_title, gettext("Domains – %{name}", name: organization.name))
      |> assign(:new_domain, "")
      |> assign(:new_method, "dns")
+     # What the last check saw, per domain (issue #1466). Keyed by domain id
+     # because this page can have several claims running at once.
+     |> assign(:check_reports, %{})
      |> assign(:verification_enabled?, Organizations.verification_enabled?())
      |> load_domains()}
   end
@@ -78,7 +82,9 @@ defmodule VutuvWeb.OrganizationLive.Domains do
            Organizations.get_domain(socket.assigns.organization, id),
          true <- is_nil(domain.verified_at) do
       {:ok, _} = Organizations.set_domain_method(domain, method)
-      {:noreply, load_domains(socket)}
+      # The stored report was about the other method, so it would now be
+      # answering a question nobody asked.
+      {:noreply, socket |> forget_report(id) |> load_domains()}
     else
       _ -> {:noreply, socket}
     end
@@ -92,13 +98,16 @@ defmodule VutuvWeb.OrganizationLive.Domains do
         {:noreply, socket}
 
       domain ->
-        case Organizations.verify_domain(organization, domain) do
+        case Organizations.check_domain(organization, domain) do
           {:ok, _organization} ->
-            {:noreply, socket |> load_domains() |> put_flash(:info, gettext("Domain verified."))}
-
-          {:error, _} ->
             {:noreply,
-             put_flash(socket, :error, verify_error(socket.assigns.verification_enabled?))}
+             socket
+             |> forget_report(id)
+             |> load_domains()
+             |> put_flash(:info, gettext("Domain verified."))}
+
+          {:error, report} ->
+            {:noreply, put_report(socket, id, report)}
         end
     end
   end
@@ -144,13 +153,18 @@ defmodule VutuvWeb.OrganizationLive.Domains do
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
 
-  defp verify_error(true),
-    do:
-      gettext(
-        "We could not find the record or file yet. It can take a while to propagate. Please try again."
-      )
+  # The moment the check ran, kept beside its result so each panel can say when
+  # it last looked.
+  defp put_report(socket, domain_id, report) do
+    stamped =
+      Map.put(report, :checked_at, NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second))
 
-  defp verify_error(false), do: gettext("Domain verification is disabled on this installation.")
+    assign(socket, :check_reports, Map.put(socket.assigns.check_reports, domain_id, stamped))
+  end
+
+  defp forget_report(socket, domain_id) do
+    assign(socket, :check_reports, Map.delete(socket.assigns.check_reports, domain_id))
+  end
 
   @impl true
   def render(assigns) do
@@ -310,15 +324,24 @@ defmodule VutuvWeb.OrganizationLive.Domains do
         <code phx-no-curly-interpolation class="mt-1 block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"><%= @well_known_content %></code>
       <% end %>
 
+      <%!-- `phx-disable-with` is the whole feedback while the check runs, and it
+      is a DNS or HTTP round trip that can take seconds (issue #1466). --%>
       <button
         type="button"
         phx-click="verify"
         phx-value-id={@domain.id}
+        phx-disable-with={gettext("Checking …")}
         id={"verify-#{@domain.id}"}
-        class="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+        class="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
       >
         {gettext("Verify now")}
       </button>
+
+      <.check_report id={"verify-report-#{@domain.id}"} report={@check_reports[@domain.id]} />
+      <%!-- Only a domain that was never verified is picked up by the two-minute
+      background pass. One in its grace window is on the weekly re-check, so
+      promising it a mail "as soon as it works" would be untrue. --%>
+      <.check_reassurance :if={is_nil(@domain.verified_at)} domain={@domain.domain} />
     </div>
     """
   end

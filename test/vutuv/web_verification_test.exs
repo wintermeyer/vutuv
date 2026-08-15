@@ -112,6 +112,83 @@ defmodule Vutuv.WebVerificationTest do
     end
   end
 
+  describe "check reports (issue #1466)" do
+    test "the dns report names both queried names and every record it saw" do
+      resolver = fn _host -> [[~c"v=spf1 -all"], [~c"other=1"]] end
+
+      assert {:error, report} =
+               WebVerification.dns_check(
+                 "example.org",
+                 "vutuv-organization-verify=",
+                 "tok-123",
+                 resolver
+               )
+
+      assert report.method == "dns"
+      assert report.names == ["example.org", "_vutuv.example.org"]
+      assert report.expected == "vutuv-organization-verify=tok-123"
+      assert report.found == ["v=spf1 -all", "other=1"]
+    end
+
+    test "a hit on the bare host stops there, so the happy path stays one lookup" do
+      {:ok, agent} = Agent.start_link(fn -> [] end)
+
+      resolver = fn host ->
+        Agent.update(agent, &[host | &1])
+        [[~c"vutuv-organization-verify=tok-123"]]
+      end
+
+      assert {:ok, _report} =
+               WebVerification.dns_check(
+                 "example.org",
+                 "vutuv-organization-verify=",
+                 "tok-123",
+                 resolver
+               )
+
+      assert Agent.get(agent, & &1) == ["example.org"]
+    end
+
+    test "the well-known report separates a wrong body, a bad status and no answer at all" do
+      path = "/.well-known/vutuv-organization-verify.txt"
+
+      assert {:error, served} =
+               WebVerification.well_known_check(
+                 "example.org",
+                 path,
+                 "tok-123",
+                 adapter(200, "no")
+               )
+
+      assert served.status == 200
+      assert served.found == "no"
+      assert served.url == "https://example.org" <> path
+
+      assert {:error, missing} =
+               WebVerification.well_known_check("example.org", path, "tok-123", adapter(404, ""))
+
+      assert missing.status == 404
+
+      # No response at all — here because the SSRF guard refused to leave the
+      # machine, the same shape a DNS or TLS failure produces.
+      assert {:error, unreachable} =
+               WebVerification.well_known_check("localhost", path, "tok-123", adapter(200, "tok"))
+
+      assert is_nil(unreachable.status)
+    end
+
+    test "an answer with control characters is cut down to one printable line" do
+      path = "/.well-known/vutuv-organization-verify.txt"
+      body = "line one\nline two\r\n" <> String.duplicate("x", 400)
+
+      assert {:error, report} =
+               WebVerification.well_known_check("example.org", path, "tok", adapter(200, body))
+
+      refute report.found =~ "\n"
+      assert String.length(report.found) <= 160
+    end
+  end
+
   describe "rel_me_hrefs/1 (the parser)" do
     test "finds rel=me hrefs on <a> and <link>, any attribute order, any quotes" do
       html = """

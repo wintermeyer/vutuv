@@ -1,0 +1,22 @@
+<%= email_greeting(@user) %>,
+
+the proof for <%= @domain %> is there: your organization page
+"<%= @organization_name %>" is verified and publicly visible from now on.
+
+You did not have to do anything else. We kept looking after you published the
+entry, because a new <%= if @method == "dns" do %>DNS record<% else %>file<% end %> can take a while to reach everyone,
+depending on your provider.
+<%= if @method == "dns" do %>
+Please leave the TXT record in place. We check it every week, and without it
+the page loses its verification again.
+<% else %>
+Please leave the proof file in place. We check it every week, and without it
+the page loses its verification again.
+<% end %>
+Here is your page:
+
+<%= @url %>organizations/<%= @organization_slug %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

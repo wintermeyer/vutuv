@@ -833,6 +833,31 @@ defmodule Vutuv.Notifications.Emailer do
     do: gettext("A domain of your organization page on vutuv is about to be dropped")
 
   @doc """
+  Tells an organization owner that the background check found the proof and the
+  page is live (issue #1466).
+
+  Only the background pass sends this. Somebody who pressed "Verify now" and is
+  looking at the page being verified does not need a mail about it; the point of
+  this one is that it reaches the member who published the record, closed the
+  tab and would otherwise have to keep coming back to guess whether DNS had
+  caught up.
+  """
+  def organization_domain_verified_email(user, email, organization, domain) do
+    build_email(
+      user,
+      email,
+      "organization_domain_verified",
+      %{
+        organization_name: organization.name,
+        organization_slug: organization.slug,
+        domain: domain.domain,
+        method: domain.method
+      },
+      fn -> gettext("Your organization page on vutuv is verified") end
+    )
+  end
+
+  @doc """
   Tells an organization owner the grace window ran out on the page's last
   verified domain: it is back to "pending" and no longer publicly visible. The
   member-facing twin of `organization_unverified_notice/2`.

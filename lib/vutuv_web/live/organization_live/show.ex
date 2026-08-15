@@ -45,6 +45,11 @@ defmodule VutuvWeb.OrganizationLive.Show do
       |> assign_people(organization)
       |> assign_org_jobs(organization)
       |> assign(:post_body, "")
+      # What the last domain check saw (issue #1466). A socket assign rather
+      # than a flash: it is the answer to a question the member just asked and
+      # it has to survive on the page, where a toast auto-dismisses and a repeat
+      # of the identical toast renders no diff at all.
+      |> assign(:check_report, nil)
       |> assign_org_posts(organization)
 
     {:ok, socket}
@@ -270,8 +275,12 @@ defmodule VutuvWeb.OrganizationLive.Show do
     if socket.assigns.can_edit? and socket.assigns.pending? do
       {:ok, _domain} = Organizations.set_domain_method(socket.assigns.primary_domain, method)
 
+      # The old report was about the other method, so it would now be answering
+      # a question nobody asked.
       {:noreply,
-       assign_organization(socket, socket.assigns.organization, socket.assigns.current_user)}
+       socket
+       |> assign(:check_report, nil)
+       |> assign_organization(socket.assigns.organization, socket.assigns.current_user)}
     else
       {:noreply, socket}
     end
@@ -282,20 +291,27 @@ defmodule VutuvWeb.OrganizationLive.Show do
       organization = socket.assigns.organization
       domain = socket.assigns.primary_domain
 
-      case Organizations.verify_domain(organization, domain) do
+      case Organizations.check_domain(organization, domain) do
         {:ok, organization} ->
           {:noreply,
            socket
+           |> assign(:check_report, nil)
            |> assign_organization(organization, socket.assigns.current_user)
            |> put_flash(:info, gettext("Your organization page is verified and now live."))}
 
-        {:error, _reason} ->
-          {:noreply,
-           put_flash(socket, :error, verify_error_message(socket.assigns.verification_enabled?))}
+        {:error, report} ->
+          {:noreply, assign(socket, :check_report, stamp(report))}
       end
     else
       {:noreply, socket}
     end
+  end
+
+  # The moment the check ran, kept beside its result so the panel can say when
+  # it last looked — the pending domain's own `last_checked_at` is written by
+  # the same call, but this one belongs to the answer on screen.
+  defp stamp(report) do
+    Map.put(report, :checked_at, NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second))
   end
 
   # Who the follow belongs to: the page being acted as, else the member. A page
@@ -331,6 +347,19 @@ defmodule VutuvWeb.OrganizationLive.Show do
     {:noreply, assign(socket, :engagement, %{socket.assigns.engagement | likes: likes})}
   end
 
+  # The background pass finished the claim (issue #1466). Somebody who published
+  # the record and left this tab open watches the panel turn into their page,
+  # which is the clearest possible answer to "is it working yet".
+  def handle_info({:organization_verified, _id}, socket) do
+    organization = Organizations.get_organization!(socket.assigns.organization.id)
+
+    {:noreply,
+     socket
+     |> assign(:check_report, nil)
+     |> assign_organization(organization, socket.assigns.current_user)
+     |> put_flash(:info, gettext("Your organization page is verified and now live."))}
+  end
+
   def handle_info(_message, socket), do: {:noreply, socket}
 
   # `primary_domain` is a %OrganizationDomain{} struct here (the assign holds the row
@@ -346,15 +375,6 @@ defmodule VutuvWeb.OrganizationLive.Show do
         assign(socket, :engagement, Organizations.organization_engagement(organization, user))
     end
   end
-
-  defp verify_error_message(true),
-    do:
-      gettext(
-        "We could not find the record or file yet. It can take a while to propagate. Please try again."
-      )
-
-  defp verify_error_message(false),
-    do: gettext("Domain verification is disabled on this installation.")
 
   @impl true
   def render(assigns) do
@@ -869,14 +889,25 @@ defmodule VutuvWeb.OrganizationLive.Show do
             <% end %>
           </div>
 
+          <%!-- `phx-disable-with` is the whole feedback a member gets while the
+          check runs, and the check is a DNS or HTTP round trip that can take
+          seconds. Without it the button sits there unchanged and the click
+          reads as swallowed, which is half of what issue #1466 reported. --%>
           <button
             type="button"
             phx-click="verify"
+            phx-disable-with={gettext("Checking …")}
             id="verify-domain"
-            class="mt-6 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            class="mt-6 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {gettext("Verify now")}
           </button>
+
+          <.check_report id="verify-domain-report" report={@check_report} />
+          <.check_reassurance
+            :if={is_nil(@primary_domain.verified_at)}
+            domain={@primary_domain.domain}
+          />
         <% else %>
           <p class="mt-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
             {gettext("Domain verification is disabled on this installation.")}

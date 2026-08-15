@@ -110,6 +110,8 @@ that owns the organization gate and test seams:
 - **DNS** — a `vutuv-organization-verify=<token>` TXT record on the domain, or on
   the CNAME-safe `_vutuv.<domain>` alternate name for a domain that is itself a
   CNAME (see `profiles.md` and `WebVerification.dns_challenge_name/1`, issue #947).
+  The record is read from the zone's **own name servers** (`Vutuv.Dns`), not
+  through a recursive resolver — see "Why the DNS read bypasses the cache" below.
 - **Website file** — the token served at
   `https://<domain>/.well-known/vutuv-organization-verify.txt`, fetched with `Req`
   behind the SSRF guard (`Vutuv.Ssrf`), never following redirects.
@@ -149,10 +151,25 @@ domain — the domain, not the name, is what viewers trust.
   a `pending` organization plus an owner `OrganizationRole` and an unverified primary
   `OrganizationDomain` derived from the website URL.
 - The owner finishes the claim on the page's verification panel (shown to the
-  owner while the page is `pending`): publish the record/file, click **Verify
-  now**. A successful proof stamps `verified_at`, flips the page to `active`, and
-  sends an operator notice (`Emailer.organization_verified_notice/2`) so a human
-  reviews every new page while volume is low.
+  owner while the page is `pending`, at the page's own permanent URL
+  `/organizations/:slug`, and reachable from `/settings/organizations`, where a
+  pending row shows a **Finish verification** call to action instead of the
+  generic "Manage"): publish the record/file, click **Verify now**. A successful
+  proof stamps `verified_at`, flips the page to `active`, and sends an operator
+  notice (`Emailer.organization_verified_notice/2`) so a human reviews every new
+  page while volume is low.
+- **The claim also finishes on its own** (`Vutuv.Organizations.PendingDomainSweeper`,
+  issue #1466). Publishing a DNS record does not complete when the member
+  presses Save at their provider; it completes minutes or hours later, out of
+  their hands. So a pending domain is re-checked on a backoff ladder read from
+  its own age — `@pending_backoff`, every two minutes for the first quarter of
+  an hour, flattening to six-hourly and abandoned after 30 days — and on success
+  the owners get `Emailer.organization_domain_verified_email/4` and any open page
+  is told over the organization's PubSub topic, so it turns into the live page with
+  no reload. Both sweepers share the `:recheck_organization_domains` gate.
+  `check_domain/2` stamps `last_checked_at` on **every** outcome, including the
+  failures, or a domain that can never verify would hold the front of every
+  oldest-first batch for ever.
 - DNS / well-known domains are **re-checked weekly**
   (`Vutuv.Organizations.DomainRecheckSweeper`, gated by
   `:recheck_organization_domains`; the sweeper ticks hourly but only re-checks
@@ -162,6 +179,41 @@ domain — the domain, not the name, is what viewers trust.
   verified status, and if it was the organization's last verified domain the page
   falls back to `pending` and the operator is alerted
   (`Emailer.organization_unverified_notice/2`).
+
+### Why the DNS read bypasses the cache
+
+`Vutuv.Dns` finds the deepest ancestor of the queried name that has `NS`
+records, resolves those name servers and asks **them** for the TXT record,
+rather than asking the recursive resolver in `/etc/resolv.conf`. That is not an
+optimisation, it is the difference between the feature working and not:
+
+- A claim is almost always started **before** the record exists — the member has
+  to read the value off the panel to publish it. That first look primes the
+  resolver's **negative** cache for the zone's SOA negative TTL, commonly hours,
+  and a short TTL on the record published seconds later cannot shorten it. Every
+  later "Verify now" then gets the same cached "no" from a resolver that is
+  working exactly as designed (issue #1466).
+- Every authoritative server is asked, not only the first, because a zone whose
+  servers are mid-transfer answers differently depending on who you ask.
+- An answer without the `aa` bit is discarded (`Vutuv.Dns.InetRes.txt_at/2`), so
+  a referral is never read as "no record", and a bare TLD is never used as the
+  zone (`zone_candidates/1`), since its registry servers only ever refer.
+- Name-server addresses come out of DNS, which the claimed domain's owner
+  controls, so an address `Vutuv.Ssrf.internal_ip?/1` calls internal is dropped:
+  an `NS` record pointing at `127.0.0.1` or a metadata endpoint must not turn
+  this server into a probe.
+- When no zone can be found or nothing answers — split-horizon intranet
+  resolvers, a firewall allowing port 53 only to the configured resolver — the
+  plain recursive lookup still runs, so this can only make verification more
+  likely to succeed.
+
+The panel reports what the check actually read (`WebVerification.dns_check/4` /
+`well_known_check/4` → `OrganizationComponents.check_report/1`): the names
+queried, the value wanted, and every TXT record found there. A member whose SPF
+record is listed back at them can see in one line that the proof went to the
+wrong name, which "not found yet, please try again" never told them. That block
+is an assign and not a flash on purpose — an identical flash renders no diff, so
+the old toast made every attempt after the first look like a dead button.
 
 ### Who hears about a failing proof
 
@@ -180,6 +232,10 @@ in their own locale, linking to `/organizations/:slug/domains`):
   verified domains is not told it is about to go offline.
 - **Demotion** — `Emailer.organization_page_unverified_email/4`, sent alongside
   the operator notice when the last verified domain is dropped.
+- **Verified in the background** — `Emailer.organization_domain_verified_email/4`,
+  sent only from the pending pass, never from a click: somebody watching the
+  page being verified does not need a mail about it, and the whole point of this
+  one is that it reaches the member who published the record and closed the tab.
 
 Recipients are **owners only**: domains are an owner-only power
 (`can_manage_domains?/2`), so an admin or recruiter would get a call to action
