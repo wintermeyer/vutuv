@@ -52,11 +52,12 @@ defmodule Vutuv.Notifications.EmailerTest do
 
   describe "deliver/1 chokepoint" do
     test "every message leaves with the bounce address as envelope sender" do
-      # The Swoosh SMTP adapter uses the Sender header as SMTP MAIL FROM, so
-      # bounces (DSNs) all come back to the one piped bounce mailbox instead
-      # of no-reply@. The From stays untouched.
+      # Bounces (DSNs) all come back to the one bounce mailbox instead of to
+      # no-reply@. It rides beside the message, never as a visible header, and
+      # the From stays untouched (issue #1472; the wire-level proof is in
+      # Vutuv.Mailer.SMTPTest).
       email = Emailer.base_email()
-      assert email.headers["Sender"] == "bounces@vutuv.de"
+      assert email.private[:envelope_sender] == "bounces@vutuv.de"
       assert email.from == {"vutuv", "no-reply@vutuv.de"}
 
       raw =
@@ -67,7 +68,29 @@ defmodule Vutuv.Notifications.EmailerTest do
         |> Swoosh.Email.text_body("hi")
 
       Emailer.deliver(raw)
-      assert_email_sent(fn sent -> assert sent.headers["Sender"] == "bounces@vutuv.de" end)
+
+      assert_email_sent(fn sent ->
+        assert sent.private[:envelope_sender] == "bounces@vutuv.de"
+      end)
+    end
+
+    test "no message carries a Sender header, even if a builder set one" do
+      # A `Sender:` is what Outlook renders as "<bounce address> on behalf of
+      # <From>", which is the whole reason the envelope moved out of the
+      # headers. The chokepoint owns the envelope, so it drops the header.
+      email =
+        Emailer.base_email()
+        |> Swoosh.Email.header("Sender", "somebody@example.com")
+        |> Swoosh.Email.to("nobody@example.com")
+        |> Swoosh.Email.subject("Has a Sender")
+        |> Swoosh.Email.text_body("hi")
+
+      Emailer.deliver(email)
+
+      assert_email_sent(fn sent ->
+        refute Map.has_key?(sent.headers, "Sender")
+        assert sent.private[:envelope_sender] == "bounces@vutuv.de"
+      end)
     end
 
     test "drops mail to an address containing whitespace instead of crashing" do

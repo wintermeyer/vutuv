@@ -2,7 +2,7 @@
 
 **TL;DR** — vutuv sends all outbound mail through a **shared Postfix relay on the
 production host** (`bremen2`), with the SMTP envelope sender fixed to
-`sw@vutuv.de` (the `BOUNCE_ADDRESS` variable; see §1.6). When a recipient
+`bounces@vutuv.de` (the `BOUNCE_ADDRESS` variable; see §1.6). When a recipient
 address dies, the goal is to (1) **stop
 mailing it** and (2) eventually **freeze accounts that have become permanently
 unreachable**. The signal for "this address is dead" comes from Postfix's own
@@ -31,8 +31,8 @@ reachable as `wort.fb12.uni-bremen.de` on the Uni-Bremen network), Debian 13
 ### 1.1 The send path
 
 ```
-  Vutuv app (Swoosh, SMTP adapter)
-        │  MAIL FROM:<sw@vutuv.de>        (the Sender header; see Emailer.deliver/1)
+  Vutuv app (Vutuv.Mailer.SMTP)
+        │  MAIL FROM:<bounces@vutuv.de>   (envelope only, no Sender header; §1.7)
         │  submitted to 127.0.0.1:25, no TLS (loopback)
         ▼
   Postfix on bremen2  ──────────────►  recipient's MX (direct, relayhost is empty)
@@ -59,8 +59,8 @@ Key Postfix settings on bremen2 (read with `postconf`):
 bremen2 sends outbound mail for **several unrelated apps**, distinguishable only
 by their envelope sender. Seen in the logs:
 
-- `sw@vutuv.de` — **vutuv** (us); `bounces@vutuv.de` before 2026-07-22, so
-  older log excerpts in this document still show that address
+- `bounces@vutuv.de` — **vutuv** (us). It was `sw@vutuv.de` between 2026-07-22
+  and 2026-08-15 (§1.6), so log excerpts in this document show both addresses
 - `…@animina.de` — animina
 - `noreply@mehr-schulferien.de` — mehr-schulferien
 
@@ -128,9 +128,33 @@ Automated bounce handling never depended on it (that reads the log, §2), but it
 meant no DSN, and no remote postmaster's reply to it, ever reached a human. On
 **2026-07-22** production switched to `sw@vutuv.de` — a real mailbox, `250 OK`
 on the same probe — set as `BOUNCE_ADDRESS` in `/var/www/vutuv3/shared/.env`.
-Run that probe for whatever address you configure before trusting it; the
-shipped default in `config/config.exs` is unchanged and is *not* a working
-mailbox.
+
+On **2026-08-15** `bounces@vutuv.de` was created in Google Workspace and
+production switched back to it, so bounce handling no longer rides on a
+person's address (issue #1473). The same probe now answers:
+
+```
+250 2.1.5 OK … - gsmtp
+```
+
+Run it for whatever address you configure before trusting it. Note the
+**changeover window**: attribution joins a bounce to vutuv by the envelope
+sender (§3.2), so mail already queued under the previous address bounces under
+that one and is no longer recognized as ours. That lasts as long as the Postfix
+queue holds a message (minutes for most mail, up to ~5 days for deferred) and
+costs only detection, never a wrong deactivation.
+
+### 1.7 The envelope sender is not a header
+
+`BOUNCE_ADDRESS` reaches the SMTP conversation as `MAIL FROM` and appears in no
+header of the message. It used to be published as a `Sender:` header, because
+that is the only lever Swoosh's SMTP adapter offers — and Outlook renders such
+a header as "*`<bounce address>` on behalf of vutuv `<no-reply@vutuv.de>`*",
+i.e. the mail-handling address shown to the reader as the sender. Production
+therefore delivers through `Vutuv.Mailer.SMTP` (issue #1472), which passes the
+envelope sender to gen_smtp directly. The `Return-Path` the receiving server
+writes is unchanged, so bounce attribution and this document's §3 are not
+affected.
 
 ---
 
@@ -301,8 +325,10 @@ A hard bounce sets `emails.undeliverable_at`
 (`Vutuv.Deliverability.record_hard_bounce/3`). Then:
 
 - `Emailer.deliver/1` **drops automatic mail** to that address.
-- **PIN / login mail is exempt** (`put_private(:user_initiated, true)`): a
-  once-bounced mailbox must never lock its owner out.
+- **Critical mail is exempt** (`Emailer.put_class(:critical)` — the login PINs
+  and the new-sign-in warning): a once-bounced mailbox must never lock its
+  owner out, and the warning that somebody else signed in must not be withheld
+  by a mark this installation set itself.
 - A **successful login PIN clears the mark** (`Accounts.check_pin/3` →
   `Bounces.clear/1`): proof the address works again.
 - The owner sees a "mail to this address bounced" warning on their emails page.

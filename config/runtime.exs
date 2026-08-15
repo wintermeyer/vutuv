@@ -88,8 +88,11 @@ if config_env() == :prod do
       _never -> :never
     end
 
+  # Vutuv.Mailer.SMTP is Swoosh's SMTP adapter with the envelope sender passed
+  # to the SMTP conversation directly, so the bounce address is never a visible
+  # `Sender:` header (issue #1472).
   config :vutuv, Vutuv.Mailer,
-    adapter: Swoosh.Adapters.SMTP,
+    adapter: Vutuv.Mailer.SMTP,
     relay: System.get_env("SMTP_RELAY") || "127.0.0.1",
     port: String.to_integer(System.get_env("SMTP_PORT") || "25"),
     username: System.get_env("SMTP_USERNAME") || "",

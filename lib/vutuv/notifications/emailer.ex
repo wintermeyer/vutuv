@@ -13,6 +13,12 @@ defmodule Vutuv.Notifications.Emailer do
       headers (belt and suspenders, in case a future builder forgets the base)
       and hands the message to `Vutuv.Mailer`.
 
+  Two things travel beside the message rather than in its headers. The bounce
+  address is the **SMTP envelope sender** and no longer a visible `Sender:`
+  header (issue #1472; `Vutuv.Mailer.SMTP` puts it on the wire), and every
+  builder declares a **class** (`put_class/2`) that says whether the message
+  may be withheld, opted out of, or marked bulk.
+
   No code outside this module may call `Vutuv.Mailer.deliver/1` or Swoosh
   directly. Every builder function returns a `%Swoosh.Email{}`; `deliver/1`
   sends it.
@@ -85,12 +91,13 @@ defmodule Vutuv.Notifications.Emailer do
 
   @doc """
   The single delivery chokepoint for all outbound mail. Re-applies the robot
-  headers and the bounce envelope sender, drops automatic mail to addresses
-  a bounce marked undeliverable (`Vutuv.Notifications.Bounces`), and hands
-  everything else to `Vutuv.Mailer`. User-initiated mail (the PIN flows, ad
-  bookings — `put_private(:user_initiated, true)`) is exempt from the
-  suppression: a member whose mailbox once bounced must still be able to
-  request a login PIN, and a verified PIN clears the mark again.
+  headers, the bounce envelope sender and the message's class headers, drops
+  automatic mail to addresses a bounce marked undeliverable
+  (`Vutuv.Notifications.Bounces`), and hands everything else to `Vutuv.Mailer`.
+
+  `:critical` mail (`put_class/2`) is exempt from the suppression: a member
+  whose mailbox once bounced must still be able to request a login PIN, and a
+  verified PIN clears the mark again.
   """
   def deliver(%Swoosh.Email{} = email) do
     cond do
@@ -152,22 +159,35 @@ defmodule Vutuv.Notifications.Emailer do
     email
     |> robot_headers()
     |> envelope_sender()
+    |> class_headers()
     |> message_id()
   end
 
-  defp suppressed?(%Swoosh.Email{private: %{user_initiated: true}}), do: false
-
-  defp suppressed?(%Swoosh.Email{to: to}) when is_list(to) and to != [] do
-    Enum.all?(to, fn {_name, address} -> Bounces.suppressed?(address) end)
+  # Critical mail is exempt: the way back into an account, and the warning that
+  # somebody else is in it, must not be withheld by a mark this installation
+  # set itself. A verified login PIN clears the mark again (see Bounces).
+  defp suppressed?(%Swoosh.Email{to: to} = email) when is_list(to) and to != [] do
+    mail_class(email) != :critical and
+      Enum.all?(to, fn {_name, address} -> Bounces.suppressed?(address) end)
   end
 
   defp suppressed?(_email), do: false
 
-  # The Swoosh SMTP adapter uses the Sender header as the SMTP envelope
-  # sender (MAIL FROM), so every DSN comes back to the one bounce mailbox
-  # production Postfix pipes into POST /webhooks/bounces. The visible From
-  # stays no-reply@vutuv.de.
-  defp envelope_sender(email), do: header(email, "Sender", bounce_address())
+  # The RFC 5321 envelope sender (SMTP MAIL FROM), so every DSN comes back to
+  # the one bounce mailbox instead of to the unread From. It rides in the
+  # message's private map and `Vutuv.Mailer.SMTP` hands it to gen_smtp.
+  #
+  # It is deliberately NOT a `Sender:` header, which is what Swoosh's own SMTP
+  # adapter would require: that header is shown to the reader, and Outlook
+  # renders it as "<bounce address> on behalf of <From>", i.e. a mail-handling
+  # address presented as the party that sent the message (issue #1472). Any
+  # Sender header that did arrive is dropped, so the chokepoint alone decides
+  # what the envelope is.
+  defp envelope_sender(email) do
+    email
+    |> Map.update!(:headers, &Map.delete(&1, "Sender"))
+    |> put_private(:envelope_sender, bounce_address())
+  end
 
   defp bounce_address, do: Application.fetch_env!(:vutuv, :bounce_address)
 
@@ -186,9 +206,56 @@ defmodule Vutuv.Notifications.Emailer do
   @doc """
   Adds the bulk-only headers (`Precedence: bulk`, `List-Unsubscribe`). These are
   **not** safe for one-to-one transactional mail because `Precedence: bulk` can
-  hurt inbox placement, so they are opt-in and applied only to bulk mail.
+  hurt inbox placement, so they are applied only to `:bulk` mail — declaring
+  that class (`put_class/2`) is what pulls them in.
   """
   def bulk_headers(%Swoosh.Email{} = email), do: put_headers(email, bulk_header_list())
+
+  # --- Mail classes (issue #1474) ---------------------------------------------
+  #
+  # What a message *is* decides how it is handled, so every builder declares one
+  # class and the chokepoint derives the rest from it. Before this, whether a
+  # message survived the bounce suppression was decided by a private flag called
+  # `user_initiated` that only the PIN mails and the ad booking ever set, so the
+  # answer for everything else — including the new-sign-in warning — was an
+  # accident of which helper it happened to be built with.
+  #
+  #   :critical      Login PINs and security warnings. No opt-out, no bulk
+  #                  headers, and exempt from the bounce suppression.
+  #   :transactional About the recipient's own account, page or content. No
+  #                  opt-out, but dropped for an address a bounce proved dead.
+  #   :notification  Activity news. Gated on a per-type preference by its caller
+  #                  and carries the RFC 8058 one-click unsubscribe.
+  #   :bulk          Sent to many people at once. As :notification, plus
+  #                  `Precedence: bulk`.
+  @mail_classes [:critical, :transactional, :notification, :bulk]
+
+  @doc """
+  Declares what kind of mail this is (see the class list above). Every builder
+  sets one; `Vutuv.Notifications.MailClassTest` fails the build when a new
+  builder does not.
+  """
+  def put_class(%Swoosh.Email{} = email, class) when class in @mail_classes do
+    email
+    |> put_private(:mail_class, class)
+    |> class_headers()
+  end
+
+  @doc """
+  The class the builder declared. `:transactional` for a message assembled
+  outside this module — the conservative answer, since it opts nothing out and
+  claims no exemption.
+  """
+  def mail_class(%Swoosh.Email{private: %{mail_class: class}}), do: class
+  def mail_class(%Swoosh.Email{}), do: :transactional
+
+  # The headers a class implies. Only :bulk adds any; the one-click unsubscribe
+  # headers carry a per-recipient token, so they stay with the builder that can
+  # mint it. Idempotent and re-applied at the chokepoint, like the robot
+  # headers.
+  defp class_headers(email) do
+    if mail_class(email) == :bulk, do: bulk_headers(email), else: email
+  end
 
   def login_email(pin, email, %Vutuv.Accounts.User{email_confirmed?: false} = user) do
     gen_email(pin, email, user, "registration_email", fn ->
@@ -275,6 +342,7 @@ defmodule Vutuv.Notifications.Emailer do
     excerpt = message_excerpt(message_body)
 
     base_email()
+    |> put_class(:notification)
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(
@@ -427,8 +495,8 @@ defmodule Vutuv.Notifications.Emailer do
     rendered = alert_sections(sections, user, base, locale)
 
     base_email()
+    |> put_class(:bulk)
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> bulk_headers()
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(recipient_subject(locale, fn -> saved_search_subject(rendered) end))
     |> render_bodies("saved_search_alert", locale, %{
@@ -526,6 +594,7 @@ defmodule Vutuv.Notifications.Emailer do
     unsubscribe_url = VutuvWeb.UnsubscribeToken.url(user, field)
 
     base_email()
+    |> put_class(:notification)
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(recipient_subject(locale, subject_fun))
@@ -568,8 +637,8 @@ defmodule Vutuv.Notifications.Emailer do
         unsubscribe_url: unsubscribe_url
       }) do
     base_email()
+    |> put_class(:bulk)
     |> to({to_name, to_email})
-    |> bulk_headers()
     |> newsletter_unsubscribe(unsubscribe_url)
     |> subject(subject_line)
     |> html_body(
@@ -600,8 +669,10 @@ defmodule Vutuv.Notifications.Emailer do
   location (issue #786). Carries the device, approximate location, source IP
   and time so the owner can recognize (or not) the login, and deep-links to
   their signed-in-devices page so a "this wasn't me" is one click away (issue
-  #794). Transactional security mail, so it carries no unsubscribe and is built
-  with `build_email` (subject to bounce suppression, never user-initiated).
+  #794). Critical mail: it carries no unsubscribe, and it is the one message a
+  member must get even at an address a bounce marked dead — a mark this
+  installation set itself, and possibly wrongly, while the sign-in it reports
+  is happening now.
   """
   def security_alert_email(%Vutuv.Accounts.User{} = user, email, session, reasons) do
     locale = get_locale(user.locale)
@@ -618,6 +689,7 @@ defmodule Vutuv.Notifications.Emailer do
     build_email(user, email, "security_alert", assigns, fn ->
       gettext("New sign-in to your vutuv account")
     end)
+    |> put_class(:critical)
   end
 
   # The login time as plain UTC ("2026-06-15 05:41 UTC"). The server runs UTC and
@@ -656,8 +728,10 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def ad_booking_email(%Vutuv.Ads.Ad{} = ad, booker) do
     base_email()
-    # A booking the member just made; never suppressed (see deliver/1).
-    |> put_private(:user_initiated, true)
+    # Critical for the same reason a PIN is: a booking the member just paid for
+    # has to reach the operator or nobody writes the invoice, so it must not be
+    # dropped by the bounce suppression (see deliver/1).
+    |> put_class(:critical)
     |> to(operator_recipient())
     |> subject("vutuv Anzeigenbuchung für den #{Calendar.strftime(ad.day, "%d.%m.%Y")}")
     |> render_bodies("ad_booking", "de", %{
@@ -709,6 +783,7 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def daily_report_email(%DailyReport{} = report) do
     base_email()
+    |> put_class(:transactional)
     |> to(operator_recipient())
     |> subject(DailyReport.email_subject(report))
     |> render_bodies("daily_report", "de", %{report: report, url: public_url()})
@@ -726,6 +801,7 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def account_deleted_notice(snapshot) do
     base_email()
+    |> put_class(:transactional)
     |> to(operator_recipient())
     |> subject("vutuv: Konto @#{snapshot.username} gelöscht")
     |> render_bodies("account_deleted_notice", "de", %{account: deletion_display(snapshot)})
@@ -784,6 +860,7 @@ defmodule Vutuv.Notifications.Emailer do
   # lands on the oversight page, not just the public page.
   defp organization_operator_notice(kind, organization, domain, subject_line) do
     base_email()
+    |> put_class(:transactional)
     |> to(operator_recipient())
     |> subject(subject_line)
     |> render_bodies("organization_operator_notice", "de", %{
@@ -1012,9 +1089,9 @@ defmodule Vutuv.Notifications.Emailer do
     end)
   end
 
-  # PIN mail is user-initiated: someone just asked for it, so it is exempt
-  # from the bounce suppression in deliver/1 (the way back into a once-
-  # bounced account must stay open).
+  # PIN mail is critical: someone just asked for it, so it is exempt from the
+  # bounce suppression in deliver/1 (the way back into a once-bounced account
+  # must stay open).
   defp gen_email(pin, email, user, template_base, subject_fun) do
     gen_email(pin, email, user, template_base, %{}, subject_fun)
   end
@@ -1023,15 +1100,17 @@ defmodule Vutuv.Notifications.Emailer do
   # handle in the username-change mail) and so needs assigns beyond the PIN.
   defp gen_email(pin, email, user, template_base, extra_assigns, subject_fun) do
     build_email(user, email, template_base, Map.put(extra_assigns, :pin, pin), subject_fun)
-    |> put_private(:user_initiated, true)
+    |> put_class(:critical)
   end
 
   # Every templated email: recipient, localized subject, and the matching
   # per-locale text template with `user` + `url` always in its assigns.
+  # Transactional unless its builder says otherwise afterwards.
   defp build_email(user, email, template_base, extra_assigns, subject_fun) do
     locale = get_locale(user.locale)
 
     base_email()
+    |> put_class(:transactional)
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> subject(recipient_subject(locale, subject_fun))
     |> render_bodies(
