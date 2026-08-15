@@ -10,6 +10,28 @@ The app shell `VutuvWeb.ShellLive` (sticky top bar + mobile bottom tab bar, with
 live unread badges) is embedded in the shared `app` layout via `live_render`, so
 the chrome and badges are live on every page.
 
+### Installed on a phone (issue #1464)
+
+The site is installable: `/site.webmanifest` (`VutuvWeb.PageController`)
+declares it a `standalone` app named after `:node_name`, the same string the
+fediverse directories print, so an operator answers "what is this installation
+called" once. Its load-bearing key is **`scope: "/"`**. iOS decides from the
+scope which links belong to the installed app and opens everything outside it
+in a Safari overlay *on top of* the app — with no manifest at all that is what
+a member got for ordinary navigation, which is what #1464 reported.
+
+The document declares `viewport-fit=cover`, without which every
+`env(safe-area-inset-*)` reads 0. That buys an app that paints edge to edge
+and obliges the page to hand back the strips the device keeps: the tab bar
+grows by the bottom inset and pads it away again (so its tabs keep their full
+4rem), `<main>` and the footer reserve that grown height, the full-screen chat
+subtracts it from its `100dvh`, the lightbox controls sit inside their inset,
+and the content columns take `UI.gutter_class/0` — the page's 1rem gutter or
+the sensor housing's inset, whichever is larger. Every one of those is exactly
+the old value on a device that reports no inset, which is why the change is
+invisible on a desktop. `mobile_tab_bar_css_test.exs` and
+`web_app_manifest_test.exs` fail the build if a piece goes missing.
+
 The **Messages** (`/messages`), **Notifications** (`/notifications`) and
 **Search** (`/search`) pages are LiveViews under a `live_session`. The search
 page itself is described in [search.md](search.md).

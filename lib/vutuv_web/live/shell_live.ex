@@ -26,6 +26,7 @@ defmodule VutuvWeb.ShellLive do
       compact_count: 1,
       count_badge: 1,
       delimited_count: 1,
+      gutter_class: 0,
       icon_bookmark: 1,
       name_initials: 1,
       presence_dot: 1
@@ -539,7 +540,10 @@ defmodule VutuvWeb.ShellLive do
         id="acting-as-banner"
         class="bg-brand-700 text-white dark:bg-brand-800"
       >
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm">
+        <div class={[
+          "mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm",
+          gutter_class()
+        ]}>
           <span class="font-semibold">
             {gettext("You are writing as %{name}.", name: @acting_as_name)}
           </span>
@@ -575,7 +579,10 @@ defmodule VutuvWeb.ShellLive do
         the bar itself rather than on whatever space the flanking content leaves
         over. The side tracks are equal (1fr), so the pill stays put as the nav
         and the icon row change with the viewer and the breakpoint. --%>
-        <div class="mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 lg:gap-6">
+        <div class={[
+          "mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 lg:gap-6",
+          gutter_class()
+        ]}>
           <div class="flex items-center gap-4 lg:gap-6">
             <%!-- The logo is "home": for a logged-in member "/" redirects to their
                  home (feed or profile) via RequireUserLoggedOut; logged out it is the
@@ -859,10 +866,20 @@ defmodule VutuvWeb.ShellLive do
       iPhone 2026-08-14; the frosted bars of the sites in Apple's own bug
       reports are the tell). Opaque also reads better here — this bar sits over
       dense feed content, where the top bar sits over the page's own top. --%>
+      <%!-- Safe areas (issue #1464). The bar is 4rem of tabs PLUS whatever the
+      device reserves below them: on a phone with a home indicator that strip
+      is not tappable, so a bar that ends at the viewport edge puts its labels
+      under it. It grows by the inset and pads the same amount away, which
+      leaves the tabs their full 4rem — and `<main>`/the footer reserve the
+      same total, so nothing scrolls underneath. The 0.75rem side padding is
+      what the report asked for: the outer two tabs sat hard against the screen
+      edges, and in landscape the sensor housing covers that edge outright. --%>
       <nav
         aria-label={gettext("Main navigation")}
         class={[
-          "fixed inset-x-0 bottom-0 z-30 grid h-16 border-t border-slate-200 bg-white md:hidden dark:border-slate-800 dark:bg-slate-900",
+          "fixed inset-x-0 bottom-0 z-30 grid border-t border-slate-200 bg-white md:hidden dark:border-slate-800 dark:bg-slate-900",
+          "h-[calc(4rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)]",
+          "pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))]",
           if(@user_id, do: "grid-cols-5", else: "grid-cols-2")
         ]}
       >

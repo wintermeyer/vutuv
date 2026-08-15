@@ -27,8 +27,23 @@
     <%= if canonical = OpenGraph.canonical_url(assigns) do %>
       <link rel="canonical" href={canonical} />
     <% end %>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <%!-- `viewport-fit=cover` lets the page paint edge to edge on a phone with
+    a display cutout, which is what makes `env(safe-area-inset-*)` report the
+    real insets at all — without it every one of them is 0 and the installed
+    app's bottom bar cannot reserve the home indicator's strip (issue #1464).
+    What the page then owes the device is its own gutters: `UI.gutter_class/0`
+    on the content columns, and the tab bar's own padding in ShellLive. --%>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="csrf-token" content={get_csrf_token()} />
+    <%!-- Installed web app (issue #1464). The manifest is what tells iOS which
+    links belong to the app: anything outside its `scope` opens in an in-app
+    Safari overlay on top of the app, and with no manifest at all that is what
+    a member got for ordinary navigation. The two `*-capable` metas are the
+    pre-manifest spelling of the same wish, kept for iOS before 17.4 and for
+    Chrome's legacy path; a browser that reads the manifest ignores them. --%>
+    <link rel="manifest" href={~p"/site.webmanifest"} />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <%!-- Site icons. iMessage's LinkPresentation renders the page and then looks for
     an icon; when every candidate 404s it drops the rich link preview and shows the
     bare URL, so these files must exist (test/vutuv_web/site_icons_test.exs). --%>

@@ -2712,9 +2712,16 @@ html.lightbox-open { overflow: hidden; }
 .lightbox__nav:hover { color: #fff; background: rgb(51 65 85 / 0.9); }
 .lightbox__close:focus-visible,
 .lightbox__nav:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+/* The controls take the larger of their own offset and whatever the device
+   reserves on that edge (issue #1464): this is the one surface that covers the
+   whole screen, and under `viewport-fit=cover` the screen includes the sensor
+   housing and the home indicator. Absolute offsets are measured from the
+   padding box, so the overlay's own padding does not move these — each control
+   carries its inset itself. Every `max()` is exactly the old value wherever
+   the device reports no inset, which is most of them. */
 .lightbox__close {
-  top: 0.75rem;
-  right: 0.75rem;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
   width: 2.5rem;
   height: 2.5rem;
   font-size: 1.5rem;
@@ -2729,13 +2736,14 @@ html.lightbox-open { overflow: hidden; }
   transform: translateY(-50%);
 }
 .lightbox__nav[hidden] { display: none; }
-.lightbox__nav--prev { left: 0.75rem; }
-.lightbox__nav--next { right: 0.75rem; }
+.lightbox__nav--prev { left: max(0.75rem, env(safe-area-inset-left)); }
+.lightbox__nav--next { right: max(0.75rem, env(safe-area-inset-right)); }
 
 /* On a phone the arrows would sit on top of the picture, so they move to the
-   bottom corners where a thumb reaches them anyway. */
+   bottom corners where a thumb reaches them anyway — above the home
+   indicator, whose strip belongs to the system's own swipe. */
 @media (width < 40rem) {
-  .lightbox__nav { top: auto; bottom: 1rem; transform: none; }
+  .lightbox__nav { top: auto; bottom: max(1rem, env(safe-area-inset-bottom)); transform: none; }
   .lightbox__image { max-height: calc(100vh - 12rem); }
 }
 

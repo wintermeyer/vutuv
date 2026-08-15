@@ -14,7 +14,7 @@ LiveViews fall through to `@socket`. --%>
 pages `phx-click="lv:clear-flash"` also clears the server-side flash. --%>
 <div
   id="toast-tray"
-  class="pointer-events-none fixed right-4 top-20 z-50 flex w-80 max-w-[90vw] flex-col gap-2"
+  class="pointer-events-none fixed right-[max(1rem,env(safe-area-inset-right))] top-20 z-50 flex w-80 max-w-[90vw] flex-col gap-2"
   aria-live="polite"
 >
   <%= if msg = Phoenix.Flash.get(@flash, :info) do %>
@@ -58,20 +58,31 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
   <.ad_banner banner={Vutuv.Ads.current_banner()} />
 <% end %>
 
-<%!-- pb-24 clears the fixed mobile tab bar on normal pages. The full-screen
-chat (/messages, marked data-chat-fullscreen) sizes itself exactly to the
-viewport, so on phones it drops that padding to avoid a dead scroll below the
-thread. A utility variant is required (not a components.css rule) so it beats
-the base pb-24 utility. --%>
-<main class="mx-auto min-h-[60vh] max-w-6xl px-4 pb-24 has-[[data-chat-fullscreen]]:max-md:pb-0 md:pb-10">
+<%!-- The bottom padding clears the fixed mobile tab bar on normal pages: the
+bar's own 4rem plus 2rem of air, plus the home-indicator strip the bar grew by
+under `viewport-fit=cover` (issue #1464) — the three numbers have to be read
+together with the bar's height in ShellLive. The full-screen chat (/messages,
+marked data-chat-fullscreen) sizes itself exactly to the viewport, so on phones
+it drops that padding to avoid a dead scroll below the thread. A utility
+variant is required (not a components.css rule) so it beats the base padding
+utility. --%>
+<main class={[
+  "mx-auto min-h-[60vh] max-w-6xl pb-[calc(6rem+env(safe-area-inset-bottom))]",
+  "has-[[data-chat-fullscreen]]:max-md:pb-0 md:pb-10",
+  gutter_class()
+]}>
   {@inner_content}
 </main>
 
-<%!-- Centered, two-tier footer that shows on every screen. The extra `pb-24`
-on mobile clears the fixed bottom tab bar (`ShellLive`, h-16); `md:pb-8` drops
-it on desktop where that bar is hidden. Links wrap into a centered row. --%>
-<footer class="border-t border-slate-200 pt-8 pb-24 md:pb-8 dark:border-slate-800">
-  <div class="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center text-xs text-slate-600 dark:text-slate-400">
+<%!-- Centered, two-tier footer that shows on every screen. The extra bottom
+padding on mobile clears the fixed bottom tab bar (`ShellLive`: 4rem plus the
+home-indicator inset); `md:pb-8` drops it on desktop where that bar is hidden.
+Links wrap into a centered row. --%>
+<footer class="border-t border-slate-200 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8 dark:border-slate-800">
+  <div class={[
+    "mx-auto flex max-w-6xl flex-col items-center gap-3 text-center text-xs text-slate-600 dark:text-slate-400",
+    gutter_class()
+  ]}>
     <%!-- Links separated by middots to match the credit line below; the dots are
           decorative (aria-hidden) and the tighter gap-x-2 sits ~8px either side
           of each dot. --%>

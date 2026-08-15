@@ -656,7 +656,11 @@ config :vutuv, :operator_address, "Johannes-Müller-Str. 10 - 56068 Koblenz - Ge
 # layer (`Vutuv.NodeInfo`, the /.well-known/nodeinfo document). FediDB,
 # the-federation.info and Fediverse Observer print these two strings beside the
 # entry, so they are the installation's own words, not vutuv's — one language,
-# since NodeInfo has no locale negotiation. (NODE_NAME / NODE_DESCRIPTION)
+# since NodeInfo has no locale negotiation. The name is also what a phone puts
+# under the icon once somebody installs the site (the web app manifest at
+# /site.webmanifest): the same question, "what is this installation called",
+# and an operator should not have to answer it twice.
+# (NODE_NAME / NODE_DESCRIPTION)
 config :vutuv, :node_name, "vutuv"
 
 # Keep it to a sentence or two: real entries run 10-20 words (mastodon.social

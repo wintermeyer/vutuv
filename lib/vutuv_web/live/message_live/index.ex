@@ -611,13 +611,15 @@ defmodule VutuvWeb.MessageLive.Index do
     ~H"""
     <%!-- Full-screen chat on phones: the thread fills the whole viewport between
     the sticky top bar (h-16) and the mobile bottom tab bar (h-16), so 100dvh-8rem
-    (dvh, not vh, tracks the shrinking mobile viewport). data-chat-fullscreen lets
+    (dvh, not vh, tracks the shrinking mobile viewport) — minus the home-indicator
+    strip the tab bar grew by under `viewport-fit=cover`, or the composer ends up
+    behind the bar (issue #1464). data-chat-fullscreen lets
     components.css hide the site footer here (it would otherwise add a second
     scroll below the thread). Desktop keeps the two-panel 100vh-7rem layout. --%>
     <div
       id="messages"
       data-chat-fullscreen
-      class="flex h-[calc(100dvh-8rem)] gap-4 py-2 md:h-[calc(100vh-7rem)] md:py-6"
+      class="flex h-[calc(100dvh-8rem-env(safe-area-inset-bottom))] gap-4 py-2 md:h-[calc(100vh-7rem)] md:py-6"
     >
       <h1 class="sr-only">{gettext("Messages")}</h1>
       <%!-- Conversation list. Full-width on mobile while no thread is open;

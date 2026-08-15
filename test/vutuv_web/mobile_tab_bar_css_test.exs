@@ -24,11 +24,17 @@ defmodule VutuvWeb.MobileTabBarCssTest do
   # could fill the screen; a viewport min-height on `body` does that without a
   # global height on the document element.
   #
+  # The safe-area tests below come from the second report about this same bar
+  # (issue #1464, the installed web app): once the page paints edge to edge,
+  # the bar has to hand the home indicator's strip back to the system and keep
+  # its outer tabs off the screen edges.
+  #
   # Static source checks in the spirit of `mobile_overflow_test.exs` and
   # `dark_mode_css_test.exs`.
 
   @shell Path.expand("../../lib/vutuv_web/live/shell_live.ex", __DIR__)
   @components_css Path.expand("../../assets/css/components.css", __DIR__)
+  @layout Path.expand("../../lib/vutuv_web/templates/layout/app.html.heex", __DIR__)
 
   # Comments name selectors and properties; strip them so the assertions only
   # ever see real rules.
@@ -48,6 +54,16 @@ defmodule VutuvWeb.MobileTabBarCssTest do
         That is the mobile bottom tab bar; if it moved, move this test with it.
         """)
     end
+  end
+
+  # The whole `class={[...]}` list the bar is rendered with, tab_bar_classes/0
+  # being only its first string. The safe-area utilities live in the strings
+  # after it.
+  defp tab_bar_class_list do
+    [_, list] =
+      Regex.run(~r/class=\{\[\s*"fixed inset-x-0 bottom-0(.*?)\]\}/s, File.read!(@shell))
+
+    list
   end
 
   test "the phone tab bar is opaque (no blurred, translucent fixed layer)" do
@@ -71,6 +87,44 @@ defmodule VutuvWeb.MobileTabBarCssTest do
 
     assert classes =~ "dark:bg-slate-900",
            "the mobile tab bar still needs its dark background"
+  end
+
+  # Issue #1464: on a phone with a home indicator the bottom strip of the
+  # screen is the system's, not ours. The bar therefore grows by that inset and
+  # pads the same amount away, so its tabs keep their full 4rem above it — and
+  # whatever reserves room for the bar has to reserve the grown height, or the
+  # page scrolls underneath it. The horizontal padding is the other half of the
+  # report: the outer two tabs sat hard against the screen edges, which in
+  # landscape is where the sensor housing is.
+  test "the phone tab bar reserves the home indicator's strip" do
+    classes = tab_bar_class_list()
+
+    assert classes =~ "h-[calc(4rem+env(safe-area-inset-bottom))]",
+           "the bar must grow by the bottom inset, or its labels sit in the indicator's strip"
+
+    assert classes =~ "pb-[env(safe-area-inset-bottom)]",
+           "the bar must pad that inset away again, or the tabs lose 4rem of height to it"
+
+    refute classes =~ ~r/\bh-16\b/,
+           "a fixed `h-16` would fight the grown height (both set height, utilities tie)"
+  end
+
+  test "the outer tabs keep clear of the screen edges" do
+    classes = tab_bar_class_list()
+
+    assert classes =~ "pl-[max(0.75rem,env(safe-area-inset-left))]"
+    assert classes =~ "pr-[max(0.75rem,env(safe-area-inset-right))]"
+  end
+
+  test "the page reserves the bar's grown height below its content" do
+    layout = File.read!(@layout)
+
+    assert layout =~ "pb-[calc(6rem+env(safe-area-inset-bottom))]",
+           """
+           <main> and the footer clear the tab bar by its own height plus air.
+           When the bar grew by the home-indicator inset, that padding had to
+           grow with it, or the last card sits behind the bar.
+           """
   end
 
   test "the document element carries no global height, and body fills the viewport" do

@@ -53,6 +53,24 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The horizontal page gutter, widened to clear a display cutout (issue #1464).
+
+  The installed web app declares `viewport-fit=cover`, so the page paints edge
+  to edge and a landscape phone lays its sensor housing over one side of it —
+  about 47px on the notched iPhones. Where a container holds the page's own
+  1rem gutter, it takes the larger of the two instead, which is exactly 1rem
+  on every device that reports no inset (portrait, desktop, anything without a
+  cutout).
+
+  Used by the containers that carry the reading width: the top bar's inner
+  track, `<main>` and the footer's content column. A container that is already
+  inside one of those needs nothing — the insets do not stack.
+  """
+  def gutter_class do
+    "pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
+  end
+
+  @doc """
   Shared input class for hand-written (kit-page) form fields — the Direction A
   input recipe (full width, rounded, slate border, brand focus ring, dark-aware).
   The single source for the post composer, the auth pages and any green-field

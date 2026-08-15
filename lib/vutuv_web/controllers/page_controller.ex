@@ -97,9 +97,69 @@ defmodule VutuvWeb.PageController do
     |> send_resp(200, VutuvWeb.RobotsTxt.render(VutuvWeb.ContentPolicy.policy()))
   end
 
-  # robots.txt and llms.txt answer every visitor with the same bytes and carry
-  # nothing personal, so they are `public` cacheable like /sitemap.xml and
-  # /.well-known/security.txt beside them in the router (an hour, short enough
+  @doc """
+  The web app manifest (issue #1464): what this site is once somebody installs
+  it on a phone's Home Screen or launcher.
+
+  The load-bearing key is `scope`. iOS decides from it which links stay inside
+  the installed app — "links outside the scope will open in Safari View
+  Controller" (Apple, WWDC23) — and shipping no manifest at all is what put
+  that overlay browser on top of the app for the member who reported #1464.
+  `"/"` claims the whole site, so every in-app link stays in the app and only
+  a genuinely foreign URL leaves it.
+
+  It is generated rather than served as a static file for the same reason
+  robots.txt is (`priv/static` is gitignored), and because the name on
+  somebody's Home Screen belongs to the installation, not to us: it is the
+  `:node_name` this installation already introduces itself with elsewhere.
+
+  The icons are rendered from `priv/static/favicon.svg`
+  (`rsvg-convert -w 512 -h 512 priv/static/favicon.svg -o …`). The maskable
+  one is the same artwork with the glyph scaled to 75% about the centre, so
+  Android's launcher shape can crop it to a circle without cutting the "v" —
+  without a maskable icon the whole square is shrunk inside the shape instead,
+  which reads as a sticker rather than an app icon.
+  """
+  def webmanifest(conn, _params) do
+    conn
+    |> discovery_cache_headers()
+    |> put_resp_content_type("application/manifest+json")
+    |> send_resp(200, Jason.encode!(web_app_manifest()))
+  end
+
+  defp web_app_manifest do
+    name = Application.fetch_env!(:vutuv, :node_name)
+
+    %{
+      id: "/",
+      name: name,
+      short_name: name,
+      start_url: "/",
+      scope: "/",
+      display: "standalone",
+      # The splash screen behind the app while it starts, and the launcher
+      # background: the page canvas (slate-50) and the light theme-color the
+      # document already ships, so the start does not flash a colour the app
+      # never shows.
+      background_color: "#f8fafc",
+      theme_color: "#ffffff",
+      icons: [
+        %{src: "/images/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any"},
+        %{src: "/images/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any"},
+        %{
+          src: "/images/icon-maskable-512.png",
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable"
+        }
+      ]
+    }
+  end
+
+  # robots.txt, llms.txt and the manifest answer every visitor with the same
+  # bytes and carry nothing personal, so they are `public` cacheable like
+  # /sitemap.xml and /.well-known/security.txt beside them in the router (an
+  # hour, short enough
   # that flipping :ai_crawler_policy reaches crawlers promptly; Googlebot keeps
   # its own robots.txt copy for up to 24h regardless).
   #

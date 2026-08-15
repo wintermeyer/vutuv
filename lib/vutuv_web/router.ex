@@ -165,6 +165,11 @@ defmodule VutuvWeb.Router do
     # The agent-format discovery file (llms.txt convention): documents the
     # .md/.txt/.json/.vcf URL scheme; see VutuvWeb.AgentDocs.
     get("/llms.txt", PageController, :llms)
+    # The web app manifest (issue #1464): what the site is once it is installed
+    # on a Home Screen. It sits at the root, like robots.txt and llms.txt and
+    # unlike the NodeInfo documents under /system/, because a handle is
+    # `^[a-z0-9_]+$` and can therefore never claim a word with a dot in it.
+    get("/site.webmanifest", PageController, :webmanifest)
     # Sitemap index + chunked children (see Vutuv.Sitemap for the queries).
     get("/sitemap.xml", SitemapController, :index)
     get("/sitemaps/:name", SitemapController, :show)

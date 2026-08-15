@@ -543,11 +543,16 @@ defmodule VutuvWeb.MessageLiveTest do
       {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 
       # On phones the thread fills the whole viewport between the sticky top bar
-      # and the bottom tab bar (100dvh-8rem), with the composer sitting in-flow
-      # at the bottom — nothing extra pinned. The data-chat-fullscreen marker
+      # and the bottom tab bar (100dvh-8rem), minus the home-indicator strip the
+      # tab bar grew by under `viewport-fit=cover` (issue #1464) — or the
+      # composer ends up behind the bar. The composer sits in-flow at the bottom,
+      # nothing extra pinned. The data-chat-fullscreen marker
       # drives the components.css rule that hides the site footer on mobile so it
       # does not add a second scroll below the thread.
-      assert has_element?(view, "#messages[data-chat-fullscreen].h-\\[calc\\(100dvh-8rem\\)\\]")
+      assert has_element?(
+               view,
+               "#messages[data-chat-fullscreen].h-\\[calc\\(100dvh-8rem-env\\(safe-area-inset-bottom\\)\\)\\]"
+             )
 
       # The composer is an ordinary bottom-of-flow form, not a separately fixed
       # dock (that approach was dropped) — the thread just scrolls above it.
