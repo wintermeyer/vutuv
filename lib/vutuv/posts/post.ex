@@ -124,5 +124,9 @@ defmodule Vutuv.Posts.Post do
     # A body may only mention handles that exist, so nobody can seed `@wanted`
     # into a post to reserve it (the anti-hijack partner of handle availability).
     |> Mentions.validate_mentions_exist()
+    # ... and it may only name a handful of them: every mention notifies the
+    # member it names, so a long list of handles under an advert is spam
+    # delivered through the notification feed.
+    |> Mentions.validate_mention_limit()
   end
 end

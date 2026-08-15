@@ -228,12 +228,12 @@ msgstr ""
 msgid "\"%{tag}\" is only punctuation, not a tag."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:124
+#: lib/vutuv_web/views/error_helpers.ex:129
 #, elixir-autogen, elixir-format
 msgid "\"%{uri}\" is not a valid https account address."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:123
+#: lib/vutuv_web/views/error_helpers.ex:128
 #, elixir-autogen, elixir-format
 msgid "Please list at most %{max} accounts."
 msgstr ""
@@ -248,7 +248,12 @@ msgstr ""
 msgid "Please use at most %{max} tags."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:126
+#: lib/vutuv_web/views/error_helpers.ex:131
 #, elixir-autogen, elixir-format
 msgid "Enter your Signal link, it starts with https://signal.me/#"
+msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:123
+#, elixir-autogen, elixir-format
+msgid "We allow at most %{max} accounts per post. Please remove some mentions."
 msgstr ""

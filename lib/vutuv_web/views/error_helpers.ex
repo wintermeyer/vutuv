@@ -119,6 +119,11 @@ defmodule VutuvWeb.ErrorHelpers do
       dgettext_noop("errors", "\"%{tag}\" is only punctuation, not a tag."),
       # Vutuv.Posts, the post tag cap (issue #1237).
       dgettext_noop("errors", "Please use at most %{max} tags."),
+      # Vutuv.Mentions, the per-post mention cap (anti-spam).
+      dgettext_noop(
+        "errors",
+        "We allow at most %{max} accounts per post. Please remove some mentions."
+      ),
       # Vutuv.Accounts.User, the Fediverse aliases (issue #986, alsoKnownAs).
       dgettext_noop("errors", "Please list at most %{max} accounts."),
       dgettext_noop("errors", "\"%{uri}\" is not a valid https account address."),

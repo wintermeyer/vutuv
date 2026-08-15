@@ -19,6 +19,10 @@ defmodule Vutuv.Mentions do
       `@wanted` into a post to *reserve* it: the availability rule below then
       treats `@wanted` as "used in content" and blocks everyone from claiming
       it. Requiring the mention target to exist closes that reservation attack.
+      A post may also name at most `max_post_mentions/0` accounts
+      (`validate_mention_limit/2`), because every one of them is a
+      notification: an advert followed by a list of handles is spam delivered
+      through our own notification feed.
     * **Propagation** — when a member renames, every stored `@old` is rewritten
       to `@new` across all mention surfaces (`rewrite_everywhere/3`), and the
       new handle is only claimable when it is used in no content
@@ -89,8 +93,19 @@ defmodule Vutuv.Mentions do
     {Ad, :content}
   ]
 
+  # How many distinct local accounts one post may name. Each mention is a
+  # notification the named member never asked for, so a post that lists dozens
+  # of handles is not a conversation, it is a broadcast — the shape spam takes
+  # here (an advert, then a column of `@handle`s). Five is enough for anyone
+  # actually talking to a group and small enough that the list is worthless as
+  # a mailing tool.
+  @max_post_mentions 5
+
   @doc "The canonical entity regex, so the renderer shares this module's grammar."
   def entity_regex, do: @entity
+
+  @doc "How many distinct local accounts one post may mention."
+  def max_post_mentions, do: @max_post_mentions
 
   @doc "The `{schema, field}` mention surfaces scanned and rewritten by this module."
   def surfaces, do: @surfaces
@@ -299,6 +314,49 @@ defmodule Vutuv.Mentions do
         changeset
     end
   end
+
+  ## Mention limit (anti-spam) ---------------------------------------------
+
+  @doc """
+  Rejects a changeset whose Markdown `field` names more than
+  `max_post_mentions/0` distinct local accounts.
+
+  Being mentioned sends a notification, so a post that advertises something and
+  then lists twenty handles reaches those members whether they follow the author
+  or not — spam carried by our own notification feed. Counted after the dedupe
+  (`local_handles/1`), so naming the same person five times is one account, and
+  runs only when `field` actually changed, like the existence check beside it:
+  editing an old body is not blocked by a cap that did not exist when it was
+  written, unless the body itself is touched.
+
+  Fediverse `@user@host` handles do not count — nobody here is notified by one —
+  and neither do handles inside code spans, for the same reason the renderer
+  does not link them.
+  """
+  def validate_mention_limit(changeset, field \\ :body) do
+    case Changeset.get_change(changeset, field) do
+      text when is_binary(text) ->
+        check_mention_limit(changeset, field, local_handles(text))
+
+      _ ->
+        changeset
+    end
+  end
+
+  defp check_mention_limit(changeset, field, handles) when length(handles) > @max_post_mentions do
+    # A self-contained sentence that states the rule and what to do about it,
+    # like its existence-check twin. Keep it byte-identical to its extraction
+    # anchor in `VutuvWeb.ErrorHelpers` — gettext cannot see a literal inside
+    # `add_error/4`, and without the anchor the German copy never ships.
+    Changeset.add_error(
+      changeset,
+      field,
+      "We allow at most %{max} accounts per post. Please remove some mentions.",
+      max: @max_post_mentions
+    )
+  end
+
+  defp check_mention_limit(changeset, _field, _handles), do: changeset
 
   @doc """
   Rejects a changeset whose handle `field` is already mentioned in a public

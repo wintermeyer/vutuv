@@ -105,6 +105,26 @@ Only **members** are resolved. Organizations hold handles in the same namespace
 and the renderer links them, but they have no notification feed, so `@acme_gmbh`
 records nothing.
 
+## The per-post cap (anti-spam)
+
+A post may name at most **`Mentions.max_post_mentions/0`** (5) distinct local
+accounts — `Mentions.validate_mention_limit/2`, run from `Post.changeset/2`
+only. Being mentioned is a notification (below), so a post that advertises
+something and then lists twenty handles reaches all twenty whether they follow
+the author or not: spam delivered through our own notification feed. The
+changeset refuses it with a sentence naming the rule ("We allow at most 5
+accounts per post. Please remove some mentions."), which the composer surfaces
+like any other body error.
+
+- Counted **after the dedupe**, so naming one person five times is one account.
+- Fediverse `@user@host` handles and handles in code spans don't count —
+  nothing here is notified by either.
+- Like the existence check it runs only when the body **changed**, so an old
+  post is not held hostage by a cap that did not exist when it was written, and
+  a rename rewrite (which bypasses changesets) never trips it.
+- Posts only. A DM already goes to one recipient, and the other mention
+  surfaces (headline, descriptions, ads) notify nobody.
+
 ## Availability (anti-hijack)
 
 A handle is only claimable if `Mentions.mentioned_in_posts?/1` is false — it is
@@ -167,6 +187,7 @@ posts (the newest five, plus an "and N more" count).
 - `lib/vutuv_web/live/notification_live/index.ex` — the `mention` and
   `handle_change` renderings.
 - `test/vutuv/mentions_test.exs`, `mention_existence_test.exs`,
+  `mention_limit_test.exs`,
   `mention_notifications_test.exs`, `handle_availability_test.exs`,
   `accounts/handle_change_propagation_test.exs`,
   `vutuv_web/live/handle_change_notification_test.exs`.
