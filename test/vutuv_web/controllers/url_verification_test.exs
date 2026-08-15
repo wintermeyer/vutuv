@@ -64,15 +64,61 @@ defmodule VutuvWeb.UrlVerificationTest do
       assert Repo.get!(Url, url.id).verified_at
     end
 
-    test "redirects back with an error when the proof is missing", %{conn: conn} do
+    test "re-renders the page with a report of what it saw when the proof is missing", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
       url = insert(:url, user: user, value: "https://alice.example/")
-      stub_body("<p>nothing here</p>")
+      stub_body(~s(<a rel="me" href="https://github.com/alice">gh</a>))
 
-      conn = post(conn, ~p"/settings/links/#{url}/verify", %{"method" => "rel_me"})
+      html =
+        conn
+        |> post(~p"/settings/links/#{url}/verify", %{"method" => "rel_me"})
+        |> html_response(200)
 
-      assert redirected_to(conn) == ~p"/settings/links/#{url}/verify"
+      # The report replaces the old flat "could not find it yet, try again"
+      # (issue #1466), and it hangs under the button that produced it.
+      assert html =~ ~s(id="verify-report-rel_me")
+      assert html =~ "https://github.com/alice"
+      refute html =~ ~s(id="verify-report-dns")
       refute Repo.get!(Url, url.id).verified_at
+    end
+
+    test "the dns report names the queried names and the records found there", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      url = insert(:url, user: user, value: "https://alice.example/")
+
+      Application.put_env(:vutuv, :user_links_dns_resolver, fn _host -> [[~c"v=spf1 -all"]] end)
+      on_exit(fn -> Application.delete_env(:vutuv, :user_links_dns_resolver) end)
+
+      html =
+        conn
+        |> post(~p"/settings/links/#{url}/verify", %{"method" => "dns"})
+        |> html_response(200)
+
+      assert html =~ ~s(id="verify-report-dns")
+      assert html =~ "_vutuv.alice.example"
+      assert html =~ "v=spf1 -all"
+      refute html =~ ~s(id="verify-report-rel_me")
+    end
+
+    test "the report reads in German for a German visitor", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      url = insert(:url, user: user, value: "https://alice.example/")
+      stub_body("<p>nichts hier</p>")
+
+      # The new report strings came in through `gettext.extract --merge`, which
+      # fuzzy-fills a brand-new msgid with the translation of whatever it looks
+      # similar to — so assert the German by name, not just that the page renders.
+      html =
+        conn
+        |> Phoenix.ConnTest.recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> post(~p"/settings/links/#{url}/verify", %{"method" => "rel_me"})
+        |> html_response(200)
+
+      assert html =~ "Wir haben Ihre Seite geladen"
+      assert html =~ "Ihre Seite hat noch gar keinen rel="
     end
 
     test "cannot verify another member's link", %{conn: conn} do
@@ -115,8 +161,12 @@ defmodule VutuvWeb.UrlVerificationTest do
       html = conn |> get(~p"/settings/links/#{url}/verify") |> html_response(200)
       assert html =~ "disabled on this installation"
 
-      conn = post(conn, ~p"/settings/links/#{url}/verify", %{"method" => "rel_me"})
-      assert redirected_to(conn) == ~p"/settings/links/#{url}/verify"
+      html =
+        conn
+        |> post(~p"/settings/links/#{url}/verify", %{"method" => "rel_me"})
+        |> html_response(200)
+
+      assert html =~ "disabled on this installation"
       refute Repo.get!(Url, url.id).verified_at
     end
   end

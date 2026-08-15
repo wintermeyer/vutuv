@@ -84,32 +84,61 @@ defmodule Vutuv.Profiles.LinkVerification do
   def well_known_content(%Url{verification_token: token}), do: token
 
   @doc """
-  Verifies that `url` is `user`'s webpage via `method`. On success stamps the
-  method and timestamps and returns `{:ok, url}`. Returns `{:error, :not_found}`
-  when the proof is not present (yet) and `{:error, :disabled}` when link
-  verification is off on this installation.
+  Verifies that `url` is `user`'s webpage via `method` and **says what it saw**
+  (issue #1466). On success stamps the method and timestamps and returns
+  `{:ok, url}`; otherwise `{:error, report}` naming what was queried, what was
+  wanted and what was actually there.
+
+  A flat "we could not find the proof yet, please try again" leaves a member
+  re-reading their own zone file or page source with nothing to compare against,
+  which is what #1466 described doing for the organization half of this. The
+  report is the same shape the organization verification panel shows
+  (`Vutuv.Organizations.check_domain/2`), plus `disabled?` for the one case that
+  is not about the page at all: link verification is off on this installation.
+
+  It deliberately does **not** stamp `last_checked_at`. That column drives the
+  weekly re-check sweeper's schedule, so writing it here would let a member push
+  their own link's re-check out by pressing a button.
   """
-  def verify(%Url{} = url, %User{} = user, method) when method in ~w(rel_me dns well_known) do
-    cond do
-      not enabled?() -> {:error, :disabled}
-      proof_present?(url, user, method) -> mark_verified(url, method)
-      true -> {:error, :not_found}
+  def check(%Url{} = url, %User{} = user, method) when method in ~w(rel_me dns well_known) do
+    if enabled?() do
+      # Minting the token here is what keeps the report renderable: without one
+      # the two domain methods fall through to `run_check/3`'s last clause,
+      # whose report carries none of the fields the panel prints. That is a
+      # KeyError in the view rather than a message, so the shape is guaranteed
+      # at the door instead of guarded at every reader.
+      url = ensure_token(url)
+
+      case run_check(url, user, method) do
+        {:ok, _report} -> mark_verified(url, method)
+        {:error, report} -> {:error, Map.put(report, :disabled?, false)}
+      end
+    else
+      {:error, %{method: method, disabled?: true}}
     end
   end
 
-  defp proof_present?(%Url{} = url, %User{} = user, "rel_me"),
-    do: WebVerification.rel_me_verified?(url.value, profile_urls(user), req_options())
+  # The single proof dispatch: `check/3` shows the report, `recheck/1` only needs
+  # the verdict. Deriving the boolean from the report rather than calling the
+  # `*_verified?` twins keeps the two from ever disagreeing about the same page.
+  defp run_check(%Url{} = url, %User{} = user, "rel_me"),
+    do: WebVerification.rel_me_check(url.value, profile_urls(user), req_options())
 
-  defp proof_present?(%Url{verification_token: token, value: value}, _user, "dns")
+  defp run_check(%Url{verification_token: token, value: value}, _user, "dns")
        when is_binary(token),
-       do: WebVerification.dns_verified?(host(value), @dns_prefix, token, dns_resolver())
+       do: WebVerification.dns_check(host(value), @dns_prefix, token, dns_resolver())
 
-  defp proof_present?(%Url{verification_token: token, value: value}, _user, "well_known")
+  defp run_check(%Url{verification_token: token, value: value}, _user, "well_known")
        when is_binary(token),
-       do:
-         WebVerification.well_known_verified?(host(value), @well_known_path, token, req_options())
+       do: WebVerification.well_known_check(host(value), @well_known_path, token, req_options())
 
-  defp proof_present?(_url, _user, _method), do: false
+  # A link with no token yet cannot carry a DNS / well-known proof at all. Only
+  # `proof_present?/2` can reach this — `check/3` mints the token first — so the
+  # verdict is all this has to answer; it is never rendered.
+  defp run_check(_url, _user, method), do: {:error, %{method: method, found: nil}}
+
+  defp proof_present?(%Url{} = url, %User{} = user, method),
+    do: match?({:ok, _report}, run_check(url, user, method))
 
   defp mark_verified(%Url{} = url, method) do
     now = now()

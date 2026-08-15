@@ -873,6 +873,22 @@ Three methods, the member's choice on the owner-only page at
   (the `_dmarc` / `_acme-challenge` convention, RFC 8552, never a CNAME target)
   gives such a member a place to publish it (issue #947).
 
+`LinkVerification.check/3` is the single entry point, and like its organization
+twin it **says what it saw** when the proof is not there (issue #1466):
+`{:error, report}` naming what was queried, what was wanted and what was
+actually published, rendered by the shared `VerificationComponents.check_report/1`
+under the very button that produced it. The DNS half reads the zone's own name
+servers (`Vutuv.Dns`, so a cached negative answer cannot hold up a record that
+is already correct) — the same lookup organizations use, through the same
+resolver seam. The rel=me report lists the `rel="me"` links the page *does*
+carry, which is usually the whole diagnosis: a page that already points at a
+GitHub or Mastodon profile and simply does not name this one yet. A failed check
+therefore **renders** the verification page instead of redirecting to it (a
+flash cannot carry a report), and deliberately does not touch `last_checked_at`
+— that column drives the weekly re-check schedule, so a hand check must not be
+able to push it out. Unlike a pending organization domain there is no background
+retry for an unverified link, so the page promises none.
+
 State lives on the `urls` row (`verification_method`, `verification_token`,
 `verified_at`, `last_checked_at`, `grace_deadline_at`) — per-link and independent,
 with **no** uniqueness constraint (unlike organization domains: two members may each

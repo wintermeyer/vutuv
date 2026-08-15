@@ -155,7 +155,7 @@ defmodule Vutuv.OrganizationsTest do
     end
   end
 
-  describe "verify_dns/2" do
+  describe "check_domain/2 via dns" do
     setup [:enable_verification]
 
     test "activates the organization and alerts the operator when the TXT record matches" do
@@ -166,7 +166,7 @@ defmodule Vutuv.OrganizationsTest do
 
       stub_dns(domain.verification_token)
 
-      assert {:ok, organization} = Organizations.verify_dns(organization, domain)
+      assert {:ok, organization} = Organizations.check_domain(organization, domain)
       assert organization.status == "active"
       assert organization.verified_at
 
@@ -185,12 +185,13 @@ defmodule Vutuv.OrganizationsTest do
       Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
       on_exit(fn -> Application.delete_env(:vutuv, :organizations_dns_resolver) end)
 
-      assert {:error, :not_found} = Organizations.verify_dns(organization, domain)
+      assert {:error, report} = Organizations.check_domain(organization, domain)
+      assert report.found == []
       assert Repo.get!(Organization, organization.id).status == "pending"
     end
   end
 
-  describe "verify_well_known/2" do
+  describe "check_domain/2 via well_known" do
     setup [:enable_verification]
 
     test "activates the organization when the file serves the token" do
@@ -201,20 +202,21 @@ defmodule Vutuv.OrganizationsTest do
 
       stub_well_known(domain.verification_token <> "\n")
 
-      assert {:ok, organization} = Organizations.verify_well_known(organization, domain)
+      assert {:ok, organization} = Organizations.check_domain(organization, domain)
       assert organization.status == "active"
     end
   end
 
   describe "verification disabled" do
-    test "verify_dns is a no-op when the flag is off" do
+    test "a check is a no-op when the flag is off" do
       user = insert(:activated_user)
 
       {:ok, %{organization: organization, domain: domain}} =
         Organizations.create_pending_organization(user, @valid, "dns")
 
       # flag stays false (test default)
-      assert {:error, :not_found} = Organizations.verify_dns(organization, domain)
+      assert {:error, report} = Organizations.check_domain(organization, domain)
+      assert report.disabled?
     end
   end
 
@@ -228,7 +230,7 @@ defmodule Vutuv.OrganizationsTest do
         Organizations.create_pending_organization(user, @valid, "dns")
 
       stub_dns(domain.verification_token)
-      {:ok, _organization} = Organizations.verify_dns(organization, domain)
+      {:ok, _organization} = Organizations.check_domain(organization, domain)
       domain = Repo.get!(OrganizationDomain, domain.id)
       # Consume the "verified" operator notice so the demote assertion below
       # matches the second message, not this one.
@@ -261,7 +263,7 @@ defmodule Vutuv.OrganizationsTest do
         Organizations.create_pending_organization(user, @valid, "dns")
 
       stub_dns(primary.verification_token)
-      {:ok, _} = Organizations.verify_dns(organization, primary)
+      {:ok, _} = Organizations.check_domain(organization, primary)
       primary = Repo.get!(OrganizationDomain, primary.id)
       assert primary.primary?
 
@@ -269,7 +271,7 @@ defmodule Vutuv.OrganizationsTest do
       # primary later fails.
       {:ok, second} = Organizations.add_domain(organization, "second.example.org", "dns")
       stub_dns(second.verification_token)
-      {:ok, _} = Organizations.verify_dns(organization, second)
+      {:ok, _} = Organizations.check_domain(organization, second)
 
       # The primary's record vanishes; force past grace and re-check it.
       Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
@@ -312,7 +314,7 @@ defmodule Vutuv.OrganizationsTest do
     # then makes the TXT record vanish so the next re-check fails.
     defp break_proof(organization, domain) do
       stub_dns(domain.verification_token)
-      {:ok, _organization} = Organizations.verify_dns(organization, domain)
+      {:ok, _organization} = Organizations.check_domain(organization, domain)
       assert_email_sent(fn email -> assert email.subject =~ "Organisationsseite verifiziert" end)
       Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
       Repo.get!(OrganizationDomain, domain.id)
@@ -433,14 +435,14 @@ defmodule Vutuv.OrganizationsTest do
         Organizations.create_pending_organization(user, @valid, "dns")
 
       stub_dns(primary.verification_token)
-      {:ok, _} = Organizations.verify_dns(organization, primary)
+      {:ok, _} = Organizations.check_domain(organization, primary)
       assert_email_sent(fn email -> assert email.subject =~ "Organisationsseite verifiziert" end)
 
       {:ok, second} = Organizations.add_domain(organization, "second.example.org", "dns")
       stub_dns(second.verification_token)
       # Re-read the page (as the domains LiveView does) so `verified_at` is set
       # and the already-sent "verified" operator notice is not sent a second time.
-      {:ok, _} = Organizations.verify_dns(Repo.get!(Organization, organization.id), second)
+      {:ok, _} = Organizations.check_domain(Repo.get!(Organization, organization.id), second)
 
       Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
 

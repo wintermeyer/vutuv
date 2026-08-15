@@ -28,7 +28,7 @@ defmodule Vutuv.OrganizationsHelpers do
   @doc "The baseline valid organization attrs, merged with `overrides`."
   def valid_organization_attrs(overrides \\ %{}), do: Map.merge(@valid_attrs, overrides)
 
-  @doc "Points the DNS resolver stub at `token`, so `verify_dns/2` succeeds."
+  @doc "Points the DNS resolver stub at `token`, so `check_domain/2` succeeds."
   def stub_dns(token) do
     Application.put_env(:vutuv, :organizations_dns_resolver, fn _host ->
       [[~c"vutuv-organization-verify=#{token}"]]
@@ -50,7 +50,7 @@ defmodule Vutuv.OrganizationsHelpers do
       Organizations.create_pending_organization(owner, valid_organization_attrs(overrides), "dns")
 
     stub_dns(domain.verification_token)
-    {:ok, organization} = Organizations.verify_dns(organization, domain)
+    {:ok, organization} = Organizations.check_domain(organization, domain)
     organization
   end
 end

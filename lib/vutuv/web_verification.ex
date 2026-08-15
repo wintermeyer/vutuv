@@ -191,16 +191,47 @@ defmodule Vutuv.WebVerification do
   """
   def rel_me_verified?(url, expected_urls, req_options)
       when is_binary(url) and is_list(expected_urls) do
+    match?({:ok, _report}, rel_me_check(url, expected_urls, req_options))
+  end
+
+  @doc """
+  The `rel_me` check plus a report of what the fetch actually got: the URL, the
+  HTTP status, the back-link we wanted and **every** `rel="me"` link the page
+  carries.
+
+  Listing the links that are there is the diagnosis. `rel="me"` is a set, not a
+  single value, and the common failure is a page that already points at a
+  GitHub or Mastodon profile and simply does not name this one yet — which
+  reads as "verification is broken" until somebody says what was on the page.
+  """
+  def rel_me_check(url, expected_urls, req_options)
+      when is_binary(url) and is_list(expected_urls) do
     with %URI{host: host} when is_binary(host) <- URI.parse(url),
          {:ok, body} <- fetch(url, host, req_options, @max_html_bytes, "text/html") do
       wanted = MapSet.new(expected_urls, &normalize_url/1)
+      hrefs = rel_me_hrefs(body)
+      report = rel_me_report(url, expected_urls, 200, Enum.map(hrefs, &excerpt/1))
 
-      body
-      |> rel_me_hrefs()
-      |> Enum.any?(&MapSet.member?(wanted, normalize_url(&1)))
+      if Enum.any?(hrefs, &MapSet.member?(wanted, normalize_url(&1))),
+        do: {:ok, report},
+        else: {:error, report}
     else
-      _ -> false
+      {:error, {:status, status}} ->
+        {:error, rel_me_report(url, expected_urls, status, [])}
+
+      _ ->
+        {:error, rel_me_report(url, expected_urls, nil, [])}
     end
+  end
+
+  defp rel_me_report(url, expected_urls, status, found) do
+    %{
+      method: "rel_me",
+      url: url,
+      status: status,
+      expected: expected_urls,
+      found: Enum.uniq(found)
+    }
   end
 
   @tag_regex ~r/<(?:a|link)\b[^>]*>/i

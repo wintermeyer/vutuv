@@ -126,21 +126,18 @@ defmodule VutuvWeb.UrlController do
       |> ControllerHelpers.get_owned!(:urls, id)
       |> LinkVerification.ensure_token()
 
-    render(conn, "verify.html",
-      url: url,
-      enabled?: LinkVerification.enabled?(),
-      profile_url: LinkVerification.profile_urls(conn.assigns[:user]) |> List.first(),
-      host: URI.parse(url.value).host,
-      dns_value: LinkVerification.dns_txt_value(url),
-      dns_challenge_name: LinkVerification.dns_challenge_name(url),
-      well_known_url: LinkVerification.well_known_url(url),
-      well_known_content: LinkVerification.well_known_content(url),
-      page_title: gettext("Verify link")
-    )
+    render_verify(conn, url)
   end
 
   def run_verify(conn, %{"id" => id} = params) do
-    url = ControllerHelpers.get_owned!(conn, :urls, id)
+    # The token is minted by the GET, but a failed check now re-renders the
+    # instructions, which quote it — so mint it here too rather than relying on
+    # whoever posted having loaded the page first.
+    url =
+      conn
+      |> ControllerHelpers.get_owned!(:urls, id)
+      |> LinkVerification.ensure_token()
+
     method = params["method"]
     user = conn.assigns[:user]
 
@@ -152,26 +149,35 @@ defmodule VutuvWeb.UrlController do
   end
 
   defp handle_verify(conn, url, user, method) do
-    case LinkVerification.verify(url, user, method) do
+    case LinkVerification.check(url, user, method) do
       {:ok, _url} ->
         conn
         |> put_flash(:info, gettext("Link verified. It now shows a verified mark."))
         |> redirect(to: ~p"/settings/links")
 
-      {:error, :disabled} ->
-        conn
-        |> put_flash(:error, gettext("Link verification is disabled on this installation."))
-        |> redirect(to: ~p"/settings/links/#{url}/verify")
-
-      {:error, :not_found} ->
-        conn
-        |> put_flash(
-          :error,
-          gettext(
-            "We could not find the proof yet. It can take a while to propagate. Please try again."
-          )
-        )
-        |> redirect(to: ~p"/settings/links/#{url}/verify")
+      # A failed check RENDERS the page rather than redirecting to it (issue
+      # #1466): the report of what we actually read is the answer, and a flash
+      # cannot carry it. The URL is the same either way, since the form posts to
+      # the page it lives on.
+      {:error, report} ->
+        render_verify(conn, url, report)
     end
+  end
+
+  # Every assign the verification page needs, in one place, so the GET and the
+  # failed POST cannot render two different pages.
+  defp render_verify(conn, url, report \\ nil) do
+    render(conn, "verify.html",
+      url: url,
+      enabled?: LinkVerification.enabled?(),
+      profile_url: LinkVerification.profile_urls(conn.assigns[:user]) |> List.first(),
+      host: URI.parse(url.value).host,
+      dns_value: LinkVerification.dns_txt_value(url),
+      dns_challenge_name: LinkVerification.dns_challenge_name(url),
+      well_known_url: LinkVerification.well_known_url(url),
+      well_known_content: LinkVerification.well_known_content(url),
+      check_report: report,
+      page_title: gettext("Verify link")
+    )
   end
 end

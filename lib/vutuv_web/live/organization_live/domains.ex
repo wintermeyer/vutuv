@@ -11,11 +11,12 @@ defmodule VutuvWeb.OrganizationLive.Domains do
 
   use VutuvWeb, :live_view
 
-  import VutuvWeb.OrganizationComponents,
-    only: [manage_header: 1, check_report: 1, check_reassurance: 1]
+  import VutuvWeb.OrganizationComponents, only: [manage_header: 1, check_reassurance: 1]
+  import VutuvWeb.VerificationComponents, only: [check_report: 1]
 
   alias Vutuv.Organizations
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.VerificationComponents
 
   @impl true
   def mount(_params, session, socket) do
@@ -156,9 +157,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
   # The moment the check ran, kept beside its result so each panel can say when
   # it last looked.
   defp put_report(socket, domain_id, report) do
-    stamped =
-      Map.put(report, :checked_at, NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second))
-
+    stamped = VerificationComponents.stamp(report)
     assign(socket, :check_reports, Map.put(socket.assigns.check_reports, domain_id, stamped))
   end
 
@@ -337,7 +336,11 @@ defmodule VutuvWeb.OrganizationLive.Domains do
         {gettext("Verify now")}
       </button>
 
-      <.check_report id={"verify-report-#{@domain.id}"} report={@check_reports[@domain.id]} />
+      <.check_report
+        id={"verify-report-#{@domain.id}"}
+        report={@check_reports[@domain.id]}
+        disabled_text={gettext("Domain verification is disabled on this installation.")}
+      />
       <%!-- Only a domain that was never verified is picked up by the two-minute
       background pass. One in its grace window is on the weekly re-check, so
       promising it a mail "as soon as it works" would be untrue. --%>

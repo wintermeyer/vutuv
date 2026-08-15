@@ -35,35 +35,43 @@ defmodule Vutuv.Profiles.LinkVerificationTest do
     insert(:url, Map.merge(%{user: user, value: "https://alice.example/"}, attrs))
   end
 
-  describe "verify/3 via rel_me" do
+  describe "check/3 via rel_me" do
     test "marks the link verified when the page links back to the profile" do
       user = insert(:activated_user)
       url = link(user)
       stub_body(~s(<a rel="me" href="#{VutuvWeb.Endpoint.url()}/#{user.username}">me</a>))
 
-      assert {:ok, %Url{} = url} = LinkVerification.verify(url, user, "rel_me")
+      assert {:ok, %Url{} = url} = LinkVerification.check(url, user, "rel_me")
       assert Url.verified?(url)
       assert url.verification_method == "rel_me"
       assert url.verified_at
     end
 
-    test "returns :not_found when the back-link is absent" do
+    test "reports what the page actually carries when the back-link is absent" do
       user = insert(:activated_user)
       url = link(user)
-      stub_body("<p>no back-link here</p>")
+      stub_body(~s(<a rel="me" href="https://github.com/alice">gh</a>))
 
-      assert {:error, :not_found} = LinkVerification.verify(url, user, "rel_me")
+      assert {:error, report} = LinkVerification.check(url, user, "rel_me")
       refute Url.verified?(Repo.get!(Url, url.id))
+
+      # The whole point of the report (issue #1466): not "we could not find the
+      # proof yet", but the back-link the page does have beside the one wanted.
+      assert report.method == "rel_me"
+      assert report.status == 200
+      assert report.found == ["https://github.com/alice"]
+      assert report.expected == LinkVerification.profile_urls(user)
+      refute report.disabled?
     end
   end
 
-  describe "verify/3 via dns / well_known" do
+  describe "check/3 via dns / well_known" do
     test "dns marks the link verified when the TXT record is present" do
       user = insert(:activated_user)
       url = link(user) |> LinkVerification.ensure_token()
       stub_dns(url.verification_token)
 
-      assert {:ok, url} = LinkVerification.verify(url, user, "dns")
+      assert {:ok, url} = LinkVerification.check(url, user, "dns")
       assert url.verification_method == "dns"
     end
 
@@ -84,7 +92,7 @@ defmodule Vutuv.Profiles.LinkVerificationTest do
 
       on_exit(fn -> Application.delete_env(:vutuv, :user_links_dns_resolver) end)
 
-      assert {:ok, url} = LinkVerification.verify(url, user, "dns")
+      assert {:ok, url} = LinkVerification.check(url, user, "dns")
       assert url.verification_method == "dns"
     end
 
@@ -93,18 +101,59 @@ defmodule Vutuv.Profiles.LinkVerificationTest do
       url = link(user) |> LinkVerification.ensure_token()
       stub_body(url.verification_token <> "\n")
 
-      assert {:ok, url} = LinkVerification.verify(url, user, "well_known")
+      assert {:ok, url} = LinkVerification.check(url, user, "well_known")
       assert url.verification_method == "well_known"
+    end
+
+    test "the dns report names both queried names and every TXT record it saw" do
+      user = insert(:activated_user)
+      # Deliberately NOT pre-tokened: a report for a link whose token was never
+      # minted must still carry the fields the panel prints, or the page the
+      # report exists for is a KeyError instead.
+      url = link(user)
+      Application.put_env(:vutuv, :user_links_dns_resolver, fn _host -> [[~c"v=spf1 -all"]] end)
+      on_exit(fn -> Application.delete_env(:vutuv, :user_links_dns_resolver) end)
+
+      assert {:error, report} = LinkVerification.check(url, user, "dns")
+      assert report.method == "dns"
+      assert report.names == ["alice.example", "_vutuv.alice.example"]
+      assert report.found == ["v=spf1 -all"]
+
+      # The check minted the token it needed, and the report quotes that one.
+      assert report.expected == LinkVerification.dns_txt_value(Repo.get!(Url, url.id))
+    end
+
+    test "a failed check leaves the link's own check clock alone" do
+      user = insert(:activated_user)
+      # A link that is already verified must not have its weekly re-check pushed
+      # out by a member re-running a method by hand: `last_checked_at` belongs to
+      # the recheck sweeper's schedule, and a hand check is not one of its passes.
+      url =
+        link(user)
+        |> LinkVerification.ensure_token()
+        |> Ecto.Changeset.change(%{
+          verified_at: ~N[2026-01-01 00:00:00],
+          verification_method: "dns",
+          last_checked_at: ~N[2026-01-01 00:00:00]
+        })
+        |> Repo.update!()
+
+      Application.put_env(:vutuv, :user_links_dns_resolver, fn _host -> [] end)
+      on_exit(fn -> Application.delete_env(:vutuv, :user_links_dns_resolver) end)
+
+      assert {:error, _report} = LinkVerification.check(url, user, "dns")
+      assert Repo.get!(Url, url.id).last_checked_at == ~N[2026-01-01 00:00:00]
     end
   end
 
-  describe "verify/3 when disabled" do
-    test "returns :disabled and never touches the network" do
+  describe "check/3 when disabled" do
+    test "says so in the report and never touches the network" do
       Application.put_env(:vutuv, :verify_user_links, false)
       user = insert(:activated_user)
       url = link(user)
 
-      assert {:error, :disabled} = LinkVerification.verify(url, user, "rel_me")
+      assert {:error, report} = LinkVerification.check(url, user, "rel_me")
+      assert report.disabled?
     end
   end
 

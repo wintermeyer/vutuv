@@ -10,7 +10,7 @@ defmodule VutuvWeb.OrganizationComponents do
   use Gettext, backend: VutuvWeb.Gettext
 
   import VutuvWeb.ErrorHelpers
-  import VutuvWeb.UI, only: [input_class: 2, local_time: 1]
+  import VutuvWeb.UI, only: [input_class: 2]
 
   alias Vutuv.Countries
   alias Vutuv.Organizations.Organization
@@ -64,92 +64,6 @@ defmodule VutuvWeb.OrganizationComponents do
     </span>
     """
   end
-
-  attr(:report, :map, default: nil)
-  attr(:id, :string, required: true)
-
-  @doc """
-  What the last domain check actually saw (issue #1466).
-
-  A failed check used to answer with one auto-dismissing toast reading "not
-  found yet, please try again", and a second attempt with the identical message
-  produced no diff at all — so from the second click on, the button looked
-  broken. This block replaces that: it stays on the page until the next attempt
-  replaces it, and it names the value we wanted, where we looked and what was
-  there instead, which is usually the whole diagnosis (a record on the wrong
-  name, a stray quote, a zone that is not the live one).
-
-  Slate rather than red or amber: a proof that has not propagated yet is the
-  ordinary case, not a mistake the member made, and amber belongs to moderation.
-  """
-  def check_report(assigns) do
-    ~H"""
-    <div
-      :if={@report}
-      id={@id}
-      data-check-report
-      role="status"
-      class="mt-3 rounded-lg bg-white p-4 text-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700"
-    >
-      <p class="font-semibold text-slate-900 dark:text-slate-100">
-        {gettext("Not found yet")} &middot;
-        <.local_time at={@report.checked_at} id={"#{@id}-time"} format="%H:%M" />
-      </p>
-
-      <%= cond do %>
-        <% @report[:disabled?] -> %>
-          <p class="mt-2 text-slate-700 dark:text-slate-300">
-            {gettext("Domain verification is disabled on this installation.")}
-          </p>
-        <% @report.method == "dns" -> %>
-          <p class="mt-2 text-slate-700 dark:text-slate-300">
-            {gettext("We asked the name servers of your domain directly, for %{names}, and looked for this value:", names: Enum.join(@report.names, ", "))}
-          </p>
-          <code phx-no-curly-interpolation class={code_class()}><%= @report.expected %></code>
-          <p class="mt-3 text-slate-700 dark:text-slate-300">
-            {gettext("What is published there right now:")}
-          </p>
-          <ul :if={@report.found != []} data-check-found class="mt-1 space-y-1">
-            <li :for={record <- @report.found}>
-              <code phx-no-curly-interpolation class={code_class()}><%= record %></code>
-            </li>
-          </ul>
-          <p
-            :if={@report.found == []}
-            data-check-found
-            class="mt-1 text-slate-600 dark:text-slate-400"
-          >
-            {gettext("No TXT record at all.")}
-          </p>
-        <% true -> %>
-          <p class="mt-2 text-slate-700 dark:text-slate-300">{gettext("We fetched this address:")}</p>
-          <code phx-no-curly-interpolation class={code_class()}><%= @report.url %></code>
-          <p class="mt-3 text-slate-700 dark:text-slate-300" data-check-found>
-            {well_known_outcome(@report)}
-          </p>
-      <% end %>
-    </div>
-    """
-  end
-
-  defp code_class do
-    "mt-1 block overflow-x-auto rounded bg-slate-50 px-3 py-2 font-mono text-xs text-slate-900 dark:bg-slate-800 dark:text-slate-100"
-  end
-
-  # The one sentence saying what came back from the file fetch. `status: nil`
-  # means there was no response at all, which is a different problem from a 404
-  # and has to read as one.
-  defp well_known_outcome(%{status: nil}),
-    do: gettext("We could not reach that address at all.")
-
-  defp well_known_outcome(%{status: 200, found: found}) when is_binary(found) and found != "",
-    do: gettext("It answered, but with something else: %{found}", found: found)
-
-  defp well_known_outcome(%{status: 200}),
-    do: gettext("It answered with an empty file.")
-
-  defp well_known_outcome(%{status: status}),
-    do: gettext("It answered with HTTP status %{status}.", status: status)
 
   attr(:domain, :string, required: true)
 

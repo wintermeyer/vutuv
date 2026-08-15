@@ -15,6 +15,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
   use VutuvWeb, :live_view
 
   import VutuvWeb.OrganizationComponents
+  import VutuvWeb.VerificationComponents, only: [check_report: 1]
   import VutuvWeb.FediverseComponents, only: [follow_us_from_elsewhere: 1]
   import VutuvWeb.JobComponents, only: [job_card: 1]
   import VutuvWeb.PostComponents, only: [post_card: 1]
@@ -30,6 +31,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.UserHelpers
+  alias VutuvWeb.VerificationComponents
 
   @impl true
   def mount(_params, session, socket) do
@@ -300,18 +302,11 @@ defmodule VutuvWeb.OrganizationLive.Show do
            |> put_flash(:info, gettext("Your organization page is verified and now live."))}
 
         {:error, report} ->
-          {:noreply, assign(socket, :check_report, stamp(report))}
+          {:noreply, assign(socket, :check_report, VerificationComponents.stamp(report))}
       end
     else
       {:noreply, socket}
     end
-  end
-
-  # The moment the check ran, kept beside its result so the panel can say when
-  # it last looked — the pending domain's own `last_checked_at` is written by
-  # the same call, but this one belongs to the answer on screen.
-  defp stamp(report) do
-    Map.put(report, :checked_at, NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second))
   end
 
   # Who the follow belongs to: the page being acted as, else the member. A page
@@ -903,7 +898,11 @@ defmodule VutuvWeb.OrganizationLive.Show do
             {gettext("Verify now")}
           </button>
 
-          <.check_report id="verify-domain-report" report={@check_report} />
+          <.check_report
+            id="verify-domain-report"
+            report={@check_report}
+            disabled_text={gettext("Domain verification is disabled on this installation.")}
+          />
           <.check_reassurance
             :if={is_nil(@primary_domain.verified_at)}
             domain={@primary_domain.domain}

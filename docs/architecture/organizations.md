@@ -208,12 +208,22 @@ optimisation, it is the difference between the feature working and not:
   likely to succeed.
 
 The panel reports what the check actually read (`WebVerification.dns_check/4` /
-`well_known_check/4` → `OrganizationComponents.check_report/1`): the names
+`well_known_check/4` → `VerificationComponents.check_report/1`): the names
 queried, the value wanted, and every TXT record found there. A member whose SPF
 record is listed back at them can see in one line that the proof went to the
 wrong name, which "not found yet, please try again" never told them. That block
 is an assign and not a flash on purpose — an identical flash renders no diff, so
 the old toast made every attempt after the first look like a dead button.
+
+`Organizations.check_domain/2` is the **only** way to run a domain's proof. It
+used to have a twin (`verify_domain/2` and its per-method variants) that
+answered a bare `{:error, :not_found}` and stamped nothing; two entry points for
+one question is how the next caller silently gets no report and no
+`last_checked_at`, which the background pass reads to back off. The report
+component is shared with the personal-webpage link proofs (`profiles.md`) — same
+question, same answer, one rendering — and each caller passes its own
+`disabled_text`, since "domain verification" and "link verification" are
+separate installation switches.
 
 ### Who hears about a failing proof
 

@@ -2,6 +2,7 @@ defmodule VutuvWeb.UrlHTML do
   @moduledoc false
   use VutuvWeb, :html
   import VutuvWeb.UserHelpers
+  import VutuvWeb.VerificationComponents, only: [check_report: 1]
 
   # The single render chokepoint for a stored profile-link URL. Defense in
   # depth behind the changeset's scheme check: never emit a non-http(s) href
@@ -43,10 +44,15 @@ defmodule VutuvWeb.UrlHTML do
   attr(:url, :map, required: true)
   attr(:method, :string, required: true)
   attr(:label, :string, required: true)
+  attr(:report, :map, default: nil)
 
   # One proof method's "Verify now" button: a CSRF form POSTing the chosen
   # method to the verify action. Distinct submit id per method so tests and
   # the browser can target it (verify-rel_me / verify-dns / verify-well_known).
+  #
+  # A failed check's report (issue #1466) hangs under the button that produced
+  # it — the component decides its own contents, this only decides whose report
+  # it is, so the answer can never appear under a method nobody pressed.
   def verify_form(assigns) do
     ~H"""
     <.form for={%{}} action={~p"/settings/links/#{@url}/verify"} method="post">
@@ -59,6 +65,11 @@ defmodule VutuvWeb.UrlHTML do
         {@label}
       </button>
     </.form>
+    <.check_report
+      id={"verify-report-#{@method}"}
+      report={if @report[:method] == @method, do: @report}
+      disabled_text={gettext("Link verification is disabled on this installation.")}
+    />
     """
   end
 end

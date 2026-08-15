@@ -1083,39 +1083,10 @@ defmodule Vutuv.Organizations do
   @doc "Whether domain verification (DNS TXT + well-known) is enabled for this install."
   def verification_enabled?, do: Verification.enabled?()
 
-  @doc "Runs the domain's current verification method; on success activates the organization."
-  def verify_domain(%Organization{} = organization, %OrganizationDomain{method: "dns"} = domain),
-    do: verify_dns(organization, domain)
-
-  def verify_domain(
-        %Organization{} = organization,
-        %OrganizationDomain{method: "well_known"} = domain
-      ),
-      do: verify_well_known(organization, domain)
-
   @doc "Switches a pending domain between the DNS and well-known methods (same token)."
   def set_domain_method(%OrganizationDomain{} = domain, method)
       when method in ~w(dns well_known) do
     domain |> Ecto.Changeset.change(method: method) |> Repo.update()
-  end
-
-  @doc "Verifies a DNS domain; on success activates the organization."
-  def verify_dns(%Organization{} = organization, %OrganizationDomain{method: "dns"} = domain),
-    do: do_verify(organization, domain, &Verification.dns_verified?/2)
-
-  @doc "Verifies a well-known-file domain; on success activates the organization."
-  def verify_well_known(
-        %Organization{} = organization,
-        %OrganizationDomain{method: "well_known"} = domain
-      ),
-      do: do_verify(organization, domain, &Verification.well_known_verified?/2)
-
-  defp do_verify(%Organization{} = organization, %OrganizationDomain{} = domain, check) do
-    if verification_enabled?() and check.(domain.domain, domain.verification_token) do
-      activate(organization, domain)
-    else
-      {:error, :not_found}
-    end
   end
 
   @doc """
@@ -1124,9 +1095,11 @@ defmodule Vutuv.Organizations do
   names queried, the value we wanted and the records actually found — the
   difference between "not yet" and "you published it one label too deep".
 
-  It also stamps `last_checked_at` on a failure, which `verify_domain/2` never
-  did, so a pending domain can say when it was last looked at and the background
-  pass can back off from it.
+  This is the **only** way to run a domain's proof. It replaced a second
+  entry point (`verify_domain/2` and its per-method twins) that answered a bare
+  `{:error, :not_found}` and stamped nothing: two functions for one question is
+  how the next caller silently gets no report and no `last_checked_at`, which
+  the background pass reads to back off.
 
   `report.disabled?` marks the one case that is not about the domain at all:
   domain verification is switched off on this installation.

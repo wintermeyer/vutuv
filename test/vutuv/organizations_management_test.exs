@@ -251,7 +251,7 @@ defmodule Vutuv.OrganizationsManagementTest do
       refute second.verified_at
 
       stub_dns(second.verification_token)
-      {:ok, _organization} = Organizations.verify_domain(organization, second)
+      {:ok, _organization} = Organizations.check_domain(organization, second)
       second = Organizations.get_domain(organization, second.id)
       assert second.verified_at
 
@@ -289,7 +289,7 @@ defmodule Vutuv.OrganizationsManagementTest do
 
       {:ok, second} = Organizations.add_domain(organization, "https://acme.de", "dns")
       stub_dns(second.verification_token)
-      {:ok, _} = Organizations.verify_domain(organization, second)
+      {:ok, _} = Organizations.check_domain(organization, second)
 
       # Now the primary can go; the other verified domain becomes primary.
       {:ok, _} = Organizations.remove_domain(organization, primary)

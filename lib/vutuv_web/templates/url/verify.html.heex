@@ -38,7 +38,7 @@ success the link earns the verified mark shown on the profile + section pages. -
     <p class="text-xs text-slate-600 dark:text-slate-400">
       {gettext("The link text can be anything. A hidden <link rel=\"me\"> in the page head works too.")}
     </p>
-    <.verify_form url={@url} method="rel_me" label={gettext("Verify via back-link")} />
+    <.verify_form url={@url} method="rel_me" label={gettext("Verify via back-link")} report={@check_report} />
   </.card>
 
   <%!-- DNS TXT record (for a member who controls the domain's DNS) --%>
@@ -91,7 +91,7 @@ success the link earns the verified mark shown on the profile + section pages. -
     <p class="text-xs text-slate-600 dark:text-slate-400">
       {gettext("DNS changes can take a while to spread. If it does not verify right away, wait a few minutes and try again.")}
     </p>
-    <.verify_form url={@url} method="dns" label={gettext("Verify via DNS")} />
+    <.verify_form url={@url} method="dns" label={gettext("Verify via DNS")} report={@check_report} />
   </.card>
 
   <%!-- Well-known file (for a member who controls the whole domain) --%>
@@ -107,7 +107,7 @@ success the link earns the verified mark shown on the profile + section pages. -
       phx-no-curly-interpolation
       class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
     ><%= @well_known_content %></code>
-    <.verify_form url={@url} method="well_known" label={gettext("Verify via file")} />
+    <.verify_form url={@url} method="well_known" label={gettext("Verify via file")} report={@check_report} />
   </.card>
 
   <div class="mt-6">

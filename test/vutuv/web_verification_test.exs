@@ -187,6 +187,64 @@ defmodule Vutuv.WebVerificationTest do
       refute report.found =~ "\n"
       assert String.length(report.found) <= 160
     end
+
+    test "the rel=me report lists the back-links the page actually has" do
+      body = ~s(<a rel="me" href="https://github.com/alice">gh</a><a href="/about">about</a>)
+
+      assert {:error, report} =
+               WebVerification.rel_me_check(
+                 "https://alice.example/",
+                 ["https://vutuv.de/alice"],
+                 adapter(200, body)
+               )
+
+      assert report.method == "rel_me"
+      assert report.url == "https://alice.example/"
+      assert report.status == 200
+      assert report.expected == ["https://vutuv.de/alice"]
+      # The rel=me link it does have — the whole diagnosis when a member marked
+      # the wrong one of several profile links, or none at all.
+      assert report.found == ["https://github.com/alice"]
+    end
+
+    test "the rel=me report separates a bad status from a page with no back-link" do
+      assert {:error, missing} =
+               WebVerification.rel_me_check(
+                 "https://alice.example/",
+                 ["https://vutuv.de/alice"],
+                 adapter(404, "")
+               )
+
+      assert missing.status == 404
+      assert missing.found == []
+
+      assert {:error, unreachable} =
+               WebVerification.rel_me_check(
+                 "http://localhost/",
+                 ["https://vutuv.de/alice"],
+                 adapter(200, ~s(<a rel="me" href="https://vutuv.de/alice">x</a>))
+               )
+
+      assert is_nil(unreachable.status)
+    end
+
+    test "rel_me_verified?/3 is the same check, so the two can never disagree" do
+      body = ~s(<link rel="me" href="https://vutuv.de/alice">)
+      opts = adapter(200, body)
+
+      assert {:ok, _report} =
+               WebVerification.rel_me_check(
+                 "https://alice.example/",
+                 ["https://vutuv.de/alice"],
+                 opts
+               )
+
+      assert WebVerification.rel_me_verified?(
+               "https://alice.example/",
+               ["https://vutuv.de/alice"],
+               opts
+             )
+    end
   end
 
   describe "rel_me_hrefs/1 (the parser)" do
