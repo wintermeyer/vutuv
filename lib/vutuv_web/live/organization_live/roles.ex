@@ -33,7 +33,6 @@ defmodule VutuvWeb.OrganizationLive.Roles do
     {:ok,
      socket
      |> assign(:organization, organization)
-     |> assign(:publisher?, Organizations.publisher?(organization, socket.assigns.current_user))
      |> assign(:page_title, gettext("Team – %{name}", name: organization.name))
      |> assign(:identifier, "")
      # Nothing pre-ticked: with four roles a guessed default is wrong more often
@@ -164,8 +163,7 @@ defmodule VutuvWeb.OrganizationLive.Roles do
       <.manage_header
         organization={@organization}
         active={:roles}
-        owner?={true}
-        publisher?={@publisher?}
+        viewer={@current_user}
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Team")}</h1>

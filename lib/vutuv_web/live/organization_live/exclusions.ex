@@ -23,14 +23,11 @@ defmodule VutuvWeb.OrganizationLive.Exclusions do
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
-    current_user = socket.assigns.current_user
     organization = Organizations.get_organization!(session["organization_id"])
 
     {:ok,
      socket
      |> assign(:organization, organization)
-     |> assign(:owner?, Organizations.owner?(organization, current_user))
-     |> assign(:publisher?, Organizations.publisher?(organization, current_user))
      |> assign(:page_title, gettext("Job exclusions – %{name}", name: organization.name))
      |> assign(:member_error, nil)
      |> assign(:org_error, nil)
@@ -101,8 +98,7 @@ defmodule VutuvWeb.OrganizationLive.Exclusions do
       <.manage_header
         organization={@organization}
         active={:exclusions}
-        owner?={@owner?}
-        publisher?={@publisher?}
+        viewer={@current_user}
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">

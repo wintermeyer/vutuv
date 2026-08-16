@@ -38,8 +38,6 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
   defp assign_state(socket, organization) do
     socket
     |> assign(:organization, organization)
-    |> assign(:owner?, true)
-    |> assign(:publisher?, Organizations.publisher?(organization, socket.assigns.current_user))
     |> assign(:federated?, Fediverse.federated?(organization))
     |> assign(:ever_federated?, Fediverse.ever_federated?(organization))
     |> assign(:enabled?, Fediverse.enabled?())
@@ -72,9 +70,7 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
       <.manage_header
         organization={@organization}
         active={:fediverse}
-        owner?={true}
-       
-        publisher?={@publisher?}
+        viewer={@current_user}
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Fediverse")}</h1>

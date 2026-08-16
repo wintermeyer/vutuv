@@ -49,8 +49,6 @@ defmodule VutuvWeb.OrganizationLive.FediverseFollowers do
      socket
      |> assign(:page_title, gettext("Followers – %{name}", name: organization.name))
      |> assign(:organization, organization)
-     |> assign(:owner?, true)
-     |> assign(:publisher?, Organizations.publisher?(organization, socket.assigns.current_user))
      |> assign(:filters, Fediverse.browse_filters(%{}))
      |> assign(:page, 1)
      |> assign_totals()
@@ -154,9 +152,7 @@ defmodule VutuvWeb.OrganizationLive.FediverseFollowers do
       <.manage_header
         organization={@organization}
         active={:fediverse}
-        owner?={true}
-       
-        publisher?={@publisher?}
+        viewer={@current_user}
       />
 
       <div class="space-y-6">

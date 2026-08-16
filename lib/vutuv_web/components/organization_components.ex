@@ -13,6 +13,7 @@ defmodule VutuvWeb.OrganizationComponents do
   import VutuvWeb.UI, only: [input_class: 2]
 
   alias Vutuv.Countries
+  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
 
@@ -197,8 +198,7 @@ defmodule VutuvWeb.OrganizationComponents do
 
   attr(:organization, :map, required: true)
   attr(:active, :atom, required: true)
-  attr(:owner?, :boolean, required: true)
-  attr(:publisher?, :boolean, required: true)
+  attr(:viewer, :map, required: true)
 
   @doc """
   The header + tab bar shared by the organization management pages (issue #930): a
@@ -212,15 +212,19 @@ defmodule VutuvWeb.OrganizationComponents do
   they used to be guarded by was passed `true` by all nine call sites, so it was
   a knob that only ever read one way.
 
-  **Both role attributes are required, and that is the fix for issue #1484.** A
-  tab bar shared by nine pages must answer to the viewer's roles alone; with
-  `publisher?` defaulting to `false`, the four pages that never passed it dropped
-  the Feed and Follows tabs, so a publisher found their page's own reading list
-  only by standing on Activity or Fediverse first. A default is the wrong shape
-  here — the safe-looking value is the one that silently hides a tab — so a
-  missing attribute now fails `compile --warnings-as-errors` instead.
+  **It reads the roles itself, and that is the fix for issue #1484 carried one
+  step further.** The two booleans used to be required attributes, threaded from
+  nine call sites — five of which passed a literal `true` read off the route
+  rather than off the viewer, which is a hidden tab waiting to happen exactly as
+  `publisher?` defaulting to `false` already was. One `Organizations.role_powers/2`
+  here answers both from one query, and "a page forgot to compute a role" stops
+  being expressible. The pages are already behind their own `can_manage?/2` gate;
+  this only decides which tabs show.
   """
   def manage_header(assigns) do
+    assigns =
+      assign(assigns, :powers, Organizations.role_powers(assigns.organization, assigns.viewer))
+
     ~H"""
     <div class="mb-6">
       <.link
@@ -233,10 +237,10 @@ defmodule VutuvWeb.OrganizationComponents do
         <.manage_tab active={@active == :edit} navigate={"/organizations/#{@organization.slug}/edit"}>
           {gettext("Page")}
         </.manage_tab>
-        <.manage_tab :if={@owner?} active={@active == :roles} navigate={"/organizations/#{@organization.slug}/roles"}>
+        <.manage_tab :if={@powers.owner?} active={@active == :roles} navigate={"/organizations/#{@organization.slug}/roles"}>
           {gettext("Team")}
         </.manage_tab>
-        <.manage_tab :if={@owner?} active={@active == :domains} navigate={"/organizations/#{@organization.slug}/domains"}>
+        <.manage_tab :if={@powers.owner?} active={@active == :domains} navigate={"/organizations/#{@organization.slug}/domains"}>
           {gettext("Domains")}
         </.manage_tab>
         <.manage_tab active={@active == :exclusions} navigate={"/organizations/#{@organization.slug}/exclusions"}>
@@ -251,18 +255,18 @@ defmodule VutuvWeb.OrganizationComponents do
         <%!-- What the page reads (issue #1336). Publishers only, unlike
         Activity beside it: this is the page's own reading, part of speaking
         for it, not news about it. --%>
-        <.manage_tab :if={@publisher?} active={@active == :feed} navigate={"/organizations/#{@organization.slug}/feed"}>
+        <.manage_tab :if={@powers.publisher?} active={@active == :feed} navigate={"/organizations/#{@organization.slug}/feed"}>
           {gettext("Feed")}
         </.manage_tab>
         <%!-- "Follows", not "Following": the member-voiced msgid translates to
         "Folge ich" (I follow), which is the wrong voice under a page's nav —
         this list is what the PAGE follows, not what the reader does. --%>
-        <.manage_tab :if={@publisher?} active={@active == :following} navigate={"/organizations/#{@organization.slug}/following"}>
+        <.manage_tab :if={@powers.publisher?} active={@active == :following} navigate={"/organizations/#{@organization.slug}/following"}>
           {gettext("Follows")}
         </.manage_tab>
         <%!-- Owner-only (issue #1334): federating decides how the page appears
         on servers we do not run, and cannot be fully taken back. --%>
-        <.manage_tab :if={@owner?} active={@active == :fediverse} navigate={"/organizations/#{@organization.slug}/fediverse"}>
+        <.manage_tab :if={@powers.owner?} active={@active == :fediverse} navigate={"/organizations/#{@organization.slug}/fediverse"}>
           {gettext("Fediverse")}
         </.manage_tab>
       </nav>

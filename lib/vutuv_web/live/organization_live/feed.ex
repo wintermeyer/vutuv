@@ -45,7 +45,6 @@ defmodule VutuvWeb.OrganizationLive.Feed do
     {:ok,
      socket
      |> assign(:organization, organization)
-     |> assign(:owner?, Organizations.owner?(organization, socket.assigns.current_user))
      |> assign(:page_title, gettext("Feed – %{name}", name: organization.name))
      |> load_feed(nil)}
   end
@@ -93,9 +92,7 @@ defmodule VutuvWeb.OrganizationLive.Feed do
       <.manage_header
         organization={@organization}
         active={:feed}
-        owner?={@owner?}
-       
-        publisher?={true}
+        viewer={@current_user}
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Feed")}</h1>

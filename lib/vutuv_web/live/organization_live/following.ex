@@ -49,7 +49,6 @@ defmodule VutuvWeb.OrganizationLive.Following do
     {:ok,
      socket
      |> assign(:organization, organization)
-     |> assign(:owner?, Organizations.owner?(organization, socket.assigns.current_user))
      |> assign(:page_title, gettext("Follows – %{name}", name: organization.name))
      |> assign(:address, "")
      |> assign(:follow_error, nil)
@@ -147,9 +146,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
       <.manage_header
         organization={@organization}
         active={:following}
-        owner?={@owner?}
-       
-        publisher?={true}
+        viewer={@current_user}
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Follows")}</h1>

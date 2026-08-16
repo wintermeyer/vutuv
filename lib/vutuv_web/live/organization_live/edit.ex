@@ -28,7 +28,6 @@ defmodule VutuvWeb.OrganizationLive.Edit do
       |> assign(:locale, locale)
       |> assign(:organization, organization)
       |> assign(:owner?, Organizations.owner?(organization, current_user))
-      |> assign(:publisher?, Organizations.publisher?(organization, current_user))
       |> assign(:page_title, gettext("Edit %{name}", name: organization.name))
       |> assign(:countries, Countries.select_options(locale))
       |> assign(:aliases, Organizations.list_aliases(organization))
@@ -238,8 +237,7 @@ defmodule VutuvWeb.OrganizationLive.Edit do
       <.manage_header
         organization={@organization}
         active={:edit}
-        owner?={@owner?}
-        publisher?={@publisher?}
+        viewer={@current_user}
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">

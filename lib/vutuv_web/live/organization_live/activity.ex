@@ -42,8 +42,6 @@ defmodule VutuvWeb.OrganizationLive.Activity do
     {:ok,
      socket
      |> assign(:organization, organization)
-     |> assign(:owner?, Organizations.owner?(organization, socket.assigns.current_user))
-     |> assign(:publisher?, Organizations.publisher?(organization, socket.assigns.current_user))
      |> assign(:marker, marker)
      |> assign(:page_title, gettext("Activity – %{name}", name: organization.name))
      |> load_activity(0)}
@@ -91,9 +89,7 @@ defmodule VutuvWeb.OrganizationLive.Activity do
       <.manage_header
         organization={@organization}
         active={:activity}
-        owner?={@owner?}
-       
-        publisher?={@publisher?}
+        viewer={@current_user}
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Activity")}</h1>

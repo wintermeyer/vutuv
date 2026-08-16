@@ -26,7 +26,6 @@ defmodule VutuvWeb.OrganizationLive.Domains do
     {:ok,
      socket
      |> assign(:organization, organization)
-     |> assign(:publisher?, Organizations.publisher?(organization, socket.assigns.current_user))
      |> assign(:page_title, gettext("Domains – %{name}", name: organization.name))
      |> assign(:new_domain, "")
      |> assign(:new_method, "dns")
@@ -173,8 +172,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
       <.manage_header
         organization={@organization}
         active={:domains}
-        owner?={true}
-        publisher?={@publisher?}
+        viewer={@current_user}
       />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Domains")}</h1>
