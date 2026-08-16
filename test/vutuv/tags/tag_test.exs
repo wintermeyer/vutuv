@@ -28,6 +28,53 @@ defmodule Vutuv.Tags.TagTest do
       changeset = Tag.changeset(%Tag{}, %{"value" => "Ruby   on  Rails"})
       assert get_change(changeset, :name) == "Ruby on Rails"
     end
+
+    test "strips every leading #, however many and however spaced" do
+      for typed <- ["##Elixir", "## Elixir", "# #Elixir", "#  ## # Elixir", "  #Elixir"] do
+        assert get_change(Tag.changeset(%Tag{}, %{"value" => typed}), :name) == "Elixir",
+               "#{inspect(typed)} did not normalize to \"Elixir\""
+      end
+    end
+
+    test "a value that is nothing but hashes normalizes to blank and is refused" do
+      changeset = Tag.changeset(%Tag{}, %{"value" => "## #"})
+      refute changeset.valid?
+      assert "can't be blank" in errors_on(changeset).name
+    end
+  end
+
+  describe "a name may not start with #" do
+    # normalize_value/1 strips the hashtag form on every member path, so this
+    # backstops the raw name/slug heads — the admin edit form casts :name
+    # straight from a text field — and makes the rule fail loudly rather than
+    # minting the `#`-prefixed duplicate of a tag that already exists.
+    import Ecto.Changeset
+
+    test "the raw name head refuses it" do
+      changeset = Tag.changeset(%Tag{}, %{"name" => "#Elixir", "slug" => "elixir"})
+      refute changeset.valid?
+      assert "must not start with #" in errors_on(changeset).name
+    end
+
+    test "the admin edit form refuses it" do
+      changeset = Tag.edit_changeset(%Tag{}, %{"name" => "#Elixir", "slug" => "elixir"})
+      refute changeset.valid?
+      assert "must not start with #" in errors_on(changeset).name
+    end
+
+    test "C# and an interior # are untouched" do
+      assert Tag.changeset(%Tag{}, %{"name" => "C#", "slug" => "c_sharp"}).valid?
+      assert Tag.changeset(%Tag{}, %{"name" => "fitness#stuff", "slug" => "fitness_stuff"}).valid?
+    end
+
+    test "a legacy #-named tag stays editable as long as the name is left alone" do
+      # validate_change/3 runs only on a *change*, so a row minted before this
+      # rule can still have its description edited — the same way the
+      # punctuation rule leaves its three legacy rows alone.
+      tag = insert(:tag, name: "#legacy_hash_tag", slug: "legacy_hash_tag")
+
+      assert Tag.edit_changeset(tag, %{"description" => "still editable"}).valid?
+    end
   end
 
   describe "related_users/2" do

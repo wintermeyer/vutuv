@@ -30,6 +30,15 @@ defmodule Vutuv.Tags.Tag do
   # hold only what the narrowest local part out there accepts.
   @slug_grammar_message "may contain only lowercase letters, digits and underscores"
 
+  # The `#` belongs to the hashtag *notation*, never to the tag. Every member
+  # path already strips it (`normalize_value/1`), so this only fires where a
+  # name is cast raw — the admin edit form — and it fires loudly rather than
+  # minting the `#`-prefixed twin of a tag that already exists. The catalog
+  # still holds a couple of dozen such rows from before the strip;
+  # `validate_change/3` runs only on a change, so they stay editable — the same
+  # way the punctuation rule leaves its three legacy rows alone.
+  @leading_hash_message "must not start with #"
+
   # What counts as content: anything that is not punctuation (`\p{P}`), a
   # separator/whitespace (`\p{Z}`) or an invisible control character (`\p{C}`).
   # Letters and digits, of course — and **symbols** (`\p{S}`), which is what
@@ -104,6 +113,7 @@ defmodule Vutuv.Tags.Tag do
     |> validate_format(:name, ~r/^[^\r\n\t]+$/, message: "must be a single line")
     |> validate_web_address()
     |> validate_punctuation_only()
+    |> validate_leading_hash()
     |> validate_length(:slug, max: 60)
     |> validate_length(:name, max: 255)
     |> validate_slug_grammar()
@@ -147,6 +157,14 @@ defmodule Vutuv.Tags.Tag do
   defp validate_punctuation_only(changeset) do
     validate_change(changeset, :name, fn :name, name ->
       if punctuation_only?(name), do: [name: @punctuation_message], else: []
+    end)
+  end
+
+  # Only a *leading* `#` is refused: `C#`, `F#` and `fitness#stuff` are ordinary
+  # names, and the slug grammar above already keeps a `#` out of the URL.
+  defp validate_leading_hash(changeset) do
+    validate_change(changeset, :name, fn :name, name ->
+      if String.starts_with?(name, "#"), do: [name: @leading_hash_message], else: []
     end)
   end
 
@@ -219,21 +237,26 @@ defmodule Vutuv.Tags.Tag do
     end
   end
 
-  @leading_hash ~r/^#+\s*/
+  # Every `#` the value opens with, plus the whitespace between them: the class
+  # is greedy up to the last `#` it can still reach, so `"## # Elixir"` loses
+  # all three while `"#fitness#stuff"` loses only the first (`f` ends the run).
+  @leading_hash ~r/^[\s#]*#/u
 
   @doc """
-  Normalizes a typed tag value: trims it, strips a leading `#` (the hashtag
-  form members naturally type, since posts render `#hashtag` links, so
+  Normalizes a typed tag value: trims it, strips **every** leading `#` (the
+  hashtag form members naturally type, since posts render `#hashtag` links, so
   `"#elixir"` is stored as the tag `elixir` and links to the same global tag as
-  `"elixir"` rather than a `#`-prefixed duplicate; only a *leading* run of `#`
-  and any space right after it is removed, so `"C#"` / `"F#"` keep their
-  trailing `#`), and collapses every interior run of whitespace to a single
-  space so a multi-word tag is stored cleanly (`"Ruby   on  Rails"` and a
-  pasted `"Ruby\\non Rails"` both become `"Ruby on Rails"`). A bare `"#"`
-  normalizes to `""` (dropped as blank by the tokenizer, rejected by the
-  changeset). Applied at every tag-value boundary: `Vutuv.Tags.parse_tag_names/1`,
-  `Vutuv.Posts` post tags, `create_or_link_tag/2` and `changeset/2`, so no entry
-  point can store a leading `#` or ragged whitespace.
+  `"elixir"` rather than a `#`-prefixed duplicate; `"## # Elixir"` is the same
+  tag again). Only a *leading* `#` goes, so `"C#"` / `"F#"` keep their trailing
+  one and `"fitness#stuff"` its interior one. Then every interior run of
+  whitespace collapses to a single space, so a multi-word tag is stored cleanly
+  (`"Ruby   on  Rails"` and a pasted `"Ruby\\non Rails"` both become
+  `"Ruby on Rails"`). A value that is nothing but `#` normalizes to `""`
+  (dropped as blank by the tokenizer, rejected by the changeset). Applied at
+  every tag-value boundary: `Vutuv.Tags.parse_tag_names/1`, `Vutuv.Posts` post
+  tags, `create_or_link_tag/2` and `changeset/2`; the changeset then *refuses* a
+  leading `#` outright (`@leading_hash_message`), so the raw name heads no entry
+  point normalizes — the admin edit form — cannot store one either.
   """
   def normalize_value(value) when is_binary(value) do
     value
