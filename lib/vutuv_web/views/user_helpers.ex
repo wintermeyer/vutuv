@@ -17,6 +17,9 @@ defmodule VutuvWeb.UserHelpers do
   alias PhoenixHTMLHelpers.Format, as: HTMLFormat
   alias PhoenixHTMLHelpers.Link, as: HTMLLink
   alias Vutuv.Accounts.User
+  alias Vutuv.Organizations.Organization
+  alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.WorkExperience
@@ -35,6 +38,25 @@ defmodule VutuvWeb.UserHelpers do
     |> Enum.reject(&(&1 == "" || &1 == nil))
     |> Enum.join(" ")
   end
+
+  @doc """
+  The visible name of a post's author, whichever kind of author it has (#1334).
+
+  An organization is named by its own name and has no `@handle` line beside it:
+  a page's identity is the name, and the handle is an optional address it may
+  never have claimed. The member who pressed publish for a page is internal and
+  never appears here.
+
+  One definition for every surface that names an author — the post card, the
+  search results, the RSS feed, the screenshot queue, the agent-format
+  siblings — because the fork was written out in each of them and the next kind
+  of author would have to be remembered five times over. It asks
+  `Vutuv.Posts.author/1` rather than matching the preloaded association, which
+  reads as a type check and behaves as a preload check.
+  """
+  def author_name(%Post{} = post), do: author_name(Posts.author(post))
+  def author_name(%Organization{name: name}), do: name
+  def author_name(%User{} = user), do: full_name(user)
 
   @doc """
   The member's name the way a directory files it: `"Özil, Mesut"` — surname

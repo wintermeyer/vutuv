@@ -4644,6 +4644,23 @@ defmodule Vutuv.Posts do
   def path(%Organization{slug: slug}, post_id), do: "/organizations/#{slug}/posts/#{post_id}"
   def path(%User{username: username}, post_id), do: "/#{username}/posts/#{post_id}"
 
+  @doc """
+  Where a post's author link goes: a member's profile at their handle, an
+  organization's page at `Organizations.canonical_path/1`, which prefers its
+  opt-in root handle over `/organizations/:slug`.
+
+  The same rule `path/1` follows for the post itself, and for the same reason —
+  it was written out at every surface that renders a post header, so the next
+  kind of author would have to be remembered in each of them. It dispatches on
+  what `author/1` hands back rather than on a pattern over the preloaded
+  association: the association-shaped clause reads as a type check but behaves
+  as a preload check, so a bare `%Post{}` out of a query drew a page's post as a
+  nil member's.
+  """
+  def author_path(%Post{} = post), do: author_path(author(post))
+  def author_path(%Organization{} = organization), do: Organizations.canonical_path(organization)
+  def author_path(%User{username: username}), do: "/" <> username
+
   ## Images
 
   @doc """

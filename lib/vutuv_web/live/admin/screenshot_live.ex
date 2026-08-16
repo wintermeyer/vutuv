@@ -24,7 +24,6 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
   use VutuvWeb, :live_view
 
   import VutuvWeb.ErrorHelpers, only: [error_tag: 2]
-  import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
@@ -34,6 +33,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
   alias Vutuv.ScreenshotBlocklist
+  alias VutuvWeb.UserHelpers
 
   @impl true
   def mount(_params, _session, socket) do
@@ -163,17 +163,6 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
     |> assign(:total, total)
     |> assign(:counts, Screenshots.counts())
     |> load_blocklist()
-  end
-
-  # Whichever kind of author the post has (issue #1334). A post published in an
-  # organization's name has no member behind it here — `post.user` is nil — and
-  # a link screenshot is taken for it exactly as it is for a member's post, so
-  # both rows on this page meet one.
-  defp author_name(post) do
-    case Posts.author(post) do
-      %Organization{name: name} -> name
-      author -> full_name(author)
-    end
   end
 
   # The compact queue-table form: a member is named by handle, a page by name
@@ -388,7 +377,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                   navigate={Posts.path(ps.post)}
                   class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
-                  {gettext("Post by %{name}", name: author_name(ps.post))}
+                  {gettext("Post by %{name}", name: UserHelpers.author_name(ps.post))}
                 </.link>
                 <a
                   :if={ps.remote_post}

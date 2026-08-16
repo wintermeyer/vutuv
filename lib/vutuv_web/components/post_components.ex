@@ -39,12 +39,9 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Isbn
   alias Vutuv.Languages
   alias Vutuv.Moderation.ImageScans
-  alias Vutuv.Organizations
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PhotoLicense
-  alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
@@ -58,6 +55,7 @@ defmodule VutuvWeb.PostComponents do
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostLive.RemoteActionsComponent
+  alias VutuvWeb.UserHelpers
 
   # How many reposter faces the "Reposted by" avatar stack shows before the
   # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
@@ -306,8 +304,8 @@ defmodule VutuvWeb.PostComponents do
       # about which of the two author columns speaks.
       |> assign(:author, Posts.author(post))
       |> assign(:organization_author?, Posts.organization_post?(post))
-      |> assign(:author_path, author_path(post))
-      |> assign(:author_name, author_name(post))
+      |> assign(:author_path, Posts.author_path(post))
+      |> assign(:author_name, UserHelpers.author_name(post))
       # Whether this post is the one its author pinned to their profile (issue
       # #1110) — read off the already-preloaded author, so it costs no query.
       # Drives the menu's Pin / Unpin label and its "replaces the other one"
@@ -342,24 +340,6 @@ defmodule VutuvWeb.PostComponents do
     </div>
     """
   end
-
-  # Where the author's name and avatar link to. A member's profile lives at
-  # their handle; an organization's page at `Organizations.canonical_path/1`,
-  # which prefers its opt-in root handle over `/organizations/:slug`.
-  # Both dispatch on what `Posts.author/1` hands back rather than on a pattern
-  # over the preloaded association: the association-shaped clause reads as a
-  # type check but behaves as a preload check, so a bare %Post{} from a query
-  # drew a page's post as a nil member's.
-  defp author_path(%Post{} = post), do: author_path(Posts.author(post))
-  defp author_path(%Organization{} = organization), do: Organizations.canonical_path(organization)
-  defp author_path(%User{} = user), do: "/#{user.username}"
-
-  # The visible author name. An organization is named by its own name and has no
-  # `@handle` line beside it: a page's identity is the name, and the handle is
-  # an optional address it may never have claimed.
-  defp author_name(%Post{} = post), do: author_name(Posts.author(post))
-  defp author_name(%Organization{name: name}), do: name
-  defp author_name(%User{} = user), do: full_name(user)
 
   @doc """
   The shared shell for a threaded post list: a `divide-y` column of

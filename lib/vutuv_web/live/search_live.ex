@@ -36,8 +36,6 @@ defmodule VutuvWeb.SearchLive do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteFollow
-  alias Vutuv.Organizations
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Search
   alias VutuvWeb.UserHelpers
@@ -588,22 +586,6 @@ defmodule VutuvWeb.SearchLive do
     """
   end
 
-  # Where a result's author link goes and what it reads, for whichever kind of
-  # author the post has (issue #1334).
-  defp author_path(post) do
-    case Posts.author(post) do
-      %Organization{} = organization -> Organizations.canonical_path(organization)
-      author -> "/" <> author.username
-    end
-  end
-
-  defp author_name(post) do
-    case Posts.author(post) do
-      %Organization{name: name} -> name
-      author -> UserHelpers.full_name(author)
-    end
-  end
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -791,10 +773,10 @@ defmodule VutuvWeb.SearchLive do
               <div class="min-w-0">
                 <p class="mb-0 text-sm">
                   <.link
-                    href={author_path(post)}
+                    href={Posts.author_path(post)}
                     class="font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
                   >
-                    {author_name(post)}
+                    {UserHelpers.author_name(post)}
                   </.link>
                   <span :if={!Posts.organization_post?(post)} class="text-slate-600 dark:text-slate-400">
                     @{post.user.username}

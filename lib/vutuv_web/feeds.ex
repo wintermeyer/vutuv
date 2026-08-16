@@ -11,7 +11,6 @@ defmodule VutuvWeb.Feeds do
   """
 
   alias Vutuv.Organizations
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.PostComponents
@@ -107,7 +106,7 @@ defmodule VutuvWeb.Feeds do
 
   defp item(post) do
     permalink = AgentDocs.abs_url(Posts.path(post))
-    author = author_name(post)
+    author = UserHelpers.author_name(post)
     title = "#{author} · #{Date.to_iso8601(post.published_on)}"
 
     [
@@ -122,16 +121,6 @@ defmodule VutuvWeb.Feeds do
       "    <content:encoded><![CDATA[#{cdata_safe(rendered_body(post))}]]></content:encoded>\n",
       "  </item>\n"
     ]
-  end
-
-  # Whichever kind of author the post has (issue #1334). A reader sees the name
-  # the post is signed with; the member who pressed publish for an organization
-  # is internal and never appears in a feed.
-  defp author_name(post) do
-    case Posts.author(post) do
-      %Organization{name: name} -> name
-      author -> UserHelpers.full_name(author)
-    end
   end
 
   defp rendered_body(post) do
