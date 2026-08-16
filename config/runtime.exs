@@ -168,6 +168,12 @@ if config_env() == :prod do
     config :vutuv, :operator_address, operator_address
   end
 
+  # The @handle the media kit's press contact links to. Set it to "" to render
+  # no profile link at all.
+  if operator_handle = System.get_env("OPERATOR_HANDLE") do
+    config :vutuv, :operator_handle, operator_handle
+  end
+
   # How the fediverse directories name this installation (Vutuv.NodeInfo).
   if node_name = System.get_env("NODE_NAME") do
     config :vutuv, :node_name, node_name

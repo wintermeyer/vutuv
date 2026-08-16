@@ -340,6 +340,87 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
+  # The two company pages are English in every locale (see
+  # VutuvWeb.CompanyController), so their renderings carry no gettext either.
+  def render(%{type: "investors"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.description,
+      "## What vutuv is",
+      doc.positioning,
+      "## The gated community",
+      "- LinkedIn: #{doc.openness.linkedin}",
+      "- vutuv: #{doc.openness.vutuv}",
+      "- Why it matters: #{doc.openness.why_it_matters}",
+      "## Figures",
+      Enum.map_join(
+        [
+          {"Members", doc.figures.members},
+          {"Active this month", doc.figures.active_month},
+          {"Active this half year", doc.figures.active_halfyear},
+          {"Posts", doc.figures.posts},
+          {"Replies", doc.figures.replies},
+          {"Fediverse accounts", doc.figures.fediverse_accounts},
+          {"Fediverse servers", doc.figures.fediverse_servers}
+        ],
+        "\n",
+        fn {label, value} -> "- #{label}: #{value}" end
+      ),
+      doc.growth &&
+        "Between #{doc.growth.from} and #{doc.growth.to} (#{doc.growth.days} days): " <>
+          "#{doc.growth.members} members and #{doc.growth.fediverse_accounts} Fediverse accounts.",
+      "## Why we can afford to be quiet",
+      "vutuv is built and operated by one person working with AI agents, in Elixir on the " <>
+        "BEAM. LinkedIn's own newsroom reports #{doc.comparison.employees} full-time " <>
+        "employees serving #{doc.comparison.members} members (#{doc.comparison.source}). " <>
+        "A payroll that size is earned back with attention, which is where the nudges " <>
+        "come from; ours is not, so the feed stays chronological and nothing is tracked.",
+      "## Business model",
+      [doc.business_model, doc.business_model_url] |> Enum.filter(&is_binary/1) |> Enum.join(" "),
+      "## Contact",
+      "#{doc.operator.name}, #{doc.contact}"
+    ]
+    |> Enum.filter(&is_binary/1)
+    |> join_blocks()
+  end
+
+  def render(%{type: "media_kit"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.description,
+      "## About vutuv",
+      "### Short\n\n#{doc.boilerplate.short}",
+      "### Medium\n\n#{doc.boilerplate.medium}",
+      "### Long\n\n#{doc.boilerplate.long}",
+      "## Key facts",
+      doc.facts
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.map_join("\n", fn {label, value} -> "- #{label}: #{value}" end),
+      "## Brand assets",
+      Enum.map_join(doc.assets, "\n", &"- [#{&1.name}](#{&1.url}) (#{&1.kind}) - #{&1.note}"),
+      "## Colours",
+      Enum.map_join(doc.colors, "\n", &"- #{&1.name} `#{&1.hex}` - #{&1.note}"),
+      "## Typography",
+      Enum.map_join(doc.typography, "\n", &"- #{&1.role}: #{&1.name} - #{&1.note}"),
+      "## Screenshots",
+      Enum.map_join(doc.screenshots, "\n", &"- [#{&1.name}](#{&1.url}) - #{&1.note}"),
+      "## Using all this",
+      Enum.map_join(doc.usage, "\n", &("- " <> &1)),
+      "## Press contact",
+      [
+        "#{doc.press_contact.name}, #{doc.operator.name}",
+        doc.press_contact.email,
+        doc.press_contact.profile_url &&
+          "Profile (further contact details): #{doc.press_contact.profile_url}"
+      ]
+      |> Enum.filter(&is_binary/1)
+      |> Enum.map_join("\n", &("- " <> &1))
+    ]
+    |> join_blocks()
+  end
+
   # The pages this member follows (issue #1336), under their own heading rather
   # than among the people: a reader has to be able to tell a person from an
   # organization. Only the Following document carries the key, so every other

@@ -795,11 +795,42 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  # Every spelling of "this installation" a stored actor URI could carry, as
-  # plain lowercase hosts for a SQL comparison — the list `own_host?/1` answers
-  # for one URI at a time.
-  defp own_hosts do
-    [String.downcase(VutuvWeb.Endpoint.host()), tag_host()]
+  @doc """
+  How many **servers** those followers come from — the other half of the reach
+  figure `distinct_follower_count/0` gives, and the one that says the network
+  is wide rather than one busy instance. Same gates: own hosts excluded, zero
+  while the fediverse is switched off.
+
+  Uncapped, unlike `inbound_hosts/1`, which answers a table with a row limit.
+  """
+  def follower_host_count do
+    if enabled?() do
+      Repo.one(
+        from(f in Follower,
+          where: fragment("coalesce(?, '')", uri_host(f.actor_uri)) not in ^own_hosts(),
+          select: count(uri_host(f.actor_uri), :distinct)
+        )
+      ) || 0
+    else
+      0
+    end
+  end
+
+  @doc """
+  Every spelling of "this installation" a stored actor URI could carry, as
+  plain lowercase hosts for a SQL comparison — the list `own_host?/1` answers
+  for one URI at a time.
+
+  `main_host` exists for callers that run without a started endpoint: the
+  `people_snapshots` backfill reconstructs `distinct_follower_count/0` for past
+  days in raw SQL and must exclude the same hosts rather than spell the rule a
+  second time, but a migration runs before `VutuvWeb.Endpoint.host/0` can
+  answer.
+  """
+  def own_hosts(main_host \\ nil) do
+    host = String.downcase(main_host || VutuvWeb.Endpoint.host())
+
+    [host, tag_host(host)]
     |> Enum.flat_map(&[&1, "www." <> &1, String.replace_prefix(&1, "www.", "")])
     |> Enum.uniq()
   end
@@ -1703,10 +1734,12 @@ defmodule Vutuv.Fediverse do
   subdomain of whatever `PHX_HOST` says, so nothing has to be set to run this
   elsewhere. What an installation does owe is the DNS record, the certificate
   and an nginx server name — see `docs/ADMINS.md`.
+
+  `main_host` is for callers without a started endpoint (see `own_hosts/1`).
   """
-  def tag_host do
+  def tag_host(main_host \\ nil) do
     Application.get_env(:vutuv, :fediverse_tag_host) ||
-      "tags." <> String.downcase(VutuvWeb.Endpoint.host())
+      "tags." <> String.downcase(main_host || VutuvWeb.Endpoint.host())
   end
 
   @doc "Whether `uri` names this installation's tag host."

@@ -1,0 +1,179 @@
+<%!-- English in every locale (see VutuvWeb.CompanyController). Every string on
+this page comes from VutuvWeb.AgentDocs.MediaKitDoc, so the page and its .md
+sibling hand a journalist the same words. --%>
+<div lang="en" class="mx-auto max-w-3xl space-y-6 py-6">
+  <.card>
+    <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Media Kit</h1>
+    <p class="mt-3 text-lg text-slate-700 dark:text-slate-300">
+      Everything you need to write about vutuv: boilerplate in three lengths, the logo,
+      the colours, screenshots, and a person to ask.
+    </p>
+  </.card>
+
+  <%!-- The same page as Markdown / text / JSON / XML. It earns its place at the
+        top here rather than in a footer rail: what fetches a media kit today is
+        as likely to be a language model writing about vutuv as a journalist. --%>
+  <.other_formats_card base_path="/system/media-kit" locale="en" id="media-kit-formats" />
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">About vutuv</h2>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      Take whichever length fits the space you have. Each one stands on its own.
+    </p>
+    <%!-- `font-normal` and `m-0` on every dt/dd: components.css styles the bare
+          elements (`dl dd { font-weight: bold; margin: 10px 0 }`) for the legacy
+          pages, and an element rule applies wherever no utility overrides it. --%>
+    <dl class="mt-4 space-y-5">
+      <div :for={{label, text} <- [{"Short", @boilerplate.short}, {"Medium", @boilerplate.medium}, {"Long", @boilerplate.long}]}>
+        <dt class="m-0 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+          {label}
+        </dt>
+        <dd class="m-0 mt-1 select-all rounded-lg bg-slate-50 p-3 text-sm font-normal text-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+          {text}
+        </dd>
+      </div>
+    </dl>
+  </.card>
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Key facts</h2>
+    <dl class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+      <div :for={{label, value} <- @facts} class="flex flex-wrap gap-x-4 py-2">
+        <dt class="m-0 w-36 shrink-0 text-sm font-semibold text-slate-900 dark:text-white">
+          {label}
+        </dt>
+        <dd class="m-0 min-w-0 text-sm font-normal text-slate-700 dark:text-slate-300">{value}</dd>
+      </div>
+    </dl>
+  </.card>
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Brand assets</h2>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      Right-click to save, or open the file and take it from there.
+    </p>
+    <ul class="mt-4 grid gap-4 sm:grid-cols-2">
+      <li
+        :for={asset <- @assets}
+        class="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800"
+      >
+        <%!-- The white wordmark needs a dark plate or it is invisible on the
+              card; the others sit on the light one. --%>
+        <div class={[
+          "flex h-28 items-center justify-center rounded-t-xl p-4",
+          if(String.contains?(asset.path, "white"),
+            do: "bg-slate-900",
+            else: "bg-slate-50 dark:bg-slate-800/60"
+          )
+        ]}>
+          <img src={asset.path} alt={asset.name} class="max-h-16 max-w-full" />
+        </div>
+        <div class="p-4">
+          <p class="font-semibold text-slate-900 dark:text-white">{asset.name}</p>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{asset.note}</p>
+          <a
+            href={asset.path}
+            download
+            class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            Download {asset.kind}
+          </a>
+        </div>
+      </li>
+    </ul>
+  </.card>
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Colours</h2>
+    <ul class="mt-4 space-y-3">
+      <li :for={{name, hex, note} <- @colors} class="flex items-center gap-4">
+        <span
+          class="h-10 w-10 shrink-0 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
+          style={"background-color: #{hex}"}
+        >
+        </span>
+        <span class="min-w-0">
+          <span class="block font-semibold text-slate-900 dark:text-white">
+            {name} <span class="select-all font-mono text-sm font-normal">{hex}</span>
+          </span>
+          <span class="block text-sm text-slate-600 dark:text-slate-400">{note}</span>
+        </span>
+      </li>
+    </ul>
+  </.card>
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Typography</h2>
+    <dl class="mt-4 space-y-4">
+      <div :for={{role, name, note} <- @typography}>
+        <dt class="m-0 font-semibold text-slate-900 dark:text-white">{role}: {name}</dt>
+        <dd class="m-0 mt-1 text-sm font-normal text-slate-600 dark:text-slate-400">{note}</dd>
+      </div>
+    </dl>
+  </.card>
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Screenshots</h2>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      Taken from the running site. Use them in reporting about vutuv.
+    </p>
+    <ul class="mt-4 grid gap-6 sm:grid-cols-2">
+      <li :for={shot <- @screenshots}>
+        <a href={shot.path} target="_blank" rel="noopener noreferrer">
+          <img
+            src={shot.path}
+            alt={shot.note}
+            loading="lazy"
+            class="w-full rounded-xl ring-1 ring-slate-200 dark:ring-slate-800"
+          />
+        </a>
+        <p class="mt-2 font-semibold text-slate-900 dark:text-white">{shot.name}</p>
+        <p class="text-sm text-slate-600 dark:text-slate-400">{shot.note}</p>
+        <a
+          href={shot.path}
+          download
+          class="mt-1 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          Download PNG
+        </a>
+      </li>
+    </ul>
+  </.card>
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Using all this</h2>
+    <ul class="mt-4 space-y-2 text-slate-700 dark:text-slate-300">
+      <li :for={rule <- @usage} class="flex gap-2">
+        <span aria-hidden="true" class="text-slate-500">&bull;</span>
+        <span>{rule}</span>
+      </li>
+    </ul>
+  </.card>
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Press contact</h2>
+    <p class="mt-3 text-slate-700 dark:text-slate-300">
+      <span class="font-semibold text-slate-900 dark:text-white">{@press_contact_name}</span>,
+      {@operator_name}, which operates this installation. For questions, an interview or an
+      asset you cannot find here, write to
+      <a
+        href={"mailto:#{@press_contact}"}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >{@press_contact}</a>.
+    </p>
+    <%!-- Rendered only where the configured handle resolves to a member of this
+          installation, so a third-party media kit links its own operator or
+          nobody, never ours. --%>
+    <%!-- The URL is the link text, not a label over it: a media kit is read to
+          be copied, and a reader who sees the address understands at a glance
+          that every vutuv profile is a plain public page at a predictable
+          address. `break-all` so it cannot push a phone sideways. --%>
+    <p :if={@press_contact_profile_url} class="mt-3 text-slate-700 dark:text-slate-300">
+      Phone, messengers and everything else are on the profile page:
+      <a
+        href={@press_contact_profile_url}
+        class="font-semibold break-all text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >{@press_contact_profile_url}</a>
+    </p>
+  </.card>
+</div>

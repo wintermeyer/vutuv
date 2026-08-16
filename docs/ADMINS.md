@@ -111,6 +111,7 @@ Everything else has a default (the vutuv.de production value):
 | `OPERATOR_EMAIL` | `sw@wintermeyer-consulting.de` | **Set this.** Receives the daily report, ad bookings and account-deletion records; also the `security.txt` contact |
 | `OPERATOR_URL` | `https://wintermeyer-consulting.de` | **Set this.** Linked from the site/email footer |
 | `OPERATOR_ADDRESS` | (vutuv.de's) | **Set this.** One-line postal address in every email footer |
+| `OPERATOR_HANDLE` | `wintermeyer` | The @handle of the person your media kit (`/system/media-kit`) names as the press contact; their profile is linked there for the remaining contact details. The link appears only when the handle really belongs to a member of *your* installation, so leaving the default set costs you nothing but a missing link. `""` renders none at all |
 | `APPEAL_REPLY_TO` | (vutuv.de's) | Reply-To on the account-deactivation (strike 3) email |
 | `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = the endpoint 404s and webhook bounce handling is off. **Prefer the log watcher (`MAIL_LOG_PATH`) to this webhook:** the webhook acts on the DSN it receives without verifying the installation ever mailed the address, so feeding it a raw local bounce mailbox lets a forged bounce freeze a member ([#1063](https://github.com/wintermeyer/vutuv/issues/1063)). On a watcher-only setup leave this unset |
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |

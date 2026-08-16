@@ -109,6 +109,7 @@ defmodule Vutuv.Application do
         optional_child(:reference_check_worker, Vutuv.References.CheckWorker) ++
         optional_child(:reference_skill_refresher, Vutuv.References.SkillRefresher) ++
         optional_child(:daily_report_email, Vutuv.Reports.DailyReporter) ++
+        optional_child(:record_people_history, Vutuv.PeopleHistory.Recorder) ++
         optional_child(:bounce_watcher, Vutuv.Deliverability.Watcher) ++
         optional_child(:sweep_unreachable_accounts, Vutuv.Deliverability.Sweeper) ++
         optional_child(:resume_stuck_broadcasts, Vutuv.Newsletters.BroadcastResumer) ++

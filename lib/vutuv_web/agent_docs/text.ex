@@ -317,6 +317,83 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
+  # The two company pages are English in every locale (see
+  # VutuvWeb.CompanyController), so their renderings carry no gettext either.
+  def render(%{type: "investors"} = doc) do
+    [
+      heading(doc.title),
+      doc.description,
+      "What vutuv is",
+      doc.positioning,
+      "The gated community",
+      [
+        "- LinkedIn: #{doc.openness.linkedin}",
+        "- vutuv: #{doc.openness.vutuv}",
+        "- Why it matters: #{doc.openness.why_it_matters}"
+      ],
+      "Figures",
+      [
+        "- Members: #{doc.figures.members}",
+        "- Active this month: #{doc.figures.active_month}",
+        "- Active this half year: #{doc.figures.active_halfyear}",
+        "- Posts: #{doc.figures.posts}",
+        "- Replies: #{doc.figures.replies}",
+        "- Fediverse accounts: #{doc.figures.fediverse_accounts}",
+        "- Fediverse servers: #{doc.figures.fediverse_servers}"
+      ],
+      doc.growth &&
+        "Between #{doc.growth.from} and #{doc.growth.to} (#{doc.growth.days} days): " <>
+          "#{doc.growth.members} members and #{doc.growth.fediverse_accounts} Fediverse accounts.",
+      "Why we can afford to be quiet",
+      "vutuv is built and operated by one person working with AI agents, in Elixir on the " <>
+        "BEAM. LinkedIn's own newsroom reports #{doc.comparison.employees} full-time " <>
+        "employees serving #{doc.comparison.members} members (#{doc.comparison.source}). " <>
+        "A payroll that size is earned back with attention, which is where the nudges " <>
+        "come from; ours is not, so the feed stays chronological and nothing is tracked.",
+      "Business model",
+      [doc.business_model, doc.business_model_url] |> Enum.filter(&is_binary/1) |> Enum.join(" "),
+      "Contact",
+      "#{doc.operator.name}, #{doc.contact}",
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
+  def render(%{type: "media_kit"} = doc) do
+    [
+      heading(doc.title),
+      doc.description,
+      "About vutuv (short)",
+      doc.boilerplate.short,
+      "About vutuv (medium)",
+      doc.boilerplate.medium,
+      "About vutuv (long)",
+      doc.boilerplate.long,
+      "Key facts",
+      doc.facts |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(fn {k, v} -> "- #{k}: #{v}" end),
+      "Brand assets",
+      Enum.map(doc.assets, &"- #{&1.name} (#{&1.kind}): #{&1.url}"),
+      "Colours",
+      Enum.map(doc.colors, &"- #{&1.name} #{&1.hex}: #{&1.note}"),
+      "Typography",
+      Enum.map(doc.typography, &"- #{&1.role}: #{&1.name}. #{&1.note}"),
+      "Screenshots",
+      Enum.map(doc.screenshots, &"- #{&1.name}: #{&1.url}"),
+      "Using all this",
+      Enum.map(doc.usage, &("- " <> &1)),
+      "Press contact",
+      [
+        "- #{doc.press_contact.name}, #{doc.operator.name}",
+        "- #{doc.press_contact.email}",
+        doc.press_contact.profile_url &&
+          "- Profile (further contact details): #{doc.press_contact.profile_url}"
+      ]
+      |> Enum.filter(&is_binary/1),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
   # The pages this member follows (issue #1336) — the plain-text twin of the
   # Markdown block, under their own heading so a reader can tell a person from
   # an organization. Absent on every other people list.

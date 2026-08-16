@@ -479,6 +479,11 @@ defmodule VutuvWeb.Router do
     # The community guidelines every moderation email and report form links to.
     get("/community", PageController, :community)
 
+    # The footer's "Company" pages. English only, and under /system/ so neither
+    # burns a root word a member could hold as a handle.
+    get("/system/investors", CompanyController, :investors)
+    get("/system/media-kit", CompanyController, :media_kit)
+
     # Developer documentation for /api/2.0 (English; "developers" is in
     # ReservedSlugs). Each page also serves its raw Markdown under .md.
     # The app registry routes must precede the docs' :page catch.

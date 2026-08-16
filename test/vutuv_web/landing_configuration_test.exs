@@ -66,9 +66,41 @@ defmodule VutuvWeb.LandingConfigurationTest do
       refute body =~ "`/ads`"
       refute body =~ "{{ads}}"
       # The rest of the document is untouched, blank line and indentation
-      # included — the placeholder must not eat the paragraph break.
+      # included — the placeholder must not eat the paragraph break. Anchored on
+      # whatever entry the placeholder now follows (the investor page), not on
+      # the jobs line it followed when this was written.
       assert body =~ "`/jobs`"
-      assert body =~ "how to apply\n\nList pages paginate with `?page=N`."
+      assert body =~ "(English only)\n\nList pages paginate with `?page=N`."
+    end
+  end
+
+  # Same trap one level up: the footer and the investor page both point at
+  # `/ads`, which 404s while ads are off. Ads ship off, and vutuv.de runs that
+  # way today, so the unconditional links shipped a dead link on every page.
+  describe "the /ads links follow the ad switch" do
+    test "the footer offers Advertising only when the ad page exists", %{conn: conn} do
+      put_config(:ads_enabled, true)
+      assert conn |> get(~p"/impressum") |> html_response(200) =~ ~s|href="/ads"|
+
+      put_config(:ads_enabled, false)
+      refute conn |> get(~p"/impressum") |> html_response(200) =~ ~s|href="/ads"|
+    end
+
+    test "the investor page keeps the sentence but drops the dead link", %{conn: conn} do
+      put_config(:ads_enabled, false)
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      refute html =~ ~s|href="/ads"|
+      # The revenue model is still stated; only the link goes.
+      assert html =~ "one text ad per day"
+    end
+
+    test "the investor doc names no ad URL while ads are off", %{conn: conn} do
+      put_config(:ads_enabled, false)
+      json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
+
+      refute json["business_model_url"]
+      assert json["business_model"] =~ "Advertising"
     end
   end
 

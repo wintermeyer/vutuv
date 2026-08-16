@@ -85,6 +85,10 @@ config :vutuv, :fetch_reference_skill, false
 # The overnight daily-report mailer; its DB tally would touch the sandbox from
 # outside. Vutuv.Reports is called directly in reports_test.exs instead.
 config :vutuv, :daily_report_email, false
+# The 23:59 head-count recorder behind the investor page's growth curve; same
+# sandbox reason. Vutuv.PeopleHistory.record/1 is called directly in
+# people_history_test.exs instead.
+config :vutuv, :record_people_history, false
 # The nightly job-posting lifecycle sweeper is off in tests (a background
 # process must not touch the SQL Sandbox it doesn't own); call
 # Vutuv.Jobs.Sweeper.sweep/0 directly in the test that exercises it.

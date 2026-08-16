@@ -45,10 +45,13 @@ defmodule VutuvWeb.LayoutHTMLTest do
     assert footer_html(body) =~ ~s|href="/developers"|
   end
 
-  test "the footer copyright spans from 2019 to the current year", %{conn: conn} do
+  # 2016, not 2019: the oldest account on vutuv.de dates from 2016-11-20, and
+  # 2,615 members had joined before 2017. The media kit's "Founded" fact says
+  # the same year.
+  test "the footer copyright spans from 2016 to the current year", %{conn: conn} do
     body = conn |> get(~p"/impressum") |> html_response(200)
 
-    assert body =~ "© 2019 - #{Date.utc_today().year}"
+    assert body =~ "© 2016 - #{Date.utc_today().year}"
   end
 
   test "the footer links to wintermeyer-consulting.de without the www host", %{conn: conn} do
@@ -58,7 +61,7 @@ defmodule VutuvWeb.LayoutHTMLTest do
     refute body =~ "www.wintermeyer-consulting.de"
   end
 
-  test "the footer is shown on mobile and centered, not hidden behind a breakpoint", %{conn: conn} do
+  test "the footer is shown on mobile, not hidden behind a breakpoint", %{conn: conn} do
     body = conn |> get(~p"/impressum") |> html_response(200)
     footer = footer_html(body)
 
@@ -68,16 +71,25 @@ defmodule VutuvWeb.LayoutHTMLTest do
     # unrelated reasons).
     [footer_tag] = Regex.run(~r/<footer[^>]*>/, footer)
     refute footer_tag =~ "hidden"
-    # Centered, with the links laid out as a wrapping, centered row.
-    assert footer =~ "text-center"
-    assert footer =~ "justify-center"
+    # Two columns on a phone, four from md up - never four on a phone.
+    assert footer =~ "grid-cols-2"
+    assert footer =~ "md:grid-cols-4"
   end
 
-  test "the footer nav separates its links with middots, like the credit line", %{conn: conn} do
+  test "the footer nav groups its links under headings", %{conn: conn} do
     body = conn |> get(~p"/impressum") |> html_response(200)
     [nav] = Regex.run(~r{<nav.*?</nav>}s, footer_html(body))
 
-    assert nav =~ "·"
+    # It was one flat row of middot-separated links, which had grown to ten
+    # entries with nothing saying where the next one belonged. Four headed
+    # groups, each an actual list, so a link has a home and a thumb has a row
+    # to hit rather than a word inside a paragraph.
+    for heading <- ["Network", "Developers", "Company", "Legal"] do
+      assert nav =~ ">#{heading}</h2>"
+    end
+
+    assert length(Regex.scan(~r{<ul[^>]*>}, nav)) == 4
+    refute nav =~ "·"
   end
 
   # The keyboard-shortcuts help overlay lives in the shared layout so "?" and

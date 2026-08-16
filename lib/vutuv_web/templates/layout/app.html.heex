@@ -74,49 +74,87 @@ utility. --%>
   {@inner_content}
 </main>
 
-<%!-- Centered, two-tier footer that shows on every screen. The extra bottom
-padding on mobile clears the fixed bottom tab bar (`ShellLive`: 4rem plus the
-home-indicator inset); `md:pb-8` drops it on desktop where that bar is hidden.
-Links wrap into a centered row. --%>
-<footer class="border-t border-slate-200 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8 dark:border-slate-800">
-  <div class={[
-    "mx-auto flex max-w-6xl flex-col items-center gap-3 text-center text-xs text-slate-600 dark:text-slate-400",
-    gutter_class()
-  ]}>
-    <%!-- Links separated by middots to match the credit line below; the dots are
-          decorative (aria-hidden) and the tighter gap-x-2 sits ~8px either side
-          of each dot. --%>
-    <nav aria-label={gettext("Footer navigation")} class="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
-      <.link href={~p"/system/members"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Member directory")}</.link>
-      <span aria-hidden="true">·</span>
-      <.link href={~p"/jobs"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Jobs")}</.link>
-      <span aria-hidden="true">·</span>
-      <.link href={~p"/organizations"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Organizations")}</.link>
-      <span aria-hidden="true">·</span>
-      <.link href={~p"/developers"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("API documentation")}</.link>
-      <span aria-hidden="true">·</span>
-      <a href="https://github.com/wintermeyer/vutuv" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Source")}</a>
-      <span aria-hidden="true">·</span>
-      <a href="https://github.com/wintermeyer/vutuv/issues/new" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Submit a bug report or feature request")}</a>
-      <span aria-hidden="true">·</span>
-      <.link href={~p"/community"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Community guidelines")}</.link>
-      <span aria-hidden="true">·</span>
-      <.link href={~p"/datenschutzerklaerung"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Datenschutzerklärung")}</.link>
-      <span aria-hidden="true">·</span>
-      <.link href={~p"/nutzungsbedingungen"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Nutzungsbedingungen")}</.link>
-      <span aria-hidden="true">·</span>
-      <.link href={~p"/impressum"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("About us")}</.link>
+<%!-- The footer shows on every screen. The extra bottom padding on mobile
+clears the fixed bottom tab bar (`ShellLive`: 4rem plus the home-indicator
+inset); `md:pb-10` drops it on desktop where that bar is hidden.
+
+Four labelled groups rather than one long run of middots: the row had grown to
+ten links and read as a wall of words with no order to it, and every new page
+made it worse. The groups answer "what am I looking for" (a listing, developer
+material, who runs this, the legal texts), and each new link now has one obvious
+home instead of a place in a queue. Two columns on a phone, four from md up —
+a vertical list per group beats a dotted run there because each link becomes a
+finger-sized target instead of a word in a paragraph. --%>
+<footer class="border-t border-slate-200 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-10 dark:border-slate-800">
+  <div class={["mx-auto max-w-6xl", gutter_class()]}>
+    <% footer_heading_class = "text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400" %>
+    <%!-- The hover deliberately goes to brand, not to a darker slate: the muted
+          slate-600 the footer sits in IS the resting colour, so the old
+          `hover:text-slate-600` changed nothing at all in light mode. --%>
+    <% footer_link_class = "block py-2 text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300 dark:hover:text-brand-300" %>
+    <nav aria-label={gettext("Footer navigation")} class="grid grid-cols-2 gap-x-8 gap-y-8 md:grid-cols-4">
+      <div>
+        <h2 class={footer_heading_class}>{gettext("Network")}</h2>
+        <ul class="mt-2">
+          <li><.link href={~p"/system/members"} class={footer_link_class}>{gettext("Member directory")}</.link></li>
+          <li><.link href={~p"/organizations"} class={footer_link_class}>{gettext("Organizations")}</.link></li>
+          <li><.link href={~p"/jobs"} class={footer_link_class}>{gettext("Jobs")}</.link></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class={footer_heading_class}>{gettext("Developers")}</h2>
+        <ul class="mt-2">
+          <li><.link href={~p"/developers"} class={footer_link_class}>{gettext("API documentation")}</.link></li>
+          <li><a href="https://github.com/wintermeyer/vutuv" class={footer_link_class}>{gettext("Source")}</a></li>
+          <li>
+            <a href="https://github.com/wintermeyer/vutuv/issues/new" class={footer_link_class}>
+              {gettext("Submit a bug report or feature request")}
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div>
+        <h2 class={footer_heading_class}>{gettext("Company")}</h2>
+        <%!-- "Investors" and "Media Kit" stay English in every locale, the way
+              "vutuv" and "Fediverse" do: both pages are written in English only,
+              and the untranslated label is the warning that the language changes
+              on the other side of the click. --%>
+        <%!-- The ad page 404s while `:ads_enabled` is off, which is how the
+              software ships and, today, how vutuv.de runs. A footer entry
+              pointing at a 404 is worse than no entry, the same reasoning
+              /llms.txt applies to its own `/ads` line. --%>
+        <ul class="mt-2">
+          <li><.link href={~p"/system/investors"} class={footer_link_class}>Investors</.link></li>
+          <li><.link href={~p"/system/media-kit"} class={footer_link_class}>Media Kit</.link></li>
+          <li :if={Vutuv.Ads.enabled?()}>
+            <.link href={~p"/ads"} class={footer_link_class}>{gettext("Advertising")}</.link>
+          </li>
+          <li><.link href={~p"/impressum"} class={footer_link_class}>{gettext("About us")}</.link></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class={footer_heading_class}>{gettext("Legal")}</h2>
+        <ul class="mt-2">
+          <li><.link href={~p"/datenschutzerklaerung"} class={footer_link_class}>{gettext("Datenschutzerklärung")}</.link></li>
+          <li><.link href={~p"/nutzungsbedingungen"} class={footer_link_class}>{gettext("Nutzungsbedingungen")}</.link></li>
+          <li><.link href={~p"/community"} class={footer_link_class}>{gettext("Community guidelines")}</.link></li>
+        </ul>
+      </div>
     </nav>
-    <%!-- One dotted line, every segment on the same middot rhythm. `text-xs`
-          re-asserts the footer's 12px size to match the nav above; without it
-          the legacy `p { font-size: 15px }` in components.css would render this
-          line larger. --%>
-    <p class="text-xs">
-      © 2019 - {Date.utc_today().year} ·
-      <a href={Application.fetch_env!(:vutuv, :operator_url)} class="underline hover:text-slate-600 dark:hover:text-slate-300">{Application.fetch_env!(:vutuv, :operator_name)}</a>
-      · vutuv {Application.spec(:vutuv, :vsn)}
-      <span title={gettext("Last deployed (Berlin time)")}>· {gettext("Deployment: %{date} at %{time}", date: Vutuv.BuildInfo.deployed_date(), time: Vutuv.BuildInfo.deployed_time())}</span>
-    </p>
+    <%!-- The credit bar. `text-xs` re-asserts the footer's 12px size on the
+          paragraphs; without it the legacy `p { font-size: 15px }` in
+          components.css would render these lines larger. Who runs this on the
+          left, what is running on the right. --%>
+    <div class="mt-8 flex flex-col gap-2 border-t border-slate-200 pt-6 text-slate-600 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:text-slate-400">
+      <p class="text-xs">
+        © 2016 - {Date.utc_today().year} ·
+        <a href={Application.fetch_env!(:vutuv, :operator_url)} class="underline hover:text-brand-700 dark:hover:text-brand-300">{Application.fetch_env!(:vutuv, :operator_name)}</a>
+      </p>
+      <p class="text-xs">
+        vutuv {Application.spec(:vutuv, :vsn)}
+        <span title={gettext("Last deployed (Berlin time)")}>· {gettext("Deployment: %{date} at %{time}", date: Vutuv.BuildInfo.deployed_date(), time: Vutuv.BuildInfo.deployed_time())}</span>
+      </p>
+    </div>
   </div>
 </footer>
 

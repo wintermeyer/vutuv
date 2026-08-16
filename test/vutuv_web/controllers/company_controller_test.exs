@@ -1,0 +1,270 @@
+defmodule VutuvWeb.CompanyControllerTest do
+  @moduledoc """
+  The two company pages behind the footer's "Company" group, plus the footer
+  itself: that its groups render, that both pages stay English under a German
+  `Accept-Language` header, and that the investor page's figures are read from
+  the database rather than typed into the template.
+  """
+  use VutuvWeb.ConnCase, async: true
+
+  alias Vutuv.BerlinTime
+  alias Vutuv.PeopleHistory
+  alias Vutuv.PeopleHistory.Snapshot
+  alias Vutuv.Repo
+  alias VutuvWeb.AgentDocs.MediaKitDoc
+  alias VutuvWeb.CompanyHTML
+
+  # The creating migration backfills 30 days, so the table is never empty even
+  # in a fresh test database. Each test states its own history.
+  setup do
+    Repo.delete_all(Snapshot)
+    :ok
+  end
+
+  defp german(conn), do: put_req_header(conn, "accept-language", "de-DE,de;q=0.9")
+
+  describe "the footer" do
+    test "groups its links under headings instead of one middot row", %{conn: conn} do
+      html = conn |> german() |> get(~p"/") |> html_response(200)
+
+      # The four group headings, in German, since the footer itself is
+      # translated. Matched as headings and not as bare words: "Netzwerk" is
+      # also the top bar's nav label, so `html =~ "Netzwerk"` would pass on a
+      # page with no footer groups at all.
+      for heading <- ["Netzwerk", "Entwickler", "Unternehmen", "Rechtliches"] do
+        assert html =~ ">#{heading}</h2>"
+      end
+
+      # Every link the old flat row carried is still reachable.
+      for path <- [
+            ~p"/system/members",
+            ~p"/organizations",
+            ~p"/jobs",
+            ~p"/developers",
+            ~p"/community",
+            ~p"/datenschutzerklaerung",
+            ~p"/nutzungsbedingungen",
+            ~p"/impressum"
+          ] do
+        assert html =~ ~s|href="#{path}"|
+      end
+    end
+
+    test "carries the two new pages, labelled in English in the German footer", %{conn: conn} do
+      html = conn |> german() |> get(~p"/") |> html_response(200)
+
+      assert html =~ ~s|href="/system/investors"|
+      assert html =~ ~s|href="/system/media-kit"|
+      # The label stays English on purpose: it warns that the page is.
+      assert html =~ ">Investors<"
+      assert html =~ ">Media Kit<"
+    end
+  end
+
+  describe "GET /system/investors" do
+    test "states the live figures", %{conn: conn} do
+      insert(:activated_user)
+      insert(:activated_user)
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ "Investors"
+      assert html =~ "Members"
+      # The figure tile really carries the count from the database.
+      assert html =~ ">2</p>"
+    end
+
+    test "names LinkedIn in the first paragraph, not somewhere further down", %{conn: conn} do
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      [lead] = Regex.run(~r{<h1.*?</p>}s, html)
+      assert lead =~ "alternative to LinkedIn"
+    end
+
+    test "makes the gated-community argument, in the page and in its siblings", %{conn: conn} do
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+      markdown = conn |> get(~p"/system/investors" <> ".md") |> response(200)
+
+      assert html =~ "The gated community"
+      assert html =~ "Sign in to view"
+      # The doc siblings carry the same argument, or the page and the Markdown a
+      # language model reads would tell two different stories.
+      assert markdown =~ "The gated community"
+      assert markdown =~ "302 to the sign-in form"
+    end
+
+    test "quotes LinkedIn with the source that says it", %{conn: conn} do
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ "17,000+"
+      assert html =~ "1.3 billion+"
+      assert html =~ "https://news.linkedin.com/about-us"
+    end
+
+    test "draws the growth curve from the recorded snapshots", %{conn: conn} do
+      today = BerlinTime.today()
+      PeopleHistory.record(Date.add(today, -2), %{members: 100, fediverse_accounts: 10})
+      PeopleHistory.record(Date.add(today, -1), %{members: 130, fediverse_accounts: 25})
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ ~s|data-growth-chart="2"|
+      # The summary sentence under the chart is derived from the same two rows.
+      assert html =~ "30 members"
+      assert html =~ "15 Fediverse accounts"
+    end
+
+    test "says so rather than drawing a line through one point", %{conn: conn} do
+      PeopleHistory.record(BerlinTime.today(), %{members: 5, fediverse_accounts: 0})
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      refute html =~ "data-growth-chart"
+      assert html =~ "has not recorded two days yet"
+    end
+
+    test "stays English under a German Accept-Language header", %{conn: conn} do
+      html = conn |> german() |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ ~s|lang="en"|
+      assert html =~ "Why we can afford to be quiet"
+    end
+
+    test "serves its agent-format siblings", %{conn: conn} do
+      json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
+
+      assert json["type"] == "investors"
+      assert json["comparison"]["source"] == "https://news.linkedin.com/about-us"
+      assert is_integer(json["figures"]["members"])
+    end
+  end
+
+  describe "GET /system/media-kit" do
+    test "hands out the boilerplate, the assets and the contact", %{conn: conn} do
+      html = conn |> get(~p"/system/media-kit") |> html_response(200)
+
+      assert html =~ "Media Kit"
+      assert html =~ MediaKitDoc.boilerplate().short
+      assert html =~ "/images/brand/vutuv-wordmark.svg"
+      assert html =~ MediaKitDoc.press_contact()
+    end
+
+    test "stays English under a German Accept-Language header", %{conn: conn} do
+      html = conn |> german() |> get(~p"/system/media-kit") |> html_response(200)
+
+      assert html =~ ~s|lang="en"|
+      assert html =~ "Brand assets"
+    end
+
+    test "names the person, not just the address, and links their profile", %{conn: conn} do
+      # The literal handle is the point of the test: it has to be the one the
+      # installation is configured with, or the lookup would not resolve. No
+      # other async file inserts this exact username.
+      handle = Application.get_env(:vutuv, :operator_handle)
+      insert(:activated_user, username: handle)
+
+      html = conn |> get(~p"/system/media-kit") |> html_response(200)
+
+      url = MediaKitDoc.press_contact_profile_url()
+
+      assert html =~ MediaKitDoc.press_contact_name()
+      assert html =~ MediaKitDoc.press_contact()
+      # The address is the link text, not a label over it: a reader has to see
+      # what a vutuv profile URL looks like.
+      assert html =~ ~s|href="#{url}"|
+      assert html =~ ">#{url}</a>"
+    end
+
+    test "links no profile where that handle is nobody here", %{conn: conn} do
+      # No such member, which is a third-party installation running the shipped
+      # default: it must render silence, never a link to somebody on vutuv.de.
+      refute MediaKitDoc.press_contact_profile_url()
+
+      html = conn |> get(~p"/system/media-kit") |> html_response(200)
+
+      assert html =~ MediaKitDoc.press_contact_name()
+      # Anchored on the profile paragraph's own wording, not on a phrase that
+      # never appears on the page either way.
+      refute html =~ "Phone, messengers and everything else"
+    end
+
+    test "every asset and screenshot it offers is really served", %{conn: conn} do
+      for %{path: path} <- MediaKitDoc.assets() ++ MediaKitDoc.screenshots() do
+        assert File.exists?(Path.join("priv/static", path)),
+               "#{path} is offered on the media kit but not in priv/static"
+
+        # And it really is reachable, not merely present on disk.
+        assert conn |> get(path) |> response(200)
+      end
+    end
+
+    test "the page and its Markdown sibling carry the same boilerplate", %{conn: conn} do
+      markdown = conn |> get(~p"/system/media-kit" <> ".md") |> response(200)
+
+      assert markdown =~ MediaKitDoc.boilerplate().short
+      assert markdown =~ MediaKitDoc.press_contact()
+    end
+  end
+
+  describe "figures on an English-only page" do
+    test "are grouped the English way whatever locale the request carries" do
+      # Process-local, so this does not leak into a concurrent test.
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+
+      # The house formatter follows the request, which is right everywhere else
+      # and wrong inside an English sentence: "5.934" reads as five point nine
+      # three four to the reader this page is written for.
+      assert VutuvWeb.UI.delimited_count(5934) == "5.934"
+      assert CompanyHTML.en_count(5934) == "5,934"
+    end
+  end
+
+  describe "the growth curve's geometry" do
+    test "needs two points to draw a line" do
+      assert CompanyHTML.chart([]) == nil
+      assert CompanyHTML.chart([%Snapshot{day: ~D[2026-08-01], members: 1}]) == nil
+    end
+
+    test "scales against a zero baseline, never against the data's own floor" do
+      series = [
+        %Snapshot{day: ~D[2026-08-01], members: 500, fediverse_accounts: 0},
+        %Snapshot{day: ~D[2026-08-02], members: 1000, fediverse_accounts: 0}
+      ]
+
+      chart = CompanyHTML.chart(series)
+
+      # Axis top is a round 1000, so the last point sits at the top of the plot
+      # box (y = pad_top = 12) and the first at its exact half (12 + 180/2).
+      # An axis cropped to [500, 1000] would put the first point on the floor
+      # instead - the one chart trick this page must not play.
+      assert chart.members_line == "M52.0 102.0 L628.0 12.0"
+      assert {CompanyHTML.en_count(1000), 12.0} in chart.ticks
+      assert {CompanyHTML.en_count(0), 192.0} in chart.ticks
+    end
+
+    test "the area closes down to the baseline so it can be filled" do
+      series = [
+        %Snapshot{day: ~D[2026-08-01], members: 5, fediverse_accounts: 0},
+        %Snapshot{day: ~D[2026-08-02], members: 10, fediverse_accounts: 0}
+      ]
+
+      chart = CompanyHTML.chart(series)
+
+      assert chart.members_area == "M52.0 102.0 L628.0 12.0 L628.0 192.0 L52.0 192.0 Z"
+    end
+
+    test "the total line runs above the members line by the Fediverse share" do
+      series = [
+        %Snapshot{day: ~D[2026-08-01], members: 50, fediverse_accounts: 0},
+        %Snapshot{day: ~D[2026-08-02], members: 50, fediverse_accounts: 50}
+      ]
+
+      chart = CompanyHTML.chart(series)
+
+      # Same members both days, so that line is flat; the total rises. Axis top
+      # is 100, so 50 lands at the plot box's exact half.
+      assert chart.members_line == "M52.0 102.0 L628.0 102.0"
+      assert chart.total_line == "M52.0 102.0 L628.0 12.0"
+    end
+  end
+end

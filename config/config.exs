@@ -652,6 +652,14 @@ config :vutuv, :operator_name, "Wintermeyer Consulting"
 config :vutuv, :operator_url, "https://wintermeyer-consulting.de"
 config :vutuv, :operator_address, "Johannes-Müller-Str. 10 - 56068 Koblenz - Germany"
 
+# The @handle of the person a journalist should reach on THIS installation; the
+# media kit's press contact links their profile for the rest of the contact
+# details. Kept as a handle rather than a URL so it can only ever point at a
+# member of this installation, never at somebody on vutuv.de — and the link is
+# rendered only when the handle really resolves here, so the vutuv.de default
+# costs a third-party installation nothing but silence. (OPERATOR_HANDLE)
+config :vutuv, :operator_handle, "wintermeyer"
+
 # How this installation names and describes itself to the fediverse's directory
 # layer (`Vutuv.NodeInfo`, the /.well-known/nodeinfo document). FediDB,
 # the-federation.info and Fediverse Observer print these two strings beside the
