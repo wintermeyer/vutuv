@@ -1002,11 +1002,11 @@ defmodule VutuvWeb.PostComponents do
 
     assigns =
       assigns
-      |> assign(:author, note.display_name || Note.display_handle(note))
+      |> assign(:author, Note.label(note))
       |> assign(:handle, Note.display_handle(note))
       |> assign(:host, Note.host(note.actor_uri))
       |> assign(:origin, Note.origin(note))
-      |> assign(:initials, name_initials(note.display_name || note.handle))
+      |> assign(:initials, name_initials(Note.author_name(note) || note.handle))
       |> assign(:public?, Note.public?(note))
       |> assign(:warned?, Note.warned?(note))
 
@@ -1966,7 +1966,7 @@ defmodule VutuvWeb.PostComponents do
     assigns =
       assigns
       |> assign(:account, account)
-      |> assign(:initials, name_initials(account.name || account.handle))
+      |> assign(:initials, name_initials(RemoteAccount.display_name(account) || account.handle))
       |> assign(:link_screenshot, remote_link_screenshot(post, assigns.images))
       |> assign(:permalink, remote_post_permalink(post, assigns.viewer))
       |> assign(:origin, RemotePost.origin(post))

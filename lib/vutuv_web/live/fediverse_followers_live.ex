@@ -221,7 +221,7 @@ defmodule VutuvWeb.FediverseFollowersLive do
                     <td>
                       <.account_link
                         uri={follower.actor_uri}
-                        name={follower.name}
+                        name={Follower.display_name(follower)}
                         handle={Follower.display_handle(follower)}
                       />
                     </td>

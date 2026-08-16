@@ -20,6 +20,7 @@ defmodule Vutuv.Mastodon do
 
   require Logger
 
+  alias Vutuv.Fediverse.Handle
   alias Vutuv.RemoteHtml
   alias Vutuv.SocialFeed.Feed
   alias Vutuv.SocialFeed.Http
@@ -107,7 +108,7 @@ defmodule Vutuv.Mastodon do
   # avatar arrives as its still version.
   defp account_meta(account, user, instance) do
     name =
-      Post.presence(strip_custom_emoji(account["display_name"])) ||
+      Handle.display_name(account["display_name"]) ||
         Post.presence(account["username"]) || user
 
     %{
@@ -118,18 +119,6 @@ defmodule Vutuv.Mastodon do
       followers: Feed.follower_count(account["followers_count"])
     }
   end
-
-  # Display names may embed custom-emoji shortcodes (":verified:"); the
-  # images they name are per-instance, so here the tokens would render as
-  # literal ":verified:" text — drop them. Mastodon delimits shortcodes with
-  # non-word boundaries, which is what keeps a plain time ("10:30:45") intact.
-  defp strip_custom_emoji(value) when is_binary(value) do
-    value
-    |> String.replace(~r/(?<=^|\W):\w{2,}:(?=\W|$)/u, "")
-    |> String.replace(~r/\s{2,}/, " ")
-  end
-
-  defp strip_custom_emoji(value), do: value
 
   defp fetch_statuses(instance, id) do
     # The id came from the remote server's JSON; only a plain token may be

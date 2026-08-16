@@ -252,7 +252,7 @@ defmodule VutuvWeb.FediverseAccountLive do
       <.card>
         <div class="flex items-start gap-4">
           <.remote_avatar
-            initials={name_initials(@account.name || @account.handle)}
+            initials={name_initials(RemoteAccount.display_name(@account) || @account.handle)}
             src={RemoteAccount.avatar_url(@account)}
             size="lg"
           />

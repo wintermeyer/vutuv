@@ -34,6 +34,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Social
@@ -230,7 +231,8 @@ defmodule VutuvWeb.OrganizationLive.Following do
           <li :for={follow <- @remote_follows} class="flex items-center gap-4 py-3">
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {follow.remote_account.name || follow.remote_account.handle}
+                {RemoteAccount.display_name(follow.remote_account) ||
+                  follow.remote_account.handle}
               </p>
               <p class="truncate text-sm text-slate-600 dark:text-slate-400">
                 {follow.remote_account.handle}

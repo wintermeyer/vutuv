@@ -23,7 +23,6 @@ defmodule Vutuv.Fediverse.RemoteAccount do
   use VutuvWeb, :model
 
   alias Vutuv.Fediverse.Handle
-  alias Vutuv.SearchText
 
   # Remote URIs are unbounded in theory; cap generously (they are `text`
   # columns) so a hostile payload cannot store megabytes. actor_uri carries a
@@ -130,11 +129,19 @@ defmodule Vutuv.Fediverse.RemoteAccount do
   end
 
   @doc """
+  The account's display name as vutuv writes it — its server's custom-emoji
+  shortcodes taken out (`Vutuv.Fediverse.Handle.display_name/1`) — or nil where
+  that leaves nothing. Beside `label/1` because the avatar's initials want the
+  name alone and must not fall back to a handle.
+  """
+  def display_name(%__MODULE__{name: name}), do: Handle.display_name(name)
+
+  @doc """
   What the account is called on screen: its display name, else the handle, else
   the bare actor URI. Never nil, so a row with no display fields still reads as
   something rather than as a gap.
   """
   def label(%__MODULE__{} = account) do
-    SearchText.normalize_search(account.name) || display_handle(account) || account.actor_uri
+    display_name(account) || display_handle(account) || account.actor_uri
   end
 end

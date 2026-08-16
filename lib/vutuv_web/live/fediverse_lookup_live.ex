@@ -265,7 +265,9 @@ defmodule VutuvWeb.FediverseLookupLive do
         <div class="mt-3 flex flex-wrap items-center gap-3">
           <.remote_avatar
             initials={
-              name_initials(@post.remote_account.name || @post.remote_account.handle)
+              name_initials(
+                RemoteAccount.display_name(@post.remote_account) || @post.remote_account.handle
+              )
             }
             src={RemoteAccount.avatar_url(@post.remote_account)}
           />

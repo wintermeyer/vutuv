@@ -5,7 +5,9 @@ defmodule Vutuv.Fediverse.Handle do
 
   One module because two different tables need the same answer — a stored reply
   (`Vutuv.Fediverse.Note`) and a stored reaction (`Vutuv.Fediverse.Reaction`) —
-  and a reader must not see the same person written two ways on one page.
+  and a reader must not see the same person written two ways on one page. The
+  same reason puts the *display name* here too (`display_name/1`): the name and
+  the handle are the two halves of one card header.
 
   The handle we store is the actor document's `preferredUsername`. When there is
   none (a row written before we kept it, or a server that omits it) the account
@@ -25,6 +27,40 @@ defmodule Vutuv.Fediverse.Handle do
   # Shaped like a name at all: one path segment, no whitespace, no separators,
   # and short enough not to be a wall of text in a chip.
   @username ~r/^[A-Za-z0-9_.-]{1,64}$/
+
+  # A custom-emoji shortcode as Mastodon spells one: `[a-zA-Z0-9_]{2,}` between
+  # colons, delimited by non-word characters. The delimiters are the whole
+  # point — they are what keeps a time ("10:30:45"), a scheme
+  # ("daniel:// stenberg://") and a doubled colon out of it.
+  @shortcode ~r/(?<=^|\W):[a-zA-Z0-9_]{2,}:(?=\W|$)/
+
+  @doc """
+  What a remote account is called on screen, from the display name its server
+  sent: the string with its custom-emoji shortcodes taken out, or nil when
+  nothing readable is left.
+
+  Those networks let an account put its **own server's** emoji in its name, and
+  send it as a shortcode (`"Droid Boy :coolified:"`) with the picture it stands
+  for in the actor document's `tag` array. That picture is that server's, and
+  vutuv shows no remote picture it has not cached and put past the AI gate
+  (`Vutuv.RemoteMedia`) — a name is not worth that pipeline. So the token has
+  nothing to render as, and left in it reads as a literal `":coolified:"` on
+  the card. Drop it; the Mastodon inline feed has made the same call since it
+  shipped, and this is the one implementation both use.
+
+  Cleaned on the way **out**, not on the way in: the stored value stays what
+  the server said, so a row written before this can never be the odd one out
+  and a later decision to render the pictures still has the name to put them
+  back into.
+  """
+  def display_name(name) when is_binary(name) do
+    name
+    |> String.replace(@shortcode, "")
+    |> String.replace(~r/\s+/u, " ")
+    |> SearchText.normalize_search()
+  end
+
+  def display_name(_name), do: nil
 
   @doc """
   `@handle@host` for a stored `handle` (may be nil) and the account's URI.

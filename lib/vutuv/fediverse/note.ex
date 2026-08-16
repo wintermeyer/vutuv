@@ -129,6 +129,22 @@ defmodule Vutuv.Fediverse.Note do
   def display_handle(%__MODULE__{handle: handle, actor_uri: actor_uri}),
     do: Handle.display(handle, actor_uri)
 
+  @doc """
+  The author's display name as vutuv writes it — their server's custom-emoji
+  shortcodes taken out (`Vutuv.Fediverse.Handle.display_name/1`) — or nil where
+  that leaves nothing. Beside `label/1` because the avatar's initials want the
+  name alone and must not fall back to a handle.
+  """
+  def author_name(%__MODULE__{display_name: name}), do: Handle.display_name(name)
+
+  @doc """
+  What the card calls the author: the display name, else the `@handle@host`.
+  The one owner of that fallback, so a name cleaned in one place cannot arrive
+  raw in another — the card, the agent-format sibling and the notification all
+  read it from here.
+  """
+  def label(%__MODULE__{} = note), do: author_name(note) || display_handle(note)
+
   @doc "The server this note came from, for the card's footer and the ledger."
   defdelegate host(uri), to: Handle
 

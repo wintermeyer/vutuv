@@ -401,7 +401,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
                     <td>
                       <.account_link
                         uri={follow.remote_account.actor_uri}
-                        name={follow.remote_account.name}
+                        name={RemoteAccount.display_name(follow.remote_account)}
                         handle={RemoteAccount.display_handle(follow.remote_account)}
                       />
                     </td>

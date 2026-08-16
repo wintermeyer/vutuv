@@ -1718,7 +1718,7 @@ defmodule Vutuv.Activity do
   defp remote_actor_fields(%Note{} = note) do
     %{
       actor_id: nil,
-      actor_name: note.display_name || Note.display_handle(note),
+      actor_name: Note.label(note),
       actor_param: nil,
       actor_avatar: nil,
       actor_handle: Note.display_handle(note),

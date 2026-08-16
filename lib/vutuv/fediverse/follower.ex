@@ -68,6 +68,14 @@ defmodule Vutuv.Fediverse.Follower do
     do: Handle.display(follower.handle, actor_uri)
 
   @doc """
+  The follower's display name as vutuv writes it — their server's custom-emoji
+  shortcodes taken out (`Vutuv.Fediverse.Handle.display_name/1`) — or nil where
+  that leaves nothing, which the browser's Account cell renders as the handle
+  alone.
+  """
+  def display_name(%__MODULE__{name: name}), do: Handle.display_name(name)
+
+  @doc """
   The remote server this follower lives on, as the follower browser's Server
   column shows it and as its filter matches it (lowercased host of the actor
   URI, the Elixir twin of the `uri_host` SQL macro in `Vutuv.Fediverse`).

@@ -342,7 +342,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     |> Enum.map(fn note ->
       %{
         handle: Note.display_handle(note),
-        author: note.display_name || Note.display_handle(note),
+        author: Note.label(note),
         network: Note.host(note.actor_uri),
         url: Note.origin(note),
         received_at: note.received_at,

@@ -68,6 +68,29 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     refute has_element?(view, "[data-remote-post='#{post.id}'] [data-post-actions]")
   end
 
+  test "an author's custom-emoji shortcode never reaches the card", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    post = cached_post(user)
+
+    # What social.cologne really sends: the emoji is a picture on *that*
+    # server, and the name only carries the token naming it. We host no such
+    # picture, so the token would sit on the card as literal text.
+    RemoteAccount
+    |> Repo.get!(post.remote_account_id)
+    |> Ecto.Changeset.change(name: "Droid Boy :coolified:")
+    |> Repo.update!()
+
+    {:ok, view, html} = live(conn, ~p"/feed")
+
+    assert html =~ "Droid Boy"
+    refute html =~ ":coolified:"
+    # The monogram reads the same cleaned name, so it stays the author's own
+    # initials rather than picking up the token's colon.
+    assert view
+           |> element("[data-remote-post='#{post.id}'] [data-remote-avatar]")
+           |> render() =~ "DB"
+  end
+
   describe "the way out to the original" do
     test "is the host chip itself, and no line under the card repeats it", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
