@@ -12,6 +12,7 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.Tags
   alias Vutuv.Tags.UserTag
 
   defp zip(files) do
@@ -52,6 +53,98 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     assert cert.awarded_year == 2023
 
     assert Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count) == 2
+  end
+
+  describe "the profile's tag ceiling (issue #1478)" do
+    # A profile carries at most Vutuv.Tags.max_user_tags/0 tags, so an archive
+    # can offer more skills than there is room for. Those must be counted as
+    # what they are — refused for want of room — and not folded into the
+    # ordinary skips, whose flash tells the member the entries are already
+    # theirs or claimed by somebody else.
+    defp skills_archive(names),
+      do: zip([{"Skills.csv", "Name\n" <> Enum.join(names, "\n") <> "\n"}])
+
+    defp fill_tags(user, count) do
+      for _ <- 1..count, do: insert(:user_tag, user: user, tag: build(:tag))
+      user
+    end
+
+    test "imports only as many tags as fit and counts the rest apart" do
+      max = Tags.max_user_tags()
+      user = insert(:user) |> fill_tags(max - 3)
+      names = for _ <- 1..10, do: unique_tag_name("li-skill")
+
+      {:ok, parsed} = LinkedIn.parse(skills_archive(names))
+      {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+      assert summary.created.skills == 3
+      assert summary.blocked.tag_limit == 7
+      # Not one of them is a duplicate or an invalid name.
+      assert summary.skipped.skills == 0
+      assert Tags.user_tag_count(user) == max
+    end
+
+    test "a full profile imports no tag at all and says so" do
+      user = insert(:user) |> fill_tags(Tags.max_user_tags())
+      names = for _ <- 1..4, do: unique_tag_name("li-skill")
+
+      {:ok, parsed} = LinkedIn.parse(skills_archive(names))
+      {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+      assert summary.created.skills == 0
+      assert summary.blocked.tag_limit == 4
+      assert Tags.user_tag_count(user) == Tags.max_user_tags()
+    end
+
+    test "a tag the member already has costs no slot" do
+      max = Tags.max_user_tags()
+      user = insert(:user) |> fill_tags(max - 3)
+      held = unique_tag_name("li-skill")
+      {:ok, _} = Tags.add_user_tag(user, held)
+      fresh = for _ <- 1..3, do: unique_tag_name("li-skill")
+
+      {:ok, parsed} = LinkedIn.parse(skills_archive([held | fresh]))
+      {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+      assert summary.created.skills == 2
+      assert summary.skipped.skills == 1
+      assert summary.blocked.tag_limit == 1
+    end
+
+    test "the preview preselects no more skills than fit" do
+      max = Tags.max_user_tags()
+      user = insert(:user) |> fill_tags(max - 4)
+      names = for _ <- 1..9, do: unique_tag_name("li-skill")
+
+      {:ok, parsed} = LinkedIn.parse(skills_archive(names))
+      candidates = LinkedIn.mark_duplicates(user, parsed)
+
+      assert length(candidates.skills) == 9
+      assert Enum.count(candidates.skills, & &1.select?) == 4
+      # The archive's own order decides which four are offered.
+      assert candidates.skills |> Enum.take(4) |> Enum.all?(& &1.select?)
+    end
+
+    test "a full profile preselects nothing" do
+      user = insert(:user) |> fill_tags(Tags.max_user_tags())
+      names = for _ <- 1..3, do: unique_tag_name("li-skill")
+
+      {:ok, parsed} = LinkedIn.parse(skills_archive(names))
+      candidates = LinkedIn.mark_duplicates(user, parsed)
+
+      refute Enum.any?(candidates.skills, & &1.select?)
+    end
+
+    test "every other section still preselects everything that is not a duplicate" do
+      user = insert(:user)
+      {:ok, parsed} = LinkedIn.parse(sample_archive())
+
+      candidates = LinkedIn.mark_duplicates(user, parsed)
+
+      assert Enum.all?(candidates.positions, & &1.select?)
+      assert Enum.all?(candidates.educations, & &1.select?)
+      assert Enum.all?(candidates.certifications, & &1.select?)
+    end
   end
 
   test "a re-import does not double a certification (issue #859)" do

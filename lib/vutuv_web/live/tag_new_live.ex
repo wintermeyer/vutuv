@@ -134,15 +134,36 @@ defmodule VutuvWeb.TagNewLive do
         end
 
       many ->
-        results = Enum.map(many, &Tags.add_user_tag(user, &1))
-        failures = Enum.count(results, &match?({:error, _}, &1))
-        successes = length(results) - failures
+        {successes, failures, limited} = add_many(user, many)
         kind = if successes == 0, do: :error, else: :info
 
         {:noreply,
          socket
-         |> put_flash(kind, UserHelpers.tags_added_flash(successes, failures))
+         |> put_flash(kind, UserHelpers.tags_added_flash(successes, failures, limited))
          |> redirect(to: ~p"/settings/tags")}
+    end
+  end
+
+  # Spend the profile's free tag slots and stop. The guard above only catches a
+  # profile that is *already* full, so a batch of ten on a profile holding
+  # twelve tags used to attach three and report the other seven as duplicates or
+  # invalid — the one reason a member cannot act on. Counting them apart lets
+  # the flash name the ceiling. Same budget shape as the LinkedIn import's
+  # `insert_skills/3`; a failed add spends no slot.
+  defp add_many(user, names) do
+    {successes, failures, limited, _budget} =
+      Enum.reduce(names, {0, 0, 0, Tags.free_user_tag_slots(user)}, &add_one(user, &1, &2))
+
+    {successes, failures, limited}
+  end
+
+  defp add_one(_user, _name, {successes, failures, limited, 0}),
+    do: {successes, failures, limited + 1, 0}
+
+  defp add_one(user, name, {successes, failures, limited, budget}) do
+    case Tags.add_user_tag(user, name) do
+      {:ok, _user_tag} -> {successes + 1, failures, limited, budget - 1}
+      {:error, _changeset} -> {successes, failures + 1, limited, budget}
     end
   end
 

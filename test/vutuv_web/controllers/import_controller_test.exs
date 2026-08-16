@@ -257,4 +257,98 @@ defmodule VutuvWeb.ImportControllerTest do
     assert flash =~ "already claimed it"
     refute flash =~ "already on your profile"
   end
+
+  # A profile carries at most Vutuv.Tags.max_user_tags/0 tags, and an archive
+  # cheerfully offers fifty skills. The preview used to tick every one of them
+  # and the confirm step then dropped the overflow with a message blaming
+  # duplicates (issue #1478).
+  describe "the tag section's ceiling (issue #1478)" do
+    defp skill_files(names), do: [{"Skills.csv", "Name\n" <> Enum.join(names, "\n") <> "\n"}]
+
+    defp fill_tags(user, count) do
+      for _ <- 1..count, do: insert(:user_tag, user: user, tag: build(:tag))
+      user
+    end
+
+    defp preview(conn, files) do
+      conn
+      |> post(~p"/settings/import/linkedin", %{"import" => %{"archive" => upload_zip(files)}})
+      |> html_response(200)
+    end
+
+    defp checked_skill_boxes(body) do
+      body
+      |> LazyHTML.from_document()
+      |> LazyHTML.query(~s([data-select-limit] input[type="checkbox"][checked]))
+      |> Enum.count()
+    end
+
+    test "the preview ticks no more skills than the profile has room for", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # The account signs up with three tags, so eleven of the fifteen are left
+      # once one more is attached.
+      fill_tags(user, 1)
+      names = for i <- 1..30, do: "Ceiling Skill #{i}"
+
+      body = preview(conn, skill_files(names))
+
+      assert body =~ ~s(data-select-limit="11")
+      assert checked_skill_boxes(body) == 11
+      assert body =~ "You have 4 of 15 tags."
+      # The live half counts what is selected, so the sentence is true on
+      # arrival — with the free slots already ticked, "11 more can be picked"
+      # would read as a zero.
+      assert body =~ "11 of 11 free slots selected."
+    end
+
+    test "a full profile ticks nothing and points at the tags editor", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      fill_tags(user, Vutuv.Tags.max_user_tags() - 3)
+
+      body = preview(conn, skill_files(["Ceiling Skill A", "Ceiling Skill B"]))
+
+      assert body =~ ~s(data-select-limit="0")
+      assert checked_skill_boxes(body) == 0
+      assert body =~ "There is no room for more."
+      assert body =~ ~s(href="/settings/tags")
+    end
+
+    test "the German preview names the ceiling in German", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      fill_tags(user, 1)
+
+      body =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> preview(skill_files(["Ceiling Skill C"]))
+
+      assert body =~ "Sie haben 4 von 15 Tags."
+      assert body =~ "1 von 11 freien Plätzen ausgewählt."
+      # The msgid this one is closest to is "Remove date of birth", which is
+      # what --merge fuzzy-filled it with (the .po trap in CLAUDE.md).
+      refute body =~ "Geburtsdatum entfernen"
+    end
+
+    test "confirm reports the tags that did not fit as such", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      fill_tags(user, Vutuv.Tags.max_user_tags() - 3 - 1)
+      names = for i <- 1..5, do: "Ceiling Skill F#{i}"
+      {:ok, parsed} = LinkedIn.parse(zip_binary(skill_files(names)))
+
+      conn =
+        post(conn, ~p"/settings/import/linkedin/apply", %{
+          "payload" => Jason.encode!(LinkedIn.payload_map(parsed)),
+          "selected" => Enum.map(parsed.skills, & &1.id)
+        })
+
+      assert redirected_to(conn) == ~p"/#{user}"
+      flash = Phoenix.Flash.get(conn.assigns.flash, :info)
+      assert flash =~ "Imported 1 tag."
+      assert flash =~ "4 tags did not fit: your profile holds at most 15."
+      # The old sentence claimed those four were already on the profile.
+      refute flash =~ "already on your profile"
+      refute flash =~ "could not be added"
+    end
+  end
 end

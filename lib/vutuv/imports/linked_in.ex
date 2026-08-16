@@ -825,9 +825,16 @@ defmodule Vutuv.Imports.LinkedIn do
 
   @doc """
   Marks each candidate with `duplicate?: true` when the member already has it,
-  and turns the profile scalars into display candidates (with `fillable?`, so the
-  preview can offer only the fields that are currently blank). For rendering the
-  preview only; the apply step re-checks duplicates inside its transaction.
+  `select?: true` when the preview should offer it ticked, and turns the profile
+  scalars into display candidates (with `fillable?`, so the preview can offer
+  only the fields that are currently blank). For rendering the preview only; the
+  apply step re-checks duplicates inside its transaction.
+
+  `select?` is `not duplicate?` everywhere but the tags, where it also honours
+  the profile's free slots (`Tags.free_user_tag_slots/1`): a member with 6 tags
+  and 50 skills in their archive gets the first 9 ticked, not all 50. Ticking
+  what cannot be imported is not a harmless default — it is a promise the
+  confirm step then breaks silently (issue #1478).
   """
   def mark_duplicates(user, parsed) do
     existing = existing_keys(user)
@@ -840,14 +847,33 @@ defmodule Vutuv.Imports.LinkedIn do
       urls: mark(parsed.urls, existing.urls, &downcase(&1.params["value"])),
       social: mark(parsed.social, existing.social, &social_key(&1.params)),
       phones: mark(parsed.phones, existing.phones, &digits(&1.params["value"])),
-      skills: mark(parsed.skills, existing.skills, &String.downcase(&1.name)),
+      skills:
+        parsed.skills
+        |> mark(existing.skills, &String.downcase(&1.name))
+        |> preselect_within(Tags.free_user_tag_slots(user)),
       emails: parsed.emails,
       profile: profile_candidates(user, parsed.profile)
     }
   end
 
   defp mark(candidates, seen, key_fun) do
-    Enum.map(candidates, fn c -> Map.put(c, :duplicate?, MapSet.member?(seen, key_fun.(c))) end)
+    Enum.map(candidates, fn c ->
+      duplicate? = MapSet.member?(seen, key_fun.(c))
+      Map.merge(c, %{duplicate?: duplicate?, select?: not duplicate?})
+    end)
+  end
+
+  # Keep at most `budget` candidates ticked, in the archive's own order, and
+  # untick the rest. A duplicate is already unticked and costs no slot.
+  defp preselect_within(candidates, budget) do
+    {marked, _left} =
+      Enum.map_reduce(candidates, budget, fn
+        %{select?: true} = c, 0 -> {%{c | select?: false}, 0}
+        %{select?: true} = c, left -> {c, left - 1}
+        c, left -> {c, left}
+      end)
+
+    marked
   end
 
   # The sections the preview tallies, in the order it lists them. Emails are
@@ -879,7 +905,12 @@ defmodule Vutuv.Imports.LinkedIn do
       items = Map.fetch!(candidates, key)
       present = Enum.count(items, &present?/1)
 
-      %{key: key, found: length(items), present: present, available: length(items) - present}
+      %{
+        key: key,
+        found: length(items),
+        present: present,
+        available: Enum.count(items, &importable?/1)
+      }
     end
   end
 
@@ -888,6 +919,13 @@ defmodule Vutuv.Imports.LinkedIn do
   defp present?(%{duplicate?: true}), do: true
   defp present?(%{fillable?: false}), do: true
   defp present?(_candidate), do: false
+
+  # What this import would really add — which is not simply "everything you do
+  # not have": the tag section stops at the profile's free slots (issue #1478),
+  # and the preselection already carries that answer as `select?`. A profile
+  # scalar has no `select?`, so it falls back to the plain reading.
+  defp importable?(%{select?: select?}), do: select?
+  defp importable?(candidate), do: not present?(candidate)
 
   defp profile_candidates(user, profile) do
     for {field, label} <- @profile_fields,
@@ -1037,7 +1075,11 @@ defmodule Vutuv.Imports.LinkedIn do
       %{
         created: tallies |> by_outcome(:created) |> Map.put(:profile, profile),
         skipped: by_outcome(tallies, :skipped),
-        blocked: by_outcome(tallies, :blocked)
+        # A tag refused because the profile is full never landed, so it is
+        # blocked — but it gets its own figure beside the others, because it is
+        # the one blocked case the member can clear themselves, and the shared
+        # sentence would tell them the tag is already theirs (issue #1478).
+        blocked: tallies |> by_outcome(:blocked) |> Map.put(:tag_limit, skills.tag_limit)
       }
     end)
   end
@@ -1085,25 +1127,6 @@ defmodule Vutuv.Imports.LinkedIn do
     end
   end
 
-  defp insert_skills(user, existing, candidates) do
-    seen = Map.fetch!(existing, :skills)
-
-    {seen, created, skipped, blocked} =
-      Enum.reduce(candidates, {seen, 0, 0, 0}, &add_skill(&1, &2, user))
-
-    {Map.put(existing, :skills, seen), %{created: created, skipped: skipped, blocked: blocked}}
-  end
-
-  defp add_skill(candidate, {seen, created, skipped, blocked} = acc, user) do
-    key = String.downcase(candidate.name)
-
-    if MapSet.member?(seen, key) do
-      {seen, created, skipped + 1, blocked}
-    else
-      user |> Tags.add_user_tag(candidate.name) |> tally(key, acc)
-    end
-  end
-
   # A successful insert counts as created and remembers its key; a failure (a
   # racing duplicate, a value too long for its column) counts as blocked — the
   # member does not have that entry and never will from this archive.
@@ -1112,6 +1135,48 @@ defmodule Vutuv.Imports.LinkedIn do
 
   defp tally({:error, _}, _key, {seen, created, skipped, blocked}),
     do: {seen, created, skipped, blocked + 1}
+
+  # Tags are the one selection with a ceiling on the *profile*, not just on the
+  # candidate: a member may carry `Tags.max_user_tags/0` of them. So this branch
+  # takes a budget — the free slots, read once — and spends it. Everything past
+  # it is counted apart from the ordinary skips, because "you already have this"
+  # and "your profile is full" are different news and the second one is the only
+  # one the member can act on.
+  #
+  # Reading the budget once also keeps the count out of the loop:
+  # `Tags.add_user_tag/2` re-counts the member's tags on every call, so an
+  # archive with fifty skills used to issue fifty count queries inside this
+  # transaction. The guard there still stands — it is the chokepoint every entry
+  # point shares — we simply stop walking into it.
+  defp insert_skills(user, existing, candidates) do
+    seen = Map.fetch!(existing, :skills)
+    acc = {seen, 0, 0, 0, 0, Tags.free_user_tag_slots(user)}
+
+    {seen, created, skipped, blocked, limited, _budget} =
+      Enum.reduce(candidates, acc, &add_skill(&1, &2, user))
+
+    {Map.put(existing, :skills, seen),
+     %{created: created, skipped: skipped, blocked: blocked, tag_limit: limited}}
+  end
+
+  defp add_skill(candidate, {seen, created, skipped, blocked, limited, budget} = acc, user) do
+    key = String.downcase(candidate.name)
+
+    cond do
+      MapSet.member?(seen, key) -> {seen, created, skipped + 1, blocked, limited, budget}
+      budget == 0 -> {seen, created, skipped, blocked, limited + 1, budget}
+      true -> user |> Tags.add_user_tag(candidate.name) |> tally_skill(key, acc)
+    end
+  end
+
+  # A successful add counts as created, remembers its key and spends a slot; a
+  # failure (a racing duplicate, an invalid name) is blocked like any other
+  # refused insert and spends nothing.
+  defp tally_skill({:ok, _row}, key, {seen, created, skipped, blocked, limited, budget}),
+    do: {MapSet.put(seen, key), created + 1, skipped, blocked, limited, budget - 1}
+
+  defp tally_skill({:error, _}, _key, {seen, created, skipped, blocked, limited, budget}),
+    do: {seen, created, skipped, blocked + 1, limited, budget}
 
   # Fill only the blank profile fields the member selected (name / headline).
   # Guards here too, not just in the controller, so an import can never clobber

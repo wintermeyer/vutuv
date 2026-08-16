@@ -22,6 +22,7 @@ defmodule VutuvWeb.UserHelpers do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
+  alias Vutuv.Tags
   alias Vutuv.Tags.UserTag
 
   def full_name(%User{
@@ -165,16 +166,48 @@ defmodule VutuvWeb.UserHelpers do
   @doc """
   The flash for a batch tag add, shown by `VutuvWeb.TagNewLive` (the add-tag
   form's socket save) after attaching one or more tags to the member's profile.
+
+  `limited` — tags refused because the profile is at `Tags.max_user_tags/0` —
+  is counted and named apart from the ordinary failures. It used to ride the
+  same "the rest were duplicates or invalid" clause, which is the one reading
+  that stops a member from doing the thing that would actually help (the same
+  defect the LinkedIn import had, issue #1478).
   """
-  def tags_added_flash(successes, 0) do
+  def tags_added_flash(successes, failures, limited \\ 0)
+
+  def tags_added_flash(successes, 0, 0) do
     ngettext("Added %{count} tag.", "Added %{count} tags.", successes, count: successes)
   end
 
-  def tags_added_flash(successes, failures) do
-    gettext(
-      "Added %{successes} of %{total} tags (the rest were duplicates or invalid).",
-      successes: successes,
-      total: successes + failures
+  def tags_added_flash(successes, failures, limited) do
+    [added_part(successes), rejected_part(failures), tag_limit_part(limited)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" ")
+  end
+
+  defp added_part(0), do: nil
+
+  defp added_part(count),
+    do: ngettext("Added %{count} tag.", "Added %{count} tags.", count, count: count)
+
+  defp rejected_part(0), do: nil
+
+  defp rejected_part(count) do
+    ngettext(
+      "Skipped %{count} tag that is a duplicate or invalid.",
+      "Skipped %{count} tags that are duplicates or invalid.",
+      count
+    )
+  end
+
+  defp tag_limit_part(0), do: nil
+
+  defp tag_limit_part(count) do
+    ngettext(
+      "%{count} tag did not fit: your profile holds at most %{max}. Remove some and try again.",
+      "%{count} tags did not fit: your profile holds at most %{max}. Remove some and try again.",
+      count,
+      max: Tags.max_user_tags()
     )
   end
 

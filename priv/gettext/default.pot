@@ -122,7 +122,7 @@ msgstr ""
 #: lib/vutuv_web/templates/ad/new.html.heex:136
 #: lib/vutuv_web/templates/admin/legal_page/edit.html.heex:40
 #: lib/vutuv_web/templates/admin/newsletter/form_content.html.heex:57
-#: lib/vutuv_web/templates/import/preview.html.heex:107
+#: lib/vutuv_web/templates/import/preview.html.heex:113
 #: lib/vutuv_web/templates/report/new.html.heex:103
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:276
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:259
@@ -415,13 +415,13 @@ msgstr ""
 #: lib/vutuv_web/cv/odt.ex:176
 #: lib/vutuv_web/live/cv_live.ex:336
 #: lib/vutuv_web/templates/import/new.html.heex:13
-#: lib/vutuv_web/templates/import/preview.html.heex:61
+#: lib/vutuv_web/templates/import/preview.html.heex:67
 #: lib/vutuv_web/templates/url/edit.html.heex:4
 #: lib/vutuv_web/templates/url/index.html.heex:10
 #: lib/vutuv_web/templates/url/manage.html.heex:4
 #: lib/vutuv_web/templates/url/new.html.heex:4
 #: lib/vutuv_web/templates/url/show.html.heex:6
-#: lib/vutuv_web/views/import_html.ex:65
+#: lib/vutuv_web/views/import_html.ex:69
 #, elixir-autogen
 msgid "Links"
 msgstr ""
@@ -1396,7 +1396,7 @@ msgstr ""
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:5
 #: lib/vutuv_web/templates/import/new.html.heex:12
-#: lib/vutuv_web/templates/import/preview.html.heex:57
+#: lib/vutuv_web/templates/import/preview.html.heex:60
 #: lib/vutuv_web/templates/page/index.html.heex:108
 #: lib/vutuv_web/templates/tag/index.html.heex:1
 #: lib/vutuv_web/templates/tag/show.html.heex:23
@@ -1406,7 +1406,7 @@ msgstr ""
 #: lib/vutuv_web/templates/user_tag/index.html.heex:26
 #: lib/vutuv_web/templates/user_tag/manage.html.heex:4
 #: lib/vutuv_web/templates/user_tag/show.html.heex:6
-#: lib/vutuv_web/views/import_html.ex:64
+#: lib/vutuv_web/views/import_html.ex:68
 #, elixir-autogen
 msgid "Tags"
 msgstr ""
@@ -2761,17 +2761,13 @@ msgstr ""
 msgid "Write a post"
 msgstr ""
 
-#: lib/vutuv_web/views/user_helpers.ex:170
+#: lib/vutuv_web/views/user_helpers.ex:179
+#: lib/vutuv_web/views/user_helpers.ex:191
 #, elixir-autogen, elixir-format
 msgid "Added %{count} tag."
 msgid_plural "Added %{count} tags."
 msgstr[0] ""
 msgstr[1] ""
-
-#: lib/vutuv_web/views/user_helpers.ex:174
-#, elixir-autogen, elixir-format
-msgid "Added %{successes} of %{total} tags (the rest were duplicates or invalid)."
-msgstr ""
 
 #: lib/vutuv_web/templates/connection/index.html.heex:13
 #, elixir-autogen, elixir-format
@@ -3150,9 +3146,9 @@ msgstr ""
 #: lib/vutuv_web/live/shell_live.ex:619
 #: lib/vutuv_web/live/shell_live.ex:896
 #: lib/vutuv_web/templates/import/new.html.heex:16
-#: lib/vutuv_web/templates/import/preview.html.heex:76
+#: lib/vutuv_web/templates/import/preview.html.heex:82
 #: lib/vutuv_web/views/admin/moderation_html.ex:28
-#: lib/vutuv_web/views/import_html.ex:68
+#: lib/vutuv_web/views/import_html.ex:72
 #, elixir-autogen, elixir-format
 msgid "Profile"
 msgstr ""
@@ -5494,7 +5490,7 @@ msgstr ""
 #: lib/vutuv_web/templates/email/edit.html.heex:4
 #: lib/vutuv_web/templates/email/manage.html.heex:4
 #: lib/vutuv_web/templates/email/new.html.heex:4
-#: lib/vutuv_web/templates/import/preview.html.heex:90
+#: lib/vutuv_web/templates/import/preview.html.heex:96
 #: lib/vutuv_web/templates/settings/security.html.heex:17
 #, elixir-autogen, elixir-format
 msgid "Email addresses"
@@ -7327,14 +7323,13 @@ msgid "accounts"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:991
-#: lib/vutuv_web/views/import_html.ex:132
-#: lib/vutuv_web/views/import_html.ex:136
+#: lib/vutuv_web/views/import_html.ex:226
 #, elixir-autogen, elixir-format
 msgid "Select all"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:994
-#: lib/vutuv_web/views/import_html.ex:133
+#: lib/vutuv_web/views/import_html.ex:236
 #, elixir-autogen, elixir-format
 msgid "Unselect all"
 msgstr ""
@@ -8085,49 +8080,49 @@ msgstr ""
 msgid "Nobody is online right now."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:192
+#: lib/vutuv_web/controllers/import_controller.ex:204
 #, elixir-autogen, elixir-format
 msgid "%{count} education entry"
 msgid_plural "%{count} education entries"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:200
+#: lib/vutuv_web/controllers/import_controller.ex:212
 #, elixir-autogen, elixir-format
 msgid "%{count} link"
 msgid_plural "%{count} links"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:204
+#: lib/vutuv_web/controllers/import_controller.ex:216
 #, elixir-autogen, elixir-format
 msgid "%{count} phone number"
 msgid_plural "%{count} phone numbers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:206
+#: lib/vutuv_web/controllers/import_controller.ex:218
 #, elixir-autogen, elixir-format
 msgid "%{count} profile field"
 msgid_plural "%{count} profile fields"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:202
+#: lib/vutuv_web/controllers/import_controller.ex:214
 #, elixir-autogen, elixir-format
 msgid "%{count} social account"
 msgid_plural "%{count} social accounts"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:199
+#: lib/vutuv_web/controllers/import_controller.ex:211
 #, elixir-autogen, elixir-format
 msgid "%{count} tag"
 msgid_plural "%{count} tags"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:190
+#: lib/vutuv_web/controllers/import_controller.ex:202
 #, elixir-autogen, elixir-format
 msgid "%{count} work experience"
 msgid_plural "%{count} work experiences"
@@ -8162,7 +8157,7 @@ msgstr ""
 #: lib/vutuv_web/templates/import/new.html.heex:10
 #: lib/vutuv_web/templates/import/preview.html.heex:44
 #: lib/vutuv_web/templates/user/show.html.heex:666
-#: lib/vutuv_web/views/import_html.ex:62
+#: lib/vutuv_web/views/import_html.ex:66
 #: lib/vutuv_web/views/job_reference_html.ex:265
 #, elixir-autogen, elixir-format
 msgid "Education"
@@ -8188,7 +8183,7 @@ msgstr ""
 msgid "Education updated successfully."
 msgstr ""
 
-#: lib/vutuv_web/templates/import/preview.html.heex:92
+#: lib/vutuv_web/templates/import/preview.html.heex:98
 #, elixir-autogen, elixir-format
 msgid "Email addresses are not imported automatically because each one is confirmed by PIN. Add them yourself if you like:"
 msgstr ""
@@ -8209,8 +8204,8 @@ msgstr ""
 msgid "Import"
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:36
-#: lib/vutuv_web/controllers/import_controller.ex:126
+#: lib/vutuv_web/controllers/import_controller.ex:37
+#: lib/vutuv_web/controllers/import_controller.ex:128
 #: lib/vutuv_web/templates/import/new.html.heex:1
 #: lib/vutuv_web/templates/import/preview.html.heex:1
 #: lib/vutuv_web/templates/user/show.html.heex:432
@@ -8218,17 +8213,17 @@ msgstr ""
 msgid "Import from LinkedIn"
 msgstr ""
 
-#: lib/vutuv_web/templates/import/preview.html.heex:105
+#: lib/vutuv_web/templates/import/preview.html.heex:111
 #, elixir-autogen, elixir-format
 msgid "Import selected"
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:212
+#: lib/vutuv_web/controllers/import_controller.ex:224
 #, elixir-autogen, elixir-format
 msgid "Imported %{items}."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:211
+#: lib/vutuv_web/controllers/import_controller.ex:223
 #, elixir-autogen, elixir-format
 msgid "Nothing new to import."
 msgstr ""
@@ -8239,16 +8234,16 @@ msgstr ""
 #: lib/vutuv_web/controllers/phone_number_controller.ex:86
 #: lib/vutuv_web/controllers/phone_number_controller.ex:87
 #: lib/vutuv_web/templates/import/new.html.heex:15
-#: lib/vutuv_web/templates/import/preview.html.heex:69
+#: lib/vutuv_web/templates/import/preview.html.heex:75
 #: lib/vutuv_web/templates/phone_number/edit.html.heex:4
 #: lib/vutuv_web/templates/phone_number/manage.html.heex:4
 #: lib/vutuv_web/templates/phone_number/new.html.heex:4
-#: lib/vutuv_web/views/import_html.ex:67
+#: lib/vutuv_web/views/import_html.ex:71
 #, elixir-autogen, elixir-format
 msgid "Phone numbers"
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:81
+#: lib/vutuv_web/controllers/import_controller.ex:82
 #, elixir-autogen, elixir-format
 msgid "Please choose your LinkedIn export ZIP first."
 msgstr ""
@@ -8258,14 +8253,14 @@ msgstr ""
 msgid "School"
 msgstr ""
 
-#: lib/vutuv_web/templates/import/preview.html.heex:81
+#: lib/vutuv_web/templates/import/preview.html.heex:87
 #, elixir-autogen, elixir-format
 msgid "Set %{field}:"
 msgstr ""
 
 #: lib/vutuv_web/templates/import/new.html.heex:14
-#: lib/vutuv_web/templates/import/preview.html.heex:65
-#: lib/vutuv_web/views/import_html.ex:66
+#: lib/vutuv_web/templates/import/preview.html.heex:71
+#: lib/vutuv_web/views/import_html.ex:70
 #, elixir-autogen, elixir-format
 msgid "Social media"
 msgstr ""
@@ -8280,17 +8275,17 @@ msgstr ""
 msgid "Step 2: Upload the ZIP here"
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:74
+#: lib/vutuv_web/controllers/import_controller.ex:75
 #, elixir-autogen, elixir-format
 msgid "That does not look like a LinkedIn data export ZIP."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:135
+#: lib/vutuv_web/controllers/import_controller.ex:137
 #, elixir-autogen, elixir-format
 msgid "The file could not be read. Please try again."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:106
+#: lib/vutuv_web/controllers/import_controller.ex:107
 #, elixir-autogen, elixir-format
 msgid "The import could not be completed. Please try again."
 msgstr ""
@@ -8302,27 +8297,27 @@ msgstr ""
 
 #: lib/vutuv_web/templates/import/new.html.heex:9
 #: lib/vutuv_web/templates/import/preview.html.heex:40
-#: lib/vutuv_web/views/import_html.ex:61
+#: lib/vutuv_web/views/import_html.ex:65
 #, elixir-autogen, elixir-format
 msgid "Work experience"
 msgstr ""
 
-#: lib/vutuv_web/templates/import/preview.html.heex:96
+#: lib/vutuv_web/templates/import/preview.html.heex:102
 #, elixir-autogen, elixir-format
 msgid "add an email address"
 msgstr ""
 
-#: lib/vutuv_web/views/import_html.ex:92
+#: lib/vutuv_web/views/import_html.ex:106
 #, elixir-autogen, elixir-format
 msgid "already on your profile"
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:67
+#: lib/vutuv_web/controllers/import_controller.ex:68
 #, elixir-autogen, elixir-format
 msgid "That archive is too large or has too many files to import safely."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:151
+#: lib/vutuv_web/controllers/import_controller.ex:163
 #, elixir-autogen, elixir-format
 msgid "Too many imports. Please try again in a little while."
 msgstr ""
@@ -8477,7 +8472,7 @@ msgstr ""
 msgid "When off, the Social Media card lists your accounts without any posts."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:60
+#: lib/vutuv_web/controllers/import_controller.ex:61
 #, elixir-autogen, elixir-format
 msgid "That file is too large. Please upload a ZIP of at most 50 MB."
 msgstr ""
@@ -8923,12 +8918,12 @@ msgstr ""
 msgid "Choose automatically instead"
 msgstr ""
 
-#: lib/vutuv_web/views/user_helpers.ex:423
+#: lib/vutuv_web/views/user_helpers.ex:456
 #, elixir-autogen, elixir-format
 msgid "Show at top of profile"
 msgstr ""
 
-#: lib/vutuv_web/views/user_helpers.ex:414
+#: lib/vutuv_web/views/user_helpers.ex:447
 #, elixir-autogen, elixir-format
 msgid "Shown at the top of your profile"
 msgstr ""
@@ -9471,7 +9466,7 @@ msgstr ""
 msgid "Looking for a job"
 msgstr ""
 
-#: lib/vutuv_web/views/user_helpers.ex:72
+#: lib/vutuv_web/views/user_helpers.ex:73
 #, elixir-autogen, elixir-format
 msgid "Not open to work"
 msgstr ""
@@ -9550,7 +9545,7 @@ msgstr ""
 msgid "“%{name}” is an honor tag now. Add members below."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:194
+#: lib/vutuv_web/controllers/import_controller.ex:206
 #, elixir-autogen, elixir-format
 msgid "%{count} certificate or license"
 msgid_plural "%{count} certificates or licenses"
@@ -9608,7 +9603,7 @@ msgstr ""
 #: lib/vutuv_web/templates/qualification/new.html.heex:4
 #: lib/vutuv_web/templates/qualification/show.html.heex:6
 #: lib/vutuv_web/templates/user/show.html.heex:834
-#: lib/vutuv_web/views/import_html.ex:63
+#: lib/vutuv_web/views/import_html.ex:67
 #: lib/vutuv_web/views/job_reference_html.ex:266
 #, elixir-autogen, elixir-format
 msgid "Certificates & licenses"
@@ -9770,7 +9765,7 @@ msgstr ""
 msgid "Last name"
 msgstr ""
 
-#: lib/vutuv_web/views/user_helpers.ex:95
+#: lib/vutuv_web/views/user_helpers.ex:96
 #, elixir-autogen, elixir-format
 msgid "Prefer not to say"
 msgstr ""
@@ -20644,21 +20639,21 @@ msgstr ""
 msgid "Legal"
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:247
+#: lib/vutuv_web/controllers/import_controller.ex:263
 #, elixir-autogen, elixir-format
 msgid "%{count} entry could not be added."
 msgid_plural "%{count} entries could not be added."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:237
+#: lib/vutuv_web/controllers/import_controller.ex:253
 #, elixir-autogen, elixir-format
 msgid "%{count} social account could not be added because another member has already claimed it."
 msgid_plural "%{count} social accounts could not be added because another member has already claimed them."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/views/import_html.ex:31
+#: lib/vutuv_web/views/import_html.ex:35
 #, elixir-autogen, elixir-format
 msgid "Already on your profile"
 msgstr ""
@@ -20668,12 +20663,12 @@ msgstr ""
 msgid "Analysis complete. Nothing has been imported yet."
 msgstr ""
 
-#: lib/vutuv_web/views/import_html.ex:30
+#: lib/vutuv_web/views/import_html.ex:34
 #, elixir-autogen, elixir-format
 msgid "Found"
 msgstr ""
 
-#: lib/vutuv_web/views/import_html.ex:32
+#: lib/vutuv_web/views/import_html.ex:36
 #, elixir-autogen, elixir-format
 msgid "Ready to import"
 msgstr ""
@@ -20683,12 +20678,12 @@ msgstr ""
 msgid "Review the entries below and confirm your selection to add them to your profile."
 msgstr ""
 
-#: lib/vutuv_web/views/import_html.ex:29
+#: lib/vutuv_web/views/import_html.ex:33
 #, elixir-autogen, elixir-format
 msgid "Section"
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:219
+#: lib/vutuv_web/controllers/import_controller.ex:231
 #, elixir-autogen, elixir-format
 msgid "Skipped %{count} entry that is already on your profile."
 msgid_plural "Skipped %{count} entries that are already on your profile."
@@ -20698,4 +20693,49 @@ msgstr[1] ""
 #: lib/vutuv_web/templates/import/preview.html.heex:20
 #, elixir-autogen, elixir-format
 msgid "You can analyse the same or a newer LinkedIn archive again at any time. Nothing is duplicated and nothing is overwritten. Entries you already have are not updated either: they keep the description and dates they have on vutuv, even when your archive holds newer ones."
+msgstr ""
+
+#: lib/vutuv_web/controllers/import_controller.ex:272
+#: lib/vutuv_web/views/user_helpers.ex:206
+#, elixir-autogen, elixir-format
+msgid "%{count} tag did not fit: your profile holds at most %{max}. Remove some and try again."
+msgid_plural "%{count} tags did not fit: your profile holds at most %{max}. Remove some and try again."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/views/import_html.ex:185
+#, elixir-autogen, elixir-format
+msgid "Remove tags first"
+msgstr ""
+
+#: lib/vutuv_web/views/import_html.ex:226
+#, elixir-autogen, elixir-format
+msgid "Select as many as fit"
+msgstr ""
+
+#: lib/vutuv_web/views/user_helpers.ex:196
+#, elixir-autogen, elixir-format
+msgid "Skipped %{count} tag that is a duplicate or invalid."
+msgid_plural "Skipped %{count} tags that are duplicates or invalid."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/views/import_html.ex:180
+#, elixir-autogen, elixir-format
+msgid "There is no room for more."
+msgstr ""
+
+#: lib/vutuv_web/views/import_html.ex:143
+#, elixir-autogen, elixir-format
+msgid "There is no room for more. Uncheck one to pick another."
+msgstr ""
+
+#: lib/vutuv_web/views/import_html.ex:175
+#, elixir-autogen, elixir-format
+msgid "You have %{used} of %{max} tags."
+msgstr ""
+
+#: lib/vutuv_web/views/import_html.ex:197
+#, elixir-autogen, elixir-format
+msgid "{n} of {max} free slots selected."
 msgstr ""

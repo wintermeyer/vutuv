@@ -71,10 +71,19 @@ defmodule VutuvWeb.ImportHTML do
   defp section_label(:phones), do: gettext("Phone numbers")
   defp section_label(:profile), do: gettext("Profile")
 
-  @doc "One selectable candidate: a checkbox + label, greyed when it is a duplicate."
+  @doc """
+  One selectable candidate: a checkbox + label, greyed when it is a duplicate.
+
+  Whether the box arrives ticked is `select?`, decided by
+  `Vutuv.Imports.LinkedIn.mark_duplicates/2` — for most sections that is simply
+  "not a duplicate", for tags it also honours the profile's free slots. A
+  duplicate is marked `data-duplicate` so the client-side cap can ignore it:
+  submitting one costs no tag slot, the apply step skips it.
+  """
   attr(:id, :string, required: true)
   attr(:label, :string, required: true)
   attr(:duplicate?, :boolean, default: false)
+  attr(:select?, :boolean, default: true)
 
   def candidate_row(assigns) do
     ~H"""
@@ -83,7 +92,8 @@ defmodule VutuvWeb.ImportHTML do
         type="checkbox"
         name="selected[]"
         value={@id}
-        checked={not @duplicate?}
+        checked={@select?}
+        data-duplicate={@duplicate? && "true"}
         class={checkbox_class()}
         id={"cand-#{@id}"}
       />
@@ -100,20 +110,97 @@ defmodule VutuvWeb.ImportHTML do
     """
   end
 
-  @doc "A titled group of candidate rows, rendered only when the group is non-empty."
+  @doc """
+  A titled group of candidate rows, rendered only when the group is non-empty.
+
+  `limit` caps how many non-duplicate boxes may be ticked at once — only the
+  tags pass one (the profile's free slots). It rides the group as
+  `data-select-limit`, where both the "select all" toggle and the per-box guard
+  in `app.js` read it; with JS off the server's own preselection is already
+  within the cap, so nothing here is load-bearing for correctness.
+  """
   attr(:title, :string, required: true)
   attr(:items, :list, required: true)
+  attr(:limit, :integer, default: nil)
+  slot(:note)
   slot(:inner_block, required: true)
 
   def candidate_section(assigns) do
     ~H"""
-    <div :if={@items != []} class="mt-6" data-select-group>
-      <.select_group_header title={@title} />
+    <div :if={@items != []} class="mt-6" data-select-group data-select-limit={@limit}>
+      <.select_group_header title={@title} limit={@limit} />
+      {render_slot(@note)}
+      <%!-- The client-side cap's refusal line. Turned off by the `hidden`
+      attribute and carrying no display utility, so nothing can out-cascade it
+      (the issue #880 trap). --%>
+      <p
+        :if={@limit}
+        data-select-notice
+        hidden
+        role="status"
+        class="mt-1 text-xs font-medium text-red-600 dark:text-red-400"
+      >
+        {gettext("There is no room for more. Uncheck one to pick another.")}
+      </p>
       <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
         {render_slot(@inner_block)}
       </ul>
     </div>
     """
+  end
+
+  @doc """
+  The tag section's capacity line: what the member holds now, and how much of
+  this import is spoken for.
+
+  Two sentences, and the split matters. The first is about the **profile** and
+  never moves. The second is about the **selection** and is live — the client
+  cap rewrites it as boxes are ticked — so it counts what is selected rather
+  than what is left: a "you can import N more" phrasing reads as `0` the moment
+  the page ticks its N preselected boxes, which is the arrival state of every
+  import that has room. It carries its whole sentence as `data-label-selected`
+  (the `{n}` marker convention `<.pin_time_left>` uses; gettext only
+  interpolates `%{…}`, so the markers pass through untouched), so the JS writes
+  no translated word of its own.
+
+  A full profile gets the way out instead of a number: the tags editor.
+  """
+  attr(:used, :integer, required: true)
+  attr(:max, :integer, required: true)
+  attr(:free, :integer, required: true)
+
+  def tag_capacity_note(assigns) do
+    ~H"""
+    <p class="mt-1 text-xs text-slate-600 dark:text-slate-400" data-tag-capacity>
+      {gettext("You have %{used} of %{max} tags.", used: @used, max: @max)}
+      <span :if={@free > 0} data-select-free data-label-selected={selected_label_template()}>
+        {selected_label(@free, @free)}
+      </span>
+      <span :if={@free == 0}>
+        {gettext("There is no room for more.")}
+        <.link
+          navigate={~p"/settings/tags"}
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Remove tags first")}
+        </.link>.
+      </span>
+    </p>
+    """
+  end
+
+  @doc """
+  The live selection sentence's template, `{n}` of `{max}` still to fill in.
+  Shared by the server's first render and the `app.js` rewrite, so the two can
+  never word it differently.
+  """
+  def selected_label_template, do: gettext("{n} of {max} free slots selected.")
+
+  @doc "`selected_label_template/0` with the two figures filled in."
+  def selected_label(selected, free) do
+    selected_label_template()
+    |> String.replace("{n}", Integer.to_string(selected))
+    |> String.replace("{max}", Integer.to_string(free))
   end
 
   @doc """
@@ -123,21 +210,33 @@ defmodule VutuvWeb.ImportHTML do
   inside the enclosing `[data-select-group]`), so it starts hidden and does
   nothing with JS off. It carries both labels so the JS can swap them without
   hardcoding a translated string.
+
+  A capped group (`limit`, the tags) gets its own select label: it ticks as many
+  as fit and stops, so calling that "Select all" would name something the button
+  deliberately does not do.
   """
   attr(:title, :string, required: true)
+  attr(:limit, :integer, default: nil)
 
   def select_group_header(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :select_label,
+        if(assigns.limit, do: gettext("Select as many as fit"), else: gettext("Select all"))
+      )
+
     ~H"""
     <div class="flex items-center justify-between gap-3">
       <.section_title>{@title}</.section_title>
       <button
         type="button"
         data-select-all
-        data-label-select={gettext("Select all")}
+        data-label-select={@select_label}
         data-label-deselect={gettext("Unselect all")}
         class="hidden text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
-        {gettext("Select all")}
+        {@select_label}
       </button>
     </div>
     """

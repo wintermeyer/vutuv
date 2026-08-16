@@ -38,11 +38,11 @@
       <input type="hidden" name="payload" value={@payload} />
 
       <.candidate_section title={gettext("Work experience")} items={@candidates.positions}>
-        <.candidate_row :for={c <- @candidates.positions} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+        <.candidate_row :for={c <- @candidates.positions} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
       <.candidate_section title={gettext("Education")} items={@candidates.educations}>
-        <.candidate_row :for={c <- @candidates.educations} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+        <.candidate_row :for={c <- @candidates.educations} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
       <.candidate_section title={gettext("Certificates & licenses")} items={@candidates.certifications}>
@@ -51,23 +51,29 @@
             "LinkedIn does not say whether an entry is a certificate or a license, so we import all of them as certificates. Please review the section afterwards and switch any that are licenses."
           )}
         </p>
-        <.candidate_row :for={c <- @candidates.certifications} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+        <.candidate_row :for={c <- @candidates.certifications} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
-      <.candidate_section title={gettext("Tags")} items={@candidates.skills}>
-        <.candidate_row :for={c <- @candidates.skills} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+      <%!-- Tags are the one capped section: a profile carries at most
+      Vutuv.Tags.max_user_tags/0 of them, so the preselection stops at the free
+      slots and the section says how many that is. --%>
+      <.candidate_section title={gettext("Tags")} items={@candidates.skills} limit={@tag_capacity.free}>
+        <:note>
+          <.tag_capacity_note used={@tag_capacity.used} max={@tag_capacity.max} free={@tag_capacity.free} />
+        </:note>
+        <.candidate_row :for={c <- @candidates.skills} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
       <.candidate_section title={gettext("Links")} items={@candidates.urls}>
-        <.candidate_row :for={c <- @candidates.urls} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+        <.candidate_row :for={c <- @candidates.urls} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
       <.candidate_section title={gettext("Social media")} items={@candidates.social}>
-        <.candidate_row :for={c <- @candidates.social} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+        <.candidate_row :for={c <- @candidates.social} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
       <.candidate_section title={gettext("Phone numbers")} items={@candidates.phones}>
-        <.candidate_row :for={c <- @candidates.phones} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+        <.candidate_row :for={c <- @candidates.phones} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
       <%!-- Profile scalars: offered only when the field is currently blank, so an

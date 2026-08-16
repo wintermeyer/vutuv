@@ -21,6 +21,7 @@ defmodule VutuvWeb.ImportController do
   plug(:rate_limit when action in [:create, :confirm])
 
   alias Vutuv.Imports.LinkedIn
+  alias Vutuv.Tags
   alias VutuvWeb.RateLimit
 
   # LinkedIn's "larger data archive" runs to tens of megabytes for an active
@@ -122,6 +123,7 @@ defmodule VutuvWeb.ImportController do
       # Display only, so it stays out of the hidden payload: the confirm step
       # must not be able to read counts back from a client-controlled field.
       summary: LinkedIn.summary_rows(candidates),
+      tag_capacity: tag_capacity(user),
       payload: Jason.encode!(LinkedIn.payload_map(parsed)),
       page_title: gettext("Import from LinkedIn")
     )
@@ -133,6 +135,16 @@ defmodule VutuvWeb.ImportController do
       )
 
       redirect_with_error(conn, user, gettext("The file could not be read. Please try again."))
+  end
+
+  # What the tag section may still take on: the three figures its capacity line
+  # states and the cap the preselection and the client-side guard both spend.
+  defp tag_capacity(user) do
+    %{
+      used: Tags.user_tag_count(user),
+      max: Tags.max_user_tags(),
+      free: Tags.free_user_tag_slots(user)
+    }
   end
 
   defp parse_upload(upload) do
@@ -228,7 +240,11 @@ defmodule VutuvWeb.ImportController do
   # provider + value), so it gets its own sentence; anything else is a value
   # the schema refused and is reported plainly rather than guessed at.
   defp blocked_sentences(blocked) do
-    [claimed_sentence(blocked.social), rejected_sentence(total(blocked) - blocked.social)]
+    [
+      claimed_sentence(blocked.social),
+      tag_limit_sentence(blocked.tag_limit),
+      rejected_sentence(total(blocked) - blocked.social - blocked.tag_limit)
+    ]
   end
 
   defp claimed_sentence(0), do: nil
@@ -245,5 +261,19 @@ defmodule VutuvWeb.ImportController do
 
   defp rejected_sentence(count) do
     ngettext("%{count} entry could not be added.", "%{count} entries could not be added.", count)
+  end
+
+  # The one blocked case the member can clear themselves, so it names the
+  # ceiling and what to do about it instead of joining the generic line
+  # (issue #1478).
+  defp tag_limit_sentence(0), do: nil
+
+  defp tag_limit_sentence(count) do
+    ngettext(
+      "%{count} tag did not fit: your profile holds at most %{max}. Remove some and try again.",
+      "%{count} tags did not fit: your profile holds at most %{max}. Remove some and try again.",
+      count,
+      max: Tags.max_user_tags()
+    )
   end
 end

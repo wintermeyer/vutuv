@@ -265,7 +265,26 @@ defmodule Vutuv.Tags do
   Whether `user` already holds the maximum number of tags, so `add_user_tag/2`
   would refuse the next one. Counts the live rows, so it reflects removals.
   """
-  def at_user_tag_limit?(%User{} = user), do: user_tag_count(user.id) >= @max_user_tags
+  def at_user_tag_limit?(%User{} = user), do: free_user_tag_slots(user) == 0
+
+  @doc "How many tags `user` currently holds. Counts the live rows."
+  def user_tag_count(%User{} = user), do: user_tag_count(user.id)
+
+  def user_tag_count(user_id) when is_binary(user_id),
+    do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user_id), :count)
+
+  @doc """
+  How many more tags `user` may add before `add_user_tag/2` starts refusing:
+  `max_user_tags/0` minus what they hold, never negative (a profile
+  grandfathered in above the cap has no free slots, not a negative number).
+
+  This is the number a surface offering a *batch* of tags needs — the LinkedIn
+  import preselects that many candidates and the importer spends exactly that
+  many — because `at_user_tag_limit?/1` can only say "none left", which reads
+  as "go ahead" right up to the tag that is refused.
+  """
+  def free_user_tag_slots(%User{} = user),
+    do: max(@max_user_tags - user_tag_count(user.id), 0)
 
   @doc """
   Tags `user` with `name`, creating the global tag or linking the existing
@@ -320,9 +339,6 @@ defmodule Vutuv.Tags do
     )
     |> Map.put(:action, :insert)
   end
-
-  defp user_tag_count(user_id),
-    do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user_id), :count)
 
   # `Tag.create_or_link_tag/2` always resolves to a `:tag_id` (it either links an
   # existing tag or mints a fresh one and links that). A member can only reach an

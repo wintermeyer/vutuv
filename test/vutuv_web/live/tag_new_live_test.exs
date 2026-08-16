@@ -202,7 +202,9 @@ defmodule VutuvWeb.TagNewLiveTest do
       live |> form("#tag-form", tag_param: %{value: "Elixir, Phoenix"}) |> render_submit()
 
       flash = assert_redirect(live, ~p"/settings/tags")
-      assert flash["info"] == "Added 1 of 2 tags (the rest were duplicates or invalid)."
+      # Duplicates and invalid names keep their own sentence; the ceiling has
+      # one of its own (issue #1478), so neither reason speaks for the other.
+      assert flash["info"] == "Added 1 tag. Skipped 1 tag that is a duplicate or invalid."
       assert tag_count(user) == base + 2
     end
 
@@ -283,6 +285,32 @@ defmodule VutuvWeb.TagNewLiveTest do
       assert html =~ "at most"
       assert tag_count(user) == full
       refute Repo.exists?(from(t in Vutuv.Tags.Tag, where: t.name == "OneMore"))
+    end
+
+    # The guard above only catches a profile that is ALREADY full. A batch that
+    # runs into the ceiling half way through used to attach what fit and report
+    # the rest as duplicates or invalid — the one reason a member cannot act on
+    # (the same defect the LinkedIn import had, issue #1478).
+    test "a batch that overruns the ceiling names the ceiling, not duplicates", %{
+      live: live,
+      user: user
+    } do
+      # Three registration tags plus these leaves room for exactly two more.
+      for _ <- 1..(Vutuv.Tags.max_user_tags() - 3 - 2),
+          do: insert(:user_tag, user: user, tag: build(:tag))
+
+      names = for _ <- 1..5, do: unique_tag_name("Batch")
+
+      live |> form("#tag-form", tag_param: %{value: Enum.join(names, ", ")}) |> render_submit()
+
+      flash = assert_redirect(live, ~p"/settings/tags")
+
+      assert flash["info"] ==
+               "Added 2 tags. 3 tags did not fit: your profile holds at most 15. " <>
+                 "Remove some and try again."
+
+      refute flash["info"] =~ "duplicate"
+      assert tag_count(user) == Vutuv.Tags.max_user_tags()
     end
   end
 end

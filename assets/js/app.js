@@ -1119,35 +1119,119 @@ onReady(setupDropzones)
 // adds a one-click flip over every checkbox inside the enclosing
 // [data-select-group]. The button carries both localized labels as data-* so
 // no translated text is hardcoded here.
+//
+// A group may carry a cap in data-select-limit — the tags do, because a profile
+// holds at most Vutuv.Tags.max_user_tags/0 of them. Then the toggle fills the
+// cap instead of ticking everything, a tick past it is refused with the
+// group's own notice line, and [data-select-free] counts the remaining slots
+// down. A [data-duplicate] box never counts against the cap: the member already
+// has that entry, so submitting it spends no slot. The server preselects within
+// the same cap, so none of this is what keeps the import correct — it is what
+// keeps the page from promising an import it cannot deliver (issue #1478).
+function selectLimit(group) {
+  const raw = parseInt(group.dataset.selectLimit ?? "", 10)
+  return Number.isNaN(raw) ? null : raw
+}
+
+// Boxes that spend a slot, i.e. everything the member does not already have.
+function countingBoxes(group) {
+  return [
+    ...group.querySelectorAll('input[type="checkbox"]:not([data-duplicate])'),
+  ]
+}
+
+function showSelectNotice(group, show) {
+  const notice = group.querySelector("[data-select-notice]")
+  if (notice) notice.hidden = !show
+}
+
+// The live "N of M free slots selected" line, rebuilt from the whole sentence
+// the server put on the element, so no wording lives here. It counts what is
+// SELECTED, not what is left: the page arrives with its free slots already
+// ticked, and a "you can pick N more" line would greet every member with a
+// zero.
+function syncFreeCount(group, limit) {
+  const el = group.querySelector("[data-select-free]")
+  if (!el) return
+  const chosen = countingBoxes(group).filter((b) => b.checked).length
+  const template = el.dataset.labelSelected
+  if (template) {
+    el.textContent = template
+      .replace("{n}", String(chosen))
+      .replace("{max}", String(limit))
+  }
+}
+
 function wireSelectAll(btn) {
   if (!once(btn, "selectAll")) return
   const group = btn.closest("[data-select-group]")
   if (!group) return
+  const limit = selectLimit(group)
   const boxes = () => [...group.querySelectorAll('input[type="checkbox"]')]
+
+  // A full profile has nothing to offer here: the per-box guard below still
+  // refuses every tick, but a "select" button that can never select anything
+  // is noise, so it stays hidden.
+  const wireToggle = limit !== 0
 
   const sync = () => {
     const all = boxes()
     const allChecked = all.length > 0 && all.every((b) => b.checked)
-    btn.dataset.state = allChecked ? "all" : "some"
-    btn.textContent = allChecked
-      ? btn.dataset.labelDeselect
-      : btn.dataset.labelSelect
+    // At a cap, "all" means "as many as fit" — otherwise the button would
+    // never reach its deselect state on a group it can never fill.
+    const filled =
+      limit !== null &&
+      countingBoxes(group).filter((b) => b.checked).length >= limit
+    btn.dataset.state = allChecked || filled ? "all" : "some"
+    btn.textContent =
+      btn.dataset.state === "all"
+        ? btn.dataset.labelDeselect
+        : btn.dataset.labelSelect
+    if (limit !== null) syncFreeCount(group, limit)
   }
 
   btn.addEventListener("click", () => {
     const check = btn.dataset.state !== "all"
+    let budget = limit === null ? Infinity : limit
     boxes().forEach((b) => {
-      b.checked = check
+      if (!check) {
+        b.checked = false
+        return
+      }
+      const counts = !b.hasAttribute("data-duplicate")
+      if (counts && budget <= 0) {
+        b.checked = false
+        return
+      }
+      b.checked = true
+      if (counts) budget -= 1
     })
+    showSelectNotice(group, false)
     sync()
   })
 
-  // Keep the label honest when the member toggles individual boxes by hand.
+  // Keep the label honest when the member toggles individual boxes by hand,
+  // and refuse a tick that would overrun the cap.
   group.addEventListener("change", (e) => {
-    if (e.target.matches('input[type="checkbox"]')) sync()
+    const box = e.target
+    if (!box.matches('input[type="checkbox"]')) return
+
+    if (
+      limit !== null &&
+      box.checked &&
+      !box.hasAttribute("data-duplicate") &&
+      countingBoxes(group).filter((b) => b.checked).length > limit
+    ) {
+      box.checked = false
+      showSelectNotice(group, true)
+    } else if (!box.checked) {
+      showSelectNotice(group, false)
+    }
+
+    sync()
   })
 
-  btn.classList.remove("hidden")
+  if (wireToggle) btn.classList.remove("hidden")
   sync()
 }
 
