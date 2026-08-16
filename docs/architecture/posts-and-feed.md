@@ -357,10 +357,40 @@ in-memory twin `Posts.feed_filter_accepts?/2`: a followed member's post neither
 appears nor counts toward the pill while the Fediverse tab is open. The one
 exception is the **viewer's own** post, which must be visible after they press
 Post — there the feed switches back to "All" rather than swallowing it. The
-choice is socket state with no URL behind it (this LiveView is off-router and
-cannot patch), so a reload opens on "All", and the agent-format siblings
-(`/feed.md|txt|json|xml`) always serve the whole feed, exactly as the archive's
-siblings ignore `?type=`.
+choice has no URL behind it (this LiveView is off-router and cannot patch), and
+the agent-format siblings (`/feed.md|txt|json|xml`) always serve the whole feed,
+exactly as the archive's siblings ignore `?type=`.
+
+**The tab outlives the visit** (issue #1499). A click stores it on the member —
+`Posts.remember_feed_filter/2`, a narrow `update_all` on `users.feed_source`
+(NULL = All) — and `Posts.remembered_feed_filter/1` reads it back at mount off
+the struct the session already loaded, so the opening filter costs no query and
+the **dead render** already draws the right tab with the right entries. Four
+things it must get right, each of which the tests cover:
+
+* The **gate runs first**. A remembered "Fediverse" whose content has since gone
+  away shows no tab bar, and opening behind it would strand the reader on a
+  timeline with no way out — so the mount folds the filter back to `:all` while
+  leaving the stored value alone, and the tab returns with the content.
+* The write happens in the **event handler**, not in `load_source_filter/2`: the
+  same helper runs when the member's own post lands on a tab that cannot hold
+  it, and that fallback is the code's doing, not a choice to remember.
+* It goes through `update_all` rather than a changeset, because a socket's
+  `%User{}` was loaded at mount and can be hours old — writing the whole struct
+  back would undo whatever changed meanwhile, from another device or another
+  tab. Nothing asks first whether the value differs; that question cannot be
+  answered from a possibly-stale struct, and the write is one row by primary key.
+* The **`MountHandoff` subject carries the filter** (`{:feed, filter}`). The
+  stash holds one entry per member, not per socket, so with a bare `:feed` a
+  second device — or the same device after the tab changed between its HTML and
+  its socket connecting — would take a page computed for another tab. Keyed by
+  the filter a mismatch is simply a miss, and that mount loads its own page.
+
+It is deliberately **not** broadcast to the member's other devices. A live tab
+switch there would reload a timeline somebody is reading from the top, taking
+its pending batch, its loaded pages and its scroll position with it — and
+reading vutuv on the desktop while the phone sits on Fediverse is a reasonable
+thing to want. The next visit is soon enough.
 
 **The bar is shown only to a member the fediverse actually reaches** (issue
 #1267). For anyone else "Fediverse" can never fill, so "vutuv" is the same

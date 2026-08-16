@@ -288,6 +288,13 @@ defmodule Vutuv.Accounts.User do
     # translate mode both do), never raw.
     field(:feed_foreign_posts, :string)
     field(:feed_languages, {:array, :string})
+    # The feed's remembered source tab (issue #1499): "vutuv" / "fediverse",
+    # nil = All. Not a form field — `Vutuv.Posts.remember_feed_filter/2` writes
+    # it from the tab click and `remembered_feed_filter/1` reads it back at
+    # mount, so the vocabulary is closed at that chokepoint rather than in a
+    # changeset. Only the opening value: while the feed is open the LiveView's
+    # own assign is the truth.
+    field(:feed_source, :string)
     # The reader's post-display preferences (same settings page, applied to
     # every post this member reads: feed, profile Beiträge, permalink). The
     # line counts drive the CSS line-clamp on the preview body, desktop and

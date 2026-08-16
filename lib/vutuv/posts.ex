@@ -2391,6 +2391,40 @@ defmodule Vutuv.Posts do
   def normalize_feed_filter(_type), do: :all
 
   @doc """
+  The source tab `viewer` last chose on `/feed` (issue #1499) — the tab their
+  next visit opens on.
+
+  Read straight off the column the session already loaded, so the opening
+  filter costs no query and the very first (dead) render can compute the right
+  page. It is the *stored* value, not the effective one: the caller still has
+  to fold it back to `:all` when `fediverse_feed_available?/1` says the tab bar
+  has nothing to show, or a member whose fediverse content dried up would open
+  on a tab they cannot see to leave.
+  """
+  def remembered_feed_filter(%User{feed_source: source}), do: normalize_feed_filter(source)
+
+  @doc """
+  Remembers `filter` as `user`'s feed tab for the next visit.
+
+  A narrow `update_all` on the one column rather than a changeset: a socket's
+  `%User{}` was loaded at mount and can be hours old by the time a tab is
+  clicked, so writing the whole struct back would undo whatever else changed
+  meanwhile — from another device, or from a settings page in the next tab.
+  For the same reason it does not first ask whether the value differs; that
+  question cannot be answered from a struct that may be stale, and the write
+  is one row by primary key. Last click wins, which is what a "last chosen"
+  value means.
+  """
+  def remember_feed_filter(%User{} = user, filter) do
+    stored = if filter in [:vutuv, :fediverse], do: to_string(filter)
+
+    {1, nil} =
+      Repo.update_all(from(u in User, where: u.id == ^user.id), set: [feed_source: stored])
+
+    :ok
+  end
+
+  @doc """
   Whether the feed tab `filter` shows `entry` — the in-memory twin of the
   source split in `feed_sources/2`, for the entries that arrive live over
   PubSub rather than through a query.

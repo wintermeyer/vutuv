@@ -15,6 +15,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.PostBoost
@@ -83,6 +84,10 @@ defmodule VutuvWeb.FeedSourceTabsTest do
   defp timeline(view) do
     if has_element?(view, "#feed-posts"), do: render(element(view, "#feed-posts")), else: ""
   end
+
+  # The tab as it is stored on the member, read fresh — the socket's own
+  # `%User{}` was loaded at mount and knows nothing of what was written since.
+  defp stored_tab(user), do: Repo.get!(User, user.id).feed_source
 
   describe "the tab bar shows only where it means something (issue #1267)" do
     test "renders the three source tabs above the timeline", %{conn: conn} do
@@ -259,6 +264,99 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       assert html =~ "Nothing from the fediverse yet"
       assert has_element?(view, "#feed-source-tabs")
+    end
+  end
+
+  describe "the tab outlives the visit (issue #1499)" do
+    test "the next visit opens where the member left off", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "written here on vutuv")
+      cached_post(remote_account(user, "them"), "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      assert stored_tab(user) == "fediverse"
+
+      # A second visit: a new socket, nothing carried over but the column.
+      {:ok, again, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(again, "[data-post-filter-tab='fediverse'][aria-pressed='true']")
+      assert timeline(again) =~ "written out there"
+      refute timeline(again) =~ "written here on vutuv"
+    end
+
+    test "picking All again forgets the choice", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "written here on vutuv")
+      cached_post(remote_account(user, "them"), "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+      render_click(view, "filter-source", %{"type" => "all"})
+
+      assert stored_tab(user) == nil
+
+      {:ok, again, _html} = live(conn, ~p"/feed")
+      assert has_element?(again, "[data-post-filter-tab='all'][aria-pressed='true']")
+      assert timeline(again) =~ "written out there"
+    end
+
+    test "a remembered tab whose content is gone opens on All, but is not forgotten", %{
+      conn: conn
+    } do
+      # The stranding case: the tab bar is gated on there being fediverse
+      # content at all, so opening on the remembered Fediverse tab would show
+      # an empty timeline with no way back.
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "written here on vutuv")
+      Posts.remember_feed_filter(user, :fediverse)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      refute has_element?(view, "#feed-source-tabs")
+      assert timeline(view) =~ "written here on vutuv"
+      # Kept, so the tab comes back with the content rather than silently
+      # costing them the choice.
+      assert stored_tab(user) == "fediverse"
+    end
+
+    test "the pull back to All on the member's own post is not a choice", %{conn: conn} do
+      # `load_source_filter/2` also runs when their own post lands on a tab
+      # that cannot hold it. That is the code's doing, so it must leave the
+      # remembered tab alone.
+      {conn, user} = create_and_login_user(conn)
+      cached_post(remote_account(user, "them"), "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+
+      {:ok, _own} = Posts.create_post(user, %{body: "my own words"})
+
+      assert has_element?(view, "[data-post-filter-tab='all'][aria-pressed='true']")
+      assert stored_tab(user) == "fediverse"
+    end
+
+    test "a page computed before the tab changed is not handed to the socket", %{conn: conn} do
+      # `MountHandoff` holds one entry per member, not per socket, so the tab
+      # has to be part of its key: this member has a second device open, and
+      # between this page's HTML and its websocket connecting they switch tabs
+      # over there. Keyed only by the member, the mount below would take the
+      # page computed for the tab they just left.
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "written here on vutuv")
+      cached_post(remote_account(user, "them"), "written out there")
+
+      # The document renders on All and stashes what it computed…
+      conn = get(conn, ~p"/feed")
+      assert html_response(conn, 200) =~ "written here on vutuv"
+
+      # …and the tab changes before this socket connects.
+      Posts.remember_feed_filter(user, :fediverse)
+
+      {:ok, view, _html} = live(conn)
+
+      assert timeline(view) =~ "written out there"
+      refute timeline(view) =~ "written here on vutuv"
     end
   end
 

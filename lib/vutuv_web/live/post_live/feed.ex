@@ -12,9 +12,13 @@ defmodule VutuvWeb.PostLive.Feed do
   (`PostComponents.post_filter_tabs/1` with `feed_filter_options/0`). They
   partition the feed by what kind of post an entry carries, so the two named
   tabs together are "All"; the split itself lives in
-  `Vutuv.Posts.feed_page/2`. Like the profile's tabs the choice is socket
-  state with no URL of its own (this LiveView is off-router and cannot patch),
-  so a reload opens on "All".
+  `Vutuv.Posts.feed_page/2`. The choice has no URL of its own (this LiveView
+  is off-router and cannot patch) but it does outlive the visit: the tab is
+  remembered on the member (`Vutuv.Posts.remember_feed_filter/2`, issue
+  #1499) and read back at mount, so the next visit opens where they left off.
+  Deliberately **not** broadcast to their other devices — a live tab switch
+  would reload a timeline somebody else is reading from the top and take its
+  pending batch, its loaded pages and its scroll position with it.
 
   Real-time: `Vutuv.Posts.create_post/2` broadcasts `{:new_post, …}` and
   `Vutuv.Posts.repost_post/2` `{:new_repost, …}` to the author/reposter and
@@ -81,6 +85,13 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mount_feed(socket, user) do
+    # The tab they left on (issue #1499). It opens the page *and* keys the
+    # handoff below: the stash holds one entry per member, so two devices
+    # opening /feed within its 15s TTL would otherwise let one take a page the
+    # other computed for a different tab. Keyed by the filter, a mismatch is
+    # simply a miss and that mount loads its own page.
+    remembered = Posts.remembered_feed_filter(user)
+
     if connected?(socket) do
       Vutuv.Activity.subscribe(user.id)
       # Refresh the Berlin-day-relative post stamps ("09:50 Uhr" -> "Gestern,
@@ -92,24 +103,33 @@ defmodule VutuvWeb.PostLive.Feed do
       # The dead render stashed its computed page seconds ago
       # (VutuvWeb.Live.MountHandoff); take it and skip re-running the same
       # queries. Any miss (expired, consumed, a reconnect) recomputes.
-      case MountHandoff.take(user.id, :feed) do
+      case MountHandoff.take(user.id, {:feed, remembered}) do
         {:ok, payload} -> apply_feed_payload(socket, payload)
-        :error -> apply_feed_payload(socket, feed_payload(user))
+        :error -> apply_feed_payload(socket, feed_payload(user, remembered))
       end
     else
-      payload = feed_payload(user)
-      MountHandoff.stash(user.id, :feed, payload)
+      payload = feed_payload(user, remembered)
+      MountHandoff.stash(user.id, {:feed, remembered}, payload)
       apply_feed_payload(socket, payload)
     end
   end
 
   # Everything a feed mount computes, as data — what the dead render hands the
   # connected mount through the single-use stash.
-  defp feed_payload(user) do
+  defp feed_payload(user, remembered) do
     # The member's private content filters (issue #940): compiled once, applied
     # to every page, and the set of posts they chose to reveal anyway.
     compiled = ContentFilters.compile_for(user)
-    page = Posts.feed_page(user, limit: @page_size)
+
+    # The gate before the page, because it decides which tab this mount opens
+    # on: a remembered "Fediverse" whose content has gone away shows no tab bar
+    # at all, and stranding them on the tab behind it would leave a timeline
+    # they cannot get out of. The stored value stays untouched, so the tab
+    # comes back with the content.
+    source_tabs? = Posts.fediverse_feed_available?(user)
+    filter = if source_tabs?, do: remembered, else: :all
+
+    page = Posts.feed_page(user, limit: @page_size, filter: filter)
     entries = page.entries |> with_engagement(user) |> mark_filtered(compiled, user.id)
 
     # Read the stored draft once and hand it to the composer below, which then
@@ -122,11 +142,14 @@ defmodule VutuvWeb.PostLive.Feed do
       cursor: page.next_cursor,
       draft: draft,
       entries: entries,
+      # The tab these entries were pulled for — the remembered one, or `:all`
+      # where the bar is hidden.
+      filter: filter,
       # Whether the source tabs are worth showing this member at all (issue
       # #1267). Read once per mount and carried on the handoff like the rest;
       # it is a fact about their whole timeline, not about the open tab, so
       # switching tabs must not recompute it.
-      source_tabs?: Posts.fediverse_feed_available?(user),
+      source_tabs?: source_tabs?,
       # The desktop discovery rail renders WITH the page: it was lazy-loaded
       # for one release (v7.200.3) and the pop-in read as slowness, so it is
       # eager again — computed here once, riding the handoff to the connected
@@ -162,9 +185,9 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:content_filters, payload.content_filters)
     |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
-    # A mount always opens on the whole feed: the source tab is socket state
-    # with no URL behind it, so there is nothing to restore it from.
-    |> assign(:feed_filter, :all)
+    # The tab this mount opened on (issue #1499) — from here on the assign is
+    # the truth, and the stored column is not read again while the page lives.
+    |> assign(:feed_filter, payload.filter)
     |> assign(:source_tabs?, payload.source_tabs?)
     |> assign(:more?, payload.more?)
     |> assign(:cursor, payload.cursor)
@@ -438,7 +461,14 @@ defmodule VutuvWeb.PostLive.Feed do
   # query pulls from, so it cannot be applied to the page already on screen —
   # the timeline reloads from the top.
   def handle_event("filter-source", %{"type" => type}, socket) do
-    {:noreply, load_source_filter(socket, Posts.normalize_feed_filter(type))}
+    filter = Posts.normalize_feed_filter(type)
+    # Remembered for the next visit (issue #1499) — here and not in
+    # `load_source_filter/2`, which the arrival of the member's own post also
+    # calls to pull the feed back to "All". That fallback is the code's doing,
+    # not theirs, and must not overwrite the tab they chose.
+    Posts.remember_feed_filter(socket.assigns.current_user, filter)
+
+    {:noreply, load_source_filter(socket, filter)}
   end
 
   def handle_event("open-composer", _params, socket) do
