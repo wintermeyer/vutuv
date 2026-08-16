@@ -850,6 +850,45 @@ defmodule Vutuv.Imports.LinkedIn do
     Enum.map(candidates, fn c -> Map.put(c, :duplicate?, MapSet.member?(seen, key_fun.(c))) end)
   end
 
+  # The sections the preview tallies, in the order it lists them. Emails are
+  # deliberately absent: they are never imported, so a row claiming "0 to
+  # import" would read as a failure rather than as the rule it is.
+  @summary_sections [
+    :positions,
+    :educations,
+    :certifications,
+    :skills,
+    :urls,
+    :social,
+    :phones,
+    :profile
+  ]
+
+  @doc """
+  The per-section tally the preview shows above the candidate lists, from the
+  `mark_duplicates/2` result: how many candidates this archive produced, how
+  many of them are already on the profile, and how many are left to import.
+
+  Counts **candidates**, not CSV rows, so the figures are exactly the rows the
+  member can see below the table. A section the archive said nothing about is a
+  row of zeros and not a "file missing" claim: an empty section and an absent
+  one look the same to a member who simply has no certificates.
+  """
+  def summary_rows(candidates) do
+    for key <- @summary_sections do
+      items = Map.fetch!(candidates, key)
+      present = Enum.count(items, &present?/1)
+
+      %{key: key, found: length(items), present: present, available: length(items) - present}
+    end
+  end
+
+  # Two shapes of "the member already has this": a duplicate candidate, and a
+  # profile scalar whose field is not blank (so the import will not touch it).
+  defp present?(%{duplicate?: true}), do: true
+  defp present?(%{fillable?: false}), do: true
+  defp present?(_candidate), do: false
+
   defp profile_candidates(user, profile) do
     for {field, label} <- @profile_fields,
         value = Map.get(profile, field),
@@ -928,7 +967,15 @@ defmodule Vutuv.Imports.LinkedIn do
   Inserts the selected candidates for `user` in one transaction, skipping
   anything the member already has (so re-import never doubles a row). `selection`
   is the parse result narrowed to the chosen candidates, plus a `:profile` map of
-  the blank fields to fill. Returns `{:ok, %{created: map, skipped: map}}`.
+  the blank fields to fill.
+
+  Returns `{:ok, %{created: map, skipped: map, blocked: map}}`. The two
+  not-created buckets are counted apart because only one of them is the
+  member's own doing: `skipped` is "you already have this", `blocked` is "this
+  could not be added at all" — a social handle another member has claimed
+  (`social_key_unless_claimed/1`), a value too long for its column, a race.
+  Reporting both as "already on your profile" told members their entry was
+  imported when it never landed.
   """
   def apply_selection(user, selection) do
     # Imported prose is arbitrary external text ("Managed the @Acme account"), so
@@ -977,29 +1024,25 @@ defmodule Vutuv.Imports.LinkedIn do
 
       profile = apply_profile(user, Map.get(selection, :profile, %{}))
 
+      tallies = %{
+        positions: positions,
+        educations: educations,
+        certifications: certifications,
+        urls: urls,
+        social: social,
+        phones: phones,
+        skills: skills
+      }
+
       %{
-        created: %{
-          positions: positions.created,
-          educations: educations.created,
-          certifications: certifications.created,
-          urls: urls.created,
-          social: social.created,
-          phones: phones.created,
-          skills: skills.created,
-          profile: profile
-        },
-        skipped: %{
-          positions: positions.skipped,
-          educations: educations.skipped,
-          certifications: certifications.skipped,
-          urls: urls.skipped,
-          social: social.skipped,
-          phones: phones.skipped,
-          skills: skills.skipped
-        }
+        created: tallies |> by_outcome(:created) |> Map.put(:profile, profile),
+        skipped: by_outcome(tallies, :skipped),
+        blocked: by_outcome(tallies, :blocked)
       }
     end)
   end
+
+  defp by_outcome(tallies, outcome), do: Map.new(tallies, fn {k, t} -> {k, t[outcome]} end)
 
   # Insert each candidate whose dedup key is not already present (in the DB or
   # earlier in this same batch), building the row off the user association.
@@ -1007,10 +1050,10 @@ defmodule Vutuv.Imports.LinkedIn do
     uid = user_id(existing)
     seen = Map.fetch!(existing, type)
 
-    {seen, created, skipped} =
-      Enum.reduce(candidates, {seen, 0, 0}, &insert_one(&1, &2, fun, uid))
+    {seen, created, skipped, blocked} =
+      Enum.reduce(candidates, {seen, 0, 0, 0}, &insert_one(&1, &2, fun, uid))
 
-    {Map.put(existing, type, seen), %{created: created, skipped: skipped}}
+    {Map.put(existing, type, seen), %{created: created, skipped: skipped, blocked: blocked}}
   end
 
   defp insert_one(candidate, acc, fun, uid) do
@@ -1018,12 +1061,14 @@ defmodule Vutuv.Imports.LinkedIn do
     do_insert(key, changeset_fun, assoc, acc, uid)
   end
 
-  defp do_insert(nil, _changeset_fun, _assoc, {seen, created, skipped}, _uid),
-    do: {seen, created, skipped + 1}
+  # A nil key means the candidate can never be inserted (today: a social handle
+  # another member has claimed), so it is blocked, not skipped.
+  defp do_insert(nil, _changeset_fun, _assoc, {seen, created, skipped, blocked}, _uid),
+    do: {seen, created, skipped, blocked + 1}
 
-  defp do_insert(key, changeset_fun, assoc, {seen, created, skipped} = acc, uid) do
+  defp do_insert(key, changeset_fun, assoc, {seen, created, skipped, blocked} = acc, uid) do
     if MapSet.member?(seen, key) do
-      {seen, created, skipped + 1}
+      {seen, created, skipped + 1, blocked}
     else
       # on_conflict: :nothing — every insert here runs inside apply_selection's
       # single transaction, and a unique-index violation (even one a changeset
@@ -1042,26 +1087,31 @@ defmodule Vutuv.Imports.LinkedIn do
 
   defp insert_skills(user, existing, candidates) do
     seen = Map.fetch!(existing, :skills)
-    {seen, created, skipped} = Enum.reduce(candidates, {seen, 0, 0}, &add_skill(&1, &2, user))
-    {Map.put(existing, :skills, seen), %{created: created, skipped: skipped}}
+
+    {seen, created, skipped, blocked} =
+      Enum.reduce(candidates, {seen, 0, 0, 0}, &add_skill(&1, &2, user))
+
+    {Map.put(existing, :skills, seen), %{created: created, skipped: skipped, blocked: blocked}}
   end
 
-  defp add_skill(candidate, {seen, created, skipped} = acc, user) do
+  defp add_skill(candidate, {seen, created, skipped, blocked} = acc, user) do
     key = String.downcase(candidate.name)
 
     if MapSet.member?(seen, key) do
-      {seen, created, skipped + 1}
+      {seen, created, skipped + 1, blocked}
     else
       user |> Tags.add_user_tag(candidate.name) |> tally(key, acc)
     end
   end
 
   # A successful insert counts as created and remembers its key; a failure (a
-  # racing duplicate, an invalid row) counts as skipped.
-  defp tally({:ok, _row}, key, {seen, created, skipped}),
-    do: {MapSet.put(seen, key), created + 1, skipped}
+  # racing duplicate, a value too long for its column) counts as blocked — the
+  # member does not have that entry and never will from this archive.
+  defp tally({:ok, _row}, key, {seen, created, skipped, blocked}),
+    do: {MapSet.put(seen, key), created + 1, skipped, blocked}
 
-  defp tally({:error, _}, _key, {seen, created, skipped}), do: {seen, created, skipped + 1}
+  defp tally({:error, _}, _key, {seen, created, skipped, blocked}),
+    do: {seen, created, skipped, blocked + 1}
 
   # Fill only the blank profile fields the member selected (name / headline).
   # Guards here too, not just in the controller, so an import can never clobber

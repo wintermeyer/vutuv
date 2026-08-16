@@ -114,9 +114,14 @@ defmodule VutuvWeb.ImportController do
   # member had re-saved in a non-UTF-8 encoding. Whatever an archive does, the
   # member gets a flash and the form back, never the 500 page.
   defp render_preview(conn, user, parsed) do
+    candidates = LinkedIn.mark_duplicates(user, parsed)
+
     render(conn, "preview.html",
       user: user,
-      candidates: LinkedIn.mark_duplicates(user, parsed),
+      candidates: candidates,
+      # Display only, so it stays out of the hidden payload: the confirm step
+      # must not be able to read counts back from a client-controlled field.
+      summary: LinkedIn.summary_rows(candidates),
       payload: Jason.encode!(LinkedIn.payload_map(parsed)),
       page_title: gettext("Import from LinkedIn")
     )
@@ -162,15 +167,21 @@ defmodule VutuvWeb.ImportController do
     |> redirect(to: ~p"/settings/import/linkedin")
   end
 
-  # "Imported 1 work experience, 2 tags. Skipped 3 entries …". The skip reason
-  # names both cases: an entry the member already has AND one another member
-  # has claimed (the globally-unique social handles — see
-  # LinkedIn.social_key_unless_claimed/1).
+  # "Imported 1 work experience, 2 tags. Skipped 3 entries that are already on
+  # your profile. 1 social account is already claimed by another member."
+  #
+  # The two not-created reasons are told apart because they mean opposite
+  # things to the member: a skipped entry is on the profile already, a blocked
+  # one never landed. One sentence for both said "already on your profile"
+  # about entries that were not.
   defp summary_flash(summary) do
-    summary.created
-    |> imported_parts()
-    |> imported_message()
-    |> append_skipped(skipped_total(summary.skipped))
+    [
+      summary.created |> imported_parts() |> imported_message(),
+      skipped_sentence(total(summary.skipped))
+      | blocked_sentences(summary.blocked)
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(" ")
   end
 
   defp imported_parts(created) do
@@ -200,20 +211,39 @@ defmodule VutuvWeb.ImportController do
   defp imported_message([]), do: gettext("Nothing new to import.")
   defp imported_message(parts), do: gettext("Imported %{items}.", items: Enum.join(parts, ", "))
 
-  defp skipped_total(skipped) do
-    skipped.positions + skipped.educations + skipped.certifications + skipped.skills +
-      skipped.urls + skipped.social + skipped.phones
+  defp total(tally), do: tally |> Map.values() |> Enum.sum()
+
+  defp skipped_sentence(0), do: nil
+
+  defp skipped_sentence(count) do
+    ngettext(
+      "Skipped %{count} entry that is already on your profile.",
+      "Skipped %{count} entries that are already on your profile.",
+      count
+    )
   end
 
-  defp append_skipped(message, 0), do: message
+  # A claimed social handle is the one blocked case with an explanation the
+  # member can act on (social_media_accounts has a GLOBAL unique index on
+  # provider + value), so it gets its own sentence; anything else is a value
+  # the schema refused and is reported plainly rather than guessed at.
+  defp blocked_sentences(blocked) do
+    [claimed_sentence(blocked.social), rejected_sentence(total(blocked) - blocked.social)]
+  end
 
-  defp append_skipped(message, count) do
-    message <>
-      " " <>
-      ngettext(
-        "Skipped %{count} entry that is already on your profile or taken by another member.",
-        "Skipped %{count} entries that are already on your profile or taken by another member.",
-        count
-      )
+  defp claimed_sentence(0), do: nil
+
+  defp claimed_sentence(count) do
+    ngettext(
+      "%{count} social account could not be added because another member has already claimed it.",
+      "%{count} social accounts could not be added because another member has already claimed them.",
+      count
+    )
+  end
+
+  defp rejected_sentence(0), do: nil
+
+  defp rejected_sentence(count) do
+    ngettext("%{count} entry could not be added.", "%{count} entries could not be added.", count)
   end
 end

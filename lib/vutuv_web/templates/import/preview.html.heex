@@ -1,7 +1,28 @@
 <.settings_shell user={@user} active={:import} title={gettext("Import from LinkedIn")}>
 <div class="max-w-3xl">
   <.card>
-    <p class="text-sm text-slate-600 dark:text-slate-400">
+    <%!-- The first thing a member needs to know is that this page changed
+    nothing yet: they may leave it, or upload again, without wondering what
+    the last attempt did to their profile. --%>
+    <div
+      data-import-analysis
+      class="rounded-lg bg-brand-50 p-4 text-sm text-brand-900 ring-1 ring-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:ring-brand-800"
+    >
+      <p class="font-semibold">{gettext("Analysis complete. Nothing has been imported yet.")}</p>
+      <p class="mt-1">
+        {gettext("Review the entries below and confirm your selection to add them to your profile.")}
+      </p>
+    </div>
+
+    <.analysis_summary rows={@summary} />
+
+    <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "You can analyse the same or a newer LinkedIn archive again at any time. Nothing is duplicated and nothing is overwritten. Entries you already have are not updated either: they keep the description and dates they have on vutuv, even when your archive holds newer ones."
+      )}
+    </p>
+
+    <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
         "Here is what we found in your export. Uncheck anything you do not want. Entries already on your profile are unchecked for you."
       )}

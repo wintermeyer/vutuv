@@ -126,9 +126,12 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
 
     {:ok, summary} = LinkedIn.apply_selection(user, parsed)
 
-    # The claimed handle is skipped; the phone AFTER it still imports.
+    # The claimed handle is BLOCKED, not skipped: the member does not have it
+    # and never will from this archive, so the flash must not tell them it is
+    # already on their profile. The phone AFTER it still imports.
     assert summary.created.social == 0
-    assert summary.skipped.social == 1
+    assert summary.blocked.social == 1
+    assert summary.skipped.social == 0
     assert summary.created.phones == 1
 
     assert Repo.aggregate(
@@ -185,7 +188,7 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     {:ok, summary} = LinkedIn.apply_selection(user, parsed)
 
     assert summary.created.positions == 1
-    assert summary.skipped.positions == 1
+    assert summary.blocked.positions == 1
     assert Repo.get_by(WorkExperience, user_id: user.id, organization: "Beta")
     refute Repo.get_by(WorkExperience, user_id: user.id, organization: "Acme")
   end
@@ -202,7 +205,7 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     {:ok, summary} = LinkedIn.apply_selection(user, parsed)
 
     assert summary.created.urls == 0
-    assert summary.skipped.urls == 1
+    assert summary.blocked.urls == 1
   end
 
   test "fills a blank headline but never overwrites an existing one" do

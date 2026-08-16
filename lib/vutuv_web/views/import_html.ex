@@ -2,6 +2,75 @@ defmodule VutuvWeb.ImportHTML do
   @moduledoc false
   use VutuvWeb, :html
 
+  @doc """
+  The analysis summary above the candidate lists (issue #1477): one row per
+  supported section with what the archive held, what is already on the profile
+  and what is left to import.
+
+  Counts candidates rather than CSV rows, because a raw row count needs an
+  "ignored" column to add up, and the largest ignored group would be the
+  entries a real archive simply repeats across its files, which the importer
+  collapses on purpose: a number that reads like lost data while describing
+  the importer working correctly.
+
+  Mobile-first sizing, measured rather than guessed: the headers **wrap**, and
+  they carry no `uppercase tracking-wide` (German labels set in caps cost this
+  table ~54px, which is the difference between four columns fitting a phone and
+  the "Ready to import" figure sitting off the right edge). At 8px cell padding
+  the table's min-content is ~304px against the ~310px a 390px phone leaves
+  inside the card. The `overflow-x-auto` wrapper is the backstop for anything
+  narrower, and it is what keeps a wide table from scrolling the whole page
+  sideways.
+  """
+  attr(:rows, :list, required: true)
+
+  def analysis_summary(assigns) do
+    ~H"""
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full text-sm" data-import-summary>
+        <thead>
+          <tr class="border-b border-slate-200 text-left text-xs font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-400">
+            <th scope="col" class="py-2 pr-2">{gettext("Section")}</th>
+            <th scope="col" class="px-2 py-2 text-right">{gettext("Found")}</th>
+            <th scope="col" class="px-2 py-2 text-right">{gettext("Already on your profile")}</th>
+            <th scope="col" class="py-2 pl-2 text-right">{gettext("Ready to import")}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          <tr
+            :for={row <- @rows}
+            data-import-summary-row={row.key}
+            class={
+              if(row.found == 0,
+                do: "text-slate-500 dark:text-slate-400",
+                else: "text-slate-800 dark:text-slate-200"
+              )
+            }
+          >
+            <th scope="row" class="py-2 pr-2 text-left font-medium">{section_label(row.key)}</th>
+            <td class="px-2 py-2 text-right tabular-nums">{delimited_count(row.found)}</td>
+            <td class="px-2 py-2 text-right tabular-nums">{delimited_count(row.present)}</td>
+            <td class="py-2 pl-2 text-right font-semibold tabular-nums">
+              {delimited_count(row.available)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  # The same words the candidate lists below the table are titled with, so the
+  # summary and the lists can never name a section differently.
+  defp section_label(:positions), do: gettext("Work experience")
+  defp section_label(:educations), do: gettext("Education")
+  defp section_label(:certifications), do: gettext("Certificates & licenses")
+  defp section_label(:skills), do: gettext("Tags")
+  defp section_label(:urls), do: gettext("Links")
+  defp section_label(:social), do: gettext("Social media")
+  defp section_label(:phones), do: gettext("Phone numbers")
+  defp section_label(:profile), do: gettext("Profile")
+
   @doc "One selectable candidate: a checkbox + label, greyed when it is a duplicate."
   attr(:id, :string, required: true)
   attr(:label, :string, required: true)
