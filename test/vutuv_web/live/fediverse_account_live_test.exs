@@ -126,6 +126,59 @@ defmodule VutuvWeb.FediverseAccountLiveTest do
     assert Repo.aggregate(Follow, :count) == 0
   end
 
+  # The member's report: an actor id whose path is `/ap/users/<numeric id>` —
+  # ordinary Mastodon-family, one segment more than a pasted address may have —
+  # answered the follow with "That does not look like an address on another
+  # network", about the account whose card sits above the button. The page
+  # follows the row it is drawn from now, so no address is parsed at all.
+  test "the follow works for an actor id that is not a pasted address", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    {:ok, user} = Vutuv.Accounts.update_user(user, %{"fediverse_followers?" => "true"})
+    {:ok, _actor} = Fediverse.ensure_actor(user)
+
+    actor = "https://social.example/ap/users/116970588627792798"
+
+    Application.put_env(:vutuv, :fediverse_req_options,
+      plug: fn conn ->
+        if conn.request_path == "/.well-known/webfinger",
+          do: raise("an account we already hold needs no WebFinger lookup")
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/activity+json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "id" => actor,
+            "type" => "Person",
+            "preferredUsername" => "them",
+            "name" => "Them Themself",
+            "inbox" => actor <> "/inbox",
+            "publicKey" => %{"id" => actor <> "#main-key", "publicKeyPem" => "PEM"}
+          })
+        )
+      end
+    )
+
+    on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
+
+    acc =
+      Repo.insert!(%RemoteAccount{
+        actor_uri: actor,
+        host: "social.example",
+        handle: "them",
+        name: "Them Themself",
+        inbox_uri: actor <> "/inbox"
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/system/fediverse/account/#{acc.id}")
+
+    html = view |> element("#follow") |> render_click()
+
+    refute html =~ "does not look like an address"
+    assert has_element?(view, "[data-follow-state=requested]")
+    assert Repo.aggregate(Follow, :count) == 1
+  end
+
   test "muting is reversible, and this page is where it reverses", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     {:ok, user} = Vutuv.Accounts.update_user(user, %{"fediverse_followers?" => "true"})

@@ -123,7 +123,7 @@ defmodule VutuvWeb.FediverseLookupLive do
   def handle_event("follow", _params, socket) do
     account = socket.assigns.post.remote_account
 
-    case Fediverse.follow_remote(socket.assigns.current_user, account.actor_uri) do
+    case Fediverse.follow_remote_account(socket.assigns.current_user, account) do
       {:ok, follow} ->
         {:noreply,
          socket

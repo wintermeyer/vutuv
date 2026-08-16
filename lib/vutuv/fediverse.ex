@@ -1011,15 +1011,8 @@ defmodule Vutuv.Fediverse do
       :remote ->
         with :ok <- check_can_follow(user),
              :ok <- check_follow_limit(user),
-             {:ok, account} <- resolve_remote_account(user, address),
-             {:ok, follow} <- insert_remote_follow(user, account) do
-          enqueue(
-            user,
-            [account.inbox_uri],
-            Docs.follow_activity(user, account.actor_uri, follow.follow_activity_id)
-          )
-
-          {:ok, %{follow | remote_account: account}}
+             {:ok, account} <- resolve_remote_account(user, address) do
+          send_follow(user, account)
         end
 
       # A vutuv follow needs no actor key and spends no outbound budget, so
@@ -1033,6 +1026,63 @@ defmodule Vutuv.Fediverse do
 
       :unknown ->
         with :ok <- check_can_resolve(), do: {:error, :local_account}
+    end
+  end
+
+  @doc """
+  A member follows an account this installation **already holds**: the account
+  page (`/system/fediverse/account/:id`) and the card a looked-up post arrives
+  with both have the row in front of them, so neither has anything to look up.
+
+  Separate from `follow_remote/2`, and that is the whole point. That one takes
+  what somebody *typed* and works out who it names — parse the address, ask
+  WebFinger for the actor id. Handing it a stored `actor_uri` instead looked
+  like the same act and was not: `parse_address/1` accepts exactly the three
+  shapes people paste (`@you@server`, `you@server`, `https://server/@you`), and
+  a real actor id is under no obligation to be one of them.
+  `https://social.isarosc.de/ap/users/116970588627792798` is an ordinary
+  Mastodon-family actor with one path segment too many and no handle in it at
+  all, so pressing "Follow" answered *"That does not look like an address on
+  another network"* about an account whose card was right above the button.
+
+  Widening the parser is not the fix: its narrowness is load-bearing, because
+  `look_up_post/2` tells an account URL from a post URL by exactly the segment
+  count it refuses (see `classify_lookup/2`). So this takes the identity we
+  hold rather than a string to re-derive it from.
+
+  The actor document is still fetched, because the inbox and the key are what
+  the `Follow` is delivered and signed against and a stored row can be old.
+  What is gone is the WebFinger hop, which had nothing left to prove — the
+  row's `actor_uri` *is* the canonical id, either resolved through WebFinger
+  once already or read off a signature-verified inbound activity. The gates and
+  the refusal vocabulary are `follow_remote/2`'s, in the same order and
+  including the hourly budget: a follow sent from a page is the same outbound
+  act as one sent from the address box, and a cap one surface does not count is
+  not a cap.
+  """
+  def follow_remote_account(%User{} = user, %RemoteAccount{} = account) do
+    with :ok <- check_can_follow(user),
+         :ok <- check_follow_limit(user),
+         :ok <- check_follow_host(account.actor_uri),
+         :ok <- claim_remote_follow_budget(user),
+         {:ok, remote} <- fetch_follow_target(account.actor_uri, user),
+         :ok <- check_follow_host(remote.id),
+         {:ok, fresh} <- upsert_remote_account(remote) do
+      send_follow(user, fresh)
+    end
+  end
+
+  # The row plus the signed request, shared by both ways in so a follow sent
+  # from a page and one sent from the address box cannot drift apart.
+  defp send_follow(%User{} = user, %RemoteAccount{} = account) do
+    with {:ok, follow} <- insert_remote_follow(user, account) do
+      enqueue(
+        user,
+        [account.inbox_uri],
+        Docs.follow_activity(user, account.actor_uri, follow.follow_activity_id)
+      )
+
+      {:ok, %{follow | remote_account: account}}
     end
   end
 

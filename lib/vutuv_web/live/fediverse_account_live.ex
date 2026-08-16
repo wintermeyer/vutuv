@@ -104,7 +104,7 @@ defmodule VutuvWeb.FediverseAccountLive do
   def handle_event("follow", _params, socket) do
     account = socket.assigns.account
 
-    case Fediverse.follow_remote(socket.assigns.current_user, account.actor_uri) do
+    case Fediverse.follow_remote_account(socket.assigns.current_user, account) do
       {:ok, follow} ->
         # Only the button changes. A fresh follow is "requested", so no
         # followers-only post opens until the other server answers, and there is

@@ -15,6 +15,7 @@ defmodule Vutuv.FediverseRemoteFollowsTest do
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Social
   alias Vutuv.Social.Follow, as: SocialFollow
   alias VutuvWeb.Fediverse.Docs
@@ -318,6 +319,120 @@ defmodule Vutuv.FediverseRemoteFollowsTest do
 
       assert {:ok, _follow} = Fediverse.follow_remote(user, "@them@social.example")
       assert {:error, :follow_limit} = Fediverse.follow_remote(user, "@other@social.example")
+    end
+  end
+
+  describe "follow_remote_account/2" do
+    # An actor id is under no obligation to look like a pasted address.
+    # social.isarosc.de publishes `/ap/users/<numeric id>` — one path segment
+    # more than `parse_address/1` accepts, and no handle in it at all — so
+    # pressing "Follow" on that account's own page used to answer
+    # `:invalid_address` about an account whose card was right above the button.
+    @stored_actor "https://social.isarosc.de/ap/users/116970588627792798"
+
+    defp stored_account(actor_uri) do
+      {:ok, account} =
+        %RemoteAccount{}
+        |> RemoteAccount.changeset(%{
+          actor_uri: actor_uri,
+          host: URI.parse(actor_uri).host,
+          handle: "axel",
+          name: "Pandolin",
+          inbox_uri: actor_uri <> "/inbox"
+        })
+        |> Repo.insert()
+
+      account
+    end
+
+    # Only the actor document, and only over the id we already hold: a row we
+    # stored has nothing left for WebFinger to prove.
+    defp stub_actor(actor_uri) do
+      stub_remote(fn conn ->
+        if conn.request_path == "/.well-known/webfinger",
+          do: raise("an account we already hold needs no WebFinger lookup")
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/activity+json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "id" => actor_uri,
+            "type" => "Person",
+            "preferredUsername" => "axel",
+            "name" => "Pandolin",
+            "inbox" => actor_uri <> "/inbox",
+            "publicKey" => %{"id" => actor_uri <> "#main-key", "publicKeyPem" => "PEM"}
+          })
+        )
+      end)
+    end
+
+    # The calibration for the whole describe block: the parser refuses this id
+    # and is meant to, because `look_up_post/2` tells an account URL from a post
+    # URL by exactly the segment count it refuses. Widening it is not the fix;
+    # not going through it is.
+    test "the address parser refuses that actor id, and stays that way" do
+      assert {:error, :invalid_address} = RemoteFollow.parse_address(@stored_actor)
+    end
+
+    test "follows an actor id no address parser would accept" do
+      stub_actor(@stored_actor)
+      user = federated_user()
+      account = stored_account(@stored_actor)
+
+      assert {:ok, follow} = Fediverse.follow_remote_account(user, account)
+
+      assert follow.state == "requested"
+      assert follow.remote_account_id == account.id
+      assert follow.user_id == user.id
+
+      assert [%{"type" => "Follow"} = activity] = deliveries(user)
+      assert activity["object"] == @stored_actor
+      assert [delivery] = Repo.all(Delivery)
+      assert delivery.inbox_uri == @stored_actor <> "/inbox"
+
+      # One row, refreshed rather than duplicated.
+      assert Repo.aggregate(RemoteAccount, :count) == 1
+    end
+
+    test "a second press is refused, and the gates still hold" do
+      stub_actor(@stored_actor)
+      user = federated_user()
+      account = stored_account(@stored_actor)
+
+      assert {:ok, _follow} = Fediverse.follow_remote_account(user, account)
+      assert {:error, :already_following} = Fediverse.follow_remote_account(user, account)
+
+      assert {:error, :not_federating} =
+               Fediverse.follow_remote_account(insert(:activated_user), account)
+    end
+
+    test "a server blocked since the row was stored is refused without a request" do
+      stub_remote(fn _conn -> raise "a blocked server must never be contacted" end)
+      admin = insert(:user, admin?: true)
+      {:ok, _} = Fediverse.block_instance(%{"host" => "social.isarosc.de"}, admin)
+
+      assert {:error, :instance_blocked} =
+               Fediverse.follow_remote_account(federated_user(), stored_account(@stored_actor))
+
+      assert Repo.aggregate(Follow, :count) == 0
+    end
+
+    test "the hourly budget counts these follows too" do
+      stub_actor(@stored_actor)
+      Application.put_env(:vutuv, :fediverse_remote_follow_limit, 1)
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_remote_follow_limit) end)
+
+      user = federated_user()
+
+      assert {:ok, _follow} = Fediverse.follow_remote_account(user, stored_account(@stored_actor))
+
+      assert {:error, :follow_capped} =
+               Fediverse.follow_remote_account(
+                 user,
+                 stored_account("https://social.isarosc.de/ap/users/2")
+               )
     end
   end
 
