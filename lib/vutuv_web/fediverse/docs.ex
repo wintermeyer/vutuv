@@ -730,10 +730,21 @@ defmodule VutuvWeb.Fediverse.Docs do
       "cc" => cc(user, remote),
       "url" => note_url(user, post.id)
     }
+    |> put_content_map(post)
     |> put_in_reply_to(post, remote)
     |> put_tag(remote, hashtags)
     |> put_attachments(post)
   end
+
+  # The author's declared language federates as AS2 `contentMap` (issue
+  # #1488) — the field Mastodon reads a Note's language from, and without
+  # which the post is DROPPED from the public timelines of every reader with
+  # a language filter set. NULL (legacy/undeclared) emits no key at all:
+  # never a fabricated tag.
+  defp put_content_map(note, %Post{language: language}) when is_binary(language),
+    do: Map.put(note, "contentMap", %{language => note["content"]})
+
+  defp put_content_map(note, _post), do: note
 
   # The reply from another network this post answers, when it answers one
   # (issue #1070). An un-preloaded association is a truthy `NotLoaded`, so it is

@@ -164,6 +164,7 @@ defmodule Vutuv.Fediverse.Note do
       :display_name,
       :content_text,
       :summary,
+      :language,
       :audience,
       :received_at,
       :checked_at,

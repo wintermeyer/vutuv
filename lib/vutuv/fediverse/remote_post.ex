@@ -157,6 +157,7 @@ defmodule Vutuv.Fediverse.RemotePost do
       :in_reply_to_uri,
       :origin_url,
       :summary,
+      :language,
       :sensitive,
       :audience,
       :kind,

@@ -190,12 +190,22 @@ defmodule Vutuv.Translations.Translator do
     ratio >= @min_length_ratio and ratio <= @max_length_ratio
   end
 
-  # The fenced blocks, trailing whitespace ignored per block. Compared as a
-  # list: count, order and contents must all survive the translation.
+  # The fenced blocks, compared as a list: count, order and contents must all
+  # survive the translation. Whitespace-normalized per block (trailing spaces
+  # and blank lines dropped) — the #1455 eval showed the recommended model
+  # faithfully keeps fence CONTENT but sometimes drops a trailing blank line
+  # inside one, and a whitespace-only difference must not cost the reader the
+  # whole translation.
   defp fences(text) do
     ~r/```.*?```/s
     |> Regex.scan(text)
-    |> Enum.map(fn [block] -> String.trim_trailing(block) end)
+    |> Enum.map(fn [block] ->
+      block
+      |> String.split("\n")
+      |> Enum.map(&String.trim_trailing/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join("\n")
+    end)
   end
 
   # "und" (undetermined) when the model's tag is garbage: it is a valid ISO

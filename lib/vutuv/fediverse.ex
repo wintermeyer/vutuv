@@ -3132,10 +3132,39 @@ defmodule Vutuv.Fediverse do
     %{
       content_text: text,
       summary: remote_text(object["summary"], RemotePost.max_summary()),
+      language: as2_language(object),
       sensitive: object["sensitive"] == true,
       audience: audience
     }
   end
+
+  @doc """
+  The language an AS2 object declares (issue #1488): the first key of
+  `contentMap`, else `nameMap`, else `summaryMap`, else the `@context`'s
+  `@language` — normalized to the primary subtag this system stores, nil for
+  anything absent or malformed. Mastodon's own parser takes the first
+  `contentMap` key the same way; genuinely multilingual maps are read by
+  nobody. ONE named function instead of a copy per `object["content"]` read
+  site.
+  """
+  def as2_language(object) when is_map(object) do
+    raw =
+      first_language_key(object["contentMap"]) ||
+        first_language_key(object["nameMap"]) ||
+        first_language_key(object["summaryMap"]) ||
+        context_language(object["@context"])
+
+    Vutuv.Translations.normalize_language(raw)
+  end
+
+  def as2_language(_object), do: nil
+
+  defp first_language_key(map) when is_map(map), do: map |> Map.keys() |> List.first()
+  defp first_language_key(_other), do: nil
+
+  defp context_language(list) when is_list(list), do: Enum.find_value(list, &context_language/1)
+  defp context_language(%{"@language" => language}), do: language
+  defp context_language(_other), do: nil
 
   defp remote_post_kind(%{"type" => "Question"}), do: "question"
   defp remote_post_kind(_object), do: "note"
@@ -4150,6 +4179,7 @@ defmodule Vutuv.Fediverse do
       |> Note.changeset(%{
         content_text: text,
         summary: remote_text(object["summary"], Note.max_summary()),
+        language: as2_language(object),
         audience: audience(user, activity, object),
         checked_at: DateTime.utc_now(:second)
       })
@@ -4544,6 +4574,7 @@ defmodule Vutuv.Fediverse do
           display_name: actor.name,
           content_text: text,
           summary: remote_text(object["summary"], Note.max_summary()),
+          language: as2_language(object),
           audience: audience(user, activity, object),
           received_at: received,
           # It was demonstrably published the moment it was delivered, so the
