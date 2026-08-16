@@ -83,6 +83,46 @@ defmodule VutuvWeb.OrganizationComponents do
   end
 
   attr(:organization, :map, required: true)
+  slot(:inner_block)
+  slot(:actions)
+
+  @doc """
+  One organization in a list: logo, name and location. The default slot carries
+  whatever belongs under the name (a row of role badges), `:actions` whatever
+  sits at the right edge of the row (an unfollow button).
+
+  The three lists that show organizations — a member's followers, the
+  organizations they follow, and the ones they administer — each carried their
+  own copy of these fifteen lines, and the third had already drifted: it built
+  its own `/organizations/:slug` path instead of asking
+  `Organizations.canonical_path/1`, so a page with an opt-in root handle was
+  linked by its slug there and by its handle in the other two.
+  """
+  def organization_row(assigns) do
+    ~H"""
+    <li class="flex items-center gap-4 py-4">
+      <.link navigate={Organizations.canonical_path(@organization)} class="shrink-0">
+        <.organization_logo organization={@organization} class="h-12 w-12" />
+      </.link>
+      <div class="min-w-0 flex-1">
+        <.link
+          navigate={Organizations.canonical_path(@organization)}
+          class="block truncate font-semibold text-slate-900 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-300"
+        >
+          {@organization.name}
+        </.link>
+        <.organization_location
+          organization={@organization}
+          class="truncate text-sm text-slate-600 dark:text-slate-400"
+        />
+        {render_slot(@inner_block)}
+      </div>
+      {render_slot(@actions)}
+    </li>
+    """
+  end
+
+  attr(:organization, :map, required: true)
   attr(:class, :string, default: nil)
 
   @doc "The organization's \"City, Country\" line (nil parts folded away)."

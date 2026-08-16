@@ -18,7 +18,6 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   alias Vutuv.Isbn
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.PostComponents
-  alias VutuvWeb.UI
 
   # The per-user people lists (followers/following/connections) share one
   # clause; the set lives in ListDocs.
@@ -668,27 +667,19 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   forge exposed, dot-separated. Shared with the text renderer so the two
   human-readable formats read the same.
 
-  The counts go through `compact_count/1`, like the card these lines mirror:
-  these two formats are read by people, and a run-together `12345` is a bug
-  wherever one of them shows up. `.json` and `.xml` keep the raw figures — that
-  is what a machine reader takes them from. (`ngettext/3` binds `%{count}` to
-  the raw integer and a `count:` binding does not override it, hence the
-  separate `%{formatted}` placeholder — the same msgids the card uses.)
+  The counts stay **exact** here, where the card shows `compact_count/1`'s
+  `2K`. These formats are written for agents (the frontmatter is the
+  "markdown for agents" shape), and a reader that came for the figure is worse
+  served by a rounded one — `user_profile_code_stats_test.exs` pins it.
   """
   def code_stats_facts(account) do
     [
       account.total_stars &&
-        ngettext("%{formatted} star", "%{formatted} stars", account.total_stars,
-          formatted: UI.compact_count(account.total_stars)
-        ),
+        ngettext("%{count} star", "%{count} stars", account.total_stars),
       account.public_repos &&
-        ngettext("%{formatted} repository", "%{formatted} repositories", account.public_repos,
-          formatted: UI.compact_count(account.public_repos)
-        ),
+        ngettext("%{count} repository", "%{count} repositories", account.public_repos),
       account.followers &&
-        ngettext("%{formatted} follower", "%{formatted} followers", account.followers,
-          formatted: UI.compact_count(account.followers)
-        ),
+        ngettext("%{count} follower", "%{count} followers", account.followers),
       account.member_since && gettext("since %{date}", date: account.member_since),
       code_dormant_fact(account),
       account.languages != [] && Enum.join(account.languages, ", ")

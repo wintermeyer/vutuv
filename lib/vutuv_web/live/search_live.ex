@@ -558,11 +558,11 @@ defmodule VutuvWeb.SearchLive do
         </.button>
         <.link
           :if={@signed_in? and @refusal_link}
-          navigate={elem(@refusal_link, 0)}
+          navigate={@refusal_link.path}
           id="search-lookup-refusal-link"
           class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
-          {elem(@refusal_link, 1)} ›
+          {@refusal_link.label} ›
         </.link>
         <.link
           :if={!@signed_in?}

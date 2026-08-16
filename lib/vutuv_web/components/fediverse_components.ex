@@ -494,12 +494,17 @@ defmodule VutuvWeb.FediverseComponents do
         "This vutuv does not exchange anything with other networks. That is an operator setting, not yours."
       )
 
-  @doc "Where a refused member can act on it, as `{path, label}` — `nil` when nowhere."
+  @doc """
+  Where a refused member can act on it, as `%{path:, label:}` — `nil` when
+  nowhere. A map rather than a tuple because both call sites render it in HEEx,
+  where a tuple costs an `elem(@refusal_link, 0)` and the next reader a trip
+  back here to learn which element is the path.
+  """
   def lookup_refusal_link(:not_federating),
-    do: {~p"/settings/fediverse", gettext("Fediverse settings")}
+    do: %{path: ~p"/settings/fediverse", label: gettext("Fediverse settings")}
 
   def lookup_refusal_link(:moved),
-    do: {~p"/settings/fediverse/move", gettext("Your account move")}
+    do: %{path: ~p"/settings/fediverse/move", label: gettext("Your account move")}
 
   def lookup_refusal_link(_disabled), do: nil
 end

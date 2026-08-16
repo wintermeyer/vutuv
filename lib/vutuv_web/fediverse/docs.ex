@@ -139,48 +139,29 @@ defmodule VutuvWeb.Fediverse.Docs do
 
   @doc "The Person document WebFinger points at."
   def actor(user, %Actor{} = actor) do
-    actor_url = actor_url(user)
-
-    %{
-      "@context" => [
-        "https://www.w3.org/ns/activitystreams",
-        "https://w3id.org/security/v1"
-      ],
-      "id" => actor_url,
+    user
+    |> base_actor(actor, user.inserted_at)
+    |> Map.merge(%{
       "type" => "Person",
       "preferredUsername" => user.username,
       "name" => UserHelpers.full_name(user),
       "summary" => summary(user),
       "url" => "#{base()}/#{user.username}",
-      "inbox" => actor_url <> "/inbox",
-      "outbox" => outbox_url(user),
-      "followers" => followers_url(user),
       # Count-only like the followers collection, and for the same reason: who
       # a member reads is theirs to know (issue #1160). Always advertised, so a
       # remote server never has to guess whether this actor can follow back.
       "following" => following_url(user),
-      # The installation-wide inbox (issue #1073). The per-member one above is
-      # what every server already knows and keeps working forever; this is the
-      # offer to deliver a broadcast once for all of them.
-      "endpoints" => %{"sharedInbox" => shared_inbox_url()},
       # Where a remote server looks for the pinned post (issue #1110). Always
       # advertised, even with nothing pinned: the collection is then simply
       # empty, and an actor that only sometimes names the field would make the
       # profile a remote server renders depend on when it last fetched.
       "featured" => featured_url(user),
-      "manuallyApprovesFollowers" => false,
-      "published" => iso8601(user.inserted_at),
-      "publicKey" => %{
-        "id" => key_id(user),
-        "owner" => actor_url,
-        "publicKeyPem" => actor.public_key_pem
-      },
       "icon" => %{
         "type" => "Image",
         "mediaType" => "image/jpeg",
         "url" => "#{base()}/#{user.username}/avatar.jpg"
       }
-    }
+    })
     |> put_also_known_as(user)
     |> put_moved_to(user)
   end
@@ -199,7 +180,30 @@ defmodule VutuvWeb.Fediverse.Docs do
   where a human reads the topic, and it is the one link a remote reader wants.
   """
   def tag_actor(%Tag{} = tag, %Actor{} = actor) do
-    actor_url = actor_url(tag)
+    tag
+    |> base_actor(actor, tag.inserted_at)
+    |> Map.merge(%{
+      "type" => "Group",
+      "preferredUsername" => tag.slug,
+      "name" => tag.name,
+      "summary" => tag_summary(tag),
+      "url" => "#{base()}/tags/#{tag.slug}"
+    })
+  end
+
+  # The half of an actor document that says nothing about who the actor is: the
+  # context, the collections derived from its own URL, this installation's
+  # shared inbox (issue #1073 — the per-actor inbox is what every server
+  # already knows and keeps working forever; this is the offer to deliver a
+  # broadcast once for all of them), the approval flag and the key.
+  #
+  # It was written out three times, and the two lines that must never differ
+  # between a member, a page and a topic — the `@context` list and the shared
+  # inbox — were among the copies. The per-kind builders stay separate on
+  # purpose, because half of the member document has no meaning for a page or a
+  # topic; only this half is shared.
+  defp base_actor(subject, %Actor{} = actor, published_at) do
+    actor_url = actor_url(subject)
 
     %{
       "@context" => [
@@ -207,19 +211,14 @@ defmodule VutuvWeb.Fediverse.Docs do
         "https://w3id.org/security/v1"
       ],
       "id" => actor_url,
-      "type" => "Group",
-      "preferredUsername" => tag.slug,
-      "name" => tag.name,
-      "summary" => tag_summary(tag),
-      "url" => "#{base()}/tags/#{tag.slug}",
       "inbox" => actor_url <> "/inbox",
-      "outbox" => actor_url <> "/outbox",
-      "followers" => actor_url <> "/followers",
+      "outbox" => outbox_url(subject),
+      "followers" => followers_url(subject),
       "endpoints" => %{"sharedInbox" => shared_inbox_url()},
       "manuallyApprovesFollowers" => false,
-      "published" => iso8601(tag.inserted_at),
+      "published" => iso8601(published_at),
       "publicKey" => %{
-        "id" => actor_url <> "#main-key",
+        "id" => key_id(subject),
         "owner" => actor_url,
         "publicKeyPem" => actor.public_key_pem
       }
@@ -257,14 +256,9 @@ defmodule VutuvWeb.Fediverse.Docs do
   is.
   """
   def organization_actor(%Organization{} = organization, %Actor{} = actor) do
-    actor_url = actor_url(organization)
-
-    %{
-      "@context" => [
-        "https://www.w3.org/ns/activitystreams",
-        "https://w3id.org/security/v1"
-      ],
-      "id" => actor_url,
+    organization
+    |> base_actor(actor, organization.inserted_at)
+    |> Map.merge(%{
       "type" => "Organization",
       # The page's claimed handle. Federating without one is not possible —
       # WebFinger's `subject` and this field both need an address — which is why
@@ -272,19 +266,8 @@ defmodule VutuvWeb.Fediverse.Docs do
       "preferredUsername" => organization.username,
       "name" => organization.name,
       "summary" => organization_summary(organization),
-      "url" => "#{base()}/organizations/#{organization.slug}",
-      "inbox" => actor_url <> "/inbox",
-      "outbox" => actor_url <> "/outbox",
-      "followers" => actor_url <> "/followers",
-      "endpoints" => %{"sharedInbox" => shared_inbox_url()},
-      "manuallyApprovesFollowers" => false,
-      "published" => iso8601(organization.inserted_at),
-      "publicKey" => %{
-        "id" => actor_url <> "#main-key",
-        "owner" => actor_url,
-        "publicKeyPem" => actor.public_key_pem
-      }
-    }
+      "url" => "#{base()}/organizations/#{organization.slug}"
+    })
     |> put_organization_icon(organization)
   end
 

@@ -6,7 +6,7 @@ defmodule VutuvWeb.FolloweeHTML do
   # The "Organizations" section renders the pages this member follows in the
   # same row shape /settings/organizations uses, so a page reads the same
   # wherever it is listed.
-  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1, organization_location: 1]
+  import VutuvWeb.OrganizationComponents, only: [organization_row: 1]
 
   embed_templates("../templates/followee/*")
 end

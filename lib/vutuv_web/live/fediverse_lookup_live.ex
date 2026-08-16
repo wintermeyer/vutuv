@@ -192,11 +192,11 @@ defmodule VutuvWeb.FediverseLookupLive do
             <p class="mb-0">{lookup_refusal_text(@refusal)}</p>
             <p :if={@refusal_link} class="mb-0 mt-3">
               <.link
-                navigate={elem(@refusal_link, 0)}
+                navigate={@refusal_link.path}
                 id="lookup-refusal-link"
                 class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
-                {elem(@refusal_link, 1)} ›
+                {@refusal_link.label} ›
               </.link>
             </p>
           </div>
