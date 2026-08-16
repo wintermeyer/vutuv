@@ -266,22 +266,18 @@ defmodule Vutuv.NodeInfo do
   end
 
   # The publicly visible posts, split into originals and replies in one pass.
+  #
+  # Joined rather than asked with two `EXISTS` subqueries in the SELECT list:
+  # a predicate inside `filter(count(...), …)` cannot be turned into a semi-join,
+  # so Postgres ran both subplans once per visible post. `post_replies` has a
+  # unique index on `post_id`, so the left join answers at most one row per post
+  # and `count(r.post_id)` is the reply tally exactly.
   defp post_counts do
     %{posts: posts, comments: comments} =
       Post
       |> Posts.scope_visible(nil)
-      |> select([p], %{
-        posts:
-          filter(
-            count(p.id),
-            fragment("NOT EXISTS (SELECT 1 FROM post_replies r WHERE r.post_id = ?)", p.id)
-          ),
-        comments:
-          filter(
-            count(p.id),
-            fragment("EXISTS (SELECT 1 FROM post_replies r WHERE r.post_id = ?)", p.id)
-          )
-      })
+      |> join(:left, [p], r in "post_replies", on: r.post_id == p.id)
+      |> select([p, r], %{posts: count(p.id) - count(r.post_id), comments: count(r.post_id)})
       |> Repo.one()
 
     {posts, comments}

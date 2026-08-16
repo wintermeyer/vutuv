@@ -208,9 +208,25 @@ defmodule Vutuv.Translations do
         {:cached, translation}
 
       true ->
-        job = open_job(subject, target_language) || insert_job!(subject, target_language)
+        {:queued, job} = queue(subject, target_language)
         Worker.nudge()
         {:queued, job}
+    end
+  end
+
+  @doc """
+  Queues `subject` **without asking the cache first**, for a caller that has
+  already resolved a whole page's cached translations in one query
+  (`fresh_translations/2`) and knows this one missed — `request/2` would repeat
+  that lookup per card. It also leaves the worker alone: a page's worth of
+  subjects wants one `Worker.nudge/0` at the end, not one per card, since every
+  nudge costs the worker a full drain round.
+  """
+  def queue(subject, target_language) do
+    if enabled?() do
+      {:queued, open_job(subject, target_language) || insert_job!(subject, target_language)}
+    else
+      :disabled
     end
   end
 

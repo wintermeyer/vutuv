@@ -28,6 +28,17 @@ defmodule Vutuv.Translations.QueueTest do
     fn _subject, _target -> {:error, error} end
   end
 
+  test "queue/2 does not ask the cache — the page-batch caller already did" do
+    post = insert(:post, body: "Guten Morgen.")
+    {:ok, _} = Translations.store_translation(post, "en", %{body: "Good morning.", model: "m"})
+
+    # `request/2` would answer from the cache here. `queue/2` is for the reader
+    # whose whole page was resolved in one `fresh_translations/2`, so repeating
+    # that lookup per card is the cost it exists to remove.
+    assert %Translation{} = Translations.fresh_translation(post, "en")
+    assert {:queued, %TranslationJob{}} = Translations.queue(post, "en")
+  end
+
   test "a due job translates, stores, completes and broadcasts" do
     post = insert(:post, body: "Guten Morgen.")
     job = queued_job!(post)

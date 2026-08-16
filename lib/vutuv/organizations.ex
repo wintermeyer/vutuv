@@ -1193,7 +1193,8 @@ defmodule Vutuv.Organizations do
           d.inserted_at > ^abandoned_before and
           (is_nil(d.last_checked_at) or d.last_checked_at < ^checked_before),
       order_by: [asc_nulls_first: d.last_checked_at, asc: d.id],
-      limit: @pending_scan
+      limit: @pending_scan,
+      preload: [:organization]
     )
     |> Repo.all()
     |> Enum.filter(&pending_due?(&1, now))
@@ -1219,7 +1220,7 @@ defmodule Vutuv.Organizations do
   end
 
   defp check_pending_domain(%OrganizationDomain{} = domain) do
-    organization = get_organization!(domain.organization_id)
+    organization = organization_of(domain)
 
     # `check_domain/2` stamps `last_checked_at` on the failing branch too, so a
     # domain whose record is still missing leaves the due set for this step's
@@ -1234,6 +1235,14 @@ defmodule Vutuv.Organizations do
         :pending
     end
   end
+
+  # `pending_domains_due/0` preloads the organization, so a full batch of 50
+  # costs one query and not fifty; the lookup stays as the answer for a domain
+  # that reached here another way.
+  defp organization_of(%OrganizationDomain{organization: %Organization{} = organization}),
+    do: organization
+
+  defp organization_of(%OrganizationDomain{organization_id: id}), do: get_organization!(id)
 
   defp pending_due?(%OrganizationDomain{} = domain, now) do
     case pending_interval(NaiveDateTime.diff(now, domain.inserted_at)) do

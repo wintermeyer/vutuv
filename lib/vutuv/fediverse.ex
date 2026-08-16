@@ -782,14 +782,7 @@ defmodule Vutuv.Fediverse do
   """
   def distinct_follower_count do
     if enabled?() do
-      Repo.one(
-        from(f in Follower,
-          # coalesce, because `NULL not in (…)` is NULL and would silently drop
-          # every row whose actor URI has no parseable host.
-          where: fragment("coalesce(?, '')", uri_host(f.actor_uri)) not in ^own_hosts(),
-          select: count(f.actor_uri, :distinct)
-        )
-      ) || 0
+      Repo.one(from(f in foreign_followers(), select: count(f.actor_uri, :distinct))) || 0
     else
       0
     end
@@ -805,15 +798,40 @@ defmodule Vutuv.Fediverse do
   """
   def follower_host_count do
     if enabled?() do
-      Repo.one(
-        from(f in Follower,
-          where: fragment("coalesce(?, '')", uri_host(f.actor_uri)) not in ^own_hosts(),
-          select: count(uri_host(f.actor_uri), :distinct)
-        )
-      ) || 0
+      Repo.one(from(f in foreign_followers(), select: count(uri_host(f.actor_uri), :distinct))) ||
+        0
     else
       0
     end
+  end
+
+  @doc """
+  Both reach figures from one pass over the followers, for the page that states
+  them together (`VutuvWeb.AgentDocs.InvestorsDoc`). Same gates as the two
+  functions above; `%{accounts: 0, hosts: 0}` while the fediverse is off.
+  """
+  def follower_reach do
+    if enabled?() do
+      Repo.one(
+        from(f in foreign_followers(),
+          select: %{
+            accounts: count(f.actor_uri, :distinct),
+            hosts: count(uri_host(f.actor_uri), :distinct)
+          }
+        )
+      ) || %{accounts: 0, hosts: 0}
+    else
+      %{accounts: 0, hosts: 0}
+    end
+  end
+
+  # Follows from actors that are not us. The `coalesce` is load-bearing:
+  # `NULL not in (…)` is NULL, so without it every row whose actor URI has no
+  # parseable host would be dropped from every one of these counts.
+  defp foreign_followers do
+    from(f in Follower,
+      where: fragment("coalesce(?, '')", uri_host(f.actor_uri)) not in ^own_hosts()
+    )
   end
 
   @doc """

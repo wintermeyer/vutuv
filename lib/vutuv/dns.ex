@@ -64,9 +64,13 @@ defmodule Vutuv.Dns do
         names -> Enum.map(names, &to_string/1)
       end
     end)
-    |> Enum.flat_map(&addresses(&1, backend))
-    |> Enum.reject(&Ssrf.internal_ip?/1)
-    |> Enum.uniq()
+    # Streamed, so a zone that lists a dozen name servers costs the address
+    # lookups for the handful actually used and not for all twelve: `Enum.take/2`
+    # stops the pipeline as soon as it has enough, and reject/uniq/take are all
+    # prefix-stable, so the answer is the one the eager version gave.
+    |> Stream.flat_map(&addresses(&1, backend))
+    |> Stream.reject(&Ssrf.internal_ip?/1)
+    |> Stream.uniq()
     |> Enum.take(@max_nameservers)
     |> Enum.map(&{&1, 53})
   end

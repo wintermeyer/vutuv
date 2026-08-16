@@ -28,6 +28,7 @@ defmodule VutuvWeb.Live.PostTranslations do
   alias Vutuv.Posts
   alias Vutuv.Translations
   alias Vutuv.Translations.Translation
+  alias Vutuv.Translations.Worker
 
   @doc """
   Whether this viewer gets translation controls at all: the installation has
@@ -155,9 +156,19 @@ defmodule VutuvWeb.Live.PostTranslations do
 
     cached = Translations.fresh_translations(wanted, target)
 
-    Enum.reduce(wanted, map, fn subject, acc ->
-      resolve_auto(acc, subject, cached[subject_key(subject)])
-    end)
+    {map, queued?} =
+      Enum.reduce(wanted, {map, false}, fn subject, {acc, queued?} ->
+        case resolve_auto(acc, subject, cached[subject_key(subject)]) do
+          {acc, true} -> {acc, true}
+          {acc, false} -> {acc, queued?}
+        end
+      end)
+
+    # One nudge for the page, not one per card: each costs the worker a full
+    # drain round (a resume_stuck UPDATE plus the due SELECT).
+    if queued?, do: Worker.nudge()
+
+    map
   end
 
   defp auto_translation_wanted?(map, %{language: language} = subject, target, chosen) do
@@ -165,13 +176,21 @@ defmodule VutuvWeb.Live.PostTranslations do
       not Map.has_key?(map, subject_key(subject))
   end
 
+  # `{map, queued_a_job?}` — the caller nudges the worker once for the page.
   defp resolve_auto(map, subject, %Translation{} = cached),
-    do: Map.put(map, subject_key(subject), cached)
+    do: {Map.put(map, subject_key(subject), cached), false}
 
+  # `queue/2` rather than `Translations.request/2`: the batch above already
+  # answered "is there a fresh translation for this subject", and `request/2`
+  # would ask again, once per card.
   defp resolve_auto(map, subject, nil) do
-    case track(subject) do
-      {:ok, state} -> Map.put(map, subject_key(subject), state)
-      :denied -> map
+    case Translations.queue(subject, target_language()) do
+      {:queued, _job} ->
+        Phoenix.PubSub.subscribe(Vutuv.PubSub, Translations.topic(subject))
+        {Map.put(map, subject_key(subject), :pending), true}
+
+      :disabled ->
+        {map, false}
     end
   end
 

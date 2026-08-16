@@ -19,7 +19,12 @@ defmodule Vutuv.DnsTest do
 
     @impl true
     def lookup(name, :ns), do: get(:ns, name, [])
-    def lookup(name, :a), do: get(:a, name, [])
+
+    def lookup(name, :a) do
+      record(:resolved, name)
+      get(:a, name, [])
+    end
+
     def lookup(name, :aaaa), do: get(:aaaa, name, [])
     def lookup(name, :txt), do: get(:txt_resolver, name, [])
 
@@ -32,6 +37,8 @@ defmodule Vutuv.DnsTest do
     def put(key, map), do: Process.put({__MODULE__, key}, map)
 
     def asked, do: Process.get({__MODULE__, :asked}, []) |> Enum.reverse()
+
+    def resolved, do: Process.get({__MODULE__, :resolved}, []) |> Enum.reverse()
 
     defp get(key, subject, default) do
       Process.get({__MODULE__, key}, %{}) |> Map.get(subject, default)
@@ -154,6 +161,8 @@ defmodule Vutuv.DnsTest do
       Stub.put(:a, Map.new(Enum.with_index(names, 1), fn {n, i} -> {n, [{9, 9, 9, i}]} end))
 
       assert length(Dns.nameservers("example.org", Stub)) == 4
+      # And the five it will not use cost no lookup at all.
+      assert Stub.resolved() == Enum.take(names, 4)
     end
   end
 end
