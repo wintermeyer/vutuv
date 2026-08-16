@@ -123,7 +123,7 @@ defmodule Vutuv.Translations do
   the row stale, and a stale row answers nil (the next request re-translates).
   """
   def fresh_translation(subject, target_language) do
-    if translation = Repo.one(translation_query(subject, target_language)) do
+    if translation = Repo.one(subject_query(Translation, subject, target_language)) do
       if translation.source_sha256 == source_sha256(subject), do: translation
     end
   end
@@ -216,7 +216,7 @@ defmodule Vutuv.Translations do
 
   @doc "The open (pending or running) job for `subject` + target, if any."
   def open_job(subject, target_language) do
-    from(j in job_query(subject, target_language),
+    from(j in subject_query(TranslationJob, subject, target_language),
       where: j.status in ^TranslationJob.open_statuses()
     )
     |> Repo.one()
@@ -385,14 +385,12 @@ defmodule Vutuv.Translations do
   `{:translation_failed, subject_key, target_language}` (the key as
   `subject/1` returns it).
   """
-  def topic(%Post{id: id}), do: "translation:post:#{id}"
-  def topic(%RemotePost{id: id}), do: "translation:remote_post:#{id}"
-  def topic(%Note{id: id}), do: "translation:note:#{id}"
+  def topic(%schema{} = subject) when schema in [Post, RemotePost, Note],
+    do: key_topic(subject_key(subject))
 
-  def topic(row) do
-    {kind, id} = subject(row)
-    "translation:#{kind}:#{id}"
-  end
+  def topic(row), do: key_topic(subject(row))
+
+  defp key_topic({kind, id}), do: "translation:#{kind}:#{id}"
 
   defp broadcast(row, message) do
     Phoenix.PubSub.broadcast(Vutuv.PubSub, topic(row), message)
@@ -413,19 +411,11 @@ defmodule Vutuv.Translations do
     {:unsafe_fragment, "(#{column}, target_language) WHERE #{column} IS NOT NULL#{extra_where}"}
   end
 
-  defp translation_query(subject, target_language) do
+  defp subject_query(schema, subject, target_language) do
     [{column, id}] = subject_attrs(subject)
 
-    from(t in Translation,
+    from(t in schema,
       where: field(t, ^column) == ^id and t.target_language == ^target_language
-    )
-  end
-
-  defp job_query(subject, target_language) do
-    [{column, id}] = subject_attrs(subject)
-
-    from(j in TranslationJob,
-      where: field(j, ^column) == ^id and j.target_language == ^target_language
     )
   end
 

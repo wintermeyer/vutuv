@@ -770,12 +770,10 @@ defmodule VutuvWeb.SettingsController do
   end
 
   def reset_feed_languages(conn, _params) do
-    # The chips list is a plain member column beside the :feed pref group,
-    # so the reset clears both halves.
-    {:ok, _} =
-      conn.assigns[:user]
-      |> Ecto.Changeset.change(%{feed_languages: nil})
-      |> Repo.update()
+    # The chips list is a plain member column beside the :feed pref group, so
+    # the reset clears both halves — through the user-update chokepoint like
+    # every other settings write (the changeset maps [] to nil).
+    {:ok, _} = Accounts.update_user(conn.assigns[:user], %{"feed_languages" => []})
 
     reset_prefs(conn, :feed, gettext("Feed language settings reset to the site defaults."))
   end

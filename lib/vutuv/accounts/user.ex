@@ -283,9 +283,9 @@ defmodule Vutuv.Accounts.User do
     # outside `feed_languages` — "original" / "translate" / "hide"; nil
     # inherits the installation default (a Vutuv.Prefs knob). The chips list
     # is the member's own (nil = all languages, no installation default: "all"
-    # is the only sensible default everywhere). Read the pair through
-    # `Vutuv.Posts.feed_language_filter/1` and the translate-mode helpers,
-    # never raw.
+    # is the only sensible default everywhere). Read the chips through
+    # `Vutuv.Posts.chosen_feed_languages/1` (the hide filter and the
+    # translate mode both do), never raw.
     field(:feed_foreign_posts, :string)
     field(:feed_languages, {:array, :string})
     # The reader's post-display preferences (same settings page, applied to
@@ -708,7 +708,9 @@ defmodule Vutuv.Accounts.User do
     # The feed's foreign-language mode (issue #1461); a tampered value must
     # not fail the whole preferences form, so unknown values are refused with
     # a field error like the map service above.
-    |> validate_inclusion(:feed_foreign_posts, ~w(original translate hide))
+    # The closed value set has one owner: the Vutuv.Prefs registry entry that
+    # also drives the settings page's select.
+    |> validate_inclusion(:feed_foreign_posts, Prefs.pref!(:feed_foreign_posts).values)
     |> normalize_feed_languages()
     # Post-display line clamp: 0 means "no truncation"; anything above is a
     # line count, capped so nobody stores an absurd value (the bound comes from

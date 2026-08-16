@@ -15,7 +15,6 @@ defmodule Vutuv.Translations.TranslationJob do
 
   use VutuvWeb, :model
 
-  @statuses ~w(pending running done failed)
   @open_statuses ~w(pending running)
 
   schema "translation_jobs" do
@@ -31,8 +30,6 @@ defmodule Vutuv.Translations.TranslationJob do
 
     timestamps()
   end
-
-  def statuses, do: @statuses
 
   @doc "The statuses that count as unfinished work (mirrors the partial unique indexes)."
   def open_statuses, do: @open_statuses

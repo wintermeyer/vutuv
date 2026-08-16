@@ -72,9 +72,9 @@ defmodule VutuvWeb.PostLive.Thread do
       |> assign(:reply_budget, defaults.replies)
       |> assign(:subscribed_ids, MapSet.new())
       |> assign(:notice, nil)
-      # On-demand translations (issue #1462): per-card view state + gate.
-      |> assign(:post_translations, %{})
-      |> assign(:translatable?, PostTranslations.available?(socket.assigns.current_user))
+      # On-demand translations (issue #1462): per-card view state; a map
+      # means this viewer gets the controls, nil means they do not.
+      |> assign(:post_translations, PostTranslations.initial_map(socket.assigns.current_user))
       |> mount_window()
 
     {:ok, socket}
@@ -402,7 +402,6 @@ defmodule VutuvWeb.PostLive.Thread do
             mode={:full}
             conn_or_socket={@socket}
             translations={@post_translations}
-            translatable?={@translatable?}
           />
         <% true -> %>
           <%!-- The conversation (issue #1006), rendered like a feed thread
@@ -424,7 +423,6 @@ defmodule VutuvWeb.PostLive.Thread do
                 auto_scroll?={@auto_scroll?}
                 conn_or_socket={@socket}
                 translations={@post_translations}
-                translatable?={@translatable?}
               />
             <% else %>
               <.thread_window_conversation
@@ -439,7 +437,6 @@ defmodule VutuvWeb.PostLive.Thread do
                 auto_scroll?={@auto_scroll?}
                 conn_or_socket={@socket}
                 translations={@post_translations}
-                translatable?={@translatable?}
               />
             <% end %>
           </.card>

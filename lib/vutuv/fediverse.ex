@@ -2571,7 +2571,7 @@ defmodule Vutuv.Fediverse do
         (MapSet.member?(visible_ids, post.id) or
            (viewer.admin? == true and Posts.moderation_hidden?(post))) and
           not MapSet.member?(blocked_author_ids, post.user_id) and
-          (is_nil(chosen) or is_nil(post.language) or post.language in chosen)
+          Posts.language_visible?(post.language, chosen)
 
       _entry ->
         false

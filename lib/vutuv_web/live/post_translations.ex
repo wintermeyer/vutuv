@@ -24,8 +24,8 @@ defmodule VutuvWeb.Live.PostTranslations do
   """
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Posts
-  alias Vutuv.Repo
   alias Vutuv.Translations
   alias Vutuv.Translations.Translation
 
@@ -40,6 +40,13 @@ defmodule VutuvWeb.Live.PostTranslations do
   def target_language, do: Gettext.get_locale(VutuvWeb.Gettext)
 
   @doc """
+  The translations map a host mounts with: an empty map when this viewer gets
+  the controls (`available?/1`), nil when they do not. The cards read that
+  difference straight off the one assign, so no second gate travels with it.
+  """
+  def initial_map(viewer), do: if(available?(viewer), do: %{})
+
+  @doc """
   Handles a card's "Translate" click. Returns `{:ok, key, state}` with
   `state` either `:pending` or the cached `%Translation{}` (shown at once),
   or `:denied` for a subject this viewer may not read (a tampered id), the
@@ -47,20 +54,28 @@ defmodule VutuvWeb.Live.PostTranslations do
   """
   def request(viewer, kind, id) do
     with true <- available?(viewer),
-         {:ok, subject} <- fetch_subject(kind, id, viewer) do
-      case Translations.request(subject, target_language()) do
-        {:cached, translation} ->
-          {:ok, subject_key(subject), translation}
-
-        {:queued, _job} ->
-          Phoenix.PubSub.subscribe(Vutuv.PubSub, Translations.topic(subject))
-          {:ok, subject_key(subject), :pending}
-
-        :disabled ->
-          :denied
-      end
+         {:ok, subject} <- fetch_subject(kind, id, viewer),
+         {:ok, state} <- track(subject) do
+      {:ok, subject_key(subject), state}
     else
       _denied -> :denied
+    end
+  end
+
+  # The one mapping from `Translations.request/2` to a card's state — a cache
+  # hit shows at once, a queued job subscribes this host for the swap-in.
+  # Shared by the click path above and the translate mode below.
+  defp track(subject) do
+    case Translations.request(subject, target_language()) do
+      {:cached, translation} ->
+        {:ok, translation}
+
+      {:queued, _job} ->
+        Phoenix.PubSub.subscribe(Vutuv.PubSub, Translations.topic(subject))
+        {:ok, :pending}
+
+      :disabled ->
+        :denied
     end
   end
 
@@ -98,12 +113,16 @@ defmodule VutuvWeb.Live.PostTranslations do
   translation row stays, so translating again is instant). Returns
   `{key, map}` or `:ignore` for an unknown kind.
   """
-  def show_original(map, kind, id) do
+  def show_original(map, kind, id) when is_map(map) do
     case parse_key(kind, id) do
       nil -> :ignore
       key -> {key, Map.delete(map, key)}
     end
   end
+
+  # A viewer without the controls (nil map) has nothing to show or hide — a
+  # hand-crafted event must not crash the host.
+  def show_original(nil, _kind, _id), do: :ignore
 
   @doc ~S|The `{kind, id}` map key for a card's subject struct.|
   defdelegate subject_key(subject), to: Translations
@@ -127,7 +146,7 @@ defmodule VutuvWeb.Live.PostTranslations do
   """
   def auto_translate(map, subjects, viewer) do
     target = target_language()
-    chosen = viewer.feed_languages || []
+    chosen = Posts.chosen_feed_languages(viewer)
 
     wanted =
       subjects
@@ -137,37 +156,24 @@ defmodule VutuvWeb.Live.PostTranslations do
     cached = Translations.fresh_translations(wanted, target)
 
     Enum.reduce(wanted, map, fn subject, acc ->
-      resolve_auto(acc, subject, cached[subject_key(subject)], target)
+      resolve_auto(acc, subject, cached[subject_key(subject)])
     end)
   end
 
-  defp auto_translation_wanted?(map, subject, target, chosen) do
-    language = subject_language(subject)
-
+  defp auto_translation_wanted?(map, %{language: language} = subject, target, chosen) do
     is_binary(language) and language != target and language not in chosen and
       not Map.has_key?(map, subject_key(subject))
   end
 
-  defp resolve_auto(map, subject, %Translation{} = cached, _target),
+  defp resolve_auto(map, subject, %Translation{} = cached),
     do: Map.put(map, subject_key(subject), cached)
 
-  defp resolve_auto(map, subject, nil, target) do
-    case Translations.request(subject, target) do
-      {:cached, translation} ->
-        Map.put(map, subject_key(subject), translation)
-
-      {:queued, _job} ->
-        Phoenix.PubSub.subscribe(Vutuv.PubSub, Translations.topic(subject))
-        Map.put(map, subject_key(subject), :pending)
-
-      :disabled ->
-        map
+  defp resolve_auto(map, subject, nil) do
+    case track(subject) do
+      {:ok, state} -> Map.put(map, subject_key(subject), state)
+      :denied -> map
     end
   end
-
-  defp subject_language(%Posts.Post{language: language}), do: language
-  defp subject_language(%Vutuv.Fediverse.RemotePost{language: language}), do: language
-  defp subject_language(%Vutuv.Fediverse.Note{language: language}), do: language
 
   # The subject behind a card's click, checked against the viewer: a post
   # must be visible to them (a tampered id must not spend translation budget
@@ -183,15 +189,15 @@ defmodule VutuvWeb.Live.PostTranslations do
   end
 
   defp fetch_subject("remote_post", id, _viewer) do
-    case Repo.get(Vutuv.Fediverse.RemotePost, id) do
-      %Vutuv.Fediverse.RemotePost{} = remote -> {:ok, remote}
+    case Fediverse.get_remote_post(id) do
+      %Fediverse.RemotePost{} = remote -> {:ok, remote}
       nil -> :error
     end
   end
 
   defp fetch_subject("note", id, _viewer) do
-    case Repo.get(Vutuv.Fediverse.Note, id) do
-      %Vutuv.Fediverse.Note{} = note -> {:ok, note}
+    case Fediverse.get_note(id) do
+      %Fediverse.Note{} = note -> {:ok, note}
       nil -> :error
     end
   end

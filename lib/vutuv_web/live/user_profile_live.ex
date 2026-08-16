@@ -82,9 +82,9 @@ defmodule VutuvWeb.UserProfileLive do
       # (issue #859), one of "all" / "certification" / "license". Set once here
       # so it survives the PubSub re-renders that rebuild the profile assigns.
       |> assign(:qualifications_tab, "all")
-      # On-demand translations (issue #1462): per-card view state + gate.
-      |> assign(:post_translations, %{})
-      |> assign(:translatable?, PostTranslations.available?(socket.assigns.current_user))
+      # On-demand translations (issue #1462): per-card view state; a map
+      # means this viewer gets the controls, nil means they do not.
+      |> assign(:post_translations, PostTranslations.initial_map(socket.assigns.current_user))
       |> mount_profile()
 
     # Only a real visitor triggers the (cached, single-flight) social feed

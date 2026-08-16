@@ -2230,16 +2230,27 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  The languages the member marked as their own (the chips on
+  /settings/preferences), normalized for reading: `[]` when they never chose
+  any. The one raw read of the `feed_languages` column — its two consumers,
+  the hide filter below and the translate mode's "is this post foreign?"
+  test (`VutuvWeb.Live.PostTranslations`), interpret an empty choice
+  differently BY DESIGN: hide mode with no chips hides nothing
+  (`feed_language_filter/1` answers nil), while translate mode with no
+  chips treats only the UI locale as the member's own.
+  """
+  def chosen_feed_languages(%User{feed_languages: chosen}), do: chosen || []
+
+  @doc """
   The chosen-languages list the viewer's feed HIDES by (issue #1461), or nil
   when nothing is hidden — which is almost everyone: only the "hide" mode
   with a real language selection filters at all. The one place this pair of
   columns is interpreted for the feed queries.
   """
   def feed_language_filter(%User{} = viewer) do
-    chosen = viewer.feed_languages
+    chosen = chosen_feed_languages(viewer)
 
-    if Vutuv.Prefs.get(viewer, :feed_foreign_posts) == "hide" and is_list(chosen) and
-         chosen != [] do
+    if Vutuv.Prefs.get(viewer, :feed_foreign_posts) == "hide" and chosen != [] do
       chosen
     end
   end
@@ -2267,6 +2278,16 @@ defmodule Vutuv.Posts do
   def named_language_scope(query, chosen) when is_list(chosen) do
     from([language_source: x] in query, where: is_nil(x.language) or x.language in ^chosen)
   end
+
+  @doc """
+  The in-memory twin of `language_scope/2`, for rows a query already fetched
+  (the boost source's local half lives outside its query). Same rule, one
+  owner: NULL — the filter's or the row's — never hides.
+  """
+  def language_visible?(_language, nil), do: true
+
+  def language_visible?(language, chosen) when is_list(chosen),
+    do: is_nil(language) or language in chosen
 
   @doc """
   One page of `viewer`'s newsfeed: own posts plus posts **and reposts** of

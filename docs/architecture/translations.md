@@ -104,8 +104,9 @@ broadcast swaps the translated body in, labelled "Translated from X" with
 the original one tap away. A shown translation renders through the normal
 Markdown pipeline (local posts) or as plain text (remote content), and the
 card's `lang` attribute follows what is shown. The host-side half is
-`VutuvWeb.Live.PostTranslations`; the card-side half is the `translations`
-map + `translatable?` flag on `VutuvWeb.PostComponents`.
+`VutuvWeb.Live.PostTranslations`; the card-side half is the single
+`translations` attr on `VutuvWeb.PostComponents` — a map means the viewer
+gets the controls, nil (every non-LiveView surface) means they do not.
 
 The **feed language preference** (issue #1461, on /settings/preferences)
 adds Mastodon's chosen-languages filter: `users.feed_languages` (nil = all)

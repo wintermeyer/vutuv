@@ -95,6 +95,18 @@ defmodule Vutuv.Languages do
   @doc "Every known language code (ISO 639-1)."
   def codes, do: @codes
 
+  @doc """
+  The locales this installation serves its UI in — the Endpoint's `:locales`
+  config, the same list `VutuvWeb.Plug.Locale` negotiates against. The one
+  public reader, so the composer's language select and the popular-posts
+  pools cannot each grow their own copy of where that list lives.
+  """
+  def site_locales do
+    :vutuv
+    |> Application.get_env(VutuvWeb.Endpoint, [])
+    |> Keyword.get(:locales, ["en"])
+  end
+
   @doc "Whether `code` is one of the curated languages."
   def known?(code) when is_binary(code), do: MapSet.member?(@code_set, code)
   def known?(_code), do: false

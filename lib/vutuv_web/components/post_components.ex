@@ -55,6 +55,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Tags
   alias Vutuv.Translations.Translation
   alias VutuvWeb.FediverseComponents
+  alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostLive.RemoteActionsComponent
 
@@ -166,17 +167,13 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:translations, :map,
-    default: %{},
+    default: nil,
     doc:
       "the host's translation map (issue #1462), key {:post, id} → :pending | " <>
-        "%Vutuv.Translations.Translation{} (= shown). The card looks itself up"
-  )
-
-  attr(:translatable?, :boolean,
-    default: false,
-    doc:
-      "whether this viewer gets the Translate action (VutuvWeb.Live.PostTranslations." <>
-        "available?/1 — LiveView hosts with a signed-in viewer only)"
+        "%Vutuv.Translations.Translation{} (= shown). The card looks itself up. " <>
+        "nil (every non-LiveView surface) means this viewer gets no translation " <>
+        "controls; hosts pass a map exactly when VutuvWeb.Live.PostTranslations." <>
+        "available?/1 says yes"
   )
 
   def post_card(assigns) do
@@ -254,12 +251,11 @@ defmodule VutuvWeb.PostComponents do
       # that carry the reader's preference onto the post body; nil for a default
       # / logged-out reader, so their DOM stays clean and the CSS fallbacks apply.
       |> assign(:body_style, post_body_style(prefs))
-      # The translation line's three states + the body's `lang` attribute
-      # (screen readers, hyphenation — worth having independent of any
-      # translation). A shown translation is in the reader's own language.
-      |> assign(:translation_state, translation.state)
-      |> assign(:body_lang, translation.lang)
-      |> assign(:offer_translation?, translation.offer?)
+      # The card's translation view-state (the same map the remote cards
+      # keep): the line's three states + the body's `lang` attribute (screen
+      # readers, hyphenation — worth having independent of any translation).
+      # A shown translation is in the reader's own language.
+      |> assign(:translation, translation)
       |> assign(:restricted?, Posts.restricted?(post))
       |> assign(:permalink, Posts.path(post))
       |> assign(:gallery, gallery)
@@ -718,8 +714,7 @@ defmodule VutuvWeb.PostComponents do
         "the page (the permalink thread), so the row is just the flat card"
   )
 
-  attr(:translations, :map, default: %{})
-  attr(:translatable?, :boolean, default: false)
+  attr(:translations, :map, default: nil)
 
   def post_thread_entry(assigns) do
     # An explicit [] means "collapsed, no ancestors" (a root/standalone) and must
@@ -742,7 +737,6 @@ defmodule VutuvWeb.PostComponents do
         surface={@surface}
         conn_or_socket={@conn_or_socket}
         translations={@translations}
-        translatable?={@translatable?}
         show_reply_banner={@nest_parent}
       />
     <% else %>
@@ -757,7 +751,6 @@ defmodule VutuvWeb.PostComponents do
         surface={@surface}
         conn_or_socket={@conn_or_socket}
         translations={@translations}
-        translatable?={@translatable?}
       />
     <% end %>
     """
@@ -839,8 +832,7 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:acting_as, :any, default: nil)
-  attr(:translations, :map, default: %{})
-  attr(:translatable?, :boolean, default: false)
+  attr(:translations, :map, default: nil)
 
   defp thread_chain(assigns) do
     # `@thread_indent_cap` is a module attribute, not an assign, so resolve the
@@ -935,7 +927,6 @@ defmodule VutuvWeb.PostComponents do
             viewer={@viewer}
             marks={node.marks}
             translations={@translations}
-            translatable?={@translatable?}
             live?
           />
         <% else %>
@@ -953,7 +944,6 @@ defmodule VutuvWeb.PostComponents do
             mode={Map.get(node, :mode, :preview)}
             likers={Map.get(node, :likers)}
             translations={@translations}
-            translatable?={@translatable?}
             show_reply_banner={reply_banner?(node, @connected?, @indent?)}
           />
         <% end %>
@@ -967,7 +957,6 @@ defmodule VutuvWeb.PostComponents do
         surface={@surface}
         conn_or_socket={@conn_or_socket}
         translations={@translations}
-        translatable?={@translatable?}
       />
     </div>
     """
@@ -1044,13 +1033,8 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:translations, :map,
-    default: %{},
+    default: nil,
     doc: "the host's translation map (issue #1462), key {:note, id} — see <.post_card>"
-  )
-
-  attr(:translatable?, :boolean,
-    default: false,
-    doc: "whether this viewer gets the Translate action — see <.post_card>"
   )
 
   def remote_reply_card(assigns) do
@@ -2038,13 +2022,8 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:translations, :map,
-    default: %{},
+    default: nil,
     doc: "the host's translation map (issue #1462), key {:remote_post, id} — see <.post_card>"
-  )
-
-  attr(:translatable?, :boolean,
-    default: false,
-    doc: "whether this viewer gets the Translate action — see <.post_card>"
   )
 
   def remote_post_card(assigns) do
@@ -2473,8 +2452,7 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:conn_or_socket, :any, required: true)
-  attr(:translations, :map, default: %{})
-  attr(:translatable?, :boolean, default: false)
+  attr(:translations, :map, default: nil)
 
   def thread_conversation(assigns) do
     top_id = with %{id: id} <- List.first(assigns.posts), do: id
@@ -2487,7 +2465,6 @@ defmodule VutuvWeb.PostComponents do
       surface={:flat}
       conn_or_socket={@conn_or_socket}
       translations={@translations}
-      translatable?={@translatable?}
     />
     """
   end
@@ -2512,8 +2489,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:note_marks, :any, default: nil)
   attr(:likers, :any, default: nil)
   attr(:conn_or_socket, :any, required: true)
-  attr(:translations, :map, default: %{})
-  attr(:translatable?, :boolean, default: false)
+  attr(:translations, :map, default: nil)
 
   def thread_window_conversation(assigns) do
     window = assigns.window
@@ -2542,7 +2518,6 @@ defmodule VutuvWeb.PostComponents do
         surface={:flat}
         conn_or_socket={@conn_or_socket}
         translations={@translations}
-        translatable?={@translatable?}
       />
       <div class="py-3 pl-1">
         <button
@@ -2566,7 +2541,6 @@ defmodule VutuvWeb.PostComponents do
       surface={:flat}
       conn_or_socket={@conn_or_socket}
       translations={@translations}
-      translatable?={@translatable?}
     />
     <div :if={@window.more > 0} class="pl-1 pt-3">
       <button
@@ -2917,7 +2891,7 @@ defmodule VutuvWeb.PostComponents do
               <div
                 :if={@mode == :full and @post.body != ""}
                 data-post-body
-                lang={@body_lang}
+                lang={@translation.lang}
                 class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
                 {style_attrs(@body_style)}
               >
@@ -2944,7 +2918,7 @@ defmodule VutuvWeb.PostComponents do
                 body_style={@body_style}
                 class="mt-2"
                 tags={@post.tags}
-                lang={@body_lang}
+                lang={@translation.lang}
                 wrap
               >
                 <:float>
@@ -2974,7 +2948,7 @@ defmodule VutuvWeb.PostComponents do
                 body_style={@body_style}
                 class="mt-2"
                 tags={@post.tags}
-                lang={@body_lang}
+                lang={@translation.lang}
                 wrap
               >
                 <:float>
@@ -2993,7 +2967,7 @@ defmodule VutuvWeb.PostComponents do
                 class="mt-2"
                 media={@inline_media?}
                 tags={@post.tags}
-                lang={@body_lang}
+                lang={@translation.lang}
               />
 
               <%!-- Attachments the body does NOT reference inline. A single
@@ -3099,8 +3073,8 @@ defmodule VutuvWeb.PostComponents do
           or — never silently — the "Translated from …" label with the original
           one tap away. Events go to the host LiveView (no phx-target). --%>
           <.translation_line
-            state={@translation_state}
-            offer?={@offer_translation?}
+            state={@translation.state}
+            offer?={@translation.offer?}
             kind="post"
             subject_id={@post.id}
           />
@@ -3954,14 +3928,15 @@ defmodule VutuvWeb.PostComponents do
   defp translated_from_label(%Translation{source_language: source}),
     do: gettext("Translated from %{language}", language: Languages.name(source))
 
-  # A card whose language differs from the reader's UI locale — or declares
-  # none — gets the manual Translate action (issue #1462).
+  # A card whose language differs from the reader's translation target — or
+  # declares none — gets the manual Translate action (issue #1462). The
+  # target has one owner, the same the "translate" event resolves against.
   defp foreign_language?(language),
-    do: is_nil(language) or language != Gettext.get_locale(VutuvWeb.Gettext)
+    do: is_nil(language) or language != PostTranslations.target_language()
 
   # The shown translation's content warning, else the original — a warning
   # must never silently vanish just because its translation lacks one.
-  defp translated_summary(%{shown: %Translation{summary: summary}}, _original)
+  defp translated_summary(%{state: %Translation{summary: summary}}, _original)
        when is_binary(summary) and summary != "",
        do: summary
 
@@ -3969,7 +3944,8 @@ defmodule VutuvWeb.PostComponents do
 
   # One card's translation view-state, computed in one place for all three
   # card kinds: what the body renders from, which language it is in, and
-  # whether the Translate action shows.
+  # whether the Translate action shows. A nil translations map means this
+  # viewer gets no controls at all (every non-LiveView surface).
   defp card_translation(assigns, key, original_body, original_language) do
     state = assigns.translations[key]
     shown = if match?(%Translation{}, state), do: state
@@ -3977,9 +3953,8 @@ defmodule VutuvWeb.PostComponents do
     %{
       state: state,
       body_source: if(shown, do: shown.body, else: original_body),
-      shown: shown,
       lang: if(shown, do: shown.target_language, else: original_language),
-      offer?: assigns.translatable? and foreign_language?(original_language)
+      offer?: is_map(assigns.translations) and foreign_language?(original_language)
     }
   end
 

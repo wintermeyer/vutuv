@@ -348,16 +348,8 @@ defmodule VutuvWeb.PostLive.Composer do
   defp initial_language(%Post{language: language}) when is_binary(language), do: language
   defp initial_language(_post), do: Gettext.get_locale(VutuvWeb.Gettext)
 
-  # The installation's locales, from the Endpoint's config like the locale
-  # plug reads them.
-  defp site_locales do
-    :vutuv
-    |> Application.get_env(VutuvWeb.Endpoint, [])
-    |> Keyword.get(:locales, ["en"])
-  end
-
   defp other_language_options do
-    site = site_locales()
+    site = Languages.site_locales()
     Enum.reject(Languages.options(), fn {_label, code} -> code in site end)
   end
 
@@ -1820,7 +1812,7 @@ defmodule VutuvWeb.PostLive.Composer do
                 title={gettext("The language this post is written in")}
                 class={[input_class(), "h-9 w-auto py-0 text-sm"]}
               >
-                <option :for={code <- site_locales()} value={code} selected={@language == code}>
+                <option :for={code <- Languages.site_locales()} value={code} selected={@language == code}>
                   {String.upcase(code)}
                 </option>
                 <optgroup label={gettext("More languages")}>

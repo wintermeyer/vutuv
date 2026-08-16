@@ -155,10 +155,10 @@ defmodule VutuvWeb.PostLive.Feed do
   # connected socket would replay as an empty feed.
   defp apply_feed_payload(socket, payload) do
     socket
-    # On-demand translations (issue #1462): the per-card view state, and
-    # whether this viewer gets the controls at all.
-    |> assign(:post_translations, %{})
-    |> assign(:translatable?, PostTranslations.available?(socket.assigns.current_user))
+    # On-demand translations (issue #1462): the per-card view state. A map
+    # means this viewer gets the controls, nil means they do not — the cards
+    # read that straight off the one assign.
+    |> assign(:post_translations, PostTranslations.initial_map(socket.assigns.current_user))
     |> assign(:content_filters, payload.content_filters)
     |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
@@ -953,19 +953,12 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  defp find_by_translation_key(entries, {:post, id}) do
+  defp find_by_translation_key(entries, key) do
+    # Reuses entry_subjects/1, so "what can this entry translate" is spelled
+    # once — the reverse lookup cannot drift from the auto-translate sweep.
     Enum.find(entries, fn entry ->
-      not Posts.remote_feed_entry?(entry) and not Posts.remote_reply_entry?(entry) and
-        (entry.post.id == id or Enum.any?(entry[:ancestors] || [], &(&1.id == id)))
+      Enum.any?(entry_subjects(entry), &(PostTranslations.subject_key(&1) == key))
     end)
-  end
-
-  defp find_by_translation_key(entries, {:remote_post, id}) do
-    Enum.find(entries, &(Posts.remote_feed_entry?(&1) and &1.remote_post.id == id))
-  end
-
-  defp find_by_translation_key(entries, {:note, id}) do
-    Enum.find(entries, &(Posts.remote_reply_entry?(&1) and &1.note.id == id))
   end
 
   defp find_by_post_id(entries, post_id) do
@@ -1173,7 +1166,6 @@ defmodule VutuvWeb.PostLive.Feed do
                     marks={entry[:marks]}
                     reposted_by={entry.reposted_by}
                     translations={@post_translations}
-                    translatable?={@translatable?}
                     live?
                   />
                 <% Posts.remote_feed_entry?(entry) -> %>
@@ -1190,7 +1182,6 @@ defmodule VutuvWeb.PostLive.Feed do
                     boosted_by={entry[:boosted_by]}
                     viewer={@current_user}
                     translations={@post_translations}
-                    translatable?={@translatable?}
                   />
                 <% true -> %>
                   <%!-- A vutuv member's post that a followed account out there
@@ -1211,7 +1202,6 @@ defmodule VutuvWeb.PostLive.Feed do
                     conn_or_socket={@socket}
                     engagement={entry.engagement}
                     translations={@post_translations}
-                    translatable?={@translatable?}
                     surface={:flat}
                   />
               <% end %>

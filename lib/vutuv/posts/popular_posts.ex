@@ -113,17 +113,9 @@ defmodule Vutuv.Posts.PopularPosts do
   # One ranking query per configured locale, for the whole installation,
   # however many people are reading.
   defp snapshot(table) do
-    for locale <- locales() do
+    for locale <- Vutuv.Languages.site_locales() do
       :ets.insert(table, {{:pool, locale}, Vutuv.Posts.compute_discover_pool(locale, @pool_size)})
     end
-  end
-
-  # The installation's configured locales, the same list the locale plug reads
-  # (it lives under the Endpoint's config, not at the top level).
-  defp locales do
-    :vutuv
-    |> Application.get_env(VutuvWeb.Endpoint, [])
-    |> Keyword.get(:locales, ["en"])
   end
 
   defp schedule(interval), do: Process.send_after(self(), :refresh, interval)
