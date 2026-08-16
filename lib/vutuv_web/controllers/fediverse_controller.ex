@@ -50,6 +50,19 @@ defmodule VutuvWeb.FediverseController do
     accept =~ @activity_json or accept =~ "application/ld+json"
   end
 
+  # A person with a browser rather than another server, asked on the tag host,
+  # where the two want the same URL to answer differently.
+  #
+  # Deliberately not `not ap_request?(conn)`: a fetch carrying `*/*`, or no
+  # Accept at all, is far likelier to be a server than a reader, and of the two
+  # ways to be wrong here only one is silent. A reader handed the actor
+  # document sees JSON and shrugs; a remote server handed a redirect stops
+  # being able to follow the topic, and nothing would say so.
+  defp browser_request?(conn) do
+    conn.method == "GET" and
+      conn |> get_req_header("accept") |> Enum.join(",") =~ "text/html"
+  end
+
   def webfinger(conn, params) do
     with true <- Fediverse.enabled?(),
          subject when not is_nil(subject) <- resolve_resource(params["resource"]) do
@@ -625,11 +638,47 @@ defmodule VutuvWeb.FediverseController do
   # than another name for one. There is no per-tag switch: nobody's content is
   # published by a tag actor existing, because what it announces is filtered by
   # each author's own opt-in at announce time.
+  # Every tag-host action passes through here, which makes it the one place for
+  # the question that comes before "which topic is this": is this a reader? The
+  # tag host publishes actors and nothing a person reads, so they leave for the
+  # site — see `leave_tag_host/2`.
   defp with_federated_tag(conn, slug, fun) do
+    if browser_request?(conn),
+      do: leave_tag_host(conn, slug),
+      else: with_tag_actor(conn, slug, fun)
+  end
+
+  defp with_tag_actor(conn, slug, fun) do
     case Tags.get_canonical_tag_by_slug(slug) do
       nil -> send_resp(conn, 404, "")
       tag -> if Fediverse.federated?(tag), do: fun.(tag), else: send_resp(conn, 404, "")
     end
+  end
+
+  # The way off the tag host for a reader. A slug that names a topic goes to
+  # that topic's page — following an alternative name, the same courtesy the
+  # tag page's own 301 does — so somebody who clicked `@elixir@tags.<host>` in
+  # another network's timeline lands on the topic they clicked instead of on a
+  # start page they then have to search from.
+  #
+  # 301 for a topic, because that mapping does not change. 302 for the rest: an
+  # unclaimed word names the start page only until somebody creates the tag,
+  # and a permanent redirect a browser had cached would keep the reader from
+  # ever reaching it.
+  defp leave_tag_host(conn, slug) do
+    case Tags.resolve_tag_by_slug(slug) do
+      %Tag{} = tag -> redirect_to_site(conn, :moved_permanently, ~p"/tags/#{tag.slug}")
+      nil -> redirect_to_site(conn, :found, "/")
+    end
+  end
+
+  defp redirect_to_site(conn, status, path) do
+    conn
+    # This URL answers a reader and a remote server differently, so anything
+    # caching it has to key on the Accept header rather than on the URL alone.
+    |> put_resp_header("vary", "accept")
+    |> put_status(status)
+    |> redirect(external: String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> path)
   end
 
   @doc """
@@ -828,6 +877,11 @@ defmodule VutuvWeb.FediverseController do
 
   defp send_activity_json(conn, doc) do
     conn
+    # Several of these URLs are the same one a reader opens (a profile, a post
+    # permalink, a topic's address on the tag host) and answer by the Accept
+    # header, so a cache that keyed on the URL alone would hand one client the
+    # other's answer.
+    |> put_resp_header("vary", "accept")
     |> put_resp_content_type(@activity_json)
     |> send_resp(200, Jason.encode!(doc))
   end

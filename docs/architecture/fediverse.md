@@ -1192,6 +1192,36 @@ swallowed and renewal quietly stops working weeks later; and the new access log
 has to be caught by the logrotation and IP-anonymisation jobs, which it is
 because both match by wildcard rather than by a list of names.
 
+### Nothing on this host is for reading
+
+The tag host publishes actors, and the app answering there is the whole app, so
+every route the host had not claimed simply answered: `https://tags.<host>/`
+rendered the start page (a second copy of the site under a hostname no reader
+was meant to see, and a session cookie that lives on the apex), and `/<slug>`
+handed a browser raw ActivityPub JSON. Two rules now, split by who is asking,
+and neither is a webserver rule: nginx proxies the tag host unchanged, so an
+installation with the DNS record and the certificate gets this for free.
+
+- **A page** — anything reaching the `:browser` pipeline — is redirected to the
+  same path on the apex, query and all, permanently
+  (`VutuvWeb.Plug.TagHost`). The machine documents run through
+  `:machine_docs`, which is exactly why that plug can sit in `:browser` without
+  putting anything federation depends on at risk.
+- **A topic's own address**, `/<slug>`, is the one URL a reader and a remote
+  server ask for identically, so it is negotiated in `FediverseController`. A
+  reader goes to `/tags/<slug>` on the apex, following an alternative name to
+  the topic it stands for, so somebody clicking `@elixir@tags.<host>` in
+  another network's timeline lands on the topic they clicked instead of on a
+  start page they then have to search from. An unclaimed word gets a temporary
+  redirect to the start page, since it names one only until that tag exists.
+
+The question asked is **"did this client ask for `text/html`"**, never "did it
+fail to ask for ActivityPub". A fetch carrying `*/*`, or no Accept header at
+all, is likelier to be a server than a person, and of the two ways to be wrong
+only one is silent: a reader handed the actor document sees JSON and shrugs,
+while a remote server handed a redirect stops being able to follow the topic
+and nothing here would say so.
+
 ### The tag page's own half
 
 A visitor who arrived from another server gets the two things they came for, in

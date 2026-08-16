@@ -49,10 +49,17 @@ defmodule VutuvWeb.FediverseTagActorWebTest do
     insert(:tag, name: "Elixir #{n}", slug: "elixir_#{n}")
   end
 
+  defp site_url, do: String.trim_trailing(VutuvWeb.Endpoint.url(), "/")
+
   # A request as it arrives on the tag host: same app, different `Host` header.
   defp on_tag_host(conn), do: %{conn | host: @tag_host}
 
   defp ap(conn), do: put_req_header(conn, "accept", "application/activity+json")
+
+  # A request as a person makes it. Every browser puts `text/html` in its
+  # Accept, and on this host that is the whole distinction: there is nothing
+  # here a human reads.
+  defp in_browser(conn), do: put_req_header(conn, "accept", "text/html,application/xhtml+xml,*/*")
 
   describe "the address" do
     test "WebFinger on the tag host resolves a topic to its actor", %{conn: conn} do
@@ -123,6 +130,103 @@ defmodule VutuvWeb.FediverseTagActorWebTest do
       assert conn
              |> get(~p"/.well-known/webfinger", resource: "acct:#{tag.slug}@#{conn.host}")
              |> response(404)
+    end
+  end
+
+  describe "a person who lands here" do
+    # The tag host carries actors and nothing anybody reads, but the app behind
+    # it is the same one — so until this, every route the host had not claimed
+    # simply answered: `https://tags.vutuv.de/` rendered the whole start page,
+    # a second copy of the site under a hostname no reader was meant to see,
+    # and `/<tag>` handed a browser raw ActivityPub JSON.
+    test "the tag host has no start page of its own", %{conn: conn} do
+      conn = conn |> on_tag_host() |> in_browser() |> get("/")
+
+      assert redirected_to(conn, 301) == site_url() <> "/"
+    end
+
+    test "a page of the site keeps its path and its query on the way over", %{conn: conn} do
+      conn = conn |> on_tag_host() |> in_browser() |> get("/system/members?letter=m")
+
+      assert redirected_to(conn, 301) == site_url() <> "/system/members?letter=m"
+    end
+
+    test "the main host is left alone", %{conn: conn} do
+      assert conn |> in_browser() |> get(~p"/") |> html_response(200)
+    end
+
+    test "a topic's address opens the topic, not the start page", %{conn: conn} do
+      tag = topic()
+
+      # Somebody reading `@elixir@tags.<host>` in another network's timeline
+      # clicks the actor's own address. Dropping them on the start page would
+      # make them search for the thing they just clicked.
+      conn = conn |> on_tag_host() |> in_browser() |> get("/#{tag.slug}")
+
+      assert redirected_to(conn, 301) == site_url() <> "/tags/#{tag.slug}"
+    end
+
+    test "an alternative name leads to the topic it names", %{conn: conn} do
+      canonical = topic()
+      n = System.unique_integer([:positive])
+      other = insert(:tag, name: "Alias #{n}", slug: "alias_#{n}", merged_into_id: canonical.id)
+
+      conn = conn |> on_tag_host() |> in_browser() |> get("/#{other.slug}")
+
+      assert redirected_to(conn, 301) == site_url() <> "/tags/#{canonical.slug}"
+    end
+
+    test "an address that names no topic goes to the start page, and not for good",
+         %{conn: conn} do
+      conn =
+        conn
+        |> on_tag_host()
+        |> in_browser()
+        |> get("/kotlin_#{System.unique_integer([:positive])}")
+
+      # 302: that word names the start page only until somebody creates the
+      # tag, and a permanent redirect a browser had cached would keep the
+      # reader from ever reaching it.
+      assert redirected_to(conn, 302) == site_url() <> "/"
+    end
+
+    test "the collections a reader stumbles into lead to the topic too", %{conn: conn} do
+      tag = topic()
+
+      for path <- ["/#{tag.slug}/followers", "/#{tag.slug}/outbox"] do
+        conn = conn |> on_tag_host() |> in_browser() |> get(path)
+        assert redirected_to(conn, 301) == site_url() <> "/tags/#{tag.slug}"
+      end
+    end
+
+    # The calibration: of the two ways to read a request wrong here, only one
+    # is silent. A reader sent the actor document sees JSON and shrugs; a
+    # remote server sent a redirect stops being able to follow the topic, and
+    # nothing here would say so. So the question asked is "did this client ask
+    # for HTML", never "did it fail to ask for ActivityPub" — a fetch carrying
+    # `*/*`, or no Accept at all, keeps getting the actor.
+    test "a server that names no format still gets the actor", %{conn: conn} do
+      tag = topic()
+
+      for accept <- [nil, "*/*", "application/ld+json"] do
+        request = conn |> on_tag_host()
+        request = if accept, do: put_req_header(request, "accept", accept), else: request
+
+        assert request |> get("/#{tag.slug}") |> json_response(200)
+      end
+    end
+
+    test "a delivery is never redirected, whatever it says it accepts", %{conn: conn} do
+      tag = topic()
+
+      # An unsigned POST is refused (401) — what matters is that it was
+      # *answered* here rather than sent to the main host, where the tag
+      # inbox does not exist.
+      assert conn
+             |> on_tag_host()
+             |> in_browser()
+             |> post("/#{tag.slug}/inbox", %{"type" => "Follow"})
+             |> response(401)
     end
   end
 

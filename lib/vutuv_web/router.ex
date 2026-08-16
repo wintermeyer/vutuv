@@ -7,6 +7,12 @@ defmodule VutuvWeb.Router do
   end
 
   pipeline :browser do
+    # The tag host (`tags.<our host>`, issue #1330) publishes ActivityPub
+    # actors and nothing a person reads, so a page asked for there leaves for
+    # the site at once. First in the pipeline: the request is over, and none of
+    # the session and locale work below is worth doing for a response that is a
+    # Location header. Federation is untouched — it runs through :machine_docs.
+    plug(Plugs.TagHost)
     # activity+json rides along so ActivityPub requests reach the profile and
     # post-permalink controllers (they branch on FediverseController.ap_request?
     # and fall back to plain HTML for everyone else).
