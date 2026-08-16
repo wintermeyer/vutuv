@@ -56,6 +56,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Languages
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.GalleryLayout
@@ -160,6 +161,7 @@ defmodule VutuvWeb.PostLive.Composer do
     # drag, so it works the same on a phone and a desktop.
     |> assign(:swap_photo, nil)
     |> assign(:license, initial_license(post, socket.assigns.current_user))
+    |> assign(:language, initial_language(post))
     |> assign(:preset, preset)
     |> assign(:deny_wildcards, wildcards)
     |> assign(:denied_users, denied_users)
@@ -241,6 +243,7 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:images, images)
       |> assign(:photos, photo_state_from_draft(draft, images))
       |> assign(:license, PhotoLicense.cast(draft.license || assigns.license))
+      |> assign(:language, Post.cast_language(draft.language) || assigns.language)
       |> assign(:layout, GalleryLayout.cast(draft.layout))
       |> assign(:fill?, draft.fill? == true)
       |> assign(:restored_draft?, true)
@@ -312,6 +315,7 @@ defmodule VutuvWeb.PostLive.Composer do
         "body" => assigns.body,
         "tags" => assigns.tags_value,
         "license" => assigns.license,
+        "language" => assigns.language,
         "image_ids" => Enum.map(assigns.images, & &1.id),
         "photos" => Map.new(assigns.photos, fn {id, settings} -> {id, stringify(settings)} end),
         "layout" => assigns.layout,
@@ -337,6 +341,25 @@ defmodule VutuvWeb.PostLive.Composer do
   defp post_images(nil), do: []
   defp post_images(%Post{images: images}) when is_list(images), do: images
   defp post_images(_post), do: []
+
+  # Editing keeps the post's declared language; a new post is preset to the
+  # UI locale (issue #1489) — the author says what language they wrote in,
+  # nobody guesses.
+  defp initial_language(%Post{language: language}) when is_binary(language), do: language
+  defp initial_language(_post), do: Gettext.get_locale(VutuvWeb.Gettext)
+
+  # The installation's locales, from the Endpoint's config like the locale
+  # plug reads them.
+  defp site_locales do
+    :vutuv
+    |> Application.get_env(VutuvWeb.Endpoint, [])
+    |> Keyword.get(:locales, ["en"])
+  end
+
+  defp other_language_options do
+    site = site_locales()
+    Enum.reject(Languages.options(), fn {_label, code} -> code in site end)
+  end
 
   # Editing keeps the post's own license; a new post starts from the author's
   # last pick, so a professional sets it once and never again.
@@ -559,6 +582,7 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:body, body)
       |> assign(:tags_value, params["tags"] || socket.assigns.tags_value)
       |> assign(:license, PhotoLicense.cast(params["license"] || socket.assigns.license))
+      |> assign(:language, Post.cast_language(params["language"]) || socket.assigns.language)
       |> assign(:preset, resolve_preset(params, socket.assigns))
       |> assign(:error, nil)
       # The restore notice has said its piece once the member starts editing;
@@ -825,6 +849,7 @@ defmodule VutuvWeb.PostLive.Composer do
       body: params["body"] || "",
       tags: params["tags"] || "",
       license: params["license"] || socket.assigns.license,
+      language: Post.cast_language(params["language"]) || socket.assigns.language,
       # No :review key on purpose: the review form is gone, and attrs without
       # the key leave a post's stored review sidecar untouched on edit.
       denials: denials_payload(socket.assigns),
@@ -1783,6 +1808,31 @@ defmodule VutuvWeb.PostLive.Composer do
             </label>
 
             <div class="ml-auto flex items-center gap-3">
+              <%!-- The author's declaration of what language this post is
+              written in (issue #1489, Mastodon's model): preset to the UI
+              locale, quiet — the collapsed control reads "DE". The site's
+              own locales lead as short codes, the curated rest follows by
+              localized name. --%>
+              <select
+                name="post[language]"
+                id={"#{@id}-language"}
+                aria-label={gettext("Post language")}
+                title={gettext("The language this post is written in")}
+                class={[input_class(), "h-9 w-auto py-0 text-sm"]}
+              >
+                <option :for={code <- site_locales()} value={code} selected={@language == code}>
+                  {String.upcase(code)}
+                </option>
+                <optgroup label={gettext("More languages")}>
+                  <option
+                    :for={{label, code} <- other_language_options()}
+                    value={code}
+                    selected={@language == code}
+                  >
+                    {label}
+                  </option>
+                </optgroup>
+              </select>
               <span
                 :if={@audience_locked? or @acting_as}
                 id={"#{@id}-audience-locked"}

@@ -3,10 +3,12 @@ defmodule Vutuv.Posts.Post do
 
   use VutuvWeb, :model
 
+  alias Vutuv.Languages
   alias Vutuv.MarkdownContent
   alias Vutuv.Mentions
   alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PhotoLicense
+  alias Vutuv.Translations
 
   @max_body_length 20_000
 
@@ -107,13 +109,28 @@ defmodule Vutuv.Posts.Post do
 
   def max_body_length, do: @max_body_length
 
+  @doc """
+  What an author's language declaration may store: a known `Vutuv.Languages`
+  code (normalized to its primary subtag), anything else nil — undeclared,
+  never a guess and never a failed post.
+  """
+  def cast_language(value) do
+    normalized = Translations.normalize_language(value)
+    if normalized && Languages.known?(normalized), do: normalized
+  end
+
   def changeset(post, params \\ %{}) do
     post
     # empty_values: [] so clearing the body on edit is a real change ("" must
     # not be swallowed as "no change") — a photo-only post has an empty body.
-    |> cast(params, [:body, :license, :gallery_layout, :gallery_fill?], empty_values: [])
+    |> cast(params, [:body, :license, :gallery_layout, :gallery_fill?, :language],
+      empty_values: []
+    )
     |> update_change(:body, &String.trim/1)
     |> validate_length(:body, max: @max_body_length)
+    # An unknown language becomes nil (undeclared) rather than a validation
+    # error — the license principle: a tampered select must not fail a post.
+    |> update_change(:language, &cast_language/1)
     # An unknown licence becomes the safe default rather than a validation
     # error: a tampered select must not be able to fail a post, and "all
     # rights reserved" is the answer that grants nothing.

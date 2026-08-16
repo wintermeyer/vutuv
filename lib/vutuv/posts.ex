@@ -582,25 +582,26 @@ defmodule Vutuv.Posts do
   # alone instead of resetting it to the default. The bento layout follows the
   # same rule — absent key = untouched; a sent "" clears back to automatic
   # (`GalleryLayout.cast/1` in the changeset maps it to nil).
+  # The optional attrs and the changeset field each writes; an absent key
+  # leaves the stored value untouched (the API's partial PATCH).
+  @optional_post_params [
+    license: :license,
+    layout: :gallery_layout,
+    language: :language,
+    fill: :gallery_fill?
+  ]
+
   defp post_params(attrs) do
-    params = %{body: to_string(fetch(attrs, :body) || "")}
-
-    params =
-      case fetch(attrs, :license) do
-        nil -> params
-        license -> Map.put(params, :license, license)
+    Enum.reduce(
+      @optional_post_params,
+      %{body: to_string(fetch(attrs, :body) || "")},
+      fn {key, field}, params ->
+        case fetch(attrs, key) do
+          nil -> params
+          value -> Map.put(params, field, value)
+        end
       end
-
-    params =
-      case fetch(attrs, :layout) do
-        nil -> params
-        layout -> Map.put(params, :gallery_layout, layout)
-      end
-
-    case fetch(attrs, :fill) do
-      nil -> params
-      fill -> Map.put(params, :gallery_fill?, fill)
-    end
+    )
   end
 
   # The optional review sidecar (Vutuv.Posts.PostReview). Attrs without a

@@ -53,6 +53,7 @@ defmodule Vutuv.Posts.PostDraft do
     field(:body, :string, default: "")
     field(:tags, :string, default: "")
     field(:license, :string)
+    field(:language, :string)
     field(:image_ids, {:array, :binary_id}, default: [])
     field(:photos, :map, default: %{})
     # The chosen bento arrangement (Vutuv.Posts.GalleryLayout); nil = auto.
@@ -76,7 +77,7 @@ defmodule Vutuv.Posts.PostDraft do
   """
   def changeset(draft, attrs) do
     draft
-    |> cast(attrs, [:body, :tags, :license, :image_ids, :photos, :layout, :fill?])
+    |> cast(attrs, [:body, :tags, :license, :language, :image_ids, :photos, :layout, :fill?])
     |> validate_length(:body, max: Post.max_body_length())
     |> validate_length(:tags, max: @max_tags_length)
   end
