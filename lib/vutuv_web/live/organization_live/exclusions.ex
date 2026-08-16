@@ -30,6 +30,7 @@ defmodule VutuvWeb.OrganizationLive.Exclusions do
      socket
      |> assign(:organization, organization)
      |> assign(:owner?, Organizations.owner?(organization, current_user))
+     |> assign(:publisher?, Organizations.publisher?(organization, current_user))
      |> assign(:page_title, gettext("Job exclusions – %{name}", name: organization.name))
      |> assign(:member_error, nil)
      |> assign(:org_error, nil)
@@ -97,7 +98,12 @@ defmodule VutuvWeb.OrganizationLive.Exclusions do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-2xl py-6">
-      <.manage_header organization={@organization} active={:exclusions} owner?={@owner?} />
+      <.manage_header
+        organization={@organization}
+        active={:exclusions}
+        owner?={@owner?}
+        publisher?={@publisher?}
+      />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">
         {gettext("Job exclusions")}

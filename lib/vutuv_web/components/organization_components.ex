@@ -197,8 +197,8 @@ defmodule VutuvWeb.OrganizationComponents do
 
   attr(:organization, :map, required: true)
   attr(:active, :atom, required: true)
-  attr(:owner?, :boolean, default: false)
-  attr(:publisher?, :boolean, default: false)
+  attr(:owner?, :boolean, required: true)
+  attr(:publisher?, :boolean, required: true)
 
   @doc """
   The header + tab bar shared by the organization management pages (issue #930): a
@@ -211,6 +211,14 @@ defmodule VutuvWeb.OrganizationComponents do
   which is why those two tabs are unconditional here: the `manage?` attribute
   they used to be guarded by was passed `true` by all nine call sites, so it was
   a knob that only ever read one way.
+
+  **Both role attributes are required, and that is the fix for issue #1484.** A
+  tab bar shared by nine pages must answer to the viewer's roles alone; with
+  `publisher?` defaulting to `false`, the four pages that never passed it dropped
+  the Feed and Follows tabs, so a publisher found their page's own reading list
+  only by standing on Activity or Fediverse first. A default is the wrong shape
+  here — the safe-looking value is the one that silently hides a tab — so a
+  missing attribute now fails `compile --warnings-as-errors` instead.
   """
   def manage_header(assigns) do
     ~H"""
