@@ -2352,7 +2352,7 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  def feed_remote_posts(%User{id: viewer_id}, fetch_n, cursor) do
+  def feed_remote_posts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     if enabled?() do
       from(p in RemotePost,
         join: a in RemoteAccount,
@@ -2365,6 +2365,7 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [:screenshot, remote_account: a]
       )
+      |> Vutuv.Posts.language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> utc_at_or_before(cursor, :published_at)
       |> Repo.all()
       |> Enum.map(&remote_feed_entry/1)
@@ -2382,10 +2383,11 @@ defmodule Vutuv.Fediverse do
   to any follow of the author. Stamped with the repost time, like a local
   repost: what is new is the sharing, not the post.
   """
-  def feed_remote_reposts(%User{id: viewer_id}, fetch_n, cursor) do
+  def feed_remote_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     if enabled?() do
       from(r in PostRepost,
         join: p in RemotePost,
+        as: :language_source,
         on: p.id == r.remote_post_id,
         join: a in RemoteAccount,
         on: a.id == p.remote_account_id,
@@ -2407,6 +2409,7 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [remote_post: {p, [:screenshot, remote_account: a]}, user: reposter]
       )
+      |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> remote_reposts_at_or_before(cursor)
       |> Repo.all()
       |> Enum.map(&remote_repost_entry/1)
@@ -2483,6 +2486,7 @@ defmodule Vutuv.Fediverse do
         join: f in Follow,
         on: f.remote_account_id == a.id,
         left_join: rp in RemotePost,
+        as: :language_source,
         on: rp.id == b.remote_post_id,
         where: f.user_id == ^viewer_id and f.muted == false and f.state == "accepted",
         where: is_nil(rp.id) or rp.remote_account_id not in subquery(muted_authors),
@@ -2499,6 +2503,7 @@ defmodule Vutuv.Fediverse do
         ]
       )
       |> boosts_of_kind(opts[:only])
+      |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> utc_at_or_before(cursor, :announced_at)
       |> Repo.all()
       |> Enum.map(&boost_entry/1)
@@ -2553,6 +2558,10 @@ defmodule Vutuv.Fediverse do
     local_posts = for %{post: %Post{} = post} <- entries, do: post
     visible_ids = visible_boost_post_ids(local_posts, viewer)
     blocked_author_ids = blocked_boost_author_ids(local_posts, viewer_id)
+    # The language filter's local half (issue #1461): the boost query joins
+    # only the CACHED post (scoped in-query), so a boosted vutuv post is
+    # checked here with the other in-memory gates. NULL never hides.
+    chosen = Posts.feed_language_filter(viewer)
 
     Enum.filter(entries, fn
       %{remote_post: %RemotePost{} = post} ->
@@ -2561,7 +2570,8 @@ defmodule Vutuv.Fediverse do
       %{post: %Post{} = post} ->
         (MapSet.member?(visible_ids, post.id) or
            (viewer.admin? == true and Posts.moderation_hidden?(post))) and
-          not MapSet.member?(blocked_author_ids, post.user_id)
+          not MapSet.member?(blocked_author_ids, post.user_id) and
+          (is_nil(chosen) or is_nil(post.language) or post.language in chosen)
 
       _entry ->
         false
@@ -6595,10 +6605,11 @@ defmodule Vutuv.Fediverse do
   follows nobody out there. Stamped with the reshare time: what is new is the
   sharing.
   """
-  def feed_remote_reply_reposts(%User{id: viewer_id}, fetch_n, cursor) do
+  def feed_remote_reply_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     if enabled?() do
       from(r in NoteRepost,
         join: n in Note,
+        as: :language_source,
         on: n.id == r.note_id,
         join: resharer in User,
         on: resharer.id == r.user_id,
@@ -6617,6 +6628,7 @@ defmodule Vutuv.Fediverse do
         order_by: [desc: r.inserted_at, desc: r.id],
         preload: [note: n, user: resharer]
       )
+      |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> limit(^fetch_n)
       |> note_reposts_at_or_before(cursor)
       |> Repo.all()

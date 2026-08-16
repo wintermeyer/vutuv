@@ -279,6 +279,15 @@ defmodule Vutuv.Accounts.User do
     field(:map_openstreetmap?, :boolean)
     field(:map_apple?, :boolean)
     field(:default_map_service, :string)
+    # The feed language preference (issue #1461): what happens to feed posts
+    # outside `feed_languages` — "original" / "translate" / "hide"; nil
+    # inherits the installation default (a Vutuv.Prefs knob). The chips list
+    # is the member's own (nil = all languages, no installation default: "all"
+    # is the only sensible default everywhere). Read the pair through
+    # `Vutuv.Posts.feed_language_filter/1` and the translate-mode helpers,
+    # never raw.
+    field(:feed_foreign_posts, :string)
+    field(:feed_languages, {:array, :string})
     # The reader's post-display preferences (same settings page, applied to
     # every post this member reads: feed, profile Beiträge, permalink). The
     # line counts drive the CSS line-clamp on the preview body, desktop and
@@ -475,7 +484,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list auto_post_deletion? auto_post_deletion_after_days auto_post_deletion_keep_photos? auto_post_deletion_keep_answered? auto_post_deletion_keep_bookmarked? auto_post_deletion_delete_replies? auto_post_deletion_min_likes auto_post_deletion_min_bookmarks auto_post_deletion_min_reposts)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list auto_post_deletion? auto_post_deletion_after_days auto_post_deletion_keep_photos? auto_post_deletion_keep_answered? auto_post_deletion_keep_bookmarked? auto_post_deletion_delete_replies? auto_post_deletion_min_likes auto_post_deletion_min_bookmarks auto_post_deletion_min_reposts feed_foreign_posts feed_languages)a
 
   # The ages the automatic post deletion offers (issue #1255), in days. A fixed
   # list rather than a free number field on purpose: this setting deletes
@@ -696,6 +705,11 @@ defmodule Vutuv.Accounts.User do
     # inline (not `Maps.service_strings/0`) to avoid a compile cycle, since Maps
     # pattern-matches the `User` struct.
     |> validate_inclusion(:default_map_service, ~w(google openstreetmap apple))
+    # The feed's foreign-language mode (issue #1461); a tampered value must
+    # not fail the whole preferences form, so unknown values are refused with
+    # a field error like the map service above.
+    |> validate_inclusion(:feed_foreign_posts, ~w(original translate hide))
+    |> normalize_feed_languages()
     # Post-display line clamp: 0 means "no truncation"; anything above is a
     # line count, capped so nobody stores an absurd value (the bound comes from
     # the Vutuv.Prefs registry via post_lines_max/0). validate_number only
@@ -792,6 +806,25 @@ defmodule Vutuv.Accounts.User do
   # what a spam sign-up puts there. A tagline that *mentions* an address inside
   # a sentence ("Co-Founder of Taxdoo (www.taxdoo.com)") is ordinary and stays
   # valid — members have the Links section for the address itself.
+  # The chips list stores only known language codes, and the two spellings of
+  # "all languages" — every box ticked, or none — both store as nil, so the
+  # feed filter has exactly one representation of "nothing to hide".
+  defp normalize_feed_languages(changeset) do
+    case get_change(changeset, :feed_languages) do
+      nil ->
+        changeset
+
+      list when is_list(list) ->
+        known = Enum.filter(Enum.uniq(list), &Vutuv.Languages.known?/1)
+
+        if known == [] or length(known) >= length(Vutuv.Languages.codes()) do
+          put_change(changeset, :feed_languages, nil)
+        else
+          put_change(changeset, :feed_languages, known)
+        end
+    end
+  end
+
   defp validate_headline_not_link_only(changeset) do
     validate_change(changeset, :headline, fn :headline, headline ->
       if WebAddress.link_only?(headline),

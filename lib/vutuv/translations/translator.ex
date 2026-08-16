@@ -76,8 +76,13 @@ defmodule Vutuv.Translations.Translator do
       messages: [%{role: "user", content: prompt(subject, text, summary, target_language)}]
     }
 
+    # `remote_timeout:` too: the short 30s skip that suits a quick image
+    # verdict makes every real translation "fail" on a priority-list
+    # `:ollama_url` — a translation legitimately runs minutes, on whichever
+    # instance answers it.
     case Vutuv.Ollama.post("/api/chat", body,
            timeout: timeout(),
+           remote_timeout: timeout(),
            req_options_key: @req_options_key
          ) do
       {:ok, response} -> parse(response, text, summary)

@@ -41,6 +41,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
+  alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.RemotePostActions
   alias VutuvWeb.UserHelpers
 
@@ -154,6 +155,10 @@ defmodule VutuvWeb.PostLive.Feed do
   # connected socket would replay as an empty feed.
   defp apply_feed_payload(socket, payload) do
     socket
+    # On-demand translations (issue #1462): the per-card view state, and
+    # whether this viewer gets the controls at all.
+    |> assign(:post_translations, %{})
+    |> assign(:translatable?, PostTranslations.available?(socket.assigns.current_user))
     |> assign(:content_filters, payload.content_filters)
     |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
@@ -181,6 +186,33 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(payload.rails)
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
     |> stream(:posts, payload.entries)
+    |> auto_translate_entries(payload.entries)
+  end
+
+  # Translate mode (issue #1461): fold the page's foreign-language subjects
+  # into the translations map — cached rows show at once, the rest queue and
+  # swap in live. Only on the connected socket: the dead render is replaced
+  # moments later, and the jobs it would enqueue are the same deduped ones.
+  defp auto_translate_entries(socket, entries) do
+    viewer = socket.assigns.current_user
+
+    if connected?(socket) and PostTranslations.auto_translate?(viewer) do
+      subjects = Enum.flat_map(entries, &entry_subjects/1)
+      map = PostTranslations.auto_translate(socket.assigns.post_translations, subjects, viewer)
+      assign(socket, :post_translations, map)
+    else
+      socket
+    end
+  end
+
+  # What a feed entry shows that could be translated: its own post (plus the
+  # nested ancestors of a reply), a cached remote post, or a remote reply.
+  defp entry_subjects(entry) do
+    cond do
+      Posts.remote_reply_entry?(entry) -> [entry.note]
+      Posts.remote_feed_entry?(entry) -> [entry.remote_post]
+      true -> [entry.post | entry[:ancestors] || []]
+    end
   end
 
   # The desktop "Who to follow" rail: a randomized handful of the most-followed
@@ -341,6 +373,32 @@ defmodule VutuvWeb.PostLive.Feed do
     end)
   end
 
+  # A card's Translate tap (issue #1462): authorize + queue (or serve the
+  # cache), then re-render the one streamed card the state concerns.
+  @impl true
+  def handle_event("translate", %{"kind" => kind, "id" => id}, socket) do
+    case PostTranslations.request(socket.assigns.current_user, kind, id) do
+      {:ok, key, state} ->
+        {:noreply,
+         socket
+         |> update(:post_translations, &Map.put(&1, key, state))
+         |> restream_translated(key)}
+
+      :denied ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("show-original", %{"kind" => kind, "id" => id}, socket) do
+    case PostTranslations.show_original(socket.assigns.post_translations, kind, id) do
+      :ignore ->
+        {:noreply, socket}
+
+      {key, map} ->
+        {:noreply, socket |> assign(:post_translations, map) |> restream_translated(key)}
+    end
+  end
+
   @impl true
   def handle_event("load-more", _params, socket) do
     page =
@@ -372,7 +430,8 @@ defmodule VutuvWeb.PostLive.Feed do
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
      |> update(:entries, &(&1 ++ entries))
-     |> stream(:posts, entries, at: -1)}
+     |> stream(:posts, entries, at: -1)
+     |> auto_translate_entries(entries)}
   end
 
   # A source tab (All / vutuv / Fediverse). The tab decides which sources the
@@ -637,6 +696,28 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, refresh_shown_post(socket, post_id)}
   end
 
+  # The worker finished a translation this reader asked for (issue #1462):
+  # swap it into the one card, or clear the pending line on a failure.
+  def handle_info({:translation_ready, translation}, socket) do
+    case PostTranslations.apply_ready(socket.assigns.post_translations, translation) do
+      :ignore ->
+        {:noreply, socket}
+
+      {key, map} ->
+        {:noreply, socket |> assign(:post_translations, map) |> restream_translated(key)}
+    end
+  end
+
+  def handle_info({:translation_failed, key, target}, socket) do
+    case PostTranslations.apply_failed(socket.assigns.post_translations, key, target) do
+      :ignore ->
+        {:noreply, socket}
+
+      {key, map} ->
+        {:noreply, socket |> assign(:post_translations, map) |> restream_translated(key)}
+    end
+  end
+
   # The composer says it holds a draft, so show it (issue #1130). Two moments
   # send this: the first characters of a normal compose (the panel is already
   # open, so the assign is a no-op), and the `validate` LiveView's form recovery
@@ -861,6 +942,32 @@ defmodule VutuvWeb.PostLive.Feed do
   # `entry.post` goes through this (or `find_by_post_id/2`) first.
   defp local_entries(entries), do: Enum.reject(entries, &Posts.remote_feed_entry?/1)
 
+  # Re-render the one streamed card a translation state change concerns; a
+  # subject not on screen is a harmless no-op (update_only). A local post may
+  # sit in an entry as the leaf OR as a nested ancestor — either way the
+  # entry re-renders with the current translations map.
+  defp restream_translated(socket, key) do
+    case find_by_translation_key(socket.assigns.entries, key) do
+      nil -> socket
+      entry -> stream_insert(socket, :posts, entry, update_only: true)
+    end
+  end
+
+  defp find_by_translation_key(entries, {:post, id}) do
+    Enum.find(entries, fn entry ->
+      not Posts.remote_feed_entry?(entry) and not Posts.remote_reply_entry?(entry) and
+        (entry.post.id == id or Enum.any?(entry[:ancestors] || [], &(&1.id == id)))
+    end)
+  end
+
+  defp find_by_translation_key(entries, {:remote_post, id}) do
+    Enum.find(entries, &(Posts.remote_feed_entry?(&1) and &1.remote_post.id == id))
+  end
+
+  defp find_by_translation_key(entries, {:note, id}) do
+    Enum.find(entries, &(Posts.remote_reply_entry?(&1) and &1.note.id == id))
+  end
+
   defp find_by_post_id(entries, post_id) do
     Enum.find(entries, fn entry ->
       not Posts.remote_feed_entry?(entry) and entry.post.id == post_id
@@ -1065,6 +1172,8 @@ defmodule VutuvWeb.PostLive.Feed do
                     viewer={@current_user}
                     marks={entry[:marks]}
                     reposted_by={entry.reposted_by}
+                    translations={@post_translations}
+                    translatable?={@translatable?}
                     live?
                   />
                 <% Posts.remote_feed_entry?(entry) -> %>
@@ -1073,13 +1182,15 @@ defmodule VutuvWeb.PostLive.Feed do
                   (issue #1164; replies and boosts are #1165/#1166), and its own
                   report control. --%>
                   <.remote_post_card
-            live?
+                    live?
                     remote_post={entry.remote_post}
                     images={entry[:images] || []}
                     marks={entry[:marks]}
                     reposted_by={entry[:reposted_by]}
                     boosted_by={entry[:boosted_by]}
                     viewer={@current_user}
+                    translations={@post_translations}
+                    translatable?={@translatable?}
                   />
                 <% true -> %>
                   <%!-- A vutuv member's post that a followed account out there
@@ -1099,6 +1210,8 @@ defmodule VutuvWeb.PostLive.Feed do
                     entry_id={entry.id}
                     conn_or_socket={@socket}
                     engagement={entry.engagement}
+                    translations={@post_translations}
+                    translatable?={@translatable?}
                     surface={:flat}
                   />
               <% end %>

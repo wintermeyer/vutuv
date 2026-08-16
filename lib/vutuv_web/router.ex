@@ -1158,6 +1158,9 @@ defmodule VutuvWeb.Router do
     patch("/maps", SettingsController, :update_maps)
     put("/post_display", SettingsController, :update_post_display)
     patch("/post_display", SettingsController, :update_post_display)
+    put("/feed_languages", SettingsController, :update_feed_languages)
+    patch("/feed_languages", SettingsController, :update_feed_languages)
+    post("/feed_languages/reset", SettingsController, :reset_feed_languages)
     # Clear a whole preference group back to nil = "inherit the installation
     # default" (Vutuv.Prefs) — the quiet reset links under the two cards.
     post("/post_display/reset", SettingsController, :reset_post_display)

@@ -77,6 +77,14 @@ defmodule VutuvWeb.GettextExtractionAnchors do
         "When off, other members no longer see you among the likes of a post. The author of the post still does: we named you in the notification they got when you liked it. Either way the post keeps the same number of likes."
       ),
       gettext("Privacy"),
+      # Vutuv.Prefs — the feed language preference (issue #1461)
+      gettext("Posts in other languages"),
+      gettext("Translate into my language"),
+      gettext("Hide them"),
+      gettext(
+        "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
+      ),
+      gettext("Feed"),
       gettext("0 means posts are never shortened."),
       gettext("How much of a post a notification quotes before it is cut off."),
       gettext("Opens first, as the main button. The others appear as alternatives."),

@@ -182,8 +182,15 @@ defmodule Vutuv.FediverseBlocklistTest do
   describe "inbound caps" do
     test "a server over its hourly cap is throttled while other servers are unaffected" do
       # Tiny budgets so the test states the rule instead of writing 600 rows.
+      original_caps = Application.fetch_env(:vutuv, :fediverse_inbound_caps)
       Application.put_env(:vutuv, :fediverse_inbound_caps, {2, 2})
-      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_inbound_caps) end)
+
+      on_exit(fn ->
+        case original_caps do
+          {:ok, was} -> Application.put_env(:vutuv, :fediverse_inbound_caps, was)
+          :error -> Application.delete_env(:vutuv, :fediverse_inbound_caps)
+        end
+      end)
 
       member = federating_member()
 
@@ -213,8 +220,15 @@ defmodule Vutuv.FediverseBlocklistTest do
 
     test "one remote account cannot spend the whole host budget" do
       # Room for 10 rows from the host, but only 1 from any single actor.
+      original_caps = Application.fetch_env(:vutuv, :fediverse_inbound_caps)
       Application.put_env(:vutuv, :fediverse_inbound_caps, {10, 1})
-      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_inbound_caps) end)
+
+      on_exit(fn ->
+        case original_caps do
+          {:ok, was} -> Application.put_env(:vutuv, :fediverse_inbound_caps, was)
+          :error -> Application.delete_env(:vutuv, :fediverse_inbound_caps)
+        end
+      end)
 
       member = federating_member()
       other = federating_member()

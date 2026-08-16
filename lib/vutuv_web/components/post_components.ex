@@ -37,6 +37,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Isbn
+  alias Vutuv.Languages
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -52,6 +53,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.RemoteMedia
   alias Vutuv.ReviewCover
   alias Vutuv.Tags
+  alias Vutuv.Translations.Translation
   alias VutuvWeb.FediverseComponents
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostLive.RemoteActionsComponent
@@ -163,6 +165,20 @@ defmodule VutuvWeb.PostComponents do
         "the plain count"
   )
 
+  attr(:translations, :map,
+    default: %{},
+    doc:
+      "the host's translation map (issue #1462), key {:post, id} → :pending | " <>
+        "%Vutuv.Translations.Translation{} (= shown). The card looks itself up"
+  )
+
+  attr(:translatable?, :boolean,
+    default: false,
+    doc:
+      "whether this viewer gets the Translate action (VutuvWeb.Live.PostTranslations." <>
+        "available?/1 — LiveView hosts with a signed-in viewer only)"
+  )
+
   def post_card(assigns) do
     # The reader's post-display preferences (per-breakpoint line clamp +
     # hyphenation), fed onto the body as CSS custom properties below. There is
@@ -191,13 +207,22 @@ defmodule VutuvWeb.PostComponents do
     # simply stays absent for strangers while the author sees it; a preview
     # body carrying inline images switches to the height-based media clamp
     # (`inline_media?` below — a line clamp cannot hold pictures or floats).
+    # The card's translation state (issue #1462): a shown translation swaps
+    # the body source before the Markdown render, so the translated text goes
+    # through the exact pipeline + sanitizer the original does — no new XSS
+    # surface. The gallery/inline split below stays keyed on the ORIGINAL
+    # body: the translator leaves image references untouched.
+    translation = card_translation(assigns, {:post, post.id}, post.body, post.language)
+
     # A link in the body that points at a webpage this author has PROVED is
     # theirs wears the verified mark (issue #1246). The links ride in on the
     # already-preloaded author (`Vutuv.Posts.post_preloads/0`), so a feed of
     # fifty cards costs one batched query, not fifty — and a surface that
     # renders a card without that preload simply marks nothing.
     body_html =
-      Markdown.render_post(post.body, post.images, verified_links: VerifiedLinks.of(post.user))
+      Markdown.render_post(translation.body_source, post.images,
+        verified_links: VerifiedLinks.of(post.user)
+      )
 
     # Attachments the body references inline render in place; the rest form
     # the gallery (full mode) / the image tile row (preview).
@@ -229,6 +254,12 @@ defmodule VutuvWeb.PostComponents do
       # that carry the reader's preference onto the post body; nil for a default
       # / logged-out reader, so their DOM stays clean and the CSS fallbacks apply.
       |> assign(:body_style, post_body_style(prefs))
+      # The translation line's three states + the body's `lang` attribute
+      # (screen readers, hyphenation — worth having independent of any
+      # translation). A shown translation is in the reader's own language.
+      |> assign(:translation_state, translation.state)
+      |> assign(:body_lang, translation.lang)
+      |> assign(:offer_translation?, translation.offer?)
       |> assign(:restricted?, Posts.restricted?(post))
       |> assign(:permalink, Posts.path(post))
       |> assign(:gallery, gallery)
@@ -687,6 +718,9 @@ defmodule VutuvWeb.PostComponents do
         "the page (the permalink thread), so the row is just the flat card"
   )
 
+  attr(:translations, :map, default: %{})
+  attr(:translatable?, :boolean, default: false)
+
   def post_thread_entry(assigns) do
     # An explicit [] means "collapsed, no ancestors" (a root/standalone) and must
     # not fall back; only a missing (nil) list falls back to the one-level parent.
@@ -707,6 +741,8 @@ defmodule VutuvWeb.PostComponents do
         entry_id={@entry_id}
         surface={@surface}
         conn_or_socket={@conn_or_socket}
+        translations={@translations}
+        translatable?={@translatable?}
         show_reply_banner={@nest_parent}
       />
     <% else %>
@@ -720,6 +756,8 @@ defmodule VutuvWeb.PostComponents do
         viewer={@viewer}
         surface={@surface}
         conn_or_socket={@conn_or_socket}
+        translations={@translations}
+        translatable?={@translatable?}
       />
     <% end %>
     """
@@ -801,6 +839,8 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:acting_as, :any, default: nil)
+  attr(:translations, :map, default: %{})
+  attr(:translatable?, :boolean, default: false)
 
   defp thread_chain(assigns) do
     # `@thread_indent_cap` is a module attribute, not an assign, so resolve the
@@ -894,6 +934,8 @@ defmodule VutuvWeb.PostComponents do
             owner?={node.owner?}
             viewer={@viewer}
             marks={node.marks}
+            translations={@translations}
+            translatable?={@translatable?}
             live?
           />
         <% else %>
@@ -910,6 +952,8 @@ defmodule VutuvWeb.PostComponents do
             conn_or_socket={@conn_or_socket}
             mode={Map.get(node, :mode, :preview)}
             likers={Map.get(node, :likers)}
+            translations={@translations}
+            translatable?={@translatable?}
             show_reply_banner={reply_banner?(node, @connected?, @indent?)}
           />
         <% end %>
@@ -922,6 +966,8 @@ defmodule VutuvWeb.PostComponents do
         viewer={@viewer}
         surface={@surface}
         conn_or_socket={@conn_or_socket}
+        translations={@translations}
+        translatable?={@translatable?}
       />
     </div>
     """
@@ -997,11 +1043,23 @@ defmodule VutuvWeb.PostComponents do
       "the member whose reshare put this reply in the reader's feed (issue #1275), or nil in a conversation, where it stands under the post it answers"
   )
 
+  attr(:translations, :map,
+    default: %{},
+    doc: "the host's translation map (issue #1462), key {:note, id} — see <.post_card>"
+  )
+
+  attr(:translatable?, :boolean,
+    default: false,
+    doc: "whether this viewer gets the Translate action — see <.post_card>"
+  )
+
   def remote_reply_card(assigns) do
     note = assigns.note
+    translation = card_translation(assigns, {:note, note.id}, note.content_text, note.language)
 
     assigns =
       assigns
+      |> assign(:translation, translation)
       |> assign(:author, Note.label(note))
       |> assign(:handle, Note.display_handle(note))
       |> assign(:host, Note.host(note.actor_uri))
@@ -1077,7 +1135,18 @@ defmodule VutuvWeb.PostComponents do
             {gettext("Sent to you only, visible to nobody else")}
           </.remote_restricted_note>
 
-          <.remote_body warning={@warned? && @note.summary} text={@note.content_text} />
+          <.remote_body
+            warning={@warned? && translated_summary(@translation, @note.summary)}
+            text={@translation.body_source}
+            lang={@translation.lang}
+          />
+
+          <.translation_line
+            state={@translation.state}
+            offer?={@translation.offer?}
+            kind="note"
+            subject_id={@note.id}
+          />
 
           <%!-- The card's acts, in the open under the body where a reader
           looks for them (issues #1270, #1275, #1276). The bar owns its own
@@ -1399,6 +1468,10 @@ defmodule VutuvWeb.PostComponents do
   # sentence somebody wrote on another server. Google honors the attribute on a
   # `div`/`span`/`section` and covers its descendants, so the one wrapper takes
   # the warning, the body and the chips with it.
+  # The body's language (BCP47 primary subtag) for the `lang` attribute;
+  # nil renders no attribute.
+  attr(:lang, :string, default: nil)
+
   defp remote_body(assigns) do
     {text, hashtags} = Markdown.split_trailing_hashtags(assigns.text)
 
@@ -1424,6 +1497,7 @@ defmodule VutuvWeb.PostComponents do
           </summary>
           <div
             :if={@body?}
+            lang={@lang}
             class="markdown markdown--post mt-1.5 text-sm text-slate-700 dark:text-slate-300"
           >
             {Phoenix.HTML.raw(@html)}
@@ -1431,7 +1505,11 @@ defmodule VutuvWeb.PostComponents do
           <.remote_tags tags={@tags} />
         </details>
       <% else %>
-        <div :if={@body?} class="markdown markdown--post text-sm text-slate-700 dark:text-slate-300">
+        <div
+          :if={@body?}
+          lang={@lang}
+          class="markdown markdown--post text-sm text-slate-700 dark:text-slate-300"
+        >
           {Phoenix.HTML.raw(@html)}
         </div>
         <.remote_tags tags={@tags} />
@@ -1959,12 +2037,26 @@ defmodule VutuvWeb.PostComponents do
       "whether the ⋯ menu offers Mute. Pass false where the viewer is known not to follow the account (the lookup page, issue #1211): muting a follow that does not exist is a control that does nothing and a flash that says otherwise"
   )
 
+  attr(:translations, :map,
+    default: %{},
+    doc: "the host's translation map (issue #1462), key {:remote_post, id} — see <.post_card>"
+  )
+
+  attr(:translatable?, :boolean,
+    default: false,
+    doc: "whether this viewer gets the Translate action — see <.post_card>"
+  )
+
   def remote_post_card(assigns) do
     post = assigns.remote_post
     account = post.remote_account
 
+    translation =
+      card_translation(assigns, {:remote_post, post.id}, post.content_text, post.language)
+
     assigns =
       assigns
+      |> assign(:translation, translation)
       |> assign(:account, account)
       |> assign(:initials, name_initials(RemoteAccount.display_name(account) || account.handle))
       |> assign(:link_screenshot, remote_link_screenshot(post, assigns.images))
@@ -2065,11 +2157,20 @@ defmodule VutuvWeb.PostComponents do
             <.remote_body
               warning={
                 RemotePost.warned?(@remote_post) &&
-                  (@remote_post.summary || gettext("Marked as sensitive by its author"))
+                  (translated_summary(@translation, @remote_post.summary) ||
+                     gettext("Marked as sensitive by its author"))
               }
-              text={@remote_post.content_text}
+              text={@translation.body_source}
+              lang={@translation.lang}
             />
           </div>
+
+          <.translation_line
+            state={@translation.state}
+            offer?={@translation.offer?}
+            kind="remote_post"
+            subject_id={@remote_post.id}
+          />
 
           <.remote_post_images images={@images} />
 
@@ -2372,13 +2473,22 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:conn_or_socket, :any, required: true)
+  attr(:translations, :map, default: %{})
+  attr(:translatable?, :boolean, default: false)
 
   def thread_conversation(assigns) do
     top_id = with %{id: id} <- List.first(assigns.posts), do: id
     assigns = assign(assigns, :roots, conversation_nodes(assigns.posts, top_id, assigns))
 
     ~H"""
-    <.thread_chain nodes={@roots} viewer={@viewer} surface={:flat} conn_or_socket={@conn_or_socket} />
+    <.thread_chain
+      nodes={@roots}
+      viewer={@viewer}
+      surface={:flat}
+      conn_or_socket={@conn_or_socket}
+      translations={@translations}
+      translatable?={@translatable?}
+    />
     """
   end
 
@@ -2402,6 +2512,8 @@ defmodule VutuvWeb.PostComponents do
   attr(:note_marks, :any, default: nil)
   attr(:likers, :any, default: nil)
   attr(:conn_or_socket, :any, required: true)
+  attr(:translations, :map, default: %{})
+  attr(:translatable?, :boolean, default: false)
 
   def thread_window_conversation(assigns) do
     window = assigns.window
@@ -2429,6 +2541,8 @@ defmodule VutuvWeb.PostComponents do
         viewer={@viewer}
         surface={:flat}
         conn_or_socket={@conn_or_socket}
+        translations={@translations}
+        translatable?={@translatable?}
       />
       <div class="py-3 pl-1">
         <button
@@ -2451,6 +2565,8 @@ defmodule VutuvWeb.PostComponents do
       viewer={@viewer}
       surface={:flat}
       conn_or_socket={@conn_or_socket}
+      translations={@translations}
+      translatable?={@translatable?}
     />
     <div :if={@window.more > 0} class="pl-1 pt-3">
       <button
@@ -2801,6 +2917,7 @@ defmodule VutuvWeb.PostComponents do
               <div
                 :if={@mode == :full and @post.body != ""}
                 data-post-body
+                lang={@body_lang}
                 class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
                 {style_attrs(@body_style)}
               >
@@ -2827,6 +2944,7 @@ defmodule VutuvWeb.PostComponents do
                 body_style={@body_style}
                 class="mt-2"
                 tags={@post.tags}
+                lang={@body_lang}
                 wrap
               >
                 <:float>
@@ -2856,6 +2974,7 @@ defmodule VutuvWeb.PostComponents do
                 body_style={@body_style}
                 class="mt-2"
                 tags={@post.tags}
+                lang={@body_lang}
                 wrap
               >
                 <:float>
@@ -2874,6 +2993,7 @@ defmodule VutuvWeb.PostComponents do
                 class="mt-2"
                 media={@inline_media?}
                 tags={@post.tags}
+                lang={@body_lang}
               />
 
               <%!-- Attachments the body does NOT reference inline. A single
@@ -2973,6 +3093,17 @@ defmodule VutuvWeb.PostComponents do
           />
 
           <.liked_by :if={@likers} likers={@likers} />
+
+          <%!-- The translation line (issue #1462): the quiet Translate action
+          on a foreign-language card, the pending notice while the worker runs,
+          or — never silently — the "Translated from …" label with the original
+          one tap away. Events go to the host LiveView (no phx-target). --%>
+          <.translation_line
+            state={@translation_state}
+            offer?={@offer_translation?}
+            kind="post"
+            subject_id={@post.id}
+          />
 
           <%!-- The action bar (like / repost / bookmark + counters). On a
           LiveView host it is an in-process LiveComponent that re-renders in
@@ -3097,6 +3228,9 @@ defmodule VutuvWeb.PostComponents do
   # there is no float there, so the caller's plain row below already sits at
   # the end of the text).
   attr(:tags, :list, default: [])
+  # The body's language (BCP47 primary subtag) for the `lang` attribute —
+  # screen readers and hyphenation; nil renders no attribute.
+  attr(:lang, :string, default: nil)
   slot(:float)
 
   defp preview_body(assigns) do
@@ -3119,6 +3253,7 @@ defmodule VutuvWeb.PostComponents do
           ]}
           data-clamp-body
           data-post-body
+          lang={@lang}
           {style_attrs(@body_style)}
         >
           <%!-- The floated media is the clamp block's FIRST child so the body text
@@ -3759,6 +3894,95 @@ defmodule VutuvWeb.PostComponents do
   # Spaced rather than shingled, and `xs` rather than the `2xs` of the repost
   # banner: these are people the reader may well want to look up, so each face
   # is a finger-sized target and a picture-less member's monogram stays whole.
+  # The translation line's three states (issue #1462): the shown label ("never
+  # a silent translation"), the pending notice, or the quiet Translate action.
+  # Never more than one renders. Events carry the subject as kind + id and go
+  # to the host LiveView, which owns the translations map.
+  attr(:state, :any, doc: "nil | :pending | %Vutuv.Translations.Translation{} (= shown)")
+  attr(:offer?, :boolean, doc: "whether an untranslated card gets the Translate action")
+  attr(:kind, :string, doc: "\"post\" / \"remote_post\" / \"note\"")
+  attr(:subject_id, :any)
+
+  defp translation_line(assigns) do
+    ~H"""
+    <p
+      :if={match?(%Translation{}, @state)}
+      class="mt-2 flex flex-wrap items-center gap-x-1.5 text-xs text-slate-600 dark:text-slate-400"
+      data-translation-label
+    >
+      {translated_from_label(@state)}
+      <span aria-hidden="true">·</span>
+      <button
+        type="button"
+        phx-click="show-original"
+        phx-value-kind={@kind}
+        phx-value-id={@subject_id}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Show the original")}
+      </button>
+    </p>
+    <p
+      :if={@state == :pending}
+      role="status"
+      class="mt-2 flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"
+      data-translation-pending
+    >
+      <.hourglass class="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+      {gettext("Translating…")}
+    </p>
+    <p :if={is_nil(@state) and @offer?} class="mt-2">
+      <button
+        type="button"
+        phx-click="translate"
+        phx-value-kind={@kind}
+        phx-value-id={@subject_id}
+        data-translate-button
+        class="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Translate")}
+      </button>
+    </p>
+    """
+  end
+
+  # "und" is the model's honest "could not tell" — a label naming no language
+  # beats one confidently naming the wrong one.
+  defp translated_from_label(%Translation{source_language: source}) when source in [nil, "und"],
+    do: gettext("Translated")
+
+  defp translated_from_label(%Translation{source_language: source}),
+    do: gettext("Translated from %{language}", language: Languages.name(source))
+
+  # A card whose language differs from the reader's UI locale — or declares
+  # none — gets the manual Translate action (issue #1462).
+  defp foreign_language?(language),
+    do: is_nil(language) or language != Gettext.get_locale(VutuvWeb.Gettext)
+
+  # The shown translation's content warning, else the original — a warning
+  # must never silently vanish just because its translation lacks one.
+  defp translated_summary(%{shown: %Translation{summary: summary}}, _original)
+       when is_binary(summary) and summary != "",
+       do: summary
+
+  defp translated_summary(_translation, original), do: original
+
+  # One card's translation view-state, computed in one place for all three
+  # card kinds: what the body renders from, which language it is in, and
+  # whether the Translate action shows.
+  defp card_translation(assigns, key, original_body, original_language) do
+    state = assigns.translations[key]
+    shown = if match?(%Translation{}, state), do: state
+
+    %{
+      state: state,
+      body_source: if(shown, do: shown.body, else: original_body),
+      shown: shown,
+      lang: if(shown, do: shown.target_language, else: original_language),
+      offer?: assigns.translatable? and foreign_language?(original_language)
+    }
+  end
+
   attr(:likers, :map, required: true)
 
   defp liked_by(%{likers: %{users: []}} = assigns), do: ~H""

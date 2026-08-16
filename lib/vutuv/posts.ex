@@ -2230,6 +2230,45 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  The chosen-languages list the viewer's feed HIDES by (issue #1461), or nil
+  when nothing is hidden — which is almost everyone: only the "hide" mode
+  with a real language selection filters at all. The one place this pair of
+  columns is interpreted for the feed queries.
+  """
+  def feed_language_filter(%User{} = viewer) do
+    chosen = viewer.feed_languages
+
+    if Vutuv.Prefs.get(viewer, :feed_foreign_posts) == "hide" and is_list(chosen) and
+         chosen != [] do
+      chosen
+    end
+  end
+
+  @doc """
+  Narrows a feed source query to the chosen languages. nil = no filter. The
+  clause is spelled `is_nil or in` on purpose: NULL (undeclared) never hides
+  (the organization milestone's NOT-IN/NULL lesson), and the binding is the
+  query's root — every feed source roots at its language-bearing schema.
+  """
+  def language_scope(query, nil), do: query
+
+  def language_scope(query, chosen) when is_list(chosen) do
+    from(x in query, where: is_nil(x.language) or x.language in ^chosen)
+  end
+
+  @doc """
+  `language_scope/2` for a source whose language-bearing schema is a JOIN
+  rather than the root — the join carries `as: :language_source`. A left-join
+  NULL row passes (its language reads NULL), which is exactly right for the
+  boost source's local half.
+  """
+  def named_language_scope(query, nil), do: query
+
+  def named_language_scope(query, chosen) when is_list(chosen) do
+    from([language_source: x] in query, where: is_nil(x.language) or x.language in ^chosen)
+  end
+
+  @doc """
   One page of `viewer`'s newsfeed: own posts plus posts **and reposts** of
   followed (activated) authors, visibility-filtered, newest first.
 
@@ -2472,6 +2511,7 @@ defmodule Vutuv.Posts do
       limit: ^fetch_n
     )
     |> scope_visible(viewer)
+    |> language_scope(feed_language_filter(viewer))
     |> posts_at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
@@ -2486,7 +2526,7 @@ defmodule Vutuv.Posts do
   # No `scope_visible/2`: an organization post carries no denials by
   # construction (`create_organization_post/3`), so the only thing that can hide
   # one is moderation, and that is exactly what the two guards below are.
-  defp feed_organization_post_items(%User{id: viewer_id}, fetch_n, cursor) do
+  defp feed_organization_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     from(p in Post,
       join: o in Organization,
       as: :organization,
@@ -2497,6 +2537,7 @@ defmodule Vutuv.Posts do
       order_by: [desc: p.inserted_at, desc: p.id],
       limit: ^fetch_n
     )
+    |> language_scope(feed_language_filter(viewer))
     |> posts_at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
@@ -2543,6 +2584,7 @@ defmodule Vutuv.Posts do
       select: {r.id, r.inserted_at, p, reposter, rp}
     )
     |> scope_visible(viewer)
+    |> language_scope(feed_language_filter(viewer))
     |> reposts_at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, post, reposter, page} ->
@@ -2610,6 +2652,7 @@ defmodule Vutuv.Posts do
           limit: ^fetch_n
         )
         |> scope_visible(viewer)
+        |> language_scope(feed_language_filter(viewer))
         |> posts_at_or_before(cursor)
         |> Repo.all()
         |> Enum.map(&%{id: "tagpost-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})

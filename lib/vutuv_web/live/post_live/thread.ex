@@ -52,6 +52,7 @@ defmodule VutuvWeb.PostLive.Thread do
   alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
+  alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.PostLive.ActionsComponent
 
   # The origin's like/repost figures on a card from another network tick
@@ -71,6 +72,9 @@ defmodule VutuvWeb.PostLive.Thread do
       |> assign(:reply_budget, defaults.replies)
       |> assign(:subscribed_ids, MapSet.new())
       |> assign(:notice, nil)
+      # On-demand translations (issue #1462): per-card view state + gate.
+      |> assign(:post_translations, %{})
+      |> assign(:translatable?, PostTranslations.available?(socket.assigns.current_user))
       |> mount_window()
 
     {:ok, socket}
@@ -157,6 +161,38 @@ defmodule VutuvWeb.PostLive.Thread do
   end
 
   @impl true
+  def handle_event("translate", %{"kind" => kind, "id" => id}, socket) do
+    case PostTranslations.request(socket.assigns.current_user, kind, id) do
+      {:ok, key, state} ->
+        {:noreply, update(socket, :post_translations, &Map.put(&1, key, state))}
+
+      :denied ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("show-original", %{"kind" => kind, "id" => id}, socket) do
+    case PostTranslations.show_original(socket.assigns.post_translations, kind, id) do
+      :ignore -> {:noreply, socket}
+      {_key, map} -> {:noreply, assign(socket, :post_translations, map)}
+    end
+  end
+
+  @impl true
+  def handle_info({:translation_ready, %Vutuv.Translations.Translation{} = translation}, socket) do
+    case PostTranslations.apply_ready(socket.assigns.post_translations, translation) do
+      :ignore -> {:noreply, socket}
+      {_key, map} -> {:noreply, assign(socket, :post_translations, map)}
+    end
+  end
+
+  def handle_info({:translation_failed, key, target}, socket) do
+    case PostTranslations.apply_failed(socket.assigns.post_translations, key, target) do
+      :ignore -> {:noreply, socket}
+      {_key, map} -> {:noreply, assign(socket, :post_translations, map)}
+    end
+  end
+
   def handle_info({:post_counters, %{post_id: post_id} = payload}, socket) do
     # This host holds the post-topic subscriptions for its cards; the matching
     # in-process bar applies the payload (`ActionBar.apply_counters/2`). The
@@ -365,6 +401,8 @@ defmodule VutuvWeb.PostLive.Thread do
             likers={@likers}
             mode={:full}
             conn_or_socket={@socket}
+            translations={@post_translations}
+            translatable?={@translatable?}
           />
         <% true -> %>
           <%!-- The conversation (issue #1006), rendered like a feed thread
@@ -385,6 +423,8 @@ defmodule VutuvWeb.PostLive.Thread do
                 likers={@likers}
                 auto_scroll?={@auto_scroll?}
                 conn_or_socket={@socket}
+                translations={@post_translations}
+                translatable?={@translatable?}
               />
             <% else %>
               <.thread_window_conversation
@@ -398,6 +438,8 @@ defmodule VutuvWeb.PostLive.Thread do
                 likers={@likers}
                 auto_scroll?={@auto_scroll?}
                 conn_or_socket={@socket}
+                translations={@post_translations}
+                translatable?={@translatable?}
               />
             <% end %>
           </.card>

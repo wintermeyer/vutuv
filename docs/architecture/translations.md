@@ -95,6 +95,27 @@ default `gemma4:31b` — issue #1455's eval: the smaller/faster models invert
 negations). On success the worker broadcasts `{:translation_ready, row}` on
 `Translations.topic(subject)` for the live swap-in (issue #1462).
 
+## The reader's controls
+
+Every card whose language differs from the UI locale (or declares none)
+carries a quiet **Translate** action on the LiveView surfaces (feed,
+permalink thread, profile — issue #1462): tap → pending line → the worker's
+broadcast swaps the translated body in, labelled "Translated from X" with
+the original one tap away. A shown translation renders through the normal
+Markdown pipeline (local posts) or as plain text (remote content), and the
+card's `lang` attribute follows what is shown. The host-side half is
+`VutuvWeb.Live.PostTranslations`; the card-side half is the `translations`
+map + `translatable?` flag on `VutuvWeb.PostComponents`.
+
+The **feed language preference** (issue #1461, on /settings/preferences)
+adds Mastodon's chosen-languages filter: `users.feed_languages` (nil = all)
+plus the `:feed_foreign_posts` pref — original (shipped default) /
+translate / hide. Hide is `Posts.language_scope/2` (`is_nil or in` — NULL
+never hides) applied inside every feed source query; translate mode
+auto-requests translations for rendered foreign cards (one batched
+`fresh_translations/2` query per page, `PostTranslations.auto_translate/3`).
+Feed only; profiles, permalinks, search and public surfaces are untouched.
+
 ## What deliberately does not exist
 
 - No backfill, no bulk pre-computation: a job exists only because a reader

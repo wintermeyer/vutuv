@@ -52,6 +52,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
+  alias VutuvWeb.Live.PostTranslations
 
   # The controller embeds this LiveView with `live_render/3` (not a `live/3`
   # router route), so `VutuvWeb.Live.InitAssigns` cannot be the on_mount: it
@@ -81,6 +82,9 @@ defmodule VutuvWeb.UserProfileLive do
       # (issue #859), one of "all" / "certification" / "license". Set once here
       # so it survives the PubSub re-renders that rebuild the profile assigns.
       |> assign(:qualifications_tab, "all")
+      # On-demand translations (issue #1462): per-card view state + gate.
+      |> assign(:post_translations, %{})
+      |> assign(:translatable?, PostTranslations.available?(socket.assigns.current_user))
       |> mount_profile()
 
     # Only a real visitor triggers the (cached, single-flight) social feed
@@ -178,6 +182,24 @@ defmodule VutuvWeb.UserProfileLive do
       {:noreply, refresh_social(socket)}
     else
       {:noreply, socket}
+    end
+  end
+
+  def handle_event("translate", %{"kind" => kind, "id" => id}, socket) do
+    case PostTranslations.request(socket.assigns.current_user, kind, id) do
+      {:ok, key, state} ->
+        translations = Map.put(socket.assigns.post_translations, key, state)
+        {:noreply, assign(socket, :post_translations, translations)}
+
+      :denied ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("show-original", %{"kind" => kind, "id" => id}, socket) do
+    case PostTranslations.show_original(socket.assigns.post_translations, kind, id) do
+      :ignore -> {:noreply, socket}
+      {_key, map} -> {:noreply, assign(socket, :post_translations, map)}
     end
   end
 
@@ -329,6 +351,20 @@ defmodule VutuvWeb.UserProfileLive do
   # reflects changes made on another page or by another member.
 
   @impl true
+  def handle_info({:translation_ready, %Vutuv.Translations.Translation{} = translation}, socket) do
+    case PostTranslations.apply_ready(socket.assigns.post_translations, translation) do
+      :ignore -> {:noreply, socket}
+      {_key, map} -> {:noreply, assign(socket, :post_translations, map)}
+    end
+  end
+
+  def handle_info({:translation_failed, key, target}, socket) do
+    case PostTranslations.apply_failed(socket.assigns.post_translations, key, target) do
+      :ignore -> {:noreply, socket}
+      {_key, map} -> {:noreply, assign(socket, :post_translations, map)}
+    end
+  end
+
   def handle_info({:social_graph_changed, _payload}, socket),
     do: {:noreply, refresh_social(socket)}
 

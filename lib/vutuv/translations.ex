@@ -129,6 +129,41 @@ defmodule Vutuv.Translations do
   end
 
   @doc """
+  `fresh_translation/2` over many subjects at once — ONE query per subject
+  kind present, never one per card (the feed's translate mode renders whole
+  pages). Returns `%{subject_key => %Translation{}}` for the fresh hits;
+  stale and missing rows are simply absent.
+  """
+  def fresh_translations([], _target_language), do: %{}
+
+  def fresh_translations(subjects, target_language) do
+    by_key =
+      subjects
+      |> Enum.group_by(fn subject -> subject_column(subject) end, fn subject -> subject.id end)
+      |> Enum.flat_map(fn {column, ids} ->
+        Repo.all(
+          from(t in Translation,
+            where: field(t, ^column) in ^ids and t.target_language == ^target_language
+          )
+        )
+      end)
+      |> Map.new(&{subject(&1), &1})
+
+    for subject <- subjects,
+        translation = by_key[subject_key(subject)],
+        translation != nil,
+        translation.source_sha256 == source_sha256(subject),
+        into: %{} do
+      {subject_key(subject), translation}
+    end
+  end
+
+  @doc ~S|The `{kind, id}` key for a SUBJECT struct — the struct-side twin of `subject/1`.|
+  def subject_key(%Post{id: id}), do: {:post, id}
+  def subject_key(%RemotePost{id: id}), do: {:remote_post, id}
+  def subject_key(%Note{id: id}), do: {:note, id}
+
+  @doc """
   Stores (or refreshes) the translation of `subject` into `target_language`.
   `result` carries what the model answered: `:body`, `:source_language`, and
   for remote content `:summary`; `:model` names who translated. Stamped with

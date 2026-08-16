@@ -3932,8 +3932,11 @@ defmodule VutuvWeb.UI do
              gettext("log history audit trail security was that me who changed when protocol")
          ),
          row(:preferences, gettext("Language & display"), ~p"/settings/preferences",
-           hint: gettext("Interface language, maps, how posts are shortened"),
-           terms: gettext("german english locale translation map font length hyphenation")
+           hint: gettext("Interface language, feed languages, maps, how posts are shortened"),
+           terms:
+             gettext(
+               "german english locale translation translate map font length hyphenation feed languages hide foreign übersetzen sprache"
+             )
          ),
          row(:import, gettext("Import"), ~p"/settings/import/linkedin",
            hint: gettext("Take your data over from LinkedIn"),

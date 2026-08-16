@@ -77,6 +77,18 @@ defmodule Vutuv.Prefs do
     # same card. An installation that wants the opposite posture flips this one
     # default at /admin/preferences and every untouched member follows.
     %Pref{key: :like_attribution?, type: :boolean, default: true, group: :privacy},
+    # What the feed does with posts outside the member's chosen languages
+    # (issue #1461): show the original (shipped default), auto-translate into
+    # the UI language, or hide them. The chosen-languages list itself is a
+    # plain member column (users.feed_languages, nil = all) — "all" is the
+    # only sensible default everywhere, so it carries no installation knob.
+    %Pref{
+      key: :feed_foreign_posts,
+      type: :select,
+      default: "original",
+      values: ~w(original translate hide),
+      group: :feed
+    },
     %Pref{key: :map_google?, type: :boolean, default: true, group: :maps},
     %Pref{key: :map_openstreetmap?, type: :boolean, default: true, group: :maps},
     %Pref{key: :map_apple?, type: :boolean, default: true, group: :maps},
@@ -126,12 +138,22 @@ defmodule Vutuv.Prefs do
   def label(:like_attribution?),
     do: Gettext.gettext(VutuvWeb.Gettext, "Show my name on posts I like")
 
+  def label(:feed_foreign_posts),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Posts in other languages")
+
   def label(:map_google?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Google Maps")
   def label(:map_openstreetmap?), do: Gettext.gettext(VutuvWeb.Gettext, "Show OpenStreetMap")
   def label(:map_apple?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Apple Maps")
   def label(:default_map_service), do: Gettext.gettext(VutuvWeb.Gettext, "Default map")
 
   @doc "A short muted helper line under the control, or nil."
+  def hint(:feed_foreign_posts),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
+      )
+
   def hint(key) when key in [:post_lines_desktop, :post_lines_mobile],
     do: Gettext.gettext(VutuvWeb.Gettext, "0 means posts are never shortened.")
 
@@ -165,6 +187,7 @@ defmodule Vutuv.Prefs do
 
   @doc "The human label of a pref group."
   def group_label(:post_display), do: Gettext.gettext(VutuvWeb.Gettext, "Posts")
+  def group_label(:feed), do: Gettext.gettext(VutuvWeb.Gettext, "Feed")
   def group_label(:privacy), do: Gettext.gettext(VutuvWeb.Gettext, "Privacy")
   def group_label(:maps), do: Gettext.gettext(VutuvWeb.Gettext, "Maps")
 
@@ -178,6 +201,16 @@ defmodule Vutuv.Prefs do
     do: Vutuv.Maps.label(:openstreetmap)
 
   def value_label(%Pref{key: :default_map_service}, "apple"), do: Vutuv.Maps.label(:apple)
+
+  def value_label(%Pref{key: :feed_foreign_posts}, "original"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Show the original")
+
+  def value_label(%Pref{key: :feed_foreign_posts}, "translate"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Translate into my language")
+
+  def value_label(%Pref{key: :feed_foreign_posts}, "hide"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Hide them")
+
   def value_label(%Pref{}, value), do: to_string(value)
 
   # ── Encoding ──

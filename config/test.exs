@@ -82,6 +82,14 @@ config :vutuv, :image_scan_worker, false
 # own sync file.
 config :vutuv, :translate_posts, true
 config :vutuv, :translation_worker, false
+# The fediverse inbound rate cap counts in a GLOBAL in-memory bucket the SQL
+# sandbox never rolls back, and ~29 test files share the literal actor
+# "https://social.example/users/alice" — so one full run draws the shipped
+# 60/hour actor budget down until whichever file the seed puts last starts
+# failing with :inbound_capped (first bitten at ~7860 tests). Effectively
+# unlimited here; the cap's own tests set tight values per test and restore
+# THIS configured value afterwards (fetch_env, not delete_env).
+config :vutuv, :fediverse_inbound_caps, {1_000_000, 1_000_000}
 # Same arrangement for the Arbeitszeugnis analysis: the queue tests drain via
 # Checks.deliver_due/1 with a stubbed analysis function, and neither the
 # polling worker nor the daily skill fetch may run from the sandbox.

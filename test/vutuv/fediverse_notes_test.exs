@@ -244,8 +244,15 @@ defmodule Vutuv.FediverseNotesTest do
     end
 
     test "is subject to the inbound caps (#1067)", %{user: user, note_url: note_url} do
+      original_caps = Application.fetch_env(:vutuv, :fediverse_inbound_caps)
       Application.put_env(:vutuv, :fediverse_inbound_caps, {1, 1})
-      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_inbound_caps) end)
+
+      on_exit(fn ->
+        case original_caps do
+          {:ok, was} -> Application.put_env(:vutuv, :fediverse_inbound_caps, was)
+          :error -> Application.delete_env(:vutuv, :fediverse_inbound_caps)
+        end
+      end)
 
       assert :ok = Fediverse.record_reply(user, create_activity(note_url), remote())
 

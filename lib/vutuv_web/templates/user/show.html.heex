@@ -539,6 +539,8 @@ the resulting ~200px rail width. --%>
             conn_or_socket={@socket}
             viewer={@current_user}
             engagement={entry[:engagement]}
+            translations={@post_translations}
+            translatable?={@translatable?}
             surface={:flat}
           />
         </div>

@@ -752,6 +752,34 @@ defmodule VutuvWeb.SettingsController do
     reset_prefs(conn, :maps, gettext("Map preferences reset to the site defaults."))
   end
 
+  # The feed language preference (issue #1461): which languages the feed
+  # shows, and what happens to the rest. A reading preference like the maps,
+  # so it lives on the same language & display page.
+  def update_feed_languages(conn, %{"user" => params}) do
+    save(
+      conn,
+      # An all-unticked checkbox set posts no "feed_languages" key at all,
+      # which cast would read as "keep the stored list" — here it means the
+      # member cleared every box, i.e. "all languages" (the changeset maps
+      # [] to nil).
+      Map.put_new(params, "feed_languages", []),
+      "preferences.html",
+      ~p"/settings/preferences",
+      gettext("Feed language settings saved.")
+    )
+  end
+
+  def reset_feed_languages(conn, _params) do
+    # The chips list is a plain member column beside the :feed pref group,
+    # so the reset clears both halves.
+    {:ok, _} =
+      conn.assigns[:user]
+      |> Ecto.Changeset.change(%{feed_languages: nil})
+      |> Repo.update()
+
+    reset_prefs(conn, :feed, gettext("Feed language settings reset to the site defaults."))
+  end
+
   # The like-attribution switch (issue #1233) lives on the visibility page
   # rather than under language & display, so its reset lands back there.
   def reset_privacy_prefs(conn, _params) do
