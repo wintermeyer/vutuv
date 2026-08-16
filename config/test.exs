@@ -75,6 +75,13 @@ config :vutuv, :post_screenshot_worker, false
 # (sandbox rule). ImageScanWorker.nudge/0 casts into the void then.
 config :vutuv, :moderate_images, false
 config :vutuv, :image_scan_worker, false
+# Translations are ON in tests so the request/display paths are exercised;
+# the queue tests drain via Translations.deliver_due/1 with a stubbed
+# translator, and the polling worker stays off (sandbox rule) — its nudge/0
+# casts into the void. The one "flag off" test flips :translate_posts in its
+# own sync file.
+config :vutuv, :translate_posts, true
+config :vutuv, :translation_worker, false
 # Same arrangement for the Arbeitszeugnis analysis: the queue tests drain via
 # Checks.deliver_due/1 with a stubbed analysis function, and neither the
 # polling worker nor the daily skill fetch may run from the sandbox.

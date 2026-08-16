@@ -164,6 +164,8 @@ Everything else has a default (the vutuv.de production value):
 | `OLLAMA_VISION_MODEL` | `qwen3-vl:8b` | The vision model used for the safety verdict. Pull it once (`ollama pull qwen3-vl:8b`); any Ollama vision model works (`qwen3-vl:4b` halves the load on CPU-only servers) |
 | `IMAGE_SCAN_VOTES` | `3` | How many opinions the vision model gives on an image it called **unsafe**. The first answer is deterministic and decides alone when it says "safe" (so an ordinary upload costs one inference); a suspicion buys this many opinions in total, sampled so they are genuinely independent. Raising it makes borderline cases slower but steadier |
 | `IMAGE_SCAN_REJECT_VOTES` | `3` | How many of those opinions must call the image unsafe before it is really deleted. The default is unanimous out of three: a model's answer on a harmless-but-dramatic picture (a cartoon skull, a horror-film still, a joke image) flips between runs, and deleting a member's picture on a coin flip is the worse error — a released image is still reportable by every reader. Set both vote variables to `1` for the old "one answer decides" behaviour, or lower this to `2` for a stricter installation |
+| `TRANSLATE_POSTS` | `false` | `true` enables on-demand post translations: a reader taps "Translate" on a foreign-language card (or sets their feed to auto-translate), a job queues, a local Ollama text model translates, and the result is cached per post + target language. Nothing is pre-computed or backfilled, translations never federate, and public/logged-out/agent surfaces always show the original. Fail-open: with Ollama unreachable the card simply keeps showing the original. Leave off on installations without an Ollama that can carry the model |
+| `OLLAMA_TRANSLATION_MODEL` | `gemma4:31b` | The text model that translates posts. Deliberately separate from the vision model: the eval (issue #1455) found the smaller/faster text models invert negations — fluent, wrong translations — while gemma4:31b made no meaning errors. Pull it once (`ollama pull gemma4:31b`, ~20 GB); speed barely matters, the queue is async |
 | `TAG_MERGE_ASSIST` | `true` | Whether the tag merge screen (`/admin/tag_merges`) may ask a local model which of its proposed tag pairs name one topic. It only ever **proposes**: an admin approves each merge and sees what it would move first. With this `false` (or Ollama unreachable) the queue still fills from the deterministic rules and is administered by hand, which is the air-gapped case. The one thing it costs: a pair found only because the two names share a word (`Linux` / `embedded linux`) is left out unless a model has vouched for it, since unjudged it is nearly always wrong |
 | `TAG_MERGE_ASSIST_MODEL` | `qwen3.5:9b` | The text model that judges those pairs. Pull it once (`ollama pull qwen3.5:9b`); it is asked one narrow question per pair and told to answer "different topics" whenever unsure |
 | `DEFAULT_COUNTRY` | `DE` | ISO 3166-1 alpha-2 code that preselects country inputs (job postings, organization pages, employment references) |
@@ -370,6 +372,11 @@ vutuv runs fine without internet access:
   it to `false`: the merge screen still proposes the pairs its deterministic
   rules find and an admin decides them by hand, which is the whole feature minus
   the second opinion.
+- Post translations are local inference too: with Ollama installed, pull the
+  model once while you still have internet access
+  (`ollama pull gemma4:31b`) and set `TRANSLATE_POSTS=true`. Without Ollama,
+  leave the flag at its off default — every surface keeps showing originals,
+  which is also exactly what happens if Ollama goes away later (fail-open).
 - The map links on profile addresses (Google/OSM/Apple) are plain link-outs
   rendered in the visitor's browser; they simply won't resolve offline.
 - Job postings need no configuration to work offline: their zip → coordinate

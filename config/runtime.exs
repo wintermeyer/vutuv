@@ -391,6 +391,17 @@ if config_env() == :prod do
     config :vutuv, :ollama_url, ollama_url
   end
 
+  # On-demand post translations (milestone 13). Default off; TRANSLATE_POSTS=true
+  # opts the installation in. Fail-open: with Ollama unreachable, readers keep
+  # seeing originals. OLLAMA_TRANSLATION_MODEL swaps the text model.
+  if System.get_env("TRANSLATE_POSTS") == "true" do
+    config :vutuv, :translate_posts, true
+  end
+
+  if model = System.get_env("OLLAMA_TRANSLATION_MODEL") do
+    config :vutuv, :ollama_translation_model, model
+  end
+
   # TAG_MERGE_ASSIST=false leaves the tag merge queue to be filled by the
   # deterministic rules alone and judged by a human (issue #1338).
   if System.get_env("TAG_MERGE_ASSIST") == "false" do

@@ -106,6 +106,7 @@ defmodule Vutuv.Application do
         optional_child(:fediverse_counts, Vutuv.Fediverse.CountsRefresher) ++
         optional_child(:post_screenshot_worker, Vutuv.Posts.ScreenshotWorker) ++
         optional_child(:image_scan_worker, Vutuv.Moderation.ImageScanWorker) ++
+        optional_child(:translation_worker, Vutuv.Translations.Worker) ++
         optional_child(:reference_check_worker, Vutuv.References.CheckWorker) ++
         optional_child(:reference_skill_refresher, Vutuv.References.SkillRefresher) ++
         optional_child(:daily_report_email, Vutuv.Reports.DailyReporter) ++

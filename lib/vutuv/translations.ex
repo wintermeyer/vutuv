@@ -21,14 +21,35 @@ defmodule Vutuv.Translations do
 
   import Ecto.Query
 
+  require Logger
+
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Translations.Translation
   alias Vutuv.Translations.TranslationJob
+  alias Vutuv.Translations.Translator
+  alias Vutuv.Translations.Worker
 
   @type subject :: %Post{} | %RemotePost{} | %Note{}
+
+  # Small on purpose: the Ollama box is shared with the fail-closed image
+  # moderation, which keeps priority.
+  @batch 2
+  # A translation call waits up to 10 minutes (`Translator`); only a claim
+  # well past that is presumed crashed and re-queued.
+  @stuck_after_seconds 1800
+  # After this many strikes the job ends `failed` — fail-open, the card keeps
+  # showing the original. A later request simply opens a fresh job.
+  @strike_cap 4
+  # Service failures (Ollama down, contention stall) retry at this flat pace;
+  # content failures back off exponentially from @retry_base_seconds.
+  @service_retry_seconds 300
+  @retry_base_seconds 60
+
+  @doc "Whether on-demand post translation is enabled on this installation."
+  def enabled?, do: Application.get_env(:vutuv, :translate_posts, false)
 
   ## Language tags
 
@@ -137,15 +158,24 @@ defmodule Vutuv.Translations do
   ## The queue
 
   @doc """
-  What a reader's translate request comes down to: the cached row when it is
-  still fresh (`{:cached, translation}`), otherwise a queued job
-  (`{:queued, job}` — deduped, so a second click lands on the same open row).
+  What a reader's translate request comes down to: `:disabled` while the
+  installation has translations off, the cached row when it is still fresh
+  (`{:cached, translation}`), otherwise a queued job (`{:queued, job}` —
+  deduped, so a second click lands on the same open row) with the worker
+  nudged so the reader is not left waiting for the next poll.
   """
   def request(subject, target_language) do
-    if translation = fresh_translation(subject, target_language) do
-      {:cached, translation}
-    else
-      {:queued, open_job(subject, target_language) || insert_job!(subject, target_language)}
+    cond do
+      not enabled?() ->
+        :disabled
+
+      translation = fresh_translation(subject, target_language) ->
+        {:cached, translation}
+
+      true ->
+        job = open_job(subject, target_language) || insert_job!(subject, target_language)
+        Worker.nudge()
+        {:queued, job}
     end
   end
 
@@ -168,6 +198,169 @@ defmodule Vutuv.Translations do
     # Re-read instead of trusting the returned struct: on a lost race the
     # insert did nothing and the struct's id names no row.
     open_job(subject, target_language)
+  end
+
+  ## Draining the queue (called by Vutuv.Translations.Worker)
+
+  @doc """
+  Translates every due job. A no-op while `:translate_posts` is off (jobs
+  stay pending). `opts`: `translate:` injects the per-subject translation
+  function (tests stub it; defaults to `Translator.translate/2`), `force:`
+  runs even with the flag off, `limit:` caps the batch.
+  """
+  def deliver_due(opts \\ []) do
+    if Keyword.get(opts, :force, false) or enabled?() do
+      resume_stuck()
+      translate = Keyword.get(opts, :translate, &Translator.translate/2)
+      for job <- list_due(opts), do: process_job(job, translate)
+    end
+
+    :ok
+  end
+
+  @doc "The due pending jobs the next drain would pick up, oldest first."
+  def list_due(opts \\ []) do
+    now = DateTime.utc_now(:second)
+
+    from(j in TranslationJob,
+      where:
+        j.status == "pending" and
+          (is_nil(j.next_attempt_at) or j.next_attempt_at <= ^now),
+      order_by: [asc: j.inserted_at],
+      limit: ^Keyword.get(opts, :limit, @batch)
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Re-queues jobs a crash left `running` for longer than any live translation
+  could take. Returns the count reset. Called on worker boot and each drain.
+  """
+  def resume_stuck do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(), -@stuck_after_seconds, :second)
+
+    {count, _} =
+      from(j in TranslationJob, where: j.status == "running" and j.updated_at < ^cutoff)
+      |> Repo.update_all(set: [status: "pending", updated_at: NaiveDateTime.utc_now(:second)])
+
+    count
+  end
+
+  # Every outcome stamps the job — including the branches that do no
+  # translation work (subject gone, translation already stored). An unstamped
+  # skip would be due again on the very next drain and hold the front of the
+  # oldest-first batch forever: the `refresh_counts` starvation lesson.
+  defp process_job(job, translate) do
+    case claim_job(job, "pending", "running") do
+      nil ->
+        :ok
+
+      job ->
+        case load_subject(job) do
+          # A race with the subject's deletion; the FK erases the job anyway.
+          nil -> finish_failed(job, job.attempts, :subject_gone)
+          subject -> translate_subject(job, subject, translate)
+        end
+    end
+  end
+
+  defp translate_subject(job, subject, translate) do
+    if translation = fresh_translation(subject, job.target_language) do
+      # Someone already stored it (a racing job, an earlier crash after the
+      # store): the reader has what they asked for — done, not silently due.
+      finish_done(job, translation)
+    else
+      case translate.(subject, job.target_language) do
+        {:ok, result} ->
+          {:ok, translation} = store_translation(subject, job.target_language, result)
+          finish_done(job, translation)
+
+        {:error, {class, reason}} ->
+          strike(job, class, reason)
+      end
+    end
+  end
+
+  defp finish_done(job, translation) do
+    claim_job(job, "running", "done")
+    broadcast(job, {:translation_ready, translation})
+    :ok
+  end
+
+  defp finish_failed(job, attempts, reason) do
+    claim_job(job, "running", "failed", attempts: attempts, last_error: error_string(reason))
+    broadcast(job, {:translation_failed, subject(job), job.target_language})
+    :ok
+  end
+
+  # A strike is a retry until the cap, then `failed` — fail-open, the card
+  # keeps showing the original. Service failures (Ollama down, a contention
+  # stall on the shared box) retry at a flat patient pace; content failures
+  # (the model answered junk) back off exponentially.
+  defp strike(job, class, reason) do
+    attempts = job.attempts + 1
+
+    if attempts >= @strike_cap do
+      Logger.warning(
+        "translation failed subject=#{inspect(subject(job))} target=#{job.target_language} " <>
+          "class=#{class} error=#{inspect(reason)}"
+      )
+
+      finish_failed(job, attempts, reason)
+    else
+      retry_at = DateTime.add(DateTime.utc_now(:second), retry_delay(class, attempts))
+
+      claim_job(job, "running", "pending",
+        attempts: attempts,
+        next_attempt_at: retry_at,
+        last_error: error_string(reason)
+      )
+
+      :ok
+    end
+  end
+
+  defp retry_delay(:service, _attempts), do: @service_retry_seconds
+  defp retry_delay(_class, attempts), do: trunc(:math.pow(2, attempts)) * @retry_base_seconds
+
+  # Atomically moves one job between statuses, claiming the transition for
+  # exactly one caller (the image_scans pattern).
+  defp claim_job(%TranslationJob{id: id}, from_status, to_status, extra \\ []) do
+    now = NaiveDateTime.utc_now(:second)
+    set = Keyword.merge([status: to_status, updated_at: now], extra)
+
+    {_count, rows} =
+      from(j in TranslationJob, where: j.id == ^id and j.status == ^from_status, select: j)
+      |> Repo.update_all(set: set)
+
+    case rows do
+      [claimed] -> claimed
+      [] -> nil
+    end
+  end
+
+  defp error_string(reason), do: reason |> inspect() |> String.slice(0, 255)
+
+  ## The live swap-in (issue #1462 subscribes per shown card)
+
+  @doc """
+  The PubSub topic a subject's translations are announced on. Takes the
+  subject struct or any translations row belonging to it. Messages:
+  `{:translation_ready, %Translation{}}` and
+  `{:translation_failed, subject_key, target_language}` (the key as
+  `subject/1` returns it).
+  """
+  def topic(%Post{id: id}), do: "translation:post:#{id}"
+  def topic(%RemotePost{id: id}), do: "translation:remote_post:#{id}"
+  def topic(%Note{id: id}), do: "translation:note:#{id}"
+
+  def topic(row) do
+    {kind, id} = subject(row)
+    "translation:#{kind}:#{id}"
+  end
+
+  defp broadcast(row, message) do
+    Phoenix.PubSub.broadcast(Vutuv.PubSub, topic(row), message)
   end
 
   ## Shared subject plumbing (the triple stays in here)

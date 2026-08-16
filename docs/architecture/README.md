@@ -14,6 +14,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [social-graph.md](social-graph.md) | follows, vernetzt (mutual follows), per-follow mute, blocking |
 | [fediverse.md](fediverse.md) | follow-only ActivityPub federation: WebFinger, actors, the inbox, signed deliveries |
 | [posts-and-feed.md](posts-and-feed.md) | posts, deny-based audiences, the `/feed` timeline, likes/bookmarks/reposts, reply threads, post images |
+| [translations.md](translations.md) | declared post languages, on-demand Ollama translation, the cache + job queue, what never translates |
 | [search.md](search.md) | the search page, query operators, post full-text search |
 | [messages.md](messages.md) | 1:1 direct messages, message requests, unread-email nudges |
 | [profiles.md](profiles.md) | what a profile shows: owner vs. public view, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card |

@@ -109,6 +109,17 @@ config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
 config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 
+# On-demand post translations (Vutuv.Translations, milestone 13): a reader
+# asks, a job queues, an Ollama text model translates, the result is cached
+# per post + target language. Default OFF — an installation opts in once it
+# has an Ollama that can carry the model. Fail-open: with Ollama unreachable
+# or the flag off, every surface simply keeps showing originals. Shares
+# :ollama_url with the image moderation above; the model is deliberately
+# separate from the vision model (issue #1455 picked gemma4:31b). Runtime
+# overrides: TRANSLATE_POSTS, OLLAMA_TRANSLATION_MODEL (config/runtime.exs).
+config :vutuv, :translate_posts, false
+config :vutuv, :ollama_translation_model, "gemma4:31b"
+
 # The assisted tag pass (Vutuv.Tags.Assistant, issue #1338): an admin-triggered
 # batch that proposes which tags name one topic. It never merges anything — a
 # human approves each proposal on /admin/tag_merges — and the candidate pairs
