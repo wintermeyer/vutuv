@@ -11,6 +11,7 @@ defmodule VutuvWeb.CompanyControllerTest do
   alias Vutuv.PeopleHistory
   alias Vutuv.PeopleHistory.Snapshot
   alias Vutuv.Repo
+  alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.AgentDocs.MediaKitDoc
   alias VutuvWeb.CompanyHTML
 
@@ -62,79 +63,60 @@ defmodule VutuvWeb.CompanyControllerTest do
   end
 
   describe "GET /system/investors" do
+    test "opens with the way to start a conversation", %{conn: conn} do
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      # The contact card carries the page's only h1.
+      assert html =~ "<h1"
+      assert html =~ "Contact #{MediaKitDoc.press_contact_name()}"
+      assert html =~ ~s|href="mailto:#{MediaKitDoc.press_contact()}"|
+      assert length(Regex.scan(~r{<h1[^>]*>}, html)) == 1
+    end
+
+    test "points at the profile for the rest of the contact details", %{conn: conn} do
+      handle = Application.get_env(:vutuv, :operator_handle)
+      insert(:activated_user, username: handle)
+      url = InvestorsDoc.contact_profile_url()
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ "More contact information on my profile"
+      assert html =~ ~s|href="#{url}"|
+      assert html =~ ">#{url}</a>"
+    end
+
+    test "points at no profile where that handle is nobody here", %{conn: conn} do
+      refute InvestorsDoc.contact_profile_url()
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      refute html =~ "More contact information on my profile"
+    end
+
     test "states the live figures", %{conn: conn} do
       insert(:activated_user)
       insert(:activated_user)
 
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      assert html =~ "Investors"
+      assert html =~ "Where we are"
       assert html =~ "Members"
       # The figure tile really carries the count from the database.
       assert html =~ ">2</p>"
-    end
-
-    test "names LinkedIn in the first paragraph, not somewhere further down", %{conn: conn} do
-      html = conn |> get(~p"/system/investors") |> html_response(200)
-
-      [lead] = Regex.run(~r{<h1.*?</p>}s, html)
-      assert lead =~ "alternative to LinkedIn"
-    end
-
-    test "makes the gated-community argument, in the page and in its siblings", %{conn: conn} do
-      html = conn |> get(~p"/system/investors") |> html_response(200)
-      markdown = conn |> get(~p"/system/investors" <> ".md") |> response(200)
-
-      assert html =~ "The gated community"
-      assert html =~ "Sign in to view"
-      # The doc siblings carry the same argument, or the page and the Markdown a
-      # language model reads would tell two different stories.
-      assert markdown =~ "The gated community"
-      assert markdown =~ "302 to the sign-in form"
-    end
-
-    test "quotes LinkedIn with the source that says it", %{conn: conn} do
-      html = conn |> get(~p"/system/investors") |> html_response(200)
-
-      assert html =~ "17,000+"
-      assert html =~ "1.3 billion+"
-      assert html =~ "https://news.linkedin.com/about-us"
-    end
-
-    test "draws the growth curve from the recorded snapshots", %{conn: conn} do
-      today = BerlinTime.today()
-      PeopleHistory.record(Date.add(today, -2), %{members: 100, fediverse_accounts: 10})
-      PeopleHistory.record(Date.add(today, -1), %{members: 130, fediverse_accounts: 25})
-
-      html = conn |> get(~p"/system/investors") |> html_response(200)
-
-      assert html =~ ~s|data-growth-chart="2"|
-      # The summary sentence under the chart is derived from the same two rows.
-      assert html =~ "30 members"
-      assert html =~ "15 Fediverse accounts"
-    end
-
-    test "says so rather than drawing a line through one point", %{conn: conn} do
-      PeopleHistory.record(BerlinTime.today(), %{members: 5, fediverse_accounts: 0})
-
-      html = conn |> get(~p"/system/investors") |> html_response(200)
-
-      refute html =~ "data-growth-chart"
-      assert html =~ "has not recorded two days yet"
     end
 
     test "stays English under a German Accept-Language header", %{conn: conn} do
       html = conn |> german() |> get(~p"/system/investors") |> html_response(200)
 
       assert html =~ ~s|lang="en"|
-      assert html =~ "Why we can afford to be quiet"
+      assert html =~ "Where we are"
     end
 
     test "serves its agent-format siblings", %{conn: conn} do
       json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
 
       assert json["type"] == "investors"
-      assert json["comparison"]["source"] == "https://news.linkedin.com/about-us"
+      assert json["contact"] == MediaKitDoc.press_contact()
       assert is_integer(json["figures"]["members"])
     end
   end

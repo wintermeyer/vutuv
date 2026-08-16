@@ -13,7 +13,6 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   `VutuvWeb.CompanyController`).
   """
 
-  alias Vutuv.Accounts
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.Endpoint
@@ -216,24 +215,10 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   @doc """
   Their profile on this installation, for the contact details a media kit
   should not spell out itself (phone, messengers, other addresses), or `nil`.
-
-  Built from `:operator_handle` on **this** installation's own host, and
-  returned only once the handle really resolves to a member here. That is what
-  makes the vutuv.de default safe to ship: an installation that has no such
-  member renders no link instead of pointing a journalist at a stranger's
-  profile on somebody else's site, and nobody can leave a dead link behind by
-  renaming their handle.
+  Both company pages offer it, so it lives beside the address in
+  `InvestorsDoc`.
   """
-  def press_contact_profile_url do
-    handle = Application.get_env(:vutuv, :operator_handle) || ""
-
-    with true <- handle != "",
-         %Accounts.User{username: username} <- Accounts.get_user_by_username(handle) do
-      Endpoint.url() <> "/" <> username
-    else
-      _ -> nil
-    end
-  end
+  defdelegate press_contact_profile_url, to: InvestorsDoc, as: :contact_profile_url
 
   @doc "The media kit as a doc map."
   def build do

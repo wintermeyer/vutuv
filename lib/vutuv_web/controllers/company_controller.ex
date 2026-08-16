@@ -22,7 +22,6 @@ defmodule VutuvWeb.CompanyController do
   """
   use VutuvWeb, :controller
 
-  alias Vutuv.PeopleHistory
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.AgentDocs.MediaKitDoc
@@ -34,7 +33,6 @@ defmodule VutuvWeb.CompanyController do
   """
   def investors(conn, _params) do
     facts = InvestorsDoc.facts()
-    series = PeopleHistory.series(365)
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -42,13 +40,11 @@ defmodule VutuvWeb.CompanyController do
           page_title: "Investors",
           facts: facts,
           facts_contact: InvestorsDoc.contact_email(),
-          comparison: InvestorsDoc.linkedin(),
-          operator_name: Application.fetch_env!(:vutuv, :operator_name),
-          series: series,
-          growth: PeopleHistory.growth(series)
+          contact_profile_url: InvestorsDoc.contact_profile_url(),
+          press_contact_name: MediaKitDoc.press_contact_name()
         )
       end,
-      doc: fn -> InvestorsDoc.build(facts, series) end
+      doc: fn -> InvestorsDoc.build(facts) end
     )
   end
 

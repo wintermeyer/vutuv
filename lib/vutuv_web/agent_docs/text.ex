@@ -323,14 +323,12 @@ defmodule VutuvWeb.AgentDocs.Text do
     [
       heading(doc.title),
       doc.description,
-      "What vutuv is",
-      doc.positioning,
-      "The gated community",
+      "Contact",
       [
-        "- LinkedIn: #{doc.openness.linkedin}",
-        "- vutuv: #{doc.openness.vutuv}",
-        "- Why it matters: #{doc.openness.why_it_matters}"
-      ],
+        "#{doc.operator.name}, #{doc.contact}",
+        doc.contact_profile_url && "More contact information: #{doc.contact_profile_url}"
+      ]
+      |> Enum.filter(&is_binary/1),
       "Figures",
       [
         "- Members: #{doc.figures.members}",
@@ -341,19 +339,7 @@ defmodule VutuvWeb.AgentDocs.Text do
         "- Fediverse accounts: #{doc.figures.fediverse_accounts}",
         "- Fediverse servers: #{doc.figures.fediverse_servers}"
       ],
-      doc.growth &&
-        "Between #{doc.growth.from} and #{doc.growth.to} (#{doc.growth.days} days): " <>
-          "#{doc.growth.members} members and #{doc.growth.fediverse_accounts} Fediverse accounts.",
-      "Why we can afford to be quiet",
-      "vutuv is built and operated by one person working with AI agents, in Elixir on the " <>
-        "BEAM. LinkedIn's own newsroom reports #{doc.comparison.employees} full-time " <>
-        "employees serving #{doc.comparison.members} members (#{doc.comparison.source}). " <>
-        "A payroll that size is earned back with attention, which is where the nudges " <>
-        "come from; ours is not, so the feed stays chronological and nothing is tracked.",
-      "Business model",
-      [doc.business_model, doc.business_model_url] |> Enum.filter(&is_binary/1) |> Enum.join(" "),
-      "Contact",
-      "#{doc.operator.name}, #{doc.contact}",
+      "Press material: #{doc.media_kit_url}",
       footer(doc)
     ]
     |> join_blocks()

@@ -377,8 +377,8 @@ defmodule VutuvWeb.PageController do
   - `/jobs/<slug>` — a job posting: role, location, pay range, tags and how to apply
   - `/system/media-kit` — press material: boilerplate in three lengths, logo files,
     colours, screenshots and the press contact (English only, whatever `?lang=` says)
-  - `/system/investors` — what this installation is, what it costs to run and how
-    many people are on it, with the daily head-count history (English only)
+  - `/system/investors` — who to contact about investing, and how many members,
+    posts and Fediverse accounts this installation has (English only)
   {{ads}}
 
   List pages paginate with `?page=N`.

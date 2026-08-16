@@ -68,10 +68,11 @@ They are the same figures `/system/nodeinfo/2.1` already publishes, plus the
 Fediverse reach (`Vutuv.Fediverse.distinct_follower_count/0` and
 `follower_host_count/0`).
 
-The LinkedIn comparison quotes LinkedIn's own newsroom and links it, with the
-figures pinned as module attributes and dated in a comment. That is the whole
-weight of the cost argument: a reader who checks the source has to find it
-saying what we said it says.
+The page is deliberately two cards: a contact card carrying the h1, and those
+figures. It once carried the whole pitch (positioning against LinkedIn, the
+gated-community argument, the cost base, a growth curve) and was cut back to
+this on 2026-08-16. The prose is in the history if it is wanted again; the
+LinkedIn framing itself lives on in the media kit's boilerplate.
 
 ### Brand assets
 
@@ -113,11 +114,17 @@ the table (a deliberate call, they are the same quantity counted as well as it
 can still be counted), but the migration's moduledoc says so, and so does this
 paragraph.
 
-### The curve
+### The curve (built, currently not on any page)
 
 `VutuvWeb.CompanyHTML.growth_chart/1`, plain server-rendered SVG. No chart
 library: the drawing is two paths and a few labels, and a JavaScript bundle for
 that would be paid for by every reader of every other page.
+
+**The investor page dropped it on 2026-08-16 and nothing renders it today.** The
+component and its geometry tests stay, and the recorder keeps writing a row a
+day, on purpose: the snapshots cannot be recovered afterwards, so stopping now
+would mean the curve comes back with an empty past. Putting it back is one
+`<.growth_chart series={...} />`.
 
 It is a filled area for the members here and a line above it for the people
 total, so the gap between the two *is* the Fediverse share. A second line
