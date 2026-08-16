@@ -94,7 +94,17 @@ defmodule VutuvWeb.PageController do
     conn
     |> discovery_cache_headers()
     |> put_resp_content_type("text/plain")
-    |> send_resp(200, VutuvWeb.RobotsTxt.render(VutuvWeb.ContentPolicy.policy()))
+    |> send_resp(200, robots_body(conn))
+  end
+
+  # The tag host answers with its own, much shorter file: it carries topic
+  # addresses and nothing anybody reads, so the document has one thing to say
+  # (see `VutuvWeb.RobotsTxt.tag_host/0`, including why it does not say
+  # `Disallow: /`).
+  defp robots_body(conn) do
+    if Fediverse.tag_host?(conn.host),
+      do: VutuvWeb.RobotsTxt.tag_host(),
+      else: VutuvWeb.RobotsTxt.render(VutuvWeb.ContentPolicy.policy())
   end
 
   @doc """

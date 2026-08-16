@@ -1222,6 +1222,17 @@ only one is silent: a reader handed the actor document sees JSON and shrugs,
 while a remote server handed a redirect stops being able to follow the topic
 and nothing here would say so.
 
+The host is kept out of search the same way, and by the pair that works rather
+than the one that looks decisive. Every answer it gives carries `X-Robots-Tag:
+noindex, noai, noimageai` — the `:tag_host_docs` pipeline for the documents,
+`Plug.TagHost` for the redirects — and it serves a robots.txt of its own
+(`VutuvWeb.RobotsTxt.tag_host/0`) that **disallows nothing**. A `Disallow: /`
+is how a URL gets stuck in an index rather than kept out of one: it stops the
+fetch, so the noindex is never read and the redirect can never consolidate,
+which is precisely the mistake that put 44 apex URLs into Search Console's
+"indexed, though blocked by robots.txt" report before v7.106.3. See
+`docs/architecture/agents-and-seo.md`.
+
 ### The tag page's own half
 
 A visitor who arrived from another server gets the two things they came for, in

@@ -230,6 +230,48 @@ defmodule VutuvWeb.FediverseTagActorWebTest do
     end
   end
 
+  describe "staying out of the index" do
+    test "the tag host answers with a robots.txt of its own", %{conn: conn} do
+      body = conn |> on_tag_host() |> get("/robots.txt") |> response(200)
+
+      assert body =~ "robots.txt for #{@tag_host}"
+      assert body =~ "Allow: /"
+
+      # The rule this project already paid for once (v7.106.3, 44 URLs reported
+      # as "indexed, though blocked by robots.txt"): a Disallow stops the
+      # fetch, so the noindex below is never read and the redirect can never
+      # consolidate. The prose in the file explains that, hence the check for
+      # a directive line rather than for the word.
+      refute Enum.any?(String.split(body, "\n"), &String.starts_with?(&1, "Disallow"))
+    end
+
+    test "every answer this host gives carries the opt-out header", %{conn: conn} do
+      tag = topic()
+
+      answers = [
+        conn |> on_tag_host() |> in_browser() |> get("/"),
+        conn |> on_tag_host() |> in_browser() |> get("/#{tag.slug}"),
+        conn |> on_tag_host() |> ap() |> get("/#{tag.slug}"),
+        conn |> on_tag_host() |> ap() |> get("/#{tag.slug}/followers"),
+        conn |> on_tag_host() |> get("/robots.txt"),
+        conn
+        |> on_tag_host()
+        |> get(~p"/.well-known/webfinger", resource: "acct:#{tag.slug}@#{@tag_host}")
+      ]
+
+      for answer <- answers do
+        assert get_resp_header(answer, "x-robots-tag") == ["noindex, noai, noimageai"]
+      end
+    end
+
+    test "the site's own robots.txt is untouched by any of it", %{conn: conn} do
+      body = conn |> get(~p"/robots.txt") |> response(200)
+
+      assert body =~ "Disallow: /admin/"
+      refute body =~ @tag_host
+    end
+  end
+
   describe "following it" do
     test "a signed Follow is recorded and answered with an Accept", %{conn: conn} do
       tag = topic()

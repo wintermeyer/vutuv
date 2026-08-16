@@ -74,6 +74,17 @@ defmodule VutuvWeb.Router do
     plug(:put_nosniff)
   end
 
+  # The same, plus the page-level opt-out, for the documents the **tag host**
+  # serves. Nothing on that host is for reading — a page asked for there is
+  # redirected to the site (Plugs.TagHost) — so nothing it does answer belongs
+  # in a search index or a training corpus either, actor documents included.
+  # The header is what does the work; its robots.txt deliberately blocks
+  # nothing, so that this header is seen at all.
+  pipeline :tag_host_docs do
+    plug(:put_nosniff)
+    plug(Plugs.NoIndex)
+  end
+
   defp put_nosniff(conn, _opts) do
     Plug.Conn.put_resp_header(conn, "x-content-type-options", "nosniff")
   end
@@ -155,8 +166,13 @@ defmodule VutuvWeb.Router do
   # `preferredUsername@<host of the actor id>` to confirm an account: an id on
   # the apex would canonicalise the handle back into the member namespace.
   scope "/", VutuvWeb, host: "tags." do
-    pipe_through(:machine_docs)
+    pipe_through(:tag_host_docs)
 
+    # Its own robots.txt, because this host is not the site: it says that
+    # nothing here is for reading and deliberately disallows nothing (see
+    # VutuvWeb.RobotsTxt.tag_host/0). Before `/:slug` below, which would
+    # otherwise look for a topic called "robots.txt".
+    get("/robots.txt", PageController, :robots)
     get("/.well-known/webfinger", FediverseController, :webfinger)
     get("/:slug", FediverseController, :tag_actor)
     get("/:slug/followers", FediverseController, :tag_followers)

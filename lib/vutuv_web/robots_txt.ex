@@ -15,6 +15,7 @@ defmodule VutuvWeb.RobotsTxt do
   `ai-input`, `ai-train`), declared per group.
   """
 
+  alias Vutuv.Fediverse
   alias VutuvWeb.ContentPolicy
 
   # Built at call time so the comment names the installation's own host.
@@ -99,6 +100,44 @@ defmodule VutuvWeb.RobotsTxt do
       sitemap_line()
     ]
     |> IO.iodata_to_binary()
+  end
+
+  @doc """
+  The file the **tag host** answers with (issue #1330): a different document,
+  because that host is a different kind of thing.
+
+  `tags.<our host>` carries the ActivityPub address of every topic and nothing
+  anybody reads, so none of it belongs in a search index — and saying that is
+  the whole file. What it must **not** say is `Disallow: /`, which is how a URL
+  gets *stuck* in an index rather than kept out of one: a Disallow stops the
+  fetch, so the redirect can never consolidate and the `X-Robots-Tag: noindex`
+  every response here carries is never read, leaving anything already indexed
+  stranded as a bare link. That is the same mistake this project shipped on the
+  apex once (v7.106.3, 44 URLs reported by Search Console as "indexed, though
+  blocked by robots.txt"), and it is worth stating twice.
+  """
+  def tag_host do
+    """
+    # robots.txt for #{Fediverse.tag_host()}
+    #
+    # This host carries the fediverse address of every topic on #{VutuvWeb.Endpoint.host()}.
+    # Nothing on it is for reading: ask it for a page and you are redirected to
+    # #{VutuvWeb.Endpoint.url()}, ask it for a topic and you land on that topic's
+    # page there. Every answer it gives also carries the header
+    # `X-Robots-Tag: noindex, noai, noimageai`.
+    #
+    # So nothing here belongs in a search index or a training corpus, and
+    # crawling is DELIBERATELY still allowed, because a `Disallow: /` is how a
+    # URL gets stuck in an index rather than kept out of one: it stops the
+    # fetch, and a URL nobody may fetch is one whose noindex is never read and
+    # whose redirect can never consolidate. Fetch it, read the header, drop the
+    # URL. That is the fastest way for this host to disappear from your results,
+    # which is what both of us want.
+
+    User-agent: *
+    Allow: /
+    Content-Signal: #{ContentPolicy.render_signals(false, false, false)}
+    """
   end
 
   defp allowed_signals(policy),

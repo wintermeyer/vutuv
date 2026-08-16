@@ -22,9 +22,15 @@ defmodule VutuvWeb.Plug.TagHost do
   `/<tag>`, is negotiated in `VutuvWeb.FediverseController` instead — only that
   route knows the slug names a topic, and only it can send a reader to the
   topic's page rather than to the start page.
+
+  Every response from this host, redirects included, also carries
+  `X-Robots-Tag: noindex, noai, noimageai`: nothing here belongs in a search
+  index, and the host's own robots.txt disallows nothing precisely so that this
+  header can be read (`VutuvWeb.RobotsTxt.tag_host/0`).
   """
 
   alias Vutuv.Fediverse
+  alias VutuvWeb.ContentPolicy
   alias VutuvWeb.Endpoint
 
   def init(opts), do: opts
@@ -32,6 +38,12 @@ defmodule VutuvWeb.Plug.TagHost do
   def call(conn, _opts) do
     if Fediverse.tag_host?(conn.host) do
       conn
+      # Nothing on this host belongs in a search index or a training corpus,
+      # and a redirect is a response like any other: the header rides along so
+      # a crawler that has one of these URLs learns to drop it rather than
+      # keeping it as a bare link. Its robots.txt allows the fetch precisely so
+      # this can be read (`VutuvWeb.RobotsTxt.tag_host/0`).
+      |> ContentPolicy.put_robots_header(true, true)
       |> Plug.Conn.put_status(:moved_permanently)
       |> Phoenix.Controller.redirect(external: site_url() <> path_with_query(conn))
       |> Plug.Conn.halt()

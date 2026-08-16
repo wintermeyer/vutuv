@@ -55,6 +55,17 @@ same reason the legacy `/users/…` URLs (which 301 to the canonical `/:slug`)
 stay crawlable: blocking a redirect strands the old URL instead of letting the
 301 consolidate it. So `robots.txt` blocks only `/admin/`.
 
+The **tag host** (`tags.<our host>`, issue #1330) is the same reasoning applied
+to a whole hostname. It carries topic actors and nothing anybody reads, so none
+of it should ever appear in a result — and the way there is not `Disallow: /`,
+which would strand whatever is already indexed, but the pair this section
+describes: every response it gives carries `X-Robots-Tag: noindex, noai,
+noimageai` (the `:tag_host_docs` pipeline, and `VutuvWeb.Plug.TagHost` for the
+redirects), and its own short robots.txt (`VutuvWeb.RobotsTxt.tag_host/0`)
+disallows nothing so that header can be read. A page asked for there is
+redirected to the same page on the apex, which is the stronger signal of the
+two: a 301 consolidates the URL rather than merely dropping it.
+
 Everything else resolves itself and is deliberately crawlable too, because any
 `Disallow` beyond `/admin/` kept re-filling that Search Console bucket (and a
 failed "validate fix" pass there emails the operator):
