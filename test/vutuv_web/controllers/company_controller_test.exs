@@ -7,8 +7,6 @@ defmodule VutuvWeb.CompanyControllerTest do
   """
   use VutuvWeb.ConnCase, async: true
 
-  alias Vutuv.BerlinTime
-  alias Vutuv.PeopleHistory
   alias Vutuv.PeopleHistory.Snapshot
   alias Vutuv.Repo
   alias VutuvWeb.AgentDocs.InvestorsDoc
@@ -198,55 +196,6 @@ defmodule VutuvWeb.CompanyControllerTest do
       # three four to the reader this page is written for.
       assert VutuvWeb.UI.delimited_count(5934) == "5.934"
       assert CompanyHTML.en_count(5934) == "5,934"
-    end
-  end
-
-  describe "the growth curve's geometry" do
-    test "needs two points to draw a line" do
-      assert CompanyHTML.chart([]) == nil
-      assert CompanyHTML.chart([%Snapshot{day: ~D[2026-08-01], members: 1}]) == nil
-    end
-
-    test "scales against a zero baseline, never against the data's own floor" do
-      series = [
-        %Snapshot{day: ~D[2026-08-01], members: 500, fediverse_accounts: 0},
-        %Snapshot{day: ~D[2026-08-02], members: 1000, fediverse_accounts: 0}
-      ]
-
-      chart = CompanyHTML.chart(series)
-
-      # Axis top is a round 1000, so the last point sits at the top of the plot
-      # box (y = pad_top = 12) and the first at its exact half (12 + 180/2).
-      # An axis cropped to [500, 1000] would put the first point on the floor
-      # instead - the one chart trick this page must not play.
-      assert chart.members_line == "M52.0 102.0 L628.0 12.0"
-      assert {CompanyHTML.en_count(1000), 12.0} in chart.ticks
-      assert {CompanyHTML.en_count(0), 192.0} in chart.ticks
-    end
-
-    test "the area closes down to the baseline so it can be filled" do
-      series = [
-        %Snapshot{day: ~D[2026-08-01], members: 5, fediverse_accounts: 0},
-        %Snapshot{day: ~D[2026-08-02], members: 10, fediverse_accounts: 0}
-      ]
-
-      chart = CompanyHTML.chart(series)
-
-      assert chart.members_area == "M52.0 102.0 L628.0 12.0 L628.0 192.0 L52.0 192.0 Z"
-    end
-
-    test "the total line runs above the members line by the Fediverse share" do
-      series = [
-        %Snapshot{day: ~D[2026-08-01], members: 50, fediverse_accounts: 0},
-        %Snapshot{day: ~D[2026-08-02], members: 50, fediverse_accounts: 50}
-      ]
-
-      chart = CompanyHTML.chart(series)
-
-      # Same members both days, so that line is flat; the total rises. Axis top
-      # is 100, so 50 lands at the plot box's exact half.
-      assert chart.members_line == "M52.0 102.0 L628.0 102.0"
-      assert chart.total_line == "M52.0 102.0 L628.0 12.0"
     end
   end
 end

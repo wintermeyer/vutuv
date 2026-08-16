@@ -16,6 +16,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
   alias Vutuv.Isbn
+  alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.PostComponents
 
   # The per-user people lists (followers/following/connections) share one
@@ -355,19 +356,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       |> Enum.filter(&is_binary/1)
       |> Enum.join("\n\n"),
       "## Figures",
-      Enum.map_join(
-        [
-          {"Members", doc.figures.members},
-          {"Active this month", doc.figures.active_month},
-          {"Active this half year", doc.figures.active_halfyear},
-          {"Posts", doc.figures.posts},
-          {"Replies", doc.figures.replies},
-          {"Fediverse accounts", doc.figures.fediverse_accounts},
-          {"Fediverse servers", doc.figures.fediverse_servers}
-        ],
-        "\n",
-        fn {label, value} -> "- #{label}: #{value}" end
-      ),
+      Enum.map_join(InvestorsDoc.figure_rows(doc.figures), "\n", fn {label, value} ->
+        "- #{label}: #{value}"
+      end),
       "Press material: #{doc.media_kit_url}"
     ]
     |> join_blocks()

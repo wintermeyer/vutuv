@@ -22,6 +22,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   @doc "The public figures the investor page quotes, read live."
   def facts do
     usage = NodeInfo.usage()
+    reach = Fediverse.follower_reach()
 
     %{
       members: usage.users.total,
@@ -29,9 +30,27 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
       active_halfyear: usage.users.active_halfyear,
       posts: usage.local_posts,
       replies: usage.local_comments,
-      fediverse_accounts: Fediverse.distinct_follower_count(),
-      fediverse_servers: Fediverse.follower_host_count()
+      fediverse_accounts: reach.accounts,
+      fediverse_servers: reach.hosts
     }
+  end
+
+  @doc """
+  The figures as an ordered `{label, value}` list, so the `.md` and `.txt`
+  renderings name them identically. The HTML tiles are deliberately their own
+  arrangement (six tiles, the server count folded into a note on the seventh
+  figure), not a third copy of this list.
+  """
+  def figure_rows(facts) do
+    [
+      {"Members", facts.members},
+      {"Active this month", facts.active_month},
+      {"Active this half year", facts.active_halfyear},
+      {"Posts", facts.posts},
+      {"Replies", facts.replies},
+      {"Fediverse accounts", facts.fediverse_accounts},
+      {"Fediverse servers", facts.fediverse_servers}
+    ]
   end
 
   @doc """

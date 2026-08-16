@@ -12,6 +12,7 @@ defmodule VutuvWeb.AgentDocs.Text do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Accounts.User
+  alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.AgentDocs.Markdown
 
   @width 80
@@ -330,15 +331,9 @@ defmodule VutuvWeb.AgentDocs.Text do
       ]
       |> Enum.filter(&is_binary/1),
       "Figures",
-      [
-        "- Members: #{doc.figures.members}",
-        "- Active this month: #{doc.figures.active_month}",
-        "- Active this half year: #{doc.figures.active_halfyear}",
-        "- Posts: #{doc.figures.posts}",
-        "- Replies: #{doc.figures.replies}",
-        "- Fediverse accounts: #{doc.figures.fediverse_accounts}",
-        "- Fediverse servers: #{doc.figures.fediverse_servers}"
-      ],
+      Enum.map(InvestorsDoc.figure_rows(doc.figures), fn {label, value} ->
+        "- #{label}: #{value}"
+      end),
       "Press material: #{doc.media_kit_url}",
       footer(doc)
     ]
