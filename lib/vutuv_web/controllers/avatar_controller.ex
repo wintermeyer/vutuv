@@ -15,20 +15,17 @@ defmodule VutuvWeb.AvatarController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Avatar
+  alias Vutuv.Repo
+  alias VutuvWeb.ControllerHelpers
 
   def show(conn, %{"slug" => slug}) do
-    with %User{email_confirmed?: true, avatar: avatar} = user when not is_nil(avatar) <-
-           Vutuv.Repo.get_by(User, username: slug),
-         {:ok, jpeg} <- Vutuv.Avatar.og_jpeg(user) do
-      conn
-      |> put_resp_content_type("image/jpeg", nil)
-      |> put_resp_header("cache-control", "public, max-age=86400")
-      |> send_resp(200, jpeg)
-    else
-      _ ->
-        conn
-        |> put_resp_content_type("text/plain")
-        |> send_resp(404, "Not Found")
-    end
+    bytes =
+      with %User{email_confirmed?: true, avatar: avatar} = user when not is_nil(avatar) <-
+             Repo.get_by(User, username: slug) do
+        Avatar.og_jpeg(user)
+      end
+
+    ControllerHelpers.send_og_jpeg(conn, bytes)
   end
 end

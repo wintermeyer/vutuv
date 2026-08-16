@@ -238,14 +238,15 @@ defmodule Vutuv.PostImageStore do
   enforces too). `:error` when nothing usable is on disk.
   """
   def og_jpeg(%PostImage{token: token} = image) do
-    with {kind, path} <- og_source(image, token),
-         {:ok, rotated} <- Spec.open_rotated(path),
-         {:ok, framed} <- og_frame(kind, image, rotated),
-         {:ok, capped} <- Image.thumbnail(framed, "#{@og_width}", resize: :down),
-         {:ok, data} <- Operation.jpegsave_buffer(capped, keep: [], Q: 80) do
-      {:ok, data}
-    else
+    case og_source(image, token) do
+      {kind, path} -> Spec.og_jpeg(path, &frame_and_cap(&1, kind, image))
       _ -> :error
+    end
+  end
+
+  defp frame_and_cap(rotated, kind, image) do
+    with {:ok, framed} <- og_frame(kind, image, rotated) do
+      Image.thumbnail(framed, "#{@og_width}", resize: :down)
     end
   end
 

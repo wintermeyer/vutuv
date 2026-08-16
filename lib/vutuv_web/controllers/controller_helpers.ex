@@ -144,6 +144,38 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
+  `path` with `query` appended, and no stray `?` when there is no query — the
+  join three plugs each wrote out for themselves while redirecting somewhere
+  that must keep the request's parameters.
+  """
+  def with_query(path, ""), do: path
+  def with_query(path, query) when is_binary(query), do: path <> "?" <> query
+
+  @doc """
+  Answers an `avatar.jpg` request with the derived bytes, or with the plain
+  404 every failure shares.
+
+  The two endpoints (`/:slug/avatar.jpg` for a member, `/organizations/:slug/avatar.jpg`
+  for a page) differ only in the lookup and its visibility gate; the answer is
+  the same both ways, and both halves of it are decisions rather than details:
+  the cache lifetime keeps repeat scraper traffic off libvips, and the
+  featureless plain-text 404 is what makes an unknown slug, a missing picture
+  and a page nobody may see indistinguishable from outside.
+  """
+  def send_og_jpeg(%Conn{} = conn, {:ok, jpeg}) do
+    conn
+    |> Conn.put_resp_content_type("image/jpeg", nil)
+    |> Conn.put_resp_header("cache-control", "public, max-age=86400")
+    |> Conn.send_resp(200, jpeg)
+  end
+
+  def send_og_jpeg(%Conn{} = conn, _missing) do
+    conn
+    |> Conn.put_resp_content_type("text/plain")
+    |> Conn.send_resp(404, "Not Found")
+  end
+
+  @doc """
   Renders the bare `VutuvWeb.ErrorHTML` 403/404 page and halts: the one shape
   every auth/resolve plug and the controller-side guards use to refuse a
   request.

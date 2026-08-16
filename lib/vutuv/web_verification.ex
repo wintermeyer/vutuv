@@ -27,6 +27,7 @@ defmodule Vutuv.WebVerification do
   require Logger
 
   alias Vutuv.Dns
+  alias Vutuv.SocialFeed.Http
   alias Vutuv.Ssrf
 
   # How much of an unexpected answer is quoted back to the member in a check
@@ -293,25 +294,14 @@ defmodule Vutuv.WebVerification do
     end
   end
 
+  # The guard rails (timeouts, no retry, no redirect, `decode_body: false`, the
+  # capped collector, the installation's User-Agent) come from `Http` — they are
+  # the same rails every outbound fetch runs on, and this module used to keep
+  # its own copy of them.
   defp request(url, req_options, max_bytes, accept) do
     options =
-      [
-        url: url,
-        receive_timeout: 4_000,
-        connect_options: [timeout: 2_000],
-        retry: false,
-        redirect: false,
-        # The callers read the body as a binary (`is_binary` guards), so Req's
-        # own decode step must stay off — `into:` does NOT imply that, and a
-        # member's server may well mark a well-known answer `application/json`,
-        # which Req would decode into a map.
-        decode_body: false,
-        # Stream with a hard byte ceiling so a hostile large body is dropped
-        # during receipt instead of being buffered whole and truncated after the
-        # fact (the @max_*_bytes cap then bounds memory for real).
-        into: Vutuv.Http.capped_collector(max_bytes),
-        headers: [{"user-agent", user_agent()}, {"accept", accept}]
-      ]
+      url
+      |> Http.base_options(max_bytes, accept)
       |> Keyword.merge(req_options)
 
     case Req.get(options) do
@@ -340,10 +330,5 @@ defmodule Vutuv.WebVerification do
     |> String.replace(~r/[[:cntrl:]]+/u, " ")
     |> String.trim()
     |> String.slice(0, @max_excerpt)
-  end
-
-  defp user_agent do
-    vsn = Application.spec(:vutuv, :vsn) || ~c"0"
-    "vutuv/#{vsn} (+#{VutuvWeb.Endpoint.url()})"
   end
 end

@@ -35,7 +35,6 @@ defmodule Vutuv.Avatar do
   the vCard export and `user_url/2`.
   """
 
-  alias Vix.Vips.Operation
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Crop
   alias Vutuv.Uploads.Originals
@@ -175,10 +174,9 @@ defmodule Vutuv.Avatar do
   def og_jpeg(%{avatar_moderation: "pending"}), do: :error
   def og_jpeg(user), do: derive_jpeg(user, @og_size, @og_size, :center)
 
-  # JPEG from the best available source: decode + EXIF-autorotate, apply the
-  # user's crop, crop-resize, save **stripped** (`keep: []`). The original's
-  # metadata (camera, GPS) must never leak into a served or exported
-  # derivative — the same rule the AVIF pipeline enforces in Vutuv.Uploads.Spec.
+  # JPEG from the best available source, through the shared `Spec.og_jpeg/2`
+  # (which owns the decode, the EXIF autorotation and the stripped save); the
+  # shape here is the member's own crop plus the crop-resize.
   #
   # The crop is applied only when deriving from the **original**; a served
   # version fallback (legacy uploads with no kept original) is already cropped,
@@ -191,14 +189,13 @@ defmodule Vutuv.Avatar do
       {origin, path} ->
         crop = if origin == :original, do: Crop.parse(Map.get(user, :avatar_crop))
 
-        with {:ok, rotated} <- Spec.open_rotated(path),
-             {:ok, cropped} <- Crop.apply_to(rotated, crop),
-             {:ok, small} <- Image.thumbnail(cropped, "#{width}x#{height}", crop: gravity),
-             {:ok, data} <- Operation.jpegsave_buffer(small, keep: [], Q: 80) do
-          {:ok, data}
-        else
-          _ -> :error
-        end
+        Spec.og_jpeg(path, &crop_and_resize(&1, crop, width, height, gravity))
+    end
+  end
+
+  defp crop_and_resize(rotated, crop, width, height, gravity) do
+    with {:ok, cropped} <- Crop.apply_to(rotated, crop) do
+      Image.thumbnail(cropped, "#{width}x#{height}", crop: gravity)
     end
   end
 

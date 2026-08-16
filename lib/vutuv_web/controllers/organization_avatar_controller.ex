@@ -25,21 +25,16 @@ defmodule VutuvWeb.OrganizationAvatarController do
   alias Vutuv.OrganizationImageStore
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias VutuvWeb.ControllerHelpers
 
   def show(conn, %{"slug" => slug}) do
-    with %Organization{logo: logo} = organization when is_binary(logo) <-
-           Organizations.get_organization_by_slug(slug),
-         true <- Organizations.organization_visible_to?(organization, nil),
-         {:ok, jpeg} <- OrganizationImageStore.og_jpeg(logo) do
-      conn
-      |> put_resp_content_type("image/jpeg", nil)
-      |> put_resp_header("cache-control", "public, max-age=86400")
-      |> send_resp(200, jpeg)
-    else
-      _ ->
-        conn
-        |> put_resp_content_type("text/plain")
-        |> send_resp(404, "Not Found")
-    end
+    bytes =
+      with %Organization{logo: logo} = organization when is_binary(logo) <-
+             Organizations.get_organization_by_slug(slug),
+           true <- Organizations.organization_visible_to?(organization, nil) do
+        OrganizationImageStore.og_jpeg(logo)
+      end
+
+    ControllerHelpers.send_og_jpeg(conn, bytes)
   end
 end

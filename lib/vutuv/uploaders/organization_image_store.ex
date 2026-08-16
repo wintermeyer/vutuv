@@ -15,7 +15,6 @@ defmodule Vutuv.OrganizationImageStore do
   is shared with `Vutuv.PostImageStore`.
   """
 
-  alias Vix.Vips.Operation
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
 
@@ -95,14 +94,7 @@ defmodule Vutuv.OrganizationImageStore do
         :error
 
       path ->
-        with {:ok, rotated} <- Spec.open_rotated(path),
-             {:ok, square} <-
-               Image.thumbnail(rotated, "#{@og_size}x#{@og_size}", crop: :center),
-             {:ok, data} <- Operation.jpegsave_buffer(square, keep: [], Q: 80) do
-          {:ok, data}
-        else
-          _ -> :error
-        end
+        Spec.og_jpeg(path, &Image.thumbnail(&1, "#{@og_size}x#{@og_size}", crop: :center))
     end
   end
 

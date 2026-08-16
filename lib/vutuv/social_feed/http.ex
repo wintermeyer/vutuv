@@ -31,6 +31,24 @@ defmodule Vutuv.SocialFeed.Http do
   tests always intercept.
   """
   def get(url, options_key, extra \\ []) do
+    url
+    |> base_options()
+    |> Keyword.merge(extra)
+    |> Keyword.merge(Application.get_env(:vutuv, options_key, []))
+    |> Req.get()
+  end
+
+  @doc """
+  The guard rails themselves, for a caller that resolves its own env seam and
+  needs its own body cap and `accept` (`Vutuv.WebVerification`, which reads a
+  member's own web page rather than an API).
+
+  Split out because that caller had grown its own copy of this list, down to
+  the comment on `decode_body:` — and the two copies had already drifted on the
+  one line that must not, the `User-Agent`, so one installation named itself
+  two ways depending on which of its own requests you looked at.
+  """
+  def base_options(url, max_bytes \\ @max_body_bytes, accept \\ "application/json") do
     [
       url: url,
       receive_timeout: 4_000,
@@ -45,12 +63,9 @@ defmodule Vutuv.SocialFeed.Http do
       # Stream with a hard ceiling so a hostile large body is dropped during
       # receipt; the per-use post-checks (decode/1, fetch_avatar/2) still enforce
       # their exact JSON / avatar limits.
-      into: Vutuv.Http.capped_collector(@max_body_bytes),
-      headers: [{"user-agent", user_agent()}, {"accept", "application/json"}]
+      into: Vutuv.Http.capped_collector(max_bytes),
+      headers: [{"user-agent", user_agent()}, {"accept", accept}]
     ]
-    |> Keyword.merge(extra)
-    |> Keyword.merge(Application.get_env(:vutuv, options_key, []))
-    |> Req.get()
   end
 
   @doc "Decodes a JSON body, refusing oversized answers unparsed."

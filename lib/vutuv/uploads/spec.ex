@@ -155,6 +155,31 @@ defmodule Vutuv.Uploads.Spec do
   end
 
   @doc """
+  A **link-preview JPEG** derived from the file at `path`: decode and
+  EXIF-autorotate, hand the image to `shape` (the per-store geometry — a square
+  crop, the member's own crop, a width cap), then save it stripped.
+  `:error` when anything on the way fails.
+
+  Open Graph scrapers do not decode the AVIF versions we serve, so every store
+  that has a preview endpoint derives one of these. What must not be per-store
+  is the last step: `keep: []` is a privacy rule, not a setting — the original's
+  camera and GPS metadata may never leave in a served derivative — and it was
+  written out in three uploaders, each free to forget it.
+
+  `shape` is a `image -> {:ok, image} | any` fun; anything but `{:ok, _}` ends
+  as `:error`.
+  """
+  def og_jpeg(path, shape) when is_binary(path) and is_function(shape, 1) do
+    with {:ok, rotated} <- open_rotated(path),
+         {:ok, shaped} <- shape.(rotated),
+         {:ok, data} <- Operation.jpegsave_buffer(shaped, keep: [], Q: 80) do
+      {:ok, data}
+    else
+      _ -> :error
+    end
+  end
+
+  @doc """
   `open_rotated/1` for image bytes already in memory — same pixel budget and
   EXIF autorotation, but keyed on the **content**, not a filename.
 
