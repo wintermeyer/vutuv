@@ -13,6 +13,12 @@ defmodule Vutuv.Posts.Post do
   schema "posts" do
     field(:body, :string, default: "")
 
+    # The language the author declared in the composer (issue #1489), a
+    # lowercase primary language subtag ("de", "en"). NULL (legacy posts,
+    # undeclared) means: shown to everyone, never auto-translated, no AS2
+    # `contentMap` outbound.
+    field(:language, :string)
+
     # The bento arrangement the author picked for a multi-photo post, one of
     # the `Vutuv.Posts.GalleryLayout` names; nil = automatic (the mosaic's
     # orientation-driven choice). Presentation only — the agent formats list

@@ -71,6 +71,9 @@ defmodule Vutuv.Fediverse.Note do
     field(:display_name, :string)
     field(:content_text, :string)
     field(:summary, :string)
+    # The language the origin declared via AS2 contentMap (issue #1488), a
+    # lowercase primary language subtag; NULL = the object declared none.
+    field(:language, :string)
     field(:audience, :string)
     field(:received_at, :utc_datetime)
     field(:checked_at, :utc_datetime)

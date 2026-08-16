@@ -65,6 +65,9 @@ defmodule Vutuv.Fediverse.RemotePost do
     field(:origin_url, :string)
     field(:content_text, :string)
     field(:summary, :string)
+    # The language the origin declared via AS2 contentMap (issue #1488), a
+    # lowercase primary language subtag; NULL = the object declared none.
+    field(:language, :string)
     field(:sensitive, :boolean, default: false)
     field(:audience, :string)
     field(:kind, :string, default: "note")
