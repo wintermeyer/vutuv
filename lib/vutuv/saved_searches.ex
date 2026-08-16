@@ -278,5 +278,5 @@ defmodule Vutuv.SavedSearches do
     end
   end
 
-  defp now, do: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+  defp now, do: NaiveDateTime.utc_now(:second)
 end

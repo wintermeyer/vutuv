@@ -60,16 +60,20 @@ defmodule VutuvWeb.ImportHTML do
     """
   end
 
-  # The same words the candidate lists below the table are titled with, so the
-  # summary and the lists can never name a section differently.
-  defp section_label(:positions), do: gettext("Work experience")
-  defp section_label(:educations), do: gettext("Education")
-  defp section_label(:certifications), do: gettext("Certificates & licenses")
-  defp section_label(:skills), do: gettext("Tags")
-  defp section_label(:urls), do: gettext("Links")
-  defp section_label(:social), do: gettext("Social media")
-  defp section_label(:phones), do: gettext("Phone numbers")
-  defp section_label(:profile), do: gettext("Profile")
+  @doc """
+  The name of an import section, in one place: the summary table above the
+  candidate lists and the lists themselves both title themselves from here, so
+  they can never name a section differently. That was the claim of the comment
+  this replaces, while the template wrote all eight words out a second time.
+  """
+  def section_label(:positions), do: gettext("Work experience")
+  def section_label(:educations), do: gettext("Education")
+  def section_label(:certifications), do: gettext("Certificates & licenses")
+  def section_label(:skills), do: gettext("Tags")
+  def section_label(:urls), do: gettext("Links")
+  def section_label(:social), do: gettext("Social media")
+  def section_label(:phones), do: gettext("Phone numbers")
+  def section_label(:profile), do: gettext("Profile")
 
   @doc """
   One selectable candidate: a checkbox + label, greyed when it is a duplicate.

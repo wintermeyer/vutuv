@@ -37,15 +37,15 @@
     >
       <input type="hidden" name="payload" value={@payload} />
 
-      <.candidate_section title={gettext("Work experience")} items={@candidates.positions}>
+      <.candidate_section title={section_label(:positions)} items={@candidates.positions}>
         <.candidate_row :for={c <- @candidates.positions} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
-      <.candidate_section title={gettext("Education")} items={@candidates.educations}>
+      <.candidate_section title={section_label(:educations)} items={@candidates.educations}>
         <.candidate_row :for={c <- @candidates.educations} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
-      <.candidate_section title={gettext("Certificates & licenses")} items={@candidates.certifications}>
+      <.candidate_section title={section_label(:certifications)} items={@candidates.certifications}>
         <p :if={@candidates.certifications != []} class="mb-2 text-xs text-slate-600 dark:text-slate-400">
           {gettext(
             "LinkedIn does not say whether an entry is a certificate or a license, so we import all of them as certificates. Please review the section afterwards and switch any that are licenses."
@@ -57,29 +57,29 @@
       <%!-- Tags are the one capped section: a profile carries at most
       Vutuv.Tags.max_user_tags/0 of them, so the preselection stops at the free
       slots and the section says how many that is. --%>
-      <.candidate_section title={gettext("Tags")} items={@candidates.skills} limit={@tag_capacity.free}>
+      <.candidate_section title={section_label(:skills)} items={@candidates.skills} limit={@tag_capacity.free}>
         <:note>
           <.tag_capacity_note used={@tag_capacity.used} max={@tag_capacity.max} free={@tag_capacity.free} />
         </:note>
         <.candidate_row :for={c <- @candidates.skills} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
-      <.candidate_section title={gettext("Links")} items={@candidates.urls}>
+      <.candidate_section title={section_label(:urls)} items={@candidates.urls}>
         <.candidate_row :for={c <- @candidates.urls} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
-      <.candidate_section title={gettext("Social media")} items={@candidates.social}>
+      <.candidate_section title={section_label(:social)} items={@candidates.social}>
         <.candidate_row :for={c <- @candidates.social} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
-      <.candidate_section title={gettext("Phone numbers")} items={@candidates.phones}>
+      <.candidate_section title={section_label(:phones)} items={@candidates.phones}>
         <.candidate_row :for={c <- @candidates.phones} id={c.id} label={c.label} duplicate?={c.duplicate?} select?={c.select?} />
       </.candidate_section>
 
       <%!-- Profile scalars: offered only when the field is currently blank, so an
       import never overwrites your name or headline. --%>
       <div :if={Enum.any?(@candidates.profile, & &1.fillable?)} class="mt-6" data-select-group>
-        <.select_group_header title={gettext("Profile")} />
+        <.select_group_header title={section_label(:profile)} />
         <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
           <li :for={c <- @candidates.profile} :if={c.fillable?} class="flex items-start gap-3 py-2">
             <input type="checkbox" name="selected[]" value={c.id} class={checkbox_class()} id={"cand-#{c.id}"} />

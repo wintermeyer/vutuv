@@ -27,6 +27,7 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   alias Vutuv.Accounts.User
   alias Vutuv.Organizations
   alias Vutuv.Repo
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.OrganizationController
 
   def init(opts) do
@@ -107,13 +108,10 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
         if segment == old_slug, do: current_slug, else: segment
       end)
 
-    case conn.query_string do
-      "" -> "/" <> path
-      query -> "/" <> path <> "?" <> query
-    end
+    ControllerHelpers.with_query("/" <> path, conn.query_string)
   end
 
   defp invalid_slug(conn) do
-    VutuvWeb.ControllerHelpers.render_error(conn, 404)
+    ControllerHelpers.render_error(conn, 404)
   end
 end

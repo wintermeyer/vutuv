@@ -247,5 +247,5 @@ defmodule Vutuv.Profiles.LinkVerification do
     Application.get_env(:vutuv, :user_links_req_options, [])
   end
 
-  defp now, do: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+  defp now, do: NaiveDateTime.utc_now(:second)
 end

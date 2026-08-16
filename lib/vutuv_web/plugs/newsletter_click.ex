@@ -22,6 +22,7 @@ defmodule VutuvWeb.Plug.NewsletterClick do
   import Phoenix.Controller, only: [redirect: 2]
 
   alias Vutuv.Newsletters
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.NewsletterToken
 
   def init(opts), do: opts
@@ -52,9 +53,9 @@ defmodule VutuvWeb.Plug.NewsletterClick do
   # The same path with only the tracking parameter removed, so any other query
   # parameters the link carried are preserved.
   defp clean_path(conn) do
-    case conn.query_params |> Map.delete(NewsletterToken.param()) |> URI.encode_query() do
-      "" -> conn.request_path
-      query -> conn.request_path <> "?" <> query
-    end
+    conn.query_params
+    |> Map.delete(NewsletterToken.param())
+    |> URI.encode_query()
+    |> then(&ControllerHelpers.with_query(conn.request_path, &1))
   end
 end

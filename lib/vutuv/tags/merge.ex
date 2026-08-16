@@ -588,5 +588,5 @@ defmodule Vutuv.Tags.Merge do
     )
   end
 
-  defp now, do: NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+  defp now, do: NaiveDateTime.utc_now(:second)
 end

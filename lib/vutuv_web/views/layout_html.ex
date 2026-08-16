@@ -57,7 +57,11 @@ defmodule VutuvWeb.LayoutHTML do
 
   def ad_banner(assigns) do
     ~H"""
-    <div id="vutuv-ad" data-ad-banner class="mx-auto max-w-6xl px-4 pt-4">
+    <%!-- `gutter_class()` rather than `px-4` (#1464): the strip is a sibling of
+    the top bar above it and `<main>` below it, both of which step aside from a
+    notched phone's safe area, and the one element that is meant to look
+    deliberately placed must not be the one that does not. --%>
+    <div id="vutuv-ad" data-ad-banner class={["mx-auto max-w-6xl pt-4", gutter_class()]}>
       <.ad_banner_box banner={@banner} dismissible />
     </div>
     """
