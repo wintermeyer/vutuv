@@ -25,6 +25,7 @@ defmodule VutuvWeb.JobComponents do
 
   import VutuvWeb.UI
 
+  alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Countries
   alias Vutuv.Geo
@@ -98,7 +99,10 @@ defmodule VutuvWeb.JobComponents do
   defp employer_line(assigns) do
     ~H"""
     <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm">
-      <%= if @posting.organization do %>
+      <%!-- On the id, never on the association: an %Ecto.Association.NotLoaded{}
+      is truthy, so a posting that reached here without its preload would take
+      this branch and raise inside `canonical_path/1`. --%>
+      <%= if @posting.organization_id do %>
         <.link
           navigate={Organizations.canonical_path(@posting.organization)}
           class="font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300"
@@ -118,7 +122,11 @@ defmodule VutuvWeb.JobComponents do
   defp employer_name(%JobPosting{hiring_org_name: name}) when is_binary(name) and name != "",
     do: name
 
-  defp employer_name(%JobPosting{user: %{} = user}), do: UserHelpers.full_name(user)
+  # `%User{}`, not a bare `%{}`: a NotLoaded association is a struct and so a
+  # map, so the loose pattern matched it and then raised in `full_name/1`
+  # instead of falling through to the "no employer name" clause below, which is
+  # exactly what that clause is for.
+  defp employer_name(%JobPosting{user: %User{} = user}), do: UserHelpers.full_name(user)
   defp employer_name(_posting), do: nil
 
   @doc false

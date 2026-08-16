@@ -924,8 +924,7 @@ input[type="submit"].button--secondary {
   background: #f1f5f9;
   color: #334155;
 }
-.btns-right,
-.btns {
+.btns-right {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;

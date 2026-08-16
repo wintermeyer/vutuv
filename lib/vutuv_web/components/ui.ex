@@ -623,6 +623,27 @@ defmodule VutuvWeb.UI do
   def dev_mailbox?, do: Application.get_env(:vutuv, :dev_mailbox, false)
 
   @doc """
+  The link to that mailbox, rendered only where it exists — the whole block the
+  login screen and both PIN screens each carried a byte-identical copy of.
+  Untranslated on purpose: it is a developer's convenience and never reaches a
+  member's browser.
+  """
+  def dev_mailbox_link(assigns) do
+    ~H"""
+    <p :if={dev_mailbox?()} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      <a
+        href="/sent_emails"
+        target="_blank"
+        rel="noopener"
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        Open the dev email inbox
+      </a>
+    </p>
+    """
+  end
+
+  @doc """
   The "stuck on the PIN page" escape hatches, shared by both PIN-entry screens
   (login and post-registration). "Resend PIN" re-mints and re-mails the one-time
   PIN for the pending email (rate limited); the second control abandons the
@@ -2000,7 +2021,7 @@ defmodule VutuvWeb.UI do
 
   defp button_class("ghost"),
     do:
-      "#{@button_base} text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:hover:bg-slate-800"
+      "#{@button_base} text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-slate-800 dark:hover:text-brand-300"
 
   defp button_class("danger"), do: "#{@button_base} bg-red-600 text-white hover:bg-red-700"
   defp button_class(_), do: "#{@button_base} bg-brand-600 text-white hover:bg-brand-700"

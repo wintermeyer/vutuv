@@ -831,7 +831,7 @@ function setupOrganizationLink() {
         render(labels.linked, nameEl, unlink)
       } else if (suggestion && suggestion.id !== idInput.value) {
         const nameEl = Object.assign(document.createElement("strong"), { textContent: suggestion.name })
-        const link = button(labels.link, "font-semibold text-brand-600 underline hover:text-brand-700", () => {
+        const link = button(labels.link, "font-semibold text-brand-600 underline hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300", () => {
           idInput.value = suggestion.id
           linked = suggestion
           suggestion = null

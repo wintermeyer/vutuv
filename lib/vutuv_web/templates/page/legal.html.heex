@@ -1,7 +1,7 @@
 <div class="mx-auto max-w-3xl py-6">
   <.page_header title={@page_title} />
 
-  <.card class="leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:font-medium [&_a]:text-brand-600 hover:[&_a]:text-brand-700 [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:text-slate-900 dark:[&_h3]:text-white [&_h4]:mt-6 [&_h4]:mb-2 [&_h4]:font-semibold [&_h4]:text-slate-900 dark:[&_h4]:text-white">
+  <.card class="leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:font-medium [&_a]:text-brand-600 [&_a]:hover:text-brand-700 dark:[&_a]:text-brand-400 dark:[&_a]:hover:text-brand-300 [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:text-slate-900 dark:[&_h3]:text-white [&_h4]:mt-6 [&_h4]:mb-2 [&_h4]:font-semibold [&_h4]:text-slate-900 dark:[&_h4]:text-white">
     <%= if @page do %>
       <div class="markdown text-slate-800 dark:text-slate-200">
         {raw(VutuvWeb.DevDocMarkdown.to_html(@page.body, breaks: true))}

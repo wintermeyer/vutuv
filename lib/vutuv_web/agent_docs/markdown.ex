@@ -18,6 +18,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   alias Vutuv.Isbn
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.PostComponents
+  alias VutuvWeb.UI
 
   # The per-user people lists (followers/following/connections) share one
   # clause; the set lives in ListDocs.
@@ -666,15 +667,28 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   The facts inside a code-forge account line's parentheses — every fact the
   forge exposed, dot-separated. Shared with the text renderer so the two
   human-readable formats read the same.
+
+  The counts go through `compact_count/1`, like the card these lines mirror:
+  these two formats are read by people, and a run-together `12345` is a bug
+  wherever one of them shows up. `.json` and `.xml` keep the raw figures — that
+  is what a machine reader takes them from. (`ngettext/3` binds `%{count}` to
+  the raw integer and a `count:` binding does not override it, hence the
+  separate `%{formatted}` placeholder — the same msgids the card uses.)
   """
   def code_stats_facts(account) do
     [
       account.total_stars &&
-        ngettext("%{count} star", "%{count} stars", account.total_stars),
+        ngettext("%{formatted} star", "%{formatted} stars", account.total_stars,
+          formatted: UI.compact_count(account.total_stars)
+        ),
       account.public_repos &&
-        ngettext("%{count} repository", "%{count} repositories", account.public_repos),
+        ngettext("%{formatted} repository", "%{formatted} repositories", account.public_repos,
+          formatted: UI.compact_count(account.public_repos)
+        ),
       account.followers &&
-        ngettext("%{count} follower", "%{count} followers", account.followers),
+        ngettext("%{formatted} follower", "%{formatted} followers", account.followers,
+          formatted: UI.compact_count(account.followers)
+        ),
       account.member_since && gettext("since %{date}", date: account.member_since),
       code_dormant_fact(account),
       account.languages != [] && Enum.join(account.languages, ", ")
