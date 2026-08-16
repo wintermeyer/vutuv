@@ -41,6 +41,7 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.SlugHelpers
+  alias Vutuv.WebVerification
 
   # The role vocabulary, taken from the schema so the two can never disagree.
   # It has to be an attribute rather than a call because `add_role/4` guards on
@@ -51,11 +52,10 @@ defmodule Vutuv.Organizations do
   @reserved_slugs ~w(new)
   @directory_per_page 24
   @people_per_page 24
-  # Domain-ownership proofs (a DNS TXT record / a static well-known file) almost
-  # never change once set, so a weekly re-check is plenty; the hourly sweeper
-  # tick just spreads these checks out rather than bursting them.
-  @recheck_interval_hours 24 * 7
-  @grace_days 7
+  # The re-check interval and the grace window come from `Vutuv.WebVerification`,
+  # shared with the profile-link and social-account re-checks: how long a
+  # vanished proof keeps its mark is a promise to the member, and three copies of
+  # "7 days" is three chances for the three features to drift apart.
 
   # How often a domain that is still waiting for its proof is looked at, by how
   # long ago the claim was started: `{claim younger than, check every}` in
@@ -1271,7 +1271,7 @@ defmodule Vutuv.Organizations do
 
   @doc "DNS / well-known domains whose last check is older than the interval."
   def domains_due_for_recheck(now \\ NaiveDateTime.utc_now()) do
-    cutoff = NaiveDateTime.add(now, -@recheck_interval_hours * 3600)
+    cutoff = WebVerification.recheck_cutoff(now)
 
     Repo.all(
       from(d in OrganizationDomain,
@@ -1337,10 +1337,8 @@ defmodule Vutuv.Organizations do
   end
 
   defp handle_recheck_failure(domain, now) do
-    cond do
-      is_nil(domain.grace_deadline_at) ->
-        deadline = NaiveDateTime.add(now, @grace_days * 86_400)
-
+    case WebVerification.grace_step(domain.grace_deadline_at, now) do
+      {:grace_started, deadline} ->
         {:ok, domain} =
           domain
           |> OrganizationDomain.check_changeset(%{
@@ -1356,14 +1354,14 @@ defmodule Vutuv.Organizations do
 
         :grace_started
 
-      NaiveDateTime.compare(now, domain.grace_deadline_at) == :lt ->
+      :in_grace ->
         domain
         |> OrganizationDomain.check_changeset(%{last_checked_at: now})
         |> Repo.update()
 
         :in_grace
 
-      true ->
+      :demote ->
         demote_domain(domain, now)
     end
   end

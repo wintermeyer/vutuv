@@ -212,43 +212,42 @@ defmodule Vutuv.Profiles.Messenger do
       else: add_error(changeset, :value, "Enter a phone number or a username")
   end
 
-  # Telegram: a public @username, 5–32 of [A-Za-z0-9_]. Stored without the "@".
-  defp normalize_handle(changeset, "Telegram", value) do
-    handle = String.trim_leading(value, "@")
+  # What each provider's handle looks like once tidied, as `{pattern, message}`.
+  # A table rather than four clauses of the same seven lines, so a new messenger
+  # is a row plus a `tidy/2` clause and the four error sentences can be read
+  # side by side:
+  #
+  #   * Telegram: a public @username, 5–32 of [A-Za-z0-9_], stored without the "@".
+  #   * Threema: an 8-character ID of [A-Z0-9].
+  #   * Matrix: a federated MXID @user:homeserver.
+  #   * Session: a 66-character account ID (05 then 64 hex characters).
+  @handle_rules %{
+    "Telegram" => {~r/^[A-Za-z0-9_]{5,32}$/, "Enter your Telegram username, e.g. @yourname"},
+    "Threema" => {~r/^[A-Z0-9]{8}$/, "Enter your 8-character Threema ID, e.g. ABCD1234"},
+    "Matrix" => {~r/^@[^:\s]+:[^\s]+\.[^\s]+$/, "Enter your Matrix ID, e.g. @you:matrix.org"},
+    "Session" => {~r/^05[0-9a-f]{64}$/, "Enter your 66-character Session ID"}
+  }
 
-    if handle =~ ~r/^[A-Za-z0-9_]{5,32}$/,
-      do: put_change(changeset, :value, handle),
-      else: add_error(changeset, :value, "Enter your Telegram username, e.g. @yourname")
+  defp normalize_handle(changeset, provider, value) do
+    case Map.fetch(@handle_rules, provider) do
+      {:ok, {pattern, message}} ->
+        handle = tidy(provider, value)
+
+        if handle =~ pattern,
+          do: put_change(changeset, :value, handle),
+          else: add_error(changeset, :value, message)
+
+      :error ->
+        changeset
+    end
   end
 
-  # Threema: an 8-character ID of [A-Z0-9] (spaces tolerated, case-folded up).
-  defp normalize_handle(changeset, "Threema", value) do
-    id = value |> String.replace(" ", "") |> String.upcase()
-
-    if id =~ ~r/^[A-Z0-9]{8}$/,
-      do: put_change(changeset, :value, id),
-      else: add_error(changeset, :value, "Enter your 8-character Threema ID, e.g. ABCD1234")
-  end
-
-  # Matrix: a federated MXID @user:homeserver. A leading "@" is added if missing.
-  defp normalize_handle(changeset, "Matrix", value) do
-    id = prepend_at(String.trim(value))
-
-    if id =~ ~r/^@[^:\s]+:[^\s]+\.[^\s]+$/,
-      do: put_change(changeset, :value, id),
-      else: add_error(changeset, :value, "Enter your Matrix ID, e.g. @you:matrix.org")
-  end
-
-  # Session: a 66-character account ID (starts with 05, then 64 hex chars).
-  defp normalize_handle(changeset, "Session", value) do
-    id = value |> String.replace(~r/\s/, "") |> String.downcase()
-
-    if id =~ ~r/^05[0-9a-f]{64}$/,
-      do: put_change(changeset, :value, id),
-      else: add_error(changeset, :value, "Enter your 66-character Session ID")
-  end
-
-  defp normalize_handle(changeset, _provider, _value), do: changeset
+  # Spaces and a missing or stray "@" are typing, not a wrong handle, so each
+  # provider's value is tidied into its stored shape before it is judged.
+  defp tidy("Telegram", value), do: String.trim_leading(value, "@")
+  defp tidy("Threema", value), do: value |> String.replace(" ", "") |> String.upcase()
+  defp tidy("Matrix", value), do: prepend_at(String.trim(value))
+  defp tidy("Session", value), do: value |> String.replace(~r/\s/, "") |> String.downcase()
 
   defp prepend_at("@" <> _ = id), do: id
   defp prepend_at(id), do: "@" <> id

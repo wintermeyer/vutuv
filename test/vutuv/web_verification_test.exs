@@ -316,6 +316,35 @@ defmodule Vutuv.WebVerificationTest do
     end
   end
 
+  describe "the shared re-check clock" do
+    test "a first failure opens the grace window, then it runs out" do
+      now = ~N[2026-08-17 12:00:00]
+
+      assert {:grace_started, deadline} = WebVerification.grace_step(nil, now)
+      assert NaiveDateTime.diff(deadline, now) == WebVerification.grace_days() * 86_400
+
+      assert WebVerification.grace_step(deadline, NaiveDateTime.add(deadline, -1)) == :in_grace
+      assert WebVerification.grace_step(deadline, deadline) == :demote
+      assert WebVerification.grace_step(deadline, NaiveDateTime.add(deadline, 1)) == :demote
+    end
+
+    test "no re-checked feature keeps a second copy of the window" do
+      # A member's webpage link, their social account and an organization's
+      # domain each carried their own `@grace_days 7`, so the promise "your mark
+      # survives a week of a missing proof" could come apart between the three
+      # without anything failing. Read off the sources, because an unregistered
+      # module attribute leaves no trace to ask the module about.
+      offenders =
+        ["lib/vutuv/profiles/*.ex", "lib/vutuv/organizations.ex", "lib/vutuv/organizations/*.ex"]
+        |> Enum.flat_map(&Path.wildcard/1)
+        |> Enum.filter(&(File.read!(&1) =~ ~r/@(grace_days|recheck_interval_hours)\s/))
+
+      assert offenders == [],
+             "the grace window and the re-check interval belong to " <>
+               "Vutuv.WebVerification, not to: " <> Enum.join(offenders, ", ")
+    end
+  end
+
   # A Req adapter that answers every request with the given status + body.
   defp adapter(status, body) do
     [adapter: fn req -> {req, %Req.Response{status: status, body: body}} end]

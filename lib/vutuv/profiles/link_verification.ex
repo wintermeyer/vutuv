@@ -33,10 +33,10 @@ defmodule Vutuv.Profiles.LinkVerification do
   @dns_prefix "vutuv-verify="
   @well_known_path "/.well-known/vutuv-verify.txt"
 
-  @grace_days 7
-  # A verified webpage proof rarely changes, so re-check weekly; the hourly
-  # sweeper tick just spreads the checks out rather than bursting them.
-  @recheck_interval_hours 24 * 7
+  # The re-check interval and the grace window live in `Vutuv.WebVerification`,
+  # shared with the social-account and organization-domain re-checks: how long a
+  # vanished proof keeps its mark is a promise to the member, and the three
+  # features must not make different ones by accident.
 
   @doc "Whether link verification is enabled for this installation."
   def enabled?, do: Application.get_env(:vutuv, :verify_user_links, true)
@@ -157,7 +157,7 @@ defmodule Vutuv.Profiles.LinkVerification do
 
   @doc "Verified links whose last check is older than the interval."
   def links_due_for_recheck(now \\ NaiveDateTime.utc_now()) do
-    cutoff = NaiveDateTime.add(now, -@recheck_interval_hours * 3600)
+    cutoff = WebVerification.recheck_cutoff(now)
 
     Repo.all(
       from(u in Url,
@@ -207,21 +207,19 @@ defmodule Vutuv.Profiles.LinkVerification do
   end
 
   defp handle_recheck_failure(%Url{} = url, now) do
-    cond do
-      is_nil(url.grace_deadline_at) ->
-        deadline = NaiveDateTime.add(now, @grace_days * 86_400)
-
+    case WebVerification.grace_step(url.grace_deadline_at, now) do
+      {:grace_started, deadline} ->
         url
         |> Url.verification_changeset(%{last_checked_at: now, grace_deadline_at: deadline})
         |> Repo.update()
 
         :grace_started
 
-      NaiveDateTime.compare(now, url.grace_deadline_at) == :lt ->
+      :in_grace ->
         url |> Url.verification_changeset(%{last_checked_at: now}) |> Repo.update()
         :in_grace
 
-      true ->
+      :demote ->
         url
         |> Url.verification_changeset(%{
           verification_method: nil,

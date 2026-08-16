@@ -46,6 +46,38 @@ defmodule Vutuv.WebVerification do
     24 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end
 
+  # --- the re-check clock -----------------------------------------------------
+  #
+  # Three features re-check a proof they once accepted — a member's webpage
+  # link, their social account, an organization's domain — and all three
+  # answered the same two questions for themselves: how old may a check be
+  # before we look again, and how long does a vanished proof keep its mark. Both
+  # are promises to the member rather than implementation details, so they get
+  # one home: three copies of "7 days" is three chances for a member's link and
+  # a page's domain to be treated differently by accident.
+  #
+  # What each caller keeps is its own writes, which genuinely differ (only the
+  # organization half warns the owners, and only it can demote the whole page).
+  @grace_days 7
+  @recheck_interval_hours 24 * 7
+
+  @doc "How long a vanished proof keeps its mark before it is dropped."
+  def grace_days, do: @grace_days
+
+  @doc "The cutoff a re-check query compares `last_checked_at` against."
+  def recheck_cutoff(now), do: NaiveDateTime.add(now, -@recheck_interval_hours * 3600)
+
+  @doc """
+  Where a failed re-check stands: `{:grace_started, deadline}` the first time a
+  proof is missing, `:in_grace` while that window is open, `:demote` once it has
+  passed.
+  """
+  def grace_step(nil, now), do: {:grace_started, NaiveDateTime.add(now, @grace_days * 86_400)}
+
+  def grace_step(deadline, now) do
+    if NaiveDateTime.compare(now, deadline) == :lt, do: :in_grace, else: :demote
+  end
+
   # --- DNS TXT ----------------------------------------------------------------
 
   # A CNAME and a TXT record cannot coexist on the same DNS name (RFC 1034), so a

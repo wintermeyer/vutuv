@@ -1148,23 +1148,32 @@ defmodule Vutuv.Imports.LinkedIn do
   # archive with fifty skills used to issue fifty count queries inside this
   # transaction. The guard there still stands — it is the chokepoint every entry
   # point shares — we simply stop walking into it.
+  #
+  # The tally is a map and not a six-element tuple: every branch below used to
+  # rebuild all six positions to change one of them, so a new outcome bucket was
+  # six edits and two swapped positions would have looked identical.
   defp insert_skills(user, existing, candidates) do
-    seen = Map.fetch!(existing, :skills)
-    acc = {seen, 0, 0, 0, 0, Tags.free_user_tag_slots(user)}
+    acc = %{
+      seen: Map.fetch!(existing, :skills),
+      created: 0,
+      skipped: 0,
+      blocked: 0,
+      tag_limit: 0,
+      budget: Tags.free_user_tag_slots(user)
+    }
 
-    {seen, created, skipped, blocked, limited, _budget} =
-      Enum.reduce(candidates, acc, &add_skill(&1, &2, user))
+    acc = Enum.reduce(candidates, acc, &add_skill(&1, &2, user))
 
-    {Map.put(existing, :skills, seen),
-     %{created: created, skipped: skipped, blocked: blocked, tag_limit: limited}}
+    {Map.put(existing, :skills, acc.seen),
+     Map.take(acc, [:created, :skipped, :blocked, :tag_limit])}
   end
 
-  defp add_skill(candidate, {seen, created, skipped, blocked, limited, budget} = acc, user) do
+  defp add_skill(candidate, acc, user) do
     key = String.downcase(candidate.name)
 
     cond do
-      MapSet.member?(seen, key) -> {seen, created, skipped + 1, blocked, limited, budget}
-      budget == 0 -> {seen, created, skipped, blocked, limited + 1, budget}
+      MapSet.member?(acc.seen, key) -> bump(acc, :skipped)
+      acc.budget == 0 -> bump(acc, :tag_limit)
       true -> user |> Tags.add_user_tag(candidate.name) |> tally_skill(key, acc)
     end
   end
@@ -1172,11 +1181,16 @@ defmodule Vutuv.Imports.LinkedIn do
   # A successful add counts as created, remembers its key and spends a slot; a
   # failure (a racing duplicate, an invalid name) is blocked like any other
   # refused insert and spends nothing.
-  defp tally_skill({:ok, _row}, key, {seen, created, skipped, blocked, limited, budget}),
-    do: {MapSet.put(seen, key), created + 1, skipped, blocked, limited, budget - 1}
+  defp tally_skill({:ok, _row}, key, acc) do
+    acc
+    |> Map.update!(:seen, &MapSet.put(&1, key))
+    |> Map.update!(:budget, &(&1 - 1))
+    |> bump(:created)
+  end
 
-  defp tally_skill({:error, _}, _key, {seen, created, skipped, blocked, limited, budget}),
-    do: {seen, created, skipped, blocked + 1, limited, budget}
+  defp tally_skill({:error, _}, _key, acc), do: bump(acc, :blocked)
+
+  defp bump(acc, bucket), do: Map.update!(acc, bucket, &(&1 + 1))
 
   # Fill only the blank profile fields the member selected (name / headline).
   # Guards here too, not just in the controller, so an import can never clobber

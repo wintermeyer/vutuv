@@ -33,13 +33,12 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
   alias Vutuv.Profiles.LinkVerification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Repo
+  alias Vutuv.WebVerification
 
   @method "bluesky_bio"
 
-  @grace_days 7
-  # A bio changes rarely, so re-check weekly; the hourly sweeper tick only
-  # spreads the checks out rather than bursting them.
-  @recheck_interval_hours 24 * 7
+  # The re-check interval and the grace window come from `Vutuv.WebVerification`,
+  # shared with the link and organization-domain re-checks.
 
   @doc "Whether social-account verification is enabled for this installation."
   def enabled?, do: Application.get_env(:vutuv, :verify_social_accounts, true)
@@ -125,7 +124,7 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
 
   @doc "Verified accounts whose last check is older than the interval."
   def accounts_due_for_recheck(now \\ NaiveDateTime.utc_now()) do
-    cutoff = NaiveDateTime.add(now, -@recheck_interval_hours * 3600)
+    cutoff = WebVerification.recheck_cutoff(now)
 
     Repo.all(
       from(a in SocialMediaAccount,
@@ -197,10 +196,8 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
   end
 
   defp handle_recheck_failure(%SocialMediaAccount{} = account, now) do
-    cond do
-      is_nil(account.grace_deadline_at) ->
-        deadline = NaiveDateTime.add(now, @grace_days * 86_400)
-
+    case WebVerification.grace_step(account.grace_deadline_at, now) do
+      {:grace_started, deadline} ->
         account
         |> SocialMediaAccount.verification_changeset(%{
           last_checked_at: now,
@@ -210,14 +207,14 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
 
         :grace_started
 
-      NaiveDateTime.compare(now, account.grace_deadline_at) == :lt ->
+      :in_grace ->
         account
         |> SocialMediaAccount.verification_changeset(%{last_checked_at: now})
         |> Repo.update()
 
         :in_grace
 
-      true ->
+      :demote ->
         account
         |> SocialMediaAccount.verification_changeset(%{
           verification_method: nil,
