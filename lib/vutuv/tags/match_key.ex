@@ -66,6 +66,12 @@ defmodule Vutuv.Tags.MatchKey do
   `Vutuv.Tags.canonical_tag_names/1`) get it from here so there is one
   definition of the key and not three.
 
+  `tags_name_match_key_index` and `tags_slug_match_key_index` index exactly this
+  expression, so a lookup is a bitmap index scan rather than a walk of the
+  catalog. Postgres matches an expression index by the parsed expression: change
+  a character here and every tag lookup quietly goes back to a sequential scan,
+  which is what `test/vutuv/tags/match_key_index_test.exs` watches for.
+
   Verified against the real catalog rather than read off the code: it folds
   `Open__Source - Software`, `open-source-software` and `legacy_framework_zzz`
   onto the keys their siblings carry, strips a U+200B, answers NULL for `-`,
