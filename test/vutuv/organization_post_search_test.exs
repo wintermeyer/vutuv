@@ -78,7 +78,9 @@ defmodule Vutuv.OrganizationPostSearchTest do
     refute post.id in found_ids("Quantenkompressor")
   end
 
-  test "a post still held by the image scan is not findable either" do
+  # The AI image scan holds back the picture, not the post (issue #1104), so
+  # the words are public the moment they are written and search must find them.
+  test "a post whose photo is still being checked is findable by its words" do
     {organization, owner} = publishing_organization()
 
     {:ok, post} =
@@ -86,6 +88,6 @@ defmodule Vutuv.OrganizationPostSearchTest do
 
     Repo.update!(Ecto.Changeset.change(post, images_pending?: true))
 
-    refute post.id in found_ids("Quantenkompressor")
+    assert post.id in found_ids("Quantenkompressor")
   end
 end

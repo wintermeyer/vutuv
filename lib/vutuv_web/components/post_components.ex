@@ -185,12 +185,13 @@ defmodule VutuvWeb.PostComponents do
     # bound once and reused for the acting-viewer id and the reporter test.
     viewer = assigns.viewer
     user? = match?(%User{}, viewer)
+    author? = Posts.author?(assigns.post, viewer)
 
     # AI-moderation limbo (Vutuv.Moderation.ImageScans): the author and admins
-    # see a pending image themselves (plus the limbo pill below); every other
-    # viewer gets a neutral placecard tile instead. The post struct is patched
-    # once, so every branch below (gallery, inline refs, square layout) works
-    # on the filtered set.
+    # see a pending image themselves (plus the progress panel below); every
+    # other viewer gets a neutral placecard tile instead. The post struct is
+    # patched once, so every branch below (gallery, inline refs, square layout)
+    # works on the filtered set.
     {shown_images, held_count} = split_gallery(assigns.post, viewer)
     post = %{assigns.post | images: shown_images}
 
@@ -234,12 +235,7 @@ defmodule VutuvWeb.PostComponents do
       assigns
       |> assign(:post, post)
       |> assign(:held_count, held_count)
-      # The "only you can see this" banner keys on the **post-level** hold, not
-      # on the individual pictures: what it announces is that the whole post is
-      # being held back (`Posts.moderation_hidden?/1`), which is a fact about
-      # the post. Keying it on the images would also make it disappear on a
-      # viewer whose image list happens to be filtered.
-      |> assign(:limbo_pill?, Posts.held_for_image_check?(post))
+      |> assign(:limbo_pill?, author_photo_check?(post, author?))
       # How far the AI scan has got, for the author's progress line. Counted
       # from the post's own (unfiltered) image list, so "2 of 5" means the
       # photos the author attached, not the subset this viewer can see.
@@ -296,7 +292,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:report_menu_id, "post-report-#{entry_key}")
       |> assign(:time_id, "post-time-#{entry_key}")
       |> assign(:body_id, "post-body-#{entry_key}")
-      |> assign(:author?, Posts.author?(post, viewer))
+      |> assign(:author?, author?)
       # Who this post is BY, resolved once (issue #1334): a member, or the
       # organization it was published in the name of. Everything the header
       # needs is derived here rather than branched at each of the half-dozen
@@ -3026,23 +3022,37 @@ defmodule VutuvWeb.PostComponents do
             />
           </div>
 
-          <%!-- AI-moderation limbo. For every viewer but the author/admin a
-          pending image renders as this neutral placecard tile; the author
-          instead sees the image (filtered in above) plus the amber pill. --%>
-          <div
-            :if={@held_count > 0}
-            class={["mt-3 grid gap-2", @held_count > 1 && "grid-cols-2"]}
-            data-image-placecards
-          >
-            <div
-              :for={_placecard <- 1..@held_count//1}
-              class="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
-            >
-              <.hourglass class="h-7 w-7 text-slate-400 dark:text-slate-500" />
-              <span class="px-2 text-center text-xs text-slate-600 dark:text-slate-400">
-                {gettext("Photo is being checked")}
-              </span>
+          <%!-- AI-moderation limbo. The post itself is published from the
+          moment it is written; only the picture waits. For every viewer but
+          the author/admin a pending image therefore renders as a placecard
+          tile — which together with the line under the grid has to say enough
+          that a reader knows nothing is broken and nothing is being withheld
+          from them: the check is running, and the photo turns up here by
+          itself. The author instead sees the image (filtered in above) plus
+          the amber progress panel below. --%>
+          <div :if={@held_count > 0} class="mt-3" data-image-placecards>
+            <div class={["grid gap-2", @held_count > 1 && "grid-cols-2"]}>
+              <div
+                :for={_placecard <- 1..@held_count//1}
+                class="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 text-center ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+              >
+                <.hourglass class="h-7 w-7 text-slate-500 dark:text-slate-400" />
+                <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  {gettext("Photo is being checked")}
+                </span>
+              </div>
             </div>
+            <%!-- The sentence sits under the grid and not inside every tile:
+            six tiles repeating one paragraph is noise, and in the two-column
+            grid a tile is ~150px wide on a phone, where the German would run
+            past its own 4:3 box. --%>
+            <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+              {ngettext(
+                "Our AI is looking at it. It appears here by itself once it is through.",
+                "Our AI is looking at them. They appear here by themselves once they are through.",
+                @held_count
+              )}
+            </p>
           </div>
 
           <%!-- The author's own progress line while the AI scan runs. It is
@@ -3666,16 +3676,23 @@ defmodule VutuvWeb.PostComponents do
   end
 
   @doc """
-  The author's "not public yet, we are checking your photos" banner
-  (issue #1104).
+  The author's "we are checking your photos" banner (issue #1104).
 
-  A post waits for **all** of its photos before it goes anywhere
-  (`Vutuv.Posts.moderation_hidden?/1`), so this banner has to carry the one
-  fact the author would otherwise get wrong: the post exists, they can see it,
-  and **nobody else can yet**. It says that first, then that a check is running
-  right now (the turning hourglass), then how far it has got on a multi-photo
-  post ("2 of 5 done") — and it disappears by itself the moment the last photo
-  clears, which is the answer to "when does it go live".
+  The post itself is published the moment it is written; only the picture waits
+  for the AI scan. So this banner carries the one fact the author would
+  otherwise get wrong — **the post is already out there, the photo is not** —
+  then that a check is running right now (the turning hourglass), then how far
+  it has got on a multi-photo post ("2 of 5 done"). It disappears by itself the
+  moment the last photo clears, which is the answer to "when does the picture
+  show up".
+
+  It says the opposite of what it said when this feature shipped ("only you can
+  see this post so far"), and that is the whole point of the change: holding the
+  text back until the picture was vetted meant a reply carrying a photo raised a
+  notification for a post nobody could then find.
+
+  Author-only. Every other reader is told the same thing by the placecard
+  standing where the picture goes, in words that fit a stranger.
 
   Deliberately a banner on the card and not a modal: the check takes as long as
   it takes, and the author is meant to keep working meanwhile.
@@ -3697,12 +3714,12 @@ defmodule VutuvWeb.PostComponents do
       <.hourglass class="mt-0.5 h-4 w-4" />
       <span>
         <span class="font-semibold">
-          {gettext("Only you can see this post so far.")}
+          {gettext("Your post is published, the photo is not there yet.")}
         </span>
         <span class="mt-0.5 block">
           {ngettext(
-            "Our AI is checking the photo. As soon as it is through, the post goes live by itself.",
-            "Our AI is checking the photos, %{done} of %{total} done. As soon as the last one is through, the post goes live by itself.",
+            "Our AI is still checking it. As soon as it is through, the photo appears by itself.",
+            "Our AI is still checking them, %{done} of %{total} done. As soon as the last one is through, the photos appear by themselves.",
             @progress.total,
             done: @progress.checked,
             total: @progress.total
@@ -4066,6 +4083,15 @@ defmodule VutuvWeb.PostComponents do
   end
 
   defp square_layout?(_post, _gallery, _mode), do: false
+
+  # Whether to render the author's amber progress panel. It keys on the
+  # post-level flag rather than on the individual pictures, so it cannot
+  # disappear on a viewer whose image list happens to be filtered — and it is
+  # the AUTHOR's panel, in the author's voice ("your post is published, the
+  # photo is not there yet"), so everybody else is excluded. They are not left
+  # guessing: the placecard standing where the picture goes says the same thing
+  # in words that fit a stranger.
+  defp author_photo_check?(post, author?), do: author? and Posts.held_for_image_check?(post)
 
   # AI-moderation limbo: the author and admins keep seeing a pending image
   # (the proxy serves it to them); everyone else gets `held_count` placecard

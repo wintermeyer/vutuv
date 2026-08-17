@@ -1160,31 +1160,46 @@ posts to whole-photo rendering too, decided 2026-07-30), drafted as
 `post_drafts.fill?`. The orientation-tuned frames matter in both modes: they
 minimise the letterboxing exactly where they used to minimise the crop.
 
-### A post waits for all of its photos
+### The photo waits, the post does not
 
-A post carrying a picture that has not finished the AI image scan is held back
-**whole**: out of every feed and profile, off its own permalink, out of the
-agent-format siblings and out of the Fediverse. Publishing the text with the
-unchecked pictures blanked would mean the post is *seen* before it is vetted,
-which is what the scan exists to prevent.
+A post carrying a picture that has not finished the AI image scan publishes
+straight away. The **picture** is what waits: for anyone but the author and
+admins it renders as a placecard tile with a turning hourglass, saying the check
+is running and the photo will appear there by itself, and it does — over PubSub,
+with no reload.
 
-`posts.images_pending?` carries it, and `Posts.moderation_hidden?/1` +
-`scope_unfrozen/2` (the SQL twin) gate on it beside `frozen_at` — so the hold
-rides the **existing** visibility chokepoint rather than a second one, and the
-author (and admins) keep their usual access. It is a denormalised flag on
-purpose: the visibility scope is the newsfeed's inner loop, and a `NOT EXISTS`
-over `post_images` there would be paid for on every candidate row.
+It shipped the other way round, holding the post back whole (out of every feed
+and profile, off its own permalink) on the argument that publishing the text
+would mean the post is *seen* before it is vetted. The case that showed the unit
+was wrong: somebody answers your post with a photo, you get the "X answered you"
+notification, and the reply is nowhere you can look — not on the permalink, not
+in the notification's own quote. The scan is about the picture, and an unvetted
+picture is rendered nowhere either way: every machine surface (agent formats,
+RSS, OG, JSON-LD, the Fediverse Note) is built from `Posts.released_images/1`,
+and the Fediverse has its own delivery hold (`FEDIVERSE_IMAGE_HOLD_SECONDS`) so
+a Note goes out with its picture rather than without it.
+
+So `Posts.moderation_hidden?/1` and `scope_unfrozen/2` (its SQL twin) gate on
+`frozen_at` and the author's account standing, and on nothing else.
+`posts.images_pending?` lives on as the flag behind `Posts.held_for_image_check?/1`
+— what the **author's** amber progress panel keys on
+(`PostComponents.photo_check_progress/1`: "your post is published, the photo is
+not there yet", the hourglass, and a count on a multi-photo post). It is a
+denormalised flag on purpose: it is read per rendered card, and a `NOT EXISTS`
+over `post_images` per card would be paid for on every one.
 `Posts.refresh_images_pending/1` is its one owner and runs at the three moments
-it can change — create, edit, scan settles — with a guarded `update_all`, so
-two scans finishing at once cannot both claim the release.
+it can change — create, edit, scan settles — with a guarded `update_all`, so two
+scans finishing at once cannot both claim the settle.
 
-The author sees the post immediately, marked "Only you can see this post so
-far" with the turning hourglass and a count
-(`PostComponents.photo_check_progress/1`). Their **followers are not told yet**:
-`{:new_post, …}` goes to the author alone while the post is held and to the
-followers at the moment the last photo clears, so nobody gets a "Show 1 new
-post" pill for a post their feed query then filters out. Everything updates over
-PubSub, so the author watches it go live without reloading.
+`{:new_post, …}` therefore fans out once, to everybody the post is addressed to,
+the moment it is written. When a verdict lands,
+`Posts.broadcast_images_settled/1` announces it on the post's own topic and on
+the author's activity topic. Between them those reach every open surface: the
+permalink's conversation and the saved list subscribe per shown post, the
+profile page's visitors subscribe to the profile owner, and the feed subscribes
+to the few cards on it that are actually waiting
+(`PostLive.Feed.watch_pending_photos/2` — keyed on `held_for_image_check?/1`, so
+in steady state it holds nothing).
 
 **A single photo is shown whole in the feed.** `PostComponents.feed_photo_fit/1`
 answers `:whole` for every shape but one, and the image is bounded by height

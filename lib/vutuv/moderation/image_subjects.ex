@@ -601,8 +601,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
   end
 
   # A post picture reaching a verdict is what releases a post held back from
-  # federating (issue #1070), and what the "checking your photos" indicator on
-  # the open page is waiting for (issue #1104). Takes the image row when it
+  # federating (issue #1070), and what every open page showing that post is
+  # waiting for — the placecard swaps for the picture and the author's
+  # "checking your photos" panel counts down (issue #1104). Takes the image row when it
   # still exists (the rejection path has just deleted it, so the id would no
   # longer resolve) or its id when it does. Only `post_image` matters here —
   # the other gallery kinds neither federate nor show that indicator.

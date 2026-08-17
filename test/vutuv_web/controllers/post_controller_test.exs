@@ -632,10 +632,10 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ ~s(href="/tags/elixir")
     end
 
-    # Issue #1104: a post waits for its photos as a **whole**. Publishing the
-    # text with the unchecked picture blanked would mean the post is seen
-    # before it is vetted, which is what the scan exists to prevent.
-    test "a post whose photo is still being checked is held from everyone but its author", %{
+    # Issue #1104: the scan holds back the **picture**, never the post. The
+    # inline reference is the sharp case — a stranger must get the text with a
+    # gap where the picture is, not the unjudged picture itself.
+    test "a post whose photo is still being checked is readable, without the photo", %{
       conn: conn
     } do
       {author_conn, author} = create_and_login_user(fresh_conn())
@@ -649,34 +649,40 @@ defmodule VutuvWeb.PostControllerTest do
           image_ids: [image.id]
         })
 
-      # A stranger cannot reach the post at all — not the picture, and not the
-      # text that came with it. Like the moderation freezer, that is a 404 and
-      # not a teaser: there is nothing to advertise yet.
-      assert conn |> get(Posts.path(post)) |> Map.fetch!(:status) == 404
+      # A stranger reads the post. The unjudged picture is not in it, and a
+      # placecard says why — never a silent gap.
+      html = html_response(get(conn, Posts.path(post)), 200)
+      assert html =~ "Fresh:"
+      refute html =~ "/post_images/pendtok/feed.avif"
+      assert html =~ "data-image-placecards"
+      assert html =~ "Photo is being checked"
+      # The author's panel is the author's; a reader is never told "your post".
+      refute html =~ "data-image-pending-pill"
 
-      # The author sees it, with their picture, and is told it is not public.
+      # The author sees it with their picture, plus the progress panel.
       author_html = html_response(get(author_conn, Posts.path(post)), 200)
       assert author_html =~ ~s(class="post-inline-image")
       assert author_html =~ "/post_images/pendtok/feed.avif"
       assert author_html =~ "data-image-pending-pill"
-      assert author_html =~ "Only you can see this post so far."
+      assert author_html =~ "Your post is published, the photo is not there yet."
     end
 
-    test "the post appears for everyone once the last photo clears", %{conn: conn} do
+    test "the photo appears for everyone once the last one clears", %{conn: conn} do
       author = insert_activated_user()
 
       image =
         insert(:post_image, user: author, post: nil, token: "settletok", moderation: "pending")
 
       post = create_post!(author, %{body: "Fresh:", image_ids: [image.id]})
-      assert conn |> get(Posts.path(post)) |> Map.fetch!(:status) == 404
+      assert conn |> get(Posts.path(post)) |> Map.fetch!(:status) == 200
 
       image |> Ecto.Changeset.change(moderation: "approved") |> Vutuv.Repo.update!()
       Posts.broadcast_images_settled(post.id)
 
       html = html_response(get(conn, Posts.path(post)), 200)
       assert html =~ "/post_images/settletok/"
-      # …and the author's "only you can see this" banner is gone with it.
+      # …and the placecard that stood in for it is gone with it.
+      refute html =~ "data-image-placecards"
       refute html =~ "data-image-pending-pill"
     end
 

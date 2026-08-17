@@ -41,6 +41,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.ContentFilters
   alias Vutuv.Fediverse
   alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias Vutuv.Social
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.InitAssigns
@@ -211,10 +212,40 @@ defmodule VutuvWeb.PostLive.Feed do
     # Order/dupes don't matter: the refresh uses stream_insert update_only, which
     # updates existing rows where they sit and ignores ones already gone.
     |> assign(:entries, payload.entries)
+    # The posts on screen we hold a photo-scan subscription for (below).
+    |> assign(:photo_watch, MapSet.new())
     |> assign(payload.rails)
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
     |> stream(:posts, payload.entries)
+    |> watch_pending_photos(payload.entries)
     |> auto_translate_entries(payload.entries)
+  end
+
+  # Every post on the page whose photo is still with the AI image scan gets a
+  # subscription to its own topic, so the placecard swaps itself for the picture
+  # with no reload — the arrangement the permalink's conversation already uses.
+  # Deliberately not one subscription per card (a feed carries dozens): the set
+  # is keyed on posts that are actually waiting, which in steady state is none
+  # of them, and a verdict lands within seconds. The viewer's OWN posts would
+  # reach them over their activity topic anyway; this is what covers the posts
+  # they are merely reading, which is the case that sent somebody looking for a
+  # reply they had just been notified about.
+  defp watch_pending_photos(socket, entries) do
+    if connected?(socket) do
+      watched = socket.assigns.photo_watch
+
+      fresh =
+        for %{post: %Post{} = post} <- entries,
+            Posts.held_for_image_check?(post),
+            not MapSet.member?(watched, post.id),
+            into: MapSet.new(),
+            do: post.id
+
+      Enum.each(fresh, &Posts.subscribe_post/1)
+      assign(socket, :photo_watch, MapSet.union(watched, fresh))
+    else
+      socket
+    end
   end
 
   # Translate mode (issue #1461): fold the page's foreign-language subjects
@@ -459,6 +490,7 @@ defmodule VutuvWeb.PostLive.Feed do
      |> assign(:cursor, page.next_cursor)
      |> update(:entries, &(&1 ++ entries))
      |> stream(:posts, entries, at: -1)
+     |> watch_pending_photos(entries)
      |> auto_translate_entries(entries)}
   end
 
@@ -585,6 +617,7 @@ defmodule VutuvWeb.PostLive.Feed do
         |> prune_threaded_parent(entry)
       end)
       |> update(:entries, &(pending ++ &1))
+      |> watch_pending_photos(pending)
       |> assign(:pending_posts, [])
       |> assign(:empty?, false)
 
@@ -613,6 +646,7 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:entries, entries)
     |> clear_unseen(filter)
     |> stream(:posts, entries, reset: true)
+    |> watch_pending_photos(entries)
   end
 
   # Landing on a tab clears its dot — the page above is newest-first from the

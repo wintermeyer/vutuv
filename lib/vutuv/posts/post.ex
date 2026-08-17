@@ -47,12 +47,13 @@ defmodule Vutuv.Posts.Post do
     field(:frozen_at, :naive_datetime)
 
     # True while any attached photo is still waiting for the AI image scan
-    # (issue #1104). Such a post is held back **whole** — out of every feed,
-    # profile, permalink and the Fediverse — and visible to its author alone,
-    # who sees it marked as not yet public. Denormalised from `images` so the
-    # visibility scope stays a boolean test rather than a subquery in the
-    # newsfeed's inner loop; `Vutuv.Posts.refresh_images_pending/1` owns it and
-    # it is never cast from params.
+    # (issue #1104). It is **not** a visibility flag: the post publishes at
+    # once, and the unjudged picture alone is withheld (a placecard tile stands
+    # in for it until the verdict lands). What it drives is the author's
+    # progress panel, via `Vutuv.Posts.held_for_image_check?/1`. Denormalised
+    # from `images` so that stays a boolean test rather than a subquery paid
+    # per rendered card; `Vutuv.Posts.refresh_images_pending/1` owns it and it
+    # is never cast from params.
     field(:images_pending?, :boolean, default: false)
     # Postgres-generated tsvector over body (see the migration); referenced
     # only by search_public/2's fragments, never loaded or written by Ecto.

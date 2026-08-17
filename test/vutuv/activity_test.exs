@@ -934,6 +934,17 @@ defmodule Vutuv.ActivityTest do
       follow!(other, me)
       follow!(me, other)
 
+      # The same second is the premise, so it is stamped rather than hoped for:
+      # two inserts a moment apart still straddle a second boundary now and
+      # then, and the resulting red build reads like the feature is broken.
+      same_second = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      {2, _} =
+        Repo.update_all(
+          from(c in Follow, where: c.followee_id in [^me.id, ^other.id]),
+          set: [inserted_at: same_second]
+        )
+
       [a, b] =
         Repo.all(from(c in Follow, where: c.followee_id in [^me.id, ^other.id], select: c))
 

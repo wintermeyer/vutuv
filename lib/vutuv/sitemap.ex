@@ -187,7 +187,7 @@ defmodule Vutuv.Sitemap do
     Post
     |> join(:inner, [p], o in Organization, on: o.id == p.organization_id)
     |> where([p, o], o.status == "active" and is_nil(o.frozen_at) and o.seo?)
-    |> where([p], not p.images_pending? and is_nil(p.frozen_at))
+    |> where([p], is_nil(p.frozen_at))
   end
 
   defp chunks(0), do: 0

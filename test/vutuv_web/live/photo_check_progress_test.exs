@@ -1,12 +1,16 @@
 defmodule VutuvWeb.PhotoCheckProgressTest do
   @moduledoc """
-  The "we are checking your photos" indicator (issue #1104).
+  The two faces of a photo waiting for the AI image scan (issue #1104).
 
-  A multi-photo post can sit in the AI image scan for a while, and a card that
-  simply shows nothing while it waits reads as broken. So the author gets a
-  turning hourglass and a count that ticks off as each photo clears — and the
-  whole thing has to remove itself when the last verdict lands, with no
-  reload. That last part is what most of this file is about.
+  A multi-photo post can sit in the scan for a while, and a card that simply
+  shows nothing while it waits reads as broken. The post itself is published
+  from the moment it is written, so **two** readers have to be told what is
+  going on, in two different voices: the author gets the amber panel (a turning
+  hourglass, a count that ticks off, and the fact they would otherwise get
+  wrong — the post is out, the photo is not), everybody else gets the placecard
+  standing where the picture goes. Both have to remove themselves when the
+  verdict lands, with no reload. That last part is what most of this file is
+  about.
   """
 
   use VutuvWeb.ConnCase
@@ -36,7 +40,7 @@ defmodule VutuvWeb.PhotoCheckProgressTest do
   end
 
   describe "the author's progress line" do
-    test "says the post is not public yet and counts the photos that are through", %{
+    test "says the post is out, the photo is not, and counts what is through", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
@@ -47,10 +51,12 @@ defmodule VutuvWeb.PhotoCheckProgressTest do
 
       assert html =~ "data-image-pending-pill"
       assert html =~ ~s(data-check-pending="1")
-      # The fact the author would otherwise get wrong comes first.
-      assert html =~ "Only you can see this post so far."
+      # The fact the author would otherwise get wrong comes first — and it is
+      # the opposite of what this panel said while the post was held back.
+      assert html =~ "Your post is published, the photo is not there yet."
+      refute html =~ "Only you can see this post so far."
       assert html =~ "2 of 3 done"
-      assert html =~ "goes live by itself"
+      assert html =~ "appear by themselves"
       # The moving part: a still card is what reads as stuck.
       assert html =~ "hourglass"
     end
@@ -61,8 +67,30 @@ defmodule VutuvWeb.PhotoCheckProgressTest do
 
       html = live_feed_html(conn)
 
-      assert html =~ "Our AI is checking the photo."
+      assert html =~ "Our AI is still checking it."
       refute html =~ "of 1 done"
+    end
+
+    # It is the author's panel, in the author's voice. A reader who is not the
+    # author must never be told "your post" — what they get is the placecard.
+    test "is the author's alone; a reader gets the placecard instead", %{conn: conn} do
+      author = insert(:user, email_confirmed?: true)
+      {post, [held]} = photo_post!(author, ["pending"])
+
+      {conn, reader} = create_and_login_user(conn)
+      follow!(reader, author)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      html = live |> element("#feed-posts") |> render()
+
+      # The post itself is there — this is the whole change.
+      assert html =~ post.id
+      refute html =~ "data-image-pending-pill"
+      assert html =~ "data-image-placecards"
+      assert html =~ "Photo is being checked"
+      assert html =~ "Our AI is looking at it."
+      # And the unjudged picture is still not served to them.
+      refute html =~ "/post_images/#{held.token}/"
     end
 
     test "never shows once every photo is through", %{conn: conn} do
@@ -90,6 +118,27 @@ defmodule VutuvWeb.PhotoCheckProgressTest do
 
       html = live |> element("#feed-posts") |> render()
       refute html =~ "data-image-pending-pill"
+      assert html =~ "/post_images/#{held.token}/"
+    end
+
+    # The reader's side of the same promise. Their feed subscribes to the few
+    # posts on the page that are actually waiting (`watch_pending_photos/2`),
+    # so the picture arrives where the placecard was without them doing
+    # anything — which is what the placecard's "it appears here by itself" says.
+    test "a reader's feed swaps the placecard for the photo, with no reload", %{conn: conn} do
+      author = insert(:user, email_confirmed?: true)
+      {post, [held]} = photo_post!(author, ["pending"])
+
+      {conn, reader} = create_and_login_user(conn)
+      follow!(reader, author)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      assert live |> element("#feed-posts") |> render() =~ "data-image-placecards"
+
+      release(held, post)
+
+      html = live |> element("#feed-posts") |> render()
+      refute html =~ "data-image-placecards"
       assert html =~ "/post_images/#{held.token}/"
     end
 
@@ -139,6 +188,46 @@ defmodule VutuvWeb.PhotoCheckProgressTest do
       # Let the LiveView process the broadcast before the assertion reads it.
       :sys.get_state(Repo)
       Process.sleep(0)
+    end
+  end
+
+  # vutuv is a German site, and `mix gettext.extract --merge` fuzzy-fills a new
+  # msgid with the translation of whatever old string it resembles: the plural
+  # line here came back carrying the *previous* wording ("geht der Beitrag von
+  # selbst online" — the post goes live by itself), which is now exactly the
+  # thing that is not true. Nothing fails the build over a fuzzy flag, so these
+  # sentences are asserted by name on a real German render.
+  describe "in German" do
+    test "the author is told the post is out and the photo is not", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {post, _images} = photo_post!(user, ["approved", "pending"])
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> get(Posts.path(Vutuv.Repo.preload(post, :user)))
+        |> html_response(200)
+
+      assert html =~ "Ihr Beitrag ist veröffentlicht, das Foto noch nicht."
+      assert html =~ "Unsere KI prüft sie gerade, 1 von 2 sind durch."
+      refute html =~ "geht der Beitrag von selbst online"
+    end
+
+    test "a reader gets the placecard's German", %{conn: conn} do
+      author = insert(:user, email_confirmed?: true)
+      {post, _images} = photo_post!(author, ["pending"])
+
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> get(Posts.path(Vutuv.Repo.preload(post, :user)))
+        |> html_response(200)
+
+      assert html =~ "Foto wird geprüft"
+
+      assert html =~
+               "Unsere KI sieht es sich an. Es erscheint hier von selbst, sobald sie durch ist."
     end
   end
 

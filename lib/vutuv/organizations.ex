@@ -558,7 +558,7 @@ defmodule Vutuv.Organizations do
       on: u.id == p.user_id,
       where: m.organization_id == ^id,
       where: account_confirmed_row(u) and not account_hidden_row(u),
-      where: not p.images_pending? and is_nil(p.frozen_at),
+      where: is_nil(p.frozen_at),
       order_by: [desc: m.inserted_at, desc: m.id],
       limit: ^fetch_n,
       select: {m.id, m.inserted_at, u, p}
