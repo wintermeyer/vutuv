@@ -193,7 +193,8 @@ defmodule Vutuv.ModerationEnforcementTest do
 
       deactivated = searchable_user!(deactivated_at: NaiveDateTime.utc_now(:second))
 
-      found = Search.search("findme-", false) |> Enum.map(& &1.user_id)
+      results = Search.instant("findme-")
+      found = Enum.map(results.exact_people ++ results.similar_people, & &1.id)
 
       assert visible.id in found
       refute frozen.id in found
@@ -205,7 +206,7 @@ defmodule Vutuv.ModerationEnforcementTest do
       frozen = insert(:activated_user, frozen_at: NaiveDateTime.utc_now(:second))
       insert(:email, user: frozen, value: "frozen-search@example.com")
 
-      assert Search.search("frozen-search@example.com", true) == []
+      assert Search.search_by_email("frozen-search@example.com") == []
     end
   end
 end

@@ -3,7 +3,6 @@ defmodule Vutuv.SearchTest do
 
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Search
-  alias Vutuv.Search.SearchQuery
 
   # A user findable by name search: the factory does not create search terms
   # (Accounts.create_user does), so insert the same terms create_user would.
@@ -448,47 +447,6 @@ defmodule Vutuv.SearchTest do
 
       # ...but a bare two-letter query still is not.
       assert Search.instant("st") == nil
-    end
-  end
-
-  describe "record_query/2" do
-    test "stores the query with its user results and an anonymous requester" do
-      user = searchable_user("Maria", "Meier")
-
-      assert {:ok, query} = Search.record_query("Meier", nil)
-
-      query = Repo.preload(query, [:user_results, :search_query_requesters])
-      assert query.value == "meier"
-      refute query.email?
-      assert Enum.map(query.user_results, & &1.id) == [user.id]
-      assert [%{user_id: nil}] = query.search_query_requesters
-    end
-
-    test "repeating a query in another case reuses the stored row" do
-      requester = insert(:activated_user)
-
-      assert {:ok, _query} = Search.record_query("smith", nil)
-      assert {:ok, _query} = Search.record_query("Smith", requester)
-
-      assert Repo.aggregate(SearchQuery, :count) == 1
-      assert Repo.aggregate(Vutuv.Search.SearchQueryRequester, :count) == 2
-    end
-
-    test "an email query records the matched user as a result" do
-      user = insert(:activated_user)
-      insert(:email, user: user, value: "findme@example.com")
-
-      assert {:ok, query} = Search.record_query("findme@example.com", nil)
-
-      assert query.email?
-      assert Enum.map(Repo.preload(query, :user_results).user_results, & &1.id) == [user.id]
-    end
-
-    test "an over-long query is skipped, not raised (varchar(255) column)" do
-      # A ?q= URL can carry an arbitrarily long query with no client maxlength;
-      # it must not crash-loop SearchLive with a Postgres 22001.
-      assert {:error, %Ecto.Changeset{}} = Search.record_query(String.duplicate("a", 300), nil)
-      assert Repo.aggregate(SearchQuery, :count) == 0
     end
   end
 end

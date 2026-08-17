@@ -7,9 +7,9 @@ The **Search** page (`/search`) is a LiveView, part of the shared
 
 Search is search-as-you-type (results from three letters on, exact and
 similar-sounding name matches clearly separated, `?q=` plus the filters keeps
-the URL shareable and a settled query is recorded once) with scope chips
-(all/people/tags/posts), an exact-only toggle and query operators parsed by
-`Vutuv.Search.parse/2`: `vorname:`/`nachname:` (aka `first:`/`last:`),
+the URL shareable) with scope chips (all/people/tags/posts), an exact-only
+toggle and query operators parsed by `Vutuv.Search.parse/2`:
+`vorname:`/`nachname:` (aka `first:`/`last:`),
 `@handle`, double quotes for exact, the combinable filter `tag:`/`skill:`
 (has the tag) which finds **both people and posts** carrying it (issue #946),
 plus the combinable people-only filters `ort:`/`stadt:`/`city:` (address in
@@ -19,6 +19,27 @@ honored only for a signed-in viewer, logged-out search ignores it and a
 `elixir status:open`. Only the people-only operators pin the scope to people
 (`scope_pinned?`); `tag:` leaves the scope free, so its chips still narrow to
 just people or just posts.
+
+## Nothing about a query is stored
+
+A search is answered and forgotten. Until v7.306.0 every settled query was
+written to `search_queries` / `search_query_results` /
+`search_query_requesters` (the query string, the members it matched, and who
+searched it), and a daily sweeper pruned it to 90 days. No feature ever read a
+row of it: the phonetic matcher behind it (`Search.search/2`) existed only to
+fill the result table, and the privacy policy justified the whole thing with a
+search it would "improve and speed up" that was never built. All of it is gone;
+the tables are dropped in the next deploy (expand/contract).
+
+The one thing that IS derived from member data is `search_terms`, the name
+index: `Accounts.SearchTerm.create_search_terms/1` writes eighteen rows per
+member, six combinations of first and last name, each in plain form and in its
+Cologne-phonetics and Soundex encodings. Substring matching runs against the
+plain rows, "sounds like" against the encoded ones. It is by far the largest
+table in the database (21 MB of a 75 MB production database at ~6,000 members)
+and worth revisiting if membership grows by an order of magnitude; the
+replacement would be encoded columns on `users` plus a trigram index, not a
+second table.
 
 ## Saved searches (issue #935)
 

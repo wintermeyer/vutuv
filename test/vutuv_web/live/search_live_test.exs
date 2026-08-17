@@ -5,7 +5,6 @@ defmodule VutuvWeb.SearchLiveTest do
   import Vutuv.PostsHelpers
 
   alias Vutuv.Accounts.SearchTerm
-  alias Vutuv.Search.SearchQuery
 
   # A user findable by name search: the factory does not create search terms
   # (Accounts.create_user does), so insert the same terms create_user would.
@@ -150,23 +149,6 @@ defmodule VutuvWeb.SearchLiveTest do
       {:ok, view, _html} = live(conn, ~p"/search?q=zzzz")
 
       assert has_element?(view, "#search-empty")
-    end
-
-    test "a settled query is recorded, typing alone is not", %{conn: conn} do
-      searchable_user("Maria", "Meier")
-
-      {:ok, view, _html} = live(conn, ~p"/search")
-      view |> form("#search-form") |> render_change(%{q: "meier"})
-      assert_patch(view, ~p"/search?q=meier")
-
-      # Recording waits for the settle timer, so nothing is stored yet.
-      refute Repo.exists?(SearchQuery)
-
-      # Fire the settle timer by hand instead of sleeping through it.
-      send(view.pid, {:record_query, "meier"})
-      render(view)
-
-      assert Repo.get_by(SearchQuery, value: "meier")
     end
   end
 

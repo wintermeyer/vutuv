@@ -87,9 +87,13 @@ Enthält ein Newsletter Links auf vutuv.de, möchten wir verstehen, welche Inhal
 
 Im Messenger zeigt vutuv an, wer gerade online ist. Dieser Status wird nur flüchtig im Arbeitsspeicher gehalten, solange Sie die Seite geöffnet haben, und nicht dauerhaft gespeichert. Rechtsgrundlage ist unser berechtigtes Interesse an einer funktionierenden Echtzeit-Kommunikation (Art. 6 Abs. 1 lit. f DSGVO).
 
-#### Suche und Such-Verlauf
+#### Suche
 
-vutuv hat eine Suchfunktion, mit der Sie Personen und Inhalte finden. Wenn Sie eine Suche ausführen, speichern wir den Suchbegriff und, sofern Sie angemeldet sind, eine Verknüpfung zu Ihrem Konto sowie den Zeitpunkt der Suche. Außerdem halten wir fest, welche Profile als Treffer angezeigt wurden. Das hilft uns, die Suche zu verbessern und Treffer schneller anzuzeigen. Rechtsgrundlage ist unser berechtigtes Interesse an einer funktionierenden und besseren Suche (Art. 6 Abs. 1 lit. f DSGVO); dieser Verarbeitung können Sie nach Art. 21 DSGVO widersprechen.
+vutuv hat eine Suchfunktion, mit der Sie Personen und Inhalte finden. **Was Sie suchen, speichern wir nicht.** Ihre Eingabe wird beantwortet und danach verworfen: kein Suchbegriff, kein Zeitpunkt, keine Verknüpfung zu Ihrem Konto, keine Liste der angezeigten Treffer.
+
+Damit Ihr Name auch bei einer ungefähren Schreibweise gefunden wird, legen wir zu jedem Konto Suchbegriffe aus Vor- und Nachnamen an, zusammen mit deren lautlicher Umschrift (Kölner Phonetik und Soundex). Diese Begriffe stammen ausschließlich aus Ihrem Namen und werden gelöscht, sobald Sie Ihr Konto löschen. Rechtsgrundlage ist unser berechtigtes Interesse an einer funktionierenden Suche (Art. 6 Abs. 1 lit. f DSGVO).
+
+Eine Ausnahme sind **gespeicherte Suchen**: Wenn Sie eine Suche ausdrücklich speichern, bewahren wir diese eine Suchanfrage bei Ihrem Konto auf, damit Sie sie erneut ausführen und auf Wunsch per E-Mail über neue Treffer benachrichtigt werden können. Sie sehen und löschen diese Suchen jederzeit selbst unter „Einstellungen / Gespeicherte Suchen“.
 
 #### Arbeitszeugnisse
 

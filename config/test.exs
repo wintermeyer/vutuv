@@ -37,7 +37,6 @@ config :vutuv, :send_unread_message_emails, false
 # connection; tests call Vutuv.Activity.Digest.send_pending/0 directly.
 config :vutuv, :send_notification_digest_emails, false
 config :vutuv, :moderation_sweeper, false
-config :vutuv, :prune_search_history, false
 # Webhook deliveries run inline in tests (Vutuv.Webhooks.deliver_due/0 with a
 # stubbed HTTP layer); the polling GenServer would touch the sandbox from
 # outside. Vutuv.Webhooks.Deliverer.nudge/0 casts into the void then.

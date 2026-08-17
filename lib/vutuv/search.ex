@@ -8,8 +8,7 @@ defmodule Vutuv.Search do
   and `nachname:`/`last:` search one name field, `tag:`/`skill:` filters both
   people and posts carrying that tag (issue #946), `@handle` the username, and
   a fully quoted query (or `exact: true`) turns off prefix and phonetic
-  matching. `record_query/2` persists a settled query for the search history.
-  The original `search/2` stays as the low-level name/email matcher.
+  matching. `search_by_email/1` stays as the low-level email matcher.
   """
 
   import Ecto.Query
@@ -20,9 +19,6 @@ defmodule Vutuv.Search do
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
-  alias Vutuv.Search.SearchQuery
-  alias Vutuv.Search.SearchQueryRequester
-  alias Vutuv.Search.SearchQueryResult
   alias Vutuv.Tags.Tag
 
   @min_chars 3
@@ -33,11 +29,6 @@ defmodule Vutuv.Search do
   @tag_scope_limit 50
   @post_limit 10
   @post_scope_limit 25
-
-  # How long a settled search is kept (see prune_history/1). The search-history
-  # tables feed no user-facing feature; the window just bounds their growth and
-  # how long who-searched-what is retained. Change here to adjust the policy.
-  @history_retention_days 90
 
   # TLD bound is {2,} (not {2,4}): modern TLDs run long (.online, .software),
   # and an unrecognized email would wrongly fall through to phonetic name search.
@@ -301,7 +292,7 @@ defmodule Vutuv.Search do
         {[], []}
 
       email?(parsed.text) ->
-        {search(parsed.text, true), []}
+        {search_by_email(parsed.text), []}
 
       parsed.exact? ->
         {exact_people(parsed), []}
@@ -601,133 +592,12 @@ defmodule Vutuv.Search do
   end
 
   @doc """
-  Persists a settled query for the search history: the query row (reused
-  case-insensitively), its current user results and one requester row per
-  search (`requester` is the searching user or `nil` for visitors).
+  The member with exactly that email address, or `[]`.
+
+  Only addresses the owner flagged public are findable (`public?` defaults to
+  false): a private address must not even confirm that an account exists.
   """
-  def record_query(value, requester) when is_binary(value) do
-    value = value |> String.trim() |> String.downcase()
-    is_email = email?(value)
-
-    results =
-      if is_email do
-        value |> search(true) |> Enum.map(&%SearchQueryResult{user_id: &1.id})
-      else
-        # The history tables feed no user-facing feature, so a popular/ambiguous
-        # query must not delete-and-reinsert thousands of result rows: keep only
-        # the top matches (search/2 already returns them score-sorted).
-        value |> search(false) |> Enum.take(@people_limit)
-      end
-
-    params = %{"value" => value, "email?" => is_email}
-
-    Repo.one(from(q in SearchQuery, where: q.value == ^value))
-    |> insert_or_update_query(params, requester_changeset(requester), results)
-  end
-
-  @doc """
-  Bounds the search-history tables, which are written on every settled search
-  but read by no feature and never trimmed otherwise. Drops queries not searched
-  within `@history_retention_days` (cascading their results and requesters
-  through the FK), and trims requester rows older than the window from queries
-  that are still active. Returns the deleted row counts. Run on a schedule by
-  `Vutuv.Search.HistorySweeper`; safe to call by hand for an immediate sweep.
-  """
-  def prune_history(now \\ NaiveDateTime.utc_now()) do
-    cutoff =
-      now
-      |> NaiveDateTime.add(-@history_retention_days * 24 * 3600, :second)
-      |> NaiveDateTime.truncate(:second)
-
-    # The per-search log (who searched what, when) grows with every search even
-    # for a popular query whose row stays fresh, so trim its old rows directly.
-    {requesters, _} =
-      Repo.delete_all(from(r in SearchQueryRequester, where: r.inserted_at < ^cutoff))
-
-    # Queries not searched within the window go entirely, taking their results
-    # and any remaining requesters with them (FK on_delete: :delete_all).
-    {queries, _} = Repo.delete_all(from(q in SearchQuery, where: q.updated_at < ^cutoff))
-
-    %{search_queries: queries, search_query_requesters: requesters}
-  end
-
-  defp insert_or_update_query(nil, params, requester_changeset, results) do
-    %SearchQuery{}
-    |> SearchQuery.changeset(params)
-    |> Ecto.Changeset.put_assoc(:search_query_requesters, [requester_changeset])
-    |> Ecto.Changeset.put_assoc(:search_query_results, results)
-    |> Repo.insert()
-  end
-
-  defp insert_or_update_query(query, params, requester_changeset, results) do
-    requester_changeset =
-      SearchQueryRequester.changeset(requester_changeset, %{search_query_id: query.id})
-
-    # Only the results assoc is replaced via put_assoc; the requester rows are
-    # inserted separately below, so preloading them (one row per prior search
-    # of this value) would be fetched-and-discarded work on every settle.
-    query_changeset =
-      query
-      |> Repo.preload([:search_query_results])
-      |> SearchQuery.changeset(params)
-      |> Ecto.Changeset.put_assoc(:search_query_results, results)
-
-    Ecto.Multi.new()
-    |> Ecto.Multi.update(:search_query, query_changeset)
-    |> Ecto.Multi.insert(:search_query_requester, requester_changeset)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{search_query: query}} -> {:ok, query}
-      {:error, _failed, changeset, _changes} -> {:error, changeset}
-    end
-  end
-
-  defp requester_changeset(nil) do
-    SearchQueryRequester.changeset(%SearchQueryRequester{}, %{user_id: nil})
-  end
-
-  defp requester_changeset(user), do: Ecto.build_assoc(user, :search_query_requesters)
-
-  # Checks database for matches between search.value and search_terms
-  def search(value, false) do
-    for(
-      term <-
-        Repo.all(
-          from(t in SearchTerm,
-            left_join: u in assoc(t, :user),
-            as: :user,
-            # Only the two columns the result rows need — the full SearchTerm
-            # row (value, timestamps) is never read here. Bounded like the
-            # display path: common German names collide heavily in both
-            # phonetic encodings, and this history-only path used to ship
-            # thousands of rows per settled search just to keep 50.
-            select: %{score: t.score, user_id: t.user_id},
-            order_by: [desc: t.score],
-            limit: @term_limit
-          )
-          |> phonetic_term_match(String.downcase(value))
-          |> exclude_moderated()
-        )
-    ) do
-      %{
-        score: term.score,
-        result: %SearchQueryResult{
-          user_id: term.user_id
-        }
-      }
-    end
-    # Sorts by score
-    |> Enum.sort(&(&1.score > &2.score))
-    # Filters duplicates
-    |> Enum.uniq_by(& &1.result)
-    # Maps to flat list of users
-    |> Enum.map(& &1.result)
-  end
-
-  # Searches for the user with exactly that email address. Only addresses the
-  # owner flagged public are findable (public? defaults to false): a private
-  # address must not even confirm that an account exists.
-  def search(value, true) do
+  def search_by_email(value) do
     value = String.downcase(value)
 
     Repo.all(
@@ -746,7 +616,7 @@ defmodule Vutuv.Search do
 
   # Accounts in the moderation freezer (frozen pending review, suspended or
   # deactivated) are hidden everywhere, including search. The condition is
-  # owned by Vutuv.Moderation.Query; left-joined orphan terms (no user) pass.
+  # owned by Vutuv.Moderation.Query.
   defp exclude_moderated(query) do
     from([user: u] in query, where: not account_hidden_row(u))
   end

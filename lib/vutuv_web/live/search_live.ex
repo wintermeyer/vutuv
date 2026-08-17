@@ -41,8 +41,6 @@ defmodule VutuvWeb.SearchLive do
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.UserHTML
 
-  @record_after :timer.seconds(2)
-
   @impl true
   def mount(_params, _session, socket) do
     current_user = socket.assigns[:current_user]
@@ -57,8 +55,7 @@ defmodule VutuvWeb.SearchLive do
      # than per keystroke: it reads their federation state, and the answer is
      # the same for every query they type. `look_up_post/2` asks again at the
      # click, so participation ending in another tab is still refused.
-     |> assign(:lookup_refusal, current_user && Fediverse.lookup_refusal(current_user))
-     |> assign(:record_timer, nil)}
+     |> assign(:lookup_refusal, current_user && Fediverse.lookup_refusal(current_user))}
   end
 
   @impl true
@@ -91,8 +88,7 @@ defmodule VutuvWeb.SearchLive do
      # member has since corrected.
      |> assign(:remote_post_error, kept_post_error(socket, post_url))
      |> assign_needles(results)
-     |> assign_people_maps(results)
-     |> schedule_record(results)}
+     |> assign_people_maps(results)}
   end
 
   defp kept_post_error(socket, post_url) do
@@ -254,13 +250,6 @@ defmodule VutuvWeb.SearchLive do
   # exact), so the sweeper and the "run now" link replay the same search.
   defp search_query(q, scope, exact), do: search_params(q, scope, exact) |> URI.encode_query()
 
-  # The settle timer fired: this query stopped changing, so it counts.
-  @impl true
-  def handle_info({:record_query, q}, socket) do
-    Search.record_query(q, socket.assigns[:current_user])
-    {:noreply, socket}
-  end
-
   @scopes ~w(all people tags posts)
 
   defp parse_scope(scope) when scope in @scopes, do: String.to_existing_atom(scope)
@@ -286,19 +275,6 @@ defmodule VutuvWeb.SearchLive do
       work_info_by_id: UserHelpers.work_information_map(people, 45),
       following_by_id: UserHelpers.following_map(socket.assigns[:current_user], people)
     )
-  end
-
-  # Debounce the history write past the typing: every new query cancels the
-  # previous timer, so only a query that survives the settle window is stored.
-  defp schedule_record(socket, results) do
-    if timer = socket.assigns.record_timer, do: Process.cancel_timer(timer)
-
-    timer =
-      if results && connected?(socket) do
-        Process.send_after(self(), {:record_query, results.query}, @record_after)
-      end
-
-    assign(socket, :record_timer, timer)
   end
 
   defp scope_label(:all), do: gettext("All")

@@ -419,8 +419,6 @@ defmodule Vutuv.Accounts.User do
     field(:unreachable_at, :naive_datetime)
     field(:tag_list, :string, virtual: true)
 
-    has_many(:search_query_requesters, Vutuv.Search.SearchQueryRequester)
-    has_many(:search_query_results, Vutuv.Search.SearchQueryResult)
     has_many(:login_pins, Vutuv.Accounts.LoginPin)
     has_many(:emails, Vutuv.Accounts.Email)
     has_many(:user_tags, Vutuv.Tags.UserTag)

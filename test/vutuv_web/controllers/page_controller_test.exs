@@ -202,14 +202,21 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Open Source"
       assert body =~ ~s(href="https://github.com/wintermeyer/vutuv")
 
-      # The persisted, behaviour-related processing must be disclosed: the
-      # per-user search history, the slug (profile-address) history and the live
-      # online status. Usage/dwell tracking is only planned, not active, so it
-      # must NOT be described here yet (it gets added when the feature ships).
-      assert body =~ "Such-Verlauf"
+      # The persisted, behaviour-related processing must be disclosed: the slug
+      # (profile-address) history and the live online status. Usage/dwell
+      # tracking is only planned, not active, so it must NOT be described here
+      # yet (it gets added when the feature ships).
       assert body =~ "Verlauf Ihrer Profil-Adressen"
       assert body =~ "Online-Status"
       refute body =~ "Verweildauer"
+
+      # The search-history tables are gone (v7.304.0), so the policy must no
+      # longer promise a "Such-Verlauf" — and must say plainly that a query is
+      # answered and forgotten. Only a search the member deliberately saves is
+      # kept, which stays disclosed.
+      refute body =~ "Such-Verlauf"
+      assert body =~ "Was Sie suchen, speichern wir nicht"
+      assert body =~ "gespeicherte Suchen"
 
       # Recording session device/IP/location for the signed-in-devices feature
       # and the new-device security email is a data-protection change that must
