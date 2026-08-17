@@ -134,6 +134,25 @@ defmodule VutuvWeb.AccountActivityLiveTest do
     end
   end
 
+  # Issue #1511: the kind declared only "enabled" while the settings controller
+  # sent "fields" beside it, so every fediverse save was rejected by the
+  # changeset and this row never existed.
+  test "a fediverse save reads as the switches touched plus where they stand", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    :ok =
+      AccountEvents.record(user, "fediverse_changed",
+        details: %{fields: ["fediverse_followers?", "fediverse_reactions?"], enabled: true}
+      )
+
+    {:ok, live, _html} = live(conn, ~p"/settings/activity")
+
+    row = live |> element("#activity-events") |> render()
+    assert row =~ "Fediverse settings changed"
+    assert row =~ "Fediverse participation, Fediverse reactions"
+    assert row =~ "taking part in the Fediverse"
+  end
+
   test "an event somebody else caused is marked as such", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     admin = insert(:user, admin?: true)

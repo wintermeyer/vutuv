@@ -105,7 +105,10 @@ defmodule Vutuv.AccountEvents do
     # Privacy and reach
     "privacy_changed" => ["fields"],
     "notifications_changed" => ["fields"],
-    "fediverse_changed" => ["enabled"],
+    # Both halves, like its three siblings above: which switches the save
+    # carried, plus the state the take-part switch ended in — the one fediverse
+    # setting whose consequences nobody can take back.
+    "fediverse_changed" => ["enabled", "fields"],
     "member_blocked" => ["handle"],
     "member_unblocked" => ["handle"],
     "filter_added" => ["filter_kind"],

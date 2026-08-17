@@ -152,17 +152,27 @@ defmodule VutuvWeb.AccountEventText do
     ngettext("%{count} post", "%{formatted} posts", count, formatted: UI.delimited_count(count))
   end
 
-  defp detail("fediverse_changed", %{"enabled" => true}),
-    do: gettext("taking part in the Fediverse")
-
-  defp detail("fediverse_changed", %{"enabled" => false}),
-    do: gettext("not taking part in the Fediverse")
-
-  defp detail(_kind, %{"fields" => fields}) when is_list(fields) and fields != [] do
-    Enum.map_join(fields, ", ", &field_label/1)
+  # The fediverse save is the one that says both things: which switches it
+  # carried, and where the take-part switch stands afterwards — the setting
+  # whose consequences nobody can take back, and the reason a row reading only
+  # "Fediverse participation" would leave the member guessing which way it went.
+  defp detail("fediverse_changed", %{"enabled" => enabled} = details)
+       when is_boolean(enabled) do
+    case field_list(details) do
+      nil -> participation_label(enabled)
+      fields -> fields <> " · " <> participation_label(enabled)
+    end
   end
 
-  defp detail(_kind, _details), do: nil
+  defp detail(_kind, details), do: field_list(details)
+
+  defp field_list(%{"fields" => fields}) when is_list(fields) and fields != [],
+    do: Enum.map_join(fields, ", ", &field_label/1)
+
+  defp field_list(_details), do: nil
+
+  defp participation_label(true), do: gettext("taking part in the Fediverse")
+  defp participation_label(false), do: gettext("not taking part in the Fediverse")
 
   @doc """
   How the change was confirmed, as a phrase to hang off the row. `nil` for a

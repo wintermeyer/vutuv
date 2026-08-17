@@ -156,6 +156,21 @@ defmodule VutuvWeb.AccountEventHooksTest do
       assert event.details["fields"] == ["noindex?"]
     end
 
+    test "a fediverse save records both the participation state and the fields", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _on} = Vutuv.Accounts.update_user(user, %{"fediverse_followers?" => "true"})
+
+      # No acknowledgement needed: this save leaves the take-part switch alone.
+      put(conn, ~p"/settings/fediverse",
+        user: %{"fediverse_followers?" => "true", "fediverse_reactions?" => "false"}
+      )
+
+      assert [event] = events(user, "fediverse_changed")
+      assert event.details["enabled"] == true
+
+      assert event.details["fields"] == ["fediverse_followers?", "fediverse_reactions?"]
+    end
+
     test "a content filter records its kind, never the muted word", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
