@@ -162,6 +162,12 @@ defmodule VutuvWeb.OauthController do
     oauth_error(conn, 400, "unsupported_grant_type")
   end
 
+  # A client asking for more than its app registered. Naming it beats
+  # `invalid_grant`, which would send the client looking at its credentials.
+  defp token_response(conn, {:error, :invalid_scope}) do
+    oauth_error(conn, 400, "invalid_scope")
+  end
+
   defp token_response(conn, {:error, _reason}), do: oauth_error(conn, 400, "invalid_grant")
 
   defp oauth_error(conn, status, code) do

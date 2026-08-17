@@ -56,7 +56,12 @@ defmodule VutuvWeb.Plug.MastodonApiAuth do
   defp mastodon_token?(%{app: %{protocol: "mastodon"}}), do: true
   defp mastodon_token?(_token), do: false
 
-  defp bearer_token(conn) do
+  @doc false
+  # The one reading of this adapter's `Authorization` header, public because
+  # `MastodonApi.AppController` authenticates its app-token endpoint itself and
+  # must not spell the header a second, stricter way. HTTP auth scheme names are
+  # case-insensitive (RFC 7235), and real clients do send a lowercase `bearer`.
+  def bearer_token(conn) do
     with [header] <- get_req_header(conn, "authorization"),
          [scheme, token] <- String.split(header, " ", parts: 2, trim: true),
          "bearer" <- String.downcase(scheme) do

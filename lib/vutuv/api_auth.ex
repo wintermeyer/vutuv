@@ -33,6 +33,11 @@ defmodule Vutuv.ApiAuth do
   # request.
   @last_used_resolution_seconds 60
 
+  @doc false
+  # The app tokens in `Vutuv.ApiAuth.OAuth` stamp the same column and must not
+  # pick their own number for it.
+  def last_used_resolution_seconds, do: @last_used_resolution_seconds
+
   # ── Personal access tokens ──
 
   @doc """

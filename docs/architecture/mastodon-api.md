@@ -18,10 +18,16 @@ Served on `mastodon.<PHX_HOST>` **and on the main host**;
 `MASTODON_API_ENABLED=false` disables both. ActivityPub actors, WebFinger
 handles, profiles and public post URLs live on `PHX_HOST` throughout.
 
-The subdomain is the **canonical** origin — it is what the instance document
-advertises, it serves no website pages (an API-host catch-all refuses anything
-that is not an API route), and a reverse proxy can give it its own CORS and
-security headers. But a member setting up a phone app types the address they
+The subdomain is the **preferred** origin: it serves no website pages (an
+API-host catch-all refuses anything that is not an API route), and a reverse
+proxy can give it its own CORS and security headers. It is **not** advertised
+anywhere, and that is worth knowing before anybody decides whether to keep it.
+`instance.uri` / `domain` are `PHX_HOST`, so are the actor ids, the WebFinger
+answers and every post URL; `MastodonApi.api_url/1` is reached only from
+`client_url/2`, which names the subdomain solely to a client that already
+arrived on it. An installation that never sets the DNS record, the certificate
+and the `server_name` therefore has nothing pointing at a host it does not
+serve. But a member setting up a phone app types the address they
 know, which is the main one, so the same routes answer there too. Without that,
 typing `vutuv.de` gets a 404 from the client's first probe and the app reports
 "not a Mastodon server".
@@ -176,6 +182,21 @@ already working. Diagnosing it took one `curl`: `client_credentials` answered
 `unsupported_grant_type` where `authorization_code` with the same nonsense
 credentials got as far as `invalid_client`.
 
+**The production log confirms it, and reading that log needed one calibration.**
+Six attempts from that phone, each 0–4 s after its own successful
+`POST /api/v1/apps` and each answered 400, with not one `GET /oauth/authorize`
+anywhere in the retained window: register, then ask for a token, with no member
+authorization in between, which is this grant's flow and no other. It also rules
+`authorization_code` out, because that one is implemented and would have answered
+401. Which error body it was is **not** legible at a glance: nginx logs
+`$body_bytes_sent`, the **compressed** length, so the 54 bytes match none of the
+four error documents until the same documents are measured gzipped
+(`unsupported_grant_type` 54, `invalid_client` 46 — a phone sends
+`Accept-Encoding: gzip`, `curl` by default does not). Calibrate such a field
+against a known input before believing what it says. What stays out of reach is
+the literal `grant_type` the client sent: a wrong value, an unknown one and a
+missing one all answer byte-identically, so no response can name it.
+
 **Such a token lives in its own table** (`oauth_app_tokens`,
 `Vutuv.ApiAuth.AppToken`) rather than beside the member tokens, and that is the
 security property rather than a filing decision. `api_tokens.user_id` is NOT
@@ -191,9 +212,30 @@ What such a token may do is correspondingly small:
 `GET /api/v1/apps/verify_credentials`, which names the app and deliberately
 echoes back neither `client_id` nor secret. It is the one Mastodon route not
 behind `Plug.MastodonApiAuth` — it authenticates itself, because that plug's job
-is to resolve a *member*. The grant is offered to `protocol: "mastodon"` apps
-only: a native vutuv OAuth app is user-facing with mandatory PKCE and asked for
-no app-level credential, so it keeps getting `unsupported_grant_type`.
+is to resolve a *member*, and this endpoint asks the reverse question. It
+therefore answers for a **member** token as well, which is what Mastodon does
+("a client credential or an access token") and what a client checking which app
+its token belongs to expects; the two are resolved through their own tables, so
+the widening stops at this route. It reads the `Authorization` header through
+`Plug.MastodonApiAuth.bearer_token/1` rather than spelling it a second time: auth
+scheme names are case-insensitive, and a second reading that only accepts
+`Bearer` is a 401 for clients the rest of the adapter serves.
+
+The grant is offered to `protocol: "mastodon"` apps only: a native vutuv OAuth
+app is user-facing with mandatory PKCE and asked for no app-level credential, so
+it keeps getting `unsupported_grant_type`. A requested `scope` is honoured within
+what the app registered and refused as `invalid_scope` beyond it; omitting it
+keeps the registered scopes.
+
+**Two things this grant needs that the member grants get for free.** Only the
+hash of a token is ever stored, so a live one cannot be handed back a second time
+(Doorkeeper's `reuse_access_token` has no counterpart here) and every call mints a
+row — while app registration is public and the token endpoint is not rate
+limited, which is unbounded growth on an unattended path. `client_credentials`
+therefore keeps only the newest few rows per app. And revocation has to search
+this table too (`OAuth.revoke/1`): RFC 7009 lets the endpoint answer 200 for a
+token it does not know, so a client revoking its own live app token would
+otherwise be told 200 while the credential kept working.
 
 ### Paging, streaming and push
 
