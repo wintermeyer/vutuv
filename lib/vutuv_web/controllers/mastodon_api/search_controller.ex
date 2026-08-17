@@ -11,6 +11,8 @@ defmodule VutuvWeb.MastodonApi.SearchController do
   alias Vutuv.Moderation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Posts
+  alias Vutuv.Repo
 
   def search(conn, %{"q" => query} = params) do
     query = String.trim(query)
@@ -55,8 +57,22 @@ defmodule VutuvWeb.MastodonApi.SearchController do
     |> Enum.map(&Presenter.account/1)
   end
 
-  defp statuses(%{posts: posts}, limit, viewer) when is_list(posts),
-    do: posts |> Enum.take(limit) |> Presenter.statuses(viewer)
+  # Preloaded before rendering, because `Vutuv.Search` loads only what a result
+  # *row* on the website needs — it preloads the two author sides and nothing
+  # else. Every other list in this adapter arrives through a reader that has
+  # already run `post_preloads/0`, so the presenter is written for loaded posts
+  # and answers an unloaded association by leaving the thing out: no
+  # `media_attachments`, no inline pictures in the body, and `in_reply_to_id`
+  # nil, which renders a reply as though it opened its own conversation. None of
+  # that errors, so search quietly served a thinner post than every other
+  # endpoint. `Repo.preload/2` skips what is already loaded, so the authors are
+  # not fetched twice.
+  defp statuses(%{posts: posts}, limit, viewer) when is_list(posts) do
+    posts
+    |> Enum.take(limit)
+    |> Repo.preload(Posts.render_preloads())
+    |> Presenter.statuses(viewer)
+  end
 
   defp statuses(_no_free_text, _limit, _viewer), do: []
 

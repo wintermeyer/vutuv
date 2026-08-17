@@ -157,5 +157,30 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
       assert body["hashtags"] == []
       assert Enum.any?(body["accounts"], &(&1["display_name"] =~ "Nurhier"))
     end
+
+    # `Vutuv.Search` loads what a website result row needs and no more, so a
+    # status rendered straight out of it came back thinner than the same status
+    # from every other endpoint: a reply looked like it opened its own
+    # conversation, because the presenter answers an unloaded `reply_ref` by
+    # leaving `in_reply_to_id` nil rather than by failing.
+    test "a reply found by search still knows what it answers", %{conn: conn} do
+      author = insert(:activated_user)
+      {:ok, parent} = Posts.create_post(author, %{body: "Die Ausgangsfrage"})
+
+      {:ok, _reply} =
+        Posts.create_reply(author, parent, %{body: "Die Antwort über Kaltluftseen"})
+
+      token = mastodon_token(insert(:activated_user), ["read"])
+
+      %{"statuses" => statuses} =
+        conn
+        |> mastodon_conn(token)
+        |> get("/api/v2/search?q=Kaltluftseen")
+        |> json_response(200)
+
+      assert [status] = statuses
+      assert status["in_reply_to_id"] == parent.id
+      assert status["in_reply_to_account_id"] == author.id
+    end
   end
 end
