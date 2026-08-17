@@ -182,6 +182,11 @@ defmodule VutuvWeb.Router do
     get("/api/v1/custom_emojis", MastodonApi.ListController, :custom_emojis)
     get("/api/v2/instance", MastodonApi.DiscoveryController, :instance_v2)
     post("/api/v1/apps", MastodonApi.AppController, :create)
+    # Not behind `:mastodon_api_auth`: that plug resolves a **member**, and this
+    # is the one endpoint an app-only credential may reach. It authenticates
+    # itself against `oauth_app_tokens`, so neither credential can stand in for
+    # the other.
+    get("/api/v1/apps/verify_credentials", MastodonApi.AppController, :verify_credentials)
     get("/oauth/authorize", MastodonApi.OauthRedirectController, :authorize)
     post("/oauth/token", OauthController, :token)
     post("/oauth/revoke", OauthController, :revoke)
@@ -425,6 +430,11 @@ defmodule VutuvWeb.Router do
     get("/api/v1/custom_emojis", MastodonApi.ListController, :custom_emojis)
     get("/api/v2/instance", MastodonApi.DiscoveryController, :instance_v2)
     post("/api/v1/apps", MastodonApi.AppController, :create)
+    # Not behind `:mastodon_api_auth`: that plug resolves a **member**, and this
+    # is the one endpoint an app-only credential may reach. It authenticates
+    # itself against `oauth_app_tokens`, so neither credential can stand in for
+    # the other.
+    get("/api/v1/apps/verify_credentials", MastodonApi.AppController, :verify_credentials)
     # `/oauth/*` is deliberately NOT mirrored. The main host already serves the
     # real consent screen and the native token/revoke endpoints, and the same
     # `OauthController` handles a Mastodon-protocol app there — mirroring put

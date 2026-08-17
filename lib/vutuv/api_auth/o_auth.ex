@@ -39,7 +39,7 @@ defmodule Vutuv.ApiAuth.OAuth do
   import Ecto.Query
 
   alias Vutuv.ApiAuth
-  alias Vutuv.ApiAuth.{App, AuthCode, Grant, Scopes, Token}
+  alias Vutuv.ApiAuth.{App, AppToken, AuthCode, Grant, Scopes, Token}
   alias Vutuv.MastodonApi.Access
   alias Vutuv.MastodonApi.Scopes, as: MastodonScopes
   alias Vutuv.Repo
@@ -261,6 +261,94 @@ defmodule Vutuv.ApiAuth.OAuth do
       ApiAuth.revoke_grant_tokens!(token.grant_id)
       {:error, :invalid_grant}
     end
+  end
+
+  @doc """
+  `grant_type=client_credentials`: a token for the **app itself**, with no
+  member behind it (RFC 6749 §4.4).
+
+  Mastodon's token endpoint answers this grant, and a client asks for it right
+  after registering through `POST /api/v1/apps` — before it sends anybody to a
+  browser. Refusing it is not a missing extra: Ivory on a real phone gave up at
+  that request with `unsupported_grant_type` and never reached the consent
+  screen at all.
+
+  **Mastodon clients only.** A native vutuv OAuth app is a user-facing thing
+  with mandatory PKCE, and nothing in that flow asked for an app-level
+  credential; answering the grant there would widen `/api/2.0`'s surface for
+  nobody's benefit. So a non-Mastodon client gets the same
+  `unsupported_grant_type` it gets today.
+
+  The token lands in `oauth_app_tokens`, not beside the member tokens — see
+  `Vutuv.ApiAuth.AppToken` for why that is the security property rather than a
+  filing decision. It carries the app's registered scopes because Mastodon's
+  response does; they grant nothing here.
+  """
+  def client_credentials(params) do
+    with {:ok, app} <- authenticate_client(params),
+         {:ok, app} <- check_mastodon_client(app) do
+      token = @access_prefix <> ApiAuth.random_token()
+
+      Repo.insert!(%AppToken{
+        app_id: app.id,
+        token_hash: ApiAuth.hash_token(token),
+        scopes: app.registered_scopes
+      })
+
+      {:ok,
+       %{
+         access_token: token,
+         token_type: "Bearer",
+         scope: Enum.join(app.registered_scopes, " "),
+         created_at: System.system_time(:second)
+       }}
+    end
+  end
+
+  defp check_mastodon_client(%App{protocol: "mastodon"} = app), do: {:ok, app}
+  defp check_mastodon_client(%App{}), do: {:error, :unsupported_grant_type}
+
+  @doc """
+  The app behind a `client_credentials` token, or `nil`.
+
+  Reads `oauth_app_tokens` and nothing else, which is the point: a member token
+  cannot arrive here and an app token cannot arrive at `ApiAuth.verify_token/1`.
+  """
+  def verify_app_token(plaintext) when is_binary(plaintext) do
+    AppToken
+    |> Repo.get_by(token_hash: ApiAuth.hash_token(plaintext))
+    |> case do
+      %AppToken{} = token -> live_app_token(token)
+      nil -> nil
+    end
+  end
+
+  def verify_app_token(_other), do: nil
+
+  defp live_app_token(token) do
+    if AppToken.live?(token) do
+      token = Repo.preload(token, :app)
+
+      # A suspended app's credential stops working, the same as its member
+      # tokens do (`ApiAuth.check_app/2`).
+      case token.app do
+        %App{suspended_at: nil} = app ->
+          touch_app_token(token)
+          app
+
+        _suspended_or_gone ->
+          nil
+      end
+    end
+  end
+
+  # Written with `update_all` rather than a changeset so two concurrent uses
+  # cannot fight over the row, matching how member tokens stamp theirs.
+  defp touch_app_token(token) do
+    Repo.update_all(
+      from(t in AppToken, where: t.id == ^token.id),
+      set: [last_used_at: DateTime.utc_now(:second)]
+    )
   end
 
   @doc """

@@ -5,7 +5,9 @@ defmodule VutuvWeb.MastodonApi.AppController do
 
   alias Ecto.Changeset
   alias Vutuv.ApiAuth
+  alias Vutuv.ApiAuth.OAuth
   alias Vutuv.MastodonApi.Scopes
+  alias Vutuv.MastodonApi.WebPush
   alias VutuvWeb.RateLimit
 
   @registration_limit 20
@@ -27,6 +29,48 @@ defmodule VutuvWeb.MastodonApi.AppController do
       {:error, changeset} ->
         validation_error(conn, changeset_error(changeset))
     end
+  end
+
+  @doc """
+  `GET /api/v1/apps/verify_credentials` — the app behind a `client_credentials`
+  token, and the one thing such a token is for.
+
+  Authenticated **here**, not by `Plug.MastodonApiAuth`: that plug resolves a
+  member and every route behind it is member-scoped, which an app token has no
+  business reaching. It reads `oauth_app_tokens` and nothing else, so a member's
+  bearer token cannot identify an app either — the two credentials cannot be
+  swapped in either direction, and that is the property, not a check somebody has
+  to remember.
+
+  The response deliberately carries **no** `client_id` and no secret: the client
+  already holds both, and echoing a credential back to whoever presents a token
+  is how one leaks into a log.
+  """
+  def verify_credentials(conn, _params) do
+    case OAuth.verify_app_token(bearer_token(conn)) do
+      nil -> conn |> put_status(401) |> json(%{error: "The access token is invalid"})
+      app -> json(conn, application(app))
+    end
+  end
+
+  defp bearer_token(conn) do
+    case get_req_header(conn, "authorization") do
+      ["Bearer " <> token | _rest] -> String.trim(token)
+      _absent -> nil
+    end
+  end
+
+  # Mastodon's Application entity, minus the credentials.
+  defp application(app) do
+    %{
+      id: app.id,
+      name: app.name,
+      website: app.homepage_url,
+      scopes: app.registered_scopes,
+      redirect_uri: Enum.join(app.redirect_uris, "\n"),
+      redirect_uris: app.redirect_uris,
+      vapid_key: WebPush.public_key()
+    }
   end
 
   defp registration_allowed?(conn) do

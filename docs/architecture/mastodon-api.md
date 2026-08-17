@@ -53,9 +53,10 @@ Server discovery, login and the core social workflow:
 
 - `GET /.well-known/oauth-authorization-server`
 - `GET /api/v1/instance` and `GET /api/v2/instance`
-- `POST /api/v1/apps`
+- `POST /api/v1/apps` and `GET /api/v1/apps/verify_credentials`
 - `GET /oauth/authorize` (redirects the browser to the main origin)
-- `POST /oauth/token` and `POST /oauth/revoke`
+- `POST /oauth/token` (`authorization_code`, `refresh_token`,
+  `client_credentials`) and `POST /oauth/revoke`
 - `GET /api/v1/accounts/verify_credentials`
 - `GET /api/v1/timelines/home`
 - reading, creating, editing and deleting statuses, plus personal replies
@@ -162,6 +163,37 @@ Letting a whole workforce *read* an organization's feed without being able to
 speak in its name needs a role split that this adapter deliberately did not
 make on its way past. It is designed under "The staff feed" in
 [organizations.md](organizations.md).
+
+### The app's own token (`client_credentials`)
+
+A Mastodon client asks for a token for **itself** right after
+`POST /api/v1/apps` and before it opens a browser — RFC 6749 §4.4, which
+Mastodon's token endpoint answers. Refusing that grant does not cost a feature,
+it ends setup: Ivory pointed at `vutuv.de` churned for a few seconds and gave up
+with `unsupported_grant_type`, never reaching the consent screen, while
+everything downstream of it — the two hosts, registration, discovery — was
+already working. Diagnosing it took one `curl`: `client_credentials` answered
+`unsupported_grant_type` where `authorization_code` with the same nonsense
+credentials got as far as `invalid_client`.
+
+**Such a token lives in its own table** (`oauth_app_tokens`,
+`Vutuv.ApiAuth.AppToken`) rather than beside the member tokens, and that is the
+security property rather than a filing decision. `api_tokens.user_id` is NOT
+NULL and `ApiAuth.lookup/1` reaches the member through an **inner join**, so a
+userless row there would be dropped by that join without a word — the shape
+CLAUDE.md records five separate incidents of. Widening the column would also
+open an N-1 window in which the previous release meets a token it cannot read.
+Keeping the two apart means every member-scoped endpoint authenticates through
+`api_tokens` and therefore *cannot* accept an app token; nothing has to remember
+a rule, and an endpoint added later inherits the refusal.
+
+What such a token may do is correspondingly small:
+`GET /api/v1/apps/verify_credentials`, which names the app and deliberately
+echoes back neither `client_id` nor secret. It is the one Mastodon route not
+behind `Plug.MastodonApiAuth` — it authenticates itself, because that plug's job
+is to resolve a *member*. The grant is offered to `protocol: "mastodon"` apps
+only: a native vutuv OAuth app is user-facing with mandatory PKCE and asked for
+no app-level credential, so it keeps getting `unsupported_grant_type`.
 
 ### Paging, streaming and push
 

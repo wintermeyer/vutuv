@@ -126,6 +126,16 @@ defmodule VutuvWeb.OauthController do
     token_response(conn, OAuth.refresh(params))
   end
 
+  # RFC 6749 §4.4, which Mastodon's token endpoint answers: a token for the app
+  # itself, with no member behind it. A client asks for one right after
+  # registering and before it opens a browser, so refusing it stops setup dead —
+  # Ivory on a real phone never reached the consent screen. Only Mastodon apps
+  # get it (`OAuth.client_credentials/1` says why); everybody else falls through
+  # to the `unsupported_grant_type` below, unchanged.
+  def token(conn, %{"grant_type" => "client_credentials"} = params) do
+    token_response(conn, OAuth.client_credentials(params))
+  end
+
   def token(conn, _params), do: oauth_error(conn, 400, "unsupported_grant_type")
 
   def revoke(conn, params) do
@@ -144,6 +154,12 @@ defmodule VutuvWeb.OauthController do
 
   defp token_response(conn, {:error, reason}) when reason in [:invalid_client, :app_suspended] do
     oauth_error(conn, 401, "invalid_client")
+  end
+
+  # A native client asking for `client_credentials`: the grant exists but is not
+  # offered to it, which is exactly what this code says. 400 per RFC 6749 §5.2.
+  defp token_response(conn, {:error, :unsupported_grant_type}) do
+    oauth_error(conn, 400, "unsupported_grant_type")
   end
 
   defp token_response(conn, {:error, _reason}), do: oauth_error(conn, 400, "invalid_grant")
