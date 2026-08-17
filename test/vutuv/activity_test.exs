@@ -942,6 +942,45 @@ defmodule Vutuv.ActivityTest do
     end
   end
 
+  describe "events_since/3" do
+    # What the digest mail is allowed to say. The list keeps every entry, but
+    # a mail about the member's own click is the badge problem with a stamp on
+    # it, so the self-triggered ones are dropped at this seam.
+    test "leaves out the connection the member closed themselves" do
+      me = insert(:user)
+      other = insert(:user)
+
+      follow!(other, me)
+      follow!(me, other)
+
+      kinds = me.id |> Activity.events_since(nil, 50) |> Enum.map(& &1.kind)
+      assert "follower" in kinds
+      refute "connection" in kinds
+    end
+
+    test "keeps the connection the other side closed" do
+      me = insert(:user)
+      other = insert(:user)
+
+      follow!(me, other)
+      follow!(other, me)
+
+      kinds = me.id |> Activity.events_since(nil, 50) |> Enum.map(& &1.kind)
+      assert "connection" in kinds
+    end
+
+    test "the list itself still shows both" do
+      me = insert(:user)
+      other = insert(:user)
+
+      follow!(other, me)
+      follow!(me, other)
+
+      kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
+      assert "connection" in kinds
+    end
+  end
+
   describe "notifications_count/2" do
     test "counts the whole derived feed regardless of the read marker" do
       me = insert(:user)

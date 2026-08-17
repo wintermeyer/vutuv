@@ -41,12 +41,14 @@ defmodule VutuvWeb.ApiV2.NotificationController do
   end
 
   # The derived feed item, JSON-safe: the avatar entry can be a data URI
-  # placeholder or an app path — pass URLs, drop the rest.
+  # placeholder or an app path — pass URLs, drop the rest. `self_triggered?` is
+  # internal bookkeeping for the digest mail (`Activity.events_since/3`), not
+  # part of the API contract, and its name would not survive JSON anyway.
   defp entry(item) do
     item
     |> Map.update(:actor_avatar, nil, &avatar_url/1)
     |> Map.put(:actor_username, item[:actor_param])
-    |> Map.delete(:actor_param)
+    |> Map.drop([:actor_param, :self_triggered?])
   end
 
   defp avatar_url("data:" <> _placeholder), do: nil

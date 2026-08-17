@@ -94,6 +94,42 @@ defmodule Vutuv.Activity.DigestTest do
 
       assert Digest.send_pending() == 0
     end
+
+    # The badge already stays quiet for a vernetzt pair the member completed
+    # themselves; a mail about it would be the same alarm with a stamp on it.
+    test "a connection the member completed themselves is not mailed", %{
+      member: member,
+      other: other
+    } do
+      # `other` followed three hours ago and the member read that in the app,
+      # so only what comes after is still mailable.
+      aged_follower(member, other, 180)
+      Activity.mark_notifications_read(member.id)
+
+      # An hour ago the member followed back. That made the pair vernetzt — by
+      # their own hand, so there is nothing left to tell them.
+      back = insert(:follow, follower: member, followee: other)
+      at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -60 * 60, :second)
+      Repo.update_all(from(f in Follow, where: f.id == ^back.id), set: [inserted_at: at])
+
+      seen_minutes_ago(member, 120)
+
+      assert Digest.send_pending() == 0
+      refute_received {:email, _email}
+    end
+
+    test "a follow-back from the other side is mailed", %{other: other} do
+      member = mailable_member()
+
+      # Mirror image: the member followed first, `other` closed the circle an
+      # hour ago. Somebody else acted, so this is news worth a mail.
+      insert(:follow, follower: member, followee: other)
+      aged_follower(member, other, 60)
+      seen_minutes_ago(member, 120)
+
+      assert Digest.send_pending() == 1
+      assert_received {:email, _email}
+    end
   end
 
   describe "what the member configured" do

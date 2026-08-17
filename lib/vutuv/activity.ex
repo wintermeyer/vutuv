@@ -724,11 +724,23 @@ defmodule Vutuv.Activity do
   cursor-paginated from the newest end, so this walks back until it passes
   `since` rather than filtering per kind — which keeps the registry the only
   place that knows what a kind is.
+
+  Entries the member triggered themselves are dropped. An event whose actor is
+  the member is news to everybody except them, and a mail about their own click
+  is the worst place to learn that — the badge already stays quiet for those
+  (`count_connections/3`). A source marks such an entry with
+  `self_triggered?: true` and needs no other arrangement here, which is what
+  keeps `Vutuv.Activity.Digest` free of per-kind rules. Today only the vernetzt
+  pair a member completed themselves sets it; every other kind has somebody
+  else as its actor, and self-replies and self-endorsements never become
+  entries at all.
   """
   def events_since(user_id, since, limit) do
     %{entries: entries} = notifications_page(user_id, limit: limit)
 
-    Enum.filter(entries, fn entry -> after?(entry[:at], since) end)
+    Enum.filter(entries, fn entry ->
+      after?(entry[:at], since) and entry[:self_triggered?] != true
+    end)
   end
 
   defp after?(nil, _since), do: false
@@ -1094,7 +1106,12 @@ defmodule Vutuv.Activity do
           id: type(fragment("GREATEST(?, ?)", out.id, back.id), Vutuv.UUIDv7),
           at:
             type(fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at), :naive_datetime),
-          actor_id: out.followee_id
+          actor_id: out.followee_id,
+          # Who closed the circle: the member's own follow being the later row
+          # makes this item something they already know (see
+          # `count_connections/3` for why the ids answer this and the seconds-
+          # resolution timestamps cannot).
+          self_closed: out.id > back.id
         }
       )
 
@@ -1115,11 +1132,18 @@ defmodule Vutuv.Activity do
       join: u in User,
       on: u.id == e.actor_id,
       order_by: [desc: e.at, desc: e.id],
-      select: %{id: e.id, at: e.at, friend: struct(u, ^User.listing_fields())}
+      select: %{
+        id: e.id,
+        at: e.at,
+        friend: struct(u, ^User.listing_fields()),
+        self_closed: e.self_closed
+      }
     )
     |> Repo.all()
-    |> Enum.map(fn %{id: id, at: at, friend: friend} ->
-      actor_item("connection-#{id}", "connection", at, friend)
+    |> Enum.map(fn %{id: id, at: at, friend: friend, self_closed: self_closed} ->
+      "connection-#{id}"
+      |> actor_item("connection", at, friend)
+      |> Map.put(:self_triggered?, self_closed)
     end)
   end
 
