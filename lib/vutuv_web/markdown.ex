@@ -570,11 +570,13 @@ defmodule VutuvWeb.Markdown do
   # (a lone Enter is a deliberate break), so they keep the default. **Posts**
   # pass `breaks: false`: a post body is prose, and Milkdown (the composer)
   # never emits a lone soft-wrap newline — it serializes a real break as a
-  # trailing backslash and a paragraph as a blank line, both of which render the
-  # same either way. The only bodies with lone newlines are ones hard-wrapped in
-  # an external editor or pasted in source mode, where `breaks: true` turned
-  # every ~80-column wrap into a visible break (a wall of stray `<br>`s next to
-  # long links); `breaks: false` reflows them into flowing paragraphs.
+  # trailing backslash and a paragraph as a blank line. The only bodies with
+  # lone newlines are ones hard-wrapped in an external editor or pasted in
+  # source mode, where `breaks: true` turned every ~80-column wrap into a
+  # visible break (a wall of stray `<br>`s next to long links); `breaks: false`
+  # reflows them into flowing paragraphs. The two settings agree on the
+  # backslash only because `normalize_hard_breaks/1` respells it first — see
+  # there, and don't drop it on the assumption that Earmark reads both.
   defp render_pipeline(text, opts \\ []) do
     # Footnotes bracket the whole pipeline: the syntax becomes plain-text markers
     # before Earmark sees it, and the real markup is built after the scrubber has
@@ -585,7 +587,11 @@ defmodule VutuvWeb.Markdown do
     # word, so `Fences.normalize/1` folds the info string into one before it
     # ever gets there. See `VutuvWeb.CodeHighlight.Fences`.
     {prepared, footnotes} =
-      text |> Fences.normalize() |> strip_break_artifacts() |> Footnotes.prepare()
+      text
+      |> Fences.normalize()
+      |> strip_break_artifacts()
+      |> normalize_hard_breaks()
+      |> Footnotes.prepare()
 
     prepared
     |> String.replace("<", "&lt;")
@@ -654,6 +660,30 @@ defmodule VutuvWeb.Markdown do
       text
     end
   end
+
+  # CommonMark spells a hard break two ways — a trailing backslash and two
+  # trailing spaces — and **Earmark reads the backslash only while `breaks:` is
+  # off**: `breaks: true` swaps its `<br>` rule for one matching bare whitespace
+  # before the newline, which drops the backslash alternative, so the `\` falls
+  # through as ordinary text and the newline becomes the break separately. Every
+  # hard-broken line of a chat message therefore ended in a visible `\` (reported
+  # on a DM thread, 2026-08-17) — and the same for a tagline, an organization
+  # description or a job posting, since all four render with the default. The
+  # writer never typed that character: it is how Milkdown serializes the break
+  # (`assets/js/markdown_editor.js`), which is why `render_post/3` was unaffected
+  # and the bug looked like it belonged to messages.
+  #
+  # So respell it as the two spaces, which **both** settings consume. Doing it
+  # here rather than at write time repairs the already-stored bodies too, so this
+  # needs none of the repair migrations the other Milkdown round-trip fixes did.
+  # `map_outside_code/2` keeps a code fence's line continuations (`curl \`)
+  # verbatim, and the lookbehind keeps an escaped backslash (`\\`) at a line end,
+  # which is a literal character and not a break.
+  defp normalize_hard_breaks(text) do
+    if String.contains?(text, "\\"), do: map_outside_code(text, &hard_break_chunk/1), else: text
+  end
+
+  defp hard_break_chunk(chunk), do: Regex.replace(~r/(?<!\\)\\(\r?\n)/, chunk, "  \\1")
 
   @doc """
   Render a feed preview: the Markdown source is cut at a block boundary

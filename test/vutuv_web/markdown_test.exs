@@ -155,6 +155,37 @@ defmodule VutuvWeb.MarkdownTest do
     assert render("line one\nline two") =~ "<br"
   end
 
+  describe "the editor's trailing-backslash hard break" do
+    test "breaks the line without leaving the backslash visible" do
+      # Milkdown serializes a hard break as `\` + newline. Earmark understands
+      # that spelling only while `breaks:` is off — with `breaks: true` (chat,
+      # taglines, organization and job descriptions) its `<br>` rule matches the
+      # bare newline instead, so the backslash fell through as literal text and
+      # every hard-broken line ended in a visible `\` (reported on a DM thread).
+      html = render("line one\\\nline two")
+
+      assert html =~ "<br"
+      refute html =~ "\\"
+    end
+
+    test "an empty line between two breaks leaves no lone backslash" do
+      # Two hard breaks in a row — the writer's blank line — serialized `\`,
+      # newline, `\`, newline, which rendered as a line holding just a `\`.
+      refute render("line one\\\n\\\nline two") =~ "\\"
+    end
+
+    test "keeps a backslash that is not a break" do
+      assert render("a \\ b") =~ "a \\ b"
+      assert render("C:\\\\path") =~ "C:\\"
+    end
+
+    test "leaves a line continuation inside a code fence alone" do
+      # A shell snippet ends its lines with a backslash on purpose, and a fence
+      # is the one place that backslash is content rather than an editor artifact.
+      assert render("```\ncurl \\\n  https://example.com\n```") =~ "curl \\"
+    end
+  end
+
   describe "post line breaks (breaks: false)" do
     defp post(text), do: text |> Markdown.render_post([]) |> Phoenix.HTML.safe_to_string()
 
