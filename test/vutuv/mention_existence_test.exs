@@ -35,7 +35,7 @@ defmodule Vutuv.MentionExistenceTest do
       refute Post.changeset(%Post{}, %{body: "hi @older"}).valid?
     end
 
-    test "a fediverse @user@host handle needs no local account" do
+    test "an address on another server needs no local account" do
       assert Post.changeset(%Post{}, %{body: "boost @bob@geno.social"}).valid?
     end
 

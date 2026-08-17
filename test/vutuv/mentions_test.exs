@@ -16,7 +16,7 @@ defmodule Vutuv.MentionsTest do
       assert Mentions.local_handles("@older") == ["older"]
     end
 
-    test "a fediverse @user@host handle is not a local mention" do
+    test "an address on another server is not a local mention" do
       assert Mentions.local_handles("say hi to @bob@geno.social") == []
     end
 
@@ -84,7 +84,7 @@ defmodule Vutuv.MentionsTest do
       assert Mentions.rewrite("@older and @old", "old", "new") == {"@older and @new", 1}
     end
 
-    test "never touches emails, hashtags, fediverse handles or code spans" do
+    test "never touches emails, hashtags, other servers' addresses or code spans" do
       text = "mail bob@old.de, tag #old, boost @old@host.io, code `@old`"
       assert Mentions.rewrite(text, "old", "new") == {text, 0}
     end

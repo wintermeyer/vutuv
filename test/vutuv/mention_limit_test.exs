@@ -50,7 +50,7 @@ defmodule Vutuv.MentionLimitTest do
       refute Post.changeset(%Post{}, %{body: body(members ++ [org])}).valid?
     end
 
-    test "fediverse handles do not count — nobody here is notified by one" do
+    test "addresses on another server do not count — nobody here is notified" do
       body = body(handles(Mentions.max_post_mentions())) <> " @bob@geno.social @ann@geno.social"
 
       assert Post.changeset(%Post{}, %{body: body}).valid?

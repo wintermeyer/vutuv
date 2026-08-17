@@ -12,9 +12,22 @@ the notification below. They share one definition in **`Vutuv.Mentions`**,
 which owns the entity grammar (`entity_regex/0`, read back by
 `VutuvWeb.Markdown` so the renderer can never drift from it).
 
-Only the **local** `@handle` form is a vutuv handle. A fediverse `@user@host`
-handle and a `#hashtag` are never touched, and a handle inside a code span/block
-is sample text, not a mention (matching what the renderer links).
+What counts is decided by the **host**, not by the shape (issue #1560).
+`@ada` and `@ada@vutuv.de` name the same member: the second is the address
+written out in full, which is how every remote server writes a mention of one of
+us, so both are a mention and both link to the profile. Only the host is asked,
+through `Vutuv.Fediverse.local_host?/1`, so the `www.` alias, a port and a
+shouted spelling all count as us. An address on any **other** host is somebody
+else's account and is never touched; `@php@tags.vutuv.de` is a topic of ours and
+joins `hashtags/1` instead (issue #1330); a handle inside a code span/block is
+sample text, not a mention (matching what the renderer links).
+
+Before that, `local_handles/1` dropped every `@user@host` hit by design, and the
+renderer sent an address on our own host to `https://vutuv.de/@ada` — the
+Mastodon-web convention applied to a host that is not Mastodon, a path vutuv
+does not serve. So the one clickable thing in a sentence naming a member 404ed
+on our own domain, being named that way notified nobody, and a rename left the
+address behind pointing at a handle its owner had given up.
 
 ## The mention surfaces
 
@@ -57,8 +70,12 @@ reads it. The rows are a reconciled index of the body, so editing the mention
 out takes the entry with it, and a page naming *itself* is not news to its own
 team.
 
-- Detection skips code spans/blocks, emails and fediverse handles, and matches
-  whole handles (so `@old` is not found inside `@older`).
+- Detection skips code spans/blocks, emails and other servers' addresses, and
+  matches whole handles (so `@old` is not found inside `@older`).
+- Because the full address counts, a post naming `@nobody@vutuv.de` is refused
+  exactly like one naming `@nobody`. That is the same rule, not a new one: the
+  reservation attack works through either spelling, since `used_in_content?/1`
+  reads the same `local_handles/1`.
 - Detection **sees through a Markdown escape** inside a handle. The Milkdown
   WYSIWYG editor serializes `@ulrich_wolf` as `@ulrich\_wolf` (remark escapes the
   `_`, a Markdown emphasis char). Earmark undoes that before the renderer links
@@ -116,9 +133,10 @@ changeset refuses it with a sentence naming the rule ("We allow at most 5
 accounts per post. Please remove some mentions."), which the composer surfaces
 like any other body error.
 
-- Counted **after the dedupe**, so naming one person five times is one account.
-- Fediverse `@user@host` handles and handles in code spans don't count —
-  nothing here is notified by either.
+- Counted **after the dedupe**, so naming one person five times is one account —
+  and `@ada` beside `@ada@vutuv.de` is still one account.
+- Addresses on another server and handles in code spans don't count — nothing
+  here is notified by either.
 - Like the existence check it runs only when the body **changed**, so an old
   post is not held hostage by a cap that did not exist when it was written, and
   a rename rewrite (which bypasses changesets) never trips it.
@@ -150,8 +168,10 @@ candidate precisely.
 1. update the user + move the `handles` registry row + write the
    `username_changes` ledger row (unchanged),
 2. `Mentions.rewrite_everywhere/3` rewrites every stored `@old` to `@new` across
-   all surfaces — via `Ecto.Changeset.change/2`, bypassing each schema's
-   changeset, so a body's other now-dead mentions never block the rewrite,
+   all surfaces — including `@old@vutuv.de`, which becomes `@new@vutuv.de` with
+   the host kept as the author spelled it — via `Ecto.Changeset.change/2`,
+   bypassing each schema's changeset, so a body's other now-dead mentions never
+   block the rewrite,
 3. file one `handle_change_notifications` row per **other** author whose posts
    were rewritten (the renamer's own posts are rewritten but never
    self-notified), with the ids of *their* affected posts.
@@ -186,7 +206,8 @@ posts (the newest five, plus an "and N more" count).
 - `lib/vutuv/accounts/handle_change_notification.ex` — the durable row.
 - `lib/vutuv_web/live/notification_live/index.ex` — the `mention` and
   `handle_change` renderings.
-- `test/vutuv/mentions_test.exs`, `mention_existence_test.exs`,
+- `test/vutuv/mentions_test.exs`, `mentions_local_address_test.exs`,
+  `vutuv_web/markdown_local_address_test.exs`, `mention_existence_test.exs`,
   `mention_limit_test.exs`,
   `mention_notifications_test.exs`, `handle_availability_test.exs`,
   `accounts/handle_change_propagation_test.exs`,

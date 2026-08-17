@@ -29,10 +29,14 @@ defmodule Vutuv.Mentions do
       (`used_in_content?/1`), so a rename cannot hijack someone else's existing
       `@new` links.
 
-  Only the **local** `@handle` form is a vutuv handle. A fediverse `@user@host`
-  handle and a `#hashtag` are never touched by any function here, and a handle
-  inside a code span/block is sample text, not a mention (matching what the
-  renderer links).
+  What counts is decided by the **host**, not by the shape (issue #1560).
+  `@handle` and `@handle@<our own host>` name the same member — the second is
+  just the address written out in full, which is how every remote server writes
+  a mention of us — so both are a mention here and both link to the profile.
+  An address on any *other* host is somebody else's account and is never
+  touched, `@slug@<our tag host>` is a topic of ours and joins `hashtags/1`
+  rather than the handles, and a handle inside a code span/block is sample
+  text, not a mention (matching what the renderer links).
 
   These functions read the raw Markdown **source**. The Milkdown WYSIWYG editor
   serializes `@ulrich_wolf` as `@ulrich\\_wolf` (remark escapes the `_`, a
@@ -52,6 +56,7 @@ defmodule Vutuv.Mentions do
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
   alias Vutuv.Chat.Message
+  alias Vutuv.Fediverse
   alias Vutuv.Handles
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Organizations
@@ -66,8 +71,9 @@ defmodule Vutuv.Mentions do
   # rendering, validation and rewriting share ONE definition; `VutuvWeb.Markdown`
   # reads it through `entity_regex/0`. The leading `@`/`#` must not sit
   # mid-token — no email `a@b`, no `@@`, no `/path#frag` — hence the negative
-  # lookbehinds. The fediverse form is tried first, so `@a@b.social` links to
-  # the remote account instead of the local member `@a`. Captures: 1 = fediverse
+  # lookbehinds. The fediverse form is tried first, so `@a@b.social` is read as
+  # one whole address rather than the local member `@a` followed by loose text;
+  # the **host** then decides whose it is. Captures: 1 = fediverse
   # user, 2 = fediverse host, 3 = local handle, 4 = hashtag (exactly one kind is
   # set per hit).
   @entity ~r{(?<![\w@/])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
@@ -115,8 +121,11 @@ defmodule Vutuv.Mentions do
   @doc """
   The unique, lowercased local `@handles` mentioned in `text`.
 
-  Fediverse `@user@host` handles and `#hashtags` are excluded; handles inside
-  code spans/blocks are ignored.
+  `@handle` and `@handle@<our own host>` both count and collapse to the one
+  handle: the second is the same member's address written out in full, which is
+  how a remote server names one of us. An address on any other host (including
+  our tag host) and a `#hashtag` are excluded; handles inside code spans/blocks
+  are ignored.
   """
   def local_handles(text) when is_binary(text) do
     if String.contains?(text, "@") do
@@ -142,10 +151,14 @@ defmodule Vutuv.Mentions do
   `#berlin` and not finding the post they clicked it in.
 
   Lowercased because the slug is: `#Berlin`, `#berlin` and `#BERLIN` are one
-  tag, which is also how the renderer resolves them.
+  tag, which is also how the renderer resolves them. A topic's Fediverse address
+  `@berlin@<our tag host>` (issue #1330) names the same tag and is counted with
+  them, for the same reason: that is what the renderer links.
   """
   def hashtags(text) when is_binary(text) do
-    if String.contains?(text, "#") do
+    # `@` as well as `#`, because a tag can be named by its address — a body
+    # carrying `@berlin@tags.<our host>` and no `#` at all still names one.
+    if String.contains?(text, "#") or String.contains?(text, "@") do
       text
       |> text_chunks()
       |> Enum.flat_map(&scan_hashtags/1)
@@ -208,7 +221,10 @@ defmodule Vutuv.Mentions do
   Rewrites every local `@old` mention in `text` to `@new`, returning
   `{rewritten, count}`.
 
-  Emails, hashtags, fediverse handles and code spans are left untouched, and a
+  A full address on our own host is rewritten as one — `@old@vutuv.de` becomes
+  `@new@vutuv.de`, keeping the host as the author spelled it — so a rename does
+  not leave that form behind as a link to a handle its owner has left. Emails,
+  hashtags, addresses on any other host and code spans are left untouched, and a
   body with nothing to change round-trips byte-for-byte.
   """
   def rewrite(text, old, new) when is_binary(text) do
@@ -223,7 +239,7 @@ defmodule Vutuv.Mentions do
         |> chunks()
         |> Enum.map_reduce(0, fn
           {:code, chunk}, acc -> {chunk, acc}
-          {:text, chunk}, acc -> rewrite_chunk(chunk, old_n, "@" <> new_n, acc)
+          {:text, chunk}, acc -> rewrite_chunk(chunk, old_n, new_n, acc)
         end)
 
       {IO.iodata_to_binary(chunks), count}
@@ -329,9 +345,11 @@ defmodule Vutuv.Mentions do
   editing an old body is not blocked by a cap that did not exist when it was
   written, unless the body itself is touched.
 
-  Fediverse `@user@host` handles do not count — nobody here is notified by one —
+  An address on another server does not count — nobody here is notified by one —
   and neither do handles inside code spans, for the same reason the renderer
-  does not link them.
+  does not link them. An address on **our** host does count, and counts as the
+  same account as the bare handle: it reaches the same notification feed, so a
+  list of twenty spelled out in full would otherwise walk straight past the cap.
   """
   def validate_mention_limit(changeset, field \\ :body) do
     case Changeset.get_change(changeset, field) do
@@ -462,7 +480,17 @@ defmodule Vutuv.Mentions do
   # `Regex.scan` truncates trailing unmatched groups, so a hit's length says
   # which kind it is: fediverse `["user", "host"]`, local `["", "", "handle"]`,
   # hashtag `["", "", "", "hashtag"]`.
-  defp handle_of([user, host | _]) when user != "" and host != "", do: []
+  #
+  # An address on our **own** host is the same member written out in full — the
+  # spelling every remote server uses to name one of us, and the one the
+  # renderer links to the profile — so it is a mention here too (issue #1560).
+  # `local_host?/1` folds case, port and the `www.` alias, so every spelling of
+  # this installation counts; our tag host is a different host and belongs to
+  # `hashtag_of/1`.
+  defp handle_of([user, host | _]) when user != "" and host != "" do
+    if Fediverse.local_host?(host), do: [String.downcase(user)], else: []
+  end
+
   defp handle_of([_, _, handle | _]) when handle != "", do: [String.downcase(handle)]
   defp handle_of(_), do: []
 
@@ -473,11 +501,19 @@ defmodule Vutuv.Mentions do
   end
 
   # Same truncation rule as `handle_of/1`: only a hashtag hit has a fourth
-  # group, so anything shorter is one of the two `@` forms.
+  # group, so anything shorter is one of the two `@` forms — and the `@` form on
+  # our **tag** host is a topic of ours (`@php@tags.<our host>`, issue #1330),
+  # which the renderer links to `/tags/:slug` exactly like the `#php` that means
+  # the same thing. So it names a tag here too, and a post writing it is filed
+  # under that tag instead of pointing readers at a page it is not on.
+  defp hashtag_of([user, host | _]) when user != "" and host != "" do
+    if Fediverse.tag_host?(host), do: [String.downcase(user)], else: []
+  end
+
   defp hashtag_of([_, _, _, hashtag]) when hashtag != "", do: [String.downcase(hashtag)]
   defp hashtag_of(_), do: []
 
-  defp rewrite_chunk(chunk, old_n, replacement, acc) do
+  defp rewrite_chunk(chunk, old_n, new_n, acc) do
     hits =
       @entity
       |> Regex.scan(chunk, capture: :all_but_first)
@@ -486,24 +522,36 @@ defmodule Vutuv.Mentions do
     if hits == 0 do
       {chunk, acc}
     else
-      {replace_old_mentions(chunk, old_n, replacement), acc + hits}
+      {replace_old_mentions(chunk, old_n, new_n), acc + hits}
     end
   end
 
-  defp replace_old_mentions(chunk, old_n, replacement) do
+  # The host of an address on our own host is kept verbatim rather than
+  # re-derived from the endpoint: the author wrote `www.` (or a shouted case)
+  # for a reason, and only the handle is what the rename changed.
+  defp replace_old_mentions(chunk, old_n, new_n) do
     Regex.replace(@entity, chunk, fn
       whole, "", "", handle, "" ->
-        if String.downcase(handle) == old_n, do: replacement, else: whole
+        if String.downcase(handle) == old_n, do: "@" <> new_n, else: whole
+
+      whole, user, host, "", "" ->
+        if local_handle_match?(user, host, old_n), do: "@#{new_n}@#{host}", else: whole
 
       whole, _user, _host, _handle, _hashtag ->
         whole
     end)
   end
 
+  defp local_match?([user, host | _], old_n) when user != "" and host != "",
+    do: local_handle_match?(user, host, old_n)
+
   defp local_match?([_, _, handle | _], old_n) when handle != "",
     do: String.downcase(handle) == old_n
 
   defp local_match?(_, _), do: false
+
+  defp local_handle_match?(user, host, old_n),
+    do: String.downcase(user) == old_n and Fediverse.local_host?(host)
 
   # Splits `text` into `{:text, _}` / `{:code, _}` chunks that rejoin exactly.
   defp chunks(text) do

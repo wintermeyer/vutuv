@@ -118,17 +118,18 @@ defmodule Vutuv.RemoteHtmlTest do
       assert RemoteHtml.to_text("<p>@herrkaschke</p>", nil, [@mention, other]) == "@herrkaschke"
     end
 
-    test "a mention of an account on this very installation stays as written" do
-      # The renderer would link the full form straight back at this server
-      # (`https://host/@user`), which is not a page vutuv serves — so the
-      # short form stays plain, exactly as before. `www.` is us (issue #1211).
+    test "a mention of an account on this very installation is expanded too" do
+      # It used to be left short, because the renderer sent the full form back
+      # at this server as `https://host/@user`, a path vutuv does not serve.
+      # It resolves that address to the member's profile now (issue #1560), so
+      # a remote post naming one of us links to them. `www.` is us (#1211).
       local = %{
         "type" => "Mention",
         "href" => "https://www.localhost/users/stefan",
         "name" => "@stefan@www.localhost"
       }
 
-      assert RemoteHtml.to_text("<p>@stefan</p>", nil, [local]) == "@stefan"
+      assert RemoteHtml.to_text("<p>@stefan</p>", nil, [local]) == "@stefan@www.localhost"
     end
 
     test "a name the renderer could not link is not expanded" do

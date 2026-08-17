@@ -41,10 +41,14 @@ defmodule Vutuv.Repo.Migrations.CreatePostMentions do
   # like every other one in this feed: someone mentioned last week sees it the
   # first time they open /notifications after this ships.
   #
-  # The grammar lives in `Vutuv.Mentions` and is deliberately called rather than
-  # re-implemented here — a backfill that disagreed with the running code about
-  # what counts as a mention would be worse than no backfill at all. Bodies
-  # without an `@` short-circuit inside `local_handles/1`.
+  # The grammar below is a **snapshot** of `Vutuv.Mentions.local_handles/1` as
+  # it stood the day this ran, copied rather than called for the reason
+  # `backfill_hashtag_filings` copies its own: a migration must keep meaning
+  # what it meant then. It called that function until issue #1560 taught it that
+  # an address on our own host is a mention too — which it decides by asking
+  # `VutuvWeb.Endpoint.host/0`, and a migration runs before the endpoint is
+  # started, so the call would raise `could not find persistent term for
+  # endpoint` on any replay against real rows.
   #
   # Timestamps and the UUID v7 id are stamped from the **post**, not from now,
   # so a backfilled mention lands in the feed at the moment it was written
@@ -81,8 +85,47 @@ defmodule Vutuv.Repo.Migrations.CreatePostMentions do
 
   defp resolve(body, by_handle) do
     body
-    |> Vutuv.Mentions.local_handles()
+    |> local_handles()
     |> Enum.flat_map(&List.wrap(Map.get(by_handle, &1)))
     |> Enum.uniq()
+  end
+
+  # The snapshot. `@` may not sit mid-token (no email `a@b`, no `@@`), an
+  # `@user@host` address is matched whole so it is not read as the member
+  # `@user` plus loose text, a handle inside code is sample text, and a Markdown
+  # escape inside a handle (`@ulrich\_wolf`, what the editor used to write) is
+  # dropped before scanning.
+  @entity ~r{(?<![\w@/])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)}
+  @code ~r/```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`/
+
+  defp local_handles(body) do
+    if String.contains?(body, "@") do
+      @code
+      |> Regex.split(body, include_captures: true)
+      |> Enum.with_index()
+      |> Enum.flat_map(fn
+        {chunk, index} when rem(index, 2) == 0 -> scan_handles(chunk)
+        {_code, _index} -> []
+      end)
+      |> Enum.uniq()
+    else
+      []
+    end
+  end
+
+  defp scan_handles(chunk) do
+    @entity
+    |> Regex.scan(unescape(chunk), capture: :all_but_first)
+    |> Enum.flat_map(fn
+      [user, host] when user != "" and host != "" -> []
+      [_, _, handle] when handle != "" -> [String.downcase(handle)]
+      _ -> []
+    end)
+  end
+
+  defp unescape(chunk) do
+    if String.contains?(chunk, "\\"),
+      do: Regex.replace(~r/\\([A-Za-z0-9_])/, chunk, "\\1"),
+      else: chunk
   end
 end

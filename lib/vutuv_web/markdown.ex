@@ -79,8 +79,9 @@ defmodule VutuvWeb.Markdown do
   # shared by rendering, mention-existence validation and the rename rewrite),
   # so it can never drift from what those paths detect. The leading `@`/`#` must
   # not sit mid-token (no email `a@b`, no `/path#frag`); the fediverse form is
-  # tried **first**, so `@a@b.social` links to the remote account, not the local
-  # member `@a`; handles/tags match permissively and are validated against the
+  # tried **first**, so `@a@b.social` is read as one whole address rather than
+  # the member `@a` plus loose text, and the **host** then decides where it
+  # points; handles/tags match permissively and are validated against the
   # DB by `linkify_entities/1`. Captures: 1 = fediverse user, 2 = fediverse
   # host, 3 = local handle, 4 = hashtag (exactly one kind is set per hit).
   @entity Vutuv.Mentions.entity_regex()
@@ -152,7 +153,9 @@ defmodule VutuvWeb.Markdown do
       remote content, and a hotlink would leak each reader's IP;
     * `#hashtags` link to our tag pages through the same non-empty-tag gate;
     * a fully-qualified `@user@host` fediverse handle links to that remote
-      account (it unambiguously names one), the same as in a member post;
+      account (it unambiguously names one), the same as in a member post — and
+      an address on **our** host names one of our members just as
+      unambiguously, so it links to that profile (issue #1560);
     * bare `@mentions` deliberately stay plain text — a Mastodon `@name` names
       an account in the fediverse, not the vutuv member who happens to share
       the handle, so linking it would point at the wrong person;
@@ -187,8 +190,9 @@ defmodule VutuvWeb.Markdown do
   (`open_links_in_new_tab/1` for URLs in the body, `linkify_entities/2` for a
   `@user@host` handle), so the marker cannot be forgotten on one of them. Links
   to **our own** pages carry no `rel` at all — a `#hashtag` resolves to
-  `/tags/:slug` — so they are left alone: nofollowing our own tag pages would
-  throw away the internal linking they exist for.
+  `/tags/:slug`, an address on our own host to that member's profile — so they
+  are left alone: nofollowing our own pages would throw away the internal
+  linking they exist for.
   """
   def mark_foreign_links(html) when is_binary(html) do
     String.replace(
@@ -935,21 +939,26 @@ defmodule VutuvWeb.Markdown do
     tokens = tokenize_html(html)
 
     case entity_candidates(tokens) do
-      {[], [], false} ->
+      {[], [], [], false} ->
         html
 
-      {mentions, hashtags, _fediverse?} ->
-        # With an empty user map every mention falls through as plain text
-        # (`mention_link/3`), which is exactly what :hashtags_only wants. A body
-        # carrying only fediverse handles still reaches here (they need no
-        # lookup, so both `mentions` and `hashtags` stay empty) and gets linked.
-        users =
-          if mode == :all, do: mention_targets(mentions), else: %{}
-
+      {mentions, local_mentions, hashtags, _fediverse?} ->
+        # `:hashtags_only` drops the **bare** handles — in remote content a
+        # `@name` names an account over there, not the vutuv member who happens
+        # to share the handle. A fully-qualified address on our own host has no
+        # such ambiguity (the host names us), so it is resolved in both modes,
+        # which is why the two forms read from two maps rather than one: sharing
+        # a map would have the address lookup quietly link the bare handles too.
+        # With nothing to look up either form falls through as plain text. A
+        # body carrying only foreign addresses still reaches here (they need no
+        # lookup) and gets linked.
+        handles = if mode == :all, do: mentions ++ local_mentions, else: local_mentions
+        targets = if handles == [], do: %{}, else: mention_targets(handles)
+        bare_users = if mode == :all, do: targets, else: %{}
         tags = Tags.linkable_slugs(hashtags)
 
         tokens
-        |> map_linkable_text(&link_entities_in_text(&1, users, tags))
+        |> map_linkable_text(&link_entities_in_text(&1, bare_users, targets, tags))
         |> IO.iodata_to_binary()
     end
   end
@@ -958,42 +967,49 @@ defmodule VutuvWeb.Markdown do
   # tokens), so a tag-depth walk can tell text apart from markup.
   defp tokenize_html(html), do: Regex.split(~r/<[^>]+>/, html, include_captures: true)
 
-  # The unique, lowercased {handles, hashtags} sitting in linkable text.
+  # The unique, lowercased {handles, own-host handles, hashtags} sitting in
+  # linkable text.
   defp entity_candidates(tokens) do
-    {mentions, hashtags, fediverse?} =
-      reduce_linkable_text(tokens, {[], [], false}, fn text, acc ->
+    {mentions, local_mentions, hashtags, fediverse?} =
+      reduce_linkable_text(tokens, {[], [], [], false}, fn text, acc ->
         @entity
         |> Regex.scan(text, capture: :all_but_first)
         |> Enum.reduce(acc, &collect_candidate/2)
       end)
 
-    {Enum.uniq(mentions), Enum.uniq(hashtags), fediverse?}
+    {Enum.uniq(mentions), Enum.uniq(local_mentions), Enum.uniq(hashtags), fediverse?}
   end
 
   # `Regex.scan` truncates trailing unmatched groups, so each hit arrives at a
   # different length: a fediverse handle as `["user", "host"]`, a mention as
   # `["", "", "handle"]`, a hashtag as `["", "", "", "hashtag"]`. Dispatch on
-  # which group is set. A fediverse handle needs no DB lookup, so it only raises
-  # the `fediverse?` flag — that keeps the token walk from being skipped for a
-  # body whose only entities are fediverse handles.
+  # which group is set. An address on somebody else's host needs no DB lookup,
+  # so it only raises the `fediverse?` flag — that keeps the token walk from
+  # being skipped for a body whose only entities are foreign addresses.
   #
-  # The one exception is our **own tag host** (issue #1330): `@php@tags.<host>`
-  # is a topic of this installation wearing a Fediverse address, so its user
-  # part is a tag slug and joins the hashtags — resolved by the same single
-  # `Tags.linkable_slugs/1` call, alias redirects included.
-  defp collect_candidate([user, host | _], {mentions, hashtags, _fediverse?})
+  # Two of our own hosts wear that same shape and neither leaves the site. Our
+  # **tag host** (issue #1330): `@php@tags.<host>` is a topic of this
+  # installation, so its user part is a tag slug and joins the hashtags —
+  # resolved by the same single `Tags.linkable_slugs/1` call, alias redirects
+  # included. Our **main host** (issue #1560): `@ada@<host>` is a member or a
+  # page of ours, so its user part is a handle and gets looked up like a bare
+  # `@ada` — kept in its own list because it resolves even in `:hashtags_only`
+  # mode, where a bare handle deliberately does not.
+  defp collect_candidate([user, host | _], {mentions, local, hashtags, _fediverse?})
        when user != "" and host != "" do
-    if Fediverse.tag_host?(host),
-      do: {mentions, [String.downcase(user) | hashtags], true},
-      else: {mentions, hashtags, true}
+    cond do
+      Fediverse.tag_host?(host) -> {mentions, local, [String.downcase(user) | hashtags], true}
+      Fediverse.local_host?(host) -> {mentions, [String.downcase(user) | local], hashtags, true}
+      true -> {mentions, local, hashtags, true}
+    end
   end
 
-  defp collect_candidate([_, _, handle | _], {mentions, hashtags, fediverse?})
+  defp collect_candidate([_, _, handle | _], {mentions, local, hashtags, fediverse?})
        when handle != "",
-       do: {[String.downcase(handle) | mentions], hashtags, fediverse?}
+       do: {[String.downcase(handle) | mentions], local, hashtags, fediverse?}
 
-  defp collect_candidate([_, _, _, hashtag], {mentions, hashtags, fediverse?}),
-    do: {mentions, [String.downcase(hashtag) | hashtags], fediverse?}
+  defp collect_candidate([_, _, _, hashtag], {mentions, local, hashtags, fediverse?}),
+    do: {mentions, local, [String.downcase(hashtag) | hashtags], fediverse?}
 
   # Walks the token stream, applying `fun` to every text token outside a
   # skip element and leaving tags and skipped text untouched.
@@ -1037,21 +1053,41 @@ defmodule VutuvWeb.Markdown do
 
   defp skip_tag?(name), do: String.downcase(name) in @entity_skip_tags
 
-  defp link_entities_in_text(text, users, tags) do
+  defp link_entities_in_text(text, bare_users, address_users, tags) do
     Regex.replace(@entity, text, fn
-      whole, user, host, "", "" -> fediverse_link(whole, user, host, tags)
-      whole, "", "", handle, "" -> mention_link(whole, handle, users)
+      whole, user, host, "", "" -> fediverse_link(whole, user, host, address_users, tags)
+      whole, "", "", handle, "" -> mention_link(whole, handle, bare_users)
       whole, "", "", "", hashtag -> hashtag_link(whole, hashtag, tags)
     end)
   end
 
   # A fully-qualified `@user@host` address. Almost always somebody else's
-  # account — but our **own tag host** wears the same shape, and there the
-  # reader wants the tag page here rather than a trip to another server.
-  defp fediverse_link(whole, user, host, tags) do
-    if Fediverse.tag_host?(host),
-      do: tag_actor_link(whole, user, tags),
-      else: remote_actor_link(user, host)
+  # account — but two of our own hosts wear the same shape, and for both the
+  # reader wants a page here rather than a trip to another server: our tag host
+  # names a topic, and our main host names a member or a page of ours.
+  defp fediverse_link(whole, user, host, users, tags) do
+    cond do
+      Fediverse.tag_host?(host) -> tag_actor_link(whole, user, tags)
+      Fediverse.local_host?(host) -> local_address_link(whole, user, host, users)
+      true -> remote_actor_link(user, host)
+    end
+  end
+
+  # `@ada@vutuv.de` is the member `@ada`, spelled the way a remote server writes
+  # a mention of one of us — so it links to the profile in the same tab, exactly
+  # like the bare `@ada` (issue #1560). Sending the reader to
+  # `https://vutuv.de/@ada` was the Mastodon-web convention applied to a host
+  # that is not Mastodon: that path is not a page vutuv serves, so the one
+  # clickable thing in a sentence naming a member 404ed on our own domain.
+  #
+  # The **address stays the visible text**: the author wrote it in full so a
+  # reader on another network can copy it, and shortening it to `@ada` would
+  # take that away. An unresolved handle stays plain text, like a bare mention.
+  defp local_address_link(whole, user, host, users) do
+    case Map.get(users, String.downcase(user)) do
+      nil -> whole
+      target -> mention_anchor(target, "#{user}@#{host}")
+    end
   end
 
   # A topic's Fediverse address (issue #1330) is `@<slug>@tags.<our host>`, so a

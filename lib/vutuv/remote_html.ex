@@ -35,10 +35,13 @@ defmodule Vutuv.RemoteHtml do
   deliberately leaves a bare `@name` in remote content unlinked (it would point
   at whatever vutuv member shares the handle). So `to_text/3` takes those
   `Mention` tags and widens each short form to the full `@user@host`, which the
-  renderer then links to the remote profile like any typed fediverse handle.
+  renderer then links to the remote profile like any typed fediverse handle —
+  **including a mention of one of our own members**, whose address on our host
+  the renderer now resolves to their profile (issue #1560); it used to be left
+  short, because the full form was linked straight back at this server as
+  `https://host/@user`, a path vutuv does not serve.
   """
 
-  alias Vutuv.Fediverse
   alias Vutuv.Mentions
   alias Vutuv.SocialFeed.Post
 
@@ -131,11 +134,7 @@ defmodule Vutuv.RemoteHtml do
   defp mention_handle(%{"type" => "Mention", "name" => name, "href" => href})
        when is_binary(name) and is_binary(href) do
     with {user, host} <- split_mention(name, href),
-         true <- linkable?(user, host),
-         # A mention of an account on this very installation stays short: the
-         # renderer would link the full form straight back at this server
-         # (`https://host/@user`), which is not a page vutuv serves.
-         false <- Fediverse.local_host?(host) do
+         true <- linkable?(user, host) do
       [{user, host}]
     else
       _ -> []
