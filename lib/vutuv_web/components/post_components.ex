@@ -3322,14 +3322,7 @@ defmodule VutuvWeb.PostComponents do
 
   defp post_gallery(assigns) do
     ~H"""
-    <div
-      class={["grid gap-2 mt-4", length(@gallery) > 1 && "sm:grid-cols-2"]}
-      data-lightbox-gallery
-      data-label-close={gettext("Close")}
-      data-label-prev={gettext("Previous photo")}
-      data-label-next={gettext("Next photo")}
-      data-label-download={gettext("Download the original")}
-    >
+    <.lightbox_gallery class={["grid gap-2 mt-4", length(@gallery) > 1 && "sm:grid-cols-2"]}>
       <figure
         :for={{image, index} <- Enum.with_index(@gallery)}
         class="mb-0 overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
@@ -3357,7 +3350,7 @@ defmodule VutuvWeb.PostComponents do
           {image.caption}
         </figcaption>
       </figure>
-    </div>
+    </.lightbox_gallery>
     """
   end
 

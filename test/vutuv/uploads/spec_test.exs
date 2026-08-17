@@ -67,9 +67,12 @@ defmodule Vutuv.Uploads.SpecTest do
   end
 
   test "canonical versions and resolutions per image type" do
-    assert Enum.map(Spec.versions(:avatar), & &1.name) == [:thumb, :medium]
+    assert Enum.map(Spec.versions(:avatar), & &1.name) == [:thumb, :medium, :large]
     assert Spec.version(:avatar, :thumb).fit == {:crop, 96, 96, :center}
     assert Spec.version(:avatar, :medium).fit == {:crop, 192, 192, :center}
+    # `large` is the profile header's click-to-enlarge (issue #1528): the one
+    # avatar version sized for the lightbox rather than for a 96px slot.
+    assert Spec.version(:avatar, :large).fit == {:crop_down, 1024, :center}
     assert Spec.version(:cover, :wide).fit == {:width_down, 1600}
     assert Spec.version(:screenshot, :thumb).fit == {:crop, 800, 528, :high}
     assert Enum.map(Spec.versions(:post_image), & &1.name) == [:thumb, :feed, :large, :xl]
@@ -123,6 +126,32 @@ defmodule Vutuv.Uploads.SpecTest do
       width_dest = Path.join(tmp, "wide.avif")
       assert :ok = Spec.write_derived(Spec.version(:cover, :wide), rotated, width_dest)
       assert dims(width_dest) == {40, 80}
+    end
+
+    # The avatar's `:large` has to keep two promises the plain `:crop` and the
+    # plain `resize: :down` each keep only one of: square like the versions
+    # beside it, and never invented pixels. Members hand us small avatars often
+    # enough that both matter.
+    test "crop_down squares a smaller source without upscaling it" do
+      tmp = tmp!()
+      dest = Path.join(tmp, "large.avif")
+      # 80x40 landscape with orientation 6, so it displays as 40x80 portrait.
+      {:ok, rotated} = Spec.open_rotated(exif_jpeg!(tmp))
+
+      assert :ok = Spec.write_derived(Spec.version(:avatar, :large), rotated, dest)
+      assert dims(dest) == {40, 40}
+    end
+
+    test "crop_down caps a larger source at its spec size" do
+      tmp = tmp!()
+      path = Path.join(tmp, "big.png")
+      {:ok, big} = Image.new(2000, 1500, color: [20, 40, 60])
+      {:ok, _} = Image.write(big, path)
+      {:ok, rotated} = Spec.open_rotated(path)
+
+      dest = Path.join(tmp, "large.avif")
+      assert :ok = Spec.write_derived(Spec.version(:avatar, :large), rotated, dest)
+      assert dims(dest) == {1024, 1024}
     end
 
     test "propagates encode errors instead of raising" do

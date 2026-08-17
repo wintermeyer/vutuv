@@ -11,6 +11,13 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
   import Vutuv.Factory
 
   alias Vutuv.Uploads.LegacySweeper
+  alias Vutuv.Uploads.Spec
+
+  # A row only counts as migrated once EVERY current version is on disk, so the
+  # fixture writes them from the spec rather than naming two of them: adding a
+  # version (the avatar's `:large`) would otherwise leave this fixture
+  # half-migrated and every assertion here reading "skipped".
+  @avatar_versions Enum.map(Spec.versions(:avatar), & &1.name)
 
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_sweep_#{System.unique_integer([:positive])}")
@@ -41,8 +48,11 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
     user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
     {:ok, user} = user |> Ecto.Changeset.change(avatar_fingerprint: fp) |> Repo.update()
     dir = Path.join(tmp, "avatars/#{user.id}")
-    touch!(Path.join(dir, "#{user.username}-thumb-#{fp}.avif"))
-    touch!(Path.join(dir, "#{user.username}-medium-#{fp}.avif"))
+
+    for version <- @avatar_versions do
+      touch!(Path.join(dir, "#{user.username}-#{version}-#{fp}.avif"))
+    end
+
     touch!(Path.join(dir, "Ada King_thumb.jpg"))
     touch!(Path.join(dir, "Ada King_medium.jpg"))
     {user, dir, fp}
@@ -55,7 +65,7 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
              LegacySweeper.run(only: :avatars)
 
     assert Enum.sort(File.ls!(dir)) ==
-             ["#{user.username}-medium-#{fp}.avif", "#{user.username}-thumb-#{fp}.avif"]
+             Enum.sort(for v <- @avatar_versions, do: "#{user.username}-#{v}-#{fp}.avif")
   end
 
   test "dry run reports without deleting", %{tmp: tmp} do
@@ -64,7 +74,7 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
     assert %{avatars: %{rows: 1, files_removed: 2, skipped: 0}} =
              LegacySweeper.run(only: :avatars, dry_run: true)
 
-    assert length(File.ls!(dir)) == 4
+    assert length(File.ls!(dir)) == length(@avatar_versions) + 2
   end
 
   test "never visits a row still on the legacy scheme (nil fingerprint)", %{tmp: tmp} do

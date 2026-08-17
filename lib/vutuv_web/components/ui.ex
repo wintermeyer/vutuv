@@ -2436,6 +2436,35 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The wrapper `assets/js/lightbox.js` opens photos out of: it marks the group a
+  click can step through and carries the overlay's own chrome wording, because
+  the server is the only side that knows the reader's language.
+
+  It exists as a component because there are two kinds of gallery now — a post's
+  photos and the profile header's single avatar (issue #1528) — and the four
+  labels are the part neither may spell differently from the other.
+  """
+  attr(:class, :any, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def lightbox_gallery(assigns) do
+    ~H"""
+    <div
+      class={@class}
+      data-lightbox-gallery
+      data-label-close={gettext("Close")}
+      data-label-prev={gettext("Previous photo")}
+      data-label-next={gettext("Next photo")}
+      data-label-download={gettext("Download the original")}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
   User avatar. Pass `user` (a `%Vutuv.Accounts.User{}`, resolved via `Vutuv.Avatar`)
   or a raw `src`. Sizes `2xs|xs|sm|md|lg` (`2xs` is the 20px inline size for
   compact attribution strips like the post card's "Reposted by" avatar stack);

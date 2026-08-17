@@ -21,6 +21,7 @@ defmodule Vutuv.AvatarTest do
   alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.MutableImage
   alias Vutuv.Accounts.User
+  alias Vutuv.Uploads.Spec
 
   @user %User{
     id: 7,
@@ -329,9 +330,12 @@ defmodule Vutuv.AvatarTest do
       upload2 = %Plug.Upload{filename: "new.png", path: png, content_type: "image/png"}
       assert {:ok, _, fp2} = Vutuv.Avatar.store({upload2, @user})
 
-      # Exactly the two versions of the latest upload remain.
+      # Exactly the versions of the latest upload remain — read from the spec,
+      # so adding one (the `:large` of issue #1528) does not read as accumulation.
       assert Path.join(tmp, "avatars/7") |> File.ls!() |> Enum.sort() ==
-               ["john.doe-medium-#{fp2}.avif", "john.doe-thumb-#{fp2}.avif"]
+               Enum.sort(
+                 for spec <- Spec.versions(:avatar), do: "john.doe-#{spec.name}-#{fp2}.avif"
+               )
     end
 
     test "a re-upload with a different extension leaves no stale private original", %{

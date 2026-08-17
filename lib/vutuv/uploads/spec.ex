@@ -8,7 +8,9 @@ defmodule Vutuv.Uploads.Spec do
 
   Served versions are AVIF. Derived sizes are ~2x their largest CSS display
   size so they stay crisp on HiDPI screens (avatar slots per `VutuvWeb.UI`:
-  xs 32 / sm 36 / md 48 / lg 96 px).
+  xs 32 / sm 36 / md 48 / lg 96 px) — except the versions that exist to be
+  *looked at* rather than to fill a layout slot (`post_image` `xl`, `avatar`
+  `large`), which are sized for the lightbox's full screen.
 
   The write pipeline is decode → `Image.autorotate` (`open_rotated/1`, once
   per upload) → resize per `fit` → `Vix.Vips.Operation.heifsave` with
@@ -37,8 +39,9 @@ defmodule Vutuv.Uploads.Spec do
   @effort 4
 
   # `fit` shapes: {:crop, w, h, gravity} crops to exactly w×h;
+  # {:crop_down, s, gravity} crops to a square of at most s×s;
   # {:box_down, s} fits within s×s; {:width_down, w} caps the width —
-  # both *_down variants never upscale a smaller source.
+  # every *_down variant never upscales a smaller source.
   #
   # heifsave's Q scale is not WebP's: the former WebP Q80 is visually
   # ~AVIF Q58-63. Avatars get Q62 (blocking is most visible at tiny sizes
@@ -46,7 +49,15 @@ defmodule Vutuv.Uploads.Spec do
   @specs %{
     avatar: [
       %{name: :thumb, fit: {:crop, 96, 96, :center}, quality: 62},
-      %{name: :medium, fit: {:crop, 192, 192, :center}, quality: 62}
+      %{name: :medium, fit: {:crop, 192, 192, :center}, quality: 62},
+      # The version behind the profile header's click-to-enlarge (issue #1528).
+      # Like `post_image` `xl` it is sized for the lightbox rather than for a
+      # slot: 1024 is ~3x a phone's overlay width at DPR 3, and on a desktop it
+      # is the picture at its own size on a dark screen. It is `crop_down`, not
+      # `crop`, because an avatar is the one upload members routinely hand us
+      # smaller than the version we want — upscaling a 300px selfie to 1024
+      # would cost bytes for pixels that carry nothing.
+      %{name: :large, fit: {:crop_down, 1024, :center}, quality: 62}
     ],
     cover: [
       # Displayed ~768px wide on HiDPI; aspect ratio preserved, the display
@@ -144,6 +155,7 @@ defmodule Vutuv.Uploads.Spec do
   end
 
   defp fit_width(%{fit: {:crop, width, _height, _gravity}}), do: width
+  defp fit_width(%{fit: {:crop_down, size, _gravity}}), do: size
   defp fit_width(%{fit: {:box_down, size}}), do: size
   defp fit_width(%{fit: {:width_down, width}}), do: width
 
@@ -249,6 +261,18 @@ defmodule Vutuv.Uploads.Spec do
 
   defp resize(image, {:crop, width, height, gravity}) do
     Image.thumbnail(image, "#{width}x#{height}", crop: gravity)
+  end
+
+  # Square, and never bigger than the source. `crop: gravity` alone upscales a
+  # smaller source; `resize: :down` beside it stops the upscale but then skips
+  # the crop entirely (a 300x200 source comes back 300x199, measured), so the
+  # framing would differ from the square versions beside it. Picking the target
+  # from the shorter side keeps both promises with the one code path: the
+  # crop-to-cover scale is never above 1, so vips crops without ever scaling up.
+  defp resize(image, {:crop_down, size, gravity}) do
+    side = min(Image.width(image), Image.height(image))
+    target = min(side, size)
+    Image.thumbnail(image, "#{target}x#{target}", crop: gravity)
   end
 
   # resize: :down so a smaller upload keeps its native size instead of

@@ -277,6 +277,95 @@ defmodule VutuvWeb.UserHTML do
   end
 
   @doc """
+  The profile header's picture, and the click that opens it at full size
+  (issue #1528).
+
+  The header shows the avatar at 96 CSS px; the `:large` version behind this is
+  1024 px square, so the overlay is a real look at the face on a phone, a tablet
+  and a desktop alike rather than a blown-up thumbnail. It reuses the photo
+  lightbox — one overlay, one set of keyboard and swipe rules, one dark stage —
+  by rendering a `<.lightbox_gallery>` of exactly one picture.
+
+  **The link appears only when the file is really on disk** (`Avatar.large_url/1`
+  asks): `:large` is younger than the rows, so an avatar keeps rendering exactly
+  as it did before until the deploy's regeneration has re-derived it. Without a
+  picture at all there is no link either — the initials tile has nothing to
+  enlarge.
+
+  The hover/focus scrim is the whole affordance. A magnifier that only appears
+  under the pointer keeps the header calm at rest, and on a touch screen the
+  96px picture is already a comfortable target for the tap people try anyway.
+  """
+  attr(:user, :any, required: true)
+  attr(:pending?, :boolean, default: false)
+
+  def profile_avatar(assigns) do
+    assigns =
+      assign(assigns,
+        alt: gettext("Profile picture of %{name}", name: full_name(assigns.user)),
+        src: if(assigns.pending?, do: ~p"/settings/pending_image/avatar/medium"),
+        zoom: avatar_zoom_url(assigns.user, assigns.pending?),
+        zoom_label: gettext("Show the profile picture larger")
+      )
+
+    ~H"""
+    <.lightbox_gallery :if={@zoom} class="shrink-0">
+      <a
+        href={@zoom}
+        id="profile-avatar-zoom"
+        class="group relative inline-flex cursor-zoom-in rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        title={@zoom_label}
+        aria-label={@zoom_label}
+        data-lightbox-photo="0"
+        data-photo-src={@zoom}
+        data-photo-alt={@alt}
+        data-photo-caption={full_name(@user)}
+      >
+        <.profile_avatar_image user={@user} src={@src} alt="" />
+        <span class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-slate-900/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+          <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
+          </svg>
+        </span>
+      </a>
+    </.lightbox_gallery>
+    <.profile_avatar_image :if={!@zoom} user={@user} src={@src} alt={@alt} />
+    """
+  end
+
+  # The picture itself, identical in both branches so the link can never change
+  # how the header looks — only whether it opens.
+  attr(:user, :any, required: true)
+  attr(:src, :any, required: true)
+  attr(:alt, :string, required: true)
+
+  defp profile_avatar_image(assigns) do
+    ~H"""
+    <.avatar
+      user={@user}
+      src={@src}
+      size="lg"
+      shape="square"
+      loading="eager"
+      alt={@alt}
+      class="relative z-10 shrink-0 ring-4 ring-white dark:ring-slate-900"
+      presence
+    />
+    """
+  end
+
+  # Where the enlarged picture lives: the served file for everyone, or the
+  # authenticated quarantine route while the owner's own upload waits for the
+  # AI scan. Both ends answer nil when that version is not on disk, so a member
+  # whose avatar predates `:large` simply gets the header they had before.
+  defp avatar_zoom_url(user, true) do
+    if Vutuv.Avatar.pending_preview_path(user, :large),
+      do: ~p"/settings/pending_image/avatar/large"
+  end
+
+  defp avatar_zoom_url(user, _pending?), do: Vutuv.Avatar.large_url(user)
+
+  @doc """
   The profile's private-save toggle — bookmark or like *this member* — as the
   twin of the post card's bookmark and heart: the same glyph, the same fill-on-
   active language, one click, in the footer row of the header card. It used to

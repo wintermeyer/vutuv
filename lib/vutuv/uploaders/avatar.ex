@@ -124,6 +124,24 @@ defmodule Vutuv.Avatar do
   end
 
   @doc """
+  URL of the enlarged picture behind the profile header's click-to-enlarge
+  (issue #1528), or `nil` when there is nothing bigger to open.
+
+  Unlike `url/2` this **checks the disk**, because the `:large` version is
+  younger than the rows: an existing avatar only gets the file once
+  `Vutuv.Uploads.Regenerator` has re-derived it (the deploy runs that after the
+  traffic switch, so there is a window of minutes; a row whose original went
+  missing never gets it at all). Answering `nil` there costs one `File.exists?`
+  per profile render and buys the alternative to a two-deploy rollout: the
+  avatar is simply not clickable yet, instead of being a link to a 404.
+  """
+  def large_url(user) do
+    if Uploads.version_path({user.avatar, user}, :large, @config) do
+      url({user.avatar, user}, :large)
+    end
+  end
+
+  @doc """
   Removes the user's avatar files — the served versions and the private
   original. A no-op when none. Called when an account is deleted.
   """

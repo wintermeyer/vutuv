@@ -14,10 +14,16 @@ defmodule VutuvWeb.PendingImageController do
 
   use VutuvWeb, :controller
 
+  alias Vutuv.Uploads.Spec
   alias VutuvWeb.ImageProxy
 
-  # kind -> the served version names (mirrors Vutuv.Uploads.Spec).
-  @versions %{"avatar" => ~w(thumb medium), "cover" => ~w(wide)}
+  # kind -> the served version names, read from `Vutuv.Uploads.Spec` rather
+  # than typed out again: a hand-kept copy silently 404s the owner's preview of
+  # a version added there later (the avatar's `:large` was exactly that case).
+  @versions %{
+    "avatar" => Enum.map(Spec.versions(:avatar), &to_string(&1.name)),
+    "cover" => Enum.map(Spec.versions(:cover), &to_string(&1.name))
+  }
 
   def show(conn, %{"kind" => kind, "version" => version}) do
     user = conn.assigns[:user]

@@ -109,19 +109,12 @@ the resulting ~200px rail width. --%>
         banner. (Owner sees Edit profile; a blocker sees Unblock.) --%>
         <% avatar_pending? = @as_owner? and @user.avatar_moderation == "pending" %>
         <div class="-mt-12 flex items-end gap-4">
-          <%!-- AI-moderation limbo: the owner previews their pending avatar via
-          the quarantine route; everyone else gets the initials tile until the
-          scan releases it. --%>
-          <.avatar
-            user={@user}
-            src={if avatar_pending?, do: ~p"/settings/pending_image/avatar/medium"}
-            size="lg"
-            shape="square"
-            loading="eager"
-            alt={"Avatar of #{full_name(@user)}"}
-            class="relative z-10 shrink-0 ring-4 ring-white dark:ring-slate-900"
-            presence
-          />
+          <%!-- The picture, and — once the 1024px `:large` version exists —
+          the click that opens it in the photo lightbox (issue #1528).
+          AI-moderation limbo: the owner previews their pending avatar via the
+          quarantine route; everyone else gets the initials tile until the scan
+          releases it. --%>
+          <.profile_avatar user={@user} pending?={avatar_pending?} />
           <div
             id="profile-actions"
             class="ml-auto flex items-center justify-end gap-2"

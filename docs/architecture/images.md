@@ -30,6 +30,29 @@ the source for re-deriving. It is not reachable by URL construction (no
 deliberate exception is the per-photo post-image download an author switches on
 themselves — see [Original downloads](#original-downloads-issue-1104) below.
 
+## Opening a picture at full size (the lightbox)
+
+Two pictures are meant to be *looked at* rather than to fill a layout slot, and
+both have a version sized for that: a post photo's `xl` (2560) and an avatar's
+`large` (1024, issue #1528). Both open in the same overlay
+(`assets/js/lightbox.js`), a page-level enhancement appended to `<body>` outside
+every LiveView root; a click target only has to sit inside a
+`<.lightbox_gallery>` (`VutuvWeb.UI`, which carries the overlay's own translated
+chrome wording) and name what it shows in `data-photo-*` attributes.
+
+The avatar's `large` is `{:crop_down, 1024, :center}`, not `{:crop, …}`: it stays
+square like the `thumb`/`medium` beside it but never upscales, because an avatar
+is the one upload members routinely hand us smaller than the version we want.
+
+**A new version is not there the moment its code deploys.** `fingerprint_converged?`
+counts every Spec version as a file on disk, so adding one makes every row
+non-converged and the deploy's own `regenerate_images` step re-derives them —
+but that runs *after* the traffic switch, and a row whose original went missing
+is skipped forever. So the profile header asks the disk
+(`Vutuv.Avatar.large_url/1`) and renders the plain, unclickable avatar while the
+answer is nil. That one `File.exists?` per profile render is what replaces the
+alternative, a two-deploy rollout with a link to a 404 in between.
+
 ## EXIF: what is read, and what never is
 
 `Vutuv.Uploads.Exif` reads a **whitelist** of seven camera facts out of an

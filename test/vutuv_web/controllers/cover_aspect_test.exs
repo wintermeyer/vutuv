@@ -102,7 +102,10 @@ defmodule VutuvWeb.CoverAspectTest do
         |> html_response(200)
 
       assert html =~ "Empfohlen: 1.600 × 400 Pixel (4:1)."
-      assert html =~ "Empfohlen: quadratisch, mindestens 400 × 400 Pixel."
+      # The avatar figure moved from 400 to 2.100 when the 1024px `:large`
+      # version landed (issue #1528): the advice is derived from the widest
+      # version we keep, so growing that grows what we ask members to bring.
+      assert html =~ "Empfohlen: quadratisch, mindestens 2.100 × 2.100 Pixel."
     end
 
     test "the cover recommendation is the widest version we store, at the banner's shape" do

@@ -13,6 +13,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
   import Vutuv.Factory
 
   alias Vutuv.Uploads.Regenerator
+  alias Vutuv.Uploads.Spec
 
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_regen_#{System.unique_integer([:positive])}")
@@ -81,7 +82,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
 
       dir = Path.join(tmp, "avatars/#{user.id}")
       avifs = Path.wildcard(Path.join(dir, "*.avif"))
-      assert length(avifs) == 2
+      assert length(avifs) == length(Spec.versions(:avatar))
       mtimes = for f <- avifs, into: %{}, do: {f, File.stat!(f).mtime}
 
       assert Regenerator.run(only: :avatars).avatars ==
