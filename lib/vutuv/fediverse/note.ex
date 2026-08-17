@@ -31,6 +31,7 @@ defmodule Vutuv.Fediverse.Note do
   use VutuvWeb, :model
 
   alias Vutuv.Fediverse.Handle
+  alias Vutuv.Translations
 
   @audiences ~w(public followers direct unknown)
 
@@ -74,6 +75,9 @@ defmodule Vutuv.Fediverse.Note do
     # The language the origin declared via AS2 contentMap (issue #1488), a
     # lowercase primary language subtag; NULL = the object declared none.
     field(:language, :string)
+    # When the language detection last looked (issue #1535); see the twin on
+    # `Vutuv.Fediverse.RemotePost`. Set on every outcome, nothing casts it.
+    field(:language_checked_at, :utc_datetime)
     field(:audience, :string)
     field(:received_at, :utc_datetime)
     field(:checked_at, :utc_datetime)
@@ -188,6 +192,9 @@ defmodule Vutuv.Fediverse.Note do
     |> validate_length(:display_name, max: 255)
     |> validate_length(:content_text, max: @max_content)
     |> validate_length(:summary, max: @max_summary)
+    # Whoever writes `language` owns its clock — see the twin on
+    # `Vutuv.Fediverse.RemotePost` (issue #1535).
+    |> Translations.reset_language_check()
     |> unique_constraint(:object_uri)
   end
 end

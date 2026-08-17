@@ -31,6 +31,8 @@ defmodule Vutuv.Fediverse.RemotePost do
 
   use VutuvWeb, :model
 
+  alias Vutuv.Translations
+
   # `public` — addressed to the public collection: on the timelines of that
   # server, and here it renders to whoever follows the account.
   # `unlisted` — public but kept out of that server's discovery surfaces. It is
@@ -68,6 +70,10 @@ defmodule Vutuv.Fediverse.RemotePost do
     # The language the origin declared via AS2 contentMap (issue #1488), a
     # lowercase primary language subtag; NULL = the object declared none.
     field(:language, :string)
+    # When the language detection last looked (issue #1535) — most origins
+    # send no `contentMap`, so this is the column that keeps that pile from
+    # being retried forever. Set on every outcome; nothing casts it.
+    field(:language_checked_at, :utc_datetime)
     field(:sensitive, :boolean, default: false)
     field(:audience, :string)
     field(:kind, :string, default: "note")
@@ -188,6 +194,10 @@ defmodule Vutuv.Fediverse.RemotePost do
     |> validate_length(:origin_url, max: @max_uri_bytes, count: :bytes)
     |> validate_length(:content_text, max: @max_content)
     |> validate_length(:summary, max: @max_summary)
+    # Whoever writes `language` owns its clock (issue #1535) — and an `Update`
+    # carrying no `contentMap` writes it as nil, which has to mean "look again"
+    # rather than "undeclared forever".
+    |> Translations.reset_language_check()
     |> unique_constraint(:object_uri)
   end
 end

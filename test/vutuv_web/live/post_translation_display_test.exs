@@ -88,6 +88,34 @@ defmodule VutuvWeb.PostTranslationDisplayTest do
       refute has_element?(live, "[data-translate-button]")
     end
 
+    # Issue #1535: an undeclared post used to be offered, and since nearly
+    # everything written before the language column existed is undeclared, the
+    # offer sat under posts the reader wrote in their own language.
+    test "a card that declares no language offers no translate action", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "Undeclared language.", language: nil})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert render(live) =~ "Undeclared language."
+      refute has_element?(live, "[data-translate-button]")
+
+      # Once the detector places it, the action is back.
+      {:ok, 1} =
+        Translations.detect_due(
+          force: true,
+          limit: 1,
+          detect: fn _subject -> {:ok, "de"} end
+        )
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(
+               live,
+               ~s(button[phx-click="translate"][phx-value-id="#{post.id}"])
+             )
+    end
+
     test "a failed translation clears the pending line, the original stands", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = german_post!(user)

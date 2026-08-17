@@ -215,7 +215,23 @@ defmodule Vutuv.Translations.Translator do
     Translations.normalize_language(answer["source_language"]) || "und"
   end
 
-  defp model, do: Application.get_env(:vutuv, :ollama_translation_model, "gemma4:31b")
+  @doc """
+  The text model that translates — and, deliberately, the one that detects a
+  post's language (`Vutuv.Translations.Detector`): a second model on the shared
+  box would have Ollama swapping tens of gigabytes in and out between the two
+  calls.
+  """
+  def model, do: Application.get_env(:vutuv, :ollama_translation_model, "gemma4:31b")
+
+  @doc """
+  The context window both calls on this model ask for. Public for the same
+  reason `model/0` is, and it has to be the SAME number: Ollama keys its
+  resident runner on the model **plus** its options, so a detection asking for
+  a smaller window would evict and reload the model — and then reload it again
+  for the next translation. A short detection sample costs nothing extra in a
+  window the translator has already paid for.
+  """
+  def num_ctx, do: @num_ctx
 
   # Text inference on the shared box can stall for minutes under contention
   # (`OLLAMA_NUM_PARALLEL=1`); the queue is async, so patience beats a

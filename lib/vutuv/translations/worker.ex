@@ -8,9 +8,17 @@ defmodule Vutuv.Translations.Worker do
   durable across restarts and power loss by construction, because the row is
   the job.
 
-  There is no backfill and no repair sweep here on purpose: a job exists only
-  because a reader asked for that translation, so an empty queue is the
-  normal, correct state.
+  A job exists only because a reader asked for that translation, so an empty
+  queue is the normal, correct state — there is no repair sweep over
+  translations here.
+
+  The poll does carry one sweep, after the queue: language detection
+  (`Translations.detect_due/1`, issue #1535), for the posts that declare no
+  language. It runs **behind** the reader-driven queue in every round and in a
+  small batch, because a reader waits for a translation and nobody waits for a
+  detection. The pile from before the language column existed is meant to be
+  drained by `mix vutuv.translations.detect_languages` (or
+  `Vutuv.Release.detect_post_languages/1`) in one go rather than by this poll.
 
   Gated by the `:translation_worker` config flag (off in tests, which call
   `Translations.deliver_due/1` directly with a stubbed translator); the
@@ -48,6 +56,7 @@ defmodule Vutuv.Translations.Worker do
   @impl GenServer
   def handle_info(:poll, state) do
     drain()
+    detect()
     schedule()
     {:noreply, state}
   end
@@ -58,6 +67,17 @@ defmodule Vutuv.Translations.Worker do
     Translations.deliver_due()
   rescue
     error -> Logger.error("translation drain failed: #{inspect(error)}")
+  end
+
+  # Only on the poll, never on `nudge/0`, and only while the queue is empty: a
+  # detection is nobody waiting, but it holds this single process for as long as
+  # Ollama takes, so anything a reader asked for goes first. That is a check at
+  # the top of the round, not a guarantee — a tap landing mid-detection still
+  # waits for it, which is the price of one process and a shared box.
+  defp detect do
+    if Translations.list_due(limit: 1) == [], do: Translations.detect_due()
+  rescue
+    error -> Logger.error("language detection failed: #{inspect(error)}")
   end
 
   defp schedule do

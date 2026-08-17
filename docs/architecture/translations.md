@@ -24,8 +24,49 @@ garbage → nil), so the columns only ever compare short single codes.
   The declared value rides post drafts across a reload too.
 - The remote columns are filled at ingest from AS2 `contentMap`
   (issue #1488).
-- NULL means legacy/undeclared: shown to everyone, never auto-translated,
-  no `contentMap` outbound.
+- NULL means undeclared: shown to everyone, never auto-translated, no
+  `contentMap` outbound, and **no Translate action** (issue #1535 — see
+  below).
+
+## Filling the gaps (issue #1535)
+
+Declaration covers what the composer writes and what a `contentMap` carries,
+which left two piles undeclared: everything written before the column
+existed, and every remote object whose origin sends no `contentMap` — most of
+them. For those rows the reader's language filter never applied, and the
+Translate action offered itself on posts in the reader's own language, where a
+tap spent an Ollama slot translating German into German.
+
+`Vutuv.Translations.Detector` closes that: **one cheap call** — a short
+markup-stripped sample, one JSON field, the same model as the translator
+(a second model would make Ollama swap tens of gigabytes between a detection
+and a translation). Only a curated language (`Vutuv.Languages.known?/1`) is
+stored, because that list is what a reader can tick on
+/settings/preferences — a code outside it could be hidden by the filter and
+never chosen back. A detected language then counts like a declared one,
+filter included.
+
+`posts.language_checked_at` (and its twins) is the sweep's own clock:
+**stamped on every outcome**, including the one where the text could not be
+placed at all, which keeps `language` NULL and takes the row out of the work
+list — an unstamped skip would be due again on the next round and hold the
+front of every batch forever (the `refresh_counts` starvation lesson,
+`test/vutuv/translations/language_detection_test.exs` calibrates against it).
+A service failure is the one outcome that stamps nothing and stops the batch:
+the row is not the problem. Rows are handed out **newest first**, against the
+oldest-first convention here and deliberately — the language of a post that is
+in somebody's feed right now is the one a reader can use, and the inflow is
+orders of magnitude smaller than one poll interval's capacity, so nothing
+starves.
+
+Two entry points, one loop (`Translations.detect_all/1`): the worker's poll
+takes a couple of rows **behind** the reader-driven queue and never on
+`nudge/0`, while the one-off backfill of the old pile is a deliberate run —
+`mix vutuv.translations.detect_languages` locally,
+`Vutuv.Release.detect_post_languages/1` on a release. The stamp is written
+with `update_all`, never a changeset: a post whose `updated_at` moves more
+than a minute past `inserted_at` renders as "edited", and a backfill must not
+put that mark on hundreds of posts nobody touched.
 
 ## The subject triple
 
@@ -97,9 +138,9 @@ negations). On success the worker broadcasts `{:translation_ready, row}` on
 
 ## The reader's controls
 
-Every card whose language differs from the UI locale (or declares none)
-carries a quiet **Translate** action on the LiveView surfaces (feed,
-permalink thread, profile — issue #1462): tap → pending line → the worker's
+Every card whose language is **known** and differs from the UI locale carries
+a quiet **Translate** action on the LiveView surfaces (feed, permalink thread,
+profile — issue #1462): tap → pending line → the worker's
 broadcast swaps the translated body in, labelled "Translated from X" with
 the original one tap away. A shown translation renders through the normal
 Markdown pipeline (local posts) or as plain text (remote content), and the
@@ -119,8 +160,10 @@ Feed only; profiles, permalinks, search and public surfaces are untouched.
 
 ## What deliberately does not exist
 
-- No backfill, no bulk pre-computation: a job exists only because a reader
-  wanted that translation.
-- No language auto-detection of local posts: the author declares.
+- No backfill, no bulk pre-computation **of translations**: a job exists only
+  because a reader wanted that translation. (The *language* of an undeclared
+  post is backfilled — issue #1535 above.)
+- No language guessing where the author declared one: a declaration is never
+  second-guessed, and the composer preselects the author's UI locale.
 - No federation of translations: only originals leave the house.
 - No translation UI on public/logged-out/agent surfaces.

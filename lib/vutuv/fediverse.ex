@@ -3282,11 +3282,16 @@ defmodule Vutuv.Fediverse do
   @doc """
   The language an AS2 object declares (issue #1488): the first key of
   `contentMap`, else `nameMap`, else `summaryMap`, else the `@context`'s
-  `@language` — normalized to the primary subtag this system stores, nil for
-  anything absent or malformed. Mastodon's own parser takes the first
-  `contentMap` key the same way; genuinely multilingual maps are read by
-  nobody. ONE named function instead of a copy per `object["content"]` read
-  site.
+  `@language` — read through `Vutuv.Translations.cast_language/1`, so nil for
+  anything absent, malformed, or outside the curated list. Mastodon's own
+  parser takes the first `contentMap` key the same way; genuinely multilingual
+  maps are read by nobody. ONE named function instead of a copy per
+  `object["content"]` read site.
+
+  Curated and not merely well-formed, because Mastodon's own language picker
+  offers tags this installation's chips do not (`eo`, `nb`, `nn`, `tok`):
+  stored, such a code would be hidden from every hide-mode reader with no chip
+  that could bring it back, while NULL is simply always shown.
   """
   def as2_language(object) when is_map(object) do
     raw =
@@ -3295,7 +3300,7 @@ defmodule Vutuv.Fediverse do
         first_language_key(object["summaryMap"]) ||
         context_language(object["@context"])
 
-    Vutuv.Translations.normalize_language(raw)
+    Vutuv.Translations.cast_language(raw)
   end
 
   def as2_language(_object), do: nil

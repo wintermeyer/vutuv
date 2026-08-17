@@ -3942,12 +3942,6 @@ defmodule VutuvWeb.PostComponents do
   defp translated_from_label(%Translation{source_language: source}),
     do: gettext("Translated from %{language}", language: Languages.name(source))
 
-  # A card whose language differs from the reader's translation target — or
-  # declares none — gets the manual Translate action (issue #1462). The
-  # target has one owner, the same the "translate" event resolves against.
-  defp foreign_language?(language),
-    do: is_nil(language) or language != PostTranslations.target_language()
-
   # The shown translation's content warning, else the original — a warning
   # must never silently vanish just because its translation lacks one.
   defp translated_summary(%{state: %Translation{summary: summary}}, _original)
@@ -3968,7 +3962,9 @@ defmodule VutuvWeb.PostComponents do
       state: state,
       body_source: if(shown, do: shown.body, else: original_body),
       lang: if(shown, do: shown.target_language, else: original_language),
-      offer?: is_map(assigns.translations) and foreign_language?(original_language)
+      offer?:
+        is_map(assigns.translations) and
+          PostTranslations.offer_translation?(original_language)
     }
   end
 

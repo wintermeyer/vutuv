@@ -75,9 +75,15 @@ defmodule Vutuv.MarkdownContent do
     end
   end
 
-  # Ignore fenced (``` / ~~~) and inline (`code`) spans: image syntax there is
-  # sample text, not a rendered image.
-  defp strip_code(body) do
+  @doc """
+  A body with its fenced (``` / ~~~) and inline (`code`) spans removed.
+
+  Two readers, one rule. The image guard here needs it because image syntax
+  inside code is sample text, not a rendered image; the language detector
+  (`Vutuv.Translations.Detector`) needs it because a code block is not prose
+  and would have the model reading a post's language off its identifiers.
+  """
+  def strip_code(body) do
     body
     |> String.replace(~r/```[\s\S]*?```|~~~[\s\S]*?~~~/, "")
     |> String.replace(~r/`[^`]*`/, "")

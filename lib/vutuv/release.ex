@@ -10,6 +10,7 @@ defmodule Vutuv.Release do
   alias Vutuv.PageScreenshot
   alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Posts.Screenshots
+  alias Vutuv.Translations
   alias Vutuv.Uploads.LegacyRelabel
   alias Vutuv.Uploads.LegacySweeper
   alias Vutuv.Uploads.Regenerator
@@ -238,6 +239,36 @@ defmodule Vutuv.Release do
     )
 
     counts
+  end
+
+  @doc """
+  Names the language of every post, remote post and remote reply that declares
+  none (issue #1535), newest first, until the pile is drained. The one-off
+  backfill of everything written before the language column existed; the
+  regular inflow is handled by `Vutuv.Translations.Worker`'s own small batch.
+
+  Needs Ollama reachable and `:translate_posts` on (`force: true` runs it
+  anyway). It stops early and says so if Ollama goes quiet — rows it never
+  reached stay untouched and a second run picks them up:
+
+      bin/vutuv eval "Vutuv.Release.detect_post_languages()"
+      bin/vutuv eval "Vutuv.Release.detect_post_languages(max_rows: 200)"
+  """
+  def detect_post_languages(opts \\ []) do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(:req)
+    [repo] = repos()
+
+    progress = fn checked -> IO.puts("detect_post_languages: #{checked} checked …") end
+
+    {:ok, result, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo ->
+        Translations.detect_all(Keyword.put_new(opts, :progress, progress))
+      end)
+
+    IO.puts("detect_post_languages: #{Translations.detect_summary(result)}")
+
+    result
   end
 
   defp repos do

@@ -42,4 +42,19 @@ defmodule Vutuv.Translations.TranslationsDisabledTest do
 
     assert Repo.one!(TranslationJob).status == "pending"
   end
+
+  test "detect_due/1 is a no-op — an installation with no Ollama detects nothing" do
+    post = insert(:post, body: "Ein ganz gewöhnlicher deutscher Satz.")
+
+    {1, _} =
+      Repo.update_all(from(p in Vutuv.Posts.Post, where: p.id == ^post.id),
+        set: [language: nil]
+      )
+
+    exploding = fn _subject -> raise "must not detect while disabled" end
+    assert Translations.detect_due(detect: exploding) == {:ok, 0}
+    assert Translations.detect_all(detect: exploding) == {:ok, 0}
+
+    assert Repo.reload!(post).language_checked_at == nil
+  end
 end

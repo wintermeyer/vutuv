@@ -70,6 +70,15 @@ defmodule Vutuv.FediverseLanguageTest do
       assert Fediverse.as2_language(%{"contentMap" => %{"<script>" => "x"}}) == nil
       assert Fediverse.as2_language(nil) == nil
     end
+
+    # Mastodon's own picker offers tags this installation has no chip for.
+    # Stored, such a code would be hidden from every hide-mode reader with no
+    # way to tick it back; NULL is always shown (issue #1535).
+    test "a well-formed tag outside the curated list stores nothing" do
+      assert Fediverse.as2_language(%{"contentMap" => %{"eo" => "x"}}) == nil
+      assert Fediverse.as2_language(%{"contentMap" => %{"tok" => "x"}}) == nil
+      assert Fediverse.as2_language(%{"contentMap" => %{"nb" => "x"}}) == nil
+    end
   end
 
   describe "inbound storage" do

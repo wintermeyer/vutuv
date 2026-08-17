@@ -41,6 +41,27 @@ defmodule VutuvWeb.Live.PostTranslations do
   def target_language, do: Gettext.get_locale(VutuvWeb.Gettext)
 
   @doc """
+  Whether a card in `language` is worth offering a Translate action for: the
+  language has to be **known** and different from the reader's target.
+
+  An undeclared card (nil) gets nothing (issue #1535). It used to be offered,
+  on the theory that an unknown language might be foreign — but nearly
+  everything written before the language column existed is undeclared, so the
+  offer sat under posts in the reader's own language and a tap spent a slot
+  translating German into German. What fills those columns instead is
+  `Vutuv.Translations.Detector`, and a detected language reaches this test like
+  a declared one.
+
+  Deliberately **wider** than `auto_translate?/1` + `auto_translation_wanted?`:
+  the automatic mode leaves a card in one of the reader's *other* chosen
+  languages alone, while the manual offer stands even there — a reader who
+  ticked a language to see it in the original may still want one particular
+  card translated, and that tap is theirs to make.
+  """
+  def offer_translation?(language),
+    do: is_binary(language) and language != target_language()
+
+  @doc """
   The translations map a host mounts with: an empty map when this viewer gets
   the controls (`available?/1`), nil when they do not. The cards read that
   difference straight off the one assign, so no second gate travels with it.

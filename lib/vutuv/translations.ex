@@ -25,8 +25,10 @@ defmodule Vutuv.Translations do
 
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Languages
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
+  alias Vutuv.Translations.Detector
   alias Vutuv.Translations.Translation
   alias Vutuv.Translations.TranslationJob
   alias Vutuv.Translations.Translator
@@ -34,9 +36,24 @@ defmodule Vutuv.Translations do
 
   @type subject :: %Post{} | %RemotePost{} | %Note{}
 
+  # The three subject kinds, spelled once: the detection work list walks them
+  # and `topic/1` guards on them.
+  @subject_schemas [Post, RemotePost, Note]
+
+  # The columns a detection reads from, across the three schemas: a change to
+  # any of them re-opens the question (`reset_language_check/1`).
+  @language_sources [:language, :body, :content_text]
+
   # Small on purpose: the Ollama box is shared with the fail-closed image
   # moderation, which keeps priority.
   @batch 2
+  # The same small batch as the reader-driven queue, and for the same reason —
+  # but it runs *after* that queue and never on a `nudge/0`, because a
+  # detection is nobody waiting (`Vutuv.Translations.Worker`).
+  @detect_batch @batch
+  # The one-off backfill run has no reader behind it and its own process, so
+  # it only pays one query per round instead of one per couple of rows.
+  @detect_all_batch 25
   # A translation call waits up to 10 minutes (`Translator`); only a claim
   # well past that is presumed crashed and re-queued.
   @stuck_after_seconds 1800
@@ -71,6 +88,184 @@ defmodule Vutuv.Translations do
   end
 
   def normalize_language(_value), do: nil
+
+  @doc """
+  What may reach a `language` column: a **curated** `Vutuv.Languages` code,
+  normalized to its primary subtag — anything else nil, which means
+  undeclared (shown to everyone, never auto-translated, never hidden).
+
+  Curated and not merely well-formed, because this list is exactly what a
+  reader can tick on /settings/preferences: a code outside it would be hidden
+  by the language filter with no chip that could ever bring it back. The one
+  owner of that rule — `Vutuv.Posts.Post.cast_language/1` (the composer),
+  `Vutuv.Fediverse.as2_language/1` (AS2 `contentMap`) and
+  `Vutuv.Translations.Detector` (issue #1535) all read it here.
+  """
+  def cast_language(value) do
+    normalized = normalize_language(value)
+    if normalized && Languages.known?(normalized), do: normalized
+  end
+
+  ## Language detection (issue #1535)
+
+  @doc """
+  Whoever writes a subject's language — or the text it was read from — owns the
+  detection clock: such a changeset clears `language_checked_at`, so the row is
+  looked at again.
+
+  Both language directions matter. A declaration that lands makes an earlier
+  detection irrelevant; a declaration that is *taken back* — which is what an
+  AS2 `Update` carrying no `contentMap` does to a remote post, and those are
+  most of them — would otherwise leave the stamp behind on an empty column and
+  drop the row out of the work list for good: undeclared forever, no filter, no
+  Translate offer, never asked again. A new **text** counts too, because the
+  stamp says "we looked" at words that no longer exist — the post that was one
+  bare link when we looked may be a paragraph now.
+
+  The three subject schemas call this, so no ingest or edit path has to remember
+  it. What it deliberately does not do is drop a language that is already
+  known: a text edit re-opens the question only for a row nobody could place.
+  """
+  def reset_language_check(%Ecto.Changeset{} = changeset) do
+    if Enum.any?(@language_sources, &Map.has_key?(changeset.changes, &1)) do
+      Ecto.Changeset.put_change(changeset, :language_checked_at, nil)
+    else
+      changeset
+    end
+  end
+
+  @doc """
+  The subjects whose language nobody knows and nobody has looked for yet, at
+  most `limit`, across all three subject kinds.
+
+  **Newest first**, against the oldest-first convention of every other sweeper
+  here, and deliberately: the language of a post that is in somebody's feed
+  right now is what a reader can use, while the pile from before the column
+  existed is a one-off that only has to drain eventually. Nothing starves for
+  it either — the inflow (remote objects arriving without a `contentMap`) is
+  orders of magnitude smaller than what one poll interval can check.
+  """
+  def due_for_detection(limit) do
+    @subject_schemas
+    |> Enum.flat_map(&due_detection_rows(&1, limit))
+    # Ids are UUID v7, so id order IS creation order — and lexicographic
+    # order on the string form is that same order.
+    |> Enum.sort_by(& &1.id, :desc)
+    |> Enum.take(limit)
+  end
+
+  defp due_detection_rows(schema, limit) do
+    from(r in schema,
+      where: is_nil(r.language) and is_nil(r.language_checked_at),
+      order_by: [desc: r.id],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Detects the language of every due subject, up to `limit`. Returns
+  `{:ok, checked}`, or `{:paused, checked}` when Ollama stopped answering —
+  the batch then stops where it is, because nothing about the next row would
+  go any better.
+
+  `opts`: `detect:` injects the per-subject detector (tests stub it; defaults
+  to `Detector.detect/1`), `force:` runs with the flag off, `limit:` caps the
+  batch.
+
+  Every outcome stamps `language_checked_at`, including the one where the text
+  could not be placed at all — that stamp is the scheduler's clock, not a
+  claim that a language was found. Without it an unplaceable row would be due
+  again on the very next round and hold the front of every batch forever (the
+  `refresh_counts` starvation lesson). A service failure is the one outcome
+  that stamps nothing: the row is not the problem.
+  """
+  def detect_due(opts \\ []) do
+    if Keyword.get(opts, :force, false) or enabled?() do
+      detect = Keyword.get(opts, :detect, &Detector.detect/1)
+
+      opts
+      |> Keyword.get(:limit, @detect_batch)
+      |> due_for_detection()
+      |> Enum.reduce_while({:ok, 0}, &detect_subject(&1, &2, detect))
+    else
+      {:ok, 0}
+    end
+  end
+
+  defp detect_subject(subject, {:ok, checked}, detect) do
+    case detect.(subject) do
+      {:ok, language} -> {:cont, {:ok, checked + stamp_language(subject, language)}}
+      {:error, {:content, _reason}} -> {:cont, {:ok, checked + stamp_language(subject, nil)}}
+      {:error, {:service, _reason}} -> {:halt, {:paused, checked}}
+    end
+  end
+
+  @doc """
+  Drains the whole detection pile in one run, `@detect_all_batch` rows per
+  round, and returns `{:ok | :paused | :budget, checked}`. This is the one-off
+  backfill of everything written before the language column existed — a
+  deliberate **run**, not a sweeper, because it is finite work and because the
+  poll in `Vutuv.Translations.Worker` has to stay small enough to keep out of a
+  reader's way. `Vutuv.Release.detect_post_languages/1` is the release-side
+  entry point, `mix vutuv.translations.detect_languages` the local one.
+
+  `opts`: `progress:` a one-argument function called with the running count
+  after every round (defaults to a no-op — a context knows nothing about IO),
+  `max_rows:` the safety ceiling, plus everything `detect_due/1` takes. Both
+  entry points report the outcome through `detect_summary/1`, so the two of them
+  cannot word it differently.
+  """
+  def detect_all(opts \\ []) do
+    progress = Keyword.get(opts, :progress, fn _checked -> :ok end)
+    budget = Keyword.get(opts, :max_rows, 20_000)
+
+    opts
+    |> Keyword.put_new(:limit, @detect_all_batch)
+    |> detect_all_round(progress, budget, 0)
+  end
+
+  defp detect_all_round(_opts, _progress, budget, checked) when budget <= 0,
+    do: {:budget, checked}
+
+  defp detect_all_round(opts, progress, budget, checked) do
+    case detect_due(Keyword.put(opts, :limit, min(opts[:limit], budget))) do
+      # Nothing due: the pile is drained, which is the run's happy ending.
+      {:ok, 0} ->
+        {:ok, checked}
+
+      {:ok, count} ->
+        progress.(checked + count)
+        detect_all_round(opts, progress, budget - count, checked + count)
+
+      {:paused, count} ->
+        {:paused, checked + count}
+    end
+  end
+
+  @doc """
+  One operator-facing sentence for a `detect_all/1` outcome, so the mix task and
+  the release entry point cannot report the same run differently.
+  """
+  def detect_summary({:ok, checked}), do: "done, #{checked} checked."
+
+  def detect_summary({:paused, checked}),
+    do: "Ollama went quiet after #{checked} checked — run it again to carry on."
+
+  def detect_summary({:budget, checked}), do: "stopped at the #{checked} row ceiling."
+
+  # `update_all`, never a changeset: `Vutuv.Posts.Post` carries timestamps and
+  # a post whose `updated_at` moves more than a minute past `inserted_at`
+  # renders as "edited" — a backfill must not put that mark on hundreds of
+  # posts nobody touched.
+  # Writing `language: nil` for an unplaceable text is a no-op on a column the
+  # work list already filtered as NULL — one shape for both outcomes.
+  defp stamp_language(%schema{id: id}, language) do
+    set = [language: language, language_checked_at: DateTime.utc_now(:second)]
+
+    {count, _} = Repo.update_all(from(r in schema, where: r.id == ^id), set: set)
+    count
+  end
 
   ## The subject triple
 
@@ -401,7 +596,7 @@ defmodule Vutuv.Translations do
   `{:translation_failed, subject_key, target_language}` (the key as
   `subject/1` returns it).
   """
-  def topic(%schema{} = subject) when schema in [Post, RemotePost, Note],
+  def topic(%schema{} = subject) when schema in @subject_schemas,
     do: key_topic(subject_key(subject))
 
   def topic(row), do: key_topic(subject(row))

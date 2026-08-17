@@ -3,7 +3,6 @@ defmodule Vutuv.Posts.Post do
 
   use VutuvWeb, :model
 
-  alias Vutuv.Languages
   alias Vutuv.MarkdownContent
   alias Vutuv.Mentions
   alias Vutuv.Posts.GalleryLayout
@@ -20,6 +19,11 @@ defmodule Vutuv.Posts.Post do
     # undeclared) means: shown to everyone, never auto-translated, no AS2
     # `contentMap` outbound.
     field(:language, :string)
+
+    # When the language detection last looked at this post (issue #1535) —
+    # the sweep's own clock, set on every outcome, including the one where the
+    # text could not be placed and `language` stays NULL. Nothing casts it.
+    field(:language_checked_at, :utc_datetime)
 
     # The bento arrangement the author picked for a multi-photo post, one of
     # the `Vutuv.Posts.GalleryLayout` names; nil = automatic (the mosaic's
@@ -113,12 +117,11 @@ defmodule Vutuv.Posts.Post do
   @doc """
   What an author's language declaration may store: a known `Vutuv.Languages`
   code (normalized to its primary subtag), anything else nil — undeclared,
-  never a guess and never a failed post.
+  never a guess and never a failed post. The rule itself lives with the other
+  language columns (`Vutuv.Translations.cast_language/1`), which the AS2
+  ingest and the detector read too.
   """
-  def cast_language(value) do
-    normalized = Translations.normalize_language(value)
-    if normalized && Languages.known?(normalized), do: normalized
-  end
+  defdelegate cast_language(value), to: Translations
 
   def changeset(post, params \\ %{}) do
     post
@@ -132,6 +135,8 @@ defmodule Vutuv.Posts.Post do
     # An unknown language becomes nil (undeclared) rather than a validation
     # error — the license principle: a tampered select must not fail a post.
     |> update_change(:language, &cast_language/1)
+    # Whoever writes `language` owns its clock (issue #1535).
+    |> Translations.reset_language_check()
     # An unknown licence becomes the safe default rather than a validation
     # error: a tampered select must not be able to fail a post, and "all
     # rights reserved" is the answer that grants nothing.
