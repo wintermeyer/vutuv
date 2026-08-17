@@ -21818,7 +21818,7 @@ msgstr "Apps, die für Mastodon gebaut wurden, können im Namen dieser Seite sch
 #: lib/vutuv_web/templates/settings/apps.html.heex:44
 #, elixir-autogen, elixir-format
 msgid "Apps built for Mastodon — Ivory, Tusky, Ice Cubes and the rest — can read your feed, post, and notify you. Off unless you turn it on."
-msgstr "Apps, die für Mastodon gebaut wurden — Ivory, Tusky, Ice Cubes und andere — können deinen Feed lesen, Beiträge schreiben und dich benachrichtigen. Aus, solange du es nicht einschaltest."
+msgstr "Apps, die für Mastodon gebaut wurden (Ivory, Tusky, Ice Cubes und andere), können Ihren Feed lesen, Beiträge schreiben und Sie benachrichtigen. Aus, solange Sie es nicht einschalten."
 
 #: lib/vutuv_web/live/organization_live/apps.ex:39
 #, elixir-autogen, elixir-format
@@ -21829,12 +21829,12 @@ msgstr "Apps – %{name}"
 #: lib/vutuv_web/templates/settings/apps.html.heex:85
 #, elixir-autogen, elixir-format
 msgid "How to set up an app"
-msgstr "Wie du eine App einrichtest"
+msgstr "Wie Sie eine App einrichten"
 
 #: lib/vutuv_web/templates/settings/apps.html.heex:58
 #, elixir-autogen, elixir-format
 msgid "Lets you sign in to this account from a Mastodon-compatible app. Switching it off immediately stops apps you already signed in from reaching this account."
-msgstr "Damit kannst du dich von einer Mastodon-kompatiblen App aus bei diesem Konto anmelden. Ausschalten wirkt sofort, auch für Apps, in denen du längst angemeldet bist."
+msgstr "Damit können Sie sich von einer Mastodon-kompatiblen App aus bei diesem Konto anmelden. Ausschalten wirkt sofort, auch für Apps, in denen Sie längst angemeldet sind."
 
 #: lib/vutuv_web/views/account_event_text.ex:52
 #, elixir-autogen, elixir-format
@@ -21849,18 +21849,18 @@ msgstr "Mastodon-Apps, verbundene Apps und Zugriffstoken"
 #: lib/vutuv_web/live/organization_live/apps.ex:110
 #, elixir-autogen, elixir-format
 msgid "Sign in with your own account, then pick %{name} on the approval screen."
-msgstr "Melde dich mit deinem eigenen Konto an und wähle dann %{name} im Zustimmungsbildschirm."
+msgstr "Melden Sie sich mit Ihrem eigenen Konto an und wählen Sie dann %{name} im Zustimmungsbildschirm."
 
 #: lib/vutuv_web/live/organization_live/apps.ex:115
 #, elixir-autogen, elixir-format
 msgid "Sign in with your own account, then pick this page on the approval screen. A short @name is not needed for that, only for being followed from another server."
-msgstr "Melde dich mit deinem eigenen Konto an und wähle dann diese Seite im Zustimmungsbildschirm. Ein kurzer @Name ist dafür nicht nötig, sondern nur dafür, von einem anderen Server aus gefolgt zu werden."
+msgstr "Melden Sie sich mit Ihrem eigenen Konto an und wählen Sie dann diese Seite im Zustimmungsbildschirm. Ein kurzer @Name ist dafür nicht nötig, sondern nur dafür, von einem anderen Server aus gefolgt zu werden."
 
 #: lib/vutuv_web/live/organization_live/apps.ex:105
 #: lib/vutuv_web/templates/settings/apps.html.heex:70
 #, elixir-autogen, elixir-format
 msgid "The address to type into the app"
-msgstr "Die Adresse, die du in die App eintippst"
+msgstr "Die Adresse, die Sie in die App eintippen"
 
 #: lib/vutuv_web/live/organization_live/apps.ex:77
 #, elixir-autogen, elixir-format
