@@ -81,6 +81,24 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
     end
   end
 
+  # The photos on a post the client may already have finished the AI scan. That
+  # is `status.update` and not `update`: Mastodon uses it for a status whose
+  # content changed after it was delivered, which is exactly what happened, and
+  # a client replaces the card in place instead of inserting a second copy.
+  #
+  # Without this a picture would simply never arrive. `update` announces a
+  # status **once**, and a client does not revisit it — so a post streamed while
+  # its photo was still pending would sit there as text forever, on that device,
+  # while every other surface shows the picture. `public?: false` means a second
+  # photo on the same post is still being scanned; the release that settles the
+  # last one is the one that carries the news.
+  def handle_info({:post_images_settled, %{post_id: post_id, public?: true}}, state) do
+    case visible_status(post_id, state) do
+      nil -> {:ok, state}
+      status -> {:push, event("status.update", status), state}
+    end
+  end
+
   def handle_info({:new_notification, notification}, state) do
     {:push, event("notification", streamed_notification(notification)), state}
   end
@@ -126,12 +144,33 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
   defp mastodon_token?(%{app: %{protocol: "mastodon"}}), do: true
   defp mastodon_token?(_token), do: false
 
+  # A post whose pictures have not cleared the scan is **not** announced, even
+  # when it is otherwise visible. Mastodon's `update` carries a finished status:
+  # its attachment list has no "still processing" state (only the media endpoint
+  # does), so announcing one now would put a permanently text-only card in the
+  # client — the `status.update` above is what carries it once the scan settles.
+  #
+  # This does not rely on the fan-out being deferred elsewhere, and deliberately
+  # so: today `Posts.broadcast_images_settled/1` is what tells a follower about a
+  # held post, but that is a property of the post pipeline and not a promise to
+  # this socket.
+  #
+  # Asked **by id**, not on the struct in hand. `awaiting_image_release?/1`
+  # answers `false` for an unloaded `:images` association, so passing a post
+  # whose preloads someone later trims would silently open this gate — and the
+  # failure would be an unvetted picture's absence going unnoticed rather than a
+  # crash. The id clause preloads for itself. That is one extra read on an event
+  # a member sees a handful of times a day.
   defp visible_status(post_id, state) do
     viewer = state.organization || state.user
 
     case Posts.get_post(post_id) do
-      nil -> nil
-      post -> if Posts.visible_to?(post, viewer), do: Presenter.status(post)
+      nil ->
+        nil
+
+      post ->
+        if Posts.visible_to?(post, viewer) and not Posts.awaiting_image_release?(post_id),
+          do: Presenter.status(post)
     end
   end
 

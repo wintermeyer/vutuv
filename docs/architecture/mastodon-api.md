@@ -204,6 +204,41 @@ host test as the HTTP gate (`MastodonApi.client_host?/1`), so a client that
 signed in on the main host can open a stream there too — demanding the subdomain
 here let an app authenticate and then never connect.
 
+**A photo that has not cleared the AI scan holds the announcement, not the
+post.** `update` carries a finished status — an attachment list has no "still
+processing" state (only the media endpoint does, as a `null` url) and a client
+inserts the card once and never looks again. So a post whose pictures are still
+being scanned is not announced at all, and the release arrives as
+**`status.update`**, the event Mastodon has for a status whose content changed
+after delivery; the client swaps the card in place. Announcing it early would
+leave that one device showing a text-only post forever while every other surface
+has the picture. The socket asks `Posts.awaiting_image_release?/1` itself rather
+than relying on the post pipeline deferring its fan-out, because that deferral is
+a property of the pipeline and not a promise to this socket. The **push
+notification** is deliberately not held: it carries no content, the client
+fetches over the API, and delaying "somebody replied to you" to wait on a
+picture would be the wrong trade.
+
+**The author's own view over an app is the same view.** On the website they get a
+placeholder tile and a line saying the scan is running; a Mastodon client has
+nowhere to put either, and their own pending photo cannot simply be handed to
+them: `PostImageController` authorises unreleased bytes from the **browser
+session** (`Posts.image_visible_to?/2` → `ImageScans.privileged_viewer?/2`), and
+an app fetches a media URL with no credentials at all, so it would receive the
+proxy's fail-closed 404 and render a broken image. A post with no attachment is
+the better of the two. Note what is *not* sent: no attachment object at all,
+rather than one with a `null` url — so a client renders a text post and cannot
+be left with a placeholder that never resolves. `broadcast_images_settled/1`
+reaches the author's own topic too, so their `status.update` arrives with
+everybody else's.
+
+Most clients never see any of this. Mastodon's own upload flow is
+`POST /api/v2/media` → poll `GET /api/v1/media/:id` until the url is non-null →
+*then* create the status, and that is exactly what the media endpoint's `null`
+url means here. A client following it attaches a photo that has already cleared
+the scan. The window above belongs to clients that post immediately with a
+freshly uploaded id.
+
 **Push** is RFC 8291/8292 Web Push, implemented in `Vutuv.MastodonApi.WebPush`
 with **no dependency**: the obvious hex package requires `httpoison ~> 1.0`,
 which this project bans, and has not shipped since 2021 — everything needed is

@@ -270,4 +270,117 @@ defmodule VutuvWeb.MastodonApi.StreamingSocketTest do
       assert {:ok, ^state} = StreamingSocket.handle_info({:presence_pref, true}, state)
     end
   end
+
+  # Mastodon's `update` carries a finished status: an attachment list has no
+  # "still processing" state, and a client inserts the card once and never looks
+  # again. So a post whose photo is still in the AI scan must not be announced —
+  # otherwise that device shows it as text forever while every other surface has
+  # the picture — and the release has to arrive as `status.update`, the event
+  # Mastodon has for a status whose content changed after delivery.
+  #
+  # Calibrated against the unguarded socket: drop the `awaiting_image_release?/1`
+  # test and the first case here goes green on an `update` it should not have
+  # sent, which is the whole bug.
+  describe "a post whose photo has not cleared the scan" do
+    setup do
+      user = insert(:activated_user)
+      token = mastodon_token(user, ["read"])
+      {:ok, state} = StreamingSocket.connect(transport(%{"access_token" => token}))
+
+      author = insert(:activated_user)
+      {:ok, post} = Posts.create_post(author, %{body: "Mit Foto"})
+      image = insert(:post_image, user: author, post: post, moderation: "pending")
+
+      {:ok, state: state, post: post, image: image}
+    end
+
+    test "is not announced at all", %{state: state, post: post} do
+      assert {:ok, ^state} = StreamingSocket.handle_info({:new_post, %{post_id: post.id}}, state)
+    end
+
+    test "arrives as status.update once the scan releases it", %{
+      state: state,
+      post: post,
+      image: image
+    } do
+      image |> Ecto.Changeset.change(moderation: "approved") |> Repo.update!()
+
+      assert {:push, frame, ^state} =
+               StreamingSocket.handle_info(
+                 {:post_images_settled, %{post_id: post.id, public?: true}},
+                 state
+               )
+
+      decoded = decode_frame(frame)
+
+      assert decoded["event"] == "status.update"
+      assert decoded["payload"]["id"] == post.id
+      assert [%{"type" => "image"}] = decoded["payload"]["media_attachments"]
+    end
+
+    # A second photo on the same post is still being scanned, so this is not the
+    # release that finishes it; the one that settles the last picture is.
+    test "stays silent while another photo on it is still pending", %{
+      state: state,
+      post: post
+    } do
+      assert {:ok, ^state} =
+               StreamingSocket.handle_info(
+                 {:post_images_settled, %{post_id: post.id, public?: false}},
+                 state
+               )
+    end
+  end
+
+  # The author's own view over an app, which is where this is most confusing: the
+  # website shows them a placeholder and a line of explanation, and a Mastodon
+  # client has nowhere to put either. Their own pending photo cannot simply be
+  # handed over — the image proxy authorises unreleased bytes from the *browser
+  # session*, and an app fetches a media URL with no credentials at all, so it
+  # would get the proxy's fail-closed 404 and render a broken image, which is
+  # worse than a post with no photo. So the answer is the same event as for
+  # everybody else, and `broadcast_images_settled/1` does reach the author's own
+  # topic — this is the path that closes the gap for them.
+  test "the author's own client gets their photo swapped in when the scan settles" do
+    author = insert(:activated_user)
+    token = mastodon_token(author, ["read"])
+    {:ok, state} = StreamingSocket.connect(transport(%{"access_token" => token}))
+
+    {:ok, post} = Posts.create_post(author, %{body: "Mein Foto"})
+    image = insert(:post_image, user: author, post: post, moderation: "pending")
+
+    # Nothing while it is pending, not even for the author.
+    assert {:ok, ^state} = StreamingSocket.handle_info({:new_post, %{post_id: post.id}}, state)
+
+    image |> Ecto.Changeset.change(moderation: "approved") |> Repo.update!()
+
+    assert {:push, frame, ^state} =
+             StreamingSocket.handle_info(
+               {:post_images_settled, %{post_id: post.id, public?: true}},
+               state
+             )
+
+    decoded = decode_frame(frame)
+
+    assert decoded["event"] == "status.update"
+    assert [%{"type" => "image"}] = decoded["payload"]["media_attachments"]
+  end
+
+  test "a post with a released photo is announced normally, with the photo" do
+    user = insert(:activated_user)
+    token = mastodon_token(user, ["read"])
+    {:ok, state} = StreamingSocket.connect(transport(%{"access_token" => token}))
+
+    author = insert(:activated_user)
+    {:ok, post} = Posts.create_post(author, %{body: "Foto ist durch"})
+    insert(:post_image, user: author, post: post, moderation: "approved")
+
+    assert {:push, frame, ^state} =
+             StreamingSocket.handle_info({:new_post, %{post_id: post.id}}, state)
+
+    decoded = decode_frame(frame)
+
+    assert decoded["event"] == "update"
+    assert [%{"type" => "image"}] = decoded["payload"]["media_attachments"]
+  end
 end
