@@ -21,6 +21,8 @@ defmodule Vutuv.MastodonApi.WebPush do
   cannot see (`docs/ADMINS.md`).
   """
 
+  alias Vutuv.Ssrf
+
   @curve :prime256v1
   @jwt_ttl_seconds 12 * 3600
 
@@ -54,7 +56,8 @@ defmodule Vutuv.MastodonApi.WebPush do
   end
 
   defp deliver(endpoint, p256dh, auth, body) do
-    with {:ok, ua_public} <- decode_key(p256dh),
+    with :ok <- check_target(endpoint),
+         {:ok, ua_public} <- decode_key(p256dh),
          {:ok, auth_secret} <- decode_key(auth) do
       {encrypted, _} = encrypt(body, ua_public, auth_secret)
 
@@ -69,7 +72,12 @@ defmodule Vutuv.MastodonApi.WebPush do
           {"authorization", authorization(endpoint)}
         ],
         receive_timeout: 10_000,
-        retry: false
+        retry: false,
+        # A push service has no business redirecting us, and following one would
+        # walk straight around the check above: the vetted host answers 302 and
+        # the next hop is wherever it likes. `Vutuv.Webhooks` refuses redirects
+        # for the same reason.
+        redirect: false
       )
       |> case do
         {:ok, %{status: status}} when status in 200..299 -> :ok
@@ -78,12 +86,28 @@ defmodule Vutuv.MastodonApi.WebPush do
         {:error, reason} -> {:error, reason}
       end
     else
+      {:error, :blocked} ->
+        {:error, :blocked}
+
       # A tagged tuple, never the bare `:error` this `with` would otherwise fall
       # through with: the caller matches `{:error, reason}`, and a naked atom
       # crashed its `case` rather than being logged. `PushSubscription` refuses
       # such a key now, so this is the floor under rows written before it did.
-      _undecodable_key -> {:error, :invalid_key}
+      _undecodable_key ->
+        {:error, :invalid_key}
     end
+  end
+
+  # The resolving half of the SSRF pair. The changeset already refused an
+  # internal *literal*, but a hostname that was public when the subscription was
+  # written can be re-pointed at an internal address afterwards, and the whole
+  # point of a stored-then-fetched URL is that those are two different moments
+  # (`Vutuv.Webhooks` learned this as issue #775). Resolution failure is not
+  # treated as internal: there is nothing to reach, so the POST fails on its own.
+  defp check_target(endpoint) do
+    if Ssrf.resolves_to_internal?(URI.parse(endpoint).host),
+      do: {:error, :blocked},
+      else: :ok
   end
 
   @doc """

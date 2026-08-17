@@ -8,6 +8,7 @@ defmodule Vutuv.MastodonApi.PushSubscription do
   use VutuvWeb, :model
 
   alias Vutuv.MastodonApi.WebPush
+  alias Vutuv.Ssrf
 
   @alert_kinds ~w(mention favourite reblog follow)
 
@@ -41,13 +42,24 @@ defmodule Vutuv.MastodonApi.PushSubscription do
     |> unique_constraint(:api_token_id)
   end
 
-  # A subscription endpoint is a URL this installation will POST to, so it must
-  # be an https one and nothing else — an unvalidated endpoint would make the
-  # push sender a request forwarder.
+  # A subscription endpoint is a URL this installation will POST to, so it is
+  # the same shape of hazard as a webhook target: whoever writes it here picks
+  # where our server sends a request. https-only is not enough on its own —
+  # `https://10.0.0.5/` is a perfectly good https URL — so the literal check
+  # from `Vutuv.Ssrf` runs beside it, exactly as `Vutuv.Webhooks.Subscription`
+  # does. It is the cheap half of the pair and does no DNS, which is what makes
+  # it safe in a changeset; `Vutuv.MastodonApi.WebPush` re-checks with
+  # resolution at send time, because a public hostname can be re-pointed at an
+  # internal address after this row is written.
   defp validate_endpoint(:endpoint, value) do
     case URI.parse(value) do
-      %URI{scheme: "https", host: host} when is_binary(host) and host != "" -> []
-      _other -> [endpoint: "must be an https URL"]
+      %URI{scheme: "https", host: host} when is_binary(host) and host != "" ->
+        if Ssrf.internal_host?(host),
+          do: [endpoint: "must not point at a private, loopback or link-local address"],
+          else: []
+
+      _other ->
+        [endpoint: "must be an https URL"]
     end
   end
 
