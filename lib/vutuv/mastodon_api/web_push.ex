@@ -54,8 +54,8 @@ defmodule Vutuv.MastodonApi.WebPush do
   end
 
   defp deliver(endpoint, p256dh, auth, body) do
-    with {:ok, ua_public} <- decode(p256dh),
-         {:ok, auth_secret} <- decode(auth) do
+    with {:ok, ua_public} <- decode_key(p256dh),
+         {:ok, auth_secret} <- decode_key(auth) do
       {encrypted, _} = encrypt(body, ua_public, auth_secret)
 
       endpoint
@@ -77,8 +77,34 @@ defmodule Vutuv.MastodonApi.WebPush do
         {:ok, %{status: status}} -> {:error, {:status, status}}
         {:error, reason} -> {:error, reason}
       end
+    else
+      # A tagged tuple, never the bare `:error` this `with` would otherwise fall
+      # through with: the caller matches `{:error, reason}`, and a naked atom
+      # crashed its `case` rather than being logged. `PushSubscription` refuses
+      # such a key now, so this is the floor under rows written before it did.
+      _undecodable_key -> {:error, :invalid_key}
     end
   end
+
+  @doc """
+  Decodes one of a subscription's base64url keys.
+
+  Padded input is accepted beside bare, and the standard alphabet beside
+  base64url: the keys are copied out of a browser's `PushManager` subscription
+  by hand-written client code, and the operator's own VAPID private key is
+  pasted in by a person. All of those spellings are in the wild, and the caller
+  checks the decoded size anyway.
+  """
+  def decode_key(value) when is_binary(value) do
+    trimmed = String.trim_trailing(value, "=")
+
+    case Base.url_decode64(trimmed, padding: false) do
+      {:ok, decoded} -> {:ok, decoded}
+      :error -> Base.decode64(trimmed, padding: false)
+    end
+  end
+
+  def decode_key(_value), do: :error
 
   @doc """
   RFC 8291 §3.4: one `aes128gcm` record, header and all. The whole point of the
@@ -142,7 +168,7 @@ defmodule Vutuv.MastodonApi.WebPush do
   end
 
   defp sign(message) do
-    {:ok, private} = decode(private_key())
+    {:ok, private} = decode_key(private_key())
 
     :ecdsa
     |> :crypto.sign(:sha256, message, [private, @curve])
@@ -164,15 +190,6 @@ defmodule Vutuv.MastodonApi.WebPush do
   defp pad(value), do: String.duplicate(<<0>>, 32 - byte_size(value)) <> value
 
   defp encode(value), do: Base.url_encode64(value, padding: false)
-
-  defp decode(value) when is_binary(value) do
-    case Base.url_decode64(value, padding: false) do
-      {:ok, decoded} -> {:ok, decoded}
-      :error -> Base.decode64(value, padding: false)
-    end
-  end
-
-  defp decode(_value), do: :error
 
   @doc """
   A fresh VAPID key pair as the two base64url strings an operator puts in the
