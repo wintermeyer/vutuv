@@ -95,6 +95,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Social.Follow
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
+  alias Vutuv.Translations
   alias Vutuv.Uploads.Crop
   alias Vutuv.UUIDv7
   alias Vutuv.WebAddress
@@ -2326,14 +2327,49 @@ defmodule Vutuv.Posts do
   @doc """
   The languages the member marked as their own (the chips on
   /settings/preferences), normalized for reading: `[]` when they never chose
-  any. The one raw read of the `feed_languages` column — its two consumers,
-  the hide filter below and the translate mode's "is this post foreign?"
-  test (`VutuvWeb.Live.PostTranslations`), interpret an empty choice
-  differently BY DESIGN: hide mode with no chips hides nothing
-  (`feed_language_filter/1` answers nil), while translate mode with no
-  chips treats only the UI locale as the member's own.
+  any. The one raw read of the `feed_languages` column — its three consumers,
+  the hide filter below, the translate mode's "is this post foreign?"
+  test (`VutuvWeb.Live.PostTranslations`) and the settings card's ticked
+  chips, interpret an empty choice differently BY DESIGN: hide mode with no
+  chips hides nothing (`feed_language_filter/1` answers nil), translate mode
+  with no chips treats only the UI locale as the member's own, and the card
+  ticks nothing at all while offering a suggestion beside it
+  (`suggested_feed_languages/1`).
   """
   def chosen_feed_languages(%User{feed_languages: chosen}), do: chosen || []
+
+  @doc """
+  The languages the Feed-languages card puts in the open (issue #1537): what
+  this account already says the member reads — their interface language plus the
+  language skills on their profile.
+
+  A **suggestion**, not a choice, and the card is careful about the difference:
+  it decides which chips are visible without a disclosure and ticks nothing. A
+  pre-ticked suggestion would be a filter nobody chose, and it would ride along
+  the next save of the neighbouring "posts in other languages" select.
+
+  The profile half is read here rather than taken from a preload, so the answer
+  cannot depend on whether a call site remembered one. The order is not part of
+  the answer — the card lays its chips out by localized label — so this does not
+  pay for `Vutuv.Profiles.Language.ordered/1`.
+  """
+  def suggested_feed_languages(%User{} = user) do
+    Enum.uniq([interface_language(user) | profile_language_skills(user)])
+  end
+
+  # `cast_language/1` on both, or a third-party installation running a regioned
+  # locale ("pt-BR") suggests a code the chips do not carry and the card opens
+  # with nothing in the open at all.
+  defp interface_language(%User{locale: locale}) do
+    Translations.cast_language(locale) ||
+      Translations.cast_language(Gettext.get_locale(VutuvWeb.Gettext))
+  end
+
+  defp profile_language_skills(%User{id: id}) do
+    from(l in Vutuv.Profiles.Language, where: l.user_id == ^id, select: l.language_code)
+    |> Repo.all()
+    |> Enum.flat_map(&List.wrap(Translations.cast_language(&1)))
+  end
 
   @doc """
   The chosen-languages list the viewer's feed HIDES by (issue #1461), or nil

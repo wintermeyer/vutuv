@@ -108,7 +108,9 @@ defmodule VutuvWeb.FeedTranslateModeTest do
       assert html =~ "Beiträge in anderen Sprachen"
       assert html =~ "In meine Sprache übersetzen"
       assert html =~ "Ausblenden"
-      assert html =~ "Diese Sprachen zeigen"
+      # The chips' own heading (issue #1537 replaced the checkbox grid);
+      # feed_language_chips_test.exs covers the card's behaviour.
+      assert html =~ "Diese Sprachen lese ich"
     end
   end
 end

@@ -179,11 +179,16 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
     <%!-- Feed languages (issue #1461, Mastodon's chosen-languages filter plus
           a translate mode): which languages the feed shows, and what happens
           to the rest — original (shipped default), auto-translated into the
-          interface language, or hidden. All boxes ticked (or none) means "all
+          interface language, or hidden. No language chosen means "all
           languages", stored as inheriting. Posts that declare no language
           always show and are never auto-translated. The translate option only
           does anything on installations with translations enabled; the select
-          still offers it so the choice survives the flag being turned on. --%>
+          still offers it so the choice survives the flag being turned on.
+
+          The languages are chips, not a grid of every curated language with all
+          sixty-odd boxes ticked (issue #1537) — see
+          `VutuvWeb.SettingsHTML.feed_language_chips/1` for what sits in the open
+          and why the suggestion deliberately does not tick anything. --%>
     <.card>
       <.section_title>{gettext("Feed languages")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -197,30 +202,13 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
 
         <fieldset class="space-y-3">
           <legend class="text-sm font-medium text-slate-900 dark:text-white">
-            {gettext("Show these languages")}
+            {gettext("These languages I read")}
           </legend>
           <p class="text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Ticking every box (or none) means: all languages.")}
+            {gettext("Choosing none means: all languages.")}
           </p>
 
-          <div class="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-            <label
-              :for={{label, code} <- Vutuv.Languages.options()}
-              class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
-            >
-              <input
-                type="checkbox"
-                name="user[feed_languages][]"
-                value={code}
-                checked={
-                  Ecto.Changeset.get_field(@changeset, :feed_languages) == nil or
-                    code in (Ecto.Changeset.get_field(@changeset, :feed_languages) || [])
-                }
-                class={checkbox_class()}
-              />
-              <span>{label}</span>
-            </label>
-          </div>
+          <.feed_language_chips user={@user} changeset={@changeset} />
         </fieldset>
 
         <div class="sm:max-w-xs">
