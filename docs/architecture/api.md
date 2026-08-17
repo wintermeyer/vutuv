@@ -72,3 +72,11 @@ endpoint reference, the Jobs API chapter (postings, organizations, lifecycle,
 API profile responses carry the member's `noindex?`/`noai?` consent flags
 in-band (the public `.json`/`.md` siblings signal the same via
 `Content-Signal`/`X-Robots-Tag` headers)
+
+
+## The Mastodon-compatible surface is elsewhere
+
+Installations also serve a Mastodon-compatible client API on
+`mastodon.<PHX_HOST>`, so existing phone clients can sign in. It shares this
+app's data and permission model but none of its URLs, and it is documented on
+its own in [mastodon-api.md](mastodon-api.md).

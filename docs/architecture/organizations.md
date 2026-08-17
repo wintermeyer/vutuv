@@ -287,6 +287,115 @@ The predicates live in `Vutuv.Organizations`: `owner?/2`, `can_edit_page?/2`
 predicate (creator ∪ any role holder) used for **visibility** — a recruiter
 still sees a pending/frozen page — not for writes.
 
+**Every channel maps onto these four roles and adds none of its own.** The
+Mastodon-compatible client adapter (`Vutuv.MastodonApi.Access`) is the case
+that tested the rule: it lets a member hold a page as a separate identity in a
+phone app, and it resolves that identity through `publisher?/2` — the same
+predicate `acting_organization/2` asks for the browser's identity switch. A
+client is a second way to reach the powers the Redaktion already has, never a
+new power and never a new grant. The one thing an organization identity can
+never hold is the `write:blocks` scope: a block is between two people, it cuts
+both ways, and a page is not one of the two.
+
+### The staff feed (designed, not built)
+
+The case the four roles do not cover: a whole workforce should be able to
+**read** what its company's social-media team has curated, without any of them
+being able to speak in the company's name. Today the only way to open
+`/organizations/:slug/feed` is `publisher`, which also grants posting and
+`/act_as` — far too much for "let me read our reading list".
+
+The design below is deliberately small, because one thing that could have made
+it big turns out to be already true: **the organization feed's action bar
+already acts as the reading member, not as the page** (see
+`OrganizationLive.Feed`). So a reader needs no companion role for interacting,
+and no second identity is involved anywhere in this feature. That is also why
+it must stay that way: an earlier draft of the Mastodon work quietly switched
+that bar to act as the page, which is a different feature wearing the same
+buttons. Speaking *as* the page keeps its own deliberate, visible route,
+`/act_as` (#1335), which none of this touches.
+
+**One role, `social_reader`: may read the page's feed, nothing else.** It is
+the cheap half of the split (`publisher` satisfies it, so no existing gate
+moves and nothing has to be backfilled). A `social_manager` — follows and
+mutes without publishing — is *not* part of this: it moves
+`/organizations/:slug/following` off `publisher` and therefore needs a role
+row backfilled for every current publisher, which is a separate decision with
+a migration attached.
+
+**Granted from a verified domain, per domain, default off.** An organization
+already proves domains by DNS or well-known. It should be able to say, for one
+verified domain at a time, "anybody holding an email address on this host may
+read our feed". Four things this rests on, each checked:
+
+- **An `emails` row is already proof of control.** There is no `verified_at`
+  column because there is no unverified state: an address is PIN-confirmed
+  *before* the row is inserted (`VutuvWeb.EmailController` create → confirm),
+  and `Email.update_changeset/2` cannot change `value` afterwards. Nothing new
+  has to be built to establish trust in the address.
+- **Match the exact host, like `OrganizationDomain` does** — not
+  `Vutuv.EmailDomain`'s suffix rule, which the exclusion lists use
+  (`example.com` also matching `eu.example.com`). Two domain semantics already
+  live in this codebase and picking the wrong one here would admit
+  `name@mail.acme.com` on a host Acme never proved, widening silently with
+  every new subdomain. Acme adds and verifies each mail domain instead, which
+  the per-domain switch makes visible anyway.
+- **Say what the grant actually means.** The domain proof establishes DNS
+  control, deliberately with no email method (see `OrganizationDomain`) — so
+  what it licenses is "can receive mail at a host we control", which is not the
+  same as "is an employee". Alumni, ex-colleagues whose mailbox still exists,
+  contractors and shared aliases all pass it. The admin UI should say that
+  rather than "employees".
+- **Default off, because the feed reveals the follow list.** A reader can infer
+  what the page follows, and that list is deliberately not public (see
+  `OrganizationLive.Following`: what a company watches says more about its
+  plans than a member's reading list says about theirs). The switch is
+  therefore "show our interests to everybody with an address on this host", and
+  it should read like one.
+
+**Derive the grant, never materialise it.** Domain-derived access must not
+insert `organization_roles` rows. Materialising it brings back both problems
+this document already records — a backfill on deploy and rows that outlive
+their reason — and would fill the owner's roster with hundreds of automatic
+entries. As a derived predicate it also revokes correctly and immediately:
+when the switch goes off, when the domain loses verification (it has a
+`grace_deadline_at` and a recheck sweeper), or when the member deletes the
+address.
+
+**It belongs on `/feed`, with a URL.** Sending employees to
+`/organizations/:slug/feed` is the wrong door — that page is the team's
+workspace. `/feed` grows one tab per organization the viewer may read, beside
+All / vutuv / Fediverse (`VutuvWeb.PostComponents.post_filter_tabs/1` already
+takes an `options` list, which is the seam). Today none of those tabs has a
+URL: `filter-source` is a plain `phx-click` with no `push_patch`, and only
+`/feed` itself is routed. Giving them URLs needs one decision made up front:
+
+- **Sources as a query parameter, organizations as a path segment** —
+  `/feed?source=vutuv` beside `/feed/<org-slug>`. If both were path segments,
+  `/feed/fediverse` would be ambiguous with an organization slugged
+  `fediverse`. Splitting them by kind removes the collision without reserving
+  any words. Should `/feed/<something>` ever need a non-organization meaning
+  (`/feed/saved`), that word has to be reserved then.
+- **Key on `slug`**, not `organizations.username`: the root handle is optional.
+- `feed` is already a root path word, so a sub-path burns no member handle and
+  needs no `ReservedSlugs` entry.
+- `/feed` already has agent-format siblings that are **private**, not the usual
+  anonymous public view (`VutuvWeb.AgentDocs.FeedDoc`: 404 without a viewer,
+  `private, no-store`). A per-organization feed follows that same pattern.
+
+The query layer needs nothing new: `Posts.organization_feed_page/2` already
+scopes its sources anonymously (`scope_visible(nil)`) and takes `viewer:` for
+decoration only — which is exactly "the page's reading list, my own
+interaction state".
+
+Two smaller things noticed while mapping the above, neither urgent:
+`PostLive.ActionBar.acting_page/1` resolves its organization with a bare
+`Repo.get/2`, so if the page row is gone it falls back to `page || user` and
+the act lands on the **member's** account; resolving through
+`acting_organization/2` instead would answer nil and do nothing. And a token
+minted for a page has no expiry (see `Vutuv.ApiAuth.OAuth`), which is why the
+per-request role re-check is doing more work here than anywhere else.
+
 Invariant: **every organization keeps ≥ 1 owner.** `remove_role/1` and
 `set_roles/4` refuse to remove or demote the last owner (`{:error, :last_owner}`),
 exactly like the last-domain rule. `set_roles/4` is the roster's one write — it
