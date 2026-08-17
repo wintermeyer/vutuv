@@ -249,31 +249,136 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
   end
 
   describe "replies" do
-    test "an organization post cannot be answered yet", %{conn: _conn} do
-      owner = insert(:activated_user)
+    defp page_post(owner, body) do
       organization = active_organization_for(owner)
       {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
-      {:ok, post} = Posts.create_organization_post(organization, owner, %{body: "Hallo."})
-
-      reader = insert(:activated_user)
-
-      # Refused outright rather than half-working: everything a reply sets in
-      # motion is member-shaped, and an organization has no inbox until #1336.
-      assert {:error, :restricted} = Posts.create_reply(reader, post, %{body: "Antwort"})
+      {:ok, post} = Posts.create_organization_post(organization, owner, %{body: body})
+      {organization, post}
     end
 
-    test "and the reply page turns that refusal away instead of crashing", %{conn: conn} do
-      {conn, _reader} = create_and_login_user(conn)
-      owner = insert(:activated_user)
-      organization = active_organization_for(owner)
-      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
-      {:ok, post} = Posts.create_organization_post(organization, owner, %{body: "Hallo."})
+    defp page_post(body \\ "Hallo."), do: page_post(insert(:activated_user), body)
 
-      # `Posts.restricted?/1` only knows about denial rows, so the page's own
-      # gate lets a page's post through and the composer would then be offered
-      # for something `create_reply/3` refuses one submit later. Reaching it by
-      # URL must land somewhere sensible, not on a crash.
+    test "a member answers a page's post, and the row names the page as the parent author" do
+      {organization, post} = page_post()
+      reader = insert(:activated_user)
+
+      assert {:ok, reply} = Posts.create_reply(reader, post, %{body: "Antwort"})
+
+      # The page-shaped half of the pair `parent_author_id` is for a member: it
+      # is what the page's activity list reads, and what keeps the reply
+      # nameable once the page deletes the post it answers.
+      assert reply.reply_ref.parent_post_id == post.id
+      assert reply.reply_ref.parent_organization_id == organization.id
+      assert is_nil(reply.reply_ref.parent_author_id)
+    end
+
+    test "the reply page names the page and its composer works", %{conn: conn} do
+      # Logging in first: `sent_pin/0` reads the oldest mail in the box, so a
+      # page created before it would put its own mail in front of the PIN.
+      {conn, reader} = create_and_login_user(conn)
+      {organization, post} = page_post("Wir stellen ein.")
+
+      {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/reply")
+
+      # A page has no handle to speak of, so it is named by its name — the
+      # heading used to reach for `@parent.user.username`, which a page's post
+      # has not got, and the gate above it turned every such visitor away with
+      # "page not found".
+      assert html =~ organization.name
+      assert html =~ "composer-form"
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "Ich bewerbe mich."}})
+      |> render_submit()
+
+      assert_redirect(live, Posts.path(post))
+      assert [reply] = Posts.list_replies(post, reader)
+      assert reply.body == "Ich bewerbe mich."
+    end
+
+    test "the answer shows up under the page's post and names what it answers", %{conn: conn} do
+      {organization, post} = page_post()
+      reader = insert(:activated_user, first_name: "Rita", last_name: "Leserin")
+      {:ok, _reply} = Posts.create_reply(reader, post, %{body: "Meine Antwort"})
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      # The permalink hosts the conversation now (`PostLive.Thread`); without it
+      # an answer to a page's post would be written into a void.
+      assert html =~ "Meine Antwort"
+      assert html =~ "Rita Leserin"
+      # And the answer's own card says whom it answers, by the page's name.
+      assert html =~ organization.name
+    end
+
+    test "a post of a page that is not publicly visible stays unanswerable", %{conn: conn} do
+      {conn, _reader} = create_and_login_user(conn)
+      {organization, post} = page_post()
+
+      {:ok, _} =
+        organization |> Ecto.Changeset.change(%{status: "pending"}) |> Vutuv.Repo.update()
+
+      # `visible_to?/2` deliberately does not ask whether the page is visible —
+      # that lives in the queries, which is right for every list. The reply page
+      # renders the parent card from an id in the URL, so without
+      # `answerable?/1` a guessed id would confirm and quote it.
       assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/posts/#{post.id}/reply")
+
+      assert {:error, :not_visible} =
+               Posts.create_reply(insert(:activated_user), post, %{body: "Antwort"})
+    end
+
+    test "and it is still there once the socket connects", %{conn: conn} do
+      {_organization, post} = page_post()
+      reader = insert(:activated_user)
+      {:ok, _reply} = Posts.create_reply(reader, post, %{body: "Meine Antwort"})
+
+      # The conversation is a LiveView nested inside this page's LiveView, so
+      # its dead render is thrown away and re-mounted on connect: a page that
+      # only renders statically would look right in the assertion above and be
+      # empty in a browser.
+      {:ok, view, _html} = live(conn, Posts.path(post))
+
+      thread =
+        Enum.find(live_children(view), &(&1.module == VutuvWeb.PostLive.Thread))
+
+      assert render(thread) =~ "Meine Antwort"
+    end
+
+    test "the answer's agent-format siblings name the page they answer", %{conn: conn} do
+      {organization, post} = page_post()
+      reader = insert(:activated_user)
+      {:ok, reply} = Posts.create_reply(reader, post, %{body: "Meine Antwort"})
+
+      # `UserHelpers.full_name/1` has no clause for a page, so the `.md`/`.json`
+      # sibling of an answer to one used to be a 500 where the HTML card renders
+      # fine — the drift the agent-doc rule exists to catch.
+      assert conn |> get(Posts.path(reply) <> ".md") |> response(200) =~ organization.name
+
+      json = conn |> get(Posts.path(reply) <> ".json") |> json_response(200)
+      assert json["in_reply_to"]["author"] == organization.name
+      assert json["in_reply_to"]["url"] =~ Posts.path(post)
+    end
+
+    test "the page's team learns about it on the activity page", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      {organization, post} = page_post(owner, "Hallo.")
+      reader = insert(:activated_user, first_name: "Rita", last_name: "Leserin")
+      {:ok, reply} = Posts.create_reply(reader, post, %{body: "Meine Antwort"})
+
+      # Derived from the reply row like the page's likes and reposts, so nothing
+      # is written twice — and this is the list that receives an answer at all,
+      # since there is no member to notify and one row per publisher would
+      # contradict the single shared read marker.
+      assert organization.id
+             |> Organizations.get_organization!()
+             |> Organizations.unread_activity_count() == 1
+
+      {:ok, _view, html} = live(conn, ~p"/organizations/#{organization.slug}/activity")
+
+      assert html =~ "Rita Leserin"
+      # The entry links to the ANSWER — that is what the team wants to read.
+      assert html =~ Posts.path(reply)
     end
   end
 end

@@ -4,26 +4,25 @@ defmodule VutuvWeb.OrganizationLive.Post do
   (`/organizations/:slug/posts/:id`, issue #1334). Embedded via `live_render`
   from `VutuvWeb.OrganizationController`, like the organization page itself.
 
-  The post, the way back to the page that published it, and the replies written
-  on **other networks** (issue #1334 completing #1069 for pages).
+  The way back to the page that published it, and then the post **with its
+  conversation** — the answers written here and the ones written on other
+  networks, woven together in time order.
 
-  Still no vutuv conversation below it: an organization post cannot be answered
-  here (`Vutuv.Posts.check_reply_allowed/2` refuses), because everything a local
-  reply sets in motion is member-shaped. A remote reply is different — it
-  arrives whether or not we host a thread for it, and hiding what a page's own
-  post already collected would only mean the team cannot see it.
-
-  Those cards are **read-only** here, unlike on the member thread that owns
-  them: removing, reporting and the heart all belong to a person, and a page has
-  nobody behind those buttons.
+  That conversation is `VutuvWeb.PostLive.Thread`, nested by `live_render`, and
+  not a second rendering of one: the member permalink has grown a windowed thread
+  with expanders, per-card action bars on one socket, and the hosting of the
+  remote cards' own acts, and a page's post now collects exactly the same things
+  (issue #1336 opened local replies to it). A page's post used to render its own
+  post card plus a read-only list of remote replies, which cost this page every
+  one of those and, less obviously, offered a ⋯ menu whose `phx-click` no handler
+  here answered — the takedown a publisher gained in #1417 was on a card whose
+  host could not perform it.
   """
 
   use VutuvWeb, :live_view
 
-  import VutuvWeb.PostComponents, only: [post_card: 1, remote_reply_card: 1]
   import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
 
-  alias Vutuv.Fediverse
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias VutuvWeb.Live.InitAssigns
@@ -45,13 +44,6 @@ defmodule VutuvWeb.OrganizationLive.Post do
        socket
        |> assign(:organization, organization)
        |> assign(:post, post)
-       # Replies from other networks (issue #1334, completing #1069 for pages).
-       # Viewer-scoped by `list_notes/2` like the member permalink, so a reply
-       # addressed to the page alone never reaches anybody else's render.
-       |> assign(
-         :remote_replies,
-         Fediverse.list_notes([post.id], socket.assigns.current_user)[post.id] || []
-       )
        |> assign(:formats?, Organizations.agent_visible?(organization))
        |> assign(:page_title, organization.name)}
     else
@@ -77,16 +69,18 @@ defmodule VutuvWeb.OrganizationLive.Post do
         {@organization.name}
       </.link>
 
+      <%!-- The post and everything answering it, from `VutuvWeb.PostLive.Thread`
+      — the same conversation the member permalink shows, nested here as its own
+      LiveView so the expanders, the per-card action bars and the remote cards'
+      takedown controls all have the host they need. Its dead render is thrown
+      away and re-mounted on connect like any nested child, and it resolves the
+      viewer from the cookie session itself, so this page hands it nothing but
+      the post id. --%>
       <div class="mt-4">
-        <.post_card post={@post} viewer={@current_user} conn_or_socket={@socket} mode={:full} />
-      </div>
-
-      <%!-- Replies written on another network (issue #1334). Read-only here,
-      like the member-facing answering page: the acts on such a card (remove,
-      report, the heart) are hosted by the member thread that owns them, and a
-      page has no member behind those buttons. --%>
-      <div :if={@remote_replies != []} class="mt-4 space-y-3" id="organization-remote-replies">
-        <.remote_reply_card :for={note <- @remote_replies} note={note} viewer={@current_user} />
+        {live_render(@socket, VutuvWeb.PostLive.Thread,
+          id: "organization-post-thread",
+          session: %{"post_id" => @post.id}
+        )}
       </div>
 
       <%!-- The agent-format siblings of this permalink. Shown only when they

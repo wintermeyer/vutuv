@@ -1,8 +1,13 @@
 defmodule VutuvWeb.OrganizationLive.Activity do
   @moduledoc """
   What happened to an organization page (`/organizations/:slug/activity`,
-  issue #1336): who followed it, who liked or reposted what it published, and
-  who named it by its handle.
+  issue #1336): who followed it, who liked or reposted what it published, who
+  named it by its handle, and who **answered** one of its posts.
+
+  That last one is where the list stops being a courtesy: a reply is addressed to
+  the page and expects to be read, and nothing else in the app tells the team it
+  arrived — which is why answering a page's post stayed refused until this page
+  existed.
 
   **One read marker for the whole team.** Opening this page stamps
   `organizations.activity_read_at`, and it is stamped for everybody — "read"
@@ -81,6 +86,9 @@ defmodule VutuvWeb.OrganizationLive.Activity do
 
   defp line(%{kind: "mention"} = entry),
     do: gettext("%{name} mentioned this page.", name: full_name(entry.actor))
+
+  defp line(%{kind: "reply"} = entry),
+    do: gettext("%{name} answered a post.", name: full_name(entry.actor))
 
   @impl true
   def render(assigns) do

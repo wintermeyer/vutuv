@@ -3892,7 +3892,19 @@ defmodule Vutuv.Fediverse do
   @inbox_addressed_cap 25
 
   @doc """
-  Every local member a delivery to the **shared inbox** is for (issue #1073).
+  Every local **actor** a delivery to the shared inbox is for (issue #1073) — a
+  member, a page (issue #1334) or a topic (issue #1330), as structs the caller
+  dispatches on.
+
+  All three kinds have to be here because all three **advertise this endpoint**:
+  `endpoints.sharedInbox` is a fact about the installation, so every actor
+  document we serve carries it, and Mastodon (like most implementations) then
+  prefers it over the actor's own inbox for everything it delivers. While this
+  resolved members only, every signed activity a server sent for a page or a
+  topic resolved to nobody and was dropped — a `Follow` of a page, a favourite
+  of its post, and (as reported) an **answer** to its post, which simply never
+  appeared here. The page's own `/organizations/:slug/inbox` was not the path
+  those deliveries took.
 
   The per-member inbox learns who the activity is for from the URL; the shared
   one has to read it out of the activity. Three sources, because that is where
@@ -3902,7 +3914,7 @@ defmodule Vutuv.Fediverse do
       activity and on its object — plus the object itself and, for an `Undo`,
       the object it wraps: a `Follow` names an actor URL, a `Like` or
       `Announce` a Note URL, a reply its `inReplyTo`. Every URL of ours resolves
-      to the member it hangs off.
+      to the member, page or topic it hangs off.
     * the **remote actor's own lifecycle** (`Update`/`Delete` of itself), which
       names no local member at all: it is broadcast to everyone with a stake in
       that actor, so the addressees are the members it follows here **and**
@@ -3913,9 +3925,18 @@ defmodule Vutuv.Fediverse do
       names nobody here: the addressees are the members whose posts hold a
       stored copy of it.
 
-  Members who do not federate (or are suspended, frozen, gone) are filtered out,
-  so a delivery to them is silently dropped — never answered differently, or the
-  endpoint would become a way to ask who takes part.
+  Those last two remain **member-only** on purpose, and it is a known gap rather
+  than a decision: they are about the accounts somebody here follows, and a page
+  can follow too since #1336, so a lifecycle broadcast about an account only a
+  page follows still resolves to nobody. It costs a page's copy of a renamed or
+  deleted remote account, not an answer to one of its posts, and the join behind
+  it (`fediverse_followers` inner-joined through `users`) is the second half of
+  that fix rather than this one.
+
+  Actors that do not federate (a member suspended, frozen or gone, a page or
+  topic with its switch off) are filtered out, so a delivery to them is silently
+  dropped — never answered differently, or the endpoint would become a way to
+  ask who takes part.
 
   `actor_uri` is the activity's *claimed* actor. The caller resolves recipients
   before the signature is verified (it needs one of their keys to sign the
@@ -3923,14 +3944,15 @@ defmodule Vutuv.Fediverse do
   afterwards, once that claim is proven.
   """
   def inbox_recipients(activity, actor_uri) when is_map(activity) do
-    (addressed_users(activity) ++ lifecycle_users(activity, actor_uri))
-    |> Enum.uniq_by(& &1.id)
+    (addressed_actors(activity) ++ lifecycle_users(activity, actor_uri))
+    # By kind AND id: three tables, so an id alone is not the identity here.
+    |> Enum.uniq_by(&{&1.__struct__, &1.id})
     |> Enum.filter(&federated?/1)
   end
 
   def inbox_recipients(_activity, _actor_uri), do: []
 
-  defp addressed_users(activity) do
+  defp addressed_actors(activity) do
     object = if is_map(activity["object"]), do: activity["object"], else: %{}
 
     # `object["actor"]` is what names us in an `Accept`/`Reject` (issue #1160):
@@ -3942,8 +3964,57 @@ defmodule Vutuv.Fediverse do
     |> Enum.filter(&is_binary/1)
     |> Enum.uniq()
     |> Enum.take(@inbox_addressed_cap)
-    |> Enum.flat_map(&local_username/1)
-    |> users_by_username()
+    |> Enum.flat_map(&local_actor_ref/1)
+    |> Enum.uniq()
+    |> actors_by_ref()
+  end
+
+  # Which of our own actors a URI names, as `{kind, handle}` — resolved as a
+  # reference first and loaded in one query per kind below, so a delivery naming
+  # twenty URLs still costs three lookups rather than twenty.
+  defp local_actor_ref(uri) do
+    case local_path(uri) do
+      nil -> tag_actor_ref(uri)
+      segments -> ref_from_segments(segments)
+    end
+  end
+
+  # A page's URLs first: they are the more specific shape, and the member clauses
+  # below would otherwise read `/organizations/acme/actor` as the member
+  # `organizations` (a word `Vutuv.Accounts.ReservedSlugs` keeps unclaimable, so
+  # the lookup would miss — but a rule that holds by luck is not a rule).
+  defp ref_from_segments(["organizations", slug, "actor" | _]),
+    do: [{:organization, String.downcase(slug)}]
+
+  defp ref_from_segments(["organizations", slug, "posts", _id | _]),
+    do: [{:organization, String.downcase(slug)}]
+
+  defp ref_from_segments([username, "actor" | _]), do: [{:user, String.downcase(username)}]
+  defp ref_from_segments([username, "posts", _id | _]), do: [{:user, String.downcase(username)}]
+  defp ref_from_segments(_segments), do: []
+
+  # A topic's actor lives on its own host (`tags.<host>`), which is precisely why
+  # `local_path/1` must not answer for it: `https://tags.<host>/hund` would come
+  # back as the member `hund`. So the tag host is asked separately, and the slug
+  # is the whole path — the actor id is `#{tag_base()}/<slug>`.
+  defp tag_actor_ref(uri) do
+    with true <- tag_host?(uri),
+         %URI{path: path} <- URI.parse(uri),
+         [slug | _rest] <- String.split(path || "", "/", trim: true) do
+      [{:tag, String.downcase(slug)}]
+    else
+      _ -> []
+    end
+  end
+
+  # One query per kind for the whole addressee list, not one per URI. A merged
+  # alias is left out of the topic lookup (`merged_into_id`): an alias is another
+  # name for a topic, never a second actor, so a delivery to one is a delivery to
+  # nothing — the same answer `with_federated_tag` gives at the topic's own inbox.
+  defp actors_by_ref(refs) do
+    users_by_username(for {:user, name} <- refs, do: name) ++
+      organizations_by_slug(for {:organization, slug} <- refs, do: slug) ++
+      tags_by_slug(for {:tag, slug} <- refs, do: slug)
   end
 
   defp audience_uris(map) when is_map(map) do
@@ -3958,26 +4029,20 @@ defmodule Vutuv.Fediverse do
 
   defp audience_uris(_other), do: []
 
-  # The member an actor or Note URL of ours hangs off, as a username. Anything
-  # else — a foreign host, the public collection, a malformed URI — is a miss.
-  # Read through `local_path/1`, so the `www.`/`http` spellings a remote server
-  # may have learned for the same member still deliver (issue #1211).
-  defp local_username(uri) do
-    case local_path(uri) do
-      nil -> []
-      segments -> username_from_segments(segments)
-    end
-  end
-
-  defp username_from_segments([username, "actor" | _rest]), do: [String.downcase(username)]
-  defp username_from_segments([username, "posts", _id | _rest]), do: [String.downcase(username)]
-  defp username_from_segments(_segments), do: []
-
-  # One query for the whole addressee list, not one per URI.
   defp users_by_username([]), do: []
 
   defp users_by_username(usernames),
     do: Repo.all(from(u in User, where: u.username in ^usernames))
+
+  defp organizations_by_slug([]), do: []
+
+  defp organizations_by_slug(slugs),
+    do: Repo.all(from(o in Organization, where: o.slug in ^slugs))
+
+  defp tags_by_slug([]), do: []
+
+  defp tags_by_slug(slugs),
+    do: Repo.all(from(t in Tag, where: t.slug in ^slugs and is_nil(t.merged_into_id)))
 
   # A post an account publishes to its followers (issue #1161) names no local
   # member at all — the addressing is the public collection and the author's own

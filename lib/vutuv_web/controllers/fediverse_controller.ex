@@ -209,15 +209,16 @@ defmodule VutuvWeb.FediverseController do
   # The activity's actor must be that same actor, or anyone could sign a
   # Follow as themselves while claiming to be someone else.
   #
-  # `users` is who the activity is for: exactly one member at the per-member
-  # inbox, whoever the activity addressed at the shared one — where it may also
-  # be nobody, which is still verified first and only then dropped, so an
-  # unsigned delivery is a 401 whatever it claims to be addressed to.
-  defp verify_and_perform(conn, users) do
+  # `recipients` is who the activity is for: exactly one member at the
+  # per-member inbox, whoever the activity addressed at the shared one — where it
+  # may be a member, a page or a topic, several of them, or nobody at all, which
+  # is still verified first and only then dropped, so an unsigned delivery is a
+  # 401 whatever it claims to be addressed to.
+  defp verify_and_perform(conn, recipients) do
     activity = conn.body_params
 
     with {:ok, key_id} <- signature_key_id(conn),
-         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, signer(users)),
+         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, signer(recipients)),
          # The signing keyId must be served by the same host as the actor id it
          # names — without this an attacker-controlled host can serve a key
          # document claiming `id: "https://good.example/alice"`, spoofing
@@ -227,13 +228,28 @@ defmodule VutuvWeb.FediverseController do
          true <- Fediverse.same_host?(remote.id, key_id),
          :ok <- verify_signature(conn, remote),
          true <- activity["actor"] == remote.id do
-      Enum.each(users, &perform(&1, activity, remote))
+      Enum.each(recipients, &perform_for_recipient(&1, activity, remote))
       perform_once(activity, remote)
       send_resp(conn, 202, "")
     else
       _ -> send_resp(conn, 401, "")
     end
   end
+
+  # One addressee of a shared-inbox delivery, whichever kind of actor it is. The
+  # three `perform*` families below are the per-kind handlers the three
+  # per-actor inboxes already run; this is the only place that has to know all
+  # three exist, and it is what a delivery to `endpoints.sharedInbox` — which
+  # every actor document of ours advertises — needs in order to reach a page or a
+  # topic at all.
+  defp perform_for_recipient(%User{} = user, activity, remote),
+    do: perform(user, activity, remote)
+
+  defp perform_for_recipient(%Organization{} = organization, activity, remote),
+    do: perform_for_organization(organization, activity, remote)
+
+  defp perform_for_recipient(%Tag{} = tag, activity, remote),
+    do: perform_for_tag(tag, activity, remote)
 
   # What one addressed member does with an activity. Deliberately returns
   # nothing the caller uses: the answer is the same 202 whatever any of these
@@ -494,12 +510,15 @@ defmodule VutuvWeb.FediverseController do
     )
   end
 
-  # Remote-actor fetches are signed with the followed member's own key —
+  # Remote-actor fetches are signed with the addressed actor's own key —
   # instances running in authorized-fetch ("secure") mode reject anonymous
-  # GETs. At the shared inbox that is the first addressee we resolved; a
-  # delivery addressed to nobody here falls back to an anonymous fetch, which
-  # such an instance may refuse — and then the delivery is rejected, which is
-  # the right outcome for an activity that was for none of our members anyway.
+  # GETs. At the shared inbox that is the first addressee we resolved, of
+  # whichever kind: a page's delivery has to be signable by the page, or an
+  # authorized-fetch server's answer to a reply under its post could not be
+  # verified and the reply would be lost. A delivery addressed to nobody here
+  # falls back to an anonymous fetch, which such an instance may refuse — and
+  # then the delivery is rejected, which is the right outcome for an activity
+  # that was for none of our actors anyway.
   defp signer([%User{} = user | _rest]) do
     case Fediverse.get_actor(user) do
       nil -> nil
@@ -507,6 +526,8 @@ defmodule VutuvWeb.FediverseController do
     end
   end
 
+  defp signer([%Organization{} = organization | _rest]), do: organization_signer(organization)
+  defp signer([%Tag{} = tag | _rest]), do: tag_signer(tag)
   defp signer([]), do: nil
 
   @doc """

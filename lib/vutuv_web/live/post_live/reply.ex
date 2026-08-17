@@ -1,14 +1,15 @@
 defmodule VutuvWeb.PostLive.Reply do
   @moduledoc """
   Reply page — the parent post (read-only preview) above the same composer
-  as the feed. Only visible, **public**, `Vutuv.Posts.replyable?/1` parents can
+  as the feed. Only visible, **public**, `Vutuv.Posts.answerable?/1` parents can
   be answered; everything else is sent away with the unknown-id flash, so
-  existence never leaks. `replyable?/1` is shared with `create_reply/3`'s own
-  gate, which is what keeps a page's post (issue #1334) off this page — the
-  heading below names the parent's **member** author, which such a post has not
-  got. A block is deliberately *not* part of the gate: quiet blocking has to let
-  the blocked member reach the composer and be refused on submit, or the block
-  leaks.
+  existence never leaks. A post published in a page's name is answerable like any
+  other (issue #1336) as long as the page itself is publicly visible, which is
+  what `answerable?/1` — shared with `create_reply/3`'s own gate — asks; the
+  heading then names whichever author `Vutuv.Posts.author/1` hands back rather
+  than reaching for a member author a page's post has not got. A block is
+  deliberately *not* part of the gate: quiet blocking has to let the blocked
+  member reach the composer and be refused on submit, or the block leaks.
 
   **Quoting a passage** (issue #1114): a reader who marks part of a post before
   pressing Reply arrives here with that text in the `quote` parameter, and the
@@ -35,7 +36,7 @@ defmodule VutuvWeb.PostLive.Reply do
     user = socket.assigns.current_user
     parent = Posts.get_post(id)
 
-    if parent && Posts.replyable?(parent) && Posts.visible_to?(parent, user) &&
+    if parent && Posts.answerable?(parent) && Posts.visible_to?(parent, user) &&
          not Posts.restricted?(parent) do
       {:ok,
        socket
@@ -53,7 +54,7 @@ defmodule VutuvWeb.PostLive.Reply do
     <div id="post-reply" class="py-6">
       <div class="mx-auto max-w-2xl space-y-4">
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
-          {gettext("Reply to %{handle}", handle: "@" <> @parent.user.username)}
+          {gettext("Reply to %{handle}", handle: author_handle(Posts.author(@parent)))}
         </h1>
 
         <%!-- quotable={false}: this card's own Reply link leads back to this

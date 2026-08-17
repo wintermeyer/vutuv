@@ -22,6 +22,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   `/system/` — see `shared_inbox_url/0`.
   """
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Actor
   alias Vutuv.Mentions
   alias Vutuv.Organizations.Organization
@@ -29,6 +30,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
+  alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.ReviewCover
   alias Vutuv.Tags.Tag
@@ -47,7 +49,9 @@ defmodule VutuvWeb.Fediverse.Docs do
     :remote_reply_ref,
     :tags,
     {:post_hashtags, :tag},
-    {:reply_ref, [:parent_author]}
+    # Both kinds of parent author (issue #1336), or an answer to a page's post
+    # would render with no `inReplyTo` — see `parent_author/1`.
+    {:reply_ref, [:parent_author, :parent_organization]}
   ]
 
   @doc "The associations `note/2` needs loaded on a post."
@@ -963,7 +967,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   defp reply_parent(%Post{reply_ref: nil}), do: nil
 
   defp reply_parent(%Post{reply_ref: reply_ref}) do
-    with %Vutuv.Accounts.User{} = author <- reply_ref.parent_author,
+    with author when not is_nil(author) <- parent_author(reply_ref),
          true <- Vutuv.Fediverse.federated?(author),
          false <- Vutuv.Posts.restricted?(%Post{id: reply_ref.parent_post_id}) do
       {author, reply_ref.parent_post_id}
@@ -971,6 +975,17 @@ defmodule VutuvWeb.Fediverse.Docs do
       _ -> nil
     end
   end
+
+  # Either kind of parent author (issue #1336): a member may answer a post
+  # published in a page's name, and `federated?/1` and `note_url/2` both already
+  # speak page as well as member. Matching `%User{}` alone left such an answer
+  # with no `inReplyTo` at all, so it travelled as a standalone post and appeared
+  # on the other server beside the conversation instead of inside it.
+  defp parent_author(%PostReply{parent_author: %User{} = author}), do: author
+
+  defp parent_author(%PostReply{parent_organization: %Organization{} = page}), do: page
+
+  defp parent_author(%PostReply{}), do: nil
 
   # Public posts only federate, and a public post's images are publicly
   # servable through the authorizing proxy — so their URLs can ride along.

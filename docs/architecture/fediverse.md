@@ -103,22 +103,45 @@ every activity of a member it finds no key for, silently.
   dedupes one row per distinct remote inbox. It is the same code: the same
   installation switch, the same blocklist checked first, the same per-IP limit,
   the same signature and anti-spoofing verification, and then the very same
-  per-member handling. The per-member inbox keeps working forever; it is what
-  every server already knows.
+  per-recipient handling. The per-actor inboxes keep working forever; they are
+  what every server already knows.
 
-  The only thing that differs is where the addressees come from —
+  **All three kinds of actor are recipients here** — a member, a page (#1334) and
+  a topic (#1330) — because all three *advertise* this endpoint: the shared inbox
+  is a fact about the installation, so every actor document carries it, and
+  Mastodon (like most implementations) then prefers it over the actor's own inbox
+  for everything it delivers. So the per-actor inboxes are largely spare doors,
+  and while this resolved members only, **every signed activity for a page or a
+  topic resolved to nobody and was dropped with a 202**: a `Follow` of a page, a
+  favourite of its post, and — as reported — an *answer* to its post, which
+  simply never appeared here. `VutuvWeb.FediverseController.perform_for_recipient/3`
+  dispatches to the per-kind handler the matching per-actor inbox already runs,
+  and `signer/1` signs the actor fetch with that actor's own key, which an
+  authorized-fetch server requires.
+
+  The only other thing that differs is where the addressees come from —
   `Vutuv.Fediverse.inbox_recipients/2` reads them out of the activity instead of
   the URL, from three places: the **addressing** (`to`/`cc`/`bto`/`bcc`/
   `audience` on the activity and its object, plus the object itself and, for an
   `Undo`, the object it wraps — a `Follow` names an actor URL, a `Like` a Note
-  URL, a reply its `inReplyTo`, each of which hangs off the member it belongs
-  to); the **remote actor's own `Update`/`Delete`**, which names no local member
-  at all and is therefore fanned out to exactly the members that actor follows
-  here (this is the case worth having the endpoint for — one account deletion
-  used to be one signed delivery per member); and an author's `Update`/`Delete`
-  **of a note they wrote**, fanned out to the members whose posts hold a copy.
-  Addressee URIs are attacker-chosen text, so the list is cut at 25; the two
-  lifecycle fan-outs are bounded by rows we wrote ourselves and are not.
+  URL, a reply its `inReplyTo`, each of which hangs off the member, page or topic
+  it belongs to; a topic's URL is asked separately, because it lives on the tag
+  host and `local_path/1` would read `https://tags.<host>/hund` as the member
+  `hund`); the **remote actor's own `Update`/`Delete`**, which names no local
+  member at all and is therefore fanned out to exactly the members that actor
+  follows here (this is the case worth having the endpoint for — one account
+  deletion used to be one signed delivery per member); and an author's
+  `Update`/`Delete` **of a note they wrote**, fanned out to the members whose
+  posts hold a copy. Addressee URIs are attacker-chosen text, so the list is cut
+  at 25; the two lifecycle fan-outs are bounded by rows we wrote ourselves and
+  are not.
+
+  **The two lifecycle fan-outs are still member-only, and that is a known gap
+  rather than a decision.** They are about the accounts somebody here follows,
+  and a page can follow since #1336, so a broadcast about an account only a page
+  follows resolves to nobody; the join behind them (`fediverse_followers` inner-
+  joined through `users`) is the other half of that fix. It costs a page's copy of
+  a renamed or deleted remote account, not an answer to one of its posts.
 
   Two deliberate asymmetries. It never answers `404`/`410`: those belong to a
   URL that names one member, where a `410` is how a server learns *that account*
@@ -896,13 +919,25 @@ serves itself — the member endpoint's arrangement one to one. The field is
 the endpoint applies the page's own visibility, so a pending or frozen page
 keeps its picture private like every other byte of it.
 
-**The inbox is deliberately narrower.** A page accepts `Follow` and
-`Undo(Follow)` and acknowledges everything else with the same `202` the member
-inbox gives anything it does not handle. It holds no conversations, answers no
-Follow of its own and does not migrate, so `Like`, `Announce`, `Create(Note)`,
-`Accept`/`Reject` and `Move` would have nothing to act on. Signature
-verification is unchanged — same keyId/actor host pinning, same refusal to
-believe an `actor` field the signature does not cover.
+**What a page's inbox handles.** `Follow` / `Undo(Follow)`, `Like` / `Announce`
+of its posts and their `Undo`, `Accept`/`Reject` answering a Follow the page sent
+(#1336 gave it a following side), and `Create(Note)` answering one of its posts —
+`record_organization_reply/3`, which is the member path minus the pieces that
+have no page: no `fediverse_replies?` switch (a page that publishes outward has
+no comparable reason to want the reach and not the answers), no `restricted?`
+check (a page's post carries no audience by construction) and no per-member
+notification, because the news reaches its team through
+`/organizations/:slug/activity`. `Move` and anything else gets the same `202` the
+member inbox gives what it does not handle. Signature verification is unchanged —
+same keyId/actor host pinning, same refusal to believe an `actor` field the
+signature does not cover.
+
+**But this is rarely the door a delivery uses.** The actor document advertises
+`endpoints.sharedInbox` (it is a fact about the installation), and Mastodon
+prefers it, so in practice the page's activities arrive at `/system/inbox` — which
+resolved members only until the fix described under "Shared inbox" above, and
+therefore dropped every one of them with a 202. Whenever you add a handler here,
+check that the shared inbox reaches it.
 
 **Answering a Follow is not optional politeness.** An unanswered Follow shows on
 Mastodon as pending forever, which is the "pressed Follow and nothing happened"

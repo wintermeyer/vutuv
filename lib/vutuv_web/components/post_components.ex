@@ -39,6 +39,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Isbn
   alias Vutuv.Languages
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PhotoLicense
@@ -2724,13 +2725,18 @@ defmodule VutuvWeb.PostComponents do
         <% {:parent, parent_author, parent_path} -> %>
           <.reply_banner_line variant="parent">
             <.link href={parent_path} class="hover:text-brand-700">
-              {gettext("Replying to %{handle}", handle: handle(parent_author))}
+              {gettext("Replying to %{handle}", handle: author_handle(parent_author))}
             </.link>
           </.reply_banner_line>
         <% {:author_only, parent_author} -> %>
           <.reply_banner_line variant="author-only">
-            <.link href={~p"/#{parent_author}"} class="hover:text-brand-700">
-              {gettext("Reply to a now-deleted post by %{handle}", handle: handle(parent_author))}
+            <%!-- `Posts.author_path/1` takes the author directly, so the page a
+            page-published parent belonged to is reached the same way a member's
+            profile is. --%>
+            <.link href={Posts.author_path(parent_author)} class="hover:text-brand-700">
+              {gettext("Reply to a now-deleted post by %{handle}",
+                handle: author_handle(parent_author)
+              )}
             </.link>
           </.reply_banner_line>
         <% {:remote, remote_handle, remote_account_id} -> %>
@@ -4027,7 +4033,10 @@ defmodule VutuvWeb.PostComponents do
 
   defp reply_banner(post, viewer) do
     case Posts.reply_ref_state(post) do
-      {:parent, parent} -> {:parent, parent.user, Posts.path(parent)}
+      # `Posts.author/1`, not `parent.user`: the parent may have been published
+      # in a page's name (issue #1336), and the preloads carry both authors so
+      # this costs no query.
+      {:parent, parent} -> {:parent, Posts.author(parent), Posts.path(parent)}
       # A top-level post that answers a post on another network (issue #1165)
       # has no local parent at all, so its "Replying to" line comes from the
       # sidecar instead. Only ever reached when there is no local reply ref: an
@@ -4059,8 +4068,18 @@ defmodule VutuvWeb.PostComponents do
 
   defp remote_account_id(%PostRemoteReply{}), do: nil
 
-  # Reply system messages name the account handle, never the clear name.
-  defp handle(%User{username: username}), do: "@" <> username
+  @doc """
+  How a post's author is named in prose about answering them — the card's
+  "Replying to …" banner and the reply page's heading, which must agree.
+
+  A member is named by their `@handle`: it is their address, and the line is
+  about *who* is being answered. A page is named by its **name**, because a page
+  has no handle to speak of — the root handle is an optional address it may
+  never have claimed, so `@…` would be a gap dressed as a fact (the same reason
+  `author_name/1` puts no handle line beside a page's name on the card itself).
+  """
+  def author_handle(%Organization{name: name}), do: name
+  def author_handle(%User{username: username}), do: "@" <> username
 
   # Whether to float a post's single image beside its body (the text wraps around
   # and below it, `.post-clamp--wrap`) rather than stacking a full-width image

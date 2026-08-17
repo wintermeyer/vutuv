@@ -355,34 +355,52 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  Whether this post is a kind of post that accepts replies at all — the half of
-  the reply rule that depends on the post alone, with nobody asking yet.
+  Whether this post is in a state that accepts answers at all — the half of the
+  reply rule that depends on the post alone, with nobody asking yet.
+
+  A post published in a page's name is answerable like any other (issue #1336):
+  it was refused outright while a page had no reading side, since every
+  consequence of a reply was member-shaped and the answer would have reached
+  nobody, and the page's activity list is now what receives it. What this asks is
+  the one thing `visible_to?/2` deliberately does **not**: whether the page
+  itself is publicly visible. Page visibility lives in the queries (see
+  `moderation_hidden?/1`), which is right for every list, but the reply page
+  renders the parent card from an id in the URL — so without this a guessed id
+  would confirm and quote the post of a pending or frozen page.
 
   Public because the reply **page** must ask it too. That page cannot run the
   whole of `check_reply_allowed/2` (a quiet block has to let the blocked member
-  reach the composer and be refused on submit, or the block leaks), so without a
-  named predicate it kept its own weaker copy of the rule — and offered a
-  composer for a page's post, whose heading then dereferenced the member author
-  that a page's post does not have.
+  reach the composer and be refused on submit, or the block leaks), so a named
+  predicate is what keeps the two gates from drifting apart.
   """
-  def replyable?(%Post{} = post), do: not organization_post?(post)
+  def answerable?(%Post{organization_id: nil}), do: true
+
+  def answerable?(%Post{organization_id: id}) when is_binary(id) do
+    # Read fresh by id, deliberately **not** through the preloaded
+    # `:organization` — for the same reason `parent_restricted_now?/1` re-queries
+    # the denials: the reply LiveView holds the parent struct from mount, and the
+    # page may have been frozen or sent back to `pending` since. Matching on the
+    # preloaded association would also read as a type check while behaving as a
+    # preload check, which is how a page's post once fell into the member branch.
+    case Organizations.get_organization(id) do
+      nil -> false
+      page -> Organizations.public_visible?(page)
+    end
+  end
 
   defp check_reply_allowed(%User{} = author, %Post{} = parent) do
     cond do
-      # An organization post cannot be answered yet (issue #1334). Everything
-      # downstream of a reply is member-shaped — the parent-author notification,
-      # the block check between the two authors, the thread's "Replying to
-      # @handle" line — and an organization has no inbox to be told about it
-      # until issue #1336 gives it a reading side. Refusing outright beats a
-      # reply that quietly reaches nobody.
-      not replyable?(parent) -> {:error, :restricted}
+      not answerable?(parent) -> {:error, :not_visible}
       not visible_to?(parent, author) -> {:error, :not_visible}
       # Query restriction fresh from the DB, not the (possibly stale) preloaded
       # denials: the reply LiveView holds the parent struct from mount, and the
       # author may have restricted the post after it was loaded.
       parent_restricted_now?(parent) -> {:error, :restricted}
       # A block between author and parent author refuses the reply with the
-      # same opaque :restricted the disabled reply button already explains.
+      # same opaque :restricted the disabled reply button already explains. A
+      # block is between two members, so a page's post has none: `blocked?/2`
+      # reads `parent.user_id`, which is NULL there, and `blocked_between?/2`
+      # answers false for a nil side rather than raising.
       blocked?(author, parent) -> {:error, :restricted}
       true -> :ok
     end
@@ -743,7 +761,12 @@ defmodule Vutuv.Posts do
     Repo.insert!(%PostReply{
       post_id: post.id,
       parent_post_id: parent.id,
+      # Whichever of the two authors the parent has (issue #1334): the columns
+      # are read as a pair everywhere, and the page's own activity list is
+      # derived from `parent_organization_id` the way a member's reply
+      # notification is derived from `parent_author_id`.
       parent_author_id: parent.user_id,
+      parent_organization_id: parent.organization_id,
       root_post_id: thread_root_id(parent)
     })
   end
@@ -4760,16 +4783,17 @@ defmodule Vutuv.Posts do
   @doc """
   Classifies a post's reply parent (from its preloaded `reply_ref`) into one of
   `{:parent, parent_post}` (the parent still exists), `{:author_only, author}`
-  (the parent post is gone but its author remains), `:gone` (author gone too),
-  or `nil` (not a reply). The API (`PostJSON`), the agent docs (`PostDoc`) and
-  the post card all render from this, so they can't disagree on what a reply
-  points at. An un-preloaded `reply_ref` is a truthy `NotLoaded`, hence the
-  struct matches.
+  (the parent post is gone but its author remains — a member or the page it was
+  published in the name of), `:gone` (author gone too), or `nil` (not a reply).
+  The API (`PostJSON`), the agent docs (`PostDoc`) and the post card all render
+  from this, so they can't disagree on what a reply points at. An un-preloaded
+  `reply_ref` is a truthy `NotLoaded`, hence the struct matches.
   """
   def reply_ref_state(%Post{reply_ref: %PostReply{} = ref}) do
     cond do
       match?(%Post{}, ref.parent_post) -> {:parent, ref.parent_post}
       match?(%User{}, ref.parent_author) -> {:author_only, ref.parent_author}
+      match?(%Organization{}, ref.parent_organization) -> {:author_only, ref.parent_organization}
       true -> :gone
     end
   end
@@ -4826,22 +4850,28 @@ defmodule Vutuv.Posts do
       remote_reply_ref: [remote_post: :remote_account],
       denials: [:denied_user],
       tags: from(t in Tag, order_by: t.name),
+      # Both kinds of parent author, at both levels (issue #1336): a member may
+      # answer a post published in a page's name, so the parent card names and
+      # links a page as readily as a member — and `author/1` would otherwise pay
+      # a query per card to find out which.
       reply_ref: [
         :parent_author,
+        :parent_organization,
         parent_post: [
           :images,
           :screenshot,
           :review,
+          :organization,
           # Rendered as a full card, so its author's proven links come along
           # too (issue #1246) — same reason as the top-level `user` above.
           user: verified_links_preload(),
           tags: from(t in Tag, order_by: t.name),
           # The nested parent's own "Replying to …" line, local and remote: the
           # two states it can be in when it is a reply rather than a thread
-          # starter. `parent_post: :user` is deliberately the author alone —
-          # the grandparent is named and linked, never rendered.
+          # starter. `parent_post: [:user, :organization]` is deliberately the
+          # author alone — the grandparent is named and linked, never rendered.
           remote_reply_ref: [remote_post: :remote_account],
-          reply_ref: [:parent_author, parent_post: :user]
+          reply_ref: [:parent_author, :parent_organization, parent_post: [:user, :organization]]
         ]
       ]
     ]
@@ -5562,10 +5592,20 @@ defmodule Vutuv.Posts do
 
   # A new reply ticks the parent's open action bars, notifies its author
   # (self-replies are not news) and tells the thread's other participants.
+  #
+  # An answer to a post published in a page's name notifies nobody here, and
+  # that is the whole arrangement rather than a gap: the page's activity list is
+  # **derived** from `post_replies.parent_organization_id`
+  # (`Vutuv.Organizations.activity_page/2`), the way its likes and reposts are
+  # derived, so an answer appears there — and disappears again with the row —
+  # without anything being written twice. Guarded on the column rather than left
+  # to `notify_reply/4`'s own nil tolerance: reading `nil != reply.user_id` as
+  # "somebody to tell" is exactly the half-read pair that has cost this
+  # milestone sixteen silent failures.
   defp broadcast_reply(%Post{} = parent, %Post{} = reply) do
     broadcast_reply_count(parent.id)
 
-    if parent.user_id != reply.user_id do
+    if is_binary(parent.user_id) and parent.user_id != reply.user_id do
       Vutuv.Activity.notify_reply(parent.user_id, reply.user, parent.id, reply.id)
     end
 

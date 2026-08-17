@@ -71,8 +71,13 @@ section in `organizations.md`.
 Consequences worth knowing:
 
 - Organization posts carry **no audience** (the deny model is built on the
-  author's own follower graph and blocks) and **cannot be replied to**. Both are
-  refused outright rather than silently reaching nobody.
+  author's own follower graph and blocks), so a denial has nobody to name.
+- They **can be answered**, by a member here and from another network (#1336).
+  What used to refuse it was that a reply reaches nobody; the page's activity
+  list is the recipient that made it defensible, so `post_replies` carries
+  `parent_organization_id` beside `parent_author_id` and `broadcast_reply/2`
+  notifies no member for such a parent. Answering itself stays a member's act —
+  `create_reply/3` takes a `%User{}`.
 - They have their own feed source (`feed_organization_post_items/3`), so
   `feed_post_items/3` stays deliberately the member half.
 - Personal scopes exclude them: a member's profile, archive and feed never show
@@ -949,7 +954,13 @@ like/reply quotes.
 **The permalink page renders the conversation as an embedded LiveView**
 (`VutuvWeb.PostLive.Thread`, `live_render` from `PostController` — the
 profile's pattern: the controller keeps the URL and the agent-format
-negotiation, the socket owns the conversation card). A **small conversation
+negotiation, the socket owns the conversation card). A **page's** post permalink
+(`/organizations/:slug/posts/:id`) hosts the same LiveView, nested one level
+deeper inside `VutuvWeb.OrganizationLive.Post`: it needs the identical thread now
+that a page's post can be answered (#1336), and one owner beats a second
+rendering — the page's earlier hand-rolled card plus a read-only remote-reply
+list had no expanders, no batched action bars, and a ⋯ menu whose `phx-click` its
+host did not answer. A **small conversation
 (≤ 25 visible posts) renders whole** (issue #1006) in `thread_order/1` reading
 order via `PostComponents.thread_conversation/1`. A **bigger one opens as a
 window around the permalinked post** (`Vutuv.Posts.thread_window/3`, the issue

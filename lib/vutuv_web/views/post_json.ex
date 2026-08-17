@@ -51,7 +51,10 @@ defmodule VutuvWeb.PostJSON do
         %{
           post_id: parent.id,
           url: VutuvWeb.Endpoint.url() <> Posts.path(parent),
-          author: author_ref(parent.user)
+          # Whichever author the parent has (issue #1336): a member may answer a
+          # post published in a page's name, and `author_ref/1` already speaks
+          # both — `parent.user` alone would have shipped `nil` here.
+          author: author_ref(Posts.author(parent))
         }
 
       {:author_only, author} ->

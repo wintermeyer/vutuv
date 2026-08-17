@@ -88,6 +88,28 @@ defmodule VutuvWeb.OrganizationActivityWebTest do
     assert html =~ "/organizations/#{organization.slug}/activity"
   end
 
+  test "an answer to one of the page's posts reads correctly in German", %{conn: conn} do
+    {conn, owner} = create_and_login_user(conn)
+    organization = active_organization_for(owner)
+    {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+    {:ok, post} = Vutuv.Posts.create_organization_post(organization, owner, %{body: "Hallo."})
+    reader = insert(:activated_user, first_name: "Rita", last_name: "Leserin")
+    {:ok, _reply} = Vutuv.Posts.create_reply(reader, post, %{body: "Antwort"})
+
+    # Asserted by name and in German on purpose: `gettext.extract --merge`
+    # fuzzy-filled this brand-new msgid with "hat einen Beitrag geteilt"
+    # (*shared* a post), which nothing in an English test would ever have
+    # noticed.
+    html =
+      conn
+      |> recycle()
+      |> put_req_header("accept-language", "de-DE,de")
+      |> get(~p"/organizations/#{organization.slug}/activity")
+      |> html_response(200)
+
+    assert html =~ "Rita Leserin hat auf einen Beitrag geantwortet."
+  end
+
   test "someone outside the team gets a 404", %{conn: conn} do
     {stranger_conn, _stranger} = create_and_login_user(conn)
     owner = insert(:activated_user)

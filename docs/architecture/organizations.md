@@ -423,8 +423,8 @@ piece lives:
   **`Vutuv.Posts.author/1` is the one accessor**; reading `post.user` on an
   organization post is the bug to look for. Editing and deleting follow the
   **role, not the person**: any current publisher may, because the post belongs
-  to the page. Organization posts carry no audience and cannot be replied to
-  (both refused outright rather than half-working).
+  to the page. Organization posts carry no audience — there is nobody for a
+  denial to name — and they **are answerable** (see below).
 - **A member switches into it** for a session (#1335). The session carries only
   `acting_as_organization_id`, and it is a **hint, never a credential**:
   `VutuvWeb.Plug.ActingAs` and `Live.InitAssigns.acting_as/2` re-ask
@@ -434,8 +434,23 @@ piece lives:
 - **Members follow it.** `follows.followee_organization_id` (nullable pair +
   CHECK, #1336) — only the followee side; a page following somebody is not built.
   Its posts then reach the follower's feed through `feed_organization_post_items/3`.
+- **Its posts can be answered** — by a member here and by an account on another
+  network (#1336). The gate was refused outright while a page had no reading
+  side; what makes it defensible now is the activity list below, which is where
+  an answer arrives. `post_replies` therefore carries `parent_organization_id`
+  beside `parent_author_id` — the pair is what keeps the answer nameable after
+  the page deletes the post it hangs under, and what the activity list reads —
+  and `broadcast_reply/2` writes **no** notification for a page (no member to
+  address, and a row per publisher would contradict the one shared read marker).
+  Answering stays a member's act: `create_reply/3` takes a `%User{}`, so a page
+  cannot answer anything, its own post included. The post's permalink hosts the
+  conversation through the shared `VutuvWeb.PostLive.Thread`, nested by
+  `live_render` — the same windowed thread, per-card action bars and remote-card
+  takedown controls the member permalink has, rather than a second rendering of
+  one.
 - **It sees what happens to it** at `/organizations/:slug/activity`: new
-  followers, likes and reposts of its posts, and posts naming it by handle.
+  followers, likes and reposts of its posts, posts naming it by handle, and
+  answers to its posts.
   Derived from the source tables, so an unliked post is not "read" — it never
   happened. **One read marker for the whole team** (`activity_read_at`): read
   means somebody read it, never that everybody did, which is why it is a column
