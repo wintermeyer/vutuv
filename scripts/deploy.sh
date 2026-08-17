@@ -69,6 +69,39 @@ esac
 NEW_UNIT="$APP@$NEW_SLOT"
 log "Deploying: $ACTIVE_SLOT -> $NEW_SLOT (port $NEW_PORT)"
 
+# Clean up an aborted deploy. `set -e` aborts the script but never tidies up,
+# and a job killed from outside (the Actions cancel button, a runner timeout)
+# does not even reach the health gate's error path below. Dying anywhere
+# between `systemctl start` and the nginx reload would then leave the idle slot
+# running: an orphaned beam.smp holding a database pool nobody can reach.
+# $switched flips the moment nginx serves the new slot, because from then on
+# $NEW_UNIT is the live one and stopping it would be the outage this script
+# exists to avoid. $upstream_backup covers the few milliseconds in which the
+# snippet already names the new port but nginx has not read it yet: leaving
+# that behind would point the next unrelated reload (certbot, logrotate) at a
+# stopped slot. A SIGKILL still escapes all of this, so the `systemctl stop`
+# before the slot is repointed stays the backstop for the next deploy.
+switched=0
+upstream_backup=
+cleanup() {
+  local status=$?
+  # Disarm EXIT against re-entry, and ignore a second signal: a runner sends
+  # INT and then TERM, and being cut off midway is how the slot would survive
+  # after all.
+  trap - EXIT
+  trap '' INT TERM HUP
+  if [ "$switched" -eq 0 ]; then
+    log "Aborted before the traffic switch; $ACTIVE_SLOT keeps serving traffic"
+    if [ -n "$upstream_backup" ]; then
+      printf '%s\n' "$upstream_backup" | sudo tee "$UPSTREAM_FILE" > /dev/null || true
+    fi
+    sudo systemctl stop "$NEW_UNIT" 2>/dev/null || true
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'log "Deploy interrupted by a signal"; exit 143' INT TERM HUP
+
 export MIX_ENV=prod
 
 # Toolchain via mise (versions pinned in .tool-versions at the repo root).
@@ -116,19 +149,22 @@ for i in $(seq 1 "$HEALTH_RETRIES"); do
     break
   fi
   if [ "$i" -eq "$HEALTH_RETRIES" ]; then
+    # The trap owns stopping the slot, on this path like on every other.
     log "ERROR: $NEW_SLOT never became healthy; $ACTIVE_SLOT still serves traffic"
-    sudo systemctl stop "$NEW_UNIT" 2>/dev/null || true
     exit 1
   fi
   sleep "$HEALTH_INTERVAL"
 done
 
 # Switch traffic: rewrite the nginx upstream and reload. Reload is graceful —
-# running requests and websockets finish on the old workers.
+# running requests and websockets finish on the old workers. Keep the previous
+# snippet verbatim so the trap can put it back if we die before the reload.
+upstream_backup=$(cat "$UPSTREAM_FILE" 2>/dev/null || true)
 printf 'upstream vutuv3 {\n    server 127.0.0.1:%s;\n}\n' "$NEW_PORT" \
   | sudo tee "$UPSTREAM_FILE" > /dev/null
 sudo nginx -t
 sudo nginx -s reload
+switched=1
 log "Traffic switched to $NEW_SLOT"
 
 # Record the new state; keep `current` as a convenience pointer for manual
