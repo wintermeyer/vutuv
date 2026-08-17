@@ -447,7 +447,12 @@ piece lives:
   conversation through the shared `VutuvWeb.PostLive.Thread`, nested by
   `live_render` — the same windowed thread, per-card action bars and remote-card
   takedown controls the member permalink has, rather than a second rendering of
-  one.
+  one. **Its `.md`/`.txt`/`.json`/`.xml` siblings carry that conversation too**
+  (`PostDoc.build_organization_post/2`): the agent-format rule applies here like
+  anywhere, and this is the one public page `agent_docs_drift_test.exs` does not
+  watch, so the drift has to be caught by hand — the builder said "cannot be
+  answered, so there is no reply list and no thread" for one commit after
+  answering shipped, and its remote-reply half had been stale since #1334.
 - **It sees what happens to it** at `/organizations/:slug/activity`: new
   followers, likes and reposts of its posts, posts naming it by handle, and
   answers to its posts.

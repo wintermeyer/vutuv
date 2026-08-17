@@ -360,6 +360,26 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
       assert json["in_reply_to"]["url"] =~ Posts.path(post)
     end
 
+    test "and the page's own permalink carries the conversation in every format", %{conn: conn} do
+      {_organization, post} = page_post()
+      reader = insert(:activated_user, first_name: "Rita", last_name: "Leserin")
+      {:ok, _reply} = Posts.create_reply(reader, post, %{body: "Meine Antwort"})
+
+      # The other half of the drift, and the one no test would have caught: the
+      # HTML permalink hosts the whole conversation now, so the doc builder has
+      # to carry it too. `agent_docs_drift_test.exs` does not cover a page's
+      # post, which is exactly why this assertion lives here.
+      md = conn |> get(Posts.path(post) <> ".md") |> response(200)
+      assert md =~ "Meine Antwort"
+      assert md =~ "Rita Leserin"
+
+      json = conn |> get(Posts.path(post) <> ".json") |> json_response(200)
+
+      assert json["reply_count"] == 1
+      assert [%{"body_markdown" => "Meine Antwort"}] = json["replies"]
+      assert Enum.any?(json["thread"], &(&1["body_markdown"] == "Meine Antwort"))
+    end
+
     test "the page's team learns about it on the activity page", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       {organization, post} = page_post(owner, "Hallo.")

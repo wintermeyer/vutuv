@@ -26,7 +26,6 @@ defmodule VutuvWeb.PostController do
   alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
-  alias Vutuv.SocialFeed.Http
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.PostDoc
   alias VutuvWeb.Fediverse.Docs, as: FediverseDocs
@@ -294,7 +293,7 @@ defmodule VutuvWeb.PostController do
       author: author,
       owner?: Posts.author?(post, viewer),
       restricted?: restricted?,
-      auto_scroll?: not page_capture?(conn),
+      auto_scroll?: not VutuvWeb.ControllerHelpers.page_capture?(conn),
       # The "Other formats" card links to the post's agent siblings — shown only
       # when the anonymous .md/.txt/.json/.xml would actually resolve (the same
       # gate as maybe_put_alternates/2 advertising them in the head).
@@ -304,16 +303,6 @@ defmodule VutuvWeb.PostController do
       page_title:
         "#{VutuvWeb.UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}"
     )
-  end
-
-  # The link-preview screenshot browser reading this page rather than a person
-  # (`Vutuv.PageScreenshot`, which sends vutuv's own user agent). The capture
-  # renders the document **from the top**, so the thread's arrival scroll jump
-  # moves the compositor away before those tiles are painted and the stored
-  # preview is an empty page (issue #1033). The capture gets the same
-  # conversation, just no jump.
-  defp page_capture?(conn) do
-    conn |> get_req_header("user-agent") |> List.first() |> Http.own_agent?()
   end
 
   defp redirect_query(conn) do

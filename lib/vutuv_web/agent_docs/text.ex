@@ -123,7 +123,9 @@ defmodule VutuvWeb.AgentDocs.Text do
   end
 
   # The plain-text twin of the Markdown organization-post block (issue #1334):
-  # the same fields in the same order, minus the ones such a post cannot have.
+  # the same fields in the same order, minus the reply-to line such a post
+  # cannot have. Its conversation is here for the same reason the Markdown one
+  # is — the permalink shows it (issue #1336).
   def render(%{type: "organization_post"} = doc) do
     [
       heading("#{gettext("Post by %{name}", name: doc.author.name)} · #{doc.published_on}"),
@@ -134,6 +136,15 @@ defmodule VutuvWeb.AgentDocs.Text do
       Markdown.likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
       license_text(doc.license),
+      section(
+        "#{gettext("Conversation")} (#{length(doc.thread)})",
+        doc.thread |> Enum.reject(&(&1.id == doc.id)) |> Enum.map(&thread_lines/1)
+      ),
+      if(doc.thread_truncated, do: gettext("Only part of this long conversation is shown.")),
+      section(
+        "#{gettext("Replies from other networks")} (#{length(doc.fediverse_replies)})",
+        Enum.map(doc.fediverse_replies, &remote_reply_lines/1)
+      ),
       footer(doc)
     ]
     |> join_blocks()

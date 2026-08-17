@@ -12,6 +12,7 @@ defmodule VutuvWeb.ControllerHelpers do
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth.App
   alias Vutuv.Repo
+  alias Vutuv.SocialFeed.Http
 
   @doc """
   Renders the PIN-entry screen belonging to the flow the pending identity is in,
@@ -141,6 +142,25 @@ defmodule VutuvWeb.ControllerHelpers do
       "locale" => conn.assigns[:locale],
       "request_path" => conn.request_path
     }
+  end
+
+  @doc """
+  Whether the link-preview screenshot browser is reading this page rather than a
+  person (`Vutuv.PageScreenshot`, which sends vutuv's own user agent).
+
+  The capture renders the document **from the top**, so a page that scrolls
+  itself on arrival is shot before those tiles are painted and the stored
+  preview is an empty page (issue #1033). The capture gets the same content,
+  just no jump.
+
+  Shared rather than private to `PostController` because a post permalink now
+  comes in two shapes — the member's and the page's
+  (`/organizations/:slug/posts/:id`) — and both embed the same scrolling
+  `VutuvWeb.PostLive.Thread`. A second private copy of this is a second thing to
+  remember when the next author kind appears.
+  """
+  def page_capture?(%Conn{} = conn) do
+    conn |> Conn.get_req_header("user-agent") |> List.first() |> Http.own_agent?()
   end
 
   @doc """

@@ -131,9 +131,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   # A post an organization published (issue #1334). The same blocks as a
-  # member's post minus the ones such a post cannot have — no reply-to line, no
-  # conversation, no replies from other networks — so a reader parsing both
-  # meets the same field under the same heading wherever it applies.
+  # member's post, minus the one such a post cannot have: it is never itself a
+  # reply, so there is no reply-to line. The conversation IS here (issue #1336
+  # opened answering, #1334 already brought the remote replies), under the same
+  # headings, so a reader parsing both meets the same field in the same place.
   def render(%{type: "organization_post"} = doc) do
     author_link = "[#{md_text(doc.author.name)}](#{doc.author.url})"
 
@@ -146,7 +147,16 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       engagement_line(doc),
       likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
-      license_line(doc.license)
+      license_line(doc.license),
+      section(
+        "#{gettext("Conversation")} (#{length(doc.thread)})",
+        doc.thread |> Enum.reject(&(&1.id == doc.id)) |> Enum.map(&thread_block/1)
+      ),
+      if(doc.thread_truncated, do: gettext("Only part of this long conversation is shown.")),
+      section(
+        "#{gettext("Replies from other networks")} (#{length(doc.fediverse_replies)})",
+        Enum.map(doc.fediverse_replies, &remote_reply_block/1)
+      )
     ]
     |> join_blocks()
   end

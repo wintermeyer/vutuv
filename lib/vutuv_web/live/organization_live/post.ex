@@ -45,6 +45,12 @@ defmodule VutuvWeb.OrganizationLive.Post do
        |> assign(:organization, organization)
        |> assign(:post, post)
        |> assign(:formats?, Organizations.agent_visible?(organization))
+       # Carried through to the nested thread rather than left to its default:
+       # the conversation scrolls itself to the permalinked post, and the
+       # link-preview browser renders from the top, so a jump here stores a
+       # blank preview (issue #1033) — the trap the member permalink already
+       # avoids.
+       |> assign(:auto_scroll?, session["auto_scroll"] != false)
        |> assign(:page_title, organization.name)}
     else
       # The controller already refused an id that does not resolve, so reaching
@@ -74,12 +80,13 @@ defmodule VutuvWeb.OrganizationLive.Post do
       LiveView so the expanders, the per-card action bars and the remote cards'
       takedown controls all have the host they need. Its dead render is thrown
       away and re-mounted on connect like any nested child, and it resolves the
-      viewer from the cookie session itself, so this page hands it nothing but
-      the post id. --%>
+      viewer from the cookie session itself, so this page hands it the post id
+      and the one thing it cannot work out for itself: whether the reader is a
+      person or the screenshot browser. --%>
       <div class="mt-4">
         {live_render(@socket, VutuvWeb.PostLive.Thread,
           id: "organization-post-thread",
-          session: %{"post_id" => @post.id}
+          session: %{"post_id" => @post.id, "auto_scroll" => @auto_scroll?}
         )}
       </div>
 

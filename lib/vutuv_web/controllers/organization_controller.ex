@@ -271,6 +271,12 @@ defmodule VutuvWeb.OrganizationController do
             |> ControllerHelpers.live_render_session()
             |> Map.put("organization_id", organization.id)
             |> Map.put("post_id", id)
+            # Threaded down to the nested `PostLive.Thread` exactly as the
+            # member permalink does it (issue #1033): the conversation scrolls
+            # itself to the permalinked post on arrival, and the link-preview
+            # capture renders from the top, so the jump would store a blank
+            # image of this page.
+            |> Map.put("auto_scroll", not ControllerHelpers.page_capture?(conn))
         )
 
       format ->
