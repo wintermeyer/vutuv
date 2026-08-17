@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest something vutuv should be able to do.
+labels: ["Feature Request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please keep the whole issue under 150 words.** A mockup or a screenshot
+        carries more than three paragraphs of prose, and a short request gets
+        discussed sooner than a long one.
+
+        If you are letting an AI agent write this for you, give it that ceiling
+        — left alone it will produce a specification nobody asked for.
+
+  - type: input
+    id: tldr
+    attributes:
+      label: TL;DR
+      description: One sentence. What should vutuv do?
+      placeholder: Show the jobs earned with a qualification on its detail page.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is hard today
+      description: >-
+        The situation you keep running into. Skip this only if it is obvious
+        from the sentence above.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How it should work
+      description: >-
+        Your suggestion, plus a mockup or screenshot if you have one. Prior art
+        from another site is welcome and usually explains it in one link.
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: What you are not asking for
+      description: >-
+        Optional, and more useful than it sounds: naming the neighbouring idea
+        you do *not* want keeps the discussion from growing into it.

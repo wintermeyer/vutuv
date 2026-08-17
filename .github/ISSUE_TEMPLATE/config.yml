@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Question, idea or RFC
+    url: https://github.com/wintermeyer/vutuv/discussions
+    about: >-
+      Open-ended questions and "what if we…" belong in a discussion. An issue is
+      for one concrete thing to build or fix.
+  - name: Security problem
+    url: https://github.com/wintermeyer/vutuv/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.

@@ -1,0 +1,108 @@
+name: Issue size
+
+# Asks for a shorter issue when one arrives long.
+#
+# The issue *forms* under .github/ISSUE_TEMPLATE/ only bind somebody filling
+# them in on the web. `gh issue create --body-file …` never sees a template at
+# all, which is exactly how our own agent-written issues get filed — and those
+# are the long ones: measured on 2026-08-17 across the open backlog, issues
+# filed from this account averaged 610 words against 74 from everybody else.
+# So the templates alone would discipline the wrong group. This check is the
+# half that reaches both, because it runs on the issue rather than on the form.
+#
+# It nags once and then goes quiet. The label clears itself on the edit that
+# shortens the issue, so it is a nudge and not a gate: nothing here blocks or
+# closes anything, and a long issue that has to be long simply keeps the label.
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+# An edit while the previous run is still going would race on the same label.
+concurrency:
+  group: issue-size-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            // The ceiling the templates ask for is 150. Nagging at 150 would
+            // fire on every issue that lands at 160, so the automated line sits
+            // well above it and only catches the genuine walls of text.
+            const LIMIT = 250;
+            const LABEL = "too long";
+            const MARKER = "<!-- issue-size-check -->";
+
+            const issue = context.payload.issue;
+            if (issue.state !== "open") return;
+
+            // Prose only. Code, quoted logs, screenshots and URLs are the parts
+            // of a long issue that are usually *earning* their length, so
+            // counting them would ask people to delete the useful half.
+            const prose = (issue.body || "")
+              .replace(/```[\s\S]*?```/g, " ")
+              .replace(/~~~[\s\S]*?~~~/g, " ")
+              .replace(/<!--[\s\S]*?-->/g, " ")
+              .replace(/<[^>]+>/g, " ")
+              .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+              .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+              .replace(/`[^`]*`/g, " ")
+              .replace(/https?:\/\/\S+/g, " ");
+
+            const count = prose
+              .split(/\s+/)
+              .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+
+            const common = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+            };
+
+            core.info(`#${issue.number}: ${count} words of prose (limit ${LIMIT})`);
+
+            if (count <= LIMIT) {
+              // Shortened after a nag: take the label back off. It may never
+              // have been there, hence the swallowed 404.
+              try {
+                await github.rest.issues.removeLabel({ ...common, name: LABEL });
+                core.info("Below the limit now, label removed.");
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+              return;
+            }
+
+            await github.rest.issues.addLabels({ ...common, labels: [LABEL] });
+
+            // Say it once. An `edited` event fires on every later change, and a
+            // bot repeating itself under someone's issue is worse than the long
+            // issue was.
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { ...common, per_page: 100 }
+            );
+            if (comments.some((c) => (c.body || "").includes(MARKER))) {
+              core.info("Already asked once, staying quiet.");
+              return;
+            }
+
+            const body = [
+              MARKER,
+              `Thank you for writing this up. It is on the long side though — about **${count} words**, where we aim for under 150.`,
+              "",
+              "That is not pedantry about length. A long issue gets skimmed rather than read, so it reaches a decision *slower* than a short one would. Could you trim it to the essentials? A one-line summary, where it lives, what happens now against what you want, and the steps to reproduce is almost always the whole useful content. Anything else we will ask you for.",
+              "",
+              "If an AI agent drafted this for you, tell it that ceiling and it will happily comply — left alone they all assume more text is more helpful, and it is not.",
+              "",
+              "*This nudge is automated. Edit the issue and the label comes off by itself.*",
+            ].join("\n");
+
+            await github.rest.issues.createComment({ ...common, body });

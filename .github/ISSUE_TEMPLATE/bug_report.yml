@@ -1,0 +1,61 @@
+name: Bug report
+description: Something is broken.
+labels: ["Bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please keep the whole issue under 150 words.** Short beats complete:
+        we can always ask a follow-up question, but nobody reads a wall of text
+        carefully, so a long issue gets answered slower, not faster.
+
+        If you are letting an AI agent write this for you, give it that ceiling
+        — left alone it will produce two thousand words of context we already
+        have.
+
+  - type: input
+    id: tldr
+    attributes:
+      label: TL;DR
+      description: One sentence. What is broken?
+      placeholder: Saving a tagline longer than 255 characters returns a 500.
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: The page, URL, route or module it happens in.
+      placeholder: /me/tagline/edit
+
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: Now vs. want
+      description: What happens today, and what should happen instead.
+      placeholder: |
+        Now: a 256-character tagline hits Postgres 22001 and the page 500s.
+        Want: the form rejects it with a field error.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open /me/tagline/edit
+        2. Paste 300 characters
+        3. Save -> 500
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Screenshot, time, browser
+      description: >-
+        A screenshot says more than a paragraph. For a bug on vutuv.de please
+        add the exact time including seconds and time zone, so we can find the
+        request in the log.
