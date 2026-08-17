@@ -14,13 +14,38 @@ same reason.
 
 ## The host
 
-Served on `mastodon.<PHX_HOST>` by default; `MASTODON_API_ENABLED=false`
-disables it. ActivityPub actors,
-WebFinger handles, profiles and public post URLs stay on `PHX_HOST`; the
-subdomain is only the technical REST/OAuth origin entered in a phone client.
-It serves no website pages (an API-host catch-all refuses anything that is not
-an API route), so a reverse proxy can apply CORS and security headers
-independently from the main site.
+Served on `mastodon.<PHX_HOST>` **and on the main host**;
+`MASTODON_API_ENABLED=false` disables both. ActivityPub actors, WebFinger
+handles, profiles and public post URLs live on `PHX_HOST` throughout.
+
+The subdomain is the **canonical** origin — it is what the instance document
+advertises, it serves no website pages (an API-host catch-all refuses anything
+that is not an API route), and a reverse proxy can give it its own CORS and
+security headers. But a member setting up a phone app types the address they
+know, which is the main one, so the same routes answer there too. Without that,
+typing `vutuv.de` gets a 404 from the client's first probe and the app reports
+"not a Mastodon server".
+
+**A redirect would have been the smaller change and does not work.** A client
+keeps the host you typed and builds every later URL from it, and HTTP libraries
+drop the `Authorization` header across a host change — so the login would land
+and every authenticated call after it would come back 401. Hence two hosts
+serving the same routes, and hence `oauth_metadata` naming endpoints on
+whichever host the client arrived on (`MastodonApi.client_url/2`): a client is
+never sent across mid-flow. The consent screen is the one deliberate exception,
+because it is a browser page and lives on the main host either way.
+
+The catch-all is **not** mirrored onto the main host, where it would swallow the
+whole website; an unmatched `/api/v1/...` there falls through to the ordinary
+404.
+
+**What a member types, and what they then see.** The server address is
+`vutuv.de` (or the subdomain, both work). The handle follows Mastodon's own
+`LOCAL_DOMAIN`/`WEB_DOMAIN` convention: `acct` is the bare handle and
+`instance.uri`/`domain` is `PHX_HOST`, so a client that composes the two shows
+`@member@vutuv.de` — the same identity the fediverse knows. A client that
+instead builds the handle from the host it talked to shows that host, which is
+one more reason the main host answers.
 
 ## What works today
 

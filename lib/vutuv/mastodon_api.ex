@@ -16,6 +16,41 @@ defmodule Vutuv.MastodonApi do
   def local_domain, do: Endpoint.host()
   def api_host, do: "mastodon." <> local_domain()
 
+  @doc """
+  Whether `host` may serve the client API — the technical subdomain **or** the
+  main host.
+
+  The subdomain is the canonical origin and the one this app advertises, but a
+  member typing an address into a phone app types the address they know, which
+  is the main one. Serving both is what makes `vutuv.de` work as a login.
+
+  A redirect would have been the smaller change and does not survive contact
+  with a real client: an app keeps the host you typed and builds every later
+  URL from it, and HTTP libraries drop the `Authorization` header on a
+  cross-host redirect — so the login would complete and every authenticated
+  call after it would come back 401. Both hosts answer the same routes
+  instead.
+  """
+  def client_host?(host) when is_binary(host) do
+    host = host |> String.downcase() |> String.trim_trailing(".")
+    host in [api_host(), local_domain(), "www." <> local_domain()]
+  end
+
+  def client_host?(_host), do: false
+
+  @doc """
+  The origin a client should keep talking to, given the host it reached us on.
+
+  A client that found us at the main host stays there; one that used the
+  subdomain stays there too. Sending it across hosts mid-flow is what breaks
+  the bearer token.
+  """
+  def client_url(host, path) do
+    if String.downcase(to_string(host)) == api_host(),
+      do: api_url(path),
+      else: main_url(path)
+  end
+
   def compatibility_version do
     vutuv_version = Application.spec(:vutuv, :vsn) |> to_string()
     @compatibility_version <> " (compatible; vutuv " <> vutuv_version <> ")"

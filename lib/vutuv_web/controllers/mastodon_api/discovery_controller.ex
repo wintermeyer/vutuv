@@ -66,14 +66,21 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
     })
   end
 
+  # Every endpoint is named on the host the client actually reached us on, so a
+  # client that typed the main address is never sent across to the subdomain
+  # mid-flow — which is exactly where a bearer token gets dropped. The consent
+  # screen is the one deliberate exception: it is a browser page and lives on
+  # the main host whatever the client used.
   def oauth_metadata(conn, _params) do
+    here = &MastodonApi.client_url(conn.host, &1)
+
     json(conn, %{
-      issuer: MastodonApi.api_url("/"),
+      issuer: here.("/"),
       service_documentation: "https://docs.joinmastodon.org/",
       authorization_endpoint: MastodonApi.main_url("/oauth/authorize"),
-      token_endpoint: MastodonApi.api_url("/oauth/token"),
-      app_registration_endpoint: MastodonApi.api_url("/api/v1/apps"),
-      revocation_endpoint: MastodonApi.api_url("/oauth/revoke"),
+      token_endpoint: here.("/oauth/token"),
+      app_registration_endpoint: here.("/api/v1/apps"),
+      revocation_endpoint: here.("/oauth/revoke"),
       scopes_supported: Scopes.all(),
       response_types_supported: ["code"],
       response_modes_supported: ["query"],

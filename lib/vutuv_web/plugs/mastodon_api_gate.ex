@@ -14,7 +14,7 @@ defmodule VutuvWeb.Plug.MastodonApiGate do
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    if MastodonApi.enabled?() and String.downcase(conn.host) == MastodonApi.api_host() do
+    if MastodonApi.enabled?() and MastodonApi.client_host?(conn.host) do
       merge_resp_headers(conn, [
         {"content-security-policy", "default-src 'none'; frame-ancestors 'none'"},
         {"referrer-policy", "no-referrer"},
