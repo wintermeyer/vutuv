@@ -47,6 +47,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.SavedSearches
   alias Vutuv.SavedSearches.SavedSearch
   alias Vutuv.Sessions
+  alias Vutuv.ViewerClock
 
   # The hub: no forms of its own, just the grouped rows with per-section entry
   # counts. Each page sets its own :page_title so the browser tab / history
@@ -118,9 +119,18 @@ defmodule VutuvWeb.SettingsController do
 
     render(conn, "preferences.html",
       user: user,
-      changeset: User.changeset(Prefs.with_effective(user)),
+      changeset: User.changeset(with_effective_clock(user)),
       page_title: gettext("Language & display")
     )
+  end
+
+  # `Prefs.with_effective/1` fills an untouched pref with the *installation*
+  # default, which for the date region is not what this member's pages actually
+  # render in: `Vutuv.ViewerClock` gives an unset region the guess from their
+  # browser first (issue #1502). Show them the shape they are reading, or the
+  # form would state a value the whole site contradicts.
+  defp with_effective_clock(user) do
+    user |> Prefs.with_effective() |> Map.put(:date_region, ViewerClock.region())
   end
 
   # The export area lives under the profile now (/:slug/export, where issue
@@ -684,14 +694,23 @@ defmodule VutuvWeb.SettingsController do
   # not public profile content, so it lives on the language & display page rather
   # than the profile editor. It posts back to that page and rerenders it on
   # error.
+  # The "Language & region" card: the interface language plus the two viewer
+  # clock knobs (issue #1502) — how dates are written and which zone times are
+  # stamped in. One form, because all three answer "where am I reading this
+  # from"; the language is a plain column and the other two are `Vutuv.Prefs`,
+  # which is why only they have a reset below.
   def update_language(conn, %{"user" => params}) do
     save(
       conn,
       params,
       "preferences.html",
       ~p"/settings/preferences",
-      gettext("Language updated.")
+      gettext("Language and region saved.")
     )
+  end
+
+  def reset_region(conn, _params) do
+    reset_prefs(conn, :region, gettext("Date and time settings reset to the site defaults."))
   end
 
   # Map preferences (which map services to show on addresses and which is the

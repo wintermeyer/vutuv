@@ -60,6 +60,14 @@
   >
     <.form_error changeset={@changeset} />
 
+    <%!-- The new account's time zone, filled by app.js from the browser
+          (issue #1502), so post stamps read right from the first page instead
+          of in Berlin time. Deliberately not a question on the form: the date
+          shape comes from Accept-Language on the same request, and both are
+          overridable later on /settings/preferences. With JavaScript off it
+          posts empty, which simply means "inherit the installation default". --%>
+    <input type="hidden" name="user[time_zone]" data-timezone-field />
+
     <div class="grid gap-4 sm:grid-cols-2">
       <div>
         <label for={f[:first_name].id} class={label_class}>{gettext("First name")}</label>

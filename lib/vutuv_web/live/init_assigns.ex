@@ -29,7 +29,7 @@ defmodule VutuvWeb.Live.InitAssigns do
 
   def on_mount(:default, _params, session, socket) do
     user = session_user(session)
-    VutuvWeb.LiveLocale.put_locale(user, session)
+    VutuvWeb.LiveLocale.put_viewer(user, session)
 
     # Mirror `conn.request_path` for live pages: the shared layout hands the
     # current path to the embedded ShellLive so it can zero the matching
@@ -101,7 +101,7 @@ defmodule VutuvWeb.Live.InitAssigns do
   """
   def assign_embedded(socket, session) do
     user = session_user(session)
-    VutuvWeb.LiveLocale.put_locale(user, session)
+    VutuvWeb.LiveLocale.put_viewer(user, session)
 
     socket
     |> assign(:current_user, user)

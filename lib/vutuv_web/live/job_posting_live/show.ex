@@ -130,10 +130,10 @@ defmodule VutuvWeb.JobPostingLive.Show do
 
           <p class="text-xs text-slate-600 dark:text-slate-400">
             <span :if={@posting.first_published_at}>
-              {gettext("Posted")}: <.local_time at={@posting.first_published_at} id="posted" format="%Y-%m-%d" />
+              {gettext("Posted")}: <.local_time at={@posting.first_published_at} id="posted" style={:date} />
             </span>
             <span :if={@posting.expires_on}>
-              · {gettext("Expires")}: {Calendar.strftime(@posting.expires_on, "%Y-%m-%d")}
+              · {gettext("Expires")}: {Vutuv.ViewerClock.format(@posting.expires_on, :date)}
             </span>
           </p>
         </.card>

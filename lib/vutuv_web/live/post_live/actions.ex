@@ -39,7 +39,7 @@ defmodule VutuvWeb.PostLive.Actions do
   @impl true
   def mount(_params, session, socket) do
     post_id = session["post_id"]
-    VutuvWeb.LiveLocale.put_locale(session)
+    VutuvWeb.LiveLocale.put_viewer(session)
 
     # Resolve the viewer from the session token on the connected socket only —
     # it is the one that subscribes and writes. The dead render stays anonymous

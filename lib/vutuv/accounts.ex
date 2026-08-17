@@ -142,14 +142,40 @@ defmodule Vutuv.Accounts do
     search_terms = SearchTerm.create_search_terms(user_params)
 
     changeset =
-      User.registration_changeset(%User{}, user_params)
+      %User{}
+      # Both viewer-clock fields are set below from sources the visitor did not
+      # type into a labelled field, so neither may come out of the form params.
+      |> User.registration_changeset(Map.drop(user_params, ~w(date_region time_zone)))
       |> Ecto.Changeset.put_assoc(:search_terms, search_terms)
       |> put_registration_username(slug_value)
       |> Ecto.Changeset.put_change(:locale, conn.assigns[:locale])
+      |> put_viewer_clock(conn, user_params)
 
     Enum.reduce([changeset | assocs], fn {type, params}, changeset ->
       Ecto.Changeset.put_assoc(changeset, type, [params])
     end)
+  end
+
+  # A new account starts on its own clock (issue #1502): the date shape comes
+  # from the browser's `Accept-Language` (`VutuvWeb.Plug.Locale` already guessed
+  # it for this request) and the time zone from a hidden field the sign-up form
+  # fills with `Intl.DateTimeFormat().resolvedOptions().timeZone`. Neither is a
+  # question anybody is asked — a form that opens by asking where you are is a
+  # worse first impression than a stamp the member can correct later on
+  # /settings/preferences.
+  #
+  # Both are dropped rather than refused when they don't check out. A hidden
+  # field and a request header are not something a member can see or retype, so a
+  # browser reporting a zone this installation's tzdata does not carry (an ICU
+  # build ahead of ours) must not fail the sign-up with an error pointing at a
+  # field that is not on the screen. `nil` there means "inherit the installation
+  # default", which is exactly the right answer.
+  defp put_viewer_clock(changeset, conn, user_params) do
+    zone = user_params["time_zone"]
+
+    changeset
+    |> Ecto.Changeset.put_change(:date_region, conn.assigns[:browser_date_region])
+    |> Ecto.Changeset.put_change(:time_zone, if(Vutuv.TimeZones.known?(zone), do: zone))
   end
 
   defp put_registration_username(changeset, nil),

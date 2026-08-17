@@ -48,7 +48,7 @@ defmodule VutuvWeb.ShellLive do
   def mount(_params, session, socket) do
     # The shell mounts outside the `live_session` (embedded via live_render),
     # so InitAssigns never runs for it — apply the session locale here.
-    VutuvWeb.LiveLocale.put_locale(session)
+    VutuvWeb.LiveLocale.put_viewer(session)
 
     # When the shell mounts ON the messages/notifications page itself, that
     # badge starts at zero. Relying only on the page's read-broadcast races the
@@ -393,8 +393,11 @@ defmodule VutuvWeb.ShellLive do
      )}
   end
 
-  # Berlin midnight: yesterday's sign-ups stop counting, so the pill empties out
-  # until the first member of the new day confirms.
+  # The `Vutuv.DayClock` tick. This pill counts the **Berlin** day whatever zone
+  # the reader is in (it is the operator's own figure), and Berlin midnight is a
+  # whole UTC hour, so it still empties exactly then; the clock's other hourly
+  # ticks re-ask a question whose answer has not moved, which is the cheap half
+  # of letting every reader's own midnight roll their post stamps over.
   def handle_info(:day_changed, socket), do: {:noreply, recount_new_members(socket)}
 
   # A block changed for this member (either direction): refresh their block

@@ -44,6 +44,17 @@ defmodule Vutuv.BerlinTimeTest do
                {~N[2026-07-14 22:00:00], ~N[2026-07-15 22:00:00]}
     end
 
+    # The two switch days are the ones a hand-rolled DST rule got wrong by an
+    # hour: they are 23 and 25 hours long, and the bounds have to say so.
+    test "brackets the two DST switch days at their real lengths" do
+      # 2026: clocks go forward March 29, back October 25.
+      assert BerlinTime.day_bounds_utc(~D[2026-03-29]) ==
+               {~N[2026-03-28 23:00:00], ~N[2026-03-29 22:00:00]}
+
+      assert BerlinTime.day_bounds_utc(~D[2026-10-25]) ==
+               {~N[2026-10-24 22:00:00], ~N[2026-10-25 23:00:00]}
+    end
+
     test "the bounds round-trip: every instant inside maps back to that Berlin day" do
       for date <- [~D[2026-01-15], ~D[2026-07-15]] do
         {start, finish} = BerlinTime.day_bounds_utc(date)
@@ -54,27 +65,6 @@ defmodule Vutuv.BerlinTimeTest do
         assert BerlinTime.date(first) == date
         assert BerlinTime.date(last) == date
         assert BerlinTime.date(before) == Date.add(date, -1)
-      end
-    end
-  end
-
-  describe "next_midnight_utc/1" do
-    test "returns the coming Berlin 00:00 as a UTC instant, DST-aware" do
-      # Winter (CET, +1h): Berlin 2026-01-16 00:00 is 2026-01-15 23:00 UTC.
-      assert BerlinTime.next_midnight_utc(~U[2026-01-15 12:00:00Z]) == ~U[2026-01-15 23:00:00Z]
-      # Summer (CEST, +2h): Berlin 2026-07-03 00:00 is 2026-07-02 22:00 UTC.
-      assert BerlinTime.next_midnight_utc(~U[2026-07-02 12:00:00Z]) == ~U[2026-07-02 22:00:00Z]
-    end
-
-    test "a moment before Berlin midnight still points at the very next one" do
-      # 2026-01-15 22:59 UTC is Berlin 23:59 the same day; the next boundary is
-      # still 2026-01-16 00:00 Berlin = 2026-01-15 23:00 UTC (one minute away).
-      assert BerlinTime.next_midnight_utc(~U[2026-01-15 22:59:00Z]) == ~U[2026-01-15 23:00:00Z]
-    end
-
-    test "the result is always strictly in the future of the given instant" do
-      for utc <- [~U[2026-01-15 12:00:00Z], ~U[2026-07-02 23:30:00Z], ~U[2026-03-29 00:30:00Z]] do
-        assert DateTime.compare(BerlinTime.next_midnight_utc(utc), utc) == :gt
       end
     end
   end

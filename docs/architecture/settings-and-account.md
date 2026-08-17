@@ -146,6 +146,61 @@ outside), so resolution falls back to shipped defaults; tests inject
 installation defaults with `Vutuv.Prefs.Cache.store/1` + `clear/0`
 (async: false).
 
+### Date region and time zone
+
+**Every timestamp a member reads is written on their own clock, in their own
+date shape** (issue #1502). Before it, `users.locale` held a language only — the
+Locale plug truncated `en-GB` to `en` — so a post stamp was Europe/Berlin for
+everybody and its non-German branch hardcoded US order and a 12-hour clock.
+
+Two `Vutuv.Prefs` knobs (group `:region`, both on `/settings/preferences` under
+"Language & region", reset via POST `/settings/region/reset`):
+
+- **`users.date_region`** — one of four shapes in `Vutuv.DateRegions`:
+  `DE` (`31.12.2026, 14:30`), `GB` (`31/12/2026, 14:30`), `US`
+  (`12/31/2026, 2:30 PM`) and `ISO` (`2026-12-31, 14:30`). Four, not two
+  hundred: each is labelled with the regions that write dates that way and
+  every option carries a worked sample, because nobody picks a date format by
+  reading the name of a country. Shipped default `DE`.
+- **`users.time_zone`** — an IANA identifier. `Vutuv.TimeZones` offers the 312
+  canonical civil zones of `zone1970.tab` plus `UTC` in the settings select, but
+  **validates** against the time zone database itself (`tz`, compiled in, no
+  runtime network — an intranet install needs nothing), so every alias IANA
+  still ships resolves too. The menu is not the boundary of what is accepted: a
+  browser reports whatever name its own ICU build carries. Shipped default
+  `Europe/Berlin`.
+
+`Vutuv.ViewerClock` is the read seam. `VutuvWeb.Plug.Locale` resolves both on
+every browser request and `VutuvWeb.LiveLocale.put_viewer/1,2` mirrors that in a
+LiveView process, storing them in the **process dictionary** beside the Gettext
+locale and for the same reason: a timestamp is rendered deep inside a component
+that has no business being handed the viewer. Resolution is the member's own
+value → for the region, the guess from their browser's `Accept-Language` → the
+installation default. That middle layer is what stops an *existing* member
+reading US-style stamps until they find the setting.
+
+**A new account is stamped from the browser at sign-up, never asked.** The date
+region comes from `Accept-Language` on the same request; the time zone from a
+hidden field `assets/js/app.js` fills with
+`Intl.DateTimeFormat().resolvedOptions().timeZone`. Both are *dropped* rather
+than refused when they don't check out — neither is something a member can see
+or retype, so a browser ahead of our tzdata must not fail a sign-up with an
+error beside a field that is not on the screen; nil means "inherit". The
+settings page offers the same one-click shortcut to anyone who signed up before
+this existed: app.js writes what the browser reports under the select.
+
+Two consequences elsewhere. `VutuvWeb.UI.local_time/1` renders **server-final**
+(no `data-localtime`, no hook) once a member holds an own zone, and keeps the
+client-side rewrite when they do not — their setting beats the machine they
+happen to be reading on, but a visitor's browser still knows better than our
+default. And `Vutuv.DayClock` broadcasts on **every whole UTC hour** rather than
+once at Berlin midnight, because "today" now rolls over at 300-odd different
+moments (see [realtime.md](realtime.md)). `Vutuv.BerlinTime` stays what it always
+was, and is now clearly named for it: the **installation's** clock — the German
+calendar day the ad rotation books by, the nightly workers wake on and the age
+display rolls over at. Those are facts about the site, not about whoever is
+looking.
+
 The **add-tag form** (`/settings/tags/new`) is a LiveView
 (`VutuvWeb.TagNewLive`, issue #848): while the member types it previews the
 tags a submit will attach — split on commas and spaces, leading `#` stripped,

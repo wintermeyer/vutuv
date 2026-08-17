@@ -3523,13 +3523,12 @@ defmodule VutuvWeb.PostComponents do
   defp taken_on(%PostImage{taken_at: nil}), do: nil
 
   # The capture day only — a shutter time to the second is noise beside the
-  # exposure settings. Formatted the way the post timestamps already branch
-  # (`VutuvWeb.UI.post_time/1`), so dates read the same across the card.
+  # exposure settings. Written in the reader's own region, like the post
+  # timestamp above it (`VutuvWeb.UI.post_time/1`), so dates read the same
+  # across the card. The capture day is the photographer's local day as their
+  # camera recorded it, so it is never shifted into the reader's zone.
   defp taken_on(%PostImage{taken_at: taken_at}) do
-    case Gettext.get_locale(VutuvWeb.Gettext) do
-      "de" -> Calendar.strftime(taken_at, "%d.%m.%Y")
-      _other -> Calendar.strftime(taken_at, "%b %-d, %Y")
-    end
+    taken_at |> NaiveDateTime.to_date() |> Vutuv.ViewerClock.format(:date)
   end
 
   # Below this a photo is taller than 1:2 — a tower the reader has to scroll

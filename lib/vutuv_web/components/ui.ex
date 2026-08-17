@@ -27,8 +27,9 @@ defmodule VutuvWeb.UI do
   import PhoenixHTMLHelpers.Form, only: [checkbox: 3]
 
   alias Vutuv.Accounts.User
-  alias Vutuv.BerlinTime
+  alias Vutuv.DateRegions
   alias Vutuv.Tags.UserTag
+  alias Vutuv.ViewerClock
   alias VutuvWeb.CodeHighlight.Languages
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Markdown
@@ -2791,75 +2792,120 @@ defmodule VutuvWeb.UI do
 
   Pass `id` when the element lives inside a LiveView so the `LocalTime` hook can
   attach (the hook needs a DOM id); omit it on classic pages, where the
-  `data-localtime` sweep handles it. `format` is the `Calendar.strftime/2` form
-  of the fallback text (default `"%Y-%m-%d %H:%M"`).
+  `data-localtime` sweep handles it.
 
-  `precision="second"` makes the rewritten text carry **seconds**
-  (`data-localtime="second"`, which the JS reads). Minutes are right for
-  everything that is merely "when did this arrive"; the account-activity log
-  (issue #1087) is the case where they are not — support answering "you changed
-  this at 14:32:07" needs the second, and two events inside one minute have to
-  be distinguishable in the order they are shown in.
+  **Who writes the text.** Once a member has picked a time zone of their own
+  (`users.time_zone`, issue #1502) the server renders in it and the element
+  carries no `data-localtime`, so the client leaves it alone: their setting has
+  to beat the machine they happen to be reading on. Without one — an anonymous
+  visitor, or a member who never chose — nothing on the server knows the
+  reader's zone, so the browser keeps the last word exactly as before.
+
+  `style` picks the shape from the viewer's date region (`Vutuv.DateRegions`):
+  `:datetime` (the default), `:date`, `:short_date`, `:time`,
+  `:datetime_seconds`. Pass `format` instead to pin a literal
+  `Calendar.strftime/2` pattern — what the admin tables do, where an ISO date
+  is the point and a member's German or American shape would only get in the
+  way of comparing rows.
+
+  `precision="second"` makes the *rewritten* text carry seconds
+  (`data-localtime="second"`, which the JS reads); pair it with
+  `style={:datetime_seconds}` or a seconds-carrying `format` so both halves
+  agree. Minutes are right for everything that is merely "when did this
+  arrive"; the account-activity log (issue #1087) is the case where they are
+  not — support answering "you changed this at 14:32:07" needs the second, and
+  two events inside one minute have to be distinguishable in the order they are
+  shown in.
   """
   attr(:at, :any, required: true, doc: "a NaiveDateTime (treated as UTC) or a UTC DateTime")
   attr(:id, :string, default: nil, doc: "DOM id; when set, the LocalTime hook attaches")
-  attr(:format, :string, default: "%Y-%m-%d %H:%M")
+  attr(:format, :string, default: nil, doc: "a literal strftime pattern; overrides style")
+
+  attr(:style, :atom,
+    values: ~w(date short_date time datetime short_datetime datetime_seconds)a,
+    default: :datetime
+  )
+
   attr(:precision, :string, values: ~w(minute second), default: "minute")
   attr(:class, :any, default: nil)
   attr(:rest, :global)
 
   def local_time(assigns) do
-    assigns = assign(assigns, :iso, iso_utc(assigns.at))
+    server_final? = ViewerClock.own_zone?()
+
+    assigns =
+      assign(assigns,
+        iso: iso_utc(assigns.at),
+        text: local_time_text(assigns, server_final?),
+        localtime: !server_final? && assigns.precision
+      )
 
     ~H"""
     <time
       id={@id}
-      phx-hook={@id && "LocalTime"}
-      data-localtime={@precision}
+      phx-hook={@id && @localtime && "LocalTime"}
+      data-localtime={@localtime}
       datetime={@iso}
       title={@iso}
       class={@class}
       {@rest}
-    >{Calendar.strftime(@at, @format)}</time>
+    >{@text}</time>
     """
+  end
+
+  # The visible text: the reader's shape either way, but only shifted into their
+  # zone when the server has the last word. Otherwise the instant stays UTC, as
+  # the no-JavaScript fallback it has always been — writing an
+  # installation-default zone into text the browser is about to overwrite would
+  # only make the pre-rewrite flash wrong in a second way, and the ISO `title`
+  # carries the unambiguous stamp regardless.
+  defp local_time_text(assigns, server_final?) do
+    pattern = assigns.format || ViewerClock.pattern(assigns.style)
+
+    if server_final?,
+      do: assigns.at |> ViewerClock.naive() |> Calendar.strftime(pattern),
+      else: Calendar.strftime(assigns.at, pattern)
   end
 
   defp iso_utc(%DateTime{} = dt), do: dt |> DateTime.truncate(:second) |> DateTime.to_iso8601()
   defp iso_utc(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt) <> "Z"
 
   @doc """
-  A **post** timestamp, rendered entirely on the server in Europe/Berlin time —
-  vutuv's canonical clock (`Vutuv.BerlinTime`, the same German calendar day the
-  age display and the daily ad rotation use). Unlike `<.local_time>` there is no
-  client-side rewrite: a post from **today** shows just the time ("08:42 Uhr" in
-  German, a bare "8:42 AM" elsewhere), one from **yesterday** the word plus the
-  time ("Gestern, 08:42 Uhr" / "Yesterday, 8:42 AM"), older posts the full short
-  date and time ("02.07.26, 08:42"). The `<time>` keeps the UTC `datetime` for
+  A **post** timestamp, rendered entirely on the server in the **reader's own**
+  time zone and date shape (`Vutuv.ViewerClock`, issue #1502; before that every
+  post was stamped in Europe/Berlin for everybody). Unlike `<.local_time>` there
+  is never a client-side rewrite, because the wording is relative to the
+  reader's calendar day and only the server knows which day that is: a post from
+  **today** shows just the time ("08:42 Uhr" in German on a 24-hour clock, a
+  bare "8:42 AM" on a 12-hour one), one from **yesterday** the word plus the
+  time, older posts the short date and time in the reader's region ("02.07.26,
+  08:42" / "7/2/26, 8:42 AM"). The `<time>` keeps the UTC `datetime` for
   machines/agents and a full-date `title` for hover, but the visible text is
   final from the server, so it deliberately carries **no** `data-localtime`
-  marker (the JS localizer skips it). Because the today/yesterday wording is
-  relative to the German calendar day, `Vutuv.DayClock` broadcasts `:day_changed`
-  at Berlin midnight and the LiveViews that show posts (feed, profile,
-  notifications) re-render their stamps then, so an open page rolls "08:42 Uhr"
-  over to "Gestern, 08:42 Uhr" at 00:00 without a reload. Used by the post card
-  and the thread/notification post preview; every other timestamp still uses
-  `<.local_time>` (viewer timezone).
+  marker (the JS localizer skips it).
+
+  Because today/yesterday moves with the clock, `Vutuv.DayClock` broadcasts
+  `:day_changed` on every whole UTC hour and the LiveViews that show posts
+  (feed, profile, notifications) re-render their stamps then, so an open page
+  rolls "08:42 Uhr" over to "Gestern, 08:42 Uhr" at the reader's own midnight
+  without a reload. Used by the post card and the thread/notification post
+  preview; every other timestamp uses `<.local_time>`.
   """
   attr(:at, :any, required: true, doc: "a NaiveDateTime (treated as UTC) or a UTC DateTime")
   attr(:id, :string, default: nil)
   attr(:class, :any, default: nil)
 
   def post_time(assigns) do
-    utc = as_utc_datetime(assigns.at)
-    local = BerlinTime.naive(utc)
-    bucket = day_bucket(BerlinTime.date(utc), BerlinTime.today())
+    local = ViewerClock.naive(assigns.at)
+    bucket = day_bucket(ViewerClock.date(assigns.at), ViewerClock.today())
     locale = Gettext.get_locale(VutuvWeb.Gettext)
+    region = ViewerClock.region()
 
     assigns =
       assign(assigns,
         iso: iso_utc(assigns.at),
-        text: post_stamp(local, bucket, locale),
-        full: post_stamp(local, :older, locale)
+        text: post_stamp(local, bucket, locale, region),
+        full: post_stamp(local, :older, locale, region)
       )
 
     ~H"""
@@ -2867,11 +2913,8 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  defp as_utc_datetime(%DateTime{} = dt), do: dt
-  defp as_utc_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
-
-  # Which Berlin-day bucket a post falls in, relative to the current German day.
-  # The `Vutuv.DayClock` re-renders open pages at Berlin midnight so a post moves
+  # Which of the reader's days a post falls in, relative to their today. The
+  # `Vutuv.DayClock` re-renders open pages on the hour so a post moves
   # `:today -> :yesterday -> :older` as the day rolls over. A stamp from the
   # future (clock skew) is never possible in practice, so it collapses to `:older`.
   defp day_bucket(post_date, today) do
@@ -2882,18 +2925,25 @@ defmodule VutuvWeb.UI do
     end
   end
 
-  # German is the site's primary locale: 24-hour clock, an "Uhr" suffix for a
-  # post made today, "Gestern" plus the time for yesterday, and the dotted
-  # numeric short date otherwise. Any other locale (currently English) gets the
-  # bare locale-appropriate time / "Yesterday" / short date, matching what the
-  # old client-side Intl short format produced. The full-date form (`:older`)
-  # also backs every stamp's hover `title`, so machines and hovers keep the date.
-  defp post_stamp(local, :today, "de"), do: Calendar.strftime(local, "%H:%M") <> " Uhr"
-  defp post_stamp(local, :yesterday, "de"), do: "Gestern, " <> post_stamp(local, :today, "de")
-  defp post_stamp(local, :older, "de"), do: Calendar.strftime(local, "%d.%m.%y, %H:%M")
-  defp post_stamp(local, :today, _locale), do: Calendar.strftime(local, "%-I:%M %p")
-  defp post_stamp(local, :yesterday, l), do: "Yesterday, " <> post_stamp(local, :today, l)
-  defp post_stamp(local, :older, _locale), do: Calendar.strftime(local, "%-m/%-d/%y, %-I:%M %p")
+  # Two independent axes, which is why both are passed: the **language** picks
+  # the words ("Gestern" / "Yesterday") and the **region** the digits. German
+  # adds an "Uhr" suffix to a bare time, but only on a 24-hour clock — "2:30 PM
+  # Uhr" is not a thing anyone says. The full-date form (`:older`) also backs
+  # every stamp's hover `title`, so machines and hovers keep the date.
+  defp post_stamp(local, :today, locale, region) do
+    time = Calendar.strftime(local, DateRegions.pattern(region, :time))
+
+    if locale == "de" and DateRegions.clock(region) == :h24, do: time <> " Uhr", else: time
+  end
+
+  defp post_stamp(local, :yesterday, locale, region) do
+    yesterday = if locale == "de", do: "Gestern", else: "Yesterday"
+    yesterday <> ", " <> post_stamp(local, :today, locale, region)
+  end
+
+  defp post_stamp(local, :older, _locale, region) do
+    Calendar.strftime(local, ViewerClock.pattern(region, :short_datetime))
+  end
 
   @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
   attr(:count, :integer, default: 0)

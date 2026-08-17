@@ -91,7 +91,22 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Posts"),
       gettext("Maps"),
       gettext("On"),
-      gettext("Off")
+      gettext("Off"),
+      # Vutuv.Prefs + Vutuv.DateRegions — the viewer clock (issue #1502)
+      gettext("Date format"),
+      gettext("Time zone"),
+      gettext("Date & time"),
+      gettext(
+        "The order and punctuation of every date you read here, and whether times run on a 12- or 24-hour clock."
+      ),
+      gettext(
+        "Posts, messages and notifications are stamped in this zone. New accounts take it from the browser."
+      ),
+      # Vutuv.DateRegions.label/1 — the regions each date shape is named after
+      gettext("Germany, Austria, Switzerland"),
+      gettext("United Kingdom, France, Brazil"),
+      gettext("United States"),
+      gettext("ISO 8601 (Sweden, Japan, China)")
     ]
   end
 end

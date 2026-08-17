@@ -567,17 +567,14 @@ defmodule VutuvWeb.UserHTML do
 
   @doc """
   A last-activity date trimmed for the compact Code card. A date in `today`'s
-  (Berlin) year drops the redundant year and shows only day + month (German
-  "28.05.", otherwise "5/28"); any earlier year shows just the year ("2025"),
-  since the exact day of a long-dormant account no longer matters. Public for
-  a locale-specific unit test.
+  (Berlin) year drops the redundant year and shows only day + month in the
+  reader's own region ("28.05.", "5/28"); any earlier year shows just the year
+  ("2025"), since the exact day of a long-dormant account no longer matters.
+  Public for a region-specific unit test.
   """
   def compact_activity_date(%Date{} = date, %Date{} = today) do
     if date.year == today.year do
-      case Gettext.get_locale(VutuvWeb.Gettext) do
-        "de" -> Calendar.strftime(date, "%d.%m.")
-        _ -> Calendar.strftime(date, "%-m/%-d")
-      end
+      Vutuv.ViewerClock.format(date, :day_month)
     else
       Integer.to_string(date.year)
     end

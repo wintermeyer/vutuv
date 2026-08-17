@@ -220,7 +220,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
             <.local_time
               at={domain.grace_deadline_at}
               id={"domain-grace-time-#{domain.id}"}
-              format="%Y-%m-%d"
+              style={:date}
             />
           </p>
 

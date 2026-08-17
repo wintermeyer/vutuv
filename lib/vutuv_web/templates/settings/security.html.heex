@@ -52,7 +52,7 @@ who still looks here first. --%>
             </.by_other_badge>
           </span>
           <span class="block text-xs text-slate-600 dark:text-slate-400">
-            <.local_time at={event.inserted_at} precision="second" format="%Y-%m-%d %H:%M:%S" />
+            <.local_time at={event.inserted_at} precision="second" style={:datetime_seconds} />
             <span :if={detail(event)}>· {detail(event)}</span>
           </span>
         </li>

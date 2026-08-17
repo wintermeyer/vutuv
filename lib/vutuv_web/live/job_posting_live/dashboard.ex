@@ -139,7 +139,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
                   views: compact_count(posting.view_count),
                   clicks: compact_count(posting.apply_click_count))}
                 <span :if={@tab == :published and not is_nil(posting.expires_on)}>
-                  · {gettext("Expires")}: {Calendar.strftime(posting.expires_on, "%Y-%m-%d")}
+                  · {gettext("Expires")}: {Vutuv.ViewerClock.format(posting.expires_on, :date)}
                 </span>
               </p>
             </div>

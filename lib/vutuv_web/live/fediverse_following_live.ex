@@ -415,7 +415,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
                       <.local_time
                         at={follow.inserted_at}
                         id={"followed-#{follow.id}"}
-                        format="%Y-%m-%d"
+                        style={:date}
                       />
                     </td>
                     <td>

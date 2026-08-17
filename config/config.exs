@@ -34,6 +34,13 @@ config :logger, :console,
 
 config :phoenix, :json_library, Jason
 
+# The IANA time zone database behind `DateTime.shift_zone/2`, which every
+# member-facing timestamp goes through (`Vutuv.ViewerClock`). `tz` compiles the
+# bundled IANA release in, so nothing is fetched at runtime and an air-gapped
+# intranet install keeps working; a newer tzdata arrives with the next `tz`
+# release. `Tz.UpdatePeriodically` is deliberately not supervised.
+config :elixir, :time_zone_database, Tz.TimeZoneDatabase
+
 # The ActivityPub media type (follow-only federation, Vutuv.Fediverse): the
 # :browser pipeline must let an `Accept: application/activity+json` request
 # through to the profile / post-permalink controllers, which answer it with

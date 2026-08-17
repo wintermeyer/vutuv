@@ -92,7 +92,7 @@ do. --%>
           >{@user.moved_to}</a>
         </p>
         <p :if={@user.moved_at} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-          {gettext("Redirected on %{date}", date: Calendar.strftime(@user.moved_at, "%Y-%m-%d"))}
+          {gettext("Redirected on %{date}", date: Vutuv.ViewerClock.format(@user.moved_at, :date))}
         </p>
         <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
           {gettext(

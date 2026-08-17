@@ -45,7 +45,7 @@ defmodule VutuvWeb.Admin.DashboardLive do
   def mount(_params, session, socket) do
     # Embedded outside the admin live_session, so re-apply the request locale
     # (the labels are gettext, the admin UI is German) the way ShellLive does.
-    VutuvWeb.LiveLocale.put_locale(session)
+    VutuvWeb.LiveLocale.put_viewer(session)
 
     if connected?(socket) do
       Presence.subscribe_online()

@@ -65,7 +65,7 @@ defmodule VutuvWeb.SectionReorderLive do
   def mount(_params, session, socket) do
     # Embedded outside the live_session, so InitAssigns never runs — re-apply
     # the session locale here or the tool falls back to English.
-    VutuvWeb.LiveLocale.put_locale(session)
+    VutuvWeb.LiveLocale.put_viewer(session)
 
     # The authenticated owner is resolved from the cookie's session_token (the
     # same resolver ConfigureSession / Live.InitAssigns use), never a bare

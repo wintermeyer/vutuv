@@ -1,15 +1,29 @@
 defmodule VutuvWeb.Plug.Locale do
-  @moduledoc false
+  @moduledoc """
+  Resolves everything about a request that is "where the reader is": the
+  interface language, the date shape they read (`Vutuv.DateRegions`) and the
+  time zone their stamps are written in (`Vutuv.ViewerClock`).
+
+  The language goes into Gettext, the other two into the viewer clock, and both
+  are also stored in the session so a LiveView — a process this plug never ran
+  in — can pick them up on mount (`VutuvWeb.LiveLocale`).
+  """
 
   import Plug.Conn
+
+  alias Vutuv.Accounts.User
+  alias Vutuv.DateRegions
+  alias Vutuv.ViewerClock
 
   def init(default), do: default
 
   def call(conn, _default) do
-    handle_locale(conn, conn.assigns[:current_user])
+    conn
+    |> handle_locale(conn.assigns[:current_user])
+    |> put_viewer_clock(conn.assigns[:current_user])
   end
 
-  defp handle_locale(conn, %Vutuv.Accounts.User{locale: nil}), do: handle_locale(conn, nil)
+  defp handle_locale(conn, %User{locale: nil}), do: handle_locale(conn, nil)
 
   defp handle_locale(conn, nil) do
     # Get locales from header
@@ -22,8 +36,21 @@ defmodule VutuvWeb.Plug.Locale do
     |> assign_locale(conn)
   end
 
-  defp handle_locale(conn, %Vutuv.Accounts.User{locale: loc}) do
+  defp handle_locale(conn, %User{locale: loc}) do
     assign_locale(loc, conn)
+  end
+
+  # The date shape and time zone this reader gets. The browser's own guess is
+  # kept beside the resolved value — the sign-up form stamps it on the new
+  # account (`Vutuv.Accounts`), and a LiveView mount re-runs the same
+  # resolution off the session, so it has to travel there too.
+  defp put_viewer_clock(conn, user) do
+    browser_region = DateRegions.from_accept_language(get_req_header(conn, "accept-language"))
+    ViewerClock.put_viewer(user, browser_region)
+
+    conn
+    |> assign(:browser_date_region, browser_region)
+    |> store_in_session(:date_region, browser_region)
   end
 
   defp process_header([]), do: []
@@ -68,13 +95,13 @@ defmodule VutuvWeb.Plug.Locale do
 
     conn
     |> assign(:locale, locale)
-    |> store_in_session(locale)
+    |> store_in_session(:locale, locale)
   end
 
   # API requests run this plug without a fetched session — skip them.
-  defp store_in_session(conn, locale) do
+  defp store_in_session(conn, key, value) do
     case conn.private do
-      %{plug_session_fetch: :done} -> put_session(conn, :locale, locale)
+      %{plug_session_fetch: :done} -> put_session(conn, key, value)
       _ -> conn
     end
   end

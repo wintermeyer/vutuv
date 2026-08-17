@@ -25,10 +25,82 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
           </p>
         </div>
 
+        <%!-- The date shape (issue #1502). The option text carries a worked
+              sample (Vutuv.Prefs.value_label/2), because nobody picks a date
+              format by reading the name of a country. --%>
+        <div class="sm:max-w-md">
+          <%= label f, :date_region, Vutuv.Prefs.label(:date_region), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= select f, :date_region,
+            Enum.map(Vutuv.Prefs.pref!(:date_region).values, fn value ->
+              {Vutuv.Prefs.value_label(Vutuv.Prefs.pref!(:date_region), value), value}
+            end),
+            class: input_class() %>
+          <%= error_tag f, :date_region %>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {Vutuv.Prefs.hint(:date_region)}
+          </p>
+        </div>
+
+        <%!-- The time zone. Grouped by IANA area so the ~313 zones are
+              scannable, and app.js fills the line below it with what this
+              browser reports, so the common case is one click rather than a
+              hunt through the list. --%>
+        <div class="sm:max-w-md">
+          <%= label f, :time_zone, Vutuv.Prefs.label(:time_zone), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <select
+            id={f[:time_zone].id}
+            name={f[:time_zone].name}
+            class={input_class(f, :time_zone)}
+            aria-invalid={f.errors[:time_zone] && "true"}
+          >
+            <optgroup :for={{area, zones} <- Vutuv.TimeZones.groups()} label={area}>
+              <option
+                :for={zone <- zones}
+                value={zone}
+                selected={to_string(f[:time_zone].value) == zone}
+              >
+                {zone}
+              </option>
+            </optgroup>
+          </select>
+          <%= error_tag f, :time_zone %>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {Vutuv.Prefs.hint(:time_zone)}
+          </p>
+          <%!-- Filled by app.js from Intl.DateTimeFormat().resolvedOptions();
+                it carries the plain `hidden` attribute and no display utility,
+                so with JavaScript off it simply never appears. --%>
+          <p
+            hidden
+            data-browser-timezone
+            data-select={f[:time_zone].id}
+            data-label={gettext("Your browser says: {zone}")}
+            class="mt-1 text-sm text-slate-600 dark:text-slate-400"
+          >
+          </p>
+        </div>
+
         <div class="pt-1">
           <.button type="submit">{gettext("Save")}</.button>
         </div>
       </.form>
+
+      <%!-- Back to inheriting the installation defaults — see the maps card.
+            The interface language above is a plain column, not a pref, so it is
+            deliberately not part of this reset. --%>
+      <div
+        :if={Vutuv.Prefs.customized_in_group?(@user, :region)}
+        class="mt-5 border-t border-slate-100 pt-4 dark:border-slate-800"
+      >
+        <.link
+          href={~p"/settings/region/reset"}
+          method="post"
+          id="reset-region"
+          class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          {gettext("Reset to the site defaults")}
+        </.link>
+      </div>
     </.card>
 
     <%!-- Map preferences: which map services show on the addresses this member

@@ -484,8 +484,18 @@ notification on `/notifications` quotes, which map services appear on
 addresses and which one opens first. Members tune these on their own settings
 pages; you decide what everyone gets **until** they do.
 
-One of them is a privacy posture rather than a display detail: **whether a
-member is named among the likes of a post**. A post's own page lists the
+Two of them decide how every timestamp on the site is written: the **date
+format** (`31.12.2026` / `31/12/2026` / `12/31/2026` / `2026-12-31`, each with
+its own clock) and the **time zone**. They ship as German dates on Europe/Berlin
+because that is what vutuv.de is; an installation somewhere else changes both
+here once and every member who has not chosen follows. A member's own choice
+always wins, and a **new account takes both from its browser at sign-up**, so
+these defaults matter most to accounts that already existed and to logged-out
+visitors. The time zone list is the IANA database compiled into the release —
+nothing is fetched, so an air-gapped install has every zone.
+
+Another is a privacy posture rather than a display detail: **whether a member
+is named among the likes of a post**. A post's own page lists the
 members who liked it under the count, and vutuv ships that as public, the way
 a like is on the networks people come from. If your installation wants the
 opposite — an intranet, say, where who agreed with what is nobody else's

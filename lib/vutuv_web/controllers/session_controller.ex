@@ -258,7 +258,7 @@ defmodule VutuvWeb.SessionController do
           ok: false,
           error:
             gettext("This account is suspended until %{date}.",
-              date: Calendar.strftime(until, "%Y-%m-%d")
+              date: Vutuv.ViewerClock.format(until, :date)
             )
         })
 
@@ -393,7 +393,7 @@ defmodule VutuvWeb.SessionController do
         |> put_flash(
           :error,
           gettext("This account is suspended until %{date}.",
-            date: Calendar.strftime(until, "%Y-%m-%d")
+            date: Vutuv.ViewerClock.format(until, :date)
           )
         )
         |> redirect(to: ~p"/")

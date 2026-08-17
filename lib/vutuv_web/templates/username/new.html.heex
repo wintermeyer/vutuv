@@ -69,7 +69,7 @@ Profile now. --%>
             days: @quota.window_days
           ) %>
           <%= gettext("You can change it again on %{date}.",
-            date: Calendar.strftime(@quota.next_change_at, "%Y-%m-%d")
+            date: Vutuv.ViewerClock.format(@quota.next_change_at, :date)
           ) %>
         </p>
       <% end %>

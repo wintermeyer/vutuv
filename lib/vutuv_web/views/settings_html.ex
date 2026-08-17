@@ -291,7 +291,7 @@ defmodule VutuvWeb.SettingsHTML do
             {@passkey.nickname || gettext("Passkey")}
           </span>
           <span class="block text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Added")}: {Calendar.strftime(@passkey.inserted_at, "%Y-%m-%d")}<span :if={
+            {gettext("Added")}: {Vutuv.ViewerClock.format(@passkey.inserted_at, :date)}<span :if={
               @passkey.last_used_at
             }>
               · {gettext("Last used")}: {last_active(@passkey.last_used_at)}</span>
@@ -394,7 +394,7 @@ defmodule VutuvWeb.SettingsHTML do
       seconds < 3600 -> ngettext("%{count} minute ago", "%{count} minutes ago", div(seconds, 60))
       seconds < 86_400 -> ngettext("%{count} hour ago", "%{count} hours ago", div(seconds, 3600))
       seconds < 604_800 -> ngettext("%{count} day ago", "%{count} days ago", div(seconds, 86_400))
-      true -> Calendar.strftime(at, "%Y-%m-%d")
+      true -> Vutuv.ViewerClock.format(at, :date)
     end
   end
 end

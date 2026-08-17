@@ -1,12 +1,12 @@
 defmodule VutuvWeb.NotificationLive.Groups do
   @moduledoc """
   Pure presentation grouping behind the notifications page: raw
-  `Vutuv.Activity` feed items in, Berlin-day sections of merged rows out.
+  `Vutuv.Activity` feed items in, calendar-day sections of merged rows out.
 
   The feed's event tables make one item per row, which floods the page - 113
   followers on one day were 113 identical cards. Grouping merges what reads
-  as one piece of news into one row, keyed within a Berlin calendar day (the
-  site's canonical clock, like post timestamps):
+  as one piece of news into one row, keyed within a calendar day — the
+  **reader's** day (`Vutuv.ViewerClock`, issue #1502), like post timestamps:
 
     * likes of the **same post** - "Anna and Ben liked your post."
     * new **followers** - "Anna, Ben and 111 more are now following you."
@@ -25,7 +25,7 @@ defmodule VutuvWeb.NotificationLive.Groups do
   midnight rollover) instead of patching a stream in place.
   """
 
-  alias Vutuv.BerlinTime
+  alias Vutuv.ViewerClock
 
   # How many actors a row names before folding the rest into "and N more".
   @named_actors 2
@@ -47,7 +47,7 @@ defmodule VutuvWeb.NotificationLive.Groups do
     items
     |> Enum.map(&normalize/1)
     |> Enum.sort_by(&NaiveDateTime.to_iso8601(&1.at_naive), :desc)
-    |> Enum.group_by(& &1.berlin_day)
+    |> Enum.group_by(& &1.day)
     |> Enum.sort_by(fn {day, _} -> day end, {:desc, Date})
     |> Enum.map(fn {day, day_items} ->
       %{day: day, groups: day_groups(day, day_items, read_marker)}
@@ -197,13 +197,13 @@ defmodule VutuvWeb.NotificationLive.Groups do
     do: NaiveDateTime.compare(item.at_naive, read_marker) == :gt
 
   # Every item gets a normalized UTC NaiveDateTime (pushed events carry
-  # DateTimes, derived rows NaiveDateTimes) and its Berlin calendar day.
+  # DateTimes, derived rows NaiveDateTimes) and the reader's calendar day.
   defp normalize(item) do
     at = to_naive(item[:at]) || NaiveDateTime.utc_now(:second)
 
     item
     |> Map.put(:at_naive, at)
-    |> Map.put(:berlin_day, at |> DateTime.from_naive!("Etc/UTC") |> BerlinTime.date())
+    |> Map.put(:day, ViewerClock.date(at))
   end
 
   defp to_naive(%DateTime{} = at), do: DateTime.to_naive(at)

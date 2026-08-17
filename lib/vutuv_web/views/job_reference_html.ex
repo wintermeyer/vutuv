@@ -431,18 +431,13 @@ defmodule VutuvWeb.JobReferenceHTML do
   end
 
   @doc """
-  An issue date as the reader's locale writes one.
+  An issue date as the reader's own region writes one (`Vutuv.ViewerClock`).
 
   The bare `Date` prints ISO-8601, which on a German page reads as a machine
   stamp rather than a date. The agent-format siblings keep ISO — that is the
   form a machine wants, and this is the form a person wants.
   """
-  def issued_on(%Date{} = date) do
-    case Gettext.get_locale(VutuvWeb.Gettext) do
-      "de" -> Calendar.strftime(date, "%d.%m.%Y")
-      _other -> Calendar.strftime(date, "%Y-%m-%d")
-    end
-  end
+  def issued_on(%Date{} = date), do: Vutuv.ViewerClock.format(date, :date)
 
   def issued_on(_none), do: nil
 

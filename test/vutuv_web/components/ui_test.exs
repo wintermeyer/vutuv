@@ -4,14 +4,24 @@ defmodule VutuvWeb.UITest do
   import Phoenix.Component, only: [sigil_H: 2]
   import Phoenix.LiveViewTest
 
-  alias Vutuv.BerlinTime
+  alias Vutuv.ViewerClock
   alias VutuvWeb.UI
 
-  # Noon UTC on yesterday's Berlin calendar day, as a NaiveDateTime (post_time
-  # reads a naive value as UTC). Noon keeps the Berlin day unambiguous - far
-  # from either midnight - so the "yesterday" bucket is stable whenever tests run.
-  defp yesterday_berlin_noon do
-    BerlinTime.today()
+  # The timestamp components read the viewer's date shape and time zone off the
+  # process (issue #1502), which the Locale plug sets per request. Each test
+  # says what it is rendering for, so nothing depends on the installation
+  # defaults; `own_zone?` is the flag that decides whether the server's text is
+  # final or the browser still rewrites it.
+  defp put_viewer(region, zone \\ "Europe/Berlin", own_zone? \\ true) do
+    ViewerClock.put(region, zone, own_zone?)
+  end
+
+  # Noon UTC on yesterday's calendar day for the viewer clock currently set, as
+  # a NaiveDateTime (post_time reads a naive value as UTC). Noon keeps the day
+  # unambiguous - far from either midnight - so the "yesterday" bucket is stable
+  # whenever tests run.
+  defp yesterday_noon do
+    ViewerClock.today()
     |> Date.add(-1)
     |> DateTime.new!(~T[12:00:00], "Etc/UTC")
     |> DateTime.to_naive()
@@ -62,10 +72,12 @@ defmodule VutuvWeb.UITest do
 
   describe "post_time/1" do
     # A post made today shows only the time; older posts keep the full date.
-    # Rendered server-side in Europe/Berlin time (Vutuv.BerlinTime), so it must
-    # not carry the client-side data-localtime marker the JS localizer rewrites.
+    # Rendered server-side in the reader's own zone and date shape, so it must
+    # not carry the client-side data-localtime marker the JS localizer rewrites
+    # — only the server knows which calendar day "today" is for this reader.
     test "a post from today shows only the time, with 'Uhr' in German" do
       Gettext.put_locale(VutuvWeb.Gettext, "de")
+      put_viewer("DE")
       html = render_component(&UI.post_time/1, at: NaiveDateTime.utc_now())
 
       # Visible text is just the time; the full date lives only in the hover title.
@@ -77,6 +89,7 @@ defmodule VutuvWeb.UITest do
 
     test "an older post shows the full short date and time in German" do
       Gettext.put_locale(VutuvWeb.Gettext, "de")
+      put_viewer("DE")
       # 2020-01-15 10:00 UTC is winter (CET, UTC+1) -> 11:00 Berlin.
       html = render_component(&UI.post_time/1, at: ~N[2020-01-15 10:00:00])
 
@@ -86,9 +99,10 @@ defmodule VutuvWeb.UITest do
 
     test "a post from yesterday says 'Gestern' with the time and no numeric date in German" do
       Gettext.put_locale(VutuvWeb.Gettext, "de")
+      put_viewer("DE")
       # Yesterday in Berlin, at a time far from midnight so the Berlin day is
       # unambiguous. post_time treats a NaiveDateTime as UTC.
-      at = %{yesterday_berlin_noon() | second: 0}
+      at = %{yesterday_noon() | second: 0}
       html = render_component(&UI.post_time/1, at: at)
 
       assert html =~ ~r/>Gestern, \d{2}:\d{2} Uhr</
@@ -98,7 +112,8 @@ defmodule VutuvWeb.UITest do
 
     test "a post from yesterday says 'Yesterday' under a non-German locale" do
       Gettext.put_locale(VutuvWeb.Gettext, "en")
-      at = %{yesterday_berlin_noon() | second: 0}
+      put_viewer("US")
+      at = %{yesterday_noon() | second: 0}
       html = render_component(&UI.post_time/1, at: at)
 
       assert html =~ ~r/>Yesterday, \d{1,2}:\d{2}\s?(AM|PM)</
@@ -106,17 +121,54 @@ defmodule VutuvWeb.UITest do
 
     test "today shows a bare time (no 'Uhr') under a non-German locale" do
       Gettext.put_locale(VutuvWeb.Gettext, "en")
+      put_viewer("US")
       html = render_component(&UI.post_time/1, at: NaiveDateTime.utc_now())
 
       assert html =~ ~r/\d{1,2}:\d{2}\s?(AM|PM)/
       refute html =~ "Uhr"
     end
 
-    test "an older post shows the locale-appropriate full date in English" do
+    test "an older post shows the full date in the reader's own region" do
       Gettext.put_locale(VutuvWeb.Gettext, "en")
+      put_viewer("US")
+
+      assert render_component(&UI.post_time/1, at: ~N[2020-01-15 10:00:00]) =~ "1/15/20, 11:00 AM"
+    end
+
+    # The two axes are independent, which is the whole point of issue #1502: the
+    # language picks the words, the region picks the digits and the clock.
+    test "language and date region are independent" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      put_viewer("US")
       html = render_component(&UI.post_time/1, at: ~N[2020-01-15 10:00:00])
 
       assert html =~ "1/15/20, 11:00 AM"
+
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      put_viewer("DE")
+      html = render_component(&UI.post_time/1, at: %{yesterday_noon() | second: 0})
+
+      assert html =~ ~r/>Yesterday, \d{2}:\d{2}</
+      refute html =~ "AM"
+    end
+
+    # "Uhr" is a 24-hour-clock word. A German reader on the US shape must not be
+    # handed "11:00 AM Uhr".
+    test "the German 'Uhr' suffix is dropped on a 12-hour region" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      put_viewer("US")
+
+      refute render_component(&UI.post_time/1, at: NaiveDateTime.utc_now()) =~ "Uhr"
+    end
+
+    test "the stamp is written in the reader's own time zone" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      # 2020-01-15 10:00 UTC is 11:00 in Berlin, 04:00 in Chicago (CST), 19:00 in Tokyo.
+      put_viewer("ISO", "America/Chicago")
+      assert render_component(&UI.post_time/1, at: ~N[2020-01-15 10:00:00]) =~ "2020-01-15, 04:00"
+
+      put_viewer("ISO", "Asia/Tokyo")
+      assert render_component(&UI.post_time/1, at: ~N[2020-01-15 10:00:00]) =~ "2020-01-15, 19:00"
     end
   end
 
@@ -391,13 +443,47 @@ defmodule VutuvWeb.UITest do
       refute without_id =~ "phx-hook"
     end
 
-    test "the visible body is the server-rendered fallback in the requested format" do
+    test "an explicit format wins over the viewer's date region" do
       at = ~N[2026-06-20 09:30:00]
+      put_viewer("US", "Etc/UTC")
 
-      assert render_component(&UI.local_time/1, at: at) =~ "2026-06-20 09:30"
+      assert render_component(&UI.local_time/1, at: at, format: "%Y-%m-%d %H:%M") =~
+               "2026-06-20 09:30"
 
       assert render_component(&UI.local_time/1, at: at, format: "%d.%m.%Y %H:%M") =~
                "20.06.2026 09:30"
+    end
+
+    test "without a format the text follows the viewer's own region and zone" do
+      at = ~N[2026-06-20 09:30:00]
+
+      put_viewer("DE", "Europe/Berlin")
+      assert render_component(&UI.local_time/1, at: at) =~ "20.06.2026 11:30"
+
+      put_viewer("US", "America/New_York")
+      assert render_component(&UI.local_time/1, at: at) =~ "6/20/2026 5:30 AM"
+    end
+
+    # The browser keeps the last word only while nothing on the server knows the
+    # reader's zone. Once a member has picked one, their setting must beat the
+    # machine they happen to be reading on, so the client rewrite is called off.
+    test "a member's own zone makes the server text final and drops the JS rewrite" do
+      at = ~N[2026-06-20 09:30:00]
+
+      put_viewer("DE", "Europe/Berlin", false)
+      inherited = render_component(&UI.local_time/1, at: at, id: "t")
+      assert inherited =~ "data-localtime"
+      assert inherited =~ ~s(phx-hook="LocalTime")
+      # The fallback text is the instant in UTC (09:30, not Berlin's 11:30) —
+      # the browser is about to overwrite it, and the ISO `title` keeps the
+      # unambiguous stamp either way.
+      assert inherited =~ "20.06.2026 09:30"
+
+      put_viewer("DE", "Europe/Berlin")
+      own = render_component(&UI.local_time/1, at: at, id: "t")
+      refute own =~ "data-localtime"
+      refute own =~ "phx-hook"
+      assert own =~ "20.06.2026 11:30"
     end
   end
 end

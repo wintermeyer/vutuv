@@ -56,7 +56,7 @@ defmodule VutuvWeb.ReferenceCheckLive do
   @impl true
   def mount(_params, session, socket) do
     reference_id = session["job_reference_id"]
-    VutuvWeb.LiveLocale.put_locale(session)
+    VutuvWeb.LiveLocale.put_viewer(session)
     socket = assign(socket, page_title: nil)
 
     if connected?(socket) do

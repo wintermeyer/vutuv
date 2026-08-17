@@ -1045,6 +1045,58 @@ function setupMapLinks() {
 }
 onReady(setupMapLinks)
 
+// The viewer's own time zone (issue #1502). The browser is the only side that
+// knows it, so it fills two things: the sign-up form's hidden field, which
+// stamps the new account with its zone (Vutuv.Accounts), and the hint under the
+// zone select on /settings/preferences, so an existing member picks theirs by
+// clicking the name their browser reports instead of hunting through 313
+// options. The sentence and its "{zone}" marker come from the server, which is
+// the only side that knows the reader's language.
+function browserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || ""
+  } catch (e) {
+    return ""
+  }
+}
+
+function offerBrowserTimeZone(hint, zone) {
+  const select = document.getElementById(hint.dataset.select)
+  // Nothing worth offering when the select already stands on that zone, or
+  // when it does not carry it at all (an ICU alias our menu doesn't list).
+  if (!select || select.value === zone) return
+  if (!Array.from(select.options).some((option) => option.value === zone)) return
+
+  const [before, after] = hint.dataset.label.split("{zone}")
+  const button = document.createElement("button")
+  button.type = "button"
+  button.textContent = zone
+  button.className =
+    "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+  button.addEventListener("click", () => {
+    select.value = zone
+    hint.hidden = true
+  })
+
+  hint.textContent = before || ""
+  hint.appendChild(button)
+  if (after) hint.appendChild(document.createTextNode(after))
+  hint.hidden = false
+}
+
+function setupTimeZoneFields() {
+  const zone = browserTimeZone()
+  if (!zone) return
+
+  document
+    .querySelectorAll("input[data-timezone-field]")
+    .forEach((input) => (input.value = zone))
+  document
+    .querySelectorAll("[data-browser-timezone]")
+    .forEach((hint) => offerBrowserTimeZone(hint, zone))
+}
+onReady(setupTimeZoneFields)
+
 // Drag-and-drop for the LinkedIn import ZIP (Step 2 of the import page). The
 // <label data-dropzone> wraps a real, sr-only file input, so the form still
 // posts multipart exactly as before and the picker/submit work with JS off —

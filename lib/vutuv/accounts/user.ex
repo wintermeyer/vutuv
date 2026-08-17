@@ -111,6 +111,14 @@ defmodule Vutuv.Accounts.User do
     # the birthday field on the Basics form.
     field(:birthdate_visibility, :string, default: "full")
     field(:locale, :string)
+    # How this member wants dates written and which clock they run on (issue
+    # #1502) — `Vutuv.Prefs` knobs, so nil means "inherit the installation
+    # default" rather than "unset". The interface language above says nothing
+    # about either: an English-speaking member in Berlin still wants the
+    # 24-hour clock. A new account gets both from its browser at sign-up;
+    # `Vutuv.ViewerClock` resolves them for rendering.
+    field(:date_region, :string)
+    field(:time_zone, :string)
     # An admin checked this person's physical ID against their name: this IS that
     # person. Admin-only (deliberately NOT in @optional_fields); drives the
     # "Verified profile" badge and the admin review queue. Not to be confused
@@ -491,7 +499,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale tag_list auto_post_deletion? auto_post_deletion_after_days auto_post_deletion_keep_photos? auto_post_deletion_keep_answered? auto_post_deletion_keep_bookmarked? auto_post_deletion_delete_replies? auto_post_deletion_min_likes auto_post_deletion_min_bookmarks auto_post_deletion_min_reposts feed_foreign_posts feed_languages)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails? cv_update_notifications? thread_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? fediverse_reactions? fediverse_replies? also_known_as_input map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines like_attribution? headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility desired_workplace_types first_name last_name middle_name nickname honorific_prefix honorific_suffix name_pronunciation gender birthdate birthdate_visibility locale date_region time_zone tag_list auto_post_deletion? auto_post_deletion_after_days auto_post_deletion_keep_photos? auto_post_deletion_keep_answered? auto_post_deletion_keep_bookmarked? auto_post_deletion_delete_replies? auto_post_deletion_min_likes auto_post_deletion_min_bookmarks auto_post_deletion_min_reposts feed_foreign_posts feed_languages)a
 
   # The ages the automatic post deletion offers (issue #1255), in days. A fixed
   # list rather than a free number field on purpose: this setting deletes
@@ -708,6 +716,19 @@ defmodule Vutuv.Accounts.User do
     # locale is user-writable (profile form + PATCH /api/2.0/me) over a
     # varchar(255) column, so cap it or an oversized value raises Postgres 22001.
     |> validate_length(:locale, max: 255)
+    # The date shape is a closed choice of four, owned by the Prefs registry
+    # that also fills the settings select.
+    |> validate_inclusion(:date_region, Prefs.pref!(:date_region).values)
+    # The time zone is NOT checked against that registry's list: the settings
+    # select offers the canonical civil zones, but the value a browser reports
+    # at sign-up is whatever its own ICU build calls the zone, aliases included
+    # (`Europe/Kiev`, `Asia/Calcutta`). The real question is whether this
+    # installation can convert into it, so ask the time zone database.
+    |> validate_change(:time_zone, fn :time_zone, zone ->
+      if Vutuv.TimeZones.known?(zone),
+        do: [],
+        else: [time_zone: "is not a known time zone"]
+    end)
     # The literal mirrors the canonical service list in `Vutuv.Maps`; it is kept
     # inline (not `Maps.service_strings/0`) to avoid a compile cycle, since Maps
     # pattern-matches the `User` struct.

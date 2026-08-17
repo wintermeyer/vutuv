@@ -224,7 +224,7 @@ defmodule VutuvWeb.AccountActivityLive do
                         at={event.inserted_at}
                         id={"at-#{event.id}"}
                         precision="second"
-                        format="%Y-%m-%d %H:%M:%S"
+                        style={:datetime_seconds}
                       />
                     </td>
                     <td class="align-top">

@@ -57,12 +57,12 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
-  alias Vutuv.BerlinTime
   alias Vutuv.Fediverse
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
+  alias Vutuv.ViewerClock
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Markdown
   alias VutuvWeb.NotificationLive.Groups
@@ -114,7 +114,7 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:page_title, gettext("Notifications"))
      |> assign(:read_marker, read_marker)
      |> assign(:new_count, new_count)
-     |> assign(:today, BerlinTime.today())
+     |> assign(:today, ViewerClock.today())
      |> assign(:quote_lines, User.notification_post_lines(user))
      |> assign_rail(connected?(socket))}
   end
@@ -195,10 +195,10 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # The Berlin day rolled over at midnight (Vutuv.DayClock): recompute the
-  # sections so "Today" becomes "Yesterday" without a reload.
+  # The reader's day may have rolled over (Vutuv.DayClock ticks hourly):
+  # recompute the sections so "Today" becomes "Yesterday" without a reload.
   def handle_info(:day_changed, socket) do
-    {:noreply, socket |> assign(:today, BerlinTime.today()) |> assign_sections()}
+    {:noreply, socket |> assign(:today, ViewerClock.today()) |> assign_sections()}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
@@ -930,21 +930,20 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # The row's clock time: sections are Berlin calendar days, so the visible
-  # time is the Berlin wall clock (the site's canonical clock, like post
+  # The row's clock time: sections are the reader's calendar days, so the
+  # visible time is their own wall clock in their own region (like post
   # stamps); the <time> keeps an unambiguous ISO-8601 UTC datetime for
   # machines. Server-rendered final - deliberately no data-localtime rewrite.
   attr(:at, :any, required: true)
 
   defp row_time(assigns) do
     utc = DateTime.from_naive!(assigns.at, "Etc/UTC")
-    berlin = BerlinTime.naive(utc)
 
     assigns =
       assigns
       |> assign(:datetime, DateTime.to_iso8601(utc))
-      |> assign(:title, Calendar.strftime(berlin, "%Y-%m-%d %H:%M"))
-      |> assign(:clock, Calendar.strftime(berlin, "%H:%M"))
+      |> assign(:title, ViewerClock.format(utc, :datetime))
+      |> assign(:clock, ViewerClock.format(utc, :time))
 
     ~H"""
     <time datetime={@datetime} title={@title} class="text-xs tabular-nums text-slate-500">

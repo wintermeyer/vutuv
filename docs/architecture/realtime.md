@@ -89,12 +89,19 @@ viewer's set both ways) and each member can switch it off on the Privacy
 settings page (`show_online_status?`), after which they are never tracked or
 shown as online.
 
-**Post timestamps** render server-side in Berlin time
-(`VutuvWeb.UI.post_time/1`): a post from **today** shows just the time ("09:50
-Uhr"), **yesterday's** the word plus the time ("Gestern, 09:50 Uhr"), older
-posts the full date — and `Vutuv.DayClock` broadcasts at Berlin midnight so
-every open feed / profile / notifications / likes page rolls its stamps over to
-the new day with no reload.
+**Post timestamps** render server-side in the **reader's own** time zone and
+date shape (`VutuvWeb.UI.post_time/1` over `Vutuv.ViewerClock`, issue #1502; see
+[settings-and-account.md](settings-and-account.md#date-region-and-time-zone)):
+a post from **today** shows just the time ("09:50 Uhr"), **yesterday's** the
+word plus the time ("Gestern, 09:50 Uhr"), older posts the full date. There is
+deliberately no client-side rewrite, because the today/yesterday wording is
+relative to a calendar day only the server knows the reader's version of —
+instead `Vutuv.DayClock` broadcasts `:day_changed` on **every whole UTC hour**
+(every IANA zone's local midnight falls on one), so every open feed / profile /
+notifications / likes page rolls its stamps over at the reader's own midnight
+with no reload. Berlin midnight is itself a whole UTC hour, so the one consumer
+that really does count German days — the admin "new members today" pill — still
+empties exactly then.
 
 The layout is split into `root.html.heex` (document shell) and `app.html.heex`
 (chrome), shared by classic controller pages and LiveViews.
@@ -220,9 +227,9 @@ calling that row new. The page marks those rows with one extra query per page
 ### The notifications page (2026-07 redesign)
 
 `VutuvWeb.NotificationLive.Index` renders the derived feed as **grouped rows
-under Berlin-day sections** (`VutuvWeb.NotificationLive.Groups`, a pure
-function over the item list). What reads as one piece of news merges into one
-row, keyed within a Berlin calendar day: same-day likes of one post, the day's
+under calendar-day sections** (`VutuvWeb.NotificationLive.Groups`, a pure
+function over the item list; the days are the **reader's**, like post stamps).
+What reads as one piece of news merges into one row, keyed within a day: same-day likes of one post, the day's
 new followers ("Anna, Ben and 111 more are now following you.", the overflow
 linking to the member's followers list), the day's new connections, one
 endorser's endorsements ("endorsed you for Elixir and Phoenix."), and same-day
@@ -266,7 +273,7 @@ Around the list:
   `<.user_row live?>` — and **Last 30 days**, a per-kind count card from
   `Activity.activity_summary/2` (one round trip of scalar subqueries).
 
-Row times are the Berlin wall clock (the site's canonical clock, like post
+Row times are the reader's own wall clock in their own date region (like post
 stamps), server-rendered final with an ISO-8601 UTC `datetime` for machines.
 
 ### CV updates (issue #980)

@@ -68,7 +68,7 @@ defmodule VutuvWeb.VerificationComponents do
       <p class="font-semibold text-slate-900 dark:text-slate-100">
         {gettext("Not found yet")}
         <span :if={@report[:checked_at]}>
-          &middot; <.local_time at={@report.checked_at} id={"#{@id}-time"} format="%H:%M" />
+          &middot; <.local_time at={@report.checked_at} id={"#{@id}-time"} style={:time} />
         </span>
       </p>
 

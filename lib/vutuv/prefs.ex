@@ -89,6 +89,28 @@ defmodule Vutuv.Prefs do
       values: ~w(original translate hide),
       group: :feed
     },
+    # How a member's dates and times are written, and which clock they are
+    # written on (issue #1502). Two knobs rather than one because they answer
+    # different questions — a German-speaking member in Chicago wants German
+    # date order on a Chicago clock — and neither follows from the interface
+    # language. A new account gets both from its browser at sign-up, so the
+    # installation defaults are what an *old* account reads until it chooses;
+    # the shipped pair is what vutuv rendered for everybody before the setting
+    # existed, so nothing moved under anyone's feet on the deploy.
+    %Pref{
+      key: :date_region,
+      type: :select,
+      default: "DE",
+      values: Vutuv.DateRegions.keys(),
+      group: :region
+    },
+    %Pref{
+      key: :time_zone,
+      type: :select,
+      default: "Europe/Berlin",
+      values: Vutuv.TimeZones.all(),
+      group: :region
+    },
     %Pref{key: :map_google?, type: :boolean, default: true, group: :maps},
     %Pref{key: :map_openstreetmap?, type: :boolean, default: true, group: :maps},
     %Pref{key: :map_apple?, type: :boolean, default: true, group: :maps},
@@ -141,6 +163,9 @@ defmodule Vutuv.Prefs do
   def label(:feed_foreign_posts),
     do: Gettext.gettext(VutuvWeb.Gettext, "Posts in other languages")
 
+  def label(:date_region), do: Gettext.gettext(VutuvWeb.Gettext, "Date format")
+  def label(:time_zone), do: Gettext.gettext(VutuvWeb.Gettext, "Time zone")
+
   def label(:map_google?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Google Maps")
   def label(:map_openstreetmap?), do: Gettext.gettext(VutuvWeb.Gettext, "Show OpenStreetMap")
   def label(:map_apple?), do: Gettext.gettext(VutuvWeb.Gettext, "Show Apple Maps")
@@ -176,6 +201,20 @@ defmodule Vutuv.Prefs do
         "When off, other members no longer see you among the likes of a post. The author of the post still does: we named you in the notification they got when you liked it. Either way the post keeps the same number of likes."
       )
 
+  def hint(:date_region),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "The order and punctuation of every date you read here, and whether times run on a 12- or 24-hour clock."
+      )
+
+  def hint(:time_zone),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "Posts, messages and notifications are stamped in this zone. New accounts take it from the browser."
+      )
+
   def hint(:default_map_service),
     do:
       Gettext.gettext(
@@ -189,6 +228,7 @@ defmodule Vutuv.Prefs do
   def group_label(:post_display), do: Gettext.gettext(VutuvWeb.Gettext, "Posts")
   def group_label(:feed), do: Gettext.gettext(VutuvWeb.Gettext, "Feed")
   def group_label(:privacy), do: Gettext.gettext(VutuvWeb.Gettext, "Privacy")
+  def group_label(:region), do: Gettext.gettext(VutuvWeb.Gettext, "Date & time")
   def group_label(:maps), do: Gettext.gettext(VutuvWeb.Gettext, "Maps")
 
   @doc "The human label of one value of a pref (select options, current-value lines)."
@@ -201,6 +241,13 @@ defmodule Vutuv.Prefs do
     do: Vutuv.Maps.label(:openstreetmap)
 
   def value_label(%Pref{key: :default_map_service}, "apple"), do: Vutuv.Maps.label(:apple)
+
+  # A date shape is chosen by looking at one, so the sample leads and the
+  # regions it is named after follow. Separated by a middle dot rather than
+  # wrapped in brackets: the ISO option's own label carries a bracket, and
+  # nesting one inside another reads as a typo.
+  def value_label(%Pref{key: :date_region}, value),
+    do: Vutuv.DateRegions.example(value) <> " · " <> Vutuv.DateRegions.label(value)
 
   def value_label(%Pref{key: :feed_foreign_posts}, "original"),
     do: Gettext.gettext(VutuvWeb.Gettext, "Show the original")

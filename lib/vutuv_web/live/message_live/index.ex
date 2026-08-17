@@ -783,7 +783,6 @@ defmodule VutuvWeb.MessageLive.Index do
               <.local_time
                 id={"#{dom_id}-at"}
                 at={m.inserted_at}
-                format="%d.%m.%Y %H:%M"
                 class={[
                   "mt-1 block text-right text-[10px] leading-none",
                   if(mine?(m, @viewer), do: "text-white/70", else: "text-slate-600 dark:text-slate-400")

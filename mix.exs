@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.300.7",
+      version: "7.301.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -86,6 +86,15 @@ defmodule Vutuv.MixProject do
       # (from ex_phone_number) into a flag emoji shown next to the number (#892).
       {:ex_cldr, "~> 2.47"},
       {:ex_cldr_territories, "~> 2.12"},
+
+      # IANA time zone database, compiled in from the bundled release (no
+      # runtime network, so an air-gapped intranet install works): the
+      # `Calendar.TimeZoneDatabase` behind `DateTime.shift_zone/2`, which
+      # renders every member-facing timestamp in the viewer's own zone
+      # (`Vutuv.ViewerClock`, issue #1502). The periodic updater
+      # (`Tz.UpdatePeriodically`) is deliberately NOT supervised — a tzdata
+      # release ships with the next vutuv release instead.
+      {:tz, "~> 0.28"},
 
       # Passkey / WebAuthn (FIDO2) login: server-side verification of the
       # registration and authentication ceremonies (see Vutuv.Credentials). The
