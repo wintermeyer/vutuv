@@ -86,7 +86,14 @@ defmodule VutuvWeb.MastodonApi.StatusController do
       # from somebody else's upload cannot ride in here.
       image_ids = edited_image_ids(conn.params["media_ids"], post)
 
-      case Posts.update_post(post, %{body: body, image_ids: image_ids}) do
+      # Merged **under** the edit: `update_post/2` replaces the audience and the
+      # tags with whatever the attrs carry, and a Mastodon client speaks neither.
+      # Naming only body and images therefore did not leave them alone, it
+      # cleared them — a post its author had closed to somebody came back public
+      # and was federated that way, silently. See `unchanged_audience_attrs/1`.
+      attrs = Map.merge(Posts.unchanged_audience_attrs(post), %{body: body, image_ids: image_ids})
+
+      case Posts.update_post(post, attrs) do
         {:ok, updated} -> json(conn, Presenter.one_status(updated, viewer(conn)))
         {:error, :invalid_images} -> validation_error(conn, "Unknown or foreign media ids.")
         {:error, :too_many_images} -> validation_error(conn, "Too many images.")

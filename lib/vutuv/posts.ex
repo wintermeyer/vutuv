@@ -416,6 +416,36 @@ defmodule Vutuv.Posts do
     end
   end
 
+  @doc """
+  The attrs that leave a post's **audience and tags exactly as they are**, for a
+  caller that edits only part of a post.
+
+  `update_post/2` replaces both wholesale — `put_assoc/3` on associations
+  declared `on_replace: :delete` — so attrs that simply do not name `:denials`
+  and `:tags` do not leave them alone, they **clear** them. That is not a
+  no-op, it is a silent widening: a post its author had closed to somebody
+  becomes public, `run_update/3` then federates the newly public version, and
+  nothing errors, because `check_visibility_lock/2` only refuses *narrowing*.
+  A Mastodon client edits a body and its photos and has no vocabulary for
+  either association, so every edit from a phone went down that path.
+
+  Merge it **under** the caller's own attrs (`Map.merge(unchanged, mine)`), so
+  a caller that does name either one still wins.
+  """
+  def unchanged_audience_attrs(%Post{} = post) do
+    post = Repo.preload(post, [:denials, :tags])
+
+    %{
+      denials: Enum.map(post.denials, &denial_attrs/1),
+      tags: Enum.map(post.tags, & &1.name)
+    }
+  end
+
+  defp denial_attrs(%PostDenial{denied_user_id: id}) when is_binary(id),
+    do: %{denied_user_id: id}
+
+  defp denial_attrs(%PostDenial{wildcard: wildcard}), do: %{wildcard: wildcard}
+
   defp run_update(changeset, removed, image_ids) do
     case Repo.transaction(fn -> apply_update!(changeset, removed, image_ids) end) do
       {:ok, updated} ->
