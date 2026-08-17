@@ -105,10 +105,13 @@ test suite, and the naive loop ingests its full output once per iteration:
    (blue/green: the *previous* release keeps serving the migrated schema).
 
 7. **Commit** — a short summary line, a blank line, then a body explaining *why*
-   (motivation, context, trade-offs), per Stefan's commit rule. If cold deploy,
-   append `[cold-deploy]` to the summary line. If the user passed `$ARGUMENTS`,
-   use it as the basis. End the body with the plain-paragraph agent-authorship
-   footer. Stage specific paths, never secrets (`.env`, credentials).
+   (motivation, context, trade-offs), per Stefan's commit rule. Put the new
+   version in the **subject**: `<summary> (vX.Y.Z)`. `gh pr merge --squash` takes
+   a single-commit PR's subject, not the PR title, so a version that only lives
+   in the title is dropped from `main`'s log. If cold deploy, append
+   `[cold-deploy]` to the summary line. If the user passed `$ARGUMENTS`, use it
+   as the basis. End the body with the plain-paragraph agent-authorship footer.
+   Stage specific paths, never secrets (`.env`, credentials).
 
 8. **Push the branch — in a Bash call of its own.** The `PreToolUse` hook
    `.claude/hooks/precommit-before-push.sh` intercepts any Bash command
