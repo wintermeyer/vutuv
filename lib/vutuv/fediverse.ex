@@ -376,6 +376,36 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  @doc """
+  Who a follower row (or a prune row) is about: the member, the page (issue
+  #1334) or the topic (issue #1330) being followed. Exactly one of the three is
+  set — the database CHECK says so — which is what makes the `||` chain total.
+
+  The one definition of "whose follower is this", so a surface that renders such
+  a row does not have to remember the third owner kind for itself.
+
+  Needs the associations preloaded, and says so rather than guessing: an
+  unloaded association is truthy, so a plain `||` chain would hand back
+  `%Ecto.Association.NotLoaded{}` and the caller would quietly treat it as an
+  owner it cannot use — which is how the pruner came to sign nothing at all for
+  a page's followers. A forgotten preload is a bug in the query, so it raises
+  here instead of degrading somewhere further along.
+  """
+  def followed(%{user: user, organization: organization, tag: tag}) do
+    [user, organization, tag]
+    |> Enum.reject(&(&1 == nil))
+    |> case do
+      [%Ecto.Association.NotLoaded{} | _] ->
+        raise ArgumentError, "Fediverse.followed/1 needs :user, :organization and :tag preloaded"
+
+      [owner | _] ->
+        owner
+
+      [] ->
+        nil
+    end
+  end
+
   @doc "Drops a page's remote follower (the inbox's Undo). Idempotent."
   def remove_organization_follower(%Organization{id: id}, actor_uri) do
     {count, _} =
@@ -3343,9 +3373,30 @@ defmodule Vutuv.Fediverse do
   defp do_prune_due_followers(now) do
     due = followers_due_for_prune(now)
     actors = actors_by_user_id(due)
+    organization_actors = actors_by_organization_id(due)
+    tag_actors = actors_by_tag_id(due)
 
-    count_pruned(due, &check_follower(&1, actors[&1.user_id], now))
+    count_pruned(
+      due,
+      &check_follower(&1, follower_actor(&1, actors, organization_actors, tag_actors), now)
+    )
   end
+
+  # The key this re-check signs with belongs to whoever is being followed, so a
+  # page's and a topic's followers are checked with their own actor rather than
+  # with nothing. Without this the fetch went out unsigned, an authorized-fetch
+  # server answered 401, and 401 is not a "gone" status — so the dead row was
+  # kept and re-checked forever. Mirrors `signing_actor/4` on the delivery path.
+  defp follower_actor(%Follower{organization_id: id}, _actors, organization_actors, _tag_actors)
+       when is_binary(id),
+       do: organization_actors[id]
+
+  defp follower_actor(%Follower{tag_id: id}, _actors, _organization_actors, tag_actors)
+       when is_binary(id),
+       do: tag_actors[id]
+
+  defp follower_actor(%Follower{user_id: id}, actors, _organization_actors, _tag_actors),
+    do: actors[id]
 
   # Each check is one blocking HTTPS round trip (no DB connection held during
   # it), so run a few at a time instead of summing every remote's latency. Both
@@ -3373,7 +3424,7 @@ defmodule Vutuv.Fediverse do
       # rows would otherwise fill the batch by itself and the per-host cap
       # would leave the run half empty, starving everybody else.
       limit: ^(@prune_batch * 4),
-      preload: [:user]
+      preload: [:user, :organization, :tag]
     )
     |> Repo.all()
     |> spread_across_hosts(&(BlockedInstance.normalize_host(&1.actor_uri) || &1.actor_uri))
@@ -3399,7 +3450,7 @@ defmodule Vutuv.Fediverse do
   end
 
   defp check_follower(%Follower{} = follower, actor, now) do
-    case fetch_remote_actor(follower.actor_uri, signer_for(follower.user, actor)) do
+    case fetch_remote_actor(follower.actor_uri, signer_for(followed(follower), actor)) do
       {:error, {:http, status}} when status in @gone_statuses ->
         prune_follower(follower, status)
 
@@ -3412,10 +3463,20 @@ defmodule Vutuv.Fediverse do
     Repo.delete(follower)
     broadcast_remote_followers_changed([follower.user_id])
 
+    # The ledger row carries the SAME owner the follower row did (member, page
+    # or topic). It used to copy `user_id` whatever the follower was, so a
+    # page's or a topic's removal hit the NOT NULL on that column and raised —
+    # after the follower had already been deleted, which is the worst order:
+    # the removal happened and the report never heard about it.
+    #
     # The host is always parseable here (an unparseable actor URI never gets as
     # far as an HTTP status), but fall back rather than lose the ledger row: a
     # deletion the report cannot see is exactly what this is meant to prevent.
-    %FollowerPrune{user_id: follower.user_id}
+    %FollowerPrune{
+      user_id: follower.user_id,
+      organization_id: follower.organization_id,
+      tag_id: follower.tag_id
+    }
     |> FollowerPrune.changeset(%{
       host: BlockedInstance.normalize_host(follower.actor_uri) || "unknown",
       status: status

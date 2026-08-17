@@ -27,6 +27,7 @@ defmodule VutuvWeb.ReportDetails do
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Tags.Tag
@@ -110,13 +111,11 @@ defmodule VutuvWeb.ReportDetails do
 
   # A pruned follower is deliberately nameless — only the server it lived on
   # survives the deletion (see Vutuv.Fediverse.FollowerPrune), so the line reads
-  # "mastodon.example (HTTP 410)" against the member who lost the follower.
+  # "mastodon.example (HTTP 410)" against whoever lost the follower: a member, a
+  # page or a topic, the same three kinds the follower row carried.
   defp entry(:fediverse_prunes, prune) do
-    %{
-      primary: prune.host,
-      secondary: "HTTP #{prune.status} · @#{prune.user.username}",
-      path: "/" <> prune.user.username
-    }
+    {label, path} = follow_target(prune)
+    %{primary: prune.host, secondary: "HTTP #{prune.status} · #{label}", path: path}
   end
 
   defp entry(:bounces, %{email: email, status: status}),
@@ -158,9 +157,9 @@ defmodule VutuvWeb.ReportDetails do
   defp actor_label(%Organization{name: name}), do: name
   defp actor_label(actor), do: "@" <> actor.username
 
-  # Who gained the follower, and where that page lives. A remote actor follows a
-  # member, a page (issue #1334) or a topic (issue #1330) — exactly one, and the
-  # database CHECK says so, which is what makes the `||` chain total.
+  # Who gained (or lost) the follower, and where their page lives. Which of the
+  # three owners a row is about is `Vutuv.Fediverse.followed/1`'s business, so
+  # the next owner kind is remembered in one place rather than in every surface.
   #
   # This read `follower.user.username` outright, so the first page or topic to
   # gain a Fediverse follower took the *whole* nightly report down with a
@@ -169,9 +168,7 @@ defmodule VutuvWeb.ReportDetails do
   # GenServer, and `init/1` rescheduled for the following midnight. No mail, no
   # retry, no error anywhere the operator would see it. The same shape as the
   # post-author fix above, one association further along.
-  defp follow_target(follower) do
-    target_entry(follower.user || follower.organization || follower.tag)
-  end
+  defp follow_target(row), do: target_entry(Fediverse.followed(row))
 
   defp target_entry(%Organization{} = organization),
     do: {organization.name, Organizations.canonical_path(organization)}

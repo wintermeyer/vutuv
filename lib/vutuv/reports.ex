@@ -66,7 +66,8 @@ defmodule Vutuv.Reports do
         # whichever of them gained the follower.
         fediverse_followers:
           sample(Follower, [:user, :organization, :tag], day_start, day_end, limit),
-        fediverse_prunes: sample(FollowerPrune, [:user], day_start, day_end, limit),
+        fediverse_prunes:
+          sample(FollowerPrune, [:user, :organization, :tag], day_start, day_end, limit),
         bounces: deliverability_details.bounces,
         deactivations: deliverability_details.deactivations,
         freezes: deliverability_details.freezes,

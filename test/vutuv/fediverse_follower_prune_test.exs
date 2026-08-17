@@ -36,6 +36,20 @@ defmodule Vutuv.FediverseFollowerPruneTest do
     user
   end
 
+  defp organization_follower(organization, host) do
+    Fediverse.add_organization_follower(organization, %{
+      actor_uri: "https://#{host}/users/alice",
+      inbox_uri: "https://#{host}/inbox"
+    })
+  end
+
+  defp tag_follower(tag, host) do
+    Fediverse.add_tag_follower(tag, %{
+      actor_uri: "https://#{host}/users/alice",
+      inbox_uri: "https://#{host}/inbox"
+    })
+  end
+
   defp follower(user, host, attrs \\ []) do
     {:ok, follower} =
       Fediverse.add_follower(user, %{
@@ -94,6 +108,67 @@ defmodule Vutuv.FediverseFollowerPruneTest do
       # Each row was still stamped, so the next run moves on to other followers
       # instead of retrying the same unhappy servers straight away.
       assert Enum.all?(Repo.all(Follower), &(&1.last_checked_at != nil))
+    end
+
+    # A remote account follows a member, a page (#1334) or a topic (#1330). The
+    # ledger row held only `user_id`, NOT NULL, and the pruner wrote
+    # `follower.user_id` into it whatever the follower was — so the day a page's
+    # or a topic's remote account was deleted, the insert raised on a NOT NULL
+    # violation instead of recording the removal. The fetch had no signer for
+    # those two either, so it went out unsigned and an authorized-fetch server
+    # answered 401, which reads as "still there" and kept the dead row forever.
+    test "a page's gone follower is pruned and recorded against the page" do
+      organization = insert(:organization)
+      {:ok, _actor} = Fediverse.ensure_organization_actor(organization)
+      {:ok, _follower} = organization_follower(organization, "gone.example")
+
+      stub_hosts(%{"gone.example" => 410})
+
+      assert Fediverse.prune_due_followers() == 1
+      assert Fediverse.organization_remote_follower_count(organization) == 0
+
+      assert [prune] = Repo.all(FollowerPrune)
+      assert prune.organization_id == organization.id
+      assert prune.user_id == nil
+      assert prune.tag_id == nil
+      assert prune.host == "gone.example"
+    end
+
+    test "a topic's gone follower is pruned and recorded against the tag" do
+      tag = insert(:tag)
+      {:ok, _actor} = Fediverse.ensure_tag_actor(tag)
+      {:ok, _follower} = tag_follower(tag, "gone.example")
+
+      stub_hosts(%{"gone.example" => 410})
+
+      assert Fediverse.prune_due_followers() == 1
+
+      assert [prune] = Repo.all(FollowerPrune)
+      assert prune.tag_id == tag.id
+      assert prune.user_id == nil
+      assert prune.organization_id == nil
+    end
+
+    test "a page's and a topic's actor fetch are signed with their own keys" do
+      organization = insert(:organization)
+      tag = insert(:tag)
+      {:ok, _} = Fediverse.ensure_organization_actor(organization)
+      {:ok, _} = Fediverse.ensure_tag_actor(tag)
+      {:ok, _} = organization_follower(organization, "page.example")
+      {:ok, _} = tag_follower(tag, "topic.example")
+      test_pid = self()
+
+      stub(fn conn ->
+        send(test_pid, {:signature, conn.host, Plug.Conn.get_req_header(conn, "signature")})
+        Plug.Conn.send_resp(conn, 200, "{}")
+      end)
+
+      Fediverse.prune_due_followers()
+
+      assert_received {:signature, "page.example", [page_signature]}
+      assert_received {:signature, "topic.example", [topic_signature]}
+      assert page_signature =~ ~s(keyId=")
+      assert topic_signature =~ ~s(keyId=")
     end
 
     test "the actor fetch is signed with the member's own key" do

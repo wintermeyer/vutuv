@@ -163,6 +163,25 @@ defmodule VutuvWeb.ReportDetailsTest do
              ]
     end
 
+    test "a pruned follower of a topic names the tag, not a member" do
+      tag = insert(:tag)
+
+      Repo.insert!(
+        struct(
+          Vutuv.Fediverse.FollowerPrune,
+          [tag_id: tag.id, host: "social.example", status: 404] ++ at(@on_day)
+        )
+      )
+
+      assert section(Reports.daily(@date), :fediverse_prunes).entries == [
+               %{
+                 primary: "social.example",
+                 secondary: "HTTP 404 · ##{tag.name}",
+                 path: "/tags/#{tag.slug}"
+               }
+             ]
+    end
+
     test "a bounce names the address and its status, with no link" do
       insert(:email_bounce,
         email_value: "dead@example.com",
