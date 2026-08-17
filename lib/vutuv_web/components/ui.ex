@@ -249,9 +249,12 @@ defmodule VutuvWeb.UI do
   rules. Task-list checkboxes are deliberately absent (Earmark renders them as
   literal text).
 
-  `@value` is the current Markdown source; it must be mirrored into
-  `data-mde-value` so a server-driven change (an inline image insert, the
-  post-save reset, the message-send clear) re-seeds the editor. Pass
+  `@value` is the current Markdown source. It seeds the editor once, at mount;
+  after that the editor owns the prose and the server's echo of it is ignored,
+  because a re-render lands on every keystroke and re-parsing the document
+  would move the caret. To hand the editor new text later — the post-save
+  reset, "Discard draft", the message-send clear — change `@seed`: the hook
+  re-seeds from `@value` when, and only when, that token changes. Pass
   `submit_on="cmd-enter"` so Cmd/Ctrl+Enter submits the surrounding form —
   the post and the message composers both do (issue #1196); the hook skips
   the shortcut while the form's submit button is disabled.
@@ -264,6 +267,14 @@ defmodule VutuvWeb.UI do
   attr(:rows, :integer, default: 6, doc: "rows of the source/fallback textarea")
   attr(:submit_on, :string, default: nil, values: [nil, "cmd-enter"])
   attr(:compact, :boolean, default: false, doc: "tighter min-height (messages)")
+
+  attr(:seed, :any,
+    default: nil,
+    doc:
+      "re-seed token: change it (a counter is enough) to make the editor take " <>
+        "`value` again — the post-save reset, \"Discard draft\", the " <>
+        "message-send clear. A form that is only ever seeded at mount leaves it nil"
+  )
 
   attr(:images, :boolean,
     default: false,
@@ -291,6 +302,7 @@ defmodule VutuvWeb.UI do
       id={@id}
       phx-hook="MarkdownEditor"
       data-mde-value={@value}
+      data-mde-seed={@seed}
       data-mde-placeholder={@placeholder}
       data-mde-submit={@submit_on}
       data-mde-images={@images && "1"}

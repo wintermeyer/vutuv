@@ -20,7 +20,11 @@ The composer is the shared **Milkdown WYSIWYG Markdown editor**
 (`VutuvWeb.UI.markdown_editor/1`, its compact variant — the same one the post
 composer uses); Cmd/Ctrl+Enter sends. Messages are stored and rendered as
 Markdown (`VutuvWeb.Markdown.render/1`), unchanged by the editor. The `typing`
-handler keeps the draft body in the form so the editor clears after a send; see
+handler keeps the draft body in the form so a reconnect can recover it; what
+empties the composer after a send is the **re-seed token** `assign_form/1` bumps
+beside the reset body (`seed=`), because the editor deliberately ignores its own
+text coming back — every other re-render on this page, the other side's typing
+bubble included, must leave the writer's caret alone. See
 `.claude/rules/design.md` for the component. Emoji come with it (issue #1197):
 the 🙂 toolbar button's picker and the `:tada:` type-through both work here, and
 both store the emoji **character**, so a message needs no rendering change.

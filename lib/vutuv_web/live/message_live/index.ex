@@ -57,6 +57,7 @@ defmodule VutuvWeb.MessageLive.Index do
      |> assign(:cursor, nil)
      |> assign_sidebar()
      |> stream(:messages, [], dom_id: &"message-#{&1.id}")
+     |> assign(:editor_seed, 0)
      |> assign_form()}
   end
 
@@ -245,11 +246,11 @@ defmodule VutuvWeb.MessageLive.Index do
     end
 
     # Keep the form's body in step with what is typed (like the post composer's
-    # validate). The Milkdown editor is re-seeded from the field's rendered value
-    # (data-mde-value), so this is what lets it clear after a send: assign_form/1
-    # resets the body to "", the rendered value changes, and the MarkdownEditor
-    # hook re-seeds itself empty. Without it the server never sees the draft, the
-    # value never changes, and the composer would keep the just-sent text.
+    # validate), so a socket reconnect recovers the draft and the send after it
+    # carries the whole message. The editor does NOT take this value back — it
+    # is the writer's own text returning, and re-parsing it would move their
+    # caret; what empties the composer after a send is the seed assign_form/1
+    # bumps beside the reset body.
     {:noreply, assign(socket, :form, to_form(%{"body" => body}, as: :message))}
   end
 
@@ -515,7 +516,16 @@ defmodule VutuvWeb.MessageLive.Index do
   defp active?(socket, conversation_id),
     do: match?(%Conversation{id: ^conversation_id}, socket.assigns.conversation)
 
-  defp assign_form(socket), do: assign(socket, :form, to_form(%{"body" => ""}, as: :message))
+  # Back to an empty composer, after a send and at mount. The seed goes up with
+  # it: that token, not the rendered value, is what tells the Milkdown editor to
+  # let go of the prose it holds (VutuvWeb.UI.markdown_editor/1) — every other
+  # re-render on this page, the `typing` echo and the other side's typing bubble
+  # included, must leave the caret exactly where the writer put it.
+  defp assign_form(socket) do
+    socket
+    |> assign(:form, to_form(%{"body" => ""}, as: :message))
+    |> update(:editor_seed, &(&1 + 1))
+  end
 
   defp display_name(nil), do: gettext("Deleted account")
 
@@ -828,20 +838,28 @@ defmodule VutuvWeb.MessageLive.Index do
           </div>
         </div>
 
-        <div
-          :if={Chat.request_recipient?(@conversation, @viewer.id)}
-          id="request-banner"
-          class="flex flex-wrap items-center justify-center gap-2 border-t border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300"
-        >
-          <span>{gettext("@%{slug} wants to message you.", slug: @other.username)}</span>
-          <.request_actions id={@conversation.id} />
+        <%!-- Same empty wrapper, same reason as `#typing-slot` above: the
+        recipient of a pending request CAN write (`Chat.can_send?/2` is true for
+        them), so this banner sits over a composer that is being typed in, and
+        it steps aside the moment they accept or the other side withdraws. With
+        the `:if` on a direct child of this column, that would relocate the form
+        below and blur the editor. --%>
+        <div id="request-slot">
+          <div
+            :if={Chat.request_recipient?(@conversation, @viewer.id)}
+            id="request-banner"
+            class="flex flex-wrap items-center justify-center gap-2 border-t border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300"
+          >
+            <span>{gettext("@%{slug} wants to message you.", slug: @other.username)}</span>
+            <.request_actions id={@conversation.id} />
+          </div>
         </div>
 
         <%!-- The message composer is the shared Milkdown WYSIWYG editor
         (VutuvWeb.UI.markdown_editor/1), the same one the post composer uses, in
         its compact variant. Cmd/Ctrl+Enter sends (submit_on); plain Enter is a
         newline. It clears after send because assign_form/1 resets the body to ""
-        and the hook re-seeds from data-mde-value. The composer stacks vertically
+        AND bumps the seed the hook re-seeds on. The composer stacks vertically
         (flex-col): the editor takes the full width on top and the Send button sits
         below it as a full-width horizontal bar, rather than riding beside it. --%>
         <.form
@@ -856,6 +874,7 @@ defmodule VutuvWeb.MessageLive.Index do
             id="message-body"
             name="message[body]"
             value={@form[:body].value || ""}
+            seed={@editor_seed}
             label={gettext("Write a message…")}
             placeholder={gettext("Write a message…")}
             rows={2}

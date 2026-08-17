@@ -44,11 +44,20 @@ defmodule VutuvWeb.MarkdownEditorTest do
 
     assert html =~ ~s(id="ed")
     assert html =~ ~s(phx-hook="MarkdownEditor")
-    # data-mde-value re-seeds the editor on server-driven changes (image insert,
-    # post-save reset, message clear).
+    # data-mde-value seeds the editor at mount.
     assert html =~ ~s(data-mde-value="hello **world**")
     assert html =~ ~s(data-mde-placeholder="Write something…")
     assert html =~ "data-mde-mount"
+  end
+
+  test "the re-seed token rides the root, and only a change of it means re-seed" do
+    # The editor takes `value` again when `seed` CHANGES, never because the
+    # rendered value differs from what it last sent: the composer echoes the
+    # body back on every keystroke, and re-parsing the document on such an echo
+    # moves the caret (and drops anything typed since that render was built).
+    # A form that is only ever seeded at mount passes no seed at all.
+    assert editor(%{seed: 3}) =~ ~s(data-mde-seed="3")
+    refute editor() =~ "data-mde-seed"
   end
 
   test "every rendered Markdown feature has a toolbar command" do
@@ -186,5 +195,38 @@ defmodule VutuvWeb.MarkdownEditorTest do
     assert html =~ ~s(data-mde-submit="cmd-enter")
     assert html =~ "mde--compact"
     assert html =~ ~s(rows="2")
+  end
+
+  # Every call site either hands the editor a re-seed token or is named here
+  # with the reason it needs none. Silence is the hazard: an editor whose value
+  # the server changes after mount without moving the token keeps showing the
+  # old prose AND writes that old text back over the form field, so the save
+  # stores it too. The two exempt forms never touch the value after mount —
+  # they only echo it through `validate`, and every save path push_navigates
+  # (which re-mounts). Add a seed the moment either grows a reset, a template
+  # picker or any other server-driven rewrite.
+  @seedless %{
+    "lib/vutuv_web/live/organization_live/edit.ex" => "seeded at mount, saves navigate away",
+    "lib/vutuv_web/live/job_posting_live/form.ex" => "seeded at mount, saves navigate away"
+  }
+
+  test "every markdown_editor call site passes a re-seed token, or is exempt by name" do
+    call_sites =
+      "lib/**/*.ex"
+      |> Path.wildcard()
+      |> Enum.filter(&(File.read!(&1) =~ "<.markdown_editor"))
+      |> Enum.reject(&(&1 =~ "components/ui.ex"))
+
+    # A guard that finds nothing has stopped guarding.
+    assert length(call_sites) >= 4
+
+    for path <- call_sites, not Map.has_key?(@seedless, path) do
+      source = File.read!(path)
+
+      assert source =~ ~r/<\.markdown_editor\b[^>]*\bseed=/s,
+             "#{path} renders a markdown_editor without a seed. Bump a counter where " <>
+               "the editor must take the server's value again, or add the file to " <>
+               "@seedless in #{__ENV__.file |> Path.relative_to_cwd()} with the reason."
+    end
   end
 end

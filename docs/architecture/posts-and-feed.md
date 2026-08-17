@@ -491,7 +491,11 @@ The composer's body field is the shared **Milkdown WYSIWYG Markdown editor**
 message composer). It edits Markdown *source* in place — the field stays a
 `<textarea>` and the body is still stored and rendered as Markdown — so nothing
 downstream (`VutuvWeb.Markdown`, the `.md`/`.txt`/`.json`/`.xml` siblings)
-changes. See `.claude/rules/design.md` for the component and its gotchas.
+changes. See `.claude/rules/design.md` for the component and its gotchas — above
+all that the editor takes the server's value at mount and then only when
+`seed=` changes (`reset_composer/1` bumps it after a post and after *Discard
+draft*). The body echoed back by `validate` is the writer's own text returning,
+and re-parsing it would throw their caret to the end.
 **Cmd/Ctrl+Enter submits** (issue #1196, `submit_on="cmd-enter"` — the same
 opt-in the message composer passes, one handler in the hook); the shortcut
 respects a disabled submit button, so it cannot post past the photo-upload
@@ -692,9 +696,10 @@ review form went and gets dropped in a later deploy, like `mode`.
 **When it is written.** From every handler that changes the content, debounced
 through `send_update_after/3` to the component itself — so no host LiveView
 needs a handler for it, and a burst of keystrokes costs one write rather than
-one per character. `:composer_draft_debounce_ms` sets the pause (1.5s shipped,
-`0` in the test env, where it writes inside the `validate` that changed
-something so a test never races a timer). It is an **autosave**, so it never
+one per character. `:composer_draft_debounce_ms` sets the pause (5s shipped —
+it was 1.5s, which re-rendered the whole composer about once per sentence while
+somebody was still writing it; `0` in the test env, where it writes inside the
+`validate` that changed something so a test never races a timer). It is an **autosave**, so it never
 interrupts: an invalid changeset simply skips that round, and a draft holding
 nothing is deleted rather than stored, so clearing the composer clears it.
 

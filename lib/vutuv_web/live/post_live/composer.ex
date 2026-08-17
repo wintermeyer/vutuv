@@ -175,6 +175,11 @@ defmodule VutuvWeb.PostLive.Composer do
     # True while an autosave is already queued, so a burst of keystrokes
     # schedules one write rather than one per character.
     |> assign(:draft_scheduled?, false)
+    # Bumped only when the editor is meant to take `@body` again (the post-save
+    # reset, "Discard draft"). Everything else that changes `@body` is the
+    # member's own typing coming back, and the editor must keep the prose and
+    # the caret it already has — see VutuvWeb.UI.markdown_editor/1.
+    |> assign(:editor_seed, 0)
     |> allow_upload(:images,
       accept: Vutuv.PostImageStore.extension_whitelist(),
       max_entries: Posts.max_images_per_post(),
@@ -193,13 +198,18 @@ defmodule VutuvWeb.PostLive.Composer do
   # more: the browser never let us word one, and with the content kept there is
   # nothing left to warn about.
 
-  # How long the composer waits after the last change before writing. Long
-  # enough that ordinary typing costs one write per pause instead of one per
-  # character, short enough that a reload is very unlikely to outrun it. `0`
-  # means "write on the spot", which is what the test env uses so a draft is
-  # observable the moment a change round trips (and what an installation would
-  # set to trade writes for never losing the last second of typing).
-  @default_draft_debounce_ms 1_500
+  # How long the composer waits after the first change of a burst before
+  # writing. Long enough that a page of prose costs a handful of writes rather
+  # than one per pause, short enough that a reload is very unlikely to outrun
+  # it. It was 1.5s, i.e. an upsert plus a component re-render roughly once per
+  # sentence while somebody was still typing it (measured: the patch reaches
+  # the editor's hook 1.5s after the change). Stefan asked for 5 to 10 seconds;
+  # a draft exists to survive an accidental reload, and five seconds of writing
+  # is a small enough thing to lose for that. `0` means "write on the spot", which is what the
+  # test env uses so a draft is observable the moment a change round trips (and
+  # what an installation would set to trade writes for never losing the last
+  # second of typing).
+  @default_draft_debounce_ms 5_000
 
   defp draft_debounce_ms,
     do: Application.get_env(:vutuv, :composer_draft_debounce_ms, @default_draft_debounce_ms)
@@ -1015,6 +1025,8 @@ defmodule VutuvWeb.PostLive.Composer do
 
     socket
     |> assign(:body, opening_body)
+    # The one moment the editor must let go of what it holds.
+    |> update(:editor_seed, &(&1 + 1))
     |> assign(:tags_value, "")
     |> assign(:images, [])
     |> assign(:photos, %{})
@@ -1355,7 +1367,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
           <%!-- The editor is always on screen: a post is one kind, words
           first, whether or not pictures join it below. --%>
-          <.body_editor id={@id} body={@body} post={@post} />
+          <.body_editor id={@id} body={@body} post={@post} seed={@editor_seed} />
 
           <%!-- The photo grid, whenever photos are attached: they come large
           in their own aspect ratio, with their caption and camera switch in
@@ -1998,6 +2010,7 @@ defmodule VutuvWeb.PostLive.Composer do
   attr(:id, :string, required: true)
   attr(:body, :string, required: true)
   attr(:post, :any, required: true)
+  attr(:seed, :integer, required: true)
 
   defp body_editor(assigns) do
     ~H"""
@@ -2006,6 +2019,7 @@ defmodule VutuvWeb.PostLive.Composer do
         id={"#{@id}-body"}
         name="post[body]"
         value={@body}
+        seed={@seed}
         label={gettext("What's new?")}
         placeholder={gettext("What's new? Markdown is supported.")}
         rows={if(@post, do: 10, else: 3)}

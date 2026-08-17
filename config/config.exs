@@ -246,11 +246,12 @@ config :vutuv, :post_edit_window_minutes, 30
 # (config/runtime.exs).
 config :vutuv, :post_draft_retention_days, 30
 
-# How long the composer waits after the last change before it writes the draft,
-# in milliseconds. The pause is what keeps ordinary typing at one write per
-# pause instead of one per character; `0` writes on the spot, trading writes for
-# never losing the last second of typing (which is what the test env uses).
-config :vutuv, :composer_draft_debounce_ms, 1_500
+# How long the composer waits after the first change of a burst before it
+# writes the draft, in milliseconds. The pause is what keeps a page of prose at
+# a handful of writes instead of one per pause; `0` writes on the spot, trading
+# writes for never losing the last seconds of typing (which is what the test env
+# uses).
+config :vutuv, :composer_draft_debounce_ms, 5_000
 
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
 # Off for now: no banner serves, the public /ads flow and the admin review

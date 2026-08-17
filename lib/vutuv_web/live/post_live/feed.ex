@@ -1191,9 +1191,22 @@ defmodule VutuvWeb.PostLive.Feed do
           collapses it. A reconnect re-mounts this LiveView and would
           collapse it under a draft, so a drafting composer re-opens itself
           (:composer_drafting). --%>
+          <%!-- Hidden rather than dropped while the composer is open, and the
+          display class is picked by ONE condition so the two can never both
+          land on the element (the #880 trap: `hidden` loses the cascade to a
+          `flex` beside it). A conditional
+          element ABOVE the editor is the caret-killer of #1200: when it comes
+          and goes, morphdom relocates the following siblings to restore their
+          order — a removeChild + insertBefore of #composer-panel, measured —
+          and re-parenting a `contenteditable` blurs it, so a member typing
+          when the composer collapses or re-opens loses the caret and the
+          keystrokes after it. --%>
           <div
-            :if={!@composer_open?}
-            class="flex items-center gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+            id="composer-trigger"
+            class={[
+              if(@composer_open?, do: "hidden", else: "flex"),
+              "items-center gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+            ]}
           >
             <.composer_trigger
               viewer={@current_user}

@@ -173,31 +173,36 @@ defmodule VutuvWeb.MessageLiveTest do
       refute has_element?(view, "#send-shortcut-key")
     end
 
-    test "the composer tracks the draft so the editor clears after a send", %{conn: conn} do
+    test "the composer clears after a send, and only then", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       conversation = insert_conversation_between(me, insert_activated_user())
 
       {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 
-      # Typing feeds the draft back to the field's rendered value (data-mde-value),
-      # which is what the Milkdown editor re-seeds from. When the typing handler
-      # dropped the body, the server never saw the draft, the value never changed
-      # on send, and the composer kept the just-sent text.
+      seed = fn -> view |> element("#message-body") |> render() end
+
+      # Typing feeds the draft back into the field's rendered value, so a socket
+      # reconnect recovers it and the send after it carries the whole message.
+      # The editor does NOT take that value back — it is the writer's own text
+      # returning, and re-parsing it would move their caret — so the re-seed
+      # token must stay put while they write.
       html =
         view
         |> element("#message-form")
         |> render_change(%{message: %{body: "draft in progress"}})
 
       assert html =~ ~s(data-mde-value="draft in progress")
+      assert seed.() =~ ~s(data-mde-seed="1")
 
-      # After a send the form resets, so the rendered value empties again and the
-      # hook clears the editor (updated/1 sees the changed value).
+      # After a send the form resets AND the token moves, which is the only
+      # thing that empties the editor (VutuvWeb.UI.markdown_editor/1).
       view
       |> form("#message-form", message: %{body: "the real message"})
       |> render_submit()
 
       refute render(view) =~ "draft in progress"
       assert has_element?(view, "#message-body[data-mde-value='']")
+      assert seed.() =~ ~s(data-mde-seed="2")
     end
 
     test "a deleted message disappears live from open threads", %{conn: conn} do
@@ -380,6 +385,30 @@ defmodule VutuvWeb.MessageLiveTest do
       refute has_element?(view, "#requests")
       refute render(view) =~ "May I?"
       assert Chat.list_requests(me) == []
+    end
+
+    test "the request banner sits in a wrapper that is always rendered", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      stranger = insert_activated_user()
+      conversation = insert_conversation_between(stranger, me, status: "pending")
+      {:ok, _} = Chat.send_message(stranger, conversation.id, "May I?")
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      # The recipient of a pending request may already write (Chat.can_send?/2),
+      # so this banner stands over a composer somebody is typing in — and it
+      # steps aside the moment they accept. With the `:if` on a direct child of
+      # the column, morphdom would relocate the form below to put the siblings
+      # back in order, and re-parenting the editor's `contenteditable` blurs it:
+      # the caret leaves the half-written answer. Hence the wrapper, asserted in
+      # BOTH states so nobody folds the "empty div" away.
+      assert has_element?(view, "#request-slot #request-banner")
+      assert has_element?(view, "#message-form")
+
+      view |> element("#request-banner button", "Accept") |> render_click()
+
+      refute has_element?(view, "#request-banner")
+      assert has_element?(view, "#request-slot")
     end
 
     test "the requester sees a waiting hint instead of the composer", %{conn: conn} do

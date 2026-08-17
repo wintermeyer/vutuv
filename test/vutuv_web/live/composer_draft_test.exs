@@ -272,4 +272,45 @@ defmodule VutuvWeb.ComposerDraftTest do
       refute html =~ "halb umgeschrieben"
     end
   end
+
+  describe "the editor's re-seed token" do
+    # The Milkdown editor takes `value` again when `data-mde-seed` changes, and
+    # at no other time (VutuvWeb.UI.markdown_editor/1). It has to be a token the
+    # server bumps on purpose, because the composer echoes the body back on
+    # every keystroke: an editor that re-parsed its document whenever the
+    # rendered value differed from its last push would do so for a LATE echo
+    # too — the answer to an older change arriving while the writer has typed
+    # on — and re-parsing moves the caret to the end and drops what came after
+    # that render. That is the "jumping cursor".
+
+    defp seed(live) do
+      html = live |> element("#composer-body") |> render()
+      [_, seed] = Regex.run(~r/data-mde-seed="(\d+)"/, html)
+      seed
+    end
+
+    test "typing never bumps it, saving and discarding do", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      at_mount = seed(live)
+
+      type(live, %{"body" => "Ein Satz"})
+      type(live, %{"body" => "Ein Satz, der weitergeht"})
+
+      assert seed(live) == at_mount, "a body echo must not re-seed the editor"
+
+      live |> form("#composer-form", %{"post" => %{"body" => "Ein Satz"}}) |> render_submit()
+
+      # Posted: the composer has to let go of the text, so this one bumps.
+      after_save = seed(live)
+      assert after_save != at_mount
+
+      type(live, %{"body" => "Der nächste Entwurf"})
+      assert seed(live) == after_save
+
+      live |> element("#composer-discard") |> render_click()
+      assert seed(live) != after_save
+    end
+  end
 end

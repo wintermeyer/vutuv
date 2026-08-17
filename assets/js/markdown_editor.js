@@ -398,9 +398,13 @@ export const MarkdownEditor = {
     this.source = this.el.querySelector("[data-mde-source]")
     if (!this.mountEl || !this.source) return
 
-    // The server-rendered Markdown is the seed and the "what does the server
-    // currently hold" reference for updated() (image inserts, post-save resets).
+    // The server-rendered Markdown is the seed; `lastPushed` is what the form
+    // field should hold, so updated() can undo a stale echo written over it.
     this.lastPushed = this.source.value
+    // The re-seed token: only a CHANGE of it means the server wants the prose
+    // replaced (see updated()). Read at mount, so the first render never counts
+    // as a change.
+    this.seed = this.root.dataset.mdeSeed || ""
     this.syncing = false
     // View state lives in JS, not in DOM attributes: the root is server-managed,
     // so morphdom wipes any attribute we set on it at the next patch (every
@@ -466,16 +470,53 @@ export const MarkdownEditor = {
     if (this.source.style.height) this.sourceHeight = this.source.style.height
   },
 
+  // A patch here is the normal case, not the exception: the composer's
+  // `phx-change` echoes the body back on every keystroke, so the server
+  // re-renders this editor while it is being typed in. Re-parsing the document
+  // on such a patch is never right — `replaceAll` rebuilds the prose, which
+  // moves the caret and drops whatever was typed since the render the echo was
+  // built from. So the server SAYS when it wants a re-seed, with
+  // `data-mde-seed` (the post-save reset, "Discard draft", the message-send
+  // clear); an unchanged seed means "this is my own text coming back".
+  //
+  // Inferring it from the value instead — re-parse whenever the rendered value
+  // differs from the last push — reads a LATE echo as a command. With two
+  // changes in flight the patch answering the older one arrives while the
+  // editor already holds the newer text, so the prose snaps back a character
+  // and the caret lands at the end; the patch answering the newer one then
+  // does it again a few milliseconds later. Measured over a simulated 1.5s
+  // link, and the reason a member on a slow connection saw the caret "jump
+  // back or to the end" every few words.
   updated() {
     // morphdom just re-rendered the composer and stripped our JS-set attributes;
     // re-stamp them in the same synchronous patch (before paint, so no flicker).
     this.applyState()
     if (!this.editor) return
-    // If the server changed the field out from under us (an inline image was
-    // inserted, or the composer/message form reset after save), re-seed the
-    // editor; skip the echo of our own last push so typing doesn't churn.
+
+    const seed = this.root.dataset.mdeSeed || ""
     const serverMd = this.root.dataset.mdeValue || ""
-    if (serverMd === this.lastPushed) return
+    // Both halves are required. The seed says the server MEANT it; the second
+    // says there is something to do — which is what makes a rejoin harmless,
+    // since re-mounting the LiveView starts its counter over and the editor
+    // would otherwise read that fresh 0 as an instruction. (A rejoin arrives
+    // with the recovered text anyway: LiveView replays the form BEFORE it
+    // applies the mount patch, so the value that lands equals the last push.)
+    const reseed = seed !== this.seed && serverMd !== this.lastPushed
+    this.seed = seed
+
+    if (!reseed) {
+      // The patch may still have written an older echo of our own text into the
+      // hidden field — it is the server-rendered form field and nothing focuses
+      // it in WYSIWYG mode, so morphdom overwrites it, and a submit sends what
+      // it holds. Put the editor's text back silently: no `input` event, so no
+      // round trip, no re-render and nothing near the caret.
+      if (this.mode !== "source" && this.source.value !== this.lastPushed) {
+        this.source.value = this.lastPushed
+      }
+
+      return
+    }
+
     this.lastPushed = serverMd
     this.source.value = serverMd
 

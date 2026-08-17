@@ -72,8 +72,10 @@ function isVisible(el) {
 // reveal trigger first, then focus once it paints. The reveal is a LiveView
 // round-trip, and on a cross-page arrival (#compose) the socket may still be
 // joining, which swallows the first click; so retry the click each tick until
-// the panel is actually visible, then focus. Re-clicking once it is open is a
-// harmless no-op (the trigger is gone from the DOM by then).
+// the panel is actually visible, then focus. Only click while the trigger is
+// itself visible: it stays in the DOM once the composer opens (it is merely
+// hidden, so morphdom cannot relocate the panel below it), so an unguarded
+// retry would keep pushing `open-composer` at an already-open composer.
 function revealAndFocusComposer(tries = 0) {
   const el = document.getElementById("composer-body")
   if (el && isVisible(el)) {
@@ -81,7 +83,8 @@ function revealAndFocusComposer(tries = 0) {
     return
   }
   if (tries > 40) return
-  document.getElementById("open-composer")?.click()
+  const trigger = document.getElementById("open-composer")
+  if (trigger && isVisible(trigger)) trigger.click()
   setTimeout(() => revealAndFocusComposer(tries + 1), 50)
 }
 
