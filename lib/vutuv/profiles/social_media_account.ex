@@ -49,7 +49,15 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   @required_fields ~w(provider value)a
   @optional_fields ~w()a
 
-  @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg)
+  @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg Gitea Forgejo)
+
+  # The code forges a member runs themselves (issue #1504). They have no fixed
+  # host, so — exactly like Mastodon — the instance is part of the address: the
+  # value is stored as `name@git.example.com` and the profile link is
+  # https://git.example.com/name. Both speak the same Gitea-compatible API v1,
+  # so the two providers differ only in the name and the glyph; one client
+  # (`Vutuv.CodeStats.Forgejo`) serves both.
+  @self_hosted_providers ~w(Gitea Forgejo)
 
   # The code forges whose profile URL is a bare host plus a single-segment
   # username (github.com/name), so any deeper path a member pastes is not a
@@ -66,6 +74,31 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   from this list so the two can never drift apart.
   """
   def accepted_providers, do: @accepted_providers
+
+  @doc """
+  The providers whose instance the member runs themselves, so the value carries
+  its own host (`name@git.example.com`). The chokepoint every caller asks —
+  the changeset's own parsing, the stats client, the verification and the
+  admission check — rather than spelling the two names out again.
+  """
+  def self_hosted_providers, do: @self_hosted_providers
+
+  @doc "Whether `provider` is one of `self_hosted_providers/0`."
+  def self_hosted_provider?(provider), do: provider in @self_hosted_providers
+
+  @doc """
+  Splits a stored self-hosted value into `{:ok, handle, host}`, or `:error` for
+  anything that is not one — the one place that reads the `name@host` form, so
+  the link, the API base and the displayed address cannot disagree.
+  """
+  def split_self_hosted(value) when is_binary(value) do
+    case String.split(value, "@", parts: 2, trim: true) do
+      [handle, host] when handle != "" and host != "" -> {:ok, handle, host}
+      _ -> :error
+    end
+  end
+
+  def split_self_hosted(_value), do: :error
 
   # Providers whose profile URL is a fixed base plus the bare handle. Mastodon
   # is deliberately absent: it is federated, so the instance is part of the
@@ -96,7 +129,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"XING", ""},
     {"GitHub", ""},
     {"GitLab", ""},
-    {"Codeberg", ""}
+    {"Codeberg", ""},
+    {"Gitea", ""},
+    {"Forgejo", ""}
   ]
 
   # A federated Mastodon handle: user@instance.tld.
@@ -104,6 +139,15 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # A Bluesky handle: a lowercase domain (name.bsky.social, or a custom
   # domain) — the same shape Vutuv.Bluesky embeds in the AppView query.
   @bluesky_format ~r/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/
+  # A self-hosted forge address: a Gitea/Forgejo username, then a dotted public
+  # hostname. Deliberately strict on the host half — no port, no path, and the
+  # required alphabetic TLD rules out every IP literal and bare `localhost`
+  # spelling — because this value is what the stats client turns into an
+  # outbound request. The shape is only the cheap half of that guard: a
+  # hostname that merely *resolves* to an internal address still looks fine
+  # here, so `Vutuv.CodeStats.Forgejo` vets it through `Vutuv.Ssrf` at fetch
+  # time, which is the check that cannot be done in a changeset (no DNS).
+  @self_hosted_format ~r/^[A-Za-z0-9][A-Za-z0-9._-]{0,62}@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/
 
   @doc """
   Creates a changeset based on the `model` and `params`.
@@ -228,6 +272,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
           case get_field(changeset, :provider) do
             "Mastodon" -> parse_mastodon(value)
             "Bluesky" -> parse_bluesky(value)
+            provider when provider in @self_hosted_providers -> parse_self_hosted(value)
             _ -> parse_value(value)
           end
 
@@ -270,6 +315,47 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     end
   end
 
+  # A self-hosted forge address, from whatever the member had in their hands:
+  # the profile URL they pasted (`https://git.example.com/hans`, with or without
+  # scheme, query or fragment) or the address form itself (`hans@git.example.com`,
+  # `@hans@git.example.com`). Stored as `hans@git.example.com` with the host
+  # lowercased, the way the Mastodon handle beside it is. Anything that does not
+  # reduce to that pair is handed on unchanged for validate_value/1 to reject
+  # with the provider's own message — the member gets told the shape, never a
+  # silently mangled entry (the trap issue #923 documented for the fixed forges).
+  defp parse_self_hosted(value) do
+    rest =
+      value
+      |> String.trim()
+      |> String.trim_leading("@")
+      |> String.replace(~r{^https?://}i, "")
+      |> String.split(["?", "#"], parts: 2)
+      |> hd()
+      |> String.trim_trailing("/")
+
+    cond do
+      String.contains?(rest, "/") -> from_url_path(rest)
+      String.contains?(rest, "@") -> from_address(rest)
+      true -> rest
+    end
+  end
+
+  defp from_url_path(rest) do
+    case String.split(rest, "/", trim: true) do
+      [host, handle] -> join_self_hosted(String.trim_leading(handle, "@"), host)
+      _deeper_path -> rest
+    end
+  end
+
+  defp from_address(rest) do
+    case String.split(rest, "@", parts: 2) do
+      [handle, host] -> join_self_hosted(handle, host)
+      _ -> rest
+    end
+  end
+
+  defp join_self_hosted(handle, host), do: handle <> "@" <> String.downcase(host)
+
   defp validate_value(changeset) do
     provider = get_field(changeset, :provider)
 
@@ -280,6 +366,10 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp valid_value?("Mastodon", value), do: Regex.match?(@mastodon_format, value)
   defp valid_value?("Bluesky", value), do: Regex.match?(@bluesky_format, value)
+
+  defp valid_value?(provider, value) when provider in @self_hosted_providers,
+    do: Regex.match?(@self_hosted_format, value)
+
   # Every other provider (LinkedIn, XING, Facebook, GitHub, …) accepts any
   # non-blank handle. These networks allow characters vutuv's own username
   # never will — German umlauts in a LinkedIn slug (sebastian-hädrich), dots,
@@ -292,6 +382,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp invalid_message("Bluesky"),
     do: "Enter your Bluesky handle, e.g. name.bsky.social"
+
+  defp invalid_message(provider) when provider in @self_hosted_providers,
+    do: "Enter your username and your instance, e.g. name@git.example.com"
 
   defp invalid_message(_), do: "Invalid account name"
 
@@ -307,6 +400,12 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # instance is part of the handle, not a fixed base).
   def social_media_link(%__MODULE__{provider: "Mastodon"} = account),
     do: HTMLLink.link(get_display(account), to: url(account))
+
+  # A self-hosted forge carries its own host too, so its link is built by
+  # url/1 the same way (see @self_hosted_providers).
+  def social_media_link(%__MODULE__{provider: provider} = account)
+      when provider in @self_hosted_providers,
+      do: HTMLLink.link(get_display(account), to: url(account))
 
   # The rendered profile link; the provider → URL scheme knowledge lives
   # only in url/1 below. Providers without a canonical URL scheme (a nil
@@ -327,6 +426,10 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # (VutuvWeb.AgentDocs) need a string, not a rendered link.
   def url(%__MODULE__{provider: "Mastodon", value: value}), do: mastodon_url(value)
 
+  def url(%__MODULE__{provider: provider, value: value})
+      when provider in @self_hosted_providers,
+      do: self_hosted_url(value)
+
   for url <- base_urls do
     case url do
       {provider, nil} ->
@@ -339,6 +442,15 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   end
 
   def url(_), do: ""
+
+  # https://instance/user from the stored user@instance address. Gitea and
+  # Forgejo serve a profile at the bare username, with no "@" prefix.
+  defp self_hosted_url(value) do
+    case split_self_hosted(value) do
+      {:ok, handle, host} -> "https://" <> host <> "/" <> handle
+      :error -> ""
+    end
+  end
 
   # https://instance/@user from the stored user@instance handle.
   defp mastodon_url(value) do

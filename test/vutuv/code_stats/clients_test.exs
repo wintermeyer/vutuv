@@ -3,6 +3,7 @@ defmodule Vutuv.CodeStats.ClientsTest do
   use ExUnit.Case, async: false
 
   alias Vutuv.CodeStats.Codeberg
+  alias Vutuv.CodeStats.Forgejo
   alias Vutuv.CodeStats.GitHub
   alias Vutuv.CodeStats.GitLab
   alias Vutuv.CodeStats.Snapshot
@@ -172,6 +173,93 @@ defmodule Vutuv.CodeStats.ClientsTest do
       assert snapshot["member_since"] == "2020-11-11"
       assert snapshot["languages"] == ["Go"]
       assert snapshot["last_active_at"] == "2026-07-02T12:00:00Z"
+    end
+  end
+
+  # A self-hosted instance is the one forge whose host the MEMBER names, so this
+  # client carries what its two siblings do not: the address is split out of the
+  # value, and it is vetted before anything is sent to it. Issue #1504.
+  describe "Forgejo.fetch_stats/1 (self-hosted)" do
+    test "asks the instance named in the value and aggregates its answer" do
+      test_pid = self()
+
+      stub(:forgejo_req_options, fn conn ->
+        send(test_pid, {:host, conn.host, conn.request_path})
+
+        case conn.request_path do
+          "/api/v1/users/hans" ->
+            json_resp(
+              conn,
+              Jason.encode!(%{"followers_count" => 4, "created" => "2021-02-03T00:00:00Z"})
+            )
+
+          "/api/v1/users/hans/repos" ->
+            conn
+            |> Plug.Conn.put_resp_header("x-total-count", "7")
+            |> json_resp(
+              Jason.encode!([
+                %{
+                  "name" => "tool",
+                  "html_url" => "https://git.example.com/hans/tool",
+                  "description" => "A tool",
+                  "language" => "Elixir",
+                  "stars_count" => 2,
+                  "fork" => false,
+                  "updated_at" => "2026-07-04T09:00:00Z"
+                }
+              ])
+            )
+        end
+      end)
+
+      assert {:ok, snapshot} = Forgejo.fetch_stats("hans@git.example.com")
+      assert snapshot["followers"] == 4
+      assert snapshot["public_repos"] == 7
+      assert snapshot["total_stars"] == 2
+      assert snapshot["languages"] == ["Elixir"]
+      assert_receive {:host, "git.example.com", "/api/v1/users/hans"}
+    end
+
+    test "an unknown user (404) is gone" do
+      stub(:forgejo_req_options, fn conn -> Plug.Conn.send_resp(conn, 404, "{}") end)
+      assert Forgejo.fetch_stats("nobody@git.example.com") == {:error, :gone}
+    end
+
+    test "a value with no instance is gone, and nothing is requested" do
+      stub(:forgejo_req_options, fn _conn -> flunk("must not send a request") end)
+      assert Forgejo.fetch_stats("hans") == {:error, :gone}
+      assert Forgejo.fetch_user("hans") == {:error, :gone}
+    end
+
+    test "an instance resolving to an internal address is refused unasked" do
+      original = Application.fetch_env!(:vutuv, :ssrf_resolver)
+      on_exit(fn -> Application.put_env(:vutuv, :ssrf_resolver, original) end)
+      Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family -> {:ok, [{10, 0, 0, 5}]} end)
+
+      stub(:forgejo_req_options, fn _conn -> flunk("must not send a request") end)
+      assert Forgejo.fetch_stats("hans@git.internal.example") == {:error, :gone}
+      assert Forgejo.fetch_user("hans@git.internal.example") == {:error, :gone}
+    end
+  end
+
+  # The one request three callers share: the statistics, the admission check
+  # (Vutuv.CodeStats.verify_instance/1) and the verification proof.
+  describe "Forgejo.fetch_user/1" do
+    test "answers the instance's public user object" do
+      stub(:forgejo_req_options, fn conn ->
+        json_resp(conn, Jason.encode!(%{"website" => "https://vutuv.de/hans", "login" => "hans"}))
+      end)
+
+      assert {:ok, %{"website" => "https://vutuv.de/hans"}} =
+               Forgejo.fetch_user("hans@git.example.com")
+    end
+
+    test "keeps 'no such user' apart from 'could not ask'" do
+      stub(:forgejo_req_options, fn conn -> Plug.Conn.send_resp(conn, 404, "{}") end)
+      assert Forgejo.fetch_user("hans@git.example.com") == {:error, :gone}
+
+      stub(:forgejo_req_options, fn conn -> Plug.Conn.send_resp(conn, 502, "") end)
+      assert Forgejo.fetch_user("hans@git.example.com") == {:error, :transient}
     end
   end
 end

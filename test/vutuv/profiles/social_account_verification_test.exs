@@ -52,6 +52,24 @@ defmodule Vutuv.Profiles.SocialAccountVerificationTest do
     end)
   end
 
+  # The same shape for a self-hosted forge: its public user object, reported
+  # back as {:req, host, path} so a test can prove which instance was asked.
+  defp serve_forge_user(fields) do
+    test_pid = self()
+
+    Application.put_env(:vutuv, :forgejo_req_options,
+      plug: fn conn ->
+        send(test_pid, {:req, conn.host, conn.request_path})
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(fields))
+      end
+    )
+
+    on_exit(fn -> Application.delete_env(:vutuv, :forgejo_req_options) end)
+  end
+
   defp bluesky_account(user, handle \\ @handle) do
     insert(:social_media_account, provider: "Bluesky", value: handle, user: user)
   end
@@ -116,6 +134,67 @@ defmodule Vutuv.Profiles.SocialAccountVerificationTest do
 
       assert {:error, :unsupported} = Verification.verify(account, ctx.user)
       refute_receive {:req, _}
+    end
+  end
+
+  # A self-hosted Gitea/Forgejo profile (issue #1504). It is the one provider
+  # where the mark carries real weight: an instance the member runs themselves
+  # vouches for nothing by existing, so the proof is what makes the entry worth
+  # the trust a github.com handle gets for free.
+  describe "verify/2 for a self-hosted forge" do
+    setup do
+      enable()
+      user = insert_activated_user()
+
+      account =
+        insert(:social_media_account,
+          provider: "Forgejo",
+          value: "hans@git.example.com",
+          user: user
+        )
+
+      %{user: user, account: account}
+    end
+
+    test "the website field carrying the vutuv profile URL earns the mark", ctx do
+      serve_forge_user(%{"website" => profile_url(ctx.user), "description" => ""})
+
+      assert {:ok, account} = Verification.verify(ctx.account, ctx.user)
+      assert account.verification_method == "forgejo_profile"
+      assert account.verified_at
+
+      assert_receive {:req, "git.example.com", "/api/v1/users/hans"}
+    end
+
+    test "the description counts too — a forge profile has no one obvious field", ctx do
+      serve_forge_user(%{"website" => "", "description" => "Also at #{profile_url(ctx.user)}"})
+
+      assert {:ok, account} = Verification.verify(ctx.account, ctx.user)
+      assert account.verification_method == "forgejo_profile"
+    end
+
+    test "a profile naming nobody earns nothing", ctx do
+      serve_forge_user(%{"website" => "https://example.com", "description" => "Hi"})
+
+      assert {:error, :not_found} = Verification.verify(ctx.account, ctx.user)
+      assert Repo.reload(ctx.account).verified_at == nil
+    end
+
+    test "another member's profile URL does not count", ctx do
+      stranger = insert_activated_user()
+      serve_forge_user(%{"website" => profile_url(stranger)})
+
+      assert {:error, :not_found} = Verification.verify(ctx.account, ctx.user)
+    end
+
+    test "an unreachable instance is not a verdict", ctx do
+      Application.put_env(:vutuv, :forgejo_req_options,
+        plug: fn conn -> Plug.Conn.send_resp(conn, 500, "") end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :forgejo_req_options) end)
+
+      assert {:error, :unreachable} = Verification.verify(ctx.account, ctx.user)
     end
   end
 

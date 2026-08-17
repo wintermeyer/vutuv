@@ -2,8 +2,14 @@ defmodule Vutuv.CodeStats do
   @moduledoc """
   Cached public statistics for a member's code-forge accounts — the profile's
   "Code" card (issue #922): stars, repositories, followers, languages, last
-  activity and top repositories for the listed GitHub / GitLab / Codeberg
-  accounts. Neutral facts only, no score.
+  activity and top repositories for the listed GitHub / GitLab / Codeberg and
+  **self-hosted Gitea / Forgejo** accounts. Neutral facts only, no score.
+
+  A self-hosted account (issue #1504) is the one whose instance the member
+  names themselves, so it is also the one that has to earn its place:
+  `verify_instance/1` asks that instance before the entry is accepted at all —
+  see its doc for why that check is the whole answer to "then anyone can type
+  anything".
 
   The database is the cache: each fetch writes a snapshot map onto the
   account's `social_media_accounts` row (`code_stats` +
@@ -30,18 +36,24 @@ defmodule Vutuv.CodeStats do
   `fetch_stats/1`.
   """
 
+  import Ecto.Changeset, only: [add_error: 3, get_change: 2, get_field: 2]
+
   alias Vutuv.Activity
   alias Vutuv.CodeStats.Fetcher
+  alias Vutuv.CodeStats.Forgejo
   alias Vutuv.CodeStats.Snapshot
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.RemoteFetch.Backoff
 
   # provider value on the account row => the client module whose fetch_stats/1
-  # the fetcher's task runs.
+  # the fetcher's task runs. Gitea and Forgejo share one client: they speak the
+  # same API, and the instance rides in the value (`name@git.example.com`).
   @providers %{
     "GitHub" => Vutuv.CodeStats.GitHub,
     "GitLab" => Vutuv.CodeStats.GitLab,
-    "Codeberg" => Vutuv.CodeStats.Codeberg
+    "Codeberg" => Vutuv.CodeStats.Codeberg,
+    "Gitea" => Vutuv.CodeStats.Forgejo,
+    "Forgejo" => Vutuv.CodeStats.Forgejo
   }
 
   # A snapshot may serve for a week before a profile view refreshes it —
@@ -129,6 +141,66 @@ defmodule Vutuv.CodeStats do
       :ok
     else
       :ignored
+    end
+  end
+
+  @doc """
+  Whether this changeset carries a **new** self-hosted forge address, i.e. one
+  `verify_instance/1` would put a question to the instance about. The caller
+  asks first so it can spend a rate-limit slot only on a save that really
+  reaches out (see `VutuvWeb.RateLimit.check_instance_probe/2`).
+  """
+  def instance_probe_needed?(%Ecto.Changeset{} = changeset) do
+    changeset.valid? and enabled?() and
+      SocialMediaAccount.self_hosted_provider?(get_field(changeset, :provider)) and
+      is_binary(get_change(changeset, :value))
+  end
+
+  @doc """
+  The admission check for a self-hosted forge account (issue #1504): the
+  instance must answer for that username, or the entry is refused.
+
+  This is what keeps "self-hosted" from meaning "type anything". github.com and
+  codeberg.org vouch for their own handles by existing; an address a member
+  invented does not, so the entry has to earn its place by being *there* — and
+  the same request that proves it is the one that later fills the "Code" card,
+  so nothing is spent on the check.
+
+  A refusal is worded by which of the two things went wrong, because they ask
+  different things of the member: `:gone` (the instance answered, and has no
+  such user) is a verdict they can act on, `:transient` (we could not ask) is
+  not one and must never be reported as though it were.
+
+  A no-op when the flag is off — an air-gapped installation cannot ask, so it
+  takes the entry at its word and renders it as a plain link, exactly as it
+  does for GitHub.
+  """
+  def verify_instance(%Ecto.Changeset{} = changeset) do
+    if instance_probe_needed?(changeset) do
+      probe_instance(changeset, get_change(changeset, :value))
+    else
+      changeset
+    end
+  end
+
+  defp probe_instance(changeset, value) do
+    case Forgejo.fetch_user(value) do
+      {:ok, _user} ->
+        changeset
+
+      {:error, :gone} ->
+        add_error(
+          changeset,
+          :value,
+          "We could not find this account on that instance. Please check the address."
+        )
+
+      {:error, _transient} ->
+        add_error(
+          changeset,
+          :value,
+          "That instance did not answer. Please try again in a moment."
+        )
     end
   end
 

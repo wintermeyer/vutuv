@@ -1,11 +1,13 @@
 defmodule VutuvWeb.SocialMediaAccountController do
   use VutuvWeb, :controller
+  alias Ecto.Changeset
   alias Vutuv.CodeStats
   alias Vutuv.Profiles.SocialAccountVerification, as: Verification
   alias Vutuv.Profiles.SocialMediaAccount
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.RateLimit
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
 
@@ -57,6 +59,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
         position: Vutuv.Ordering.next_position(SocialMediaAccount, user.id)
       )
       |> SocialMediaAccount.changeset(social_media_account_params)
+      |> check_instance(conn)
 
     case Repo.insert(changeset) do
       {:ok, social_media_account} ->
@@ -116,7 +119,12 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
   def update(conn, %{"id" => id, "social_media_account" => social_media_account_params}) do
     social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
-    changeset = SocialMediaAccount.changeset(social_media_account, social_media_account_params)
+
+    changeset =
+      social_media_account
+      |> SocialMediaAccount.changeset(social_media_account_params)
+      |> check_instance(conn)
+
     result = Repo.update(changeset)
 
     # A changed handle dropped the old snapshot (see the changeset); fetch the
@@ -190,15 +198,44 @@ defmodule VutuvWeb.SocialMediaAccountController do
     )
   end
 
+  # Deliberately says "profile" rather than naming a field: which field carries
+  # the proof depends on the network (a Bluesky bio, a forge's website field or
+  # its description), and the instructions page above the button has just said
+  # which one this member should use.
   defp verify_result(conn, {:error, :not_found}) do
     put_flash(
       conn,
       :error,
-      gettext("We could not find the link in your profile description yet. Please try again.")
+      gettext("We could not find the link in your profile yet. Please try again.")
     )
   end
 
   defp verify_path(account), do: ~p"/settings/social_media_accounts/#{account}/verify"
+
+  # A self-hosted Gitea/Forgejo entry is only accepted once that instance
+  # confirms the username (Vutuv.CodeStats.verify_instance/1) — the check that
+  # keeps a member-named forge from being a free-text field. Everything else
+  # passes straight through, so no other provider pays for a network round trip
+  # on save. The rate limit is asked first, and only when a probe would really
+  # be sent, so a slot is never spent on a save that asks nobody anything.
+  defp check_instance(changeset, conn) do
+    cond do
+      not CodeStats.instance_probe_needed?(changeset) ->
+        changeset
+
+      RateLimit.check_instance_probe(conn, conn.assigns[:user]) == :ok ->
+        CodeStats.verify_instance(changeset)
+
+      true ->
+        # A plain string, like every other add_error message: it is translated
+        # at render time out of the "errors" domain (VutuvWeb.ErrorHelpers).
+        Changeset.add_error(
+          changeset,
+          :value,
+          "Too many checks for now. Please try again later."
+        )
+    end
+  end
 
   defp user_with_social_media_accounts(conn),
     do:

@@ -34,6 +34,12 @@ defmodule VutuvWeb.RateLimit do
   @import_limit 10
   @import_window_ms :timer.hours(1)
 
+  # Saving a self-hosted forge profile (issue #1504) sends one request to an
+  # address the member typed, so the form gets its own modest budget: 20 per
+  # hour, per IP and per member.
+  @probe_limit 20
+  @probe_window_ms :timer.hours(1)
+
   @doc """
   Returns `:ok` when the request is within the limit for `event`, or
   `:rate_limited` once the per-IP or per-identity counter is exceeded. `extra` is
@@ -102,6 +108,17 @@ defmodule VutuvWeb.RateLimit do
       Application.get_env(:vutuv, :linkedin_import_rate_limit, {@import_limit, @import_window_ms})
 
     check(conn, :linkedin_import, user.id, limit: limit, window_ms: window_ms)
+  end
+
+  @doc """
+  Throttles the self-hosted-forge admission check (20 per hour, per IP and per
+  member): saving a Gitea/Forgejo profile makes this server send one request to
+  a host the member typed (`Vutuv.CodeStats.verify_instance/1`), and a form
+  anybody can re-submit in a loop is a form anybody can point at a stranger.
+  Generous enough that fixing a typo a few times never trips it.
+  """
+  def check_instance_probe(conn, user) do
+    check(conn, :instance_probe, user.id, limit: @probe_limit, window_ms: @probe_window_ms)
   end
 
   defp identity_keys(_event, nil), do: []

@@ -276,6 +276,94 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
     end
   end
 
+  # A self-hosted Gitea/Forgejo instance has no fixed host, so the value carries
+  # its own (name@git.example.com) exactly as a Mastodon handle does. See issue
+  # #1504; the instance itself is asked in Vutuv.CodeStats.verify_instance/1.
+  describe "self-hosted forge value parsing (#1504)" do
+    test "accepts Gitea and Forgejo as providers" do
+      for provider <- ~w(Gitea Forgejo) do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+            provider: provider,
+            value: "hans@git.example.com"
+          })
+
+        assert changeset.valid?, "expected #{provider} to be an accepted provider"
+      end
+    end
+
+    test "stores the address form as typed, host lowercased" do
+      assert value_for(%{provider: "Forgejo", value: "Hans@Git.Example.COM"}) ==
+               "Hans@git.example.com"
+    end
+
+    test "extracts the pair from a pasted profile URL" do
+      assert value_for(%{provider: "Gitea", value: "https://git.example.com/hans"}) ==
+               "hans@git.example.com"
+    end
+
+    test "takes a pasted URL with no scheme, a trailing slash and a query" do
+      assert value_for(%{provider: "Gitea", value: "git.example.com/hans/?tab=activity"}) ==
+               "hans@git.example.com"
+    end
+
+    test "strips a leading @ from the address form" do
+      assert value_for(%{provider: "Forgejo", value: "@hans@git.example.com"}) ==
+               "hans@git.example.com"
+    end
+
+    test "rejects a bare username with no instance" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Gitea", value: "hans"})
+
+      refute changeset.valid?
+      assert Enum.any?(errors_on(changeset).value, &(&1 =~ "name@git.example.com"))
+    end
+
+    test "rejects a repository URL: it names no profile" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Forgejo",
+          value: "https://git.example.com/hans/project"
+        })
+
+      refute changeset.valid?
+      assert changeset.errors[:value]
+    end
+
+    # The stored value is what the stats client turns into an outbound request,
+    # so the shape itself rules out the addresses that would point it inward.
+    # (A hostname that merely RESOLVES to one still looks fine here — that is
+    # Vutuv.Ssrf's job at fetch time.)
+    test "rejects an instance that is not a public dotted hostname" do
+      for value <-
+            ~w(hans@localhost hans@127.0.0.1 hans@10.0.0.5 hans@[::1] hans@git.example.com:3000) do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+            provider: "Gitea",
+            value: value
+          })
+
+        refute changeset.valid?, "expected #{value} to be refused"
+      end
+    end
+
+    test "split_self_hosted/1 answers the pair, or :error for anything else" do
+      assert SocialMediaAccount.split_self_hosted("hans@git.example.com") ==
+               {:ok, "hans", "git.example.com"}
+
+      assert SocialMediaAccount.split_self_hosted("hans") == :error
+      assert SocialMediaAccount.split_self_hosted(nil) == :error
+    end
+
+    test "self_hosted_provider?/1 is the chokepoint every caller asks" do
+      assert SocialMediaAccount.self_hosted_provider?("Gitea")
+      assert SocialMediaAccount.self_hosted_provider?("Forgejo")
+      refute SocialMediaAccount.self_hosted_provider?("Codeberg")
+      refute SocialMediaAccount.self_hosted_provider?(nil)
+    end
+  end
+
   describe "url/1" do
     test "builds the profile URL for GitLab" do
       account = %SocialMediaAccount{provider: "GitLab", value: "wintermeyer"}
@@ -295,6 +383,18 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
     test "builds the profile URL for Bluesky" do
       account = %SocialMediaAccount{provider: "Bluesky", value: "gargron.bsky.social"}
       assert SocialMediaAccount.url(account) == "https://bsky.app/profile/gargron.bsky.social"
+    end
+
+    test "builds the profile URL of a self-hosted instance, with no @ prefix" do
+      for provider <- ~w(Gitea Forgejo) do
+        account = %SocialMediaAccount{provider: provider, value: "hans@git.example.com"}
+        assert SocialMediaAccount.url(account) == "https://git.example.com/hans"
+      end
+    end
+
+    test "a self-hosted value that lost its instance yields no link, never a broken one" do
+      account = %SocialMediaAccount{provider: "Gitea", value: "hans"}
+      assert SocialMediaAccount.url(account) == ""
     end
   end
 

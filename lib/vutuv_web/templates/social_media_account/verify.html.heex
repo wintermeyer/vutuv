@@ -1,8 +1,9 @@
 <%!-- Owner-only "prove this account is yours" page (classic settings page). One
-proof: the account's own profile description must carry the member's vutuv
-profile URL. Bluesky has no rel=me, so the bio is the one field only the
-account holder can write. On success the account earns the verified mark shown
-on the profile card + section pages. --%>
+proof: a field on the account's own profile must carry the member's vutuv
+profile URL — the Bluesky bio (that network has no rel=me, so the bio is the one
+field only the account holder can write), or the website field / description of
+a self-hosted Gitea or Forgejo profile. On success the account earns the
+verified mark shown on the profile card + section pages. --%>
 <.settings_shell user={@user} active={:social} title={gettext("Verify profile")}>
   <.card class="space-y-4">
     <div class="flex flex-wrap items-center gap-2">
@@ -38,7 +39,7 @@ on the profile card + section pages. --%>
     :if={!@verifiable?}
     class="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-400"
   >
-    {gettext("%{provider} profiles cannot be verified yet. Only Bluesky offers a profile description we can check.",
+    {gettext("%{provider} profiles cannot be verified yet: the network offers no field we could check.",
       provider: @social_media_account.provider
     )}
   </div>
@@ -51,16 +52,16 @@ on the profile card + section pages. --%>
   </div>
 
   <.card :if={@verifiable? && @enabled?} class="mt-4 space-y-3">
-    <.section_title>{gettext("Link back from your profile description")}</.section_title>
+    <.section_title>{gettext("Link back from your profile")}</.section_title>
     <p class="text-sm text-slate-700 dark:text-slate-300">
-      {gettext("Add this address to your Bluesky profile description (your bio), then run the check:")}
+      {verify_instructions(@social_media_account.provider)}
     </p>
     <code
       phx-no-curly-interpolation
       class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
     ><%= @profile_url %></code>
     <p class="text-xs text-slate-600 dark:text-slate-400">
-      {gettext("The rest of your description can say whatever you like. We only look for this address.")}
+      {gettext("The rest of the field can say whatever you like. We only look for this address.")}
     </p>
 
     <.form

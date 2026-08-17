@@ -30,6 +30,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     WorkExperience
   }
 
+  alias Vutuv.CodeStats
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.QualificationDocument
   alias Vutuv.Tags.UserTag
@@ -64,7 +65,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     %{assoc: assoc, schema: schema} = Map.fetch!(@writable, conn.assigns.section)
     user = conn.assigns.current_user
 
-    changeset = user |> build_assoc(assoc) |> schema.changeset(params)
+    changeset = user |> build_assoc(assoc) |> schema.changeset(params) |> before_write()
 
     case Repo.insert(changeset) do
       {:ok, record} ->
@@ -86,7 +87,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     user = conn.assigns.current_user
 
     with %{} = record <- ControllerHelpers.get_owned(user, assoc, id),
-         {:ok, record} <- record |> schema.changeset(params) |> Repo.update() do
+         {:ok, record} <- record |> schema.changeset(params) |> before_write() |> Repo.update() do
       after_write(conn.assigns.section, record)
       record = preload_for_doc(record, conn.assigns.section)
       ApiV2.send_json(conn, SectionDocs.build_show(user, conn.assigns.section, record))
@@ -152,7 +153,18 @@ defmodule VutuvWeb.ApiV2.SectionController do
   # never leaves a stale screenshot); shares the supervised, gated capture.
   defp after_write(:links, url), do: Vutuv.PageScreenshot.generate_async(url)
 
+  # A code-forge account gets its first stats snapshot fetched in the
+  # background, exactly as the HTML form's create/update does — an entry added
+  # through the API must not have to wait for a profile view to notice it.
+  defp after_write(:social_media_accounts, account), do: CodeStats.refresh_if_stale(account)
+
   defp after_write(_section, _record), do: :ok
+
+  # The one write-side check that needs the network: a self-hosted Gitea/Forgejo
+  # address is only accepted once that instance confirms the username (issue
+  # #1504). It belongs here and not in the changeset because a changeset must
+  # never touch the network; every other section passes straight through.
+  defp before_write(changeset), do: CodeStats.verify_instance(changeset)
 
   # The associations a section's doc map renders (SectionDocs.work_entry/1
   # falls back to nil on an unloaded association, which would silently drop

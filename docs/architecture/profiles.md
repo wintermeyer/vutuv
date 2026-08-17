@@ -1038,10 +1038,18 @@ small emerald mark a verified webpage link gets
 (`Vutuv.Profiles.SocialAccountVerification`, the social twin of
 `Vutuv.Profiles.LinkVerification`).
 
-Only **Bluesky** can be proved today: its profile description (the bio) must
-carry the member's vutuv profile URL, which is the one field only the account
-holder can write — the network has no `rel="me"`. The URL is matched as a whole
-address, so a bio linking to `/alicexyz` never verifies the member `alice`.
+Two kinds of account can be proved. **Bluesky** (`bluesky_bio`): its profile
+description (the bio) must carry the member's vutuv profile URL, which is the
+one field only the account holder can write — the network has no `rel="me"`. A
+**self-hosted Gitea / Forgejo** account (`forgejo_profile`, issue #1504): the
+same public user object the "Code" card is built from carries both fields its
+owner writes, the website field and the description, and either may hold the
+URL — a forge profile has no single obvious place for it, and refusing the other
+one would just read as the check being broken. There it also means more than
+elsewhere: an instance a member runs themselves vouches for nothing by existing,
+so the proof is what earns the entry the trust a github.com handle gets for
+free. The URL is matched as a whole address in both cases, so a bio linking to
+`/alicexyz` never verifies the member `alice`.
 The columns on `social_media_accounts` are deliberately provider-agnostic
 (`verification_method`, `verified_at`, `last_checked_at`, `grace_deadline_at`),
 so a second network is one clause rather than another migration.
@@ -1069,9 +1077,11 @@ md/text show "(verified profile)").
 
 ## Code-forge statistics ("Code" card, issue #922)
 
-A profile that lists a **GitHub, GitLab or Codeberg** account gets a **"Code"
-card** (`Vutuv.CodeStats`, per-forge clients `Vutuv.CodeStats.GitHub` /
-`GitLab` / `Codeberg`): neutral public facts per account — total stars,
+A profile that lists a **GitHub, GitLab, Codeberg or self-hosted Gitea /
+Forgejo** account gets a **"Code" card** (`Vutuv.CodeStats`, per-forge clients
+`Vutuv.CodeStats.GitHub` / `GitLab` / `Forgejo`, the last of which `Codeberg`
+points at its one fixed host — codeberg.org runs Forgejo): neutral public facts
+per account — total stars,
 repository count, followers, "member since", most-used languages (rendered
 as calm slate pills, deliberately not the brand tag chips — they are not
 endorsable) and the top three repositories — no score, no rating. A "Last
@@ -1093,6 +1103,42 @@ find the snapshot stale. `Vutuv.CodeStats.Fetcher` single-flights the
 background fetches, and an open profile LiveView re-renders the card when
 the fresh snapshot lands (`{:code_stats_updated, account_id}` on the owner's
 Activity topic).
+
+### Self-hosted instances (issue #1504)
+
+Gitea and Forgejo have no fixed host, so — exactly like a Mastodon handle — the
+instance is part of the address: the value is stored as `name@git.example.com`
+(`SocialMediaAccount.split_self_hosted/1` is the one reader of that form) and
+the profile link is `https://git.example.com/name`. The two providers differ
+only in the name and the glyph; they speak the same Gitea-compatible API v1, so
+one client serves both.
+
+That is also the one entry whose host the **member** names, which asks two
+questions the fixed forges never did.
+
+**Is it real?** `Vutuv.CodeStats.verify_instance/1` puts the address to the
+instance before the entry is accepted at all: no answer for that username, no
+entry. github.com and codeberg.org vouch for their own handles by existing; an
+address a member invented does not, so it earns its place by being *there* — and
+the request that proves it is the one that later fills the card, so the check
+costs nothing extra. Its two refusals are worded apart on purpose, because they
+ask different things of the member: "that instance has no such user" is a
+verdict they can act on, "we could not reach it" is not one. It runs in the
+controllers (`SocialMediaAccountController` create/update and the API's
+`before_write/1`), never in the changeset — a changeset must not touch the
+network — and the form's path additionally spends a slot of
+`RateLimit.check_instance_probe/2` (20/hour), since a form anybody can
+re-submit in a loop is a form anybody can point at a stranger. With
+`:fetch_code_stats` off the check is skipped and the entry is taken at its word,
+exactly as an air-gapped installation already treats GitHub.
+
+**Where may we send the request?** `Vutuv.CodeStats.Forgejo` vets every instance
+through `Vutuv.Ssrf` before it asks, so an address resolving inward is refused
+unasked. The stored shape is the cheap half of that guard (a dotted public
+hostname: no port, no path, and the required alphabetic TLD rules out IP
+literals and `localhost`); the DNS half cannot live in a changeset, so it sits
+at fetch time. A refused or malformed address is `:gone`, not `:transient` —
+neither is coming back, so it deactivates instead of walking the ladder forever.
 
 Failures reuse the social feed's persisted backoff ladder / deactivation
 columns (the provider sets are disjoint). The whole feature sits behind the

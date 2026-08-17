@@ -258,3 +258,58 @@ msgid "We allow at most %{max} accounts per post. Please remove some mentions."
 msgstr ""
 "Wir erlauben höchstens %{max} Konten pro Beitrag. Bitte entfernen Sie einige "
 "Erwähnungen."
+
+#: lib/vutuv_web/views/error_helpers.ex:134
+#, elixir-autogen, elixir-format
+msgid "Enter your Bluesky handle, e.g. name.bsky.social"
+msgstr "Geben Sie Ihr Bluesky-Handle an, z. B. name.bsky.social"
+
+#: lib/vutuv_web/views/error_helpers.ex:147
+#, elixir-autogen, elixir-format
+msgid "Enter your Codeberg username, not a full URL with extra path segments"
+msgstr "Geben Sie Ihren Codeberg-Benutzernamen an, keine vollständige URL mit weiteren Pfadangaben"
+
+#: lib/vutuv_web/views/error_helpers.ex:143
+#, elixir-autogen, elixir-format
+msgid "Enter your GitHub username, not a full URL with extra path segments"
+msgstr "Geben Sie Ihren GitHub-Benutzernamen an, keine vollständige URL mit weiteren Pfadangaben"
+
+#: lib/vutuv_web/views/error_helpers.ex:139
+#, elixir-autogen, elixir-format
+msgid "Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
+msgstr "Geben Sie Ihren GitLab-Benutzernamen an, z. B. gitlab.com/benutzername (keinen ID-Link mit /-/u/)"
+
+#: lib/vutuv_web/views/error_helpers.ex:133
+#, elixir-autogen, elixir-format
+msgid "Enter your full Mastodon handle, e.g. @user@instance.social"
+msgstr "Geben Sie Ihr vollständiges Mastodon-Handle an, z. B. @name@instanz.social"
+
+#: lib/vutuv_web/views/error_helpers.ex:135
+#, elixir-autogen, elixir-format
+msgid "Enter your username and your instance, e.g. name@git.example.com"
+msgstr "Geben Sie Ihren Benutzernamen und Ihre Instanz an, z. B. name@git.example.com"
+
+#: lib/vutuv_web/views/error_helpers.ex:151
+#, elixir-autogen, elixir-format
+msgid "Invalid account name"
+msgstr "Ungültiger Kontoname"
+
+#: lib/vutuv_web/views/error_helpers.ex:152
+#, elixir-autogen, elixir-format
+msgid "Someone has already claimed this account"
+msgstr "Dieses Konto hat bereits jemand für sich beansprucht"
+
+#: lib/vutuv_web/views/error_helpers.ex:159
+#, elixir-autogen, elixir-format
+msgid "That instance did not answer. Please try again in a moment."
+msgstr "Diese Instanz hat nicht geantwortet. Bitte versuchen Sie es gleich noch einmal."
+
+#: lib/vutuv_web/views/error_helpers.ex:160
+#, elixir-autogen, elixir-format
+msgid "Too many checks for now. Please try again later."
+msgstr "Vorerst zu viele Prüfungen. Bitte versuchen Sie es später noch einmal."
+
+#: lib/vutuv_web/views/error_helpers.ex:155
+#, elixir-autogen, elixir-format
+msgid "We could not find this account on that instance. Please check the address."
+msgstr "Wir konnten dieses Konto auf dieser Instanz nicht finden. Bitte prüfen Sie die Adresse."

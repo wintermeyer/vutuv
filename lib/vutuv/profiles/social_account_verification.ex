@@ -4,12 +4,19 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
   member lists on their profile — the social twin of
   `Vutuv.Profiles.LinkVerification`, earning the same small emerald mark.
 
-  Today exactly one network is verifiable:
+  Two kinds of account can be proved today:
 
     * `bluesky_bio` — the member's Bluesky profile description (their bio)
       carries their vutuv profile URL. Bluesky has no `rel="me"`, so the bio is
       the one field only the account holder can write; the threat model is the
       same as the `rel_me` proof on a webpage.
+    * `forgejo_profile` — a **self-hosted** Gitea / Forgejo account (issue
+      #1504) whose profile carries that URL in its website field or its
+      description. Both come back from the same unauthenticated API call the
+      "Code" card already makes, so the proof costs one request and no HTML
+      parsing. It is the one provider where the mark says more than usual: an
+      instance a member runs themselves vouches for nothing by existing, so the
+      proof is what makes the entry worth the same trust as a github.com handle.
 
   The state lives on the `social_media_accounts` row and is written **only**
   through `SocialMediaAccount.verification_changeset/2`, never from a form —
@@ -30,12 +37,18 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Bluesky
+  alias Vutuv.CodeStats.Forgejo
   alias Vutuv.Profiles.LinkVerification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Repo
   alias Vutuv.WebVerification
 
-  @method "bluesky_bio"
+  @bluesky_method "bluesky_bio"
+  @forgejo_method "forgejo_profile"
+
+  # Read at compile time so the guard below can use it — the list itself still
+  # lives in exactly one place (the schema).
+  @self_hosted SocialMediaAccount.self_hosted_providers()
 
   # The re-check interval and the grace window come from `Vutuv.WebVerification`,
   # shared with the link and organization-domain re-checks.
@@ -44,11 +57,15 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
   def enabled?, do: Application.get_env(:vutuv, :verify_social_accounts, true)
 
   @doc """
-  Whether this provider can be proved at all. Only Bluesky today; every other
-  listed account (LinkedIn, a code forge, …) simply offers no verify affordance.
+  Whether this provider can be proved at all: Bluesky, and a self-hosted
+  Gitea/Forgejo instance. Every other listed account (LinkedIn, github.com, …)
+  simply offers no verify affordance — the network exposes no field we can read
+  that only its owner can write.
   """
   def verifiable?(%SocialMediaAccount{provider: provider}), do: verifiable?(provider)
-  def verifiable?(provider), do: provider == "Bluesky"
+
+  def verifiable?(provider),
+    do: provider == "Bluesky" or SocialMediaAccount.self_hosted_provider?(provider)
 
   @doc """
   The URL the member must put in their Bluesky bio: their canonical vutuv
@@ -76,7 +93,7 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
 
   defp check_and_stamp(account, user) do
     case proof_present?(account, user) do
-      {:ok, true} -> mark_verified(account)
+      {:ok, true} -> mark_verified(account, method(account))
       {:ok, false} -> {:error, :not_found}
       {:error, reason} -> {:error, reason}
     end
@@ -94,7 +111,31 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
     end
   end
 
+  # A self-hosted Gitea/Forgejo profile: the same public user object the "Code"
+  # card is built from carries the two fields its owner writes — the website
+  # field and the description. Either one may hold the proof, because a forge
+  # profile has no single obvious place for it and refusing the other would
+  # just read as the check being broken.
+  defp proof_present?(%SocialMediaAccount{provider: provider, value: value}, %User{} = user)
+       when provider in @self_hosted do
+    case Forgejo.fetch_user(value) do
+      {:ok, remote} -> {:ok, proves?(remote, user)}
+      # The instance answered and has no such user — a real answer, not a blip.
+      {:error, :gone} -> {:ok, false}
+      {:error, _transient} -> {:error, :unreachable}
+    end
+  end
+
   defp proof_present?(_account, _user), do: {:error, :unsupported}
+
+  defp proves?(remote, user) when is_map(remote) do
+    mentions_profile?(remote["website"], user) or mentions_profile?(remote["description"], user)
+  end
+
+  defp proves?(_remote, _user), do: false
+
+  defp method(%SocialMediaAccount{provider: "Bluesky"}), do: @bluesky_method
+  defp method(%SocialMediaAccount{}), do: @forgejo_method
 
   # The URL must appear as a whole address, not as the prefix of a longer one:
   # a bio linking to /alicexyz must never verify the member "alice". Handles are
@@ -107,12 +148,12 @@ defmodule Vutuv.Profiles.SocialAccountVerification do
 
   defp mentions_profile?(_description, _user), do: false
 
-  defp mark_verified(%SocialMediaAccount{} = account) do
+  defp mark_verified(%SocialMediaAccount{} = account, method) do
     now = now()
 
     account
     |> SocialMediaAccount.verification_changeset(%{
-      verification_method: @method,
+      verification_method: method,
       verified_at: now,
       last_checked_at: now,
       grace_deadline_at: nil

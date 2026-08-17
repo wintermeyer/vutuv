@@ -128,7 +128,36 @@ defmodule VutuvWeb.ErrorHelpers do
       dgettext_noop("errors", "Please list at most %{max} accounts."),
       dgettext_noop("errors", "\"%{uri}\" is not a valid https account address."),
       # Vutuv.Profiles.Messenger, the Signal contact link (issue #1442).
-      dgettext_noop("errors", "Enter your Signal link, it starts with https://signal.me/#")
+      dgettext_noop("errors", "Enter your Signal link, it starts with https://signal.me/#"),
+      # Vutuv.Profiles.SocialMediaAccount, the per-provider address shapes.
+      dgettext_noop("errors", "Enter your full Mastodon handle, e.g. @user@instance.social"),
+      dgettext_noop("errors", "Enter your Bluesky handle, e.g. name.bsky.social"),
+      dgettext_noop(
+        "errors",
+        "Enter your username and your instance, e.g. name@git.example.com"
+      ),
+      dgettext_noop(
+        "errors",
+        "Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
+      ),
+      dgettext_noop(
+        "errors",
+        "Enter your GitHub username, not a full URL with extra path segments"
+      ),
+      dgettext_noop(
+        "errors",
+        "Enter your Codeberg username, not a full URL with extra path segments"
+      ),
+      dgettext_noop("errors", "Invalid account name"),
+      dgettext_noop("errors", "Someone has already claimed this account"),
+      # Vutuv.CodeStats, the self-hosted forge admission check (issue #1504) and
+      # its rate limit in VutuvWeb.SocialMediaAccountController.
+      dgettext_noop(
+        "errors",
+        "We could not find this account on that instance. Please check the address."
+      ),
+      dgettext_noop("errors", "That instance did not answer. Please try again in a moment."),
+      dgettext_noop("errors", "Too many checks for now. Please try again later.")
     ]
   end
 end

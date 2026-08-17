@@ -149,7 +149,7 @@ Everything else has a default (the vutuv.de production value):
 | `AUDIBLE_DOMAIN` | `www.audible.de` | The Audible store an **audiobook** review card links the "Hörbuch"/"Audiobook" word to (a title search, since Audible keys by its own ASIN, not the print ISBN). Set your regional store (`www.audible.com`, …) — or an **empty** value (`AUDIBLE_DOMAIN=`) to keep the word plain text |
 | `VERIFY_ORGANIZATION_DOMAINS` | `true` | `false` disables the verified-organization-page domain proof (the DNS TXT and well-known-file checks and their periodic re-check) — no new organization page can be verified, existing ones keep working. Set it on installations that must not make outbound DNS/HTTP calls. A newly verified organization sends an operator notice to `OPERATOR_EMAIL` |
 | `VERIFY_USER_LINKS` | `true` | `false` disables verified personal-webpage links (a member proving a profile link is their own page via a rel=me back-link, or the same DNS TXT / well-known-file domain proof, plus their periodic re-check) — no new link can be verified, existing marks keep working. Set it on installations that must not make outbound DNS/HTTP calls |
-| `VERIFY_SOCIAL_ACCOUNTS` | `true` | `false` disables verified social-media handles (a member proving a listed account is theirs, plus its periodic re-check) — no new account can be verified, existing marks keep working. Only Bluesky can be proved today: its profile description must carry the member's vutuv profile URL, which the public Bluesky AppView is asked for. Set it on installations that must not make outbound HTTP calls |
+| `VERIFY_SOCIAL_ACCOUNTS` | `true` | `false` disables verified social-media handles (a member proving a listed account is theirs, plus its periodic re-check) — no new account can be verified, existing marks keep working. Two kinds of account can be proved: Bluesky (its profile description must carry the member's vutuv profile URL, which the public Bluesky AppView is asked for) and a self-hosted Gitea/Forgejo profile (the website field or the description, read from that instance's public API). Set it on installations that must not make outbound HTTP calls |
 | `GITHUB_API_TOKEN` | – | Optional token for the profile code-stats fetches (GitHub allows 60 unauthenticated requests/hour per IP; a token raises that to 5,000). A [fine-grained PAT](https://github.com/settings/personal-access-tokens) with **no** scopes/permissions is enough — the fetches read public data only. Can be added (or rotated) at any time; without it everything still works, the 7-day snapshot cache is sized for the unauthenticated limit |
 | `MAIL_LOG_POLL_MS` | `5000` | Bounce watcher poll interval |
 | `JOB_RUNTIME_DAYS` | `90` | How long a published job posting stays live before it auto-expires. Flat, no renewals — a still-open role gets a fresh posting |
@@ -191,7 +191,7 @@ A few rarely-changed switches are compile-time settings in
 `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
 `:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's
-GitHub/GitLab/Codeberg statistics), `:generate_screenshots` (profile link
+GitHub/GitLab/Codeberg and self-hosted Gitea/Forgejo statistics), `:generate_screenshots` (profile link
 previews **and** the auto-screenshot for single-link posts, including cached
 fediverse posts in the feed — admins watch the
 capture queue and browse the gallery at `/admin/screenshots`; a YouTube video
@@ -343,8 +343,9 @@ vutuv runs fine without internet access:
   to hide the feature if link verification is not wanted on the installation.
 - Set `VERIFY_SOCIAL_ACCOUNTS=false`: verified social-media handles ask the
   public Bluesky AppView (`public.api.bsky.app`) for the account's profile
-  description, so unlike the link proofs there is no internal-resolver variant
-  that could work air-gapped — the check simply fails. Turn it off so the verify
+  description, or a self-hosted Gitea/Forgejo instance for its public user
+  object, so unlike the link proofs there is no internal-resolver variant that
+  could work air-gapped — the check simply fails. Turn it off so the verify
   page says so plainly instead of offering a button that can never succeed.
 - Turn off the features that call out to the internet (compile-time flags in
   `config/config.exs`): `:fetch_gravatar` (the member's own "Fetch my picture
@@ -353,7 +354,9 @@ vutuv runs fine without internet access:
   and registration never does),
   `:fetch_mastodon_posts` / `:fetch_bluesky_posts` (the social-feed card on
   profiles), `:fetch_code_stats` (the profile "Code" card's GitHub/GitLab/
-  Codeberg statistics — off, the accounts stay plain links), and
+  Codeberg and self-hosted Gitea/Forgejo statistics — off, the accounts stay
+  plain links, and a self-hosted address is taken at its word because the
+  instance cannot be asked), and
   `:generate_screenshots` (profile link-preview screenshots **and** the
   auto-screenshot for single-link posts — these fetch the linked page and run
   headless Chromium).

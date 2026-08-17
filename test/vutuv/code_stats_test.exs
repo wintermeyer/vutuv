@@ -17,6 +17,14 @@ defmodule Vutuv.CodeStatsTest do
 
   defp reload(account), do: Repo.get!(SocialMediaAccount, account.id)
 
+  defp self_hosted_changeset(value),
+    do: SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Forgejo", value: value})
+
+  defp stub_forgejo(fun) do
+    Application.put_env(:vutuv, :forgejo_req_options, plug: fun)
+    on_exit(fn -> Application.delete_env(:vutuv, :forgejo_req_options) end)
+  end
+
   describe "accounts_of/1 and visible_accounts/1" do
     test "picks only the code-forge providers, in order" do
       user = insert(:user)
@@ -169,6 +177,77 @@ defmodule Vutuv.CodeStatsTest do
       assert is_nil(updated.code_stats)
       assert is_nil(updated.code_stats_fetched_at)
       assert is_nil(updated.fetch_disabled_at)
+    end
+  end
+
+  # The admission check for a self-hosted Gitea/Forgejo account (issue #1504):
+  # the instance must answer for that username, or the entry is refused. This
+  # is the whole difference between "self-hosted" and "a free-text field".
+  describe "verify_instance/1" do
+    test "an instance that knows the username admits the entry" do
+      enable_code_stats()
+
+      stub_forgejo(fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"login" => "hans"}))
+      end)
+
+      changeset = "hans@git.example.com" |> self_hosted_changeset() |> CodeStats.verify_instance()
+      assert changeset.valid?
+    end
+
+    test "an instance that does not know the username refuses it, and says which" do
+      enable_code_stats()
+      stub_forgejo(fn conn -> Plug.Conn.send_resp(conn, 404, "{}") end)
+
+      changeset = "hans@git.example.com" |> self_hosted_changeset() |> CodeStats.verify_instance()
+
+      refute changeset.valid?
+      assert Enum.any?(errors_on(changeset).value, &(&1 =~ "could not find this account"))
+    end
+
+    test "an unreachable instance is not reported as a verdict" do
+      enable_code_stats()
+      stub_forgejo(fn conn -> Plug.Conn.send_resp(conn, 502, "") end)
+
+      changeset = "hans@git.example.com" |> self_hosted_changeset() |> CodeStats.verify_instance()
+
+      refute changeset.valid?
+      assert Enum.any?(errors_on(changeset).value, &(&1 =~ "did not answer"))
+    end
+
+    test "asks nobody about a fixed-host forge, an unchanged handle or a broken address" do
+      enable_code_stats()
+      stub_forgejo(fn _conn -> flunk("must not send a request") end)
+
+      github =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "GitHub",
+          value: "octo"
+        })
+
+      assert CodeStats.verify_instance(github).valid?
+
+      unchanged =
+        SocialMediaAccount.changeset(
+          %SocialMediaAccount{provider: "Forgejo", value: "hans@git.example.com"},
+          %{value: "hans@git.example.com"}
+        )
+
+      assert CodeStats.verify_instance(unchanged).valid?
+
+      # Already invalid on its shape: there is nothing to ask about yet.
+      refute CodeStats.verify_instance(self_hosted_changeset("hans")).valid?
+    end
+
+    # An air-gapped installation cannot ask, so it takes the entry at its word
+    # and renders a plain link — exactly what it does for GitHub.
+    test "the flag being off admits the entry unasked" do
+      stub_forgejo(fn _conn -> flunk("must not send a request") end)
+
+      changeset = "hans@git.example.com" |> self_hosted_changeset() |> CodeStats.verify_instance()
+      assert changeset.valid?
     end
   end
 
