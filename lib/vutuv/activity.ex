@@ -148,6 +148,12 @@ defmodule Vutuv.Activity do
   # "Became vernetzt" events are derived from mutual follows: the pair's
   # timestamp is the later of the two follow times (GREATEST), matching
   # connection_items/3 below.
+  #
+  # This arm deliberately does NOT drop the pairs the member closed themselves,
+  # the way the badge tally does (`count_connections/3`). The marker may see
+  # more than the tally — that only moves it further forward and empties the
+  # badge sooner. The dangerous direction is the other one: a kind the marker
+  # cannot see never clears its badge (#980, #930, v7.200.1).
   defp connection_max(user_id) do
     from(out in Follow,
       join: back in Follow,
@@ -763,10 +769,12 @@ defmodule Vutuv.Activity do
   #   * `report_protection` is ONE source emitting two event families
   #     (severed / restored) with different timestamp columns — so two max
   #     arms and two counts. That is why both list-valued keys are lists.
-  #   * `unread?` (drop events about posts the member already engaged with,
-  #     `mark_post_seen/2`) only reaches reply / thread / mention — the kinds
-  #     whose subject is somebody else's post (`subject_post_id/1`); every
-  #     other kind ignores it.
+  #   * `unread?` marks the badge tally, as opposed to the pager's total, and
+  #     switches on the two "the member already knows this" exceptions. It
+  #     reaches reply / thread / mention (drop events about posts the member
+  #     engaged with, `mark_post_seen/2` — the kinds whose subject is somebody
+  #     else's post, `subject_post_id/1`) and `connection` (drop the pair the
+  #     member made mutual themselves); every other kind ignores it.
   #   * `cv_update` counts sittings, not rows: its read-marker filter lives
   #     inside the grouped query (`CvUpdates.count_query/2`), not in `since/2`.
   #   * The fediverse kinds key on `received_at` (a :utc_datetime), `username`
@@ -805,7 +813,7 @@ defmodule Vutuv.Activity do
         email_pref: :email_on_follower?,
         max_arms: [connection_max(user_id)],
         items: &connection_items(user_id, &1, &2),
-        counts: [count_connections(user_id, read_at)]
+        counts: [count_connections(user_id, read_at, unread?)]
       },
       %{
         kind: "reply",
@@ -1797,7 +1805,21 @@ defmodule Vutuv.Activity do
   # Mutual follows (vernetzt), counted from the same self-join as
   # connection_items/3; the "became mutual" time is the later of the two
   # follows (GREATEST), so the unread filter matches the items.
-  defp count_connections(user_id, read_at) do
+  #
+  # `closed_by_other?` is the badge's half of it: a pair is two follow rows,
+  # and whoever wrote the later one closed the circle on purpose — telling them
+  # about their own click is what put a badge on the bell for something the
+  # member had just done. The other side still hears about it, because a
+  # follow-back can arrive days after the follow and is real news there. Only
+  # the tally asks; the list (`connection_items/3`) and the pager
+  # (`notifications_count/2`) keep showing the entry to both sides, the same
+  # division of labour `mark_post_seen/2` already draws.
+  #
+  # It reads the **ids**, not `inserted_at`: the column keeps whole seconds, so
+  # a quick follow-back ties there and could not be told apart at all, while a
+  # `Vutuv.UUIDv7` carries sub-millisecond ordering bits (the id order this
+  # module's keyset cursors already rely on).
+  defp count_connections(user_id, read_at, closed_by_other? \\ false) do
     query =
       from(out in Follow,
         join: back in Follow,
@@ -1805,6 +1827,11 @@ defmodule Vutuv.Activity do
         where: out.follower_id == ^user_id,
         select: %{count: count()}
       )
+
+    query =
+      if closed_by_other?,
+        do: where(query, [out, back], back.id > out.id),
+        else: query
 
     if read_at do
       where(

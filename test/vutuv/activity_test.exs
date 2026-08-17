@@ -864,6 +864,84 @@ defmodule Vutuv.ActivityTest do
     end
   end
 
+  describe "a connection the member closed themselves" do
+    # A vernetzt pair is two follow rows, and the later one closed the circle.
+    # Whoever wrote that row acted on purpose and needs no badge for their own
+    # doing; the other side does, because a follow-back can arrive days later.
+    # Both sides keep the entry in their list — only the badge tells them apart.
+
+    test "does not raise the badge for the member who followed back" do
+      me = insert(:user)
+      other = insert(:user)
+
+      follow!(other, me)
+      follow!(me, other)
+
+      # That someone followed me is news. That my own answer made us vernetzt
+      # is not, so the badge stays at one.
+      assert Activity.unread_notification_count(me.id) == 1
+    end
+
+    test "still raises it on the side that was followed back" do
+      me = insert(:user)
+      other = insert(:user)
+
+      follow!(other, me)
+      follow!(me, other)
+
+      # Same pair, other seat: `me` closed the circle, so `other` learns both
+      # that they were followed and that the two are now vernetzt.
+      assert Activity.unread_notification_count(other.id) == 2
+    end
+
+    test "counts the connection when the other side closes the circle" do
+      me = insert(:user)
+      other = insert(:user)
+
+      follow!(me, other)
+      follow!(other, me)
+
+      # I followed first and was followed back — nothing here is my own doing.
+      assert Activity.unread_notification_count(me.id) == 2
+    end
+
+    test "the list, the pager and the 30-day summary keep counting it" do
+      me = insert(:user)
+      other = insert(:user)
+
+      follow!(other, me)
+      follow!(me, other)
+
+      kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
+      assert "connection" in kinds
+
+      # A pager that counted less than its list would offer an empty page.
+      assert Activity.notifications_count(me.id) == length(recent_notifications(me.id))
+      assert Activity.notifications_count(me.id, ["connection"]) == 1
+
+      # The "last 30 days" card is a balance sheet, not an alarm.
+      since = NaiveDateTime.add(NaiveDateTime.utc_now(), -30, :day)
+      assert Activity.activity_summary(me.id, since).connections == 1
+    end
+
+    test "tells the two follows apart within the same second" do
+      me = insert(:user)
+      other = insert(:user)
+
+      # `follows.inserted_at` only keeps seconds, so both rows of a quick
+      # follow-back carry the same timestamp and only their UUID v7 ids say who
+      # was last. A timestamp comparison could not answer this at all.
+      follow!(other, me)
+      follow!(me, other)
+
+      [a, b] =
+        Repo.all(from(c in Follow, where: c.followee_id in [^me.id, ^other.id], select: c))
+
+      assert a.inserted_at == b.inserted_at
+      assert Activity.unread_notification_count(me.id) == 1
+    end
+  end
+
   describe "notifications_count/2" do
     test "counts the whole derived feed regardless of the read marker" do
       me = insert(:user)
