@@ -20,6 +20,7 @@ defmodule Vutuv.ApiAuth do
 
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth.{App, Grant, Token}
+  alias Vutuv.MastodonApi.PushSubscription
   alias Vutuv.{Moderation, Repo}
   alias Vutuv.Organizations.Organization
 
@@ -70,9 +71,11 @@ defmodule Vutuv.ApiAuth do
 
   @doc "Revokes one token. Takes effect on the next API request."
   def revoke_token!(%Token{} = token) do
+    token =
+      token |> Ecto.Changeset.change(revoked_at: DateTime.utc_now(:second)) |> Repo.update!()
+
+    drop_push_subscriptions!([token.id])
     token
-    |> Ecto.Changeset.change(revoked_at: DateTime.utc_now(:second))
-    |> Repo.update!()
   end
 
   @doc """
@@ -81,11 +84,10 @@ defmodule Vutuv.ApiAuth do
   number of tokens revoked.
   """
   def revoke_all_tokens!(%User{} = user) do
-    {count, _} =
-      Repo.update_all(
-        from(t in Token, where: t.user_id == ^user.id and is_nil(t.revoked_at)),
-        set: [revoked_at: DateTime.utc_now(:second)]
-      )
+    live = from(t in Token, where: t.user_id == ^user.id and is_nil(t.revoked_at))
+    drop_push_subscriptions!(from(t in live, select: t.id))
+
+    {count, _} = Repo.update_all(live, set: [revoked_at: DateTime.utc_now(:second)])
 
     count
   end
@@ -216,13 +218,36 @@ defmodule Vutuv.ApiAuth do
   # Kills every live token of a grant — grant revocation, and the OAuth
   # code-reuse / refresh-reuse theft signals.
   def revoke_grant_tokens!(grant_id) do
-    {count, _} =
-      Repo.update_all(
-        from(t in Token, where: t.grant_id == ^grant_id and is_nil(t.revoked_at)),
-        set: [revoked_at: DateTime.utc_now(:second)]
-      )
+    live = from(t in Token, where: t.grant_id == ^grant_id and is_nil(t.revoked_at))
+    drop_push_subscriptions!(from(t in live, select: t.id))
+
+    {count, _} = Repo.update_all(live, set: [revoked_at: DateTime.utc_now(:second)])
 
     count
+  end
+
+  # A Web Push subscription is a standing permission to reach a device, and
+  # revocation here is a soft `revoked_at` rather than a delete — so the
+  # subscription's `ON DELETE CASCADE` never fires and the row outlives the
+  # credential that created it. Dropping it is what stops the pushes; the
+  # revoked-token join in `Vutuv.MastodonApi.PushDispatcher` is the belt to this
+  # braces, since it holds for any revocation path added later that forgets to
+  # come here.
+  # Deleted **before** the update, while the ids are still selectable by "live
+  # tokens of this user"; afterwards there is nothing left to name them by. The
+  # two statements are not wrapped in a transaction on purpose: the worst
+  # interleaving drops a subscription whose token then survives, which costs a
+  # device its pushes until it re-subscribes — the other order would keep a
+  # device reachable by a dead credential, and only one of those is a security
+  # question.
+  defp drop_push_subscriptions!(token_ids) when is_list(token_ids) do
+    Repo.delete_all(from(s in PushSubscription, where: s.api_token_id in ^token_ids))
+    :ok
+  end
+
+  defp drop_push_subscriptions!(%Ecto.Query{} = token_ids) do
+    Repo.delete_all(from(s in PushSubscription, where: s.api_token_id in subquery(token_ids)))
+    :ok
   end
 
   # ── Verification (the API pipeline's entry point) ──

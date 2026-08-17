@@ -5,35 +5,11 @@ defmodule VutuvWeb.MastodonApi.PaginationTest do
   """
   use VutuvWeb.ConnCase, async: false
 
-  alias Vutuv.ApiAuth
+  import Vutuv.MastodonHelpers
+
   alias Vutuv.Posts
   alias Vutuv.Social
   alias Vutuv.UUIDv7
-
-  @mastodon_host "mastodon.localhost"
-
-  defp token_for(user, scopes) do
-    plaintext = "vutuv_at_" <> ApiAuth.random_token()
-    app = insert(:oauth_app, user: nil, protocol: "mastodon", registered_scopes: scopes)
-
-    insert(:api_token,
-      user: user,
-      app: app,
-      kind: "access",
-      name: nil,
-      scopes: scopes,
-      expires_at: nil,
-      token_hash: ApiAuth.hash_token(plaintext)
-    )
-
-    plaintext
-  end
-
-  defp api(conn, token) do
-    conn
-    |> Map.put(:host, @mastodon_host)
-    |> put_req_header("authorization", "Bearer " <> token)
-  end
 
   describe "UUIDv7.timestamp/1" do
     test "is the inverse of generate_at/1, which is what the merged feed needs" do
@@ -69,8 +45,8 @@ defmodule VutuvWeb.MastodonApi.PaginationTest do
       conn: conn,
       reader: reader
     } do
-      token = token_for(reader, ["read"])
-      response = conn |> api(token) |> get("/api/v1/timelines/home?limit=2")
+      token = mastodon_token(reader, ["read"])
+      response = conn |> mastodon_conn(token) |> get("/api/v1/timelines/home?limit=2")
 
       assert [first, second] = json_response(response, 200)
       assert first["content"] =~ "Beitrag 5"
@@ -84,12 +60,12 @@ defmodule VutuvWeb.MastodonApi.PaginationTest do
     test "max_id walks back through the whole timeline without gaps or repeats", %{
       reader: reader
     } do
-      token = token_for(reader, ["read"])
+      token = mastodon_token(reader, ["read"])
 
       {collected, _} =
         Enum.reduce(1..3, {[], nil}, fn _page, {seen, cursor} ->
           query = if cursor, do: "?limit=2&max_id=#{cursor}", else: "?limit=2"
-          body = build_conn() |> api(token) |> get("/api/v1/timelines/home" <> query)
+          body = build_conn() |> mastodon_conn(token) |> get("/api/v1/timelines/home" <> query)
           statuses = json_response(body, 200)
           {seen ++ statuses, List.last(statuses)["id"]}
         end)
@@ -104,8 +80,8 @@ defmodule VutuvWeb.MastodonApi.PaginationTest do
     end
 
     test "the last page offers no next link, so a client stops", %{conn: conn, reader: reader} do
-      token = token_for(reader, ["read"])
-      response = conn |> api(token) |> get("/api/v1/timelines/home?limit=40")
+      token = mastodon_token(reader, ["read"])
+      response = conn |> mastodon_conn(token) |> get("/api/v1/timelines/home?limit=40")
 
       assert length(json_response(response, 200)) == 5
       refute get_resp_header(response, "link") |> Enum.join() =~ ~s(rel="next")
@@ -115,11 +91,11 @@ defmodule VutuvWeb.MastodonApi.PaginationTest do
       conn: conn,
       reader: reader
     } do
-      token = token_for(reader, ["read"])
+      token = mastodon_token(reader, ["read"])
 
       statuses =
         conn
-        |> api(token)
+        |> mastodon_conn(token)
         |> get("/api/v1/timelines/home?limit=2&max_id=garbage")
         |> json_response(200)
 

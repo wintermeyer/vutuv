@@ -25,9 +25,9 @@ defmodule VutuvWeb.MastodonApi.Pagination do
       so a client can walk forward through a gap without skipping anything.
   """
 
-  import Ecto.Query
   import Plug.Conn
 
+  alias Vutuv.Keyset
   alias Vutuv.MastodonApi
   alias Vutuv.UUIDv7
 
@@ -47,44 +47,51 @@ defmodule VutuvWeb.MastodonApi.Pagination do
   end
 
   @doc """
-  Narrows a query to the requested window and orders it.
-
-  `min_id` flips the order to oldest-first so the **oldest** unseen rows are
-  taken; `reverse/2` puts the page back into the newest-first order every
-  Mastodon response is in.
+  The page as the plain options every context reader here takes
+  (`Vutuv.Keyset`), so the boundary reaches the query instead of being filtered
+  out of rows the query already returned.
   """
-  def scope(query, %__MODULE__{} = page, field \\ :id) do
-    query
-    |> maybe_where(page.max_id, fn q, id -> where(q, [r], field(r, ^field) < ^id) end)
-    |> maybe_where(page.since_id, fn q, id -> where(q, [r], field(r, ^field) > ^id) end)
-    |> maybe_where(page.min_id, fn q, id -> where(q, [r], field(r, ^field) > ^id) end)
-    |> order_by([r], [{^direction(page), field(r, ^field)}])
-    |> limit(^page.limit)
+  def opts(%__MODULE__{} = page) do
+    [limit: page.limit, max_id: page.max_id, since_id: page.since_id, min_id: page.min_id]
   end
 
+  @doc """
+  Narrows a query to the requested window and orders it — `Vutuv.Keyset.scope/3`
+  for a caller that already holds the parsed page.
+  """
+  def scope(query, %__MODULE__{} = page, field \\ :id),
+    do: Keyset.scope(query, opts(page), field)
+
   @doc "Restores newest-first after a `min_id` page was fetched oldest-first."
-  def reverse(rows, %__MODULE__{min_id: nil}), do: rows
-  def reverse(rows, %__MODULE__{}), do: Enum.reverse(rows)
+  def reverse(rows, %__MODULE__{} = page), do: Keyset.restore(rows, opts(page))
 
   @doc """
-  How much to ask an underlying reader for, so the window below still has a
+  How many rows to ask the **merged home feed** for, so its window still has a
   full page left after the boundary ties are dropped.
 
-  A merged feed's own cursor is second-precision and cannot separate entries
-  written in the same second, so it can only narrow the fetch to the boundary
-  second; the id comparison in `window/3` does the actual cutting. The headroom
-  is how many entries may tie there before a page comes back short — which ends
-  a client's walk one round early, and never repeats an entry.
+  For that one reader and no other. `Vutuv.Posts.feed_page/2` pages by a
+  `{timestamp, seen ids}` cursor of second precision, which cannot separate
+  entries written in the same second, so it narrows the read to the boundary
+  second and `window/3` cuts on the ids. The headroom is how many entries may
+  tie there before a page comes back short — which ends a client's walk one
+  round early, and never repeats an entry.
+
+  Every other list here takes a `Vutuv.Keyset` window instead. Reaching for
+  this where a keyset would do is what capped all of them at 40 rows: the
+  headroom is a fixed number, so the read runs out the moment the boundary is
+  older than it, and the list ends silently.
   """
   def fetch_size(%__MODULE__{max_id: nil, since_id: nil, min_id: nil} = page), do: page.limit
   def fetch_size(%__MODULE__{} = page), do: page.limit + 20
 
   @doc """
-  Cuts an already-fetched, newest-first list to the requested window.
+  Cuts an already-bounded, newest-first list to the requested window.
 
-  For readers that cannot take a keyset themselves — the merged feeds and the
-  assembled account lists — where `scope/3` is not available. `id_fun` names the
-  id a client would hand back, which is the one the response carries.
+  Only for a **merged** list — several sources with no shared id space, which
+  no single query can order. Each source is bounded by the same window first
+  (so the read stays the size of a page however deep the walk has gone), and
+  this picks the page out of what they returned together. `id_fun` names the id
+  a client would hand back, which is the one the response carries.
   """
   def window(entries, %__MODULE__{} = page, id_fun) when is_function(id_fun, 1) do
     entries
@@ -139,6 +146,11 @@ defmodule VutuvWeb.MastodonApi.Pagination do
     end
   end
 
+  # The next page is offered on the host this request arrived on, never on the
+  # canonical one: an installation may not have the subdomain at all, and a
+  # client that signed in on the main host would follow a `next` link to an
+  # origin its bearer token does not survive. `client_url/2` is exactly this
+  # decision; naming `api_url/1` here quietly undid it for every "load more".
   defp link(conn, %__MODULE__{limit: limit}, boundary) do
     query =
       boundary
@@ -146,14 +158,8 @@ defmodule VutuvWeb.MastodonApi.Pagination do
       |> Map.new()
       |> Map.put("limit", to_string(limit))
 
-    MastodonApi.api_url(conn.request_path) <> "?" <> URI.encode_query(query)
+    MastodonApi.client_url(conn.host, conn.request_path) <> "?" <> URI.encode_query(query)
   end
-
-  defp direction(%__MODULE__{min_id: nil}), do: :desc
-  defp direction(%__MODULE__{}), do: :asc
-
-  defp maybe_where(query, nil, _fun), do: query
-  defp maybe_where(query, id, fun), do: fun.(query, id)
 
   defp parse_limit(%{"limit" => value}, default) do
     case Integer.parse(to_string(value)) do

@@ -24,7 +24,18 @@ defmodule Vutuv.MastodonApi.Presenter do
 
   def identity_name(%Organization{name: name}), do: name
 
-  def account(%User{} = user) do
+  @doc """
+  One account in Mastodon's shape.
+
+  `counts` fills the three profile-header figures. It is passed by the
+  endpoints that answer with a **single** account — the ones a client renders a
+  profile header from — and left out of the list endpoints, where filling it
+  would mean three counts per row and no client shows them there. Reading the
+  member's own bio into `note` costs nothing, so that is always filled.
+  """
+  def account(subject, counts \\ nil)
+
+  def account(%User{} = user, counts) do
     avatar = user_avatar(user)
 
     base_account(%{
@@ -32,14 +43,16 @@ defmodule Vutuv.MastodonApi.Presenter do
       username: user.username,
       acct: user.username,
       display_name: UserHelpers.full_name(user),
+      note: note(user.headline),
       created_at: created_at(user, user.id),
       url: MastodonApi.main_url("/" <> user.username),
       avatar: avatar,
       group: false
     })
+    |> Map.merge(count_fields(counts))
   end
 
-  def account(%Organization{} = organization) do
+  def account(%Organization{} = organization, counts) do
     handle = organization.username || organization.slug
     icon = MastodonApi.main_url("/images/icon-512.png")
 
@@ -48,14 +61,16 @@ defmodule Vutuv.MastodonApi.Presenter do
       username: handle,
       acct: handle,
       display_name: organization.name,
+      note: note(organization.description),
       created_at: created_at(organization, organization.id),
       url: MastodonApi.main_url(Organizations.canonical_path(organization)),
       avatar: icon,
       group: true
     })
+    |> Map.merge(count_fields(counts))
   end
 
-  def account(%RemoteAccount{} = account) do
+  def account(%RemoteAccount{} = account, _counts) do
     handle = RemoteAccount.display_handle(account) |> String.trim_leading("@")
     username = handle |> String.split("@") |> hd()
     icon = MastodonApi.main_url("/images/icon-512.png")
@@ -72,7 +87,49 @@ defmodule Vutuv.MastodonApi.Presenter do
     })
   end
 
-  def status(%Post{} = post) do
+  @doc """
+  A page of statuses as `viewer` sees them — the form every list endpoint here
+  should use.
+
+  The three counts under a post and the viewer's own like / bookmark / reshare
+  flags are read for the whole page in **one** round trip
+  (`Posts.post_engagement_map/2`), the same way the website's feed pre-loads
+  them for its cards. Rendering a status at a time would be four queries per
+  row, and rendering them without a viewer at all is what made every heart in
+  every client sit empty on a post the member had just liked — so a client
+  offered "like" on something already liked, and undid it.
+
+  `viewer` is the acting identity: a `%User{}`, an `%Organization{}` for a page
+  identity, or `nil`. Entries from other networks pass straight through — their
+  counts travel with the record.
+  """
+  def statuses(items, viewer) when is_list(items) do
+    engagements =
+      items
+      |> Enum.map(&engaged_post_id/1)
+      |> Enum.reject(&is_nil/1)
+      |> Posts.post_engagement_map(viewer)
+
+    Enum.map(items, &rendered_status(&1, engagements))
+  end
+
+  @doc "One status as `viewer` sees it — `statuses/2` for a single row."
+  def one_status(item, viewer), do: item |> List.wrap() |> statuses(viewer) |> hd()
+
+  defp engaged_post_id(%Post{id: id}), do: id
+  defp engaged_post_id(%{post: %Post{id: id}}), do: id
+  defp engaged_post_id(_other), do: nil
+
+  defp rendered_status(%Post{} = post, engagements), do: status(post, engagements[post.id])
+
+  defp rendered_status(%{post: %Post{} = post}, engagements),
+    do: status(post, engagements[post.id])
+
+  defp rendered_status(other, _engagements), do: status_from_entry(other)
+
+  def status(post, engagement \\ nil)
+
+  def status(%Post{} = post, engagement) do
     author = Posts.author(post)
     content = post.body |> Markdown.render_post(loaded_images(post)) |> safe_html()
 
@@ -84,14 +141,16 @@ defmodule Vutuv.MastodonApi.Presenter do
         url: MastodonApi.main_url(Posts.path(post)),
         uri: MastodonApi.main_url(Posts.path(post)),
         account: account(author),
-        media_attachments: media_attachments(post)
+        media_attachments: media_attachments(post),
+        visibility: visibility(post, engagement)
       }
       |> Map.merge(reply_fields(post))
+      |> Map.merge(engagement_fields(engagement))
 
     base_status(fields)
   end
 
-  def status(%RemotePost{} = post) do
+  def status(%RemotePost{} = post, _engagement) do
     base_status(%{
       id: "remote-" <> post.id,
       created_at: timestamp(post.published_at),
@@ -104,7 +163,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     })
   end
 
-  def status(%Note{} = note) do
+  def status(%Note{} = note, _engagement) do
     base_status(%{
       id: "remote-note-" <> note.id,
       created_at: timestamp(note.received_at),
@@ -122,6 +181,25 @@ defmodule Vutuv.MastodonApi.Presenter do
   def status_from_entry(%{remote_post: %RemotePost{} = post}), do: status(post)
   def status_from_entry(%{note: %Note{} = note}), do: status(note)
   def status_from_entry(%{post: %Post{} = post}), do: status(post)
+
+  defp count_fields(nil), do: %{}
+
+  defp count_fields(counts) do
+    %{
+      followers_count: counts[:followers] || 0,
+      following_count: counts[:following] || 0,
+      statuses_count: counts[:statuses] || 0,
+      last_status_at: counts[:last_status_at]
+    }
+  end
+
+  # Mastodon's `note` is HTML, and a vutuv headline or page description is
+  # plain text a member typed. Escaped and wrapped in one paragraph, so a
+  # client renders the words rather than parsing whatever was in them.
+  defp note(text) when is_binary(text) and text != "",
+    do: "<p>" <> Plug.HTML.html_escape(text) <> "</p>"
+
+  defp note(_blank), do: ""
 
   defp base_account(fields) do
     Map.merge(
@@ -214,6 +292,36 @@ defmodule Vutuv.MastodonApi.Presenter do
       group: false
     })
   end
+
+  # The action bar's own figures, in Mastodon's names. `shown_counts/1` folds
+  # in what other networks did with the same post, exactly as the website's
+  # card does — a post has one like count, not one per world.
+  defp engagement_fields(nil), do: %{}
+
+  defp engagement_fields(engagement) do
+    counts = Posts.shown_counts(engagement)
+
+    %{
+      favourites_count: counts.likes,
+      reblogs_count: counts.reposts,
+      replies_count: counts.replies,
+      favourited: engagement.liked? == true,
+      reblogged: engagement.reposted? == true,
+      bookmarked: engagement.bookmarked? == true
+    }
+  end
+
+  # vutuv has no visibility column: a post is public until it carries a denial,
+  # and any denial at all closes it to anonymous readers (`PostDenial`). That
+  # is not Mastodon's followers-only, but `private` is the honest neighbour —
+  # it is the value that tells a client the post is **not** for redistribution,
+  # so it stops offering boost on something its author narrowed. Calling every
+  # post `public` told clients the opposite.
+  defp visibility(_post, %{restricted?: restricted?}), do: audience(restricted?)
+  defp visibility(post, _no_engagement), do: audience(Posts.restricted?(post))
+
+  defp audience(true), do: "private"
+  defp audience(_open), do: "public"
 
   defp reply_fields(post) do
     case Posts.reply_ref_state(post) do

@@ -62,6 +62,7 @@ defmodule Vutuv.Tags.Timeline do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Fediverse.RemotePostTag
+  alias Vutuv.Keyset
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Tags.Tag
@@ -154,6 +155,26 @@ defmodule Vutuv.Tags.Timeline do
     {rows, more?} = split_overflow(rows, per_page)
 
     %{entries: load(rows), total: total(tag, filters), more?: more?}
+  end
+
+  @doc """
+  The timeline as a list a client can walk (`Vutuv.Keyset`), for the
+  Mastodon-compatible hashtag timeline.
+
+  Same two sources and same filters as `page/2`, but ordered and bounded by the
+  entry id rather than by `at` and cut with an offset. Both id spaces are
+  `Vutuv.UUIDv7`, so ordering by id interleaves them by creation time just as
+  `at` does — and unlike `at` it is unique, which is what a client naming the
+  last id it saw needs. No total and no `more?`: neither has a place in that
+  vocabulary, where the answer to "is there more" is the next request.
+  """
+  def walk(%Tag{} = tag, opts \\ []) do
+    tag
+    |> keys(filters(opts))
+    |> Keyset.scope(opts)
+    |> Repo.all()
+    |> Keyset.restore(opts)
+    |> load()
   end
 
   @doc """

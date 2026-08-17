@@ -7,10 +7,12 @@ defmodule VutuvWeb.MastodonApi.ListController do
   bookmark but never find it again, which is the sort of half-feature that
   reads as a broken app rather than a missing one.
 
-  Paging is `Vutuv.Pages`' offset underneath and Mastodon's id walk on top:
-  these readers take an `offset`, not a keyset, so a page is fetched with
-  headroom and `Pagination.window/3` cuts it on the ids. That keeps one
-  vocabulary at the edge without rewriting four readers underneath.
+  Every one of them is walked by id (`Vutuv.Keyset`), the same way a Mastodon
+  client walks any list: the boundary goes into the query, so the hundredth
+  page costs what the first one did. The website's own pagers over the same
+  data stay offset-based and keep their totals and numbered pages — the two
+  vocabularies want different orders, and mixing them is what silently ended
+  every one of these lists at 40 rows.
   """
 
   use VutuvWeb, :controller
@@ -19,17 +21,17 @@ defmodule VutuvWeb.MastodonApi.ListController do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Keyset
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
-  alias Vutuv.Posts.PostRepost
   alias Vutuv.Repo
   alias Vutuv.Social
   alias Vutuv.UUIDv7
   alias VutuvWeb.MastodonApi.Pagination
 
-  def bookmarks(conn, params), do: engaged(conn, params, &Posts.bookmarked_posts_page/2)
-  def favourites(conn, params), do: engaged(conn, params, &Posts.liked_posts_page/2)
+  def bookmarks(conn, params), do: engaged(conn, params, &Posts.bookmarked_statuses/2)
+  def favourites(conn, params), do: engaged(conn, params, &Posts.liked_statuses/2)
 
   def followers(conn, %{"id" => id} = params) do
     page = Pagination.params(params)
@@ -38,10 +40,7 @@ defmodule VutuvWeb.MastodonApi.ListController do
       case UUIDv7.with_cast(id, &Accounts.get_user/1) do
         %User{} = user ->
           user
-          |> Social.follows_page(:followers, %{})
-          |> Map.fetch!(:users)
-          |> Enum.sort_by(& &1.id, :desc)
-          |> Pagination.window(page, & &1.id)
+          |> Social.follow_accounts(:followers, Pagination.opts(page))
           |> Enum.map(&Presenter.account/1)
 
         nil ->
@@ -58,35 +57,32 @@ defmodule VutuvWeb.MastodonApi.ListController do
       conn.assigns.current_user.id
       |> Social.blocked_user_ids()
       |> MapSet.to_list()
-      |> users_by_ids()
-      |> Pagination.window(page, & &1.id)
+      |> blocked_accounts(page)
       |> Enum.map(&Presenter.account/1)
 
     respond(conn, accounts, page)
   end
 
   # A mute lives on the follow edge, so only somebody you follow can be muted —
-  # which is also true on the website.
+  # which is also true on the website. Read straight off the edge: fetching the
+  # follow list and asking `follow_edge/2` per row was a query per person on
+  # the page, and it could only ever see page one of that list.
   def mutes(conn, params) do
     page = Pagination.params(params)
 
     accounts =
       conn.assigns.current_user
-      |> Social.follows_page(:followees, %{})
-      |> Map.fetch!(:users)
-      |> Enum.filter(&muted?(conn.assigns.current_user.id, &1.id))
-      |> Enum.sort_by(& &1.id, :desc)
-      |> Pagination.window(page, & &1.id)
+      |> Social.muted_accounts(Pagination.opts(page))
       |> Enum.map(&Presenter.account/1)
 
     respond(conn, accounts, page)
   end
 
   def favourited_by(conn, %{"id" => id} = params),
-    do: reactors(conn, id, params, &Posts.post_likers(&1, limit: &2))
+    do: reactors(conn, id, params, &Posts.post_liker_accounts/2)
 
   def reblogged_by(conn, %{"id" => id} = params),
-    do: reactors(conn, id, params, &reposters/2)
+    do: reactors(conn, id, params, &Posts.post_reposter_accounts/2)
 
   # Who reacted is only answerable for a status the asker may read: the list
   # would otherwise say who engaged with a post they cannot see, which is a
@@ -102,8 +98,7 @@ defmodule VutuvWeb.MastodonApi.ListController do
       post ->
         accounts =
           post.id
-          |> reader.(Pagination.fetch_size(page))
-          |> Pagination.window(page, & &1.id)
+          |> reader.(Pagination.opts(page))
           |> Enum.map(&Presenter.account/1)
 
         respond(conn, accounts, page)
@@ -129,10 +124,8 @@ defmodule VutuvWeb.MastodonApi.ListController do
 
     statuses =
       conn.assigns.current_user
-      |> reader.(limit: Pagination.fetch_size(page))
-      |> Map.fetch!(:entries)
-      |> Pagination.window(page, & &1.id)
-      |> Enum.map(&Presenter.status/1)
+      |> reader.(Pagination.opts(page))
+      |> Presenter.statuses(conn.assigns.current_user)
 
     conn
     |> Pagination.link_header(Enum.map(statuses, & &1.id), page)
@@ -145,26 +138,12 @@ defmodule VutuvWeb.MastodonApi.ListController do
     |> json(accounts)
   end
 
-  defp reposters(post_id, limit) do
-    Repo.all(
-      from(r in PostRepost,
-        join: u in User,
-        on: u.id == r.user_id,
-        where: r.post_id == ^post_id,
-        order_by: [desc: r.id],
-        limit: ^limit,
-        select: u
-      )
-    )
-  end
+  defp blocked_accounts([], _page), do: []
 
-  defp users_by_ids([]), do: []
-
-  defp users_by_ids(ids) do
-    Repo.all(from(u in User, where: u.id in ^ids, order_by: [desc: u.id]))
-  end
-
-  defp muted?(user_id, target_id) do
-    match?(%{muted?: true}, Social.follow_edge(user_id, target_id))
+  defp blocked_accounts(ids, page) do
+    from(u in User, where: u.id in ^ids)
+    |> Keyset.scope(Pagination.opts(page))
+    |> Repo.all()
+    |> Keyset.restore(Pagination.opts(page))
   end
 end

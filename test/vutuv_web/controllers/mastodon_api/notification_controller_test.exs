@@ -5,35 +5,11 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
   """
   use VutuvWeb.ConnCase, async: false
 
+  import Vutuv.MastodonHelpers
+
   alias Vutuv.Activity
-  alias Vutuv.ApiAuth
   alias Vutuv.Posts
   alias Vutuv.Social
-
-  @mastodon_host "mastodon.localhost"
-
-  defp token_for(user, scopes) do
-    plaintext = "vutuv_at_" <> ApiAuth.random_token()
-    app = insert(:oauth_app, user: nil, protocol: "mastodon", registered_scopes: scopes)
-
-    insert(:api_token,
-      user: user,
-      app: app,
-      kind: "access",
-      name: nil,
-      scopes: scopes,
-      expires_at: nil,
-      token_hash: ApiAuth.hash_token(plaintext)
-    )
-
-    plaintext
-  end
-
-  defp api(conn, token) do
-    conn
-    |> Map.put(:host, @mastodon_host)
-    |> put_req_header("authorization", "Bearer " <> token)
-  end
 
   test "a like and a follow arrive as favourite and follow", %{conn: conn} do
     member = insert(:activated_user)
@@ -44,8 +20,10 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
     :ok = Posts.like_post(liker, post)
     {:ok, _} = Social.follow(follower, member.id)
 
-    token = token_for(member, ["read"])
-    notifications = conn |> api(token) |> get("/api/v1/notifications") |> json_response(200)
+    token = mastodon_token(member, ["read"])
+
+    notifications =
+      conn |> mastodon_conn(token) |> get("/api/v1/notifications") |> json_response(200)
 
     types = notifications |> Enum.map(& &1["type"]) |> Enum.sort()
     assert types == ["favourite", "follow"]
@@ -69,8 +47,10 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
 
     Activity.notify_endorsement(member.id, endorser, Vutuv.Repo.preload(user_tag, :tag).tag)
 
-    token = token_for(member, ["read"])
-    notifications = conn |> api(token) |> get("/api/v1/notifications") |> json_response(200)
+    token = mastodon_token(member, ["read"])
+
+    notifications =
+      conn |> mastodon_conn(token) |> get("/api/v1/notifications") |> json_response(200)
 
     assert notifications == []
   end
@@ -84,11 +64,11 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
     :ok = Posts.like_post(liker, post)
     {:ok, _} = Social.follow(follower, member.id)
 
-    token = token_for(member, ["read"])
+    token = mastodon_token(member, ["read"])
 
     only_follows =
       conn
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v1/notifications?types[]=follow")
       |> json_response(200)
 
@@ -96,7 +76,7 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
 
     without_follows =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v1/notifications?exclude_types[]=follow")
       |> json_response(200)
 
@@ -108,24 +88,24 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
     follower = insert(:activated_user)
     {:ok, _} = Social.follow(follower, member.id)
 
-    token = token_for(member, ["read", "write"])
+    token = mastodon_token(member, ["read", "write"])
 
     assert %{"count" => count} =
              conn
-             |> api(token)
+             |> mastodon_conn(token)
              |> get("/api/v1/notifications/unread_count")
              |> json_response(200)
 
     assert count >= 1
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/notifications/clear")
            |> json_response(200) == %{}
 
     assert %{"count" => 0} =
              build_conn()
-             |> api(token)
+             |> mastodon_conn(token)
              |> get("/api/v1/notifications/unread_count")
              |> json_response(200)
   end
@@ -135,19 +115,19 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
     follower = insert(:activated_user)
     {:ok, _} = Social.follow(follower, member.id)
 
-    token = token_for(member, ["read"])
-    [one] = conn |> api(token) |> get("/api/v1/notifications") |> json_response(200)
+    token = mastodon_token(member, ["read"])
+    [one] = conn |> mastodon_conn(token) |> get("/api/v1/notifications") |> json_response(200)
 
     fetched =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v1/notifications/#{one["id"]}")
       |> json_response(200)
 
     assert fetched["id"] == one["id"]
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> get("/api/v1/notifications/follower-#{Ecto.UUID.generate()}")
            |> response(404)
   end

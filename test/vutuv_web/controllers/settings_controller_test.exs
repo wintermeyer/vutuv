@@ -347,16 +347,34 @@ defmodule VutuvWeb.SettingsControllerTest do
     assert html =~ ~s(href="#{~p"/settings/fediverse/move"}")
   end
 
-  test "fediverse: Mastodon client access defaults on and can be disabled", %{conn: conn} do
+  # The switch is on the Apps page, not here: federating publishes a profile to
+  # other servers, while this only lets a phone app sign in to this account, and
+  # a member who wants one does not necessarily want the other.
+  test "apps: Mastodon client access is off until the member turns it on", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    assert user.mastodon_clients?
+    refute user.mastodon_clients?
 
-    html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+    html = conn |> get(~p"/settings/apps") |> html_response(200)
     assert html =~ ~s(name="user[mastodon_clients?]")
+    # Asserted on the rendered action rather than on a path we know exists: a
+    # form posting to a retired URL 404s in production and passes every test
+    # that builds the path itself (v7.34–v7.42).
+    assert html =~ ~s(action="#{~p"/settings/apps"}")
+    # The address a member has to type is on the page, from the endpoint rather
+    # than a literal, plus the way to the help page.
+    assert html =~ VutuvWeb.Endpoint.host()
+    assert html =~ ~s(href="#{~p"/system/mastodon"}")
 
-    conn = put(conn, ~p"/settings/fediverse", user: %{"mastodon_clients?" => "false"})
-    assert redirected_to(conn) == ~p"/settings/fediverse"
-    refute Repo.get(User, user.id).mastodon_clients?
+    conn = put(conn, ~p"/settings/apps", user: %{"mastodon_clients?" => "true"})
+    assert redirected_to(conn) == ~p"/settings/apps"
+    assert Repo.get(User, user.id).mastodon_clients?
+  end
+
+  test "apps: the switch is not on the Fediverse page any more", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+
+    refute conn |> get(~p"/settings/fediverse") |> html_response(200) =~
+             ~s(name="user[mastodon_clients?]")
   end
 
   test "fediverse: the migration link only shows once the member federates", %{conn: conn} do

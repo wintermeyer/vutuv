@@ -136,6 +136,24 @@ a consent screen instead of pasting tokens — see
 Registered apps can also receive **[webhooks](/developers/webhooks)**: signed
 event deliveries instead of polling.
 
+## Already built a Mastodon client? It works here
+
+Beside this API, vutuv speaks enough of the **Mastodon client API** for existing
+Mastodon apps to sign in and be used as a normal account — timelines, posting
+with photos, likes and boosts and bookmarks, notifications, follows, search,
+streaming and Web Push. Point your client at `vutuv.de` and it registers itself,
+opens our consent screen and gets a bearer token; you write no vutuv-specific
+code at all.
+
+It is deliberately a separate surface from `/api/2.0`: Mastodon's paths are not
+ours to shape, so they keep their own origin and their own contract, and nothing
+there constrains anything here. Members have to allow app access for their
+account first — it is off by default — and a member of an organization's
+editorial team can pick that organization as a separate identity on the consent
+screen. [/system/mastodon](/system/mastodon) is the page to send a member to;
+what is supported, what differs from a real Mastodon server and why is written
+up in `docs/architecture/mastodon-api.md` in the repository.
+
 ## Built by developers, for developers
 
 vutuv is a project by developers who want other developers to join in. It is

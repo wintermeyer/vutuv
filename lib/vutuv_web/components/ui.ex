@@ -4111,8 +4111,11 @@ defmodule VutuvWeb.UI do
            terms: gettext("company employer firm business organisation page")
          ),
          row(:apps, gettext("Apps & API"), ~p"/settings/apps",
-           hint: gettext("Connected apps and access tokens"),
-           terms: gettext("api token oauth developer connected third party")
+           hint: gettext("Mastodon apps, connected apps and access tokens"),
+           terms:
+             gettext(
+               "api token oauth developer connected third party mastodon app phone client ivory tusky ice cubes sign in"
+             )
          ),
          row(:delete, gettext("Delete account"), ~p"/settings/delete",
            hint: gettext("Remove your account and everything on it"),

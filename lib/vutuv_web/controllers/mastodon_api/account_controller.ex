@@ -19,20 +19,41 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   def verify_credentials(conn, _params) do
     subject = conn.assigns.current_organization || conn.assigns.current_user
 
-    account =
-      subject
-      |> Presenter.account()
-      |> Map.put(:following_count, following_count(subject))
-
-    json(conn, account)
+    json(conn, Presenter.account(subject, counts(conn, subject)))
   end
 
   def show(conn, %{"id" => id}) do
     case target(conn, id) do
       nil -> not_found(conn)
-      account -> json(conn, Presenter.account(account))
+      account -> json(conn, Presenter.account(account, counts(conn, account)))
     end
   end
+
+  # The three figures a client puts in a profile header. Only here and on
+  # `verify_credentials`, the two endpoints that answer with a single account —
+  # a followers list would pay this per row, and no client shows the numbers
+  # there.
+  defp counts(conn, %User{} = user) do
+    %{
+      followers: Social.follower_count(user),
+      following: following_count(user),
+      statuses: Posts.count_author_posts(user, profile_viewer(conn))
+    }
+  end
+
+  defp counts(conn, %Organization{} = organization) do
+    %{
+      followers: Social.organization_follower_count(organization),
+      following: following_count(organization),
+      statuses:
+        Posts.count_organization_posts(organization, organization_viewer(conn, organization))
+    }
+  end
+
+  # A remote account's figures live on its own server; we hold a cache of its
+  # posts, not its social graph, and inventing a number from what happens to be
+  # cached would be worse than the honest zero.
+  defp counts(_conn, _remote), do: nil
 
   def follow(conn, %{"id" => id}), do: relationship_action(conn, id, :follow)
   def unfollow(conn, %{"id" => id}), do: relationship_action(conn, id, :unfollow)
@@ -54,34 +75,36 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   end
 
   def statuses(conn, %{"id" => id} = params) do
-    page = Pagination.params(params)
-    fetch = Pagination.fetch_size(page)
+    page = Pagination.params(strip_prefixes(params))
+    opts = Pagination.opts(page)
 
     statuses =
       case target(conn, id) do
         %User{} = user ->
           user
-          |> Posts.profile_posts(profile_viewer(conn), limit: fetch)
-          |> Enum.map(&Presenter.status_from_entry/1)
+          |> Posts.author_statuses(profile_viewer(conn), opts)
+          |> Presenter.statuses(viewer(conn))
 
         %Organization{} = organization ->
           organization
-          |> Posts.organization_posts_page(organization_viewer(conn, organization), limit: fetch)
-          |> Map.fetch!(:entries)
-          |> Enum.map(&Presenter.status/1)
+          |> Posts.organization_statuses(organization_viewer(conn, organization), opts)
+          |> Presenter.statuses(viewer(conn))
 
+        # The only source here that cannot be bounded in its query: what we
+        # hold of a remote account is a bounded cache, not a list we can page
+        # (`Fediverse.account_posts/2` answers everything it has). Cutting the
+        # window out of it is honest for that reason and no other.
         %RemoteAccount{} = account ->
           subject = conn.assigns.current_organization || conn.assigns.current_user
           {posts, _more?} = Fediverse.account_posts(account, subject)
 
           posts
-          |> Enum.take(fetch)
+          |> Pagination.window(page, & &1.id)
           |> Enum.map(fn post -> Presenter.status(%{post | remote_account: account}) end)
 
         _missing_or_unsupported ->
           []
       end
-      |> Pagination.window(page, &bare_id(&1.id))
 
     conn
     |> Pagination.link_header(Enum.map(statuses, &bare_id(&1.id)), page)
@@ -89,15 +112,17 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   end
 
   def following(conn, %{"id" => id} = params) do
-    page = Pagination.params(params)
+    page = Pagination.params(strip_prefixes(params))
+
+    opts = Pagination.opts(page)
 
     accounts =
       case {target(conn, id), conn.assigns.current_organization} do
         {%User{} = user, _identity} ->
-          user_following(conn, user)
+          user_following(conn, user, opts)
 
         {%Organization{id: organization_id} = organization, %Organization{id: organization_id}} ->
-          organization_following(organization)
+          organization_following(organization, opts)
 
         _private_or_missing ->
           []
@@ -338,9 +363,18 @@ defmodule VutuvWeb.MastodonApi.AccountController do
 
   defp requested?(_conn, _target), do: false
 
-  defp user_following(conn, user) do
-    local_members = Social.follows_page(user, :followees, %{}).users
-    local_organizations = user |> Social.followed_organizations() |> Enum.map(&elem(&1, 1))
+  # Three kinds of account, three id spaces, so no one query can order them —
+  # this is a merged list, and `Pagination.window/3` picks the page out of what
+  # the sources return. The two local sources are bounded by the **same**
+  # window first, so their read stays one page wide however deep the walk has
+  # gone; taking the newest `limit` of each is enough, because the newest
+  # `limit` overall cannot contain a row that was not among its own source's
+  # newest `limit`. The remote leg is the member's own follow list, read whole
+  # as it always has been — it has no keyset reader yet, and it is the one
+  # source whose size a member sets themselves.
+  defp user_following(conn, user, opts) do
+    local_members = Social.follow_accounts(user, :followees, opts)
+    local_organizations = Social.followed_organization_accounts(user, opts)
 
     remote_accounts =
       if is_nil(conn.assigns.current_organization) and conn.assigns.current_user.id == user.id,
@@ -350,18 +384,14 @@ defmodule VutuvWeb.MastodonApi.AccountController do
     local_members ++ local_organizations ++ remote_accounts
   end
 
-  defp organization_following(organization) do
-    local_accounts =
-      organization
-      |> Social.organization_followees()
-      |> Enum.map(&elem(&1, 1))
-
+  defp organization_following(organization, opts) do
     remote_accounts =
       organization
       |> Fediverse.list_organization_remote_follows()
       |> Enum.map(& &1.remote_account)
 
-    local_accounts ++ remote_accounts
+    Social.organization_followed_members(organization, opts) ++
+      Social.organization_followed_pages(organization, opts) ++ remote_accounts
   end
 
   defp following_count(%User{} = user),
@@ -397,6 +427,11 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   defp profile_viewer(%{assigns: %{current_organization: nil, current_user: user}}), do: user
   defp profile_viewer(_conn), do: nil
 
+  # The acting identity, for the engagement figures on a status. Distinct from
+  # `profile_viewer/1`, which answers who may *see* a profile: a page identity
+  # sees what an anonymous reader sees, but it likes and bookmarks as itself.
+  defp viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
+
   defp organization_viewer(
          %{assigns: %{current_organization: %Organization{id: id}, current_user: user}},
          %Organization{id: id}
@@ -429,4 +464,19 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   defp bare_id("remote-note-" <> rest), do: rest
   defp bare_id("remote-" <> rest), do: rest
   defp bare_id(id), do: id
+
+  # An account or status from another network is rendered with a prefixed id,
+  # and that is what a client hands back as the boundary. Stripping it here is
+  # not cosmetic: `UUIDv7.cast_or_nil/1` answers nil for `remote-<uuid>`, and a
+  # nil boundary is no boundary — so a page that happened to end on a remote
+  # row would send the client back to the top of the list, forever. The bare
+  # uuid underneath is the part that carries the timestamp.
+  defp strip_prefixes(params) do
+    Enum.reduce(~w(max_id since_id min_id), params, fn key, acc ->
+      case acc[key] do
+        value when is_binary(value) -> Map.put(acc, key, bare_id(value))
+        _absent -> acc
+      end
+    end)
+  end
 end

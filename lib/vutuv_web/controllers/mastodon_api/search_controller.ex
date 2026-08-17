@@ -22,7 +22,7 @@ defmodule VutuvWeb.MastodonApi.SearchController do
 
     json(conn, %{
       accounts: section(type, "accounts", fn -> accounts(resolved, free_text, limit) end),
-      statuses: section(type, "statuses", fn -> statuses(free_text, limit) end),
+      statuses: section(type, "statuses", fn -> statuses(free_text, limit, viewer(conn)) end),
       hashtags: section(type, "hashtags", fn -> hashtags(free_text, limit) end)
     })
   end
@@ -55,10 +55,12 @@ defmodule VutuvWeb.MastodonApi.SearchController do
     |> Enum.map(&Presenter.account/1)
   end
 
-  defp statuses(%{posts: posts}, limit) when is_list(posts),
-    do: posts |> Enum.take(limit) |> Enum.map(&Presenter.status/1)
+  defp statuses(%{posts: posts}, limit, viewer) when is_list(posts),
+    do: posts |> Enum.take(limit) |> Presenter.statuses(viewer)
 
-  defp statuses(_no_free_text, _limit), do: []
+  defp statuses(_no_free_text, _limit, _viewer), do: []
+
+  defp viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
 
   # Mastodon's Tag entity. vutuv tags live at `/tags/:slug` on the main host,
   # which is where a client's "open in browser" should land.

@@ -380,6 +380,9 @@ defmodule VutuvWeb.PageController do
     filed by last-name initial at `/system/members/<a-z|other>`
   - `/system/markdown` — what members may write in a post: the Markdown
     reference, also raw at `/system/markdown.md` (`?lang=de` for German)
+  - `/system/mastodon` — how to reach this installation from a Mastodon-compatible
+    app: the address to enter, what such an app can do here and what it cannot,
+    also raw at `/system/mastodon.md` (`?lang=de` for German)
   - `/organizations` — the verified organization directory; one organization at `/organizations/<slug>`
   - `/organizations/<slug>/posts/<id>` — a post published in an organization's own
     name; the organization is the author, so there is no member behind it to look up

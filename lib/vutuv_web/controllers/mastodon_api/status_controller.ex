@@ -42,7 +42,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
         subject = conn.assigns.current_organization || conn.assigns.current_user
 
         if Posts.visible_to?(post, subject),
-          do: json(conn, Presenter.status(post)),
+          do: json(conn, Presenter.one_status(post, subject)),
           else: not_found(conn)
 
       nil ->
@@ -54,7 +54,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     with :ok <- validate_visibility(params["visibility"]),
          {:ok, image_ids} <- resolve_media(conn, params["media_ids"]),
          {:ok, post} <- create_post(conn, params, %{body: body, image_ids: image_ids}) do
-      conn |> put_status(200) |> json(Presenter.status(post))
+      conn |> put_status(200) |> json(Presenter.one_status(post, viewer(conn)))
     else
       {:error, :unsupported_visibility} ->
         validation_error(conn, "Only public statuses are supported.")
@@ -87,7 +87,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
       image_ids = edited_image_ids(conn.params["media_ids"], post)
 
       case Posts.update_post(post, %{body: body, image_ids: image_ids}) do
-        {:ok, updated} -> json(conn, Presenter.status(updated))
+        {:ok, updated} -> json(conn, Presenter.one_status(updated, viewer(conn)))
         {:error, :invalid_images} -> validation_error(conn, "Unknown or foreign media ids.")
         {:error, :too_many_images} -> validation_error(conn, "Too many images.")
         {:error, reason} -> validation_error(conn, changeset_error(reason))
@@ -103,12 +103,20 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   def update(conn, _params), do: validation_error(conn, "Status text is required.")
 
+  # Mastodon answers a delete with the status it just removed, so it is rendered
+  # before the row is gone. A failed delete used to raise on the `{:ok, _}`
+  # match, which reaches a client as a 500 with an HTML body it cannot parse —
+  # for the one call where it most needs to know whether the post is still
+  # there. It gets JSON either way now.
   def delete(conn, %{"id" => id}) do
     case own_post(conn, id) do
       %Post{} = post ->
-        rendered = Presenter.status(post)
-        {:ok, _deleted} = Posts.delete_post(post)
-        json(conn, rendered)
+        rendered = Presenter.one_status(post, viewer(conn))
+
+        case Posts.delete_post(post) do
+          {:ok, _deleted} -> json(conn, rendered)
+          {:error, reason} -> validation_error(conn, changeset_error(reason))
+        end
 
       nil ->
         not_found(conn)
@@ -317,7 +325,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
       end
 
     enabled? = action in [:favourite, :reblog, :bookmark]
-    json(conn, Map.put(Presenter.status(post), field, enabled?))
+    json(conn, Map.put(Presenter.one_status(post, viewer(conn)), field, enabled?))
   end
 
   defp action_error(:self), do: "You cannot favourite your own status."
@@ -350,6 +358,8 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     Posts.visible_to?(post, subject)
   end
 
+  defp viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
+
   defp own_post(conn, id) do
     case {conn.assigns.current_organization, conn.assigns.current_user.id, Posts.get_post(id)} do
       {nil, user_id, %Post{organization_id: nil, user_id: user_id} = post} ->
@@ -372,8 +382,8 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     descendants = Enum.filter(posts, &below?(parents, &1.id, post.id))
 
     %{
-      ancestors: render_thread(posts, ancestors),
-      descendants: Enum.map(descendants, &Presenter.status/1)
+      ancestors: render_thread(posts, ancestors, viewer),
+      descendants: Presenter.statuses(descendants, viewer)
     }
   end
 
@@ -384,9 +394,9 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     if id in acc, do: acc, else: ancestor_chain(parents, parents[id], [id | acc])
   end
 
-  defp render_thread(posts, ids) do
+  defp render_thread(posts, ids, viewer) do
     by_id = Map.new(posts, &{&1.id, &1})
-    for id <- ids, post = by_id[id], do: Presenter.status(post)
+    Presenter.statuses(for(id <- ids, post = by_id[id], do: post), viewer)
   end
 
   # Walks up rather than down: a post is a descendant when the focus is

@@ -1,15 +1,13 @@
 defmodule VutuvWeb.MastodonApi.SocialControllerTest do
   use VutuvWeb.ConnCase, async: false
 
+  import Vutuv.MastodonHelpers
   import Vutuv.OrganizationsHelpers
 
-  alias Vutuv.ApiAuth
   alias Vutuv.MastodonApi.Access
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias Vutuv.Social
-
-  @mastodon_host "mastodon.localhost"
 
   setup do
     original_verification = Application.fetch_env(:vutuv, :verify_organization_domains)
@@ -31,49 +29,19 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     :ok
   end
 
-  defp token_for(user, scopes, organization \\ nil) do
-    plaintext = "vutuv_at_" <> ApiAuth.random_token()
-
-    app =
-      insert(:oauth_app,
-        user: nil,
-        protocol: "mastodon",
-        registered_scopes: scopes
-      )
-
-    insert(:api_token,
-      user: user,
-      app: app,
-      organization: organization,
-      kind: "access",
-      name: nil,
-      scopes: scopes,
-      expires_at: nil,
-      token_hash: ApiAuth.hash_token(plaintext)
-    )
-
-    plaintext
-  end
-
-  defp api(conn, token) do
-    conn
-    |> Map.put(:host, @mastodon_host)
-    |> put_req_header("authorization", "Bearer " <> token)
-  end
-
   test "a personal identity reads its home timeline and posts", %{conn: conn} do
     reader = insert(:activated_user)
     author = insert(:activated_user)
     {:ok, _follow} = Social.follow(reader, author.id)
     {:ok, post} = Posts.create_post(author, %{body: "From the feed"})
-    token = token_for(reader, ["read", "write"])
+    token = mastodon_token(reader, ["read", "write"])
 
-    [status] = conn |> api(token) |> get("/api/v1/timelines/home") |> json_response(200)
+    [status] = conn |> mastodon_conn(token) |> get("/api/v1/timelines/home") |> json_response(200)
     assert status["id"] == post.id
 
     created =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/statuses", %{"status" => "From the phone"})
       |> json_response(200)
 
@@ -83,13 +51,13 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
   test "search resolves local addresses and organization slugs", %{conn: conn} do
     user = insert(:activated_user)
     organization = active_organization_for(insert(:activated_user))
-    token = token_for(user, ["read"])
+    token = mastodon_token(user, ["read"])
 
     local_address = URI.encode_www_form("@#{user.username}@localhost")
 
     %{"accounts" => [found_user]} =
       conn
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v2/search?q=#{local_address}")
       |> json_response(200)
 
@@ -97,7 +65,7 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
 
     %{"accounts" => [found_organization]} =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v2/search?q=#{organization.slug}")
       |> json_response(200)
 
@@ -108,11 +76,11 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     user = insert(:activated_user)
     author = insert(:activated_user)
     {:ok, parent} = Posts.create_post(author, %{body: "A public post"})
-    token = token_for(user, ["read", "write"])
+    token = mastodon_token(user, ["read", "write"])
 
     reply =
       conn
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/statuses", %{
         "status" => "A phone reply",
         "in_reply_to_id" => parent.id
@@ -121,7 +89,7 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
 
     edited =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> put("/api/v1/statuses/#{reply["id"]}", %{"status" => "An edited phone reply"})
       |> json_response(200)
 
@@ -129,19 +97,19 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     assert edited["in_reply_to_id"] == parent.id
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/statuses/#{parent.id}/favourite")
            |> json_response(200)
            |> Map.fetch!("favourited")
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/statuses/#{parent.id}/bookmark")
            |> json_response(200)
            |> Map.fetch!("bookmarked")
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/statuses/#{parent.id}/reblog")
            |> json_response(200)
            |> Map.fetch!("reblogged")
@@ -155,14 +123,14 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     author = insert(:activated_user)
     {:ok, _follow} = Social.follow_as_organization(organization, author)
     {:ok, post} = Posts.create_post(author, %{body: "For the organization"})
-    token = token_for(member, ["read", "write", "follow"], organization)
+    token = mastodon_token(member, ["read", "write", "follow"], organization)
 
-    [status] = conn |> api(token) |> get("/api/v1/timelines/home") |> json_response(200)
+    [status] = conn |> mastodon_conn(token) |> get("/api/v1/timelines/home") |> json_response(200)
     assert status["id"] == post.id
 
     created =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/statuses", %{"status" => "Organization announcement"})
       |> json_response(200)
 
@@ -186,12 +154,12 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
         denials: [%{wildcard: "non_followers"}]
       })
 
-    personal_token = token_for(member, ["read"])
-    organization_token = token_for(member, ["read", "write"], organization)
+    personal_token = mastodon_token(member, ["read"])
+    organization_token = mastodon_token(member, ["read", "write"], organization)
 
     personal_statuses =
       conn
-      |> api(personal_token)
+      |> mastodon_conn(personal_token)
       |> get("/api/v1/accounts/#{author.id}/statuses")
       |> json_response(200)
 
@@ -199,14 +167,14 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
 
     organization_statuses =
       build_conn()
-      |> api(organization_token)
+      |> mastodon_conn(organization_token)
       |> get("/api/v1/accounts/#{author.id}/statuses")
       |> json_response(200)
 
     refute Enum.any?(organization_statuses, &(&1["id"] == private_post.id))
 
     assert build_conn()
-           |> api(organization_token)
+           |> mastodon_conn(organization_token)
            |> post("/api/v1/statuses/#{private_post.id}/favourite")
            |> response(404)
   end
@@ -219,27 +187,27 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     target = insert(:activated_user)
     organization = active_organization_for(member)
     {:ok, _} = Organizations.add_role(organization, member, "publisher", member)
-    token = token_for(member, ["read", "write", "follow"], organization)
+    token = mastodon_token(member, ["read", "write", "follow"], organization)
 
     assert conn
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/statuses", %{"status" => "Allowed"})
            |> response(200)
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/accounts/#{target.id}/follow")
            |> response(200)
 
     {:ok, _} = Organizations.set_roles(organization, member, ["owner"], member)
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/statuses", %{"status" => "No longer allowed"})
            |> response(403)
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/accounts/#{target.id}/unfollow")
            |> response(403)
   end
@@ -249,7 +217,7 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
   # administrative role but not `publisher` is offered no organization
   # identity at all and cannot mint a token for one.
   test "an administrative role alone offers no organization identity" do
-    member = insert(:activated_user)
+    member = allow_mastodon_clients(insert(:activated_user))
     organization = active_organization_for(member)
     {:ok, _} = Organizations.add_role(organization, member, "admin", member)
 
@@ -266,11 +234,11 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     target = insert(:activated_user)
     organization = active_organization_for(member)
     {:ok, _} = Organizations.add_role(organization, member, "publisher", member)
-    token = token_for(member, ["read", "follow"], organization)
+    token = mastodon_token(member, ["read", "follow"], organization)
 
     relationship =
       conn
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/accounts/#{target.id}/follow")
       |> json_response(200)
 
@@ -278,7 +246,7 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
 
     muted =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/accounts/#{target.id}/mute")
       |> json_response(200)
 
@@ -286,7 +254,7 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
 
     following =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v1/accounts/#{organization.id}/following")
       |> json_response(200)
 
@@ -294,21 +262,21 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
 
     verified =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v1/accounts/verify_credentials")
       |> json_response(200)
 
     assert verified["following_count"] == 1
 
-    personal_token = token_for(member, ["read"])
+    personal_token = mastodon_token(member, ["read"])
 
     assert build_conn()
-           |> api(personal_token)
+           |> mastodon_conn(personal_token)
            |> get("/api/v1/accounts/#{organization.id}/following")
            |> json_response(200) == []
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/accounts/#{target.id}/block")
            |> response(403)
   end
@@ -316,16 +284,16 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
   test "a personal identity can block another local member", %{conn: conn} do
     user = insert(:activated_user)
     target = insert(:activated_user)
-    token = token_for(user, ["read", "follow"])
+    token = mastodon_token(user, ["read", "follow"])
 
     conn
-    |> api(token)
+    |> mastodon_conn(token)
     |> post("/api/v1/accounts/#{target.id}/follow")
     |> json_response(200)
 
     muted =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/accounts/#{target.id}/mute")
       |> json_response(200)
 
@@ -333,7 +301,7 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
 
     relationship =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/accounts/#{target.id}/block")
       |> json_response(200)
 
@@ -342,15 +310,17 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
 
   test "an identity opt-out stops an already issued token immediately", %{conn: conn} do
     user = insert(:activated_user)
-    token = token_for(user, ["read"])
+    token = mastodon_token(user, ["read"])
 
-    assert conn |> api(token) |> get("/api/v1/accounts/verify_credentials") |> response(200)
+    assert conn
+           |> mastodon_conn(token)
+           |> get("/api/v1/accounts/verify_credentials")
+           |> response(200)
 
-    {:ok, user} = user |> Ecto.Changeset.change(mastodon_clients?: false) |> Vutuv.Repo.update()
-    refute user.mastodon_clients?
+    refute deny_mastodon_clients(user).mastodon_clients?
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> get("/api/v1/accounts/verify_credentials")
            |> response(403)
   end
@@ -359,15 +329,17 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     member = insert(:activated_user)
     organization = active_organization_for(member)
     {:ok, _} = Organizations.add_role(organization, member, "publisher", member)
-    token = token_for(member, ["read"], organization)
+    token = mastodon_token(member, ["read"], organization)
 
-    assert conn |> api(token) |> get("/api/v1/accounts/verify_credentials") |> response(200)
+    assert conn
+           |> mastodon_conn(token)
+           |> get("/api/v1/accounts/verify_credentials")
+           |> response(200)
 
-    {:ok, organization} = Organizations.set_mastodon_clients(organization, false)
-    refute organization.mastodon_clients?
+    refute deny_mastodon_clients(organization).mastodon_clients?
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> get("/api/v1/accounts/verify_credentials")
            |> response(403)
   end

@@ -8,15 +8,13 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
   """
   use VutuvWeb.ConnCase, async: false
 
+  import Vutuv.MastodonHelpers
   import Vutuv.OrganizationsHelpers
 
-  alias Vutuv.ApiAuth
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
   alias Vutuv.Repo
-
-  @mastodon_host "mastodon.localhost"
 
   setup do
     Vutuv.RateLimiter.reset()
@@ -51,30 +49,6 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
     %Plug.Upload{path: src, filename: "photo.jpg", content_type: "image/jpeg"}
   end
 
-  defp token_for(user, scopes, organization \\ nil) do
-    plaintext = "vutuv_at_" <> ApiAuth.random_token()
-    app = insert(:oauth_app, user: nil, protocol: "mastodon", registered_scopes: scopes)
-
-    insert(:api_token,
-      user: user,
-      app: app,
-      organization: organization,
-      kind: "access",
-      name: nil,
-      scopes: scopes,
-      expires_at: nil,
-      token_hash: ApiAuth.hash_token(plaintext)
-    )
-
-    plaintext
-  end
-
-  defp api(conn, token) do
-    conn
-    |> Map.put(:host, @mastodon_host)
-    |> put_req_header("authorization", "Bearer " <> token)
-  end
-
   defp release!(image_id) do
     PostImage
     |> Repo.get!(image_id)
@@ -84,11 +58,11 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
 
   test "upload, describe and attach a photo to a status", %{conn: conn, tmp: tmp} do
     user = insert(:activated_user)
-    token = token_for(user, ["read", "write"])
+    token = mastodon_token(user, ["read", "write"])
 
     uploaded =
       conn
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/media", %{"file" => jpeg!(tmp), "description" => "Ein grünes Feld"})
       |> json_response(200)
 
@@ -97,7 +71,7 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
 
     status =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/statuses", %{"status" => "Mit Bild", "media_ids" => [uploaded["id"]]})
       |> json_response(200)
 
@@ -124,11 +98,11 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
     on_exit(fn -> restore(:moderate_images, original_moderation) end)
 
     user = insert(:activated_user)
-    token = token_for(user, ["write:media"])
+    token = mastodon_token(user, ["write:media"])
 
     pending =
       conn
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v2/media", %{"file" => jpeg!(tmp)})
       |> json_response(202)
 
@@ -136,7 +110,7 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
 
     polled =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v1/media/#{pending["id"]}")
 
     assert polled.status == 206
@@ -146,7 +120,7 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
 
     ready =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> get("/api/v1/media/#{pending["id"]}")
       |> json_response(200)
 
@@ -155,14 +129,14 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
 
   test "the description can be set after the upload", %{conn: conn, tmp: tmp} do
     user = insert(:activated_user)
-    token = token_for(user, ["write:media"])
+    token = mastodon_token(user, ["write:media"])
 
-    uploaded = conn |> api(token) |> post("/api/v1/media", %{"file" => jpeg!(tmp)})
+    uploaded = conn |> mastodon_conn(token) |> post("/api/v1/media", %{"file" => jpeg!(tmp)})
     id = json_response(uploaded, 200)["id"]
 
     updated =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> put("/api/v1/media/#{id}", %{"description" => "Nachgereicht"})
       |> json_response(200)
 
@@ -174,12 +148,12 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
     owner = insert(:activated_user)
     stranger = insert(:activated_user)
     {:ok, image} = Posts.create_pending_image(owner, jpeg!(tmp).path, "photo.jpg")
-    token = token_for(stranger, ["read", "write"])
+    token = mastodon_token(stranger, ["read", "write"])
 
-    assert conn |> api(token) |> get("/api/v1/media/#{image.id}") |> response(404)
+    assert conn |> mastodon_conn(token) |> get("/api/v1/media/#{image.id}") |> response(404)
 
     assert build_conn()
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/statuses", %{"status" => "Geklaut", "media_ids" => [image.id]})
            |> response(422)
 
@@ -188,10 +162,10 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
 
   test "a token without the media scope cannot upload", %{conn: conn, tmp: tmp} do
     user = insert(:activated_user)
-    token = token_for(user, ["read"])
+    token = mastodon_token(user, ["read"])
 
     assert conn
-           |> api(token)
+           |> mastodon_conn(token)
            |> post("/api/v1/media", %{"file" => jpeg!(tmp)})
            |> response(403)
   end
@@ -204,17 +178,17 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
     member = insert(:activated_user)
     organization = active_organization_for(member)
     {:ok, _} = Organizations.add_role(organization, member, "publisher", member)
-    token = token_for(member, ["read", "write"], organization)
+    token = mastodon_token(member, ["read", "write"], organization)
 
     uploaded =
       conn
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/media", %{"file" => jpeg!(tmp)})
       |> json_response(200)
 
     status =
       build_conn()
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/statuses", %{"status" => "Seitenbild", "media_ids" => [uploaded["id"]]})
       |> json_response(200)
 

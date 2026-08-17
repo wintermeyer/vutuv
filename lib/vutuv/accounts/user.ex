@@ -224,7 +224,7 @@ defmodule Vutuv.Accounts.User do
     # Bluesky — the column name predates Bluesky and gates the whole card).
     # Default on; the opt-out lives on the Privacy settings page.
     field(:show_mastodon_feed?, :boolean, default: true)
-    field(:mastodon_clients?, :boolean, default: true)
+    field(:mastodon_clients?, :boolean, default: false)
     # Whether the profile's "Code" card shows the cached public statistics of
     # the listed code-forge accounts (Vutuv.CodeStats: GitHub, GitLab,
     # Codeberg). Default on; the opt-out lives on the Privacy settings page.

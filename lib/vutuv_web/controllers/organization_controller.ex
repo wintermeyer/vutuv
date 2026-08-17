@@ -182,6 +182,15 @@ defmodule VutuvWeb.OrganizationController do
         &Organizations.owner?/2
       )
 
+  @doc """
+  Whether a Mastodon-compatible app may act as this page. Owner-only like
+  federating beside it, and its own page for the same reason it is its own tab:
+  publishing to other servers and letting the team use a phone app are two
+  decisions, not one.
+  """
+  def apps(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.OrganizationLive.Apps, &Organizations.owner?/2)
+
   def exclusions(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Exclusions, &Organizations.can_manage?/2)
 

@@ -115,6 +115,12 @@ defmodule Vutuv.AccountEvents do
     # carried, plus the state the take-part switch ended in — the one fediverse
     # setting whose consequences nobody can take back.
     "fediverse_changed" => ["enabled", "fields"],
+    # Whether this account may be signed into from a Mastodon-compatible app.
+    # The state is the whole detail: the switch has exactly one field, so a
+    # list of field names would say nothing a member could act on, while
+    # "turned on" / "turned off" is the answer to "when did my phone stop
+    # working" and to "did somebody open this account up".
+    "mastodon_clients_changed" => ["enabled"],
     "member_blocked" => ["handle"],
     "member_unblocked" => ["handle"],
     "filter_added" => ["filter_kind"],

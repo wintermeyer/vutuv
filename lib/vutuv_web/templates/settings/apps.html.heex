@@ -1,32 +1,91 @@
 <%!-- Apps & API: the developer hub, split off the account hub so neither page
 is overloaded. Third-party apps the member authorized, their personal API
-tokens, and a cross-link to the public API docs. Read-only here (each row links
-to where the thing is actually managed), so no changeset. --%>
+tokens, a cross-link to the public API docs — and the Mastodon-app switch.
+
+That switch lives here rather than on the Fediverse page on purpose. Federating
+publishes your profile to other servers; this only decides whether a phone app
+may sign in to *this* account, which is the same kind of decision as the two
+rows above it. It ships off, so the card has to say what turning it on is for
+and, above all, **which address to type into the app** — an adapter nobody can
+find an address for is not a feature. The host comes from the endpoint, so an
+installation that is not vutuv.de shows its own. --%>
 <.settings_shell user={@user} active={:apps} title={gettext("Apps")}>
 
-  <.card>
-    <.section_title>{gettext("Apps & API access")}</.section_title>
-    <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
-      <.account_row
-        title={gettext("Connected apps")}
-        subtitle={gettext("Third-party apps you authorized.")}
-        href={~p"/connected_apps"}
-        label={gettext("Manage")}
-      />
-      <.account_row
-        title={gettext("Access tokens")}
-        subtitle={gettext("Personal tokens for the vutuv API.")}
-        href={~p"/access_tokens"}
-        label={gettext("Manage")}
-      />
-    </ul>
-    <p class="mt-4">
-      <.link
-        navigate={~p"/developers"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+  <div class="space-y-6">
+    <.card>
+      <.section_title>{gettext("Apps & API access")}</.section_title>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <.account_row
+          title={gettext("Connected apps")}
+          subtitle={gettext("Third-party apps you authorized.")}
+          href={~p"/connected_apps"}
+          label={gettext("Manage")}
+        />
+        <.account_row
+          title={gettext("Access tokens")}
+          subtitle={gettext("Personal tokens for the vutuv API.")}
+          href={~p"/access_tokens"}
+          label={gettext("Manage")}
+        />
+      </ul>
+      <p class="mt-4">
+        <.link
+          navigate={~p"/developers"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Read the API docs")} ›
+        </.link>
+      </p>
+    </.card>
+
+    <.card>
+      <.section_title>{gettext("Mastodon-compatible apps")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("Apps built for Mastodon — Ivory, Tusky, Ice Cubes and the rest — can read your feed, post, and notify you. Off unless you turn it on.")}
+      </p>
+
+      <.form
+        :let={f}
+        for={@changeset}
+        action={~p"/settings/apps"}
+        id="mastodon-clients-form"
+        class="mt-5 space-y-5"
       >
-        {gettext("Read the API docs")} ›
-      </.link>
-    </p>
-  </.card>
+        <.form_error changeset={@changeset} />
+
+        <.setting_toggle label={gettext("Allow Mastodon-compatible apps")}>
+          <:checkbox><%= checkbox f, :mastodon_clients?, class: checkbox_class() %></:checkbox>
+          {gettext(
+            "Lets you sign in to this account from a Mastodon-compatible app. Switching it off immediately stops apps you already signed in from reaching this account."
+          )}
+        </.setting_toggle>
+
+        <.button type="submit">{gettext("Save")}</.button>
+      </.form>
+
+      <%!-- The address, verbatim and selectable, because typing the wrong one
+      is the single way this fails for a member who did everything right. --%>
+      <div class="mt-6 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/50">
+        <p class="font-medium text-slate-900 dark:text-white">
+          {gettext("The address to type into the app")}
+        </p>
+        <p class="mt-1 select-all font-mono text-base text-slate-900 dark:text-white">
+          {VutuvWeb.Endpoint.host()}
+        </p>
+        <p class="mt-2 text-slate-600 dark:text-slate-400">
+          {gettext("Your account is then %{handle}.",
+            handle: "@" <> @user.username <> "@" <> VutuvWeb.Endpoint.host()
+          )}
+        </p>
+        <p class="mt-3">
+          <.link
+            navigate={~p"/system/mastodon"}
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("How to set up an app")} ›
+          </.link>
+        </p>
+      </div>
+    </.card>
+  </div>
 </.settings_shell>

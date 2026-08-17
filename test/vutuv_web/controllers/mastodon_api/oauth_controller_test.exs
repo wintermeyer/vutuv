@@ -1,6 +1,7 @@
 defmodule VutuvWeb.MastodonApi.OauthControllerTest do
   use VutuvWeb.ConnCase
 
+  import Vutuv.MastodonHelpers
   import Vutuv.OrganizationsHelpers
 
   alias Vutuv.ApiAuth
@@ -8,7 +9,6 @@ defmodule VutuvWeb.MastodonApi.OauthControllerTest do
   alias Vutuv.Organizations
   alias Vutuv.Repo
 
-  @mastodon_host "mastodon.localhost"
   @redirect "org.example.client://oauth"
 
   setup do
@@ -32,7 +32,6 @@ defmodule VutuvWeb.MastodonApi.OauthControllerTest do
     :ok
   end
 
-  defp on_mastodon_host(conn), do: %{conn | host: @mastodon_host}
   defp fresh_conn, do: build_conn() |> init_test_session(%{})
 
   defp registration_params do
@@ -117,8 +116,9 @@ defmodule VutuvWeb.MastodonApi.OauthControllerTest do
         |> json_response(200)
 
       {conn, user} = create_and_login_user(fresh_conn())
+      user = allow_mastodon_clients(user)
       target = insert(:activated_user)
-      organization = active_organization_for(user)
+      organization = active_organization_for(user) |> allow_mastodon_clients()
       {:ok, _} = Organizations.add_role(organization, user, "publisher", user)
 
       authorize_params = %{
@@ -186,6 +186,7 @@ defmodule VutuvWeb.MastodonApi.OauthControllerTest do
       credentials = conn |> register() |> json_response(200)
       app = Repo.get_by!(App, client_id: credentials["client_id"])
       {conn, user} = create_and_login_user(fresh_conn())
+      user = allow_mastodon_clients(user)
 
       authorize_params = %{
         "response_type" => "code",
@@ -247,7 +248,8 @@ defmodule VutuvWeb.MastodonApi.OauthControllerTest do
 
     test "cannot authorize a scope the client did not register", %{conn: conn} do
       credentials = conn |> register(%{"scopes" => "read"}) |> json_response(200)
-      {conn, _user} = create_and_login_user(fresh_conn())
+      {conn, user} = create_and_login_user(fresh_conn())
+      allow_mastodon_clients(user)
 
       conn =
         get(
@@ -272,7 +274,8 @@ defmodule VutuvWeb.MastodonApi.OauthControllerTest do
         |> register(%{"redirect_uris" => [redirect], "scopes" => "read"})
         |> json_response(200)
 
-      {conn, _user} = create_and_login_user(fresh_conn())
+      {conn, user} = create_and_login_user(fresh_conn())
+      allow_mastodon_clients(user)
 
       authorize_params = %{
         "response_type" => "code",

@@ -32,7 +32,7 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
 
     conn
     |> Pagination.link_header(Enum.map(entries, &boundary_id/1), page)
-    |> json(Enum.map(entries, &Presenter.status_from_entry/1))
+    |> json(Presenter.statuses(entries, viewer(conn)))
   end
 
   # A status from another network is rendered with a prefixed id
@@ -59,6 +59,10 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
     entry |> Presenter.status_from_entry() |> Map.fetch!(:id) |> bare_id()
   end
 
+  # Who is reading, so the hearts and bookmarks in the answer are theirs: a
+  # page identity engages as the page, a member as themselves.
+  defp viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
+
   @doc """
   The instance-wide public timeline.
 
@@ -73,10 +77,8 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
 
     statuses =
       :all
-      |> Posts.recent_public_posts(limit: Pagination.fetch_size(page))
-      |> Enum.map(&%{id: "post-" <> &1.id, post: &1})
-      |> Pagination.window(page, &boundary_id/1)
-      |> Enum.map(&Presenter.status_from_entry/1)
+      |> Posts.recent_public_posts(Pagination.opts(page))
+      |> Presenter.statuses(viewer(conn))
 
     conn
     |> Pagination.link_header(Enum.map(statuses, &bare_id(&1.id)), page)
@@ -89,16 +91,14 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   following from a phone at all.
   """
   def tag(conn, %{"hashtag" => slug} = params) do
-    page = Pagination.params(params)
+    page = Pagination.params(strip_prefixes(params))
 
     statuses =
       case Tags.get_canonical_tag_by_slug(String.downcase(slug)) do
         %Tag{} = tag ->
           tag
-          |> Timeline.page(per_page: Pagination.fetch_size(page))
-          |> Map.fetch!(:entries)
-          |> Pagination.window(page, &boundary_id/1)
-          |> Enum.map(&Presenter.status_from_entry/1)
+          |> Timeline.walk(Pagination.opts(page))
+          |> Presenter.statuses(viewer(conn))
 
         nil ->
           []

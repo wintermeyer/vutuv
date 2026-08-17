@@ -74,16 +74,15 @@ defmodule VutuvWeb.OrganizationFediverseSwitchTest do
     assert Fediverse.ever_federated?(page)
   end
 
-  test "Mastodon client access defaults on and the owner can switch it off", %{conn: conn} do
+  # The app switch moved to its own tab (/organizations/:slug/apps): federating
+  # publishes the page to other servers, letting the team use a phone app does
+  # not, and one card was making them look like one decision. Covered in
+  # organization_apps_switch_test.exs.
+  test "the app switch is not on this page any more", %{conn: conn} do
     {conn, page, _owner} = owned_page(conn)
-    assert page.mastodon_clients?
 
-    {:ok, view, html} = live(conn, ~p"/organizations/#{page.slug}/fediverse")
-    assert html =~ "mastodon-client-access"
-
-    render_click(view, "toggle-mastodon", %{})
-
-    refute Organizations.get_organization!(page.id).mastodon_clients?
+    html = conn |> get(~p"/organizations/#{page.slug}/fediverse") |> html_response(200)
+    refute html =~ "mastodon-client-access"
   end
 
   test "a page without a handle is told to claim one first", %{conn: conn} do

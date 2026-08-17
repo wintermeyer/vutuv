@@ -62,6 +62,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Keyset
   alias Vutuv.Mentions
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations
@@ -1440,6 +1441,52 @@ defmodule Vutuv.Posts do
     )
     |> scope_attributed(Keyword.get(opts, :include_hidden?, false))
     |> Repo.all()
+  end
+
+  @doc """
+  Who liked a post, as a list a client can walk (`Vutuv.Keyset`) — the same
+  people `post_likers/2` names on the permalink, with the same two guards
+  (a hidden or unconfirmed account is nobody, and a member who asked not to be
+  named beside their likes is not named).
+
+  Bounded on the **member's** id rather than on the like's, because that is the
+  id the response carries and the one a client hands back.
+  """
+  def post_liker_accounts(post_id, opts \\ []) when is_binary(post_id) do
+    from(l in PostLike,
+      join: u in User,
+      as: :liker,
+      on: u.id == l.user_id,
+      where: l.post_id == ^post_id,
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      select: u
+    )
+    |> scope_attributed(false)
+    |> Keyset.scope(opts, {:liker, :id})
+    |> Repo.all()
+    |> Keyset.restore(opts)
+  end
+
+  @doc """
+  Who reshared a post, as a walkable list — the mirror of
+  `post_liker_accounts/2`.
+
+  Carries the hidden/unconfirmed guard too: a reshare is not an endorsement a
+  suspended account gets to keep making in public. There is no attribution
+  switch here, because resharing is already a public act under your own name.
+  """
+  def post_reposter_accounts(post_id, opts \\ []) when is_binary(post_id) do
+    from(r in PostRepost,
+      join: u in User,
+      as: :reposter,
+      on: u.id == r.user_id,
+      where: r.post_id == ^post_id,
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      select: u
+    )
+    |> Keyset.scope(opts, {:reposter, :id})
+    |> Repo.all()
+    |> Keyset.restore(opts)
   end
 
   @doc "How many likers the permalink names before the rest fold into `+N`."
@@ -3075,6 +3122,29 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  `profile_posts/3` as a list a client can walk: the same three legs
+  (`author_timeline_query/3`) and the same visibility, ordered and bounded by
+  the **post** id rather than by when the entry was made.
+
+  Two deliberate differences from the website's version, both forced by what a
+  Mastodon client hands back. It returns one id per status, and for a repost
+  that id is the id of the post being reshared, not of the reshare — so the
+  post id is the only column the walk can be bounded on, and the order has to
+  match it or the page repeats and skips rows. And replies are **not** folded
+  under the post they answer (`collapse_profile_threads/1`): a client's account
+  timeline is a flat list, and folding would make a full page come back short,
+  which reads to the client as the end of the list.
+  """
+  def author_statuses(%User{} = author, viewer, opts \\ []) do
+    author
+    |> author_timeline_query(viewer, :all)
+    |> Keyset.scope(opts, :post_id)
+    |> Repo.all()
+    |> Keyset.restore(opts)
+    |> author_entries(author)
+  end
+
+  @doc """
   How many timeline entries of `author` `viewer` may see (the "View all"
   label). `filter` (issue #945) scopes the count to one entry kind — see
   `author_timeline_query/3`.
@@ -3291,12 +3361,15 @@ defmodule Vutuv.Posts do
     |> recent_public(opts)
   end
 
+  # `opts` may also carry a `Vutuv.Keyset` window (`:max_id` / `:since_id` /
+  # `:min_id`), which the Mastodon-compatible public timeline walks the site
+  # feed by. Without one this is the plain newest-first page it always was.
   defp recent_public(query, opts) do
     query
     |> scope_visible(nil)
-    |> order_by([p], desc: p.id)
-    |> limit(^Keyword.get(opts, :limit, 20))
+    |> Keyset.scope(opts)
     |> Repo.all()
+    |> Keyset.restore(opts)
     |> Repo.preload(post_preloads())
   end
 
@@ -3823,6 +3896,28 @@ defmodule Vutuv.Posts do
     {shown, rest} = Enum.split(entries, limit)
 
     %{entries: shown, total: total, more?: rest != [], next_offset: offset + length(shown)}
+  end
+
+  @doc "How many of `organization`'s posts `viewer` may see."
+  def count_organization_posts(%Organization{} = organization, viewer),
+    do: organization |> organization_posts_query(viewer) |> Repo.aggregate(:count)
+
+  @doc """
+  `organization_posts_page/3` as a list a client can walk: the same query and
+  the same visibility, bounded by a `Vutuv.Keyset` window on the post id
+  instead of by an offset.
+
+  A plain list rather than a page map, because the only thing the caller can
+  tell a Mastodon client about "more" is the id of the oldest row it just
+  received — a total and an offset have nowhere to go in that vocabulary.
+  """
+  def organization_statuses(%Organization{} = organization, viewer, opts \\ []) do
+    organization
+    |> organization_posts_query(viewer)
+    |> Keyset.scope(opts)
+    |> Repo.all()
+    |> Keyset.restore(opts)
+    |> preload_posts()
   end
 
   @doc """
@@ -4446,6 +4541,36 @@ defmodule Vutuv.Posts do
   @doc "One page of the posts `user` bookmarked — see `liked_posts_page/2`."
   def bookmarked_posts_page(%User{} = user, opts \\ []),
     do: engaged_posts_page(PostBookmark, user, opts)
+
+  @doc """
+  The posts `user` liked, as a list a client can walk (`Vutuv.Keyset`).
+
+  Ordered by the **post** id, not by when the like was made, because the id a
+  Mastodon client hands back to ask for the next page is the status id and
+  nothing else — a list ordered by one column and paged by another repeats
+  rows and skips others. The website's saved/liked pages keep their
+  newest-saved-first order and their search and sort controls
+  (`liked_posts_page/2`); this is the same set of posts, walkable.
+  """
+  def liked_statuses(%User{} = user, opts \\ []),
+    do: engaged_statuses(PostLike, user, opts)
+
+  @doc "The posts `user` bookmarked, as a walkable list — see `liked_statuses/2`."
+  def bookmarked_statuses(%User{} = user, opts \\ []),
+    do: engaged_statuses(PostBookmark, user, opts)
+
+  defp engaged_statuses(schema, %User{id: user_id} = user, opts) do
+    from(p in Post,
+      join: e in ^schema,
+      on: e.post_id == p.id,
+      where: e.user_id == ^user_id
+    )
+    |> scope_visible(user)
+    |> Keyset.scope(opts)
+    |> Repo.all()
+    |> Keyset.restore(opts)
+    |> preload_posts()
+  end
 
   # `opts`: `:search` (matches post body and author name, case-insensitive),
   # `:sort` (`:recent` default newest-saved-first | `:oldest` | `:name` by

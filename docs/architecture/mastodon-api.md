@@ -78,10 +78,27 @@ Server discovery, login and the core social workflow:
 
 Status creation accepts public text posts with photos. Organization posts are
 top-level, matching vutuv's existing organization post model. Polls and
-non-public visibility need explicit Mastodon mappings before they can be added;
-the adapter rejects an unsupported visibility instead of silently publishing
-something broader. There is no video anywhere in vutuv, so there is nothing to
-map there.
+non-public visibility need explicit Mastodon mappings before they can be
+*written*; the adapter rejects an unsupported visibility instead of silently
+publishing something broader. There is no video anywhere in vutuv, so there is
+nothing to map there.
+
+**Reading** does report audience, though. vutuv has no visibility column — a
+post is public until it carries a `PostDenial`, and any denial at all closes it
+to anonymous readers — so a post with denials is rendered `private`. That is not
+Mastodon's followers-only, but it is the value that tells a client the post is
+not for redistribution, so it stops offering boost on something its author
+narrowed. Calling every post `public`, as the first cut did, told clients the
+opposite.
+
+**The figures under a status are the ones the website shows.** The three counts
+and the reader's own like / bookmark / reshare come from
+`Posts.post_engagement_map/2`, read once for the whole page the way the feed
+pre-loads them for its cards (`Presenter.statuses/2` is the form every list
+endpoint uses; `one_status/2` is the same path for a single row). Rendering them
+without a viewer, as the first cut did, left every heart empty on a post the
+member had just liked — so tapping it *removed* the like. `shown_counts/1` folds
+in what other networks did with the same post, exactly as the card does.
 
 ### Photos
 
@@ -152,16 +169,40 @@ Every list takes Mastodon's `limit` / `max_id` / `since_id` / `min_id` and
 answers a `Link` header (`VutuvWeb.MastodonApi.Pagination`). vutuv's ids do the
 work: they are `Vutuv.UUIDv7`, whose first 48 bits are the creation time, so an
 id comparison *is* a time comparison and no offset or stored cursor is needed.
-The merged feeds paginate by a second-precision `{timestamp, seen ids}` cursor
-underneath, which cannot separate entries written in the same second — so the
-cursor only narrows the fetch to the boundary second and the id comparison
-cuts. A page can therefore come back short where many entries tie, which ends a
-walk one round early and never repeats an entry.
+
+**The boundary goes into the query, never into a filter over rows the query
+already returned** (`Vutuv.Keyset`, which the context readers take as plain
+options). This is worth stating as a rule because getting it wrong is invisible:
+the first cut of this adapter fetched the newest `limit + 20` rows and filtered
+the window out of them in memory, which works for two pages and then answers an
+empty page — for that request and every one after it. A 200-post profile simply
+looked like a 40-post one, with a 200 and no log line. `deep_pagination_test.exs`
+walks each list past that old read; it is calibrated so that restoring the
+in-memory window turns every case red.
+
+A consequence worth knowing: **each list is ordered by the id a client hands
+back**, which for a saved-posts list is the post id rather than when it was
+saved, and for an account timeline the post id rather than the reshare time. A
+list ordered by one column and paged by another repeats rows and skips others,
+so there is no third option. The website's own pagers over the same data keep
+their orders, their totals and their numbered pages.
+
+The merged feeds — the home timeline and the merged `following` list — are the
+exception, and only in how the page is *assembled*: several sources share no id
+space, so no single query can order them. Each source is bounded by the same
+window first and the page is picked from what they return together, so the
+deepest page reads as few rows as the first. The home feed paginates by a
+second-precision `{timestamp, seen ids}` cursor underneath, which cannot
+separate entries written in the same second, so the cursor narrows the fetch to
+the boundary second and the id comparison cuts; a page can come back short where
+many entries tie, which ends a walk one round early and never repeats an entry.
 
 **Streaming** is `/api/v1/streaming`, a `Phoenix.Socket.Transport` rather than a
 channel, because Mastodon has its own frame format on the wire. It is mounted on
-the shared endpoint (a socket cannot be host-scoped there) and checks the API
-host itself, so the path stays inert on the main origin.
+the shared endpoint (a socket cannot be host-scoped there) and applies the same
+host test as the HTTP gate (`MastodonApi.client_host?/1`), so a client that
+signed in on the main host can open a stream there too — demanding the subdomain
+here let an app authenticate and then never connect.
 
 **Push** is RFC 8291/8292 Web Push, implemented in `Vutuv.MastodonApi.WebPush`
 with **no dependency**: the obvious hex package requires `httpoison ~> 1.0`,
@@ -204,10 +245,14 @@ than it asks for, or a decision that was left open on purpose.
   connect, but cannot notice a role withdrawn *mid-connection*; every payload is
   a status the member may already read, so the exposure is the connection's
   lifetime rather than the token's.
-- **Account counts are hardcoded to zero.** `followers_count`, `statuses_count`
-  and `last_status_at` in `MastodonApi.Presenter.base_account/1`; only
-  `verify_credentials` fills `following_count`. Clients therefore render every
-  profile as having no followers and no posts.
+- **Account figures are filled on single accounts only.** `verify_credentials`
+  and `/accounts/:id` carry real `followers_count`, `following_count` and
+  `statuses_count`; an account inside a *list* (followers, mutes, who liked a
+  status) carries zeros, because filling them there is three counts per row and
+  no client shows the numbers in that position. `note` is filled everywhere —
+  the member's headline or the page's description, escaped and wrapped in one
+  paragraph, since Mastodon's `note` is HTML and ours is text a member typed.
+  `last_status_at` is still always `nil`.
 - **A grant is keyed on `(user_id, app_id)`, not on the identity.** Authorizing
   the same client once personally and once as a page folds both consents into
   one `Grant` row whose scopes are the union. Enforcement is unaffected (the
@@ -219,8 +264,14 @@ than it asks for, or a decision that was left open on purpose.
   `accepts ["json"]` before the catch-all route, so a browser opening
   `https://mastodon.<host>/` raises `Phoenix.NotAcceptableError`. The intent —
   no website pages on the API origin — holds either way.
-- **`mastodon_clients?` defaults to `true`** for members and organizations
-  alike, so an installation's existing accounts are opted in when the migration
-  runs. Nothing becomes reachable without an explicit OAuth consent, and the
-  flag is a kill switch rather than the gate; the open question is whether a new
-  remote channel should default on for accounts whose owners never asked for it.
+- **`mastodon_clients?` defaults to `false`** for members and organizations
+  alike: signing in from a phone app is opted into, not out of. Most members will
+  never want it, and a switch nobody turned on is one fewer way in for an account
+  that is not using it. The two are separate columns because they are separate
+  decisions — a member allowing apps for themselves says nothing about a page
+  their team runs. A member turns theirs on under `/settings/apps`, an owner
+  turns a page's on under `/organizations/<slug>/apps`, and either takes effect
+  on the next request. Because it ships off, both pages have to name the address
+  a member types (from `Endpoint.host()`, never a literal) and link
+  `/system/mastodon`; the adapter was otherwise undiscoverable from inside the
+  product, which is a worse failure than a missing endpoint.

@@ -172,7 +172,29 @@ defmodule VutuvWeb.SettingsController do
 
   def apps(conn, _params) do
     user = conn.assigns[:user]
-    render(conn, "apps.html", user: user, page_title: gettext("Apps & API"))
+
+    render(conn, "apps.html",
+      user: user,
+      changeset: User.changeset(user),
+      page_title: gettext("Apps & API")
+    )
+  end
+
+  # The Mastodon-app switch lives here rather than on the Fediverse page, and
+  # the distinction is worth keeping straight: federating publishes a profile
+  # to other servers, while this only decides whether a phone app may sign in
+  # to **this** account. A member who wants one does not necessarily want the
+  # other, and the Fediverse page is where somebody goes who has already
+  # decided about federation.
+  def update_apps(conn, %{"user" => params}) do
+    save(
+      conn,
+      Map.take(params, ["mastodon_clients?"]),
+      "apps.html",
+      ~p"/settings/apps",
+      gettext("App settings saved."),
+      event: "mastodon_clients_changed"
+    )
   end
 
   # "Your organizations": the organization pages the member owns or helps run
@@ -942,6 +964,11 @@ defmodule VutuvWeb.SettingsController do
   defp change_details("fediverse_changed", saved, params) do
     %{fields: changed_fields(params), enabled: saved.fediverse_followers?}
   end
+
+  # One switch, so the state is the detail — a field list would only ever read
+  # "Mastodon-compatible apps" and never say which way it went.
+  defp change_details("mastodon_clients_changed", saved, _params),
+    do: %{enabled: saved.mastodon_clients?}
 
   defp change_details(_kind, _saved, params), do: %{fields: changed_fields(params)}
 

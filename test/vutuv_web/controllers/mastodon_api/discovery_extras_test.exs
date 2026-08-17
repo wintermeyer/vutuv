@@ -5,8 +5,9 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
   """
   use VutuvWeb.ConnCase, async: false
 
+  import Vutuv.MastodonHelpers
+
   alias Vutuv.Accounts.SearchTerm
-  alias Vutuv.ApiAuth
   alias Vutuv.Posts
   alias Vutuv.Repo
 
@@ -23,31 +24,6 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
     user
   end
 
-  @mastodon_host "mastodon.localhost"
-
-  defp token_for(user, scopes) do
-    plaintext = "vutuv_at_" <> ApiAuth.random_token()
-    app = insert(:oauth_app, user: nil, protocol: "mastodon", registered_scopes: scopes)
-
-    insert(:api_token,
-      user: user,
-      app: app,
-      kind: "access",
-      name: nil,
-      scopes: scopes,
-      expires_at: nil,
-      token_hash: ApiAuth.hash_token(plaintext)
-    )
-
-    plaintext
-  end
-
-  defp api(conn, token) do
-    conn
-    |> Map.put(:host, @mastodon_host)
-    |> put_req_header("authorization", "Bearer " <> token)
-  end
-
   describe "GET /api/v1/statuses/:id/context" do
     test "splits a conversation into ancestors and descendants", %{conn: conn} do
       author = insert(:activated_user)
@@ -57,11 +33,11 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
       {:ok, middle} = Posts.create_reply(author, root, %{body: "Die Mitte"})
       {:ok, leaf} = Posts.create_reply(author, middle, %{body: "Das Blatt"})
 
-      token = token_for(reader, ["read"])
+      token = mastodon_token(reader, ["read"])
 
       context =
         conn
-        |> api(token)
+        |> mastodon_conn(token)
         |> get("/api/v1/statuses/#{middle.id}/context")
         |> json_response(200)
 
@@ -75,11 +51,11 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
       {:ok, first} = Posts.create_reply(author, root, %{body: "Erste Antwort"})
       {:ok, second} = Posts.create_reply(author, first, %{body: "Zweite Antwort"})
 
-      token = token_for(insert(:activated_user), ["read"])
+      token = mastodon_token(insert(:activated_user), ["read"])
 
       context =
         conn
-        |> api(token)
+        |> mastodon_conn(token)
         |> get("/api/v1/statuses/#{root.id}/context")
         |> json_response(200)
 
@@ -99,9 +75,12 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
           denials: [%{wildcard: "non_followers"}]
         })
 
-      token = token_for(stranger, ["read"])
+      token = mastodon_token(stranger, ["read"])
 
-      assert conn |> api(token) |> get("/api/v1/statuses/#{private.id}/context") |> response(404)
+      assert conn
+             |> mastodon_conn(token)
+             |> get("/api/v1/statuses/#{private.id}/context")
+             |> response(404)
     end
   end
 
@@ -109,11 +88,11 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
     test "answers the Markdown the author typed, not the rendered body", %{conn: conn} do
       author = insert(:activated_user)
       {:ok, post} = Posts.create_post(author, %{body: "Mit **Auszeichnung**"})
-      token = token_for(author, ["read", "write"])
+      token = mastodon_token(author, ["read", "write"])
 
       source =
         conn
-        |> api(token)
+        |> mastodon_conn(token)
         |> get("/api/v1/statuses/#{post.id}/source")
         |> json_response(200)
 
@@ -124,20 +103,23 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
     test "only the author may read it", %{conn: conn} do
       author = insert(:activated_user)
       {:ok, post} = Posts.create_post(author, %{body: "Meins"})
-      token = token_for(insert(:activated_user), ["read"])
+      token = mastodon_token(insert(:activated_user), ["read"])
 
-      assert conn |> api(token) |> get("/api/v1/statuses/#{post.id}/source") |> response(404)
+      assert conn
+             |> mastodon_conn(token)
+             |> get("/api/v1/statuses/#{post.id}/source")
+             |> response(404)
     end
   end
 
   describe "GET /api/v2/search" do
     test "finds a member by name, not only by exact handle", %{conn: conn} do
       searchable_user("Wilhelmine", "Sucherin")
-      token = token_for(insert(:activated_user), ["read"])
+      token = mastodon_token(insert(:activated_user), ["read"])
 
       %{"accounts" => accounts} =
         conn
-        |> api(token)
+        |> mastodon_conn(token)
         |> get("/api/v2/search?q=Wilhelmine")
         |> json_response(200)
 
@@ -148,11 +130,11 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
       author = insert(:activated_user)
       {:ok, _post} = Posts.create_post(author, %{body: "Etwas über Segelfliegen"})
 
-      token = token_for(insert(:activated_user), ["read"])
+      token = mastodon_token(insert(:activated_user), ["read"])
 
       %{"statuses" => statuses} =
         conn
-        |> api(token)
+        |> mastodon_conn(token)
         |> get("/api/v2/search?q=Segelfliegen")
         |> json_response(200)
 
@@ -163,11 +145,11 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
       author = searchable_user("Nurhier", "Person")
       {:ok, _post} = Posts.create_post(author, %{body: "Nurhier steht es auch"})
 
-      token = token_for(insert(:activated_user), ["read"])
+      token = mastodon_token(insert(:activated_user), ["read"])
 
       body =
         conn
-        |> api(token)
+        |> mastodon_conn(token)
         |> get("/api/v2/search?q=Nurhier&type=accounts")
         |> json_response(200)
 

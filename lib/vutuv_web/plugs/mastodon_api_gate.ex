@@ -2,9 +2,11 @@ defmodule VutuvWeb.Plug.MastodonApiGate do
   @moduledoc """
   Installation switch and security-header boundary for the Mastodon client API.
 
-  The router already limits these routes to the `mastodon.` host. Keeping the
-  installation flag here makes a disabled adapter indistinguishable from one
-  that is not installed at all.
+  This plug is the **only** thing that decides which hosts serve the adapter:
+  the routes carry no host constraint, so `client_host?/1` here is the whole
+  boundary — the technical subdomain and the main host both answer, and anything
+  else 404s. Keeping the installation flag in the same place makes a disabled
+  adapter indistinguishable from one that is not installed at all.
   """
 
   import Plug.Conn

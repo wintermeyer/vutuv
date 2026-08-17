@@ -96,10 +96,16 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
   def terminate(_reason, _state), do: :ok
 
   # The streaming socket is mounted on the shared endpoint, which has no host
-  # scoping of its own, so the API host is checked here — the adapter must not
-  # become reachable from the main origin by way of a websocket.
+  # scoping of its own, so the host is checked here — the adapter must not
+  # become reachable from an origin that does not serve it.
+  #
+  # The same test the HTTP gate applies (`client_host?/1`), not `api_host()`
+  # alone: a client that signed in on the main host keeps talking to the main
+  # host, so demanding the subdomain here let it authenticate and then never
+  # open a stream — the one failure a member reads as "the app is broken"
+  # rather than as a missing feature.
   defp check_host(%{connect_info: %{uri: %URI{host: host}}}) when is_binary(host) do
-    if String.downcase(host) == MastodonApi.api_host(), do: :ok, else: :error
+    if MastodonApi.client_host?(host), do: :ok, else: :error
   end
 
   defp check_host(_transport), do: :error

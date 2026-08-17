@@ -165,7 +165,12 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
     |> Enum.map(& &1[:post_id])
     |> Enum.reject(&is_nil/1)
     |> then(&Posts.visible_posts_by_ids(conn.assigns.current_user, &1))
-    |> Map.new(fn {id, post} -> {id, Presenter.status(post)} end)
+    |> then(fn by_id ->
+      posts = Map.values(by_id)
+      rendered = Presenter.statuses(posts, conn.assigns.current_user)
+
+      posts |> Enum.map(& &1.id) |> Enum.zip(rendered) |> Map.new()
+    end)
   end
 
   # Somebody on another network has no vutuv profile, so `Vutuv.Activity` leaves

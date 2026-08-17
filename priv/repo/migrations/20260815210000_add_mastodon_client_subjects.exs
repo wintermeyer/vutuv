@@ -12,13 +12,19 @@ defmodule Vutuv.Repo.Migrations.AddMastodonClientSubjects do
   # `Vutuv.MastodonApi.Access.authorize_token/2` would answer with a nil
   # organization and the token would quietly fall back to acting as the member
   # who owns it.
+  # Both switches default to **off**. Signing in from a phone app is a power
+  # user's feature and most members will never want it, so it is opted into
+  # rather than out of — and a switch nobody turned on is one fewer way in for
+  # an account that is not using it. The two are separate columns because they
+  # are separate decisions: a member allowing apps for themselves says nothing
+  # about a page their team runs, and vice versa.
   def up do
     alter table(:users) do
-      add(:mastodon_clients?, :boolean, null: false, default: true)
+      add(:mastodon_clients?, :boolean, null: false, default: false)
     end
 
     alter table(:organizations) do
-      add(:mastodon_clients?, :boolean, null: false, default: true)
+      add(:mastodon_clients?, :boolean, null: false, default: false)
     end
 
     alter table(:oauth_auth_codes) do

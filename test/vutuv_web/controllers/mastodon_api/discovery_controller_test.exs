@@ -1,11 +1,9 @@
 defmodule VutuvWeb.MastodonApi.DiscoveryControllerTest do
   use VutuvWeb.ConnCase
 
+  import Vutuv.MastodonHelpers
+
   alias Vutuv.Posts.Post
-
-  @mastodon_host "mastodon.localhost"
-
-  defp on_mastodon_host(conn), do: %{conn | host: @mastodon_host}
 
   describe "the Mastodon API host" do
     test "serves current and legacy instance metadata", %{conn: conn} do
@@ -121,18 +119,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryControllerTest do
 
     test "an authenticated endpoint works on the main host", %{conn: conn} do
       user = insert(:activated_user)
-      plaintext = "vutuv_at_" <> Vutuv.ApiAuth.random_token()
-      app = insert(:oauth_app, user: nil, protocol: "mastodon", registered_scopes: ["read"])
-
-      insert(:api_token,
-        user: user,
-        app: app,
-        kind: "access",
-        name: nil,
-        scopes: ["read"],
-        expires_at: nil,
-        token_hash: Vutuv.ApiAuth.hash_token(plaintext)
-      )
+      plaintext = mastodon_token(user, ["read"])
 
       account =
         conn

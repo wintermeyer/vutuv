@@ -7,35 +7,11 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
   """
   use VutuvWeb.ConnCase, async: false
 
-  alias Vutuv.ApiAuth
+  import Vutuv.MastodonHelpers
+
   alias Vutuv.MastodonApi.PushSubscription
   alias Vutuv.MastodonApi.WebPush
   alias Vutuv.Repo
-
-  @mastodon_host "mastodon.localhost"
-
-  defp token_for(user, scopes) do
-    plaintext = "vutuv_at_" <> ApiAuth.random_token()
-    app = insert(:oauth_app, user: nil, protocol: "mastodon", registered_scopes: scopes)
-
-    insert(:api_token,
-      user: user,
-      app: app,
-      kind: "access",
-      name: nil,
-      scopes: scopes,
-      expires_at: nil,
-      token_hash: ApiAuth.hash_token(plaintext)
-    )
-
-    plaintext
-  end
-
-  defp api(conn, token) do
-    conn
-    |> Map.put(:host, @mastodon_host)
-    |> put_req_header("authorization", "Bearer " <> token)
-  end
 
   defp with_vapid(keys) do
     original = Application.fetch_env(:vutuv, :web_push)
@@ -86,11 +62,11 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
       with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
 
       user = insert(:activated_user)
-      token = token_for(user, ["push"])
+      token = mastodon_token(user, ["push"])
 
       body =
         conn
-        |> api(token)
+        |> mastodon_conn(token)
         |> post("/api/v1/push/subscription", %{
           "subscription" => %{
             "endpoint" => "https://push.example.com/abc",
@@ -111,10 +87,10 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
       keys = WebPush.generate_keys()
       with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
 
-      token = token_for(insert(:activated_user), ["push"])
+      token = mastodon_token(insert(:activated_user), ["push"])
 
       assert conn
-             |> api(token)
+             |> mastodon_conn(token)
              |> post("/api/v1/push/subscription", %{
                "subscription" => %{
                  "endpoint" => "http://push.example.com/abc",
@@ -128,10 +104,10 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
       conn: conn
     } do
       with_vapid([])
-      token = token_for(insert(:activated_user), ["push"])
+      token = mastodon_token(insert(:activated_user), ["push"])
 
       assert conn
-             |> api(token)
+             |> mastodon_conn(token)
              |> post("/api/v1/push/subscription", %{
                "subscription" => %{
                  "endpoint" => "https://push.example.com/abc",
@@ -145,11 +121,11 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
       keys = WebPush.generate_keys()
       with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
 
-      token = token_for(insert(:activated_user), ["push"])
+      token = mastodon_token(insert(:activated_user), ["push"])
 
       for endpoint <- ["https://push.example.com/one", "https://push.example.com/two"] do
         build_conn()
-        |> api(token)
+        |> mastodon_conn(token)
         |> post("/api/v1/push/subscription", %{
           "subscription" => %{"endpoint" => endpoint, "keys" => browser_keys()}
         })
@@ -164,22 +140,22 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
       keys = WebPush.generate_keys()
       with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
 
-      token = token_for(insert(:activated_user), ["push"])
+      token = mastodon_token(insert(:activated_user), ["push"])
 
       conn
-      |> api(token)
+      |> mastodon_conn(token)
       |> post("/api/v1/push/subscription", %{
         "subscription" => %{"endpoint" => "https://push.example.com/x", "keys" => browser_keys()}
       })
       |> json_response(200)
 
       assert build_conn()
-             |> api(token)
+             |> mastodon_conn(token)
              |> get("/api/v1/push/subscription")
              |> json_response(200)
 
       assert build_conn()
-             |> api(token)
+             |> mastodon_conn(token)
              |> delete("/api/v1/push/subscription")
              |> json_response(200) == %{}
 

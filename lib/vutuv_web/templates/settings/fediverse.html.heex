@@ -70,13 +70,6 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
           )}
         </.setting_toggle>
 
-        <.setting_toggle label={gettext("Allow Mastodon-compatible apps")}>
-          <:checkbox><%= checkbox f, :mastodon_clients?, class: checkbox_class() %></:checkbox>
-          {gettext(
-            "Lets you sign in to this account from a Mastodon-compatible phone app. Switching it off immediately stops existing app tokens from accessing this identity."
-          )}
-        </.setting_toggle>
-
         <%!-- Reactions (issue #1068): the answer coming back. Only meaningful
               once posts are actually going out, so it shows with the rest of
               the "you are taking part" block. The wording names what is stored

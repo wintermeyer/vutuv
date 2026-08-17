@@ -80,12 +80,20 @@ defmodule Vutuv.MastodonApi.WebPush do
     end
   end
 
-  # RFC 8291 §3.4. The whole point of the ceremony is that the key is derived
-  # from a shared secret plus the subscription's own `auth` secret, so a push
-  # service that relays the body cannot read it.
-  defp encrypt(plaintext, ua_public, auth_secret) do
-    salt = :crypto.strong_rand_bytes(16)
-    {as_public, as_private} = :crypto.generate_key(:ecdh, @curve)
+  @doc """
+  RFC 8291 §3.4: one `aes128gcm` record, header and all. The whole point of the
+  ceremony is that the key is derived from a shared secret **plus** the
+  subscription's own `auth` secret, so a push service that relays the body
+  cannot read it.
+
+  `salt` and `keypair` exist so the ceremony can be checked against the test
+  vector in RFC 8291 §5, which fixes both (see `web_push_test.exs`). Left out,
+  they are fresh per message, which is what every real send does — a reused salt
+  with a reused key would leak the plaintext.
+  """
+  def encrypt(plaintext, ua_public, auth_secret, salt \\ nil, keypair \\ nil) do
+    salt = salt || :crypto.strong_rand_bytes(16)
+    {as_public, as_private} = keypair || :crypto.generate_key(:ecdh, @curve)
     shared = :crypto.compute_key(:ecdh, ua_public, as_private, @curve)
 
     key_info = "WebPush: info" <> <<0>> <> ua_public <> as_public

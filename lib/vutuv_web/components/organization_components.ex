@@ -309,6 +309,14 @@ defmodule VutuvWeb.OrganizationComponents do
         <.manage_tab :if={@powers.owner?} active={@active == :fediverse} navigate={"/organizations/#{@organization.slug}/fediverse"}>
           {gettext("Fediverse")}
         </.manage_tab>
+        <%!-- Its own tab rather than a card on the Fediverse one, mirroring the
+        member's /settings/apps: federating publishes the page to other servers,
+        while this only decides whether the Editorial team may reach it from a
+        phone app. Owner-only all the same — it is an administrative question
+        about the page, not part of speaking for it. --%>
+        <.manage_tab :if={@powers.owner?} active={@active == :apps} navigate={"/organizations/#{@organization.slug}/apps"}>
+          {gettext("Apps")}
+        </.manage_tab>
       </nav>
     </div>
     """
