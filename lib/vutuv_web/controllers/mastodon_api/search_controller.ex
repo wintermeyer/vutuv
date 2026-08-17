@@ -97,8 +97,14 @@ defmodule VutuvWeb.MastodonApi.SearchController do
 
   defp resolve(query, conn), do: resolve_local(conn, query)
 
+  # `client_host?/1`, not a list of the two hosts we happen to think of: it also
+  # answers for the `www.` alias, and serving a site at both the apex and its
+  # `www.` name is the oldest convention on the web. Spelled out, the miss was
+  # not a polite "unknown handle" — `@member@www.<our host>` fell through to the
+  # remote branch, so this installation WebFingered **itself** over the network
+  # and told the member their own site was unreachable.
   defp resolve_qualified(conn, address, handle, host) do
-    if host in [MastodonApi.local_domain(), MastodonApi.api_host()],
+    if MastodonApi.client_host?(host),
       do: resolve_local(conn, handle),
       else: resolve_remote(conn, address)
   end

@@ -31,12 +31,16 @@ defmodule Vutuv.MastodonApi do
   call after it would come back 401. Both hosts answer the same routes
   instead.
   """
-  def client_host?(host) when is_binary(host) do
-    host = host |> String.downcase() |> String.trim_trailing(".")
-    host in [api_host(), local_domain(), "www." <> local_domain()]
-  end
+  def client_host?(host) when is_binary(host),
+    do: normalize_host(host) in [api_host(), local_domain(), "www." <> local_domain()]
 
   def client_host?(_host), do: false
+
+  # A host arrives however the client wrote it: shouted, with the trailing dot
+  # of a fully-qualified name. Every test against a host we own goes through
+  # here, so none of them can be the one that forgets.
+  defp normalize_host(host),
+    do: host |> to_string() |> String.downcase() |> String.trim_trailing(".")
 
   @doc """
   The origin a client should keep talking to, given the host it reached us on.
@@ -46,9 +50,7 @@ defmodule Vutuv.MastodonApi do
   the bearer token.
   """
   def client_url(host, path) do
-    if String.downcase(to_string(host)) == api_host(),
-      do: api_url(path),
-      else: main_url(path)
+    if normalize_host(host) == api_host(), do: api_url(path), else: main_url(path)
   end
 
   def compatibility_version do

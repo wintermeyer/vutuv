@@ -72,6 +72,26 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     assert found_organization["id"] == organization.id
   end
 
+  # `www.` is us. A member pastes whatever their browser or a share button handed
+  # them, and the apex and its `www.` alias are the same site — but the resolver
+  # compared the host against a two-entry list, so this address fell through to
+  # the *remote* branch and the installation WebFingered itself over the network
+  # instead of answering from its own tables.
+  test "search resolves an address on the www. alias as one of ours", %{conn: conn} do
+    user = insert(:activated_user)
+    token = mastodon_token(user, ["read"])
+
+    address = URI.encode_www_form("@#{user.username}@www.localhost")
+
+    %{"accounts" => [found]} =
+      conn
+      |> mastodon_conn(token)
+      |> get("/api/v2/search?q=#{address}")
+      |> json_response(200)
+
+    assert found["id"] == user.id
+  end
+
   test "a personal identity edits, replies to and engages with statuses", %{conn: conn} do
     user = insert(:activated_user)
     author = insert(:activated_user)
