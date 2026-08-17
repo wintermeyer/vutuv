@@ -62,11 +62,21 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   def block(conn, %{"id" => id}), do: relationship_action(conn, id, :block)
   def unblock(conn, %{"id" => id}), do: relationship_action(conn, id, :unblock)
 
-  def relationships(conn, params) do
-    ids = List.wrap(params["id"] || params["id[]"])
+  # Deduplicated and capped, because this is the one endpoint here that takes a
+  # list of ids and does per-id work: each one is a lookup plus a visibility
+  # check, and each surviving row then costs a handful of relationship queries.
+  # Left unbounded, a single request with a few hundred repeated ids is a
+  # thousand queries somebody else's phone pays for — and repeating one id is
+  # free to send and pointless to answer twice. The cap is the page size every
+  # other list here is bounded by, so a client that wants more asks again.
+  @max_relationships 40
 
+  def relationships(conn, params) do
     relationships =
-      ids
+      params["id"]
+      |> List.wrap()
+      |> Enum.uniq()
+      |> Enum.take(@max_relationships)
       |> Enum.map(&target(conn, &1))
       |> Enum.reject(&is_nil/1)
       |> Enum.map(&relationship(conn, &1))

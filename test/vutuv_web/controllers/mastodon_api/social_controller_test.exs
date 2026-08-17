@@ -72,6 +72,35 @@ defmodule VutuvWeb.MastodonApi.SocialControllerTest do
     assert found_organization["id"] == organization.id
   end
 
+  # The one endpoint here that takes a list of ids and does per-id work: a
+  # lookup, a visibility check and a handful of relationship queries each. Left
+  # unbounded, one request with a few hundred ids is a thousand queries
+  # somebody else's phone waits behind — and a repeated id is pointless to
+  # answer twice.
+  test "the relationships list is deduplicated and capped", %{conn: conn} do
+    reader = insert(:activated_user)
+    subject = insert(:activated_user)
+    token = mastodon_token(reader, ["read"])
+
+    repeated = Enum.map_join(1..10, "&", fn _n -> "id[]=#{subject.id}" end)
+
+    assert [_one] =
+             conn
+             |> mastodon_conn(token)
+             |> get("/api/v1/accounts/relationships?#{repeated}")
+             |> json_response(200)
+
+    many = Enum.map_join(1..45, "&", fn _n -> "id[]=#{insert(:activated_user).id}" end)
+
+    answered =
+      build_conn()
+      |> mastodon_conn(token)
+      |> get("/api/v1/accounts/relationships?#{many}")
+      |> json_response(200)
+
+    assert length(answered) == 40
+  end
+
   # `www.` is us. A member pastes whatever their browser or a share button handed
   # them, and the apex and its `www.` alias are the same site — but the resolver
   # compared the host against a two-entry list, so this address fell through to

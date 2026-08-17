@@ -27,12 +27,19 @@ defmodule Vutuv.MastodonApi.PushDispatcher do
   alias Vutuv.Repo
 
   @doc "Pushes `notification` to `user_id`'s registered devices, if any."
+  # **Nothing here touches the database on the caller's process.** `notify/2` is
+  # the notification chokepoint, so this runs inside whatever action produced
+  # the notification — often inside its transaction — and a member liking a post
+  # should not wait on two reads that only a push service will ever care about.
+  # The cheap decisions (is push configured at all, is this a kind Mastodon
+  # knows) are made here because they cost no query and skip the task entirely;
+  # everything that reads a row happens in the task.
   def dispatch(user_id, notification) when is_binary(user_id) do
     with true <- WebPush.configured?(),
-         type when is_binary(type) <- Notifications.type(notification[:kind]),
-         [_ | _] = subscriptions <- subscriptions_for(user_id, type) do
-      locale = preferred_locale(user_id)
-      Enum.each(subscriptions, &deliver(&1, type, notification, locale))
+         type when is_binary(type) <- Notifications.type(notification[:kind]) do
+      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
+        fan_out(user_id, type, notification)
+      end)
     end
 
     :ok
@@ -40,19 +47,34 @@ defmodule Vutuv.MastodonApi.PushDispatcher do
 
   def dispatch(_user_id, _notification), do: :ok
 
+  defp fan_out(user_id, type, notification) do
+    case subscriptions_for(user_id, type) do
+      [] -> :ok
+      rows -> Enum.each(rows, fn {sub, locale} -> deliver(sub, type, notification, locale) end)
+    end
+  end
+
   # Joined to the token rather than selected on `user_id` alone: revoking a
   # credential marks it `revoked_at` instead of deleting it, so the
   # subscription's cascade never fires and a device the member signed out of
   # would keep being pushed to. `Vutuv.ApiAuth` deletes the row as well; this is
   # the check that cannot be forgotten by a revocation path added later.
+  #
+  # The member's locale rides along instead of costing a second `Repo.get`: it
+  # is one value for one member, and the join that already has to happen can
+  # carry it.
   defp subscriptions_for(user_id, type) do
     from(s in PushSubscription,
       join: t in Token,
       on: t.id == s.api_token_id,
-      where: s.user_id == ^user_id and is_nil(t.revoked_at)
+      join: u in User,
+      on: u.id == s.user_id,
+      where: s.user_id == ^user_id and is_nil(t.revoked_at),
+      select: {s, u.locale}
     )
     |> Repo.all()
-    |> Enum.filter(&wants?(&1, type))
+    |> Enum.filter(fn {subscription, _locale} -> wants?(subscription, type) end)
+    |> Enum.map(fn {subscription, locale} -> {subscription, locale(locale)} end)
   end
 
   defp wants?(%PushSubscription{alerts: alerts}, type), do: Map.get(alerts, type, true) == true
@@ -64,12 +86,8 @@ defmodule Vutuv.MastodonApi.PushDispatcher do
   # cannot disagree about what language they think this person reads.
   @fallback_locale "en"
 
-  defp preferred_locale(user_id) do
-    case Repo.get(User, user_id) do
-      %User{locale: locale} when is_binary(locale) and locale != "" -> locale
-      _no_choice -> @fallback_locale
-    end
-  end
+  defp locale(value) when is_binary(value) and value != "", do: value
+  defp locale(_no_choice), do: @fallback_locale
 
   defp deliver(subscription, type, notification, locale) do
     # No content: the payload says what kind of thing happened and which
