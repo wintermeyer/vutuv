@@ -67,16 +67,57 @@ defmodule Scripts.BumpVersionTest do
     path
   end
 
-  defp run(dir, level \\ "patch") do
-    env = [{"PATH", Path.join(dir, "bin") <> ":" <> System.get_env("PATH")}]
+  # `claims` opts in to the shared register (the env seam the script reads
+  # instead of the git dir); without it the run must behave as if there were
+  # none, which is also what a checkout outside any repository gets.
+  defp run(dir, level \\ "patch", opts \\ []) do
+    env = [
+      {"PATH", Path.join(dir, "bin") <> ":" <> System.get_env("PATH")},
+      {"VUTUV_VERSION_CLAIMS_DIR", opts[:claims]}
+    ]
 
-    {out, status} =
-      System.cmd("elixir", [@script, level], cd: dir, env: env, stderr_to_stdout: true)
+    args = [@script, level] ++ List.wrap(opts[:note])
+
+    {out, status} = System.cmd("elixir", args, cd: dir, env: env, stderr_to_stdout: true)
 
     version =
       File.read!(Path.join(dir, "mix.exs")) |> then(&Regex.run(~r/"([\d.]+)"/, &1)) |> Enum.at(1)
 
     %{output: out, status: status, version: version}
+  end
+
+  defp claims_dir(dir) do
+    path = Path.join(dir, "claims")
+    File.mkdir_p!(path)
+    path
+  end
+
+  defp file_claim(dir, version, branch) do
+    File.write!(Path.join(claims_dir(dir), version), """
+    branch: #{branch}
+    note: irgendwas
+    at: 2026-08-17T09:00:00Z
+    """)
+  end
+
+  # A repository whose current branch has a name, so the script can recognise
+  # its own claims. `git init -b` names it without needing a commit.
+  defp init_repo(dir, branch) do
+    {_, 0} = System.cmd("git", ["init", "-q", "-b", branch], cd: dir)
+
+    {_, 0} =
+      System.cmd("git", ["commit", "-q", "--allow-empty", "-m", "x"], cd: dir, env: git_env())
+
+    :ok
+  end
+
+  defp git_env do
+    [
+      {"GIT_AUTHOR_NAME", "t"},
+      {"GIT_AUTHOR_EMAIL", "t@example.com"},
+      {"GIT_COMMITTER_NAME", "t"},
+      {"GIT_COMMITTER_EMAIL", "t@example.com"}
+    ]
   end
 
   test "bumps past the number an open PR already claims", %{dir: dir} do
@@ -155,5 +196,72 @@ defmodule Scripts.BumpVersionTest do
     assert result.status == 1
     assert result.version == "7.304.0"
     assert result.output =~ "unknown level"
+  end
+
+  # The shared register (a directory under the common `.git`, so every worktree
+  # of one checkout sees it and nothing in it can be committed) closes the gap
+  # GitHub cannot: the minutes between bumping and opening the PR.
+  describe "the local claims register" do
+    test "steps over a number another branch has filed", %{dir: dir} do
+      write_mix(dir, "7.304.0")
+      fake_gh(dir, %{})
+      file_claim(dir, "7.304.1", "somebody-else")
+
+      result = run(dir, "patch", claims: claims_dir(dir))
+
+      assert result.version == "7.304.2"
+      assert result.output =~ "somebody-else claims 7.304.1"
+    end
+
+    test "files its own claim, note and branch included", %{dir: dir} do
+      write_mix(dir, "7.304.0")
+      fake_gh(dir, %{})
+      init_repo(dir, "meine-arbeit")
+
+      result = run(dir, "patch", claims: claims_dir(dir), note: "Zwei Dinge geradegezogen")
+
+      assert result.version == "7.304.1"
+      body = File.read!(Path.join(claims_dir(dir), "7.304.1"))
+      assert body =~ "branch: meine-arbeit"
+      assert body =~ "note: Zwei Dinge geradegezogen"
+    end
+
+    # Otherwise every re-run after a rebase would walk the number up again.
+    test "its own branch's claim does not push the number along", %{dir: dir} do
+      write_mix(dir, "7.304.0")
+      fake_gh(dir, %{})
+      init_repo(dir, "meine-arbeit")
+      file_claim(dir, "7.304.1", "meine-arbeit")
+
+      result = run(dir, "patch", claims: claims_dir(dir))
+
+      assert result.version == "7.304.1"
+    end
+
+    # A claim the released version has reached is spent, and the register must
+    # forget it — otherwise it only ever grows and every bump jumps further.
+    test "a claim at or below the released number is dropped", %{dir: dir} do
+      write_mix(dir, "7.304.0")
+      fake_gh(dir, %{})
+      file_claim(dir, "7.303.9", "long-merged")
+
+      result = run(dir, "patch", claims: claims_dir(dir))
+
+      assert result.version == "7.304.1"
+      refute File.exists?(Path.join(claims_dir(dir), "7.303.9"))
+    end
+
+    test "`list` reports the register and changes nothing", %{dir: dir} do
+      write_mix(dir, "7.304.0")
+      fake_gh(dir, %{})
+      file_claim(dir, "7.305.0", "somebody-else")
+
+      result = run(dir, "list", claims: claims_dir(dir))
+
+      assert result.status == 0
+      assert result.version == "7.304.0"
+      assert result.output =~ "7.305.0"
+      assert result.output =~ "somebody-else"
+    end
   end
 end

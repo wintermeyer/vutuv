@@ -74,7 +74,8 @@ test suite, and the naive loop ingests its full output once per iteration:
 
    ```bash
    git fetch origin main
-   elixir scripts/bump_version.exs patch   # -> prints the new version
+   elixir scripts/bump_version.exs patch "kurz, woran du arbeitest"
+   elixir scripts/bump_version.exs list    # wer hält gerade welche Nummer
    ```
 
    Default `patch`; `minor` for a new backward-compatible user-facing feature;
@@ -87,8 +88,19 @@ test suite, and the naive loop ingests its full output once per iteration:
    not answer the question: an unmerged PR holds the next number for hours while
    main still looks free, and two branches that pick the same one get no merge
    conflict and no warning. It names each claim on stderr, and when `gh` cannot
-   answer it says so and bumps from `mix.exs` as before — so this is a backstop,
-   not a guarantee, and step 11's re-check before merging still stands.
+   answer it says so and bumps from `mix.exs` as before.
+
+   It then **files its own claim in a register the other sessions read**: one
+   file per version under the shared `.git` (so every worktree of this checkout
+   sees it, and nothing there can be committed or pushed). That covers what
+   GitHub cannot — the minutes between bumping and opening the PR, which is
+   exactly when the parallel sessions collide. The optional second argument is
+   the note the others see beside your number; `list` prints the register and
+   changes nothing. Claims expire by themselves (spent once `main` reaches
+   them, gone after a day).
+
+   Still a backstop, not a guarantee, so step 11's re-check before merging
+   stands.
 
 5. **Check the working tree** — `git status --short` and `git diff --stat` to see
    everything that changed (your work + any subagent fixes + the bump).
