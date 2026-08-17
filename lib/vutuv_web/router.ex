@@ -145,10 +145,257 @@ defmodule VutuvWeb.Router do
     plug(Plugs.ApiV2Auth)
   end
 
+  # The Mastodon-compatible phone-client adapter has its own host and header
+  # boundary. No cookie authenticates its JSON endpoints; OAuth consent stays
+  # on the main host and only the machine endpoints return here.
+  pipeline :mastodon_api do
+    plug(:accepts, ["json"])
+    plug(Plugs.MastodonApiGate)
+    plug(Plugs.ApiCors)
+  end
+
+  pipeline :mastodon_api_auth do
+    plug(Plugs.MastodonApiAuth)
+  end
+
   # The OAuth machine endpoints: form-encoded in (parsed at the endpoint),
   # JSON out, no session, no CSRF — RFC 6749's token/revocation endpoints.
   pipeline :oauth_token do
     plug(:accepts, ["json"])
+  end
+
+  # Existing Mastodon clients are pointed at this technical host. Keep this
+  # scope before every host-agnostic route: the final catch-all prevents the
+  # normal website from becoming available through the API origin.
+  scope "/", VutuvWeb, host: "mastodon." do
+    pipe_through(:mastodon_api)
+
+    get(
+      "/.well-known/oauth-authorization-server",
+      MastodonApi.DiscoveryController,
+      :oauth_metadata
+    )
+
+    get("/api/v1/instance", MastodonApi.DiscoveryController, :instance_v1)
+    # Public in Mastodon: a client asks for the emoji set before anybody signs
+    # in, so this must not sit behind a bearer token.
+    get("/api/v1/custom_emojis", MastodonApi.ListController, :custom_emojis)
+    get("/api/v2/instance", MastodonApi.DiscoveryController, :instance_v2)
+    post("/api/v1/apps", MastodonApi.AppController, :create)
+    get("/oauth/authorize", MastodonApi.OauthRedirectController, :authorize)
+    post("/oauth/token", OauthController, :token)
+    post("/oauth/revoke", OauthController, :revoke)
+  end
+
+  scope "/", VutuvWeb.MastodonApi, host: "mastodon." do
+    pipe_through([:mastodon_api, :mastodon_api_auth])
+
+    get("/api/v1/accounts/verify_credentials", AccountController, :verify_credentials,
+      assigns: %{mastodon_scope: "read:accounts"}
+    )
+
+    patch("/api/v1/accounts/update_credentials", ProfileController, :update_credentials,
+      assigns: %{mastodon_scope: "write:accounts"}
+    )
+
+    post("/api/v1/push/subscription", PushController, :create, assigns: %{mastodon_scope: "push"})
+
+    get("/api/v1/push/subscription", PushController, :show, assigns: %{mastodon_scope: "push"})
+    put("/api/v1/push/subscription", PushController, :update, assigns: %{mastodon_scope: "push"})
+
+    delete("/api/v1/push/subscription", PushController, :delete,
+      assigns: %{mastodon_scope: "push"}
+    )
+
+    post("/api/v1/reports", ProfileController, :create,
+      assigns: %{mastodon_scope: "write:reports"}
+    )
+
+    get("/api/v1/accounts/relationships", AccountController, :relationships,
+      assigns: %{mastodon_scope: "read:follows"}
+    )
+
+    get("/api/v1/accounts/:id", AccountController, :show,
+      assigns: %{mastodon_scope: "read:accounts"}
+    )
+
+    get("/api/v1/accounts/:id/statuses", AccountController, :statuses,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/accounts/:id/following", AccountController, :following,
+      assigns: %{mastodon_scope: "read:follows"}
+    )
+
+    post("/api/v1/accounts/:id/follow", AccountController, :follow,
+      assigns: %{mastodon_scope: "write:follows"}
+    )
+
+    post("/api/v1/accounts/:id/unfollow", AccountController, :unfollow,
+      assigns: %{mastodon_scope: "write:follows"}
+    )
+
+    post("/api/v1/accounts/:id/mute", AccountController, :mute,
+      assigns: %{mastodon_scope: "write:mutes"}
+    )
+
+    post("/api/v1/accounts/:id/unmute", AccountController, :unmute,
+      assigns: %{mastodon_scope: "write:mutes"}
+    )
+
+    post("/api/v1/accounts/:id/block", AccountController, :block,
+      assigns: %{mastodon_scope: "write:blocks"}
+    )
+
+    post("/api/v1/accounts/:id/unblock", AccountController, :unblock,
+      assigns: %{mastodon_scope: "write:blocks"}
+    )
+
+    get("/api/v1/accounts/:id/followers", ListController, :followers,
+      assigns: %{mastodon_scope: "read:follows"}
+    )
+
+    get("/api/v1/bookmarks", ListController, :bookmarks,
+      assigns: %{mastodon_scope: "read:bookmarks"}
+    )
+
+    get("/api/v1/favourites", ListController, :favourites,
+      assigns: %{mastodon_scope: "read:favourites"}
+    )
+
+    get("/api/v1/blocks", ListController, :blocks, assigns: %{mastodon_scope: "read:blocks"})
+    get("/api/v1/mutes", ListController, :mutes, assigns: %{mastodon_scope: "read:mutes"})
+
+    get("/api/v1/statuses/:id/favourited_by", ListController, :favourited_by,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/statuses/:id/reblogged_by", ListController, :reblogged_by,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v2/search", SearchController, :search, assigns: %{mastodon_scope: "read:search"})
+
+    get("/api/v1/preferences", CompatibilityController, :preferences,
+      assigns: %{mastodon_scope: "read:accounts"}
+    )
+
+    get("/api/v1/notifications", NotificationController, :index,
+      assigns: %{mastodon_scope: "read:notifications"}
+    )
+
+    get("/api/v1/notifications/unread_count", NotificationController, :unread_count,
+      assigns: %{mastodon_scope: "read:notifications"}
+    )
+
+    post("/api/v1/notifications/clear", NotificationController, :clear,
+      assigns: %{mastodon_scope: "write:notifications"}
+    )
+
+    post("/api/v1/notifications/:id/dismiss", NotificationController, :dismiss,
+      assigns: %{mastodon_scope: "write:notifications"}
+    )
+
+    get("/api/v1/notifications/:id", NotificationController, :show,
+      assigns: %{mastodon_scope: "read:notifications"}
+    )
+
+    get("/api/v1/conversations", CompatibilityController, :empty,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/lists", CompatibilityController, :empty,
+      assigns: %{mastodon_scope: "read:lists"}
+    )
+
+    get("/api/v1/followed_tags", CompatibilityController, :empty,
+      assigns: %{mastodon_scope: "read:follows"}
+    )
+
+    get("/api/v2/filters", CompatibilityController, :empty,
+      assigns: %{mastodon_scope: "read:filters"}
+    )
+
+    get("/api/v1/markers", CompatibilityController, :markers,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/timelines/home", TimelineController, :home,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/timelines/public", TimelineController, :public,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/timelines/tag/:hashtag", TimelineController, :tag,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/statuses/:id/context", StatusController, :context,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/statuses/:id/source", StatusController, :source,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    get("/api/v1/statuses/:id", StatusController, :show,
+      assigns: %{mastodon_scope: "read:statuses"}
+    )
+
+    # Upload first, then name the ids in `media_ids[]` on a status. v2 answers
+    # 202 while the AI image scan runs and the client polls the GET below; v1
+    # stays synchronous for clients that do not poll.
+    post("/api/v1/media", MediaController, :create, assigns: %{mastodon_scope: "write:media"})
+
+    post("/api/v2/media", MediaController, :create_async,
+      assigns: %{mastodon_scope: "write:media"}
+    )
+
+    get("/api/v1/media/:id", MediaController, :show, assigns: %{mastodon_scope: "write:media"})
+    put("/api/v1/media/:id", MediaController, :update, assigns: %{mastodon_scope: "write:media"})
+
+    post("/api/v1/statuses", StatusController, :create,
+      assigns: %{mastodon_scope: "write:statuses"}
+    )
+
+    put("/api/v1/statuses/:id", StatusController, :update,
+      assigns: %{mastodon_scope: "write:statuses"}
+    )
+
+    delete("/api/v1/statuses/:id", StatusController, :delete,
+      assigns: %{mastodon_scope: "write:statuses"}
+    )
+
+    post("/api/v1/statuses/:id/favourite", StatusController, :favourite,
+      assigns: %{mastodon_scope: "write:favourites"}
+    )
+
+    post("/api/v1/statuses/:id/unfavourite", StatusController, :unfavourite,
+      assigns: %{mastodon_scope: "write:favourites"}
+    )
+
+    post("/api/v1/statuses/:id/reblog", StatusController, :reblog,
+      assigns: %{mastodon_scope: "write:statuses"}
+    )
+
+    post("/api/v1/statuses/:id/unreblog", StatusController, :unreblog,
+      assigns: %{mastodon_scope: "write:statuses"}
+    )
+
+    post("/api/v1/statuses/:id/bookmark", StatusController, :bookmark,
+      assigns: %{mastodon_scope: "write:bookmarks"}
+    )
+
+    post("/api/v1/statuses/:id/unbookmark", StatusController, :unbookmark,
+      assigns: %{mastodon_scope: "write:bookmarks"}
+    )
+  end
+
+  scope "/", VutuvWeb.MastodonApi, host: "mastodon." do
+    pipe_through(:mastodon_api)
+    match(:*, "/*path", DiscoveryController, :not_found)
   end
 
   # Served from the app (not priv/static, which is gitignored) and with no

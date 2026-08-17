@@ -17,6 +17,9 @@ defmodule VutuvWeb.OauthController do
   use VutuvWeb, :controller
 
   alias Vutuv.ApiAuth.OAuth
+  alias Vutuv.MastodonApi.Access
+
+  @oob_redirect "urn:ietf:wg:oauth:2.0:oob"
 
   # ── Consent (browser pipeline) ──
 
@@ -24,7 +27,14 @@ defmodule VutuvWeb.OauthController do
     case OAuth.validate_authorize(params) do
       {:ok, request} ->
         if conn.assigns[:current_user] do
-          render(conn, "authorize.html", request: request, params: params)
+          identities = identities(conn.assigns.current_user, request)
+
+          render(conn, "authorize.html",
+            request: request,
+            params: params,
+            identities: identities,
+            consent_scopes: consent_scopes(request, identities)
+          )
         else
           conn
           |> put_session(:login_return_to, current_path(conn))
@@ -59,12 +69,25 @@ defmodule VutuvWeb.OauthController do
   end
 
   defp decide(conn, user, request, "allow") do
-    {:ok, code} = OAuth.approve(user, request)
-    redirect(conn, external: callback_url(request, code: code))
+    case OAuth.approve(user, request, conn.params["identity"]) do
+      {:ok, code} ->
+        if request.redirect_uri == @oob_redirect,
+          do: conn |> put_resp_header("cache-control", "no-store") |> text(code),
+          else: redirect(conn, external: callback_url(request, code: code))
+
+      {:error, _reason} ->
+        conn |> put_status(403) |> render("error.html", reason: :forbidden)
+    end
   end
 
   defp decide(conn, _user, request, _deny) do
-    redirect(conn, external: callback_url(request, error: "access_denied"))
+    if request.redirect_uri == @oob_redirect,
+      do:
+        conn
+        |> put_resp_header("cache-control", "no-store")
+        |> put_status(403)
+        |> text("access_denied"),
+      else: redirect(conn, external: callback_url(request, error: "access_denied"))
   end
 
   # The exact registered redirect URI plus our query params (state echoes
@@ -84,6 +107,14 @@ defmodule VutuvWeb.OauthController do
 
   defp maybe_put_state(query, nil), do: query
   defp maybe_put_state(query, state), do: Map.put(query, "state", state)
+
+  defp identities(user, %{app: %{protocol: "mastodon"}, scopes: scopes}),
+    do: Access.identities(user, scopes)
+
+  defp identities(user, request), do: [%{value: "person", subject: user, scopes: request.scopes}]
+
+  defp consent_scopes(_request, [%{scopes: scopes}]), do: scopes
+  defp consent_scopes(request, _identities), do: request.scopes
 
   # ── The token endpoints (machine pipeline, no session/CSRF) ──
 

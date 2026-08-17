@@ -32,9 +32,12 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.MastodonApi
+  alias Vutuv.Moderation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Social
@@ -50,7 +53,9 @@ defmodule VutuvWeb.OrganizationLive.Following do
      socket
      |> assign(:organization, organization)
      |> assign(:page_title, gettext("Follows – %{name}", name: organization.name))
-     |> assign(:address, "")
+     |> assign(:local_form, local_form())
+     |> assign(:local_follow_error, nil)
+     |> assign(:remote_form, remote_form())
      |> assign(:follow_error, nil)
      |> load_following()}
   end
@@ -59,7 +64,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
     organization = socket.assigns.organization
 
     socket
-    |> assign(:followees, Social.organization_followees(organization))
+    |> assign(:followees, Social.organization_followee_entries(organization))
     |> assign(:tags, Tags.organization_followed_tags(organization))
     |> assign(:federated?, Fediverse.federated?(organization))
     |> assign(:remote_follows, Fediverse.list_organization_remote_follows(organization))
@@ -67,47 +72,102 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
   @impl true
   def handle_event("unfollow", %{"id" => follow_id}, socket) do
-    organization = socket.assigns.organization
+    with_publisher(socket, fn organization ->
+      # Scoped to this page's own edges: `organization_followees/1` only ever
+      # hands out follow ids belonging to it, and the delete re-checks rather
+      # than trusting the id that came back from the client.
+      Social.unfollow_edge_as_organization(organization, follow_id)
 
-    # Scoped to this page's own edges: `organization_followees/1` only ever
-    # hands out follow ids belonging to it, and the delete re-checks rather
-    # than trusting the id that came back from the client.
-    Social.unfollow_edge_as_organization(organization, follow_id)
-
-    {:noreply, load_following(socket)}
+      {:noreply, load_following(socket)}
+    end)
   end
+
+  def handle_event("follow-local", %{"local_follow" => %{"account" => address}}, socket) do
+    with_publisher(socket, fn organization ->
+      case local_account(address) do
+        %Organization{id: id} when id == organization.id ->
+          {:noreply,
+           socket
+           |> assign(:local_form, local_form(address))
+           |> assign(:local_follow_error, :self)}
+
+        %User{} = account ->
+          follow_local(socket, organization, account)
+
+        %Organization{} = account ->
+          follow_local(socket, organization, account)
+
+        nil ->
+          {:noreply,
+           socket
+           |> assign(:local_form, local_form(address))
+           |> assign(:local_follow_error, :not_found)}
+      end
+    end)
+  end
+
+  def handle_event("typing-local", %{"local_follow" => %{"account" => address}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:local_form, local_form(address))
+     |> assign(:local_follow_error, nil)}
+  end
+
+  def handle_event("mute", %{"id" => follow_id}, socket),
+    do: set_local_mute(socket, follow_id, true)
+
+  def handle_event("unmute", %{"id" => follow_id}, socket),
+    do: set_local_mute(socket, follow_id, false)
 
   def handle_event("unfollow-tag", %{"id" => tag_id}, socket) do
-    Tags.unfollow_tag_as_organization(socket.assigns.organization, tag_id)
-    {:noreply, load_following(socket)}
+    with_publisher(socket, fn organization ->
+      Tags.unfollow_tag_as_organization(organization, tag_id)
+      {:noreply, load_following(socket)}
+    end)
   end
 
-  def handle_event("follow-remote", %{"address" => address}, socket) do
-    case Fediverse.follow_remote_as_organization(socket.assigns.organization, address) do
-      {:ok, _follow} ->
-        {:noreply,
-         socket
-         |> assign(:address, "")
-         |> assign(:follow_error, nil)
-         |> load_following()}
+  def handle_event("follow-remote", %{"remote_follow" => %{"address" => address}}, socket) do
+    with_publisher(socket, fn organization ->
+      case Fediverse.follow_remote_as_organization(organization, address) do
+        {:ok, _follow} ->
+          {:noreply,
+           socket
+           |> assign(:remote_form, remote_form())
+           |> assign(:follow_error, nil)
+           |> load_following()}
 
-      {:error, reason} ->
-        # The address stays in the box: a refusal usually means a typo, and
-        # emptying it would make the reader retype what they just wrote.
-        {:noreply, socket |> assign(:address, address) |> assign(:follow_error, reason)}
-    end
+        {:error, reason} ->
+          # The address stays in the box: a refusal usually means a typo, and
+          # emptying it would make the reader retype what they just wrote.
+          {:noreply,
+           socket
+           |> assign(:remote_form, remote_form(address))
+           |> assign(:follow_error, reason)}
+      end
+    end)
   end
 
   # Typing again clears the last refusal, so the box is not still shouting about
   # an address that has since been corrected.
-  def handle_event("typing", %{"address" => address}, socket) do
-    {:noreply, socket |> assign(:address, address) |> assign(:follow_error, nil)}
+  def handle_event("typing", %{"remote_follow" => %{"address" => address}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:remote_form, remote_form(address))
+     |> assign(:follow_error, nil)}
   end
 
   def handle_event("unfollow-remote", %{"id" => id}, socket) do
-    Fediverse.unfollow_remote_as_organization(socket.assigns.organization, id)
-    {:noreply, load_following(socket)}
+    with_publisher(socket, fn organization ->
+      Fediverse.unfollow_remote_as_organization(organization, id)
+      {:noreply, load_following(socket)}
+    end)
   end
+
+  def handle_event("mute-remote", %{"id" => id}, socket),
+    do: set_remote_mute(socket, id, true)
+
+  def handle_event("unmute-remote", %{"id" => id}, socket),
+    do: set_remote_mute(socket, id, false)
 
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
@@ -119,6 +179,87 @@ defmodule VutuvWeb.OrganizationLive.Following do
     do: Organizations.canonical_path(organization)
 
   defp followee_path(%User{username: username}), do: "/#{username}"
+
+  defp follow_local(socket, organization, account) do
+    case Social.follow_as_organization(organization, account) do
+      {:ok, _follow} ->
+        {:noreply,
+         socket
+         |> assign(:local_form, local_form())
+         |> assign(:local_follow_error, nil)
+         |> load_following()}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, :local_follow_error, :not_found)}
+    end
+  end
+
+  defp local_account(address) do
+    case local_handle(address) do
+      {:ok, handle} ->
+        account =
+          Accounts.get_user_by_username(handle) ||
+            Organizations.get_organization_by_username(handle) ||
+            Organizations.get_organization_by_slug(handle)
+
+        visible_local_account(account)
+
+      _not_local ->
+        nil
+    end
+  end
+
+  defp local_handle(address) do
+    case address |> String.trim() |> String.trim_leading("@") |> String.split("@", parts: 2) do
+      [handle] when handle != "" ->
+        {:ok, String.downcase(handle)}
+
+      [handle, host] when handle != "" ->
+        if String.downcase(host) in [MastodonApi.local_domain(), MastodonApi.api_host()],
+          do: {:ok, String.downcase(handle)},
+          else: :remote
+
+      _invalid ->
+        :invalid
+    end
+  end
+
+  defp visible_local_account(%User{} = user) do
+    if Moderation.profile_visible_to?(user, nil), do: user
+  end
+
+  defp visible_local_account(%Organization{} = organization) do
+    if Organizations.public_visible?(organization), do: organization
+  end
+
+  defp visible_local_account(nil), do: nil
+
+  defp set_local_mute(socket, follow_id, muted?) do
+    with_publisher(socket, fn organization ->
+      _ = Social.set_follow_edge_mute_as_organization(organization, follow_id, muted?)
+      {:noreply, load_following(socket)}
+    end)
+  end
+
+  defp set_remote_mute(socket, account_id, muted?) do
+    with_publisher(socket, fn organization ->
+      :ok = Fediverse.set_organization_remote_follow_mute(organization, account_id, muted?)
+      {:noreply, load_following(socket)}
+    end)
+  end
+
+  defp with_publisher(socket, fun) do
+    organization = socket.assigns.organization
+
+    if Organizations.publisher?(organization, socket.assigns.current_user) do
+      fun.(organization)
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, gettext("You are not allowed to change this organization."))
+       |> push_navigate(to: "/organizations/#{organization.slug}/activity")}
+    end
+  end
 
   # `follow_remote_as_organization/2` speaks the same refusal vocabulary as the
   # member path, so each one gets a sentence rather than an atom on screen.
@@ -139,6 +280,16 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
   defp follow_error_message(_other), do: gettext("That did not work.")
 
+  defp local_follow_error_message(:self), do: gettext("An organization cannot follow itself.")
+
+  defp local_follow_error_message(:not_found),
+    do: gettext("No visible local account has that handle.")
+
+  defp local_follow_error_message(_other), do: gettext("That did not work.")
+
+  defp local_form(value \\ ""), do: to_form(%{"account" => value}, as: :local_follow)
+  defp remote_form(value \\ ""), do: to_form(%{"address" => value}, as: :remote_follow)
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -154,7 +305,36 @@ defmodule VutuvWeb.OrganizationLive.Following do
         {gettext("The members, organizations and topics this page follows. Everything here shapes its feed, and only the team can see this list.")}
       </p>
 
-      <.card class="mt-6" id="organization-followees">
+      <.card class="mt-6" id="organization-follow-local">
+        <.section_title>{gettext("Follow a local account")}</.section_title>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          {gettext("Enter a member handle or organization handle. This follow belongs to the organization, not to your personal account.")}
+        </p>
+        <.form
+          for={@local_form}
+          id="organization-follow-local-form"
+          phx-submit="follow-local"
+          phx-change="typing-local"
+          class="mt-3 flex flex-wrap gap-2"
+        >
+          <input
+            type="text"
+            id={@local_form[:account].id}
+            name={@local_form[:account].name}
+            value={@local_form[:account].value}
+            placeholder="@name"
+            autocomplete="off"
+            class={[input_class(), "min-w-0 flex-1"]}
+            aria-label={gettext("Local account")}
+          />
+          <.button type="submit">{gettext("Follow")}</.button>
+        </.form>
+        <p :if={@local_follow_error} class="editform__error mt-2" role="alert">
+          {local_follow_error_message(@local_follow_error)}
+        </p>
+      </.card>
+
+      <.card class="mt-4" id="organization-followees">
         <.section_title>{gettext("Members and organizations")}</.section_title>
 
         <p :if={@followees == []} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
@@ -162,7 +342,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
         </p>
 
         <ul :if={@followees != []} class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
-          <li :for={{follow_id, followee} <- @followees} class="flex items-center gap-4 py-4">
+          <li :for={{follow, followee} <- @followees} class="flex items-center gap-4 py-4">
             <.link navigate={followee_path(followee)} class="shrink-0">
               <.organization_logo
                 :if={match?(%Organization{}, followee)}
@@ -186,14 +366,22 @@ defmodule VutuvWeb.OrganizationLive.Following do
               />
             </div>
 
-            <.button
-              variant="secondary"
-              phx-click="unfollow"
-              phx-value-id={follow_id}
-              class="shrink-0"
-            >
-              {gettext("Unfollow")}
-            </.button>
+            <div class="flex shrink-0 gap-2">
+              <.button
+                variant="secondary"
+                phx-click={if follow.muted, do: "unmute", else: "mute"}
+                phx-value-id={follow.id}
+              >
+                {if follow.muted, do: gettext("Unmute"), else: gettext("Mute")}
+              </.button>
+              <.button
+                variant="secondary"
+                phx-click="unfollow"
+                phx-value-id={follow.id}
+              >
+                {gettext("Unfollow")}
+              </.button>
+            </div>
           </li>
         </ul>
       </.card>
@@ -203,18 +391,25 @@ defmodule VutuvWeb.OrganizationLive.Following do
       <.card :if={@federated?} class="mt-4" id="organization-remote-follows">
         <.section_title>{gettext("Accounts on other networks")}</.section_title>
 
-        <form phx-submit="follow-remote" phx-change="typing" class="mt-3 flex flex-wrap gap-2">
+        <.form
+          for={@remote_form}
+          id="organization-follow-remote-form"
+          phx-submit="follow-remote"
+          phx-change="typing"
+          class="mt-3 flex flex-wrap gap-2"
+        >
           <input
             type="text"
-            name="address"
-            value={@address}
+            id={@remote_form[:address].id}
+            name={@remote_form[:address].name}
+            value={@remote_form[:address].value}
             placeholder="@name@server.example"
             autocomplete="off"
             class={[input_class(), "min-w-0 flex-1"]}
             aria-label={gettext("Fediverse address")}
           />
           <.button type="submit">{gettext("Follow")}</.button>
-        </form>
+        </.form>
 
         <p :if={@follow_error} class="editform__error mt-2" role="alert">
           {follow_error_message(@follow_error)}
@@ -246,14 +441,22 @@ defmodule VutuvWeb.OrganizationLive.Following do
               {gettext("Requested")}
             </span>
 
-            <.button
-              variant="secondary"
-              phx-click="unfollow-remote"
-              phx-value-id={follow.id}
-              class="shrink-0"
-            >
-              {gettext("Unfollow")}
-            </.button>
+            <div class="flex shrink-0 gap-2">
+              <.button
+                variant="secondary"
+                phx-click={if follow.muted, do: "unmute-remote", else: "mute-remote"}
+                phx-value-id={follow.remote_account.id}
+              >
+                {if follow.muted, do: gettext("Unmute"), else: gettext("Mute")}
+              </.button>
+              <.button
+                variant="secondary"
+                phx-click="unfollow-remote"
+                phx-value-id={follow.id}
+              >
+                {gettext("Unfollow")}
+              </.button>
+            </div>
           </li>
         </ul>
       </.card>

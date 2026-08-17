@@ -60,6 +60,24 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
     {:noreply, assign_state(socket, organization)}
   end
 
+  # Owner-only, like federating itself and unlike the Redaktion's own powers:
+  # this decides whether the page is reachable through a phone client at all,
+  # which is an administrative question about the page rather than part of
+  # speaking for it. Re-asked here rather than trusted from the mount assign.
+  def handle_event("toggle-mastodon", _params, socket) do
+    organization = socket.assigns.organization
+
+    if Organizations.owner?(organization, socket.assigns.current_user) do
+      {:ok, organization} =
+        Organizations.set_mastodon_clients(organization, !organization.mastodon_clients?)
+
+      {:noreply, assign_state(socket, organization)}
+    else
+      {:noreply,
+       put_flash(socket, :error, gettext("You are not allowed to change this organization."))}
+    end
+  end
+
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
 
@@ -85,6 +103,20 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
           "People who have no vutuv account can follow this page and read its posts, in networks like Mastodon."
         )}
       </p>
+
+      <.card class="mt-6" id="mastodon-client-access">
+        <.section_title>{gettext("Mastodon-compatible apps")}</.section_title>
+        <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">
+          {gettext(
+            "The page's Editorial team can use this organization as a separate identity in a compatible phone app, with the same rights they already have here. Those rights are checked again on every request."
+          )}
+        </p>
+        <.button class="mt-3" phx-click="toggle-mastodon" variant="secondary">
+          {if @organization.mastodon_clients?,
+            do: gettext("Disable app access"),
+            else: gettext("Enable app access")}
+        </.button>
+      </.card>
 
       <.card :if={!@enabled?} class="mt-6">
         <p class="text-sm text-slate-700 dark:text-slate-300">

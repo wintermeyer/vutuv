@@ -222,6 +222,7 @@ defmodule VutuvWeb.AccountEventText do
   def field_label("noai?"), do: gettext("AI agents")
   def field_label("show_online_status?"), do: gettext("Online status")
   def field_label("show_mastodon_feed?"), do: gettext("Mastodon posts")
+  def field_label("mastodon_clients?"), do: gettext("Mastodon-compatible apps")
   def field_label("show_code_stats?"), do: gettext("Code statistics")
   def field_label("notification_emails?"), do: gettext("Notification emails")
   def field_label("newsletter_emails?"), do: gettext("Newsletter")

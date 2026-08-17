@@ -79,10 +79,14 @@ defmodule VutuvWeb.Admin.ApiAppLive do
               <tr :for={app <- @apps} id={"api-app-#{app.id}"}>
                 <td>{app.name}</td>
                 <td>
-                  <.link href={~p"/#{app.user}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
-                    @{app.user.username}
-                  </.link>
-                  <span class="text-slate-600 dark:text-slate-400">({full_name(app.user)})</span>
+                  <%= if app.user do %>
+                    <.link href={~p"/#{app.user}"} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+                      @{app.user.username}
+                    </.link>
+                    <span class="text-slate-600 dark:text-slate-400">({full_name(app.user)})</span>
+                  <% else %>
+                    <span class="text-slate-600 dark:text-slate-400">—</span>
+                  <% end %>
                 </td>
                 <td>
                   <.local_time at={app.inserted_at} id={"api-app-time-#{app.id}"} format="%Y-%m-%d" />

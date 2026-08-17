@@ -23,6 +23,13 @@ defmodule VutuvWeb.Endpoint do
     websocket: [connect_info: [session: @session_options], max_frame_size: 1_000_000]
   )
 
+  # Mastodon's streaming API. Mounted on the shared endpoint because a socket
+  # cannot be host-scoped here; the handler checks the API host itself, so this
+  # path stays inert on the main origin.
+  socket("/api/v1/streaming", VutuvWeb.MastodonApi.StreamingSocket,
+    websocket: [connect_info: [:x_headers, :uri], max_frame_size: 64_000]
+  )
+
   # In dev, serve static assets with `cache-control: no-cache` so the browser
   # always revalidates against the ETag after a Tailwind rebuild (a 304 when the
   # file is unchanged, a fresh 200 when it changed) instead of heuristically

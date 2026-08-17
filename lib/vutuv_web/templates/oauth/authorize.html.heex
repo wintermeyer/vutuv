@@ -10,7 +10,7 @@
     </p>
 
     <ul class="mt-4 space-y-2">
-      <%= for scope <- @request.scopes do %>
+      <%= for scope <- @consent_scopes do %>
         <li class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
           <span class="mt-0.5 text-brand-600">✓</span>
           <span>
@@ -36,12 +36,44 @@
         <input :if={@params[key]} type="hidden" name={key} value={@params[key]} />
       <% end %>
 
+      <div :if={length(@identities) > 1} class="mb-5">
+        <label for="oauth-identity" class="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+          {gettext("Use this identity")}
+        </label>
+        <select
+          id="oauth-identity"
+          name="identity"
+          class={[
+            "mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm",
+            "dark:border-slate-700 dark:bg-slate-900"
+          ]}
+        >
+          <option :for={identity <- @identities} value={identity.value}>
+            {Vutuv.MastodonApi.Presenter.identity_name(identity.subject)}
+            <%= if @request.app.protocol == "mastodon" do %>
+              · {Enum.join(identity.scopes, " ")}
+            <% end %>
+          </option>
+        </select>
+      </div>
+      <input
+        :if={length(@identities) == 1}
+        type="hidden"
+        name="identity"
+        value={hd(@identities).value}
+      />
+
+      <p :if={@identities == []} class="mb-5 text-sm text-red-700 dark:text-red-300">
+        {gettext("Mastodon client access is disabled for every identity available to you.")}
+      </p>
+
       <div class="flex gap-3">
         <button
           type="submit"
           name="decision"
           value="allow"
           id="oauth-allow"
+          disabled={@identities == []}
           class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         >
           {gettext("Allow access")}
