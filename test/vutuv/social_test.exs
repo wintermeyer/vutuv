@@ -73,6 +73,46 @@ defmodule Vutuv.SocialTest do
     end
   end
 
+  describe "follow_many/2" do
+    test "follows every member it was given and says how many that was" do
+      follower = insert(:user)
+      a = insert(:user)
+      b = insert(:user)
+
+      assert Social.follow_many(follower, [a.id, b.id]) == 2
+      assert Social.user_follows_user?(follower.id, a.id)
+      assert Social.user_follows_user?(follower.id, b.id)
+    end
+
+    test "an id the member already follows is not counted again" do
+      follower = insert(:user)
+      already = insert(:user)
+      fresh = insert(:user)
+      {:ok, _} = Social.follow(follower, already.id)
+
+      assert Social.follow_many(follower, [already.id, fresh.id]) == 1
+    end
+
+    test "a repeated id in the same batch is followed once" do
+      follower = insert(:user)
+      target = insert(:user)
+
+      assert Social.follow_many(follower, [target.id, target.id]) == 1
+    end
+
+    test "one impossible id does not take the rest of the batch down" do
+      follower = insert(:user)
+      target = insert(:user)
+
+      assert Social.follow_many(follower, ["not-a-uuid", follower.id, target.id]) == 1
+      assert Social.user_follows_user?(follower.id, target.id)
+    end
+
+    test "nothing to follow is not an error" do
+      assert Social.follow_many(insert(:user), []) == 0
+    end
+  end
+
   describe "unfollow!/2" do
     test "is idempotent: a second unfollow (edge already gone) is a no-op, not a crash" do
       follower = insert(:user)

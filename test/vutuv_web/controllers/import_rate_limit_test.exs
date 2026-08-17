@@ -8,17 +8,30 @@ defmodule VutuvWeb.ImportRateLimitTest do
 
   setup do
     Vutuv.RateLimiter.reset()
-    prev_rate_limit = Application.get_env(:vutuv, :rate_limit)
-    prev_import = Application.get_env(:vutuv, :linkedin_import_rate_limit)
-    Application.put_env(:vutuv, :rate_limit, enabled: true)
-    Application.put_env(:vutuv, :linkedin_import_rate_limit, {2, 60_000})
-
-    on_exit(fn ->
-      Application.put_env(:vutuv, :rate_limit, prev_rate_limit)
-      Application.put_env(:vutuv, :linkedin_import_rate_limit, prev_import)
-    end)
+    put_config(:rate_limit, enabled: true)
+    put_config(:linkedin_import_rate_limit, {2, 60_000})
 
     :ok
+  end
+
+  # `:linkedin_import_rate_limit` is normally ABSENT, and `Application.get_env/2`
+  # answers nil for absent and for nil alike — so the obvious
+  # `put_env(key, get_env(key))` restore wrote nil back as a real value and
+  # poisoned the key for every later test in the run. The next reader then did
+  # not get the function's default, it got nil, which crashed the contact
+  # finder's upload with a MatchError (11 tests, in a file that has nothing to
+  # do with rate limits). Capture with fetch_env/2 and restore the two cases
+  # apart.
+  defp put_config(key, value) do
+    original = Application.fetch_env(:vutuv, key)
+    Application.put_env(:vutuv, key, value)
+
+    on_exit(fn ->
+      case original do
+        {:ok, was} -> Application.put_env(:vutuv, key, was)
+        :error -> Application.delete_env(:vutuv, key)
+      end
+    end)
   end
 
   defp upload_zip do

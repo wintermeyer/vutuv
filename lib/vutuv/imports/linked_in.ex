@@ -15,9 +15,12 @@ defmodule Vutuv.Imports.LinkedIn do
   transaction, reusing the existing schema changesets and skipping anything the
   member already has (so a re-import never doubles a row).
 
-  Deliberately out of scope: `Connections.csv` (not profile data) and email
-  addresses (PIN-verified identities in vutuv — surfaced read-only in the
-  preview, never auto-created).
+  `Connections.csv` is deliberately absent from all of that: it is not profile
+  data, and nothing in it is ever written to a profile. It has its own pure
+  entry point instead, `parse_connections/2` (issue #1476), which reduces each
+  contact to the two identifiers a vutuv member can be recognised by. Email
+  addresses are out of scope too: they are PIN-verified identities here, so the
+  preview shows them read-only and never auto-creates one.
   """
 
   import Ecto.Query
@@ -33,6 +36,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
+  alias Vutuv.Search
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
@@ -102,15 +106,43 @@ defmodule Vutuv.Imports.LinkedIn do
     end
   end
 
+  @doc """
+  The `Connections.csv` half of the same archive (issue #1476): the member's
+  first-degree LinkedIn contacts, reduced on the spot to the only two things a
+  match can be made on — `%{email: …, linkedin: …}`, either of which may be nil.
+
+  Names, employers, positions and connection dates are **dropped here**, in the
+  parser, so nothing downstream can hold them by accident: this is a lookup of
+  people who are already on vutuv, not an address book we take a copy of.
+
+  Same archive, same caps, same pure-function contract as `parse/2` — and the
+  same errors.
+  """
+  def parse_connections(zip_binary, opts \\ []) when is_binary(zip_binary) do
+    with {:ok, files} <- inflate_archive(zip_binary, opts), do: {:ok, connections(files)}
+  end
+
+  @doc "Like `parse_connections/2`, but from the uploaded temp file."
+  def parse_connections_file(path, opts \\ []) when is_binary(path) do
+    case File.read(path) do
+      {:ok, bytes} -> parse_connections(bytes, opts)
+      {:error, _} -> {:error, :invalid_archive}
+    end
+  end
+
   defp do_parse(bytes, opts) when is_binary(bytes) do
+    with {:ok, files} <- inflate_archive(bytes, opts), do: {:ok, build(files)}
+  end
+
+  # Unzip under the safety caps: the shared front half of both parses.
+  defp inflate_archive(bytes, opts) when is_binary(bytes) do
     caps = caps(opts)
 
     with {:ok, entries} <- central_directory(bytes),
          {:ok, kept} <- select_entries(entries, caps),
          {:ok, located} <- locate_entries(bytes, kept),
-         :ok <- reject_overlaps(located),
-         {:ok, files} <- inflate_entries(bytes, caps, located) do
-      {:ok, build(files)}
+         :ok <- reject_overlaps(located) do
+      inflate_entries(bytes, caps, located)
     end
   end
 
@@ -521,6 +553,99 @@ defmodule Vutuv.Imports.LinkedIn do
   end
 
   defp subset?(keys, set), do: Enum.all?(keys, &MapSet.member?(set, &1))
+
+  # ── Connections.csv → the two identifiers a match can rest on (issue #1476) ──
+
+  # LinkedIn's own limit on first-degree connections is 30,000, so this bounds a
+  # real export generously while keeping a crafted CSV from asking the database
+  # about an unbounded address list in one upload.
+  @max_connections 30_000
+
+  # Connections.csv opens with a "Notes:" paragraph and a blank line ABOVE the
+  # header row — the one export file that does — so the header is looked for in
+  # the first few rows rather than assumed to be the first. Kept small: a file
+  # that has not named its columns by then is not this file.
+  @preamble_rows 10
+
+  # The signature is checked on the *row*, not the filename, like every other
+  # classification here: LinkedIn localizes filenames but not the header row,
+  # and "Connected On" appears in no other export file.
+  @connections_headers ["First Name", "Connected On"]
+
+  defp connections(files) do
+    files
+    |> Enum.flat_map(&connection_rows/1)
+    |> Enum.take(@max_connections)
+    |> Enum.map(&contact/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp connection_rows({_name, content}) do
+    case connections_header(parse_csv(content)) do
+      {headers, data} -> Enum.map(data, &row_map(headers, &1))
+      nil -> []
+    end
+  end
+
+  defp connections_header(rows) do
+    rows
+    |> Enum.take(@preamble_rows)
+    |> Enum.find_index(&connections_header_row?/1)
+    |> case do
+      nil -> nil
+      index -> {Enum.at(rows, index), Enum.drop(rows, index + 1)}
+    end
+  end
+
+  defp connections_header_row?(row) do
+    set = row |> Enum.map(&String.trim/1) |> MapSet.new()
+    subset?(@connections_headers, set)
+  end
+
+  # Everything else in the row — name, employer, position, connected-on — is
+  # dropped right here (see parse_connections/2). A row that carries neither
+  # identifier can never match, so it is not kept as an empty shell either.
+  defp contact(row) do
+    case {contact_email(row["Email Address"]), linkedin_id(row["URL"])} do
+      {nil, nil} -> nil
+      {email, linkedin} -> %{email: email, linkedin: linkedin}
+    end
+  end
+
+  defp contact_email(value) when is_binary(value) do
+    normalized = value |> String.trim() |> String.downcase()
+
+    if Search.email?(normalized) and String.length(normalized) <= 254,
+      do: normalized,
+      else: nil
+  end
+
+  defp contact_email(_value), do: nil
+
+  # A public LinkedIn profile address in every spelling an export, a browser or
+  # a share button produces: with or without scheme, with or without `www.` or a
+  # country subdomain, with a trailing slash, a `?trk=` tracking parameter or a
+  # fragment. What identifies the profile is the segment after `/in/`.
+  @linkedin_profile ~r{^(?:https?://)?(?:[a-z0-9-]+\.)*linkedin\.com/in/([^/?#]+)}i
+
+  defp linkedin_id(value) when is_binary(value) do
+    case Regex.run(@linkedin_profile, String.trim(value)) do
+      [_match, id] -> id |> decode_segment() |> String.downcase() |> blank_nil()
+      _ -> nil
+    end
+  end
+
+  defp linkedin_id(_value), do: nil
+
+  # A percent-encoded segment (LinkedIn writes them for non-ASCII handles) has
+  # to be decoded before it can equal a stored handle; a malformed one is not a
+  # handle at all, and URI.decode/1 raises on it.
+  defp decode_segment(segment) do
+    URI.decode(segment)
+  rescue
+    ArgumentError -> segment
+  end
 
   # ── Profile.csv → name/headline scalars + Websites/Twitter candidates ──
 

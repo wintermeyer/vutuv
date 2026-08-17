@@ -1,8 +1,8 @@
 # Settings & account
 
 How members manage their own account: the settings hub, onboarding, username
-changes, the LinkedIn import and the GDPR data export. Login and sessions are
-covered in [authentication.md](authentication.md).
+changes, the LinkedIn import and contact finder, and the GDPR data export. Login
+and sessions are covered in [authentication.md](authentication.md).
 
 ## Settings hub (user-agnostic `/settings` URLs)
 
@@ -398,8 +398,9 @@ signature, since LinkedIn localizes the names), tolerates a UTF-8 BOM and CRLF,
 and maps Positions → work experiences, Volunteering → work experiences with
 the volunteer category (issue #840), Education → the new education section,
 Skills → tags, and the profile's Websites / Twitter handles → links / social
-accounts; `Connections.csv` is skipped and email addresses are shown read-only
-(never auto-created, since each is PIN-verified).
+accounts; `Connections.csv` is skipped here (it has its own page — see below)
+and email addresses are shown read-only (never auto-created, since each is
+PIN-verified).
 
 It is **preview-and-confirm**: the member sees everything found, entries already
 on their profile are pre-unchecked, each section has a **select-all /
@@ -415,6 +416,58 @@ signature (per-entry / total-uncompressed / entry-count caps, and
 unrecognized/huge members are never inflated), imports are rate-limited per
 member, the CSVs are only ever decompressed into memory (never written to disk),
 and the uploaded temp file is deleted as soon as it is read.
+
+## Find your LinkedIn contacts
+
+The other half of the same archive, on its own page
+(`/settings/import/linkedin/connections`, `VutuvWeb.ImportConnectionsLive`,
+issue #1476): which of a member's LinkedIn contacts are **already vutuv
+members**, so they can follow them. The profile import fills your profile, this
+fills your feed; each is worth doing without the other, so it is a page with its
+own upload rather than a step in that wizard, and the two link to each other.
+
+`Vutuv.Imports.LinkedIn.parse_connections/2` reads `Connections.csv` (the one
+export file with a `Notes:` preamble above its header row) and reduces every
+contact **in the parser** to the only two identifiers a match can rest on:
+`%{email: …, linkedin: …}`. Names, employers, positions and connection dates
+never leave that function.
+
+`Vutuv.Imports.ConnectionMatch.find/2` resolves them, on **exact identifiers
+only**:
+
+| Evidence | Matches against |
+| --- | --- |
+| `:email` | a **public** email address of a confirmed, non-hidden member |
+| `:linkedin` | the LinkedIn account a member links from their profile (`lower(value)`) |
+
+There is deliberately no name / employer / position matching. A guess in a
+"people you already know" list is not neutral — acting on it means following the
+wrong person, publicly — and the LinkedIn side of the issue's proposal is
+narrower than it looks in any case: about 4 % of members link a LinkedIn
+profile, against about half who publish an address.
+
+**Only public addresses**, the same line `Vutuv.Search.search_by_email/1` holds:
+a private address must not even confirm that an account exists, and this asks
+the same question in bulk from a file the member wrote. So a match only ever
+reveals what the matched member's own profile already shows. It halves the
+reach, and that is the trade.
+
+Nothing is stored: the archive is read into memory and dropped, the match list
+lives in the socket and dies with the page (a reconnect means uploading again —
+the follows already made are ordinary follows and stay). Nothing is imported,
+nobody is invited, no email is sent, and no placeholder profile is created.
+
+The list is built for the size an intranet installation produces, where everyone
+in the archive is a member: search by name, a `not following yet / following /
+all` filter, 50 per page, and select-all over the **whole filtered set** rather
+than the visible page. Nothing is preselected — uploading a file must never be
+the act that follows 800 people — and **Follow selected** runs through
+`Vutuv.Social.follow_many/2`, so each one is a normal follow with its normal
+notification. One press is capped at 500, and the button says the number.
+
+It shares the profile import's rate-limit budget (one archive between the two
+pages), keyed on the member alone since a LiveView has no conn to read a client
+address from.
 
 ## Data export (GDPR)
 

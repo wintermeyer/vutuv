@@ -98,6 +98,42 @@ defmodule Vutuv.Social do
   end
 
   @doc """
+  Follow several members in one act (the LinkedIn contact finder, issue #1476),
+  and answer with how many follows that really created.
+
+  Edges the member already has are skipped **before** the insert rather than
+  left to the unique index: it is the cheap half, and it keeps the count
+  honest — running the same list twice must report "nothing new", not the same
+  number again. Every follow still goes through `follow/2`, so each one is a
+  normal follow with its normal notification; a batch is a shortcut for the
+  clicks, never a quieter kind of follow.
+
+  Ids that cannot be followed at all (a bad id, the member themselves, a block)
+  are skipped one by one, so one impossible entry cannot take the batch with it.
+  The cast happens **before** the already-following lookup, not only inside
+  `follow/2`: these ids come off checkboxes, and one unparseable string in the
+  list makes `follow_edges/2` raise `Ecto.Query.CastError` on the whole batch.
+  """
+  def follow_many(%User{} = follower, followee_ids) when is_list(followee_ids) do
+    ids =
+      followee_ids
+      |> Enum.map(&Vutuv.UUIDv7.cast_or_nil/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    existing = follow_edges(follower.id, ids)
+
+    ids
+    |> Enum.reject(&Map.has_key?(existing, &1))
+    |> Enum.reduce(0, fn id, followed ->
+      case follow(follower, id) do
+        {:ok, _follow} -> followed + 1
+        _error -> followed
+      end
+    end)
+  end
+
+  @doc """
   Follow an organization page (issue #1336), so its posts land in `follower`'s
   feed. Idempotent: following twice returns the edge that already exists rather
   than an error, because the control is a toggle and a double click must not

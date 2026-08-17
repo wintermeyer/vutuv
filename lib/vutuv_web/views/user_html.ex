@@ -187,6 +187,11 @@ defmodule VutuvWeb.UserHTML do
   call sites are mutually exclusive, so the DOM id stays unique.
   """
   attr(:promoted, :boolean, default: false)
+  # The owner gets one extra line under the suggestions: the LinkedIn contact
+  # finder (issue #1476). This is the card a member reads when they are looking
+  # for people to follow, so it is where "and the ones you already know" belongs
+  # — the settings list alone would never be found from here.
+  attr(:owner?, :boolean, default: false)
   attr(:recommended_users, :list, required: true)
   attr(:current_user, :any, required: true)
   attr(:current_user_id, :any, required: true)
@@ -221,6 +226,17 @@ defmodule VutuvWeb.UserHTML do
           live?
         />
       </ul>
+      <div
+        :if={@owner?}
+        class="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800"
+      >
+        <.link
+          navigate={~p"/settings/import/linkedin/connections"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Find people you know from LinkedIn")} <span aria-hidden="true">→</span>
+        </.link>
+      </div>
     </.card>
     """
   end

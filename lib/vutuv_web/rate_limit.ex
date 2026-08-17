@@ -60,8 +60,7 @@ defmodule VutuvWeb.RateLimit do
       # without it a rate-limited client kept writing a fresh identity bucket per
       # distinct email even after its IP budget was spent (F13). `and` short-
       # circuits, so `identities_ok?/4` never runs once the IP key is over.
-      if RateLimiter.hit({event, :ip, ip(conn)}, lim, win) == :ok and
-           identities_ok?(event, extra, lim, win) do
+      if ip_ok?(conn, event, lim, win) and identities_ok?(event, extra, lim, win) do
         :ok
       else
         :rate_limited
@@ -70,6 +69,16 @@ defmodule VutuvWeb.RateLimit do
       :ok
     end
   end
+
+  # `nil` instead of a conn means there is no client address to bucket: a
+  # LiveView socket, whose `connect_info` carries the session and nothing else.
+  # Only a logged-in member reaches those events, so `extra` below is a real
+  # identity and is what does the work; the per-IP half is what protects the
+  # *anonymous* paths, and it is not silently skipped anywhere else.
+  defp ip_ok?(nil, _event, _lim, _win), do: true
+
+  defp ip_ok?(conn, event, lim, win),
+    do: RateLimiter.hit({event, :ip, ip(conn)}, lim, win) == :ok
 
   defp identities_ok?(event, extra, lim, win) do
     event
@@ -104,11 +113,28 @@ defmodule VutuvWeb.RateLimit do
   overridable via `config :vutuv, :linkedin_import_rate_limit, {limit, window_ms}`.
   """
   def check_linkedin_import(conn, user) do
-    {limit, window_ms} =
-      Application.get_env(:vutuv, :linkedin_import_rate_limit, {@import_limit, @import_window_ms})
+    {limit, window_ms} = import_budget()
 
     check(conn, :linkedin_import, user.id, limit: limit, window_ms: window_ms)
   end
+
+  # Anything but a `{limit, window}` pair falls back to the built-in budget
+  # rather than raising: this runs on the upload path, so a config key holding
+  # something unexpected must throttle by the default, never 500 the page.
+  defp import_budget do
+    case Application.get_env(:vutuv, :linkedin_import_rate_limit) do
+      {limit, window_ms} when is_integer(limit) and is_integer(window_ms) -> {limit, window_ms}
+      _other -> {@import_limit, @import_window_ms}
+    end
+  end
+
+  @doc """
+  The socket-side twin for the contact finder (issue #1476), which decompresses
+  the same archive over a LiveView upload. It shares the import budget — the two
+  pages read one archive between them — and is keyed on the member alone,
+  because a LiveView has no conn to read a client address from.
+  """
+  def check_linkedin_import(user), do: check_linkedin_import(nil, user)
 
   @doc """
   Throttles the self-hosted-forge admission check (20 per hour, per IP and per

@@ -427,12 +427,23 @@ the resulting ~200px rail width. --%>
       <%!-- A quiet link into the LinkedIn importer: the fastest way to fill
       several of the steps above at once. Owner-only (it lives inside this
       owner-only card) and part of the same onboarding push. --%>
-      <div class="mt-4 border-t border-brand-100 pt-4 dark:border-brand-900/50">
+      <div class="mt-4 space-y-1 border-t border-brand-100 pt-4 dark:border-brand-900/50">
         <.link
           navigate={~p"/settings/import/linkedin"}
           class="inline-flex items-center gap-1 text-sm font-semibold text-brand-800 hover:underline dark:text-brand-100"
         >
           {gettext("Import from LinkedIn")}
+          <span aria-hidden="true">→</span>
+        </.link>
+        <%!-- The other thing that same archive is good for (issue #1476), and
+        the fastest way through the "follow other members" step above: the
+        people you already know are better company than any suggestion we can
+        make on a member's first minute here. --%>
+        <.link
+          navigate={~p"/settings/import/linkedin/connections"}
+          class="flex items-center gap-1 text-sm font-semibold text-brand-800 hover:underline dark:text-brand-100"
+        >
+          {gettext("Find people you know from LinkedIn")}
           <span aria-hidden="true">→</span>
         </.link>
       </div>
@@ -1042,6 +1053,7 @@ the resulting ~200px rail width. --%>
     <.who_to_follow_card
       :if={@promote_discovery?}
       promoted
+      owner?={@as_owner?}
       recommended_users={@recommended_users}
       current_user={@current_user}
       current_user_id={@current_user_id}
@@ -1533,6 +1545,7 @@ the resulting ~200px rail width. --%>
     groups it with Followers / Following at the end on a phone. --%>
     <.who_to_follow_card
       :if={!@promote_discovery?}
+      owner?={@as_owner?}
       recommended_users={@recommended_users}
       current_user={@current_user}
       current_user_id={@current_user_id}

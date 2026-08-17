@@ -4046,6 +4046,19 @@ defmodule VutuvWeb.UI do
            hint: gettext("Topics whose posts reach your feed"),
            terms: gettext("tag topic subscribe follow feed")
          ),
+         # Under "feed" rather than beside Import: that page fills your profile
+         # from a LinkedIn archive, this one fills your feed from it, and this
+         # is the group a member reads when their feed is too quiet.
+         row(
+           :import_connections,
+           gettext("Find your contacts"),
+           ~p"/settings/import/linkedin/connections",
+           hint: gettext("See which of your LinkedIn contacts are already on vutuv"),
+           terms:
+             gettext(
+               "linkedin contacts connections address book find people know colleagues follow zip kontakte bekannte kollegen finden"
+             )
+         ),
          row(:saved_searches, gettext("Saved searches"), ~p"/settings/saved_searches",
            hint: gettext("Job and people searches that email you new matches"),
            terms: gettext("job alert search agent watchlist")

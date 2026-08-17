@@ -1006,6 +1006,13 @@ defmodule VutuvWeb.Router do
       # the account, exactly when, from where and how it was confirmed. A
       # LiveView because it is a searchable, sortable, paged table.
       live("/activity", AccountActivityLive, :index)
+
+      # "Which of my LinkedIn contacts are already here?" (issue #1476). Its own
+      # upload, separate from the profile importer above: that one fills your
+      # profile, this one fills your feed, and each is worth doing without the
+      # other. A LiveView because the result is a long list to search, filter,
+      # page and follow from — none of which should cost a reload.
+      live("/import/linkedin/connections", ImportConnectionsLive, :index)
     end
   end
 
