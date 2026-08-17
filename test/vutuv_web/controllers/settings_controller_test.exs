@@ -347,6 +347,18 @@ defmodule VutuvWeb.SettingsControllerTest do
     assert html =~ ~s(href="#{~p"/settings/fediverse/move"}")
   end
 
+  test "fediverse: Mastodon client access defaults on and can be disabled", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    assert user.mastodon_clients?
+
+    html = conn |> get(~p"/settings/fediverse") |> html_response(200)
+    assert html =~ ~s(name="user[mastodon_clients?]")
+
+    conn = put(conn, ~p"/settings/fediverse", user: %{"mastodon_clients?" => "false"})
+    assert redirected_to(conn) == ~p"/settings/fediverse"
+    refute Repo.get(User, user.id).mastodon_clients?
+  end
+
   test "fediverse: the migration link only shows once the member federates", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
 

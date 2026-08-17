@@ -38,6 +38,50 @@ defmodule Vutuv.OrganizationPostsTest do
   end
 
   describe "create_organization_post/3" do
+    # An organization post fills `organization_id`, never `user_id` — so the
+    # attach step's `i.user_id == ^post.user_id` compared a column with nil,
+    # which Ecto refuses outright rather than matching nothing. The composer
+    # offers photo upload whether or not you are acting as a page, so this was a
+    # 500 on the ordinary path of posting a picture in a page's name. Calibrated
+    # against the un-fixed code, where it raises rather than failing.
+    test "carries photos, which belong to the member who uploaded them" do
+      {organization, owner} = publishing_organization()
+
+      tmp = Path.join(System.tmp_dir!(), "org-photo-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(tmp)
+      on_exit(fn -> File.rm_rf(tmp) end)
+
+      source = Path.join(tmp, "photo.jpg")
+      {:ok, image} = Image.new(32, 32, color: [200, 30, 30])
+      {:ok, _} = Image.write(image, source)
+
+      {:ok, pending} = Posts.create_pending_image(owner, source, "photo.jpg")
+
+      assert {:ok, post} =
+               Posts.create_organization_post(organization, owner, %{
+                 body: "Unser neues Büro.",
+                 image_ids: [pending.id]
+               })
+
+      assert post.organization_id == organization.id
+      assert post.user_id == nil
+      assert [attached] = Repo.preload(post, :images).images
+      assert attached.id == pending.id
+      assert attached.user_id == owner.id
+    end
+
+    test "refuses a photo uploaded by somebody else" do
+      {organization, owner} = publishing_organization()
+      stranger = insert(:activated_user)
+      foreign = insert(:post_image, user: stranger, post: nil)
+
+      assert {:error, :invalid_images} =
+               Posts.create_organization_post(organization, owner, %{
+                 body: "Nicht meins.",
+                 image_ids: [foreign.id]
+               })
+    end
+
     test "records the organization as author and the member as who pressed publish" do
       {organization, owner} = publishing_organization()
 

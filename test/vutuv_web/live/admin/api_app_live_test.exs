@@ -9,6 +9,7 @@ defmodule VutuvWeb.Admin.ApiAppLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.App
   alias Vutuv.Repo
 
@@ -31,6 +32,20 @@ defmodule VutuvWeb.Admin.ApiAppLiveTest do
       {:ok, lv, html} = live(conn, ~p"/admin/api_apps")
 
       assert html =~ app.name
+      assert has_element?(lv, "#api-app-#{app.id}")
+    end
+
+    test "lists an unattended Mastodon registration without an owner", %{conn: conn} do
+      {:ok, app, _secret} =
+        ApiAuth.create_mastodon_app(%{
+          "name" => "Phone Client",
+          "redirect_uris" => ["phone.client://oauth"],
+          "registered_scopes" => ["read"]
+        })
+
+      {:ok, lv, html} = live(conn, ~p"/admin/api_apps")
+
+      assert html =~ "Phone Client"
       assert has_element?(lv, "#api-app-#{app.id}")
     end
 

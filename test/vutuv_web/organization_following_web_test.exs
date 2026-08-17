@@ -14,6 +14,8 @@ defmodule VutuvWeb.OrganizationFollowingWebTest do
   import Vutuv.OrganizationsHelpers
 
   alias Vutuv.Organizations
+  alias Vutuv.Organizations.OrganizationRole
+  alias Vutuv.Repo
   alias Vutuv.Social
   alias Vutuv.Tags
 
@@ -73,6 +75,45 @@ defmodule VutuvWeb.OrganizationFollowingWebTest do
 
     render_click(view, "unfollow-tag", %{"id" => tag.id})
     refute Tags.tag_followed_by_organization?(organization, tag)
+  end
+
+  test "a publisher can follow and mute a local account from the web", %{conn: conn} do
+    {conn, organization} = publishing_page(conn)
+    member = insert(:activated_user, username: "local-follow-target")
+
+    {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/following")
+
+    render_submit(view, "follow-local", %{
+      "local_follow" => %{"account" => "@local-follow-target"}
+    })
+
+    follow = Social.organization_follow_as_organization(organization, member)
+    assert follow
+
+    render_click(view, "mute", %{"id" => follow.id})
+    assert Repo.reload!(follow).muted
+
+    render_click(view, "unmute", %{"id" => follow.id})
+    refute Repo.reload!(follow).muted
+  end
+
+  # The page is gated before it mounts, but a socket that is already open
+  # outlives the grant that opened it, so every write re-asks the role rather
+  # than trusting the mount. Calibrated against the un-fixed code: without the
+  # check in `with_publisher/2` the follow really does disappear here.
+  test "an open page stops mutating after the editorial role is withdrawn", %{conn: conn} do
+    {conn, organization} = publishing_page(conn)
+    member = insert(:activated_user)
+    {:ok, follow} = Social.follow_as_organization(organization, member)
+    {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/following")
+
+    Repo.delete!(
+      Repo.get_by!(OrganizationRole, organization_id: organization.id, role: "publisher")
+    )
+
+    render_click(view, "unfollow", %{"id" => follow.id})
+
+    assert Social.organization_follows?(organization, member)
   end
 
   test "one page cannot drop another page's follow", %{conn: conn} do

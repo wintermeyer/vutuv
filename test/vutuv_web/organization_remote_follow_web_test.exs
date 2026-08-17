@@ -98,6 +98,18 @@ defmodule VutuvWeb.OrganizationRemoteFollowWebTest do
     refute Repo.get(Follow, follow.id)
   end
 
+  test "a publisher can mute and unmute a remote follow", %{conn: conn} do
+    {conn, page} = publishing_page(conn)
+    follow = existing_follow(page)
+
+    {:ok, view, _html} = live(conn, ~p"/organizations/#{page.slug}/following")
+    render_click(view, "mute-remote", %{"id" => follow.remote_account_id})
+    assert Repo.reload!(follow).muted
+
+    render_click(view, "unmute-remote", %{"id" => follow.remote_account_id})
+    refute Repo.reload!(follow).muted
+  end
+
   test "one page cannot withdraw another page's follow", %{conn: conn} do
     {conn, page} = publishing_page(conn)
 
@@ -121,7 +133,11 @@ defmodule VutuvWeb.OrganizationRemoteFollowWebTest do
     {conn, page} = publishing_page(conn)
 
     {:ok, view, _html} = live(conn, ~p"/organizations/#{page.slug}/following")
-    html = render_submit(view, "follow-remote", %{"address" => "not-an-address"})
+
+    html =
+      render_submit(view, "follow-remote", %{
+        "remote_follow" => %{"address" => "not-an-address"}
+      })
 
     # The box keeps the text: a refusal is usually a typo, and emptying it would
     # make the reader retype what they just wrote.

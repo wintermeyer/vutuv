@@ -74,6 +74,18 @@ defmodule VutuvWeb.OrganizationFediverseSwitchTest do
     assert Fediverse.ever_federated?(page)
   end
 
+  test "Mastodon client access defaults on and the owner can switch it off", %{conn: conn} do
+    {conn, page, _owner} = owned_page(conn)
+    assert page.mastodon_clients?
+
+    {:ok, view, html} = live(conn, ~p"/organizations/#{page.slug}/fediverse")
+    assert html =~ "mastodon-client-access"
+
+    render_click(view, "toggle-mastodon", %{})
+
+    refute Organizations.get_organization!(page.id).mastodon_clients?
+  end
+
   test "a page without a handle is told to claim one first", %{conn: conn} do
     {conn, owner} = create_and_login_user(conn)
     page = active_organization_for(owner)

@@ -207,6 +207,21 @@ defmodule Vutuv.OrganizationRemoteFollowTest do
       follow |> Follow.accept() |> Repo.update!()
       assert post.id in feed_ids(page)
     end
+
+    test "the account timeline uses the page's own accepted follow" do
+      page = federating_page()
+      account = remote_account()
+      follow = requested_follow(page, account)
+      post = remote_post(account, "followers")
+
+      {before_accept, _more?} = Fediverse.account_posts(account, page)
+      refute Enum.any?(before_accept, &(&1.id == post.id))
+
+      follow |> Follow.accept() |> Repo.update!()
+
+      {after_accept, _more?} = Fediverse.account_posts(account, page)
+      assert Enum.any?(after_accept, &(&1.id == post.id))
+    end
   end
 
   test "a page that does not federate cannot ask at all" do
