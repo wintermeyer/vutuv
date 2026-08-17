@@ -50,6 +50,28 @@ defmodule Vutuv.MastodonHelpers do
   end
 
   @doc """
+  An unattended client registration, the row `POST /api/v1/apps` produces:
+  `protocol: "mastodon"`, no owner. Use this where the *registration* is only
+  setup; a test that is about the registration endpoint itself should still post
+  to it, so the shape under test is the one that flow really creates.
+  """
+  def register_mastodon_app(attrs \\ %{}) do
+    {:ok, app, _secret} =
+      ApiAuth.create_mastodon_app(
+        Map.merge(
+          %{
+            "name" => "Pocket Client",
+            "redirect_uris" => ["org.example.client://oauth"],
+            "registered_scopes" => ["read"]
+          },
+          attrs
+        )
+      )
+
+    app
+  end
+
+  @doc """
   A Mastodon access token for `user`, or for `organization` acting through
   `user`, with both identities' switches turned on.
 

@@ -18,6 +18,7 @@ defmodule VutuvWeb.OauthController do
 
   alias Vutuv.ApiAuth.OAuth
   alias Vutuv.MastodonApi.Access
+  alias VutuvWeb.RateLimit
 
   @oob_redirect "urn:ietf:wg:oauth:2.0:oob"
 
@@ -68,7 +69,40 @@ defmodule VutuvWeb.OauthController do
     end
   end
 
+  # A phone client resubmitted this form about a hundred times from a single
+  # loaded page, up to eight times a second, and each submission minted its own
+  # authorization code (issue #1561). Nothing of ours resubmits it, so this does
+  # not chase that client's bug — it saves the wasted round trips and tells a
+  # runaway client that something is wrong. What bounds the *pile* of live codes
+  # is `OAuth.prune_unused_codes/2` at the mint site, because no per-minute
+  # budget can: a client resubmitting every seven seconds stays inside any budget
+  # and still accumulates codes for their whole ten-minute lifetime.
+  #
+  # The ceiling sits far above anything a person does, because it must never
+  # touch a working login: nobody presses Allow ten times in a minute. The guard
+  # lives inside the "allow" clause rather than beside it, so "only a consent is
+  # charged" is true by position — denying mints nothing, and charging it would
+  # let a stream of refusals block a genuine consent afterwards.
+  @consent_limit 10
+  @consent_window :timer.minutes(1)
+
   defp decide(conn, user, request, "allow") do
+    if within_consent_budget?(user, request),
+      do: mint_code(conn, user, request),
+      else: conn |> put_status(429) |> render("error.html", reason: :too_many_requests)
+  end
+
+  defp decide(conn, _user, request, _deny) do
+    if request.redirect_uri == @oob_redirect,
+      do:
+        conn
+        |> put_resp_header("cache-control", "no-store")
+        |> put_status(403)
+        |> text("access_denied"),
+      else: redirect(conn, external: callback_url(request, error: "access_denied"))
+  end
+
+  defp mint_code(conn, user, request) do
     case OAuth.approve(user, request, conn.params["identity"]) do
       {:ok, code} ->
         if request.redirect_uri == @oob_redirect,
@@ -80,14 +114,19 @@ defmodule VutuvWeb.OauthController do
     end
   end
 
-  defp decide(conn, _user, request, _deny) do
-    if request.redirect_uri == @oob_redirect,
-      do:
-        conn
-        |> put_resp_header("cache-control", "no-store")
-        |> put_status(403)
-        |> text("access_denied"),
-      else: redirect(conn, external: callback_url(request, error: "access_denied"))
+  # `nil` instead of the conn skips the per-IP bucket on purpose, the way the
+  # limiter documents for an authenticated event: only a signed-in member reaches
+  # this, so the member+app identity is the real key. Passing the conn would put
+  # every app in one per-IP bucket, and a client looping on one app would then
+  # block the member from connecting a different one.
+  #
+  # The identity is a binary, not a tuple: the limiter hashes it through
+  # `to_string/1`, which raises on a tuple.
+  defp within_consent_budget?(user, request) do
+    RateLimit.check(nil, :oauth_consent, user.id <> ":" <> request.app.id,
+      limit: @consent_limit,
+      window_ms: @consent_window
+    ) == :ok
   end
 
   # The exact registered redirect URI plus our query params (state echoes

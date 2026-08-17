@@ -237,6 +237,48 @@ this table too (`OAuth.revoke/1`): RFC 7009 lets the endpoint answer 200 for a
 token it does not know, so a client revoking its own live app token would
 otherwise be told 200 while the credential kept working.
 
+### What setup leaves behind, and the budget on consent
+
+Two tables fill up on their own here, and for a while nothing emptied either
+(issue #1557). A client **registers itself before the consent screen**, so every
+setup somebody starts and abandons leaves an ownerless `oauth_apps` row — that is
+ordinary use, not a fault: opening a client and not finishing costs the same row
+as a server-side refusal did. And every consent mints an `oauth_auth_codes` row
+that is dead ten minutes later, redeemed or not. `Vutuv.ApiAuth.sweep/0` clears
+both after a week, run daily by `Vutuv.ApiAuth.Sweeper`.
+
+**What counts as abandoned is the whole of that function.** "No grant" is not
+enough: a `client_credentials` app holds a live token and has no grant at all, so
+that test alone would delete exactly the apps the newest feature serves. An app
+goes only when nobody consented **and** it holds no live token. A spent code is
+kept the same week rather than dropped at expiry, because the row is what makes a
+**replay** detectable — `consume_code/1` reads `used_at` and revokes the grant's
+tokens when a code comes back twice.
+
+**One consent should mint one code, and for a while one login minted about a
+hundred** (issue #1561): a phone client resubmitted `POST /oauth/authorize` from
+a **single loaded page**, up to eight times a second, every one a 302 with a
+valid CSRF token and a fresh code redeemable for ten minutes. Nothing here
+resubmits that form — the template is a plain `<.form>`, and the three places in
+`assets/js` that submit a form belong to the Markdown editor, WebAuthn and the
+Fediverse dialog — so neither half of the answer chases that client's bug.
+
+Two bounds, and they are not the same bound. `prune_unused_codes/2` keeps the
+newest few **unused** codes per member and app at the mint site, which is what
+caps how many are redeemable at once; a spent one is spared, because that row is
+what `consume_code/1` reads to catch a replay. And the consent route carries a
+budget of ten allowed submissions per member and app per minute — keyed on the
+identity rather than the IP, so a client looping on one app cannot block
+connecting another, and charged only for an "allow", so a stream of refusals
+cannot lock out a genuine consent.
+
+**The budget alone would not do**, which is the part worth remembering: a client
+pacing itself just under any per-minute limit still accumulates codes for their
+whole ten-minute life. Measured on the un-pruned code, the budget left ten
+redeemable at once; the prune leaves three. What the budget buys is the wasted
+round trips and a signal to the client that something is wrong. It sits far above
+anything a person does, because it must never touch a working login.
+
 ### Paging, streaming and push
 
 Every list takes Mastodon's `limit` / `max_id` / `since_id` / `min_id` and

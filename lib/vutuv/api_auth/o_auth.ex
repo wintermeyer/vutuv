@@ -169,9 +169,47 @@ defmodule Vutuv.ApiAuth.OAuth do
           code_challenge: request.code_challenge,
           expires_at: seconds_from_now(@code_ttl_seconds)
         })
+        |> tap(fn _ -> prune_unused_codes(user, app) end)
       end)
 
     {:ok, code}
+  end
+
+  # Only the hash of a code is stored, so a repeated consent cannot be answered
+  # with the code it already handed out — every submission has to mint a new row,
+  # and each is a bearer credential for ten minutes. One phone client resubmitted
+  # the consent form about a hundred times from a single loaded page, so one
+  # login held about a hundred live codes at once (issue #1561).
+  #
+  # The budget on the consent route bounds the *rate*; this bounds the *pile*,
+  # which is the part that matters and which a rate limit cannot do: a client
+  # resubmitting every seven seconds stays inside any per-minute budget and still
+  # accumulates codes for the whole ten-minute lifetime. Same answer, and the
+  # same shape, as `prune_app_tokens/1` next door.
+  #
+  # **Unused codes only.** A spent one is what makes a replay detectable —
+  # `consume_code/1` reads `used_at` and revokes the grant's tokens when a code
+  # comes back twice — so deleting those here would quietly disarm that signal.
+  # A few are kept rather than one, so two authorizations genuinely in flight for
+  # the same member and app cannot cut each other off.
+  @codes_keep 3
+
+  defp prune_unused_codes(user, app) do
+    keep =
+      from(c in AuthCode,
+        where: c.user_id == ^user.id and c.app_id == ^app.id,
+        order_by: [desc: c.id],
+        limit: @codes_keep,
+        select: c.id
+      )
+
+    Repo.delete_all(
+      from(c in AuthCode,
+        where: c.user_id == ^user.id and c.app_id == ^app.id,
+        where: is_nil(c.used_at),
+        where: c.id not in subquery(keep)
+      )
+    )
   end
 
   defp upsert_grant!(user, app, scopes) do
@@ -445,6 +483,11 @@ defmodule Vutuv.ApiAuth.OAuth do
   defp fetch_code(_app, _missing), do: {:error, :invalid_grant}
 
   # One-time use: a second redemption revokes everything the grant minted.
+  #
+  # This reads a **row**, so it only detects a replay for as long as the row is
+  # there: `prune_unused_codes/2` above spares a spent code, and
+  # `Vutuv.ApiAuth.sweep/0` keeps one for a week. Shorten either and this signal
+  # starts answering "unknown code" instead.
   defp consume_code(%AuthCode{used_at: %DateTime{}} = code) do
     ApiAuth.revoke_grant_tokens!(code.grant_id)
     {:error, :invalid_grant}

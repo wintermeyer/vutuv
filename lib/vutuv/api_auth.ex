@@ -19,7 +19,7 @@ defmodule Vutuv.ApiAuth do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
-  alias Vutuv.ApiAuth.{App, Grant, Token}
+  alias Vutuv.ApiAuth.{App, AppToken, AuthCode, Grant, Token}
   alias Vutuv.MastodonApi.PushSubscription
   alias Vutuv.{Moderation, Repo}
   alias Vutuv.Organizations.Organization
@@ -253,6 +253,79 @@ defmodule Vutuv.ApiAuth do
   defp drop_push_subscriptions!(%Ecto.Query{} = token_ids) do
     Repo.delete_all(from(s in PushSubscription, where: s.api_token_id in subquery(token_ids)))
     :ok
+  end
+
+  # ── Housekeeping ──
+
+  # How long an unattended registration and a spent authorization code are kept.
+  # Both are generous on purpose: the point is to bound growth, not to reclaim
+  # bytes, and a member who starts setting a client up on Friday should still
+  # find it there on Monday.
+  @sweep_after_days 7
+
+  @doc """
+  Deletes what the OAuth tables accumulate on their own (issue #1557). Returns
+  `%{apps: deleted, codes: deleted}`.
+
+  Two things pile up without anybody doing anything wrong. A Mastodon client
+  registers itself **before** the consent screen, so every setup somebody starts
+  and abandons leaves an ownerless `oauth_apps` row; and every consent mints an
+  `oauth_auth_codes` row that is dead ten minutes later whether or not it was
+  ever redeemed. Nothing removed either, so both grew forever.
+
+  **What "abandoned" must mean is the whole of this function.** "No grant" alone
+  is wrong since v7.317.0: a `client_credentials` app holds a live token and has
+  no grant at all, so that test would delete exactly the apps this installation's
+  newest feature works for. An app is abandoned only when no member ever
+  consented **and** it holds no live token of its own. Native `/developers/apps`
+  registrations are never touched — a developer made those by hand.
+
+  A spent code is kept for the same week rather than dropped the moment it
+  expires, because the row is what makes a **replay** detectable: `consume_code/1`
+  reads `used_at` and revokes the whole grant's tokens when a code comes back
+  twice. Delete it too eagerly and that theft signal answers "unknown code".
+  """
+  def sweep do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -@sweep_after_days * 86_400)
+
+    %{apps: sweep_abandoned_apps(cutoff), codes: sweep_spent_codes(cutoff)}
+  end
+
+  # `not exists`, deliberately, where `x not in subquery` reads more naturally.
+  # Two reasons, and the second is the one that bites. Postgres cannot turn
+  # `NOT IN` into an anti-join — the NULL semantics forbid it — so it plans a
+  # hashed SubPlan and silently falls back to re-scanning the subquery **per
+  # candidate row** once the planner thinks it no longer fits `work_mem`. That is
+  # a cliff, not a slope, and it is driven by an estimate, so a stale ANALYZE can
+  # tip it early; an installation large enough to need this sweep is exactly the
+  # one where the sweep would then run for hours and log nothing. `not exists`
+  # plans a Hash Anti Join at any size. And it removes the NULL trap by
+  # construction rather than by an argument about the two columns being NOT NULL,
+  # so widening either one later cannot quietly turn this into a no-op that reads
+  # as "nothing to clean up".
+  defp sweep_abandoned_apps(cutoff) do
+    {count, _} =
+      Repo.delete_all(
+        from(a in App,
+          as: :app,
+          where: a.protocol == "mastodon",
+          where: a.inserted_at < ^cutoff,
+          where: not exists(from(g in Grant, where: g.app_id == parent_as(:app).id)),
+          where:
+            not exists(
+              from(t in AppToken,
+                where: t.app_id == parent_as(:app).id and is_nil(t.revoked_at)
+              )
+            )
+        )
+      )
+
+    count
+  end
+
+  defp sweep_spent_codes(cutoff) do
+    {count, _} = Repo.delete_all(from(c in AuthCode, where: c.inserted_at < ^cutoff))
+    count
   end
 
   # ── Verification (the API pipeline's entry point) ──

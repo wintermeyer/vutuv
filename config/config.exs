@@ -461,6 +461,11 @@ config :vutuv, :fediverse_max_remote_follows, 1_000
 # Vutuv.AccountEvents.delete_expired/0 directly).
 config :vutuv, :sweep_account_events, true
 
+# Whether the daily GenServer that clears abandoned OAuth client registrations
+# and spent authorization codes runs (off in tests, same sandbox reasoning;
+# tests call Vutuv.ApiAuth.sweep/0 directly). Issue #1557.
+config :vutuv, :sweep_api_auth, true
+
 # How long an account-activity event is kept (issue #1087). The log is personal
 # data — devices, IP addresses, what changed when — so it ages out. One year
 # covers the "this happened months ago and I only noticed now" support case

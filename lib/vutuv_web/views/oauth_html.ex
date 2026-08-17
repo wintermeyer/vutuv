@@ -22,6 +22,12 @@ defmodule VutuvWeb.OauthHTML do
   def error_text(:invalid_pkce),
     do: gettext("The application's request is missing the required PKCE challenge (S256).")
 
+  def error_text(:too_many_requests),
+    do:
+      gettext(
+        "This application asked to be connected too many times in a row. Please wait a moment and try again."
+      )
+
   def error_text(_other),
     do: gettext("The authorization request is invalid.")
 end
