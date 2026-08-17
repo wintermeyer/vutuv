@@ -290,6 +290,19 @@ defmodule Vutuv.Organizations do
     do: %{roles: [], owner?: false, can_edit?: false, publisher?: false, can_manage?: false}
 
   @doc """
+  Enables or disables Mastodon-compatible clients for one organization.
+
+  A kill switch, not a role: it says whether this page may be reached through a
+  phone client at all, and answers no for everybody the moment it is off, even
+  the Redaktion. Who may act *through* that channel stays `publisher?/2`.
+  """
+  def set_mastodon_clients(%Organization{} = organization, enabled?) when is_boolean(enabled?) do
+    organization
+    |> Ecto.Changeset.change(mastodon_clients?: enabled?)
+    |> Repo.update()
+  end
+
+  @doc """
   The organization `user` is currently acting as, given the id their session
   carries — or `nil` (issue #1335).
 

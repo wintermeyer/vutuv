@@ -8,13 +8,30 @@ defmodule Vutuv.ApiAuth.OAuth do
 
   Deliberate choices:
 
-    * **PKCE (S256) is mandatory for every client**, and the client secret
-      is required at the token endpoint — 2.0 supports confidential clients
-      only (a browser-only app needs a small server-side exchange).
+    * **PKCE (S256) is mandatory for every native (`protocol: "vutuv"`)
+      client**, and the client secret is required at the token endpoint —
+      2.0 supports confidential clients only (a browser-only app needs a
+      small server-side exchange).
+    * **A `protocol: "mastodon"` app may omit PKCE**: the phone clients this
+      adapter exists for frequently send no challenge, and refusing them
+      would defeat the compatibility. Such a code stores the
+      `@mastodon_no_pkce` sentinel and `check_code_params/2` skips the
+      verifier check. The client secret is still required, so this is not an
+      unauthenticated exchange — and the sentinel cannot be smuggled in from
+      outside, because `check_pkce/1` accepts a challenge of 43..128 bytes
+      only and the sentinel is 16. Do not "tidy" that length check away.
     * Authorization codes are one-time and 10-minute; **redeeming a code
       twice revokes every token of its grant** (the RFC's theft signal).
     * Refresh tokens **rotate on every use**; using a rotated (revoked)
       refresh token again also revokes the whole grant's tokens.
+    * **A Mastodon grant gets no refresh token and its access token carries
+      no `expires_at`**, the way upstream Mastodon issues them — so nothing
+      rotates and nothing ages out, and such a session ends only on explicit
+      revocation, app suspension, or the account falling inactive. What
+      bounds that instead is `VutuvWeb.Plug.MastodonApiAuth`, which
+      re-derives the identity's powers from **live** roles on every request:
+      withdrawing a role or clearing `mastodon_clients?` takes effect at
+      once rather than at some next refresh that never comes.
     * All secrets are stored as SHA-256 hashes, like everything else in
       `Vutuv.ApiAuth`.
   """
@@ -23,6 +40,8 @@ defmodule Vutuv.ApiAuth.OAuth do
 
   alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.{App, AuthCode, Grant, Scopes, Token}
+  alias Vutuv.MastodonApi.Access
+  alias Vutuv.MastodonApi.Scopes, as: MastodonScopes
   alias Vutuv.Repo
 
   @code_prefix "vutuv_ac_"
@@ -32,6 +51,7 @@ defmodule Vutuv.ApiAuth.OAuth do
   @code_ttl_seconds 600
   @access_ttl_seconds 7_200
   @refresh_ttl_days 90
+  @mastodon_no_pkce "mastodon-no-pkce"
 
   def access_ttl_seconds, do: @access_ttl_seconds
 
@@ -47,8 +67,8 @@ defmodule Vutuv.ApiAuth.OAuth do
     with {:ok, app} <- fetch_client(params["client_id"]),
          {:ok, redirect_uri} <- check_redirect_uri(app, params["redirect_uri"]),
          :ok <- check_response_type(params["response_type"]),
-         {:ok, scopes} <- parse_scopes(params["scope"]),
-         {:ok, challenge} <- check_pkce(params) do
+         {:ok, scopes} <- parse_scopes(app, params["scope"]),
+         {:ok, challenge} <- check_pkce(app, params) do
       {:ok,
        %{
          app: app,
@@ -91,6 +111,17 @@ defmodule Vutuv.ApiAuth.OAuth do
 
   defp parse_scopes(_missing), do: {:error, :invalid_scope}
 
+  defp parse_scopes(%App{protocol: "mastodon", registered_scopes: registered}, scope),
+    do: MastodonScopes.authorize(scope, registered)
+
+  defp parse_scopes(%App{}, scope), do: parse_scopes(scope)
+
+  defp check_pkce(%App{protocol: "mastodon"}, params) do
+    if is_binary(params["code_challenge"]), do: check_pkce(params), else: {:ok, @mastodon_no_pkce}
+  end
+
+  defp check_pkce(%App{}, params), do: check_pkce(params)
+
   defp check_pkce(%{"code_challenge" => challenge} = params) do
     cond do
       params["code_challenge_method"] != "S256" -> {:error, :invalid_pkce}
@@ -110,7 +141,17 @@ defmodule Vutuv.ApiAuth.OAuth do
   ever widens, revocation is explicit), the code carries the PKCE
   challenge. Returns the code plaintext for the redirect.
   """
-  def approve(user, %{app: app, scopes: scopes} = request) do
+  def approve(user, request, identity \\ nil)
+
+  def approve(user, %{app: %App{protocol: "mastodon"}} = request, identity) do
+    with {:ok, organization, scopes} <- Access.select(user, identity, request.scopes) do
+      do_approve(user, request, organization, scopes)
+    end
+  end
+
+  def approve(user, request, _identity), do: do_approve(user, request, nil, request.scopes)
+
+  defp do_approve(user, %{app: app} = request, organization, scopes) do
     code = @code_prefix <> ApiAuth.random_token()
 
     {:ok, _auth_code} =
@@ -121,9 +162,10 @@ defmodule Vutuv.ApiAuth.OAuth do
           user_id: user.id,
           app_id: app.id,
           grant_id: grant.id,
+          organization_id: organization && organization.id,
           code_hash: ApiAuth.hash_token(code),
           redirect_uri: request.redirect_uri,
-          scopes: grant.scopes,
+          scopes: scopes,
           code_challenge: request.code_challenge,
           expires_at: seconds_from_now(@code_ttl_seconds)
         })
@@ -180,7 +222,7 @@ defmodule Vutuv.ApiAuth.OAuth do
          {:ok, code} <- fetch_code(app, params["code"]),
          :ok <- consume_code(code),
          :ok <- check_code_params(code, params) do
-      mint_pair(code.grant_id, code.user_id, app.id, code.scopes)
+      mint_pair(code.grant_id, code.user_id, code.organization_id, app, code.scopes)
     end
   end
 
@@ -214,7 +256,7 @@ defmodule Vutuv.ApiAuth.OAuth do
       )
 
     if n == 1 do
-      mint_pair(token.grant_id, token.user_id, app.id, token.scopes)
+      mint_pair(token.grant_id, token.user_id, token.organization_id, app, token.scopes)
     else
       ApiAuth.revoke_grant_tokens!(token.grant_id)
       {:error, :invalid_grant}
@@ -289,6 +331,7 @@ defmodule Vutuv.ApiAuth.OAuth do
     cond do
       DateTime.compare(code.expires_at, DateTime.utc_now()) != :gt -> {:error, :invalid_grant}
       params["redirect_uri"] != code.redirect_uri -> {:error, :invalid_grant}
+      code.code_challenge == @mastodon_no_pkce -> :ok
       not pkce_verifies?(code.code_challenge, params["code_verifier"]) -> {:error, :invalid_grant}
       true -> :ok
     end
@@ -319,18 +362,41 @@ defmodule Vutuv.ApiAuth.OAuth do
     not Repo.exists?(from(g in Grant, where: g.id == ^grant_id and is_nil(g.revoked_at)))
   end
 
-  defp mint_pair(grant_id, user_id, app_id, scopes) do
+  defp mint_pair(grant_id, user_id, organization_id, %App{protocol: "mastodon"} = app, scopes) do
+    access = @access_prefix <> ApiAuth.random_token()
+    insert_token!(grant_id, user_id, organization_id, app.id, scopes, "access", access, nil)
+
+    {:ok,
+     %{
+       access_token: access,
+       token_type: "Bearer",
+       scope: Enum.join(scopes, " "),
+       created_at: System.system_time(:second)
+     }}
+  end
+
+  defp mint_pair(grant_id, user_id, organization_id, %App{} = app, scopes) do
     access = @access_prefix <> ApiAuth.random_token()
     refresh = @refresh_prefix <> ApiAuth.random_token()
 
     {:ok, _} =
       Repo.transaction(fn ->
-        insert_token!(grant_id, user_id, app_id, scopes, "access", access, @access_ttl_seconds)
+        insert_token!(
+          grant_id,
+          user_id,
+          organization_id,
+          app.id,
+          scopes,
+          "access",
+          access,
+          @access_ttl_seconds
+        )
 
         insert_token!(
           grant_id,
           user_id,
-          app_id,
+          organization_id,
+          app.id,
           scopes,
           "refresh",
           refresh,
@@ -348,17 +414,30 @@ defmodule Vutuv.ApiAuth.OAuth do
      }}
   end
 
-  defp insert_token!(grant_id, user_id, app_id, scopes, kind, plaintext, ttl_seconds) do
+  defp insert_token!(
+         grant_id,
+         user_id,
+         organization_id,
+         app_id,
+         scopes,
+         kind,
+         plaintext,
+         ttl_seconds
+       ) do
     Repo.insert!(%Token{
       user_id: user_id,
+      organization_id: organization_id,
       app_id: app_id,
       grant_id: grant_id,
       kind: kind,
       token_hash: ApiAuth.hash_token(plaintext),
       scopes: scopes,
-      expires_at: seconds_from_now(ttl_seconds)
+      expires_at: expires_at(ttl_seconds)
     })
   end
+
+  defp expires_at(nil), do: nil
+  defp expires_at(seconds), do: seconds_from_now(seconds)
 
   defp lookup_app_token(app, value) when is_binary(value) do
     Repo.get_by(Token, token_hash: ApiAuth.hash_token(value), app_id: app.id)

@@ -727,17 +727,28 @@ defmodule Vutuv.Posts do
 
   # Claims each image row for the post (ownership and pending state are
   # enforced by the WHERE, so a tampered id rolls the whole insert back).
+  # The uploader is NOT always `post.user_id`: an organization post has no
+  # member owner (the CHECK is one column or the other), so its pictures belong
+  # to the acting member who uploaded them. Reading `user_id` alone made this
+  # `i.user_id == ^nil`, which Ecto refuses outright rather than matching no
+  # rows — so attaching a photo to a post written in a page's name raised, i.e.
+  # a 500 straight out of the composer, which offers the upload either way.
   defp attach_images!(%Post{} = post, image_ids) do
     now = NaiveDateTime.utc_now(:second)
+    uploader_id = post.user_id || post.acting_user_id
 
     image_ids
     |> Enum.with_index()
     |> Enum.each(fn {id, position} ->
+      # Belt and braces for a post that somehow names neither: rolling back
+      # beats handing the same nil to the query below.
+      if is_nil(uploader_id), do: Repo.rollback(:invalid_images)
+
       {count, _} =
         Repo.update_all(
           from(i in PostImage,
             where:
-              i.id == ^id and i.user_id == ^post.user_id and
+              i.id == ^id and i.user_id == ^uploader_id and
                 (is_nil(i.post_id) or i.post_id == ^post.id)
           ),
           set: [post_id: post.id, position: position, updated_at: now]

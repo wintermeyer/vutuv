@@ -18,6 +18,7 @@ defmodule Vutuv.ApiAuth.Token do
     belongs_to(:user, Vutuv.Accounts.User)
     belongs_to(:app, Vutuv.ApiAuth.App)
     belongs_to(:grant, Vutuv.ApiAuth.Grant)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
 
     field(:kind, :string)
     field(:token_hash, :string)

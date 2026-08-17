@@ -12,6 +12,8 @@ defmodule Vutuv.ApiAuth.App do
 
   use VutuvWeb, :model
 
+  alias Vutuv.MastodonApi.Scopes, as: MastodonScopes
+
   schema "oauth_apps" do
     belongs_to(:user, Vutuv.Accounts.User)
 
@@ -21,6 +23,8 @@ defmodule Vutuv.ApiAuth.App do
     field(:redirect_uris, {:array, :string}, default: [])
     field(:client_id, :string)
     field(:client_secret_hash, :string)
+    field(:protocol, :string, default: "vutuv")
+    field(:registered_scopes, {:array, :string}, default: [])
     field(:suspended_at, :utc_datetime)
 
     timestamps()
@@ -34,13 +38,27 @@ defmodule Vutuv.ApiAuth.App do
   """
   def changeset(app, params \\ %{}) do
     app
+    |> common_changeset(params)
+    |> validate_redirect_uris(&valid_redirect_uri?/1)
+  end
+
+  @doc false
+  def mastodon_changeset(app, params) do
+    app
+    |> common_changeset(params)
+    |> put_change(:registered_scopes, params["registered_scopes"] || [])
+    |> validate_subset(:registered_scopes, MastodonScopes.all())
+    |> validate_redirect_uris(&valid_mastodon_redirect_uri?/1)
+  end
+
+  defp common_changeset(app, params) do
+    app
     |> cast(params, [:name, :description, :homepage_url, :redirect_uris])
     |> validate_required([:name])
     |> validate_length(:name, max: 60)
     |> validate_length(:description, max: 500)
     |> validate_length(:homepage_url, max: 255)
     |> update_change(:redirect_uris, &clean_uris/1)
-    |> validate_redirect_uris()
     |> unique_constraint(:client_id)
   end
 
@@ -52,7 +70,7 @@ defmodule Vutuv.ApiAuth.App do
 
   # An empty list equals the schema default (no change recorded), so check
   # the resulting field — same pitfall as the token scopes.
-  defp validate_redirect_uris(changeset) do
+  defp validate_redirect_uris(changeset, valid?) do
     case get_field(changeset, :redirect_uris) do
       [_at_least_one | _] = uris ->
         cond do
@@ -61,7 +79,7 @@ defmodule Vutuv.ApiAuth.App do
           Enum.any?(uris, &(String.length(&1) > 255)) ->
             add_error(changeset, :redirect_uris, "must each be at most 255 characters")
 
-          Enum.all?(uris, &valid_redirect_uri?/1) ->
+          Enum.all?(uris, valid?) ->
             changeset
 
           true ->
@@ -85,4 +103,28 @@ defmodule Vutuv.ApiAuth.App do
       _other -> false
     end
   end
+
+  defp valid_mastodon_redirect_uri?("urn:ietf:wg:oauth:2.0:oob"), do: true
+
+  defp valid_mastodon_redirect_uri?(uri) when is_binary(uri) do
+    case URI.parse(uri) do
+      %URI{scheme: "https", host: host, fragment: nil} when is_binary(host) and host != "" ->
+        true
+
+      %URI{scheme: "http", host: host, fragment: nil}
+      when host in ["localhost", "127.0.0.1"] ->
+        true
+
+      %URI{scheme: scheme, fragment: nil} when is_binary(scheme) ->
+        downcased = String.downcase(scheme)
+
+        downcased not in ["http", "https", "javascript", "data", "file"] and
+          scheme =~ ~r/^[a-z][a-z0-9+.-]*$/i
+
+      _other ->
+        false
+    end
+  end
+
+  defp valid_mastodon_redirect_uri?(_other), do: false
 end

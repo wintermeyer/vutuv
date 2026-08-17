@@ -297,6 +297,19 @@ config :vutuv, :landing_example_profile_url, "https://vutuv.de/wintermeyer"
 # either way (users.fediverse_followers?).
 config :vutuv, :fediverse_enabled, true
 
+# The Mastodon-compatible smartphone-client API is a separate adapter
+# on `mastodon.<PHX_HOST>`. ActivityPub actors and handles stay on PHX_HOST.
+# Runtime override: MASTODON_API_ENABLED=false (config/runtime.exs).
+config :vutuv, :mastodon_api_enabled, true
+
+# Web Push for Mastodon-compatible clients (RFC 8291/8292). Empty by default:
+# without a VAPID key pair the push endpoints answer 403 and nothing is sent,
+# which is what an intranet installation with no reachable push service wants.
+# Generate a pair once with
+#   mix run -e 'IO.inspect Vutuv.MastodonApi.WebPush.generate_keys()'
+# and set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT (runtime.exs).
+config :vutuv, :web_push, vapid_public_key: nil, vapid_private_key: nil, vapid_subject: nil
+
 # Whether the hourly GenServer that re-checks remote followers runs (off in
 # tests, where it would touch the SQL sandbox from outside; tests call
 # Vutuv.Fediverse.prune_due_followers/1 directly). It drops a follower row

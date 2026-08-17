@@ -171,6 +171,7 @@ config :vutuv, :verify_user_links, false
 # :bluesky_req_options.
 config :vutuv, :recheck_social_accounts, false
 config :vutuv, :verify_social_accounts, false
+config :vutuv, :mastodon_api_enabled, true
 
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true

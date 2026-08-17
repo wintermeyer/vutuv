@@ -1390,6 +1390,24 @@ defmodule Vutuv.Fediverse do
     :ok
   end
 
+  @doc "Sets the mute flag on a page's existing remote follow."
+  def set_organization_remote_follow_mute(
+        %Organization{id: organization_id},
+        remote_account_id,
+        muted?
+      ) do
+    UUIDv7.with_cast(remote_account_id, fn account_id ->
+      Repo.update_all(
+        from(f in Follow,
+          where: f.organization_id == ^organization_id and f.remote_account_id == ^account_id
+        ),
+        set: [muted: muted?, updated_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)]
+      )
+    end)
+
+    :ok
+  end
+
   @doc """
   *Why* this member cannot follow anybody out there, when they cannot: `nil`
   when they can, else `:opted_out`, `:restricted` or `:disabled`.
@@ -3019,10 +3037,10 @@ defmodule Vutuv.Fediverse do
   The cached posts of one account for `viewer`, newest first, as
   `{posts, more?}` (issue #1162).
 
-  Audience-scoped exactly like the feed: public and unlisted for anybody signed
-  in, followers-only solely for a viewer whose own follow is **accepted**. So the
-  page can be opened by any member without becoming a way to read what an author
-  addressed to their followers.
+  Audience-scoped exactly like the feed: public and unlisted for any signed-in
+  member or organization identity, followers-only solely when that identity's
+  own follow is **accepted**. So the page cannot become a way to read what an
+  author addressed to somebody else's followers.
 
   The cap and the "there is more" flag are both answered here — one row past the
   cap is fetched and dropped — so no caller has to know the number or repeat the
@@ -3036,6 +3054,21 @@ defmodule Vutuv.Fediverse do
             f.state == "accepted"
       )
 
+    account_posts_query(account_id, accepted)
+  end
+
+  def account_posts(%RemoteAccount{id: account_id}, %Organization{id: organization_id}) do
+    accepted =
+      from(f in Follow,
+        where:
+          f.remote_account_id == ^account_id and f.organization_id == ^organization_id and
+            f.state == "accepted"
+      )
+
+    account_posts_query(account_id, accepted)
+  end
+
+  defp account_posts_query(account_id, accepted) do
     from(p in RemotePost,
       where: p.remote_account_id == ^account_id,
       # The feed's vocabulary, not a negated literal: `open_audiences/0` is the

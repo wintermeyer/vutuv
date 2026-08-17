@@ -38,6 +38,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Engagement
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.Reaction
+  alias Vutuv.MastodonApi.PushDispatcher
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationRole
@@ -338,8 +339,13 @@ defmodule Vutuv.Activity do
   @doc "Push a new in-app notification to `user_id`."
   def notify(nil, _notification), do: :ok
 
-  def notify(user_id, %{} = notification),
-    do: broadcast(user_id, {:new_notification, notification})
+  def notify(user_id, %{} = notification) do
+    # The one place a notification is announced, which is why the Web Push
+    # fan-out hangs here rather than at each of the twenty callers: a push
+    # cannot then drift out of step with what the website shows.
+    PushDispatcher.dispatch(user_id, notification)
+    broadcast(user_id, {:new_notification, notification})
+  end
 
   @doc """
   Convenience: a "started following you" notification for the followee. Carries

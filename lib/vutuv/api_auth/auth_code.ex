@@ -12,6 +12,7 @@ defmodule Vutuv.ApiAuth.AuthCode do
     belongs_to(:user, Vutuv.Accounts.User)
     belongs_to(:app, Vutuv.ApiAuth.App)
     belongs_to(:grant, Vutuv.ApiAuth.Grant)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
 
     field(:code_hash, :string)
     field(:redirect_uri, :string)

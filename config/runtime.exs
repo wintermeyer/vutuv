@@ -190,6 +190,16 @@ if config_env() == :prod do
     config :vutuv, :fediverse_enabled, false
   end
 
+  if System.get_env("MASTODON_API_ENABLED") == "false" do
+    config :vutuv, :mastodon_api_enabled, false
+  end
+
+  # Web Push stays off unless the operator supplies a VAPID key pair.
+  config :vutuv, :web_push,
+    vapid_public_key: System.get_env("VAPID_PUBLIC_KEY"),
+    vapid_private_key: System.get_env("VAPID_PRIVATE_KEY"),
+    vapid_subject: System.get_env("VAPID_SUBJECT")
+
   # The landing-page headline split test (Vutuv.Experiments).
   # LANDING_HEADLINE_EXPERIMENT=false shows every visitor the default headline
   # and counts nothing — for an installation that does not want its start page

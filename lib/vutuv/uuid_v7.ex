@@ -53,6 +53,27 @@ defmodule Vutuv.UUIDv7 do
   end
 
   @doc """
+  The creation time a v7 id carries in its first 48 bits, as a `NaiveDateTime`
+  in UTC — or `nil` for anything that is not a castable v7 UUID.
+
+  The inverse of `generate_at/1`, and the reason a client's opaque
+  `max_id`/`min_id` can be turned into a position in a **merged** feed without a
+  lookup: the merged paginator orders by timestamp across sources that have no
+  shared id space, so the boundary it needs is a time, and the id already
+  carries one. Truncated to the second, because that is the precision the feed
+  cursor and the `inserted_at` columns keep.
+  """
+  def timestamp(value) do
+    with uuid when is_binary(uuid) <- cast_or_nil(value),
+         {:ok, <<millisecond::48, 7::4, _rest::76>>} <- Ecto.UUID.dump(uuid),
+         {:ok, datetime} <- DateTime.from_unix(millisecond, :millisecond) do
+      datetime |> DateTime.to_naive() |> NaiveDateTime.truncate(:second)
+    else
+      _not_a_v7_uuid -> nil
+    end
+  end
+
+  @doc """
   The two ids as a `{smaller, larger}` tuple — the one home of the "smaller id
   first" convention. Canonical lowercase-hex UUIDs compare in the same order as
   their bytes, so a plain `<` agrees with the Postgres `uuid` ordering that the

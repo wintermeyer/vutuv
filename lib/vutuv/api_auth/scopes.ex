@@ -69,4 +69,25 @@ defmodule Vutuv.ApiAuth.Scopes do
 
   def description("jobs:write"),
     do: gettext("Post, edit and close job openings as you")
+
+  def description("read") do
+    gettext("Read your profile, including entries only you can see") <>
+      "; " <> gettext("Read posts visible to you")
+  end
+
+  def description("read:accounts"),
+    do: gettext("Read your profile, including entries only you can see")
+
+  def description("read:statuses"), do: gettext("Read posts visible to you")
+  def description("write"), do: gettext("Write, edit and delete your posts")
+  def description("write:statuses"), do: gettext("Write, edit and delete your posts")
+  def description("follow"), do: gettext("Manage who you follow")
+  def description("push"), do: gettext("Notifications")
+
+  def description("write:follows"), do: gettext("Manage who you follow")
+  def description("write:mutes"), do: gettext("Mute or unmute accounts")
+  def description("write:blocks"), do: gettext("Block or unblock accounts")
+
+  def description("read:" <> _resource), do: gettext("Read data visible to this identity")
+  def description("write:" <> _resource), do: gettext("Act as this identity")
 end

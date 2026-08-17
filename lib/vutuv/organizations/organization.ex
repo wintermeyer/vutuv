@@ -64,6 +64,7 @@ defmodule Vutuv.Organizations.Organization do
     # every externally visible part of that half is gated on it, and federating
     # cannot be fully taken back once a remote server holds a copy.
     field(:fediverse_followers?, :boolean, default: false)
+    field(:mastodon_clients?, :boolean, default: true)
     field(:status, :string, default: "pending")
     field(:verified_at, :naive_datetime)
     field(:frozen_at, :naive_datetime)

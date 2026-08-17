@@ -21,6 +21,7 @@ defmodule Vutuv.ApiAuth do
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth.{App, Grant, Token}
   alias Vutuv.{Moderation, Repo}
+  alias Vutuv.Organizations.Organization
 
   @pat_prefix "vutuv_pat_"
   @client_id_prefix "vutuv_app_"
@@ -106,6 +107,21 @@ defmodule Vutuv.ApiAuth do
         client_secret_hash: hash_token(secret)
       }
       |> App.changeset(attrs)
+
+    with {:ok, app} <- Repo.insert(changeset), do: {:ok, app, secret}
+  end
+
+  @doc "Registers an unattended client through Mastodon's public app endpoint."
+  def create_mastodon_app(attrs) do
+    secret = @secret_prefix <> random_token()
+
+    changeset =
+      %App{
+        protocol: "mastodon",
+        client_id: @client_id_prefix <> random_token(16),
+        client_secret_hash: hash_token(secret)
+      }
+      |> App.mastodon_changeset(attrs)
 
     with {:ok, app} <- Repo.insert(changeset), do: {:ok, app, secret}
   end
@@ -216,10 +232,11 @@ defmodule Vutuv.ApiAuth do
   :invalid_token | :revoked | :expired | :app_suspended | :account_inactive}`.
   """
   def verify_token(plaintext) when is_binary(plaintext) do
-    with {:ok, token, user, app} <- lookup(hash_token(plaintext)),
+    with {:ok, token, user, app, organization} <- lookup(hash_token(plaintext)),
          :ok <- check_live(token),
          :ok <- check_app(token, app),
          :ok <- check_user(user) do
+      token = %{token | app: app, organization: organization}
       {:ok, touch_last_used(token), user}
     end
   end
@@ -249,12 +266,14 @@ defmodule Vutuv.ApiAuth do
       on: u.id == t.user_id,
       left_join: a in App,
       on: a.id == t.app_id,
-      select: {t, u, a}
+      left_join: o in Organization,
+      on: o.id == t.organization_id,
+      select: {t, u, a, o}
     )
     |> Repo.one()
     |> case do
       nil -> {:error, :invalid_token}
-      {token, user, app} -> {:ok, token, user, app}
+      {token, user, app, organization} -> {:ok, token, user, app, organization}
     end
   end
 
