@@ -4003,10 +4003,13 @@ defmodule VutuvWeb.UI do
              gettext("log history audit trail security was that me who changed when protocol")
          ),
          row(:preferences, gettext("Language & display"), ~p"/settings/preferences",
-           hint: gettext("Interface language, feed languages, maps, how posts are shortened"),
+           hint:
+             gettext(
+               "Interface language, date format and time zone, feed languages, maps, how posts are shortened"
+             ),
            terms:
              gettext(
-               "german english locale translation translate map font length hyphenation feed languages hide foreign übersetzen sprache"
+               "german english locale translation translate map font length hyphenation feed languages hide foreign übersetzen sprache zeitzone timezone time zone utc datum date uhrzeit clock 24 hour datumsformat"
              )
          ),
          row(:import, gettext("Import"), ~p"/settings/import/linkedin",

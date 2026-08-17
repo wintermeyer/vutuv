@@ -332,6 +332,17 @@ defmodule Vutuv.Prefs do
   @key_by_string Map.new(@keys, &{Atom.to_string(&1), &1})
   defp maybe_key(string), do: @key_by_string[string]
 
+  @doc """
+  The registry key a raw string names, or `nil` when the registry has no such
+  pref. The lookup behind `VutuvWeb.AccountEventText.field_label/1`, which
+  renders a settings field a member touched: a key that is still in the
+  registry gets `label/1` (so the log and the form can never word the same knob
+  differently), and a retired one falls back to a humanized name, because the
+  activity log is append-only and its old rows outlive the registry.
+  """
+  def key(raw) when is_binary(raw), do: maybe_key(raw)
+  def key(_raw), do: nil
+
   @doc "The stored overrides as `%{key => raw_string}` (only known keys)."
   def list_default_rows do
     Default

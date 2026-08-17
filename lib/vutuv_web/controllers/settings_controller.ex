@@ -705,7 +705,8 @@ defmodule VutuvWeb.SettingsController do
       params,
       "preferences.html",
       ~p"/settings/preferences",
-      gettext("Language and region saved.")
+      gettext("Language and region saved."),
+      event: "preferences_changed"
     )
   end
 
@@ -724,7 +725,8 @@ defmodule VutuvWeb.SettingsController do
       params,
       "preferences.html",
       ~p"/settings/preferences",
-      gettext("Map preferences saved.")
+      gettext("Map preferences saved."),
+      event: "preferences_changed"
     )
   end
 
@@ -737,7 +739,8 @@ defmodule VutuvWeb.SettingsController do
       normalize_post_lines(params),
       "preferences.html",
       ~p"/settings/preferences",
-      gettext("Post display settings saved.")
+      gettext("Post display settings saved."),
+      event: "preferences_changed"
     )
   end
 
@@ -784,7 +787,8 @@ defmodule VutuvWeb.SettingsController do
       Map.put_new(params, "feed_languages", []),
       "preferences.html",
       ~p"/settings/preferences",
-      gettext("Feed language settings saved.")
+      gettext("Feed language settings saved."),
+      event: "preferences_changed"
     )
   end
 
@@ -794,7 +798,9 @@ defmodule VutuvWeb.SettingsController do
     # every other settings write (the changeset maps [] to nil).
     {:ok, _} = Accounts.update_user(conn.assigns[:user], %{"feed_languages" => []})
 
-    reset_prefs(conn, :feed, gettext("Feed language settings reset to the site defaults."))
+    reset_prefs(conn, :feed, gettext("Feed language settings reset to the site defaults."),
+      fields: ["feed_foreign_posts", "feed_languages"]
+    )
   end
 
   # The like-attribution switch (issue #1233) lives on the visibility page
@@ -804,12 +810,28 @@ defmodule VutuvWeb.SettingsController do
       conn,
       :privacy,
       gettext("Your likes follow the site default again."),
-      ~p"/settings/privacy"
+      redirect_to: ~p"/settings/privacy",
+      event: "privacy_changed"
     )
   end
 
-  defp reset_prefs(conn, group, flash, redirect_to \\ ~p"/settings/preferences") do
-    {:ok, _user} = Prefs.reset_group(conn.assigns[:user], group)
+  # A reset is a settings change like a save, so it is logged like one — the
+  # activity log used to hear about the save and stay silent about the way
+  # back. `event` names the kind because the shared reset serves two pages
+  # (`opts[:fields]` widens the field list where a group has a plain column
+  # beside it), and the fields come from the group being cleared rather than
+  # from form params, which a reset link carries none of.
+  defp reset_prefs(conn, group, flash, opts \\ []) do
+    user = conn.assigns[:user]
+    {:ok, _user} = Prefs.reset_group(user, group)
+
+    fields = opts[:fields] || Enum.map(Prefs.group_registry(group), &Atom.to_string(&1.key))
+    redirect_to = opts[:redirect_to] || ~p"/settings/preferences"
+
+    AccountEvents.record(user, opts[:event] || "preferences_changed",
+      conn: conn,
+      details: %{fields: Enum.sort(fields)}
+    )
 
     conn
     |> put_flash(:info, flash)

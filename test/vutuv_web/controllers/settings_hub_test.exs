@@ -147,6 +147,45 @@ defmodule VutuvWeb.SettingsHubTest do
       assert html =~ ~s(data-search="#{needle}")
     end
 
+    # A setting that is one click away but that the filter box cannot find is
+    # unfindable in practice — the hub is 25 rows deep. The date shape and the
+    # time zone (issue #1502) landed on a page whose row was written before
+    # they existed, so its synonyms named neither.
+    test "the date and time settings are findable by the words a member types", %{
+      conn: conn,
+      user: user
+    } do
+      needle =
+        rows(user)
+        |> Enum.find(&(&1.key == :preferences))
+        |> UI.settings_search_text()
+
+      for word <- ~w(zeitzone timezone datum date uhrzeit format) do
+        assert needle =~ word, ~s(the settings filter cannot find "#{word}")
+      end
+
+      # Asserted on a fragment rather than the whole haystack: this row's label
+      # carries an "&", which the attribute renders escaped.
+      assert conn |> get(~p"/settings") |> html_response(200) =~ "zeitzone timezone"
+    end
+
+    # The filter matches the *translated* haystack, so an English-only check
+    # would pass while a German member still finds nothing — and the synonym
+    # list is exactly the kind of string `gettext.extract --merge` carries over
+    # fuzzily when it is reworded.
+    test "the German synonyms carry the date and time words too", %{conn: conn} do
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/settings")
+        |> html_response(200)
+
+      for word <- ~w(zeitzone datum uhrzeit datumsformat) do
+        assert html =~ word, ~s(the German settings filter cannot find "#{word}")
+      end
+    end
+
     test "the desktop content pane shows the map instead of an empty state", %{conn: conn} do
       html = conn |> get(~p"/settings") |> html_response(200)
 

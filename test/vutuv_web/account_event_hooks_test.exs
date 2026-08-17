@@ -146,6 +146,58 @@ defmodule VutuvWeb.AccountEventHooksTest do
     end
   end
 
+  describe "language & display" do
+    test "saving a date format and a time zone records the field names, not the values", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+
+      put(conn, ~p"/settings/language",
+        user: %{"date_region" => "US", "time_zone" => "America/Denver"}
+      )
+
+      assert [event] = events(user, "preferences_changed")
+      assert event.details["fields"] == ["date_region", "time_zone"]
+
+      # A member's time zone is a coarse location, and this log outlives the
+      # change by a year — the value must not be in it.
+      refute inspect(event.details) =~ "America/Denver"
+    end
+
+    test "the other cards on the page record under the same kind", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      put(conn, ~p"/settings/maps", user: %{"default_map_service" => "apple"})
+      put(conn, ~p"/settings/post_display", user: %{"post_lines_desktop" => "3"})
+
+      assert [maps, posts] = events(user, "preferences_changed")
+      assert maps.details["fields"] == ["default_map_service"]
+      assert posts.details["fields"] == ["post_lines_desktop"]
+    end
+
+    # The way back was silent while the save was logged, which is the half of
+    # the story a member checking "was that me?" most needs.
+    test "a reset records the group it cleared", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      put(conn, ~p"/settings/language", user: %{"time_zone" => "UTC"})
+      post(conn, ~p"/settings/region/reset")
+
+      assert [_save, reset] = events(user, "preferences_changed")
+      assert reset.details["fields"] == ["date_region", "time_zone"]
+    end
+
+    test "the visibility reset stays on its own page's kind", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post(conn, ~p"/settings/privacy/reset")
+
+      assert [event] = events(user, "privacy_changed")
+      assert event.details["fields"] == ["like_attribution?"]
+      assert events(user, "preferences_changed") == []
+    end
+  end
+
   describe "privacy" do
     test "a visibility save records which switches were touched", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

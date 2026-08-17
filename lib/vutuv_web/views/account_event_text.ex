@@ -22,6 +22,7 @@ defmodule VutuvWeb.AccountEventText do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.AccountEvents.AccountEvent
+  alias Vutuv.Prefs
   alias VutuvWeb.UI
 
   @doc "What happened, as a short heading. Also the kind filter's option text."
@@ -44,6 +45,7 @@ defmodule VutuvWeb.AccountEventText do
   def event_label("profile_updated"), do: gettext("Profile changed")
   def event_label("privacy_changed"), do: gettext("Visibility settings changed")
   def event_label("notifications_changed"), do: gettext("Notification settings changed")
+  def event_label("preferences_changed"), do: gettext("Language & display settings changed")
   def event_label("fediverse_changed"), do: gettext("Fediverse settings changed")
   def event_label("member_blocked"), do: gettext("Member blocked")
   def event_label("member_unblocked"), do: gettext("Member unblocked")
@@ -248,15 +250,27 @@ defmodule VutuvWeb.AccountEventText do
   def field_label("auto_post_deletion_min_bookmarks"), do: gettext("Bookmark floor")
   def field_label("auto_post_deletion_min_reposts"), do: gettext("Repost floor")
 
+  # A `Vutuv.Prefs` knob is named by the registry that also labels it on the
+  # settings form, so the log and the form cannot word the same switch
+  # differently — and a new pref needs no clause here. A key the registry no
+  # longer knows falls through to the humanizer below, which is what keeps the
+  # append-only log's old rows readable after a pref is retired.
   def field_label(raw) when is_binary(raw) do
+    case Prefs.key(raw) do
+      nil -> humanize_field(raw)
+      key -> Prefs.label(key)
+    end
+  end
+
+  def field_label(raw), do: to_string(raw)
+
+  defp humanize_field(raw) do
     raw
     |> String.trim_trailing("?")
     |> String.replace("_", " ")
     |> :string.titlecase()
     |> to_string()
   end
-
-  def field_label(raw), do: to_string(raw)
 
   @doc """
   Whether this event was somebody else's doing. The whole point of the log, so

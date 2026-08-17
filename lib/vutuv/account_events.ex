@@ -105,6 +105,12 @@ defmodule Vutuv.AccountEvents do
     # Privacy and reach
     "privacy_changed" => ["fields"],
     "notifications_changed" => ["fields"],
+    # The language & display page (issue #1502 added the date shape and the
+    # time zone to it). Field names only, like its siblings: which knob was
+    # touched is what answers "was that me?", while the value is on the page
+    # itself and would put a member's time zone — a coarse location — into a
+    # log that outlives the change by a year.
+    "preferences_changed" => ["fields"],
     # Both halves, like its three siblings above: which switches the save
     # carried, plus the state the take-part switch ended in — the one fediverse
     # setting whose consequences nobody can take back.
