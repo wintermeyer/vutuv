@@ -2466,6 +2466,39 @@ defmodule Vutuv.Posts do
     |> Enum.any?(fn fetch -> fetch.(1, nil) != [] end)
   end
 
+  @doc """
+  Whether the tab `source` has anything for `viewer` stamped at or after
+  `since` — what the feed asks before dotting a tab it is not looking at
+  (issue #1503).
+
+  Same shape as `fediverse_feed_available?/1` one question narrower, and for
+  the same reason: **only the reader's own sources know whether a post reaches
+  them**. A mute, a follow still merely requested, an audience narrower than
+  public, a language they filter out and the resharer's own standing all decide
+  per member, so the write that triggered this cannot fan out an answer — it
+  can only say "something landed, go and look". Each source is asked for its
+  newest row and `Enum.any?/2` stops at the first that qualifies.
+
+  It answers "there is something at the top of that tab at least as new as what
+  just landed", not "that exact post reached you". The two come apart only when
+  a server delivers a post published well before now: then the row this finds
+  is the tab's newest rather than the arrival. A tab with fresh content at the
+  top is still what the dot promises, so that is the conservative side to err
+  on — the side it must never err on is a post the reader may not see, which is
+  why the sources answer rather than the fan-out.
+  """
+  def feed_source_since?(%User{} = viewer, source, %NaiveDateTime{} = since)
+      when source in [:vutuv, :fediverse] do
+    viewer
+    |> feed_sources(source)
+    |> Enum.any?(fn fetch ->
+      case fetch.(1, nil) do
+        [entry | _] -> NaiveDateTime.compare(entry.at, since) != :lt
+        [] -> false
+      end
+    end)
+  end
+
   # Everything the six sources produce, made ready to render.
   #
   # The remote sources (issues #1161, #1166) carry a cached post from another network,

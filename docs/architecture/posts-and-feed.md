@@ -412,6 +412,38 @@ the feed is open sees the bar on their next load. An empty *tab* keeps the bar
 (reachable once the content leaves under the reader — muting the account it
 came from), or they would be stranded on a tab they cannot leave.
 
+**A tab you are not on says something landed there** (issue #1503) — a coral
+dot beside its label (`post_filter_tabs/1`'s `unseen`), cleared by going there
+(`load_source_filter/2` → `clear_unseen/2`; "All" clears both, a named tab only
+itself). A dot and no count: what the reader needs is that there is something
+over there, and the tab reloads from the top anyway. The socket's
+`:unseen_sources` is never stored — it means "since you have been looking at
+this page", so a fresh mount starting clean is the honest state.
+
+The two halves reach it differently, and the difference is what each write
+knows about the reader:
+
+* **A vutuv post is already broadcast.** `insert_entry/3` used to drop an
+  arrival the open tab cannot hold; now it dots that tab's source instead. The
+  tab check moved **below** `Posts.visible_to?/2` for it: while the answer was
+  "do nothing" the order was free, and it is not free for a dot — lighting a
+  tab for a post the reader is turned away from is exactly the lie to avoid.
+  A regression test is calibrated against the old order.
+* **A fediverse arrival broadcast nothing at all**, so the four writes that put
+  a row on that side now send a bare nudge to the local followers of the account
+  or the resharer: `record_remote_post/2`, `record_remote_boost/2` (both to the
+  followers of the sending account — the boost path reads its row back first,
+  because `ON CONFLICT DO NOTHING` cannot say whether *this* delivery wrote it
+  and an `Announce` arrives once per follower), `repost_remote_post/2` and
+  `repost_note/2` (the resharer plus their unmuted followers here). The nudge
+  carries the stamp the entry will wear in the merged feed and nothing else:
+  whether the row reaches this particular reader depends on their mute, the
+  follow's state, the audience and their language filter, so the feed asks its
+  own sources (`Posts.feed_source_since?/3`, one `LIMIT 1` per source with
+  `Enum.any?/2` short-circuiting, the shape `fediverse_feed_available?/1` uses).
+  Only the tab the reader is **not** on is probed — "All" holds both halves, so
+  nothing ever landed elsewhere — and a member with no tab bar pays no query.
+
 **The discovery rail renders with the page.** The rail (Tags you follow / Who
 to follow / Suggested posts) was lazily loaded for one release (v7.200.3: an
 empty aside plus a `LazyRails` hook asking for it after connect), and the

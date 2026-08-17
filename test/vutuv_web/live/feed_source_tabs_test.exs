@@ -448,4 +448,209 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       assert has_element?(view, "[data-post-filter-tab='all'][aria-pressed='true']")
     end
   end
+
+  describe "the tab you are not on says something landed there (issue #1503)" do
+    setup do
+      # `record_remote_post/2` claims the shared inbound cap, which lives in the
+      # RateLimiter's ETS table and outlives a test.
+      Vutuv.RateLimiter.reset()
+      :ok
+    end
+
+    defp dotted?(view, tab) do
+      has_element?(
+        view,
+        "#feed-source-tabs [data-post-filter-tab='#{tab}'] [data-post-filter-unseen]"
+      )
+    end
+
+    # A Create as the servers out there send one, from an account this member
+    # already follows.
+    defp remote_note(account, published \\ DateTime.utc_now(:second)) do
+      unique = System.unique_integer([:positive])
+
+      %{
+        "type" => "Create",
+        "actor" => account.actor_uri,
+        "object" => %{
+          "id" => "https://social.example/posts/#{unique}",
+          "type" => "Note",
+          "attributedTo" => account.actor_uri,
+          "content" => "<p>frisch von drüben</p>",
+          "url" => "https://social.example/@#{account.handle}/#{unique}",
+          "published" => DateTime.to_iso8601(published),
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"]
+        }
+      }
+    end
+
+    test "a vutuv post arriving on the Fediverse tab dots vutuv and All", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {author, _post} = followed_post(user, "an older post")
+      cached_post(remote_account(user, "them"), "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
+
+      assert dotted?(view, "vutuv")
+      # "All" would show it too, so it says so.
+      assert dotted?(view, "all")
+      # You are looking at this one, so nothing on it can be unseen.
+      refute dotted?(view, "fediverse")
+    end
+
+    test "landing on the tab clears its dot", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {author, _post} = followed_post(user, "an older post")
+      cached_post(remote_account(user, "them"), "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
+      assert dotted?(view, "vutuv")
+
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+
+      assert timeline(view) =~ "arriving live"
+      # Gone from "All" as well: the only thing it was standing for is read.
+      refute dotted?(view, "all")
+
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      refute dotted?(view, "vutuv")
+    end
+
+    test "a post the reader may not see dots nothing", %{conn: conn} do
+      # Calibrated against the un-fixed order: `insert_entry/3` used to drop an
+      # arrival on the wrong tab BEFORE asking `visible_to?/2`, which cost
+      # nothing while the answer was "do nothing" and would now light a tab for
+      # a post this member is turned away from.
+      {conn, user} = create_and_login_user(conn)
+      {author, _post} = followed_post(user, "an older post")
+      cached_post(remote_account(user, "them"), "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+
+      # Only people the author follows — and they do not follow this reader.
+      {:ok, _denied} =
+        Posts.create_post(author, %{
+          body: "not for you",
+          denials: [%{"wildcard" => "non_followees"}]
+        })
+
+      refute dotted?(view, "vutuv")
+      refute dotted?(view, "all")
+    end
+
+    test "a post from another network dots the Fediverse tab", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "written here on vutuv")
+      account = remote_account(user, "them")
+      cached_post(account, "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+
+      assert :ok = Fediverse.record_remote_post(remote_note(account), account.actor_uri)
+
+      assert dotted?(view, "fediverse")
+      assert dotted?(view, "all")
+      refute dotted?(view, "vutuv")
+
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      assert timeline(view) =~ "frisch von drüben"
+      refute dotted?(view, "all")
+    end
+
+    test "a post the reader's own follow does not open dots nothing", %{conn: conn} do
+      # The calibration for the probe: the nudge reaches this member (their
+      # follow is not muted, so the fan-out has nothing to go on), and only
+      # their own sources know that a follow nobody has answered yet does not
+      # open that account's followers-only posts. Skip the probe and the dot
+      # lights up here.
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "written here on vutuv")
+
+      # An account they asked to follow and that has not answered. Its older
+      # public post is readable, so the tab bar shows and the probe has a real
+      # row to answer with.
+      account = remote_account("private")
+
+      Repo.insert!(%Follow{
+        user_id: user.id,
+        remote_account_id: account.id,
+        state: "requested",
+        follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/private"
+      })
+
+      old = cached_post(account, "an earlier public post")
+      two_hours_ago = DateTime.add(DateTime.utc_now(:second), -7200)
+      Repo.update!(Ecto.Changeset.change(old, published_at: two_hours_ago))
+
+      # Somebody else's accepted follow is what gets the delivery recorded.
+      Repo.insert!(%Follow{
+        user_id: insert(:user, email_confirmed?: true).id,
+        remote_account_id: account.id,
+        state: "accepted",
+        follow_activity_id: "https://vutuv.test/other/actor#follows/private"
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+
+      followers_only =
+        put_in(remote_note(account), ["object", "to"], [account.actor_uri <> "/followers"])
+
+      assert :ok = Fediverse.record_remote_post(followers_only, account.actor_uri)
+
+      refute dotted?(view, "fediverse")
+      refute dotted?(view, "all")
+    end
+
+    test "a muted account's post dots nothing", %{conn: conn} do
+      # The reader's mute is the one per-member gate the fan-out can answer
+      # itself, so this one never even leaves the write.
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "written here on vutuv")
+
+      # One account whose old post keeps the tab bar on screen…
+      old = cached_post(remote_account(user, "seen"), "read long ago")
+      two_hours_ago = DateTime.add(DateTime.utc_now(:second), -7200)
+      Repo.update!(Ecto.Changeset.change(old, published_at: two_hours_ago))
+
+      # …and one this member muted.
+      muted = remote_account(user, "muted")
+
+      Repo.get_by!(Follow, remote_account_id: muted.id)
+      |> Ecto.Changeset.change(muted: true)
+      |> Repo.update!()
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+
+      assert :ok = Fediverse.record_remote_post(remote_note(muted), muted.actor_uri)
+
+      refute dotted?(view, "fediverse")
+      refute dotted?(view, "all")
+    end
+
+    test "the All tab is never dotted while it is the open one", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {author, _post} = followed_post(user, "an older post")
+      account = remote_account(user, "them")
+      cached_post(account, "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
+      assert :ok = Fediverse.record_remote_post(remote_note(account), account.actor_uri)
+
+      # "All" holds both halves, so nothing landed somewhere else.
+      refute dotted?(view, "all")
+      refute dotted?(view, "vutuv")
+      refute dotted?(view, "fediverse")
+    end
+  end
 end

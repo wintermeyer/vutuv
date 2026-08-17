@@ -1540,6 +1540,61 @@ defmodule Vutuv.Fediverse do
     |> Enum.each(&Activity.broadcast(&1, :remote_followers_changed))
   end
 
+  ## Telling open feeds that something landed on the other tab (issue #1503)
+
+  # A bare "go and look", never a payload: an open /feed sitting on the tab this
+  # did NOT land on asks its own sources whether the arrival reaches this
+  # particular reader (`Vutuv.Posts.feed_source_since?/3`) and dots the other
+  # tab if it does. It has to ask, because mute, a follow still merely
+  # requested, a narrowed audience, the reader's language filter and the
+  # resharer's standing all decide per member — none of which is knowable from
+  # the write. `at` is the stamp the entry will carry in the merged feed
+  # (naive UTC, like every `Vutuv.FeedPage` entry), so the reader's own newest
+  # row can be compared against it.
+  #
+  # Every other subscriber of the member topic ignores this through its
+  # catch-all `handle_info/2`, exactly like `:remote_follows_changed` above.
+  defp nudge_feeds(user_ids, %NaiveDateTime{} = at) do
+    event = {:remote_feed_arrival, %{at: at}}
+
+    user_ids
+    |> Enum.uniq()
+    |> Enum.each(&Activity.broadcast(&1, event))
+  end
+
+  # Who to nudge when an account out there posts: the members following it here
+  # with the follow unmuted. Mute is the one per-member gate this can answer
+  # itself — it hangs off the very row being joined — and answering it here
+  # spares every muted follower a message and a probe. `user_id` is null for a
+  # page's follow (issue #1336); a page has no open feed to dot.
+  defp followers_of_account(%RemoteAccount{id: account_id}, filters \\ []) do
+    from(f in Follow,
+      where: f.remote_account_id == ^account_id and f.muted == false,
+      where: not is_nil(f.user_id),
+      select: f.user_id
+    )
+    |> accepted_only(filters[:accepted])
+    |> Repo.all()
+  end
+
+  defp accepted_only(query, true), do: where(query, [f], f.state == "accepted")
+  defp accepted_only(query, _any), do: query
+
+  # Who to nudge when a member here passes something on: themselves (their own
+  # reshare is a row in their own feed) plus everyone whose follow of them is
+  # unmuted — the audience `feed_remote_reposts/3` and its note twin scope to.
+  defp resharer_audience(%User{id: user_id}) do
+    followers =
+      Repo.all(
+        from(f in Vutuv.Social.Follow,
+          where: f.followee_id == ^user_id and f.muted == false,
+          select: f.follower_id
+        )
+      )
+
+    [user_id | followers]
+  end
+
   # The members here who follow one of these remote accounts. Read **before** a
   # delete of those accounts: their follows cascade away with them, so asked
   # afterwards the answer is always "nobody" and the page never hears about it.
@@ -2294,6 +2349,11 @@ defmodule Vutuv.Fediverse do
          true <- own_thread?(object, account),
          {:ok, post} <- insert_remote_post(account, object, audience) do
       attach_pictures(post, object)
+      # Only the row this delivery really wrote: the same post arrives once per
+      # local follower until every server speaks to our shared inbox, and each
+      # redelivery leaves the `with` as a `:skip` above, so open feeds are
+      # nudged exactly once rather than once per follower squared.
+      nudge_feeds(followers_of_account(account), DateTime.to_naive(post.published_at))
       :ok
     else
       _ -> :skip
@@ -6078,6 +6138,29 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  # Wraps the two acts of `outbound_act/3` that are also **feed sources** — a
+  # member passing a cached post or a reply on — so open feeds hear about it
+  # (issue #1503). The two hearts beside them are not wrapped: a like changes a
+  # figure on a card, it puts no row in anybody's timeline.
+  #
+  # The stamp is taken **before** the write, never after: the reader's feed asks
+  # for a row at or after it, and a stamp read afterwards can sit a tick past
+  # the very row it is meant to find. Only a reshare that was really written
+  # says anything — a second tab's press answers `{:ok, :already}` and has
+  # nothing new to point at.
+  defp with_feed_nudge(%User{} = user, act) do
+    at = NaiveDateTime.utc_now(:second)
+
+    case act.() do
+      {:ok, :reposted} = written ->
+        nudge_feeds(resharer_audience(user), at)
+        written
+
+      other ->
+        other
+    end
+  end
+
   # The member as they stand **now**, for the same reason the subject above is
   # re-read: the card was rendered at some earlier moment (issue #1349). Their
   # own copy came from a LiveView mount and every gate here asks about their
@@ -6657,7 +6740,7 @@ defmodule Vutuv.Fediverse do
   decided from the struct the page rendered with.
   """
   def repost_note(%User{} = user, %Note{} = note),
-    do: outbound_act(user, note, note_repost())
+    do: with_feed_nudge(user, fn -> outbound_act(user, note, note_repost()) end)
 
   @doc """
   The member takes the reshare back: drops the row and queues the matching
@@ -7275,8 +7358,48 @@ defmodule Vutuv.Fediverse do
     %PostBoost{remote_account_id: account.id}
     |> PostBoost.changeset(attrs)
     |> Repo.insert(on_conflict: :nothing)
+    |> nudge_boost_feeds(account, target, attrs.announced_at)
 
     :ok
+  end
+
+  # An `Announce` is delivered once per local follower too, so the nudge has to
+  # know whether *this* delivery wrote the row. `DO NOTHING` cannot say (the id
+  # is minted here, not by Postgres, so the struct comes back looking inserted
+  # either way), so the row is read back by what the unique indexes cover and
+  # its id compared — the same read-back `stored_post/2` does for a cached post.
+  #
+  # Which tab lights up follows what was boosted, not where it came from: a
+  # followed account passing a **member's** post on is a vutuv-tab entry
+  # (issue #1167), and the reader may be sitting on the Fediverse tab when it
+  # lands.
+  defp nudge_boost_feeds({:ok, %PostBoost{id: minted}}, account, target, announced_at) do
+    if stored_boost_id(account, target) == minted do
+      nudge_feeds(
+        followers_of_account(account, accepted: true),
+        DateTime.to_naive(announced_at)
+      )
+    end
+  end
+
+  defp nudge_boost_feeds(_result, _account, _target, _announced_at), do: :ok
+
+  defp stored_boost_id(%RemoteAccount{id: account_id}, %RemotePost{id: post_id}) do
+    Repo.one(
+      from(b in PostBoost,
+        where: b.remote_account_id == ^account_id and b.remote_post_id == ^post_id,
+        select: b.id
+      )
+    )
+  end
+
+  defp stored_boost_id(%RemoteAccount{id: account_id}, %Post{id: post_id}) do
+    Repo.one(
+      from(b in PostBoost,
+        where: b.remote_account_id == ^account_id and b.post_id == ^post_id,
+        select: b.id
+      )
+    )
   end
 
   defp boost_target(%RemotePost{id: id}), do: %{remote_post_id: id}
@@ -7628,7 +7751,7 @@ defmodule Vutuv.Fediverse do
   decided from the struct the page rendered with.
   """
   def repost_remote_post(%User{} = user, %RemotePost{} = post),
-    do: outbound_act(user, post, remote_post_repost())
+    do: with_feed_nudge(user, fn -> outbound_act(user, post, remote_post_repost()) end)
 
   @doc """
   The member takes the boost back: drops the row and queues the matching

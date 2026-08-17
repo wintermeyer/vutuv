@@ -189,6 +189,11 @@ defmodule VutuvWeb.PostLive.Feed do
     # the truth, and the stored column is not read again while the page lives.
     |> assign(:feed_filter, payload.filter)
     |> assign(:source_tabs?, payload.source_tabs?)
+    # The named sources holding something this reader has not seen (issue
+    # #1503), each one a dot on its tab. Socket state on purpose and never
+    # stored: it means "since you have been looking at this page", so a mount
+    # starting clean is the honest state, not a lost one.
+    |> assign(:unseen_sources, MapSet.new())
     |> assign(:more?, payload.more?)
     |> assign(:cursor, payload.cursor)
     |> assign(:empty?, payload.entries == [])
@@ -606,8 +611,18 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:empty?, entries == [])
     |> assign(:pending_posts, [])
     |> assign(:entries, entries)
+    |> clear_unseen(filter)
     |> stream(:posts, entries, reset: true)
   end
+
+  # Landing on a tab clears its dot — the page above is newest-first from the
+  # top, so whatever it was pointing at has now been seen. "All" clears both,
+  # because it shows both; a named tab clears only itself, so a dot waiting on
+  # the other one survives the trip.
+  defp clear_unseen(socket, :all), do: assign(socket, :unseen_sources, MapSet.new())
+
+  defp clear_unseen(socket, source),
+    do: update(socket, :unseen_sources, &MapSet.delete(&1, source))
 
   @impl true
   def handle_info({:new_post, %{post_id: post_id, author_id: author_id}}, socket) do
@@ -690,6 +705,20 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
   end
 
+  # Something landed through the fediverse (issue #1503) — a followed account
+  # posted or boosted, or somebody here passed a remote post or reply on. Unlike
+  # `{:new_post, …}` this carries no entry, because whether that write reaches
+  # THIS reader depends on their mutes, their follow states, the audience and
+  # their language filter; so the nudge only says "look", and the feed asks its
+  # own sources (`Posts.feed_source_since?/3`).
+  #
+  # Only the tab the reader is NOT on can be dotted, which is why "All" ignores
+  # this outright: it shows both halves, so nothing landed elsewhere. A member
+  # with no tab bar has nowhere to put a dot and pays no query either.
+  def handle_info({:remote_feed_arrival, %{at: at}}, socket) do
+    {:noreply, dot_other_tab(socket, at)}
+  end
+
   # The viewer followed / unfollowed a tag elsewhere (a tag page in another tab,
   # issue #872): redraw the "Tags you follow" and "Who to follow" rails so an
   # open feed reflects it live. Posts already streamed stay; the new tag's posts
@@ -767,6 +796,42 @@ defmodule VutuvWeb.PostLive.Feed do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
+  # The dot half of `{:remote_feed_arrival, …}` above. Three cheap refusals
+  # before the query: "All" has no other tab, a member without the tab bar has
+  # nowhere to show one, and a tab already dotted has nothing to learn.
+  defp dot_other_tab(socket, at) do
+    source = other_source(socket.assigns.feed_filter)
+
+    cond do
+      is_nil(source) or not socket.assigns.source_tabs? ->
+        socket
+
+      MapSet.member?(socket.assigns.unseen_sources, source) ->
+        socket
+
+      Posts.feed_source_since?(socket.assigns.current_user, source, at) ->
+        mark_unseen(socket, source)
+
+      true ->
+        socket
+    end
+  end
+
+  # The other named tab — nil on "All", which is both of them at once.
+  defp other_source(:vutuv), do: :fediverse
+  defp other_source(:fediverse), do: :vutuv
+  defp other_source(_all), do: nil
+
+  # The tab values carrying a dot: the named sources holding something unseen,
+  # plus "All", which shows whatever they hold. The component drops the dot on
+  # whichever tab is active, so this never has to know which one that is.
+  defp unseen_tabs(sources) do
+    case Enum.map(sources, &to_string/1) do
+      [] -> []
+      named -> ["all" | named]
+    end
+  end
+
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in
   # place (update_only, so an off-page id is a harmless no-op). The entry's other
   # fields — engagement, follow edge, repost roster — are preserved.
@@ -822,19 +887,35 @@ defmodule VutuvWeb.PostLive.Feed do
       Social.blocked_between?(user.id, entry.post.user_id) ->
         {:noreply, socket}
 
+      # Visibility is asked FIRST, and the order is the whole correctness of
+      # the dot below (issue #1503): the tab check used to come first and drop
+      # the arrival, which cost nothing while the answer was "do nothing" and
+      # would now light a tab for a post this reader is not allowed to read.
+      not Posts.visible_to?(entry.post, user) ->
+        {:noreply, socket}
+
       # A post nobody on this tab asked for must not be counted by the pill
       # either: the pill's whole promise is that clicking it shows those posts
       # right here.
-      not Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
-        {:noreply, socket}
-
-      Posts.visible_to?(entry.post, user) ->
+      Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
         {:noreply, update(socket, :pending_posts, &[decorate(entry, user, socket) | &1])}
 
+      # It belongs on a tab the reader is not looking at, so say so there
+      # rather than dropping it: a dot, not a count — the point is that
+      # something is over there, and the tab reloads from the top anyway.
       true ->
-        {:noreply, socket}
+        {:noreply, mark_unseen(socket, entry_source(entry))}
     end
   end
+
+  # Which named tab an entry belongs to — the two are a partition, so the one
+  # question `remote_feed_entry?/1` answers decides it.
+  defp entry_source(entry) do
+    if Posts.remote_feed_entry?(entry), do: :fediverse, else: :vutuv
+  end
+
+  defp mark_unseen(socket, source),
+    do: update(socket, :unseen_sources, &MapSet.put(&1, source))
 
   # A newly streamed reply renders the post it answers inline (the threaded
   # card), so drop the parent's standalone row — from the stream and from any
@@ -1146,13 +1227,17 @@ defmodule VutuvWeb.PostLive.Feed do
           it is false on an installation with the fediverse switched off. A
           feed with fediverse content in it is never empty, so no separate
           empty-feed check is needed — and an empty *tab* keeps the bar, or
-          there would be no way back. --%>
+          there would be no way back.
+
+          A tab holding something that landed while the reader was on another
+          one wears a coral dot (issue #1503), cleared by going there. --%>
           <.post_filter_tabs
             :if={@source_tabs?}
             id="feed-source-tabs"
             active={to_string(@feed_filter)}
             event="filter-source"
             options={feed_filter_options()}
+            unseen={unseen_tabs(@unseen_sources)}
           />
 
           <div :if={@pending_posts != []} class="text-center">

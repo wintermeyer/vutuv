@@ -99,4 +99,32 @@ defmodule VutuvWeb.PostComponentsTest do
       refute html =~ "py-1 "
     end
   end
+
+  describe "post_filter_tabs/1 unseen dots (issue #1503)" do
+    # How many tabs the given markup dots.
+    defp dots(html), do: length(String.split(html, "data-post-filter-unseen")) - 1
+
+    test "no dots at all unless a caller asks for them" do
+      # The profile and the `/:slug/posts` archive pass no `unseen`, and their
+      # tabs must look exactly as they did.
+      assert dots(tabs_html()) == 0
+    end
+
+    test "an inactive tab named in unseen wears the coral dot" do
+      html = tabs_html(active: "all", unseen: ["reposts"])
+
+      assert dots(html) == 1
+      assert html =~ "bg-accent"
+      # Icon-free and count-free, so the word is the whole accessible name.
+      assert html =~ "sr-only"
+    end
+
+    test "the active tab never dots, whatever it is passed" do
+      # You are looking at it — the feed's own bookkeeping should never send
+      # this, and the control must not be able to contradict itself if it does.
+      html = tabs_html(active: "reposts", unseen: ["all", "reposts"])
+
+      assert dots(html) == 1
+    end
+  end
 end

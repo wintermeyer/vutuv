@@ -475,6 +475,11 @@ defmodule VutuvWeb.PostComponents do
   pill, which reads on white and on the canvas alike. That is the same
   vocabulary the shell's top-bar nav uses for the page you are on, so "which
   of these am I on" looks the same everywhere in the app.
+
+  `unseen` dots the tabs holding something the reader has not seen (issue
+  #1503) — the coral dot the notifications list wears, and a dot rather than a
+  count because the host knows *that* something landed there, not how much.
+  The active tab never carries one whatever is passed: you are looking at it.
   """
   attr(:active, :string, required: true)
   attr(:event, :string, default: nil, doc: "phx-click event name → button mode")
@@ -484,6 +489,8 @@ defmodule VutuvWeb.PostComponents do
     default: nil,
     doc: "value/label pairs; defaults to post_filter_options/0"
   )
+
+  attr(:unseen, :list, default: [], doc: "tab values carrying an unseen dot")
 
   attr(:rest, :global, doc: "container attrs, e.g. an id for tests")
 
@@ -506,7 +513,7 @@ defmodule VutuvWeb.PostComponents do
           aria-pressed={to_string(@active == value)}
           class={post_filter_tab_class(@active == value)}
         >
-          {label}
+          {label}<.unseen_dot show={value != @active and value in @unseen} />
         </button>
         <.link
           :if={!@event}
@@ -515,10 +522,28 @@ defmodule VutuvWeb.PostComponents do
           aria-current={@active == value && "page"}
           class={post_filter_tab_class(@active == value)}
         >
-          {label}
+          {label}<.unseen_dot show={value != @active and value in @unseen} />
         </.link>
       <% end %>
     </div>
+    """
+  end
+
+  # The unseen marker: the same 8px coral dot an unread notification row wears,
+  # here riding beside the label rather than over it — a tab is text, so there
+  # is no icon to sit on the corner of. Screen readers get the word; the dot
+  # carries no number, so there is nothing else to say.
+  attr(:show, :boolean, required: true)
+
+  defp unseen_dot(assigns) do
+    ~H"""
+    <span
+      :if={@show}
+      data-post-filter-unseen
+      class="ml-1.5 inline-block h-2 w-2 rounded-full bg-accent align-middle"
+    >
+      <span class="sr-only">{gettext("New")}</span>
+    </span>
     """
   end
 
