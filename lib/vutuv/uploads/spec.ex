@@ -134,6 +134,20 @@ defmodule Vutuv.Uploads.Spec do
   end
 
   @doc """
+  The widest pixel width `type` is ever stored at. Every `fit` never upscales,
+  so this is also the point past which more pixels are thrown away — which is
+  what the upload forms tell members to aim for (`VutuvWeb.UI`'s recommended
+  avatar/cover sizes read it, so a resolution change here moves the advice).
+  """
+  def max_width(type) do
+    type |> versions() |> Enum.map(&fit_width/1) |> Enum.max()
+  end
+
+  defp fit_width(%{fit: {:crop, width, _height, _gravity}}), do: width
+  defp fit_width(%{fit: {:box_down, size}}), do: size
+  defp fit_width(%{fit: {:width_down, width}}), do: width
+
+  @doc """
   Decodes `path` and applies the EXIF orientation, returning
   `{:ok, %Vix.Vips.Image{}}` ready for `write_derived/3` (decode and rotate
   once, then derive all versions from it) or `{:error, reason}` when the file

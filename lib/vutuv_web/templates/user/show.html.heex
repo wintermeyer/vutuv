@@ -47,7 +47,17 @@ the resulting ~200px rail width. --%>
         if cover_pending?,
           do: ~p"/settings/pending_image/cover/wide",
           else: Vutuv.Cover.display_url(@user, :wide) %>
-      <div class="relative h-28 overflow-hidden rounded-t-2xl">
+      <%!-- A photo gets the crop dialog's own frame (cover_aspect_class(), so
+      the strip the member positioned is the strip everybody sees, on a phone as
+      on a desktop — issue #1518); the gradient default has no shape to honour
+      and keeps the compact h-28 band instead of 185px of empty colour. --%>
+      <div
+        class={[
+          "relative overflow-hidden rounded-t-2xl",
+          (cover_url && cover_aspect_class()) || "h-28"
+        ]}
+        data-cover-frame
+      >
         <%= if cover_url do %>
           <img src={cover_url} alt={gettext("Cover photo of %{name}", name: full_name(@user))} class="h-full w-full object-cover" />
         <% else %>

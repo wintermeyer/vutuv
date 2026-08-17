@@ -29,6 +29,7 @@ defmodule VutuvWeb.UI do
   alias Vutuv.Accounts.User
   alias Vutuv.DateRegions
   alias Vutuv.Tags.UserTag
+  alias Vutuv.Uploads.Spec
   alias Vutuv.ViewerClock
   alias VutuvWeb.CodeHighlight.Languages
   alias VutuvWeb.JsonLd
@@ -2650,6 +2651,62 @@ defmodule VutuvWeb.UI do
   defp presence_dot_pos("sm"), do: "-bottom-0.5 -right-0.5 h-3 w-3"
   defp presence_dot_pos("lg"), do: "bottom-1 right-1 h-4 w-4"
   defp presence_dot_pos(_), do: "-bottom-0.5 -right-0.5 h-3.5 w-3.5"
+
+  # ── The profile cover banner's shape ──────────────────────────────────────
+  #
+  # One constant behind every rendering of a cover, because the crop dialog and
+  # the banner have to frame the same rectangle. They did not: the dialog framed
+  # 4:1 while the banner was a fixed-height `h-28` box of whatever width the
+  # column happened to have (~6.6:1 on a desktop, ~3:1 on a phone), so the strip
+  # a member positioned was cropped a second time, by a different amount on
+  # every screen (issue #1518). Anything showing a cover — banner, settings
+  # preview, the fresh-pick preview — takes `cover_aspect_class/0` and lets
+  # `object-cover` do the rest.
+  @cover_aspect_w 4
+  @cover_aspect_h 1
+
+  @doc "The cover banner's shape as `{width, height}` parts of its aspect ratio."
+  def cover_aspect, do: {@cover_aspect_w, @cover_aspect_h}
+
+  @doc """
+  The `aspect-*` utility every cover frame carries. Spelled out rather than
+  interpolated from `cover_aspect/0` because Tailwind's scanner only sees
+  literal class strings; `cover_aspect_test.exs` fails the build if the two
+  drift apart.
+  """
+  def cover_aspect_class, do: "aspect-[4/1]"
+
+  @doc """
+  The same shape as the number `assets/js/image_crop.js` reads out of the file
+  input's `data-crop-aspect` (frame width divided by its height).
+  """
+  def cover_crop_aspect do
+    ratio = @cover_aspect_w / @cover_aspect_h
+    if ratio == trunc(ratio), do: Integer.to_string(trunc(ratio)), else: Float.to_string(ratio)
+  end
+
+  @doc "The shape as members read it in the upload hint: `\"4:1\"`."
+  def cover_aspect_label, do: "#{@cover_aspect_w}:#{@cover_aspect_h}"
+
+  @doc """
+  Pixel size to aim for when uploading a cover: the widest version we store, at
+  the banner's own shape. More pixels than this are thrown away by the resize.
+  """
+  def recommended_cover_size do
+    width = Spec.max_width(:cover)
+    {width, div(width * @cover_aspect_h, @cover_aspect_w)}
+  end
+
+  @doc """
+  Pixel size to aim for when uploading an avatar: double what we store, rounded
+  up to a figure a person can hold in their head. Double, because the crop
+  dialog zooms up to 4x and a member who keeps a quarter of their photo should
+  still have a sharp square left.
+  """
+  def recommended_avatar_size do
+    size = ceil(Spec.max_width(:avatar) * 2 / 100) * 100
+    {size, size}
+  end
 
   @doc """
   Compact display form for counted numbers, used site-wide wherever a count is
