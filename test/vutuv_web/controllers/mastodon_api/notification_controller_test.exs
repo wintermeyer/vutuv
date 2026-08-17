@@ -9,6 +9,7 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
 
   alias Vutuv.Activity
   alias Vutuv.Posts
+  alias Vutuv.Repo
   alias Vutuv.Social
 
   test "a like and a follow arrive as favourite and follow", %{conn: conn} do
@@ -130,5 +131,79 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
            |> mastodon_conn(token)
            |> get("/api/v1/notifications/follower-#{Ecto.UUID.generate()}")
            |> response(404)
+  end
+
+  # A client pages by handing back the `id` it was given, and these ids are not
+  # bare uuids — they are the derived item's key, `like-<uuid>`. `cast_or_nil/1`
+  # answers nil for that, a nil boundary is *no* boundary, and no boundary is
+  # the newest page: before the prefix was stripped off the incoming `max_id`,
+  # "load more" served page one again, forever. Calibrated against the un-fixed
+  # controller, where the second page comes back identical to the first.
+  test "paging by the id a client was given advances the list", %{conn: conn} do
+    member = insert(:activated_user)
+    {:ok, post} = Posts.create_post(member, %{body: "Viel beachtet"})
+
+    for _n <- 1..4, do: :ok = Posts.like_post(insert(:activated_user), post)
+
+    token = mastodon_token(member, ["read"])
+
+    first =
+      conn
+      |> mastodon_conn(token)
+      |> get("/api/v1/notifications?limit=2")
+      |> json_response(200)
+
+    assert length(first) == 2
+
+    second =
+      build_conn()
+      |> mastodon_conn(token)
+      |> get("/api/v1/notifications?limit=2&max_id=#{List.last(first)["id"]}")
+      |> json_response(200)
+
+    assert length(second) == 2
+
+    assert MapSet.disjoint?(
+             MapSet.new(first, & &1["id"]),
+             MapSet.new(second, & &1["id"])
+           ),
+           "the second page repeated the first — the boundary never reached the query"
+  end
+
+  # The unmappable kinds are dropped **after** the read, so a full read can
+  # still answer a short page with plenty left behind it. Judging "is there
+  # more" by the answer's length calls that the end of the list.
+  #
+  # The newest entry here is the endorsement Mastodon has no type for, so a read
+  # of two yields one item against a limit of two — which is exactly the shape
+  # the old length test got wrong, and it goes red without the `more?` override.
+  test "a page thinned by unmappable kinds still offers a next link", %{conn: conn} do
+    member = insert(:activated_user)
+    {:ok, post} = Posts.create_post(member, %{body: "Gemischt"})
+
+    for _n <- 1..2, do: :ok = Posts.like_post(insert(:activated_user), post)
+
+    # Backdated so the endorsement below is unambiguously the newest entry: the
+    # rows are stamped to the second and the merge breaks a tie per source, not
+    # across them, so three same-second rows order arbitrarily.
+    Repo.update_all(Vutuv.Posts.PostLike,
+      set: [inserted_at: NaiveDateTime.add(NaiveDateTime.utc_now(:second), -60)]
+    )
+
+    # A real endorsement **row**, with its endorser: the notification feed reads
+    # `user_tag_endorsements` and inner-joins the endorser, so neither
+    # `notify_endorsement/3` on its own (a webhook and a broadcast) nor a row
+    # with no `user_id` puts anything here to filter out.
+    insert(:user_tag_endorsement,
+      user_tag: insert(:user_tag, user: member, tag: insert(:tag)),
+      user: insert(:activated_user)
+    )
+
+    token = mastodon_token(member, ["read"])
+    conn = conn |> mastodon_conn(token) |> get("/api/v1/notifications?limit=2")
+
+    assert length(json_response(conn, 200)) == 1
+    assert [link] = Plug.Conn.get_resp_header(conn, "link")
+    assert link =~ ~s(rel="next")
   end
 end

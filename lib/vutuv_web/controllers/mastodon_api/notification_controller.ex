@@ -28,6 +28,7 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
+  alias Vutuv.MastodonApi.Notifications
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
@@ -35,32 +36,24 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
   alias Vutuv.UUIDv7
   alias VutuvWeb.MastodonApi.Pagination
 
-  # vutuv kind -> Mastodon notification type. A reply and a thread answer both
-  # arrive as `mention`, which is the type Mastodon uses for "somebody wrote to
-  # you"; it has no separate reply type.
-  @types %{
-    "mention" => "mention",
-    "reply" => "mention",
-    "thread" => "mention",
-    "fediverse_reply" => "mention",
-    "like" => "favourite",
-    "fediverse_reaction" => "favourite",
-    "follower" => "follow",
-    "connection" => "follow"
-  }
-
   def index(conn, params) do
-    page = Pagination.params(params)
+    page = Pagination.params(params, strip: &bare_id/1)
+    read = load(conn, page)
 
     items =
-      conn
-      |> load(page)
+      read
       |> Enum.filter(&mapped?/1)
       |> filter_types(params)
       |> Pagination.window(page, &bare_id/1)
 
+    # What the **read** returned decides whether there is more, not what
+    # survived the filter: a page of tag endorsements and CV updates maps to
+    # nothing here, and calling that the end of the list would strand a client
+    # above every older mention.
+    more? = length(read) >= Pagination.fetch_size(page)
+
     conn
-    |> Pagination.link_header(Enum.map(items, &bare_id/1), page)
+    |> Pagination.link_header(Enum.map(items, &bare_id/1), page, more?: more?)
     |> json(notifications(conn, items))
   end
 
@@ -105,7 +98,7 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
     end
   end
 
-  defp mapped?(item), do: Map.has_key?(@types, item.kind)
+  defp mapped?(item), do: Notifications.mapped?(item)
 
   # `types[]` and `exclude_types[]` are how a client's filter tabs ask for one
   # kind. Both are Mastodon types, not vutuv kinds.
@@ -176,24 +169,17 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
   # Somebody on another network has no vutuv profile, so `Vutuv.Activity` leaves
   # the local actor fields nil and carries their handle instead. A Mastodon
   # notification must still name an account, so it is built from what there is.
-  defp placeholder_account(item) do
-    handle = item[:actor_handle] || item[:actor_name] || "unknown"
+  defp placeholder_account(item), do: Notifications.placeholder_account(item)
 
-    %{
-      id: "remote-actor-" <> Base.url_encode64(:crypto.hash(:sha256, handle), padding: false),
-      username: handle |> String.trim_leading("@") |> String.split("@") |> hd(),
-      acct: String.trim_leading(handle, "@"),
-      display_name: item[:actor_name] || handle,
-      url: item[:actor_url],
-      avatar: nil,
-      created_at: nil,
-      group: false
-    }
-  end
+  defp type(item), do: Notifications.type(item)
 
-  defp type(item), do: Map.fetch!(@types, item.kind)
+  # A derived item's key is `<kind>-<uuid>`, and that whole string is the `id` a
+  # client is given and hands back. Both shapes go through here: the item, when
+  # the page is being cut and numbered, and the bare string, when it arrives as
+  # a `max_id` and has to become the uuid the ordering is built on.
+  defp bare_id(%{id: id}), do: bare_id(id)
 
-  defp bare_id(%{id: id}) do
+  defp bare_id(id) when is_binary(id) do
     case String.split(id, "-", parts: 2) do
       [_prefix, rest] -> rest
       _plain -> id

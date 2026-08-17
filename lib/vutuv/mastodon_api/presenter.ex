@@ -54,7 +54,7 @@ defmodule Vutuv.MastodonApi.Presenter do
 
   def account(%Organization{} = organization, counts) do
     handle = organization.username || organization.slug
-    icon = MastodonApi.main_url("/images/icon-512.png")
+    icon = fallback_avatar()
 
     base_account(%{
       id: organization.id,
@@ -73,7 +73,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   def account(%RemoteAccount{} = account, _counts) do
     handle = RemoteAccount.display_handle(account) |> String.trim_leading("@")
     username = handle |> String.split("@") |> hd()
-    icon = MastodonApi.main_url("/images/icon-512.png")
+    icon = fallback_avatar()
 
     base_account(%{
       id: "remote-" <> account.id,
@@ -201,7 +201,25 @@ defmodule Vutuv.MastodonApi.Presenter do
 
   defp note(_blank), do: ""
 
-  defp base_account(fields) do
+  @doc """
+  The picture stood in for an account we hold no avatar for — a page, a remote
+  actor, a member whose avatar is the generated placeholder.
+
+  One function rather than the same literal in five places, so an installation
+  that changes its icon changes it everywhere at once.
+  """
+  def fallback_avatar, do: MastodonApi.main_url("/images/icon-512.png")
+
+  @doc """
+  The keys every account carries, under the ones a caller filled in.
+
+  Public because an account is also built outside this module — the stand-in for
+  a remote actor in `Vutuv.MastodonApi.Notifications`. A client reads `emojis`,
+  `fields` and the counts without checking, so a hand-built map that skips them
+  hands it a `nil` where it expects a list; going through here is what makes
+  that impossible.
+  """
+  def base_account(fields) do
     Map.merge(
       %{
         locked: false,
@@ -209,8 +227,8 @@ defmodule Vutuv.MastodonApi.Presenter do
         discoverable: true,
         group: false,
         note: "",
-        header: MastodonApi.main_url("/images/icon-512.png"),
-        header_static: MastodonApi.main_url("/images/icon-512.png"),
+        header: fallback_avatar(),
+        header_static: fallback_avatar(),
         avatar_static: fields.avatar,
         followers_count: 0,
         following_count: 0,
@@ -260,7 +278,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp user_avatar(user) do
     case Avatar.display_url(user, :thumb) do
       "/" <> _path = relative -> MastodonApi.main_url(relative)
-      "data:" <> _placeholder -> MastodonApi.main_url("/images/icon-512.png")
+      "data:" <> _placeholder -> fallback_avatar()
       absolute -> absolute
     end
   end
@@ -277,7 +295,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp note_fallback_account(note) do
     handle = Note.display_handle(note) |> String.trim_leading("@")
     username = handle |> String.split("@") |> hd()
-    icon = MastodonApi.main_url("/images/icon-512.png")
+    icon = fallback_avatar()
 
     id = :crypto.hash(:sha256, note.actor_uri) |> Base.url_encode64(padding: false)
 

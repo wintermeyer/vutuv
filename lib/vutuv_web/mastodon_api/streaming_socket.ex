@@ -28,6 +28,7 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
   alias Vutuv.ApiAuth
   alias Vutuv.MastodonApi
   alias Vutuv.MastodonApi.Access
+  alias Vutuv.MastodonApi.Notifications
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.MastodonApi.Scopes
   alias Vutuv.Posts
@@ -44,10 +45,26 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
          {:ok, organization} <- Access.authorize_token(api_token, user),
          true <- Scopes.granted?(api_token.scopes, "read:statuses"),
          ["read:statuses"] <- Access.allowed_scopes(user, organization, ["read:statuses"]) do
-      {:ok, %{user: user, organization: organization, streams: MapSet.new()}}
+      {:ok,
+       %{
+         user: user,
+         organization: organization,
+         streams: MapSet.new(),
+         notifications?: granted?(user, organization, api_token, "read:notifications")
+       }}
     else
       _refused -> :error
     end
+  end
+
+  # The user stream carries two things a client asks for with two scopes, and
+  # `read:statuses` is the only one connecting requires (Mastodon lets a client
+  # open the socket with it alone). So whether notifications go down it is asked
+  # separately — a token authorized to read this member's posts was never
+  # authorized to read who liked them.
+  defp granted?(user, organization, api_token, scope) do
+    Scopes.granted?(api_token.scopes, scope) and
+      Access.allowed_scopes(user, organization, [scope]) == [scope]
   end
 
   @impl true
@@ -100,7 +117,11 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
   end
 
   def handle_info({:new_notification, notification}, state) do
-    {:push, event("notification", streamed_notification(notification)), state}
+    if state.notifications? and Notifications.mapped?(notification) do
+      {:push, event("notification", streamed_notification(notification)), state}
+    else
+      {:ok, state}
+    end
   end
 
   def handle_info({:post_deleted, %{post_id: post_id}}, state) do
@@ -122,8 +143,13 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
   # host, so demanding the subdomain here let it authenticate and then never
   # open a stream — the one failure a member reads as "the app is broken"
   # rather than as a missing feature.
+  # `enabled?/0` as well as the host, for the same reason `Plugs.MastodonApiGate`
+  # checks both: an operator who sets `MASTODON_API_ENABLED=false` has turned the
+  # adapter off, and an adapter whose HTTP half 404s while its websocket still
+  # accepts connections is not off. The socket is mounted on the shared endpoint
+  # and so is reached by neither the gate nor the router.
   defp check_host(%{connect_info: %{uri: %URI{host: host}}}) when is_binary(host) do
-    if MastodonApi.client_host?(host), do: :ok, else: :error
+    if MastodonApi.enabled?() and MastodonApi.client_host?(host), do: :ok, else: :error
   end
 
   defp check_host(_transport), do: :error
@@ -175,14 +201,22 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
   end
 
   # The notification the shell broadcasts is the same derived item the REST
-  # endpoint renders, minus the batched account/status lookup — a live push
-  # carries one item, so the batch would be a batch of one.
+  # endpoint renders, and it goes out in the same vocabulary: the **Mastodon**
+  # type from `Vutuv.MastodonApi.Notifications`, never the raw vutuv kind. A
+  # socket that sent `"like"` where `/api/v1/notifications` says `"favourite"`
+  # made one notification two different things depending on how the client heard
+  # about it, and sent kinds Mastodon has no type for at all.
+  #
+  # The account is looked up rather than left nil: a Notification entity without
+  # one is not a Notification, and a client reading `account.acct` off nil is a
+  # crash on the client's side of a contract we wrote. One row for one item is
+  # what the batch loader would have cost anyway.
   defp streamed_notification(notification) do
     %{
       id: notification[:id],
-      type: notification[:kind],
+      type: Notifications.type(notification),
       created_at: notification[:at] && to_string(notification[:at]),
-      account: nil,
+      account: Notifications.account(notification),
       status: nil
     }
   end

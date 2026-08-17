@@ -167,6 +167,53 @@ defmodule VutuvWeb.MastodonApi.StreamingSocketTest do
 
       assert StreamingSocket.connect(transport(%{"access_token" => token})) == :error
     end
+
+    # The installation switch, not only the host. An operator who set
+    # MASTODON_API_ENABLED=false turned the adapter off, and an adapter whose
+    # HTTP half 404s while its websocket still accepts connections is not off —
+    # the socket hangs off the shared endpoint, so neither the gate plug nor the
+    # router ever sees it. Calibrated against the un-fixed `check_host/1`, which
+    # asked `client_host?/1` alone and let this connect.
+    test "refuses every connection while the adapter is switched off" do
+      token = mastodon_token(insert(:activated_user), ["read"])
+
+      previous = Application.fetch_env!(:vutuv, :mastodon_api_enabled)
+      Application.put_env(:vutuv, :mastodon_api_enabled, false)
+      on_exit(fn -> Application.put_env(:vutuv, :mastodon_api_enabled, previous) end)
+
+      assert StreamingSocket.connect(transport(%{"access_token" => token})) == :error
+    end
+  end
+
+  # The user stream carries statuses **and** notifications, and Mastodon lets a
+  # client open it with `read:statuses` alone — so the second scope has to be
+  # asked separately. Before it was, a token authorized only to read this
+  # member's posts was handed every notification about them.
+  describe "a token without read:notifications" do
+    setup do
+      user = insert(:activated_user)
+      token = mastodon_token(user, ["read:statuses"])
+      {:ok, state} = StreamingSocket.connect(transport(%{"access_token" => token}))
+      {:ok, state: state, user: user}
+    end
+
+    test "still opens the stream", %{state: state} do
+      refute state.notifications?
+    end
+
+    test "still receives a new post", %{state: state} do
+      {:ok, post} = Posts.create_post(insert(:activated_user), %{body: "Öffentlich"})
+
+      assert {:push, _frame, ^state} =
+               StreamingSocket.handle_info({:new_post, %{post_id: post.id}}, state)
+    end
+
+    test "receives no notification", %{state: state} do
+      notification = %{id: "like-1", kind: "like", at: ~N[2026-08-17 10:00:00]}
+
+      assert {:ok, ^state} =
+               StreamingSocket.handle_info({:new_notification, notification}, state)
+    end
   end
 
   describe "the wire protocol" do
@@ -253,8 +300,20 @@ defmodule VutuvWeb.MastodonApi.StreamingSocketTest do
              }
     end
 
-    test "pushes a notification", %{state: state} do
-      notification = %{id: "n-1", kind: "like", at: ~N[2026-08-17 10:00:00]}
+    # The **Mastodon** type, not the vutuv kind. A socket saying "like" where
+    # `/api/v1/notifications` says "favourite" makes one notification two
+    # different things depending on how the client heard about it, and "like" is
+    # not a type any client knows. Calibrated against the un-fixed socket, which
+    # passed `notification[:kind]` straight through and made this line red.
+    test "pushes a notification in Mastodon's vocabulary", %{state: state} do
+      actor = insert(:activated_user)
+
+      notification = %{
+        id: "like-#{Vutuv.UUIDv7.generate()}",
+        kind: "like",
+        actor_id: actor.id,
+        at: ~N[2026-08-17 10:00:00]
+      }
 
       assert {:push, frame, ^state} =
                StreamingSocket.handle_info({:new_notification, notification}, state)
@@ -262,8 +321,22 @@ defmodule VutuvWeb.MastodonApi.StreamingSocketTest do
       decoded = decode_frame(frame)
 
       assert decoded["event"] == "notification"
-      assert decoded["payload"]["type"] == "like"
-      assert decoded["payload"]["id"] == "n-1"
+      assert decoded["payload"]["type"] == "favourite"
+      assert decoded["payload"]["id"] == notification.id
+
+      # A Notification entity without an account is not one, and a client
+      # reading `account.acct` off nil crashes on its side of our contract.
+      assert decoded["payload"]["account"]["id"] == actor.id
+      assert decoded["payload"]["account"]["acct"] == actor.username
+    end
+
+    # The REST endpoint refuses to invent a type for a vutuv-only kind, and the
+    # socket is the same contract over a different transport.
+    test "stays silent about a kind Mastodon has no type for", %{state: state} do
+      notification = %{id: "cv_update-1", kind: "cv_update", at: ~N[2026-08-17 10:00:00]}
+
+      assert {:ok, ^state} =
+               StreamingSocket.handle_info({:new_notification, notification}, state)
     end
 
     test "ignores every other broadcast on the member's topic", %{state: state} do

@@ -21,25 +21,15 @@ defmodule Vutuv.MastodonApi.PushDispatcher do
 
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth.Token
+  alias Vutuv.MastodonApi.Notifications
   alias Vutuv.MastodonApi.PushSubscription
   alias Vutuv.MastodonApi.WebPush
   alias Vutuv.Repo
 
-  @types %{
-    "mention" => "mention",
-    "reply" => "mention",
-    "thread" => "mention",
-    "fediverse_reply" => "mention",
-    "like" => "favourite",
-    "fediverse_reaction" => "favourite",
-    "follower" => "follow",
-    "connection" => "follow"
-  }
-
   @doc "Pushes `notification` to `user_id`'s registered devices, if any."
   def dispatch(user_id, notification) when is_binary(user_id) do
     with true <- WebPush.configured?(),
-         type when is_binary(type) <- @types[notification[:kind]],
+         type when is_binary(type) <- Notifications.type(notification[:kind]),
          [_ | _] = subscriptions <- subscriptions_for(user_id, type) do
       locale = preferred_locale(user_id)
       Enum.each(subscriptions, &deliver(&1, type, notification, locale))

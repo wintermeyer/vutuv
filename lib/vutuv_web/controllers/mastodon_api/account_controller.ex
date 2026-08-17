@@ -75,7 +75,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   end
 
   def statuses(conn, %{"id" => id} = params) do
-    page = Pagination.params(strip_prefixes(params))
+    page = Pagination.params(params, strip: &bare_id/1)
     opts = Pagination.opts(page)
 
     statuses =
@@ -112,7 +112,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   end
 
   def following(conn, %{"id" => id} = params) do
-    page = Pagination.params(strip_prefixes(params))
+    page = Pagination.params(params, strip: &bare_id/1)
 
     opts = Pagination.opts(page)
 
@@ -464,19 +464,4 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   defp bare_id("remote-note-" <> rest), do: rest
   defp bare_id("remote-" <> rest), do: rest
   defp bare_id(id), do: id
-
-  # An account or status from another network is rendered with a prefixed id,
-  # and that is what a client hands back as the boundary. Stripping it here is
-  # not cosmetic: `UUIDv7.cast_or_nil/1` answers nil for `remote-<uuid>`, and a
-  # nil boundary is no boundary — so a page that happened to end on a remote
-  # row would send the client back to the top of the list, forever. The bare
-  # uuid underneath is the part that carries the timestamp.
-  defp strip_prefixes(params) do
-    Enum.reduce(~w(max_id since_id min_id), params, fn key, acc ->
-      case acc[key] do
-        value when is_binary(value) -> Map.put(acc, key, bare_id(value))
-        _absent -> acc
-      end
-    end)
-  end
 end

@@ -36,13 +36,33 @@ defmodule VutuvWeb.MastodonApi.Pagination do
 
   defstruct limit: @default_limit, max_id: nil, since_id: nil, min_id: nil
 
-  @doc "Reads the four parameters, clamping `limit` to Mastodon's 1..40."
+  @doc """
+  Reads the four parameters, clamping `limit` to Mastodon's 1..40.
+
+  **`:strip` is not optional for a list whose ids are prefixed.** A client hands
+  back the `id` it was given, and several lists here render one that is not a
+  bare uuid — `remote-<uuid>` for anything from another network, `like-<uuid>`
+  for a derived notification. `UUIDv7.cast_or_nil/1` answers `nil` for those, a
+  nil boundary is *no* boundary, and no boundary is the newest page — so a
+  client walking such a list is sent back to the top of it on every "load more",
+  forever. Pass a 1-arity function that reduces the rendered id to the uuid
+  underneath (the part that carries the timestamp, and so the ordering).
+  """
   def params(params, opts \\ []) do
+    strip = Keyword.get(opts, :strip, & &1)
+
+    boundary = fn key ->
+      case params[key] do
+        value when is_binary(value) -> value |> strip.() |> UUIDv7.cast_or_nil()
+        _absent -> nil
+      end
+    end
+
     %__MODULE__{
       limit: parse_limit(params, Keyword.get(opts, :default_limit, @default_limit)),
-      max_id: UUIDv7.cast_or_nil(params["max_id"]),
-      since_id: UUIDv7.cast_or_nil(params["since_id"]),
-      min_id: UUIDv7.cast_or_nil(params["min_id"])
+      max_id: boundary.("max_id"),
+      since_id: boundary.("since_id"),
+      min_id: boundary.("min_id")
     }
   end
 
@@ -115,8 +135,15 @@ defmodule VutuvWeb.MastodonApi.Pagination do
   of the list, and offering a next link there makes a client spin on an empty
   fetch forever. `prev` is always offered, because a list can grow at the top
   between two requests.
+
+  `:more?` overrides that length test for a list that **filters after it
+  reads** — the notifications page drops the vutuv-only kinds Mastodon has no
+  type for, so a full read can still answer a short page while plenty is left
+  behind it. Judging by the answer's length there ends the walk early and
+  silently, which is the same failure the length test exists to prevent, just
+  from the other side.
   """
-  def link_header(conn, ids, %__MODULE__{} = page) do
+  def link_header(conn, ids, %__MODULE__{} = page, opts \\ []) do
     case Enum.reject(ids, &is_nil/1) do
       [] ->
         conn
@@ -124,7 +151,8 @@ defmodule VutuvWeb.MastodonApi.Pagination do
       present ->
         newest = Enum.max(present)
         oldest = Enum.min(present)
-        next = if length(present) >= page.limit, do: link(conn, page, max_id: oldest)
+        more? = Keyword.get(opts, :more?, length(present) >= page.limit)
+        next = if more?, do: link(conn, page, max_id: oldest)
 
         links =
           Enum.reject([{next, "next"}, {link(conn, page, min_id: newest), "prev"}], fn
