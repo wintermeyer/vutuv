@@ -82,6 +82,14 @@ test suite, and the naive loop ingests its full output once per iteration:
    rebase onto it **before** bumping (or re-bump after the rebase) so the number
    is monotonic.
 
+   The script also **asks `gh` which numbers the open pull requests already
+   claim** and bumps past the highest of them, because `origin/main` alone does
+   not answer the question: an unmerged PR holds the next number for hours while
+   main still looks free, and two branches that pick the same one get no merge
+   conflict and no warning. It names each claim on stderr, and when `gh` cannot
+   answer it says so and bumps from `mix.exs` as before — so this is a backstop,
+   not a guarantee, and step 11's re-check before merging still stands.
+
 5. **Check the working tree** — `git status --short` and `git diff --stat` to see
    everything that changed (your work + any subagent fixes + the bump).
 
@@ -131,12 +139,18 @@ test suite, and the naive loop ingests its full output once per iteration:
       fix to the branch, and watch again. If it stays red or the failure isn't
       yours to fix, stop and report; leave the PR open.
 
-11. **Merge** — squash, delete the branch (the repo convention, same as
-    `/issues`):
+11. **Merge** — but re-read `origin/main`'s version first, then squash and
+    delete the branch (the repo convention, same as `/issues`):
 
     ```bash
+    git fetch origin && git show origin/main:mix.exs | grep -m1 version
     gh pr merge <nr> --squash --delete-branch
     ```
+
+    Another PR can merge while yours sits in CI, and if it took your number
+    there is no conflict to notice: the squash lands your work without moving
+    the version, and one number names two changes. If it moved, rebase, re-bump
+    (step 4), re-run `mix precommit`, and only then merge.
 
     The merge lands on `main` and that push is what starts
     `.github/workflows/deploy.yml`.
