@@ -73,6 +73,81 @@ defmodule VutuvWeb.ReportDetailsTest do
              ]
     end
 
+    test "a new Fediverse follower of a member names them and links the profile" do
+      user = insert(:user, username: "erik")
+
+      Repo.insert!(
+        struct(
+          Vutuv.Fediverse.Follower,
+          [
+            user_id: user.id,
+            actor_uri: "https://remote.example/users/frida",
+            inbox_uri: "https://remote.example/users/frida/inbox",
+            handle: "@frida@remote.example"
+          ] ++ at(@on_day)
+        )
+      )
+
+      assert section(Reports.daily(@date), :fediverse_followers).entries == [
+               %{primary: "@frida@remote.example", secondary: "@erik", path: "/erik"}
+             ]
+    end
+
+    # A remote follower follows a member, a page (#1334) or a topic (#1330),
+    # CHECK-enforced to exactly one — so `follower.user` is nil for the latter
+    # two. Reading `follower.user.username` unconditionally crashed the whole
+    # nightly report the first day a page or a topic gained one: the GenServer
+    # died inside its own `handle_info`, the supervisor restarted it, and
+    # `init/1` rescheduled for the *next* day, so the day's mail was lost
+    # without a trace. Same bug shape the post entries already carry a fix for.
+    test "a new Fediverse follower of a page names the page and links it" do
+      organization = insert(:organization)
+
+      Repo.insert!(
+        struct(
+          Vutuv.Fediverse.Follower,
+          [
+            organization_id: organization.id,
+            actor_uri: "https://remote.example/users/greta",
+            inbox_uri: "https://remote.example/users/greta/inbox",
+            handle: "@greta@remote.example"
+          ] ++ at(@on_day)
+        )
+      )
+
+      assert section(Reports.daily(@date), :fediverse_followers).entries == [
+               %{
+                 primary: "@greta@remote.example",
+                 secondary: organization.name,
+                 path: Vutuv.Organizations.canonical_path(organization)
+               }
+             ]
+    end
+
+    test "a new Fediverse follower of a topic names the tag and links it" do
+      tag = insert(:tag)
+
+      Repo.insert!(
+        struct(
+          Vutuv.Fediverse.Follower,
+          [
+            tag_id: tag.id,
+            actor_uri: "https://remote.example/users/hilde",
+            inbox_uri: "https://remote.example/users/hilde/inbox",
+            handle: "@hilde@remote.example"
+          ] ++ at(@on_day)
+        )
+      )
+
+      assert section(Reports.daily(@date), :fediverse_followers).entries == [
+               %{
+                 primary: "@hilde@remote.example",
+                 secondary: "##{tag.name}",
+                 path: "/tags/#{tag.slug}"
+               }
+             ]
+    end
+
     test "a pruned Fediverse follower names the server, not the person who left" do
       user = insert(:user, username: "dora")
 

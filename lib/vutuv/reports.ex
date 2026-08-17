@@ -61,7 +61,11 @@ defmodule Vutuv.Reports do
         reposts: sample(PostRepost, [:user, :post], day_start, day_end, limit),
         likes: sample(PostLike, [:user, :post], day_start, day_end, limit),
         bookmarks: sample(PostBookmark, [:user, :post], day_start, day_end, limit),
-        fediverse_followers: sample(Follower, [:user], day_start, day_end, limit),
+        # All three owner kinds: a remote actor follows a member, a page
+        # (issue #1334) or a topic (issue #1330), and the detail line names
+        # whichever of them gained the follower.
+        fediverse_followers:
+          sample(Follower, [:user, :organization, :tag], day_start, day_end, limit),
         fediverse_prunes: sample(FollowerPrune, [:user], day_start, day_end, limit),
         bounces: deliverability_details.bounces,
         deactivations: deliverability_details.deactivations,

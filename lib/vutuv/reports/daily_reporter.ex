@@ -9,7 +9,9 @@ defmodule Vutuv.Reports.DailyReporter do
   trigger instant and sleeps until then, a real cron tick rather than a busy
   poll. After firing it reschedules for the following day, so a DST shift is
   picked up each time (the trigger is computed in Berlin local time via
-  `Vutuv.BerlinTime`). The marker is implicit in the timer, so a restart in
+  `Vutuv.BerlinTime`). A report that raises is logged and skipped rather than
+  taken as a crash, so one bad day is visible in the log instead of vanishing.
+  The marker is implicit in the timer, so a restart in
   the few minutes between local midnight and the trigger can miss that one
   day's mail. That is harmless for a stats notice and rare (it only coincides
   with a deploy landing in that window). Disabled in tests
@@ -42,9 +44,25 @@ defmodule Vutuv.Reports.DailyReporter do
   def handle_info(:run, state) do
     yesterday = Date.add(BerlinTime.today(), -1)
 
-    case Reports.deliver_daily_email(yesterday) do
-      {:ok, _report} -> Logger.info("Mailed the daily report for #{yesterday}")
-      :skipped -> :ok
+    # Deliberately rescued: a raise here used to be invisible. The GenServer
+    # died inside its own timer callback, the supervisor restarted it, and
+    # `init/1` scheduled the *following* midnight — so a broken report cost
+    # that day's mail with no error anywhere the operator would look, and the
+    # next night's mail arrived as if nothing had happened. That is exactly how
+    # the first Fediverse follower of a page or a topic silently swallowed a
+    # day's report (`VutuvWeb.ReportDetails`). Logging the day and the reason
+    # keeps the loss visible; rescheduling either way keeps one bad day from
+    # taking the following ones with it.
+    try do
+      case Reports.deliver_daily_email(yesterday) do
+        {:ok, _report} -> Logger.info("Mailed the daily report for #{yesterday}")
+        :skipped -> :ok
+      end
+    rescue
+      error ->
+        Logger.error(
+          "Daily report for #{yesterday} failed: #{Exception.format(:error, error, __STACKTRACE__)}"
+        )
     end
 
     schedule_next()

@@ -26,6 +26,10 @@ defmodule VutuvWeb.ReportDetails do
 
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
+  alias Vutuv.Accounts.User
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
+  alias Vutuv.Tags.Tag
   alias VutuvWeb.AgentDocs
 
   # Section order + German headings for the email; the admin page keys its own
@@ -100,11 +104,8 @@ defmodule VutuvWeb.ReportDetails do
   defp entry(:bookmarks, bookmark), do: post_entry(bookmark.post, bookmark.user)
 
   defp entry(:fediverse_followers, follower) do
-    %{
-      primary: follower_display(follower),
-      secondary: "@" <> follower.user.username,
-      path: "/" <> follower.user.username
-    }
+    {label, path} = follow_target(follower)
+    %{primary: follower_display(follower), secondary: label, path: path}
   end
 
   # A pruned follower is deliberately nameless — only the server it lived on
@@ -154,8 +155,29 @@ defmodule VutuvWeb.ReportDetails do
   # A member is named by handle, an organization by its name — it may never have
   # claimed a handle. Without this the daily report crashed on the first day any
   # page published (issue #1334).
-  defp actor_label(%Vutuv.Organizations.Organization{name: name}), do: name
+  defp actor_label(%Organization{name: name}), do: name
   defp actor_label(actor), do: "@" <> actor.username
+
+  # Who gained the follower, and where that page lives. A remote actor follows a
+  # member, a page (issue #1334) or a topic (issue #1330) — exactly one, and the
+  # database CHECK says so, which is what makes the `||` chain total.
+  #
+  # This read `follower.user.username` outright, so the first page or topic to
+  # gain a Fediverse follower took the *whole* nightly report down with a
+  # BadMapError on nil — and silently: the crash happened inside the
+  # `Vutuv.Reports.DailyReporter` timer callback, the supervisor restarted the
+  # GenServer, and `init/1` rescheduled for the following midnight. No mail, no
+  # retry, no error anywhere the operator would see it. The same shape as the
+  # post-author fix above, one association further along.
+  defp follow_target(follower) do
+    target_entry(follower.user || follower.organization || follower.tag)
+  end
+
+  defp target_entry(%Organization{} = organization),
+    do: {organization.name, Organizations.canonical_path(organization)}
+
+  defp target_entry(%Tag{} = tag), do: {"#" <> tag.name, "/tags/#{tag.slug}"}
+  defp target_entry(%User{username: username}), do: {"@" <> username, "/" <> username}
 
   # The remote actor's own label, best first: its @handle, then its display
   # name, falling back to the raw actor URI (always present).

@@ -190,6 +190,41 @@ defmodule Vutuv.ReportsTest do
       assert Reports.deliver_daily_email(@date) == :skipped
       assert_no_email_sent()
     end
+
+    # The whole mail, both bodies, for the day a page and a topic each gained a
+    # Fediverse follower — the case that used to raise while building the detail
+    # lines, so no mail went out at all and the loss was silent (the crash
+    # happened inside the `DailyReporter` timer callback and the restart simply
+    # rescheduled for the next midnight).
+    test "renders both bodies when a page and a topic gained a Fediverse follower" do
+      organization = insert(:organization)
+      tag = insert(:tag)
+
+      for {key, id} <- [organization_id: organization.id, tag_id: tag.id] do
+        Repo.insert!(
+          struct(
+            Vutuv.Fediverse.Follower,
+            [
+              {key, id},
+              {:actor_uri, "https://remote.example/users/#{id}"},
+              {:inbox_uri, "https://remote.example/users/#{id}/inbox"},
+              {:handle, "@follower_#{id}@remote.example"}
+            ] ++ at(@on_day)
+          )
+        )
+      end
+
+      assert {:ok, report} = Reports.deliver_daily_email(@date)
+      assert report.fediverse_followers == 2
+
+      assert_email_sent(fn email ->
+        assert email.subject =~ "2 neue Fediverse-Follower"
+        assert email.text_body =~ organization.name
+        assert email.text_body =~ "##{tag.name}"
+        assert email.text_body =~ "/tags/#{tag.slug}"
+        assert email.html_body =~ organization.name
+      end)
+    end
   end
 
   describe "deliverability metrics" do
