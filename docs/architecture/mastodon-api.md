@@ -58,7 +58,12 @@ one more reason the main host answers.
 Server discovery, login and the core social workflow:
 
 - `GET /.well-known/oauth-authorization-server`
-- `GET /api/v1/instance` and `GET /api/v2/instance`
+- `GET /api/v1/instance` and `GET /api/v2/instance` — including `api_versions`
+  (the machine-readable API generation a 4.3+ client checks instead of parsing
+  our `4.4.0 (compatible; vutuv x.y.z)` prose) and the operator contact, which
+  is the `:operator_recipient` address `security.txt` already publishes plus the
+  `:operator_handle` member as a full account entity (`null` where that handle
+  names nobody on this installation)
 - `POST /api/v1/apps` and `GET /api/v1/apps/verify_credentials`
 - `GET /oauth/authorize` (redirects the browser to the main origin)
 - `POST /oauth/token` (`authorization_code`, `refresh_token`,
@@ -111,6 +116,56 @@ endpoint uses; `one_status/2` is the same path for a single row). Rendering them
 without a viewer, as the first cut did, left every heart empty on a post the
 member had just liked — so tapping it *removed* the like. `shown_counts/1` folds
 in what other networks did with the same post, exactly as the card does.
+
+**Every account carries its own picture, its banner and its figures.** Mastodon's
+account entity is the same object everywhere, and a client renders a profile
+header from whichever copy it happens to hold — usually the one embedded in a
+status it already has. So the adapter fills all of it on every account it sends:
+a member's avatar and **cover photo** (`Vutuv.Cover`, gated on the AI image scan,
+since a picture still in quarantine is not on its public URL yet), a page's logo
+and cover, and the cached picture of an account on another network
+(`RemoteAccount.avatar_url/1`, the one chokepoint that answers `nil` unless the
+gate cleared it). An account with no cover gets a plain brand banner
+(`/images/header-placeholder.png`) rather than the installation's square icon,
+which is what a client used to draw across the top of every profile.
+
+The three counts are `Vutuv.MastodonApi.AccountCounts`, one query per figure for
+a whole page rather than three per row — ours are real aggregates where
+Mastodon's are counter columns. Leaving them at the entity's zeroes was not "no
+data" to a client but the number zero: a member with a full timeline read "0
+posts" in their own profile header, and tapping it listed all of them. A remote
+account still gets no counts — we cache its posts, not its social graph.
+
+**A reshare is rendered as one.** Every feed source here can hand over a post
+somebody passed on — a member's or a page's repost, an account on another
+network boosting something — and the entry names that resharer in `reposted_by`
+or `boosted_by`. `Presenter.reshared/2` builds Mastodon's wrapper around it: the
+outer status is the resharer's, with empty `content` and a `url` of `null`, and
+the post itself sits under `reblog`. Flattening them, as the first cut did, put a
+stranger's post in the middle of a member's home timeline with no line saying who
+passed it on — and did the same on that member's own profile, where their
+reshares are part of the timeline, so "my own posts" read as everybody's. The
+wrapper keeps the **entry's** id (`boost-<uuid>`, `repost-<uuid>`), so a boost and
+the post it carries are two rows to a client and the pagination cursor is when
+the post was passed on rather than when it was written;
+`VutuvWeb.MastodonApi.Pagination.bare_id/1` reads the uuid back out of it and
+`StatusController.resolve_status/1` resolves it to the post underneath, the way
+Mastodon resolves a reblog id.
+
+**A record from another network also arrives on its own, not only wrapped in a
+feed entry**, and for a while nothing rendered it that way:
+`Fediverse.recent_public_remote_posts/1` answers bare `%RemotePost{}` structs and
+`Presenter.one_status/2` renders the answer to every status action, so a client's
+**Federated** tab and every favourite, boost or bookmark on something from
+another network raised a `FunctionClauseError` — a 500 with an HTML body, which
+reads to a client as "no posts found" or a bare error. `status_from_entry/1`
+takes the bare structs too now.
+
+**A refusal says what to do about it.** The outbound gates in `Vutuv.Fediverse`
+have a reason for every no — the account does not federate, the operator blocked
+that server, the hour's budget is spent — and all of them used to collapse into
+one sentence naming nothing. They are spelled out per reason now, because a
+member cannot see the rule from inside a phone app.
 
 ### Photos
 

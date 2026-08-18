@@ -1428,6 +1428,25 @@ defmodule Vutuv.Posts do
     :ok
   end
 
+  @doc """
+  The post a repost row named, or `nil` — the lookup behind a reshare's own id.
+
+  A reshare is a status in its own right to a Mastodon client
+  (`Vutuv.MastodonApi.Presenter.reshared/2` renders it as `repost-<uuid>`), and
+  the id it hands back has to resolve to something. What it resolves to is the
+  post underneath: acting on a reshare means acting on the post, which is what
+  Mastodon does too. Unscoped by design — every caller re-asks its own
+  visibility question of the post it gets.
+  """
+  def get_reposted_post(id) do
+    with uuid when not is_nil(uuid) <- Vutuv.UUIDv7.cast_or_nil(id),
+         %PostRepost{post_id: post_id} <- Repo.get(PostRepost, uuid) do
+      get_post(post_id)
+    else
+      _no_such_repost -> nil
+    end
+  end
+
   @doc "Whether any reposts of this post exist (the audience lock)."
   def has_reposts?(%Post{id: id}), do: has_reposts?(id)
 
@@ -3263,6 +3282,28 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  `count_author_posts/3` for many members at once, as `%{user_id => count}` —
+  one query for a whole page.
+
+  Written for the Mastodon client API, which fills the counts on **every**
+  account it embeds in a status: Mastodon's `statuses_count` is a counter column
+  and every client believes it, so leaving it at zero told a client that a
+  member with a full timeline had written nothing — which is what a profile
+  header then showed. Same query and same viewer scoping as the single count, so
+  the figure a client reads in a timeline is the one it reads on the profile.
+  """
+  def author_post_counts([], _viewer), do: %{}
+
+  def author_post_counts(author_ids, viewer) when is_list(author_ids) do
+    author_ids
+    |> author_timeline_query(viewer, :all)
+    |> group_by([t], t.author_id)
+    |> select([t], {t.author_id, count()})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
   `count_author_posts/3` as a tagged `%{kind: "posts_total", total:}` count
   query, for a caller folding it into a wider union — the profile mounts fold
   it into their single per-mount counts query (with the section and social
@@ -4074,14 +4115,22 @@ defmodule Vutuv.Posts do
   # own posts, `:replies` only own replies, `:reposts` only reposts. The
   # reply split keys on whether the post carries a PostReply row (its
   # `has_one :reply_ref`); `:reposts` skips the originals leg entirely.
-  defp author_timeline_query(%User{id: author_id}, viewer, filter) do
+  defp author_timeline_query(%User{id: author_id}, viewer, filter),
+    do: author_timeline_query([author_id], viewer, filter)
+
+  # **The author is a list, not one member**, so the same three legs answer both
+  # one profile timeline and `author_post_counts/2`'s figure for a whole page of
+  # authors. Each leg therefore also selects the author it belongs to, which is
+  # what the batched count groups by; `author_entries/2` ignores the extra key.
+  defp author_timeline_query(author_ids, viewer, filter) when is_list(author_ids) do
     originals =
       from(p in Post,
-        where: p.user_id == ^author_id,
+        where: p.user_id in ^author_ids,
         select: %{
           kind: type(^"post", :string),
           ref_id: p.id,
           post_id: p.id,
+          author_id: p.user_id,
           at: p.inserted_at,
           on_date: p.published_on
         }
@@ -4093,11 +4142,12 @@ defmodule Vutuv.Posts do
       from(p in Post,
         join: r in PostRepost,
         on: r.post_id == p.id,
-        where: r.user_id == ^author_id,
+        where: r.user_id in ^author_ids,
         select: %{
           kind: type(^"repost", :string),
           ref_id: r.id,
           post_id: p.id,
+          author_id: r.user_id,
           at: r.inserted_at,
           on_date:
             fragment("((? AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')::date", r.inserted_at)
@@ -4113,7 +4163,7 @@ defmodule Vutuv.Posts do
       from(r in FediversePostRepost,
         join: rp in RemotePost,
         on: rp.id == r.remote_post_id,
-        where: r.user_id == ^author_id,
+        where: r.user_id in ^author_ids,
         # Re-asked rather than trusted: the author can narrow their post after
         # somebody here reshared it, and a timeline is a public page.
         where: rp.audience in ^RemotePost.open_audiences(),
@@ -4121,6 +4171,7 @@ defmodule Vutuv.Posts do
           kind: type(^"remote_repost", :string),
           ref_id: r.id,
           post_id: r.remote_post_id,
+          author_id: r.user_id,
           at: r.inserted_at,
           on_date:
             fragment("((? AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')::date", r.inserted_at)

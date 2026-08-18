@@ -53,9 +53,46 @@ defmodule Vutuv.MastodonApi do
     if normalize_host(host) == api_host(), do: api_url(path), else: main_url(path)
   end
 
+  # The machine-readable twin of `@compatibility_version` (Mastodon 4.3+): one
+  # integer that says which API generation this speaks, and the value Mastodon
+  # itself shipped under the version above (`lib/mastodon/version.rb` at
+  # v4.4.0). It exists **because** the version string is unparseable for a fork
+  # — ours reads `4.4.0 (compatible; vutuv 7.x)` — so a client that wants to
+  # know what it may call reads this instead of guessing at prose. Kept beside
+  # the string it belongs to, so the two claims cannot drift into naming
+  # different Mastodon generations.
+  @mastodon_api_version 6
+
   def compatibility_version do
-    vutuv_version = Application.spec(:vutuv, :vsn) |> to_string()
-    @compatibility_version <> " (compatible; vutuv " <> vutuv_version <> ")"
+    @compatibility_version <> " (compatible; vutuv " <> vutuv_version() <> ")"
+  end
+
+  @doc "This installation's own version — the vutuv release, not the API generation."
+  def vutuv_version, do: Application.spec(:vutuv, :vsn) |> to_string()
+
+  @doc """
+  The `api_versions` object of the v2 instance document.
+
+  A map rather than the bare integer, because the field is an open namespace:
+  Mastodon fills `mastodon`, and another implementation may add its own key
+  beside it without either side having to agree first.
+  """
+  def api_versions, do: %{mastodon: @mastodon_api_version}
+
+  @doc """
+  How to reach the people who run this installation, in the shape both instance
+  documents want: `{email, handle_or_nil}`.
+
+  Both halves come from the operator-identity block in `config/config.exs`
+  (env-overridable), never from a literal here — the address is the one
+  `security.txt` already publishes as the operator contact, and the handle is
+  `:operator_handle`, the member a journalist is pointed at. The handle is
+  returned as written and resolved by the caller, so an installation whose
+  handle names nobody answers `nil` instead of pointing a client at a stranger.
+  """
+  def operator_contact do
+    {_name, email} = Application.fetch_env!(:vutuv, :operator_recipient)
+    {email, Application.get_env(:vutuv, :operator_handle)}
   end
 
   def main_url(path), do: absolute_url(local_domain(), path)

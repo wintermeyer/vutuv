@@ -489,8 +489,9 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   # Accounts and statuses from another network are rendered with a prefixed id
   # (`remote-<uuid>`); the uuid underneath is what carries the ordering, so it
   # is what a page boundary compares and advertises.
-  defp bare_id("remote-note-author-" <> rest), do: rest
-  defp bare_id("remote-note-" <> rest), do: rest
-  defp bare_id("remote-" <> rest), do: rest
-  defp bare_id(id), do: id
+  # Shared with the timelines rather than kept as a second list: an account's
+  # own statuses carry the reshare ids the merged feed mints (`repost-<uuid>`,
+  # `remote_repost-<uuid>`), which this copy did not know about and would have
+  # handed to the paginator whole.
+  defp bare_id(id), do: Pagination.bare_id(id)
 end

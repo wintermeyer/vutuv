@@ -506,14 +506,62 @@ defmodule Vutuv.Social do
   # page know something about you that you cannot see. Hence LEFT joins and one
   # gate per kind — the inner join this used to be dropped a page silently.
   defp follower_count_query(user_id) do
+    from(c in follower_scope([user_id]),
+      select: %{kind: type(^"followers", :string), total: count(c.id)}
+    )
+  end
+
+  # The gates above, over a **set** of members, so the single count and the
+  # batched one cannot answer differently. Split out when the Mastodon client
+  # API started filling the counts on every account it embeds in a status
+  # (Mastodon's are counter columns; ours are these queries, so a page of
+  # twenty statuses had to become a fixed handful of round trips rather than
+  # three per row).
+  defp follower_scope(user_ids) do
     from(c in Follow,
       left_join: u in assoc(c, :follower),
       left_join: o in Organization,
       on: o.id == c.follower_organization_id,
-      where: c.followee_id == ^user_id,
-      where: visible_member(u) or visible_page(o),
-      select: %{kind: type(^"followers", :string), total: count(c.id)}
+      where: c.followee_id in ^user_ids,
+      where: visible_member(u) or visible_page(o)
     )
+  end
+
+  defp followee_scope(user_ids) do
+    from(c in Follow,
+      left_join: u in assoc(c, :followee),
+      left_join: o in Organization,
+      on: o.id == c.followee_organization_id,
+      where: c.follower_id in ^user_ids,
+      where: visible_member(u) or visible_page(o)
+    )
+  end
+
+  @doc """
+  `follower_count/1` and `followee_count/1` for many members at once, as
+  `%{user_id => count}` — one query each, and a member nobody follows is simply
+  absent rather than carrying a zero row.
+  """
+  def follower_counts([]), do: %{}
+
+  def follower_counts(user_ids) when is_list(user_ids) do
+    from(c in follower_scope(user_ids),
+      group_by: c.followee_id,
+      select: {c.followee_id, count(c.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  def followee_counts([]), do: %{}
+
+  def followee_counts(user_ids) when is_list(user_ids) do
+    from(c in followee_scope(user_ids),
+      group_by: c.follower_id,
+      select: {c.follower_id, count(c.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   # Following counts **both kinds** (issue #1336): a followed page is something
@@ -526,12 +574,7 @@ defmodule Vutuv.Social do
   # counts members alone (`followee_member_count_query/1`). This one is the
   # figure a person reads.
   defp followee_count_query(user_id) do
-    from(c in Follow,
-      left_join: u in assoc(c, :followee),
-      left_join: o in Organization,
-      on: o.id == c.followee_organization_id,
-      where: c.follower_id == ^user_id,
-      where: visible_member(u) or visible_page(o),
+    from(c in followee_scope([user_id]),
       select: %{kind: type(^"followees", :string), total: count(c.id)}
     )
   end

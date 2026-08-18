@@ -34,7 +34,34 @@ defmodule VutuvWeb.MastodonApi.Pagination do
   @default_limit 20
   @max_limit 40
 
+  # Every word a rendered id can carry in front of its uuid, from all three
+  # minting sites: the merged feed's entry ids (`Vutuv.Posts`,
+  # `Vutuv.Fediverse`), the prefixes `Vutuv.MastodonApi.Presenter` puts on
+  # anything from another network, and the derived notification ids. One list
+  # rather than one per controller: they were two hand-kept copies, and a
+  # prefix added to a feed source has no reason to know which of them to
+  # visit. None of these words can be the first group of a uuid (they are not
+  # eight hex digits), so stripping is unambiguous.
+  @id_prefixes ~w(post repost tagpost boost remote remote_repost note author reply like)
+
   defstruct limit: @default_limit, max_id: nil, since_id: nil, min_id: nil
+
+  @doc """
+  The bare uuid under a rendered id — the part that carries the creation time,
+  and so the ordering every boundary here is read from.
+
+  `"boost-01a0…"`, `"remote-repost-01a0…"`, `"remote-note-01a0…"` and a plain
+  uuid all reduce to the same shape. This is the `:strip` every list endpoint
+  passes to `params/2`; see the note there for what a missed prefix costs.
+  """
+  def bare_id(value) when is_binary(value) do
+    case String.split(value, "-", parts: 2) do
+      [prefix, rest] when prefix in @id_prefixes -> bare_id(rest)
+      _plain_uuid -> value
+    end
+  end
+
+  def bare_id(value), do: value
 
   @doc """
   Reads the four parameters, clamping `limit` to Mastodon's 1..40.

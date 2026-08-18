@@ -1638,6 +1638,26 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  `remote_follow_count/1` for many members at once, as `%{user_id => count}`.
+
+  The batched twin the Mastodon client API needs: a member's "following" figure
+  is the local follows plus these, and that endpoint fills the figure for every
+  account it embeds in a page of statuses — one query for the page rather than
+  one per row.
+  """
+  def remote_follow_counts([]), do: %{}
+
+  def remote_follow_counts(user_ids) when is_list(user_ids) do
+    from(f in Follow,
+      where: f.user_id in ^user_ids,
+      group_by: f.user_id,
+      select: {f.user_id, count(f.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
   How many of those follows the other side has confirmed — the `totalItems` of
   the count-only `following` collection. Only accepted ones: a request nobody
   answered is not a relationship, and publishing it would leak what a member
@@ -2842,6 +2862,39 @@ defmodule Vutuv.Fediverse do
   def get_remote_post(id) do
     UUIDv7.with_cast(id, &Repo.get(RemotePost, &1))
     |> Repo.preload([:remote_account, :screenshot])
+  end
+
+  @doc """
+  What a reshare row named, or `nil` — the lookups behind the ids a reshare
+  carries in the client API (`Vutuv.MastodonApi.Presenter.reshared/2`).
+
+  Three tables, because vutuv has three ways a post is passed on: a member here
+  reshares a cached post (`fediverse_post_reposts`), a member here reshares a
+  cached reply (`fediverse_note_reposts`), and an account out there boosts
+  something (`fediverse_post_boosts`, which points at either a cached post or a
+  post of ours — exactly one of the two, so the answer follows the row).
+
+  Unscoped like their local twin: the caller re-asks whether the reader may see
+  what comes back.
+  """
+  def get_reposted_remote_post(id) do
+    with %PostRepost{remote_post_id: post_id} <- UUIDv7.with_cast(id, &Repo.get(PostRepost, &1)) do
+      get_remote_post(post_id)
+    end
+  end
+
+  def get_reposted_note(id) do
+    with %NoteRepost{note_id: note_id} <- UUIDv7.with_cast(id, &Repo.get(NoteRepost, &1)) do
+      get_note(note_id)
+    end
+  end
+
+  def get_boosted_object(id) do
+    case UUIDv7.with_cast(id, &Repo.get(PostBoost, &1)) do
+      %PostBoost{remote_post_id: post_id} when is_binary(post_id) -> get_remote_post(post_id)
+      %PostBoost{post_id: post_id} when is_binary(post_id) -> Vutuv.Posts.get_post(post_id)
+      _no_such_boost -> nil
+    end
   end
 
   @doc """
