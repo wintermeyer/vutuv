@@ -195,8 +195,12 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
         nil
 
       post ->
+        # `one_status/2`, not the bare `status/1`: a pushed status lands in the
+        # same client cache as the REST answers, so it has to carry the
+        # viewer's own engagement flags and the author's account counts too —
+        # zeroes here would overwrite the figures the batch just filled.
         if Posts.visible_to?(post, viewer) and not Posts.awaiting_image_release?(post_id),
-          do: Presenter.status(post)
+          do: Presenter.one_status(post, viewer)
     end
   end
 

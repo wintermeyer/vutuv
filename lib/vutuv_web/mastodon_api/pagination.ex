@@ -34,15 +34,25 @@ defmodule VutuvWeb.MastodonApi.Pagination do
   @default_limit 20
   @max_limit 40
 
-  # Every word a rendered id can carry in front of its uuid, from all three
-  # minting sites: the merged feed's entry ids (`Vutuv.Posts`,
-  # `Vutuv.Fediverse`), the prefixes `Vutuv.MastodonApi.Presenter` puts on
-  # anything from another network, and the derived notification ids. One list
-  # rather than one per controller: they were two hand-kept copies, and a
-  # prefix added to a feed source has no reason to know which of them to
-  # visit. None of these words can be the first group of a uuid (they are not
-  # eight hex digits), so stripping is unambiguous.
-  @id_prefixes ~w(post repost tagpost boost remote remote_repost note author reply like)
+  # Every word a rendered id can carry in front of its uuid, from both minting
+  # sites the timeline and account endpoints serve: the merged feed's entry ids
+  # (`Vutuv.Posts`, `Vutuv.Fediverse`) and the prefixes
+  # `Vutuv.MastodonApi.Presenter` puts on anything from another network
+  # (`note`/`author` cover the `remote-note-…` account ids, `reply` the
+  # `remote-reply-repost-…` reshares). One list rather than one per controller:
+  # they were two hand-kept copies, and a prefix added to a feed source has no
+  # reason to know which of them to visit. The derived notification ids are NOT
+  # in here — `VutuvWeb.MastodonApi.NotificationController` keeps its own
+  # strip, which unconditionally drops the first segment. None of these words
+  # can be the first group of a uuid (they are not eight hex digits), so
+  # stripping is unambiguous.
+  @id_prefixes ~w(post repost tagpost boost remote remote_repost note author reply)
+
+  # The spellings a feed source actually stamps whole. `bare_id/1` reduces a
+  # compound like `remote-repost-<uuid>` word by word, but the forward
+  # direction (`prefixed_ids/1`) cannot chain words to *produce* it, so the
+  # compounds are spelled out here.
+  @minted_prefixes @id_prefixes ++ ~w(remote-repost remote-reply-repost remote-note)
 
   defstruct limit: @default_limit, max_id: nil, since_id: nil, min_id: nil
 
@@ -77,7 +87,7 @@ defmodule VutuvWeb.MastodonApi.Pagination do
   costs a duplicate row.
   """
   def prefixed_ids(uuid) when is_binary(uuid),
-    do: Enum.map(@id_prefixes, &(&1 <> "-" <> uuid))
+    do: Enum.map(@minted_prefixes, &(&1 <> "-" <> uuid))
 
   @doc """
   Reads the four parameters, clamping `limit` to Mastodon's 1..40.

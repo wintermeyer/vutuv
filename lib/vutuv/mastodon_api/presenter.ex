@@ -134,10 +134,8 @@ defmodule Vutuv.MastodonApi.Presenter do
   # counts along. See `Vutuv.MastodonApi.AccountCounts` for why they have to be
   # there at all.
   defp fill_account_counts(statuses, viewer) do
-    case AccountCounts.for_statuses(statuses, viewer) do
-      counts when map_size(counts) == 0 -> statuses
-      counts -> Enum.map(statuses, &counted_status(&1, counts))
-    end
+    counts = AccountCounts.for_statuses(statuses, viewer)
+    Enum.map(statuses, &counted_status(&1, counts))
   end
 
   defp counted_status(%{reblog: %{} = inner} = status, counts),
@@ -168,36 +166,39 @@ defmodule Vutuv.MastodonApi.Presenter do
   """
   def one_status(item, viewer), do: item |> List.wrap() |> statuses(viewer) |> hd()
 
+  # The map clauses are for feed-entry maps only: a `%Note{}` also carries a
+  # `post` association, so without the guard a Note whose `:post` happens to be
+  # preloaded would render as its parent post instead of itself.
   defp engaged_post_id(%Post{id: id}), do: id
-  defp engaged_post_id(%{post: %Post{id: id}}), do: id
+  defp engaged_post_id(%{post: %Post{id: id}} = entry) when not is_struct(entry), do: id
   defp engaged_post_id(_other), do: nil
 
   defp rendered_status(%Post{} = post, engagements), do: status(post, engagements[post.id])
 
-  defp rendered_status(%{post: %Post{} = post} = entry, engagements),
-    do: reshared(entry, status(post, engagements[post.id]))
+  defp rendered_status(%{post: %Post{} = post} = entry, engagements)
+       when not is_struct(entry),
+       do: reshared(entry, status(post, engagements[post.id]))
 
   defp rendered_status(other, _engagements), do: status_from_entry(other)
 
-  @doc """
-  A reshare in Mastodon's shape: an outer status by whoever passed the post on,
-  carrying the post itself under `reblog`.
-
-  **Every feed source here can hand over a reshare, and all of them were
-  flattened.** A merged-feed entry names its resharer in `reposted_by` (a member
-  or a page here) or in `boosted_by` (an account on another network), and this
-  module dropped both: the post was rendered as if its own author had just
-  written it. So a client showed a stranger's post in the middle of a member's
-  home timeline with no line saying who passed it on — and the same on a
-  member's own profile, where their reshares are part of their timeline
-  (`Posts.author_statuses/3`), which is why "my own posts" read as everybody's.
-
-  The wrapper is Mastodon's, down to the empty `content` and the `url` of
-  `null`: a client renders the inner status and takes the outer one only for the
-  "X boosted" line. The counts stay on the inner status, which is where a client
-  reads them.
-  """
-  def reshared(entry, inner) do
+  # A reshare in Mastodon's shape: an outer status by whoever passed the post
+  # on, carrying the post itself under `reblog`.
+  #
+  # **Every feed source here can hand over a reshare, and all of them were
+  # flattened.** A merged-feed entry names its resharer in `reposted_by` (a
+  # member or a page here) or in `boosted_by` (an account on another network),
+  # and this module dropped both: the post was rendered as if its own author had
+  # just written it. So a client showed a stranger's post in the middle of a
+  # member's home timeline with no line saying who passed it on — and the same
+  # on a member's own profile, where their reshares are part of their timeline
+  # (`Posts.author_statuses/3`), which is why "my own posts" read as
+  # everybody's.
+  #
+  # The wrapper is Mastodon's, down to the empty `content` and the `url` of
+  # `null`: a client renders the inner status and takes the outer one only for
+  # the "X boosted" line. The counts stay on the inner status, which is where a
+  # client reads them.
+  defp reshared(entry, inner) do
     case resharer(entry) do
       nil ->
         inner
@@ -296,12 +297,8 @@ defmodule Vutuv.MastodonApi.Presenter do
   """
   def status_from_entry(entry), do: reshared(entry, inner_status_from_entry(entry))
 
-  defp inner_status_from_entry(%{remote_post: %RemotePost{} = post}), do: status(post)
-  defp inner_status_from_entry(%{note: %Note{} = note}), do: status(note)
-  defp inner_status_from_entry(%{post: %Post{} = post}), do: status(post)
-
   # **A row from another network also arrives on its own, not only wrapped in a
-  # feed entry.** The three clauses above read the merged feed's entry maps, and
+  # feed entry.** The map clauses below read the merged feed's entry maps, and
   # every caller that hands over a bare struct instead fell straight through
   # them into a `FunctionClauseError` — a 500 with an HTML body, to a client
   # that decodes every answer as JSON. Two live paths did exactly that:
@@ -311,9 +308,17 @@ defmodule Vutuv.MastodonApi.Presenter do
   # `one_status/2` renders the answer to every status action, so favouriting,
   # boosting or bookmarking anything from another network failed *after* the
   # like had already been written and delivered.
+  #
+  # The struct clauses come first on purpose: a `%Note{}` also carries a `post`
+  # association, so with the map clauses ahead a Note whose `:post` happens to
+  # be preloaded would render as its parent post instead of itself.
   defp inner_status_from_entry(%RemotePost{} = post), do: status(post)
   defp inner_status_from_entry(%Note{} = note), do: status(note)
   defp inner_status_from_entry(%Post{} = post), do: status(post)
+
+  defp inner_status_from_entry(%{remote_post: %RemotePost{} = post}), do: status(post)
+  defp inner_status_from_entry(%{note: %Note{} = note}), do: status(note)
+  defp inner_status_from_entry(%{post: %Post{} = post}), do: status(post)
 
   defp count_fields(nil), do: %{}
 
@@ -422,16 +427,12 @@ defmodule Vutuv.MastodonApi.Presenter do
     )
   end
 
-  # A picture still with the AI image gate is **not on the public URL yet** — the
-  # file waits in quarantine and the column already names it, so handing a
-  # client that address is handing it a 404. The website branches on the same
-  # state to show the owner a pending pill and everybody else the stand-in;
-  # here the stand-in is the whole answer.
-  defp user_avatar(%{avatar_moderation: state} = user) do
-    if ImageScans.released?(state), do: released_avatar(user), else: fallback_avatar()
-  end
-
-  defp released_avatar(user) do
+  # The AI image gate is not re-asked here: `Vutuv.Uploads.url/3` answers "no
+  # image" for a picture still in moderation limbo (the file waits in
+  # quarantine), so a pending avatar already comes back as the `data:` default
+  # and a pending cover as nil — the same chokepoint every website surface
+  # reads, and the stand-in falls out of it.
+  defp user_avatar(user) do
     case Avatar.display_url(user, :thumb) do
       "/" <> _path = relative -> MastodonApi.main_url(relative)
       "data:" <> _placeholder -> fallback_avatar()
@@ -443,12 +444,10 @@ defmodule Vutuv.MastodonApi.Presenter do
   # filled `header` with the installation's icon and nothing overrode it for a
   # member, so a client drew the vutuv logo across the top of every profile —
   # including profiles that have carried a cover photo for years.
-  defp user_cover(%{cover_moderation: state} = user) do
-    with true <- ImageScans.released?(state),
-         path when is_binary(path) <- Cover.display_url(user, :wide) do
-      MastodonApi.main_url(path)
-    else
-      _no_cover -> fallback_header()
+  defp user_cover(user) do
+    case Cover.display_url(user, :wide) do
+      path when is_binary(path) -> MastodonApi.main_url(path)
+      nil -> fallback_header()
     end
   end
 

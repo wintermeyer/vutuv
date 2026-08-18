@@ -23,14 +23,22 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   the post.
   """
   def show(conn, %{"id" => id}) do
+    with_visible_status(conn, id, fn object ->
+      json(conn, Presenter.one_status(object, viewer(conn)))
+    end)
+  end
+
+  # The one spelling of "resolve the id, gate it, or 404" — every read and
+  # every action goes through it. Answering 200 to any id that merely resolves
+  # tells whoever asks that the object exists, which is the one thing a
+  # followers-only cached post must not confirm, so no caller may skip the gate.
+  defp with_visible_status(conn, id, fun) do
     case resolve_status(id) do
       nil ->
         not_found(conn)
 
       object ->
-        if status_visible?(conn, object),
-          do: json(conn, Presenter.one_status(object, viewer(conn))),
-          else: not_found(conn)
+        if status_visible?(conn, object), do: fun.(object), else: not_found(conn)
     end
   end
 
@@ -44,8 +52,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   defp resolve_status("remote-" <> id), do: Fediverse.get_remote_post(id)
   defp resolve_status("boost-" <> id), do: Fediverse.get_boosted_object(id)
   defp resolve_status("repost-" <> id), do: Posts.get_reposted_post(id)
-  defp resolve_status(id) when is_binary(id), do: Posts.get_post(id)
-  defp resolve_status(_other), do: nil
+  defp resolve_status(id), do: Posts.get_post(id)
 
   def create(conn, %{"status" => body} = params) when is_binary(body) do
     with :ok <- validate_visibility(params["visibility"]),
@@ -171,31 +178,19 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   and inventing one would put words in the wrong conversation.
   """
   def context(conn, %{"id" => id}) do
-    case resolve_status(id) do
-      %Post{} = post ->
-        if status_visible?(conn, post),
-          do: json(conn, thread_context(conn, post)),
-          else: not_found(conn)
-
-      # A status from another network has no place in the local reply tree, but
-      # a client asks for its context the moment somebody opens it — and a 404
-      # to that call is an error screen where the post should be. The honest
-      # answer is the empty conversation, in Mastodon's own shape.
-      #
-      # **It still has to pass the same gate as every other branch.** Answering
-      # 200 to any id that merely resolves tells whoever asks that the object
-      # exists, which is the one thing a followers-only cached post must not
-      # confirm — and it would have been the only read here that skipped
-      # `status_visible?/2`.
-      nil ->
-        not_found(conn)
-
-      object ->
-        if status_visible?(conn, object),
-          do: json(conn, %{ancestors: [], descendants: []}),
-          else: not_found(conn)
-    end
+    with_visible_status(conn, id, fn object ->
+      json(conn, context_payload(conn, object))
+    end)
   end
+
+  defp context_payload(conn, %Post{} = post), do: thread_context(conn, post)
+
+  # A status from another network has no place in the local reply tree, but a
+  # client asks for its context the moment somebody opens it — and a 404 to
+  # that call is an error screen where the post should be. The honest answer is
+  # the empty conversation, in Mastodon's own shape (the visibility gate has
+  # already been asked by `with_visible_status/3`, like on every other read).
+  defp context_payload(_conn, _remote), do: %{ancestors: [], descendants: []}
 
   @doc """
   The status as its author typed it — the Markdown source, not the rendered
@@ -253,16 +248,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   end
 
   defp status_action(conn, id, action) do
-    case resolve_status(id) do
-      nil -> not_found(conn)
-      object -> maybe_perform_status_action(conn, object, action)
-    end
-  end
-
-  defp maybe_perform_status_action(conn, post, action) do
-    if status_visible?(conn, post),
-      do: perform_status_action(conn, post, action),
-      else: not_found(conn)
+    with_visible_status(conn, id, &perform_status_action(conn, &1, action))
   end
 
   defp perform_status_action(conn, post, action) do

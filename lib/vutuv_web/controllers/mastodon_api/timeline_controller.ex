@@ -23,7 +23,7 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   alias VutuvWeb.MastodonApi.Pagination
 
   def home(conn, params) do
-    page = Pagination.params(strip_prefixes(params))
+    page = Pagination.params(params, strip: &Pagination.bare_id/1)
     entries = load(conn, page)
 
     conn
@@ -34,16 +34,8 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   # A status from another network is rendered with a prefixed id
   # (`remote-<uuid>`), and that is what a client hands back. Both the boundary
   # we read and the one we advertise are the bare uuid underneath, which is the
-  # part that carries the timestamp.
-  defp strip_prefixes(params) do
-    Enum.reduce(~w(max_id since_id min_id), params, fn key, acc ->
-      case acc[key] do
-        value when is_binary(value) -> Map.put(acc, key, bare_id(value))
-        _absent -> acc
-      end
-    end)
-  end
-
+  # part that carries the timestamp — every `params/2` call here passes the
+  # same `:strip`, like the account and notification endpoints do.
   defp bare_id(value), do: Pagination.bare_id(value)
 
   # **Every feed entry already carries its own id**, so reading the boundary out
@@ -113,7 +105,11 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   there.
   """
   def public(conn, params) do
-    page = Pagination.params(params)
+    # The strip is as load-bearing here as on `home/2`: the fediverse leg's
+    # statuses carry `remote-<uuid>` ids, a client hands the last one back as
+    # `max_id`, and an unstripped boundary casts to nil — no boundary, so the
+    # Federated tab served the same first page forever.
+    page = Pagination.params(params, strip: &Pagination.bare_id/1)
 
     statuses =
       params
@@ -132,7 +128,7 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   following from a phone at all.
   """
   def tag(conn, %{"hashtag" => slug} = params) do
-    page = Pagination.params(strip_prefixes(params))
+    page = Pagination.params(params, strip: &Pagination.bare_id/1)
 
     statuses =
       case Tags.get_canonical_tag_by_slug(String.downcase(slug)) do
