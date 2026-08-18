@@ -127,13 +127,29 @@ and cover, and the cached picture of an account on another network
 (`RemoteAccount.avatar_url/1`, the one chokepoint that answers `nil` unless the
 gate cleared it). An account with no cover gets a plain brand banner
 (`/images/header-placeholder.png`) rather than the installation's square icon,
-which is what a client used to draw across the top of every profile. The
-**notification actor** goes through the same chokepoint (issue #1598): an
-activity item for somebody on another network carries only their handle and
-actor URI, so `Notifications.accounts/1` — the one loader both the REST list
-and the streaming socket render through — resolves the cached `RemoteAccount`
-by that URI (`Fediverse.remote_accounts_by_uris/1`, batched per page) and only
-an actor nobody here stored falls back to the hand-built placeholder account.
+which is what a client used to draw across the top of every profile. A remote
+account has no banner at all — we cache an actor's `icon`, never its `image` —
+so it always gets that one. The **notification actor** goes through the same
+chokepoint (issue #1598): an activity item for somebody on another network
+carries only their handle and actor URI, so `Notifications.accounts/1` — the one
+loader both the REST list and the streaming socket render through — resolves the
+cached `RemoteAccount` by that URI (`Fediverse.remote_accounts_by_uris/1`,
+batched per page) and only an actor nobody here stored falls back to the
+hand-built placeholder account.
+
+**A cached remote picture needs a capability, because an image loader carries
+no credentials.** `/system/remote_media/…` asks for a signed-in reader, and a
+phone app fetches an image with a bare `GET`: no cookie, no bearer, whatever
+the API call beside it used. So naming the real picture (v7.330.0) named it at
+a URL the client could not fetch, and every account out of the fediverse went
+blank — its profile, its posts, and from v7.332.6 its notifications too. The
+adapter appends `VutuvWeb.RemoteMediaToken` — signed, expiring, and naming
+exactly the account and stored file it opens — and the proxy takes it in place
+of the session. The AI gate and the stored-file whitelist are still re-asked per
+request, so it widens nothing. Its `signed_at` is pinned to the UTC day so a
+client is handed the same URL all day and its image cache keeps working; a
+per-render timestamp would re-download every face in the timeline on every
+refresh.
 
 The three counts are `Vutuv.MastodonApi.AccountCounts`, one query per figure for
 a whole page rather than three per row — ours are real aggregates where

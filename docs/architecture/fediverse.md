@@ -1588,12 +1588,19 @@ conflated:
 chokepoints ("we have the file **and** the gate cleared it"), read both at
 render time and again in `VutuvWeb.RemoteMediaController` — the authorizing
 proxy at `/system/remote_media/…`, which re-checks per request that the reader
-is signed in, that the post's own audience reaches them, that the gate cleared
+belongs here, that the post's own audience reaches them, that the gate cleared
 the picture, and that the URL's version segment names the exact fingerprinted
 file we currently store. Everything else is a 404, and every response carries
 `X-Robots-Tag: noindex, noimageindex`: this is somebody else's photograph, and
 it must never surface as ours in an image search. An unguessable URL is not an
 access control.
+
+"Belongs here" is a session for a browser, and on the avatar route also a
+`VutuvWeb.RemoteMediaToken` in `t` — the capability the Mastodon adapter appends
+because a phone app's image loader sends neither the cookie nor the bearer token
+the API call beside it used. It is unforgeable, it expires, and it names one
+account's one stored file, so it opens nothing else and stops opening that one
+the moment the file is replaced.
 
 A post can now be a **photograph and nothing else**, which used to be dropped
 for having no text. Its `content_text` is then the empty string — emphatically

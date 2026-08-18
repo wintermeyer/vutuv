@@ -21,6 +21,7 @@ defmodule VutuvWeb.RemoteMediaControllerTest do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.MastodonApi.Presenter
   alias Vutuv.RemoteMedia
 
   setup %{conn: conn} do
@@ -232,5 +233,50 @@ defmodule VutuvWeb.RemoteMediaControllerTest do
 
       assert get(ctx.conn, media_url(stored)).status == 404
     end
+  end
+
+  describe "the URL the Mastodon adapter hands a client" do
+    # The seam #1588 opened: the adapter started naming the cached picture
+    # instead of the installation's icon, and an image loader fetches with a
+    # bare GET — no cookie, no bearer, because that is what every image loader
+    # does. So the picture the API had just named came back 404 and every
+    # account out of the fediverse sat blank in the app.
+    test "loads without a session, because that is how an image loader asks", ctx do
+      stored = avatar(ctx.account)
+
+      assert get(ctx.out, adapter_path(stored)).status == 200
+    end
+
+    test "is still refused without one", ctx do
+      stored = avatar(ctx.account)
+
+      assert get(ctx.out, media_url(stored)).status == 404
+      assert get(ctx.out, media_url(stored) <> "?t=not-a-token").status == 404
+    end
+
+    test "stops answering once the gate takes the picture back", ctx do
+      stored = avatar(ctx.account)
+      path = adapter_path(stored)
+
+      Repo.update!(change(stored, avatar_moderation: "pending"))
+
+      assert get(ctx.out, path).status == 404
+    end
+
+    test "does not open another account's picture", ctx do
+      other = avatar(other_account())
+      borrowed = ctx.account |> avatar() |> capability()
+
+      assert get(ctx.out, media_url(other) <> "?" <> borrowed).status == 404
+    end
+  end
+
+  # The avatar URL as a client receives it, reduced to what ConnTest requests.
+  defp adapter_path(%RemoteAccount{} = account),
+    do: media_url(account) <> "?" <> capability(account)
+
+  defp capability(%RemoteAccount{} = account) do
+    %URI{query: query} = account |> Presenter.account() |> Map.fetch!(:avatar) |> URI.parse()
+    query
   end
 end

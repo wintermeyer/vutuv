@@ -95,8 +95,14 @@ defmodule Vutuv.MastodonApi do
   """
   def operator_handle, do: Application.get_env(:vutuv, :operator_handle)
 
-  def main_url(path), do: absolute_url(local_domain(), path)
-  def api_url(path), do: absolute_url(api_host(), path)
+  @doc """
+  An absolute URL on the main host. `query` is passed separately because
+  `absolute_url/3` builds the URI from parts — a query folded into `path`
+  would be escaped into the path rather than kept as one.
+  """
+  def main_url(path, query \\ nil), do: absolute_url(local_domain(), path, query)
+
+  def api_url(path), do: absolute_url(api_host(), path, nil)
 
   @doc """
   The streaming endpoint as a client must dial it: the `ws(s)` form of
@@ -113,8 +119,8 @@ defmodule Vutuv.MastodonApi do
     |> String.replace_prefix("http://", "ws://")
   end
 
-  defp absolute_url(host, path) do
+  defp absolute_url(host, path, query) do
     uri = URI.parse(Endpoint.url())
-    URI.to_string(%{uri | host: host, path: path, query: nil, fragment: nil})
+    URI.to_string(%{uri | host: host, path: path, query: query, fragment: nil})
   end
 end

@@ -28,6 +28,8 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias Vutuv.UUIDv7
+  alias VutuvWeb.RemoteMediaToken
 
   setup do
     Vutuv.RateLimiter.reset()
@@ -182,10 +184,25 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
       account = remote_account(avatar: "pic.avif", avatar_moderation: "approved")
 
       rendered = Presenter.account(account)
+      picture = MastodonApi.main_url(RemoteAccount.avatar_url(account))
 
-      assert rendered.avatar == MastodonApi.main_url(RemoteAccount.avatar_url(account))
+      assert String.starts_with?(rendered.avatar, picture <> "?")
       assert rendered.avatar_static == rendered.avatar
       refute rendered.avatar == Presenter.fallback_avatar()
+    end
+
+    # The picture is served by a proxy that wants a signed-in reader, and the
+    # thing fetching it is an image loader with neither cookie nor bearer — so
+    # the URL has to carry its own permission or it is a 404 in every client.
+    test "and a capability the proxy accepts, because an image loader has none" do
+      account = remote_account(avatar: "pic.avif", avatar_moderation: "approved")
+
+      %{query: query} = account |> Presenter.account() |> Map.fetch!(:avatar) |> URI.parse()
+      token = URI.decode_query(query) |> Map.fetch!(RemoteMediaToken.param())
+
+      assert RemoteMediaToken.avatar?(token, account.id, account.avatar)
+      refute RemoteMediaToken.avatar?(token, account.id, "other.avif")
+      refute RemoteMediaToken.avatar?(token, UUIDv7.generate(), account.avatar)
     end
 
     test "keeps the stand-in while the gate has not cleared it" do

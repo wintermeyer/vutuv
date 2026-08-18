@@ -34,6 +34,21 @@ defmodule VutuvWeb.RemoteMediaController do
   cannot be lost by a route moving scope, and it is the same `%User{}` gate on
   both actions: the routes sit in the plain `:browser` scope, where nothing
   else would ask.
+
+  **Or a signed capability, on the avatar.** A session is how a *browser*
+  proves it is a member, and the Mastodon adapter's readers are phone apps
+  whose image loader sends neither the cookie nor the bearer token the API call
+  beside it used. So the avatar action takes a `VutuvWeb.RemoteMediaToken` as
+  the equivalent claim — unforgeable, expiring, and naming exactly the account
+  and stored file it opens. Everything else on the way in is unchanged and
+  re-asked per request, so it widens what may be seen by nothing; without it,
+  v7.330.0 named every remote picture in an API response at a URL no client
+  could fetch. `post_image/2` has no such door because the adapter names no
+  remote attachment — see `VutuvWeb.RemoteMediaToken`.
+
+  Both actions open on `Vutuv.Fediverse.enabled?/0`: switching federation off
+  has to close the proxy too, or the pictures it cached go on being served
+  after the feature that justified them is gone.
   """
 
   use VutuvWeb, :controller
@@ -44,9 +59,11 @@ defmodule VutuvWeb.RemoteMediaController do
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.RemoteMedia
   alias VutuvWeb.ImageProxy
+  alias VutuvWeb.RemoteMediaToken
 
   def post_image(conn, %{"id" => id, "version" => version_file}) do
-    with %User{} = viewer <- viewer(conn),
+    with true <- Fediverse.enabled?(),
+         %User{} = viewer <- conn.assigns[:current_user],
          %RemoteImage{} = image <- Fediverse.get_remote_image(id),
          true <- RemoteImage.released?(image),
          version when not is_nil(version) <- parse_version(version_file, image.file),
@@ -62,11 +79,22 @@ defmodule VutuvWeb.RemoteMediaController do
 
   # An avatar has no per-post audience: it is the picture of an account
   # somebody here follows, shown wherever that account is named. So the check
-  # is the gate plus a signed-in reader.
-  def avatar(conn, %{"id" => id, "version" => version_file}) do
-    with %User{} <- viewer(conn),
+  # is the gate plus a reader who belongs here — a session, or the capability
+  # the API hands its clients.
+  #
+  # `signed_in?/1` is asked twice on purpose. The second time is the real
+  # check, and it needs the row, because a capability names the file the row
+  # currently holds. The first is a pre-filter: this route answers without a
+  # session, and a caller who brings neither claim must not be able to make us
+  # read the database at all.
+  def avatar(conn, %{"id" => id, "version" => version_file} = params) do
+    token = params[RemoteMediaToken.param()]
+
+    with true <- Fediverse.enabled?(),
+         true <- signed_in?(conn) or is_binary(token),
          %RemoteAccount{} = account <- Fediverse.get_remote_account(id),
          true <- RemoteAccount.avatar_ready?(account),
+         true <- signed_in?(conn) or RemoteMediaToken.avatar?(token, account.id, account.avatar),
          version when not is_nil(version) <- parse_version(version_file, account.avatar) do
       serve(conn, version,
         accel: &RemoteMedia.avatar_accel_path(account.id, &1),
@@ -77,12 +105,7 @@ defmodule VutuvWeb.RemoteMediaController do
     end
   end
 
-  # A signed-in reader, and only while the installation federates at all:
-  # switching federation off has to close the proxy too, or the pictures it
-  # cached go on being served after the feature that justified them is gone.
-  defp viewer(conn) do
-    if Fediverse.enabled?(), do: conn.assigns[:current_user]
-  end
+  defp signed_in?(conn), do: match?(%User{}, conn.assigns[:current_user])
 
   defp serve(conn, version, accel: accel, path: path) do
     conn

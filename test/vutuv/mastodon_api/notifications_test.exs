@@ -46,7 +46,13 @@ defmodule Vutuv.MastodonApi.NotificationsTest do
     account = Notifications.account(item(actor_uri))
 
     assert account.id == "remote-" <> stored.id
-    assert account.avatar == MastodonApi.main_url(RemoteAccount.avatar_url(stored))
+    # The URL carries the proxy's capability beside the path — an image loader
+    # brings no session of its own.
+    assert String.starts_with?(
+             account.avatar,
+             MastodonApi.main_url(RemoteAccount.avatar_url(stored)) <> "?"
+           )
+
     refute account.avatar == Presenter.fallback_avatar()
   end
 

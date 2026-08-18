@@ -207,8 +207,12 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
       assert favourite["type"] == "favourite"
       assert favourite["account"]["id"] == "remote-" <> account.id
 
-      assert favourite["account"]["avatar"] ==
-               MastodonApi.main_url(RemoteAccount.avatar_url(account))
+      # Plus the capability the picture's proxy wants — a phone app's image
+      # loader sends no cookie, so the URL has to carry its own permission.
+      assert String.starts_with?(
+               favourite["account"]["avatar"],
+               MastodonApi.main_url(RemoteAccount.avatar_url(account)) <> "?"
+             )
 
       refute favourite["account"]["avatar"] == Presenter.fallback_avatar()
     end

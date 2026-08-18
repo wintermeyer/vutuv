@@ -20,6 +20,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.Posts.PostImage
   alias Vutuv.UUIDv7
   alias VutuvWeb.Markdown
+  alias VutuvWeb.RemoteMediaToken
   alias VutuvWeb.UserHelpers
 
   def identity_name(%User{} = user),
@@ -470,10 +471,20 @@ defmodule Vutuv.MastodonApi.Presenter do
   # rendered the vutuv logo beside every remote author. `avatar_url/1` is the
   # one chokepoint that answers nil unless the AI gate cleared the file, so a
   # picture we may not show still falls back rather than leaking.
+  #
+  # The capability rides along because the proxy that serves these bytes asks
+  # for a signed-in reader, and the thing fetching this URL is an image loader
+  # with no cookie and no bearer — which is why naming the real picture, on its
+  # own, only turned every remote face into a 404. See
+  # `VutuvWeb.RemoteMediaToken`; the website keeps using the bare path and its
+  # session.
   defp remote_avatar(%RemoteAccount{} = account) do
     case RemoteAccount.avatar_url(account) do
-      path when is_binary(path) -> MastodonApi.main_url(path)
-      nil -> fallback_avatar()
+      path when is_binary(path) ->
+        MastodonApi.main_url(path, RemoteMediaToken.avatar_query(account.id, account.avatar))
+
+      nil ->
+        fallback_avatar()
     end
   end
 
