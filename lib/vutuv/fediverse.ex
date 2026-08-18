@@ -3036,6 +3036,27 @@ defmodule Vutuv.Fediverse do
     )
   end
 
+  @doc """
+  The same lookup as `remote_parent_post/1`, batched for a whole page of
+  `%RemotePost{}` items (issue #1622's Mastodon-adapter case, which — unlike
+  `/context`'s one-post-at-a-time walk — renders many self-replies at once and
+  cannot afford a query per row).
+
+  `pairs` is a list of `{in_reply_to_uri, remote_account_id}`, exactly what
+  `own_thread?/2` gates a stored reply's parent by — so the result keys the
+  same way, and a caller with no candidate pairs pays no query.
+  """
+  def remote_parent_posts([]), do: %{}
+
+  def remote_parent_posts(pairs) when is_list(pairs) do
+    uris = pairs |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+    account_ids = pairs |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+
+    from(p in RemotePost, where: p.object_uri in ^uris and p.remote_account_id in ^account_ids)
+    |> Repo.all()
+    |> Map.new(&{{&1.object_uri, &1.remote_account_id}, &1})
+  end
+
   @doc "One cached remote post with its account and screenshot, or nil."
   def get_remote_post(id) do
     UUIDv7.with_cast(id, &Repo.get(RemotePost, &1))
