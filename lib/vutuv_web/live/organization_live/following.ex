@@ -28,9 +28,9 @@ defmodule VutuvWeb.OrganizationLive.Following do
   use VutuvWeb, :live_view
 
   import VutuvWeb.OrganizationComponents,
-    only: [manage_header: 1, organization_logo: 1, organization_location: 1]
+    only: [manage_header: 1, organization_location: 1]
 
-  import VutuvWeb.UserHelpers, only: [full_name: 1]
+  import VutuvWeb.UserHelpers, only: [author_name: 1]
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
@@ -40,6 +40,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
   alias Vutuv.Moderation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Posts
   alias Vutuv.Social
   alias Vutuv.Tags
   alias VutuvWeb.Live.InitAssigns
@@ -171,14 +172,6 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
-
-  defp followee_name(%Organization{name: name}), do: name
-  defp followee_name(%User{} = user), do: full_name(user)
-
-  defp followee_path(%Organization{} = organization),
-    do: Organizations.canonical_path(organization)
-
-  defp followee_path(%User{username: username}), do: "/#{username}"
 
   defp follow_local(socket, organization, account) do
     case Social.follow_as_organization(organization, account) do
@@ -343,7 +336,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
         <ul :if={@followees != []} class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
           <li :for={{follow, followee} <- @followees} class="flex items-center gap-4 py-4">
-            <.link navigate={followee_path(followee)} class="shrink-0">
+            <.link navigate={Posts.author_path(followee)} class="shrink-0">
               <.organization_logo
                 :if={match?(%Organization{}, followee)}
                 organization={followee}
@@ -354,10 +347,10 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
             <div class="min-w-0 flex-1">
               <.link
-                navigate={followee_path(followee)}
+                navigate={Posts.author_path(followee)}
                 class="block truncate font-semibold text-slate-900 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-300"
               >
-                {followee_name(followee)}
+                {author_name(followee)}
               </.link>
               <.organization_location
                 :if={match?(%Organization{}, followee)}

@@ -6,7 +6,7 @@ defmodule VutuvWeb.SettingsHTML do
   # badge / role label pieces so a member's own pages read exactly like the
   # public directory rows.
   import VutuvWeb.OrganizationComponents,
-    only: [organization_logo: 1, organization_location: 1, kind_badge: 1, role_label: 1]
+    only: [organization_location: 1, kind_badge: 1, role_label: 1]
 
   # Saved-search view helpers (cadence options, kind badge, filter summary) are
   # the same ones the /jobs and /search "Save search" control uses (issue #935).

@@ -1475,7 +1475,10 @@ defmodule Vutuv.Posts do
 
   Hidden accounts (frozen, deactivated, suspended, unreachable) and unconfirmed
   ones drop out like they do from every other public people list; their likes
-  still count, they simply have no face to show.
+  still count, they simply have no face to show. A **page's** like (issue
+  #1410) is listed like a member's — a `%Organization{}` among the users —
+  behind its own gate (`organization_public_row/1`), so a frozen page loses
+  its face the same way a frozen member does.
   """
   def post_likers(post_id, opts \\ []) when is_binary(post_id) do
     # Matches `<.avatar_stack>`'s cap, so the row never queries rows it would
@@ -1484,17 +1487,26 @@ defmodule Vutuv.Posts do
     limit = Keyword.get(opts, :limit, @likers_shown)
 
     from(l in PostLike,
-      join: u in User,
+      left_join: u in User,
       on: u.id == l.user_id,
+      left_join: o in Organization,
+      on: o.id == l.organization_id,
       where: l.post_id == ^post_id,
-      where: account_confirmed_row(u) and not account_hidden_row(u),
+      # Each actor kind passes its own gate: on a LEFT-joined missing users
+      # row `is_nil(u.email_confirmed?)` is TRUE, so an unscoped member gate
+      # would wave every page row through, frozen ones included (the #1408
+      # shape).
+      where:
+        (not is_nil(l.user_id) and account_confirmed_row(u) and not account_hidden_row(u)) or
+          (not is_nil(l.organization_id) and organization_public_row(o)),
       # UUID v7: id order is creation order, so this is newest liker first.
       order_by: [desc: l.id],
       limit: ^limit,
-      select: u
+      select: {u, o}
     )
     |> scope_attributed(Keyword.get(opts, :include_hidden?, false))
     |> Repo.all()
+    |> Enum.map(fn {user, page} -> page || user end)
   end
 
   @doc """
@@ -1551,8 +1563,16 @@ defmodule Vutuv.Posts do
   defp scope_attributed(query, false) do
     default = Prefs.default(:like_attribution?)
 
-    from([_l, u] in query,
-      where: coalesce(field(u, :like_attribution?), type(^default, :boolean)) == true
+    # Scoped per actor kind, like every gate on the nullable pair: attribution
+    # is a member's preference, and a page's like (issue #1410) has no such
+    # column — its NULL would resolve to the installation default and could
+    # silently drop every page. The members-only queries below never produce a
+    # page row, so the second arm is structurally inert there.
+    from([l, u] in query,
+      where:
+        (not is_nil(l.user_id) and
+           coalesce(field(u, :like_attribution?), type(^default, :boolean)) == true) or
+          not is_nil(l.organization_id)
     )
   end
 
@@ -4927,6 +4947,9 @@ defmodule Vutuv.Posts do
   association: the association-shaped clause reads as a type check but behaves
   as a preload check, so a bare `%Post{}` out of a query drew a page's post as a
   nil member's.
+
+  Not only authors: any member-or-page actor links through here — a liker in
+  the permalink's row (issue #1410), a reposter, a chat party.
   """
   def author_path(%Post{} = post), do: author_path(author(post))
   def author_path(%Organization{} = organization), do: Organizations.canonical_path(organization)

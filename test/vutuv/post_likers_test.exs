@@ -85,6 +85,46 @@ defmodule Vutuv.PostLikersTest do
     end
   end
 
+  describe "a page's like (issue #1410)" do
+    test "a page is listed beside the members, newest first", %{post: post} do
+      fan = insert_activated_user()
+      :ok = Posts.like_post(fan, post)
+      page = insert(:organization)
+      page_like!(post, page)
+
+      assert liker_ids(post) == [page.id, fan.id]
+    end
+
+    test "a frozen page keeps its count but loses its face", %{post: post} do
+      page = insert(:organization, frozen_at: NaiveDateTime.utc_now(:second))
+      page_like!(post, page)
+
+      # The #1408 shape — see the per-kind gate in `Posts.post_likers/2`.
+      assert liker_ids(post) == []
+      assert Posts.engagement_counts(post.id).likes == 1
+    end
+
+    test "a page that is not active has no face either", %{post: post} do
+      page = insert(:organization, status: "pending", verified_at: nil)
+      page_like!(post, page)
+
+      assert liker_ids(post) == []
+    end
+
+    test "a page has no attribution preference and is always named", %{post: post} do
+      with_installation_defaults(%{like_attribution?: false})
+
+      untouched = insert_activated_user()
+      :ok = Posts.like_post(untouched, post)
+      page = insert(:organization)
+      page_like!(post, page)
+
+      # The member inherits the installation's opt-out; the page must not —
+      # see the page exemption in `scope_attributed/2`.
+      assert liker_ids(post) == [page.id]
+    end
+  end
+
   describe "the preference resolves through all three layers" do
     test "the shipped default attributes a member who never touched it", %{post: post} do
       assert Prefs.shipped_defaults()[:like_attribution?] == true

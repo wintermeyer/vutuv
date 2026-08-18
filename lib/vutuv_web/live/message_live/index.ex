@@ -17,12 +17,11 @@ defmodule VutuvWeb.MessageLive.Index do
   """
   use VutuvWeb, :live_view
 
-  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
-
   alias Vutuv.Chat
   alias Vutuv.Chat.{Conversation, Message}
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Posts
   alias VutuvWeb.{Markdown, Presence}
 
   @typing_clear_ms 2500
@@ -557,8 +556,6 @@ defmodule VutuvWeb.MessageLive.Index do
 
   # Where the name links to. A page lives under /organizations/<slug>, and a
   # member at the root - one function so no call site has to remember which.
-  defp party_path(%Organization{} = page), do: Organizations.canonical_path(page)
-  defp party_path(user), do: ~p"/#{user}"
 
   # Only a member can be online or blocked. Deliberately NOT used for "is there
   # a request to answer" or "may I write here": a page conversation is created
@@ -719,7 +716,7 @@ defmodule VutuvWeb.MessageLive.Index do
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </.link>
-            <.link navigate={party_path(@other)} class="flex min-w-0 items-center gap-2">
+            <.link navigate={Posts.author_path(@other)} class="flex min-w-0 items-center gap-2">
               <.party_avatar party={@other} />
               <h1 class="truncate font-semibold text-slate-800 dark:text-slate-100">
                 {display_name(@other)}

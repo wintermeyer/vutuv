@@ -32,8 +32,6 @@ defmodule VutuvWeb.SearchLive do
 
   import VutuvWeb.SavedSearchComponents
 
-  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
-
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Posts

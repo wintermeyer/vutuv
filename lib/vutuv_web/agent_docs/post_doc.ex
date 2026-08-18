@@ -116,7 +116,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # time), and the reader of a doc is never that author — not through a
       # `.md` sibling and not through the authenticated `/api/2.0`, which
       # `build/3` also serves.
-      likers: Enum.map(Posts.post_likers(post.id), &AgentDocs.person_ref/1),
+      likers: Enum.map(Posts.post_likers(post.id), &liker_ref/1),
       repost_count: counts.reposts,
       bookmark_count: engagement.bookmarks,
       # ...and the breakdown the card's "from other networks" panel shows when
@@ -187,7 +187,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       thread: thread_entries(thread),
       thread_truncated: thread_truncated?,
       like_count: counts.likes,
-      likers: Enum.map(Posts.post_likers(post.id), &AgentDocs.person_ref/1),
+      likers: Enum.map(Posts.post_likers(post.id), &liker_ref/1),
       repost_count: counts.reposts,
       bookmark_count: engagement.bookmarks,
       fediverse_like_count: engagement.fediverse_likes,
@@ -198,6 +198,11 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       fediverse_replies: remote_replies
     })
   end
+
+  # A liker is a member or a page (issue #1410); the md/txt renderers read
+  # `.name` off either shape, JSON/XML carry the map as is.
+  defp liker_ref(%Organization{} = page), do: organization_ref(page)
+  defp liker_ref(%User{} = user), do: AgentDocs.person_ref(user)
 
   # The organization's own reference, the counterpart of `AgentDocs.person_ref/1`.
   # `canonical_path/1` prefers the page's opt-in root handle, so the URL here is

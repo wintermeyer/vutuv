@@ -95,6 +95,34 @@ defmodule VutuvWeb.PostLikersRowTest do
     end
   end
 
+  describe "a page's like (issue #1410)" do
+    test "a page gets a face: its name in the sentence, its logo linking to its page", %{
+      post: post
+    } do
+      page = insert(:organization, name: "Formkurve GmbH")
+      page_like!(post, page)
+
+      {:ok, _view, html} = thread_view(post)
+
+      assert html =~ "data-post-likers"
+      assert html =~ "Liked by Formkurve GmbH"
+      assert face_count(html) == 1
+      assert html =~ ~s(href="/organizations/#{page.slug}")
+    end
+
+    test "a page and a member share the row like two members would", %{post: post} do
+      like!(post, first_name: "Fanny", last_name: "Fan")
+      page = insert(:organization, name: "Formkurve GmbH")
+      page_like!(post, page)
+
+      {:ok, _view, html} = thread_view(post)
+
+      # The page liked last, so the sentence names it; the member keeps a face.
+      assert html =~ "Liked by Formkurve GmbH and 1 other"
+      assert face_count(html) == 2
+    end
+  end
+
   describe "the post's author" do
     test "sees the liker who opted out, and is told the row is theirs alone", %{
       post: post,

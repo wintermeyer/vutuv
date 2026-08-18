@@ -28,6 +28,9 @@ defmodule VutuvWeb.UI do
 
   alias Vutuv.Accounts.User
   alias Vutuv.DateRegions
+  alias Vutuv.Organizations.Organization
+  alias Vutuv.Organizations.OrganizationImage
+  alias Vutuv.Posts
   alias Vutuv.Tags.UserTag
   alias Vutuv.Uploads.Spec
   alias Vutuv.ViewerClock
@@ -1736,6 +1739,48 @@ defmodule VutuvWeb.UI do
     )
   end
 
+  attr(:organization, :map, required: true)
+  attr(:version, :string, default: "feed")
+  attr(:class, :string, default: "h-16 w-16")
+
+  @doc """
+  An organization's logo, or a brand-tint initials tile when it has none — the
+  page's twin of `<.avatar>`. Lives in the kit (issue #1410) because the shared
+  face strips render it too, and `VutuvWeb.OrganizationComponents` cannot be
+  imported here (it imports this module).
+  """
+  def organization_logo(assigns) do
+    ~H"""
+    <%= if @organization.logo do %>
+      <img
+        src={OrganizationImage.token_url(@organization.logo, @version)}
+        alt={@organization.name}
+        class={[@class, "rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-slate-800"]}
+      />
+    <% else %>
+      <span
+        class={[
+          @class,
+          "flex items-center justify-center rounded-2xl bg-brand-50 font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+        ]}
+        aria-hidden="true"
+      >
+        {organization_initial(@organization.name)}
+      </span>
+    <% end %>
+    """
+  end
+
+  # A page's monogram is deliberately ONE letter — the shipped look of every
+  # organization tile — where a member's `name_initials/1` takes two.
+  defp organization_initial(name) do
+    name
+    |> String.trim()
+    |> String.first()
+    |> Kernel.||("?")
+    |> String.upcase()
+  end
+
   @doc """
   A **stack of overlapping avatars**, each linking to that member's profile and
   carrying their name as its tooltip, with the rest collapsing into a trailing
@@ -1744,6 +1789,9 @@ defmodule VutuvWeb.UI do
   `aria-hidden` decoration. Used by the post card's "Reposted by" banner; the
   tag list page's bar (`<.endorsed_by>`) shares only the faces, since it is one
   link and needs its own geometry.
+
+  An entry is a member **or a page** (issue #1410, the permalink's "Liked by"
+  row): a `%Organization{}` renders its logo, named and linked to its own page.
   """
   attr(:users, :list, required: true)
   attr(:cap, :integer, default: 5)
@@ -1794,32 +1842,49 @@ defmodule VutuvWeb.UI do
   # The shingled faces, shared by `<.avatar_stack>` and the tag page's bar: a
   # profile link per face where the strip is decoration beside a sentence, plain
   # spans where the strip is itself one link (an <a> inside an <a> is invalid).
-  attr(:shown, :list, required: true, doc: "{user, index} pairs")
+  attr(:shown, :list, required: true, doc: "{member-or-page, index} pairs")
   attr(:size, :string, required: true)
   attr(:pull, :any, required: true)
   attr(:link?, :boolean, default: false)
 
   defp stack_faces(assigns) do
     ~H"""
-    <%= for {user, i} <- @shown do %>
+    <%= for {account, i} <- @shown do %>
       <.link
         :if={@link?}
-        href={~p"/#{user}"}
-        title={VutuvWeb.UserHelpers.full_name(user)}
+        href={Posts.author_path(account)}
+        title={VutuvWeb.UserHelpers.author_name(account)}
         class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && @pull]}
         data-stack-face
       >
-        <.avatar user={user} size={@size} />
+        <.stack_face account={account} size={@size} />
       </.link>
       <span
         :if={!@link?}
-        title={VutuvWeb.UserHelpers.full_name(user)}
+        title={VutuvWeb.UserHelpers.author_name(account)}
         class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && @pull]}
         data-stack-face
       >
-        <.avatar user={user} size={@size} />
+        <.stack_face account={account} size={@size} />
       </span>
     <% end %>
+    """
+  end
+
+  attr(:account, :map, required: true)
+  attr(:size, :string, required: true)
+
+  # A page's logo at the avatar's size: `rounded-2xl` on a face this small is a
+  # circle anyway, so the wrapper's `rounded-full` ring still hugs it.
+  defp stack_face(%{account: %Organization{}} = assigns) do
+    ~H"""
+    <.organization_logo organization={@account} class={avatar_size(@size)} />
+    """
+  end
+
+  defp stack_face(assigns) do
+    ~H"""
+    <.avatar user={@account} size={@size} />
     """
   end
 

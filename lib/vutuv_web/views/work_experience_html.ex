@@ -1,7 +1,6 @@
 defmodule VutuvWeb.WorkExperienceHTML do
   @moduledoc false
   use VutuvWeb, :html
-  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
   import VutuvWeb.UserHelpers
 
   alias Vutuv.Organizations

@@ -52,7 +52,9 @@ defmodule VutuvWeb.UserHelpers do
   siblings — because the fork was written out in each of them and the next kind
   of author would have to be remembered five times over. It asks
   `Vutuv.Posts.author/1` rather than matching the preloaded association, which
-  reads as a type check and behaves as a preload check.
+  reads as a type check and behaves as a preload check. Not only authors: any
+  member-or-page actor is named through here — a liker (issue #1410), a
+  reposter, an organization's followee row.
   """
   def author_name(%Post{} = post), do: author_name(Posts.author(post))
   def author_name(%Organization{name: name}), do: name

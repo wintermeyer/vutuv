@@ -21,8 +21,6 @@ defmodule VutuvWeb.OrganizationLive.Post do
 
   use VutuvWeb, :live_view
 
-  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
-
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias VutuvWeb.Live.InitAssigns

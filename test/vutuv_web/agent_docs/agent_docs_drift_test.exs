@@ -607,6 +607,20 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     end
   end
 
+  test "post permalink: a page's like is named like a member's (issue #1410)", %{post: post} do
+    page = insert(:organization, name: "Drift Likering GmbH")
+    page_like!(post, page)
+
+    rendered = formats_for("/drift_tester/posts/#{post.id}")
+
+    doc = Jason.decode!(rendered.json)
+    assert [liker] = doc["likers"]
+    assert liker["name"] == "Drift Likering GmbH"
+    assert liker["url"] =~ "/organizations/#{page.slug}"
+
+    for format <- [rendered.md, rendered.txt], do: assert(format =~ "Drift Likering GmbH")
+  end
+
   test "post permalink: a liker who opted out is named in no format, and still counted", %{
     post: post
   } do

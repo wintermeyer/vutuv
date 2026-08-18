@@ -1,8 +1,9 @@
 defmodule VutuvWeb.OrganizationComponents do
   @moduledoc """
-  Shared kit-page pieces for verified organization pages (issue #929): the logo tile
-  (uploaded image or an initials fallback) and the verified-domain badge. Not
-  globally imported — `import VutuvWeb.OrganizationComponents` at the call site.
+  Shared kit-page pieces for verified organization pages (issue #929), the
+  verified-domain badge among them. Not globally imported — `import
+  VutuvWeb.OrganizationComponents` at the call site. The logo tile lives in
+  `VutuvWeb.UI` (issue #1410).
   """
 
   use Phoenix.Component
@@ -10,39 +11,13 @@ defmodule VutuvWeb.OrganizationComponents do
   use Gettext, backend: VutuvWeb.Gettext
 
   import VutuvWeb.ErrorHelpers
-  import VutuvWeb.UI, only: [input_class: 2]
+  # `organization_logo/1` lives in the kit (issue #1410): the shared face
+  # strips render it too, and `VutuvWeb.UI` cannot import this module back.
+  import VutuvWeb.UI, only: [input_class: 2, organization_logo: 1]
 
   alias Vutuv.Countries
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
-  alias Vutuv.Organizations.OrganizationImage
-
-  attr(:organization, :map, required: true)
-  attr(:version, :string, default: "feed")
-  attr(:class, :string, default: "h-16 w-16")
-
-  @doc "An organization's logo, or a brand-tint initials tile when it has none."
-  def organization_logo(assigns) do
-    ~H"""
-    <%= if @organization.logo do %>
-      <img
-        src={OrganizationImage.token_url(@organization.logo, @version)}
-        alt={@organization.name}
-        class={[@class, "rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-slate-800"]}
-      />
-    <% else %>
-      <span
-        class={[
-          @class,
-          "flex items-center justify-center rounded-2xl bg-brand-50 font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-        ]}
-        aria-hidden="true"
-      >
-        {initial(@organization.name)}
-      </span>
-    <% end %>
-    """
-  end
 
   attr(:domain, :string, required: true)
   attr(:class, :string, default: nil)
@@ -366,12 +341,4 @@ defmodule VutuvWeb.OrganizationComponents do
   def alias_kind_label("brand"), do: gettext("Brand")
   def alias_kind_label("abbreviation"), do: gettext("Abbreviation")
   def alias_kind_label(_), do: gettext("Alias")
-
-  defp initial(name) do
-    name
-    |> String.trim()
-    |> String.first()
-    |> Kernel.||("?")
-    |> String.upcase()
-  end
 end

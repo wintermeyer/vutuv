@@ -25,9 +25,6 @@ defmodule VutuvWeb.PostComponents do
 
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
-  # An organization post wears its organization's logo where a member's post
-  # wears an avatar (issue #1334).
-  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
@@ -3844,16 +3841,19 @@ defmodule VutuvWeb.PostComponents do
       names them, so the stack itself is decorative for assistive tech. --%>
       <.avatar_stack users={@reposters} cap={@cap} />
       <span class="min-w-0 truncate">
+        <%!-- `author_name/1` / `author_path/1`, not `full_name/1` / `~p`: a
+        reposter can be a page (`Posts.reposter_rosters/2`), which crashed the
+        member-only pair (issue #1410). --%>
         <%= if @others == 0 do %>
-          <.link href={~p"/#{@primary}"} class="hover:text-brand-700">
-            {gettext("Reposted by %{name}", name: full_name(@primary))}
+          <.link href={Posts.author_path(@primary)} class="hover:text-brand-700">
+            {gettext("Reposted by %{name}", name: UserHelpers.author_name(@primary))}
           </.link>
         <% else %>
           {ngettext(
             "Reposted by %{name} and %{formatted} other",
             "Reposted by %{name} and %{formatted} others",
             @others,
-            name: full_name(@primary),
+            name: UserHelpers.author_name(@primary),
             formatted: compact_count(@others)
           )}
         <% end %>
@@ -4001,14 +4001,16 @@ defmodule VutuvWeb.PostComponents do
           cap={Posts.likers_shown()}
         />
         <span class="min-w-0 text-sm text-slate-600 dark:text-slate-400">
+          <%!-- `author_name/1`, not `full_name/1`: the newest liker can be a
+          page (issue #1410), and `full_name/1` has no clause for one. --%>
           <%= if @others == 0 do %>
-            {gettext("Liked by %{name}", name: full_name(@primary))}
+            {gettext("Liked by %{name}", name: UserHelpers.author_name(@primary))}
           <% else %>
             {ngettext(
               "Liked by %{name} and %{formatted} other",
               "Liked by %{name} and %{formatted} others",
               @others,
-              name: full_name(@primary),
+              name: UserHelpers.author_name(@primary),
               formatted: compact_count(@others)
             )}
           <% end %>

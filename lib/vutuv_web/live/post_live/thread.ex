@@ -46,6 +46,7 @@ defmodule VutuvWeb.PostLive.Thread do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Prefs
@@ -306,7 +307,11 @@ defmodule VutuvWeb.PostLive.Thread do
     %{
       users: users,
       total: (engagement && Posts.shown_counts(engagement).likes) || length(users),
-      private?: author? and Enum.any?(users, &(not Prefs.get(&1, :like_attribution?)))
+      # Members only: a page in the list (issue #1410) has no attribution
+      # preference to have opted out of.
+      private?:
+        author? and
+          Enum.any?(users, &(is_struct(&1, User) and not Prefs.get(&1, :like_attribution?)))
     }
   end
 

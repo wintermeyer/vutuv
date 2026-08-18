@@ -1175,6 +1175,27 @@ defmodule VutuvWeb.PostFeedLiveTest do
     end
   end
 
+  describe "a page's repost (issue #1410)" do
+    test "the banner names the page like a member", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      author = other_user()
+      page = insert(:organization, name: "Bannerwerk GmbH")
+
+      Repo.insert!(%Vutuv.Social.Follow{
+        follower_id: viewer.id,
+        followee_organization_id: page.id
+      })
+
+      {:ok, post} = Posts.create_post(author, %{body: "Reshared by a page."})
+      Repo.insert!(%Vutuv.Posts.PostRepost{post_id: post.id, organization_id: page.id})
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      assert html =~ "Reposted by Bannerwerk GmbH"
+      assert html =~ ~s(href="/organizations/#{page.slug}")
+    end
+  end
+
   describe "mute from the feed" do
     test "a followed author's post carries a Mute toggle wired to the mute route", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
