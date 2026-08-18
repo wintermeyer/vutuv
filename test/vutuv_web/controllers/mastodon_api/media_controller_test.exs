@@ -56,6 +56,50 @@ defmodule VutuvWeb.MastodonApi.MediaControllerTest do
     |> Repo.update!()
   end
 
+  test "an unposted upload can be taken back again", %{conn: conn, tmp: tmp} do
+    user = insert(:activated_user)
+    token = mastodon_token(user, ["read", "write"])
+
+    # Mastodon's API version 4 half a composer needs: a client uploads eagerly,
+    # so a picture the member picks and drops is already here. Without this
+    # method it waited for the next day's sweep of unattached leftovers.
+    uploaded =
+      conn
+      |> mastodon_conn(token)
+      |> post("/api/v1/media", %{"file" => jpeg!(tmp)})
+      |> json_response(200)
+
+    assert build_conn()
+           |> mastodon_conn(token)
+           |> delete("/api/v1/media/#{uploaded["id"]}")
+           |> json_response(200)
+
+    refute Repo.get(PostImage, uploaded["id"])
+
+    assert build_conn()
+           |> mastodon_conn(token)
+           |> get("/api/v1/media/#{uploaded["id"]}")
+           |> json_response(404)
+  end
+
+  test "one member cannot delete another's upload", %{conn: conn, tmp: tmp} do
+    owner = insert(:activated_user)
+    stranger = insert(:activated_user)
+
+    uploaded =
+      conn
+      |> mastodon_conn(mastodon_token(owner, ["read", "write"]))
+      |> post("/api/v1/media", %{"file" => jpeg!(tmp)})
+      |> json_response(200)
+
+    assert build_conn()
+           |> mastodon_conn(mastodon_token(stranger, ["read", "write"]))
+           |> delete("/api/v1/media/#{uploaded["id"]}")
+           |> json_response(404)
+
+    assert Repo.get(PostImage, uploaded["id"])
+  end
+
   test "upload, describe and attach a photo to a status", %{conn: conn, tmp: tmp} do
     user = insert(:activated_user)
     token = mastodon_token(user, ["read", "write"])

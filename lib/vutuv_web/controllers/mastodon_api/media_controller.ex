@@ -61,6 +61,32 @@ defmodule VutuvWeb.MastodonApi.MediaController do
     end
   end
 
+  @doc """
+  Throws away an upload that was never posted (`DELETE /api/v1/media/:id`).
+
+  One of the two methods Mastodon's **API version 4** stands for, and the half a
+  composer needs: a client uploads eagerly, so every picture a member picks and
+  then changes their mind about is already on this server. Without this the file
+  sat there until the next day's sweep of unattached leftovers
+  (`Vutuv.Posts.PendingImageSweeper`) — which is a promise vutuv keeps, but not
+  the one a member makes when they tap the ✕ on a photo.
+
+  Only an **unattached** upload of the member's own, like every other method
+  here: once a picture belongs to a post it is removed through the status, not
+  behind its back. Mastodon answers 200 with an empty body, and a client reads
+  the status rather than the payload.
+  """
+  def delete(conn, %{"id" => id}) do
+    case own_media(conn, id) do
+      %PostImage{} = image ->
+        :ok = Posts.delete_pending_image(image)
+        json(conn, %{})
+
+      nil ->
+        not_found(conn)
+    end
+  end
+
   defp upload(conn, %{"file" => %Plug.Upload{} = upload} = params, ready_status) do
     with :ok <- within_rate_limit(conn),
          {:ok, image} <- Posts.create_pending_image(conn.assigns.current_user, upload) do

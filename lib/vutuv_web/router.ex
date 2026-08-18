@@ -233,6 +233,12 @@ defmodule VutuvWeb.Router do
       assigns: %{mastodon_scope: "read:follows"}
     )
 
+    # Before `/accounts/:id`, which would otherwise match "lookup" as an id. The
+    # handle-to-account call a client makes on every `@` it renders.
+    get("/api/v1/accounts/lookup", AccountController, :lookup,
+      assigns: %{mastodon_scope: "read:accounts"}
+    )
+
     get("/api/v1/accounts/:id", AccountController, :show,
       assigns: %{mastodon_scope: "read:accounts"}
     )
@@ -308,6 +314,20 @@ defmodule VutuvWeb.Router do
       assigns: %{mastodon_scope: "read:notifications"}
     )
 
+    # The three companions of that list. A client holds a `group_key` from it and
+    # opens, fills or dismisses the row with these; all three used to 404.
+    get("/api/v2/notifications/:group_key/accounts", NotificationController, :group_accounts,
+      assigns: %{mastodon_scope: "read:notifications"}
+    )
+
+    post("/api/v2/notifications/:group_key/dismiss", NotificationController, :dismiss_group,
+      assigns: %{mastodon_scope: "write:notifications"}
+    )
+
+    get("/api/v2/notifications/:group_key", NotificationController, :group,
+      assigns: %{mastodon_scope: "read:notifications"}
+    )
+
     get("/api/v1/notifications/unread_count", NotificationController, :unread_count,
       assigns: %{mastodon_scope: "read:notifications"}
     )
@@ -332,8 +352,25 @@ defmodule VutuvWeb.Router do
       assigns: %{mastodon_scope: "read:lists"}
     )
 
-    get("/api/v1/followed_tags", CompatibilityController, :empty,
+    # vutuv has followed tags (issue #872); this used to answer a hardcoded
+    # empty list, so a client showed none of them and offered "Follow" on every
+    # topic the member already follows.
+    get("/api/v1/followed_tags", TagController, :followed,
       assigns: %{mastodon_scope: "read:follows"}
+    )
+
+    # `read:follows`, not the parent `read`: the answer carries the viewer's own
+    # subscription, and `Scopes.granted?/2` widens upward only — a bare parent
+    # scope is refused for every token that was granted the granular ones, which
+    # is what every other route here asks for.
+    get("/api/v1/tags/:id", TagController, :show, assigns: %{mastodon_scope: "read:follows"})
+
+    post("/api/v1/tags/:id/follow", TagController, :follow,
+      assigns: %{mastodon_scope: "write:follows"}
+    )
+
+    post("/api/v1/tags/:id/unfollow", TagController, :unfollow,
+      assigns: %{mastodon_scope: "write:follows"}
     )
 
     get("/api/v2/filters", CompatibilityController, :empty,
@@ -416,6 +453,12 @@ defmodule VutuvWeb.Router do
 
     get("/api/v1/media/:id", MediaController, :show, assigns: %{mastodon_scope: "write:media"})
     put("/api/v1/media/:id", MediaController, :update, assigns: %{mastodon_scope: "write:media"})
+
+    # Mastodon API version 4: a client that uploads eagerly can take an unposted
+    # picture back instead of leaving it for the next day's sweep.
+    delete("/api/v1/media/:id", MediaController, :delete,
+      assigns: %{mastodon_scope: "write:media"}
+    )
 
     post("/api/v1/statuses", StatusController, :create,
       assigns: %{mastodon_scope: "write:statuses"}

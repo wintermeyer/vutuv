@@ -3,16 +3,12 @@ defmodule VutuvWeb.MastodonApi.SearchController do
 
   use VutuvWeb, :controller
 
-  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
-  alias Vutuv.Fediverse
-  alias Vutuv.MastodonApi
   alias Vutuv.MastodonApi.Presenter
-  alias Vutuv.Moderation
-  alias Vutuv.Organizations
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias Vutuv.Tags
+  alias VutuvWeb.MastodonApi.Handles
 
   def search(conn, %{"q" => query} = params) do
     query = String.trim(query)
@@ -25,7 +21,7 @@ defmodule VutuvWeb.MastodonApi.SearchController do
     json(conn, %{
       accounts: section(type, "accounts", fn -> accounts(resolved, free_text, limit) end),
       statuses: section(type, "statuses", fn -> statuses(free_text, limit, viewer(conn)) end),
-      hashtags: section(type, "hashtags", fn -> hashtags(free_text, limit) end)
+      hashtags: section(type, "hashtags", fn -> hashtags(free_text, limit, viewer(conn)) end)
     })
   end
 
@@ -78,22 +74,29 @@ defmodule VutuvWeb.MastodonApi.SearchController do
 
   defp viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
 
-  # Mastodon's Tag entity. vutuv tags live at `/tags/:slug` on the main host,
-  # which is where a client's "open in browser" should land.
-  defp hashtags(%{tags: tags}, limit) when is_list(tags) do
+  # Mastodon's Tag entity, rendered by the one owner of that shape
+  # (`Presenter.tag/2`) so the search results, `/api/v1/tags/:id` and
+  # `/api/v1/followed_tags` cannot describe the same topic differently.
+  #
+  # `following` used to be a hardcoded `false`, which is a claim and not a
+  # placeholder: a client draws its Follow button from it, so a topic the member
+  # already follows was offered to them again. One query per search fills it for
+  # the whole page.
+  defp hashtags(%{tags: tags}, limit, viewer) when is_list(tags) do
+    followed = followed_tag_ids(viewer)
+
     tags
     |> Enum.take(limit)
-    |> Enum.map(fn tag ->
-      %{
-        name: tag.slug,
-        url: MastodonApi.main_url("/tags/#{tag.slug}"),
-        history: [],
-        following: false
-      }
-    end)
+    |> Enum.map(&Presenter.tag(&1, MapSet.member?(followed, &1.id)))
   end
 
-  defp hashtags(_no_free_text, _limit), do: []
+  defp hashtags(_no_free_text, _limit, _viewer), do: []
+
+  # A page identity follows topics of its own, but a search runs for whoever is
+  # reading; answering with the page's subscriptions would tick a box the member
+  # never ticked, so an `%Organization{}` falls through to the empty set.
+  defp followed_tag_ids(%User{} = user), do: user |> Tags.followed_tag_ids() |> MapSet.new()
+  defp followed_tag_ids(_page_identity), do: MapSet.new()
 
   defp limit(%{"limit" => value}) do
     case Integer.parse(to_string(value)) do
@@ -104,61 +107,5 @@ defmodule VutuvWeb.MastodonApi.SearchController do
 
   defp limit(_params), do: 20
 
-  defp resolve("@" <> address, conn) do
-    case String.split(address, "@", parts: 2) do
-      [handle] -> resolve_local(conn, handle)
-      [handle, host] -> resolve_qualified(conn, address, handle, String.downcase(host))
-    end
-  end
-
-  defp resolve(query, conn), do: resolve_local(conn, query)
-
-  # `client_host?/1`, not a list of the two hosts we happen to think of: it also
-  # answers for the `www.` alias, and serving a site at both the apex and its
-  # `www.` name is the oldest convention on the web. Spelled out, the miss was
-  # not a polite "unknown handle" — `@member@www.<our host>` fell through to the
-  # remote branch, so this installation WebFingered **itself** over the network
-  # and told the member their own site was unreachable.
-  defp resolve_qualified(conn, address, handle, host) do
-    if MastodonApi.client_host?(host),
-      do: resolve_local(conn, handle),
-      else: resolve_remote(conn, address)
-  end
-
-  defp resolve_remote(conn, address) do
-    subject = conn.assigns.current_organization || conn.assigns.current_user
-
-    case Fediverse.resolve_remote_account(subject, "@" <> address) do
-      {:ok, account} -> account
-      _error -> nil
-    end
-  end
-
-  defp resolve_local(conn, handle) do
-    normalized = String.downcase(handle)
-
-    normalized
-    |> local_account()
-    |> visible_to_identity(conn)
-  end
-
-  defp local_account(handle) do
-    Accounts.get_user_by_username(handle) ||
-      Organizations.get_organization_by_username(handle) ||
-      Organizations.get_organization_by_slug(handle)
-  end
-
-  defp visible_to_identity(%User{} = user, conn) do
-    viewer = if is_nil(conn.assigns.current_organization), do: conn.assigns.current_user
-    if Moderation.profile_visible_to?(user, viewer), do: user
-  end
-
-  defp visible_to_identity(%Organization{} = organization, conn) do
-    current_id = conn.assigns.current_organization && conn.assigns.current_organization.id
-
-    if Organizations.public_visible?(organization) or current_id == organization.id,
-      do: organization
-  end
-
-  defp visible_to_identity(nil, _conn), do: nil
+  defp resolve(query, conn), do: Handles.resolve(conn, query)
 end
