@@ -89,7 +89,15 @@ defmodule VutuvWeb.RemoteFollowController do
     else
       case RemoteFollow.subscribe_url(address, Docs.acct(subject)) do
         {:ok, url} ->
-          redirect(conn, external: url)
+          # A hand-off page, not a 302: `form-action 'self'` covers a
+          # submission's redirects, and the destination here is only known
+          # once the visitor's address has been resolved, so the header the
+          # consent screen widens cannot be written in advance (issue #1569).
+          ControllerHelpers.hand_off(
+            conn,
+            url,
+            gettext("Confirm the follow on your own server.")
+          )
 
         {:error, reason} ->
           conn

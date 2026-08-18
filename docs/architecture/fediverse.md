@@ -677,8 +677,8 @@ apps, paste it into a search box and wait. The Fediverse's answer is the
 **remote-follow (OStatus subscribe) template**, which every server publishes in
 its own WebFinger document. So the profile card asks the visitor for *their*
 address, `Vutuv.Fediverse.RemoteFollow` looks up *their* server's follow dialog
-and `VutuvWeb.RemoteFollowController` (`POST /:slug/fediverse/follow`) redirects
-them into it with the member's `acct:` URI filled in. The follow is then
+and `VutuvWeb.RemoteFollowController` (`POST /:slug/fediverse/follow`) hands
+them on to it with the member's `acct:` URI filled in. The follow is then
 confirmed where the visitor's account actually lives; no credential ever reaches
 vutuv and the typed address is used for one lookup and forgotten.
 
@@ -690,6 +690,17 @@ It is a plain HTML form post, not a `phx-click`: the person it is for arrives
 from another network and is the last visitor whose JavaScript we should assume
 anything about. (The profile is a LiveView, which loads the session's CSRF state,
 so the token the form stamps is valid from a live render too.)
+
+**The last hop is a page, not a 302** (issue #1569). `form-action 'self'` is
+enforced on every hop of a form submission, redirects included, so answering
+this POST with `redirect(conn, external: …)` was dropped by Chrome and WebKit —
+invisibly on both sides, and the console blamed our own URL. The consent
+screen's fix does not carry over, because the destination here only exists once
+the address the visitor typed has been resolved. So the submission ends at a
+200 (`VutuvWeb.ControllerHelpers.hand_off/3`, rendered by
+`VutuvWeb.OutboundHTML`) and the layout's `<meta http-equiv="refresh">` takes
+the visitor on: the hop that leaves vutuv is then an ordinary navigation, which
+the directive does not govern.
 
 This is also the **only outbound fetch an anonymous visitor can trigger**, so it
 is fenced like the inbox path it borrows its shape from: the installation switch

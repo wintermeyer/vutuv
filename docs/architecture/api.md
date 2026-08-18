@@ -71,6 +71,13 @@ validates nothing: `https://evil.example.org;script-src 'unsafe-inline'/cb`
 registers cleanly and comes back with that whole run as its "host", which in a
 header would be a second directive of the app author's choosing.
 
+Widening the header is the exception, not the pattern: it works here only
+because the destination is registered and known while the page renders. The
+other two forms that leave the site — "follow us from your own server" and the
+job board's easy apply — answer with a page instead
+(`VutuvWeb.ControllerHelpers.hand_off/3`, issue #1569); `VutuvWeb.OutboundHTML`
+says why, and it is the shape to copy for anything new.
+
 **One consent, one code.** A phone client resubmitted a single loaded consent
 page about a hundred times, up to eight a second, and every submission minted an
 authorization code of its own, each redeemable for ten minutes (issue #1561).

@@ -1,0 +1,10 @@
+<%!-- The hand-off page (VutuvWeb.ControllerHelpers.hand_off/3). An http(s)
+destination is taken by the layout's meta refresh before this paints, so what
+is written here is for the case where it *is* read — a mailto, or a refresh
+that did not fire: the destination is named and the button is the whole point
+of the page. See VutuvWeb.OutboundHTML for why this is not a 302. --%>
+<.card class="mx-auto max-w-md text-center">
+  <h1 class="text-xl font-bold text-slate-900 dark:text-white">{@copy.title}</h1>
+  <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{@note}</p>
+  <.button href={@url} rel="noopener" class="mt-6">{@copy.label}</.button>
+</.card>

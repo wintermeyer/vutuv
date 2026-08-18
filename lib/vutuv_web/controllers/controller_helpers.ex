@@ -209,6 +209,42 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
+  Answers a form submission whose destination is another site: a 200 that
+  names `url`, explains itself with `note`, and links on (issue #1569).
+
+  **Use this instead of `redirect(conn, external: …)` in reply to a POST.**
+  `form-action 'self'` is enforced on a submission's redirects too, so the 302
+  is dropped by Chrome and WebKit with nothing to see on either side. The full
+  reasoning, and why an `http(s)` destination still costs no click, is in
+  `VutuvWeb.OutboundHTML`.
+
+  A same-origin destination needs none of this — keep redirecting to those.
+  """
+  def hand_off(%Conn{} = conn, url, note) when is_binary(url) and is_binary(note) do
+    copy = VutuvWeb.OutboundHTML.hand_off_copy(url)
+
+    conn
+    |> Conn.assign(:meta_refresh, copy.auto_forward)
+    |> chrome_for(copy)
+    |> Phoenix.Controller.put_view(html: VutuvWeb.OutboundHTML)
+    |> Phoenix.Controller.render("hand_off.html", url: url, note: note, copy: copy)
+  end
+
+  # A page that forwards itself is never read, so it does not pay for the app
+  # chrome. The saving is not the dead render itself — `ShellLive.mount_static/3`
+  # runs no query, and it costs 20–30 KB and well under a millisecond. It is
+  # that `app.html.heex` holds the document's **only live root**, so without it
+  # `liveSocket.connect()` takes its dead branch and never opens a socket at
+  # all: no connected `ShellLive` mount (5 queries and ~2.3 ms for a signed-in
+  # member, measured), no presence track and untrack, for a document the
+  # browser replaces in the same frame. Dropping the *app* layout keeps the
+  # *root* one, which is where the meta refresh has to live anyway. The page
+  # that waits for a click is read, so it keeps the chrome — a bare dead end
+  # there is worse than the render.
+  defp chrome_for(conn, %{auto_forward: nil}), do: conn
+  defp chrome_for(conn, _forwards_itself), do: Phoenix.Controller.put_layout(conn, html: false)
+
+  @doc """
   Renders the "this profile is currently unavailable" page and halts with the
   given status (issue #812): `403` for a reversible hold (frozen / suspended /
   unreachable), `410` for a permanently deactivated account. Unlike

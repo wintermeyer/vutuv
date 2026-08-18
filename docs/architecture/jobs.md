@@ -243,6 +243,14 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
 - **No applications table** — applying routes to the employer's channel (an
   outbound URL, a prefilled mailto, or a vutuv conversation with the poster), so
   vutuv never becomes controller of rejected-candidate data (§26 BDSG / AGG).
+  The two outbound channels answer the POST with a hand-off page rather than a
+  302 (`VutuvWeb.ControllerHelpers.hand_off/3`, issue #1569): `form-action
+  'self'` is enforced on a submission's redirects too, and this page cannot
+  widen the header for its own destination because the apply button sits in a
+  LiveView the visitor may have reached by live navigation. The website
+  destination forwards itself; the `mailto:` waits for the button, because a
+  browser hands a URL to an external program on a user gesture. The
+  conversation stays a plain redirect — it is same-origin.
 
 ## Salary normalization
 

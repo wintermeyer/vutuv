@@ -9,6 +9,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
   import Phoenix.LiveViewTest
   import Vutuv.EndpointHostHelper
+  import Vutuv.FediverseHelpers
 
   alias Vutuv.Social
   alias VutuvWeb.Fediverse.Docs
@@ -25,29 +26,6 @@ defmodule VutuvWeb.UserProfileFediverseTest do
   defp position(html, id) do
     {at, _len} = :binary.match(html, ~s|id="#{id}"|)
     at
-  end
-
-  defp stub_remote(fun) do
-    Application.put_env(:vutuv, :fediverse_req_options, plug: fun)
-    on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
-  end
-
-  defp serve_subscribe_template do
-    stub_remote(fn conn ->
-      conn
-      |> Plug.Conn.put_resp_content_type("application/jrd+json")
-      |> Plug.Conn.send_resp(
-        200,
-        Jason.encode!(%{
-          "links" => [
-            %{
-              "rel" => "http://ostatus.org/spec/1.0#subscribe",
-              "template" => "https://social.example/authorize_interaction?uri={uri}"
-            }
-          ]
-        })
-      )
-    end)
   end
 
   describe "the card" do
@@ -175,7 +153,9 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
       conn = post(conn, ~p"/#{user}/fediverse/follow", %{"address" => "@them@social.example"})
 
-      assert redirected_to(conn) ==
+      # A hand-off page rather than a 302, because `form-action 'self'` covers
+      # a submission's redirects (issue #1569) — see OutboundHandOffTest.
+      assert html_response(conn, 200) =~
                "https://social.example/authorize_interaction?uri=" <>
                  URI.encode_www_form("acct:" <> Docs.acct(user))
     end
@@ -195,7 +175,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
           "address" => "@them@social.example"
         })
 
-      assert redirected_to(conn) =~ "https://social.example/authorize_interaction"
+      assert html_response(conn, 200) =~ "https://social.example/authorize_interaction"
     end
 
     test "explains a typo instead of guessing", %{conn: conn} do

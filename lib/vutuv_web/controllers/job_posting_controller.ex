@@ -94,17 +94,31 @@ defmodule VutuvWeb.JobPostingController do
     end
   end
 
+  # The two outbound channels answer with a hand-off page rather than a 302:
+  # `form-action 'self'` covers a submission's redirects, and this page cannot
+  # widen the header for its own destination because the button sits in a
+  # LiveView the visitor may have reached by live navigation (issue #1569).
   defp do_apply(conn, %{apply_kind: :url, apply_url: url} = posting, _viewer)
        when is_binary(url) do
     Jobs.increment_apply_click(posting)
-    redirect(conn, external: url)
+
+    ControllerHelpers.hand_off(
+      conn,
+      url,
+      gettext("The employer takes applications on their own website.")
+    )
   end
 
   defp do_apply(conn, %{apply_kind: :email, apply_email: email} = posting, _viewer)
        when is_binary(email) do
     Jobs.increment_apply_click(posting)
     subject = URI.encode_www_form(gettext("Application: %{title}", title: posting.title))
-    redirect(conn, external: "mailto:#{email}?subject=#{subject}")
+
+    ControllerHelpers.hand_off(
+      conn,
+      "mailto:#{email}?subject=#{subject}",
+      gettext("Your e-mail program opens with the subject filled in.")
+    )
   end
 
   defp do_apply(conn, %{apply_kind: :message}, nil) do

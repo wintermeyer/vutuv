@@ -39,6 +39,14 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
   app's registered `redirect_uris`, so this names a destination the server was
   going to redirect to anyway — never anything read straight off the query
   string.
+
+  That makes widening the exception rather than the pattern: it works here only
+  because the destination is registered and known while the page renders. The
+  other two submissions bound for another site cannot say that, so they leave
+  the header alone and answer with a page, letting an ordinary navigation make
+  the hop (`VutuvWeb.OutboundHTML`, issue #1569). Prefer that shape for
+  anything new; reach for `allow_form_action/2` only when the destination is
+  pinned in advance.
   """
 
   @behaviour Plug

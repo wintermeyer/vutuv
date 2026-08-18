@@ -741,7 +741,7 @@ msgstr "Code & Repositorys"
 
 #: lib/vutuv_web/controllers/block_controller.ex:34
 #: lib/vutuv_web/controllers/follow_controller.ex:24
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:166
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:174
 #: lib/vutuv_web/controllers/user_save_controller.ex:45
 #: lib/vutuv_web/live/user_profile_live.ex:159
 #, elixir-autogen
@@ -12700,7 +12700,7 @@ msgstr "Bewerbungs-URL"
 msgid "Application e-mail"
 msgstr "Bewerbungs-E-Mail"
 
-#: lib/vutuv_web/controllers/job_posting_controller.ex:106
+#: lib/vutuv_web/controllers/job_posting_controller.ex:115
 #, elixir-autogen, elixir-format
 msgid "Application: %{title}"
 msgstr "Bewerbung: %{title}"
@@ -12817,7 +12817,7 @@ msgstr "So bewerben Sie sich"
 msgid "Hybrid"
 msgstr "Hybrid"
 
-#: lib/vutuv_web/controllers/job_posting_controller.ex:120
+#: lib/vutuv_web/controllers/job_posting_controller.ex:134
 #, elixir-autogen, elixir-format
 msgid "I'm interested in your posting: %{url}"
 msgstr "Ich interessiere mich für Ihre Anzeige: %{url}"
@@ -12962,7 +12962,7 @@ msgstr "Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse."
 msgid "Please confirm your email address before posting a job."
 msgstr "Bitte bestätigen Sie Ihre E-Mail-Adresse, bevor Sie eine Stelle ausschreiben."
 
-#: lib/vutuv_web/controllers/job_posting_controller.ex:112
+#: lib/vutuv_web/controllers/job_posting_controller.ex:126
 #, elixir-autogen, elixir-format
 msgid "Please log in to message the poster."
 msgstr "Bitte melden Sie sich an, um die Anbieter:in anzuschreiben."
@@ -15724,27 +15724,27 @@ msgstr "@name@example.social"
 msgid "Your address is used once, to send you to your own server's follow dialog. It is never stored here."
 msgstr "Ihre Adresse wird einmal verwendet, um Sie zum Folgen-Dialog Ihres eigenen Servers zu schicken. Gespeichert wird sie hier nicht."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:197
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:205
 #, elixir-autogen, elixir-format
 msgid "This profile is not on the Fediverse."
 msgstr "Dieses Profil ist nicht im Fediverse."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:213
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:221
 #, elixir-autogen, elixir-format
 msgid "That is not a Fediverse address. It looks like @you@example.social."
 msgstr "Das ist keine Fediverse-Adresse. Eine sieht so aus: @name@example.social."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:217
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:225
 #, elixir-autogen, elixir-format
 msgid "%{server} did not offer a follow dialog. Copy the handle above and paste it into your app's search instead."
 msgstr "%{server} bietet keinen Folgen-Dialog an. Kopieren Sie stattdessen die Adresse oben und fügen Sie sie in die Suche Ihrer App ein."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:224
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:232
 #, elixir-autogen, elixir-format
 msgid "%{server} did not answer. Copy the handle above and paste it into your app's search instead."
 msgstr "%{server} hat nicht geantwortet. Kopieren Sie stattdessen die Adresse oben und fügen Sie sie in die Suche Ihrer App ein."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:235
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:243
 #, elixir-autogen, elixir-format
 msgid "Your server"
 msgstr "Ihr Server"
@@ -18475,7 +18475,7 @@ msgstr "@%{handle} ist auf diesem vutuv. Sie folgen dem Mitglied jetzt direkt hi
 msgid "That address is on this vutuv, but it names no member here."
 msgstr "Diese Adresse gehört zu diesem vutuv, aber es gibt hier kein Mitglied mit diesem Namen."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:208
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:216
 #, elixir-autogen, elixir-format
 msgid "That address is on this vutuv. Sign in and use the Follow button on this profile."
 msgstr "Diese Adresse gehört zu diesem vutuv. Melden Sie sich an, dann können Sie diesem Mitglied direkt hier folgen."
@@ -18485,17 +18485,17 @@ msgstr "Diese Adresse gehört zu diesem vutuv. Melden Sie sich an, dann können 
 msgid "That is your own address. You cannot follow yourself."
 msgstr "Das ist Ihre eigene Adresse. Sie können sich nicht selbst folgen."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:150
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:158
 #, elixir-autogen, elixir-format
 msgid "That is your own profile. You cannot follow yourself."
 msgstr "Das ist Ihr eigenes Profil. Sie können sich nicht selbst folgen."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:161
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:169
 #, elixir-autogen, elixir-format
 msgid "You already follow @%{handle} here."
 msgstr "Sie folgen @%{handle} hier bereits."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:143
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:151
 #, elixir-autogen, elixir-format
 msgid "You are on this vutuv yourself, so you now follow @%{handle} right here."
 msgstr "Sie sind selbst auf diesem vutuv. Sie folgen @%{handle} jetzt direkt hier."
@@ -20977,13 +20977,13 @@ msgstr "Neue Nachricht von %{sender} auf vutuv"
 msgid "This page cannot receive messages."
 msgstr "Diese Organisation kann keine Nachrichten empfangen."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:200
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:204
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:208
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:212
 #, elixir-autogen, elixir-format
 msgid "That address is on this vutuv. Sign in and use the Follow button on this page."
 msgstr "Diese Adresse gehört zu diesem vutuv. Melden Sie sich an, dann können Sie dieser Seite direkt hier folgen."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:195
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:203
 #, elixir-autogen, elixir-format
 msgid "This page is not on the Fediverse."
 msgstr "Diese Seite ist nicht im Fediverse."
@@ -21147,17 +21147,17 @@ msgstr[1] "Ihre Registrierung wurde nicht bestätigt, deshalb löschen wir sie a
 msgid "#%{tag} is a topic on this vutuv, so you now follow the tag here."
 msgstr "#%{tag} ist ein Thema auf diesem vutuv. Sie folgen dem Tag jetzt hier."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:192
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:200
 #, elixir-autogen, elixir-format
 msgid "This topic is not on the Fediverse."
 msgstr "Dieses Thema ist nicht im Fediverse."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:154
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:162
 #, elixir-autogen, elixir-format
 msgid "You already follow #%{tag} here."
 msgstr "Sie folgen #%{tag} hier bereits."
 
-#: lib/vutuv_web/controllers/remote_follow_controller.ex:133
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:141
 #, elixir-autogen, elixir-format
 msgid "You are on this vutuv yourself, so you now follow #%{tag} right here."
 msgstr "Sie sind selbst auf diesem vutuv. Sie folgen #%{tag} jetzt direkt hier."
@@ -22224,3 +22224,38 @@ msgstr "unbekanntes Gerät"
 #, elixir-autogen, elixir-format
 msgid "Connected on"
 msgstr "Verbunden am"
+
+#: lib/vutuv_web/controllers/remote_follow_controller.ex:99
+#, elixir-autogen, elixir-format
+msgid "Confirm the follow on your own server."
+msgstr "Bestätigen Sie das Folgen auf Ihrem eigenen Server."
+
+#: lib/vutuv_web/views/outbound_html.ex:71
+#, elixir-autogen, elixir-format
+msgid "Continue"
+msgstr "Weiter"
+
+#: lib/vutuv_web/views/outbound_html.ex:63
+#, elixir-autogen, elixir-format
+msgid "Continue to %{server}"
+msgstr "Weiter zu %{server}"
+
+#: lib/vutuv_web/views/outbound_html.ex:62
+#, elixir-autogen, elixir-format
+msgid "E-mail to %{address}"
+msgstr "E-Mail an %{address}"
+
+#: lib/vutuv_web/controllers/job_posting_controller.ex:108
+#, elixir-autogen, elixir-format
+msgid "The employer takes applications on their own website."
+msgstr "Das Unternehmen nimmt Bewerbungen auf der eigenen Webseite entgegen."
+
+#: lib/vutuv_web/views/outbound_html.ex:70
+#, elixir-autogen, elixir-format
+msgid "Write e-mail"
+msgstr "E-Mail schreiben"
+
+#: lib/vutuv_web/controllers/job_posting_controller.ex:120
+#, elixir-autogen, elixir-format
+msgid "Your e-mail program opens with the subject filled in."
+msgstr "Ihr E-Mail-Programm öffnet sich mit ausgefülltem Betreff."
