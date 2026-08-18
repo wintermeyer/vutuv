@@ -177,6 +177,12 @@ config :vutuv, :recheck_social_accounts, false
 config :vutuv, :verify_social_accounts, false
 config :vutuv, :mastodon_api_enabled, true
 
+# Push is on in production (the VAPID pair derives itself), but off here so no
+# test outside the push suite fires a real POST at a push service — the
+# dispatcher runs on every notification, and a subscription row is all it
+# takes. The push tests enable it per test.
+config :vutuv, :web_push_enabled, false
+
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true
 

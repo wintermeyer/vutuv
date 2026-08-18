@@ -320,12 +320,14 @@ config :vutuv, :fediverse_enabled, true
 # Runtime override: MASTODON_API_ENABLED=false (config/runtime.exs).
 config :vutuv, :mastodon_api_enabled, true
 
-# Web Push for Mastodon-compatible clients (RFC 8291/8292). Empty by default:
-# without a VAPID key pair the push endpoints answer 403 and nothing is sent,
-# which is what an intranet installation with no reachable push service wants.
-# Generate a pair once with
-#   mix run -e 'IO.inspect Vutuv.MastodonApi.WebPush.generate_keys()'
-# and set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT (runtime.exs).
+# Web Push for Mastodon-compatible clients (RFC 8291/8292). On by default: a
+# VAPID pair is self-signed, so an installation that was given none derives its
+# own from secret_key_base (Vutuv.MastodonApi.WebPush) rather than answering
+# every client "push is not configured". Runtime override:
+# WEB_PUSH_ENABLED=false for an installation that must reach no push service
+# (intranet), VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY to pin a pair of your own,
+# VAPID_SUBJECT for the contact a push service sees (config/runtime.exs).
+config :vutuv, :web_push_enabled, true
 config :vutuv, :web_push, vapid_public_key: nil, vapid_private_key: nil, vapid_subject: nil
 
 # Whether the hourly GenServer that re-checks remote followers runs (off in

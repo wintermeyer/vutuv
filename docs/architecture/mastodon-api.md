@@ -478,8 +478,18 @@ in OTP's `:crypto`, and delivery goes through `Req` like every other outbound
 call. A subscription is keyed on the access token, so one device is one
 subscription and revoking an app takes it along. A push carries **no content**:
 the kind and the notification id, nothing else, so neither the push service nor
-a lock screen learns what was written. Off unless an operator sets a VAPID key
-pair (`docs/ADMINS.md`).
+a lock screen learns what was written.
+
+**It needs no configuration.** A VAPID pair is self-signed, so an installation
+that pinned none derives its own from `secret_key_base` (the same
+domain-separated derivation as the login-PIN pepper: no table, no migration,
+identical on every node). `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` pin a pair,
+both halves or neither; `WEB_PUSH_ENABLED=false` — and
+`MASTODON_API_ENABLED=false` — turn push off, and then the key is absent rather
+than null. The public key is published at **`configuration.vapid.public_key`**
+in `GET /api/v2/instance`, where a client has looked since Mastodon 4.3; the
+`vapid_key` in the answer to `POST /api/v1/apps` was deprecated in that release
+and is still sent for older clients (`docs/ADMINS.md`).
 
 ### Known gaps and deferred decisions
 

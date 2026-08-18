@@ -2,8 +2,11 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
   @moduledoc """
   Web Push subscriptions and the crypto behind them.
 
-  `async: false` because the VAPID key pair is application config, and every
-  push path in the app reads it.
+  `async: false` because both keys this flips — `:web_push_enabled` and
+  `:web_push` — are application config, and every push path in the app reads
+  them. `config/test.exs` holds push **off** for the rest of the suite (the
+  dispatcher runs on every notification and would fire a real request at a push
+  service), so a test here says which state it wants.
   """
   use VutuvWeb.ConnCase, async: false
 
@@ -13,16 +16,27 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
   alias Vutuv.MastodonApi.WebPush
   alias Vutuv.Repo
 
-  defp with_vapid(keys) do
-    original = Application.fetch_env(:vutuv, :web_push)
-    Application.put_env(:vutuv, :web_push, keys)
+  defp put_config(key, value) do
+    original = Application.fetch_env(:vutuv, key)
+    Application.put_env(:vutuv, key, value)
 
     on_exit(fn ->
       case original do
-        {:ok, value} -> Application.put_env(:vutuv, :web_push, value)
-        :error -> Application.delete_env(:vutuv, :web_push)
+        {:ok, was} -> Application.put_env(:vutuv, key, was)
+        :error -> Application.delete_env(:vutuv, key)
       end
     end)
+  end
+
+  defp enable_push, do: put_config(:web_push_enabled, true)
+  defp with_vapid(keys), do: put_config(:web_push, keys)
+
+  # Push on, with a pinned pair — what an operator who set the env vars has.
+  defp pinned_keys do
+    keys = WebPush.generate_keys()
+    enable_push()
+    with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
+    keys
   end
 
   # A browser subscription: the key is an uncompressed P-256 point, the auth
@@ -46,20 +60,90 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
       assert byte_size(decoded_private) == 32
     end
 
-    test "push is off until an operator configures a pair" do
+    # The bug the regression tests below are about: an installation nobody
+    # configured had no key, so every client was told push does not exist here.
+    test "an installation that configured nothing still has a key pair" do
+      enable_push()
       with_vapid([])
-      refute WebPush.configured?()
 
-      keys = WebPush.generate_keys()
-      with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
-      assert WebPush.configured?()
+      assert WebPush.enabled?()
+      assert {:ok, public} = Base.url_decode64(WebPush.public_key(), padding: false)
+      assert byte_size(public) == 65
+      assert WebPush.public_key() == WebPush.public_key(), "the derived pair must be stable"
+    end
+
+    # A key pair is only a key pair if the private half signs for the public
+    # one, which a length check does not show. The private half never leaves
+    # the module, so the test re-walks the derivation itself — which also pins
+    # the domain-separation string, and that is the point: changing it silently
+    # invalidates every subscription every phone already registered.
+    test "the advertised key is the point of the derived private scalar" do
+      enable_push()
+      with_vapid([])
+
+      secret = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
+      scalar = :crypto.hash(:sha256, "vutuv/web_push/vapid/v1/0" <> secret)
+      {public, _private} = :crypto.generate_key(:ecdh, :prime256v1, scalar)
+
+      assert Base.url_encode64(public, padding: false) == WebPush.public_key()
+    end
+
+    # Push is the phone-client API, so the adapter's own switch has to take it
+    # along — a device that subscribed before `MASTODON_API_ENABLED=false` must
+    # not keep being pushed to from an installation that answers 404 to every
+    # request that device makes.
+    test "the adapter's switch takes push with it" do
+      enable_push()
+      put_config(:mastodon_api_enabled, false)
+
+      refute WebPush.enabled?()
+      refute WebPush.public_key()
+    end
+
+    # Half a pair is a signature no push service accepts, so it must not be
+    # mixed with the derived other half — the whole pair falls back instead.
+    test "a configured pair wins, and half a pair is ignored" do
+      keys = pinned_keys()
+      assert WebPush.public_key() == keys.public_key
+
+      with_vapid(vapid_public_key: keys.public_key)
+      refute WebPush.public_key() == keys.public_key
+      assert {:ok, decoded} = Base.url_decode64(WebPush.public_key(), padding: false)
+      assert byte_size(decoded) == 65
+    end
+
+    test "an operator who turned push off has no key and no push" do
+      put_config(:web_push_enabled, false)
+
+      refute WebPush.enabled?()
+      refute WebPush.public_key()
+    end
+  end
+
+  # The public key has to be where a current client looks for it: Mastodon moved
+  # it into the instance document in 4.3 and deprecated the `vapid_key` in the
+  # answer to `POST /api/v1/apps` at the same time. We claim 4.4 compatibility.
+  describe "GET /api/v2/instance" do
+    test "names the server's VAPID key", %{conn: conn} do
+      keys = pinned_keys()
+
+      body = conn |> on_mastodon_host() |> get("/api/v2/instance") |> json_response(200)
+
+      assert body["configuration"]["vapid"]["public_key"] == keys.public_key
+    end
+
+    test "an installation with push off names none at all", %{conn: conn} do
+      put_config(:web_push_enabled, false)
+
+      body = conn |> on_mastodon_host() |> get("/api/v2/instance") |> json_response(200)
+
+      refute Map.has_key?(body["configuration"], "vapid")
     end
   end
 
   describe "POST /api/v1/push/subscription" do
     test "registers a device and answers the server key", %{conn: conn} do
-      keys = WebPush.generate_keys()
-      with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
+      keys = pinned_keys()
 
       user = insert(:activated_user)
       token = mastodon_token(user, ["push"])
@@ -84,8 +168,7 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
     end
 
     test "an endpoint that is not https is refused", %{conn: conn} do
-      keys = WebPush.generate_keys()
-      with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
+      pinned_keys()
 
       token = mastodon_token(insert(:activated_user), ["push"])
 
@@ -104,8 +187,7 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
     # https URL, and a stored endpoint is a URL this server will POST to later.
     # Same hazard, and same guard, as a webhook target.
     test "an endpoint pointing into our own network is refused" do
-      keys = WebPush.generate_keys()
-      with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
+      pinned_keys()
 
       token = mastodon_token(insert(:activated_user), ["push"])
 
@@ -127,10 +209,33 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
       assert Repo.aggregate(PushSubscription, :count) == 0
     end
 
-    test "without VAPID keys the endpoint refuses instead of accepting a dead subscription", %{
+    # The reported bug, end to end: a client on an installation whose operator
+    # never heard of VAPID could not switch push on.
+    test "registers on an installation that configured nothing", %{conn: conn} do
+      enable_push()
+      with_vapid([])
+
+      token = mastodon_token(insert(:activated_user), ["push"])
+
+      body =
+        conn
+        |> mastodon_conn(token)
+        |> post("/api/v1/push/subscription", %{
+          "subscription" => %{
+            "endpoint" => "https://push.example.com/abc",
+            "keys" => browser_keys()
+          }
+        })
+        |> json_response(200)
+
+      assert body["server_key"] == WebPush.public_key()
+      assert Repo.aggregate(PushSubscription, :count) == 1
+    end
+
+    test "an installation with push off refuses instead of accepting a dead subscription", %{
       conn: conn
     } do
-      with_vapid([])
+      put_config(:web_push_enabled, false)
       token = mastodon_token(insert(:activated_user), ["push"])
 
       assert conn
@@ -145,8 +250,7 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
     end
 
     test "re-registering the same token replaces its subscription" do
-      keys = WebPush.generate_keys()
-      with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
+      pinned_keys()
 
       token = mastodon_token(insert(:activated_user), ["push"])
 
@@ -164,8 +268,7 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
     end
 
     test "reading and deleting the subscription", %{conn: conn} do
-      keys = WebPush.generate_keys()
-      with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
+      pinned_keys()
 
       token = mastodon_token(insert(:activated_user), ["push"])
 
@@ -202,8 +305,7 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
     end
 
     test "is refused before any request is made" do
-      keys = WebPush.generate_keys()
-      with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
+      pinned_keys()
 
       Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family ->
         {:ok, [{169, 254, 169, 254}]}

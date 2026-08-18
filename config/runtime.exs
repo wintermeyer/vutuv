@@ -194,7 +194,13 @@ if config_env() == :prod do
     config :vutuv, :mastodon_api_enabled, false
   end
 
-  # Web Push stays off unless the operator supplies a VAPID key pair.
+  # An installation that must not reach a push service at all (intranet).
+  # Otherwise push needs no configuration: the VAPID pair below is optional and
+  # only pins one, e.g. so it survives a secret_key_base rotation.
+  if System.get_env("WEB_PUSH_ENABLED") == "false" do
+    config :vutuv, :web_push_enabled, false
+  end
+
   config :vutuv, :web_push,
     vapid_public_key: System.get_env("VAPID_PUBLIC_KEY"),
     vapid_private_key: System.get_env("VAPID_PRIVATE_KEY"),

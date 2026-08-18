@@ -14,9 +14,9 @@ defmodule Vutuv.MastodonApi.WebPushTest do
   `salt` and the sender key pair are injected for exactly this reason; a real
   send draws both fresh, which one test here asserts.
 
-  `async: false` because the `configured?/0` group flips the `:web_push`
-  application config, which is global and which every push path in the app
-  reads — `Vutuv.MastodonApi.PushDispatcher` gates on it, and
+  `async: false` because the `enabled?/0` group flips `:web_push_enabled` and
+  `:web_push`, both global and both read by every push path in the app —
+  `Vutuv.MastodonApi.PushDispatcher` gates on them, and
   `push_streaming_test.exs` is sync for the same reason.
   """
   use ExUnit.Case, async: false
@@ -78,40 +78,46 @@ defmodule Vutuv.MastodonApi.WebPushTest do
     refute first == second
   end
 
-  describe "configured?/0" do
+  describe "enabled?/0" do
     setup do
-      original = Application.fetch_env(:vutuv, :web_push)
+      for key <- [:web_push, :web_push_enabled] do
+        original = Application.fetch_env(:vutuv, key)
 
-      on_exit(fn ->
-        case original do
-          {:ok, value} -> Application.put_env(:vutuv, :web_push, value)
-          :error -> Application.delete_env(:vutuv, :web_push)
-        end
-      end)
+        on_exit(fn ->
+          case original do
+            {:ok, value} -> Application.put_env(:vutuv, key, value)
+            :error -> Application.delete_env(:vutuv, key)
+          end
+        end)
+      end
 
       :ok
     end
 
-    # An intranet installation cannot reach a push service, so this has to be a
-    # switch that is off until an operator sets both keys — not a best effort
-    # that times out against the internet on every notification.
-    test "is false until both VAPID keys are set" do
+    # An installation that configured nothing is the ordinary case, not a
+    # broken one: it derives its own pair, so push works and this stays true.
+    # Requiring the two env vars is what left every client on vutuv.de unable
+    # to switch push on.
+    test "is true on an installation that configured nothing" do
+      Application.put_env(:vutuv, :web_push_enabled, true)
       Application.put_env(:vutuv, :web_push, [])
-      refute WebPush.configured?()
 
-      Application.put_env(:vutuv, :web_push, vapid_public_key: @as_public)
-      refute WebPush.configured?()
-
-      Application.put_env(:vutuv, :web_push,
-        vapid_public_key: @as_public,
-        vapid_private_key: @as_private
-      )
-
-      assert WebPush.configured?()
+      assert WebPush.enabled?()
+      assert is_binary(WebPush.public_key())
     end
 
-    test "an unconfigured installation refuses to send rather than trying" do
-      Application.put_env(:vutuv, :web_push, [])
+    # An intranet installation cannot reach a push service, so there has to be
+    # a switch — just not one an operator has to find in order to get the
+    # feature everybody else wants.
+    test "is false only where the operator turned push off" do
+      Application.put_env(:vutuv, :web_push_enabled, false)
+
+      refute WebPush.enabled?()
+      refute WebPush.public_key()
+    end
+
+    test "an installation with push off refuses to send rather than trying" do
+      Application.put_env(:vutuv, :web_push_enabled, false)
 
       subscription = %{
         endpoint: "https://push.example/1",
@@ -119,7 +125,7 @@ defmodule Vutuv.MastodonApi.WebPushTest do
         auth: @auth_secret
       }
 
-      assert WebPush.send(subscription, %{a: 1}) == {:error, :not_configured}
+      assert WebPush.send(subscription, %{a: 1}) == {:error, :disabled}
     end
   end
 
