@@ -66,14 +66,32 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
     end
   end
 
+  # What CSP's own `host-source` grammar can spell: letters, digits, `-`, `.`.
+  # `URI.parse/1` validates nothing, so `https://evil.example.org;script-src
+  # 'unsafe-inline'/cb` — which app registration accepts, and registration is
+  # public — comes back with that whole run as its "host". Spliced into the
+  # header that is a second directive of the caller's choosing, so a host we
+  # cannot spell widens nothing. The scheme needs no such check: a scheme
+  # outside the grammar makes `URI.parse/1` answer `nil` (measured), which the
+  # first clause below turns away.
+  @host ~r/^[a-z0-9.\-]+$/i
+
   @doc """
-  The CSP source expression that permits a form submission to end at `uri`.
+  The CSP source expression that permits a form submission to end at `uri`,
+  or `nil` for a target no source expression can name.
 
   `http(s)` gets the exact origin, which is as narrow as CSP can express and
   is where narrowness is worth having. Anything else is a native app's own
   scheme (`ivory://oauth-callback`, `com.example.app:/cb`) whose shape varies
   too much to pin down as a host-source, so it gets the scheme-source
   (`ivory:`) — a scheme registered to that one app.
+
+  Two targets deliberately widen nothing. A `urn:` is a name and not a place:
+  the out-of-band flow (`urn:ietf:wg:oauth:2.0:oob`) prints the code on our
+  own page instead of redirecting, so there is no hop to permit. And a host
+  outside CSP's grammar — an intranet name with an underscore, an IPv6
+  literal, or anything carrying a `;` — has no source expression at all, so
+  the strict policy stands and the redirect stays blocked.
   """
   def form_action_source(uri) when is_binary(uri) do
     case URI.parse(uri) do
@@ -81,7 +99,10 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
         nil
 
       %URI{scheme: scheme, host: host, port: port} when scheme in ["http", "https"] ->
-        if is_binary(host) and host != "", do: origin(scheme, host, port)
+        if is_binary(host) and Regex.match?(@host, host), do: origin(scheme, host, port)
+
+      %URI{scheme: "urn"} ->
+        nil
 
       %URI{scheme: scheme} ->
         scheme <> ":"
@@ -90,10 +111,11 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
 
   def form_action_source(_uri), do: nil
 
-  defp origin("http", host, 80), do: "http://" <> host
-  defp origin("https", host, 443), do: "https://" <> host
-  defp origin(scheme, host, nil), do: scheme <> "://" <> host
-  defp origin(scheme, host, port), do: "#{scheme}://#{host}:#{port}"
+  # A source with no port matches only the scheme's default port, so 443/80
+  # must stay off and a dev callback's :4000 must ride along — which is what
+  # `URI.to_string/1` does with a port, for `ws`/`wss` as much as `http(s)`.
+  defp origin(scheme, host, port),
+    do: URI.to_string(%URI{scheme: scheme, host: host, port: port})
 
   # DEV-ONLY escape hatch. When true we add `script-src 'self' 'unsafe-eval'` so
   # Tidewave's `browser_eval` tool works locally: it injects JS and runs it with
@@ -160,15 +182,6 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
   # along only when non-standard (dev's :4000); the production 443 must not
   # appear (the public origin has no explicit port).
   defp ws_origin(conn) do
-    scheme = if conn.scheme == :https, do: "wss", else: "ws"
-
-    port =
-      case {conn.scheme, conn.port} do
-        {:http, 80} -> ""
-        {:https, 443} -> ""
-        {_, port} -> ":#{port}"
-      end
-
-    "#{scheme}://#{conn.host}#{port}"
+    origin(if(conn.scheme == :https, do: "wss", else: "ws"), conn.host, conn.port)
   end
 end

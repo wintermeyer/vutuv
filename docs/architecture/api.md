@@ -65,7 +65,11 @@ policy through `ContentSecurityPolicy.allow_form_action/2` with the app's
 (`ivory:`) for a native client's own scheme. It is never built from the raw
 query parameter — `OAuth.validate_authorize/1` has already matched it against
 the app's registered `redirect_uris`, so the policy names a destination the
-server was going to redirect to anyway.
+server was going to redirect to anyway. Scheme and host are still re-checked
+where the source is spelled, because registration is public and `URI.parse/1`
+validates nothing: `https://evil.example.org;script-src 'unsafe-inline'/cb`
+registers cleanly and comes back with that whole run as its "host", which in a
+header would be a second directive of the app author's choosing.
 
 **Who holds a credential, and who may take it away.** `/connected_apps` names,
 per authorization, when it was given and which devices still hold a live token

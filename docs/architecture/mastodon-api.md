@@ -284,6 +284,30 @@ redeemable at once; the prune leaves three. What the budget buys is the wasted
 round trips and a signal to the client that something is wrong. It sits far above
 anything a person does, because it must never touch a working login.
 
+### Why "Allow access" looked dead in one browser and not another
+
+The consent screen's redirect and the `form-action` widening that lets it
+through are in [api.md](api.md). What belongs here is the shape of the report,
+because it is the shape every client-compatibility bug takes.
+
+**Nothing about it was visible from the server.** We answered 302 and minted the
+code as usual; the browser dropped the redirect and the client sat waiting for a
+callback that never came. The table read as consent given and never used: 4
+codes for Tuba (issue #1562), none redeemed, and two POSTs a few seconds apart
+per attempt, which is a member pressing the button again because nothing
+happened.
+
+**And the browsers disagree, so the same build works for one member and not the
+next.** Measured in Chrome across all three custom-scheme shapes in use here —
+Tuba's `tuba://auth_code`, Tusky's `oauth2redirect://…`, Ivory's
+`com.tapbots…:/…` — every one is blocked, as is an ordinary third-party
+`https://` callback on another host; meanwhile Ivory on iOS Safari and Tusky in
+an Android WebView redeemed their codes the same evening. So a client's own
+report ("nothing happens when I tap Allow") is evidence about a *browser*, not
+about that client, and the two must not be conflated when the next one arrives.
+The console message compounds it by naming the **pre-redirect** URL — ours —
+which reads as if we blocked a form posting to our own origin.
+
 ### Paging, streaming and push
 
 Every list takes Mastodon's `limit` / `max_id` / `since_id` / `min_id` and

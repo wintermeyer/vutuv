@@ -113,6 +113,20 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicyTest do
     test "every other page keeps the bare directive", %{conn: conn} do
       assert csp(get(conn, ~p"/")) =~ "form-action 'self';"
     end
+
+    test "a registered URI that would splice a second directive widens nothing",
+         %{conn: conn} do
+      # App registration is public and `URI.parse/1` validates nothing, so
+      # everything up to the first "/" comes back as the "host".
+      policy = consent_policy(conn, "https://evil.example.org;script-src 'unsafe-inline'/cb")
+
+      assert policy =~ "form-action 'self';"
+      refute policy =~ "unsafe-inline'/cb"
+    end
+
+    test "the out-of-band flow stays strict, because it never redirects", %{conn: conn} do
+      assert consent_policy(conn, "urn:ietf:wg:oauth:2.0:oob") =~ "form-action 'self';"
+    end
   end
 
   describe "form_action_source/1" do
@@ -134,6 +148,14 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicyTest do
     test "nothing usable yields nil, so the policy is left alone" do
       assert ContentSecurityPolicy.form_action_source("/relative") == nil
       assert ContentSecurityPolicy.form_action_source(nil) == nil
+    end
+
+    test "a host CSP cannot spell yields nil rather than a header we did not write" do
+      assert ContentSecurityPolicy.form_action_source("https://a.example;script-src 'x'/cb") ==
+               nil
+
+      assert ContentSecurityPolicy.form_action_source("https://intra_net.example/cb") == nil
+      assert ContentSecurityPolicy.form_action_source("urn:ietf:wg:oauth:2.0:oob") == nil
     end
   end
 
