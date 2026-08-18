@@ -348,6 +348,33 @@ if config_env() == :prod do
     config :vutuv, :fediverse_counts_per_host, String.to_integer(String.trim(per_host))
   end
 
+  # How much the release writes to the system log. `config/prod.exs` sets
+  # `:error`, which is quiet enough to run on and too quiet to debug on: every
+  # `Logger.warning` in the app is discarded, and the request logger with it.
+  # An operator chasing a problem raises the bar for a boot (`LOG_LEVEL=info`)
+  # and lowers it again afterwards, rather than editing the source (issue
+  # #1561, where the diagnostic naming a runaway OAuth client was silent).
+  #
+  # An unknown value keeps the compiled default instead of raising: a typo in an
+  # env var must never be the reason a release refuses to boot. The levels are
+  # written out as literal atoms for the same reason — `String.to_existing_atom/1`
+  # raises on anything the atom table has not seen, which is a boot-time gamble
+  # on what a config provider happens to have loaded.
+  log_levels = %{
+    "emergency" => :emergency,
+    "alert" => :alert,
+    "critical" => :critical,
+    "error" => :error,
+    "warning" => :warning,
+    "notice" => :notice,
+    "info" => :info,
+    "debug" => :debug
+  }
+
+  if level = log_levels[String.downcase(String.trim(System.get_env("LOG_LEVEL") || ""))] do
+    config :logger, level: level
+  end
+
   # How long the account-activity log keeps an event (issue #1087). It holds
   # devices, IP addresses and what changed when, so how long that may be kept is
   # the operator's call; one year is what vutuv.de runs.

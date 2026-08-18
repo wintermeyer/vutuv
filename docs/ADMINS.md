@@ -90,6 +90,7 @@ Everything else has a default (the vutuv.de production value):
 | `PHX_URL_PORT` | `443`/`80` | The public port, if not the scheme default |
 | `PORT` | `4003` | Local port the app listens on (loopback; nginx proxies to it) |
 | `CHECK_ORIGINS` | – | Extra allowed websocket origins, comma-separated (host + `www.` twin are always allowed) |
+| `LOG_LEVEL` | `error` | How much the release writes to the system log. The default is deliberately quiet — only failures, and nothing per request. Set `info` for a boot while you are chasing a problem (that adds the request log: one line per request with path, status and duration), `debug` to see every database query as well, and put it back afterwards: `info` on a busy installation is a lot of disk. Anything the app needs an operator to read stays at `error` either way. An unrecognised value is ignored rather than refused, so a typo cannot stop a boot |
 | `DB_USER` | `vutuv` | PostgreSQL user |
 | `DB_NAME` | `vutuv3_prod` | PostgreSQL database |
 | `DB_HOST` | `127.0.0.1` | PostgreSQL host |

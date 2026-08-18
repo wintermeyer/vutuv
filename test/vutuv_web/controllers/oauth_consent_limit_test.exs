@@ -136,9 +136,16 @@ defmodule VutuvWeb.OauthConsentLimitTest do
   # browser's User-Agent reaches only the web server's access log. A client that
   # spends this budget is a runaway by definition, so it names itself in our own
   # log — the app it registered as, and the string the browser sent.
+  #
+  # Captured at `:error`, which is where the bar sits in production
+  # (`config/prod.exs`), because a diagnostic nobody can read is not a
+  # diagnostic: this line shipped as a `Logger.warning` and was therefore
+  # discarded on the one installation that had the question. The test env logs
+  # from `:warning`, so the old level passed a plain `capture_log` while
+  # answering nothing.
   test "a client that spends the budget names itself in the log", %{conn: conn, app: app} do
     log =
-      ExUnit.CaptureLog.capture_log(fn ->
+      ExUnit.CaptureLog.capture_log([level: :error], fn ->
         for _ <- 1..30 do
           conn
           |> recycle()

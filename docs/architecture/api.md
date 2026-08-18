@@ -96,7 +96,12 @@ the release before this — mints a fresh code exactly as it used to. Underneath
 and the route's per-minute consent budget still refuses a runaway client; that
 refusal now also writes one line a minute naming the client's User-Agent, because
 which client resubmits is the open half of #1561 and the browser's own
-User-Agent reaches nothing but the web server's access log.
+User-Agent reaches nothing but the web server's access log. That line is a
+`Logger.error`, and deliberately so: a release runs at `:error`
+(`config/prod.exs`), so as a `Logger.warning` it was discarded by the only
+installation that had the question, while its test passed against a test env
+that logs from `:warning` down. `LOG_LEVEL` raises the bar for a boot when more
+is wanted, but nothing an operator must read may depend on that.
 
 **Who holds a credential, and who may take it away.** `/connected_apps` names,
 per authorization, when it was given and which devices still hold a live token

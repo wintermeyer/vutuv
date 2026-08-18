@@ -11,6 +11,9 @@ config :vutuv, VutuvWeb.Endpoint,
   version: Mix.Project.config()[:version],
   locales: ~w(en de)
 
+# Quiet by default, and `LOG_LEVEL` in config/runtime.exs raises the bar for a
+# boot. Anything an operator must be able to read while chasing a problem is
+# logged at `:error` for that reason (see `VutuvWeb.OauthController`).
 config :logger, level: :error
 
 # The SMTP mailer is configured at boot in config/runtime.exs (SMTP_RELAY,
