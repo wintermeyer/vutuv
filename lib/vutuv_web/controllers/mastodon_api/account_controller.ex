@@ -224,7 +224,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
       organization ->
         case Fediverse.remote_follow_for(organization, target) do
           nil -> :ok
-          follow -> Fediverse.unfollow_remote_as_organization(organization, follow.id)
+          follow -> Fediverse.unfollow_remote(organization, follow.id)
         end
     end
   end

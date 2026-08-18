@@ -1332,21 +1332,21 @@ defmodule Vutuv.Fediverse do
   def get_remote_account(id), do: UUIDv7.with_cast(id, &Repo.get(RemoteAccount, &1))
 
   @doc """
-  The member takes the follow back: a best-effort `Undo(Follow)` to the other
-  server, then the row goes.
+  The member or page takes the follow back: a best-effort `Undo(Follow)` to
+  the other server, then the row goes.
 
   The row is deleted whether or not the Undo can be sent, because it describes
-  *our* member's intent and they have withdrawn it; a server that never hears
-  about it simply stops being followed the moment we stop accepting its
-  deliveries.
+  *our* member's or page's intent and they have withdrawn it; a server that
+  never hears about it simply stops being followed the moment we stop
+  accepting its deliveries.
   """
-  def unfollow_remote(%User{} = user, follow_id) do
-    case get_remote_follow(user, follow_id) do
+  def unfollow_remote(owner, follow_id) do
+    case get_remote_follow(owner, follow_id) do
       nil ->
         {:error, :not_found}
 
       follow ->
-        undo_remote_follow(user, follow)
+        undo_remote_follow(owner, follow)
         Repo.delete(follow)
         # The cached posts existed because somebody here followed the author
         # (issue #1161). If nobody does any more, they go now rather than at the
@@ -1422,13 +1422,25 @@ defmodule Vutuv.Fediverse do
     Repo.get_by(Follow, organization_id: id, remote_account_id: account_id)
   end
 
-  # One of the member's own follows, with the remote account preloaded, or nil.
-  # Scoped to the member, so an id from somebody else's page resolves to nothing.
+  # One of the member's or page's own follows, with the remote account
+  # preloaded, or nil. Scoped to the owner, so an id from somebody else's
+  # page resolves to nothing.
   defp get_remote_follow(%User{id: user_id}, follow_id) do
     UUIDv7.with_cast(follow_id, fn id ->
       Repo.one(
         from(f in Follow,
           where: f.id == ^id and f.user_id == ^user_id,
+          preload: [:remote_account]
+        )
+      )
+    end)
+  end
+
+  defp get_remote_follow(%Organization{id: page_id}, follow_id) do
+    UUIDv7.with_cast(follow_id, fn id ->
+      Repo.one(
+        from(f in Follow,
+          where: f.id == ^id and f.organization_id == ^page_id,
           preload: [:remote_account]
         )
       )
@@ -2007,6 +2019,14 @@ defmodule Vutuv.Fediverse do
       else: :ok
   end
 
+  # The same ceiling for a page (issue #1601): a cap one follower kind does not
+  # count is not a cap.
+  defp check_follow_limit(%Organization{} = page) do
+    if organization_remote_follow_count(page) >= max_remote_follows(),
+      do: {:error, :follow_limit},
+      else: :ok
+  end
+
   # Signed with the follower's own key: instances in authorized-fetch mode
   # refuse an anonymous GET, and this is the one fetch we make on their behalf.
   defp fetch_follow_target(actor_uri, follower) do
@@ -2093,6 +2113,7 @@ defmodule Vutuv.Fediverse do
   def follow_remote_as_organization(%Organization{} = page, address) do
     with :ok <- check_can_resolve(),
          true <- federated?(page),
+         :ok <- check_follow_limit(page),
          {:ok, account} <- resolve_remote_account(page, address),
          {:ok, follow} <- insert_remote_follow(page, account) do
       enqueue(
@@ -2105,41 +2126,6 @@ defmodule Vutuv.Fediverse do
     else
       false -> {:error, :not_federated}
       other -> other
-    end
-  end
-
-  @doc """
-  Drops a page's follow of a remote account: withdraws it out there (`Undo`) and
-  removes the row. Scoped to the page, so an id belonging to somebody else's
-  follow removes nothing.
-  """
-  def unfollow_remote_as_organization(%Organization{id: page_id} = page, follow_id) do
-    case Repo.get_by(Follow, id: follow_id, organization_id: page_id) do
-      nil ->
-        {:error, :not_found}
-
-      follow ->
-        follow = Repo.preload(follow, :remote_account)
-
-        # Best effort, and gated on `ever_federated?/1` rather than
-        # `federated?/1`: switching federation off is exactly when a page's
-        # follows are withdrawn, and that is the moment `federated?/1` turns
-        # false — the same trap the member path documents.
-        if ever_federated?(page) and follow.remote_account do
-          enqueue(
-            page,
-            [follow.remote_account.inbox_uri],
-            Docs.undo_follow_activity(
-              page,
-              follow.remote_account.actor_uri,
-              follow.follow_activity_id
-            )
-          )
-        end
-
-        Repo.delete(follow)
-        purge_unfollowed_remote_posts([follow.remote_account_id])
-        :ok
     end
   end
 
@@ -2180,8 +2166,8 @@ defmodule Vutuv.Fediverse do
   defp new_remote_follow(%Organization{} = page, id, account),
     do: %Follow{id: id, organization_id: page.id, remote_account_id: account.id}
 
-  defp undo_remote_follow(%User{} = user, %Follow{} = follow),
-    do: undo_remote_follows(user, [follow])
+  defp undo_remote_follow(owner, %Follow{} = follow),
+    do: undo_remote_follows(owner, [follow])
 
   # Best effort, and deliberately gated on `ever_federated?/1` rather than
   # `federated?/1`: switching federation off is exactly when every follow is
@@ -2193,19 +2179,19 @@ defmodule Vutuv.Fediverse do
   # and the blocklist check would each run once per followed account (two
   # queries per row, up to `max_remote_follows/0` of them) and each withdrawal
   # would be its own single-row insert.
-  defp undo_remote_follows(_user, []), do: :ok
+  defp undo_remote_follows(_owner, []), do: :ok
 
-  defp undo_remote_follows(%User{} = user, follows) do
-    if enabled?() and ever_federated?(user) do
+  defp undo_remote_follows(owner, follows) do
+    if enabled?() and ever_federated?(owner) do
       blocked = blocked_hosts()
 
       follows
       |> Enum.filter(&deliverable_undo?(&1, blocked))
       |> Enum.map(fn %Follow{remote_account: account} = follow ->
         {account.inbox_uri,
-         Docs.undo_follow_activity(user, account.actor_uri, follow.follow_activity_id)}
+         Docs.undo_follow_activity(owner, account.actor_uri, follow.follow_activity_id)}
       end)
-      |> enqueue_each(user)
+      |> enqueue_each(owner)
     end
 
     :ok

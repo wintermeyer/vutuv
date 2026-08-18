@@ -18,6 +18,7 @@ defmodule Vutuv.OrganizationRemoteFollowTest do
   import Vutuv.OrganizationsHelpers
 
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
@@ -234,5 +235,61 @@ defmodule Vutuv.OrganizationRemoteFollowTest do
              Fediverse.follow_remote_as_organization(page, "@alice@social.example")
 
     assert Repo.aggregate(Delivery, :count) == 0
+  end
+
+  test "the total ceiling refuses one more follow (issue #1601)" do
+    Application.put_env(:vutuv, :fediverse_max_remote_follows, 1)
+    on_exit(fn -> Application.delete_env(:vutuv, :fediverse_max_remote_follows) end)
+
+    page = federating_page()
+    account = remote_account()
+    requested_follow(page, account)
+
+    assert {:error, :follow_limit} =
+             Fediverse.follow_remote_as_organization(page, "@other@social.example")
+  end
+
+  # Pinned by name because `gettext.extract --merge` fuzzy-filled exactly this
+  # msgid with the member wording ("Sie folgen bereits …") — the wrong voice:
+  # the reader acts for the page, they are not the follower.
+  test "the German ceiling refusal speaks for the page, not the member" do
+    # No restore needed: the locale lives in this test process's dictionary
+    # and dies with it.
+    Gettext.put_locale(VutuvWeb.Gettext, "de")
+
+    text =
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "This page is following the most accounts we allow (%{max}).",
+        max: "1.000"
+      )
+
+    assert text == "Diese Seite folgt bereits so vielen Konten, wie hier erlaubt sind (1.000)."
+  end
+
+  describe "unfollow_remote/2 for a page" do
+    test "queues no Undo for a blocklisted instance but still deletes the row (issue #1600)" do
+      page = federating_page()
+      account = remote_account()
+      follow = requested_follow(page, account)
+
+      # The bare row rather than `block_instance/2`: the admin flow purges every
+      # follow of the host in the same act, so the state this filter guards is
+      # the race window where the block lands while a follow still exists —
+      # exactly what the member path's `deliverable_undo?/2` exists for.
+      Repo.insert!(%BlockedInstance{host: "social.example"})
+
+      :ok = Fediverse.unfollow_remote(page, follow.id)
+
+      refute Repo.get(Follow, follow.id)
+      assert Repo.aggregate(Delivery, :count) == 0
+    end
+
+    test "answers not_found for a malformed follow id (issue #1600)" do
+      page = federating_page()
+
+      assert {:error, :not_found} =
+               Fediverse.unfollow_remote(page, "not-a-uuid")
+    end
   end
 end

@@ -158,7 +158,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
   def handle_event("unfollow-remote", %{"id" => id}, socket) do
     with_publisher(socket, fn organization ->
-      Fediverse.unfollow_remote_as_organization(organization, id)
+      Fediverse.unfollow_remote(organization, id)
       {:noreply, load_following(socket)}
     end)
   end
@@ -265,6 +265,14 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
   defp follow_error_message(:blocked_instance),
     do: gettext("That server is blocked on this installation.")
+
+  # Its own msgid, not the member's "You are following …": a different voice
+  # speaks here — the reader acts for the page, they are not the follower.
+  defp follow_error_message(:follow_limit),
+    do:
+      gettext("This page is following the most accounts we allow (%{max}).",
+        max: delimited_count(Fediverse.max_remote_follows())
+      )
 
   defp follow_error_message(_other), do: gettext("That did not work.")
 
