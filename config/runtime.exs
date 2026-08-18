@@ -348,12 +348,13 @@ if config_env() == :prod do
     config :vutuv, :fediverse_counts_per_host, String.to_integer(String.trim(per_host))
   end
 
-  # How much the release writes to the system log. `config/prod.exs` sets
-  # `:error`, which is quiet enough to run on and too quiet to debug on: every
-  # `Logger.warning` in the app is discarded, and the request logger with it.
-  # An operator chasing a problem raises the bar for a boot (`LOG_LEVEL=info`)
-  # and lowers it again afterwards, rather than editing the source (issue
-  # #1561, where the diagnostic naming a runaway OAuth client was silent).
+  # How much the release writes to the system log. `config/prod.exs` compiles in
+  # `:error`, which is quiet enough to run on and too quiet to debug on: at that
+  # level every `Logger.warning` in the app goes, and the request logger with
+  # it. An operator chasing a problem raises the bar for a boot
+  # (`LOG_LEVEL=info`) and lowers it again afterwards, rather than editing the
+  # source — which is what it took while issue #1561 wanted to know which client
+  # was resubmitting a form.
   #
   # An unknown value keeps the compiled default instead of raising: a typo in an
   # env var must never be the reason a release refuses to boot. The levels are

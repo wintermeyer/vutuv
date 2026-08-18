@@ -136,13 +136,14 @@ defmodule VutuvWeb.OauthController do
   # this exists to name sent a hundred requests in one, and a hundred identical
   # lines is how a log stops being read.
   #
-  # `error`, not `warning`, and that is the whole point of the line. Production
-  # runs the logger at `:error` (`config/prod.exs`), so the first version of
-  # this diagnostic was discarded by the one installation that had the question
-  # — while its test passed, because the test env logs from `:warning` down. An
-  # installation can now raise the bar with `LOG_LEVEL`, but a diagnostic must
-  # not depend on somebody having done that beforehand: this is also the level
-  # the member sees, since the same event answers their login with a 429.
+  # `error`, not `warning`, because a release's compiled default is `:error`
+  # (`config/prod.exs`): a `Logger.warning` is therefore not guaranteed to be
+  # readable on any installation, and this line exists only to be read. Its test
+  # captures at `:error` for the same reason — at `:warning`, which is where the
+  # test env logs, it passed without proving anything. `LOG_LEVEL` lets an
+  # operator raise the bar for a boot, but a diagnostic must not depend on
+  # somebody having done that beforehand. `:error` is also honest about what
+  # happened: the same event answers the member's login with a 429.
   defp log_runaway(conn, user, request) do
     if RateLimit.check(nil, :oauth_consent_report, user.id <> ":" <> request.app.id,
          limit: 1,

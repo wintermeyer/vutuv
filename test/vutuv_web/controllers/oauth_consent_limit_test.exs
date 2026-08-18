@@ -137,12 +137,11 @@ defmodule VutuvWeb.OauthConsentLimitTest do
   # spends this budget is a runaway by definition, so it names itself in our own
   # log — the app it registered as, and the string the browser sent.
   #
-  # Captured at `:error`, which is where the bar sits in production
-  # (`config/prod.exs`), because a diagnostic nobody can read is not a
-  # diagnostic: this line shipped as a `Logger.warning` and was therefore
-  # discarded on the one installation that had the question. The test env logs
-  # from `:warning`, so the old level passed a plain `capture_log` while
-  # answering nothing.
+  # Captured at `:error`, the level a release compiles in (`config/prod.exs`),
+  # because a diagnostic that is only readable on a louder installation is not
+  # one. This shipped as a `Logger.warning` and the test said nothing about it:
+  # the test env logs from `:warning`, so a plain `capture_log` was green at a
+  # level no release is obliged to keep.
   test "a client that spends the budget names itself in the log", %{conn: conn, app: app} do
     log =
       ExUnit.CaptureLog.capture_log([level: :error], fn ->
