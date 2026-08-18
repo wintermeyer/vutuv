@@ -68,23 +68,23 @@ test suite, and the naive loop ingests its full output once per iteration:
    Do not proceed unless the subagent reports the full `mix precommit` exited 0.
    If it can't get to green, stop and tell the user what's still failing.
 
-4. **Bump the version from current `origin/main`** (deterministic — no
+4. **Bump the version from the current base branch** (deterministic — no
    hand-editing `mix.exs`). Fetch first so the bump can't collide with a version
    another branch already landed:
 
    ```bash
-   git fetch origin main
+   git fetch origin main    # from a fork: git fetch upstream main
    elixir scripts/bump_version.exs patch "kurz, woran du arbeitest"
    elixir scripts/bump_version.exs list    # wer hält gerade welche Nummer
    ```
 
    Default `patch`; `minor` for a new backward-compatible user-facing feature;
-   never `major` without Stefan's agreement. If `origin/main` has moved ahead,
-   rebase onto it **before** bumping (or re-bump after the rebase) so the number
-   is monotonic.
+   never `major` without Stefan's agreement. If the base branch has moved ahead
+   (from a fork that is `upstream/main`, never your own mirror), rebase onto it
+   **before** bumping (or re-bump after the rebase) so the number is monotonic.
 
    The script also **asks `gh` which numbers the open pull requests already
-   claim** and bumps past the highest of them, because `origin/main` alone does
+   claim** and bumps past the highest of them, because `main` alone does
    not answer the question: an unmerged PR holds the next number for hours while
    main still looks free, and two branches that pick the same one get no merge
    conflict and no warning. It names each claim on stderr, and when `gh` cannot
@@ -154,7 +154,7 @@ test suite, and the naive loop ingests its full output once per iteration:
       fix to the branch, and watch again. If it stays red or the failure isn't
       yours to fix, stop and report; leave the PR open.
 
-11. **Merge** — but re-read `origin/main`'s version first, then squash and
+11. **Merge** — but re-read the base branch's version first, then squash and
     delete the branch (the repo convention, same as `/issues`):
 
     ```bash
