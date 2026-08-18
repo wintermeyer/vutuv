@@ -136,9 +136,9 @@ defmodule VutuvWeb.JobComponents do
 
   @doc "The card's location chip: 'City, Country' (country only when it differs from the default) or 'Remote (DE, AT)'."
   def card_location(%JobPosting{workplace_type: :remote} = posting) do
-    case posting.remote_countries do
-      [] -> gettext("Remote")
-      codes -> gettext("Remote") <> " (" <> Enum.join(codes, ", ") <> ")"
+    case remote_countries_label(posting.remote_countries) do
+      nil -> gettext("Remote")
+      label -> gettext("Remote") <> " (" <> label <> ")"
     end
   end
 
@@ -156,6 +156,44 @@ defmodule VutuvWeb.JobComponents do
   defp country_suffix(country) do
     if country in [nil, "", Geo.default_country()], do: nil, else: Countries.name(country)
   end
+
+  @remote_codes_shown 3
+
+  @doc """
+  How a remote posting's applicant countries read in one line, or `nil` for
+  none. `kind` picks the vocabulary: `:code` for the board card's tight chip,
+  `:name` for the localized names on the detail page.
+
+  A whole region is named rather than spelled out ("EU", not 27 codes), which is
+  the point of the presets in the editor (issue #1559); anything else lists the
+  first few and counts the rest, because a preset stores its expansion and 128
+  countries in a chip is not a chip.
+  """
+  def remote_countries_label(codes, kind \\ :code)
+
+  def remote_countries_label([], _kind), do: nil
+
+  def remote_countries_label(codes, kind) when is_list(codes) do
+    case Countries.region_for(codes) do
+      nil -> capped_countries(codes, kind)
+      region -> region
+    end
+  end
+
+  def remote_countries_label(_codes, _kind), do: nil
+
+  defp capped_countries(codes, kind) do
+    shown =
+      codes |> Enum.take(@remote_codes_shown) |> Enum.map_join(", ", &country_label(&1, kind))
+
+    case length(codes) - @remote_codes_shown do
+      rest when rest > 0 -> shown <> " " <> gettext("+%{count} more", count: compact_count(rest))
+      _none -> shown
+    end
+  end
+
+  defp country_label(code, :name), do: Countries.name(code)
+  defp country_label(code, :code), do: code
 
   @doc "The card's pay line: the range, 'Ehrenamtlich' for a volunteer posting, or nothing."
   def salary_line(%JobPosting{employment_type: :volunteer}), do: gettext("Voluntary")

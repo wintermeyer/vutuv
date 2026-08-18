@@ -6,10 +6,33 @@ defmodule VutuvWeb.JobPostingLive.Form do
   workplace, apply target, salary unless volunteer) and the anti-abuse gate.
 
   The workplace choice drives the form: on-site / hybrid show the address block,
-  remote shows the applicant-countries select. Visibility leads with the human
+  remote shows the applicant-country picker. Visibility leads with the human
   audience (everyone / members); the SEO / GEO machine toggles show only for an
   `everyone` posting. A live, non-blocking AGG hint nudges a gender-neutral
   title.
+
+  ## The applicant-country picker (issues #1558, #1559)
+
+  249 countries in a six-row `<select multiple>` hid what you had picked the
+  moment you scrolled, and its "hold Ctrl / Cmd" hint means nothing on a phone.
+  It is a pill box now, in the tag field's visual language: region presets
+  (EU / EMEA / MENA / APAC) fill in a whole region at a click, a search box
+  finds one country by a fragment of its localized name, and every chosen
+  country sits below as a removable pill that never scrolls out of view.
+
+  The picked codes are held in the changeset like any other field and rendered
+  as hidden `job_posting[remote_countries][]` inputs, so a save carries them
+  without this module keeping a second copy of the selection. A preset stores
+  its **expansion** rather than the region's name, which is what keeps the board
+  filter (`Vutuv.Jobs.filter_location/4` matches a searched country against
+  `remote_countries`) working untouched; the word is re-derived for display by
+  `Vutuv.Countries.region_for/1`.
+
+  The search box is the one control that is *not* part of the posting form: it
+  is associated with the tiny sibling `#job-country-search` form through its
+  `form=` attribute, because Enter inside the posting form means "publish" and
+  half a country name is nobody's idea of a finished posting. Over there Enter
+  means "take the top match" instead.
   """
 
   use VutuvWeb, :live_view
@@ -17,10 +40,16 @@ defmodule VutuvWeb.JobPostingLive.Form do
   import VutuvWeb.ErrorHelpers
 
   alias Vutuv.Countries
+  alias Vutuv.Geo
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Organizations
   alias Vutuv.Salary
+
+  # How many search hits the box offers at once. Long enough that a two-letter
+  # fragment still shows the country you meant, short enough to stay a list you
+  # read rather than scroll.
+  @matches_shown 8
 
   @impl true
   def mount(params, _session, socket) do
@@ -91,6 +120,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
       auto_upload: true,
       progress: &handle_progress/3
     )
+    |> assign(:country_query, "")
     |> assign_form(changeset)
   end
 
@@ -98,6 +128,23 @@ defmodule VutuvWeb.JobPostingLive.Form do
     socket
     |> assign(:changeset, changeset)
     |> assign(:form, to_form(changeset, as: :job_posting))
+    |> assign(:remote_countries, Countries.names(current(changeset, :remote_countries) || []))
+    |> assign_country_matches()
+  end
+
+  # The hits the search box offers: what the query finds, minus what is already
+  # a pill. Offering a country you have picked would answer a tap with nothing
+  # visibly happening.
+  defp assign_country_matches(socket) do
+    chosen = MapSet.new(socket.assigns.remote_countries, fn {_name, code} -> code end)
+
+    matches =
+      socket.assigns.country_query
+      |> Countries.search()
+      |> Enum.reject(fn {_name, code} -> MapSet.member?(chosen, code) end)
+      |> Enum.take(@matches_shown)
+
+    assign(socket, :country_matches, matches)
   end
 
   # --- events ----------------------------------------------------------------
@@ -106,7 +153,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
   def handle_event("validate", %{"job_posting" => params}, socket) do
     changeset =
       socket.assigns.posting
-      |> Jobs.change_job_posting(params)
+      |> Jobs.change_job_posting(seed_remote_countries(params, socket.assigns.changeset))
       |> Map.put(:action, :validate)
 
     {:noreply,
@@ -114,6 +161,38 @@ defmodule VutuvWeb.JobPostingLive.Form do
      |> assign_form(changeset)
      |> assign(:required_tags, params["required_tags"] || "")
      |> assign(:nice_tags, params["nice_to_have_tags"] || "")}
+  end
+
+  def handle_event("country-search", %{"country_query" => query}, socket) do
+    {:noreply, socket |> assign(:country_query, query) |> assign_country_matches()}
+  end
+
+  def handle_event("country-add", %{"code" => code}, socket) do
+    # A tap moves the focus onto the result button, so the emptied query really
+    # reaches the box — LiveView never patches the value of a *focused* input.
+    {:noreply, socket |> assign(:country_query, "") |> add_countries([code])}
+  end
+
+  # Enter in the search box (see the moduledoc: it belongs to the sibling form).
+  # The query stays, because the box keeps the typed text either way and a
+  # server that pretended otherwise would show a list that does not match it.
+  def handle_event("country-add-first", _params, socket) do
+    case socket.assigns.country_matches do
+      [{_name, code} | _rest] -> {:noreply, add_countries(socket, [code])}
+      [] -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("country-region", %{"region" => key}, socket) do
+    {:noreply, add_countries(socket, Countries.region_codes(key))}
+  end
+
+  def handle_event("country-remove", %{"code" => code}, socket) do
+    {:noreply, put_countries(socket, List.delete(selected_codes(socket), code))}
+  end
+
+  def handle_event("country-clear", _params, socket) do
+    {:noreply, put_countries(socket, [])}
   end
 
   def handle_event("save", %{"do" => action, "job_posting" => params}, socket) do
@@ -140,6 +219,49 @@ defmodule VutuvWeb.JobPostingLive.Form do
   def handle_event("cancel-upload", %{"ref" => ref}, socket) do
     {:noreply, cancel_upload(socket, :images, ref)}
   end
+
+  # --- applicant countries ---------------------------------------------------
+
+  # From the changeset, not from the rendered pills: `@remote_countries` has
+  # already been narrowed to codes the ISO table carries, so deriving the
+  # selection from it would drop an unknown stored code as a side effect of
+  # taking an unrelated pill out.
+  defp selected_codes(socket),
+    do: current(socket.assigns.changeset, :remote_countries) || []
+
+  defp add_countries(socket, codes),
+    do: put_countries(socket, Enum.uniq(selected_codes(socket) ++ codes))
+
+  # The selection lives in the changeset, not in a second assign beside it, so
+  # the pills, the hidden inputs and what a save writes can never disagree. The
+  # form's own action is carried over rather than set to `:validate`: picking a
+  # country is not the member asking to have the whole posting checked, and
+  # popping the error banner on them for it would read as a rejection.
+  defp put_countries(socket, codes) do
+    params = Map.put(socket.assigns.changeset.params || %{}, "remote_countries", codes)
+
+    changeset =
+      socket.assigns.posting
+      |> Jobs.change_job_posting(params)
+      |> Map.put(:action, socket.assigns.changeset.action)
+
+    assign_form(socket, changeset)
+  end
+
+  # The moment the workplace becomes remote, the picker appears empty; preselect
+  # the installation's own country there, the way the on-site country select
+  # does. Read off the transition (the working changeset holds the workplace the
+  # member had, the params the one they just chose) rather than off whether the
+  # browser sent the field, so it is the server's own state that decides. Every
+  # later change leaves the list alone: once the field has been on screen, an
+  # empty selection is the member's answer.
+  defp seed_remote_countries(%{"workplace_type" => "remote"} = params, changeset) do
+    if current(changeset, :workplace_type) == :remote,
+      do: params,
+      else: Map.put(params, "remote_countries", [Geo.default_country()])
+  end
+
+  defp seed_remote_countries(params, _changeset), do: params
 
   defp handle_progress(:images, entry, socket) do
     if entry.done? do
@@ -286,6 +408,12 @@ defmodule VutuvWeb.JobPostingLive.Form do
     <div class="py-6">
       <h1 class="mb-6 text-2xl font-bold text-slate-900 dark:text-slate-100">{@page_title}</h1>
 
+    <%!-- The applicant-country search box sits in the Location card below but
+          belongs to THIS form (through its `form=` attribute), so Enter there
+          takes the top match instead of publishing the posting. It has to be a
+          sibling: HTML has no nested forms. --%>
+      <form id="job-country-search" phx-submit="country-add-first" class="hidden"></form>
+
       <.form for={@form} id="job-posting-form" phx-change="validate" phx-submit="save" class="space-y-6">
         <.form_error :if={@changeset.action} changeset={@changeset} />
 
@@ -420,25 +548,92 @@ defmodule VutuvWeb.JobPostingLive.Form do
             </div>
           </div>
 
-          <div :if={current(@changeset, :workplace_type) == :remote}>
-            <label class="mb-1 block text-sm font-medium" for="job_posting_remote_countries">
+          <div :if={current(@changeset, :workplace_type) == :remote} class="space-y-3">
+            <label class="block text-sm font-medium" for="job-country-query">
               {gettext("Applicants must be located in")}
             </label>
-            <select
-              name="job_posting[remote_countries][]"
-              id="job_posting_remote_countries"
-              multiple
-              size="6"
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                :for={region <- Countries.regions()}
+                type="button"
+                phx-click="country-region"
+                phx-value-region={region.key}
+                title={region.name}
+                class="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                + {region.key}
+                <span class="font-normal text-slate-500 dark:text-slate-400">
+                  {delimited_count(region.count)}
+                </span>
+              </button>
+            </div>
+
+            <input
+              type="text"
+              id="job-country-query"
+              name="country_query"
+              form="job-country-search"
+              value={@country_query}
+              phx-change="country-search"
+              phx-debounce="150"
+              autocomplete="off"
+              placeholder={gettext("Search for a country")}
               class={input_class()}
+            />
+
+            <ul
+              :if={@country_matches != []}
+              class="divide-y divide-slate-100 overflow-hidden rounded-lg ring-1 ring-slate-200 dark:divide-slate-800 dark:ring-slate-700"
             >
-              <option
-                :for={{label, value} <- Countries.select_options()}
-                value={value}
-                selected={value in remote_country_values(@changeset)}
-              >{label}</option>
-            </select>
+              <li :for={{name, code} <- @country_matches}>
+                <button
+                  type="button"
+                  phx-click="country-add"
+                  phx-value-code={code}
+                  class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-brand-50 dark:hover:bg-slate-800"
+                >
+                  <span>{name}</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400">{code}</span>
+                </button>
+              </li>
+            </ul>
+            <p :if={@country_query != "" and @country_matches == []} class="editform__hint">
+              {gettext("No country left to add for that.")}
+            </p>
+
+            <%!-- An emptied selection must still post its key, or the changeset
+                  would fall back to the countries the posting was saved with. --%>
+            <input type="hidden" name="job_posting[remote_countries][]" value="" />
+
+            <%= if @remote_countries == [] do %>
+              <p class="editform__hint">{gettext("No country chosen yet.")}</p>
+            <% else %>
+              <div class="flex max-h-64 flex-wrap gap-1.5 overflow-y-auto">
+                <span :for={{name, code} <- @remote_countries} class="tag-input__pill">
+                  <input type="hidden" name="job_posting[remote_countries][]" value={code} />
+                  <span class="tag-input__name">{name}</span>
+                  <button
+                    type="button"
+                    class="tag-input__remove"
+                    phx-click="country-remove"
+                    phx-value-code={code}
+                    aria-label={gettext("Remove %{country}", country: name)}
+                  >×</button>
+                </span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-400">
+                {chosen_line(@remote_countries)}
+                <button
+                  type="button"
+                  phx-click="country-clear"
+                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                >
+                  {gettext("Remove all")}
+                </button>
+              </p>
+            <% end %>
             {error_tag(@form, :remote_countries)}
-            <p class="editform__hint">{gettext("Hold Ctrl / Cmd to select more than one.")}</p>
           </div>
         </.card>
 
@@ -618,13 +813,17 @@ defmodule VutuvWeb.JobPostingLive.Form do
 
   # A new posting preselects the installation's default country (issue #932);
   # an existing one keeps its own.
-  defp country_value(changeset), do: current(changeset, :country) || Vutuv.Geo.default_country()
+  defp country_value(changeset), do: current(changeset, :country) || Geo.default_country()
 
-  defp remote_country_values(changeset) do
-    case current(changeset, :remote_countries) do
-      [] -> [Vutuv.Geo.default_country()]
-      codes -> codes
-    end
+  # `%{formatted}` rather than `%{count}`: ngettext/4 binds `%{count}` to the
+  # raw integer and a `count:` binding does not override it, so the grouped
+  # number would be silently replaced by "1234".
+  defp chosen_line(countries) do
+    n = length(countries)
+
+    ngettext("%{formatted} country chosen.", "%{formatted} countries chosen.", n,
+      formatted: delimited_count(n)
+    )
   end
 
   defp agg_hint?(form), do: JobPosting.agg_hint?(form[:title].value || "")

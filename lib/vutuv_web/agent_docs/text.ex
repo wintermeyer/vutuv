@@ -475,11 +475,18 @@ defmodule VutuvWeb.AgentDocs.Text do
     do:
       "- #{gettext("Location")}: #{[city, country] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(", ")}"
 
-  defp job_location(%{remote_countries: [_ | _] = countries}),
-    do:
-      "- #{gettext("Location")}: #{gettext("Remote")} (#{Enum.map_join(countries, ", ", & &1.name)})"
+  defp job_location(%{remote_countries: [_ | _] = countries} = doc),
+    do: "- #{gettext("Location")}: #{gettext("Remote")} (#{remote_where(doc, countries)})"
 
   defp job_location(_doc), do: "- #{gettext("Location")}: #{gettext("Remote")}"
+
+  # The countries in full — an agent filters on them — with the poster's own
+  # word in front when their selection is exactly a region, so the machine
+  # formats say "EMEA" where the HTML page does.
+  defp remote_where(%{remote_region: region}, countries) when is_binary(region),
+    do: "#{region}: #{Enum.map_join(countries, ", ", & &1.name)}"
+
+  defp remote_where(_doc, countries), do: Enum.map_join(countries, ", ", & &1.name)
 
   defp job_tags(_label, []), do: nil
 

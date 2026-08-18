@@ -1432,6 +1432,48 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert_fact_everywhere(rendered, phoenix)
   end
 
+  test "a remote posting's applicant countries appear in every format" do
+    # The HTML detail page used to show nothing at all for a remote posting,
+    # so the countries the poster picked existed only in the agent documents
+    # (issues #1558/#1559).
+    posting =
+      Vutuv.JobsHelpers.publish_job!(nil, %{
+        "title" => "Remote Elixir Engineer",
+        "workplace_type" => "remote",
+        "remote_countries" => ["DE", "AT"],
+        "required_tags" => unique_tag_name("Elixir")
+      })
+
+    rendered = formats_for("/jobs/#{posting.slug}")
+    assert_fact_everywhere(rendered, "Germany")
+    assert_fact_everywhere(rendered, "Austria")
+  end
+
+  test "a region preset is named in every format, not only spelled out" do
+    # The HTML chip says "EU" where the poster picked the preset; the agent
+    # formats keep all 27 names AND carry the word (issue #1559).
+    posting =
+      Vutuv.JobsHelpers.publish_job!(nil, %{
+        "title" => "EU-wide Elixir Engineer",
+        "workplace_type" => "remote",
+        "remote_countries" => Vutuv.Countries.region_codes("EU"),
+        "required_tags" => unique_tag_name("Elixir")
+      })
+
+    rendered = formats_for("/jobs/#{posting.slug}")
+
+    # Not assert_fact_everywhere: "EU" is a substring of the EUR currency the
+    # salary line carries, so a bare search would pass without the region.
+    assert rendered.html =~ ~r/>\s*EU\s*</
+    assert rendered.md =~ "(EU: "
+    assert rendered.txt =~ "(EU: "
+    assert Jason.decode!(rendered.json)["remote_region"] == "EU"
+    assert rendered.xml =~ "<remote_region>EU</remote_region>"
+
+    # The enumeration survives for anything filtering on it.
+    for format <- [:md, :txt, :json, :xml], do: assert(rendered[format] =~ "Portugal")
+  end
+
   test "the job board appears in every format" do
     Vutuv.JobsHelpers.publish_job!(nil, %{
       "title" => "Board Tester Role",

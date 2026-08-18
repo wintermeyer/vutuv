@@ -28,6 +28,7 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
       employment_type: JobPosting.employment_type_label(posting.employment_type),
       workplace_type: JobPosting.workplace_type_label(posting.workplace_type),
       location: location(posting),
+      remote_region: Countries.region_for(posting.remote_countries),
       remote_countries: remote_countries(posting),
       salary_line: salary_line(posting),
       salary: JobPosting.salary_fields(posting),
@@ -83,6 +84,7 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
       employment_type: JobPosting.employment_type_label(posting.employment_type),
       workplace_type: JobPosting.workplace_type_label(posting.workplace_type),
       location: location(posting),
+      remote_region: Countries.region_for(posting.remote_countries),
       remote_countries: remote_countries(posting),
       salary_line: salary_line(posting),
       salary: JobPosting.salary_fields(posting),
@@ -116,6 +118,9 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
     }
   end
 
+  # The full list stays, so an agent can filter on it; `remote_region` beside it
+  # carries the word the HTML page shows when the selection is exactly a region
+  # ("EMEA" rather than 128 names), which is the poster's own framing.
   defp remote_countries(%JobPosting{workplace_type: :remote} = posting) do
     Enum.map(posting.remote_countries, &%{code: &1, name: Countries.name(&1)})
   end

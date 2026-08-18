@@ -110,6 +110,150 @@ defmodule VutuvWeb.JobPostingTest do
     end
   end
 
+  # Form params for a remote posting. The address block is gone from the DOM
+  # once the workplace is remote, and `form/3` refuses to fill a field the
+  # rendered form does not have.
+  defp remote_params(overrides \\ %{}) do
+    overrides
+    |> Map.put("workplace_type", "remote")
+    |> form_params()
+    |> Map.drop(["zip_code", "city", "country"])
+  end
+
+  # Switch the workplace to remote so the applicant-country picker renders, and
+  # hand back the HTML it produced.
+  defp go_remote(view) do
+    view
+    |> form("#job-posting-form", job_posting: form_params(%{"workplace_type" => "remote"}))
+    |> render_change()
+  end
+
+  describe "applicant countries (issues #1558, #1559)" do
+    test "the picker shows the chosen countries as pills, never a 249-row select",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/jobs/new")
+
+      html = go_remote(view)
+
+      # The whole point of #1558: the old control hid the selection.
+      refute html =~ ~s(id="job_posting_remote_countries")
+      refute html =~ "Hold Ctrl"
+      # Switching to remote preselects the installation's own country, visibly
+      # (the test conn speaks English, so the pill reads "Germany").
+      assert html =~ "Germany"
+      assert html =~ ~s(name="job_posting[remote_countries][]" value="DE")
+
+      html = render_click(view, "country-add", %{"code" => "AT"})
+      assert html =~ ~s(name="job_posting[remote_countries][]" value="AT")
+
+      html = render_click(view, "country-remove", %{"code" => "DE"})
+      refute html =~ ~s(name="job_posting[remote_countries][]" value="DE")
+      assert html =~ ~s(name="job_posting[remote_countries][]" value="AT")
+    end
+
+    test "an emptied list stays empty across the next form change", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/jobs/new")
+
+      go_remote(view)
+      render_click(view, "country-clear", %{})
+
+      # The seed must fire only the first time the field appears. Typing on in
+      # the form re-sends the (now empty) field, and putting Germany back would
+      # overrule an answer the member gave on purpose.
+      html =
+        view
+        |> form("#job-posting-form", job_posting: remote_params(%{"title" => "Remote Role"}))
+        |> render_change()
+
+      refute html =~ ~s(name="job_posting[remote_countries][]" value="DE")
+      assert html =~ "No country chosen yet."
+    end
+
+    test "the search box finds a country and adding one drops it from the hits",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/jobs/new")
+      go_remote(view)
+
+      html = render_change(view, "country-search", %{"country_query" => "witzerl"})
+      assert html =~ "Switzerland"
+      assert html =~ ~s(phx-click="country-add" phx-value-code="CH")
+
+      # Enter in the box takes the top hit (the sibling form's phx-submit), so
+      # it can never publish the posting half-finished.
+      html = render_submit(view, "country-add-first", %{})
+      assert html =~ ~s(name="job_posting[remote_countries][]" value="CH")
+      # Offered once, then it is a pill — a hit you have already taken would
+      # answer a tap with nothing visibly happening.
+      refute html =~ ~s(phx-click="country-add" phx-value-code="CH")
+    end
+
+    test "a region preset fills in its whole expansion and publishes with it",
+         %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      age_account(user)
+      {:ok, view, _html} = live(conn, ~p"/jobs/new")
+      go_remote(view)
+
+      render_click(view, "country-clear", %{})
+      render_click(view, "country-region", %{"region" => "EU"})
+
+      {:error, {:live_redirect, %{to: to}}} =
+        view
+        |> form("#job-posting-form", job_posting: remote_params())
+        |> render_submit(%{"do" => "publish"})
+
+      posting = Jobs.get_job_posting_by_slug(to |> String.split("/") |> List.last())
+      # The expansion is what gets stored, so Jobs.filter_location/4 keeps
+      # working against remote_countries untouched (issue #1559).
+      assert Enum.sort(posting.remote_countries) == Vutuv.Countries.region_codes("EU")
+      assert length(posting.remote_countries) == 27
+    end
+
+    test "a whole region reads as its name on the card and the detail page" do
+      posting =
+        publish_job!(nil, %{
+          "workplace_type" => "remote",
+          "remote_countries" => Vutuv.Countries.region_codes("EU")
+        })
+
+      assert VutuvWeb.JobComponents.card_location(posting) =~ "(EU)"
+
+      assert VutuvWeb.JobComponents.remote_countries_label(posting.remote_countries, :name) ==
+               "EU"
+    end
+
+    test "the picker speaks German to a German browser", %{conn: conn} do
+      # `mix gettext.extract --merge` fuzzy-filled every one of these labels
+      # with an unrelated translation ("Land suchen" arrived as "Konto zum
+      # Einfrieren suchen"), and nothing in the build says so.
+      {conn, user} = create_and_login_user(conn)
+      user |> Ecto.Changeset.change(%{locale: nil}) |> Repo.update!()
+
+      {:ok, view, _html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> live(~p"/jobs/new")
+
+      html = go_remote(view)
+      assert html =~ "Land suchen"
+      assert html =~ "1 Land ausgewählt."
+      assert html =~ "Alle entfernen"
+      assert html =~ "Deutschland entfernen"
+
+      assert render_click(view, "country-clear", %{}) =~ "Noch kein Land ausgewählt."
+    end
+
+    test "a long selection is capped instead of spelling out every country" do
+      # 128 codes in a card chip is not a chip.
+      label = VutuvWeb.JobComponents.remote_countries_label(~w(DE AT CH FR IT), :code)
+      assert label == "DE, AT, CH +2 more"
+    end
+  end
+
   describe "detail page + gating" do
     test "a public posting shows salary, employer and JSON-LD with validThrough", %{conn: conn} do
       posting = publish_job!()

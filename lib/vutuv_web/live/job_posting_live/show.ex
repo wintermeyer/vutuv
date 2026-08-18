@@ -253,7 +253,11 @@ defmodule VutuvWeb.JobPostingLive.Show do
     Jobs.tags_of(posting, :required) != [] or Jobs.tags_of(posting, :nice_to_have) != []
   end
 
-  defp location_line(%{workplace_type: :remote}), do: nil
+  # A remote posting's "location" is where its applicants may live. It used to
+  # show nothing at all, so the countries the poster chose were visible only in
+  # the agent formats and on the board card (issues #1558/#1559).
+  defp location_line(%{workplace_type: :remote} = posting),
+    do: JobComponents.remote_countries_label(posting.remote_countries, :name)
 
   defp location_line(%{zip_code: zip, city: city, country: country}) do
     [[zip, city] |> Enum.reject(&blank?/1) |> Enum.join(" "), Vutuv.Countries.name(country)]

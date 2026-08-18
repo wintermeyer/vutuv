@@ -72,7 +72,7 @@ defmodule Vutuv.CountriesTest do
 
     test "options are sorted by the folded localized name" do
       options = Countries.select_options(:de)
-      keys = Enum.map(options, fn {name, _code} -> fold(name) end)
+      keys = Enum.map(options, fn {name, _code} -> Countries.fold(name) end)
       assert keys == Enum.sort(keys)
     end
 
@@ -98,6 +98,110 @@ defmodule Vutuv.CountriesTest do
     end
   end
 
+  describe "names/2" do
+    test "pairs codes with their localized names, sorted like the option list" do
+      assert Countries.names(~w(CH AT DE), :de) == [
+               {"Deutschland", "DE"},
+               {"Österreich", "AT"},
+               {"Schweiz", "CH"}
+             ]
+    end
+
+    test "drops unknown codes and collapses duplicates" do
+      assert Countries.names(~w(DE XX de DE), :en) == [{"Germany", "DE"}]
+      assert Countries.names([], :en) == []
+      assert Countries.names(nil, :en) == []
+    end
+  end
+
+  describe "search/2" do
+    test "matches a fragment of the localized name" do
+      assert {"Deutschland", "DE"} in Countries.search("eutschl", :de)
+      assert {"Germany", "DE"} in Countries.search("germ", :en)
+    end
+
+    test "folds diacritics and case on both sides" do
+      # The point of the folding: nobody types an umlaut into a search box.
+      assert {"Österreich", "AT"} in Countries.search("oster", :de)
+      assert {"Côte d'Ivoire", "CI"} in Countries.search("COTE", :de)
+    end
+
+    test "an exact ISO code is listed first" do
+      assert [{"Österreich", "AT"} | _rest] = Countries.search("AT", :de)
+      assert [{"Italien", "IT"} | _rest] = Countries.search("it", :de)
+    end
+
+    test "names that begin with the query come before matches buried mid-word" do
+      # Alphabetical order alone answered "sch" with Amerikanisch-Samoa,
+      # Aserbaidschan and Bangladesch, and pushed Schweiz past the eight hits a
+      # picker shows.
+      top = Countries.search("sch", :de) |> Enum.take(4) |> Enum.map(&elem(&1, 0))
+      assert "Schweden" in top
+      assert "Schweiz" in top
+
+      # A later word counts too: "staaten" finds "Vereinigte Staaten".
+      assert [{"Vereinigte Staaten", "US"} | _rest] = Countries.search("staaten", :de)
+    end
+
+    test "a blank or non-binary query finds nothing" do
+      assert Countries.search("", :de) == []
+      assert Countries.search("   ", :de) == []
+      assert Countries.search(nil, :de) == []
+    end
+  end
+
+  describe "regions/1" do
+    test "the four presets carry localized names and their size" do
+      assert ["EU", "EMEA", "MENA", "APAC"] == Enum.map(Countries.regions(:de), & &1.key)
+
+      eu = Enum.find(Countries.regions(:de), &(&1.key == "EU"))
+      assert eu.name == "Europäische Union"
+      assert eu.count == 27
+      assert eu.count == length(Countries.region_codes("EU"))
+
+      assert Enum.find(Countries.regions(:en), &(&1.key == "EU")).name == "European Union"
+    end
+
+    test "the EU expansion is the 27 member states" do
+      eu = Countries.region_codes("EU")
+      assert "DE" in eu
+      refute "CH" in eu
+      refute "GB" in eu
+    end
+
+    test "EMEA is the union of Europe, the Middle East and Africa" do
+      emea = Countries.region_codes("EMEA")
+      # One from each of the three parts, and nothing from the Americas or APAC.
+      assert "NO" in emea
+      assert "SA" in emea
+      assert "KE" in emea
+      refute "US" in emea
+      refute "JP" in emea
+      assert Enum.uniq(emea) == emea
+    end
+
+    test "region_codes/1 answers [] for anything unknown" do
+      assert Countries.region_codes("LATAM") == []
+      assert Countries.region_codes(nil) == []
+    end
+  end
+
+  describe "region_for/1" do
+    test "names the region a selection covers exactly, in any order" do
+      assert Countries.region_for(Countries.region_codes("EU")) == "EU"
+      assert Countries.region_for(Enum.reverse(Countries.region_codes("APAC"))) == "APAC"
+    end
+
+    test "a selection that is not exactly a region is not named as one" do
+      # Taking one country back out means something narrower than the region,
+      # and calling it "EU" anyway would misdescribe where they will hire.
+      [_dropped | rest] = Countries.region_codes("EU")
+      assert Countries.region_for(rest) == nil
+      assert Countries.region_for(["DE", "AT"]) == nil
+      assert Countries.region_for([]) == nil
+    end
+  end
+
   describe "all/0" do
     test "covers the full ISO 3166-1 alpha-2 set" do
       codes = Countries.all()
@@ -105,25 +209,5 @@ defmodule Vutuv.CountriesTest do
       assert "DE" in codes
       assert Enum.all?(codes, &(&1 == String.upcase(&1)))
     end
-  end
-
-  # Mirror of the module's private sort key, so the sort assertion checks the
-  # same folded ordering the module produces.
-  defp fold(name) do
-    name
-    |> String.downcase()
-    |> String.replace("ä", "a")
-    |> String.replace("ö", "o")
-    |> String.replace("ü", "u")
-    |> String.replace("ß", "ss")
-    |> String.replace("å", "a")
-    |> String.replace("á", "a")
-    |> String.replace("à", "a")
-    |> String.replace("é", "e")
-    |> String.replace("è", "e")
-    |> String.replace("ç", "c")
-    |> String.replace("í", "i")
-    |> String.replace("ó", "o")
-    |> String.replace("ú", "u")
   end
 end
