@@ -18,7 +18,10 @@ defmodule Vutuv.MastodonApi.Notifications do
   not served, not pushed and not streamed.
   """
 
+  import Ecto.Query, only: [where: 3]
+
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
@@ -47,24 +50,47 @@ defmodule Vutuv.MastodonApi.Notifications do
   @doc "Whether this kind is one Mastodon has a type for."
   def mapped?(item), do: not is_nil(type(item))
 
-  @doc """
-  The account one notification names, as a single lookup.
+  @doc "The account one notification names — `accounts/1` for a single item."
+  def account(item), do: accounts([item])[item[:id]]
 
-  For the batch path (`/api/v1/notifications` renders a page at a time) the
-  controller has its own two-query loader; this is for the callers that hold
-  exactly one item, where a batch would be a batch of one.
+  @doc """
+  The accounts a page of items names, rendered and keyed by **item id** — one
+  query per actor kind (members, pages, cached remote accounts) rather than
+  one per row. Both readers that name an actor — the REST controller and the
+  streaming socket — render through here, for the same reason the type table
+  lives here: two copies of "who is this" is how they come to disagree.
+
+  A remote actor has no vutuv profile, so `Vutuv.Activity` carries only their
+  handle and actor URI — but whoever's reply or reaction was stored got a
+  `RemoteAccount` row too, gate-cleared avatar included, found under that URI
+  and rendered through `Presenter.account/1`, the chokepoint the status path
+  uses (issue #1598). So the actor and their statuses are one account to a
+  client, face and all. Only an actor whose row is gone, or whom nobody here
+  ever stored, falls back to `placeholder_account/1`.
   """
-  def account(item) do
-    case {item[:actor_id], item[:actor_kind]} do
-      {nil, _kind} -> placeholder_account(item)
-      {id, "organization"} -> lookup(Organization, id) || placeholder_account(item)
-      {id, _member} -> lookup(User, id) || placeholder_account(item)
-    end
+  def accounts(items) do
+    {remote, local} = Enum.split_with(items, &is_nil(&1[:actor_id]))
+    {organizations, users} = Enum.split_with(local, &(&1[:actor_kind] == "organization"))
+
+    # A local actor is keyed by row id, a remote one by actor URI; the two
+    # keyspaces cannot collide.
+    resolved =
+      Map.merge(
+        accounts_by_id(User, Enum.map(users, & &1.actor_id)),
+        Map.merge(
+          accounts_by_id(Organization, Enum.map(organizations, & &1.actor_id)),
+          remote_accounts(remote)
+        )
+      )
+
+    Map.new(items, fn item ->
+      {item[:id], resolved[item[:actor_id] || item[:actor_url]] || placeholder_account(item)}
+    end)
   end
 
   @doc """
-  The stand-in account for an actor with no vutuv profile — somebody on another
-  network, whose handle is all `Vutuv.Activity` carries.
+  The stand-in account for a remote actor nobody here ever stored — then their
+  handle really is all `Vutuv.Activity` carries.
 
   Built through `Presenter.base_account/1` like every other account this adapter
   renders, so it carries the keys a client reads unconditionally (`emojis`,
@@ -86,10 +112,19 @@ defmodule Vutuv.MastodonApi.Notifications do
     })
   end
 
-  defp lookup(schema, id) do
-    case Repo.get(schema, id) do
-      nil -> nil
-      record -> Presenter.account(record)
-    end
+  defp accounts_by_id(_schema, []), do: %{}
+
+  defp accounts_by_id(schema, ids) do
+    schema
+    |> where([r], r.id in ^Enum.uniq(ids))
+    |> Repo.all()
+    |> Map.new(&{&1.id, Presenter.account(&1)})
+  end
+
+  defp remote_accounts(items) do
+    items
+    |> Enum.map(& &1[:actor_url])
+    |> Fediverse.remote_accounts_by_uris()
+    |> Map.new(fn {uri, account} -> {uri, Presenter.account(account)} end)
   end
 end

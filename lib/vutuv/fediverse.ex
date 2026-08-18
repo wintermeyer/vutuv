@@ -1332,6 +1332,23 @@ defmodule Vutuv.Fediverse do
   def get_remote_account(id), do: UUIDv7.with_cast(id, &Repo.get(RemoteAccount, &1))
 
   @doc """
+  The stored remote accounts these actor URIs name, keyed by URI — one query
+  for a whole page. A URI nobody here stored is simply absent, so callers
+  fall back per actor.
+  """
+  def remote_accounts_by_uris(actor_uris) do
+    case actor_uris |> Enum.filter(&is_binary/1) |> Enum.uniq() do
+      [] ->
+        %{}
+
+      uris ->
+        from(a in RemoteAccount, where: a.actor_uri in ^uris)
+        |> Repo.all()
+        |> Map.new(&{&1.actor_uri, &1})
+    end
+  end
+
+  @doc """
   The member or page takes the follow back: a best-effort `Undo(Follow)` to
   the other server, then the row goes.
 

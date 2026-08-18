@@ -8,6 +8,10 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
   import Vutuv.MastodonHelpers
 
   alias Vutuv.Activity
+  alias Vutuv.Fediverse.Reaction
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.MastodonApi
+  alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Social
@@ -168,6 +172,72 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
              MapSet.new(second, & &1["id"])
            ),
            "the second page repeated the first — the boundary never reached the query"
+  end
+
+  # A favourite or boost from another network names an actor with no vutuv
+  # profile, so `Vutuv.Activity` carries only their handle and actor URI — but
+  # when somebody's reply or reaction was stored, their `RemoteAccount` was
+  # too, gate-cleared avatar included. Statuses learned to wear that face in
+  # #1588; the notification list hardcoded the installation icon (issue #1598).
+  describe "a favourite arriving from another network" do
+    test "wears the actor's cached face, not the installation icon", %{conn: conn} do
+      member = insert(:activated_user)
+      {:ok, post} = Posts.create_post(member, %{body: "Bis ins Fediverse"})
+
+      actor_uri = "https://social.example/users/carol-#{System.unique_integer([:positive])}"
+
+      account =
+        Repo.insert!(%RemoteAccount{
+          actor_uri: actor_uri,
+          host: "social.example",
+          handle: "carol",
+          name: "Carol",
+          inbox_uri: actor_uri <> "/inbox",
+          avatar: "avatar-abc123.avif",
+          avatar_moderation: "approved"
+        })
+
+      remote_reaction(post, actor_uri, "carol")
+
+      token = mastodon_token(member, ["read"])
+
+      [favourite] =
+        conn |> mastodon_conn(token) |> get("/api/v1/notifications") |> json_response(200)
+
+      assert favourite["type"] == "favourite"
+      assert favourite["account"]["id"] == "remote-" <> account.id
+
+      assert favourite["account"]["avatar"] ==
+               MastodonApi.main_url(RemoteAccount.avatar_url(account))
+
+      refute favourite["account"]["avatar"] == Presenter.fallback_avatar()
+    end
+
+    test "keeps the stand-in for an actor nobody here stored", %{conn: conn} do
+      member = insert(:activated_user)
+      {:ok, post} = Posts.create_post(member, %{body: "Auch bis ins Fediverse"})
+
+      actor_uri = "https://social.example/users/nobody-#{System.unique_integer([:positive])}"
+      remote_reaction(post, actor_uri, "nobody")
+
+      token = mastodon_token(member, ["read"])
+
+      [favourite] =
+        conn |> mastodon_conn(token) |> get("/api/v1/notifications") |> json_response(200)
+
+      assert favourite["account"]["acct"] == "nobody@social.example"
+      assert favourite["account"]["avatar"] == Presenter.fallback_avatar()
+    end
+  end
+
+  defp remote_reaction(post, actor_uri, handle) do
+    Repo.insert!(%Reaction{
+      post_id: post.id,
+      actor_uri: actor_uri,
+      handle: handle,
+      kind: "like",
+      received_at: DateTime.utc_now(:second)
+    })
   end
 
   # The unmappable kinds are dropped **after** the read, so a full read can

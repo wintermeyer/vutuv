@@ -127,7 +127,13 @@ and cover, and the cached picture of an account on another network
 (`RemoteAccount.avatar_url/1`, the one chokepoint that answers `nil` unless the
 gate cleared it). An account with no cover gets a plain brand banner
 (`/images/header-placeholder.png`) rather than the installation's square icon,
-which is what a client used to draw across the top of every profile.
+which is what a client used to draw across the top of every profile. The
+**notification actor** goes through the same chokepoint (issue #1598): an
+activity item for somebody on another network carries only their handle and
+actor URI, so `Notifications.accounts/1` — the one loader both the REST list
+and the streaming socket render through — resolves the cached `RemoteAccount`
+by that URI (`Fediverse.remote_accounts_by_uris/1`, batched per page) and only
+an actor nobody here stored falls back to the hand-built placeholder account.
 
 The three counts are `Vutuv.MastodonApi.AccountCounts`, one query per figure for
 a whole page rather than three per row — ours are real aggregates where

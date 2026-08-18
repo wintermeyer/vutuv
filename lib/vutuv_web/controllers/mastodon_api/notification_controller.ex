@@ -24,15 +24,10 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
 
   use VutuvWeb, :controller
 
-  import Ecto.Query, only: [where: 3]
-
-  alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.MastodonApi.Notifications
   alias Vutuv.MastodonApi.Presenter
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
-  alias Vutuv.Repo
   alias Vutuv.UUIDv7
   alias VutuvWeb.MastodonApi.Pagination
 
@@ -196,7 +191,9 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
   end
 
   defp notifications(conn, items) do
-    accounts = load_accounts(items)
+    # Who each item names is `Notifications.accounts/1`'s answer — the same one
+    # the streaming socket serves — keyed by item id, one query per actor kind.
+    accounts = Notifications.accounts(items)
     statuses = load_statuses(conn, items)
 
     Enum.map(items, fn item ->
@@ -204,35 +201,10 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
         id: item.id,
         type: type(item),
         created_at: timestamp(item.at),
-        account: accounts[item[:actor_id]] || placeholder_account(item),
+        account: accounts[item.id],
         status: statuses[item[:post_id]]
       }
     end)
-  end
-
-  # One query per actor kind rather than one per row: a page of twenty
-  # notifications is usually twenty different people.
-  defp load_accounts(items) do
-    {organizations, users} =
-      items
-      |> Enum.filter(& &1[:actor_id])
-      |> Enum.split_with(&(&1[:actor_kind] == "organization"))
-
-    Map.merge(
-      accounts_by_id(User, Enum.map(users, & &1.actor_id)),
-      accounts_by_id(Organization, Enum.map(organizations, & &1.actor_id))
-    )
-  end
-
-  defp accounts_by_id(_schema, []), do: %{}
-
-  defp accounts_by_id(schema, ids) do
-    ids = Enum.uniq(ids)
-
-    schema
-    |> where([r], r.id in ^ids)
-    |> Repo.all()
-    |> Map.new(&{&1.id, Presenter.account(&1)})
   end
 
   defp load_statuses(conn, items) do
@@ -247,11 +219,6 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
       posts |> Enum.map(& &1.id) |> Enum.zip(rendered) |> Map.new()
     end)
   end
-
-  # Somebody on another network has no vutuv profile, so `Vutuv.Activity` leaves
-  # the local actor fields nil and carries their handle instead. A Mastodon
-  # notification must still name an account, so it is built from what there is.
-  defp placeholder_account(item), do: Notifications.placeholder_account(item)
 
   defp type(item), do: Notifications.type(item)
 
