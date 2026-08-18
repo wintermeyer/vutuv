@@ -178,7 +178,7 @@ defmodule VutuvWeb.QualificationControllerTest do
       assert html =~ "Currently in use"
     end
 
-    test "the entry page shows the usage line and its doc siblings carry it",
+    test "the entry page shows the in-use pill and its doc siblings carry it",
          %{owner: owner} do
       qualification = insert(:qualification, user: owner, name: "Meisterbrief")
       insert(:work_experience, user: owner, qualification: qualification, end_year: nil)
@@ -189,7 +189,6 @@ defmodule VutuvWeb.QualificationControllerTest do
         |> html_response(200)
 
       assert html =~ "data-qualification-usage"
-      assert html =~ "Used for 1 job"
       assert html =~ "Currently in use"
 
       json =
@@ -227,6 +226,132 @@ defmodule VutuvWeb.QualificationControllerTest do
       md = build_conn() |> get("/#{owner.username}/qualifications.md") |> Map.get(:resp_body)
       assert md =~ "used for 1 job"
       assert md =~ "last used 2019-09"
+    end
+  end
+
+  describe "the jobs a credential earned (issue #1109)" do
+    setup %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      %{conn: conn, owner: owner}
+    end
+
+    test "the entry page lists them newest first and links each role",
+         %{owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Meisterbrief")
+
+      insert(:work_experience,
+        user: owner,
+        qualification: qualification,
+        title: "Metallbauer",
+        organization: "Schmidt GmbH",
+        start_year: 2015,
+        end_year: 2019,
+        end_month: 3,
+        slug: "metallbauer-schmidt"
+      )
+
+      insert(:work_experience,
+        user: owner,
+        qualification: qualification,
+        title: "Werkstattleiter",
+        organization: "Krause KG",
+        start_year: 2019,
+        end_year: nil,
+        slug: "werkstattleiter-krause"
+      )
+
+      html =
+        build_conn()
+        |> get(~p"/#{owner}/qualifications/#{qualification}")
+        |> html_response(200)
+
+      assert html =~ "data-citing-jobs"
+      assert html =~ "Werkstattleiter"
+      assert html =~ "Krause KG"
+      assert html =~ ~p"/#{owner}/work_experiences/werkstattleiter-krause"
+      assert html =~ ~p"/#{owner}/work_experiences/metallbauer-schmidt"
+      # The period rides along on the meta line, so a reader can tell the
+      # current role from the one that ended.
+      assert html =~ "3/2019"
+
+      # The ongoing role comes first (citing_jobs_detail_preload/0 order).
+      assert :binary.match(html, "Werkstattleiter") < :binary.match(html, "Metallbauer")
+    end
+
+    test "an employer with a verified organization page is linked to it",
+         %{owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Meisterbrief")
+      organization = insert(:organization, name: "Krause KG")
+
+      insert(:work_experience,
+        user: owner,
+        qualification: qualification,
+        title: "Werkstattleiter",
+        organization: "Krause",
+        organization_page: organization
+      )
+
+      html =
+        build_conn()
+        |> get(~p"/#{owner}/qualifications/#{qualification}")
+        |> html_response(200)
+
+      assert html =~ Vutuv.Organizations.canonical_path(organization)
+      assert html =~ "Krause KG"
+    end
+
+    test "a credential no job cites shows no jobs block", %{owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Unused cert")
+
+      html =
+        build_conn()
+        |> get(~p"/#{owner}/qualifications/#{qualification}")
+        |> html_response(200)
+
+      refute html =~ "data-citing-jobs"
+      refute html =~ "data-qualification-usage"
+    end
+
+    test "the doc siblings carry the roles, not just the count", %{owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Meisterbrief")
+
+      insert(:work_experience,
+        user: owner,
+        qualification: qualification,
+        title: "Werkstattleiter",
+        organization: "Krause KG",
+        start_year: 2019,
+        end_year: nil,
+        slug: "werkstattleiter-krause"
+      )
+
+      json =
+        build_conn()
+        |> get("/#{owner.username}/qualifications/#{qualification.id}.json")
+        |> Map.get(:resp_body)
+        |> Jason.decode!()
+
+      assert [job] = json["entry"]["jobs"]["entries"]
+      assert job["title"] == "Werkstattleiter"
+      assert job["organization"] == "Krause KG"
+      assert job["start"] == "2019-01"
+      assert job["url"] =~ "/work_experiences/werkstattleiter-krause"
+
+      md =
+        build_conn()
+        |> get("/#{owner.username}/qualifications/#{qualification.id}.md")
+        |> Map.get(:resp_body)
+
+      assert md =~ "[Werkstattleiter]("
+      assert md =~ "Krause KG"
+
+      txt =
+        build_conn()
+        |> get("/#{owner.username}/qualifications/#{qualification.id}.txt")
+        |> Map.get(:resp_body)
+
+      assert txt =~ "Werkstattleiter"
+      assert txt =~ "Krause KG"
     end
   end
 

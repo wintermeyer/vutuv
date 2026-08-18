@@ -766,18 +766,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # The non-default CV categories (issue #840) are called out on the entry
   # line, mirroring the HTML pages' category headings; a plain job stays
   # unmarked, like the page's jobs-only timeline. Shared with the text
-  # renderer. Singular wording (one entry), the same msgids as the form's
-  # category picker.
+  # renderer, and one rule with the HTML rows — `kind_note/1` owns both which
+  # kinds are worth naming and the wording (the form's category picker msgids).
   @doc false
-  def work_kind_note(work) do
-    case Map.get(work, :kind) do
-      "self_employed" -> gettext("Freelance / Self-employed")
-      "internship" -> gettext("Internship")
-      "volunteer" -> gettext("Volunteering & hobbies")
-      "other" -> gettext("Other activities")
-      _employment -> nil
-    end
-  end
+  defdelegate work_kind_note(work), to: VutuvWeb.WorkExperienceHTML, as: :kind_note
 
   # Shares work_period/1 (the education entry carries the same :start / :end
   # keys). Degree + school lead, then the period, then field of study and
@@ -847,12 +839,45 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         do: "- #{md_text(qualification.name)}",
         else: "- #{md_text(qualification.name)}: #{md_text(facts)}"
 
-    base
-    |> append_if(qualification.url, &(&1 <> " <#{md_url(qualification.url)}>"))
-    |> append_if(
-      qualification.document,
-      &(&1 <> " [#{gettext("proof document")}](#{md_url(qualification.document.url)})")
-    )
+    line =
+      base
+      |> append_if(qualification.url, &(&1 <> " <#{md_url(qualification.url)}>"))
+      |> append_if(
+        qualification.document,
+        &(&1 <> " [#{gettext("proof document")}](#{md_url(qualification.document.url)})")
+      )
+
+    # The jobs the credential earned (issue #1109), one indented line each —
+    # the same tight nested list the code-forge accounts use for their repos.
+    Enum.join([line | Enum.map(citing_jobs(qualification), &citing_job_line/1)], "\n")
+  end
+
+  # The credential's citing roles, or [] for an entry that has none (or came
+  # from a surface that did not preload them).
+  @doc false
+  def citing_jobs(qualification) do
+    case Map.get(qualification, :jobs) do
+      %{entries: [_ | _] = entries} -> entries
+      _no_jobs -> []
+    end
+  end
+
+  defp citing_job_line(job) do
+    title = md_text(job.title)
+    linked = if job.url, do: "[#{title}](#{md_url(job.url)})", else: title
+    facts = citing_job_facts(job)
+
+    if facts == "", do: "  - #{linked}", else: "  - #{linked}: #{md_text(facts)}"
+  end
+
+  # One citing role's facts beside its title — the employer, its period and,
+  # for anything but a plain job, the CV category. Shared with the plain-text
+  # renderer so the two read the same.
+  @doc false
+  def citing_job_facts(job) do
+    [job.organization, work_period(job), work_kind_note(job)]
+    |> Enum.filter(& &1)
+    |> Enum.join(" · ")
   end
 
   defp append_if(line, nil, _fun), do: line

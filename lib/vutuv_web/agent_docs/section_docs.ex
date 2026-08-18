@@ -22,7 +22,6 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   alias Vutuv.JobReferenceDocument
   alias Vutuv.Languages
   alias Vutuv.Organizations
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Phone
   alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.Qualification
@@ -77,7 +76,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   @doc "A single entry's show page (`/:slug/<section>/<id-or-slug>`)."
   def build_show(user, section, record) when is_map_key(@sections, section) do
     segment = Atom.to_string(section)
-    path = "/#{user.username}/#{segment}/#{Phoenix.Param.to_param(record)}"
+    path = entry_path(user, segment, record)
     entry = section |> entry(record, user) |> maybe_add_endorsers(section, record)
 
     AgentDocs.doc_meta(@sections[section], path, noindex: true, noai: true)
@@ -89,6 +88,12 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       entry: entry
     })
   end
+
+  # A section entry's path under its member, spelled once (issue #1109 gave the
+  # credential's citing roles a URL and would otherwise have been the second
+  # place to remember the shape).
+  defp entry_path(user, segment, record),
+    do: "/#{user.username}/#{segment}/#{Phoenix.Param.to_param(record)}"
 
   defp index_title(:work_experiences, name), do: gettext("Work experience of %{name}", name: name)
   defp index_title(:educations, name), do: gettext("Education of %{name}", name: name)
@@ -219,16 +224,20 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     end
   end
 
-  defp organization_ref(%{organization_page: %Organization{} = organization}) do
-    if Organizations.public_visible?(organization) do
-      %{
-        name: organization.name,
-        url: AgentDocs.abs_url(Organizations.canonical_path(organization))
-      }
+  # `WorkExperience.linked_organization/1` owns which page still counts as
+  # linked, so the docs and the HTML pages cannot answer that differently.
+  defp organization_ref(work) do
+    case WorkExperience.linked_organization(work) do
+      nil ->
+        nil
+
+      organization ->
+        %{
+          name: organization.name,
+          url: AgentDocs.abs_url(Organizations.canonical_path(organization))
+        }
     end
   end
-
-  defp organization_ref(_work), do: nil
 
   @doc false
   def education_entry(edu) do
@@ -311,9 +320,10 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       awarded: CV.year_month(qualification.awarded_year, qualification.awarded_month),
       expires: CV.year_month(qualification.expires_year, qualification.expires_month),
       # The jobs earned with this credential (issue #1005), mirroring the HTML
-      # usage badges. nil when no job cites it — and, like qualification_ref/1
-      # on the work entry, when the citing jobs were not preloaded.
-      jobs: job_usage_ref(qualification),
+      # usage badges and, since #1109, the credential page's list of them. nil
+      # when no job cites it — and, like qualification_ref/1 on the work entry,
+      # when the citing jobs were not preloaded.
+      jobs: job_usage_ref(qualification, user),
       # The uploaded, member-consented proof document — only once the AI scan
       # released it (the docs are the anonymous public view), and only when
       # the caller supplied the user its URL lives under.
@@ -338,7 +348,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   defp document_ref(_qualification, _user), do: nil
 
-  defp job_usage_ref(qualification) do
+  defp job_usage_ref(qualification, user) do
     case Qualification.job_usage(qualification) do
       nil ->
         nil
@@ -347,10 +357,34 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
         %{
           count: usage.count,
           in_use: usage.current?,
-          last_used: last_used(usage.last_end)
+          last_used: last_used(usage.last_end),
+          # The roles themselves (issue #1109), in the page's order: a reader
+          # that has the credential in hand can follow it to the work it earned
+          # instead of only learning how many there were.
+          entries: Enum.map(qualification.work_experiences, &citing_job_ref(&1, user))
         }
     end
   end
+
+  # A citing role as the credential names it: enough to recognise the job, plus
+  # the URL of its own page. Deliberately slimmer than work_entry/1 — the
+  # description and the CV links belong to the work-experience documents.
+  defp citing_job_ref(work, user) do
+    %{
+      id: work.id,
+      title: work.title,
+      organization: work.organization,
+      kind: work.kind,
+      start: CV.year_month(work.start_year, work.start_month),
+      end: CV.year_month(work.end_year, work.end_month),
+      url: citing_job_url(work, user)
+    }
+  end
+
+  defp citing_job_url(work, %{username: _username} = user),
+    do: AgentDocs.abs_url(entry_path(user, "work_experiences", work))
+
+  defp citing_job_url(_work, _user), do: nil
 
   defp last_used(nil), do: nil
   defp last_used({year, month}), do: CV.year_month(year, month)

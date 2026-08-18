@@ -588,12 +588,32 @@ convention `CvSection.order_by_date/1` sorts by) or a slate "Last used: M/YYYY"
 the "not used at all" signal, keeping rows calm. The policy lives in
 `Qualification.job_usage/1`, reading the `work_experiences` preload spliced in
 via `Qualification.citing_jobs_preload/0`; like `cited_qualification/1` it
-falls through to nil on an unloaded association. The entry show page renders
-the same facts as one "Jobs" line (`QualificationHTML.usage_line/1`), and the
-agent formats carry a `jobs: {count, in_use, last_used}` map per entry
+falls through to nil on an unloaded association. The agent formats carry a
+`jobs: {count, in_use, last_used, entries}` map per entry
 (`SectionDocs.qualification_entry/1`; md/txt append "used for N jobs ·
 currently in use" to the facts line), kept honest by the drift test; `/api/2.0`
 qualification entries include the same map.
+
+**The credential's own page names the jobs (issue #1109).** `/:slug/qualifications/<id>`
+does not summarise the count — it lists the roles, `QualificationHTML.citing_jobs/1`
+under a "Jobs" caption carrying the same in-use / last-used pill the list rows
+wear (`usage_status_pill/1`, shared with `qualification_row/1`). Each row links
+the role's own page and, where the employer is a verified organization page, that
+page too (`WorkExperienceHTML.linked_organization/1` decides, so a frozen or
+pending page stays plain text exactly as on the timeline), with the period and —
+for anything but a plain job — the CV category on the meta line. The roles ride
+in on `Qualification.citing_jobs_detail_preload/0`, which is
+`citing_jobs_preload/0` plus each job's `organization_page`: a second preload on
+purpose, since the list badges only count and must not pay for the extra query.
+The `jobs.entries` list in the agent formats is the same roster (title,
+employer, kind, period and the role's absolute URL), so an agent holding the
+credential can follow it to the work it earned; md/txt indent one line per role
+under the credential, the way a code-forge account lists its repositories. The
+page's facts (type, issuer, issued, expires, credential id, verification link)
+sit in a two-column grid from `sm` up rather than one stacked ladder, and an
+expired credential wears the "Expired" pill for **every** viewer here — unlike
+the list rows, where the pill is owner-only because a visitor never sees an
+expired row in the first place.
 
 ## Qualification proof documents (the uploaded Nachweis)
 

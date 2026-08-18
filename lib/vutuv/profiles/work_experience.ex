@@ -5,6 +5,8 @@ defmodule Vutuv.Profiles.WorkExperience do
   import Vutuv.Organizations.Query, only: [organization_public_row: 1]
   alias Vutuv.ChangesetHelpers
   alias Vutuv.Mentions
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Profiles.CvSection
   alias Vutuv.Profiles.Qualification
 
@@ -161,6 +163,22 @@ defmodule Vutuv.Profiles.WorkExperience do
   """
   def cited_qualification(%{qualification: %Qualification{} = qualification}), do: qualification
   def cited_qualification(_work), do: nil
+
+  @doc """
+  The linked organization page of this job (issue #931), or nil — free-text
+  only, the association not preloaded, or a page that is no longer public
+  (pending, frozen, archived), which renders exactly like an unlinked one.
+
+  Beside `cited_qualification/1` for the same reason: it is a display policy,
+  and every surface that names an employer has to apply the same one — the
+  profile timeline and section page (`WorkExperienceHTML.employer_name/1`), the
+  credential page's list of the jobs it earned, and the agent documents.
+  """
+  def linked_organization(%{organization_page: %Organization{} = organization}) do
+    if Organizations.public_visible?(organization), do: organization
+  end
+
+  def linked_organization(_work), do: nil
 
   @doc """
   Splits an already-ordered list into its CV categories: `{kind, entries}`

@@ -2,10 +2,13 @@ defmodule VutuvWeb.QualificationHTML do
   @moduledoc false
   use VutuvWeb, :html
   import VutuvWeb.UserHelpers
+  import VutuvWeb.WorkExperienceHTML, only: [employer_name: 1]
 
   alias Vutuv.BerlinTime
   alias Vutuv.Profiles.Qualification
+  alias Vutuv.Profiles.WorkExperience
   alias Vutuv.QualificationDocument
+  alias VutuvWeb.WorkExperienceHTML
 
   @doc "The singular name of a kind, for the form picker and the row badge."
   def kind_name("certification"), do: gettext("Certificate")
@@ -49,7 +52,7 @@ defmodule VutuvWeb.QualificationHTML do
   def expiry_year_options, do: (BerlinTime.today().year + 20)..1920//-1
 
   @doc "The month `<select>` options (translated), reused from work experience."
-  defdelegate month_number_options, to: VutuvWeb.WorkExperienceHTML, as: :month_options
+  defdelegate month_number_options, to: WorkExperienceHTML, as: :month_options
 
   @doc """
   The meta line under a credential name: issuer, awarded year, and the "valid
@@ -66,18 +69,28 @@ defmodule VutuvWeb.QualificationHTML do
     |> Enum.join(" · ")
   end
 
-  defp awarded_text(%{awarded_year: nil}), do: nil
-  defp awarded_text(%{awarded_month: nil, awarded_year: year}), do: Integer.to_string(year)
-  defp awarded_text(%{awarded_month: month, awarded_year: year}), do: "#{month}/#{year}"
+  @doc ~S(The award date as `2018` or `3/2018`, nil when the member gave none.)
+  def awarded_text(qualification),
+    do: month_year(qualification.awarded_month, qualification.awarded_year)
+
+  @doc ~S(The expiry date as `2026` or `3/2026`, nil for a credential that never expires.)
+  def expires_text(qualification),
+    do: month_year(qualification.expires_month, qualification.expires_year)
+
+  # The one month/year rule of this page: a bare year until the member named a
+  # month. Every date this module shows (awarded, expires, last used) reads the
+  # same because they all come through here.
+  defp month_year(_month, nil), do: nil
+  defp month_year(nil, year), do: Integer.to_string(year)
+  defp month_year(month, year), do: "#{month}/#{year}"
 
   # "valid until 2026" (year) or "valid until 3/2026" (month + year).
-  defp valid_until_text(%{expires_year: nil}), do: nil
-
-  defp valid_until_text(%{expires_month: nil, expires_year: year}),
-    do: gettext("valid until %{date}", date: Integer.to_string(year))
-
-  defp valid_until_text(%{expires_month: month, expires_year: year}),
-    do: gettext("valid until %{date}", date: "#{month}/#{year}")
+  defp valid_until_text(qualification) do
+    case expires_text(qualification) do
+      nil -> nil
+      date -> gettext("valid until %{date}", date: date)
+    end
+  end
 
   @doc "Whether this member has both a certificate and a licence to tab between."
   def mixed_kinds?(qualifications) do
@@ -121,40 +134,144 @@ defmodule VutuvWeb.QualificationHTML do
 
   defdelegate expired?(qualification), to: Qualification
 
-  @doc """
-  The usage facts of a credential as one " · "-joined sentence (issue #1005),
-  for the entry show page: "Used for 2 jobs · Currently in use". nil when no
-  job cites it (or the citing jobs were not preloaded), so the caller can drop
-  the whole block.
-  """
-  def usage_line(qualification) do
-    case Qualification.job_usage(qualification) do
-      nil ->
-        nil
-
-      usage ->
-        [usage_count_text(usage), usage_status_text(usage)]
-        |> Enum.reject(&is_nil/1)
-        |> Enum.join(" · ")
-    end
-  end
-
   defp usage_count_text(usage) do
     ngettext("Used for %{formatted} job", "Used for %{formatted} jobs", usage.count,
       formatted: compact_count(usage.count)
     )
   end
 
-  defp usage_status_text(%{current?: true}), do: gettext("Currently in use")
+  @doc """
+  Whether the credential is still earning its keep (issue #1005): the emerald
+  "Currently in use" pill while any citing job is ongoing, otherwise the calm
+  "Last used: 9/2019" one. Renders nothing when neither applies, so it drops in
+  wherever a `Qualification.job_usage/1` map is at hand — the list rows and the
+  credential's own page share this one rendering.
+  """
+  attr(:usage, :map, required: true)
 
-  defp usage_status_text(%{last_end: {_year, _month} = last_end}),
-    do: gettext("Last used: %{date}", date: end_text(last_end))
+  def usage_status_pill(assigns) do
+    ~H"""
+    <.pill :if={@usage.current?} tone={:positive} data-usage-current>
+      {gettext("Currently in use")}
+    </.pill>
+    <.pill :if={not @usage.current? and @usage.last_end != nil} tone={:neutral} data-usage-last>
+      {gettext("Last used: %{date}", date: end_text(@usage.last_end))}
+    </.pill>
+    """
+  end
 
-  defp usage_status_text(_usage), do: nil
+  @doc """
+  The small status pill this page's markings all wear: the usage badges, the
+  "Expired" marker and the document's "Being reviewed" note. One shell, four
+  tones, so a pill on the list row and the same pill on the entry page cannot
+  drift apart — which is exactly what six hand-copied class strings had started
+  to do. Extra attributes (the `data-*` test hooks) pass straight through.
+  """
+  attr(:tone, :atom, default: :neutral, values: [:brand, :positive, :neutral, :warning])
+  attr(:class, :any, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
 
-  # The badge's month/year form, matching the meta line's "3/2026" style.
-  defp end_text({year, nil}), do: Integer.to_string(year)
-  defp end_text({year, month}), do: "#{month}/#{year}"
+  def pill(assigns) do
+    ~H"""
+    <span
+      class={[
+        "inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium",
+        pill_tone(@tone),
+        @class
+      ]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </span>
+    """
+  end
+
+  # Brand tint for a plain count, emerald for the reserved active/verified
+  # signal, slate for a calm past fact, amber for moderation limbo (never for a
+  # past fact — amber is reserved for moderation).
+  defp pill_tone(:brand),
+    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
+  defp pill_tone(:positive),
+    do: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+
+  defp pill_tone(:neutral),
+    do: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+
+  defp pill_tone(:warning),
+    do: "bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+
+  # `job_usage/1` reports the last end as a `{year, month}` pair.
+  defp end_text({year, month}), do: month_year(month, year)
+
+  @doc """
+  The jobs a member earned with this credential (issue #1109) — the reverse of
+  each role's own "With qualification: …" line, and what the count badge on the
+  list rows only summarised. Every row links the role's page, and an employer
+  that is a verified organization page links there too, so the credential is a
+  hub rather than a dead end. Ongoing roles come first (the
+  `Qualification.citing_jobs_detail_preload/0` order).
+
+  Renders nothing when no job cites the credential — and, since it asks
+  `Qualification.job_usage/1`, nothing on a surface that did not preload the
+  citing jobs either.
+  """
+  attr(:user, :any, required: true)
+  attr(:qualification, :any, required: true)
+
+  def citing_jobs(assigns) do
+    assigns = assign(assigns, :usage, Qualification.job_usage(assigns.qualification))
+
+    ~H"""
+    <div :if={@usage} class="mt-6">
+      <div class="flex flex-wrap items-center gap-2" data-qualification-usage>
+        <h2 class="card__label mb-0">{pgettext("qualification detail", "Jobs")}</h2>
+        <.usage_status_pill usage={@usage} />
+      </div>
+      <ul
+        class="mt-2 divide-y divide-slate-200 overflow-hidden rounded-xl ring-1 ring-slate-200 dark:divide-slate-800 dark:ring-slate-800"
+        data-citing-jobs
+      >
+        <li :for={job <- @qualification.work_experiences} class="px-3 py-2.5">
+          <.link
+            href={~p"/#{@user}/work_experiences/#{job}"}
+            class="block font-semibold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-400"
+          >
+            {job.title}
+          </.link>
+          <p class="mb-0 text-sm text-slate-600 dark:text-slate-400">
+            <.employer_name
+              organization={WorkExperience.linked_organization(job)}
+              text={job.organization}
+            />
+            {job_facts(job)}
+          </p>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  # What still fits on a row's meta line beside the employer. Joined into one
+  # string rather than rendered per fact — adjacent HEEx elements carry no
+  # whitespace between them, so a span per fact glues "10/2024· Internship".
+  defp job_facts(job) do
+    case Enum.reject([job_period(job), WorkExperienceHTML.kind_note(job)], &is_nil/1) do
+      [] -> nil
+      facts -> "· " <> Enum.join(facts, " · ")
+    end
+  end
+
+  # An entry with no dates at all has no period — `format_duration/4` would
+  # read that as "Present", which is a claim the member never made.
+  defp job_period(%{start_year: nil, end_year: nil}), do: nil
+
+  defp job_period(job) do
+    job.start_month
+    |> WorkExperienceHTML.format_duration(job.start_year, job.end_month, job.end_year)
+    |> IO.iodata_to_binary()
+  end
 
   @doc """
   Whether this viewer gets the document block: everyone once the AI scan
@@ -239,13 +356,14 @@ defmodule VutuvWeb.QualificationHTML do
         <span class="block text-xs text-slate-600 dark:text-slate-400">
           {document_label(@qualification)}
         </span>
-        <span
+        <.pill
           :if={@as_owner? and not Qualification.document_released?(@qualification)}
-          class="mt-1 inline-flex items-center rounded-lg bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+          tone={:warning}
+          class="mt-1"
           data-document-pending
         >
           {gettext("Being reviewed")}
-        </span>
+        </.pill>
       </div>
     </div>
     """
@@ -276,38 +394,17 @@ defmodule VutuvWeb.QualificationHTML do
       >
         {@qualification.name}
       </.link>
-      <span
-        :if={@as_owner? and expired?(@qualification)}
-        class="ml-2 inline-flex items-center rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-      >
+      <.pill :if={@as_owner? and expired?(@qualification)} class="ml-2" data-expired>
         {gettext("Expired")}
-      </span>
+      </.pill>
       <p :if={@meta != ""} class="text-sm text-slate-600 dark:text-slate-400">{@meta}</p>
       <p
         :if={@usage}
         class="mt-1 flex flex-wrap items-center gap-1.5"
         data-qualification-usage
       >
-        <span
-          class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-          data-usage-jobs
-        >
-          {usage_count_text(@usage)}
-        </span>
-        <span
-          :if={@usage.current?}
-          class="inline-flex items-center rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-          data-usage-current
-        >
-          {gettext("Currently in use")}
-        </span>
-        <span
-          :if={not @usage.current? and @usage.last_end != nil}
-          class="inline-flex items-center rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-          data-usage-last
-        >
-          {gettext("Last used: %{date}", date: end_text(@usage.last_end))}
-        </span>
+        <.pill tone={:brand} data-usage-jobs>{usage_count_text(@usage)}</.pill>
+        <.usage_status_pill usage={@usage} />
       </p>
       <a
         :if={@qualification.url}

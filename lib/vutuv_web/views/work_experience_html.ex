@@ -5,7 +5,6 @@ defmodule VutuvWeb.WorkExperienceHTML do
   import VutuvWeb.UserHelpers
 
   alias Vutuv.Organizations
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Profiles.WorkExperience
   alias VutuvWeb.UserProfileLive
 
@@ -41,6 +40,25 @@ defmodule VutuvWeb.WorkExperienceHTML do
   @doc "The `{label, value}` options for the form's category select."
   def kind_options do
     for kind <- WorkExperience.kinds(), do: {kind_name(kind), kind}
+  end
+
+  # Everything but the plain job, which stays unmarked the way the jobs-only
+  # timeline does. Derived from the schema, so a new kind is noteworthy by
+  # default rather than by somebody remembering this list.
+  @noteworthy_kinds WorkExperience.kinds() -- ["employment"]
+
+  @doc """
+  The CV category of an entry (issue #840), named only when it is not the plain
+  job everyone assumes: a role done as an internship or an Ehrenamt reads
+  differently. nil for employment, for an unknown kind, and for a map carrying
+  no `:kind` at all — so the agent-doc renderers can hand it their doc maps.
+  The single owner of that rule; `kind_name/1` stays the label source.
+  """
+  def kind_note(entry) do
+    case Map.get(entry, :kind) do
+      kind when kind in @noteworthy_kinds -> kind_name(kind)
+      _plain_job_or_unknown -> nil
+    end
   end
 
   @doc """
@@ -211,7 +229,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
       # non-frozen organization qualifies, so a frozen/archived page renders the block
       # exactly as an unlinked one (plain text). Kept under a distinct key from the
       # free-text `organization` string above so the two never collide.
-      organization_page: linked_organization(newest),
+      organization_page: WorkExperience.linked_organization(newest),
       multi?: multi?,
       roles: circles,
       span: span,
@@ -220,15 +238,6 @@ defmodule VutuvWeb.WorkExperienceHTML do
       size: circle_rem(months, max_months)
     }
   end
-
-  # The linked, currently-verified organization of a work experience, or nil. Guards
-  # on a loaded, active, non-frozen %Organization{}: an unloaded association, a
-  # free-text-only role, or a frozen/archived page all fall through to nil.
-  defp linked_organization(%{organization_page: %Organization{} = organization}) do
-    if Organizations.public_visible?(organization), do: organization
-  end
-
-  defp linked_organization(_job), do: nil
 
   @doc """
   The employer name on a timeline block: when the experience is linked to a

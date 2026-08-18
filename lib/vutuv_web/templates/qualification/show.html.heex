@@ -16,44 +16,63 @@
     delete_to={~p"/settings/qualifications/#{@qualification}"}
   />
 
-  <h2 class="card__label"><%= gettext("Type") %></h2>
-  <p><%= kind_name(@qualification.kind) %></p>
+  <%!-- Two facts per row (`.card__facts`, components.css). As one stacked
+  ladder they pushed everything worth reading below the fold. --%>
+  <div class="card__facts">
+    <div>
+      <h2 class="card__label">{gettext("Type")}</h2>
+      <p>{kind_name(@qualification.kind)}</p>
+    </div>
 
-  <%= if @qualification.issuer do %>
-    <h2 class="card__label"><%= gettext("Issuer") %></h2>
-    <p><%= @qualification.issuer %></p>
-  <% end %>
+    <div :if={@qualification.issuer}>
+      <h2 class="card__label">{gettext("Issuer")}</h2>
+      <p>{@qualification.issuer}</p>
+    </div>
 
-  <%= if @qualification.awarded_year do %>
-    <h2 class="card__label"><%= gettext("Issued") %></h2>
-    <p><%= Enum.reject([@qualification.awarded_month, @qualification.awarded_year], &is_nil/1) |> Enum.join("/") %></p>
-  <% end %>
+    <div :if={awarded_text(@qualification)}>
+      <h2 class="card__label">{gettext("Issued")}</h2>
+      <p>{awarded_text(@qualification)}</p>
+    </div>
 
-  <%= if @qualification.expires_year do %>
-    <h2 class="card__label"><%= gettext("Expires") %></h2>
-    <p><%= Enum.reject([@qualification.expires_month, @qualification.expires_year], &is_nil/1) |> Enum.join("/") %></p>
-  <% end %>
+    <div :if={expires_text(@qualification)}>
+      <h2 class="card__label">{gettext("Expires")}</h2>
+      <p class="flex flex-wrap items-center gap-2">
+        {expires_text(@qualification)}
+        <%!-- Unlike the list rows, this page stays reachable for an expired
+        credential by anyone holding its link, so everyone gets the marker. --%>
+        <.pill :if={expired?(@qualification)} data-expired>{gettext("Expired")}</.pill>
+      </p>
+    </div>
 
-  <%= if usage = usage_line(@qualification) do %>
-    <h2 class="card__label"><%= gettext("Jobs") %></h2>
-    <p data-qualification-usage><%= usage %></p>
-  <% end %>
+    <div :if={@qualification.credential_id}>
+      <h2 class="card__label">{gettext("Credential ID")}</h2>
+      <p class="breakwrap">{@qualification.credential_id}</p>
+    </div>
 
-  <%= if @qualification.credential_id do %>
-    <h2 class="card__label"><%= gettext("Credential ID") %></h2>
-    <p><%= @qualification.credential_id %></p>
-  <% end %>
+    <div :if={@qualification.url}>
+      <h2 class="card__label">{gettext("Verification link")}</h2>
+      <p>
+        <a
+          href={@qualification.url}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          class="breakwrap"
+        >
+          {@qualification.url}
+        </a>
+      </p>
+    </div>
+  </div>
 
-  <%= if @qualification.url do %>
-    <h2 class="card__label"><%= gettext("Verification link") %></h2>
-    <p><a href={@qualification.url} target="_blank" rel="nofollow noopener noreferrer"><%= @qualification.url %></a></p>
-  <% end %>
+  <%!-- Issue #1109: the jobs this credential earned, the reverse of each
+  role's own "With qualification: …" line. --%>
+  <.citing_jobs user={@user} qualification={@qualification} />
 
   <%!-- The uploaded proof document (owner sees it during moderation limbo,
   everyone once released): a larger preview plus the explicit download. --%>
-  <%= if show_document?(@qualification, same_user?(@user, @current_user)) do %>
-    <h2 class="card__label"><%= gettext("Uploaded proof") %></h2>
-    <div class="mt-2" data-document-thumb>
+  <div :if={show_document?(@qualification, same_user?(@user, @current_user))} class="mt-6">
+    <h2 class="card__label">{gettext("Uploaded proof")}</h2>
+    <div data-document-thumb>
       <a
         href={document_url(@user, @qualification)}
         target="_blank"
@@ -72,19 +91,14 @@
           class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           data-document-download
         >
-          <%= gettext("Download original (%{label})", label: document_label(@qualification)) %>
+          {gettext("Download original (%{label})", label: document_label(@qualification))}
         </a>
       </p>
-      <%= if same_user?(@user, @current_user) and not Qualification.document_released?(@qualification) do %>
-        <p>
-          <span
-            class="inline-flex items-center rounded-lg bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
-            data-document-pending
-          >
-            <%= gettext("Being reviewed") %>
-          </span>
-        </p>
-      <% end %>
+      <p :if={
+        same_user?(@user, @current_user) and not Qualification.document_released?(@qualification)
+      }>
+        <.pill tone={:warning} data-document-pending>{gettext("Being reviewed")}</.pill>
+      </p>
     </div>
-  <% end %>
+  </div>
 </.card_section>

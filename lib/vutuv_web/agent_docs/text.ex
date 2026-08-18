@@ -690,11 +690,25 @@ defmodule VutuvWeb.AgentDocs.Text do
 
     facts = Markdown.qualification_facts(qualification)
 
-    "* " <>
-      qualification.name <>
+    line =
+      "* " <>
+        qualification.name <>
+        if(facts == "", do: "", else: ": #{facts}") <>
+        if(qualification.url, do: " #{qualification.url}", else: "") <>
+        if(document, do: " #{gettext("proof document")}: #{document.url}", else: "")
+
+    # The jobs the credential earned (issue #1109), indented under it like the
+    # code-forge accounts list their repositories.
+    Enum.join([line | Enum.map(Markdown.citing_jobs(qualification), &citing_job_line/1)], "\n")
+  end
+
+  defp citing_job_line(job) do
+    facts = Markdown.citing_job_facts(job)
+
+    "  * " <>
+      job.title <>
       if(facts == "", do: "", else: ": #{facts}") <>
-      if(qualification.url, do: " #{qualification.url}", else: "") <>
-      if(document, do: " #{gettext("proof document")}: #{document.url}", else: "")
+      if(job.url, do: " #{job.url}", else: "")
   end
 
   defp link_line(%{description: nil, url: url} = link), do: "* #{url}" <> verified_suffix(link)

@@ -309,6 +309,31 @@ body.stretch main {
 .card p {
   color: #334155;
 }
+/* A detail page's facts as a two-column grid (issue #1109). One label/value
+   pair per row turns a card with six facts into a ladder you have to scroll to
+   read, and it wastes the whole right half of the card. Lives here, not as
+   utilities on one template: `.card__label`'s 1rem gap and the global
+   `p { margin-bottom: 15px }` both have to be cancelled inside the grid, and a
+   page that copies thirteen overrides to opt in is how legacy pages drift.
+   Every entry show page can wear it. Mobile-last, like this file's other
+   responsive rules. */
+.card__facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 2rem;
+  margin-bottom: 1rem;
+}
+.card .card__facts .card__label {
+  margin-bottom: 0.25rem;
+}
+.card .card__facts p {
+  margin-bottom: 0;
+}
+@media (width < 40rem) {
+  .card__facts {
+    grid-template-columns: 1fr;
+  }
+}
 /* Card links inherit the global `a` element color. No `.card a` rule here:
    its (0,1,1) specificity would beat `.button` (0,1,0) and paint anchor
    buttons inside cards brand-on-brand. */

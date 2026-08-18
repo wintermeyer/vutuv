@@ -295,6 +295,17 @@ defmodule Vutuv.Profiles.Qualification do
   end
 
   @doc """
+  `citing_jobs_preload/0` plus each citing job's verified organization page —
+  what the credential's own page needs to render the jobs it earned (issue
+  #1109). Deliberately a second preload: the list badges only count the jobs,
+  so the profile card and the section list must not pay for the extra query.
+  """
+  def citing_jobs_detail_preload do
+    [work_experiences: query] = citing_jobs_preload()
+    [work_experiences: {query, [:organization_page]}]
+  end
+
+  @doc """
   How the member's jobs use this credential (issue #1005), read from the
   preloaded `work_experiences` (see `citing_jobs_preload/0`): `%{count:,
   current?:, last_end:}`. `current?` is true while any citing job is ongoing —

@@ -102,16 +102,24 @@ defmodule VutuvWeb.QualificationController do
 
   def show(conn, _params) do
     # resolve_qualification scoped :qualification to conn.assigns[:user]; the
-    # citing jobs ride along for the usage line (issue #1005).
+    # citing jobs ride along for the usage line (issue #1005) and, since #1109,
+    # for the list of jobs the credential earned.
     qualification =
       Repo.preload(conn.assigns[:qualification], Qualification.citing_jobs_preload())
 
     AgentDocs.respond(conn,
-      html:
-        &render(&1, "show.html",
-          qualification: qualification,
-          page_title: entry_page_title(conn.assigns[:user], qualification)
-        ),
+      html: fn conn ->
+        # Only the HTML page links each job's employer to its organization
+        # page, so only the HTML branch pays for that second query. Preloading
+        # it above would bill every .md/.txt/.json/.xml request for rows no
+        # doc builder reads.
+        detailed = Repo.preload(qualification, Qualification.citing_jobs_detail_preload())
+
+        render(conn, "show.html",
+          qualification: detailed,
+          page_title: entry_page_title(conn.assigns[:user], detailed)
+        )
+      end,
       doc: fn ->
         SectionDocs.build_show(conn.assigns[:user], :qualifications, qualification)
       end
