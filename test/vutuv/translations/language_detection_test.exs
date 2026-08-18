@@ -80,6 +80,20 @@ defmodule Vutuv.Translations.LanguageDetectionTest do
 
   defp undetermined, do: detector({:error, {:content, :undetermined}})
 
+  # Reports which process is in the model and holds the row there until the
+  # test releases it — the only way to see whether two rows are inside at once.
+  defp holding_detector(parent) do
+    fn _subject ->
+      send(parent, {:in_model, self()})
+
+      receive do
+        :release -> {:ok, "de"}
+      after
+        5_000 -> {:ok, "de"}
+      end
+    end
+  end
+
   defp language_of(%schema{id: id}) do
     Repo.one!(from(r in schema, where: r.id == ^id, select: {r.language, r.language_checked_at}))
   end
@@ -172,6 +186,87 @@ defmodule Vutuv.Translations.LanguageDetectionTest do
       assert {nil, nil} = language_of(first)
       assert {nil, nil} = language_of(second)
       assert length(Translations.due_for_detection(50)) == 2
+    end
+
+    # Issue #1573: one row in a model at a time is one Ollama instance at a
+    # time, so a second GPU box named in `:ollama_url` never took any of this
+    # work. Calibrated against the sequential version below — with
+    # `max_concurrency: 1` the second row does not reach the detector until
+    # the first is released, and the second `assert_receive` runs out.
+    test "rows go to the model in parallel, up to the bound" do
+      undeclared_post!()
+      undeclared_post!()
+
+      parent = self()
+
+      task =
+        Task.async(fn ->
+          Translations.detect_due(
+            force: true,
+            limit: 2,
+            max_concurrency: 2,
+            detect: holding_detector(parent)
+          )
+        end)
+
+      assert_receive {:in_model, first}, 2_000
+      assert_receive {:in_model, second}, 1_000
+      refute first == second
+
+      send(first, :release)
+      send(second, :release)
+      assert {:ok, 2} = Task.await(task)
+    end
+
+    test "max_concurrency: 1 is the old one-at-a-time sweep" do
+      undeclared_post!()
+      undeclared_post!()
+
+      parent = self()
+
+      task =
+        Task.async(fn ->
+          Translations.detect_due(
+            force: true,
+            limit: 2,
+            max_concurrency: 1,
+            detect: holding_detector(parent)
+          )
+        end)
+
+      assert_receive {:in_model, first}, 2_000
+      refute_receive {:in_model, _second}, 200
+
+      send(first, :release)
+      assert_receive {:in_model, second}, 2_000
+      send(second, :release)
+      assert {:ok, 2} = Task.await(task)
+    end
+
+    test "the batch is at least as wide as the bound, so no instance sits out a round" do
+      for _ <- 1..3, do: undeclared_post!()
+
+      # No `limit:`, so the default applies: the small batch, widened to the
+      # number of endpoints there are to keep busy.
+      assert {:ok, 3} =
+               Translations.detect_due(
+                 force: true,
+                 max_concurrency: 3,
+                 detect: detector({:ok, "de"})
+               )
+    end
+
+    test "a detector that blows up pauses the batch instead of killing the caller" do
+      post = undeclared_post!()
+
+      assert {:paused, 0} =
+               Translations.detect_due(
+                 force: true,
+                 limit: 1,
+                 detect: fn _subject -> raise "the model client fell over" end
+               )
+
+      assert {nil, nil} = language_of(post)
     end
 
     test "the stamp does not make a backfilled post look edited" do

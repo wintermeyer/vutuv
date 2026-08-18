@@ -106,11 +106,20 @@ config :vutuv, :screenshot_blocklist, ["reddit.com", "heise.de"]
 # an Ollama vision model releases it; unsafe images are deleted and the
 # owner notified. Fail-closed: with Ollama unreachable the queue retries
 # forever, nothing is auto-approved. Off = images release immediately (tests,
-# installations without Ollama). :ollama_url may be a comma-separated
-# priority list — every instance but the last is tried with the short
-# :ollama_remote_timeout and skipped on any service failure; the last is the
-# patient fallback of record (:ollama_timeout). Runtime overrides:
-# IMAGE_MODERATION_ENABLED, OLLAMA_URL, OLLAMA_VISION_MODEL
+# installations without Ollama).
+#
+# :ollama_url may be a comma-separated list of instances, read two ways at
+# once (Vutuv.Ollama). For ONE call it is a priority list: every instance but
+# the last is tried with the short :ollama_remote_timeout and skipped on any
+# service failure; the last is the patient fallback of record
+# (:ollama_timeout). For CONCURRENT calls it is a pool: a second call starts
+# on the least busy instance, so a second GPU box takes work instead of only
+# standing by for the first one to break. :ollama_concurrency is how deep that
+# pool goes (and how many calls a sweep may have in flight); it defaults to
+# every entry BUT the last, which is the fallback of record and usually the
+# machine's own CPU Ollama. So gpu,localhost keeps behaving as it always did,
+# and gpu1,gpu2,localhost uses both cards. Runtime overrides:
+# IMAGE_MODERATION_ENABLED, OLLAMA_URL, OLLAMA_CONCURRENCY, OLLAMA_VISION_MODEL
 # (config/runtime.exs).
 config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"

@@ -36,6 +36,7 @@ defmodule Vutuv.Translations do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Languages
+  alias Vutuv.Ollama
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Translations.Detector
@@ -59,7 +60,9 @@ defmodule Vutuv.Translations do
   @batch 2
   # The same small batch as the reader-driven queue, and for the same reason —
   # but it runs *after* that queue and never on a `nudge/0`, because a
-  # detection is nobody waiting (`Vutuv.Translations.Worker`).
+  # detection is nobody waiting (`Vutuv.Translations.Worker`). The floor, not
+  # the figure: a round takes at least this many rows and at least as many as
+  # there are Ollama instances to keep busy, so no endpoint sits out a round.
   @detect_batch @batch
   # The one-off backfill run has no reader behind it and its own process, so
   # it only pays one query per round instead of one per couple of rows.
@@ -201,35 +204,73 @@ defmodule Vutuv.Translations do
 
   `opts`: `detect:` injects the per-subject detector (tests stub it; defaults
   to `Detector.detect/1`), `force:` runs with the flag off, `limit:` caps the
-  batch.
+  batch, `max_concurrency:` how many rows are in a model at once (defaults to
+  `Vutuv.Ollama.concurrency/0`).
+
+  **Rows go to the model in parallel** up to that bound (issue #1573). One at
+  a time is one Ollama instance at a time, so an installation that names a
+  second GPU box in `:ollama_url` never had it take any of this work — it was
+  reached only when the first box *failed*. The bound is the endpoint count
+  rather than a number of our own choosing, because the endpoints are what
+  there is to keep busy, and the batch is widened to it so no slot idles.
+  Row claiming stays unnecessary because the parallelism is inside one
+  process: a round selects its rows once and hands each to exactly one task.
+
+  Only the model call runs in a task; the stamp is written back here, in one
+  process. That keeps the writes serialised for free, and it keeps the tasks
+  out of the SQL sandbox's ownership rules in tests.
 
   Every outcome stamps `language_checked_at`, including the one where the text
   could not be placed at all — that stamp is the scheduler's clock, not a
   claim that a language was found. Without it an unplaceable row would be due
   again on the very next round and hold the front of every batch forever (the
   `refresh_counts` starvation lesson). A service failure is the one outcome
-  that stamps nothing: the row is not the problem.
+  that stamps nothing: the row is not the problem. It also stops the batch
+  where it is, which now discards whatever the sibling tasks were doing —
+  their rows keep no stamp and are simply due again, so the count can come
+  back one or two short of what was actually written. Both entry points use it
+  as progress, never as a total.
   """
   def detect_due(opts \\ []) do
     if Keyword.get(opts, :force, false) or enabled?() do
       detect = Keyword.get(opts, :detect, &Detector.detect/1)
+      concurrency = Keyword.get(opts, :max_concurrency, Ollama.concurrency())
 
       opts
-      |> Keyword.get(:limit, @detect_batch)
+      |> Keyword.get(:limit, max(@detect_batch, concurrency))
       |> due_for_detection()
-      |> Enum.reduce_while({:ok, 0}, &detect_subject(&1, &2, detect))
+      |> Task.async_stream(&{&1, detect_subject(detect, &1)},
+        max_concurrency: concurrency,
+        ordered: false,
+        timeout: :infinity
+      )
+      |> Enum.reduce_while({:ok, 0}, &stamp_detection/2)
     else
       {:ok, 0}
     end
   end
 
-  defp detect_subject(subject, {:ok, checked}, detect) do
-    case detect.(subject) do
-      {:ok, language} -> {:cont, {:ok, checked + stamp_language(subject, language)}}
-      {:error, {:content, _reason}} -> {:cont, {:ok, checked + stamp_language(subject, nil)}}
-      {:error, {:service, _reason}} -> {:halt, {:paused, checked}}
-    end
+  # In a task, so a raise must not take the caller down with it — the worker
+  # rescues around the whole sweep, but an exiting task kills the process it
+  # is linked to before any rescue is reached. A detector that blows up is a
+  # service failure as far as the batch is concerned: nothing is known about
+  # the text, so the row keeps no stamp and comes back.
+  defp detect_subject(detect, subject) do
+    detect.(subject)
+  rescue
+    error ->
+      Logger.error("language detection crashed: #{Exception.message(error)}")
+      {:error, {:service, :crashed}}
   end
+
+  defp stamp_detection({:ok, {subject, {:ok, language}}}, {:ok, checked}),
+    do: {:cont, {:ok, checked + stamp_language(subject, language)}}
+
+  defp stamp_detection({:ok, {subject, {:error, {:content, _reason}}}}, {:ok, checked}),
+    do: {:cont, {:ok, checked + stamp_language(subject, nil)}}
+
+  defp stamp_detection({:ok, {_subject, {:error, {:service, _reason}}}}, {:ok, checked}),
+    do: {:halt, {:paused, checked}}
 
   @doc """
   Drains the whole detection pile in one run, `@detect_all_batch` rows per

@@ -420,12 +420,32 @@ single-opinion behaviour. `mix vutuv.moderation.backfill` queues the
 grandfathered catalog through the same pipeline without hiding anything while
 it waits.
 
-`:ollama_url` may be a comma-separated **priority list** of instances: every
-instance but the last is tried with `:ollama_remote_timeout` (30 s — enough
-for a GPU box to cold-load the model) and skipped on any service failure;
-the last is the fallback of record with the patient `:ollama_timeout`
-(120 s, covers a CPU cold load). Only service-class failures fall through —
-a verdict is final wherever it came from. vutuv.de runs
+`:ollama_url` may be a comma-separated list of instances, and `Vutuv.Ollama`
+reads it two ways at once.
+
+For **one call** it is a priority list: every instance but the last is tried
+with `:ollama_remote_timeout` (30 s — enough for a GPU box to cold-load the
+model) and skipped on any service failure; the last is the fallback of record
+with the patient `:ollama_timeout` (120 s, covers a CPU cold load). Only
+service-class failures fall through — a verdict is final wherever it came
+from. vutuv.de runs
 `http://bremen3.wintermeyer.de:11434,http://localhost:11434`: the GPU box
 answers in seconds, the local CPU instance keeps moderation alive when it is
 down.
+
+For **overlapping calls** it is also a pool (issue #1573): a call made while
+another is still running starts on the instance with the fewest requests
+outstanding, ties going to the earlier entry — so one call at a time is
+exactly the priority list above, while a second GPU box named in the list
+takes work instead of only standing by for the first one to fail. The patient
+budget stays with the last *configured* entry wherever the rotation puts it;
+it is the instance an operator nominated as the one not to give up on.
+
+The pool is `Vutuv.Ollama.concurrency/0` entries deep, from the head of the
+list, and by default that is every entry **but the last**. The last one is the
+fallback of record — on vutuv.de the web server's own CPU Ollama — and giving
+it a share of the work would be a regression, not a feature. So the two-entry
+production list above behaves exactly as it did; adding a second GPU box in
+front of `localhost` is all it takes to use one. `:ollama_concurrency`
+(`OLLAMA_CONCURRENCY`) overrides the depth, and is also the bound on how many
+calls a background sweep runs at once.

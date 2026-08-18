@@ -76,6 +76,23 @@ with `update_all`, never a changeset: a post whose `updated_at` moves more
 than a minute past `inserted_at` renders as "edited", and a backfill must not
 put that mark on hundreds of posts nobody touched.
 
+Within a round the rows go to the model **in parallel**, bounded by
+`Vutuv.Ollama.concurrency/0` — every `:ollama_url` entry but the patient
+fallback at the end, unless `OLLAMA_CONCURRENCY` says otherwise — and the
+batch is widened to at least that, so no instance sits out a round (issue
+#1573). On a one-GPU installation that bound is 1 and nothing changes. One
+row at a time was one
+Ollama instance at a time, so a second GPU box named in `:ollama_url` never
+took any of this work; it was reached only when the first box *failed*. Only
+the model call runs in a task, the stamp is written back in the one process,
+which keeps the writes serialised and needs no row claiming: a round selects
+its rows once and hands each to exactly one task. Two sweepers running at
+once (an operator's backfill beside the worker's poll, or the two releases
+that overlap during a blue/green switch) still fetch the same batch and
+duplicate the calls — wasted inference, never a wrong answer, since both write
+the same language. A `SKIP LOCKED`-style claim is what a genuine second
+*worker* would need, and there is no second worker.
+
 ## The subject triple
 
 A translation's subject is exactly one of a local post, a cached remote post,

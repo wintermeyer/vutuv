@@ -424,14 +424,21 @@ if config_env() == :prod do
   # enabled: with Ollama unreachable, new images wait in owner-only limbo and
   # are scanned automatically once it is back. IMAGE_MODERATION_ENABLED=false
   # releases images immediately (installations without Ollama). OLLAMA_URL
-  # may be a comma-separated priority list — fast remote GPU box first,
-  # patient local fallback last (see docs/architecture/images.md).
+  # may be a comma-separated list — fast remote GPU box first, patient local
+  # fallback last (see docs/architecture/images.md). It is both a priority
+  # list for one call and a pool for concurrent ones; OLLAMA_CONCURRENCY says
+  # how deep the pool goes and defaults to every entry but the last, so the
+  # patient fallback stays a fallback.
   if System.get_env("IMAGE_MODERATION_ENABLED") == "false" do
     config :vutuv, :moderate_images, false
   end
 
   if ollama_url = System.get_env("OLLAMA_URL") do
     config :vutuv, :ollama_url, ollama_url
+  end
+
+  if concurrency = System.get_env("OLLAMA_CONCURRENCY") do
+    config :vutuv, :ollama_concurrency, String.to_integer(concurrency)
   end
 
   # On-demand post translations (milestone 13). Default off; TRANSLATE_POSTS=true

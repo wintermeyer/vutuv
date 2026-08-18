@@ -40,7 +40,9 @@ defmodule Vutuv.Moderation.Ollama do
   comma-separated **priority list**: every instance but the last is tried
   with the short `:ollama_remote_timeout` (default 30 s) and skipped on any
   service failure; the last one is the fallback of record with the patient
-  `:ollama_timeout`. Tests inject a `plug:` responder via the
+  `:ollama_timeout`. It is a **pool** as well — a scan that overlaps another
+  Ollama call starts on the least busy instance (`Vutuv.Ollama`). Tests inject
+  a `plug:` responder via the
   `:image_scan_req_options` config key (the Req seam every outbound client
   here uses).
   """
