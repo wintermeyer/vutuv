@@ -2832,6 +2832,28 @@ defmodule Vutuv.Fediverse do
     |> Enum.group_by(& &1.remote_post_id)
   end
 
+  @doc """
+  The id of the cached remote post `uri` names, scoped to `account`'s own posts,
+  or `nil` when no such row is held.
+
+  A stored remote reply only ever continues a thread of the same account
+  (`own_thread?/2` keeps a reply solely when its parent is already one of the
+  account's cached posts), so its `inReplyTo` — when we still hold the parent —
+  points at another post by the same account. That is what lets the Mastodon
+  adapter name a followed account's self-reply with an `in_reply_to_id` its
+  client can actually fetch.
+  """
+  def remote_post_id_by_uri(uri, account_id) when is_binary(uri) and is_binary(account_id) do
+    Repo.one(
+      from(p in RemotePost,
+        where: p.object_uri == ^uri and p.remote_account_id == ^account_id,
+        select: p.id
+      )
+    )
+  end
+
+  def remote_post_id_by_uri(_uri, _account_id), do: nil
+
   @doc "One cached remote post with its account and screenshot, or nil."
   def get_remote_post(id) do
     UUIDv7.with_cast(id, &Repo.get(RemotePost, &1))
