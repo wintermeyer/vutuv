@@ -31,11 +31,11 @@ defmodule Vutuv.MastodonApi.PushDispatcher do
   # the notification chokepoint, so this runs inside whatever action produced
   # the notification — often inside its transaction — and a member liking a post
   # should not wait on two reads that only a push service will ever care about.
-  # The cheap decisions (is push configured at all, is this a kind Mastodon
+  # The cheap decisions (is push on at all, is this a kind Mastodon
   # knows) are made here because they cost no query and skip the task entirely;
   # everything that reads a row happens in the task.
   def dispatch(user_id, notification) when is_binary(user_id) do
-    with true <- WebPush.configured?(),
+    with true <- WebPush.enabled?(),
          type when is_binary(type) <- Notifications.type(notification[:kind]) do
       Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
         fan_out(user_id, type, notification)

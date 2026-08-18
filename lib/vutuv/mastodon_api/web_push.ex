@@ -16,24 +16,87 @@ defmodule Vutuv.MastodonApi.WebPush do
   lock screen — learns that something happened, never what was said. The client
   fetches the notification itself over the authenticated API.
 
-  Push is off unless the installation configures a VAPID key pair, which is
-  what keeps an intranet installation from trying to reach a push service it
-  cannot see (`docs/ADMINS.md`).
+  **The key pair is this installation's own**, and nobody issues it: VAPID is a
+  self-signed identity, so a server that has none can simply make one. That is
+  what happens here when the operator configured nothing — the pair is derived
+  from `secret_key_base`, exactly as the login-PIN pepper is, so every node of
+  an installation computes the same one without a table, a migration or a
+  shared file, and two installations never share a key. Requiring an env var
+  first made push a feature nobody switched on: an operator who never read the
+  manual had clients answering "push is not configured" forever
+  (`WEB_PUSH_ENABLED=false` is the deliberate off switch for an intranet that
+  must not reach a push service; see `docs/ADMINS.md`).
+
+  `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` still win where they are set — both or
+  neither, since half a pair is a signature no push service will accept — which
+  is what an operator who rotates `secret_key_base` wants, and what carries a
+  key pair across a move to another installation.
   """
 
+  alias Vutuv.MastodonApi
   alias Vutuv.Ssrf
+  alias VutuvWeb.Endpoint
 
   @curve :prime256v1
   @jwt_ttl_seconds 12 * 3600
 
-  @doc "Whether this installation can send pushes at all."
-  def configured?, do: is_binary(public_key()) and is_binary(private_key())
+  # The order of P-256's base point. A derived scalar has to land inside it to
+  # be a private key at all; the odds of missing are about 2^-32, but "about"
+  # is not a thing to leave in a boot path.
+  @p256_order 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
+  @doc """
+  Whether this installation sends pushes at all. There is no "not configured"
+  state left (see the moduledoc), so this is the operator's switch — and the
+  adapter's own, because a push to a phone client is the phone client API:
+  switching that off with `MASTODON_API_ENABLED=false` must not leave devices
+  that subscribed beforehand still being pushed to.
+  """
+  def enabled?,
+    do: MastodonApi.enabled?() and Application.get_env(:vutuv, :web_push_enabled, true)
 
   @doc "The VAPID public key a client needs to create a subscription."
-  def public_key, do: config(:vapid_public_key)
+  def public_key, do: if(enabled?(), do: elem(keys(), 0))
 
-  defp private_key, do: config(:vapid_private_key)
-  defp subject, do: config(:vapid_subject) || "mailto:admin@example.com"
+  # RFC 8292 wants a way to reach whoever runs this server, and a push service
+  # is entitled to refuse a JWT without one — so the placeholder address this
+  # used to fall back to was worse than no default at all. `operator_email/0`
+  # is the adapter's own answer to "how do you reach whoever runs this", the
+  # one `security.txt` publishes.
+  defp subject, do: config(:vapid_subject) || "mailto:" <> MastodonApi.operator_email()
+
+  # Both halves or neither: an installation whose env carries a public key
+  # without its private one would advertise a key it cannot sign with, and
+  # every push would be refused by the push service with nothing in our log to
+  # say why.
+  defp keys do
+    case {config(:vapid_public_key), config(:vapid_private_key)} do
+      {public, private} when is_binary(public) and is_binary(private) -> {public, private}
+      _incomplete_or_absent -> derived_keys()
+    end
+  end
+
+  # 45µs, and its only input cannot change while a node runs, so a memo keyed
+  # on the secret would be correct — it just has to sit here rather than around
+  # `keys/0`, where it would freeze a pair an operator pins later. Not worth a
+  # `:persistent_term` write for 45µs on a path that runs once per push.
+  defp derived_keys(counter \\ 0) do
+    candidate =
+      :crypto.hash(:sha256, "vutuv/web_push/vapid/v1/#{counter}" <> secret_key_base())
+
+    case candidate do
+      <<scalar::unsigned-big-256>> when scalar > 0 and scalar < @p256_order ->
+        {public, private} = :crypto.generate_key(:ecdh, @curve, candidate)
+        {encode(public), encode(private)}
+
+      _outside_the_curve_order ->
+        derived_keys(counter + 1)
+    end
+  end
+
+  defp secret_key_base do
+    Application.fetch_env!(:vutuv, Endpoint)[:secret_key_base]
+  end
 
   defp config(key) do
     case Application.get_env(:vutuv, :web_push, [])[key] do
@@ -48,10 +111,10 @@ defmodule Vutuv.MastodonApi.WebPush do
   without a sweeper.
   """
   def send(%{endpoint: endpoint, p256dh: p256dh, auth: auth}, payload) do
-    if configured?() do
+    if enabled?() do
       deliver(endpoint, p256dh, auth, Jason.encode!(payload))
     else
-      {:error, :not_configured}
+      {:error, :disabled}
     end
   end
 
@@ -171,6 +234,9 @@ defmodule Vutuv.MastodonApi.WebPush do
   # RFC 8292: a JWT the push service checks against the public key we hand it,
   # so only this installation can push to its own subscriptions.
   defp authorization(endpoint) do
+    # One derivation, not two: both halves come out of the same tuple, and a
+    # member with three phones pays this per device per notification.
+    {public, private} = keys()
     %URI{scheme: scheme, host: host} = URI.parse(endpoint)
     audience = "#{scheme}://#{host}"
 
@@ -186,13 +252,13 @@ defmodule Vutuv.MastodonApi.WebPush do
       )
 
     signing_input = header <> "." <> claims
-    signature = encode(sign(signing_input))
+    signature = encode(sign(signing_input, private))
 
-    "vapid t=#{signing_input}.#{signature}, k=#{public_key()}"
+    "vapid t=#{signing_input}.#{signature}, k=#{public}"
   end
 
-  defp sign(message) do
-    {:ok, private} = decode_key(private_key())
+  defp sign(message, private_key) do
+    {:ok, private} = decode_key(private_key)
 
     :ecdsa
     |> :crypto.sign(:sha256, message, [private, @curve])
@@ -217,7 +283,9 @@ defmodule Vutuv.MastodonApi.WebPush do
 
   @doc """
   A fresh VAPID key pair as the two base64url strings an operator puts in the
-  environment. Run it once with `mix run -e`, keep the private key secret.
+  environment. Nothing needs it — an installation derives its own pair — but it
+  is how an operator pins one that outlives a `secret_key_base` rotation. Run
+  it once with `mix run -e`, keep the private key secret.
   """
   def generate_keys do
     {public, private} = :crypto.generate_key(:ecdh, @curve)

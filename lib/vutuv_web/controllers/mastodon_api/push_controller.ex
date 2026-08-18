@@ -5,9 +5,10 @@ defmodule VutuvWeb.MastodonApi.PushController do
 
   Keyed on the access token, so one device is one subscription and revoking the
   app takes it with it. The `server_key` a client needs to build the browser
-  subscription is this installation's VAPID public key; where an operator has
-  configured none, every call here answers 403 rather than accepting a
-  subscription that could never be delivered to.
+  subscription is this installation's VAPID public key, which every
+  installation has (`Vutuv.MastodonApi.WebPush` derives one where the operator
+  pinned none). Only an installation that switched push off answers 403, rather
+  than accepting a subscription that could never be delivered to.
   """
 
   use VutuvWeb, :controller
@@ -34,7 +35,7 @@ defmodule VutuvWeb.MastodonApi.PushController do
         {:error, changeset} -> validation_error(conn, changeset)
       end
     else
-      {:error, :not_configured} -> error(conn, 403, "Push is not configured on this server")
+      {:error, :disabled} -> error(conn, 403, "Push is disabled on this server")
       {:error, :invalid} -> error(conn, 422, "Validation failed: subscription is incomplete")
     end
   end
@@ -78,7 +79,7 @@ defmodule VutuvWeb.MastodonApi.PushController do
   end
 
   defp push_available do
-    if WebPush.configured?(), do: :ok, else: {:error, :not_configured}
+    if WebPush.enabled?(), do: :ok, else: {:error, :disabled}
   end
 
   # Mastodon nests the browser's own PushSubscription under `subscription`, and

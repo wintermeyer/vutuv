@@ -11,6 +11,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   alias Vutuv.MastodonApi
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.MastodonApi.Scopes
+  alias Vutuv.MastodonApi.WebPush
   alias Vutuv.NodeInfo
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -171,6 +172,21 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
       },
       translation: %{enabled: false}
     }
+    |> put_vapid()
+  end
+
+  # Where a Mastodon client has looked for the server's push key since 4.3,
+  # which is why its absence broke switching push on before the client ever
+  # reached `/api/v1/push/subscription`. Upstream carries it in the v2 document
+  # only; it rides the shared builder here on purpose, since both documents
+  # describe the same instance and an extra key costs a v1 client nothing.
+  # Absent — not null — where push is off, so a client is told "no push here"
+  # rather than handed an empty key to subscribe with.
+  defp put_vapid(configuration) do
+    case WebPush.public_key() do
+      nil -> configuration
+      key -> Map.put(configuration, :vapid, %{public_key: key})
+    end
   end
 
   # The operator as a full Account entity, which is what a client links to. Both
