@@ -54,7 +54,7 @@ defmodule Vutuv.OrganizationFediverseRepliesTest do
       |> Ecto.Changeset.change(Enum.into(opts, %{fediverse_followers?: true, username: "acme"}))
       |> Repo.update!()
 
-    if page.fediverse_followers?, do: {:ok, _} = Fediverse.ensure_organization_actor(page)
+    if page.fediverse_followers?, do: {:ok, _} = Fediverse.ensure_actor(page)
     {:ok, post} = Posts.create_organization_post(page, owner, %{body: "Nach draußen."})
     {page, post, owner}
   end

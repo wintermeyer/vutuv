@@ -1454,4 +1454,36 @@ defmodule Vutuv.Accounts.User do
   defimpl List.Chars, for: Vutuv.Accounts.User do
     def to_charlist(user), do: ~c"#{user.first_name} #{user.last_name}"
   end
+
+  defimpl Vutuv.Identity, for: Vutuv.Accounts.User do
+    def kind(_user), do: :user
+
+    def id(user), do: user.id
+
+    def display_name(user) do
+      [user.honorific_prefix, user.first_name, user.last_name, user.honorific_suffix]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join(" ")
+    end
+
+    def handle(user), do: user.username
+
+    def path(user), do: "/" <> user.username
+
+    def image(user), do: user.avatar
+
+    def hidden?(user), do: not Vutuv.Moderation.profile_visible_to?(user, nil)
+
+    def topic(user), do: "user:#{user.id}"
+
+    def ap_type(_user), do: "Person"
+
+    def ref(user) do
+      %{
+        name: display_name(user),
+        username: user.username,
+        url: VutuvWeb.Endpoint.url() <> path(user)
+      }
+    end
+  end
 end

@@ -49,7 +49,7 @@ defmodule VutuvWeb.OrganizationRemoteFollowWebTest do
       |> Ecto.Changeset.change(Enum.into(opts, %{fediverse_followers?: true, username: "acme"}))
       |> Repo.update!()
 
-    if page.fediverse_followers?, do: {:ok, _} = Fediverse.ensure_organization_actor(page)
+    if page.fediverse_followers?, do: {:ok, _} = Fediverse.ensure_actor(page)
     {conn, page}
   end
 

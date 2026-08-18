@@ -146,7 +146,7 @@ defmodule VutuvWeb.Fediverse.Docs do
     user
     |> base_actor(actor, user.inserted_at)
     |> Map.merge(%{
-      "type" => "Person",
+      "type" => Vutuv.Identity.ap_type(user),
       "preferredUsername" => user.username,
       "name" => UserHelpers.full_name(user),
       "summary" => summary(user),
@@ -263,7 +263,7 @@ defmodule VutuvWeb.Fediverse.Docs do
     organization
     |> base_actor(actor, organization.inserted_at)
     |> Map.merge(%{
-      "type" => "Organization",
+      "type" => Vutuv.Identity.ap_type(organization),
       # The page's claimed handle. Federating without one is not possible —
       # WebFinger's `subject` and this field both need an address — which is why
       # `Fediverse.federated?/1` refuses a page that has not claimed one.

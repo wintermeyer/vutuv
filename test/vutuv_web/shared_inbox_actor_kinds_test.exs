@@ -51,7 +51,7 @@ defmodule VutuvWeb.SharedInboxActorKindsTest do
       |> Ecto.Changeset.change(%{fediverse_followers?: true, username: username})
       |> Repo.update!()
 
-    {:ok, _} = Fediverse.ensure_organization_actor(page)
+    {:ok, _} = Fediverse.ensure_actor(page)
     page
   end
 
@@ -197,6 +197,6 @@ defmodule VutuvWeb.SharedInboxActorKindsTest do
     }
 
     assert conn |> shared_post(activity, priv) |> response(202)
-    assert Fediverse.organization_remote_follower_count(page) == 1
+    assert Fediverse.follower_count(page) == 1
   end
 end

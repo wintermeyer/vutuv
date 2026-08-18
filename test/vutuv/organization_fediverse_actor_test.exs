@@ -57,13 +57,13 @@ defmodule Vutuv.OrganizationFediverseActorTest do
   test "a page gets one keypair, and asking twice returns the same one" do
     organization = active_organization_for(insert(:activated_user))
 
-    assert {:ok, actor} = Fediverse.ensure_organization_actor(organization)
+    assert {:ok, actor} = Fediverse.ensure_actor(organization)
     assert actor.organization_id == organization.id
     assert is_nil(actor.user_id)
     assert actor.private_key_pem =~ "PRIVATE KEY"
     assert actor.public_key_pem =~ "PUBLIC KEY"
 
-    assert {:ok, same} = Fediverse.ensure_organization_actor(organization)
+    assert {:ok, same} = Fediverse.ensure_actor(organization)
     assert same.id == actor.id
   end
 
@@ -71,7 +71,7 @@ defmodule Vutuv.OrganizationFediverseActorTest do
     member = insert(:activated_user)
     organization = active_organization_for(insert(:activated_user))
 
-    {:ok, _} = Fediverse.ensure_organization_actor(organization)
+    {:ok, _} = Fediverse.ensure_actor(organization)
 
     # `get_actor/1` reads `user_id`, which a page row leaves NULL — so the two
     # namespaces cannot bleed into each other even though they share a table.
@@ -79,16 +79,16 @@ defmodule Vutuv.OrganizationFediverseActorTest do
 
     {:ok, member_actor} = Fediverse.ensure_actor(member)
     assert Fediverse.get_actor(member).id == member_actor.id
-    assert Fediverse.get_organization_actor(organization).organization_id == organization.id
-    refute Fediverse.get_organization_actor(organization).id == member_actor.id
+    assert Fediverse.get_actor(organization).organization_id == organization.id
+    refute Fediverse.get_actor(organization).id == member_actor.id
   end
 
   test "deleting the page takes its keypair with it" do
     organization = active_organization_for(insert(:activated_user))
-    {:ok, _} = Fediverse.ensure_organization_actor(organization)
+    {:ok, _} = Fediverse.ensure_actor(organization)
 
     {:ok, _} = Vutuv.Organizations.delete_organization(organization)
 
-    refute Fediverse.get_organization_actor(organization)
+    refute Fediverse.get_actor(organization)
   end
 end

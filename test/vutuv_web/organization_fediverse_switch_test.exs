@@ -56,7 +56,7 @@ defmodule VutuvWeb.OrganizationFediverseSwitchTest do
 
     # Minted on the way in, not lazily on the first request: a remote server
     # resolving the handle a second later must find a complete actor.
-    assert Fediverse.get_organization_actor(page)
+    assert Fediverse.get_actor(page)
   end
 
   test "switching off stops federating but keeps the keypair", %{conn: conn} do

@@ -58,7 +58,12 @@ defmodule VutuvWeb.PostJSONTest do
     assert json.reply_count == 0
     assert json.in_reply_to.post_id == parent.id
     assert String.ends_with?(json.in_reply_to.url, Posts.path(parent))
-    assert json.in_reply_to.author == %{username: parent_author.username, name: "Petra Parent"}
+
+    assert json.in_reply_to.author == %{
+             username: parent_author.username,
+             name: "Petra Parent",
+             url: VutuvWeb.Endpoint.url() <> "/" <> parent_author.username
+           }
 
     # Parent deleted, account alive: no post left, the author still named.
     {:ok, _} = Posts.delete_post(parent)

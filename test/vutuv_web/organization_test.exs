@@ -230,7 +230,7 @@ defmodule VutuvWeb.OrganizationTest do
       # publish an unverified page to other servers.
       assert page.fediverse_followers?
       refute Vutuv.Fediverse.federated?(page)
-      assert is_nil(Vutuv.Fediverse.get_organization_actor(page))
+      assert is_nil(Vutuv.Fediverse.get_actor(page))
     end
   end
 

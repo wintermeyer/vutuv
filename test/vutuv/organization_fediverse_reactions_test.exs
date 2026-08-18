@@ -45,7 +45,7 @@ defmodule Vutuv.OrganizationFediverseReactionsTest do
       |> Ecto.Changeset.change(Enum.into(opts, %{fediverse_followers?: true, username: "acme"}))
       |> Repo.update!()
 
-    if page.fediverse_followers?, do: {:ok, _} = Fediverse.ensure_organization_actor(page)
+    if page.fediverse_followers?, do: {:ok, _} = Fediverse.ensure_actor(page)
     {:ok, post} = Posts.create_organization_post(page, owner, %{body: "Nach draußen."})
     {page, post}
   end
@@ -77,7 +77,7 @@ defmodule Vutuv.OrganizationFediverseReactionsTest do
 
     # Unconditional by design: an upstream withdrawal is the deletion path that
     # makes storing somebody else's act defensible in the first place.
-    :ok = Fediverse.remove_organization_reaction(page, uri, "announce", @actor)
+    :ok = Fediverse.remove_reaction(page, uri, "announce", @actor)
     assert counts(post).reposts == 0
   end
 

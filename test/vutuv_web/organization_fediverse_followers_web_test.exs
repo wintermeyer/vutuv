@@ -38,7 +38,7 @@ defmodule VutuvWeb.OrganizationFediverseFollowersWebTest do
       |> Ecto.Changeset.change(%{username: "acme", fediverse_followers?: true})
       |> Repo.update!()
 
-    {:ok, _} = Fediverse.ensure_organization_actor(page)
+    {:ok, _} = Fediverse.ensure_actor(page)
 
     {conn, page, owner}
   end

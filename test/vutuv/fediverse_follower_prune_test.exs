@@ -119,13 +119,13 @@ defmodule Vutuv.FediverseFollowerPruneTest do
     # answered 401, which reads as "still there" and kept the dead row forever.
     test "a page's gone follower is pruned and recorded against the page" do
       organization = insert(:organization)
-      {:ok, _actor} = Fediverse.ensure_organization_actor(organization)
+      {:ok, _actor} = Fediverse.ensure_actor(organization)
       {:ok, _follower} = organization_follower(organization, "gone.example")
 
       stub_hosts(%{"gone.example" => 410})
 
       assert Fediverse.prune_due_followers() == 1
-      assert Fediverse.organization_remote_follower_count(organization) == 0
+      assert Fediverse.follower_count(organization) == 0
 
       assert [prune] = Repo.all(FollowerPrune)
       assert prune.organization_id == organization.id
@@ -152,7 +152,7 @@ defmodule Vutuv.FediverseFollowerPruneTest do
     test "a page's and a topic's actor fetch are signed with their own keys" do
       organization = insert(:organization)
       tag = insert(:tag)
-      {:ok, _} = Fediverse.ensure_organization_actor(organization)
+      {:ok, _} = Fediverse.ensure_actor(organization)
       {:ok, _} = Fediverse.ensure_tag_actor(tag)
       {:ok, _} = organization_follower(organization, "page.example")
       {:ok, _} = tag_follower(tag, "topic.example")

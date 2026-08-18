@@ -39,7 +39,7 @@ defmodule Vutuv.OrganizationFediversePublishTest do
       |> Ecto.Changeset.change(Enum.into(opts, %{fediverse_followers?: true, username: "acme"}))
       |> Repo.update!()
 
-    {:ok, _} = Fediverse.ensure_organization_actor(page)
+    {:ok, _} = Fediverse.ensure_actor(page)
     {page, owner}
   end
 

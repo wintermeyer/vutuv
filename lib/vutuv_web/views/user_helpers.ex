@@ -17,7 +17,6 @@ defmodule VutuvWeb.UserHelpers do
   alias PhoenixHTMLHelpers.Format, as: HTMLFormat
   alias PhoenixHTMLHelpers.Link, as: HTMLLink
   alias Vutuv.Accounts.User
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Profiles.Address
@@ -28,16 +27,7 @@ defmodule VutuvWeb.UserHelpers do
   alias Vutuv.Tags
   alias Vutuv.Tags.UserTag
 
-  def full_name(%User{
-        first_name: first_name,
-        last_name: last_name,
-        honorific_prefix: honorific_prefix,
-        honorific_suffix: honorific_suffix
-      }) do
-    [honorific_prefix, first_name, last_name, honorific_suffix]
-    |> Enum.reject(&(&1 == "" || &1 == nil))
-    |> Enum.join(" ")
-  end
+  def full_name(%User{} = user), do: Vutuv.Identity.display_name(user)
 
   @doc """
   The visible name of a post's author, whichever kind of author it has (#1334).
@@ -57,8 +47,7 @@ defmodule VutuvWeb.UserHelpers do
   reposter, an organization's followee row.
   """
   def author_name(%Post{} = post), do: author_name(Posts.author(post))
-  def author_name(%Organization{name: name}), do: name
-  def author_name(%User{} = user), do: full_name(user)
+  def author_name(author), do: Vutuv.Identity.display_name(author)
 
   @doc """
   The member's name the way a directory files it: `"Özil, Mesut"` — surname

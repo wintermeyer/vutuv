@@ -61,7 +61,7 @@ defmodule VutuvWeb.OrganizationLive.FediverseFollowers do
     organization = socket.assigns.organization
 
     socket
-    |> assign(:total_followers, Fediverse.organization_remote_follower_count(organization))
+    |> assign(:total_followers, Fediverse.follower_count(organization))
     |> assign(:hosts, Fediverse.follower_hosts(organization))
   end
 

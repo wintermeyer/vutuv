@@ -41,7 +41,7 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
     |> assign(:federated?, Fediverse.federated?(organization))
     |> assign(:ever_federated?, Fediverse.ever_federated?(organization))
     |> assign(:enabled?, Fediverse.enabled?())
-    |> assign(:remote_followers, Fediverse.organization_remote_follower_count(organization))
+    |> assign(:remote_followers, Fediverse.follower_count(organization))
   end
 
   @impl true
@@ -55,7 +55,7 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
     # remote server that resolves the handle a second later must find a complete
     # actor, and generating a key inside that request would be the slowest
     # possible moment for it.
-    if on?, do: Fediverse.ensure_organization_actor(organization)
+    if on?, do: Fediverse.ensure_actor(organization)
 
     {:noreply, assign_state(socket, organization)}
   end

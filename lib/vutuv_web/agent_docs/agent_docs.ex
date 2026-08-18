@@ -303,14 +303,12 @@ defmodule VutuvWeb.AgentDocs do
   def iso_date(%NaiveDateTime{} = naive),
     do: naive |> NaiveDateTime.to_date() |> Date.to_iso8601()
 
-  @doc "The doc representation of a person: name, slug, profile URL."
-  def person_ref(user) do
-    %{
-      name: VutuvWeb.UserHelpers.full_name(user),
-      username: user.username,
-      url: abs_url("/" <> user.username)
-    }
-  end
+  @doc """
+  The doc reference of a member or page: `Vutuv.Identity.ref/1` (name plus
+  username or slug, absolute URL). The name survives from when only a person
+  could appear in a doc.
+  """
+  def person_ref(identity), do: Vutuv.Identity.ref(identity)
 
   @doc "The one-line excerpt the list-like docs show of a post body."
   def excerpt(body) do

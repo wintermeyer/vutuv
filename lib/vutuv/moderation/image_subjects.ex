@@ -909,9 +909,8 @@ defmodule Vutuv.Moderation.ImageSubjects do
   # Live pages re-render the affected image (or drop the limbo pill) with no
   # reload; dead pages catch up on the next request.
   defp broadcast(%ImageScan{} = scan, verdict) do
-    Phoenix.PubSub.broadcast(
-      Vutuv.PubSub,
-      "user:#{scan.owner_user_id}",
+    Vutuv.Activity.broadcast(
+      scan.owner_user_id,
       {:image_moderation, scan.kind, scan.subject_id, verdict}
     )
   end

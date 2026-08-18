@@ -271,4 +271,32 @@ defmodule Vutuv.Organizations.Organization do
 
   defp upcase(nil), do: nil
   defp upcase(value), do: value |> String.trim() |> String.upcase()
+
+  defimpl Vutuv.Identity, for: Vutuv.Organizations.Organization do
+    def kind(_organization), do: :organization
+
+    def id(organization), do: organization.id
+
+    def display_name(organization), do: organization.name
+
+    def handle(organization), do: organization.username
+
+    def path(organization), do: Vutuv.Organizations.canonical_path(organization)
+
+    def image(organization), do: organization.logo
+
+    def hidden?(organization), do: not Vutuv.Organizations.public_visible?(organization)
+
+    def topic(organization), do: "organization:#{organization.id}"
+
+    def ap_type(_organization), do: "Organization"
+
+    def ref(organization) do
+      %{
+        name: organization.name,
+        slug: organization.slug,
+        url: VutuvWeb.Endpoint.url() <> path(organization)
+      }
+    end
+  end
 end

@@ -82,7 +82,7 @@ defmodule VutuvWeb.OrganizationController do
       # their copies; 404 otherwise), which reads to an AP client as "nothing
       # here" rather than choking on HTML. The member twin is `UserController`.
       FediverseController.ap_request?(conn) and Fediverse.federated?(organization) ->
-        {:ok, actor} = Fediverse.ensure_organization_actor(organization)
+        {:ok, actor} = Fediverse.ensure_actor(organization)
 
         conn
         |> put_resp_content_type("application/activity+json")

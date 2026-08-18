@@ -18,7 +18,6 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
-  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
@@ -67,7 +66,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       id: post.id,
       title: "#{UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}",
       description: AgentDocs.excerpt(post.body),
-      author: AgentDocs.person_ref(author),
+      author: Vutuv.Identity.ref(author),
       published_on: post.published_on,
       body_markdown: post.body,
       # The links in that body pointing at a webpage the author has PROVED is
@@ -116,7 +115,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # time), and the reader of a doc is never that author — not through a
       # `.md` sibling and not through the authenticated `/api/2.0`, which
       # `build/3` also serves.
-      likers: Enum.map(Posts.post_likers(post.id), &liker_ref/1),
+      likers: Enum.map(Posts.post_likers(post.id), &Vutuv.Identity.ref/1),
       repost_count: counts.reposts,
       bookmark_count: engagement.bookmarks,
       # ...and the breakdown the card's "from other networks" panel shows when
@@ -173,7 +172,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       id: post.id,
       title: "#{organization.name} · #{Date.to_iso8601(post.published_on)}",
       description: AgentDocs.excerpt(post.body),
-      author: organization_ref(organization),
+      author: Vutuv.Identity.ref(organization),
       published_on: post.published_on,
       body_markdown: post.body,
       review: review_entry(post.review),
@@ -187,7 +186,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       thread: thread_entries(thread),
       thread_truncated: thread_truncated?,
       like_count: counts.likes,
-      likers: Enum.map(Posts.post_likers(post.id), &liker_ref/1),
+      # A liker is a member or a page (issue #1410); the md/txt renderers read
+      # `.name` off either ref shape, JSON/XML carry the map as is.
+      likers: Enum.map(Posts.post_likers(post.id), &Vutuv.Identity.ref/1),
       repost_count: counts.reposts,
       bookmark_count: engagement.bookmarks,
       fediverse_like_count: engagement.fediverse_likes,
@@ -197,22 +198,6 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       fediverse_reply_count: engagement.fediverse_replies,
       fediverse_replies: remote_replies
     })
-  end
-
-  # A liker is a member or a page (issue #1410); the md/txt renderers read
-  # `.name` off either shape, JSON/XML carry the map as is.
-  defp liker_ref(%Organization{} = page), do: organization_ref(page)
-  defp liker_ref(%User{} = user), do: AgentDocs.person_ref(user)
-
-  # The organization's own reference, the counterpart of `AgentDocs.person_ref/1`.
-  # `canonical_path/1` prefers the page's opt-in root handle, so the URL here is
-  # the one the page answers to rather than the slug form the post lives under.
-  defp organization_ref(%Organization{} = organization) do
-    %{
-      name: organization.name,
-      slug: organization.slug,
-      url: AgentDocs.abs_url(Organizations.canonical_path(organization))
-    }
   end
 
   @doc """
@@ -227,7 +212,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       title:
         "#{UserHelpers.full_name(author)} · #{gettext("Posts")}" <> period_suffix(period_label),
       description: gettext("Post archive of %{name}", name: UserHelpers.full_name(author)),
-      author: AgentDocs.person_ref(author),
+      author: Vutuv.Identity.ref(author),
       period: period_label,
       total: total,
       posts: Enum.map(entries, &timeline_entry/1)
@@ -308,15 +293,14 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     %{
       id: post.id,
       url: AgentDocs.abs_url(Posts.path(post)),
-      # Whichever kind of author the post has (issue #1334) — the reposters
-      # below stay members, since only a member can repost.
-      # The name the entry is signed with: a page by its own name, the member
-      # who published for it stays internal, exactly as on the HTML card.
+      # The name the entry is signed with, whichever kind of author (issue
+      # #1334): a page by its own name, the member who published for it stays
+      # internal, exactly as on the HTML card. Reposters can be pages too.
       author: UserHelpers.author_name(post),
       published_on: post.published_on,
       excerpt: AgentDocs.excerpt(post.body),
-      reposted_by: entry[:reposted_by] && UserHelpers.full_name(entry[:reposted_by]),
-      reposters: Enum.map(reposters, &UserHelpers.full_name/1)
+      reposted_by: entry[:reposted_by] && UserHelpers.author_name(entry[:reposted_by]),
+      reposters: Enum.map(reposters, &UserHelpers.author_name/1)
     }
   end
 

@@ -77,7 +77,7 @@ defmodule Vutuv.OrganizationFediverseFollowersTest do
     assert {:ok, again} =
              Fediverse.add_organization_follower(organization, attrs(%{name: "Frida F."}))
 
-    assert Fediverse.organization_remote_follower_count(organization) == 1
+    assert Fediverse.follower_count(organization) == 1
     assert again.name == "Frida F."
 
     # The returned struct must BE the stored row. With client-generated UUIDs an
@@ -96,7 +96,7 @@ defmodule Vutuv.OrganizationFediverseFollowersTest do
     # Two different relationships, so two rows — and neither unique index may
     # mistake one for the other.
     assert Fediverse.follower_count(member) == 1
-    assert Fediverse.organization_remote_follower_count(organization) == 1
+    assert Fediverse.follower_count(organization) == 1
   end
 
   test "an Undo drops only that page's row" do
@@ -108,7 +108,7 @@ defmodule Vutuv.OrganizationFediverseFollowersTest do
 
     assert Fediverse.remove_organization_follower(organization, attrs().actor_uri) == 1
 
-    assert Fediverse.organization_remote_follower_count(organization) == 0
+    assert Fediverse.follower_count(organization) == 0
     assert Fediverse.follower_count(member) == 1
 
     # Idempotent: an Undo for a follow that is already gone is a no-op.
@@ -132,7 +132,7 @@ defmodule Vutuv.OrganizationFediverseFollowersTest do
 
     {:ok, _} = Vutuv.Organizations.delete_organization(organization)
 
-    assert Fediverse.organization_remote_follower_count(organization) == 0
+    assert Fediverse.follower_count(organization) == 0
   end
 
   describe "browsing them" do

@@ -22,7 +22,6 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
 
-  alias Vutuv.Organizations
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
 
@@ -76,9 +75,9 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
 
   # The pages a member follows (issue #1336), as their own key rather than mixed
   # into `people`: an agent reading this document must be able to tell a person
-  # from an organization, and `person_ref/1` cannot describe a page anyway. Only
-  # the Following list has them, so the key is absent everywhere else instead of
-  # being an empty list on the follower and connection documents.
+  # from an organization. Only the Following list has them, so the key is absent
+  # everywhere else instead of being an empty list on the follower and
+  # connection documents.
   defp put_followed_organizations(doc, nil), do: doc
 
   defp put_followed_organizations(doc, organizations) do
@@ -86,11 +85,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       doc,
       :organizations,
       Enum.map(organizations, fn {_follow_id, organization} ->
-        %{
-          name: organization.name,
-          slug: organization.slug,
-          url: AgentDocs.abs_url(Organizations.canonical_path(organization))
-        }
+        Vutuv.Identity.ref(organization)
       end)
     )
   end

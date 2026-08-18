@@ -48,6 +48,7 @@ defmodule Vutuv.Posts do
   """
 
   import Ecto.Query
+  import Vutuv.Identity.Query, only: [party_is: 2]
 
   import Vutuv.Moderation.Query,
     only: [account_hidden: 1, account_confirmed_row: 1, account_hidden_row: 1]
@@ -1702,9 +1703,8 @@ defmodule Vutuv.Posts do
 
   # "This actor's row", as a query fragment. Never a bare `e.user_id == ^id`:
   # that column is NULL on a page's row, and the comparison would answer NULL
-  # rather than false — the trap this milestone has already paid for repeatedly.
-  defp engaged_by(%User{id: id}), do: dynamic([e], e.user_id == ^id)
-  defp engaged_by(%Organization{id: id}), do: dynamic([e], e.organization_id == ^id)
+  # rather than false — `party_is/2` spells the pair predicate once.
+  defp engaged_by(party), do: dynamic([e], party_is(e, party))
 
   # The four engagement counters (likes / bookmarks / reposts / replies),
   # counted live from the rows. Defined once here so both `engagement_counts/1`
@@ -5011,8 +5011,7 @@ defmodule Vutuv.Posts do
   the permalink's row (issue #1410), a reposter, a chat party.
   """
   def author_path(%Post{} = post), do: author_path(author(post))
-  def author_path(%Organization{} = organization), do: Organizations.canonical_path(organization)
-  def author_path(%User{username: username}), do: "/" <> username
+  def author_path(author), do: Vutuv.Identity.path(author)
 
   ## Images
 

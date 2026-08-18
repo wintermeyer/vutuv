@@ -113,7 +113,7 @@ defmodule VutuvWeb.OrganizationFeedWebTest do
       |> Ecto.Changeset.change(%{fediverse_followers?: true, username: "acme"})
       |> Repo.update!()
 
-    {:ok, _} = Fediverse.ensure_organization_actor(page)
+    {:ok, _} = Fediverse.ensure_actor(page)
     {:ok, _} = Organizations.add_role(page, owner, "publisher", owner)
 
     account =

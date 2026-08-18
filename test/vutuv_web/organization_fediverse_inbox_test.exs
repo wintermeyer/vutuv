@@ -44,7 +44,7 @@ defmodule VutuvWeb.OrganizationFediverseInboxTest do
       |> Ecto.Changeset.change(%{fediverse_followers?: true, username: "acme"})
       |> Repo.update!()
 
-    {:ok, _} = Fediverse.ensure_organization_actor(page)
+    {:ok, _} = Fediverse.ensure_actor(page)
     page
   end
 
@@ -109,7 +109,7 @@ defmodule VutuvWeb.OrganizationFediverseInboxTest do
 
     assert conn |> signed_post(page, follow_activity(page), priv) |> response(202)
 
-    assert Fediverse.organization_remote_follower_count(page) == 1
+    assert Fediverse.follower_count(page) == 1
 
     # The Accept is what stops Mastodon showing the follow as pending forever,
     # so its absence would be the actual failure, not a missing nicety.
@@ -126,7 +126,7 @@ defmodule VutuvWeb.OrganizationFediverseInboxTest do
     stub_remote_actor(pub)
 
     conn |> signed_post(page, follow_activity(page), priv) |> response(202)
-    assert Fediverse.organization_remote_follower_count(page) == 1
+    assert Fediverse.follower_count(page) == 1
 
     undo = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
@@ -137,7 +137,7 @@ defmodule VutuvWeb.OrganizationFediverseInboxTest do
     }
 
     assert build_conn() |> signed_post(page, undo, priv) |> response(202)
-    assert Fediverse.organization_remote_follower_count(page) == 0
+    assert Fediverse.follower_count(page) == 0
   end
 
   test "a Follow naming another actor is not a follow of this page", %{conn: conn} do
@@ -149,7 +149,7 @@ defmodule VutuvWeb.OrganizationFediverseInboxTest do
 
     # Acknowledged — the signature was valid — but it must not mint a follower.
     assert conn |> signed_post(page, elsewhere, priv) |> response(202)
-    assert Fediverse.organization_remote_follower_count(page) == 0
+    assert Fediverse.follower_count(page) == 0
   end
 
   test "an unsigned delivery is refused", %{conn: conn} do
@@ -163,7 +163,7 @@ defmodule VutuvWeb.OrganizationFediverseInboxTest do
            )
            |> response(401)
 
-    assert Fediverse.organization_remote_follower_count(page) == 0
+    assert Fediverse.follower_count(page) == 0
   end
 
   test "a page that has not opted in has no inbox", %{conn: conn} do

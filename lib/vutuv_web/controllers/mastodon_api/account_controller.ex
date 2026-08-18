@@ -222,7 +222,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
         end
 
       organization ->
-        case Fediverse.organization_remote_follow_for(organization, target) do
+        case Fediverse.remote_follow_for(organization, target) do
           nil -> :ok
           follow -> Fediverse.unfollow_remote_as_organization(organization, follow.id)
         end
@@ -237,7 +237,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
         Fediverse.set_remote_follow_mute(conn.assigns.current_user, id, muted?)
 
       {%Organization{} = organization, %RemoteAccount{id: id}} ->
-        Fediverse.set_organization_remote_follow_mute(organization, id, muted?)
+        Fediverse.set_remote_follow_mute(organization, id, muted?)
 
       {nil, local} ->
         Social.set_follow_mute(conn.assigns.current_user, local, muted?)
@@ -313,7 +313,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   defp following?(conn, %RemoteAccount{} = target) do
     case conn.assigns.current_organization do
       nil -> not is_nil(Fediverse.remote_follow_for(conn.assigns.current_user, target))
-      organization -> not is_nil(Fediverse.organization_remote_follow_for(organization, target))
+      organization -> not is_nil(Fediverse.remote_follow_for(organization, target))
     end
   end
 
@@ -334,7 +334,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
     follow =
       case conn.assigns.current_organization do
         nil -> Fediverse.remote_follow_for(conn.assigns.current_user, target)
-        organization -> Fediverse.organization_remote_follow_for(organization, target)
+        organization -> Fediverse.remote_follow_for(organization, target)
       end
 
     muted_follow?(follow)
@@ -374,7 +374,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
     follow =
       case conn.assigns.current_organization do
         nil -> Fediverse.remote_follow_for(conn.assigns.current_user, target)
-        organization -> Fediverse.organization_remote_follow_for(organization, target)
+        organization -> Fediverse.remote_follow_for(organization, target)
       end
 
     match?(%{state: "requested"}, follow)

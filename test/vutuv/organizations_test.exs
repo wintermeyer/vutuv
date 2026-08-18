@@ -627,12 +627,12 @@ defmodule Vutuv.OrganizationsTest do
       # becomes reachable, and the keypair has to exist by then — a federating
       # page without one has its deliveries DELETED as undeliverable, silently.
       refute Vutuv.Fediverse.federated?(page)
-      assert is_nil(Vutuv.Fediverse.get_organization_actor(page))
+      assert is_nil(Vutuv.Fediverse.get_actor(page))
 
       {:ok, page} = Organizations.claim_handle(page, %{"username" => "acme"})
 
       assert Vutuv.Fediverse.federated?(page)
-      assert %Vutuv.Fediverse.Actor{} = Vutuv.Fediverse.get_organization_actor(page)
+      assert %Vutuv.Fediverse.Actor{} = Vutuv.Fediverse.get_actor(page)
     end
 
     test "a page that did not opt in gets no keypair from claiming its @name" do
@@ -640,7 +640,7 @@ defmodule Vutuv.OrganizationsTest do
 
       {:ok, page} = Organizations.claim_handle(page, %{"username" => "quietco"})
 
-      assert is_nil(Vutuv.Fediverse.get_organization_actor(page))
+      assert is_nil(Vutuv.Fediverse.get_actor(page))
     end
   end
 end

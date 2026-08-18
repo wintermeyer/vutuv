@@ -528,10 +528,8 @@ defmodule VutuvWeb.MessageLive.Index do
 
   defp display_name(nil), do: gettext("Deleted account")
 
-  defp display_name(%Organization{name: name}), do: name
-
-  defp display_name(user) do
-    case VutuvWeb.UserHelpers.full_name(user) do
+  defp display_name(party) do
+    case Vutuv.Identity.display_name(party) do
       "" -> gettext("Member")
       name -> name
     end

@@ -979,7 +979,7 @@ defmodule Vutuv.Organizations do
         # the same reason). Minted here rather than lazily on the first request,
         # so a remote server that resolves the handle a second later finds a
         # complete actor instead of waiting on an RSA keygen.
-        if Fediverse.federated?(updated), do: Fediverse.ensure_organization_actor(updated)
+        if Fediverse.federated?(updated), do: Fediverse.ensure_actor(updated)
 
         {:ok, updated}
 

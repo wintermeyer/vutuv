@@ -99,7 +99,7 @@ defmodule Vutuv.OrganizationFediverseGateTest do
     # afterwards keys on the keypair having existed, not on the current flag.
     refute Fediverse.ever_federated?(organization)
 
-    {:ok, _} = Fediverse.ensure_organization_actor(organization)
+    {:ok, _} = Fediverse.ensure_actor(organization)
     assert Fediverse.ever_federated?(organization)
 
     switched_off =

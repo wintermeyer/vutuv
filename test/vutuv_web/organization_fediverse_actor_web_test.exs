@@ -147,7 +147,7 @@ defmodule VutuvWeb.OrganizationFediverseActorWebTest do
 
   test "a page that switched federation off answers 410, not 404", %{conn: conn} do
     page = federating_page()
-    {:ok, _} = Vutuv.Fediverse.ensure_organization_actor(page)
+    {:ok, _} = Vutuv.Fediverse.ensure_actor(page)
 
     _page = page |> Ecto.Changeset.change(%{fediverse_followers?: false}) |> Repo.update!()
 

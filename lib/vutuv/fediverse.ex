@@ -40,6 +40,7 @@ defmodule Vutuv.Fediverse do
   use Gettext, backend: VutuvWeb.Gettext
 
   import Ecto.Query
+  import Vutuv.Identity.Query, only: [party_is: 2]
   import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
 
   require Logger
@@ -200,61 +201,49 @@ defmodule Vutuv.Fediverse do
   # now. Turning the switch off does not unsend what other servers already have,
   # so anything that still has to reach them keys on this, not on `federated?/1`.
   def ever_federated?(%Organization{} = organization),
-    do: enabled?() and get_organization_actor(organization) != nil
+    do: enabled?() and get_actor(organization) != nil
 
   ## Actors
 
-  @doc "The member's actor (keypair), created on first use. Race-safe."
-  def ensure_actor(%User{} = user) do
-    case get_actor(user) do
-      nil ->
-        {private_pem, public_pem} = Keys.generate()
-
-        %Actor{user_id: user.id, private_key_pem: private_pem, public_key_pem: public_pem}
-        |> Repo.insert(on_conflict: :nothing, conflict_target: [:user_id])
-
-        {:ok, get_actor(user)}
-
-      actor ->
-        {:ok, actor}
-    end
-  end
-
-  def get_actor(%User{id: user_id}), do: Repo.get_by(Actor, user_id: user_id)
-
   @doc """
-  A **page's** actor (issue #1334), created on first use. Race-safe, and the
-  exact twin of `ensure_actor/1` — the keypair is the same thing, only its
-  owner column differs.
+  The member's or page's actor (keypair), created on first use. Race-safe;
+  one function with a head per kind (issue #1416), because the keypair is the
+  same thing and only its owner column differs.
 
-  Nothing calls this from a user-facing path yet, and that is deliberate. A
-  keypair is invisible outside this database, so it can exist alone; the parts
-  other servers see (WebFinger, the actor document, delivery, an inbox that
-  answers Follow) have to arrive together, because being findable without a
-  working inbox means somebody presses Follow and nothing ever happens.
+  A page's keypair can exist before anything is federated — it is invisible
+  outside this database. The parts other servers see (WebFinger, the actor
+  document, delivery, an inbox that answers Follow) have to arrive together,
+  because being findable without a working inbox means somebody presses Follow
+  and nothing ever happens.
   """
-  def ensure_organization_actor(%Organization{} = organization) do
-    case get_organization_actor(organization) do
+  def ensure_actor(subject) do
+    case get_actor(subject) do
       nil ->
         {private_pem, public_pem} = Keys.generate()
 
-        %Actor{
-          organization_id: organization.id,
-          private_key_pem: private_pem,
-          public_key_pem: public_pem
-        }
-        |> Repo.insert(on_conflict: :nothing, conflict_target: [:organization_id])
+        subject
+        |> new_actor(private_pem, public_pem)
+        |> Repo.insert(on_conflict: :nothing, conflict_target: actor_conflict_target(subject))
 
-        {:ok, get_organization_actor(organization)}
+        {:ok, get_actor(subject)}
 
       actor ->
         {:ok, actor}
     end
   end
 
-  @doc "The page's actor, or nil."
-  def get_organization_actor(%Organization{id: id}),
-    do: Repo.get_by(Actor, organization_id: id)
+  defp new_actor(%User{id: id}, private_pem, public_pem),
+    do: %Actor{user_id: id, private_key_pem: private_pem, public_key_pem: public_pem}
+
+  defp new_actor(%Organization{id: id}, private_pem, public_pem),
+    do: %Actor{organization_id: id, private_key_pem: private_pem, public_key_pem: public_pem}
+
+  defp actor_conflict_target(%User{}), do: [:user_id]
+  defp actor_conflict_target(%Organization{}), do: [:organization_id]
+
+  @doc "The member's or page's actor, or nil."
+  def get_actor(%User{id: user_id}), do: Repo.get_by(Actor, user_id: user_id)
+  def get_actor(%Organization{id: id}), do: Repo.get_by(Actor, organization_id: id)
 
   @doc """
   The keypair a **tag** signs with, minted on first use (issue #1330).
@@ -417,10 +406,6 @@ defmodule Vutuv.Fediverse do
     count
   end
 
-  @doc "How many remote accounts follow this page."
-  def organization_remote_follower_count(%Organization{id: id}),
-    do: Repo.aggregate(from(f in Follower, where: f.organization_id == ^id), :count)
-
   @doc """
   Records a remote follower of a **topic** (issue #1330), idempotently: a server
   that re-delivers its `Follow` refreshes the row it already has rather than
@@ -502,8 +487,13 @@ defmodule Vutuv.Fediverse do
     :ok
   end
 
+  @doc "How many remote accounts follow this member or page."
   def follower_count(%User{id: user_id}) do
     Repo.aggregate(from(f in Follower, where: f.user_id == ^user_id), :count)
+  end
+
+  def follower_count(%Organization{id: id}) do
+    Repo.aggregate(from(f in Follower, where: f.organization_id == ^id), :count)
   end
 
   @doc """
@@ -554,7 +544,7 @@ defmodule Vutuv.Fediverse do
 
   def departed?(%Organization{} = organization) do
     enabled?() and not organization.fediverse_followers? and
-      get_organization_actor(organization) != nil
+      get_actor(organization) != nil
   end
 
   @doc """
@@ -937,9 +927,9 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  The distinct inboxes a member's activities go to: one per server where the
-  remote declared a sharedInbox (however many followers live there), else the
-  per-actor inbox.
+  The distinct inboxes a member's or page's activities go to: one per server
+  where the remote declared a sharedInbox (however many followers live there),
+  else the per-actor inbox.
   """
   def delivery_inboxes(%User{id: user_id}) do
     Repo.all(
@@ -951,8 +941,7 @@ defmodule Vutuv.Fediverse do
     )
   end
 
-  @doc "The distinct inboxes of a page's remote followers (issue #1334)."
-  def organization_delivery_inboxes(%Organization{id: id}) do
+  def delivery_inboxes(%Organization{id: id}) do
     Repo.all(
       from(f in Follower,
         where: f.organization_id == ^id,
@@ -1380,27 +1369,11 @@ defmodule Vutuv.Fediverse do
   nothing but their own row. Returns `:ok` either way — muting something you do
   not follow is not an error worth a message.
   """
-  def set_remote_follow_mute(%User{id: user_id}, remote_account_id, muted?) do
-    UUIDv7.with_cast(remote_account_id, fn account_id ->
-      Repo.update_all(
-        from(f in Follow, where: f.user_id == ^user_id and f.remote_account_id == ^account_id),
-        set: [muted: muted?, updated_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)]
-      )
-    end)
-
-    :ok
-  end
-
-  @doc "Sets the mute flag on a page's existing remote follow."
-  def set_organization_remote_follow_mute(
-        %Organization{id: organization_id},
-        remote_account_id,
-        muted?
-      ) do
+  def set_remote_follow_mute(party, remote_account_id, muted?) do
     UUIDv7.with_cast(remote_account_id, fn account_id ->
       Repo.update_all(
         from(f in Follow,
-          where: f.organization_id == ^organization_id and f.remote_account_id == ^account_id
+          where: party_is(f, party) and f.remote_account_id == ^account_id
         ),
         set: [muted: muted?, updated_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)]
       )
@@ -1438,11 +1411,15 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  The member's follow of one remote account, or nil — what the account page's
-  button branches on.
+  The member's or page's follow of one remote account, or nil — what the
+  account page's button branches on.
   """
   def remote_follow_for(%User{id: user_id}, %RemoteAccount{id: account_id}) do
     Repo.get_by(Follow, user_id: user_id, remote_account_id: account_id)
+  end
+
+  def remote_follow_for(%Organization{id: id}, %RemoteAccount{id: account_id}) do
+    Repo.get_by(Follow, organization_id: id, remote_account_id: account_id)
   end
 
   # One of the member's own follows, with the remote account preloaded, or nil.
@@ -2030,17 +2007,10 @@ defmodule Vutuv.Fediverse do
       else: :ok
   end
 
-  # Signed with the member's own key: instances in authorized-fetch mode refuse
-  # an anonymous GET, and this is the one fetch we make on their behalf.
-  defp fetch_follow_target(actor_uri, %Organization{} = page) do
-    case fetch_remote_actor(actor_uri, signer_for(page, get_organization_actor(page))) do
-      {:ok, remote} -> {:ok, remote}
-      _error -> {:error, :unreachable_actor}
-    end
-  end
-
-  defp fetch_follow_target(actor_uri, %User{} = user) do
-    case fetch_remote_actor(actor_uri, signer(user)) do
+  # Signed with the follower's own key: instances in authorized-fetch mode
+  # refuse an anonymous GET, and this is the one fetch we make on their behalf.
+  defp fetch_follow_target(actor_uri, follower) do
+    case fetch_remote_actor(actor_uri, signer(follower)) do
       {:ok, remote} -> {:ok, remote}
       _error -> {:error, :unreachable_actor}
     end
@@ -2124,7 +2094,7 @@ defmodule Vutuv.Fediverse do
     with :ok <- check_can_resolve(),
          true <- federated?(page),
          {:ok, account} <- resolve_remote_account(page, address),
-         {:ok, follow} <- insert_organization_remote_follow(page, account) do
+         {:ok, follow} <- insert_remote_follow(page, account) do
       enqueue(
         page,
         [account.inbox_uri],
@@ -2135,21 +2105,6 @@ defmodule Vutuv.Fediverse do
     else
       false -> {:error, :not_federated}
       other -> other
-    end
-  end
-
-  defp insert_organization_remote_follow(%Organization{} = page, %RemoteAccount{} = account) do
-    id = UUIDv7.generate()
-
-    %Follow{id: id, organization_id: page.id, remote_account_id: account.id}
-    |> Follow.changeset(%{
-      state: "requested",
-      follow_activity_id: Docs.follow_activity_id(page, id)
-    })
-    |> Repo.insert()
-    |> case do
-      {:ok, follow} -> {:ok, follow}
-      {:error, _changeset} -> {:error, :already_following}
     end
   end
 
@@ -2188,11 +2143,6 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  @doc "Whether `page` already follows (or has asked to follow) this account."
-  def organization_remote_follow_for(%Organization{id: id}, %RemoteAccount{id: account_id}) do
-    Repo.get_by(Follow, organization_id: id, remote_account_id: account_id)
-  end
-
   @doc "The accounts `page` follows out there, newest first."
   def list_organization_remote_follows(%Organization{id: id}) do
     Repo.all(
@@ -2204,16 +2154,18 @@ defmodule Vutuv.Fediverse do
     )
   end
 
-  defp insert_remote_follow(%User{} = user, %RemoteAccount{} = account) do
-    # The activity id names the row, so the id is minted before the insert
-    # rather than read back after it: an `Accept` finds its follow by this
-    # string and by nothing else.
+  # One head per follower kind (issue #1416); only the owner column differs.
+  # The activity id names the row, so the id is minted before the insert
+  # rather than read back after it: an `Accept` finds its follow by this
+  # string and by nothing else.
+  defp insert_remote_follow(follower, %RemoteAccount{} = account) do
     id = UUIDv7.generate()
 
-    %Follow{id: id, user_id: user.id, remote_account_id: account.id}
+    follower
+    |> new_remote_follow(id, account)
     |> Follow.changeset(%{
       state: "requested",
-      follow_activity_id: Docs.follow_activity_id(user, id)
+      follow_activity_id: Docs.follow_activity_id(follower, id)
     })
     |> Repo.insert()
     |> case do
@@ -2221,6 +2173,12 @@ defmodule Vutuv.Fediverse do
       {:error, _changeset} -> {:error, :already_following}
     end
   end
+
+  defp new_remote_follow(%User{} = user, id, account),
+    do: %Follow{id: id, user_id: user.id, remote_account_id: account.id}
+
+  defp new_remote_follow(%Organization{} = page, id, account),
+    do: %Follow{id: id, organization_id: page.id, remote_account_id: account.id}
 
   defp undo_remote_follow(%User{} = user, %Follow{} = follow),
     do: undo_remote_follows(user, [follow])
@@ -3691,16 +3649,12 @@ defmodule Vutuv.Fediverse do
     :kept
   end
 
-  defp signer_for(%User{} = user, %Actor{} = actor),
-    do: {Docs.key_id(user), actor.private_key_pem}
+  # One clause for all three kinds: `Docs.key_id/1` is `actor_url/1` plus
+  # `#main-key`, and `actor_url/1` dispatches on the subject itself.
+  defp signer_for(subject, %Actor{} = actor) when not is_nil(subject),
+    do: {Docs.key_id(subject), actor.private_key_pem}
 
-  defp signer_for(%Organization{} = organization, %Actor{} = actor),
-    do: {Docs.actor_url(organization) <> "#main-key", actor.private_key_pem}
-
-  defp signer_for(%Tag{} = tag, %Actor{} = actor),
-    do: {Docs.actor_url(tag) <> "#main-key", actor.private_key_pem}
-
-  defp signer_for(_user, _actor), do: nil
+  defp signer_for(_subject, _actor), do: nil
 
   ## Blocked instances and inbound caps (issue #1067)
 
@@ -4259,50 +4213,13 @@ defmodule Vutuv.Fediverse do
 
     with true <- enabled?(),
          true <- federated?(page),
-         %Post{} = post <- resolve_own_organization_note(page, object),
+         %Post{} = post <- resolve_own_note(page, object),
          :ok <- check_inbound_cap(actor_uri),
          {:ok, _reaction} <- insert_reaction(post, actor, kind) do
       Posts.broadcast_post_counters(post.id)
       :ok
     else
       _ -> :skip
-    end
-  end
-
-  @doc """
-  The page twin of `remove_reaction/4`. Unconditional like its sibling: an
-  upstream withdrawal is the deletion path that makes storing the row
-  defensible, so it must not depend on any switch still being on.
-  """
-  def remove_organization_reaction(%Organization{} = page, object, kind, actor_uri)
-      when kind in ~w(like announce) do
-    with %Post{} = post <- resolve_own_organization_note(page, object) do
-      {count, _} =
-        Repo.delete_all(
-          from(r in Reaction,
-            where: r.post_id == ^post.id and r.actor_uri == ^actor_uri and r.kind == ^kind
-          )
-        )
-
-      if count > 0, do: Posts.broadcast_post_counters(post.id)
-    end
-
-    :ok
-  end
-
-  # The page's own note, by the permalink shape `Docs.note_url/2` mints for it.
-  # A member's note lives at `/:handle/posts/:id`, a page's under
-  # `/organizations/:slug/posts/:id`, so this cannot share `resolve_own_note/2`
-  # — and the ownership check is the point: a Like naming somebody else's post
-  # must not be recorded against this page.
-  defp resolve_own_organization_note(%Organization{id: page_id, slug: slug}, object) do
-    with uri when is_binary(uri) <- activity_object_id(object),
-         ["organizations", ^slug, "posts", post_id] <- local_path(uri),
-         %Post{organization_id: ^page_id} = post <-
-           UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
-      post
-    else
-      _ -> nil
     end
   end
 
@@ -4321,13 +4238,13 @@ defmodule Vutuv.Fediverse do
   defp notify_reaction(_user, _post, :exists), do: :ok
 
   @doc """
-  Removes a reaction the remote side took back (`Undo(Like)` / `Undo(Announce)`).
-  Honoured at once and unconditionally — an upstream withdrawal is the deletion
-  path that makes storing the row defensible, so it must not depend on any
-  switch still being on.
+  Removes a reaction the remote side took back (`Undo(Like)` / `Undo(Announce)`)
+  from a member's or a page's post. Honoured at once and unconditionally — an
+  upstream withdrawal is the deletion path that makes storing the row
+  defensible, so it must not depend on any switch still being on.
   """
-  def remove_reaction(%User{} = user, object, kind, actor_uri) when kind in ~w(like announce) do
-    with %Post{} = post <- resolve_own_note(user, object) do
+  def remove_reaction(owner, object, kind, actor_uri) when kind in ~w(like announce) do
+    with %Post{} = post <- resolve_own_note(owner, object) do
       {count, _} =
         Repo.delete_all(
           from(r in Reaction,
@@ -4406,11 +4323,27 @@ defmodule Vutuv.Fediverse do
   defp truncate_handle(_handle), do: nil
 
   # The post behind an activity's `object`, but only when it is a Note URL of
-  # ours naming *this* member's post. Ownership is checked on the row's own
-  # `user_id` — the id names the post, and the handle beside it goes stale on a
-  # rename — and `local_path/1` reads the URL, so the `www.`/`http` spellings
-  # count too (issue #1211). A URL naming somebody else's post, a foreign host,
-  # or a malformed id is a miss (nil), never a raise.
+  # ours naming *this* member's or page's post — the ownership check is the
+  # point: a Like naming somebody else's post must not be recorded against this
+  # owner. One head per kind, because `Docs.note_url/2` mints two path shapes.
+  # A member's note lives at `/:handle/posts/:id`; ownership is checked on the
+  # row's own `user_id` and the handle segment stays unpinned — the id names
+  # the post, and the handle beside it goes stale on a rename. A page's lives
+  # under `/organizations/:slug/posts/:id`, whose slug segment is pinned.
+  # `local_path/1` reads the URL, so the `www.`/`http` spellings count too
+  # (issue #1211). A URL naming somebody else's post, a foreign host, or a
+  # malformed id is a miss (nil), never a raise.
+  defp resolve_own_note(%Organization{id: page_id, slug: slug}, object) do
+    with uri when is_binary(uri) <- activity_object_id(object),
+         ["organizations", ^slug, "posts", post_id] <- local_path(uri),
+         %Post{organization_id: ^page_id} = post <-
+           UUIDv7.with_cast(post_id, &Repo.get(Post, &1)) do
+      post
+    else
+      _ -> nil
+    end
+  end
+
   defp resolve_own_note(user, object) do
     with uri when is_binary(uri) <- activity_object_id(object),
          [_username, "posts", post_id] <- local_path(uri),
@@ -4494,7 +4427,7 @@ defmodule Vutuv.Fediverse do
     with true <- enabled?(),
          true <- federated?(page),
          %{} = object <- note_object(activity["object"]),
-         %Post{} = post <- resolve_own_organization_note(page, object["inReplyTo"]),
+         %Post{} = post <- resolve_own_note(page, object["inReplyTo"]),
          :ok <- check_inbound_cap(actor.uri),
          {:ok, _note} <- insert_note(page, post, activity, object, actor) do
       Posts.broadcast_post_counters(post.id)
@@ -5969,9 +5902,12 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  # The member's own key, to sign the target-actor fetch (authorized-fetch
-  # instances reject anonymous GETs). federated?/1 guaranteed the actor exists.
-  defp signer(user), do: signer_for(user, get_actor(user))
+  # The member's or page's own key, to sign a remote-actor fetch
+  # (authorized-fetch instances reject anonymous GETs); nil without an actor.
+  # Public so the inbox controller signs the same way instead of re-spelling
+  # the key-id shape.
+  @doc false
+  def signer(subject), do: signer_for(subject, get_actor(subject))
 
   ## Answering another network (issue #1070)
 
@@ -8101,7 +8037,7 @@ defmodule Vutuv.Fediverse do
          %Organization{} = page <- Organizations.get_organization(id),
          true <- federated?(page),
          post = Repo.preload(post, Docs.note_preloads()),
-         [_ | _] = inboxes <- organization_delivery_inboxes(page) do
+         [_ | _] = inboxes <- delivery_inboxes(page) do
       record_post_deliveries(page, post, inboxes)
       enqueue(page, inboxes, builder.(post, page), hold_opts(post, kind))
     else
@@ -8463,7 +8399,7 @@ defmodule Vutuv.Fediverse do
   defp resharer_moved?(%Organization{}), do: false
 
   defp repost_inboxes(%User{} = user), do: delivery_inboxes(user)
-  defp repost_inboxes(%Organization{} = page), do: organization_delivery_inboxes(page)
+  defp repost_inboxes(%Organization{} = page), do: delivery_inboxes(page)
 
   ## The pinned post as the `featured` collection (issue #1110)
 

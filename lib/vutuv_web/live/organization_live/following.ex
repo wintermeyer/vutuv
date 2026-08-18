@@ -37,7 +37,6 @@ defmodule VutuvWeb.OrganizationLive.Following do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.MastodonApi
-  alias Vutuv.Moderation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
@@ -217,15 +216,11 @@ defmodule VutuvWeb.OrganizationLive.Following do
     end
   end
 
-  defp visible_local_account(%User{} = user) do
-    if Moderation.profile_visible_to?(user, nil), do: user
-  end
-
-  defp visible_local_account(%Organization{} = organization) do
-    if Organizations.public_visible?(organization), do: organization
-  end
-
   defp visible_local_account(nil), do: nil
+
+  defp visible_local_account(account) do
+    if not Vutuv.Identity.hidden?(account), do: account
+  end
 
   defp set_local_mute(socket, follow_id, muted?) do
     with_publisher(socket, fn organization ->
@@ -236,7 +231,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
   defp set_remote_mute(socket, account_id, muted?) do
     with_publisher(socket, fn organization ->
-      :ok = Fediverse.set_organization_remote_follow_mute(organization, account_id, muted?)
+      :ok = Fediverse.set_remote_follow_mute(organization, account_id, muted?)
       {:noreply, load_following(socket)}
     end)
   end

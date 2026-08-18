@@ -394,7 +394,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     RemotePost.open?(post) or
       match?(
         %{state: "accepted"},
-        Fediverse.organization_remote_follow_for(organization, post.remote_account)
+        Fediverse.remote_follow_for(organization, post.remote_account)
       )
   end
 

@@ -382,7 +382,7 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       {page, post, _publisher} = page_post()
       note = note!(post)
 
-      {:ok, _} = Fediverse.ensure_organization_actor(page)
+      {:ok, _} = Fediverse.ensure_actor(page)
       {:ok, view, _html} = thread_view(post, cookie)
 
       view

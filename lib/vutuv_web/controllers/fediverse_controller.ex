@@ -519,15 +519,8 @@ defmodule VutuvWeb.FediverseController do
   # falls back to an anonymous fetch, which such an instance may refuse — and
   # then the delivery is rejected, which is the right outcome for an activity
   # that was for none of our actors anyway.
-  defp signer([%User{} = user | _rest]) do
-    case Fediverse.get_actor(user) do
-      nil -> nil
-      actor -> {Docs.key_id(user), actor.private_key_pem}
-    end
-  end
-
-  defp signer([%Organization{} = organization | _rest]), do: organization_signer(organization)
   defp signer([%Tag{} = tag | _rest]), do: tag_signer(tag)
+  defp signer([subject | _rest]), do: Fediverse.signer(subject)
   defp signer([]), do: nil
 
   @doc """
@@ -537,7 +530,7 @@ defmodule VutuvWeb.FediverseController do
   """
   def organization_actor(conn, %{"slug" => slug}) do
     with_federated_organization(conn, slug, fn organization ->
-      {:ok, actor} = Fediverse.ensure_organization_actor(organization)
+      {:ok, actor} = Fediverse.ensure_actor(organization)
 
       send_activity_json(conn, Docs.organization_actor(organization, actor))
     end)
@@ -550,7 +543,7 @@ defmodule VutuvWeb.FediverseController do
         conn,
         Docs.count_collection(
           Docs.actor_url(organization) <> "/followers",
-          Fediverse.organization_remote_follower_count(organization)
+          Fediverse.follower_count(organization)
         )
       )
     end)
@@ -730,7 +723,7 @@ defmodule VutuvWeb.FediverseController do
     activity = conn.body_params
 
     with {:ok, key_id} <- signature_key_id(conn),
-         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, organization_signer(organization)),
+         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, Fediverse.signer(organization)),
          true <- Fediverse.same_host?(remote.id, key_id),
          :ok <- verify_signature(conn, remote),
          true <- activity["actor"] == remote.id do
@@ -799,7 +792,7 @@ defmodule VutuvWeb.FediverseController do
          remote
        )
        when kind in ["Like", "Announce"] do
-    Fediverse.remove_organization_reaction(
+    Fediverse.remove_reaction(
       organization,
       object["object"],
       String.downcase(kind),
@@ -826,13 +819,6 @@ defmodule VutuvWeb.FediverseController do
 
   # Everything else: acknowledged and dropped, like the member inbox.
   defp perform_for_organization(_organization, _activity, _remote), do: :ok
-
-  defp organization_signer(organization) do
-    case Fediverse.get_organization_actor(organization) do
-      nil -> nil
-      actor -> {Docs.actor_url(organization) <> "#main-key", actor.private_key_pem}
-    end
-  end
 
   @doc """
   The page's outbox, count-only like a member's.

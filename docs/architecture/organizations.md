@@ -415,8 +415,18 @@ and `publisher` must never arrive by accident.
 
 ## Speaking as a page (#1334, #1335, #1336)
 
-A page is an identity, not only a brochure. What it can do now, and where each
-piece lives:
+A page is an identity, not only a brochure. **`Vutuv.Identity`** (issue #1416)
+is the named seam over the two kinds: a protocol implemented for `User` and
+`Organization` (kind, display name, handle, path, image token, `hidden?`,
+PubSub topic, ActivityPub type, and the doc/JSON `ref` map the API and agent
+docs share), so a display surface asks the identity instead of re-matching the
+nullable `user_id | organization_id` pair. Its query half,
+`Vutuv.Identity.Query`, spells the column-pair idiom once (`party_is`,
+`join_party`, `shown_party`) — the pair's NULL semantics produced the
+milestone's whole silent-failure class. A third actor kind would implement the
+protocol instead of being excavated into every call site.
+
+What a page can do now, and where each piece lives:
 
 - **It publishes.** `posts` carries `user_id | organization_id` (CHECK exactly
   one) plus `acting_user_id` — who pressed publish, `nilify_all`, never shown.

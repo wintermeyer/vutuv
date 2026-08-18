@@ -11,7 +11,6 @@ defmodule VutuvWeb.PostJSON do
   """
 
   alias Vutuv.Accounts.User
-  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
@@ -25,7 +24,7 @@ defmodule VutuvWeb.PostJSON do
     %{
       id: post.id,
       url: VutuvWeb.Endpoint.url() <> Posts.path(post),
-      author: author_ref(Posts.author(post)),
+      author: Vutuv.Identity.ref(Posts.author(post)),
       body_markdown: post.body,
       body_html:
         post.body
@@ -54,11 +53,11 @@ defmodule VutuvWeb.PostJSON do
           # Whichever author the parent has (issue #1336): a member may answer a
           # post published in a page's name, and `author_ref/1` already speaks
           # both — `parent.user` alone would have shipped `nil` here.
-          author: author_ref(Posts.author(parent))
+          author: Vutuv.Identity.ref(Posts.author(parent))
         }
 
       {:author_only, author} ->
-        %{post_id: nil, url: nil, author: author_ref(author)}
+        %{post_id: nil, url: nil, author: Vutuv.Identity.ref(author)}
 
       :gone ->
         %{post_id: nil, url: nil, author: nil}
@@ -84,16 +83,6 @@ defmodule VutuvWeb.PostJSON do
       _other ->
         Posts.released_images(post)
     end
-  end
-
-  defp author_ref(%User{} = user) do
-    %{username: user.username, name: VutuvWeb.UserHelpers.full_name(user)}
-  end
-
-  # A page has a name and a slug where a member has a handle (issue #1334); it
-  # may hold no handle at all, so `username` would be a lie rather than a gap.
-  defp author_ref(%Organization{} = organization) do
-    %{slug: organization.slug, name: organization.name}
   end
 
   defp image(%PostImage{} = image) do

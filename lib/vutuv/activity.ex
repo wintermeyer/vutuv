@@ -32,12 +32,15 @@ defmodule Vutuv.Activity do
       the page keeps listing those events, it just stops calling them new.
   """
   import Ecto.Query
+  import Vutuv.Identity.Query, only: [join_party: 3, shown_party: 2]
+
   alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.User
   alias Vutuv.Activity.NotificationPostRead
   alias Vutuv.Engagement
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.Reaction
+  alias Vutuv.Identity
   alias Vutuv.MastodonApi.PushDispatcher
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations.Organization
@@ -56,28 +59,14 @@ defmodule Vutuv.Activity do
   @pubsub Vutuv.PubSub
   @default_limit 50
 
-  defp topic(%Vutuv.Organizations.Organization{id: id}), do: "organization:#{id}"
+  # Struct callers get the one topic grammar (`Vutuv.Identity.topic/1`); the
+  # bare-id clause spells the member topic again because most callers hold only
+  # an id — `Vutuv.IdentityTest` pins the impl to this exact string.
+  defp topic(party) when is_struct(party), do: Identity.topic(party)
   defp topic(user_id), do: "user:#{user_id}"
 
   def subscribe(nil), do: :ok
   def subscribe(party), do: Phoenix.PubSub.subscribe(@pubsub, topic(party))
-
-  # Whether a follow row has a follower worth showing. The member side is left
-  # exactly as it was — the row existing is the whole test, no moderation gate,
-  # which is what the old inner join amounted to — so this changes nothing for
-  # members. The page side additionally has to be one a reader may open, or the
-  # notification would link somewhere they are turned away from.
-  #
-  # It lives here, shared by the list and both badge queries, because those
-  # three drifting apart is exactly the bug: a badge counting what the list
-  # cannot show.
-  defmacrop shown_follower(u, o) do
-    quote do
-      not is_nil(unquote(u).id) or
-        (not is_nil(unquote(o).id) and unquote(o).status == "active" and
-           is_nil(unquote(o).frozen_at))
-    end
-  end
 
   @doc "Broadcast a raw event to a user's topic (no-op for a nil recipient)."
   def broadcast(nil, _event), do: :ok
@@ -127,15 +116,10 @@ defmodule Vutuv.Activity do
   # mirrors the filters of its kind's items/count queries below.
 
   defp follower_max(user_id) do
-    from(c in Follow,
-      left_join: u in User,
-      on: u.id == c.follower_id,
-      left_join: o in Organization,
-      on: o.id == c.follower_organization_id,
-      where: c.followee_id == ^user_id,
-      where: shown_follower(u, o),
-      select: %{ts: max(c.inserted_at)}
-    )
+    from(c in Follow, where: c.followee_id == ^user_id)
+    |> join_party(:follower_id, :follower_organization_id)
+    |> where([c, u, o], shown_party(u, o))
+    |> select([c], %{ts: max(c.inserted_at)})
   end
 
   defp endorsement_max(user_id) do
@@ -1056,15 +1040,11 @@ defmodule Vutuv.Activity do
       )
       |> at_or_before(cursor)
 
-    from(e in subquery(newest),
-      left_join: f in User,
-      on: f.id == e.actor_id,
-      left_join: o in Organization,
-      on: o.id == e.actor_organization_id,
-      where: shown_follower(f, o),
-      order_by: [desc: e.at, desc: e.id],
-      select: {e.id, e.at, struct(f, ^User.listing_fields()), o}
-    )
+    from(e in subquery(newest))
+    |> join_party(:actor_id, :actor_organization_id)
+    |> where([e, f, o], shown_party(f, o))
+    |> order_by([e], desc: e.at, desc: e.id)
+    |> select([e, f, o], {e.id, e.at, struct(f, ^User.listing_fields()), o})
     |> Repo.all()
     |> Enum.map(fn {id, at, follower, organization} ->
       actor_item("follower-#{id}", "follower", at, follower || organization)
@@ -1811,15 +1791,10 @@ defmodule Vutuv.Activity do
   # Each count helper returns a query selecting a single count, so total_count/2
   # can fold all three into one round trip via scalar subqueries.
   defp count_followers(user_id, read_at) do
-    from(c in Follow,
-      left_join: u in User,
-      on: u.id == c.follower_id,
-      left_join: o in Organization,
-      on: o.id == c.follower_organization_id,
-      where: c.followee_id == ^user_id,
-      where: shown_follower(u, o),
-      select: %{count: count()}
-    )
+    from(c in Follow, where: c.followee_id == ^user_id)
+    |> join_party(:follower_id, :follower_organization_id)
+    |> where([c, u, o], shown_party(u, o))
+    |> select([c], %{count: count()})
     |> since(read_at)
   end
 
@@ -2004,17 +1979,19 @@ defmodule Vutuv.Activity do
   defp actor_avatar(%Organization{}), do: nil
   defp actor_avatar(_), do: nil
 
-  defp display_name(%Organization{name: name}), do: name
+  defp display_name(%Organization{} = organization), do: Identity.display_name(organization)
+
+  defp display_name(%User{} = user), do: or_someone(Identity.display_name(user))
 
   defp display_name(%{first_name: first, last_name: last}) do
     [first, last]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join(" ")
-    |> case do
-      "" -> "Someone"
-      name -> name
-    end
+    |> or_someone()
   end
 
   defp display_name(_), do: "Someone"
+
+  defp or_someone(""), do: "Someone"
+  defp or_someone(name), do: name
 end
