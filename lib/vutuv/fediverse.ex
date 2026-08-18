@@ -1638,6 +1638,19 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  The same figure for a page: how many accounts on other networks it follows.
+
+  An aggregate, because both callers only ever wanted the number — they took
+  `length(list_organization_remote_follows/1)`, which loads every follow row
+  **with its `:remote_account` preloaded** and sorts them, for a list whose
+  length the page itself sets. On a timeline that renders several pages, that is
+  an unbounded read per page per request.
+  """
+  def organization_remote_follow_count(%Organization{id: id}) do
+    Repo.aggregate(from(f in Follow, where: f.organization_id == ^id), :count)
+  end
+
+  @doc """
   `remote_follow_count/1` for many members at once, as `%{user_id => count}`.
 
   The batched twin the Mastodon client API needs: a member's "following" figure

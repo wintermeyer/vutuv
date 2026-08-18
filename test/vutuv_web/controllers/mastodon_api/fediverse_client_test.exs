@@ -386,14 +386,12 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
 
     test "says how to reach the people who run this installation", %{conn: conn} do
       instance = conn |> on_mastodon_host() |> get("/api/v2/instance") |> json_response(200)
-      {email, _handle} = MastodonApi.operator_contact()
-
-      assert instance["contact"]["email"] == email
+      assert instance["contact"]["email"] == MastodonApi.operator_email()
       assert instance["contact"]["email"] != ""
     end
 
     test "names the operator's own account once the handle resolves here", %{conn: conn} do
-      {_email, handle} = MastodonApi.operator_contact()
+      handle = MastodonApi.operator_handle()
       insert(:activated_user, username: handle)
 
       instance = conn |> on_mastodon_host() |> get("/api/v2/instance") |> json_response(200)
@@ -408,12 +406,12 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
     end
 
     test "the v1 document carries the same two facts", %{conn: conn} do
-      {email, handle} = MastodonApi.operator_contact()
+      handle = MastodonApi.operator_handle()
       insert(:activated_user, username: handle)
 
       instance = conn |> on_mastodon_host() |> get("/api/v1/instance") |> json_response(200)
 
-      assert instance["email"] == email
+      assert instance["email"] == MastodonApi.operator_email()
       assert instance["contact_account"]["acct"] == handle
     end
   end

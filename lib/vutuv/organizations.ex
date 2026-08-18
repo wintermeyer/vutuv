@@ -95,6 +95,17 @@ defmodule Vutuv.Organizations do
   # --- fetch ------------------------------------------------------------------
 
   def get_organization(id), do: Repo.get(Organization, id)
+
+  @doc """
+  The pages named by `ids`, in one query — for a caller holding a page's worth of
+  ids and no structs, which would otherwise pay a lookup per row. Unknown ids are
+  simply absent.
+  """
+  def list_organizations_by_ids([]), do: []
+
+  def list_organizations_by_ids(ids) when is_list(ids),
+    do: Repo.all(from(o in Organization, where: o.id in ^ids))
+
   def get_organization!(id), do: Repo.get!(Organization, id)
 
   def get_organization_by_slug(slug) when is_binary(slug),

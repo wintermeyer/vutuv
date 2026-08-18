@@ -21,11 +21,22 @@ defmodule Vutuv.MastodonApi.AccountCounts do
       viewer-scoped timeline the profile endpoint counts, so the figure a client
       reads in a timeline is the figure it reads on the profile.
 
-  Pages are counted one at a time instead: a page authoring posts is the rare row
-  in a timeline, its counts have no grouped query today, and writing one for a
-  handful of rows would buy nothing. Remote accounts get no counts at all — we
-  cache their posts, not their social graph, and a number invented from what
-  happens to be cached would be worse than the honest zero.
+  Pages are counted one at a time instead, because their three figures have no
+  grouped query yet — and a page is **not** the rare row a first draft of this
+  assumed: the site feed joins page posts in on purpose, so a client's Local tab
+  is full of them. What that costs is bounded on purpose (`Organizations` are
+  fetched for the whole page in one query, and each figure is an aggregate
+  rather than a list somebody counts), and the grouped queries are the follow-up.
+
+  Remote accounts get no counts at all — we cache their posts, not their social
+  graph, and a number invented from what happens to be cached would be worse
+  than the honest zero.
+
+  `for_account/2` is the same arithmetic for one account, and the reason it
+  lives here: the endpoints that answer with a single account used to compose
+  these three figures themselves, and the two copies had already drifted — a
+  page's own publisher was counted as a publisher on one endpoint and as a
+  stranger on the other, so the same page reported two different post counts.
   """
 
   alias Vutuv.Accounts.User
@@ -74,7 +85,26 @@ defmodule Vutuv.MastodonApi.AccountCounts do
     for %{id: id} <- accounts, uuid = UUIDv7.cast_or_nil(id), do: uuid
   end
 
-  defp member_counts([], _viewer), do: %{}
+  @doc """
+  The same three figures for one account, or `nil` for an account whose figures
+  are not ours to state (anything from another network).
+
+  The single-account twin of `for_statuses/2`, so `GET /api/v1/accounts/:id` and
+  the account embedded in a status are assembled by one piece of code rather
+  than by two that agree only as long as somebody keeps them agreeing.
+  """
+  def for_account(%User{} = user, viewer) do
+    user.id |> List.wrap() |> member_counts(reader(viewer)) |> Map.get(user.id)
+  end
+
+  # The viewer arrives already decided by the caller, so a page's own publisher
+  # keeps the fuller count `GET /accounts/:id` has always given them. The
+  # embedded path cannot know which page a request acts for and therefore counts
+  # a page as a stranger would — the public figure, which is the one Mastodon's
+  # `statuses_count` means anyway.
+  def for_account(%Organization{} = page, viewer), do: organization_counts(page, viewer)
+
+  def for_account(_remote, _viewer), do: nil
 
   defp member_counts(ids, viewer) do
     followers = Social.follower_counts(ids)
@@ -92,22 +122,23 @@ defmodule Vutuv.MastodonApi.AccountCounts do
     end)
   end
 
-  defp page_counts([], _viewer), do: %{}
-
+  # One lookup for the whole page rather than one per row: the rendered account
+  # carries only the id, and re-fetching each page separately was a query per
+  # row before any figure had been counted.
   defp page_counts(ids, viewer) do
     ids
-    |> Enum.map(&Organizations.get_organization/1)
-    |> Enum.reject(&is_nil/1)
-    |> Map.new(fn %Organization{} = page ->
-      {page.id,
-       %{
-         followers: Social.organization_follower_count(page),
-         following:
-           Social.organization_followee_count(page) +
-             length(Fediverse.list_organization_remote_follows(page)),
-         statuses: Posts.count_organization_posts(page, viewer)
-       }}
-    end)
+    |> Organizations.list_organizations_by_ids()
+    |> Map.new(&{&1.id, organization_counts(&1, viewer)})
+  end
+
+  defp organization_counts(%Organization{} = page, viewer) do
+    %{
+      followers: Social.organization_follower_count(page),
+      following:
+        Social.organization_followee_count(page) +
+          Fediverse.organization_remote_follow_count(page),
+      statuses: Posts.count_organization_posts(page, viewer)
+    }
   end
 
   # A reshare carries two accounts — whoever passed the post on, and its author —

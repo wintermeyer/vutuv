@@ -512,11 +512,8 @@ defmodule Vutuv.Social do
   end
 
   # The gates above, over a **set** of members, so the single count and the
-  # batched one cannot answer differently. Split out when the Mastodon client
-  # API started filling the counts on every account it embeds in a status
-  # (Mastodon's are counter columns; ours are these queries, so a page of
-  # twenty statuses had to become a fixed handful of round trips rather than
-  # three per row).
+  # batched one cannot answer differently. Split out for
+  # `Vutuv.MastodonApi.AccountCounts`, which needs a page of them at once.
   defp follower_scope(user_ids) do
     from(c in Follow,
       left_join: u in assoc(c, :follower),
@@ -553,6 +550,7 @@ defmodule Vutuv.Social do
     |> Map.new()
   end
 
+  @doc "The `following` half of `follower_counts/1`, as `%{user_id => count}`."
   def followee_counts([]), do: %{}
 
   def followee_counts(user_ids) when is_list(user_ids) do

@@ -22,12 +22,6 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   alias Vutuv.UUIDv7
   alias VutuvWeb.MastodonApi.Pagination
 
-  # Every prefix a feed source stamps onto an entry id, for the cursor that
-  # names the boundary entry under each of them.
-  # `VutuvWeb.MastodonApi.Pagination.bare_id/1` owns the reverse mapping, since
-  # the account endpoints have to make it too.
-  @entry_prefixes ~w(post repost tagpost boost remote remote_repost)
-
   def home(conn, params) do
     page = Pagination.params(strip_prefixes(params))
     entries = load(conn, page)
@@ -51,6 +45,15 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   end
 
   defp bare_id(value), do: Pagination.bare_id(value)
+
+  # **Every feed entry already carries its own id**, so reading the boundary out
+  # of one costs a map lookup. Rendering the entry to ask (`status_from_entry/1`)
+  # meant a full status per candidate — Markdown to HTML, media, the account map
+  # — and `Pagination.window/3` is handed `limit + 20` of them before the page is
+  # rendered for real, so a 20-status page paid for about eighty renders and, for
+  # a page carrying cached replies, one `get_remote_account/1` per note per
+  # render. The fallback stays for an entry shape that has no id of its own.
+  defp boundary_id(%{id: id}) when is_binary(id), do: bare_id(id)
 
   defp boundary_id(entry) do
     entry |> Presenter.status_from_entry() |> Map.fetch!(:id) |> bare_id()
@@ -177,7 +180,7 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   defp cursor(%Pagination{max_id: max_id}) do
     case UUIDv7.timestamp(max_id) do
       nil -> nil
-      at -> %{at: at, ids: Enum.map(@entry_prefixes, &"#{&1}-#{max_id}")}
+      at -> %{at: at, ids: Pagination.prefixed_ids(max_id)}
     end
   end
 end

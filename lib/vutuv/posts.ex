@@ -1439,11 +1439,8 @@ defmodule Vutuv.Posts do
   visibility question of the post it gets.
   """
   def get_reposted_post(id) do
-    with uuid when not is_nil(uuid) <- Vutuv.UUIDv7.cast_or_nil(id),
-         %PostRepost{post_id: post_id} <- Repo.get(PostRepost, uuid) do
+    with %PostRepost{post_id: post_id} <- UUIDv7.with_cast(id, &Repo.get(PostRepost, &1)) do
       get_post(post_id)
-    else
-      _no_such_repost -> nil
     end
   end
 
@@ -3252,7 +3249,7 @@ defmodule Vutuv.Posts do
   @doc """
   `profile_posts/3` as a list a client can walk: the same three legs
   (`author_timeline_query/3`) and the same visibility, ordered and bounded by
-  the **post** id rather than by when the entry was made.
+  the entry's own id (`ref_id`) rather than by when the entry was made.
 
   Two deliberate differences from the website's version, both forced by what a
   Mastodon client hands back.
@@ -3298,12 +3295,10 @@ defmodule Vutuv.Posts do
   `count_author_posts/3` for many members at once, as `%{user_id => count}` —
   one query for a whole page.
 
-  Written for the Mastodon client API, which fills the counts on **every**
-  account it embeds in a status: Mastodon's `statuses_count` is a counter column
-  and every client believes it, so leaving it at zero told a client that a
-  member with a full timeline had written nothing — which is what a profile
-  header then showed. Same query and same viewer scoping as the single count, so
-  the figure a client reads in a timeline is the one it reads on the profile.
+  Same query and same viewer scoping as the single count, so the figure a client
+  reads in a timeline is the one it reads on a profile. Written for
+  `Vutuv.MastodonApi.AccountCounts`, which explains why a whole page of them is
+  needed at once.
   """
   def author_post_counts([], _viewer), do: %{}
 

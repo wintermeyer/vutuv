@@ -44,7 +44,6 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   defp resolve_status("remote-" <> id), do: Fediverse.get_remote_post(id)
   defp resolve_status("boost-" <> id), do: Fediverse.get_boosted_object(id)
   defp resolve_status("repost-" <> id), do: Posts.get_reposted_post(id)
-  defp resolve_status("post-" <> id), do: Posts.get_post(id)
   defp resolve_status(id) when is_binary(id), do: Posts.get_post(id)
   defp resolve_status(_other), do: nil
 
@@ -441,13 +440,19 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     %{posts: posts} = Posts.list_thread(post, viewer)
 
     parents = Map.new(posts, &{&1.id, parent_id(&1)})
-    ancestors = ancestor_chain(parents, parents[post.id], [])
+    by_id = Map.new(posts, &{&1.id, &1})
+    ancestors = for id <- ancestor_chain(parents, parents[post.id], []), by_id[id], do: by_id[id]
     descendants = Enum.filter(posts, &below?(parents, &1.id, post.id))
 
-    %{
-      ancestors: render_thread(posts, ancestors, viewer),
-      descendants: Presenter.statuses(descendants, viewer)
-    }
+    # **One render for both halves.** A thread is mostly the same handful of
+    # people, and every `Presenter.statuses/2` call reads their counts
+    # (`Vutuv.MastodonApi.AccountCounts`) — rendering ancestors and descendants
+    # separately paid for that twice per request, on the call a client makes the
+    # moment somebody opens a status.
+    rendered = Presenter.statuses(ancestors ++ descendants, viewer)
+    {rendered_ancestors, rendered_descendants} = Enum.split(rendered, length(ancestors))
+
+    %{ancestors: rendered_ancestors, descendants: rendered_descendants}
   end
 
   # Oldest first, which is reading order for a chain of answers.
@@ -455,11 +460,6 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   defp ancestor_chain(parents, id, acc) do
     if id in acc, do: acc, else: ancestor_chain(parents, parents[id], [id | acc])
-  end
-
-  defp render_thread(posts, ids, viewer) do
-    by_id = Map.new(posts, &{&1.id, &1})
-    Presenter.statuses(for(id <- ids, post = by_id[id], do: post), viewer)
   end
 
   # Walks up rather than down: a post is a descendant when the focus is

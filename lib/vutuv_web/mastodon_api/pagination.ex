@@ -64,6 +64,22 @@ defmodule VutuvWeb.MastodonApi.Pagination do
   def bare_id(value), do: value
 
   @doc """
+  The boundary id under every prefix a feed source can stamp on it.
+
+  The forward direction of `bare_id/1`, and the reason it lives beside it: the
+  merged home feed interleaves sources that share no id space, so its cursor
+  names the boundary entry under each spelling rather than betting on one. That
+  list was kept a second time in the timeline controller and had drifted — it
+  held only single-word prefixes, so it could never name `remote-repost-<uuid>`
+  or `remote-note-<uuid>`, which is exactly what `Vutuv.Fediverse` mints, and the
+  boundary entry came back on the next page. A surplus guess costs nothing (these
+  ids are unique, so a name nothing carries simply never matches), a missing one
+  costs a duplicate row.
+  """
+  def prefixed_ids(uuid) when is_binary(uuid),
+    do: Enum.map(@id_prefixes, &(&1 <> "-" <> uuid))
+
+  @doc """
   Reads the four parameters, clamping `limit` to Mastodon's 1..40.
 
   **`:strip` is not optional for a list whose ids are prefixed.** A client hands

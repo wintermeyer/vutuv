@@ -64,11 +64,9 @@ defmodule Vutuv.MastodonApi do
   @mastodon_api_version 6
 
   def compatibility_version do
-    @compatibility_version <> " (compatible; vutuv " <> vutuv_version() <> ")"
+    vutuv_version = Application.spec(:vutuv, :vsn) |> to_string()
+    @compatibility_version <> " (compatible; vutuv " <> vutuv_version <> ")"
   end
-
-  @doc "This installation's own version — the vutuv release, not the API generation."
-  def vutuv_version, do: Application.spec(:vutuv, :vsn) |> to_string()
 
   @doc """
   The `api_versions` object of the v2 instance document.
@@ -80,20 +78,22 @@ defmodule Vutuv.MastodonApi do
   def api_versions, do: %{mastodon: @mastodon_api_version}
 
   @doc """
-  How to reach the people who run this installation, in the shape both instance
-  documents want: `{email, handle_or_nil}`.
-
-  Both halves come from the operator-identity block in `config/config.exs`
-  (env-overridable), never from a literal here — the address is the one
-  `security.txt` already publishes as the operator contact, and the handle is
-  `:operator_handle`, the member a journalist is pointed at. The handle is
-  returned as written and resolved by the caller, so an installation whose
-  handle names nobody answers `nil` instead of pointing a client at a stranger.
+  Where to write about this installation — the address `security.txt` already
+  publishes as the operator contact, from the operator-identity block in
+  `config/config.exs` (env-overridable) rather than from a literal here.
   """
-  def operator_contact do
+  def operator_email do
     {_name, email} = Application.fetch_env!(:vutuv, :operator_recipient)
-    {email, Application.get_env(:vutuv, :operator_handle)}
+    email
   end
+
+  @doc """
+  The handle of the member a client should be pointed at for this installation,
+  as written in config and **not** resolved here: an installation whose handle
+  names nobody must answer with no account rather than with a stranger's
+  profile, and that is the caller's lookup to make.
+  """
+  def operator_handle, do: Application.get_env(:vutuv, :operator_handle)
 
   def main_url(path), do: absolute_url(local_domain(), path)
   def api_url(path), do: absolute_url(api_host(), path)

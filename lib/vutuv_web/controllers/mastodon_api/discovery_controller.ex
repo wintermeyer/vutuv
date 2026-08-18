@@ -39,7 +39,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
       configuration: configuration(conn),
       registrations: %{enabled: false, approval_required: false, message: nil},
       api_versions: MastodonApi.api_versions(),
-      contact: %{email: contact_email(), account: contact_account()},
+      contact: %{email: MastodonApi.operator_email(), account: contact_account()},
       rules: []
     })
   end
@@ -52,7 +52,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
       title: node_name(),
       short_description: node_description(),
       description: node_description(),
-      email: contact_email(),
+      email: MastodonApi.operator_email(),
       version: MastodonApi.compatibility_version(),
       urls: %{streaming_api: MastodonApi.streaming_url(conn.host)},
       stats: %{
@@ -173,15 +173,11 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
     }
   end
 
-  # Who a client should write to about this installation. Both documents used
-  # to answer an empty string and a `null` account, which a client renders as an
-  # instance with nobody behind it — "Instance administrator" with a blank line
-  # under it. Neither value is invented here: they are the operator-identity
-  # config the security.txt contact and the media kit already read, so a
-  # third-party installation names its own operator by setting two env vars.
-  defp contact_email, do: MastodonApi.operator_contact() |> elem(0)
-
-  # The operator as a full Account entity, which is what a client links to.
+  # The operator as a full Account entity, which is what a client links to. Both
+  # documents used to answer an empty string and a `null` account, which a client
+  # renders as an instance with nobody behind it — "Instance administrator" with
+  # a blank line under it.
+  #
   # Resolved through the member table on every request rather than stored: a
   # handle that names nobody here (the vutuv.de default on somebody else's
   # installation) has to answer `null`, not a dead profile — the same rule the
@@ -189,9 +185,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   # this is a contact card, not a profile header, and no client shows figures
   # on it.
   defp contact_account do
-    {_email, handle} = MastodonApi.operator_contact()
-
-    with true <- is_binary(handle) and handle != "",
+    with handle when is_binary(handle) and handle != "" <- MastodonApi.operator_handle(),
          %User{} = user <- Accounts.get_user_by_username(handle) do
       Presenter.account(user)
     else

@@ -30,11 +30,15 @@ defmodule Vutuv.MastodonApi.Presenter do
   @doc """
   One account in Mastodon's shape.
 
-  `counts` fills the three profile-header figures. It is passed by the
-  endpoints that answer with a **single** account — the ones a client renders a
-  profile header from — and left out of the list endpoints, where filling it
-  would mean three counts per row and no client shows them there. Reading the
-  member's own bio into `note` costs nothing, so that is always filled.
+  `counts` fills the three profile-header figures. Every account this adapter
+  sends carries them, because a client renders a profile header from whichever
+  copy of the account it happens to hold — see
+  `Vutuv.MastodonApi.AccountCounts`, which reads them for a whole page at once
+  and is what `statuses/2` fills them from. Passing them here is for the
+  endpoints that answer with a **single** account; leaving them out keeps the
+  entity's zeroes, which is only ever right for an account whose figures are not
+  ours to state. Reading the member's own bio into `note` costs nothing, so that
+  is always filled.
   """
   def account(subject, counts \\ nil)
 
@@ -60,6 +64,7 @@ defmodule Vutuv.MastodonApi.Presenter do
 
   def account(%Organization{} = organization, counts) do
     handle = organization.username || organization.slug
+    header = organization_image(organization.cover, fallback_header())
 
     base_account(%{
       id: organization.id,
@@ -69,13 +74,10 @@ defmodule Vutuv.MastodonApi.Presenter do
       note: note(organization.description),
       created_at: created_at(organization, organization.id),
       url: MastodonApi.main_url(Organizations.canonical_path(organization)),
-      avatar: organization_logo(organization.logo),
+      avatar: organization_image(organization.logo, fallback_avatar()),
+      header: header,
+      header_static: header,
       group: true
-    })
-    |> Map.merge(%{
-      header: organization_cover(organization.cover),
-      header_static: organization_cover(organization.cover),
-      avatar_static: organization_logo(organization.logo)
     })
     |> Map.merge(count_fields(counts))
   end
@@ -453,17 +455,14 @@ defmodule Vutuv.MastodonApi.Presenter do
   # A page's own logo and cover, which this used to skip entirely: every
   # organization account was rendered with the installation's default icon, so a
   # client showed the vutuv logo beside a page that has had a picture all along.
-  # `nil` (no picture stored) keeps the stand-in — a different one per slot,
-  # since a square icon is not a banner. The AI gate is not re-asked here: an
-  # organization image is served through `VutuvWeb.OrganizationImageController`,
-  # which resolves the token and asks it per request.
-  defp organization_logo(nil), do: fallback_avatar()
-  defp organization_logo(token), do: organization_image(token)
+  # The stand-in is the caller's, because it belongs to the *slot* rather than to
+  # the page — a square icon is not a banner. The AI gate is not re-asked here:
+  # an organization image is served through
+  # `VutuvWeb.OrganizationImageController`, which resolves the token and asks it
+  # per request.
+  defp organization_image(nil, stand_in), do: stand_in
 
-  defp organization_cover(nil), do: fallback_header()
-  defp organization_cover(token), do: organization_image(token)
-
-  defp organization_image(token),
+  defp organization_image(token, _stand_in),
     do: MastodonApi.main_url(OrganizationImage.token_url(token, "large"))
 
   # The cached picture of an account on another network (issue #1163), which
