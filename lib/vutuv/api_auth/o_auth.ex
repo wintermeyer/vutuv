@@ -2,7 +2,7 @@ defmodule Vutuv.ApiAuth.OAuth do
   @moduledoc """
   The OAuth 2 authorization-code flow (RFC 6749 + PKCE per RFC 7636,
   hardened per RFC 9700): `validate_authorize/1` checks an incoming
-  authorize request, `approve/2` records the user's consent and mints the
+  authorize request, `approve/4` records the user's consent and mints the
   one-time code, `exchange/1` and `refresh/1` are the token endpoint's two
   grant types, `revoke/1` is RFC 7009.
 
@@ -140,46 +140,154 @@ defmodule Vutuv.ApiAuth.OAuth do
   created or refreshed (scopes are the union of old and new — consent only
   ever widens, revocation is explicit), the code carries the PKCE
   challenge. Returns the code plaintext for the redirect.
-  """
-  def approve(user, request, identity \\ nil)
 
-  def approve(user, %{app: %App{protocol: "mastodon"}} = request, identity) do
+  `consent_nonce` is the nonce the consent form carried (`new_consent_nonce/0`).
+  Pass it and the same submission answers with the same code however often it
+  arrives; pass nothing and every call mints a fresh one, as before.
+  """
+  def approve(user, request, identity \\ nil, consent_nonce \\ nil)
+
+  def approve(user, %{app: %App{protocol: "mastodon"}} = request, identity, consent_nonce) do
     with {:ok, organization, scopes} <- Access.select(user, identity, request.scopes) do
-      do_approve(user, request, organization, scopes)
+      do_approve(user, request, organization, scopes, usable_nonce(consent_nonce))
     end
   end
 
-  def approve(user, request, _identity), do: do_approve(user, request, nil, request.scopes)
+  def approve(user, request, _identity, consent_nonce),
+    do: do_approve(user, request, nil, request.scopes, usable_nonce(consent_nonce))
 
-  defp do_approve(user, %{app: app} = request, organization, scopes) do
-    code = @code_prefix <> ApiAuth.random_token()
+  @doc """
+  A nonce for one rendering of the consent form (issue #1561).
 
+  It rides the form as a hidden field and comes back with the submission, which
+  is what makes each *rendering* a consent of its own — and every resubmission
+  of one rendering the same consent, answered with the same code.
+  """
+  def new_consent_nonce, do: ApiAuth.random_token(16)
+
+  # A submission with no nonce mints a fresh code, exactly as before: a page
+  # rendered by an older release, or a client that builds the POST itself.
+  defp do_approve(user, request, organization, scopes, nil),
+    do: mint(user, request, organization, scopes, random_code())
+
+  # One consent, one code (issue #1561). A phone client resubmitted a single
+  # loaded consent page about a hundred times, up to eight times a second, and
+  # every submission minted its own authorization code — each a bearer
+  # credential for ten minutes. `prune_unused_codes/2` bounds the pile that
+  # leaves behind and the route's budget bounds the rate, but neither makes the
+  # second submission of the *same* consent harmless.
+  #
+  # Only the SHA-256 of a code is stored, so a repeat cannot be answered by
+  # reading the code back out of its row. It is answered by deriving the same
+  # string again: the code IS the consent, keyed with a pepper off
+  # `secret_key_base` (the invitation and login-PIN construction). So the second
+  # submission finds the row the first one wrote, hands back the code that
+  # already went out, and writes nothing. Nothing new is stored and nothing new
+  # is sent to the browser.
+  #
+  # The nonce is the part that makes each *rendering* of the form its own
+  # consent: without it every future authorize for the same scopes would derive
+  # a code the member had long since spent. It rides the form, so a client can
+  # pin it — which costs nothing, since the only code it can ever pin is its own.
+  defp do_approve(user, request, organization, scopes, nonce) do
+    code = consent_code(user, request, organization, scopes, nonce)
+
+    case Repo.get_by(AuthCode, code_hash: ApiAuth.hash_token(code)) do
+      nil ->
+        mint(user, request, organization, scopes, code)
+
+      existing ->
+        if redeemable?(existing),
+          do: {:ok, code},
+          else: mint(user, request, organization, scopes, random_code())
+    end
+  end
+
+  # A derived code is a function of its consent, so a spent or expired one would
+  # be derived again for as long as its row is around. Those repeats get a random
+  # code instead: handing out a spent one would report the member's own client as
+  # a thief (`consume_code/1` treats a second redemption as theft), and the unique
+  # index on `code_hash` would refuse the row anyway.
+  defp redeemable?(%AuthCode{used_at: nil, expires_at: expires}),
+    do: DateTime.after?(expires, DateTime.utc_now())
+
+  defp redeemable?(%AuthCode{}), do: false
+
+  defp mint(user, %{app: app} = request, organization, scopes, code) do
     {:ok, _auth_code} =
       Repo.transaction(fn ->
         grant = upsert_grant!(user, app, scopes)
 
-        Repo.insert!(%AuthCode{
-          user_id: user.id,
-          app_id: app.id,
-          grant_id: grant.id,
-          organization_id: organization && organization.id,
-          code_hash: ApiAuth.hash_token(code),
-          redirect_uri: request.redirect_uri,
-          scopes: scopes,
-          code_challenge: request.code_challenge,
-          expires_at: seconds_from_now(@code_ttl_seconds)
-        })
+        # Two submissions of one consent can be in flight at once (that client
+        # sent eight a second), and both derive the same code: the loser of the
+        # race writes nothing rather than raising on the unique index, and its
+        # answer is the winner's row — the same code either way.
+        Repo.insert!(
+          %AuthCode{
+            user_id: user.id,
+            app_id: app.id,
+            grant_id: grant.id,
+            organization_id: organization && organization.id,
+            code_hash: ApiAuth.hash_token(code),
+            redirect_uri: request.redirect_uri,
+            scopes: scopes,
+            code_challenge: request.code_challenge,
+            expires_at: seconds_from_now(@code_ttl_seconds)
+          },
+          on_conflict: :nothing,
+          conflict_target: :code_hash
+        )
         |> tap(fn _ -> prune_unused_codes(user, app) end)
       end)
 
     {:ok, code}
   end
 
-  # Only the hash of a code is stored, so a repeated consent cannot be answered
-  # with the code it already handed out — every submission has to mint a new row,
-  # and each is a bearer credential for ten minutes. One phone client resubmitted
-  # the consent form about a hundred times from a single loaded page, so one
-  # login held about a hundred live codes at once (issue #1561).
+  defp random_code, do: @code_prefix <> ApiAuth.random_token()
+
+  # Everything the row records, so a resubmission that changed any of it (the
+  # identity picked in the select, a different scope) is a different consent and
+  # gets a code of its own. Newline-separated because none of these values can
+  # hold one, so no two consents can spell the same input.
+  defp consent_code(user, request, organization, scopes, nonce) do
+    fingerprint =
+      Enum.map_join(
+        [
+          user.id,
+          request.app.id,
+          nonce,
+          request.redirect_uri,
+          Enum.join(scopes, " "),
+          request.code_challenge,
+          organization && organization.id
+        ],
+        "\n",
+        &to_string/1
+      )
+
+    digest = :crypto.mac(:hmac, :sha256, consent_pepper(), fingerprint)
+
+    @code_prefix <> Base.encode32(digest, case: :lower, padding: false)
+  end
+
+  # Dedicated pepper derived from `secret_key_base` with domain separation, so
+  # it never equals the raw secret and lives outside the database. Without it a
+  # code would be a plain function of a fingerprint the client itself supplies.
+  defp consent_pepper do
+    secret = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
+    :crypto.hash(:sha256, "vutuv/oauth_consent/pepper/v1" <> secret)
+  end
+
+  # The nonce comes off a form, so it is the client's string: anything but a
+  # short binary is treated as absent rather than fed to the HMAC.
+  defp usable_nonce(nonce) when is_binary(nonce) and byte_size(nonce) in 1..64, do: nonce
+  defp usable_nonce(_missing_or_unusable), do: nil
+
+  # The backstop under the repeat guard above, for everything it cannot answer:
+  # a submission carrying no consent nonce still mints a row of its own, and each
+  # row is a bearer credential for ten minutes. One phone client resubmitted the
+  # consent form about a hundred times from a single loaded page, so one login
+  # held about a hundred live codes at once (issue #1561).
   #
   # The budget on the consent route bounds the *rate*; this bounds the *pile*,
   # which is the part that matters and which a rate limit cannot do: a client

@@ -22,6 +22,8 @@ defmodule VutuvWeb.OauthController do
 
   use VutuvWeb, :controller
 
+  require Logger
+
   alias Vutuv.ApiAuth.OAuth
   alias Vutuv.ApiAuth.UserAgent
   alias Vutuv.MastodonApi.Access
@@ -46,7 +48,8 @@ defmodule VutuvWeb.OauthController do
             request: request,
             params: params,
             identities: identities,
-            consent_scopes: consent_scopes(request, identities)
+            consent_scopes: consent_scopes(request, identities),
+            consent_nonce: OAuth.new_consent_nonce()
           )
         else
           conn
@@ -90,10 +93,9 @@ defmodule VutuvWeb.OauthController do
   # loaded page, up to eight times a second, and each submission minted its own
   # authorization code (issue #1561). Nothing of ours resubmits it, so this does
   # not chase that client's bug — it saves the wasted round trips and tells a
-  # runaway client that something is wrong. What bounds the *pile* of live codes
-  # is `OAuth.prune_unused_codes/2` at the mint site, because no per-minute
-  # budget can: a client resubmitting every seven seconds stays inside any budget
-  # and still accumulates codes for their whole ten-minute lifetime.
+  # runaway client that something is wrong. What makes those repeats harmless is
+  # `OAuth.approve/4`, which answers one consent with one code however often it
+  # arrives; this bounds what a client can spend getting there.
   #
   # The ceiling sits far above anything a person does, because it must never
   # touch a working login: nobody presses Allow ten times in a minute. The guard
@@ -104,9 +106,12 @@ defmodule VutuvWeb.OauthController do
   @consent_window :timer.minutes(1)
 
   defp decide(conn, user, request, "allow") do
-    if within_consent_budget?(user, request),
-      do: mint_code(conn, user, request),
-      else: conn |> put_status(429) |> render("error.html", reason: :too_many_requests)
+    if within_consent_budget?(user, request) do
+      mint_code(conn, user, request)
+    else
+      log_runaway(conn, user, request)
+      conn |> put_status(429) |> render("error.html", reason: :too_many_requests)
+    end
   end
 
   defp decide(conn, _user, request, _deny) do
@@ -119,8 +124,36 @@ defmodule VutuvWeb.OauthController do
       else: redirect(conn, external: callback_url(request, error: "access_denied"))
   end
 
+  # The half of issue #1561 nobody could answer: *which* client resubmits. The
+  # browser's User-Agent reaches only the web server's access log, where nobody
+  # is looking while it happens — and by the time the report arrives, the log
+  # has rotated. Spending this budget is the definition of a runaway client, so
+  # it is the one place where naming it costs nothing, and every installation
+  # then finds the answer in its own log instead of ours. The app is named
+  # rather than the member: what is wanted here is the client, not who they are.
+  #
+  # One line per member, app and minute, through a bucket of its own: the client
+  # this exists to name sent a hundred requests in one, and a hundred identical
+  # lines is how a log stops being read.
+  defp log_runaway(conn, user, request) do
+    if RateLimit.check(nil, :oauth_consent_report, user.id <> ":" <> request.app.id,
+         limit: 1,
+         window_ms: @consent_window
+       ) == :ok do
+      Logger.warning(
+        "oauth: consent budget spent, app=#{request.app.name} " <>
+          "user_agent=#{UserAgent.capture(conn) || "(none sent)"}"
+      )
+    end
+  end
+
   defp mint_code(conn, user, request) do
-    case OAuth.approve(user, request, conn.params["identity"]) do
+    case OAuth.approve(
+           user,
+           request,
+           conn.params["identity"],
+           conn.params["consent_nonce"]
+         ) do
       {:ok, code} ->
         if request.redirect_uri == @oob_redirect,
           do: conn |> put_resp_header("cache-control", "no-store") |> text(code),

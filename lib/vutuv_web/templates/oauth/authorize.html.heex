@@ -35,6 +35,9 @@
       <%= for key <- ~w(response_type client_id redirect_uri scope state code_challenge code_challenge_method) do %>
         <input :if={@params[key]} type="hidden" name={key} value={@params[key]} />
       <% end %>
+      <%!-- This page's own consent: however often it is submitted, it yields
+            one authorization code (issue #1561, `Vutuv.ApiAuth.OAuth`). --%>
+      <input type="hidden" name="consent_nonce" value={@consent_nonce} />
 
       <div :if={length(@identities) > 1} class="mb-5">
         <label for="oauth-identity" class="block text-sm font-semibold text-slate-800 dark:text-slate-200">

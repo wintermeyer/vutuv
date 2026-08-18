@@ -132,6 +132,26 @@ defmodule VutuvWeb.OauthConsentLimitTest do
     assert body =~ "zu oft hintereinander um eine Verbindung gebeten"
   end
 
+  # Which client resubmits is the half of #1561 that stayed open, and the
+  # browser's User-Agent reaches only the web server's access log. A client that
+  # spends this budget is a runaway by definition, so it names itself in our own
+  # log — the app it registered as, and the string the browser sent.
+  test "a client that spends the budget names itself in the log", %{conn: conn, app: app} do
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        for _ <- 1..30 do
+          conn
+          |> recycle()
+          |> put_req_header("user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0) Ivory/1.2")
+          |> post(~p"/oauth/authorize", consent_params(app))
+        end
+      end)
+
+    assert log =~ "consent budget spent"
+    assert log =~ "app=#{app.name}"
+    assert log =~ "Ivory/1.2"
+  end
+
   # A budget shared across apps would let one looping client lock a member out
   # of connecting a different one.
   test "the budget is per app, so another client still connects", %{conn: conn, app: app} do

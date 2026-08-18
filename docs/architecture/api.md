@@ -71,6 +71,26 @@ validates nothing: `https://evil.example.org;script-src 'unsafe-inline'/cb`
 registers cleanly and comes back with that whole run as its "host", which in a
 header would be a second directive of the app author's choosing.
 
+**One consent, one code.** A phone client resubmitted a single loaded consent
+page about a hundred times, up to eight a second, and every submission minted an
+authorization code of its own, each redeemable for ten minutes (issue #1561).
+Nothing here resubmits that form, so what this can fix is the cost of a repeat:
+the page carries a nonce, and `OAuth.approve/4` **derives** the code from the
+consent itself — member, app, redirect URI, scopes, PKCE challenge, acting
+identity and that nonce, HMAC'd under a pepper from `secret_key_base` — so the
+second submission finds the row the first one wrote and is answered with the code
+that already went out, writing nothing. Deriving rather than reading it back is
+forced by the storage rule: only the SHA-256 of a code is kept, so the plaintext
+is either reconstructible or gone. A spent or expired code is never handed out
+again (a second redemption is the RFC's theft signal, so that would report the
+member's own client as a thief), and a submission carrying no nonce — a page from
+the release before this — mints a fresh code exactly as it used to. Underneath it
+`prune_unused_codes/2` still caps the unused codes per member and app at three,
+and the route's per-minute consent budget still refuses a runaway client; that
+refusal now also writes one line a minute naming the client's User-Agent, because
+which client resubmits is the open half of #1561 and the browser's own
+User-Agent reaches nothing but the web server's access log.
+
 **Who holds a credential, and who may take it away.** `/connected_apps` names,
 per authorization, when it was given and which devices still hold a live token
 under it (`Vutuv.ApiAuth.UserAgent` reads a short platform label out of the
