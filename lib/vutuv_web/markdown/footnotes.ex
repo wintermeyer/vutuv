@@ -27,8 +27,9 @@ defmodule VutuvWeb.Markdown.Footnotes do
 
   **The rules, all deliberately strict and predictable:**
 
-    * A definition is a single line starting at column 0: `[^label]: text`.
-      Prose that runs long belongs in the post, not in a note.
+    * A definition is a single line starting at column 0: `[^label]: text`, or
+      `[^label] text` for the many people who never type the colon. Prose that
+      runs long belongs in the post, not in a note.
     * Notes are numbered by **first reference**, not by definition order, and one
       label referenced twice shares one note.
     * Half-typed syntax stays exactly as typed: a reference with no definition
@@ -55,7 +56,19 @@ defmodule VutuvWeb.Markdown.Footnotes do
 
   # A definition owns its whole line, from column 0, and needs a non-blank body
   # (`[^1]:` with nothing after it is not a definition, so it stays as typed).
-  @definition Regex.compile!("^\\\\?\\[\\^(#{@label})\\]:[ \\t]*(\\S[^\\n]*)", [:multiline])
+  #
+  # **The colon is optional**, and the second capture records whether it was
+  # there. `[^1] Die Anmerkung.` is how somebody writes a note who has never
+  # read our syntax page, and the strict form punished them twice over: the
+  # citation stayed in the prose as literal brackets *and* the note stayed below
+  # it as a stray line, so the post read worse than if footnotes did not exist
+  # (that is exactly what shipped on a real post, 2026-08-18). Either a colon or
+  # whitespace has to follow the bracket, so a line opening with a citation glued
+  # to a word (`[^1]steht hier`) is still not a definition.
+  @definition Regex.compile!(
+                "^\\\\?\\[\\^(#{@label})\\](?:(:)[ \\t]*|[ \\t]+)(\\S[^\\n]*)",
+                [:multiline]
+              )
 
   # Cheap substring guard: a body with no `[^` anywhere skips every pass below.
   # The escaped form `\[^1]` contains it too, so this misses nothing.
@@ -132,8 +145,8 @@ defmodule VutuvWeb.Markdown.Footnotes do
     if map_size(definitions) == 0 do
       {text, []}
     else
-      prose = chunks |> strip_definitions(Map.keys(definitions)) |> join()
-      {prose, Map.to_list(definitions)}
+      prose = chunks |> strip_definitions(definitions) |> join()
+      {prose, Enum.map(definitions, fn {label, {_kind, body}} -> {label, body} end)}
     end
   end
 
@@ -156,14 +169,23 @@ defmodule VutuvWeb.Markdown.Footnotes do
 
   ## Source rewriting
 
-  # `%{label => body}`, first definition of a label wins.
+  # `%{label => {:strict | :loose, body}}` — the kind says whether the line
+  # carried the colon, which is what tells a real definition apart from a line
+  # of prose that happens to open with a citation. The first definition of a
+  # label wins, except that a `[^1]: …` line outranks a colon-less one wherever
+  # the two sit.
   defp collect_definitions(chunks) do
     chunks
     |> scan_text(@definition)
-    |> Enum.reduce(%{}, fn [label, body], acc ->
-      Map.put_new(acc, label, String.trim_trailing(body))
+    |> Enum.reduce(%{}, fn [label, colon, body], acc ->
+      kind = if colon == ":", do: :strict, else: :loose
+      found = {kind, String.trim_trailing(body)}
+      Map.update(acc, label, found, &keep_stricter(&1, found))
     end)
   end
+
+  defp keep_stricter({:loose, _kept}, {:strict, _body} = found), do: found
+  defp keep_stricter(kept, _found), do: kept
 
   # `%{label => number}` for the defined labels, in order of first reference and
   # capped. The scan runs on a copy with **every** candidate definition line
@@ -171,7 +193,7 @@ defmodule VutuvWeb.Markdown.Footnotes do
   # would number the notes by definition order instead of by citation order.
   defp number_references(chunks, definitions) do
     chunks
-    |> strip_definitions(Map.keys(definitions))
+    |> strip_definitions(definitions)
     |> referenced_labels()
     |> Enum.filter(&Map.has_key?(definitions, &1))
     |> Enum.take(@max_footnotes)
@@ -194,14 +216,26 @@ defmodule VutuvWeb.Markdown.Footnotes do
     end)
   end
 
-  defp strip_definitions(chunks, labels) do
-    map_text(chunks, &strip_definition_lines(&1, labels))
+  defp strip_definitions(chunks, definitions) do
+    map_text(chunks, &strip_definition_lines(&1, definitions))
   end
 
-  defp strip_definition_lines(chunk, labels) do
-    Regex.replace(@definition, chunk, fn whole, label, _body ->
-      if label in labels, do: "", else: whole
+  defp strip_definition_lines(chunk, definitions) do
+    Regex.replace(@definition, chunk, fn whole, label, colon, _body ->
+      if definition_line?(definitions, label, colon), do: "", else: whole
     end)
+  end
+
+  # A `[^1]: …` line is a definition wherever it stands. A colon-less line is
+  # one only for a label whose note we actually took from that form — otherwise
+  # it is ordinary prose opening with a citation, and lifting it out of the post
+  # would delete a sentence its author wrote.
+  defp definition_line?(definitions, label, ":") do
+    Map.has_key?(definitions, label)
+  end
+
+  defp definition_line?(definitions, label, _no_colon) do
+    match?({:loose, _body}, Map.get(definitions, label))
   end
 
   # Definition lines out of the prose, references to markers, and the numbered
@@ -210,7 +244,7 @@ defmodule VutuvWeb.Markdown.Footnotes do
   defp rewrite(chunks, definitions, numbers, nonce) do
     body =
       chunks
-      |> strip_definitions(Map.keys(numbers))
+      |> strip_definitions(Map.take(definitions, Map.keys(numbers)))
       |> map_text(&mark_references(&1, numbers, nonce))
       |> join()
       |> String.trim_trailing()
@@ -219,7 +253,8 @@ defmodule VutuvWeb.Markdown.Footnotes do
       numbers
       |> Enum.sort_by(fn {_label, number} -> number end)
       |> Enum.map_join("\n\n", fn {label, number} ->
-        "#{note_marker(nonce, number)} #{Map.fetch!(definitions, label)}"
+        {_kind, body} = Map.fetch!(definitions, label)
+        "#{note_marker(nonce, number)} #{body}"
       end)
 
     body <> "\n\n" <> notes <> "\n"
@@ -278,10 +313,13 @@ defmodule VutuvWeb.Markdown.Footnotes do
   # The brackets are not decoration: `<sup>` is outside what Mastodon and most
   # feed readers keep, and without them the number would fuse into the word it
   # follows ("Satz1"). Brackets survive tag-stripping, so the citation still
-  # reads as one everywhere this HTML travels.
+  # reads as one everywhere this HTML travels — which is also why the citation
+  # and its note both take their number from `citation/1`.
   defp reference_html(nonce, number) do
-    ~s(<sup class="footnote-ref"><a href="##{note_id(nonce, number)}">[#{number}]</a></sup>)
+    ~s(<sup class="footnote-ref"><a href="##{note_id(nonce, number)}">#{citation(number)}</a></sup>)
   end
+
+  defp citation(number), do: "[#{number}]"
 
   # **No back-link from a note to its citation**, deliberately, and it was there
   # for one afternoon: a `↩` at the end of every note is the only thing in the
@@ -294,10 +332,15 @@ defmodule VutuvWeb.Markdown.Footnotes do
   # nothing and cost a mark in every single note.
   defp note_list(_nonce, []), do: ""
 
+  # The note carries its own `[n]` as text rather than leaning on the `<ol>`'s
+  # marker, for the same reason the citation carries its brackets: this HTML also
+  # travels to Mastodon, to a feed reader and through `to_plain_text/1`, and a
+  # list numbered `1.` in one place and cited as `[1]` in the other names the
+  # same note two ways. Our own stylesheet then only has to place the number.
   defp note_list(nonce, notes) do
     items =
       Enum.map_join(notes, "", fn {number, body} ->
-        ~s(<li id="#{note_id(nonce, number)}">#{body}</li>)
+        ~s(<li id="#{note_id(nonce, number)}"><span class="footnote-num">#{citation(number)}</span> #{body}</li>)
       end)
 
     ~s(<div class="footnotes"><ol>#{items}</ol></div>)

@@ -21,6 +21,11 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
     id
   end
 
+  defp first_note(html) do
+    [_, note] = Regex.run(~r/<ol>\s*<li[^>]*>(.*?)<\/li>/s, html)
+    note
+  end
+
   describe "rendering" do
     test "a reference and its definition become a linked note" do
       html = render("Ein Satz[^1].\n\n[^1]: Die Anmerkung.")
@@ -55,9 +60,8 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
       assert html =~ ">[2]</a></sup>"
 
       # Note 1 is B (referenced first), note 2 is A.
-      [_, first_note] = Regex.run(~r/<ol>\s*<li[^>]*>(.*?)<\/li>/s, html)
-      assert first_note =~ "Anmerkung B."
-      refute first_note =~ "Anmerkung A."
+      assert first_note(html) =~ "Anmerkung B."
+      refute first_note(html) =~ "Anmerkung A."
     end
 
     test "one label referenced twice shares a single note" do
@@ -80,7 +84,12 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
       refute html =~ "footnote-backref"
       refute html =~ "&#8617;"
       refute html =~ "fnref-"
-      assert html =~ ~r{<li id="fn-[0-9A-F]+-1">Die Anmerkung.</li>}
+
+      # The note prints its own `[1]`: the `<ol>` marker is our stylesheet's
+      # business alone, and Mastodon, a feed reader and `to_plain_text/1` all
+      # take the number from the markup.
+      assert html =~
+               ~r{<li id="fn-[0-9A-F]+-1"><span class="footnote-num">\[1\]</span> Die Anmerkung.</li>}
     end
 
     test "a note body renders Markdown and links" do
@@ -111,6 +120,63 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
     test "an external link still opens in a new tab" do
       html = render("see [docs](https://hexdocs.pm/phoenix)")
       assert html =~ ~s(target="_blank")
+    end
+  end
+
+  describe "the colon a member forgets" do
+    test "a definition written without the colon still becomes a note" do
+      html = render("Ein Satz[^1].\n\n[^1] Die Anmerkung.")
+
+      assert html =~ ~s(<sup class="footnote-ref")
+      assert html =~ ">[1]</a></sup>"
+      assert html =~ "Die Anmerkung."
+      refute html =~ "[^1]"
+    end
+
+    test "several colon-less definitions are numbered by first reference" do
+      html =
+        render("""
+        Erst[^b] dann[^a].
+
+        [^b] Anmerkung B.
+        [^a] Anmerkung A.
+        """)
+
+      assert first_note(html) =~ "Anmerkung B."
+      assert html =~ "Anmerkung A."
+      refute html =~ "[^a]"
+    end
+
+    test "a colon-less line nobody cites stays as typed" do
+      html = render("Ein Satz.\n\n[^1] Verwaiste Anmerkung.")
+
+      assert html =~ "[^1]"
+      refute html =~ ~s(class="footnotes")
+    end
+
+    test "a citation glued to a word does not open a definition" do
+      # `[^1]steht` is a citation in front of a word, not `[^1] text`, so there
+      # is no definition and the whole body stays as typed.
+      html = render("Ein Satz[^1].\n\n[^1]steht hier.")
+
+      assert html =~ "[^1]"
+      refute html =~ "footnote-ref"
+    end
+
+    test "a real definition outranks a prose line that opens with the citation" do
+      html =
+        render("""
+        Ein Satz[^1].
+        [^1] meint übrigens etwas ganz anderes.
+
+        [^1]: Die Anmerkung.
+        """)
+
+      # The note is the `[^1]:` line …
+      assert html =~ ~r{<li id="fn-[0-9A-F]+-1">.*Die Anmerkung.</li>}
+      # … and the prose line survives, its opening `[^1]` read as a citation.
+      assert html =~ "meint übrigens etwas ganz anderes."
+      assert length(Regex.scan(~r/<sup class="footnote-ref"/, html)) == 2
     end
   end
 
@@ -220,7 +286,7 @@ defmodule VutuvWeb.MarkdownFootnotesTest do
       text = Markdown.to_plain_text("Ein Satz[^1].\n\n[^1]: Die Anmerkung.")
 
       assert text =~ "Ein Satz[1]."
-      assert text =~ "Die Anmerkung."
+      assert text =~ "[1] Die Anmerkung."
       refute text =~ "[^1]"
     end
   end

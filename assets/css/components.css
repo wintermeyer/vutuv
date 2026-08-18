@@ -1446,10 +1446,15 @@ ul.thumbs li .text .url a {
    like `.mention` / `.hashtag`, these also appear in chat message bubbles.
    The note list is deliberately quiet: an apparatus below the text, set one
    size down and separated by a hairline, never a second voice in the post. */
-.footnote-ref { font-weight: 600; }
-/* The note is a scroll target and the app shell's top bar is sticky — without
-   this the browser parks the jumped-to note underneath it. */
-.footnotes li { scroll-margin-top: 6rem; }
+/* The citation up in the prose and the number in front of its note: two halves
+   of one mark, so they are set alike. */
+.footnote-ref, .footnote-num { font-weight: 600; }
+/* The citation is a marker, not a link in the sentence: `.markdown a`'s
+   underline drawn under a raised `[1]` reads as a smudge on the line above, so
+   it is kept for hover and keyboard focus, where it says "this is clickable". */
+sup.footnote-ref a { text-decoration: none; }
+sup.footnote-ref a:hover,
+sup.footnote-ref a:focus-visible { text-decoration: underline; }
 .footnotes {
   margin-top: 1.25em;
   padding-top: 0.75em;
@@ -1457,12 +1462,37 @@ ul.thumbs li .text .url a {
   font-size: 0.875em;
   color: #475569;
 }
-.footnotes ol { margin: 0; }
-.footnotes li { margin: 0 0 0.35em; }
-.footnotes li:last-child { margin-bottom: 0; }
+/* Somebody who separated their notes by hand before this feature existed — a
+   `***` rule at the end of the post — would otherwise get two hairlines a line
+   apart, theirs and ours. Theirs stands and ours steps aside. */
+hr + .footnotes { margin-top: 0.5em; padding-top: 0; border-top: 0; }
+/* Each note prints its own `[1]` (the renderer writes it, so it survives into
+   the plain-text and feed renderings too), so the `<ol>`'s decimal marker is
+   turned off and the number hung in the margin instead — which is what keeps a
+   note that wraps aligned under its own first line rather than under the digit.
+   The `div.` on the next two rules is load-bearing: `.markdown ol` /
+   `.markdown li` are the same specificity and sit later in this file, so a bare
+   `.footnotes ol` loses its padding and margins to them. The pseudo-class rules
+   below already outrank those on their own and carry the qualifier only so the
+   block reads as one — and so the dark counterpart of `:target` still matches. */
+div.footnotes ol { list-style: none; margin: 0; padding: 0; }
+div.footnotes li {
+  position: relative;
+  margin: 0 0 0.4em;
+  padding-left: 2.25em;
+  /* The note is a scroll target and the app shell's top bar is sticky — without
+     this the browser parks the jumped-to note underneath it. */
+  scroll-margin-top: 6rem;
+}
+.footnote-num {
+  position: absolute;
+  left: 0;
+  font-variant-numeric: tabular-nums;
+}
+div.footnotes li:last-child { margin-bottom: 0; }
 /* The jumped-to note lights up briefly so the eye lands on the right row in a
    list of ten. `:target` needs no JS and survives a shared link. */
-.footnotes li:target {
+div.footnotes li:target {
   background: #eff6ff;
   border-radius: 4px;
   box-shadow: 0 0 0 4px #eff6ff;
@@ -2974,9 +3004,11 @@ html.lightbox-open { overflow: hidden; }
   /* The author's verified-webpage mark (light values above): the same
      emerald step up `<.verified_mark>` takes on a dark card. */
   .verified-author-link { color: #34d399; }
-  /* Footnotes (light values above). */
+  /* Footnotes (light values above). The `div.` on the target rule is there
+     because its light counterpart carries one — a bare selector would be a
+     step below it and lose. */
   .footnotes { border-top-color: #1e293b; color: #94a3b8; }
-  .footnotes li:target {
+  div.footnotes li:target {
     background: rgb(59 130 246 / 0.16);
     box-shadow: 0 0 0 4px rgb(59 130 246 / 0.16);
   }
