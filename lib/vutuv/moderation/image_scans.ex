@@ -495,6 +495,19 @@ defmodule Vutuv.Moderation.ImageScans do
   defp filter_since(query, nil), do: query
   defp filter_since(query, since), do: from(s in query, where: s.scanned_at >= ^since)
 
+  @doc """
+  Whether any image is still waiting for (or in the middle of) its verdict.
+
+  Cheap on purpose — it is asked once a poll by the translation worker, which
+  stands its background pre-translation down while this is true: both queues
+  share one Ollama, they use different models, and a photo held behind a
+  20 GB model swap is a member watching a placecard where their picture
+  should be. A reader's own translation request is never stood down.
+  """
+  def busy? do
+    Repo.exists?(from(s in ImageScan, where: s.status in ^ImageScan.open_statuses()))
+  end
+
   @doc "Queue totals for the admin dashboard: %{pending: n, rejected_7d: n}."
   def counts do
     week_ago = DateTime.add(DateTime.utc_now(), -7 * 86_400, :second)

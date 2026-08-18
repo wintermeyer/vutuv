@@ -2,14 +2,22 @@
 
 Language, the fediverse way (milestone 13): the author **declares** each
 post's language in the composer (default: their UI locale) — nobody guesses.
-Translation is **on-demand** via a local Ollama text model: a reader asks, a
-job queues, the result is cached per post + target language. Never
-pre-computed, never backfilled, never federated. Public, logged-out,
-agent-format and ActivityPub surfaces always show the original.
+Translation runs through a local Ollama text model and is cached per subject +
+target language; never federated, and public, logged-out, agent-format and
+ActivityPub surfaces always show the original.
 
-Everything lives in `Vutuv.Translations`; the config flag is
-`:translate_posts` (shipped **off**, `TRANSLATE_POSTS=true` opts in;
-`docs/ADMINS.md` has the operator view).
+Two things fill that cache. A **reader asks** — the original design, and still
+the only thing that can translate remote content. And, for **our own posts
+only**, a background sweep pre-translates into every locale the installation
+serves, so the common case is a cache hit and nobody waits for a model at all.
+The sweep never gets in the reader's way: its jobs rank behind theirs, a reader
+asking for something it already queued joins that same job at the front, and it
+stands down entirely while image moderation needs the shared box.
+
+Everything lives in `Vutuv.Translations`; the config flags are
+`:translate_posts` (shipped **off**, `TRANSLATE_POSTS=true` opts in) and
+`:precompute_translations` (on, `PRECOMPUTE_TRANSLATIONS=false` opts back out
+of the sweep alone); `docs/ADMINS.md` has the operator view.
 
 ## Language columns
 
@@ -102,6 +110,75 @@ poll + `nudge/0` on request, `resume_stuck/0` on boot) drains it via
 `deliver_due/1` in small batches — the Ollama box is shared with the
 fail-closed image moderation, which keeps priority.
 
+## Who goes first (the priority column)
+
+`translation_jobs.priority` runs the drain **lower first**: 0 is somebody
+waiting, 50 is the background sweep. Three mechanisms make that real, and
+`test/vutuv/translations/priority_test.exs` calibrates each against the shape
+without it:
+
+1. **Order.** `list_due/1` sorts by priority, then age, then id — the id
+   because `inserted_at` holds whole seconds and same-second ties are ordinary.
+2. **Promotion.** A reader asking for a translation the sweep already queued
+   lands on *that* row and moves it to the front (`promote/2`), rather than
+   opening a second job to translate the same text twice. The comparison makes
+   it safe both ways: the sweep meeting a reader's job leaves it alone, and a
+   `running` job is never touched — it is already as fast as it gets, and
+   moving its `updated_at` would lie to `resume_stuck/0`.
+3. **One job per query.** A translation runs for minutes, so `deliver_due/1`
+   re-asks between jobs instead of selecting a whole batch up front. Otherwise
+   a reader tapping Translate mid-drain waits out every remaining row of a
+   batch chosen before they asked.
+
+The column's DEFAULT is the reader value, which is what makes the migration
+N-1 safe: the release still serving traffic during a blue/green switch inserts
+jobs without this column, and every one of those is a reader's request.
+
+## Pre-translating our own posts
+
+`Translations.enqueue_background/1`, run from the worker's poll. Local posts
+only — our own content, in a language somebody declared or the detector
+placed, not frozen, with a body to translate — into every configured locale
+but its own.
+
+Three bounds, and each answers a specific way this could go wrong:
+
+- **The backlog cap** (`@backlog_cap`, 20) is the threshold. While that many
+  of the sweep's jobs are outstanding a round does nothing at all, so the
+  sweep tops a short pile back up rather than handing the pipeline a table's
+  worth of work, and an Ollama that falls behind simply stops being given
+  more. A reader's jobs are not counted — they are never what the cap is
+  protecting the box from.
+- **`posts.translations_enqueued_at`** is the sweep's own clock, stamped on
+  **every** outcome including "everything was already translated, nothing
+  opened". An unstamped no-op is due again on the very next round and holds
+  the front of the work list forever — the `refresh_counts` starvation lesson,
+  and `test/vutuv/translations/precompute_test.exs` is calibrated against
+  exactly that shape. Written with `update_all` and that column alone: a post
+  whose `updated_at` moves reads as "edited", and a sweep must not put that
+  mark on hundreds of posts nobody touched.
+- **Reconsideration** is an edit (the work list compares the stamp against
+  `updated_at`, so an edited post is a candidate again at once) or the
+  `@reconsider_after_seconds` interval. That interval exists for the case no
+  edit will ever re-open: a translation that failed while Ollama was down.
+
+The worker yields the box to image moderation (`ImageScans.busy?/0`): while any
+picture waits for its verdict the poll neither opens background jobs nor drains
+the ones it has (`Worker.drain_priority/0`). Both queues share one Ollama and
+use *different* models, so alternating between them swaps tens of gigabytes,
+and a member staring at a placecard where their photo should be costs more than
+a translation arriving a poll later. Reader requests drain throughout.
+
+One dependency runs the other way and is easy to miss: **a post nobody could
+place a language for is never a candidate**, so the sweep is only ever as
+complete as the detection above it. That is why the detection gate asks
+`Translations.reader_waiting?/0` rather than whether the queue is empty — with
+a standing background backlog, "is the queue empty" is answered no forever, and
+detection would switch itself off for good.
+
+Nothing here is federated or shown on a public surface; the sweep only fills
+the same cache a reader's tap fills.
+
 **Every outcome stamps the job, including the do-nothing branches** (subject
 gone, translation already stored). An unstamped skip would be due again on
 the next drain and hold the front of the oldest-first batch forever — the
@@ -160,9 +237,12 @@ Feed only; profiles, permalinks, search and public surfaces are untouched.
 
 ## What deliberately does not exist
 
-- No backfill, no bulk pre-computation **of translations**: a job exists only
-  because a reader wanted that translation. (The *language* of an undeclared
-  post is backfilled — issue #1535 above.)
+- No pre-computation of **remote** content: the sweep translates our own posts
+  only. A cached remote post or reply is translated because a reader asked.
+  (Scope, not principle — it is 2,194 rows against 525, on a box that is also
+  moderating photos.)
+- No "translate everything now" run. The sweep is paced by the backlog cap on
+  purpose; a one-off bulk pass is the thing the cap exists to prevent.
 - No language guessing where the author declared one: a declaration is never
   second-guessed, and the composer preselects the author's UI locale.
 - No federation of translations: only originals leave the house.

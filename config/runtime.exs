@@ -412,6 +412,12 @@ if config_env() == :prod do
     config :vutuv, :ollama_translation_model, model
   end
 
+  # PRECOMPUTE_TRANSLATIONS=false keeps translation on demand only: readers can
+  # still ask, nothing is translated ahead of them.
+  if System.get_env("PRECOMPUTE_TRANSLATIONS") == "false" do
+    config :vutuv, :precompute_translations, false
+  end
+
   # TAG_MERGE_ASSIST=false leaves the tag merge queue to be filled by the
   # deterministic rules alone and judged by a human (issue #1338).
   if System.get_env("TAG_MERGE_ASSIST") == "false" do

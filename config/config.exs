@@ -127,6 +127,14 @@ config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 config :vutuv, :translate_posts, false
 config :vutuv, :ollama_translation_model, "gemma4:31b"
 
+# Whether this installation ALSO pre-translates its own posts in the
+# background, so the common case is a cache hit and nobody waits for a model.
+# Inert unless :translate_posts is on too, capped at a short backlog, and stood
+# down while image moderation needs the shared box — but an operator whose
+# Ollama has other work can switch it off with PRECOMPUTE_TRANSLATIONS=false
+# and keep translation on demand.
+config :vutuv, :precompute_translations, true
+
 # The assisted tag pass (Vutuv.Tags.Assistant, issue #1338): an admin-triggered
 # batch that proposes which tags name one topic. It never merges anything — a
 # human approves each proposal on /admin/tag_merges — and the candidate pairs

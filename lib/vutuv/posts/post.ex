@@ -25,6 +25,14 @@ defmodule Vutuv.Posts.Post do
     # text could not be placed and `language` stays NULL. Nothing casts it.
     field(:language_checked_at, :utc_datetime)
 
+    # When the background pre-translation sweep last CONSIDERED this post —
+    # its own clock, stamped on every outcome including "nothing to do here",
+    # which is what keeps an already-translated post from holding the front of
+    # every batch forever. Owned by `Vutuv.Translations`, never cast, and
+    # never written through a changeset: a post whose `updated_at` moves reads
+    # as edited, and a sweep must not put that mark on posts nobody touched.
+    field(:translations_enqueued_at, :utc_datetime)
+
     # The bento arrangement the author picked for a multi-photo post, one of
     # the `Vutuv.Posts.GalleryLayout` names; nil = automatic (the mosaic's
     # orientation-driven choice). Presentation only — the agent formats list

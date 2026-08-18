@@ -17,6 +17,16 @@ defmodule Vutuv.Translations do
   row stale and the next request re-translates. The queue rows in
   `translation_jobs` are drained by `Vutuv.Translations.Worker` (#1458)
   through `Vutuv.Translations.Translator` (#1457).
+
+  Local posts are additionally **pre-translated in the background**, so the
+  common case is a cache hit and nobody waits for a model at all
+  (`enqueue_background/1`). That sweep is deliberately the slowest thing in
+  here: it never opens more than `@backlog_cap` jobs at a time, it yields to
+  the fail-closed image moderation on the shared Ollama box (the worker makes
+  that call), and every job it opens ranks behind every job a reader asked
+  for. A reader who taps Translate on a post the sweep already queued lands on
+  that same row and promotes it — one translation, and the person waiting goes
+  first.
   """
 
   import Ecto.Query
@@ -54,6 +64,19 @@ defmodule Vutuv.Translations do
   # The one-off backfill run has no reader behind it and its own process, so
   # it only pays one query per round instead of one per couple of rows.
   @detect_all_batch 25
+  # Rows the background sweep looks at per round, and the ceiling on how many
+  # of its jobs may be outstanding. The cap IS the threshold the whole design
+  # rests on: the sweep never floods the pipeline with a table's worth of work,
+  # it keeps a short pile topped up, so an Ollama box that falls behind simply
+  # stops receiving more and a reader's request is never more than a handful of
+  # rows from the front.
+  @precompute_batch 10
+  @backlog_cap 20
+  # How long before the sweep looks at a post it has already considered. An
+  # edit re-opens it at once (the work list compares against `updated_at`), so
+  # this interval exists for the other case: a translation that failed while
+  # Ollama was down, which no edit will ever re-open.
+  @reconsider_after_seconds 6 * 3600
   # A translation call waits up to 10 minutes (`Translator`); only a claim
   # well past that is presumed crashed and re-queued.
   @stuck_after_seconds 1800
@@ -67,6 +90,13 @@ defmodule Vutuv.Translations do
 
   @doc "Whether on-demand post translation is enabled on this installation."
   def enabled?, do: Application.get_env(:vutuv, :translate_posts, false)
+
+  @doc """
+  Whether this installation also pre-translates its own posts in the
+  background. On by default, but inert unless `enabled?/0` is too — an
+  installation without an Ollama that can carry the model has neither.
+  """
+  def precompute_enabled?, do: Application.get_env(:vutuv, :precompute_translations, true)
 
   ## Language tags
 
@@ -393,8 +423,13 @@ defmodule Vutuv.Translations do
   (`{:cached, translation}`), otherwise a queued job (`{:queued, job}` —
   deduped, so a second click lands on the same open row) with the worker
   nudged so the reader is not left waiting for the next poll.
+
+  Reader priority by default, which also **promotes** a job the background
+  sweep had already opened for this exact translation: the work already
+  queued is the work the reader wanted, so they join it at the front rather
+  than starting a second copy of it.
   """
-  def request(subject, target_language) do
+  def request(subject, target_language, priority \\ TranslationJob.reader_priority()) do
     cond do
       not enabled?() ->
         :disabled
@@ -403,7 +438,7 @@ defmodule Vutuv.Translations do
         {:cached, translation}
 
       true ->
-        {:queued, job} = queue(subject, target_language)
+        {:queued, job} = queue(subject, target_language, priority)
         Worker.nudge()
         {:queued, job}
     end
@@ -417,9 +452,15 @@ defmodule Vutuv.Translations do
   subjects wants one `Worker.nudge/0` at the end, not one per card, since every
   nudge costs the worker a full drain round.
   """
-  def queue(subject, target_language) do
+  def queue(subject, target_language, priority \\ TranslationJob.reader_priority()) do
     if enabled?() do
-      {:queued, open_job(subject, target_language) || insert_job!(subject, target_language)}
+      job =
+        case open_job(subject, target_language) do
+          nil -> insert_job!(subject, target_language, priority)
+          job -> promote(job, priority)
+        end
+
+      {:queued, job}
     else
       :disabled
     end
@@ -433,8 +474,8 @@ defmodule Vutuv.Translations do
     |> Repo.one()
   end
 
-  defp insert_job!(subject, target_language) do
-    %TranslationJob{target_language: target_language}
+  defp insert_job!(subject, target_language, priority) do
+    %TranslationJob{target_language: target_language, priority: priority}
     |> struct!(subject_attrs(subject))
     |> Repo.insert!(
       on_conflict: :nothing,
@@ -446,33 +487,223 @@ defmodule Vutuv.Translations do
     open_job(subject, target_language)
   end
 
+  # One job, two askers. The comparison is what makes this safe in both
+  # directions: a reader meeting the sweep's job moves it to the front, the
+  # sweep meeting a reader's job leaves it exactly where it is. Only a
+  # `pending` row moves — a running job is already as fast as it gets, and
+  # touching it would tell `resume_stuck/0` nothing it wants to hear.
+  defp promote(%TranslationJob{priority: current} = job, priority) when priority >= current,
+    do: job
+
+  defp promote(job, priority) do
+    {_count, rows} =
+      from(j in TranslationJob,
+        where: j.id == ^job.id and j.status == "pending" and j.priority > ^priority,
+        select: j
+      )
+      |> Repo.update_all(set: [priority: priority])
+
+    case rows do
+      [promoted] -> promoted
+      [] -> job
+    end
+  end
+
+  ## Pre-translating our own posts (the background sweep)
+
+  @doc """
+  Opens background jobs for the local posts that have no fresh translation
+  yet, newest-considered-last, and returns how many it opened.
+
+  Three things bound it, and all three are deliberate:
+
+    * **The backlog cap.** While `@backlog_cap` background jobs are still
+      outstanding the round does nothing at all. That is the threshold: the
+      sweep tops a short pile back up, it never hands the pipeline a table's
+      worth of work, and an Ollama that falls behind simply stops being given
+      more.
+    * **Scope.** Local posts only — our own content, in a language somebody
+      declared or the detector placed, not in the freezer, with a body to
+      translate. A post nobody could place a language for is not a candidate:
+      there is no reader-facing Translate action on it either.
+    * **The clock.** `posts.translations_enqueued_at` records that this post
+      was *considered*, and it is stamped on **every** outcome — including the
+      one where every target was already translated and nothing was opened.
+      An unstamped no-op would be due again on the very next round and hold
+      the front of the work list forever (the `refresh_counts` starvation
+      lesson); `test/vutuv/translations/precompute_test.exs` calibrates
+      against exactly that.
+
+  `opts`: `force:` runs with the flags off, `limit:` rows per round,
+  `backlog_cap:` the ceiling.
+  """
+  def enqueue_background(opts \\ []) do
+    if Keyword.get(opts, :force, false) or (enabled?() and precompute_enabled?()) do
+      cap = Keyword.get(opts, :backlog_cap, @backlog_cap)
+
+      if background_backlog() < cap do
+        opts |> due_for_precompute() |> Enum.map(&consider/1) |> Enum.sum()
+      else
+        0
+      end
+    else
+      0
+    end
+  end
+
+  @doc """
+  Whether somebody is actually waiting for a translation right now.
+
+  The gate on everything the worker does for nobody in particular. It asks
+  about **reader** work rather than about an empty queue on purpose: once the
+  background sweep keeps a standing backlog, "is the queue empty" is answered
+  no forever, and every sweep behind that gate — language detection above all,
+  which is what decides whether a post can ever be pre-translated at all —
+  would switch itself off permanently.
+  """
+  def reader_waiting? do
+    list_due(limit: 1, max_priority: TranslationJob.reader_priority()) != []
+  end
+
+  @doc """
+  How many of the sweep's own jobs are still waiting or in flight. A reader's
+  jobs are not counted: they are never what the cap is protecting the box
+  from, and counting them would let a busy afternoon of Translate taps stand
+  the sweep down for no reason.
+  """
+  def background_backlog do
+    Repo.aggregate(
+      from(j in TranslationJob,
+        where:
+          j.status in ^TranslationJob.open_statuses() and
+            j.priority >= ^TranslationJob.background_priority()
+      ),
+      :count
+    )
+  end
+
+  # Never considered first (NULLS FIRST, newest of those first — a post in
+  # somebody's feed right now is the one a reader may ask about), then the
+  # longest-unconsidered. An edit re-opens a post immediately, because its
+  # `updated_at` moves past the stamp; everything else waits out
+  # @reconsider_after_seconds, which is what eventually retries a translation
+  # that failed while Ollama was down.
+  defp due_for_precompute(opts) do
+    cutoff = DateTime.add(DateTime.utc_now(:second), -@reconsider_after_seconds, :second)
+
+    from(p in Post,
+      where:
+        not is_nil(p.language) and is_nil(p.frozen_at) and p.body != "" and
+          (is_nil(p.translations_enqueued_at) or p.translations_enqueued_at < ^cutoff or
+             p.translations_enqueued_at < p.updated_at),
+      order_by: [asc_nulls_first: p.translations_enqueued_at, desc: p.id],
+      limit: ^Keyword.get(opts, :limit, @precompute_batch)
+    )
+    |> Repo.all()
+  end
+
+  defp consider(%Post{} = post) do
+    opened = Enum.count(missing_targets(post), &open_background_job(post, &1))
+    stamp_precompute(post)
+    opened
+  end
+
+  # Every locale a reader of this installation can be reading in, minus the
+  # one the post is already written in, minus what is already translated or
+  # already queued. Two small indexed lookups per target on a batch of ten
+  # rows every poll — the round is nothing next to the model call it feeds.
+  defp missing_targets(%Post{language: language} = post) do
+    for target <- target_languages(),
+        target != language,
+        is_nil(fresh_translation(post, target)),
+        is_nil(open_job(post, target)),
+        do: target
+  end
+
+  # The installation's locales live under the ENDPOINT config, not as a
+  # top-level `:vutuv` key — `Application.get_env(:vutuv, :locales)` answers
+  # nil, and a read like that with a plausible default fails completely
+  # silently: it translated German posts into English (right by accident, the
+  # default's only entry) and English posts into nothing at all, with a green
+  # suite and no log line. `Vutuv.NodeInfo` reads it the same way.
+  defp target_languages do
+    {:ok, config} = Application.fetch_env(:vutuv, VutuvWeb.Endpoint)
+
+    config[:locales]
+    |> List.wrap()
+    |> Enum.map(&cast_language/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp open_background_job(post, target) do
+    match?({:queued, _job}, queue(post, target, TranslationJob.background_priority()))
+  end
+
+  # `update_all` and this column alone: a post whose `updated_at` moves more
+  # than a minute past `inserted_at` renders as "edited", and a sweep must
+  # never put that mark on posts nobody touched.
+  defp stamp_precompute(%Post{id: id}) do
+    from(p in Post, where: p.id == ^id)
+    |> Repo.update_all(set: [translations_enqueued_at: DateTime.utc_now(:second)])
+  end
+
   ## Draining the queue (called by Vutuv.Translations.Worker)
 
   @doc """
   Translates every due job. A no-op while `:translate_posts` is off (jobs
   stay pending). `opts`: `translate:` injects the per-subject translation
   function (tests stub it; defaults to `Translator.translate/2`), `force:`
-  runs even with the flag off, `limit:` caps the batch.
+  runs even with the flag off, `limit:` caps the batch, `max_priority:`
+  refuses anything ranked worse than that (the worker uses it to stand the
+  background sweep down while image moderation needs the box).
   """
   def deliver_due(opts \\ []) do
     if Keyword.get(opts, :force, false) or enabled?() do
       resume_stuck()
       translate = Keyword.get(opts, :translate, &Translator.translate/2)
-      for job <- list_due(opts), do: process_job(job, translate)
+      drain(opts, translate, Keyword.get(opts, :limit, @batch))
     end
 
     :ok
   end
 
-  @doc "The due pending jobs the next drain would pick up, oldest first."
+  # One job per query rather than one query per batch, and that is the whole
+  # point: a translation runs for minutes, so a reader who taps Translate
+  # while the sweep is mid-job would otherwise wait out every remaining row
+  # of a batch that was selected before they asked. Re-asking between jobs
+  # costs one indexed query and means the reader is next.
+  defp drain(_opts, _translate, remaining) when remaining <= 0, do: :ok
+
+  defp drain(opts, translate, remaining) do
+    case list_due(Keyword.put(opts, :limit, 1)) do
+      [] ->
+        :ok
+
+      [job] ->
+        process_job(job, translate)
+        drain(opts, translate, remaining - 1)
+    end
+  end
+
+  @doc """
+  The due pending jobs the next drain would pick up: **best priority first**,
+  oldest first within a priority. `max_priority:` excludes everything ranked
+  worse (defaults to including the background sweep).
+
+  The id is the tiebreaker because `inserted_at` holds whole seconds, and two
+  jobs queued in the same second are ordinary — ids are UUID v7, so id order
+  is creation order at a resolution the timestamp does not have.
+  """
   def list_due(opts \\ []) do
     now = DateTime.utc_now(:second)
+    max_priority = Keyword.get(opts, :max_priority, TranslationJob.background_priority())
 
     from(j in TranslationJob,
       where:
-        j.status == "pending" and
+        j.status == "pending" and j.priority <= ^max_priority and
           (is_nil(j.next_attempt_at) or j.next_attempt_at <= ^now),
-      order_by: [asc: j.inserted_at],
+      order_by: [asc: j.priority, asc: j.inserted_at, asc: j.id],
       limit: ^Keyword.get(opts, :limit, @batch)
     )
     |> Repo.all()
