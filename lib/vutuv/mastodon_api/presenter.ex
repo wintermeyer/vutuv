@@ -18,6 +18,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.UUIDv7
   alias VutuvWeb.Markdown
   alias VutuvWeb.UserHelpers
@@ -261,31 +262,39 @@ defmodule Vutuv.MastodonApi.Presenter do
   end
 
   def status(%RemotePost{} = post, _engagement) do
-    base_status(%{
-      id: "remote-" <> post.id,
-      created_at: timestamp(post.published_at),
-      content: Markdown.render_remote(post.content_text || ""),
-      url: post.origin_url || post.object_uri,
-      uri: post.object_uri,
-      account: account(post.remote_account),
-      sensitive: post.sensitive,
-      spoiler_text: post.summary || ""
-    })
+    fields =
+      %{
+        id: "remote-" <> post.id,
+        created_at: timestamp(post.published_at),
+        content: Markdown.render_remote(post.content_text || ""),
+        url: post.origin_url || post.object_uri,
+        uri: post.object_uri,
+        account: account(post.remote_account),
+        sensitive: post.sensitive,
+        spoiler_text: post.summary || ""
+      }
+      |> Map.merge(remote_post_reply_fields(post))
+
+    base_status(fields)
   end
 
   def status(%Note{} = note, _engagement) do
-    base_status(%{
-      id: "remote-note-" <> note.id,
-      created_at: timestamp(note.received_at),
-      content: Markdown.render_remote(note.content_text || ""),
-      url: Note.origin(note),
-      uri: note.object_uri,
-      account: note_account(note),
-      sensitive: Note.warned?(note),
-      spoiler_text: note.summary || "",
-      favourites_count: note.likes_count || 0,
-      reblogs_count: note.shares_count || 0
-    })
+    fields =
+      %{
+        id: "remote-note-" <> note.id,
+        created_at: timestamp(note.received_at),
+        content: Markdown.render_remote(note.content_text || ""),
+        url: Note.origin(note),
+        uri: note.object_uri,
+        account: note_account(note),
+        sensitive: Note.warned?(note),
+        spoiler_text: note.summary || "",
+        favourites_count: note.likes_count || 0,
+        reblogs_count: note.shares_count || 0
+      }
+      |> Map.merge(note_reply_fields(note))
+
+    base_status(fields)
   end
 
   @doc """
@@ -540,7 +549,55 @@ defmodule Vutuv.MastodonApi.Presenter do
       {:parent, %Post{} = parent} ->
         %{in_reply_to_id: parent.id, in_reply_to_account_id: account(Posts.author(parent)).id}
 
-      _not_a_live_parent ->
+      _not_a_live_local_parent ->
+        # Not a local reply — but it may answer a followed account's post on
+        # another network (issue #1165), which threads under the cached copy of
+        # that post, a status the same client can fetch (`remote-<id>`). The
+        # #1070 shape (an answer that is *also* a local reply) already resolved
+        # to its local parent above, so only the top-level case reaches here;
+        # `remote_reply_ref` is preloaded with its `remote_post` and account.
+        remote_reply_fields(post)
+    end
+  end
+
+  defp remote_reply_fields(%Post{
+         remote_reply_ref: %PostRemoteReply{remote_post: %RemotePost{} = parent}
+       }) do
+    %{
+      in_reply_to_id: "remote-" <> parent.id,
+      in_reply_to_account_id: "remote-" <> parent.remote_account_id
+    }
+  end
+
+  defp remote_reply_fields(_post), do: %{}
+
+  # Names the local post a cached reply answers (`Posts.note_parent_post/1`).
+  # The account id is the post author's, which `author_id/1` already is (a
+  # member or a page), so no account struct is built; `%{}` (both nil) when the
+  # post is gone.
+  defp note_reply_fields(note) do
+    case Posts.note_parent_post(note) do
+      %Post{} = parent ->
+        %{in_reply_to_id: parent.id, in_reply_to_account_id: Posts.author_id(parent)}
+
+      nil ->
+        %{}
+    end
+  end
+
+  # Names the cached parent post a stored reply continues
+  # (`Fediverse.remote_post_id_by_uri/2`), both ids under the `remote-` prefix
+  # its statuses and accounts carry. `%{}` when the parent is not (or no longer)
+  # held: an id no client can resolve is worse than none (the issue's own rule).
+  defp remote_post_reply_fields(%RemotePost{
+         in_reply_to_uri: uri,
+         remote_account_id: account_id
+       }) do
+    case Fediverse.remote_post_id_by_uri(uri, account_id) do
+      id when is_binary(id) ->
+        %{in_reply_to_id: "remote-" <> id, in_reply_to_account_id: "remote-" <> account_id}
+
+      nil ->
         %{}
     end
   end

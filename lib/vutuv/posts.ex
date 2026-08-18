@@ -4879,6 +4879,18 @@ defmodule Vutuv.Posts do
 
   def reply_ref_state(_post), do: nil
 
+  @doc """
+  The local post a cached remote reply (`%Fediverse.Note{}`) answers, or `nil`
+  once that post is gone. A note is by definition an answer to one of a member's
+  own posts (`note.post_id`), which is what `/context` resolves to build the
+  reply's ancestor chain (issue #1604) and what the Mastodon adapter names as
+  the note's `in_reply_to_id` so a client threads it under that post. A bare
+  primary-key `Repo.get`, no preload — the caller reads only `id` and
+  `author_id/1` (both plain columns) — so it stays one cheap lookup per note.
+  """
+  def note_parent_post(%Note{post_id: id}) when is_binary(id), do: Repo.get(Post, id)
+  def note_parent_post(_note), do: nil
+
   defp preload_post(nil), do: nil
   defp preload_post(%Post{} = post), do: Repo.preload(post, post_preloads(), force: true)
 
