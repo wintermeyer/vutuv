@@ -11,7 +11,6 @@ defmodule Vutuv.PostsRemoteRepliesTest do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Delivery
-  alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
   alias Vutuv.Posts.PostRemoteReply
 
@@ -27,30 +26,9 @@ defmodule Vutuv.PostsRemoteRepliesTest do
     {:ok, author: author, post: post, note: insert_note!(post)}
   end
 
-  # A stored public reply from another network, the way the inbox writes one.
-  defp insert_note!(post, attrs \\ %{}) do
-    now = DateTime.utc_now(:second)
-
-    %Note{post_id: post.id}
-    |> Note.changeset(
-      Map.merge(
-        %{
-          object_uri: "#{@actor}/statuses/#{System.unique_integer([:positive])}",
-          actor_uri: @actor,
-          inbox_uri: @inbox,
-          handle: "alice",
-          display_name: "Alice Anders",
-          content_text: "Guter Punkt.",
-          audience: "public",
-          received_at: now,
-          checked_at: now,
-          expires_at: DateTime.add(now, 183 * 86_400)
-        },
-        attrs
-      )
-    )
-    |> Repo.insert!()
-  end
+  # The shared `:note` factory, pinned to the actor the assertions below name.
+  defp insert_note!(post, attrs \\ %{}),
+    do: insert(:note, Map.merge(%{post: post, actor_uri: @actor, inbox_uri: @inbox}, attrs))
 
   describe "create_remote_reply/3" do
     test "creates an ordinary reply plus the sidecar naming what it answers", %{

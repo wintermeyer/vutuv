@@ -65,6 +65,50 @@ defmodule VutuvWeb.MastodonApi.DiscoveryExtrasTest do
                Enum.sort([first.id, second.id])
     end
 
+    # Issue #1599: a %Note{} is a cached reply to a local post, so opening it in
+    # a client shows the conversation above instead of an orphan.
+    test "a cached remote reply answers its local parent chain as ancestors", %{conn: conn} do
+      author = insert(:activated_user)
+      {:ok, root} = Posts.create_post(author, %{body: "Die Wurzel"})
+      {:ok, parent} = Posts.create_reply(author, root, %{body: "Die Mitte"})
+      note = insert(:note, post: parent)
+
+      token = mastodon_token(insert(:activated_user), ["read"])
+
+      context =
+        conn
+        |> mastodon_conn(token)
+        |> get("/api/v1/statuses/remote-note-#{note.id}/context")
+        |> json_response(200)
+
+      assert Enum.map(context["ancestors"], & &1["id"]) == [root.id, parent.id]
+      assert context["descendants"] == []
+    end
+
+    # Without the explicit gate the chain would still carry the closed parent
+    # (list_thread unions the focus post back in unconditionally), so this test
+    # goes red the moment the visibility check is dropped.
+    test "a parent the reader may not see stays out of a reply's context", %{conn: conn} do
+      author = insert(:activated_user)
+
+      {:ok, closed} =
+        Posts.create_post(author, %{
+          body: "Nur für Follower",
+          denials: [%{wildcard: "non_followers"}]
+        })
+
+      note = insert(:note, post: closed)
+      token = mastodon_token(insert(:activated_user), ["read"])
+
+      context =
+        conn
+        |> mastodon_conn(token)
+        |> get("/api/v1/statuses/remote-note-#{note.id}/context")
+        |> json_response(200)
+
+      assert context == %{"ancestors" => [], "descendants" => []}
+    end
+
     test "a status nobody may see is a 404, not an empty context", %{conn: conn} do
       author = insert(:activated_user)
       stranger = insert(:activated_user)

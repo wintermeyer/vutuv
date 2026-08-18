@@ -9,33 +9,10 @@ defmodule VutuvWeb.PostFeedLiveTest do
   import Phoenix.LiveViewTest
 
   alias Vutuv.Activity
-  alias Vutuv.Fediverse.Note
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
-
-  # A stored public reply from another network, the way the inbox writes one
-  # (it feeds the "fediverse_reply" arm of the unread notification count).
-  defp insert_note!(post) do
-    now = DateTime.utc_now(:second)
-    actor = "https://social.example/users/alice#{System.unique_integer([:positive])}"
-
-    %Note{post_id: post.id}
-    |> Note.changeset(%{
-      object_uri: "#{actor}/statuses/#{System.unique_integer([:positive])}",
-      actor_uri: actor,
-      inbox_uri: "#{actor}/inbox",
-      handle: "alice",
-      display_name: "Alice Anders",
-      content_text: "Guter Punkt.",
-      audience: "public",
-      received_at: now,
-      checked_at: now,
-      expires_at: DateTime.add(now, 183 * 86_400)
-    })
-    |> Repo.insert!()
-  end
 
   # The discovery rail renders with the page again (the v7.200.3 laziness was
   # undone — see FeedRailsTest); the helper name survives at the call sites.
@@ -1368,7 +1345,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       friend = other_user()
       insert(:follow, follower: user, followee: friend)
       {:ok, mine} = Posts.create_post(user, %{body: "federated far and wide"})
-      insert_note!(mine)
+      insert(:note, post: mine)
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 

@@ -344,6 +344,26 @@ defmodule Vutuv.Factory do
     }
   end
 
+  # A stored public reply from another network, the way the inbox writes one.
+  def note_factory do
+    now = DateTime.utc_now(:second)
+    actor = sequence(:note_actor, &"https://social.example/users/alice#{&1}")
+
+    %Vutuv.Fediverse.Note{
+      post: build(:post),
+      object_uri: sequence(:note_object, &"https://social.example/statuses/#{&1}"),
+      actor_uri: actor,
+      inbox_uri: actor <> "/inbox",
+      handle: "alice",
+      display_name: "Alice Anders",
+      content_text: "Guter Punkt.",
+      audience: "public",
+      received_at: now,
+      checked_at: now,
+      expires_at: DateTime.add(now, Vutuv.Fediverse.note_retention_days() * 86_400)
+    }
+  end
+
   def post_review_factory do
     %Vutuv.Posts.PostReview{
       post: build(:post),

@@ -12,6 +12,10 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
 
+  # The empty conversation, in Mastodon's own shape — the honest answer
+  # wherever there is nothing local to show.
+  @empty_context %{ancestors: [], descendants: []}
+
   @doc """
   One status by the id a client was given.
 
@@ -185,12 +189,35 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   defp context_payload(conn, %Post{} = post), do: thread_context(conn, post)
 
+  # A cached reply is by definition an answer to a local post (`note.post_id`),
+  # so the reader who opens it gets the conversation above: the parent post's
+  # own chain plus the parent, oldest first. Gated like every other read here —
+  # a parent the viewer may not see must not ride in on its reply's id, and
+  # `list_thread/2` unions the focus post back in unconditionally, so the check
+  # cannot be left to the query. The bare row is enough for that gate
+  # (`visible_to?/2` looks up whatever is not preloaded), and the copy that gets
+  # rendered comes out of `list_thread/2` preloaded. Descendants stay empty: a
+  # local answer to this reply lives in the parent's thread and is read there.
+  defp context_payload(conn, %Note{} = note) do
+    with %Post{} = parent <- Repo.get(Post, note.post_id),
+         true <- status_visible?(conn, parent) do
+      viewer = viewer(conn)
+      %{posts: posts} = Posts.list_thread(parent, viewer)
+      parents = Map.new(posts, &{&1.id, parent_id(&1)})
+      by_id = Map.new(posts, &{&1.id, &1})
+      chain = for id <- ancestor_chain(parents, parent.id, []), p = by_id[id], do: p
+      %{ancestors: Presenter.statuses(chain, viewer), descendants: []}
+    else
+      _gone_or_closed -> @empty_context
+    end
+  end
+
   # A status from another network has no place in the local reply tree, but a
   # client asks for its context the moment somebody opens it — and a 404 to
   # that call is an error screen where the post should be. The honest answer is
-  # the empty conversation, in Mastodon's own shape (the visibility gate has
-  # already been asked by `with_visible_status/3`, like on every other read).
-  defp context_payload(_conn, _remote), do: %{ancestors: [], descendants: []}
+  # the empty conversation (the visibility gate has already been asked by
+  # `with_visible_status/3`, like on every other read).
+  defp context_payload(_conn, _remote), do: @empty_context
 
   @doc """
   The status as its author typed it — the Markdown source, not the rendered
@@ -422,12 +449,12 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   end
 
   defp thread_context(conn, %Post{} = post) do
-    viewer = conn.assigns.current_organization || conn.assigns.current_user
+    viewer = viewer(conn)
     %{posts: posts} = Posts.list_thread(post, viewer)
 
     parents = Map.new(posts, &{&1.id, parent_id(&1)})
     by_id = Map.new(posts, &{&1.id, &1})
-    ancestors = for id <- ancestor_chain(parents, parents[post.id], []), by_id[id], do: by_id[id]
+    ancestors = for id <- ancestor_chain(parents, parents[post.id], []), p = by_id[id], do: p
     descendants = Enum.filter(posts, &below?(parents, &1.id, post.id))
 
     # **One render for both halves.** A thread is mostly the same handful of
