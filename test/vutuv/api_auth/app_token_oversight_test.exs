@@ -40,9 +40,9 @@ defmodule Vutuv.ApiAuth.AppTokenOversightTest do
 
   describe "UserAgent.capture/1" do
     test "caps the stored string so a body cannot become a row" do
-      long = String.duplicate("x", UserAgent.max_bytes() * 3)
+      long = String.duplicate("x", UserAgent.max_chars() * 3)
 
-      assert String.length(UserAgent.capture(long)) == UserAgent.max_bytes()
+      assert String.length(UserAgent.capture(long)) == UserAgent.max_chars()
     end
 
     test "a missing or blank header is nil, so the column says 'not recorded'" do

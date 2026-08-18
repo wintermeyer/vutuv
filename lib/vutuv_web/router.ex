@@ -456,8 +456,9 @@ defmodule VutuvWeb.Router do
 
   # The **unauthenticated** half on the main host, which is the one place the two
   # hosts genuinely differ and so cannot join the loop above: the subdomain's
-  # block ends in a catch-all, and mirroring that here would swallow the whole
-  # website — an unmatched `/api/v1/...` has to fall through to the normal 404.
+  # block ends in a catch-all over `/*path`, and mirroring *that* here would
+  # swallow the whole website. This scope's catch-all is narrowed to Mastodon's
+  # two version prefixes instead — see the comment on it below.
   scope "/", VutuvWeb do
     pipe_through(:mastodon_api)
 

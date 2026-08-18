@@ -120,12 +120,17 @@ defmodule VutuvWeb.OrganizationLive.Apps do
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
 
+  # Two counts, because they answer two questions. `@tokens.total` is how many
+  # rows the filter found, which is what the list says about itself; the switch
+  # withdraws **every** token, so its confirmation has to name the unfiltered
+  # count. Sharing one number let a filter narrowed to a single colleague
+  # promise that "the one app token" was going, with thirty behind it.
   defp load_tokens(socket, page) do
-    assign(
-      socket,
-      :tokens,
-      ApiAuth.organization_tokens(socket.assigns.organization, socket.assigns.filter, page)
-    )
+    organization = socket.assigns.organization
+
+    socket
+    |> assign(:tokens, ApiAuth.organization_tokens(organization, socket.assigns.filter, page))
+    |> assign(:token_count, ApiAuth.count_organization_tokens(organization))
   end
 
   defp maybe_report_revoked(socket, 0), do: socket
@@ -192,11 +197,11 @@ defmodule VutuvWeb.OrganizationLive.Apps do
           phx-click="toggle"
           variant="secondary"
           data-confirm={
-            @organization.mastodon_clients? && @tokens.total > 0 &&
+            @organization.mastodon_clients? && @token_count > 0 &&
               ngettext(
                 "Turn app access off? The one app token issued for this page is withdrawn and stops working immediately.",
                 "Turn app access off? All %{count} app tokens issued for this page are withdrawn and stop working immediately.",
-                @tokens.total
+                @token_count
               )
           }
         >

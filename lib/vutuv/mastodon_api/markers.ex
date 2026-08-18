@@ -35,7 +35,11 @@ defmodule Vutuv.MastodonApi.Markers do
   The identity's markers as a map of `timeline => %Marker{}`.
 
   `only` narrows to the timelines a client asked for (`timeline[]=home`); an
-  empty or missing list answers everything, which is what Mastodon does.
+  empty or missing list answers everything. Mastodon answers `{}` there
+  (`where(timeline: Array(params[:timeline]))` over an empty array), which is
+  an accident of its query rather than a shape a client depends on — every one
+  of them names the timelines it wants, and answering the lot is the more
+  useful reading of "no filter".
   """
   def get(identity, only \\ []) do
     wanted = Enum.filter(only, &(&1 in @timelines))
@@ -77,20 +81,40 @@ defmodule Vutuv.MastodonApi.Markers do
 
   # `version` counts writes, the way Mastodon's does, so a client can tell its
   # own echo from somebody else's write on another device.
+  #
+  # One statement rather than a read and then a write: two of a member's own
+  # devices posting a position in the same instant both saw no row and both
+  # inserted, and the loser met the unique index as an `Ecto.ConstraintError` —
+  # a 500 on exactly the several-installs case this endpoint exists for.
+  # `conflict_target` has to repeat each index's `WHERE`, because both are
+  # partial; Postgres cannot infer a partial index without its predicate.
+  #
+  # The member half of that race has **no test**, deliberately: reproducing it
+  # needs two connections stopped between their read and their write, and a
+  # test that merely writes twice passes against the old code too. The page
+  # half is covered, because there the same collision is reachable without a
+  # race at all — two publishers, one position (`markers_test.exs`).
   defp upsert!(identity, timeline, last_read_id) do
-    case identity |> scope() |> where([m], m.timeline == ^timeline) |> Repo.one() do
-      nil ->
-        identity
-        |> new_marker()
-        |> Map.merge(%{timeline: timeline, last_read_id: last_read_id})
-        |> Repo.insert!()
-
-      %Marker{} = marker ->
-        marker
-        |> Ecto.Changeset.change(last_read_id: last_read_id, version: marker.version + 1)
-        |> Repo.update!()
-    end
+    identity
+    |> new_marker()
+    |> Map.merge(%{timeline: timeline, last_read_id: last_read_id})
+    |> Repo.insert!(
+      on_conflict: [
+        set: [last_read_id: last_read_id, updated_at: NaiveDateTime.utc_now(:second)],
+        inc: [version: 1]
+      ],
+      conflict_target: conflict_target(identity),
+      returning: true
+    )
   end
+
+  # A page's row keeps the `user_id` of whoever wrote it first: the position is
+  # the page's, and the column only records where it came from.
+  defp conflict_target(%User{}),
+    do: {:unsafe_fragment, "(user_id, timeline) WHERE organization_id IS NULL"}
+
+  defp conflict_target({%User{}, %Organization{}}),
+    do: {:unsafe_fragment, "(organization_id, timeline) WHERE organization_id IS NOT NULL"}
 
   defp new_marker(%User{id: user_id}), do: %Marker{user_id: user_id}
 

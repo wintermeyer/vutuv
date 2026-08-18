@@ -23,7 +23,10 @@ defmodule Vutuv.ApiAuth.UserAgent do
   # A client string is not ours to bound, so the column is `text` — but nothing
   # here needs more than a header's worth, and an unbounded body must not become
   # a row. Long enough for the wordiest desktop browser several times over.
-  @max_bytes 500
+  #
+  # Characters, not bytes: `String.slice/3` counts graphemes, and the column is
+  # `text`, so there is no byte limit for the two to disagree about.
+  @max_chars 500
 
   @doc """
   The string to store, from a `Plug.Conn` or a raw header value.
@@ -39,14 +42,14 @@ defmodule Vutuv.ApiAuth.UserAgent do
   def capture(value) when is_binary(value) do
     case String.trim(value) do
       "" -> nil
-      trimmed -> String.slice(trimmed, 0, @max_bytes)
+      trimmed -> String.slice(trimmed, 0, @max_chars)
     end
   end
 
   def capture(_absent), do: nil
 
   @doc "The cap `capture/1` applies, so a test can state it rather than assume it."
-  def max_bytes, do: @max_bytes
+  def max_chars, do: @max_chars
 
   @doc """
   A short device phrase for a stored string, or `nil` when nothing in it is

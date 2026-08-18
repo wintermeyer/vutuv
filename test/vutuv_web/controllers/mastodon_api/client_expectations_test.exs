@@ -12,6 +12,7 @@ defmodule VutuvWeb.MastodonApi.ClientExpectationsTest do
   import Vutuv.MastodonHelpers
 
   alias Vutuv.Posts
+  alias Vutuv.Repo
 
   describe "times are stamped the way a client parses them" do
     # Mastodon always sends `2019-11-26T22:37:36.000Z`, and Apple's
@@ -175,6 +176,60 @@ defmodule VutuvWeb.MastodonApi.ClientExpectationsTest do
       # resolves the ids against.
       assert Enum.map(body["accounts"], & &1["id"]) == [liker.id]
       assert Enum.map(body["statuses"], & &1["id"]) == [post.id]
+    end
+
+    test "gather over the whole page, not over a consecutive run", %{
+      conn: conn,
+      token: token,
+      post: post,
+      liker: liker
+    } do
+      # `Enum.chunk_by/2` reads like grouping and only collapses neighbours, so
+      # anything timed between two likes on one post split them into two groups
+      # carrying the identical `group_key` — which is the string a client keys
+      # its list by. Reverting `notification_groups/1` to `chunk_by` turns this
+      # red; the single-notification case above stays green either way.
+      author = Repo.get!(Vutuv.Accounts.User, post.user_id)
+      follower = insert(:activated_user)
+      second_liker = insert(:activated_user)
+
+      {:ok, _} = Vutuv.Social.follow(follower, author.id)
+      :ok = Posts.like_post(second_liker, post)
+
+      # Second-granularity stamps make the order of one test run a coin toss,
+      # so the follow is put between the two likes on purpose.
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      stamp("post_likes", :user_id, liker.id, NaiveDateTime.add(now, -120))
+      stamp("follows", :follower_id, follower.id, NaiveDateTime.add(now, -60))
+      stamp("post_likes", :user_id, second_liker.id, now)
+
+      groups =
+        conn
+        |> mastodon_conn(token)
+        |> get("/api/v2/notifications")
+        |> json_response(200)
+        |> Map.fetch!("notification_groups")
+
+      keys = Enum.map(groups, & &1["group_key"])
+      assert keys == Enum.uniq(keys), "a group_key appeared twice: #{inspect(keys)}"
+
+      assert [favourites] = Enum.filter(groups, &(&1["type"] == "favourite"))
+      assert favourites["notifications_count"] == 2
+      assert favourites["status_id"] == post.id
+      assert liker.id in favourites["sample_account_ids"]
+      assert second_liker.id in favourites["sample_account_ids"]
+
+      # Newest first, which is the order of the page it was gathered from.
+      assert Enum.map(groups, & &1["type"]) == ["favourite", "follow"]
+    end
+
+    defp stamp(table, column, id, at) do
+      Repo.update_all(
+        Ecto.Query.from(r in table,
+          where: field(r, ^column) == type(^id, Vutuv.UUIDv7)
+        ),
+        set: [inserted_at: at]
+      )
     end
   end
 

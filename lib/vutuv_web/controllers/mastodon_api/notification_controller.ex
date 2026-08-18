@@ -99,24 +99,39 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
 
   defp uniq_by_id(list), do: Enum.uniq_by(list, &(&1[:id] || &1["id"]))
 
+  # Gathered across the **whole page**, not over consecutive runs. `chunk_by/2`
+  # reads like grouping and is not: two likes on one post with a follow timed
+  # between them came back as three groups, two of them carrying the identical
+  # `favourite-<post id>` key and each counting one. A client keys its list by
+  # that string, so a duplicate is not a cosmetic slip. Mastodon's own grouping
+  # is over the whole page too.
+  #
+  # The order is first-appearance, which is newest-first because the page is:
+  # `Enum.group_by/2` answers a map, and a map has no order to inherit.
   defp notification_groups(rendered) do
-    rendered
-    |> Enum.chunk_by(&group_key/1)
-    |> Enum.map(fn [newest | _rest] = group ->
-      ids = Enum.map(group, & &1.id)
+    by_key = Enum.group_by(rendered, &group_key/1)
 
-      %{
-        group_key: group_key(newest),
-        notifications_count: length(group),
-        type: newest.type,
-        most_recent_notification_id: newest.id,
-        page_min_id: Enum.min(ids),
-        page_max_id: Enum.max(ids),
-        latest_page_notification_at: newest.created_at,
-        sample_account_ids: group |> Enum.map(& &1.account.id) |> Enum.uniq() |> Enum.take(8),
-        status_id: newest.status[:id]
-      }
-    end)
+    rendered
+    |> Enum.map(&group_key/1)
+    |> Enum.uniq()
+    |> Enum.map(&notification_group(&1, Map.fetch!(by_key, &1)))
+  end
+
+  defp notification_group(key, [newest | _rest] = group) do
+    ids = Enum.map(group, & &1.id)
+
+    %{
+      group_key: key,
+      notifications_count: length(group),
+      type: newest.type,
+      most_recent_notification_id: newest.id,
+      page_min_id: Enum.min(ids),
+      page_max_id: Enum.max(ids),
+      latest_page_notification_at: newest.created_at,
+      # Mastodon's own `SAMPLE_ACCOUNTS_SIZE`.
+      sample_account_ids: group |> Enum.map(& &1.account.id) |> Enum.uniq() |> Enum.take(8),
+      status_id: newest.status[:id]
+    }
   end
 
   # A group is one type over one status. Without a status there is nothing to

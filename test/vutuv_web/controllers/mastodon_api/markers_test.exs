@@ -12,8 +12,10 @@ defmodule VutuvWeb.MastodonApi.MarkersTest do
 
   import Vutuv.MastodonHelpers
 
+  alias Vutuv.MastodonApi.Marker
   alias Vutuv.MastodonApi.Markers
   alias Vutuv.Organizations
+  alias Vutuv.Repo
 
   setup do
     member = insert(:activated_user)
@@ -145,5 +147,55 @@ defmodule VutuvWeb.MastodonApi.MarkersTest do
 
     # And the member's own timeline is untouched by it.
     assert Markers.get(member) == %{}
+  end
+
+  test "a page has one row however many publishers write it", %{conn: conn, member: member} do
+    # The read is scoped to the organization alone, so the uniqueness has to be
+    # too. While the index also named `user_id`, two publishers writing in the
+    # same instant each inserted their own row — and every later read raised
+    # `Ecto.MultipleResultsError`, which is a 500 on that page's markers for
+    # good. Restoring `[:user_id, :organization_id, :timeline]` in the
+    # migration turns this red.
+    organization = insert(:organization)
+    {:ok, organization} = Organizations.set_mastodon_clients(organization, true)
+    colleague = insert(:activated_user)
+
+    for reader <- [member, colleague] do
+      {:ok, _} = Organizations.add_role(organization, reader, "publisher", member)
+    end
+
+    Markers.put({member, organization}, %{"home" => %{"last_read_id" => "first"}})
+
+    # What the losing side of that race attempts: a blind insert, having read
+    # no row of its own.
+    assert {:error, changeset} =
+             Repo.insert(
+               Ecto.Changeset.change(%Marker{},
+                 user_id: colleague.id,
+                 organization_id: organization.id,
+                 timeline: "home",
+                 last_read_id: "second"
+               )
+               |> Ecto.Changeset.unique_constraint([:organization_id, :timeline],
+                 name: :mastodon_markers_organization_timeline_index
+               )
+             )
+
+    assert changeset.errors != []
+    assert Repo.aggregate(Marker, :count) == 1
+
+    # And the colleague writing through the endpoint moves the page's one
+    # position rather than raising.
+    token = mastodon_token(colleague, ["read", "write"], organization)
+
+    assert conn
+           |> mastodon_conn(token)
+           |> post("/api/v1/markers", %{"home" => %{"last_read_id" => "second"}})
+           |> json_response(200)
+
+    assert %{"home" => marker} = Markers.get({member, organization})
+    assert marker.last_read_id == "second"
+    assert marker.version == 2
+    assert Repo.aggregate(Marker, :count) == 1
   end
 end

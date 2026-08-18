@@ -90,6 +90,27 @@ defmodule VutuvWeb.OrganizationAppTokensTest do
     refute html =~ "Bartholomew"
   end
 
+  test "the switch's confirmation counts every token, not the filtered rows", %{conn: conn} do
+    # The switch withdraws all of them, so its confirmation may not read the
+    # list's filtered total: narrowed to one colleague it promised that "the
+    # one app token" was going, with two more behind it. Pointing `data-confirm`
+    # back at `@tokens.total` turns this red.
+    {conn, organization, _owner} = owned_page_with_apps_on(conn)
+    issue(organization, insert(:activated_user, first_name: "Zoraida"))
+    issue(organization, insert(:activated_user, first_name: "Bartholomew"))
+    issue(organization, insert(:activated_user, first_name: "Cornelius"))
+
+    {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/apps")
+
+    html = view |> form("form[phx-change=filter]", %{"query" => "zorai"}) |> render_change()
+
+    assert html =~ "All 3 app tokens issued for this page are withdrawn"
+    refute html =~ "The one app token issued for this page is withdrawn"
+    # The list still says what the filter found.
+    assert html =~ "Zoraida"
+    refute html =~ "Bartholomew"
+  end
+
   test "an owner withdraws one token and the rest stay", %{conn: conn} do
     {conn, organization, _owner} = owned_page_with_apps_on(conn)
     doomed = issue(organization, insert(:activated_user))

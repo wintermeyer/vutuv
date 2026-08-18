@@ -377,7 +377,11 @@ defmodule Vutuv.ApiAuth do
     count
   end
 
-  @doc "How many live app tokens are issued for `organization` — the switch's confirmation."
+  @doc """
+  How many live app tokens are issued for `organization`, ignoring the list's
+  filter — what the switch's confirmation names, because turning app access off
+  withdraws every one of them and not only the rows on screen.
+  """
   def count_organization_tokens(%Organization{} = organization) do
     organization |> organization_tokens_query(nil) |> Repo.aggregate(:count)
   end
