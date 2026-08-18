@@ -155,6 +155,26 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
 
       assert context == %{"ancestors" => [], "descendants" => []}
     end
+
+    # The empty answer still has to pass the same gate as every other read here:
+    # a 200 to any id that merely resolves confirms the object exists, which is
+    # what a followers-only cached post must not do.
+    test "but only for a status the reader may see", %{conn: conn} do
+      closed =
+        Repo.update!(Ecto.Changeset.change(cached_post(remote_account()), audience: "followers"))
+
+      assert conn
+             |> get("/api/v1/statuses/remote-#{closed.id}/context")
+             |> json_response(404)
+    end
+
+    test "and the status itself still carries the author's figures", %{conn: conn, post: post} do
+      status = conn |> get("/api/v1/statuses/remote-#{post.id}") |> json_response(200)
+
+      # A remote author has no counts of ours to state, and asking for none is
+      # what keeps a single-status render free of the batch entirely.
+      assert status["account"]["statuses_count"] == 0
+    end
   end
 
   describe "an account from another network" do
@@ -297,6 +317,62 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
       assert status["account"]["id"] == sharer.id
       assert status["reblog"]["id"] == post.id
       assert status["reblog"]["account"]["id"] == author.id
+    end
+  end
+
+  describe "walking an account timeline that holds a reshare" do
+    # The blocker this round: a reshare is its own status now, so the id a
+    # client hands back is the **reshare row's**, while the walk was bounded on
+    # the post id (`Posts.author_statuses/3`). Those are different uuids, and a
+    # reshare row is younger than nearly every post — so `post_id < <reshare>`
+    # stayed true for the whole table and the same page came back for ever.
+    test "makes progress instead of handing out the same page for ever", %{conn: conn} do
+      author = insert(:activated_user)
+      stranger = insert(:activated_user)
+
+      # An old post by somebody else, reshared now: the case where the two ids
+      # are furthest apart.
+      {:ok, foreign} = Posts.create_post(stranger, %{body: "Fremder Beitrag"})
+      {:ok, own_one} = Posts.create_post(author, %{body: "Eins"})
+      :ok = Posts.repost_post(author, foreign)
+      {:ok, own_two} = Posts.create_post(author, %{body: "Zwei"})
+
+      conn = mastodon_conn(conn, mastodon_token(author, ["read"]))
+
+      seen = walk(conn, "/api/v1/accounts/#{author.id}/statuses", nil, [], 0)
+
+      assert length(seen) == 3
+      assert length(Enum.uniq(seen)) == 3
+      assert own_one.id in seen
+      assert own_two.id in seen
+      assert Enum.any?(seen, &String.starts_with?(&1, "repost-"))
+    end
+
+    # One row at a time, the way a client scrolls, with a hard stop so a
+    # non-terminating walk fails as a wrong length rather than hanging the suite.
+    defp walk(_conn, _path, _max_id, seen, rounds) when rounds > 10, do: seen
+
+    defp walk(conn, path, max_id, seen, rounds) do
+      params = if max_id, do: %{"limit" => "1", "max_id" => max_id}, else: %{"limit" => "1"}
+
+      case conn |> recycle_token() |> get(path, params) |> json_response(200) do
+        [] ->
+          seen
+
+        [status] ->
+          walk(conn, path, status["id"], seen ++ [status["id"]], rounds + 1)
+      end
+    end
+
+    # `Phoenix.ConnTest` reuses one conn per request; recycling keeps the bearer
+    # header while clearing the previous response.
+    defp recycle_token(conn) do
+      [header] = Plug.Conn.get_req_header(conn, "authorization")
+
+      conn
+      |> Phoenix.ConnTest.recycle()
+      |> Map.put(:host, conn.host)
+      |> Plug.Conn.put_req_header("authorization", header)
     end
   end
 

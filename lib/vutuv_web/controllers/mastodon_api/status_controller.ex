@@ -182,11 +182,19 @@ defmodule VutuvWeb.MastodonApi.StatusController do
       # a client asks for its context the moment somebody opens it — and a 404
       # to that call is an error screen where the post should be. The honest
       # answer is the empty conversation, in Mastodon's own shape.
-      %{} ->
-        json(conn, %{ancestors: [], descendants: []})
-
+      #
+      # **It still has to pass the same gate as every other branch.** Answering
+      # 200 to any id that merely resolves tells whoever asks that the object
+      # exists, which is the one thing a followers-only cached post must not
+      # confirm — and it would have been the only read here that skipped
+      # `status_visible?/2`.
       nil ->
         not_found(conn)
+
+      object ->
+        if status_visible?(conn, object),
+          do: json(conn, %{ancestors: [], descendants: []}),
+          else: not_found(conn)
     end
   end
 

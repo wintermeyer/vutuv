@@ -152,7 +152,18 @@ defmodule Vutuv.MastodonApi.Presenter do
 
   defp counted_account(status, _counts), do: status
 
-  @doc "One status as `viewer` sees it — `statuses/2` for a single row."
+  @doc """
+  One status as `viewer` sees it — `statuses/2` for a single row.
+
+  **It fills the author's counts too, and that is the point rather than a side
+  effect of reusing the page path.** This is what answers a status action, a
+  fresh post and an edit, and a client keeps the account object out of any of
+  them: handing back zeroes on the reply to a like would put the very "0 posts"
+  back into a profile header that the counts exist to fix. The bill is the four
+  aggregates in `Vutuv.MastodonApi.AccountCounts` for a single member — and
+  nothing at all when the author is on another network, since there are no local
+  ids to count and the batch short-circuits before it queries.
+  """
   def one_status(item, viewer), do: item |> List.wrap() |> statuses(viewer) |> hd()
 
   defp engaged_post_id(%Post{id: id}), do: id

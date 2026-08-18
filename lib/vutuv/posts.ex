@@ -3255,18 +3255,31 @@ defmodule Vutuv.Posts do
   the **post** id rather than by when the entry was made.
 
   Two deliberate differences from the website's version, both forced by what a
-  Mastodon client hands back. It returns one id per status, and for a repost
-  that id is the id of the post being reshared, not of the reshare — so the
-  post id is the only column the walk can be bounded on, and the order has to
-  match it or the page repeats and skips rows. And replies are **not** folded
-  under the post they answer (`collapse_profile_threads/1`): a client's account
-  timeline is a flat list, and folding would make a full page come back short,
-  which reads to the client as the end of the list.
+  Mastodon client hands back.
+
+  **The walk is bounded on `ref_id` — the entry's own id, which is the id every
+  rendered status reduces to.** For an original that is the post; for a reshare
+  it is the reshare row, because
+  `Vutuv.MastodonApi.Presenter.reshared/2` renders a reshare as a status of its
+  own (`repost-<uuid>`) and a client hands *that* back. Bounding on `post_id`
+  instead — which this did while a reshare was still flattened into the post it
+  carried — compares the cursor against a different table's uuid: a reshare row
+  is younger than nearly every post, so `post_id < <reshare id>` stays true for
+  the whole table and the client is handed the same page for ever. Not a wrong
+  window but an endless one, and only on an account that has reshared
+  something. The order has to match the bound or the page repeats and skips
+  rows; ordering by `ref_id` also puts a reshare where Mastodon puts it, at the
+  moment it was passed on rather than at the age of the post it carries.
+
+  And replies are **not** folded under the post they answer
+  (`collapse_profile_threads/1`): a client's account timeline is a flat list, and
+  folding would make a full page come back short, which reads to the client as
+  the end of the list.
   """
   def author_statuses(%User{} = author, viewer, opts \\ []) do
     author
     |> author_timeline_query(viewer, :all)
-    |> Keyset.scope(opts, :post_id)
+    |> Keyset.scope(opts, :ref_id)
     |> Repo.all()
     |> Keyset.restore(opts)
     |> author_entries(author)
