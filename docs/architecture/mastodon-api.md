@@ -71,12 +71,12 @@ Server discovery, login and the core social workflow:
 - `GET /api/v1/accounts/verify_credentials`
 - `GET /api/v1/timelines/home`
 - reading, creating, editing and deleting statuses, plus personal replies
-- `POST /api/v1/media`, `POST /api/v2/media`, `GET /api/v1/media/:id` and
-  `PUT /api/v1/media/:id` for photo attachments
+- `POST /api/v1/media`, `POST /api/v2/media`, `GET /api/v1/media/:id`,
+  `PUT /api/v1/media/:id` and `DELETE /api/v1/media/:id` for photo attachments
 - favourite/unfavourite, reblog/unreblog and bookmark/unbookmark status actions
-- account lookup, relationships and following lists; follow/unfollow,
-  mute/unmute and the local member block/unblock operations that vutuv already
-  supports
+- `GET /api/v1/accounts/lookup`, `/accounts/:id`, relationships and following
+  lists; follow/unfollow, mute/unmute and the local member block/unblock
+  operations that vutuv already supports
 - `GET /api/v2/search` — accounts, statuses and hashtags, plus exact
   `@user@host` resolution
 - `GET /api/v1/statuses/:id/context` and `/source`
@@ -85,13 +85,57 @@ Server discovery, login and the core social workflow:
   tabs asked different questions and got one answer) and
   `/timelines/tag/:hashtag`
 - `GET /api/v1/notifications` (+ `/unread_count`, `/clear`, `/:id`) and the
-  grouped `GET /api/v2/notifications` a 4.3+ client asks for
+  grouped `GET /api/v2/notifications` a 4.3+ client asks for, with its three
+  companions `/api/v2/notifications/:group_key`, `/:group_key/accounts` and
+  `POST /:group_key/dismiss`
+- `GET /api/v1/tags/:id`, `POST /api/v1/tags/:id/follow` / `/unfollow` and
+  `GET /api/v1/followed_tags` — vutuv's own tag subscriptions (issue #872).
+  The hashtag is matched case-insensitively, the way `/timelines/tag/:hashtag`
+  always has: a client hands it back as the member typed it, and the timeline
+  and the Follow button beside it must not disagree about what `#Elixir` names.
+  The followed list is a page like every other list here, its cursor the
+  subscription row's id (`Tags.followed_tags_page/2`) — the Tag entity carries
+  no id, so the boundary rides the `Link` header, as it does in Mastodon.
 - `GET` and `POST /api/v1/markers` — where a client left off reading
 - `GET /api/v1/bookmarks`, `/favourites`, `/blocks`, `/mutes`,
   `/accounts/:id/followers`, `/statuses/:id/favourited_by` and `/reblogged_by`
 - `PATCH /api/v1/accounts/update_credentials` and `POST /api/v1/reports`
 - `POST|GET|PUT|DELETE /api/v1/push/subscription`
 - the streaming websocket at `/api/v1/streaming`
+
+### What `api_versions` promises
+
+`api_versions.mastodon` is feature detection, not a label: a client reads the
+number and then calls the endpoints it stands for, so every one of them has to
+answer. Mastodon's own history (`lib/mastodon/version.rb`) makes 6 the 4.4
+generation, and each bump names one thing:
+
+| version | what it stands for | here |
+| --- | --- | --- |
+| 1, 2 | grouped notifications, moved to `/api/v2` | the list and its three `group_key` companions |
+| 3 | `attribution_domains` on `update_credentials` | **not served** — vutuv has no such concept; see below |
+| 4 | `DELETE /api/v1/media/:id`, `delete_media` on status delete | the method is served; the flag is moot (see below) |
+| 5 | the `blur` filter action | **not served** — the filter API is a stub; see below |
+| 6 | `POST /api/v1/tags/:name/feature` / `/unfeature` | **not served** — see below |
+
+**`delete_media` is not a flag here, it is the only behaviour.** Mastodon keeps
+a deleted post's pictures around for its delete-and-redraft, and the parameter
+opts out of that; `Vutuv.Posts.delete_post/1` removes the files with the row
+either way. So the promise is kept whichever way a client sends it — and the
+divergence worth knowing is the other direction: a client that deletes a post
+meaning to redraft it finds the `media_attachments` ids it was handed back
+already gone.
+
+The three that are **not** served answer the adapter's JSON 404 rather than the
+website's HTML, so a client meets a missing resource and not a broken server.
+Each needs something vutuv does not have yet: attribution domains have no
+counterpart at all (the nearest thing, `Vutuv.Profiles.LinkVerification`, proves
+a member owns a page and says nothing about who may attribute an article to
+them); the filter API needs `Vutuv.ContentFilters` mapped onto Mastodon's
+`FilterV2`, including an action vutuv's hide-only model has no equivalent for;
+and featuring a hashtag needs a vutuv concept, since the tags on a profile carry
+other members' endorsements and an "unfeature" that dropped them would throw
+away somebody else's vouch.
 
 Status creation accepts public text posts with photos. Organization posts are
 top-level, matching vutuv's existing organization post model. Polls and
@@ -116,6 +160,31 @@ endpoint uses; `one_status/2` is the same path for a single row). Rendering them
 without a viewer, as the first cut did, left every heart empty on a post the
 member had just liked — so tapping it *removed* the like. `shown_counts/1` folds
 in what other networks did with the same post, exactly as the card does.
+
+**A status carries what the post really holds.** Its `tags` are the ones the
+author chose in the composer — the chips the website prints under the card — so
+a client can offer "open hashtag" on them; a `#hashtag` written into the body is
+deliberately not repeated there, because it is already a link inside `content`
+and vutuv files the two apart for exactly that reason
+(`Vutuv.Posts.PostHashtag`). `mentions` comes from the `post_mentions` index the
+`"mention"` notification kind reads, in one query for a whole page, and it is
+what a client builds a reply prefill from. `language` is the author's own
+declaration, which a client filters its timeline on. `edited_at` follows the
+website's rule to the minute — an `updated_at` more than sixty seconds past
+`inserted_at` is what its card calls edited — so the hint and the field cannot
+disagree about a post. All four used to be sent empty, and an empty list is a
+claim: it says the post has no tags and names nobody.
+
+**An account's `fields` are the webpages the member has proved are their own**
+(`Vutuv.Profiles.LinkVerification` — the rel=me, DNS and `.well-known` proofs
+the website marks with an emerald tick), each with the `verified_at` that earns
+the same tick in a client. Only the proven ones: an unproven link would arrive
+with `verified_at: null`, which a client renders as an ordinary row, and that is
+not the statement the field makes. They ride the preload every post already
+carries (`Vutuv.Profiles.VerifiedLinks.preload_spec/0`, the one owner of that
+scope), so a page of statuses pays nothing; the endpoints that answer with a
+single account load them, and a list that did not renders none rather than
+firing a query per row.
 
 **Every account carries its own picture, its banner and its figures.** Mastodon's
 account entity is the same object everywhere, and a client renders a profile
@@ -569,12 +638,11 @@ edit window has passed (`Posts.update_post/2`) — Mastodon allows both. Those
 three reasons are spelled out in the 422 rather than collapsing into "The status
 is invalid", which sends a member looking for a mistake in their own text.
 
-- **Some startup stubs still answer empty.** `conversations`, `lists`,
-  `followed_tags` and `filters` return `[]`
-  (`MastodonApi.CompatibilityController`). Notifications and markers no longer
-  do. vutuv has real filters (muted words and tags), real direct messages and
-  real followed tags behind three of those, so they are the next worthwhile
-  ones.
+- **Some startup stubs still answer empty.** `conversations`, `lists` and
+  `filters` return `[]` (`MastodonApi.CompatibilityController`). Notifications,
+  markers and followed tags no longer do. vutuv has real filters (muted words
+  and tags) and real direct messages behind two of those, so they are the next
+  worthwhile ones.
 - **A path this adapter does not implement answers JSON, on both hosts.** The
   subdomain always had a catch-all; the **main host** — the one a member types
   into a phone app, and so the one every client actually uses — did not, so an

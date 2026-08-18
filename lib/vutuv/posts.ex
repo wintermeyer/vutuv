@@ -91,7 +91,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.ScreenshotWorker
   alias Vutuv.Posts.TopPosters
   alias Vutuv.Prefs
-  alias Vutuv.Profiles.Url
+  alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
   alias Vutuv.Tags
@@ -1613,6 +1613,22 @@ defmodule Vutuv.Posts do
       NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at) < edit_window_minutes() * 60
   end
 
+  # A save within this many seconds of writing is not an edit: the composer and
+  # the pipeline both touch `updated_at` right after an insert.
+  @edit_mark_slack 60
+
+  @doc """
+  Whether `post` has been changed since it was written.
+
+  vutuv stores no edit timestamp, so the rule is `updated_at` having moved away
+  from `inserted_at`. It lives here rather than at its two readers — the post
+  card's "edited" hint and the Mastodon adapter's `edited_at` — because those
+  two must not be able to disagree about a post, and two copies of one
+  threshold is exactly the arrangement that drifts.
+  """
+  def edited?(%Post{inserted_at: created, updated_at: changed}),
+    do: NaiveDateTime.diff(changed, created) > @edit_mark_slack
+
   @doc """
   Whether the author may still edit this post: inside the edit window and not
   yet liked, reposted or answered by anyone (issue #1023). Costs one query; the
@@ -1894,11 +1910,39 @@ defmodule Vutuv.Posts do
   LiveViews don't each run their own query on mount. `post_id` rides in the
   value too; otherwise the shape matches `post_engagement/2`.
   """
+  def post_engagement_map([], _viewer), do: %{}
+
   def post_engagement_map(post_ids, viewer) do
     from(p in Post, where: p.id in ^post_ids)
     |> engagement_select(engagement_viewer_id(viewer))
     |> Repo.all()
     |> Map.new(fn engagement -> {engagement.id, engagement} end)
+  end
+
+  @doc """
+  Who each of `post_ids` names with an `@handle`, as
+  `%{post_id => [%User{} | %Organization{}]}`.
+
+  One batched read for a whole page, the way `post_engagement_map/2` reads the
+  action bar's figures — a mention list built per post would be a round trip per
+  card. (The `preload` costs three round trips, not one: the rows, then one per
+  association. Three per page, never per post, is the point.) The rows come from `post_mentions`, the resolved index `Vutuv.Posts`
+  reconciles on every save, so this asks the same table the `"mention"`
+  notification kind reads and cannot drift from what was actually notified.
+
+  Both author kinds ride one row (issue #1336, CHECK-enforced to exactly one),
+  so a page is listed here as readily as a member.
+  """
+  def mention_map([]), do: %{}
+
+  def mention_map(post_ids) when is_list(post_ids) do
+    from(m in PostMention,
+      where: m.post_id in ^post_ids,
+      order_by: m.id,
+      preload: [:user, :organization]
+    )
+    |> Repo.all()
+    |> Enum.group_by(& &1.post_id, &(&1.user || &1.organization))
   end
 
   defp engagement_viewer_id(%User{id: id}), do: id
@@ -4999,9 +5043,7 @@ defmodule Vutuv.Posts do
   # with fifty links still ships only the handful they proved — and ordered,
   # because an un-ordered multi-row preload comes back in whatever order
   # Postgres likes (id order is creation order, ids being UUID v7).
-  defp verified_links_preload do
-    [urls: from(u in Url, where: not is_nil(u.verified_at), order_by: u.id)]
-  end
+  defp verified_links_preload, do: VerifiedLinks.preload_spec()
 
   @doc """
   The root-relative permalink path, e.g.

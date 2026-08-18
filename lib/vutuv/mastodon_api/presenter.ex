@@ -9,15 +9,18 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Identity
   alias Vutuv.MastodonApi
   alias Vutuv.MastodonApi.AccountCounts
   alias Vutuv.Moderation.ImageScans
-  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Profiles.Url
+  alias Vutuv.Profiles.VerifiedLinks
+  alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
   alias VutuvWeb.Markdown
   alias VutuvWeb.RemoteMediaToken
@@ -54,17 +57,18 @@ defmodule Vutuv.MastodonApi.Presenter do
       display_name: UserHelpers.full_name(user),
       note: note(user.headline),
       created_at: created_at(user, user.id),
-      url: MastodonApi.main_url("/" <> user.username),
+      url: profile_url(user),
       avatar: avatar,
       header: header,
       header_static: header,
+      fields: account_fields(user),
       group: false
     })
     |> Map.merge(count_fields(counts))
   end
 
   def account(%Organization{} = organization, counts) do
-    handle = organization.username || organization.slug
+    handle = acct_handle(organization)
     header = organization_image(organization.cover, fallback_header())
 
     base_account(%{
@@ -74,7 +78,7 @@ defmodule Vutuv.MastodonApi.Presenter do
       display_name: organization.name,
       note: note(organization.description),
       created_at: created_at(organization, organization.id),
-      url: MastodonApi.main_url(Organizations.canonical_path(organization)),
+      url: profile_url(organization),
       avatar: organization_image(organization.logo, fallback_avatar()),
       header: header,
       header_static: header,
@@ -117,14 +121,13 @@ defmodule Vutuv.MastodonApi.Presenter do
   counts travel with the record.
   """
   def statuses(items, viewer) when is_list(items) do
-    engagements =
-      items
-      |> Enum.map(&engaged_post_id/1)
-      |> Enum.reject(&is_nil/1)
-      |> Posts.post_engagement_map(viewer)
+    post_ids = items |> Enum.map(&engaged_post_id/1) |> Enum.reject(&is_nil/1)
+
+    engagements = Posts.post_engagement_map(post_ids, viewer)
+    mentions = Posts.mention_map(post_ids)
 
     items
-    |> Enum.map(&rendered_status(&1, engagements))
+    |> Enum.map(&rendered_status(&1, engagements, mentions))
     |> fill_account_counts(viewer)
   end
 
@@ -174,13 +177,14 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp engaged_post_id(%{post: %Post{id: id}} = entry) when not is_struct(entry), do: id
   defp engaged_post_id(_other), do: nil
 
-  defp rendered_status(%Post{} = post, engagements), do: status(post, engagements[post.id])
+  defp rendered_status(%Post{} = post, engagements, mentions),
+    do: status(post, engagements[post.id], mentions[post.id])
 
-  defp rendered_status(%{post: %Post{} = post} = entry, engagements)
+  defp rendered_status(%{post: %Post{} = post} = entry, engagements, mentions)
        when not is_struct(entry),
-       do: reshared(entry, status(post, engagements[post.id]))
+       do: reshared(entry, status(post, engagements[post.id], mentions[post.id]))
 
-  defp rendered_status(other, _engagements), do: status_from_entry(other)
+  defp rendered_status(other, _engagements, _mentions), do: status_from_entry(other)
 
   # A reshare in Mastodon's shape: an outer status by whoever passed the post
   # on, carrying the post itself under `reblog`.
@@ -238,9 +242,9 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp reshare_time(%{at: at}), do: timestamp(at)
   defp reshare_time(_entry), do: nil
 
-  def status(post, engagement \\ nil)
+  def status(post, engagement \\ nil, mentions \\ nil)
 
-  def status(%Post{} = post, engagement) do
+  def status(%Post{} = post, engagement, mentions) do
     author = Posts.author(post)
     content = post.body |> Markdown.render_post(loaded_images(post)) |> safe_html()
 
@@ -253,7 +257,11 @@ defmodule Vutuv.MastodonApi.Presenter do
         uri: MastodonApi.main_url(Posts.path(post)),
         account: account(author),
         media_attachments: media_attachments(post),
-        visibility: visibility(post, engagement)
+        visibility: visibility(post, engagement),
+        language: post.language,
+        edited_at: edited_at(post),
+        tags: status_tags(post),
+        mentions: status_mentions(post, mentions)
       }
       |> Map.merge(reply_fields(post))
       |> Map.merge(engagement_fields(engagement))
@@ -261,7 +269,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     base_status(fields)
   end
 
-  def status(%RemotePost{} = post, _engagement) do
+  def status(%RemotePost{} = post, _engagement, _mentions) do
     base_status(%{
       id: "remote-" <> post.id,
       created_at: timestamp(post.published_at),
@@ -274,7 +282,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     })
   end
 
-  def status(%Note{} = note, _engagement) do
+  def status(%Note{} = note, _engagement, _mentions) do
     base_status(%{
       id: "remote-note-" <> note.id,
       created_at: timestamp(note.received_at),
@@ -428,6 +436,48 @@ defmodule Vutuv.MastodonApi.Presenter do
     )
   end
 
+  # Mastodon's profile `fields`, filled from the webpages a member has PROVED
+  # are their own (`Vutuv.Profiles.LinkVerification`) — the rel=me / DNS /
+  # well-known proofs the website marks with an emerald tick. That is the same
+  # claim `verified_at` makes in a client, which is why these and not the whole
+  # link list: an unproven link rendered here would carry no `verified_at`, and
+  # a client draws no distinction between "not proved" and "a plain row", so it
+  # would read as the member's own list of trusted addresses.
+  #
+  # They are already preloaded wherever a post renders
+  # (`Posts.render_preloads/0` scopes the author's `:urls` to exactly this set),
+  # so a page of statuses pays nothing; an account whose links were not loaded
+  # answers the empty list rather than raising, like every other association
+  # here.
+  defp account_fields(%User{} = user),
+    do: user |> VerifiedLinks.of() |> Enum.map(&account_field/1)
+
+  defp account_field(%Url{} = link) do
+    address = VerifiedLinks.address(link)
+
+    %{
+      name: field_name(link, address),
+      value: field_value(link, address),
+      verified_at: timestamp(link.verified_at)
+    }
+  end
+
+  defp field_name(%Url{description: description}, _address)
+       when is_binary(description) and description != "",
+       do: description
+
+  defp field_name(_link, address), do: address
+
+  # HTML, because Mastodon's field value is: a client renders it as markup and
+  # follows the anchor. `rel="me"` is the same statement the proof itself rests
+  # on.
+  defp field_value(%Url{value: value}, address) do
+    ~s(<a href=") <>
+      Plug.HTML.html_escape(value) <>
+      ~s(" rel="me nofollow noopener noreferrer" target="_blank">) <>
+      Plug.HTML.html_escape(address) <> "</a>"
+  end
+
   # The AI image gate is not re-asked here: `Vutuv.Uploads.url/3` answers "no
   # image" for a picture still in moderation limbo (the file waits in
   # quarantine), so a pending avatar already comes back as the `data:` default
@@ -532,6 +582,86 @@ defmodule Vutuv.MastodonApi.Presenter do
       reblogged: engagement.reposted? == true,
       bookmarked: engagement.bookmarked? == true
     }
+  end
+
+  @doc """
+  One tag in Mastodon's shape.
+
+  `name` is the **slug**, not the display name: it is what a client puts back
+  into `/api/v1/timelines/tag/:hashtag` and into a `#hashtag` it composes, so it
+  has to be the spelling `/tags/:slug` answers to. `history` stays empty —
+  vutuv keeps no per-day usage series, and an invented one would be read as
+  fact.
+
+  `following?` is the viewer's own subscription and defaults to false, which is
+  the honest answer for a list rendered without a viewer (a status's own tags,
+  an anonymous search). `featuring` is flat false until vutuv has a concept to
+  fill it (issue #1592); the key stays because a 4.4 client reads it.
+  """
+  def tag(tag, following? \\ false)
+
+  def tag(%Tag{} = tag, following?) do
+    %{
+      name: tag.slug,
+      url: MastodonApi.main_url("/tags/" <> tag.slug),
+      history: [],
+      following: following?,
+      featuring: false
+    }
+  end
+
+  # The tags a client may act on: the ones the author CHOSE in the composer,
+  # which are the chips the website prints under the card. A `#hashtag` written
+  # into the body is deliberately not repeated here — it is already a link
+  # inside `content`, filed apart from the chosen tags for exactly that reason
+  # (`Vutuv.Posts.PostHashtag`), and listing it would print it twice in every
+  # client that renders both.
+  #
+  # Preloaded on every reader that renders a post (`Posts.render_preloads/0`),
+  # so this costs nothing; an unloaded association answers the empty list rather
+  # than raising, the way the rest of this module treats one.
+  defp status_tags(%Post{tags: tags}) when is_list(tags), do: Enum.map(tags, &tag/1)
+  defp status_tags(_post), do: []
+
+  # Who the post names with an `@handle`, from the batch `statuses/2` reads for
+  # the whole page. Every status that reaches a client comes through there —
+  # `one_status/2` wraps a single row into the same path — so an unbatched call
+  # renders no mentions rather than firing a query per post, exactly the way
+  # `status_tags/1` above treats an association nobody preloaded.
+  defp status_mentions(_post, nil), do: []
+  defp status_mentions(_post, mentioned), do: Enum.map(mentioned, &mention/1)
+
+  # A client reads this to prefill a reply and to resolve the `@handle` links in
+  # `content`, so `acct` has to be the handle exactly as the body spells it.
+  #
+  # The URL comes from `Vutuv.Identity.path/1`, the seam that owns where a
+  # member-or-page actor links; a hand-built copy here is one more place the
+  # next author kind would have to be remembered, and it could disagree with the
+  # `url` of the very same account embedded beside it in the status.
+  defp mention(mentioned) do
+    handle = acct_handle(mentioned)
+
+    %{
+      id: mentioned.id,
+      username: handle,
+      acct: handle,
+      url: profile_url(mentioned)
+    }
+  end
+
+  defp profile_url(identity), do: MastodonApi.main_url(Identity.path(identity))
+
+  # A page is addressed by its handle where it has one and by its slug
+  # otherwise — the same fallback its canonical URL uses.
+  defp acct_handle(%User{username: username}), do: username
+
+  defp acct_handle(%Organization{} = organization),
+    do: organization.username || organization.slug
+
+  # `Posts.edited?/1` owns the rule, so the website card's "edited" hint and this
+  # field are the same claim rather than two copies of one threshold.
+  defp edited_at(%Post{} = post) do
+    if Posts.edited?(post), do: timestamp(post.updated_at)
   end
 
   # vutuv has no visibility column: a post is public until it carries a denial,
