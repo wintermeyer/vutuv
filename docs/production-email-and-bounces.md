@@ -297,6 +297,16 @@ they reach the journal while everything else stays at `:error`:
 journalctl -u 'vutuv3@blue' -u 'vutuv3@green' | grep -E 'Deliverability|Email bounce|Dropped|Suppressed'
 ```
 
+A per-module level is invisible to `Logger.level/0`, to `:logger`'s primary
+config and to `bin/vutuv eval` (which never runs `start/2`), and a release
+running with `RELEASE_DISTRIBUTION=none` has no node for `rpc` to ask — which
+made a journal louder than `config/prod.exs` look unexplainable in issue
+#1575. Since v7.326.2 the node names its own overrides once per boot:
+
+```
+journalctl -u 'vutuv3@blue' -u 'vutuv3@green' | grep logger_override
+```
+
 The startup line `Deliverability.Watcher tailing /var/log/mail.log …` doubles
 as the liveness check that the watcher is running in the current release.
 

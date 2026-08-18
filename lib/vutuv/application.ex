@@ -3,6 +3,8 @@ defmodule Vutuv.Application do
 
   use Application
 
+  require Logger
+
   # Some subsystems carry deliberate ops alarms that production's quiet global
   # Logger level (:error, config/prod.exs) would swallow entirely.
   #
@@ -28,8 +30,39 @@ defmodule Vutuv.Application do
     Vutuv.Notifications.Emailer
   ]
 
-  @doc "Per-module log-level override making the deliverability ops alarms visible."
-  def ensure_ops_logs_visible, do: Logger.put_module_level(@ops_log_modules, :info)
+  @doc """
+  The modules whose log level this app raises at boot, this one included.
+
+  It carries its own override so the boot line below survives a global level
+  quieter than `:info`, which is what production runs by default.
+  """
+  def ops_log_modules, do: [__MODULE__ | @ops_log_modules]
+
+  @doc """
+  Applies the per-module log-level override and says so in the log.
+
+  The line matters as much as the override (issue #1575). A per-module level
+  is invisible to every check an operator reaches for — `Logger.level/0`,
+  `Application.get_env(:logger, :level)` and `:logger.get_primary_config/0`
+  all keep answering `:error` — and `bin/vutuv eval` never runs `start/2`, so
+  a fresh VM cannot see it either. Asking the running node is not a given
+  either: a release started with `RELEASE_DISTRIBUTION=none` (what vutuv.de
+  runs) has no node to attach to, so `bin/vutuv rpc` answers *"Cannot run
+  --rpc-eval if the node is not alive"* and `remote` the same. That left the
+  journal contradicting `config/prod.exs` with nothing anywhere to explain
+  it. So the node states its own deviation once per boot, in the journal that
+  shows the symptom:
+
+      journalctl -u <the vutuv unit> | grep logger_override
+  """
+  def ensure_ops_logs_visible do
+    :ok = Logger.put_module_level(ops_log_modules(), :info)
+
+    Logger.info(fn ->
+      "logger_override primary=#{Logger.level()} raised_to=info modules=" <>
+        Enum.map_join(ops_log_modules(), ",", &inspect/1)
+    end)
+  end
 
   @impl true
   def start(_type, _args) do

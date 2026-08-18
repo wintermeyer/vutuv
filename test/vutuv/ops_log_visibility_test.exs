@@ -8,9 +8,13 @@ defmodule Vutuv.OpsLogVisibilityTest do
   (`image_scan rejected` / `cleared`, the record of a machine deleting a
   member's image) would go the same way. `Vutuv.Application` raises exactly
   those modules to :info via per-module log levels at boot; this covers the
-  override so the alarms can never go silent again.
+  override so the alarms can never go silent again - and covers the boot line
+  that says so, because a per-module level is invisible to every check an
+  operator would run (issue #1575).
   """
   use ExUnit.Case, async: false
+
+  import ExUnit.CaptureLog
 
   @modules [
     Vutuv.Deliverability.Watcher,
@@ -25,7 +29,7 @@ defmodule Vutuv.OpsLogVisibilityTest do
     # default), so app start has not applied the override - apply and clean
     # up here.
     refute Application.get_env(:vutuv, :ops_log_visibility)
-    on_exit(fn -> Logger.delete_module_level(@modules) end)
+    reset_module_levels()
 
     assert :ok = Vutuv.Application.ensure_ops_logs_visible()
 
@@ -40,5 +44,28 @@ defmodule Vutuv.OpsLogVisibilityTest do
     for mod <- @modules do
       assert :logger.get_module_level(mod) == []
     end
+  end
+
+  test "the override announces itself in the log, at the raised level" do
+    # Issue #1575: production logged [warning] while `config/prod.exs`,
+    # `Logger.level()` and `:logger`'s primary config all said :error, and
+    # none of those three can ever show a per-module override - so the node
+    # has to say it out loud. The line rides the override it announces
+    # (Vutuv.Application raises itself too), which is why it survives a
+    # global level that is quieter than :info - :warning here, :error in
+    # production.
+    refute Application.get_env(:vutuv, :ops_log_visibility)
+    assert Logger.level() == :warning
+    reset_module_levels()
+
+    log = capture_log(fn -> Vutuv.Application.ensure_ops_logs_visible() end)
+
+    assert log =~ "logger_override primary=warning"
+    for mod <- @modules, do: assert(log =~ inspect(mod))
+  end
+
+  defp reset_module_levels do
+    Logger.delete_module_level(Vutuv.Application.ops_log_modules())
+    on_exit(fn -> Logger.delete_module_level(Vutuv.Application.ops_log_modules()) end)
   end
 end
