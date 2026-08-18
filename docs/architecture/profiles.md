@@ -963,9 +963,11 @@ code of DE`-style tooltip naming the calling code and its ISO region (issue
 #892). `Vutuv.Phone.country_flag/2` gates on the same national/2 seam — a German
 number in national form (no `+` prefix) gets no flag — resolves the ISO region
 via libphonenumber and turns it into the flag emoji through `Vutuv.Cldr.Territory`
-(`ex_cldr_territories`). That CLDR data is **compiled in**, so no runtime network
-is needed; the backend `Vutuv.Cldr` carries only the `Cldr.Territory` provider,
-which keeps it safe for air-gapped intranet installs.
+(`ex_cldr_territories`). That CLDR data is **compiled in** from files committed
+under `priv/cldr/locales/`, so no network is needed at build time or at runtime
+(issue #1545; the mechanism is documented in `Vutuv.Cldr`); the backend carries
+only the `Cldr.Territory` provider, which keeps it safe for air-gapped intranet
+installs.
 
 On the way **in**, the changeset (`Vutuv.Phone.normalize/1`) parses a typed
 number against the default `DE` region, rejects anything libphonenumber does not
