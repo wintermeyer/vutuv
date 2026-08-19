@@ -12,6 +12,7 @@ defmodule Vutuv.Tags do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Keyset
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Repo
@@ -733,6 +734,28 @@ defmodule Vutuv.Tags do
         select: t
       )
     )
+  end
+
+  @doc """
+  One keyset page of the same list, as `{follow_id, %Tag{}}` pairs — what the
+  Mastodon adapter's `/api/v1/followed_tags` walks.
+
+  The cursor is the **subscription row's** id, not the tag's: the list is
+  ordered by when the member subscribed, and those ids are `Vutuv.UUIDv7`, so
+  ordering by one is ordering by the other and a client's `max_id` names a
+  position in the order it was actually shown. The tag id would name a
+  different one (when the topic was created), which is why the pair is returned
+  rather than the tag alone — Mastodon's Tag entity carries no id to page on,
+  so the boundary lives in the `Link` header there too.
+  """
+  def followed_tags_page(%User{} = user, opts \\ []) do
+    from(tf in TagFollow,
+      join: t in assoc(tf, :tag),
+      where: tf.user_id == ^user.id,
+      select: {tf.id, t}
+    )
+    |> Keyset.scope(opts, :id)
+    |> Repo.all()
   end
 
   @doc """

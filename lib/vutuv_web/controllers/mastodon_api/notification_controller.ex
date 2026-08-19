@@ -134,6 +134,80 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
   defp group_key(%{type: type, status: %{id: status_id}}), do: type <> "-" <> status_id
   defp group_key(%{id: id}), do: id
 
+  @doc """
+  One group (`GET /api/v2/notifications/:group_key`).
+
+  The companion a 4.3+ client needs beside the grouped list: it opens a row from
+  a push notification, from a deep link or after coming back to a stale list, and
+  it has only the `group_key` the list gave it. Without this the call fell
+  through to the adapter's 404, so the row a member tapped in the notification
+  centre opened on an error.
+
+  The key is looked for over the same window the grouped list pages
+  (`@group_window`), not over all of history: a group is a description of a page
+  of notifications — Mastodon's own grouping is per page too, which is why the
+  entity carries `page_min_id` / `page_max_id` — so a key that has scrolled out
+  of that window no longer names anything, and 404 is the honest answer rather
+  than a group assembled from a different set of rows than the one the client
+  was shown.
+  """
+  def group(conn, %{"group_key" => key}) do
+    case group_members(conn, key) do
+      [] -> not_found(conn)
+      members -> json(conn, notification_group(key, members))
+    end
+  end
+
+  @doc """
+  The accounts behind one group (`GET /api/v2/notifications/:group_key/accounts`).
+
+  What a client calls to fill "Alice, Bob and 4 others liked your post": the
+  grouped list carries `sample_account_ids` only, and the full roster is this.
+  """
+  def group_accounts(conn, %{"group_key" => key}) do
+    case group_members(conn, key) do
+      [] -> not_found(conn)
+      members -> json(conn, members |> Enum.map(& &1.account) |> uniq_by_id())
+    end
+  end
+
+  @doc """
+  Dismisses one group (`POST /api/v2/notifications/:group_key/dismiss`).
+
+  Accepted and does nothing, for the same reason the per-item dismiss does:
+  vutuv's notifications are derived from the likes and follows themselves, so
+  there is no row to remove. A 404 here is what makes a client that swipes a row
+  away show an error instead of letting it go.
+  """
+  def dismiss_group(conn, _params), do: json(conn, %{})
+
+  # The page a group key is resolved against. Wider than a default request page,
+  # because a client holds keys from a list it has scrolled, and narrow enough
+  # that this stays one bounded read.
+  @group_window 80
+
+  defp group_members(conn, key) do
+    conn
+    |> load(%Pagination{limit: @group_window})
+    |> Enum.filter(&(mapped?(&1) and possible_member?(&1, key)))
+    |> then(&notifications(conn, &1))
+    |> Enum.filter(&(group_key(&1) == key))
+  end
+
+  # Cut the window down before anything is looked up. Rendering costs a read of
+  # every actor and every post in it (`notifications/2`), and a client fills
+  # "Alice, Bob and 4 others" once per visible row, so rendering the whole
+  # window per request meant paying for eighty notifications to keep three.
+  #
+  # A raw item can only ever land in a group named by its own id or by its type
+  # and the post it is about, which is what this asks — deliberately a **wider**
+  # net than the real key, because an item whose post the viewer may not see
+  # renders without a status and then groups by its own id. The authoritative
+  # filter above still runs on what came back.
+  defp possible_member?(item, key) do
+    item.id == key or (is_binary(item[:post_id]) and type(item) <> "-" <> item[:post_id] == key)
+  end
+
   def show(conn, %{"id" => id}) do
     bare = bare_id(%{id: id})
 
@@ -142,7 +216,7 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
     |> Enum.filter(&mapped?/1)
     |> Enum.find(&(bare_id(&1) == bare))
     |> case do
-      nil -> conn |> put_status(404) |> json(%{error: "Record not found"})
+      nil -> not_found(conn)
       item -> json(conn, hd(notifications(conn, [item])))
     end
   end
@@ -159,6 +233,8 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
   # Derived items cannot be deleted one at a time; answering 200 keeps a client
   # that swipes a row from treating it as a failure.
   def dismiss(conn, _params), do: json(conn, %{})
+
+  defp not_found(conn), do: conn |> put_status(404) |> json(%{error: "Record not found"})
 
   defp load(conn, page) do
     conn.assigns.current_user.id

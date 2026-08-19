@@ -74,6 +74,21 @@ defmodule Vutuv.Profiles.VerifiedLinks do
   end
 
   @doc """
+  The `Repo.preload/2` spec that loads exactly the links `of/1` would keep.
+
+  One owner for the scope, because three surfaces load it and a fourth reads
+  the result: the post preloads (`Vutuv.Posts.post_preloads/0`), the Mastodon
+  adapter's account endpoints, and anything else that renders a member outside
+  a post. Scoped in the query rather than filtered afterwards, so a member with
+  fifty links still ships the handful they proved — and ordered, because an
+  un-ordered multi-row preload comes back in whatever order Postgres likes (id
+  order is creation order, ids being UUID v7).
+  """
+  def preload_spec do
+    [urls: from(u in Url, where: not is_nil(u.verified_at), order_by: u.id)]
+  end
+
+  @doc """
   The link among `verified_links` that proves `url`, or `nil`.
 
   Pass only the **post author's** verified links (see the module doc).

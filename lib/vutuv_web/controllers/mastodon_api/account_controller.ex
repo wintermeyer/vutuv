@@ -13,20 +13,42 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
+  alias Vutuv.Profiles.VerifiedLinks
+  alias Vutuv.Repo
   alias Vutuv.Social
   alias Vutuv.UUIDv7
+  alias VutuvWeb.MastodonApi.Handles
   alias VutuvWeb.MastodonApi.Pagination
 
   def verify_credentials(conn, _params) do
     subject = conn.assigns.current_organization || conn.assigns.current_user
 
-    json(conn, Presenter.account(subject, counts(conn, subject)))
+    json(conn, Presenter.account(with_links(subject), counts(conn, subject)))
   end
+
+  @doc """
+  The account a handle names (`GET /api/v1/accounts/lookup?acct=…`).
+
+  A client calls this constantly — it is what resolves the `@handle` in a
+  compose box, in a shared link and in a profile it was pointed at — and until
+  now it fell through to the adapter's 404, so every one of those turned into a
+  dead end although the member was right here. Local only, which is Mastodon's
+  own contract for this endpoint (its WebFinger-free twin of search); see
+  `VutuvWeb.MastodonApi.Handles`.
+  """
+  def lookup(conn, %{"acct" => acct}) do
+    case Handles.local(conn, acct) do
+      nil -> not_found(conn)
+      account -> json(conn, Presenter.account(with_links(account), counts(conn, account)))
+    end
+  end
+
+  def lookup(conn, _params), do: not_found(conn)
 
   def show(conn, %{"id" => id}) do
     case target(conn, id) do
       nil -> not_found(conn)
-      account -> json(conn, Presenter.account(account, counts(conn, account)))
+      account -> json(conn, Presenter.account(with_links(account), counts(conn, account)))
     end
   end
 
@@ -434,6 +456,16 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   end
 
   defp visible_target(_conn, nil), do: nil
+
+  # The webpages a member has PROVED are their own, which is what the account's
+  # Mastodon `fields` are built from. Loaded here rather than in the presenter,
+  # so this stays the endpoints that answer with a **single** account: a
+  # follower list renders forty of them, and a presenter that fetched for itself
+  # would turn that page into forty queries. A member whose links were not
+  # loaded renders no fields (`Vutuv.Profiles.VerifiedLinks.of/1`), never a
+  # crash and never a query per row.
+  defp with_links(%User{} = user), do: Repo.preload(user, VerifiedLinks.preload_spec())
+  defp with_links(other), do: other
 
   defp profile_viewer(%{assigns: %{current_organization: nil, current_user: user}}), do: user
   defp profile_viewer(_conn), do: nil

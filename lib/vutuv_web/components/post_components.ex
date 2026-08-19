@@ -320,10 +320,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:frozen?, post.frozen_at != nil)
       |> assign(:reply_banner, reply_banner(post, assigns.show_reply_banner, assigns[:viewer]))
       |> assign(:reposters, repost_roster(assigns))
-      |> assign(
-        :edited?,
-        NaiveDateTime.diff(post.updated_at, post.inserted_at) > 60
-      )
+      |> assign(:edited?, Posts.edited?(post))
 
     ~H"""
     <.card :if={@surface == :card} class={@class}>
