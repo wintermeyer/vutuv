@@ -166,6 +166,21 @@ defmodule Vutuv.FediverseRemoteEngagementTest do
       assert Vutuv.Posts.remote_feed_entry?(entry)
     end
 
+    test "and the feed page it lands on renders it" do
+      resharer = federating_member()
+      reader = insert(:activated_user)
+      {:ok, _} = Vutuv.Social.follow(reader, resharer.id)
+
+      {:ok, :reposted} = Fediverse.repost_note(resharer, note())
+
+      # Not the source alone: `Vutuv.Posts.decorate_feed_entries/2` treats every
+      # remote entry as a cached post and reaches for `entry.remote_post`, which
+      # a reshared reply does not have. That raised a KeyError, so the whole feed
+      # 500ed for anybody one of their followees had passed a reply on to.
+      assert %{entries: entries} = Vutuv.Posts.feed_page(reader)
+      assert Enum.any?(entries, &Vutuv.Posts.remote_reply_entry?/1)
+    end
+
     test "it does not reach somebody who follows nobody involved" do
       resharer = federating_member()
       stranger = insert(:activated_user)

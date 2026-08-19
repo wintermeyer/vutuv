@@ -10,6 +10,7 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
+  alias Vutuv.Fediverse.PostRepost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
@@ -462,6 +463,103 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     assert Fediverse.feed_remote_posts(user, 10, nil) == []
     # And the timeline says it is empty rather than leaving a blank card.
     assert render(view) =~ "Nothing here yet"
+  end
+
+  describe "the account controls in the card's ⋯ menu" do
+    test "a long handle takes a truncating line of its own, never the label", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = cached_post(user)
+
+      # A real Mastodon address is longer on its own than the menu is wide, so
+      # folded into the label it either spilled out of the white panel or, with
+      # an ellipsis, ate the German verb that says what the item does.
+      RemoteAccount
+      |> Repo.get!(post.remote_account_id)
+      |> Ecto.Changeset.change(
+        handle: "AwetTesfaiesus",
+        host: "mastodon.social",
+        actor_uri: "https://mastodon.social/users/AwetTesfaiesus"
+      )
+      |> Repo.update!()
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      item =
+        view
+        |> element("[data-remote-post='#{post.id}'] [phx-click='mute-remote-account']")
+        |> render()
+
+      assert item =~ "Mute"
+      # The whole address is in the DOM and in the tooltip, on a line that cuts
+      # itself rather than the panel.
+      assert item =~ ~s(title="@AwetTesfaiesus@mastodon.social")
+      assert item =~ "truncate"
+    end
+
+    test "unfollowing asks first, then drops the follow and its posts", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = cached_post(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      item =
+        view
+        |> element("[data-remote-post='#{post.id}'] [phx-click='unfollow-remote-account']")
+        |> render()
+
+      assert item =~ "Unfollow"
+      assert item =~ "Stop following @them@social.example?"
+
+      view
+      |> element("[data-remote-post='#{post.id}'] [phx-click='unfollow-remote-account']")
+      |> render_click()
+
+      refute has_element?(view, "[data-remote-post='#{post.id}']")
+      assert Fediverse.remote_follow_count(user) == 0
+      # The copy existed because somebody here followed the author; nobody does
+      # now, so it goes with the follow rather than at the next sweep.
+      assert Repo.aggregate(RemotePost, :count) == 0
+    end
+
+    test "the German menu says both what it does and what it costs", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = cached_post(user)
+
+      # This is a German site, and a fresh msgid is exactly what
+      # `gettext.extract --merge` likes to fuzzy-fill with somebody else's
+      # sentence — so the two new strings are asserted by name.
+      {:ok, view, _html} =
+        conn
+        |> Phoenix.ConnTest.recycle()
+        |> Plug.Conn.put_req_header("accept-language", "de-DE,de")
+        |> live(~p"/feed")
+
+      item =
+        view
+        |> element("[data-remote-post='#{post.id}'] [phx-click='unfollow-remote-account']")
+        |> render()
+
+      assert item =~ "Entfolgen"
+      assert item =~ "@them@social.example nicht mehr folgen?"
+      assert item =~ "Die Beiträge verschwinden aus Ihrem Feed."
+    end
+
+    test "neither control shows on a post by an account the reader does not follow", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # Reshared by the member themselves (issue #1166): the card is in the feed
+      # without any follow behind it, and both controls would act on nothing.
+      post = cached_post(insert(:activated_user, fediverse_followers?: true))
+      Repo.insert!(%PostRepost{user_id: user.id, remote_post_id: post.id})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(view, "[data-remote-post='#{post.id}']")
+      refute has_element?(view, "[phx-click='mute-remote-account']")
+      refute has_element?(view, "[phx-click='unfollow-remote-account']")
+      # The way to the original and the report control are not follow-shaped and
+      # stay.
+      assert has_element?(view, "[phx-click='report-remote-post']")
+    end
   end
 
   test "nobody else's feed carries it", %{conn: conn} do

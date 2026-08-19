@@ -2714,7 +2714,22 @@ defmodule Vutuv.Posts do
   defp decorate_remote([], _viewer), do: []
 
   defp decorate_remote(remote, viewer) do
-    remote |> dedupe_remote() |> attach_remote_images() |> attach_remote_likes(viewer)
+    # Two shapes arrive here. A cached post, and a **reply** somebody here
+    # passed on (issue #1275), which carries a `note` and no `remote_post` at
+    # all — so deduping, the images and the follow, all of which read
+    # `entry.remote_post`, raise on one: the same split `decorate_feed_entries/2`
+    # makes one level up, for the same reason. The marks are read for both kinds
+    # together, which is exactly what `Fediverse.mark_lookup/2` takes a mixed
+    # list for.
+    {replies, posts} = Enum.split_with(remote, &remote_reply_entry?/1)
+
+    posts =
+      posts
+      |> dedupe_remote()
+      |> attach_remote_images()
+      |> attach_remote_follows(viewer)
+
+    attach_remote_likes(posts ++ replies, viewer)
   end
 
   # One card per cached post per page. The same post arrives from two sources
@@ -2742,10 +2757,32 @@ defmodule Vutuv.Posts do
   # re-inserting its entry into the stream, so the state a card draws from has
   # to live on the entry it draws.
   defp attach_remote_likes(remote, viewer) do
-    posts = Enum.map(remote, & &1.remote_post)
-    marks = Vutuv.Fediverse.mark_lookup(posts, viewer)
+    subjects = Enum.map(remote, &remote_subject/1)
+    marks = Vutuv.Fediverse.mark_lookup(subjects, viewer)
 
-    Enum.map(remote, &Map.put(&1, :marks, marks.(&1.remote_post)))
+    Enum.map(remote, &Map.put(&1, :marks, marks.(remote_subject(&1))))
+  end
+
+  # What a remote entry is about: the cached post, or the reply a member here
+  # passed on. Both wear the same action bar, so both have marks to read.
+  defp remote_subject(entry), do: entry[:remote_post] || entry.note
+
+  # Whether the reader follows each card's author, read once for the whole page.
+  # The card's ⋯ menu offers Mute and Unfollow only where there is a follow to
+  # act on, and a feed carries plenty of posts by accounts nobody here follows:
+  # a boost by a followed account, a member's reshare. Rides the entry for the
+  # same reason the like marks do.
+  defp attach_remote_follows(remote, nil),
+    do: Enum.map(remote, &Map.put(&1, :following?, false))
+
+  defp attach_remote_follows(remote, viewer) do
+    account_ids = Enum.map(remote, & &1.remote_post.remote_account_id)
+    followed = Vutuv.Fediverse.followed_remote_account_ids(viewer, account_ids)
+
+    Enum.map(
+      remote,
+      &Map.put(&1, :following?, MapSet.member?(followed, &1.remote_post.remote_account_id))
+    )
   end
 
   # The pictures of the remote half (issue #1163), read once for the whole page

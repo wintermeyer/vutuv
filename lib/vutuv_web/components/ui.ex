@@ -1267,6 +1267,11 @@ defmodule VutuvWeb.UI do
     attr(:value, :any, doc: "phx-value-id sent with the `click` event")
     attr(:confirm, :string, doc: "data-confirm prompt for destructive items")
     attr(:danger, :boolean, doc: "style the item red")
+
+    attr(:hint, :string,
+      doc:
+        "a long name the label cannot hold — a fediverse `@user@host` handle — rendered as a quiet second line that truncates instead of overflowing the panel"
+    )
   end
 
   def card_menu(assigns) do
@@ -1285,7 +1290,11 @@ defmodule VutuvWeb.UI do
         </svg>
         <span class="sr-only">{gettext("Options")}</span>
       </summary>
-      <div class="absolute right-0 z-20 mt-1 w-52 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+      <%!-- `w-60`, not the old `w-52`: an ordinary fediverse address
+      (`@user@mastodon.social`) fits a `hint` line at this width and starts
+      losing its host below it, and a right-aligned 15rem panel still sits
+      inside the narrowest phone. --%>
+      <div class="absolute right-0 z-20 mt-1 w-60 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
         <%!-- An item with `click` is a LiveView action (a phx-click <button>, no
         reload); otherwise it is a navigation / CSRF <.link>. Both wear the same
         item styling so one menu can mix them. --%>
@@ -1299,7 +1308,7 @@ defmodule VutuvWeb.UI do
             data-confirm={item[:confirm]}
             class={["block w-full text-left", card_menu_item_class(item[:danger])]}
           >
-            {render_slot(item)}
+            <.card_menu_item_body item={item} />
           </button>
           <.link
             :if={!item[:click]}
@@ -1311,11 +1320,33 @@ defmodule VutuvWeb.UI do
             data-confirm={item[:confirm]}
             class={["block", card_menu_item_class(item[:danger])]}
           >
-            {render_slot(item)}
+            <.card_menu_item_body item={item} />
           </.link>
         <% end %>
       </div>
     </details>
+    """
+  end
+
+  # One item's label, plus the optional `hint` line under it. A name is what
+  # outgrows this panel — a fediverse handle is `@user@host` and is longer on
+  # its own than the whole menu is wide — so it gets a line of its own and
+  # truncates there (the full string stays in the `title`). Folding it into the
+  # label instead is what looked broken: German puts the verb last, so a
+  # one-line ellipsis eats "stummschalten" and leaves the reader with a name and
+  # no act, and without one the handle simply spills out of the white panel.
+  attr(:item, :map, required: true)
+
+  defp card_menu_item_body(assigns) do
+    ~H"""
+    <span class="block truncate">{render_slot(@item)}</span>
+    <span
+      :if={@item[:hint]}
+      title={@item[:hint]}
+      class="mt-0.5 block truncate text-xs font-normal text-slate-500 dark:text-slate-400"
+    >
+      {@item[:hint]}
+    </span>
     """
   end
 

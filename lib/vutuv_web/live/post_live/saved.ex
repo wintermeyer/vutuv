@@ -31,6 +31,7 @@ defmodule VutuvWeb.PostLive.Saved do
   alias Vutuv.Repo
   alias Vutuv.Social
   alias VutuvWeb.Live.DayClockRestream
+  alias VutuvWeb.Live.RemotePostActions
 
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
@@ -83,6 +84,24 @@ defmodule VutuvWeb.PostLive.Saved do
        page_engagement(stream_name, page.entries, socket.assigns.current_user)
      )
      |> stream(stream_name, page.entries, reset: true)}
+  end
+
+  # The first page again, after an act took a row out from under the list (a
+  # report deletes our copy for everybody). Deliberately no `subscribe_posts/1`:
+  # this process is already subscribed to the topics it kept, and subscribing to
+  # a topic twice delivers every update twice.
+  defp reload_page(socket) do
+    {stream_name, page} = load_page(socket, 0)
+
+    socket
+    |> assign(:more?, page.more?)
+    |> assign(:offset, page.next_offset)
+    |> assign(:saved_posts, if(stream_name == :posts, do: page.entries, else: []))
+    |> assign(
+      :post_engagement,
+      page_engagement(stream_name, page.entries, socket.assigns.current_user)
+    )
+    |> stream(stream_name, page.entries, reset: true)
   end
 
   # Batch the action-bar engagement for a whole posts page in one query, keyed by
@@ -216,6 +235,12 @@ defmodule VutuvWeb.PostLive.Saved do
   # context scopes the delete to (me, target). A non-UUID id is a genuine no-op
   # (cast_or_nil) — building %User{id: id} from the raw phx-value used to raise
   # an Ecto.CastError in the scoped delete despite the "harmless" comment.
+  # The one act the ⋯ menu offers here (see the card above). Our copy goes for
+  # everybody, so the list is re-read rather than the row nudged out of it.
+  def handle_event("report-remote-post", %{"id" => id}, socket) do
+    RemotePostActions.report(socket, id, &reload_page/1)
+  end
+
   def handle_event("unsave-person", %{"id" => id}, socket) do
     case Vutuv.UUIDv7.cast_or_nil(id) do
       nil ->
@@ -570,9 +595,15 @@ defmodule VutuvWeb.PostLive.Saved do
                   viewer={@current_user}
                   live?
                 />
+                <%!-- `following?={false}`: a saved post is looked up by its
+                bookmark, not by a follow, so this page does not know whether
+                the reader follows the author — and a Mute or Unfollow that
+                cannot be true of them is a control that does nothing. Report
+                stays, and is handled below. --%>
                 <.remote_post_card
                   :if={not Posts.remote_reply_entry?(entry)}
                   remote_post={entry.remote_post}
+                  following?={false}
                   viewer={@current_user}
                   live?
                 />

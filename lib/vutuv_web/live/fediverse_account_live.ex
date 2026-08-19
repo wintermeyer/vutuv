@@ -164,13 +164,15 @@ defmodule VutuvWeb.FediverseAccountLive do
   # account's own inbox. Only the reader's own state changes — there is no
   # count on the card, because the real one lives on their server.
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
-    viewer = socket.assigns.current_user
-    :ok = Fediverse.set_remote_follow_mute(viewer, account_id, true)
+    RemotePostActions.mute(socket, account_id, &reread_follow/1)
+  end
 
-    {:noreply,
-     socket
-     |> put_flash(:info, mute_message(true))
-     |> assign(:follow, Fediverse.remote_follow_for(viewer, socket.assigns.account))}
+  # The card menu's Unfollow, which is this page's own button by another route —
+  # so it ends in the same state: no follow, and the cached posts gone with it.
+  def handle_event("unfollow-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.unfollow(socket, account_id, fn socket ->
+      socket |> assign(:follow, nil) |> load_posts()
+    end)
   end
 
   # The lookup box: an address in, that account's page out. Resolving is an
@@ -225,6 +227,16 @@ defmodule VutuvWeb.FediverseAccountLive do
     do: gettext("Muted. You still follow them; their posts leave your feed.")
 
   defp mute_message(false), do: gettext("Unmuted. Their posts are back in your feed.")
+
+  # What the page draws is what the database says, so the follow is re-read
+  # rather than nudged — a second tab that changed it is then not contradicted.
+  defp reread_follow(socket) do
+    assign(
+      socket,
+      :follow,
+      Fediverse.remote_follow_for(socket.assigns.current_user, socket.assigns.account)
+    )
+  end
 
   # Why the Posts card is empty, which is a different sentence in each case. The
   # flat "nobody here follows this account" was simply false for a member with a
@@ -402,6 +414,7 @@ defmodule VutuvWeb.FediverseAccountLive do
                 remote_post={%{post | remote_account: @account}}
                 images={Map.get(@images, post.id, [])}
                 marks={@marks.(post)}
+                following?={@follow != nil}
                 viewer={@current_user}
               />
             </div>

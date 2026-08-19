@@ -33,6 +33,7 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.RemotePostActions
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
@@ -77,6 +78,18 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
     end
   end
 
+  # The one act the card's ⋯ menu offers here. Our copy is deleted for everybody,
+  # so the post this page is an answer to no longer exists: there is no page
+  # left to stay on.
+  @impl true
+  def handle_event("report-remote-post", _params, socket) do
+    RemotePostActions.report(
+      socket,
+      socket.assigns.remote_post.id,
+      &push_navigate(&1, to: ~p"/feed")
+    )
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -93,7 +106,15 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
       back_label={gettext("Back to the feed")}
     >
       <:target>
-        <.remote_post_card remote_post={@remote_post} viewer={@current_user} />
+        <%!-- `following?={false}`: the card's ⋯ menu keeps the way to the
+        original, but not Mute and Unfollow. Unfollowing drops the cached posts
+        of an account nobody here follows any more — including the very one this
+        page is an answer to, with the answer half written. --%>
+        <.remote_post_card
+          remote_post={@remote_post}
+          following?={false}
+          viewer={@current_user}
+        />
       </:target>
       <:composer>
         <.live_component

@@ -76,10 +76,10 @@ defmodule VutuvWeb.FediversePostLive do
     )
     |> assign(:remote_post, post)
     |> assign(:images, Map.get(Fediverse.list_remote_images([post.id]), post.id, []))
-    # Whether the ⋯ menu offers Mute at all. This page is reachable for a public
-    # post whose author the reader does not follow (it is cached because
-    # somebody else does), and muting a follow that does not exist is a control
-    # that does nothing behind a flash saying otherwise.
+    # Whether the ⋯ menu offers Mute and Unfollow at all. This page is reachable
+    # for a public post whose author the reader does not follow (it is cached
+    # because somebody else does), and acting on a follow that does not exist is
+    # a control that does nothing behind a flash saying otherwise.
     |> assign(:follows?, not is_nil(Fediverse.remote_follow_for(viewer, account)))
   end
 
@@ -97,12 +97,14 @@ defmodule VutuvWeb.FediversePostLive do
   end
 
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
-    :ok = Fediverse.set_remote_follow_mute(socket.assigns.current_user, account_id, true)
+    RemotePostActions.mute(socket, account_id, & &1)
+  end
 
-    {:noreply,
-     socket
-     |> put_flash(:info, gettext("Muted. You still follow them; their posts leave your feed."))
-     |> assign(:follows?, false)}
+  # Unfollowing takes the reason this page holds a copy at all with it, so like
+  # a report it ends on the feed rather than on a page about a post that may no
+  # longer be cached.
+  def handle_event("unfollow-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.unfollow(socket, account_id, &push_navigate(&1, to: ~p"/feed"))
   end
 
   @impl true
@@ -128,7 +130,7 @@ defmodule VutuvWeb.FediversePostLive do
             remote_post={@remote_post}
             images={@images}
             viewer={@current_user}
-            mute?={@follows?}
+            following?={@follows?}
           />
         </div>
 

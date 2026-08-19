@@ -2014,10 +2014,10 @@ defmodule VutuvWeb.PostComponents do
     doc: "the followed remote account whose boost put this card here (issue #1167), or nil"
   )
 
-  attr(:mute?, :boolean,
+  attr(:following?, :boolean,
     default: true,
     doc:
-      "whether the ⋯ menu offers Mute. Pass false where the viewer is known not to follow the account (the lookup page, issue #1211): muting a follow that does not exist is a control that does nothing and a flash that says otherwise"
+      "whether the viewer follows this account, which is what the ⋯ menu's Mute and Unfollow both act on. Pass false where they are known not to (the lookup page, issue #1211, the tag timeline, a page's feed): acting on a follow that does not exist is a control that does nothing and a flash that says otherwise"
   )
 
   attr(:translations, :map,
@@ -2095,9 +2095,36 @@ defmodule VutuvWeb.PostComponents do
                 everybody who follows the author, so one member's report empties
                 it out of all of their feeds. Muting is the private, reversible
                 lever — the same one the member card's ⋯ menu offers — and the
-                follow itself survives it. --%>
-                <:item :if={@mute?} click="mute-remote-account" value={@account.id}>
-                  {gettext("Mute %{handle}", handle: RemoteAccount.display_handle(@account))}
+                follow itself survives it. The handle rides the `hint` line
+                rather than the label: `@user@host` is longer on its own than
+                the menu is wide. --%>
+                <:item
+                  :if={@following?}
+                  click="mute-remote-account"
+                  value={@account.id}
+                  hint={RemoteAccount.display_handle(@account)}
+                >
+                  {gettext("Mute")}
+                </:item>
+                <%!-- And the way out that lasts. Mute answers "not today";
+                somebody who is done with an account had to go and find its page
+                for that, from a card that offered them a report instead — so
+                the follow can be taken back where it gets in the way. It asks
+                first because it is not the reversible one: unfollowing drops
+                the posts vutuv cached (`unfollow_remote/2`), so following again
+                starts from an empty timeline. --%>
+                <:item
+                  :if={@following?}
+                  click="unfollow-remote-account"
+                  value={@account.id}
+                  hint={RemoteAccount.display_handle(@account)}
+                  confirm={
+                    gettext("Stop following %{handle}? Their posts leave your feed.",
+                      handle: RemoteAccount.display_handle(@account)
+                    )
+                  }
+                >
+                  {gettext("Unfollow")}
                 </:item>
                 <:item
                   click="report-remote-post"
@@ -2857,10 +2884,9 @@ defmodule VutuvWeb.PostComponents do
                   :if={@viewer_follow && !@organization_author?}
                   href={~p"/follows/#{@viewer_follow.id}/mute"}
                   method="put"
+                  hint={"@" <> @post.user.username}
                 >
-                  {if @viewer_follow.muted?,
-                    do: gettext("Unmute @%{handle}", handle: @post.user.username),
-                    else: gettext("Mute @%{handle}", handle: @post.user.username)}
+                  {if @viewer_follow.muted?, do: gettext("Unmute"), else: gettext("Mute")}
                 </:item>
                 <:item href={~p"/reports/new?#{[type: "post", id: @post.id, return_to: @permalink]}"}>
                   {gettext("Report")}

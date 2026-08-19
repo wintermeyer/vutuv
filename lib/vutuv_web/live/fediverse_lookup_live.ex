@@ -118,6 +118,17 @@ defmodule VutuvWeb.FediverseLookupLive do
     RemotePostActions.report(socket, socket.assigns.post.id, &clear_result/1)
   end
 
+  # The other two acts the card's ⋯ menu offers, which this page renders only
+  # for an account the member really follows. Both re-read the follow rather
+  # than nudging it, like everything else here.
+  def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.mute(socket, account_id, &reread_follow/1)
+  end
+
+  def handle_event("unfollow-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.unfollow(socket, account_id, &reread_follow/1)
+  end
+
   def handle_event("follow", _params, %{assigns: %{post: nil}} = socket), do: {:noreply, socket}
 
   def handle_event("follow", _params, socket) do
@@ -143,6 +154,16 @@ defmodule VutuvWeb.FediverseLookupLive do
   # re-read rather than nudged, so what the page draws is what the database
   # says. No `phx-value-id` is trusted: there is exactly one post here, it is the
   # one the socket already holds, and an act pushed at an empty page is nothing.
+
+  defp reread_follow(%{assigns: %{post: nil}} = socket), do: socket
+
+  defp reread_follow(socket) do
+    assign(
+      socket,
+      :follow,
+      Fediverse.remote_follow_for(socket.assigns.current_user, socket.assigns.post.remote_account)
+    )
+  end
 
   defp load_result(socket, post) do
     viewer = socket.assigns.current_user
@@ -242,15 +263,16 @@ defmodule VutuvWeb.FediverseLookupLive do
       </.card>
 
       <%!-- The post itself, as the card every other surface renders it with.
-      Mute is dropped: this page reaches accounts the member does not follow,
-      and a mute of a follow that does not exist is a control that does nothing
-      under a flash that says it did. --%>
+      Mute and Unfollow are dropped unless the member really follows this
+      account: this page reaches accounts they do not, and acting on a follow
+      that does not exist is a control that does nothing under a flash that says
+      it did. --%>
       <.card :if={@post} id="lookup-result">
         <.remote_post_card
             live?
           remote_post={@post}
           images={@images}
-          mute?={@follow != nil}
+          following?={@follow != nil}
           viewer={@current_user}
         />
       </.card>

@@ -122,7 +122,7 @@ defmodule VutuvWeb.OrganizationLive.Feed do
                 images={entry[:images] || []}
                 marks={entry[:marks]}
                 viewer={@current_user}
-                mute?={false}
+                following?={false}
               />
             </.card>
           <% else %>

@@ -1374,6 +1374,50 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  The same withdrawal, named by the **account** instead of by the follow row —
+  what a post's ⋯ menu has in hand. Scoped to the party's own follow, so an
+  account id from anywhere resolves to nothing but their row, and
+  `{:error, :not_found}` when they do not follow it at all.
+  """
+  def unfollow_remote_account(owner, remote_account_id) do
+    follow =
+      UUIDv7.with_cast(remote_account_id, fn account_id ->
+        Repo.one(
+          from(f in Follow, where: party_is(f, owner) and f.remote_account_id == ^account_id)
+        )
+      end)
+
+    case follow do
+      nil -> {:error, :not_found}
+      follow -> unfollow_remote(owner, follow.id)
+    end
+  end
+
+  @doc """
+  Which of these remote accounts the party follows, as a `MapSet` of account ids
+  — one query for a whole feed.
+
+  What the card menus branch on: Mute and Unfollow both act on a follow, and a
+  feed carries posts by accounts nobody here follows (a boost by a followed
+  account, a member's reshare). Offering either one there is a control that does
+  nothing and a flash that says otherwise.
+  """
+  def followed_remote_account_ids(party, account_ids) do
+    case account_ids |> Enum.filter(&is_binary/1) |> Enum.uniq() do
+      [] ->
+        MapSet.new()
+
+      ids ->
+        from(f in Follow,
+          where: party_is(f, party) and f.remote_account_id in ^ids,
+          select: f.remote_account_id
+        )
+        |> Repo.all()
+        |> MapSet.new()
+    end
+  end
+
+  @doc """
   Mutes (or unmutes) the member's follow of one remote account.
 
   The same meaning a local follow's mute has: the subscription stays, its posts

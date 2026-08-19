@@ -293,7 +293,7 @@ defmodule VutuvWeb.TagLive.Timeline do
               images={entry[:images] || []}
               marks={entry[:marks]}
               viewer={@current_user}
-              mute?={false}
+              following?={false}
             />
           <% else %>
             <.post_thread_entry

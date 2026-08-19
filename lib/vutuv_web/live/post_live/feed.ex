@@ -39,7 +39,6 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Phoenix.LiveView.JS
   alias Vutuv.Activity
   alias Vutuv.ContentFilters
-  alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
@@ -549,20 +548,14 @@ defmodule VutuvWeb.PostLive.Feed do
   # follow survives; its posts leave this feed, so every row from that account
   # goes in the same round trip rather than lingering until the next reload.
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
-    :ok = Fediverse.set_remote_follow_mute(socket.assigns.current_user, account_id, true)
+    RemotePostActions.mute(socket, account_id, &drop_remote_entries_of(&1, account_id))
+  end
 
-    muted =
-      Enum.filter(socket.assigns.entries, fn entry ->
-        Posts.remote_feed_entry?(entry) and not Posts.remote_reply_entry?(entry) and
-          entry.remote_post.remote_account_id == account_id
-      end)
-
-    {:noreply,
-     socket
-     |> put_flash(:info, gettext("Muted. You still follow them; their posts leave your feed."))
-     |> then(fn socket ->
-       Enum.reduce(muted, socket, &drop_remote_entry(&2, &1.remote_post.id))
-     end)}
+  # And the same menu's way out that lasts. The rows leave for the same reason —
+  # they were here because of that follow — and the cached posts themselves go
+  # with it once nobody here follows the account any more.
+  def handle_event("unfollow-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.unfollow(socket, account_id, &drop_remote_entries_of(&1, account_id))
   end
 
   # The rail's "Follow" button (user_row live?): follow with no reload, then
@@ -1046,6 +1039,19 @@ defmodule VutuvWeb.PostLive.Feed do
   # otherwise be left looking at an empty white card instead of the "nothing
   # here yet" message. Caught in a browser, not by the tests — none of them
   # emptied a feed this way.
+  # Every card by one remote account, off the page in this round trip — what
+  # both Mute and Unfollow leave behind. A reshared **reply** carries no
+  # `remote_post`, so it is asked about through `remote_reply_entry?/1` first
+  # rather than reached for and found nil.
+  defp drop_remote_entries_of(socket, account_id) do
+    socket.assigns.entries
+    |> Enum.filter(fn entry ->
+      Posts.remote_feed_entry?(entry) and not Posts.remote_reply_entry?(entry) and
+        entry.remote_post.remote_account_id == account_id
+    end)
+    |> Enum.reduce(socket, &drop_remote_entry(&2, &1.remote_post.id))
+  end
+
   defp drop_remote_entry(socket, remote_post_id) do
     # By each entry's own id, not by a rebuilt one. The same cached post can be
     # on the page twice — once because the reader follows its author (issue
@@ -1342,6 +1348,7 @@ defmodule VutuvWeb.PostLive.Feed do
                     marks={entry[:marks]}
                     reposted_by={entry[:reposted_by]}
                     boosted_by={entry[:boosted_by]}
+                    following?={entry[:following?] == true}
                     viewer={@current_user}
                     translations={@post_translations}
                   />
