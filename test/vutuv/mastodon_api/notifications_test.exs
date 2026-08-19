@@ -9,10 +9,13 @@ defmodule Vutuv.MastodonApi.NotificationsTest do
   """
   use Vutuv.DataCase, async: true
 
+  import Vutuv.MastodonHelpers, only: [avatar_capability: 1]
+
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.MastodonApi
   alias Vutuv.MastodonApi.Notifications
   alias Vutuv.MastodonApi.Presenter
+  alias VutuvWeb.RemoteMediaToken
 
   defp stored_account(actor_uri) do
     Repo.insert!(%RemoteAccount{
@@ -46,12 +49,16 @@ defmodule Vutuv.MastodonApi.NotificationsTest do
     account = Notifications.account(item(actor_uri))
 
     assert account.id == "remote-" <> stored.id
-    # The URL carries the proxy's capability beside the path — an image loader
-    # brings no session of its own.
+    # The path names the picture, and the query carries a capability the proxy
+    # accepts for exactly it — an image loader brings no session of its own.
     assert String.starts_with?(
              account.avatar,
              MastodonApi.main_url(RemoteAccount.avatar_url(stored)) <> "?"
            )
+
+    assert account.avatar
+           |> avatar_capability()
+           |> RemoteMediaToken.avatar?(stored.id, stored.avatar)
 
     refute account.avatar == Presenter.fallback_avatar()
   end

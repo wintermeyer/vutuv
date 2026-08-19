@@ -197,8 +197,7 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
     test "and a capability the proxy accepts, because an image loader has none" do
       account = remote_account(avatar: "pic.avif", avatar_moderation: "approved")
 
-      %{query: query} = account |> Presenter.account() |> Map.fetch!(:avatar) |> URI.parse()
-      token = URI.decode_query(query) |> Map.fetch!(RemoteMediaToken.param())
+      token = account |> Presenter.account() |> Map.fetch!(:avatar) |> avatar_capability()
 
       assert RemoteMediaToken.avatar?(token, account.id, account.avatar)
       refute RemoteMediaToken.avatar?(token, account.id, "other.avif")

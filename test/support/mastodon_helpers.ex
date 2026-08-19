@@ -21,6 +21,7 @@ defmodule Vutuv.MastodonHelpers do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
+  alias VutuvWeb.RemoteMediaToken
 
   @doc "Turns an identity's Mastodon-app switch on, as its owner would."
   def allow_mastodon_clients(%User{} = user),
@@ -110,4 +111,20 @@ defmodule Vutuv.MastodonHelpers do
 
   @doc "Puts `conn` on the adapter's host without a token."
   def on_mastodon_host(conn), do: Map.put(conn, :host, mastodon_host())
+
+  @doc """
+  The `VutuvWeb.RemoteMediaToken` out of a rendered avatar URL, or nil when the
+  URL carries none.
+
+  Every assertion about a remote face wants this **beside**
+  `String.starts_with?(url, path <> "?")`, which on its own proves only that
+  something follows the picture's path: what makes the URL work is that the
+  proxy accepts the capability in it, and a query the proxy would refuse starts
+  with exactly the same characters.
+  """
+  def avatar_capability(url) when is_binary(url) do
+    %URI{query: query} = URI.parse(url)
+
+    (query || "") |> URI.decode_query() |> Map.get(RemoteMediaToken.param())
+  end
 end

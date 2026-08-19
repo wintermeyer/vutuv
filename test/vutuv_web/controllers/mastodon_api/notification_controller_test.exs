@@ -15,6 +15,7 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Social
+  alias VutuvWeb.RemoteMediaToken
 
   test "a like and a follow arrive as favourite and follow", %{conn: conn} do
     member = insert(:activated_user)
@@ -213,6 +214,10 @@ defmodule VutuvWeb.MastodonApi.NotificationControllerTest do
                favourite["account"]["avatar"],
                MastodonApi.main_url(RemoteAccount.avatar_url(account)) <> "?"
              )
+
+      assert favourite["account"]["avatar"]
+             |> avatar_capability()
+             |> RemoteMediaToken.avatar?(account.id, account.avatar)
 
       refute favourite["account"]["avatar"] == Presenter.fallback_avatar()
     end
