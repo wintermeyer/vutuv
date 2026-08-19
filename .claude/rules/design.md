@@ -264,6 +264,20 @@ undigested, so hard-reload (Cmd+Shift+R) after a rebuild. **Dev does not use
 build on every CSS/template/JS change instead. Edits to `components.css` reach
 the browser within ~2s; if they ever don't, suspect that watcher first.
 
+**A new rule for an element `.markdown` also styles (`ol`, `li`, `a`, `td`, `p`)
+needs a tag qualifier, or it has to sit after the `.markdown` block.** `.footnotes
+ol` and `.markdown ol` are both (0,1,1), and the `.markdown` list rules live ~370
+lines further down the file, so the later one wins every property they share.
+Nothing fails and nothing warns: the rule is in the stylesheet and reads as if it
+applies. The only tell is DevTools striking the declaration through, and you have
+to go looking. That is how the footnote list shipped with the padding and margins
+of an ordinary `<ol>` from issue #1147 until 2026-08-18, when it was finally
+written as `div.footnotes ol`. Same trap, already recorded elsewhere in this file:
+the Markdown table's last cell against `td:not(:first-child):last-child`, and the
+upload drop zone against `.editform label`. When you add such a rule, check the
+computed style in a browser rather than trusting that the selector is specific
+enough to be about your thing.
+
 **Text colour is never inherited onto a link or a button — every control on a
 coloured surface names its own.** `components.css` sets `a, button { color:
 var(--color-brand-600) }` for the classic pages, and *any* rule on the element
