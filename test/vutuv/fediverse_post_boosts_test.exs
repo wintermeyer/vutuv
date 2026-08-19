@@ -368,8 +368,25 @@ defmodule Vutuv.FediversePostBoostsTest do
 
   describe "the inbound cap" do
     test "a relentless booster is metered like every other inbound activity" do
+      # Put the configured value back, never `delete_env/2`: `config/test.exs`
+      # sets this key to `{1_000_000, 1_000_000}` so no test can spend another
+      # test's inbound budget, and deleting it leaves `inbound_caps/0` falling
+      # back to the production defaults `{600, 60}` for the rest of the run.
+      # The suite shares one remote actor (`social.example/users/alice`) across
+      # some forty files and the budget is a global ETS bucket the sandbox does
+      # not roll back, so the sixty-first inbound record after this test — in
+      # whichever file the seed puts there — is refused, and reads as that
+      # file's own bug (six `:skip`s in `OrganizationFediverseRepliesTest` on
+      # CI, all of them green locally under a different seed).
+      original = Application.fetch_env(:vutuv, :fediverse_inbound_caps)
       Application.put_env(:vutuv, :fediverse_inbound_caps, {600, 1})
-      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_inbound_caps) end)
+
+      on_exit(fn ->
+        case original do
+          {:ok, was} -> Application.put_env(:vutuv, :fediverse_inbound_caps, was)
+          :error -> Application.delete_env(:vutuv, :fediverse_inbound_caps)
+        end
+      end)
 
       acc = booster_account()
       follower_of(acc)
