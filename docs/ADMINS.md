@@ -276,9 +276,17 @@ the deploy already wrote and skip the app entirely.
 `mix assets.deploy` produces content-hashed names (`app-<md5>.js`), so a file
 never changes under its own URL and two releases' assets can sit side by side.
 `scripts/publish-static.sh <path-to-priv/static>` copies a release's tree to
-`STATIC_DEST` (default `/srv/vutuv3/static`) and writes a `.br` (brotli 11) and
-`.gz` (gzip 9) beside every text file; `scripts/deploy.sh` calls it before the
-traffic switch. Point nginx at that directory:
+`STATIC_DEST` (default `/srv/vutuv3/static`) and writes a `.br` and a `.gz`
+beside every text file; `scripts/deploy.sh` calls it before the traffic switch.
+
+It wants two packages, and works without either: **`brotli`** for the `.br`
+half (no brotli binary, no `.br` files, and nginx simply compresses per request
+as before), and **`zopfli`** for the `.gz` half. zopfli emits an ordinary gzip
+stream every client already understands, about 3 % smaller than `gzip -9`
+(measured on the production bundle: 207,884 bytes against 215,079) for a couple
+of seconds of CPU per megabyte — worth it here only because this runs once per
+deploy rather than per request. Without zopfli the script falls back to
+`gzip -9`. Point nginx at that directory:
 
 ```nginx
 # Only the digested names, because only a content-hashed URL may claim
