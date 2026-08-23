@@ -26,6 +26,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
+  alias Phoenix.LiveView.JS
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Handle
@@ -4684,7 +4685,8 @@ defmodule VutuvWeb.PostComponents do
         kind="repost"
         active?={@engagement.reposted?}
         count={@counts.reposts}
-        label={if @engagement.reposted?, do: gettext("Undo repost"), else: gettext("Repost")}
+        on_label={gettext("Undo repost")}
+        off_label={gettext("Repost")}
         active_class="text-brand-600 dark:text-brand-300"
         disabled={@engagement.restricted?}
         disabled_title={gettext("Only public posts can be reposted.")}
@@ -4698,8 +4700,10 @@ defmodule VutuvWeb.PostComponents do
         kind="bookmark"
         active?={@engagement.bookmarked?}
         count={@engagement.bookmarks}
-        label={if @engagement.bookmarked?, do: gettext("Remove bookmark"), else: gettext("Bookmark")}
+        on_label={gettext("Remove bookmark")}
+        off_label={gettext("Bookmark")}
         active_class="text-brand-600 dark:text-brand-300"
+        filled?
       >
         <:icon><.icon_bookmark filled?={@engagement.bookmarked?} /></:icon>
       </.action_button>
@@ -4932,8 +4936,10 @@ defmodule VutuvWeb.PostComponents do
       kind="like"
       active?={@liked?}
       count={@count}
-      label={if @liked?, do: gettext("Unlike"), else: gettext("Like")}
+      on_label={gettext("Unlike")}
+      off_label={gettext("Like")}
       active_class="text-accent"
+      filled?
     >
       <:icon><.icon_heart filled?={@liked?} /></:icon>
     </.action_button>
@@ -4994,23 +5000,34 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
+  # The idle tint, paired with each control's `active_class`. One place, because
+  # the flip below toggles the pair as a unit.
+  @idle_action_class "text-slate-600 dark:text-slate-400"
+
   attr(:id, :string, required: true)
   attr(:target, :any, default: nil)
   attr(:kind, :string, required: true)
   attr(:active?, :boolean, required: true)
   attr(:count, :integer, required: true)
-  attr(:label, :string, required: true)
+  attr(:on_label, :string, required: true, doc: "what the control says while pressed")
+  attr(:off_label, :string, required: true, doc: "and while not")
   attr(:active_class, :string, required: true)
+  attr(:filled?, :boolean, default: false, doc: "the glyph fills while active (heart, bookmark)")
   attr(:disabled, :boolean, default: false)
   attr(:disabled_title, :string, default: nil)
   slot(:icon, required: true)
 
   defp action_button(assigns) do
+    assigns =
+      assigns
+      |> assign(:label, if(assigns.active?, do: assigns.on_label, else: assigns.off_label))
+      |> assign(:idle_class, @idle_action_class)
+
     ~H"""
     <button
       type="button"
       id={@id}
-      phx-click="toggle"
+      phx-click={toggle_js(@active_class, @on_label, @off_label, @filled?)}
       phx-target={@target}
       phx-value-kind={@kind}
       disabled={@disabled}
@@ -5023,14 +5040,83 @@ defmodule VutuvWeb.PostComponents do
         !@disabled && "hover:bg-slate-100 dark:hover:bg-slate-800",
         # components.css colors bare `a, button` brand-600, which beats the
         # wrapper's inherited slate — so the state color sits on the button.
-        if(@active?, do: @active_class, else: "text-slate-600 dark:text-slate-400")
+        if(@active?, do: @active_class, else: @idle_class)
       ]}
     >
       {render_slot(@icon)}
-      <%!-- Always mounted (invisible at zero) so an arriving first count
-            doesn't shift the neighbouring buttons under the pointer. --%>
-      <.count_pill count={@count} kind={@kind} />
+      <.toggle_count count={@count} kind={@kind} active?={@active?} />
     </button>
+    """
+  end
+
+  # The optimistic flip. A press used to leave the button untouched until the
+  # server had written the row and pushed a diff back — one round trip, which on
+  # a slow line reads as a control that does not work. So the press paints the
+  # new state on the spot and *also* pushes, and the answer confirms what the
+  # member already sees. LiveView's own recipe ("Syncing changes and optimistic
+  # UIs"); no hook, because the JS commands are DOM-patch aware.
+  #
+  # The rule that makes it safe: **every value toggled here is a function of the
+  # absolute state** (pressed / not pressed), never of the state at click time.
+  # LiveView stashes each class and attribute op on the element and re-applies
+  # it after every patch, and nothing ever expires it (`DOM.putSticky` /
+  # `applyStickyOperations`; `deleteSticky` has no caller). An op phrased as
+  # "flip whatever is there" would therefore fight the server's own correct
+  # re-render for the rest of the element's life — a count stuck one too low
+  # once somebody else's like arrives over PubSub. Phrased absolutely, the stash
+  # and the server agree the moment the answer lands.
+  #
+  # What is left is the trade we took on purpose: where the server *disagrees* —
+  # a refused act, a toggle from the member's other tab — the button keeps
+  # showing the press until the next press or a reload.
+  defp toggle_js(active_class, on_label, off_label, filled?) do
+    JS.push("toggle")
+    |> JS.toggle_class("#{active_class} #{@idle_action_class}")
+    |> JS.toggle_attribute({"aria-pressed", "true", "false"})
+    |> JS.toggle_attribute({"aria-label", on_label, off_label})
+    |> JS.toggle_attribute({"title", on_label, off_label})
+    |> JS.toggle_class("hidden", to: {:inner, "[data-count-off]"})
+    |> JS.toggle_class("hidden", to: {:inner, "[data-count-on]"})
+    |> fill_glyph(filled?)
+  end
+
+  defp fill_glyph(js, true),
+    do: JS.toggle_attribute(js, {"fill", "currentColor", "none"}, to: {:inner, "svg"})
+
+  defp fill_glyph(js, false), do: js
+
+  # Both steps of the count, pre-rendered: what it reads while the control is
+  # off, and what it reads while on. The press shows the other one, which is why
+  # the client never has to know that 1000 is written "1K" — `compact_count/1`
+  # is locale-aware and stays on the server, where it belongs.
+  #
+  # The spans are keyed by the *absolute* state, not by "current" and
+  # "alternative", so the stashed class op above lines up with what the server
+  # renders next (see `toggle_js/4`). `data-count` marks the step the server is
+  # showing, so the agent-facing marker never reads twice.
+  attr(:count, :integer, required: true)
+  attr(:kind, :string, required: true)
+  attr(:active?, :boolean, required: true)
+
+  defp toggle_count(assigns) do
+    assigns =
+      assigns
+      |> assign(:off, if(assigns.active?, do: assigns.count - 1, else: assigns.count))
+      |> assign(:on, if(assigns.active?, do: assigns.count, else: assigns.count + 1))
+
+    ~H"""
+    <%!-- Always mounted (invisible at zero) so an arriving first count
+          doesn't shift the neighbouring buttons under the pointer. --%>
+    <span
+      data-count-off
+      class={["font-medium tabular-nums", @active? && "hidden", @off == 0 && "invisible"]}
+      data-count={!@active? && @off > 0 && @kind}
+    >{compact_count(@off)}</span>
+    <span
+      data-count-on
+      class={["font-medium tabular-nums", !@active? && "hidden"]}
+      data-count={@active? && @on > 0 && @kind}
+    >{compact_count(@on)}</span>
     """
   end
 

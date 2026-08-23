@@ -21,6 +21,49 @@ defmodule VutuvWeb.PostActionsLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
+  # A lone bar rendered from a hand-built engagement, so a test can name counts
+  # no query would produce.
+  defp isolated_bar(post, viewer, engagement) do
+    live_isolated(build_conn(), VutuvWeb.PostLive.Actions,
+      session: %{
+        "post_id" => post.id,
+        "user_id" => viewer.id,
+        "id" => "post-actions-#{post.id}",
+        "locale" => "en",
+        "engagement" => engagement
+      }
+    )
+  end
+
+  # The opening tag's `class=` value alone.
+  defp class_attr(html) do
+    [_, classes] = Regex.run(~r/<[^>]*\sclass="([^"]*)"/, html)
+    classes
+  end
+
+  # The class list of one of a control's two pre-rendered count steps.
+  defp count_class(html, step) do
+    [_, classes] = Regex.run(~r/data-count-#{step}(?:="")?\s+class="([^"]*)"/, html)
+    classes
+  end
+
+  defp engagement(author, post, attrs) do
+    Enum.into(attrs, %{
+      likes: 0,
+      bookmarks: 0,
+      reposts: 0,
+      replies: 0,
+      fediverse_likes: 0,
+      fediverse_reposts: 0,
+      liked?: false,
+      bookmarked?: false,
+      reposted?: false,
+      restricted?: false,
+      author_id: author.id,
+      id: post.id
+    })
+  end
+
   # The bar is part of the feed's own DOM now, so the feed view itself drives it
   # (the button's `phx-target` routes the click to its component).
   defp feed_actions(conn, _post) do
@@ -177,13 +220,16 @@ defmodule VutuvWeb.PostActionsLiveTest do
       post = create_post!(friend, %{body: "state colors"})
       %{view: actions} = feed_actions(conn, post)
 
+      # The button's own `class=` attribute, not the whole tag: the optimistic
+      # flip names both tints inside `phx-click` (it toggles the pair), so a
+      # bare substring match would find slate on an active button.
       like = "#post-actions-post-#{post.id}-like"
-      assert actions |> element(like) |> render() =~ "text-slate-600"
+      assert actions |> element(like) |> render() |> class_attr() =~ "text-slate-600"
 
       actions |> element(like) |> render_click()
-      html = actions |> element(like) |> render()
-      assert html =~ "text-accent"
-      refute html =~ "text-slate-600"
+      classes = actions |> element(like) |> render() |> class_attr()
+      assert classes =~ "text-accent"
+      refute classes =~ "text-slate-600"
 
       # The untouched buttons keep the muted state color.
       assert actions |> element("#post-actions-post-#{post.id}-repost") |> render() =~
@@ -207,7 +253,12 @@ defmodule VutuvWeb.PostActionsLiveTest do
       actions |> element(like) |> render_click()
       html = actions |> element(like) |> render()
       assert html =~ ~s(data-count="like")
-      refute html =~ "invisible"
+
+      # The shown step is the "1"; the zero it came from stays mounted behind
+      # it (hidden, and still holding its space) so an unlike shows a stable
+      # row again without waiting for the server.
+      refute count_class(html, "on") =~ "invisible"
+      assert count_class(html, "off") =~ "invisible"
     end
 
     # The four controls spread across the full column width (X-style) rather
@@ -385,11 +436,11 @@ defmodule VutuvWeb.PostActionsLiveTest do
           }
         )
 
-      assert html =~ ~s(phx-click="toggle")
+      assert html =~ ~s(phx-value-kind="like")
 
       {:ok, _} = Posts.delete_post(post)
       _ = :sys.get_state(bar.pid)
-      refute render(bar) =~ ~s(phx-click="toggle")
+      refute render(bar) =~ ~s(phx-value-kind="like")
     end
   end
 
@@ -612,6 +663,59 @@ defmodule VutuvWeb.PostActionsLiveTest do
         )
 
       assert html =~ ~r/data-count="like">\s*1\s*</
+    end
+  end
+
+  describe "the optimistic flip" do
+    # A press used to be a dead button for a whole round trip: the heart only
+    # filled once the server had written the like and pushed a diff back, which
+    # on a slow line reads as a control that does not work. The press now paints
+    # the new state on the spot and the server's answer merely confirms it.
+    test "the press carries the client-side flip beside the push" do
+      author = other_user()
+      reader = other_user()
+      post = create_post!(author, %{body: "flip"})
+
+      {:ok, bar, _html} = isolated_bar(post, reader, engagement(author, post, []))
+
+      button = bar |> element("#post-actions-#{post.id}-like") |> render()
+
+      # The push is still the first op — the write is not optional — and the
+      # paint rides with it rather than waiting for the diff.
+      assert button =~ "push"
+      assert button =~ "toggle_class"
+      assert button =~ "toggle_attr"
+      # The tint pair and the pressed state both flip client-side.
+      assert button =~ "text-accent"
+      assert button =~ "aria-pressed"
+    end
+
+    test "both count steps are pre-rendered, so the swap needs no client-side formatter" do
+      author = other_user()
+      reader = other_user()
+      post = create_post!(author, %{body: "counted"})
+
+      {:ok, _bar, html} = isolated_bar(post, reader, engagement(author, post, likes: 999))
+
+      # 999 → "1K" is `compact_count/1`'s work and it is locale-aware, so the
+      # client must never re-derive it. The server ships both steps; the press
+      # only swaps which of the two is shown.
+      assert html =~ ~r/data-count="like">\s*999\s*</
+      assert html =~ ~r/data-count-on[^>]*>\s*1K\s*</
+    end
+
+    test "data-count marks the step the server is showing, not the one behind it" do
+      author = other_user()
+      reader = other_user()
+      post = create_post!(author, %{body: "marked"})
+
+      {:ok, _bar, html} =
+        isolated_bar(post, reader, engagement(author, post, likes: 1, liked?: true))
+
+      # The shown step carries the marker; the step behind it (0, what an
+      # unlike would show) must not, or every agent-facing count reads twice.
+      assert html =~ ~r/data-count="like">\s*1\s*</
+      refute html =~ ~r/data-count="like">\s*0\s*</
     end
   end
 end
