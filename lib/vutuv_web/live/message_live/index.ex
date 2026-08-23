@@ -219,8 +219,13 @@ defmodule VutuvWeb.MessageLive.Index do
         # sessions (including this one) render it the same way — its handler
         # runs the one refresh_conversation, so none is needed here (this
         # process is subscribed; local PubSub delivery is guaranteed).
+        # The ScrollBottom hook only follows the newest message for a reader
+        # who is at the bottom of the thread, so tell it that this member just
+        # sent one: answering something you scrolled up to read must still land
+        # you at your own message. This reply reaches the client before the
+        # echo's patch, which then keeps the pinned position.
         {:ok, %Message{}} ->
-          {:noreply, assign_form(socket)}
+          {:noreply, socket |> assign_form() |> push_event("chat:sent", %{})}
 
         # Declined conversation: drop silently — for the sender everything
         # looks exactly like an unanswered request.

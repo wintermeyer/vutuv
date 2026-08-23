@@ -205,6 +205,33 @@ defmodule VutuvWeb.MessageLiveTest do
       assert seed.() =~ ~s(data-mde-seed="2")
     end
 
+    test "typing scrolls nothing, sending pins the thread to the bottom", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_activated_user())
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      # The thread follows its newest message only while the reader sits at the
+      # bottom of it (ScrollBottom in app.js). phx-change fires on every
+      # keystroke, so a draft must never push the thread anywhere — that was the
+      # bug: writing an answer yanked the thread down letter by letter.
+      view
+      |> element("#message-form")
+      |> render_change(%{message: %{body: "still writing"}})
+
+      refute_push_event(view, "chat:sent", %{})
+
+      # A send is the one moment the sender does want to be taken along.
+      view
+      |> form("#message-form", message: %{body: "sent it"})
+      |> render_submit()
+
+      assert_push_event(view, "chat:sent", %{})
+
+      # Let the sender's own echo broadcast finish before the test exits.
+      _ = :sys.get_state(view.pid)
+    end
+
     test "a deleted message disappears live from open threads", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       {_other_conn, other} = login_other_user()

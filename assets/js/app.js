@@ -331,7 +331,7 @@ const MarkdownEditor = {
 // loaded on demand by the proxy above.
 // TagInput is the pill box on every tag field (see the sweep below, which
 // serves the same component on classic pages). LocalTime localizes timestamps
-// (see above). ScrollBottom keeps a chat thread pinned to its newest message.
+// (see above). ScrollBottom follows a chat thread's newest message.
 const Hooks = {
   MarkdownEditor,
   TagInput,
@@ -354,12 +354,66 @@ const Hooks = {
       revealPreviewClamp(this.el)
     },
   },
+  // A chat thread follows its newest message — but only for a reader who is
+  // sitting at the bottom of it. Every keystroke in the composer runs
+  // phx-change ("typing") and every patch morphs this container, so an
+  // unconditional scrollTop = scrollHeight yanked the thread down on each
+  // letter: answering a message you had scrolled up to read was impossible.
+  //
+  // The position must be remembered from OUTSIDE the patch. Reading it in
+  // beforeUpdate looks right and is not: while LiveView re-orders a stream's
+  // children (which is how "Load older messages" prepends its page), the
+  // container's own numbers are momentarily clamped to the top, so a delta
+  // taken there lands the reader a screen too high. Scroll events, in
+  // contrast, are dispatched between frames and never mid-patch — so remember()
+  // runs on every scroll (our own writes included) and always sees settled
+  // geometry.
+  //
+  // What is remembered is the first bubble's offset inside the visible box,
+  // not a scroll height: only growth ABOVE the viewport may move scrollTop,
+  // while a new message arriving below must leave the reader where they are.
+  // Sending is the exception — the server pushes "chat:sent" so your own
+  // message still takes you along.
   ScrollBottom: {
     mounted() {
-      this.el.scrollTop = this.el.scrollHeight
+      this.toBottom()
+      this.remember()
+      this.el.addEventListener("scroll", () => this.remember(), { passive: true })
+      // The scroll event our own toBottom() causes only arrives at the next
+      // frame, and the echo's patch beats it, so pin synchronously here.
+      this.handleEvent("chat:sent", () => {
+        this.pinned = true
+        this.toBottom()
+      })
     },
     updated() {
+      if (this.pinned) return this.toBottom()
+      const anchor = this.anchorId && document.getElementById(this.anchorId)
+      if (anchor) this.el.scrollTop += this.relOf(anchor) - this.anchorRel
+    },
+    remember() {
+      this.pinned = this.atBottom()
+      // A pinned thread never reads the anchor, and sitting at the bottom is
+      // the common case, so don't measure one — the scroll event that ends the
+      // pin records it.
+      if (this.pinned) return
+      const anchor = this.el.firstElementChild
+      this.anchorId = anchor && anchor.id
+      this.anchorRel = this.relOf(anchor)
+    },
+    toBottom() {
       this.el.scrollTop = this.el.scrollHeight
+    },
+    // How far a bubble sits below the top of the visible box. Painted
+    // rectangles rather than offsetTop, so the reading stays right whatever
+    // the browser's own scroll anchoring did during the patch.
+    relOf(el) {
+      return el ? el.getBoundingClientRect().top - this.el.getBoundingClientRect().top : 0
+    },
+    // A few pixels of slack: sub-pixel layout leaves "the bottom" a hair short
+    // of the exact number, and a reader that close is still reading along.
+    atBottom() {
+      return this.el.scrollHeight - this.el.scrollTop - this.el.clientHeight < 24
     },
   },
   // Browser-tab title indicator, so a backgrounded tab still shows new activity.
