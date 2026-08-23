@@ -46,6 +46,7 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
+  alias VutuvWeb.PostLive.ActionBar
 
   @doc """
   The DOM id one of these bars gets, from the kind and id of what it acts on
@@ -74,6 +75,13 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
      |> assign(:viewer, assigns[:viewer])
      |> assign_new(:notice, fn -> nil end)
      |> assign_new(:notice_path, fn -> nil end)
+     # Whether a like or a reshare may paint on press: free (a config read plus
+     # three struct reads on the loaded viewer), so it is asked per bar rather
+     # than threaded down from the host.
+     |> assign(:standing_ok?, Fediverse.outbound_standing(assigns[:viewer]) == :ok)
+     # This bar's own counter, like `:marks` and `:counts`: a host re-render
+     # must not put a discarded button back.
+     |> assign_new(:reset, fn -> 0 end)
      # `assign_new` like the marks below: a host re-render must not undo the
      # figure this bar has already nudged for the reader's own press.
      |> assign_new(:counts, fn -> Fediverse.counts(assigns.subject) end)
@@ -113,7 +121,11 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
          |> assign(:counts, moved(socket.assigns.counts, act, outcome))}
 
       {:error, reason} ->
-        {:noreply, refusal(socket, reason, subject)}
+        # The press was already painted for a member whose standing said it
+        # would go through (the budget ran out, or the post went away in the
+        # last few seconds), so the button has to be handed back to the server —
+        # a patch alone cannot overrule it. See `ActionBar.take_paint_back/2`.
+        {:noreply, socket |> refusal(reason, subject) |> ActionBar.take_paint_back(true)}
     end
   end
 
@@ -216,7 +228,10 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
     ~H"""
     <div>
       <.remote_actions
+        id={@id}
         target={@myself}
+        standing_ok?={@standing_ok?}
+        reset={@reset}
         subject_id={@subject.id}
         viewer={@viewer}
         liked?={@marks.liked?}

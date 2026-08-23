@@ -231,4 +231,81 @@ defmodule VutuvWeb.FediversePostLiveTest do
       assert render(element(view, ~s{[data-remote-count="like"]})) =~ "12"
     end
   end
+
+  describe "the optimistic flip, gated on the reader's own standing" do
+    # A press on a card from another network paints on the spot the way the
+    # vutuv bar does — but only where it is going to succeed. Taking part in the
+    # Fediverse is opt-in and most readers have not switched it on, so for them
+    # a heart that fills and empties again on every press would be worse than
+    # the explanation the bar prints instead.
+    defp federating_member(conn) do
+      {conn, user} = create_and_login_user(conn)
+      user = user |> Ecto.Changeset.change(fediverse_followers?: true) |> Repo.update!()
+      {conn, user}
+    end
+
+    test "a member who takes part gets the flip", %{conn: conn} do
+      {conn, _user} = federating_member(conn)
+      post = cached_post(account(), %{likes_count: 12})
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+      like = render(element(view, ~s{[data-remote-act="like"]}))
+
+      assert like =~ "toggle_class"
+      assert like =~ "toggle_attr"
+      assert like =~ "text-accent"
+      # The origin's figure moves with the press, both steps pre-rendered.
+      assert like =~ "data-count-off"
+      assert like =~ "data-count-on"
+    end
+
+    test "a member who does not take part keeps the plain press", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      post = cached_post(account(), %{likes_count: 12})
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+      like = render(element(view, ~s{[data-remote-act="like"]}))
+
+      assert like =~ ~s(phx-click="toggle")
+      refute like =~ "toggle_class"
+    end
+
+    # Saving never leaves the building (`check_bookmark/2` asks only whether the
+    # reader may read the post), so it paints for everyone.
+    test "the bookmark paints even for a member who does not take part", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      post = cached_post(account())
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+      bookmark = render(element(view, ~s{[data-remote-act="bookmark"]}))
+
+      assert bookmark =~ "toggle_class"
+      assert bookmark =~ ~s(data-on)
+    end
+
+    test "a server that serves no figure gets no count toggle to go with it", %{conn: conn} do
+      {conn, _user} = federating_member(conn)
+      post = cached_post(account())
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+      like = render(element(view, ~s{[data-remote-act="like"]}))
+
+      # The state still flips; predicting a tally nobody gave us does not.
+      assert like =~ "toggle_class"
+      refute like =~ "data-count-off"
+    end
+
+    test "both steps of the origin's figure are formatted by the server", %{conn: conn} do
+      {conn, _user} = federating_member(conn)
+      post = cached_post(account(), %{likes_count: 999})
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+      like = render(element(view, ~s{[data-remote-act="like"]}))
+
+      # 999 → "1K" is `compact_count/1`'s work and it is locale-aware, so the
+      # client is never asked to re-derive it.
+      assert like =~ ~r/data-remote-count="like">\s*999\s*</
+      assert like =~ ~r/data-count-on[^>]*>\s*1K\s*</
+    end
+  end
 end

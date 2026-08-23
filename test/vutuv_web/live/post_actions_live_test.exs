@@ -704,6 +704,44 @@ defmodule VutuvWeb.PostActionsLiveTest do
       assert html =~ ~r/data-count-on[^>]*>\s*1K\s*</
     end
 
+    # The paint is stashed on the element and LiveView never expires it, so a
+    # patch cannot overrule the member's press. The bar's answer is to change
+    # the control's DOM id, which hands morphdom a node it has not seen and
+    # discards the painted one along with its stash.
+    test "a refused act moves the button's id, so the server's truth can render", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      post = create_post!(friend, %{body: "refusable"})
+      %{view: actions} = feed_actions(conn, post)
+
+      like = "#post-actions-post-#{post.id}-like"
+      assert has_element?(actions, like)
+
+      # The author blocks the reader between the render and the press, so the
+      # like is refused although the button was live when it was drawn.
+      {:ok, _} = Vutuv.Social.block_user(friend, user)
+      actions |> element(like) |> render_click()
+
+      refute has_element?(actions, like)
+      assert has_element?(actions, "#{like}-r1")
+      assert %{likes: 0} = Posts.engagement_counts(post.id)
+    end
+
+    test "an ordinary press leaves the ids exactly where they were", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      post = create_post!(friend, %{body: "acceptable"})
+      %{view: actions} = feed_actions(conn, post)
+
+      like = "#post-actions-post-#{post.id}-like"
+      actions |> element(like) |> render_click()
+
+      assert has_element?(actions, like)
+      assert %{likes: 1} = Posts.engagement_counts(post.id)
+    end
+
     test "data-count marks the step the server is showing, not the one behind it" do
       author = other_user()
       reader = other_user()

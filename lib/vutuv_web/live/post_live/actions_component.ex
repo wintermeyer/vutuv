@@ -50,6 +50,9 @@ defmodule VutuvWeb.PostLive.ActionsComponent do
      |> assign(:post_id, assigns.post_id)
      |> assign(:viewer_id, assigns.viewer_id)
      |> assign(:acting_as_id, assigns[:acting_as_id])
+     # Survives the host's re-renders like `:engagement` does, and for the same
+     # reason: it is this bar's own state, not something the host knows.
+     |> assign_new(:reset, fn -> 0 end)
      |> assign_new(:engagement, fn ->
        ActionBar.engagement_or_load(
          assigns[:engagement],
@@ -75,6 +78,7 @@ defmodule VutuvWeb.PostLive.ActionsComponent do
         viewer_id={@viewer_id}
         acting_as_id={@acting_as_id}
         target={@myself}
+        reset={@reset}
       />
     </div>
     """

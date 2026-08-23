@@ -181,6 +181,45 @@ defmodule Vutuv.Fediverse do
     do: NaiveDateTime.compare(until, NaiveDateTime.utc_now()) == :gt
 
   @doc """
+  Whether this member's own standing lets an outbound act leave the building at
+  all: `:ok`, or the same `{:error, reason}` the gates below would answer with.
+
+  It is the **viewer-level** half of every outbound gate in this module
+  (`check_remote_post_act/2`, `check_note_like/2` and their siblings), asked on
+  its own so a control can know the answer *before* it is pressed. That is what
+  lets the action bar on a card from another network paint a press on the spot
+  the way the vutuv bar does: for a member who does not take part in the
+  Fediverse — which is most of them, since it is opt-in while remote posts reach
+  their feed anyway — a heart that fills and then empties again on every single
+  press is worse than the explanation they get today, so that bar keeps waiting
+  and this predicate is what tells the two apart.
+
+  Free of queries: a config read and three struct reads on the loaded viewer.
+  The gates' remaining questions are about the *subject* (`instance_blocked?`,
+  readability) and are already true of anything on screen, and the hourly budget
+  is claimed at press time by design — so `:ok` here means "this press will
+  succeed" for everything but a member 200 likes into one hour or a post deleted
+  in the last few seconds. Those two are what the refusal counter in the bars is
+  for: it changes the button's DOM id, which is the only way to overrule an
+  optimistic paint (LiveView's JS-command stash lives on the element and never
+  expires).
+
+  `test/vutuv/fediverse/outbound_standing_test.exs` holds it against the real
+  gate for each state, since two copies of one cond is exactly the drift that
+  would make a bar promise what the gate then refuses.
+  """
+  def outbound_standing(%User{} = user) do
+    cond do
+      not enabled?() -> {:error, :fediverse_disabled}
+      not federated?(user) -> {:error, :not_federating}
+      moved?(user) -> {:error, :moved}
+      true -> :ok
+    end
+  end
+
+  def outbound_standing(_no_viewer), do: {:error, :not_signed_in}
+
+  @doc """
   Whether a **revocation** for this member may still leave the building: the
   switch is on and they have an actor, i.e. they took part at some point, so
   copies of their posts may be sitting on other servers.

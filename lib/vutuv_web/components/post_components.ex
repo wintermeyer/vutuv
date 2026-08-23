@@ -56,6 +56,11 @@ defmodule VutuvWeb.PostComponents do
   alias VutuvWeb.PostLive.RemoteActionsComponent
   alias VutuvWeb.UserHelpers
 
+  # The idle tint every action control wears while it is off, paired with each
+  # control's own active colour. One place, because the optimistic flip toggles
+  # the pair as a unit and both action bars share it.
+  @idle_action_class "text-slate-600 dark:text-slate-400"
+
   # How many reposter faces the "Reposted by" avatar stack shows before the
   # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
   # on a phone (5 × 20px avatars, overlapped, plus the chip and the sentence).
@@ -1580,12 +1585,25 @@ defmodule VutuvWeb.PostComponents do
   `like-remote-reply` / `unlike-remote-reply` and so on, `"remote-post"` the
   `…-remote-post` pairs the feed and the account page already handle.
   """
+  attr(:id, :string, required: true, doc: "the bar's own id, which the controls key off")
   attr(:target, :any, required: true, doc: "the RemoteActionsComponent that handles the presses")
   attr(:subject_id, :string, required: true, doc: "rides every control as phx-value-id")
   attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil for no row at all")
   attr(:liked?, :boolean, default: false)
   attr(:reposted?, :boolean, default: false)
   attr(:bookmarked?, :boolean, default: false)
+
+  attr(:standing_ok?, :boolean,
+    default: false,
+    doc:
+      "`Vutuv.Fediverse.outbound_standing/1` said `:ok`, so a like or a reshare may paint on press"
+  )
+
+  attr(:reset, :integer,
+    default: 0,
+    doc:
+      "bumped by the bar when an act was refused; changes the controls' ids, see `control_id/3`"
+  )
 
   attr(:likes, :integer,
     default: nil,
@@ -1621,13 +1639,17 @@ defmodule VutuvWeb.PostComponents do
       we can trust, and a bookmark is private and local. --%>
       <.remote_action
         :if={@like?}
+        id={control_id(@id, "like", @reset)}
         act="like"
         target={@target}
         subject_id={@subject_id}
         on?={@liked?}
         on_class="text-accent"
-        label={gettext("Like")}
+        on_label={gettext("Unlike")}
+        off_label={gettext("Like")}
         count={@likes}
+        optimistic?={@standing_ok?}
+        filled?
       >
         <.icon_heart filled?={@liked?} />
       </.remote_action>
@@ -1645,24 +1667,35 @@ defmodule VutuvWeb.PostComponents do
 
       <.remote_action
         :if={@repost?}
+        id={control_id(@id, "repost", @reset)}
         act="repost"
         target={@target}
         subject_id={@subject_id}
         on?={@reposted?}
         on_class="text-brand-600 dark:text-brand-300"
-        label={if @reposted?, do: gettext("Undo repost"), else: gettext("Repost")}
+        on_label={gettext("Undo repost")}
+        off_label={gettext("Repost")}
         count={@shares}
+        optimistic?={@standing_ok?}
       >
         <.icon_repost />
       </.remote_action>
 
+      <%!-- Saving is the one act here that never leaves the building, so it
+      never asks after anybody's Fediverse standing (`check_bookmark/2` asks
+      only whether the reader may read this) and paints on press for everyone,
+      the member who does not federate included. --%>
       <.remote_action
+        id={control_id(@id, "bookmark", @reset)}
         act="bookmark"
         target={@target}
         subject_id={@subject_id}
         on?={@bookmarked?}
         on_class="text-brand-600 dark:text-brand-300"
-        label={if @bookmarked?, do: gettext("Remove bookmark"), else: gettext("Bookmark")}
+        on_label={gettext("Remove bookmark")}
+        off_label={gettext("Bookmark")}
+        optimistic?
+        filled?
       >
         <.icon_bookmark filled?={@bookmarked?} />
       </.remote_action>
@@ -1676,14 +1709,23 @@ defmodule VutuvWeb.PostComponents do
   # bars on two neighbouring cards would no longer line up — which is half of
   # what made the fediverse card look like a different component. An act this
   # card cannot carry keeps its slot and gives up its glyph.
+  attr(:id, :string, default: nil)
   attr(:act, :string, required: true, values: ~w(like repost bookmark))
   attr(:target, :any, required: true)
   attr(:subject_id, :string, required: true)
   attr(:on?, :boolean, required: true)
   attr(:on_class, :string, required: true)
-  attr(:label, :string, required: true)
+  attr(:on_label, :string, required: true)
+  attr(:off_label, :string, required: true)
   attr(:shown, :any, default: true)
   attr(:count, :integer, default: nil, doc: "the origin's figure, or nil for no figure at all")
+
+  attr(:optimistic?, :boolean,
+    default: false,
+    doc: "paint the press on the spot rather than waiting for the answer"
+  )
+
+  attr(:filled?, :boolean, default: false, doc: "the glyph fills while active (heart, bookmark)")
   slot(:inner_block, required: true)
 
   defp remote_action(%{shown: shown} = assigns) when shown in [nil, false] do
@@ -1693,10 +1735,16 @@ defmodule VutuvWeb.PostComponents do
   end
 
   defp remote_action(assigns) do
+    assigns =
+      assigns
+      |> assign(:label, if(assigns.on?, do: assigns.on_label, else: assigns.off_label))
+      |> assign(:idle_class, @idle_action_class)
+
     ~H"""
     <button
       type="button"
-      phx-click="toggle"
+      id={@id}
+      phx-click={remote_toggle_js(@optimistic?, @on_class, @on_label, @off_label)}
       phx-target={@target}
       phx-value-act={@act}
       aria-pressed={to_string(@on?)}
@@ -1705,17 +1753,40 @@ defmodule VutuvWeb.PostComponents do
       data-remote-act={@act}
       data-remote-id={@subject_id}
       data-on={@on? && "on"}
+      data-awaits-server={!@optimistic? && "true"}
+      data-count-steps
+      data-fills-when-pressed={@filled? && "true"}
       class={[
         "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800",
         # components.css colors bare `a, button` brand-600, which beats the
         # wrapper's inherited slate — so the state color sits on the button.
-        if(@on?, do: @on_class, else: "text-slate-600 dark:text-slate-400")
+        if(@on?, do: @on_class, else: @idle_class)
       ]}
     >
       {render_slot(@inner_block)}
-      <.remote_count count={@count} act={@act} />
+      <.remote_count count={@count} act={@act} on?={@on?} />
     </button>
     """
+  end
+
+  # The same flip the vutuv bar does (`toggle_js/4`, and the absolute-state rule
+  # in its comment applies here word for word), but only where the press is
+  # going to succeed. `optimistic?` is false for a member whose own standing
+  # already refuses the act — `Vutuv.Fediverse.outbound_standing/1`, asked once
+  # per bar and free of queries — because Fediverse participation is opt-in and
+  # most readers have not switched it on while remote posts reach their feed
+  # anyway. For them a heart that fills and empties again on every single press
+  # is worse than the explanation the bar prints instead, so their button keeps
+  # waiting for the server.
+  defp remote_toggle_js(false, _on_class, _on_label, _off_label), do: "toggle"
+
+  defp remote_toggle_js(true, on_class, on_label, off_label) do
+    JS.push("toggle")
+    |> JS.toggle_class("#{on_class} #{@idle_action_class}")
+    |> JS.toggle_attribute({"aria-pressed", "true", "false"})
+    |> JS.toggle_attribute({"aria-label", on_label, off_label})
+    |> JS.toggle_attribute({"title", on_label, off_label})
+    |> JS.toggle_attribute({"data-on", "on"})
   end
 
   # The origin's figure beside a glyph, in the local bar's own `count_pill`
@@ -1726,21 +1797,49 @@ defmodule VutuvWeb.PostComponents do
   # post.
   attr(:count, :integer, default: nil)
   attr(:act, :string, required: true)
+  attr(:on?, :boolean, required: true)
 
   defp remote_count(%{count: nil} = assigns) do
     ~H""
   end
 
+  # Both steps of the origin's figure, pre-rendered the way the vutuv bar
+  # pre-renders its own (`toggle_count/1`): what it reads while the reader has
+  # not acted, and what it reads once they have. `max(count - 1, 0)` matches the
+  # bar's own `step/2`, which is what actually moves the stored figure, so the
+  # painted number and the one that survives a reload are the same number.
   defp remote_count(assigns) do
+    assigns =
+      assigns
+      |> assign(:off, if(assigns.on?, do: max(assigns.count - 1, 0), else: assigns.count))
+      |> assign(:on, if(assigns.on?, do: assigns.count, else: assigns.count + 1))
+
     ~H"""
     <span
-      class={["font-medium tabular-nums", @count == 0 && "invisible"]}
-      data-remote-count={@act}
-    >
-      {compact_count(@count)}
-    </span>
+      data-count-off
+      class={["font-medium tabular-nums", @off == 0 && "invisible"]}
+      data-remote-count={!@on? && @act}
+    >{compact_count(@off)}</span>
+    <span data-count-on class="font-medium tabular-nums" data-remote-count={@on? && @act}>{compact_count(@on)}</span>
     """
   end
+
+  @doc false
+  # A control's DOM id, and with it morphdom's key for the node. It carries the
+  # bar's refusal counter, which is the only way the server can take an
+  # optimistic paint back: LiveView stashes each JS class/attribute op on the
+  # element and re-applies it after every patch, and nothing ever expires it
+  # (`DOM.putSticky` / `applyStickyOperations`; `deleteSticky` has no caller).
+  # A patch therefore cannot overrule the client — but a node morphdom has never
+  # seen is created fresh, stash and all. So on a refusal the bar bumps the
+  # counter, the id changes, the painted node is discarded and the server's
+  # truth renders in its place.
+  #
+  # Zero leaves the id exactly as it was before any of this, which is what keeps
+  # every selector and test keyed on `#…-like` working: the suffix only ever
+  # appears after something was actually refused.
+  def control_id(base, kind, 0), do: "#{base}-#{kind}"
+  def control_id(base, kind, reset), do: "#{base}-#{kind}-r#{reset}"
 
   # The answering control: the same slot and the same look, but a link.
   attr(:href, :any, required: true)
@@ -4645,6 +4744,12 @@ defmodule VutuvWeb.PostComponents do
     doc: "phx-target: the LiveComponent's @myself on a host page, nil on a dead page"
   )
 
+  attr(:reset, :integer,
+    default: 0,
+    doc:
+      "bumped by the bar when an act was refused; changes the controls' ids, see `control_id/3`"
+  )
+
   def post_actions(assigns) do
     assigns =
       assigns
@@ -4665,7 +4770,7 @@ defmodule VutuvWeb.PostComponents do
       class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-600 dark:text-slate-400"
     >
       <.like_control
-        id={"#{@id}-like"}
+        id={control_id(@id, "like", @reset)}
         target={@target}
         own?={@own?}
         liked?={@engagement.liked?}
@@ -4680,7 +4785,7 @@ defmodule VutuvWeb.PostComponents do
       />
 
       <.action_button
-        id={"#{@id}-repost"}
+        id={control_id(@id, "repost", @reset)}
         target={@target}
         kind="repost"
         active?={@engagement.reposted?}
@@ -4695,7 +4800,7 @@ defmodule VutuvWeb.PostComponents do
       </.action_button>
 
       <.action_button
-        id={"#{@id}-bookmark"}
+        id={control_id(@id, "bookmark", @reset)}
         target={@target}
         kind="bookmark"
         active?={@engagement.bookmarked?}
@@ -5000,10 +5105,6 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
-  # The idle tint, paired with each control's `active_class`. One place, because
-  # the flip below toggles the pair as a unit.
-  @idle_action_class "text-slate-600 dark:text-slate-400"
-
   attr(:id, :string, required: true)
   attr(:target, :any, default: nil)
   attr(:kind, :string, required: true)
@@ -5027,13 +5128,15 @@ defmodule VutuvWeb.PostComponents do
     <button
       type="button"
       id={@id}
-      phx-click={toggle_js(@active_class, @on_label, @off_label, @filled?)}
+      phx-click={toggle_js(@active_class, @on_label, @off_label)}
       phx-target={@target}
       phx-value-kind={@kind}
       disabled={@disabled}
       aria-pressed={to_string(@active?)}
       aria-label={@label}
       title={if(@disabled, do: @disabled_title, else: @label)}
+      data-count-steps
+      data-fills-when-pressed={@filled? && "true"}
       class={[
         "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm",
         @disabled && "cursor-not-allowed opacity-40",
@@ -5056,6 +5159,18 @@ defmodule VutuvWeb.PostComponents do
   # member already sees. LiveView's own recipe ("Syncing changes and optimistic
   # UIs"); no hook, because the JS commands are DOM-patch aware.
   #
+  # **Everything it touches lives on the button itself**, and the glyph's fill
+  # and which step of the count shows are derived from `aria-pressed` in CSS
+  # (`[data-fills-when-pressed]` / `[data-count-steps]` in `components.css`).
+  # That is not tidiness. A JS command aimed at a child leaves its stash on that
+  # child, and when the refusal counter below hands morphdom a fresh button,
+  # morphdom **moves the old unkeyed children into it** rather than building
+  # them — so the heart stayed filled after a refused like while the button
+  # around it had correctly gone back to grey (measured over CDP: the button was
+  # a new node, the `<svg>` inside it the very same one). Keeping all client
+  # state on the one element the counter re-keys is what makes the take-back
+  # complete.
+  #
   # The rule that makes it safe: **every value toggled here is a function of the
   # absolute state** (pressed / not pressed), never of the state at click time.
   # LiveView stashes each class and attribute op on the element and re-applies
@@ -5069,21 +5184,13 @@ defmodule VutuvWeb.PostComponents do
   # What is left is the trade we took on purpose: where the server *disagrees* —
   # a refused act, a toggle from the member's other tab — the button keeps
   # showing the press until the next press or a reload.
-  defp toggle_js(active_class, on_label, off_label, filled?) do
+  defp toggle_js(active_class, on_label, off_label) do
     JS.push("toggle")
     |> JS.toggle_class("#{active_class} #{@idle_action_class}")
     |> JS.toggle_attribute({"aria-pressed", "true", "false"})
     |> JS.toggle_attribute({"aria-label", on_label, off_label})
     |> JS.toggle_attribute({"title", on_label, off_label})
-    |> JS.toggle_class("hidden", to: {:inner, "[data-count-off]"})
-    |> JS.toggle_class("hidden", to: {:inner, "[data-count-on]"})
-    |> fill_glyph(filled?)
   end
-
-  defp fill_glyph(js, true),
-    do: JS.toggle_attribute(js, {"fill", "currentColor", "none"}, to: {:inner, "svg"})
-
-  defp fill_glyph(js, false), do: js
 
   # Both steps of the count, pre-rendered: what it reads while the control is
   # off, and what it reads while on. The press shows the other one, which is why
@@ -5109,14 +5216,10 @@ defmodule VutuvWeb.PostComponents do
           doesn't shift the neighbouring buttons under the pointer. --%>
     <span
       data-count-off
-      class={["font-medium tabular-nums", @active? && "hidden", @off == 0 && "invisible"]}
+      class={["font-medium tabular-nums", @off == 0 && "invisible"]}
       data-count={!@active? && @off > 0 && @kind}
     >{compact_count(@off)}</span>
-    <span
-      data-count-on
-      class={["font-medium tabular-nums", !@active? && "hidden"]}
-      data-count={@active? && @on > 0 && @kind}
-    >{compact_count(@on)}</span>
+    <span data-count-on class="font-medium tabular-nums" data-count={@active? && @on > 0 && @kind}>{compact_count(@on)}</span>
     """
   end
 

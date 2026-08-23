@@ -52,15 +52,48 @@ defmodule VutuvWeb.PostLive.ActionBar do
     post = Repo.get(Post, socket.assigns.post_id)
     page = acting_page(socket)
 
-    if user && post do
-      # Errors (:not_visible, :restricted, :not_allowed) mean the button should
-      # not have been live — the reload below shows the truth either way.
-      _ = act(kind, engagement, page || user, user, post)
-    end
+    refused? =
+      if user && post do
+        # Errors (:not_visible, :restricted, :not_allowed) mean the button should
+        # not have been live.
+        refused?(act(kind, engagement, page || user, user, post))
+      else
+        true
+      end
 
     # The viewer's own filled-in flags are not in any broadcast, so reload them.
-    load_engagement(socket)
+    socket
+    |> load_engagement()
+    |> take_paint_back(refused?)
   end
+
+  # `Vutuv.Posts` answers a refusal in more than one shape, so anything that is
+  # not an outright `:ok` counts as one. Erring towards "refused" is the safe
+  # side: the cost is one discarded button node, and the cost of the other
+  # mistake is a member looking at a like that was never written.
+  defp refused?(:ok), do: false
+  defp refused?({:ok, _}), do: false
+  defp refused?(_other), do: true
+
+  @doc """
+  Bumps the bar's refusal counter when the server disagreed with the press the
+  member has already been shown.
+
+  The bar paints a like / repost / bookmark on the spot and pushes alongside it
+  (`VutuvWeb.PostComponents.toggle_js/4`), so by the time this runs the member
+  is looking at the new state. A LiveView patch cannot take that back on its
+  own: the JS-command stash lives on the element and never expires, so it
+  re-applies itself over whatever the server renders. Changing the counter
+  changes the controls' DOM ids (`control_id/3`), morphdom builds fresh nodes,
+  and the discarded ones take the stash with them.
+
+  Left alone on success, so the ordinary press costs nothing and the ids a test
+  or a selector keys on only ever move after something was actually refused.
+  """
+  def take_paint_back(socket, false), do: socket
+
+  def take_paint_back(socket, true),
+    do: assign(socket, :reset, (socket.assigns[:reset] || 0) + 1)
 
   # Undoing needs only the actor; doing it needs the acting member too, so the
   # page's act can record who pressed the button (issue #1336). `actor` is the

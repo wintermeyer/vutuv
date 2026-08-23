@@ -1085,6 +1085,67 @@ tr[data-row-changed] > td {
   }
 }
 
+/* ---------- Action-bar state derived from the button's own aria-pressed ----- */
+/* Both action bars paint a press on the spot with LiveView's JS commands, and
+   every one of those commands is aimed at the **button** — never at a child.
+   The glyph's fill and which of the two pre-rendered count steps shows are
+   worked out from `aria-pressed` here instead.
+
+   That is a correctness rule, not a preference. A JS command aimed at a child
+   leaves LiveView's stash on that child, and the stash never expires — so when
+   a refused act re-keys the button to hand morphdom a fresh node, morphdom
+   **moves the old unkeyed children into it** rather than rebuilding them, and
+   they arrive still carrying the paint. Measured over CDP: after a refused
+   like the button was correctly grey again and the very same `<svg>` inside it
+   was still filled. One element holds the client state, everything else reads
+   it.
+
+   `display` here has exactly one owner: the steps carry no `hidden` utility of
+   their own (the issue #880 trap). `invisible` on a zero step is a different
+   property and stays a class. A `fill` presentation attribute loses to any
+   author rule, so the server's `fill="none"` needs no `!important` to beat. */
+[data-count-steps][aria-pressed="false"] [data-count-on],
+[data-count-steps][aria-pressed="true"] [data-count-off] {
+  display: none;
+}
+[data-fills-when-pressed][aria-pressed="true"] svg {
+  fill: currentColor;
+}
+[data-fills-when-pressed][aria-pressed="false"] svg {
+  fill: none;
+}
+
+/* ---------- A press the control cannot answer by itself ---------- */
+/* Most action-bar controls paint their new state the moment they are pressed
+   and need nothing here. One does not: a like or a reshare on a card from
+   another network, pressed by a member whose own standing already refuses it
+   (`Vutuv.Fediverse.outbound_standing/1` — Fediverse participation is opt-in
+   and most readers have not switched it on). Painting a heart for them would be
+   a lie, so the bar waits for the server and prints an explanation instead —
+   which on a slow line leaves the button looking untouched for a whole round
+   trip, exactly the dead control this whole change is about.
+
+   So the press is acknowledged without claiming an outcome: while LiveView's
+   own `phx-click-loading` marks the event as in flight, the glyph breathes.
+   Not a spinner — nothing is loading, an answer is being waited for — and not a
+   dimming, which reads as disabled. Under `prefers-reduced-motion` it holds the
+   tint still for that moment, the same trade `tr[data-row-changed]` makes: the
+   press is still acknowledged, nothing moves. */
+@keyframes press-awaits-server {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+[data-awaits-server].phx-click-loading {
+  animation: press-awaits-server 0.6s ease-in-out infinite alternate;
+  color: var(--color-brand-600);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-awaits-server].phx-click-loading {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
 /* ---------- Lists / tags / badges ---------- */
 .tags,
 .badges {
@@ -2933,6 +2994,9 @@ html.lightbox-open { overflow: hidden; }
   /* Only the tint: the keyframes read it off the element, so the animation and
      the reduced-motion fallback both follow without a dark copy of either. */
   tr[data-row-changed] > td { --row-changed-tint: var(--color-brand-900); }
+  /* Only the tint again — the keyframes carry the motion and the
+     reduced-motion fallback needs no dark copy either. */
+  [data-awaits-server].phx-click-loading { color: var(--color-brand-300); }
   /* Bare tables (legacy sets `th{color:#444;border:#ddd}` / `td{border:#eee}`). */
   th { color: #cbd5e1; border-color: #1e293b; }
   td { border-color: #1e293b; }
