@@ -234,6 +234,15 @@ historically made it optional; native vutuv OAuth apps still require S256.
 Mastodon access tokens follow the client ecosystem's non-expiring convention
 and are revocable from Connected apps or through `/oauth/revoke`.
 
+A client cannot know which optional halves of the protocol an installation
+implements, so a scope word vutuv recognises but has no API behind — the whole
+`admin:*` family, `profile`, `crypto` — is **accepted at registration and then
+dropped**, and never reaches `registered_scopes`, the consent screen or a token.
+Refusing them ended a login at its first request: Tokodon asks for `admin:read
+admin:write` on every login path, not only a moderator's, so `POST
+/api/v1/apps` answered 422 and the member never saw a consent screen (issue
+#1632). A word in neither list stays `invalid_scope`.
+
 Every token has one fixed identity: the member or one organization selected on
 the consent screen. Blocking is available only for a personal identity against
 another local member because that is the block relationship vutuv currently

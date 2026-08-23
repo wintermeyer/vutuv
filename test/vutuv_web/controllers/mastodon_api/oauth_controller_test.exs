@@ -93,13 +93,29 @@ defmodule VutuvWeb.MastodonApi.OauthControllerTest do
     test "rejects unknown scopes and unsafe redirect schemes", %{conn: conn} do
       assert %{"error" => _message} =
                conn
-               |> register(%{"scopes" => "admin:write"})
+               |> register(%{"scopes" => "write:statuse"})
                |> json_response(422)
 
       assert %{"error" => _message} =
                build_conn()
                |> register(%{"redirect_uris" => ["javascript:alert(1)"]})
                |> json_response(422)
+    end
+
+    # Tokodon asks for `admin:read admin:write` on every login path, not only a
+    # moderator's, so refusing the word ended the login at its first request and
+    # no consent screen ever appeared (#1632). Dropped, not granted: no route
+    # here reads one, and there is no Mastodon admin API to hand over.
+    test "keeps a client that asks for scopes this adapter does not have", %{conn: conn} do
+      response =
+        conn
+        |> register(%{"scopes" => "read write follow push admin:read admin:write"})
+        |> json_response(200)
+
+      assert response["scopes"] == ["read", "write", "follow", "push"]
+
+      app = Repo.get_by!(App, client_id: response["client_id"])
+      assert app.registered_scopes == ["read", "write", "follow", "push"]
     end
   end
 
@@ -244,6 +260,72 @@ defmodule VutuvWeb.MastodonApi.OauthControllerTest do
              |> put_req_header("authorization", "Bearer " <> token_response["access_token"])
              |> get("/api/2.0/me")
              |> response(403)
+    end
+
+    # Tokodon's three real requests, with the scope string it really sends.
+    # Registration was the step that 422ed (#1632), but the same string comes
+    # back on the authorize URL, so the drop has to survive the whole flow or
+    # the consent screen refuses it instead.
+    test "signs in a client asking for scopes this adapter does not have", %{conn: conn} do
+      redirect = "tokodon://oauth"
+      scope = "read write follow push admin:read admin:write"
+
+      credentials =
+        conn
+        |> register(%{
+          "client_name" => "Tokodon",
+          "redirect_uris" => redirect,
+          "scopes" => scope,
+          "website" => "https://apps.kde.org/tokodon"
+        })
+        |> json_response(200)
+
+      {conn, user} = create_and_login_user(fresh_conn())
+      allow_mastodon_clients(user)
+
+      authorize_params = %{
+        "response_type" => "code",
+        "client_id" => credentials["client_id"],
+        "redirect_uri" => redirect,
+        "scope" => scope
+      }
+
+      conn = get(conn, "/oauth/authorize?#{URI.encode_query(authorize_params)}")
+      assert html_response(conn, 200) =~ "Tokodon"
+
+      conn =
+        submit_with_csrf(
+          conn,
+          "/oauth/authorize",
+          Map.put(authorize_params, "decision", "allow")
+        )
+
+      # The custom scheme is what the consent form has to be allowed to reach.
+      assert %{query: query, scheme: "tokodon"} = URI.parse(redirected_to(conn))
+      %{"code" => code} = URI.decode_query(query)
+
+      token =
+        build_conn()
+        |> on_mastodon_host()
+        |> post("/oauth/token", %{
+          "grant_type" => "authorization_code",
+          "client_id" => credentials["client_id"],
+          "client_secret" => credentials["client_secret"],
+          "redirect_uri" => redirect,
+          "code" => code
+        })
+        |> json_response(200)
+
+      assert token["scope"] == "read write follow push"
+
+      account =
+        build_conn()
+        |> on_mastodon_host()
+        |> put_req_header("authorization", "Bearer " <> token["access_token"])
+        |> get("/api/v1/accounts/verify_credentials")
+        |> json_response(200)
+
+      assert account["id"] == user.id
     end
 
     test "cannot authorize a scope the client did not register", %{conn: conn} do
