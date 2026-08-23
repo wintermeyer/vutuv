@@ -266,6 +266,55 @@ enable `Plug.SSL`/`force_ssl`: the blue/green deploy's health gate curls
 `Plug.SSL` would redirect and break the deploy. HSTS therefore belongs here in
 the nginx TLS terminator, which every internet install already runs.
 
+### Static assets (optional, but worth it on a slow link)
+
+By default every `/assets/` request is proxied to the app, which serves the
+file uncompressed and lets nginx compress it again on each request. If you let
+nginx read the files itself instead, it can hand out the brotli and gzip copies
+the deploy already wrote and skip the app entirely.
+
+`mix assets.deploy` produces content-hashed names (`app-<md5>.js`), so a file
+never changes under its own URL and two releases' assets can sit side by side.
+`scripts/publish-static.sh <path-to-priv/static>` copies a release's tree to
+`STATIC_DEST` (default `/srv/vutuv3/static`) and writes a `.br` (brotli 11) and
+`.gz` (gzip 9) beside every text file; `scripts/deploy.sh` calls it before the
+traffic switch. Point nginx at that directory:
+
+```nginx
+# Only the digested names, because only a content-hashed URL may claim
+# `immutable`. The undigested siblings (app.js, app.css) keep their URL while
+# their content changes, so they fall through to the app.
+location ~ "^/assets/[^/]+-[0-9a-f]{32}\.[A-Za-z0-9]+$" {
+    root /srv/vutuv3/static;
+    brotli_static on;          # needs the ngx_brotli module; omit if absent
+    gzip_static on;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    try_files $uri @app;
+}
+
+# Fallback for an asset the publish step has not written yet.
+location @app {
+    proxy_pass http://127.0.0.1:4003;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+The `try_files` fallback is what makes this safe to add at any time: nothing
+404s while the directory is empty, and a deploy never has to land the files
+before the code that names them.
+
+Two settings in the `http` block are easy to get wrong. **`gzip_types` defaults
+to `text/html` alone**, so `gzip on` by itself leaves JavaScript and CSS
+uncompressed for any client that does not offer brotli; list the text types
+explicitly. And set `gzip_vary on` so responses carry
+`Vary: Accept-Encoding` — without it a shared cache may hand a compressed body
+to a client that never asked for one.
+
 ### Uploaded images
 
 Avatars, cover photos and URL screenshots are **public** images served

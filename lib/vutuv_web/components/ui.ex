@@ -304,6 +304,7 @@ defmodule VutuvWeb.UI do
     <div
       id={@id}
       phx-hook="MarkdownEditor"
+      data-mde-src={~p"/assets/markdown_editor.js"}
       data-mde-value={@value}
       data-mde-seed={@seed}
       data-mde-placeholder={@placeholder}

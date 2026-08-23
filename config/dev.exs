@@ -31,6 +31,12 @@ config :vutuv, VutuvWeb.Endpoint,
   check_origin: false,
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:vutuv, ~w(--sourcemap=inline --watch)]},
+    # The Milkdown editor is its own entry point (see the esbuild block in
+    # config/config.exs), so it needs its own watcher — without it an edit to
+    # markdown_editor.js rebuilds nothing and the browser keeps serving the
+    # bundle from whenever `mix assets.build` last ran.
+    esbuild_markdown_editor:
+      {Esbuild, :install_and_run, [:markdown_editor, ~w(--sourcemap=inline --watch)]},
     # Not `tailwind --watch`: the v4 CLI's watch mode rebuilds from a cached
     # copy of @import'ed CSS and ignores CSS edits outright, so changes to
     # components.css silently never reached the browser. The replacement runs

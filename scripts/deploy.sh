@@ -122,6 +122,18 @@ dest="$RELEASES_DIR/$ts"
 mkdir -p "$dest"
 cp -a "_build/prod/rel/$RELEASE/." "$dest/"
 
+# Publish this release's digested assets to the tree nginx serves /assets/ from,
+# with the brotli and gzip variants precomputed (scripts/publish-static.sh).
+# Before the traffic switch, so the new HTML never names a file that is not on
+# disk yet.
+#
+# Non-fatal on purpose: the vhost's `try_files $uri @app` falls back to
+# Plug.Static, so a failure here costs on-the-fly compression and a proxy hop,
+# never a broken page. That is not worth aborting a deploy over.
+if ! ./scripts/publish-static.sh "$dest"/lib/vutuv-*/priv/static; then
+  log "WARNING: publishing static assets failed; nginx falls back to the app"
+fi
+
 # If a previous deploy died between starting the slot and switching traffic,
 # the idle slot may still run stale code — clear it before repointing.
 sudo systemctl stop "$NEW_UNIT" 2>/dev/null || true

@@ -744,10 +744,34 @@ config :vutuv,
 config :swoosh, :api_client, false
 
 # Configure esbuild (the version is required)
+#
+# TWO bundles, deliberately. The Milkdown/ProseMirror editor stack is 435 kB of
+# a 677 kB single bundle (measured 2026-08-23 with `esbuild --metafile`), and it
+# is needed by exactly four LiveViews: the post composer, messages, the
+# job-posting form and organization edit. Shipping it in app.js made every
+# profile, tag page, search result and the logged-out landing page pay for it:
+# 203 kB over the wire against 51 kB without. On a rural link (measured the same
+# day from Namibia, ~87 kB/s) that is the difference between a 2.3 s and a 0.6 s
+# script download.
+#
+# So `markdown_editor.js` is its own entry point, loaded on demand by the
+# MarkdownEditor hook in app.js. It is built as ESM because the hook reaches it
+# through a dynamic `import()`, which needs real module exports; an IIFE bundle
+# would hand back an empty namespace. app.js stays IIFE.
+#
+# `--target=es2020` (up from es2017) is load-bearing for the same reason:
+# dynamic `import()` is ES2020, and against an older target esbuild rewrites it
+# into a require() shim that no browser can resolve.
 config :esbuild,
   version: "0.28.0",
   vutuv: [
-    args: ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets),
+    args: ~w(js/app.js --bundle --target=es2020 --outdir=../priv/static/assets),
+    cd: Path.expand("../assets", __DIR__),
+    env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
+  ],
+  markdown_editor: [
+    args:
+      ~w(js/markdown_editor.js --bundle --format=esm --target=es2020 --outdir=../priv/static/assets),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
   ]

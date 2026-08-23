@@ -229,4 +229,20 @@ defmodule VutuvWeb.MarkdownEditorTest do
                "@seedless in #{__ENV__.file |> Path.relative_to_cwd()} with the reason."
     end
   end
+
+  # The Milkdown stack is 64% of the JS and rides its own esbuild entry point
+  # (config/config.exs), so app.js no longer contains it: the hook reads this
+  # attribute and `import()`s the bundle when a composer actually mounts. Lose
+  # the attribute and nothing raises — the hook simply returns, and every
+  # composer on the site quietly degrades to the plain textarea fallback. That
+  # is precisely the kind of silent regression that survives a release, hence
+  # this test.
+  test "the mount point tells the hook where to fetch the editor bundle" do
+    html = editor()
+
+    assert html =~ "data-mde-src="
+
+    assert html =~ ~r/data-mde-src="[^"]*\/assets\/markdown_editor[^"]*\.js/,
+           "data-mde-src must resolve to the markdown_editor bundle: #{html}"
+  end
 end

@@ -18,8 +18,9 @@ import { openPhotoCropper } from "./photo_crop"
 // reduced-motion) reused by every classic-page enhancement below.
 import { csrfToken, onReady, once, request, reducedMotion } from "./util"
 // The Milkdown WYSIWYG Markdown editor shared by the post + message composers
-// (VutuvWeb.UI.markdown_editor/1); registered as the MarkdownEditor hook below.
-import { MarkdownEditor } from "./markdown_editor"
+// (VutuvWeb.UI.markdown_editor/1) is deliberately NOT imported here: it is a
+// separate esbuild entry point, fetched on demand by the MarkdownEditor hook
+// below. See the esbuild block in config/config.exs for the measurements.
 // The tag pill box shared by every field that takes a batch of tags
 // (VutuvWeb.UI.tag_input/1); registered as the TagInput hook below and swept
 // over classic pages further down. See tag_input.js.
@@ -253,7 +254,81 @@ document.addEventListener(
   true
 )
 
-// Hooks. MarkdownEditor is the Milkdown WYSIWYG composer (posts + messages).
+// The four lifecycle names LiveView calls on a hook. Everything else on the
+// loaded implementation is a helper it calls as `this.something()`, so the
+// helpers have to land on the hook INSTANCE, not stay on the module export.
+const EDITOR_LIFECYCLE = ["mounted", "beforeUpdate", "updated", "destroyed"]
+
+// Loads the editor bundle once per page and hands back its module namespace.
+// Cached as a promise, not as a result: several composers can mount in the same
+// patch (a message thread beside the post composer) and they must share one
+// request, including while it is still in flight.
+//
+// A failed load drops out of the cache, so the next composer to mount tries
+// again. This bundle is the one request on the page big enough for a bad link
+// to drop, and remembering that failure would leave the member with a plain
+// textarea until they reload — the opposite of what the split is for.
+let editorModule = null
+function loadEditor(src) {
+  editorModule ||= import(src).catch((err) => {
+    editorModule = null
+    throw err
+  })
+  return editorModule
+}
+
+// Stand-in for the real MarkdownEditor hook while its bundle is still being
+// fetched. It cannot simply forward calls, because the implementation's
+// lifecycle methods reach for helpers (`this.applyState()`, `this.fenceLabels()`
+// …) that live on the same object — so on arrival we copy every helper onto
+// this instance and only then run the real `mounted()`.
+//
+// The three later callbacks stay proxied rather than copied so that this object
+// remains the authority on ordering: each one is a no-op until the bundle
+// lands, which is correct in every case. Before the editor exists there is no
+// manual resize to remember (beforeUpdate), no prose to re-seed (updated), and
+// nothing to tear down (destroyed) — and `destroyed` additionally has to be able
+// to cancel a boot that is still in flight, or the implementation would mount
+// itself onto an element LiveView has already removed.
+const MarkdownEditor = {
+  mounted() {
+    const src = this.el.dataset.mdeSrc
+    if (!src) return
+
+    loadEditor(src)
+      .then(({ MarkdownEditor: impl }) => {
+        if (this.destroyed_) return
+        for (const key of Object.keys(impl)) {
+          if (!EDITOR_LIFECYCLE.includes(key)) this[key] = impl[key]
+        }
+        this.impl_ = impl
+        return impl.mounted.call(this)
+      })
+      .catch((err) => {
+        // The plain textarea underneath is a working composer without any of
+        // this (the no-JS fallback markdown_editor.js is built around), so a
+        // failed fetch degrades instead of breaking. Log it: silently serving
+        // the fallback is exactly the kind of thing nobody notices for weeks.
+        console.error("[mde] editor bundle failed to load", err)
+      })
+  },
+
+  beforeUpdate() {
+    this.impl_?.beforeUpdate.call(this)
+  },
+
+  updated() {
+    this.impl_?.updated.call(this)
+  },
+
+  destroyed() {
+    this.destroyed_ = true
+    this.impl_?.destroyed.call(this)
+  },
+}
+
+// Hooks. MarkdownEditor is the Milkdown WYSIWYG composer (posts + messages),
+// loaded on demand by the proxy above.
 // TagInput is the pill box on every tag field (see the sweep below, which
 // serves the same component on classic pages). LocalTime localizes timestamps
 // (see above). ScrollBottom keeps a chat thread pinned to its newest message.

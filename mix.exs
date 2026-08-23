@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.336.1",
+      version: "7.337.1",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -156,10 +156,15 @@ defmodule Vutuv.MixProject do
         "esbuild.install --if-missing",
         "vutuv.autoconsent.vendor"
       ],
-      "assets.build": ["tailwind vutuv", "esbuild vutuv"],
+      # Two esbuild profiles: app.js and the on-demand markdown editor bundle
+      # (see the esbuild block in config/config.exs for why they are split).
+      # Both must run, or the composer loads a 404 and falls back to the plain
+      # textarea.
+      "assets.build": ["tailwind vutuv", "esbuild vutuv", "esbuild markdown_editor"],
       "assets.deploy": [
         "tailwind vutuv --minify",
         "esbuild vutuv --minify",
+        "esbuild markdown_editor --minify",
         "phx.digest"
       ]
     ]
