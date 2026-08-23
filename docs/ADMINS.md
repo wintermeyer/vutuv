@@ -283,8 +283,11 @@ traffic switch. Point nginx at that directory:
 ```nginx
 # Only the digested names, because only a content-hashed URL may claim
 # `immutable`. The undigested siblings (app.js, app.css) keep their URL while
-# their content changes, so they fall through to the app.
-location ~ "^/assets/[^/]+-[0-9a-f]{32}\.[A-Za-z0-9]+$" {
+# their content changes, so they fall through to the app. The five roots are
+# exactly Plug.Static's `only:` list, so this can never shadow an application
+# route; /images/ is in there because the logo and wordmark SVGs are digested
+# too and load on every page.
+location ~ "^/(assets|css|fonts|images|js)/.+-[0-9a-f]{32}\.[A-Za-z0-9]+$" {
     root /srv/vutuv3/static;
     brotli_static on;          # needs the ngx_brotli module; omit if absent
     gzip_static on;
