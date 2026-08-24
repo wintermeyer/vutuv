@@ -308,9 +308,8 @@ line) with cursor "Load more", a *"Show N new posts"* pill fed by `{:new_post,
 …}` / `{:new_repost, …}` broadcasts, and a desktop-only **"New here"** welcome
 rail: five of the newest members who show a face
 (`Vutuv.Social.newest_members_with_avatar/1`, a pool of 30 ordered by the UUID
-v7 primary key), drawn at random, each with how long they have been here
-(`VutuvWeb.UserHTML.joined_line/1`) and three of their tags picked at random so
-a ↻ shows another side of the same person. It replaced a most-followed
+v7 primary key), drawn at random, each with their job title and three of their
+tags picked at random so a ↻ shows another side of the same person. It replaced a most-followed
 suggestion rail: a ranking shows the same well-connected members to everybody
 and can never reach the person who signed up this morning, who is the one for
 whom being seen decides whether they come back. Following somebody here

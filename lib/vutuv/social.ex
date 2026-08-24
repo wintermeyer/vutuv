@@ -988,8 +988,7 @@ defmodule Vutuv.Social do
 
   Same visibility gate as every other people listing (unconfirmed and
   moderation-hidden accounts never surface) and the same narrow listing-row
-  select, plus `inserted_at`: the card says how long each member has been
-  here. The viewer, their blocks and the people they already follow are
+  select. The viewer, their blocks and the people they already follow are
   filtered at the call site, exactly as `most_followed_users/1`'s pool is.
   """
   def newest_members_with_avatar(limit) do
@@ -1000,7 +999,7 @@ defmodule Vutuv.Social do
         where: is_nil(u.avatar_moderation) or u.avatar_moderation == "approved",
         order_by: [desc: u.id],
         limit: ^limit,
-        select: struct(u, ^[:inserted_at | User.listing_fields()])
+        select: struct(u, ^User.listing_fields())
       )
     )
   end

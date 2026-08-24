@@ -32,10 +32,6 @@ defmodule VutuvWeb.PostLive.Feed do
   use VutuvWeb, :live_view
 
   import VutuvWeb.PostComponents
-  # The "New here" rail's per-row "joined 3 days ago" line (the "Other formats"
-  # card and the chip/avatar/follow controls are global VutuvWeb.UI components,
-  # imported already).
-  import VutuvWeb.UserHTML, only: [joined_line: 1]
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Activity
@@ -345,20 +341,12 @@ defmodule VutuvWeb.PostLive.Feed do
 
       %{
         user: user,
-        meta: meta_line(user, Map.get(work_info, user.id, "")),
+        work: Map.get(work_info, user.id, ""),
         tags: sample,
         more: length(tags) - length(sample)
       }
     end)
   end
-
-  # One muted line per row, and the recency leads it: it is the card's whole
-  # claim, so a long job title truncates behind it rather than in front of it.
-  # One line rather than two because the card is five rows deep and its rows
-  # already carry tags — and on the first day, which is when this card shows
-  # somebody, most members have no job filled in at all.
-  defp meta_line(user, ""), do: joined_line(user)
-  defp meta_line(user, work), do: joined_line(user) <> " · " <> work
 
   defp assign_newcomers(socket) do
     socket
@@ -1592,13 +1580,14 @@ defmodule VutuvWeb.PostLive.Feed do
                 label={gettext("Greet other members")}
               />
             </div>
-            <%!-- Deliberately not "these five just joined": on a quiet
-            installation (an intranet vutuv with forty members) the newest
-            member may have been here for months, and this sentence has to stay
-            true there too. Each row's own line says how new that member really
-            is. --%>
+            <%!-- "A few of" carries the whole draw: these are not *the* newest
+            members in order, they are a random handful out of them, and a
+            sentence that says "the most recently joined" promises a ranking the
+            ↻ visibly contradicts. It also stays true on a quiet installation
+            (an intranet vutuv with forty members), where the newest member may
+            have been here for months. --%>
             <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
-              {gettext("The members who joined most recently. Following them is a warm welcome.")}
+              {gettext("A few of the newest members. Following them is a warm welcome.")}
             </p>
             <ul class="space-y-4">
               <li :for={row <- @newcomers} id={"newcomer-#{row.user.id}"} class="flex items-start gap-3">
@@ -1630,8 +1619,18 @@ defmodule VutuvWeb.PostLive.Feed do
                       live?
                     />
                   </div>
-                  <p class="mb-0 mt-0.5 truncate text-xs text-slate-600 dark:text-slate-400">
-                    {row.meta}
+                  <%!-- The job title, when there is one. It used to lead with
+                  how long the member had been here ("seit 3 Tagen dabei · …"),
+                  which was interesting and cost a third of the row for a fact
+                  the card's own heading already makes — five rows deep, that
+                  bought nothing (Stefan, 2026-08-24). A member with no job
+                  filled in, which most have not on their first days, simply
+                  gets no line rather than an empty one. --%>
+                  <p
+                    :if={row.work != ""}
+                    class="mb-0 mt-0.5 truncate text-xs text-slate-600 dark:text-slate-400"
+                  >
+                    {row.work}
                   </p>
                   <%!-- Three tags, at rail scale, each a link to that topic:
                   enough to be curious about somebody, never their whole

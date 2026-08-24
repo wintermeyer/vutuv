@@ -155,17 +155,27 @@ defmodule VutuvWeb.PostLive.FeedNewcomersTest do
              )
     end
 
-    test "says how new the member is, in German", %{conn: conn} do
+    test "shows the job title, and nothing where there is none", %{conn: conn} do
+      {conn, _me} = create_and_login_user(conn)
+      employed = newcomer()
+      insert(:work_experience, user: employed, title: "Zugführerin", organization: "DB")
+      jobless = newcomer()
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      html = render(view)
+
+      assert html =~ "Zugführerin"
+      # The row is a name and its tags, not a name and an empty line: the meta
+      # paragraph is absent rather than blank, so a member who has filled
+      # nothing in yet costs the card no height.
+      assert has_element?(view, "#newcomer-#{jobless.id}")
+      refute html =~ "dabei ·"
+    end
+
+    test "says what the card is, in German", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       me |> Ecto.Changeset.change(locale: "de") |> Repo.update!()
-
-      _today = newcomer()
-
       newcomer()
-      |> Ecto.Changeset.change(
-        inserted_at: NaiveDateTime.add(NaiveDateTime.utc_now(:second), -1, :day)
-      )
-      |> Repo.update!()
 
       conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de;q=0.9")
       {:ok, view, _html} = live(conn, ~p"/feed")
@@ -176,9 +186,10 @@ defmodule VutuvWeb.PostLive.FeedNewcomersTest do
       # labels like these are its favourite victims — a German feed would then
       # ship confident nonsense while every English assertion stayed green.
       assert html =~ "Neu dabei"
-      assert html =~ "seit heute dabei"
-      assert html =~ "seit gestern dabei"
+      assert html =~ "Ein paar der neuesten Mitglieder"
       assert html =~ "Ihnen zu folgen ist eine herzliche Begrüßung"
+      # "zuletzt dazugekommen" promised an order the ↻ visibly contradicts.
+      refute html =~ "zuletzt dazugekommen"
     end
   end
 
