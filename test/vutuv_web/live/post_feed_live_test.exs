@@ -362,7 +362,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # The posts stream is the card surface itself (divide-y flat rows), the
       # same container the profile Posts section uses — so the feed and the
       # profile read as one UX, not "separate cards" vs "one card".
-      assert has_element?(live, ~s(#feed-posts[data-post-list]))
+      assert has_element?(live, ~s(#feed-posts[data-filter-list]))
     end
   end
 

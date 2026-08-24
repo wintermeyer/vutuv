@@ -15,7 +15,13 @@ defmodule VutuvWeb.NotificationLive.Index do
       and clears the shell's bell badge, exactly as before.
     * **Filter tabs** (all / posts / people / more) restrict the feed
       server-side via `notifications_page`'s `kinds:` option and live in the
-      URL (`?filter=`), patched without a reload.
+      URL (`?filter=`), patched without a reload. A press **paints itself**
+      rather than waiting for the answer: the bar is `data-filter-bar="track"`,
+      each tab `data-filter-tab`, and the whole list `data-filter-list` inside
+      the column's `data-filter-scope` — the shared in-flight rules in
+      `app.css` do the rest, off the `phx-click-loading` LiveView puts on a
+      pressed patch link. Without it a slow line shows nothing at all between
+      the press and a page of rows arriving, which reads as a dead control.
     * A rail (right column on md+, below the list on phones) offers **Follow
       back** suggestions (recent followers, reload-free follow via
       `Vutuv.Social`) and a **Last 30 days** summary
@@ -332,7 +338,11 @@ defmodule VutuvWeb.NotificationLive.Index do
     ~H"""
     <div id="notifications" class="py-6 md:py-8">
       <div class="grid gap-6 md:grid-cols-3">
-        <div class="min-w-0 md:col-span-2">
+        <%!-- `data-filter-scope` pairs the tabs with the list they replace: the
+        in-flight paint in `app.css` dims every `[data-filter-list]` inside this
+        container while one of its tabs is waiting for an answer, so both
+        markers have to stay under this one element. --%>
+        <div data-filter-scope class="min-w-0 md:col-span-2">
           <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {gettext("Notifications")}
@@ -342,11 +352,19 @@ defmodule VutuvWeb.NotificationLive.Index do
             </p>
           </div>
 
-          <div class="mt-4 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800">
+          <%!-- `data-filter-bar="track"` picks which of the app's two tab looks
+          the in-flight paint reaches for: here the white pill on a filled
+          trough, so a pressed tab turns into this bar's own active tab rather
+          than into the brand pill the post filter tabs wear. --%>
+          <div
+            id="notification-filter"
+            data-filter-bar="track"
+            class="mt-4 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800"
+          >
             <.link
               :for={{value, label} <- filter_options()}
               patch={filter_path(value)}
-              data-notif-filter-tab={value}
+              data-filter-tab={value}
               aria-current={@filter == value && "page"}
               class={filter_tab_class(@filter == value)}
             >
@@ -354,38 +372,43 @@ defmodule VutuvWeb.NotificationLive.Index do
             </.link>
           </div>
 
-          <section :for={section <- @sections} data-day-section>
-            <h2
-              class="mb-0 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500"
-              data-day-heading
-            >
-              {day_label(section.day, @today)}
-            </h2>
-            <% first_thread_id = first_thread_group_id(section.groups) %>
-            <div class="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-slate-900 dark:ring-slate-800">
-              <.notification_row
-                :for={group <- section.groups}
-                group={group}
-                current_user={@current_user}
-                quote_lines={@quote_lines}
-                thread_hint={group.kind == "thread" and group.id == first_thread_id}
-              />
-            </div>
-          </section>
+          <%!-- Everything a tab replaces lives in one `data-filter-list`, so the
+          shared paint can dim it while the answer is on its way. The tabs stay
+          outside it: the reader has to keep seeing which one they pressed. --%>
+          <div data-filter-list>
+            <section :for={section <- @sections} data-day-section>
+              <h2
+                class="mb-0 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500"
+                data-day-heading
+              >
+                {day_label(section.day, @today)}
+              </h2>
+              <% first_thread_id = first_thread_group_id(section.groups) %>
+              <div class="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-slate-900 dark:ring-slate-800">
+                <.notification_row
+                  :for={group <- section.groups}
+                  group={group}
+                  current_user={@current_user}
+                  quote_lines={@quote_lines}
+                  thread_hint={group.kind == "thread" and group.id == first_thread_id}
+                />
+              </div>
+            </section>
 
-          <p :if={@empty?} class="mt-6 text-slate-600 dark:text-slate-400">
-            {gettext("Nothing new yet.")}
-          </p>
+            <p :if={@empty?} class="mt-6 text-slate-600 dark:text-slate-400">
+              {gettext("Nothing new yet.")}
+            </p>
 
-          <%!-- Numbered pages, patched over the socket: the page rides the URL
-          beside the filter, so it survives a reload and the back button. --%>
-          <.pager
-            params={%{"page" => @page}}
-            total={@total}
-            per_page={page_size()}
-            path={~p"/notifications"}
-            query={pager_query(@filter)}
-          />
+            <%!-- Numbered pages, patched over the socket: the page rides the URL
+            beside the filter, so it survives a reload and the back button. --%>
+            <.pager
+              params={%{"page" => @page}}
+              total={@total}
+              per_page={page_size()}
+              path={~p"/notifications"}
+              query={pager_query(@filter)}
+            />
+          </div>
         </div>
 
         <aside class="min-w-0 space-y-6">

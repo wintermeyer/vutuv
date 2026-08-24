@@ -44,7 +44,7 @@
     <%!-- One card of flat divide-y rows via the shared <.post_thread_entry>,
     the same treatment as the feed and the profile — a reply nests the post it
     answers inline instead of the flat "Replying to @handle" banner. --%>
-    <.post_list :if={@posts != []} data-post-list>
+    <.post_list :if={@posts != []} data-filter-list>
       <div :for={entry <- @posts} class={post_row_class()}>
         <%!-- A post from another network this member reshared (issue #1166)
         wears its own card, the same one the feed shows it in. --%>

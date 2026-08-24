@@ -1189,12 +1189,12 @@ defmodule VutuvWeb.PostLive.Feed do
         respects this column's min-content, so a long `truncate` descendant (a
         threaded reply's parent-excerpt) would otherwise force the column — and
         the whole page — wider than a phone viewport. --%>
-        <%!-- `data-post-filter-scope` pairs the source tabs below with the
-        timeline they govern: while a tab press is in flight the stylesheet
-        dims everything marked `data-post-list` inside this container, so the
-        press is answered on the spot instead of a round trip later. Both
-        markers have to stay under this one element. --%>
-        <div data-post-filter-scope class="min-w-0 space-y-4 md:col-span-2">
+        <%!-- `data-filter-scope` pairs the source tabs below with the timeline
+        they govern: while a tab press is in flight the stylesheet dims
+        everything marked `data-filter-list` inside this container, so the press
+        is answered on the spot instead of a round trip later. Both markers have
+        to stay under this one element. --%>
+        <div data-filter-scope class="min-w-0 space-y-4 md:col-span-2">
           <%!-- No visible headline: the top nav already marks Feed as active,
           so the page opens with the compose tile (like the profile's Beiträge
           card) and the h1 stays for screen readers only. The Likes/Bookmarks
@@ -1328,7 +1328,7 @@ defmodule VutuvWeb.PostLive.Feed do
           rather than a blank card; every live insert flips @empty? in the same
           diff, so the container is present whenever there is (or just became)
           content. --%>
-          <.post_list :if={!@empty?} id="feed-posts" phx-update="stream" data-post-list>
+          <.post_list :if={!@empty?} id="feed-posts" phx-update="stream" data-filter-list>
             <%!-- Three ways a row can render, in precedence order: hidden by a
             filter, a cached post from another network, or a vutuv post. Named
             once each in one branch, so no pair of conditions has to be kept

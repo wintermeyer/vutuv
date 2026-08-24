@@ -204,10 +204,10 @@ defmodule VutuvWeb.TagLive.Timeline do
 
   def render(assigns) do
     ~H"""
-    <%!-- `data-post-filter-scope`: the source tabs and the timeline they
-    govern in one container, so a press dims the list it is about while the
-    answer is on its way (the rule lives in `assets/css/app.css`). --%>
-    <section id="tag-timeline" data-post-filter-scope class="mt-6">
+    <%!-- `data-filter-scope`: the source tabs and the timeline they govern in
+    one container, so a press dims the list it is about while the answer is on
+    its way (the rule lives in `assets/css/app.css`). --%>
+    <section id="tag-timeline" data-filter-scope class="mt-6">
       <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {gettext("Posts with this tag")}
@@ -287,7 +287,7 @@ defmodule VutuvWeb.TagLive.Timeline do
         </button>
       </form>
 
-      <.post_list :if={!@empty?} id="tag-timeline-posts" phx-update="stream" data-post-list class="mt-3">
+      <.post_list :if={!@empty?} id="tag-timeline-posts" phx-update="stream" data-filter-list class="mt-3">
         <div :for={{dom_id, entry} <- @streams.entries} id={dom_id} class={post_row_class()}>
           <%= if Posts.remote_feed_entry?(entry) do %>
             <.remote_post_card

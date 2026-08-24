@@ -97,13 +97,13 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, html} = live(conn, ~p"/feed")
 
-      assert has_element?(view, "#feed-source-tabs [data-post-filter-tab='all']")
-      assert has_element?(view, "#feed-source-tabs [data-post-filter-tab='vutuv']")
-      assert has_element?(view, "#feed-source-tabs [data-post-filter-tab='fediverse']")
+      assert has_element?(view, "#feed-source-tabs [data-filter-tab='all']")
+      assert has_element?(view, "#feed-source-tabs [data-filter-tab='vutuv']")
+      assert has_element?(view, "#feed-source-tabs [data-filter-tab='fediverse']")
       assert html =~ "Fediverse"
 
       # "All" is where a mount opens; the tab reads as selected.
-      assert has_element?(view, "[data-post-filter-tab='all'][aria-pressed='true']")
+      assert has_element?(view, "[data-filter-tab='all'][aria-pressed='true']")
     end
 
     test "a member the fediverse never reaches gets no tabs at all", %{conn: conn} do
@@ -181,7 +181,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       render_click(view, "filter-source", %{"type" => "vutuv"})
       assert timeline(view) =~ "written here on vutuv"
       refute timeline(view) =~ "written out there"
-      assert has_element?(view, "[data-post-filter-tab='vutuv'][aria-pressed='true']")
+      assert has_element?(view, "[data-filter-tab='vutuv'][aria-pressed='true']")
 
       render_click(view, "filter-source", %{"type" => "fediverse"})
       assert timeline(view) =~ "written out there"
@@ -203,7 +203,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       render_click(view, "filter-source", %{"type" => "nonsense"})
 
       assert timeline(view) =~ "still here"
-      assert has_element?(view, "[data-post-filter-tab='all'][aria-pressed='true']")
+      assert has_element?(view, "[data-filter-tab='all'][aria-pressed='true']")
     end
 
     test "the German render names the tabs in German", %{conn: conn} do
@@ -280,7 +280,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       # A second visit: a new socket, nothing carried over but the column.
       {:ok, again, _html} = live(conn, ~p"/feed")
 
-      assert has_element?(again, "[data-post-filter-tab='fediverse'][aria-pressed='true']")
+      assert has_element?(again, "[data-filter-tab='fediverse'][aria-pressed='true']")
       assert timeline(again) =~ "written out there"
       refute timeline(again) =~ "written here on vutuv"
     end
@@ -297,7 +297,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       assert stored_tab(user) == nil
 
       {:ok, again, _html} = live(conn, ~p"/feed")
-      assert has_element?(again, "[data-post-filter-tab='all'][aria-pressed='true']")
+      assert has_element?(again, "[data-filter-tab='all'][aria-pressed='true']")
       assert timeline(again) =~ "written out there"
     end
 
@@ -332,7 +332,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, _own} = Posts.create_post(user, %{body: "my own words"})
 
-      assert has_element?(view, "[data-post-filter-tab='all'][aria-pressed='true']")
+      assert has_element?(view, "[data-filter-tab='all'][aria-pressed='true']")
       assert stored_tab(user) == "fediverse"
     end
 
@@ -445,7 +445,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       {:ok, _own} = Posts.create_post(user, %{body: "my own words"})
 
       assert timeline(view) =~ "my own words"
-      assert has_element?(view, "[data-post-filter-tab='all'][aria-pressed='true']")
+      assert has_element?(view, "[data-filter-tab='all'][aria-pressed='true']")
     end
   end
 
@@ -460,7 +460,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
     defp dotted?(view, tab) do
       has_element?(
         view,
-        "#feed-source-tabs [data-post-filter-tab='#{tab}'] [data-post-filter-unseen]"
+        "#feed-source-tabs [data-filter-tab='#{tab}'] [data-post-filter-unseen]"
       )
     end
 
@@ -675,11 +675,11 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       {:ok, view, _html} = live(conn, ~p"/feed")
 
       # The dimming rule is
-      # `[data-post-filter-scope]:has([data-post-filter-tab].phx-click-loading)
-      # [data-post-list]`, so a refactor that moves either marker out of that
+      # `[data-filter-scope]:has([data-filter-tab].phx-click-loading)
+      # [data-filter-list]`, so a refactor that moves either marker out of that
       # container kills the feedback with every other test still green.
-      assert has_element?(view, "[data-post-filter-scope] [data-post-filter-tab='fediverse']")
-      assert has_element?(view, "[data-post-filter-scope] [data-post-list]")
+      assert has_element?(view, "[data-filter-scope] [data-filter-tab='fediverse']")
+      assert has_element?(view, "[data-filter-scope] [data-filter-list]")
     end
 
     test "a tab switch sends half a page, and the rest stays reachable", %{conn: conn} do

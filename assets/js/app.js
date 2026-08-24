@@ -794,9 +794,24 @@ const Hooks = {
   },
 }
 
+// The mark a pressed nav item wears while its page is on its way. See the nav
+// press handler below; the paint itself is the press block in `app.css`.
+const NAV_PRESSING = "data-nav-pressing"
+
 const liveSocket = new LiveSocket("/live", Socket, {
   params: { _csrf_token: csrfToken() },
   hooks: Hooks,
+  dom: {
+    // Both navs live inside ShellLive, so a patch that has nothing to do with
+    // them — an unread badge ticking, the people total arriving — still walks
+    // these nodes, and morphdom drops every attribute the server did not
+    // render. That would wipe the press paint half a second into a page load,
+    // rarely and unreproducibly. LiveView carries its OWN in-flight markers
+    // across a patch for exactly this reason; ours has to say so here.
+    onBeforeElUpdated(from, to) {
+      if (from.hasAttribute(NAV_PRESSING)) to.setAttribute(NAV_PRESSING, "")
+    },
+  },
 })
 
 liveSocket.connect()
@@ -848,9 +863,12 @@ function retryFilterPress(tab) {
 }
 
 document.addEventListener("click", (e) => {
-  const tab = e.target.closest("[data-post-filter-tab]")
-  // Link mode (the `/:slug/posts` archive) is a real navigation and needs none
-  // of this; and a press on the tab you are already on has nothing to wait for.
+  const tab = e.target.closest("[data-filter-tab]")
+  // Only a button can lose a press. A tab that is a link needs none of this and
+  // must not get it: the `/:slug/posts` archive is a plain navigation, and the
+  // /notifications tabs are `<.link patch>`, which LiveView turns into a full
+  // page load whenever the socket is not up yet — so the early press that would
+  // be lost here already lands there, as an ordinary GET of the same URL.
   if (!tab || tab.tagName !== "BUTTON") return
   if (tab.getAttribute("aria-pressed") === "true") return
   // Our own retry clicks bubble back in here — one ticker per press.
@@ -861,6 +879,40 @@ document.addEventListener("click", (e) => {
   // land, LiveView's own ack takes the class off again.
   tab.classList.add("phx-click-loading")
   retryFilterPress(tab)
+})
+
+// A nav item pressed, and a whole document to wait for. The top bar's Feed /
+// Profile / Network / Jobs and the phone's bottom tab bar are plain links on
+// purpose (they cross live_sessions), so there is no socket round trip to hang
+// feedback off and no ack to end it: the pill sits on the page being left
+// until the next document paints, which on a slow line is the same dead
+// control the filter tabs had. So the press is painted here and the new
+// document's own render is what takes it off — no timer, nothing to expire.
+document.addEventListener("click", (e) => {
+  const item = e.target.closest("[data-nav-item]")
+  if (!item) return
+  // Three presses that leave THIS document exactly as it is, so painting any
+  // of them would be a lie: one that opens a new tab or window, one already
+  // handled by something else, and one on the page the reader is on.
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  if (item.target === "_blank") return
+  if (item.getAttribute("aria-current") === "page") return
+
+  item.setAttribute(NAV_PRESSING, "")
+  // On the root, because `<main>` is outside the shell LiveView that holds the
+  // navs — that is the element the dim has to reach.
+  document.documentElement.setAttribute(NAV_PRESSING, "")
+})
+
+// Back from the bfcache hands this document back exactly as it was left: mid
+// press, still painted for a page the reader has since walked away from. A
+// restore fires `pageshow` and an ordinary load fires it too, so one listener
+// covers both.
+window.addEventListener("pageshow", () => {
+  document.documentElement.removeAttribute(NAV_PRESSING)
+  document
+    .querySelectorAll(`[data-nav-item][${NAV_PRESSING}]`)
+    .forEach((el) => el.removeAttribute(NAV_PRESSING))
 })
 
 // Flash toasts. Lives outside LiveView so it also works on classic controller

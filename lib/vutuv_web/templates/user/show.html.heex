@@ -451,10 +451,10 @@ the resulting ~200px rail width. --%>
 
     <%!-- Posts (latest visible to this viewer; writing happens in the /feed
     composer, which the owner's "Add" link points to) --%>
-    <%!-- `data-post-filter-scope`: the filter tabs and the post list they
-    govern in one container, so a press dims the list while the answer is on
-    its way (the rule lives in `assets/css/app.css`). --%>
-    <.card :if={@posts_total > 0 or @as_owner?} id="profile-posts" data-post-filter-scope>
+    <%!-- `data-filter-scope`: the filter tabs and the post list they govern in
+    one container, so a press dims the list while the answer is on its way (the
+    rule lives in `assets/css/app.css`). --%>
+    <.card :if={@posts_total > 0 or @as_owner?} id="profile-posts" data-filter-scope>
       <%!-- A "profile" context disambiguates the noun (Beitrag/Beiträge) from the
       bare gettext("Post") verb on the composer's submit button ("Posten"), which
       shares the "Post" msgid and must not be repurposed. --%>
@@ -529,7 +529,7 @@ the resulting ~200px rail width. --%>
       top-level post (or a degraded reply) renders standalone. The same component
       renders the feed, the saved lists, the archive and the permalink thread, so
       a post reads identically everywhere. --%>
-      <.post_list :if={@posts != []} card={false} data-post-list>
+      <.post_list :if={@posts != []} card={false} data-filter-list>
         <div :for={entry <- @posts} class={post_row_class()}>
           <%!-- A post from another network this member reshared (issue #1166)
           wears its own card, the same one the feed shows it in. --%>

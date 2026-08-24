@@ -999,7 +999,7 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
 
     defp tab(view, value),
-      do: element(view, ~s(#profile-post-filter button[data-post-filter-tab="#{value}"]))
+      do: element(view, ~s(#profile-post-filter button[data-filter-tab="#{value}"]))
 
     test "the tab bar renders and 'All' shows every entry kind", %{conn: conn, owner: owner} do
       {:ok, view, _html} = live(conn, ~p"/#{owner}")

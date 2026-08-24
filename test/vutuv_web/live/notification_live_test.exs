@@ -1160,14 +1160,36 @@ defmodule VutuvWeb.NotificationLiveTest do
       insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
-      assert has_element?(live, ~s([data-notif-filter-tab="all"][aria-current="page"]))
+      assert has_element?(live, ~s([data-filter-tab="all"][aria-current="page"]))
 
       live
-      |> element(~s([data-notif-filter-tab="posts"]))
+      |> element(~s([data-filter-tab="posts"]))
       |> render_click()
 
       assert_patch(live, ~p"/notifications?filter=posts")
       refute render(live) =~ "started following you"
+    end
+
+    # A tab switch reloads the whole list, so on a slow line nothing in the DOM
+    # moves between the press and a page of rows arriving — a control that
+    # reads as dead. The press paints itself instead, which is CSS on
+    # LiveView's own `phx-click-loading` (`assets/css/app.css`) and cannot be
+    # asserted here. What this pins is the markup that paint silently needs.
+    test "the tabs and the list sit inside one scope", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # `[data-filter-scope]:has([data-filter-tab].phx-click-loading)
+      # [data-filter-list]` — move either marker out of that container and the
+      # feedback dies with every other test still green.
+      assert has_element?(live, ~s([data-filter-scope] [data-filter-tab="posts"]))
+      assert has_element?(live, ~s([data-filter-scope] [data-filter-list]))
+
+      # And the bar names which of the app's two tab looks the paint wears; the
+      # default is the /feed brand pill, which would be wrong on this trough.
+      assert has_element?(live, ~s([data-filter-bar="track"] [data-filter-tab]))
     end
 
     test "a live event outside the active filter is not shown", %{conn: conn} do

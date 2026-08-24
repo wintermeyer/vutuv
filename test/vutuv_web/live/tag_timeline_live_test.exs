@@ -78,11 +78,11 @@ defmodule VutuvWeb.TagTimelineLiveTest do
 
       view = timeline(conn, tag)
 
-      vutuv_only = view |> element(~s([data-post-filter-tab="vutuv"])) |> render_click()
+      vutuv_only = view |> element(~s([data-filter-tab="vutuv"])) |> render_click()
       assert vutuv_only =~ "Ein Beitrag von hier"
       refute vutuv_only =~ "Ein Beitrag von woanders"
 
-      fediverse_only = view |> element(~s([data-post-filter-tab="fediverse"])) |> render_click()
+      fediverse_only = view |> element(~s([data-filter-tab="fediverse"])) |> render_click()
       assert fediverse_only =~ "Ein Beitrag von woanders"
       refute fediverse_only =~ "Ein Beitrag von hier"
     end
@@ -91,7 +91,7 @@ defmodule VutuvWeb.TagTimelineLiveTest do
       {tag, _post} = tag_with_post("Nur von hier")
 
       view = timeline(conn, tag)
-      html = view |> element(~s([data-post-filter-tab="fediverse"])) |> render_click()
+      html = view |> element(~s([data-filter-tab="fediverse"])) |> render_click()
 
       assert html =~ "tag-source-tabs"
       assert has_element?(view, "#tag-timeline-empty")

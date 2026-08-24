@@ -90,7 +90,7 @@ defmodule VutuvWeb.TagControllerTest do
       assert html =~ "/#{author.username}/posts/#{post.id}"
       # The posts render as flat rows in one card (the feed/archive treatment),
       # not separate full-width cards - keeps the desktop layout tidy.
-      assert html =~ "data-post-list"
+      assert html =~ "data-filter-list"
     end
 
     test "the front matter rides above the timeline whatever ?page says", %{conn: conn} do
@@ -110,7 +110,7 @@ defmodule VutuvWeb.TagControllerTest do
       html = conn |> get(~p"/tags/empty") |> html_response(200)
 
       assert html =~ ~s(id="tag-timeline-empty")
-      refute html =~ "data-post-list"
+      refute html =~ "data-filter-list"
     end
   end
 

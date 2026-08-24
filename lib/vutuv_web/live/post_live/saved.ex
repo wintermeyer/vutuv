@@ -565,7 +565,7 @@ defmodule VutuvWeb.PostLive.Saved do
             so a reply nests the post it answers. The empty <p> uses the only:block
             trick (like the People tab below) so un-saving the last post reveals it
             with no emptiness bookkeeping. --%>
-            <.post_list id="saved-posts" phx-update="stream" data-post-list>
+            <.post_list id="saved-posts" phx-update="stream" data-filter-list>
               <p class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-posts-empty">
                 {posts_empty_text(@live_action, @q)}
               </p>
@@ -584,7 +584,7 @@ defmodule VutuvWeb.PostLive.Saved do
             reply and a saved post read here exactly as they did where they were
             saved — including their action bars, which is how a bookmark is
             taken back from this page. --%>
-            <.post_list id="saved-networks" phx-update="stream" data-post-list>
+            <.post_list id="saved-networks" phx-update="stream" data-filter-list>
               <p class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-networks-empty">
                 {networks_empty_text(@q)}
               </p>

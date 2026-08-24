@@ -43,60 +43,132 @@ html {
   color-scheme: light dark;
 }
 
-/* ---------- A filter tab answers its own press ----------
-   Pressing All / vutuv / Fediverse reloads the list from the top, so the
-   answer is a round trip plus a query plus a page of cards away. Until it
-   lands nothing in the DOM has moved — the pill travels with the diff — and on
-   a slow line that reads as a control that does nothing. So the press paints
-   itself here, off the `phx-click-loading` class LiveView puts on the pressed
-   element for exactly the flight and takes off again when the answer arrives.
-   The server keeps the last word (a corrected filter, like the pull back to
-   All on the member's own post, simply repaints), and none of it needs the
-   never-expiring client stash a `JS.set_attribute` would leave on the button —
-   see the absolute-state rule in `toggle_js/4`, post_components.ex.
+/* ---------- A control answers its own press ----------
+   Two families of control here send the reader somewhere and then leave them
+   with nothing to look at until the answer arrives: the **filter tabs** (All /
+   vutuv / Fediverse on /feed, All / Posts / People / More on /notifications),
+   which reload their list from the top, and the **nav items** (the top bar's
+   Feed / Profile / Network / Jobs and the phone's bottom tab bar), which are
+   plain links and therefore a whole new document. In both cases the pill only
+   travels with the answer, so until it lands nothing in the DOM has moved, and
+   on a slow line that reads as a control that does nothing. So the press
+   paints itself here.
 
-   These four rules sit OUTSIDE every cascade layer, and that is the only place
-   they can sit: the tabs wear their resting colours as Tailwind utilities, and
+   The two differ in exactly one thing, who owns the marker. A filter tab wears
+   LiveView's own `phx-click-loading` for precisely the flight and loses it on
+   the ack — that works for a `phx-click` button and a `<.link patch>` alike,
+   and it means the server keeps the last word (a corrected filter, like the
+   pull back to All on the member's own post, simply repaints). A nav press has
+   no ack and no round trip to end: `app.js` stamps `data-nav-pressing` and the
+   next document's own render is what takes it off. Neither needs the
+   never-expiring client stash a `JS.set_attribute` would leave behind — see
+   the absolute-state rule in `toggle_js/4`, post_components.ex.
+
+   These rules sit OUTSIDE every cascade layer, and that is the only place they
+   can sit: the controls wear their resting colours as Tailwind utilities, and
    an unlayered rule is the one thing that beats the utilities layer whatever
    its specificity (components.css, being a layer, would lose). Keep the block
    small and every selector anchored on a data attribute. */
-[data-post-filter-tab].phx-click-loading {
-  background-color: var(--color-brand-100);
-  color: var(--color-brand-700);
+
+:root {
+  /* The one threshold behind every "this is on its way out" paint: how long a
+     press may go unanswered before the region it replaces dims. Below it
+     nothing visible happens at all, so a fast answer never flashes, while the
+     way back is immediate. Every bar in the app reads these three — change the
+     feel here, not at a call site. */
+  --press-pending-delay: 140ms;
+  --press-pending-fade: 150ms;
+  --press-pending-opacity: 0.55;
+}
+
+/* One paint, four looks. A bar names its own colours through these three
+   properties and the rules below read them, so a pressed control always turns
+   into THAT bar's own current item rather than into some third thing. The
+   default is the brand-tinted pill the post filter tabs wear on the bare
+   canvas. */
+[data-filter-tab],
+[data-nav-item] {
+  --press-on-bg: var(--color-brand-100);
+  --press-on-fg: var(--color-brand-700);
+  --press-off-fg: var(--color-slate-600);
+}
+
+/* The notifications bar: a white pill on a filled slate trough. */
+[data-filter-bar="track"] [data-filter-tab] {
+  --press-on-bg: var(--color-white);
+}
+
+/* The top bar's nav: the quieter brand-50 tint of the page you are on. */
+[data-nav-bar] [data-nav-item] {
+  --press-on-bg: var(--color-brand-50);
+}
+
+/* The phone's bottom tab bar: no tint at all, the label itself goes brand. */
+[data-nav-bar="tabs"] [data-nav-item] {
+  --press-on-bg: transparent;
+  --press-on-fg: var(--color-brand-600);
+}
+
+[data-filter-tab].phx-click-loading,
+[data-nav-item][data-nav-pressing] {
+  background-color: var(--press-on-bg);
+  color: var(--press-on-fg);
   font-weight: 600;
 }
 
-/* The tab being left goes quiet in the same frame, so two pills are never lit
+/* The item being left goes quiet in the same frame, so two pills are never lit
    at once. The `:not()` is what keeps a press on the tab you are already on
-   (a reload of the same list) from greying itself out. */
-[data-post-filter-scope]:has([data-post-filter-tab].phx-click-loading)
-  [data-post-filter-tab][aria-pressed="true"]:not(.phx-click-loading) {
+   (a reload of the same list) from greying itself out. Filter buttons carry
+   the current one as `aria-pressed`, every link as `aria-current`. */
+[data-filter-scope]:has([data-filter-tab].phx-click-loading)
+  [data-filter-tab]:is([aria-pressed="true"], [aria-current="page"]):not(.phx-click-loading),
+[data-nav-bar]:has([data-nav-pressing]) [data-nav-item][aria-current="page"]:not([data-nav-pressing]) {
   background-color: transparent;
-  color: var(--color-slate-600);
+  box-shadow: none;
+  color: var(--press-off-fg);
   font-weight: 500;
 }
 
-/* And the list says it is being replaced. The delay is what keeps a fast
-   answer from flashing: below ~140ms nothing visible happens at all, while the
-   way back is immediate. */
-[data-post-list] {
-  transition: opacity 150ms ease-out;
+/* And what is being replaced says so: the list under a filter bar, the whole
+   page under a nav press. `<main>` sits outside the shell LiveView, so the
+   root attribute reaches it. */
+[data-filter-list],
+main {
+  transition: opacity var(--press-pending-fade) ease-out;
 }
 
-[data-post-filter-scope]:has([data-post-filter-tab].phx-click-loading) [data-post-list] {
+[data-filter-scope]:has([data-filter-tab].phx-click-loading) [data-filter-list],
+html[data-nav-pressing] main {
   cursor: progress;
-  opacity: 0.55;
-  transition-delay: 140ms;
+  opacity: var(--press-pending-opacity);
+  transition-delay: var(--press-pending-delay);
 }
 
+/* Dark mode re-declares a palette at the SAME specificity it was set at, never
+   only on the one-attribute default: `[data-nav-bar] [data-nav-item]` is
+   (0,2,0) and would keep its light `--press-on-bg` right through a (0,1,0)
+   dark rule — a brand-50 pill in a dark bar, from a stylesheet that reads as
+   if it handled dark mode. */
 @media (prefers-color-scheme: dark) {
-  [data-post-filter-tab].phx-click-loading {
-    background-color: color-mix(in oklab, var(--color-brand-900) 40%, transparent);
-    color: var(--color-brand-100);
+  [data-filter-tab],
+  [data-nav-item] {
+    --press-on-bg: color-mix(in oklab, var(--color-brand-900) 40%, transparent);
+    --press-on-fg: var(--color-brand-100);
+    --press-off-fg: var(--color-slate-400);
   }
 
-  [data-post-filter-scope]:has([data-post-filter-tab].phx-click-loading)
-    [data-post-filter-tab][aria-pressed="true"]:not(.phx-click-loading) {
-    color: var(--color-slate-400);
+  [data-filter-bar="track"] [data-filter-tab] {
+    --press-on-bg: var(--color-slate-900);
+  }
+
+  [data-nav-bar] [data-nav-item] {
+    --press-on-bg: color-mix(in oklab, var(--color-brand-900) 40%, transparent);
+    --press-off-fg: var(--color-slate-300);
+  }
+
+  [data-nav-bar="tabs"] [data-nav-item] {
+    --press-on-bg: transparent;
+    --press-on-fg: var(--color-brand-300);
+    --press-off-fg: var(--color-slate-400);
   }
 }

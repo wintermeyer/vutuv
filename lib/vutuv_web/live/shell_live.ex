@@ -599,10 +599,19 @@ defmodule VutuvWeb.ShellLive do
               vutuv
             </.link>
 
-            <nav aria-label={gettext("Main navigation")} class="hidden items-center gap-1 text-sm font-medium md:flex">
+            <%!-- `data-nav-bar` + `data-nav-item`: these are plain links, so a
+            press here is a full page load that nothing in THIS document ever
+            answers. The paint in `app.css` moves the pill on the spot; see the
+            press block there. --%>
+            <nav
+              aria-label={gettext("Main navigation")}
+              data-nav-bar
+              class="hidden items-center gap-1 text-sm font-medium md:flex"
+            >
               <.link
                 :if={@user_id}
                 href={~p"/feed"}
+                data-nav-item
                 aria-current={on_route?(@path, "/feed") && "page"}
                 class={nav_link_class(on_route?(@path, "/feed"))}
               >
@@ -616,6 +625,7 @@ defmodule VutuvWeb.ShellLive do
                 :if={@user_id}
                 href={~p"/#{@user_param}"}
                 data-nav-profile
+                data-nav-item
                 aria-current={on_route?(@path, "/#{@user_param}") && "page"}
                 class={nav_link_class(on_route?(@path, "/#{@user_param}"))}
               >
@@ -623,6 +633,7 @@ defmodule VutuvWeb.ShellLive do
               </.link>
               <.link
                 href={~p"/listings/most_followed_users"}
+                data-nav-item
                 aria-current={on_route?(@path, "/listings/most_followed_users") && "page"}
                 class={nav_link_class(on_route?(@path, "/listings/most_followed_users"))}
               >
@@ -630,6 +641,7 @@ defmodule VutuvWeb.ShellLive do
               </.link>
               <.link
                 href={~p"/jobs"}
+                data-nav-item
                 aria-current={on_route?(@path, "/jobs") && "page"}
                 class={nav_link_class(on_route?(@path, "/jobs"))}
               >
@@ -879,6 +891,7 @@ defmodule VutuvWeb.ShellLive do
       edges, and in landscape the sensor housing covers that edge outright. --%>
       <nav
         aria-label={gettext("Main navigation")}
+        data-nav-bar="tabs"
         class={[
           "fixed inset-x-0 bottom-0 z-30 grid border-t border-slate-200 bg-white md:hidden dark:border-slate-800 dark:bg-slate-900",
           "h-[calc(4rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)]",
@@ -924,13 +937,17 @@ defmodule VutuvWeb.ShellLive do
 
   defp tab(assigns) do
     ~H"""
+    <%!-- The weight lives on the link, not on the label span: the press paint
+    in `app.css` has one element to work on, and the label inherits it. Two
+    owners of the same property is what leaves a half-repainted control. --%>
     <.link
       href={@href}
+      data-nav-item
       aria-current={@active && "page"}
       class={[
         "flex flex-col items-center justify-center gap-0.5",
         if(@active,
-          do: "text-brand-600 dark:text-brand-300",
+          do: "font-semibold text-brand-600 dark:text-brand-300",
           else: "text-slate-600 dark:text-slate-400"
         )
       ]}
@@ -943,7 +960,7 @@ defmodule VutuvWeb.ShellLive do
           class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
         />
       </span>
-      <span class={["text-[10px]", @active && "font-semibold"]}>{@label}</span>
+      <span class="text-[10px]">{@label}</span>
     </.link>
     """
   end

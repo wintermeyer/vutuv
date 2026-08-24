@@ -348,7 +348,7 @@ defmodule VutuvWeb.PostComponents do
   The rows themselves stay at the call site (a `:for` over a static list, or a
   LiveView `phx-update="stream"` comprehension whose children must be bound where
   the stream assign lives), each a `<div class={post_row_class()}>` around one
-  `<.post_thread_entry>`. Stream attrs (`id`, `phx-update`, `data-post-list`) flow
+  `<.post_thread_entry>`. Stream attrs (`id`, `phx-update`, `data-filter-list`) flow
   through the global `rest` onto the divider column.
   """
   attr(:card, :boolean,
@@ -506,7 +506,7 @@ defmodule VutuvWeb.PostComponents do
           type="button"
           phx-click={@event}
           phx-value-type={value}
-          data-post-filter-tab={value}
+          data-filter-tab={value}
           aria-pressed={to_string(@active == value)}
           class={post_filter_tab_class(@active == value)}
         >
@@ -515,7 +515,7 @@ defmodule VutuvWeb.PostComponents do
         <.link
           :if={!@event}
           href={post_filter_link(@base_path, value)}
-          data-post-filter-tab={value}
+          data-filter-tab={value}
           aria-current={@active == value && "page"}
           class={post_filter_tab_class(@active == value)}
         >
