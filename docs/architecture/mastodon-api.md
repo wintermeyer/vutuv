@@ -219,12 +219,42 @@ request, so it widens no picture. It does widen who may fetch one: it is a
 bearer URL naming no member and no device, so a logout, a suspension or a
 revoked app do not close a URL already handed out, and it answers until it
 expires. That is the trade, and it is sized to what is behind the door — one
-cached copy of a public avatar. The post-attachment route keeps the session,
-because its pictures carry a post's audience. Its `signed_at` is pinned to the
-UTC day so a client is handed the same URL all day and its image cache keeps
-working; a per-render timestamp would re-download every face in the timeline on
-every refresh, and a longer bucket would lengthen that bearer window for a
-saving measured in kilobytes.
+cached copy of a public avatar. Its `signed_at` is pinned to the UTC day so a
+client is handed the same URL all day and its image cache keeps working; a
+per-render timestamp would re-download every face in the timeline on every
+refresh, and a longer bucket would lengthen that bearer window for a saving
+measured in kilobytes.
+
+**A photograph is not an avatar, so its capability names the member** (issues
+#1626 and #1627). Two pictures reached a client broken for the same reason and
+neither could take the avatar's shape, because both carry a *post's* audience: a
+photo post from another network arrived as text only (both remote status heads
+built on `base_status/1`, which defaults `media_attachments: []`, and neither
+filled it), and a photo on a *restricted* vutuv post arrived as a broken image
+(the URL was named all along, and against the nil viewer an image loader is,
+`Posts.visible_to?/2` is false for any post carrying a denial). Both are named
+now, and each URL carries a capability holding the id of the member the adapter
+rendered the status for; the proxy resolves that member — refusing one a
+suspension or a deactivation has closed, the way the session plug and the bearer
+check do — and asks the picture's own audience question of them
+(`Posts.image_visible_to?/2`, `Fediverse.remote_image_visible?/2`) on every
+request. A capability opens the sizes a client renders and nothing else: the
+full-resolution `original.orig` download, the `og.jpg` link preview and the
+author-only crop workbench stay session-only, since the version segment is not
+part of what the token pins. So narrowing the post,
+or taking a reader out of its audience, shuts every URL already handed out,
+which the avatar's bearer shape could not do. The cost is one `users` row per
+image request on that path; a signed-in browser never pays it.
+
+Two limits worth knowing. A **public** post's photo is named without a
+capability — it needs no credential, and a bearer URL that buys nothing is one
+more thing that can be shared. And a page identity gets none either: both
+audience predicates answer a `%User{}` and nothing else, so a capability naming
+a page would be one the proxy could never honour, and a client acting as a page
+sees today's plain URLs (right for every public picture, still broken for the
+rest). A cached *reply* carries no pictures at all — there is no note-image
+table and the inbox stores none — so its empty `media_attachments` is the
+answer, not a gap.
 
 The three counts are `Vutuv.MastodonApi.AccountCounts`, one query per figure for
 a whole page rather than three per row — ours are real aggregates where

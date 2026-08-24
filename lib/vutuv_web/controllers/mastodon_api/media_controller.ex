@@ -44,7 +44,10 @@ defmodule VutuvWeb.MastodonApi.MediaController do
     case own_media(conn, id) do
       %PostImage{} = image ->
         status = if Presenter.media_ready?(image), do: 200, else: 206
-        conn |> put_status(status) |> json(Presenter.media_attachment(image))
+
+        conn
+        |> put_status(status)
+        |> json(Presenter.media_attachment(image, conn.assigns.current_user))
 
       nil ->
         not_found(conn)
@@ -54,7 +57,13 @@ defmodule VutuvWeb.MastodonApi.MediaController do
   def update(conn, %{"id" => id} = params) do
     case own_media(conn, id) do
       %PostImage{} = image ->
-        json(conn, Presenter.media_attachment(describe(image, params["description"])))
+        json(
+          conn,
+          Presenter.media_attachment(
+            describe(image, params["description"]),
+            conn.assigns.current_user
+          )
+        )
 
       nil ->
         not_found(conn)
@@ -93,7 +102,9 @@ defmodule VutuvWeb.MastodonApi.MediaController do
       image = describe(image, params["description"])
       status = if Presenter.media_ready?(image), do: 200, else: ready_status
 
-      conn |> put_status(status) |> json(Presenter.media_attachment(image))
+      conn
+      |> put_status(status)
+      |> json(Presenter.media_attachment(image, conn.assigns.current_user))
     else
       {:error, :rate_limited} ->
         conn |> put_status(429) |> json(%{error: "Too many uploads"})

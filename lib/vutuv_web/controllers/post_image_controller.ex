@@ -16,23 +16,68 @@ defmodule VutuvWeb.PostImageController do
   (issue #1104), and it is closed unless the photo's author opened it for that
   photo. It is 404 by default, like everything else here — an unopened
   download and a nonexistent one look identical from outside.
+
+  **Two ways to say who is asking, one question asked of the answer** (issue
+  #1627). A browser brings the session. A phone app's image loader brings
+  neither cookie nor bearer — no header we could ask for would arrive — so
+  against the nil viewer it is, `Posts.visible_to?/2` was false for any post
+  carrying a denial and every photo on a restricted post was a broken image in
+  every client. So the Mastodon adapter mints a `VutuvWeb.RemoteMediaToken`
+  capability naming the member it rendered the status for, and that member is
+  the viewer here. The audience question itself is untouched and is still asked
+  per request: the capability says who is at the door, never that the door is
+  open, so narrowing the post shuts every URL already handed out.
   """
 
   use VutuvWeb, :controller
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
   alias VutuvWeb.ImageProxy
+  alias VutuvWeb.RemoteMediaToken
 
-  def show(conn, %{"token" => token, "version" => version_file}) do
+  def show(conn, %{"token" => token, "version" => version_file} = params) do
     with version when not is_nil(version) <- parse_version(version_file),
          image when not is_nil(image) <- Posts.get_image_by_token(token),
-         true <- Posts.image_visible_to?(image, conn.assigns[:current_user]) do
+         {source, viewer} <- reader(conn, params, token),
+         true <- source != :capability or served_version?(version),
+         true <- Posts.image_visible_to?(image, viewer) do
       serve(conn, image, version)
     else
       _ -> ImageProxy.not_found(conn)
     end
   end
+
+  # Who is asking, and how they said so. One viewer, so the audience question is
+  # asked exactly once — `image_visible_to?/2` looks the post up when it is not
+  # preloaded, and asking twice would pay for that twice. A signed-in browser
+  # never reaches the capability branch, and a request bringing nothing is the
+  # anonymous reader this proxy has always served public pictures to.
+  defp reader(conn, params, image_token) do
+    with nil <- conn.assigns[:current_user],
+         %User{} = member <-
+           params[RemoteMediaToken.param()]
+           |> RemoteMediaToken.post_image_viewer(image_token)
+           |> RemoteMediaToken.holder() do
+      {:capability, member}
+    else
+      %User{} = member -> {:session, member}
+      _nothing_brought -> {:anonymous, nil}
+    end
+  end
+
+  # **A capability opens the sizes a client renders, and only those.** The
+  # version segment is not in the signed subject — one capability opens the
+  # photo, not one file of it — so without this rule the three *derived* routes
+  # below come along with it, and `original.orig` is not a size: it is the
+  # full-resolution file, one swapped path segment away from any media URL that
+  # leaked. The adapter names none of the three, so closing them to a capability
+  # costs a client nothing.
+  #
+  # Only to a capability, though: `og.jpg` exists for link scrapers, which
+  # arrive anonymously and must go on being served a public post's preview.
+  defp served_version?(version), do: version in PostImage.versions()
 
   # "og.jpg" is the link-preview JPEG (og:image), derived on the fly rather
   # than stored; "original.orig" is the author-enabled full-resolution

@@ -297,6 +297,124 @@ defmodule VutuvWeb.RemoteMediaControllerTest do
     end
   end
 
+  # Issue #1626: the adapter names a cached photograph now, and the same
+  # session-less image loader fetches it. Unlike the avatar's, this capability
+  # names the member it was minted for, because the picture carries the
+  # audience of the post it hangs on.
+  describe "the photograph URL the Mastodon adapter hands a client" do
+    test "loads without a session", ctx do
+      image = picture(remote_post(ctx.account))
+
+      assert get(ctx.out, photo_path(image, ctx.user)).status == 200
+    end
+
+    test "is refused when the request brings nothing at all", ctx do
+      image = picture(remote_post(ctx.account))
+
+      assert get(ctx.out, media_url(image)).status == 404
+    end
+
+    test "is refused when the query carries something that is not one", ctx do
+      image = picture(remote_post(ctx.account))
+
+      assert get(ctx.out, media_url(image) <> "?t=not-a-token").status == 404
+    end
+
+    # The capability says who is knocking; the post's audience is asked again
+    # here, of that member, on every request.
+    test "does not open a followers-only post to a member with no follow", ctx do
+      image = picture(remote_post(ctx.account, "followers"))
+
+      assert get(ctx.out, photo_path(image, ctx.user)).status == 404
+    end
+
+    test "opens one to a member whose follow was accepted", ctx do
+      image = picture(remote_post(ctx.account, "followers"))
+      follow(ctx.user, ctx.account, "accepted")
+
+      assert get(ctx.out, photo_path(image, ctx.user)).status == 200
+    end
+
+    test "stops answering when the author narrows the post afterwards", ctx do
+      post = remote_post(ctx.account)
+      image = picture(post)
+      path = photo_path(image, ctx.user)
+
+      assert get(ctx.out, path).status == 200
+
+      Repo.update!(change(post, audience: "followers"))
+
+      assert get(ctx.out, path).status == 404
+    end
+
+    test "stops answering once the gate takes the picture back", ctx do
+      image = picture(remote_post(ctx.account))
+      path = photo_path(image, ctx.user)
+
+      Repo.update!(change(image, moderation: "pending"))
+
+      assert get(ctx.out, path).status == 404
+    end
+
+    test "does not open another photograph", ctx do
+      image = picture(remote_post(ctx.account))
+      other = picture(remote_post(ctx.account))
+      %URI{query: borrowed} = URI.parse(photo_path(image, ctx.user))
+
+      assert get(ctx.out, media_url(other) <> "?" <> borrowed).status == 404
+    end
+
+    test "is refused once it has expired", ctx do
+      image = picture(remote_post(ctx.account))
+
+      stale =
+        RemoteMediaToken.remote_image_query(
+          image.id,
+          image.file,
+          ctx.user.id,
+          System.os_time(:second) - RemoteMediaToken.max_age() - 60
+        )
+
+      assert get(ctx.out, media_url(image) <> "?" <> stale).status == 404
+    end
+
+    # The other end of the window: signing bakes a `max_age` in, so an expiry
+    # test alone stays green when `verify/4` loses its own.
+    test "still opens the photograph a day inside the window", ctx do
+      image = picture(remote_post(ctx.account))
+
+      fresh =
+        RemoteMediaToken.remote_image_query(
+          image.id,
+          image.file,
+          ctx.user.id,
+          System.os_time(:second) - RemoteMediaToken.max_age() + 86_400
+        )
+
+      assert get(ctx.out, media_url(image) <> "?" <> fresh).status == 200
+    end
+
+    test "stops answering once the member it names is suspended", ctx do
+      image = picture(remote_post(ctx.account))
+      path = photo_path(image, ctx.user)
+
+      assert get(ctx.out, path).status == 200
+
+      Repo.update!(
+        change(ctx.user,
+          suspended_until: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 86_400)
+        )
+      )
+
+      assert get(ctx.out, path).status == 404
+    end
+  end
+
+  defp photo_path(image, user),
+    do:
+      media_url(image) <>
+        "?" <> RemoteMediaToken.remote_image_query(image.id, image.file, user.id)
+
   # The avatar URL as a client receives it, reduced to what ConnTest requests.
   defp adapter_path(%RemoteAccount{} = account),
     do: media_url(account) <> "?" <> capability(account)

@@ -32,20 +32,24 @@ defmodule VutuvWeb.RemoteMediaController do
   is not an access control — it is a URL, and URLs get shared, logged and
   pasted. The check is in the action rather than in a router pipeline so it
   cannot be lost by a route moving scope: the routes sit in the plain
-  `:browser` scope, where nothing else would ask. `post_image/2` takes a
-  `%User{}` and nothing else; `avatar/2` takes one of two claims.
+  `:browser` scope, where nothing else would ask. Each action takes one of two
+  claims, and both resolve to a `%User{}` before any picture moves.
 
-  **The avatar's second claim is a signed capability.** A session is how a
-  *browser* proves it is a member, and the Mastodon adapter's readers are phone
-  apps whose image loader sends neither the cookie nor the bearer token the API
-  call beside it used. So the avatar action takes a
-  `VutuvWeb.RemoteMediaToken` as the equivalent claim — unforgeable, expiring,
-  and naming exactly the account and stored file it opens. Everything else on
-  the way in is unchanged and re-asked per request, so it widens *what* may be
-  seen by nothing; without it, v7.330.0 named every remote picture in an API
-  response at a URL no client could fetch. It does widen *who*, and the module
-  says how far. `post_image/2` has no such door because the adapter names no
-  remote attachment — see `VutuvWeb.RemoteMediaToken`.
+  **The second claim is a signed capability.** A session is how a *browser*
+  proves it is a member, and the Mastodon adapter's readers are phone apps whose
+  image loader sends neither the cookie nor the bearer token the API call beside
+  it used. So both actions take a `VutuvWeb.RemoteMediaToken` as the equivalent
+  claim — unforgeable, expiring, and naming exactly the stored file it opens.
+  Everything else on the way in is unchanged and re-asked per request, so it
+  widens *what* may be seen by nothing; without it, v7.330.0 named every remote
+  picture in an API response at a URL no client could fetch.
+
+  The two claims differ in what they carry, because the two pictures differ in
+  what they are. An avatar has no audience of its own, so its capability names
+  only the account and the file. A **photograph** carries the audience of the
+  post it hangs on (issue #1626), so its capability names the **member** the
+  adapter rendered it for, and `remote_image_visible?/2` is asked that member's
+  own question here like any other reader's.
 
   Both actions open on `Vutuv.Fediverse.enabled?/0`: switching federation off
   has to close the proxy too, or the pictures it cached go on being served
@@ -62,12 +66,20 @@ defmodule VutuvWeb.RemoteMediaController do
   alias VutuvWeb.ImageProxy
   alias VutuvWeb.RemoteMediaToken
 
-  def post_image(conn, %{"id" => id, "version" => version_file}) do
+  # Ordered by what each step costs, the way `avatar/2` below is: an anonymous
+  # caller bringing nothing unforgeable is turned away by the signature check
+  # before it can spend a query, and which member the capability names can only
+  # be settled once the row says which file this picture currently is.
+  def post_image(conn, %{"id" => id, "version" => version_file} = params) do
+    member? = match?(%User{}, conn.assigns[:current_user])
+    token = params[RemoteMediaToken.param()]
+
     with true <- Fediverse.enabled?(),
-         %User{} = viewer <- conn.assigns[:current_user],
+         true <- member? or RemoteMediaToken.authentic?(token),
          %RemoteImage{} = image <- Fediverse.get_remote_image(id),
          true <- RemoteImage.released?(image),
          version when not is_nil(version) <- parse_version(version_file, image.file),
+         %User{} = viewer <- reader(conn, token, image),
          true <- Fediverse.remote_image_visible?(image, viewer) do
       serve(conn, version,
         accel: &RemoteMedia.post_image_accel_path(image.id, &1),
@@ -76,6 +88,13 @@ defmodule VutuvWeb.RemoteMediaController do
     else
       _ -> ImageProxy.not_found(conn)
     end
+  end
+
+  defp reader(conn, token, %RemoteImage{} = image) do
+    conn.assigns[:current_user] ||
+      token
+      |> RemoteMediaToken.remote_image_viewer(image.id, image.file)
+      |> RemoteMediaToken.holder()
   end
 
   # An avatar has no per-post audience: it is the picture of an account

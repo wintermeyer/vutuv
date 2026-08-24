@@ -139,9 +139,14 @@ defmodule VutuvWeb.MastodonApi.AccountController do
           subject = conn.assigns.current_organization || conn.assigns.current_user
           {posts, _more?} = Fediverse.account_posts(account, subject)
 
+          # Through `statuses/2` like every other source here, not a bare
+          # `status/1` per row: that is what batches the photographs these posts
+          # carry (issue #1626). It costs nothing extra — the batches it runs
+          # short-circuit on a page holding no local post.
           posts
           |> Pagination.window(page, & &1.id)
-          |> Enum.map(fn post -> Presenter.status(%{post | remote_account: account}) end)
+          |> Enum.map(&%{&1 | remote_account: account})
+          |> Presenter.statuses(viewer(conn))
 
         _missing_or_unsupported ->
           []

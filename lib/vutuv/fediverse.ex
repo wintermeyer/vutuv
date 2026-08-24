@@ -2906,6 +2906,8 @@ defmodule Vutuv.Fediverse do
   and nothing else, and such a post with its picture silently missing is not a
   quiet card, it is a broken one.
   """
+  def list_remote_images([]), do: %{}
+
   def list_remote_images(post_ids) do
     from(i in RemoteImage,
       where: i.remote_post_id in ^post_ids,

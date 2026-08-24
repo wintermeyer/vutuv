@@ -20,6 +20,12 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
   withdrawal *mid-connection*; the stream carries no private content of its own
   (every payload is a status the member may already read), so the exposure is
   the connection's lifetime, not the token's.
+
+  One thing a payload does carry past that lifetime is a picture's capability
+  (`VutuvWeb.RemoteMediaToken`), which outlives the socket by days. It is bound
+  to the member and re-checked against their standing and the picture's audience
+  on every image request, so a withdrawal reaches it there even though it cannot
+  reach it here.
   """
 
   @behaviour Phoenix.Socket.Transport

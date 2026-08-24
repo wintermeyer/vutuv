@@ -8,6 +8,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Identity
   alias Vutuv.MastodonApi
@@ -20,6 +21,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.VerifiedLinks
+  alias Vutuv.RemoteMedia
   alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
   alias VutuvWeb.Markdown
@@ -121,18 +123,38 @@ defmodule Vutuv.MastodonApi.Presenter do
   counts travel with the record.
   """
   def statuses(items, viewer) when is_list(items) do
-    post_ids = items |> Enum.map(&engaged_post_id/1) |> Enum.reject(&is_nil/1)
-
-    engagements = Posts.post_engagement_map(post_ids, viewer)
-    mentions = Posts.mention_map(post_ids)
-    # Which cached fediverse reply each post answers, if any (issue #1641) —
-    # one query for the page, read by `reply_fields/2`.
-    answered = Fediverse.answered_notes(post_ids)
+    context = page_context(items, viewer)
 
     items
-    |> Enum.map(&rendered_status(&1, engagements, mentions, answered))
+    |> Enum.map(&rendered_status(&1, context))
     |> fill_account_counts(viewer)
   end
+
+  # Everything a page reads **once** and every status on it then reads from.
+  # Growing this map is how a new per-status fact arrives here; growing
+  # `status/3`'s parameter list is not, which is what it already looked like.
+  defp page_context(items, viewer) do
+    post_ids = items |> Enum.map(&engaged_post_id/1) |> Enum.reject(&is_nil/1)
+    remote_ids = items |> Enum.map(&remote_post_id/1) |> Enum.reject(&is_nil/1)
+
+    %{
+      viewer: viewer,
+      engagements: Posts.post_engagement_map(post_ids, viewer),
+      mentions: Posts.mention_map(post_ids),
+      # Which cached fediverse reply each post answers, if any (issue #1641).
+      answered: Fediverse.answered_notes(post_ids),
+      # The photographs on the cached posts this page shows (issue #1626).
+      # `:images` is never preloaded on a `%RemotePost{}` — every surface in this
+      # codebase batches them by id, and so does this one.
+      remote_images: Fediverse.list_remote_images(remote_ids)
+    }
+  end
+
+  # What a single status rendered outside `statuses/2` gets. Built by the same
+  # function rather than spelled out again, so a sixth batch cannot be added to
+  # one shape and forgotten in the other; every batch short-circuits on an empty
+  # id list, so it costs no query.
+  defp no_page, do: page_context([], nil)
 
   # The figures on every account this page embeds, written in after the fact
   # rather than threaded through `status/2`: a status reaches its author through
@@ -180,18 +202,20 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp engaged_post_id(%{post: %Post{id: id}} = entry) when not is_struct(entry), do: id
   defp engaged_post_id(_other), do: nil
 
-  defp rendered_status(%Post{} = post, engagements, mentions, answered),
-    do: status(post, engagements[post.id], mentions[post.id], answered[post.id])
+  # The same, for the cached posts whose photographs the page has to look up.
+  defp remote_post_id(%RemotePost{id: id}), do: id
 
-  defp rendered_status(%{post: %Post{} = post} = entry, engagements, mentions, answered)
-       when not is_struct(entry),
-       do:
-         reshared(
-           entry,
-           status(post, engagements[post.id], mentions[post.id], answered[post.id])
-         )
+  defp remote_post_id(%{remote_post: %RemotePost{id: id}} = entry) when not is_struct(entry),
+    do: id
 
-  defp rendered_status(other, _engagements, _mentions, _answered), do: status_from_entry(other)
+  defp remote_post_id(_other), do: nil
+
+  defp rendered_status(%Post{} = post, context), do: status(post, context)
+
+  defp rendered_status(%{post: %Post{} = post} = entry, context) when not is_struct(entry),
+    do: reshared(entry, status(post, context))
+
+  defp rendered_status(other, context), do: status_from_entry(other, context)
 
   # A reshare in Mastodon's shape: an outer status by whoever passed the post
   # on, carrying the post itself under `reblog`.
@@ -272,10 +296,12 @@ defmodule Vutuv.MastodonApi.Presenter do
   def account_id(%Organization{id: id}), do: id
   def account_id(%RemoteAccount{id: id}), do: "remote-" <> id
 
-  def status(post, engagement \\ nil, mentions \\ nil, answered \\ nil)
-
-  def status(%Post{} = post, engagement, mentions, answered) do
+  # One status. `context` carries everything the page read once (`page_context/2`);
+  # a caller outside `statuses/2` gets the empty one and every lookup simply
+  # misses.
+  defp status(%Post{} = post, context) do
     author = Posts.author(post)
+    engagement = context.engagements[post.id]
     content = post.body |> Markdown.render_post(loaded_images(post)) |> safe_html()
 
     fields =
@@ -286,20 +312,20 @@ defmodule Vutuv.MastodonApi.Presenter do
         url: MastodonApi.main_url(Posts.path(post)),
         uri: MastodonApi.main_url(Posts.path(post)),
         account: account(author),
-        media_attachments: media_attachments(post),
+        media_attachments: media_attachments(post, engagement, context),
         visibility: visibility(post, engagement),
         language: post.language,
         edited_at: edited_at(post),
         tags: status_tags(post),
-        mentions: status_mentions(post, mentions)
+        mentions: status_mentions(post, context.mentions[post.id])
       }
-      |> Map.merge(reply_fields(post, answered))
+      |> Map.merge(reply_fields(post, context.answered[post.id]))
       |> Map.merge(engagement_fields(engagement))
 
     base_status(fields)
   end
 
-  def status(%RemotePost{} = post, _engagement, _mentions, _answered) do
+  defp status(%RemotePost{} = post, context) do
     base_status(%{
       id: status_id(post),
       created_at: timestamp(post.published_at),
@@ -307,12 +333,18 @@ defmodule Vutuv.MastodonApi.Presenter do
       url: post.origin_url || post.object_uri,
       uri: post.object_uri,
       account: account(post.remote_account),
+      media_attachments: remote_attachments(post, context),
       sensitive: post.sensitive,
       spoiler_text: post.summary || ""
     })
   end
 
-  def status(%Note{} = note, _engagement, _mentions, _answered) do
+  # A cached **reply** carries no pictures at all: there is no note-image table
+  # and the inbox stores none, on the reply cards' own stance that a stranger's
+  # picture is not copied here (`Vutuv.Fediverse.Note`). So this head has nothing
+  # to name, and an empty `media_attachments` is the true answer rather than an
+  # unfinished one.
+  defp status(%Note{} = note, _context) do
     base_status(%{
       id: status_id(note),
       created_at: timestamp(note.received_at),
@@ -334,7 +366,8 @@ defmodule Vutuv.MastodonApi.Presenter do
   It is also what the timeline endpoints read the pagination boundary out of, so
   the id it answers for a reshare has to be the reshare's own.
   """
-  def status_from_entry(entry), do: reshared(entry, inner_status_from_entry(entry))
+  def status_from_entry(entry, context \\ no_page()),
+    do: reshared(entry, inner_status_from_entry(entry, context))
 
   # **A row from another network also arrives on its own, not only wrapped in a
   # feed entry.** The map clauses below read the merged feed's entry maps, and
@@ -351,13 +384,15 @@ defmodule Vutuv.MastodonApi.Presenter do
   # The struct clauses come first on purpose: a `%Note{}` also carries a `post`
   # association, so with the map clauses ahead a Note whose `:post` happens to
   # be preloaded would render as its parent post instead of itself.
-  defp inner_status_from_entry(%RemotePost{} = post), do: status(post)
-  defp inner_status_from_entry(%Note{} = note), do: status(note)
-  defp inner_status_from_entry(%Post{} = post), do: status(post)
+  defp inner_status_from_entry(%RemotePost{} = post, context), do: status(post, context)
+  defp inner_status_from_entry(%Note{} = note, context), do: status(note, context)
+  defp inner_status_from_entry(%Post{} = post, context), do: status(post, context)
 
-  defp inner_status_from_entry(%{remote_post: %RemotePost{} = post}), do: status(post)
-  defp inner_status_from_entry(%{note: %Note{} = note}), do: status(note)
-  defp inner_status_from_entry(%{post: %Post{} = post}), do: status(post)
+  defp inner_status_from_entry(%{remote_post: %RemotePost{} = post}, context),
+    do: status(post, context)
+
+  defp inner_status_from_entry(%{note: %Note{} = note}, context), do: status(note, context)
+  defp inner_status_from_entry(%{post: %Post{} = post}, context), do: status(post, context)
 
   defp count_fields(nil), do: %{}
 
@@ -715,8 +750,12 @@ defmodule Vutuv.MastodonApi.Presenter do
   # it is the value that tells a client the post is **not** for redistribution,
   # so it stops offering boost on something its author narrowed. Calling every
   # post `public` told clients the opposite.
-  defp visibility(_post, %{restricted?: restricted?}), do: audience(restricted?)
-  defp visibility(post, _no_engagement), do: audience(Posts.restricted?(post))
+  defp visibility(post, engagement), do: audience(restricted?(post, engagement))
+
+  # Read off the batched engagement where the page has one, so a timeline pays
+  # no query per post for what it already knows.
+  defp restricted?(_post, %{restricted?: restricted?}), do: restricted?
+  defp restricted?(post, _no_engagement), do: Posts.restricted?(post)
 
   defp audience(true), do: "private"
   defp audience(_open), do: "public"
@@ -756,8 +795,11 @@ defmodule Vutuv.MastodonApi.Presenter do
   is rendered exactly that way rather than handing out a link to something no
   reader may see yet.
   """
-  def media_attachment(%PostImage{} = image) do
-    attachment = post_attachment(image)
+  def media_attachment(%PostImage{} = image, viewer) do
+    # A pending upload belongs to its uploader alone, so its URLs are as
+    # credential-bound as a restricted post's (issue #1627) — and the loader
+    # fetching the preview is the same session-less one.
+    attachment = post_attachment(image, capability(image, viewer))
 
     if ImageScans.released?(image.moderation),
       do: attachment,
@@ -776,17 +818,31 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp loaded_images(%Post{images: images}) when is_list(images), do: images
   defp loaded_images(_not_loaded), do: []
 
-  defp media_attachments(post) do
-    post |> Posts.released_images() |> Enum.map(&post_attachment/1)
+  defp media_attachments(post, engagement, context) do
+    # The capability is minted only where a bare image loader would otherwise be
+    # turned away: a post its author narrowed. A public post's photo stays a
+    # plain URL — it needs no credential, and a bearer URL that buys nothing is
+    # one more thing that can be shared. One per photo, since the token names
+    # the picture it opens.
+    viewer = if restricted?(post, engagement), do: context.viewer
+
+    post |> Posts.released_images() |> Enum.map(&post_attachment(&1, capability(&1, viewer)))
   end
 
-  defp post_attachment(%PostImage{} = image) do
+  defp post_attachment(%PostImage{} = image, query) do
+    attachment(image, image_url(image, "large", query), image_url(image, "feed", query))
+  end
+
+  # Mastodon's attachment entity, and the one place its shape is written: the
+  # two kinds of picture here differ in where their bytes come from, never in
+  # what a client is told about them.
+  defp attachment(image, url, preview_url, remote_url \\ nil) do
     %{
       id: image.id,
       type: "image",
-      url: image_url(image, "large"),
-      preview_url: image_url(image, "feed"),
-      remote_url: nil,
+      url: url,
+      preview_url: preview_url,
+      remote_url: remote_url,
       preview_remote_url: nil,
       text_url: nil,
       meta: %{original: %{width: image.width, height: image.height}},
@@ -795,8 +851,60 @@ defmodule Vutuv.MastodonApi.Presenter do
     }
   end
 
-  defp image_url(%PostImage{} = image, version),
+  # `nil` for anything but a member: `Vutuv.Posts.image_visible_to?/2` and
+  # `Vutuv.Fediverse.remote_image_visible?/2` both answer a `%User{}` and
+  # nothing else, so a capability naming a page identity would be one the proxy
+  # could never honour. Those readers keep today's plain URL, which is right for
+  # every public picture and a broken one for the rest — a narrower gap than
+  # handing out a credential that does not work.
+  defp capability(%PostImage{token: token}, %User{id: user_id}),
+    do: RemoteMediaToken.post_image_query(token, user_id)
+
+  defp capability(%RemoteImage{} = image, %User{id: user_id}),
+    do: RemoteMediaToken.remote_image_query(image.id, image.file, user_id)
+
+  defp capability(_image, _viewer), do: nil
+
+  # One version's URL, carrying the capability where there is one. `PostImage.url/2`
+  # may already end in the crop buster's own `?v=…`, so the capability is appended
+  # to that query rather than replacing it.
+  defp image_url(%PostImage{} = image, version, nil),
     do: MastodonApi.main_url(PostImage.url(image, version))
+
+  defp image_url(%PostImage{} = image, version, query) do
+    image
+    |> PostImage.url(version)
+    |> URI.parse()
+    |> URI.append_query(query)
+    |> to_string()
+    |> MastodonApi.main_url()
+  end
+
+  # The photographs on a post from another network (issue #1626). They exist,
+  # they are cached and the website renders them — the adapter simply never
+  # named them, so the same post showed its picture in a browser and none in an
+  # app. Every URL is the authorizing proxy's, never the origin's: the AI gate,
+  # the stored-file whitelist and the post's audience are all re-asked there. A
+  # client that follows `remote_url` instead reaches the origin server directly,
+  # which is its decision to make and not one we make for the reader.
+  defp remote_attachments(%RemotePost{} = post, context) do
+    context.remote_images
+    |> Map.get(post.id, [])
+    |> Enum.filter(&RemoteImage.released?/1)
+    |> Enum.map(&remote_attachment(&1, context.viewer))
+  end
+
+  defp remote_attachment(%RemoteImage{} = image, viewer) do
+    # One stored version, so the preview and the picture are the same file — a
+    # derived copy is all this installation keeps of somebody else's photograph.
+    url =
+      MastodonApi.main_url(
+        RemoteMedia.post_image_url(image.id, image.file),
+        capability(image, viewer)
+      )
+
+    attachment(image, url, url, image.source_uri)
+  end
 
   defp safe_html(value), do: value |> Safe.to_iodata() |> IO.iodata_to_binary()
 

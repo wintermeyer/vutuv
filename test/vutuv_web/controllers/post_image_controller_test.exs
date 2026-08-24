@@ -11,6 +11,7 @@ defmodule VutuvWeb.PostImageControllerTest do
   alias Vix.Vips.MutableImage
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias VutuvWeb.RemoteMediaToken
 
   @other_login_attrs %{
     "emails" => %{"0" => %{"value" => "other@example.com"}},
@@ -451,4 +452,139 @@ defmodule VutuvWeb.PostImageControllerTest do
                ["/internal_post_images/#{image.token}/large.avif"]
     end
   end
+
+  # Issue #1627: a phone app's image loader sends neither cookie nor bearer, so
+  # against the nil viewer it is, every photo on a *restricted* post was a
+  # broken image in every Mastodon client. The adapter now names it with a
+  # capability that says which member it was rendered for.
+  describe "a restricted post's photo, fetched the way an image loader fetches" do
+    setup %{tmp: tmp} do
+      author = insert(:user, email_confirmed?: true)
+
+      # `non_followers`, not `logged_out`: the point is a post closed to a
+      # *member*, which is what makes the capability's own member matter.
+      {post, image} =
+        post_with_image!(author, tmp, %{denials: [%{"wildcard" => "non_followers"}]})
+
+      %{author: author, post: post, image: image, path: "/post_images/#{image.token}/feed.avif"}
+    end
+
+    test "is refused when the request brings nothing at all", ctx do
+      assert get(build_conn(), ctx.path).status == 404
+    end
+
+    test "is served when the capability names a member who may read the post", ctx do
+      assert get(build_conn(), ctx.path <> "?" <> capability(ctx.image, ctx.author)).status == 200
+    end
+
+    # The whole reason the capability names a member rather than only the
+    # picture: it is not a key to the file, it is a way of saying who is
+    # knocking, and the audience question is asked again on every request.
+    test "stops answering the moment the author closes the post to that member", ctx do
+      stranger = insert(:user, email_confirmed?: true)
+      query = capability(ctx.image, stranger)
+
+      assert get(build_conn(), ctx.path <> "?" <> query).status == 404
+    end
+
+    # A member who was in the audience and is taken out of it: the URL they were
+    # handed has to stop working, which is exactly what a plain bearer
+    # capability could not do.
+    test "and once the reader is taken out of the audience", ctx do
+      reader = insert(:user, email_confirmed?: true)
+      follow = insert(:follow, follower: reader, followee: ctx.author)
+      query = capability(ctx.image, reader)
+
+      assert get(build_conn(), ctx.path <> "?" <> query).status == 200
+
+      Repo.delete!(follow)
+
+      assert get(build_conn(), ctx.path <> "?" <> query).status == 404
+    end
+
+    test "does not open another photo", ctx do
+      {_other_post, other} =
+        post_with_image!(ctx.author, ctx.tmp, %{denials: [%{"wildcard" => "non_followers"}]})
+
+      borrowed = capability(ctx.image, ctx.author)
+
+      assert get(build_conn(), "/post_images/#{other.token}/feed.avif?" <> borrowed).status == 404
+    end
+
+    test "is refused once it has expired", ctx do
+      stale =
+        RemoteMediaToken.post_image_query(
+          ctx.image.token,
+          ctx.author.id,
+          System.os_time(:second) - RemoteMediaToken.max_age() - 60
+        )
+
+      assert get(build_conn(), ctx.path <> "?" <> stale).status == 404
+    end
+
+    # The other end of the window: an expiry test alone stays green when
+    # `max_age:` is dropped from the verify, because signing bakes one in.
+    test "still opens the photo a day inside the window", ctx do
+      fresh =
+        RemoteMediaToken.post_image_query(
+          ctx.image.token,
+          ctx.author.id,
+          System.os_time(:second) - RemoteMediaToken.max_age() + 86_400
+        )
+
+      assert get(build_conn(), ctx.path <> "?" <> fresh).status == 200
+    end
+
+    test "a made-up capability is refused", ctx do
+      assert get(build_conn(), ctx.path <> "?t=not-a-token").status == 404
+    end
+
+    # The signed subject names the photo, not one file of it, so without an
+    # explicit rule the derived routes come along with the sizes — and
+    # `original.orig` is the full-resolution file, one swapped path segment away
+    # from any media URL that leaked.
+    test "does not open the full-resolution download", ctx do
+      Repo.update!(change(ctx.image, download_original: true))
+      query = capability(ctx.image, ctx.author)
+
+      assert get(build_conn(), "/post_images/#{ctx.image.token}/original.orig?" <> query).status ==
+               404
+    end
+
+    test "nor the link-preview JPEG, nor the author's uncropped workbench", ctx do
+      query = capability(ctx.image, ctx.author)
+
+      assert get(build_conn(), "/post_images/#{ctx.image.token}/og.jpg?" <> query).status == 404
+
+      assert get(build_conn(), "/post_images/#{ctx.image.token}/source.avif?" <> query).status ==
+               404
+    end
+
+    # Every other door drops a suspended member (the session plug, the bearer
+    # check); a capability that did not would be the one credential a suspension
+    # cannot reach.
+    test "stops answering once the member it names is suspended", ctx do
+      query = capability(ctx.image, ctx.author)
+      assert get(build_conn(), ctx.path <> "?" <> query).status == 200
+
+      Repo.update!(
+        change(ctx.author,
+          suspended_until: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 86_400)
+        )
+      )
+
+      assert get(build_conn(), ctx.path <> "?" <> query).status == 404
+    end
+
+    test "and once they deactivate their account", ctx do
+      query = capability(ctx.image, ctx.author)
+
+      Repo.update!(change(ctx.author, deactivated_at: NaiveDateTime.utc_now(:second)))
+
+      assert get(build_conn(), ctx.path <> "?" <> query).status == 404
+    end
+  end
+
+  defp capability(image, user),
+    do: RemoteMediaToken.post_image_query(image.token, user.id)
 end
