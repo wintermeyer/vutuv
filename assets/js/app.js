@@ -802,6 +802,67 @@ const liveSocket = new LiveSocket("/live", Socket, {
 liveSocket.connect()
 window.liveSocket = liveSocket
 
+// A filter tab pressed before anything is listening. The All / vutuv /
+// Fediverse tabs are `phx-click` buttons, and LiveView binds a button only once
+// the view holding it has joined — the page's own socket, and after that the
+// embedded child's for the profile and the tag timeline. Until then a press
+// reaches nothing whatsoever: no request, no paint, and no retry when the
+// socket does arrive, so on a slow line the reader presses a tab, waits, and
+// stays where they were. Measured over CDP: still on "All" six seconds later.
+//
+// What decides that a press was lost is its EFFECT, not the socket state —
+// `liveSocket.isConnected()` is already true while an embedded child is still
+// joining, which is the long-known swallowed first click. LiveView stamps
+// `data-phx-ref-loading` on the element it is pushing for (view.js `putRef`),
+// so a tab carrying neither that nor the pressed state a moment later was never
+// heard, and pressing it again is safe: picking a filter is idempotent.
+//
+// Read the REF, never the `phx-click-loading` class: the paint below puts that
+// same class on by hand, so a ticker testing it would read its own paint as
+// LiveView's answer and give up on the very slow joins this exists for.
+const TAB_PRESS_RETRY_MS = 500
+const TAB_PRESS_RETRIES = 12
+
+function retryFilterPress(tab) {
+  let left = TAB_PRESS_RETRIES
+
+  const tick = () => {
+    // Heard: LiveView is carrying it, or the answer has already landed.
+    if (tab.hasAttribute("data-phx-ref-loading") || tab.getAttribute("aria-pressed") === "true") {
+      delete tab.dataset.filterRetrying
+      return
+    }
+
+    if (!tab.isConnected || left-- <= 0) {
+      // Stop claiming work nobody is doing.
+      tab.classList.remove("phx-click-loading")
+      delete tab.dataset.filterRetrying
+      return
+    }
+
+    tab.click()
+    setTimeout(tick, TAB_PRESS_RETRY_MS)
+  }
+
+  setTimeout(tick, TAB_PRESS_RETRY_MS)
+}
+
+document.addEventListener("click", (e) => {
+  const tab = e.target.closest("[data-post-filter-tab]")
+  // Link mode (the `/:slug/posts` archive) is a real navigation and needs none
+  // of this; and a press on the tab you are already on has nothing to wait for.
+  if (!tab || tab.tagName !== "BUTTON") return
+  if (tab.getAttribute("aria-pressed") === "true") return
+  // Our own retry clicks bubble back in here — one ticker per press.
+  if (tab.dataset.filterRetrying) return
+
+  tab.dataset.filterRetrying = "1"
+  // Paint the press even while nothing is listening yet. Once a press does
+  // land, LiveView's own ack takes the class off again.
+  tab.classList.add("phx-click-loading")
+  retryFilterPress(tab)
+})
+
 // Flash toasts. Lives outside LiveView so it also works on classic controller
 // pages: EVERY toast (info and error alike) auto-dismisses after a few seconds,
 // the × button closes it early, and a MutationObserver gives the same treatment

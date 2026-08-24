@@ -42,3 +42,61 @@
 html {
   color-scheme: light dark;
 }
+
+/* ---------- A filter tab answers its own press ----------
+   Pressing All / vutuv / Fediverse reloads the list from the top, so the
+   answer is a round trip plus a query plus a page of cards away. Until it
+   lands nothing in the DOM has moved — the pill travels with the diff — and on
+   a slow line that reads as a control that does nothing. So the press paints
+   itself here, off the `phx-click-loading` class LiveView puts on the pressed
+   element for exactly the flight and takes off again when the answer arrives.
+   The server keeps the last word (a corrected filter, like the pull back to
+   All on the member's own post, simply repaints), and none of it needs the
+   never-expiring client stash a `JS.set_attribute` would leave on the button —
+   see the absolute-state rule in `toggle_js/4`, post_components.ex.
+
+   These four rules sit OUTSIDE every cascade layer, and that is the only place
+   they can sit: the tabs wear their resting colours as Tailwind utilities, and
+   an unlayered rule is the one thing that beats the utilities layer whatever
+   its specificity (components.css, being a layer, would lose). Keep the block
+   small and every selector anchored on a data attribute. */
+[data-post-filter-tab].phx-click-loading {
+  background-color: var(--color-brand-100);
+  color: var(--color-brand-700);
+  font-weight: 600;
+}
+
+/* The tab being left goes quiet in the same frame, so two pills are never lit
+   at once. The `:not()` is what keeps a press on the tab you are already on
+   (a reload of the same list) from greying itself out. */
+[data-post-filter-scope]:has([data-post-filter-tab].phx-click-loading)
+  [data-post-filter-tab][aria-pressed="true"]:not(.phx-click-loading) {
+  background-color: transparent;
+  color: var(--color-slate-600);
+  font-weight: 500;
+}
+
+/* And the list says it is being replaced. The delay is what keeps a fast
+   answer from flashing: below ~140ms nothing visible happens at all, while the
+   way back is immediate. */
+[data-post-list] {
+  transition: opacity 150ms ease-out;
+}
+
+[data-post-filter-scope]:has([data-post-filter-tab].phx-click-loading) [data-post-list] {
+  cursor: progress;
+  opacity: 0.55;
+  transition-delay: 140ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-post-filter-tab].phx-click-loading {
+    background-color: color-mix(in oklab, var(--color-brand-900) 40%, transparent);
+    color: var(--color-brand-100);
+  }
+
+  [data-post-filter-scope]:has([data-post-filter-tab].phx-click-loading)
+    [data-post-filter-tab][aria-pressed="true"]:not(.phx-click-loading) {
+    color: var(--color-slate-400);
+  }
+}

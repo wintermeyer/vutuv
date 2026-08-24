@@ -54,6 +54,10 @@ defmodule VutuvWeb.PostLive.Feed do
   on_mount(VutuvWeb.Live.RemoteCounts)
 
   @page_size 20
+  # What a source-tab press loads (see `load_source_filter/2`) — deliberately
+  # smaller than a mount's page, because that press is a wait with nothing on
+  # screen to read while it lasts.
+  @filter_page_size 10
   # "Who to follow" rail: how many suggestions to show, the size of the popular
   # pool we shuffle them out of, and how often an open feed reshuffles. Defined
   # here (not beside `assign_who_to_follow`) so `mount_feed/2` above reads a real
@@ -621,9 +625,16 @@ defmodule VutuvWeb.PostLive.Feed do
   # (`reset: true`). The pending batch is dropped with it rather than
   # re-filtered: the fresh page is newest-first from the top, so it already
   # carries everything that was waiting behind the pill.
+  #
+  # **Half a page, not a whole one** (`@filter_page_size`): a mount is a page
+  # load and pays for a full page once, but a tab press happens mid-visit and
+  # its twenty rendered cards are the bulk of the second the member waits on a
+  # slow line — for a screen that holds three or four. `more?` comes from the
+  # same query, so the "Load more" button below picks the rest up at the full
+  # page size.
   defp load_source_filter(socket, filter) do
     user = socket.assigns.current_user
-    page = Posts.feed_page(user, limit: @page_size, filter: filter)
+    page = Posts.feed_page(user, limit: @filter_page_size, filter: filter)
 
     entries =
       page.entries
@@ -1178,7 +1189,12 @@ defmodule VutuvWeb.PostLive.Feed do
         respects this column's min-content, so a long `truncate` descendant (a
         threaded reply's parent-excerpt) would otherwise force the column — and
         the whole page — wider than a phone viewport. --%>
-        <div class="min-w-0 space-y-4 md:col-span-2">
+        <%!-- `data-post-filter-scope` pairs the source tabs below with the
+        timeline they govern: while a tab press is in flight the stylesheet
+        dims everything marked `data-post-list` inside this container, so the
+        press is answered on the spot instead of a round trip later. Both
+        markers have to stay under this one element. --%>
+        <div data-post-filter-scope class="min-w-0 space-y-4 md:col-span-2">
           <%!-- No visible headline: the top nav already marks Feed as active,
           so the page opens with the compose tile (like the profile's Beiträge
           card) and the h1 stays for screen readers only. The Likes/Bookmarks

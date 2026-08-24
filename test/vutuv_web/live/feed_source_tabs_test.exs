@@ -653,4 +653,59 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       refute dotted?(view, "fediverse")
     end
   end
+
+  describe "a press on a slow line" do
+    # Switching tabs is one round trip, and until it lands the page shows
+    # exactly what it showed before: the pill only travels with the answer, so
+    # on a slow connection the control reads as broken. The fix is two-part —
+    # the press paints itself (CSS on LiveView's own `phx-click-loading`, see
+    # `assets/css/app.css`) and the page carries less over the wire. The paint
+    # is CSS and cannot be asserted here; what these tests pin is the two
+    # things it silently depends on.
+
+    # How many vutuv posts the timeline is showing (`stream_configure` ids
+    # every row `feed-<entry id>`, and a member's post entry is `post-<uuid>`).
+    defp rows(view), do: length(String.split(timeline(view), ~s(id="feed-post-))) - 1
+
+    test "the tabs and the timeline sit inside one scope", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {_author, _post} = followed_post(user, "written here on vutuv")
+      cached_post(remote_account(user, "them"), "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      # The dimming rule is
+      # `[data-post-filter-scope]:has([data-post-filter-tab].phx-click-loading)
+      # [data-post-list]`, so a refactor that moves either marker out of that
+      # container kills the feedback with every other test still green.
+      assert has_element?(view, "[data-post-filter-scope] [data-post-filter-tab='fediverse']")
+      assert has_element?(view, "[data-post-filter-scope] [data-post-list]")
+    end
+
+    test "a tab switch sends half a page, and the rest stays reachable", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {author, _post} = followed_post(user, "post 1")
+      for n <- 2..12, do: {:ok, _} = Posts.create_post(author, %{body: "post #{n}"})
+      cached_post(remote_account(user, "them"), "written out there")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      # A mount is a full page: all twelve, plus the cached remote one beside
+      # them.
+      assert rows(view) == 12
+      assert timeline(view) =~ "written out there"
+
+      # A tab switch is not. Twenty cards of rendered HTML is the bulk of the
+      # second the member waits, and a screen holds three or four.
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+      assert rows(view) == 10
+
+      # Which only works because the shorter page still knows there is more —
+      # `more?` comes from the same query, so the button is there and fills in
+      # the rest.
+      assert has_element?(view, "#load-more")
+      render_click(view, "load-more")
+      assert rows(view) == 12
+    end
+  end
 end

@@ -204,7 +204,10 @@ defmodule VutuvWeb.TagLive.Timeline do
 
   def render(assigns) do
     ~H"""
-    <section id="tag-timeline" class="mt-6">
+    <%!-- `data-post-filter-scope`: the source tabs and the timeline they
+    govern in one container, so a press dims the list it is about while the
+    answer is on its way (the rule lives in `assets/css/app.css`). --%>
+    <section id="tag-timeline" data-post-filter-scope class="mt-6">
       <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {gettext("Posts with this tag")}
