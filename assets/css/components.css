@@ -2881,7 +2881,47 @@ html.lightbox-open { overflow: hidden; }
   user-select: none;
 }
 
+/* The shape of something that has not arrived yet. A page whose data loads
+   only once the socket has joined paints its own outline first, so the wait
+   reads as "this is filling in" rather than as "you have nothing here" — the
+   /messages sidebar arrived as two blank cards on a slow line, which is the
+   emptiest possible answer to a member who does have conversations.
+
+   It breathes rather than sweeping a highlight across: a shimmer is a second
+   animation vocabulary and this app already says "waiting" with the hourglass
+   and the row-changed tint. Under prefers-reduced-motion it holds still and
+   the grey outline carries the meaning alone, the same trade tr[data-row-changed]
+   makes. Give the container `aria-busy="true"` and keep the bars aria-hidden:
+   there is nothing here to read out. */
+.skeleton {
+  animation: skeleton-breathe 1.8s ease-in-out infinite;
+  background-color: #e2e8f0;
+  border-radius: 0.375rem;
+}
+
+@keyframes skeleton-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
+  /* Slate-700: the outline has to read against the dark card it sits in
+     (slate-900), not against the light one it was drawn for. */
+  .skeleton {
+    background-color: #334155;
+  }
+
   .profile-header__manage {
     color: #93c5fd;
   }

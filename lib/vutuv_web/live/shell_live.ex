@@ -830,7 +830,11 @@ defmodule VutuvWeb.ShellLive do
             </.link>
           </div>
 
-          <div class="flex items-center justify-end gap-1">
+          <%!-- `data-nav-bar` here too: these icons are the same kind of plain
+          link as the nav above, and pressing one is the same whole new
+          document. They inherit that bar's palette, so a press fills the circle
+          the way hovering it already tints it. --%>
+          <div data-nav-bar class="flex items-center justify-end gap-1">
             <%!-- Admins only: today's confirmed sign-ups (German calendar day),
             live from PeopleCounter and reset by the DayClock at Berlin
             midnight. Rendered only when there is something to report, so a
@@ -850,6 +854,7 @@ defmodule VutuvWeb.ShellLive do
 
             <.link
               href={~p"/search"}
+              data-nav-item
               title={gettext("Search")}
               class="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 sm:flex dark:text-slate-400 dark:hover:bg-slate-800"
             >
@@ -859,6 +864,7 @@ defmodule VutuvWeb.ShellLive do
             <%= if @user_id do %>
               <.link
                 href={~p"/bookmarks"}
+                data-nav-item
                 title={gettext("Bookmarks")}
                 class="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
               >
@@ -866,6 +872,7 @@ defmodule VutuvWeb.ShellLive do
               </.link>
               <.link
                 href={~p"/messages"}
+                data-nav-item
                 title={gettext("Messages")}
                 class="relative hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
               >
@@ -877,6 +884,7 @@ defmodule VutuvWeb.ShellLive do
               </.link>
               <.link
                 href={~p"/notifications"}
+                data-nav-item
                 title={gettext("Notifications")}
                 class="relative hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
               >

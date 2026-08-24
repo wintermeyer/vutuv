@@ -90,6 +90,21 @@ defmodule VutuvWeb.PressPaintCssTest do
            "a press painted before a navigation must be cleared when the reader comes back"
   end
 
+  # The other half of what a slow line sees: the document has arrived, and a
+  # page whose data waits for the socket has nothing to show yet.
+  test "the waiting placeholder is one class, and it holds still when asked to" do
+    css = File.read!(Path.expand("../../assets/css/components.css", __DIR__))
+
+    assert [_] = Regex.scan(~r/^\.skeleton \{/m, css),
+           "one .skeleton definition; a per-page copy is how two of them drift"
+
+    assert css =~ "@media (prefers-reduced-motion: reduce)"
+
+    # It sits on a dark card too, and a light-grey outline is invisible there.
+    [_light, dark] = String.split(css, "@media (prefers-color-scheme: dark)", parts: 2)
+    assert dark =~ ".skeleton {", "the placeholder needs its dark-mode colour"
+  end
+
   test "no bar names itself in the markers" do
     for path <- Path.wildcard(Path.expand("../../lib/vutuv_web/**/*.ex*", __DIR__)) do
       source = File.read!(path)

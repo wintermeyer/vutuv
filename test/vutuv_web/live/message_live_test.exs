@@ -38,6 +38,31 @@ defmodule VutuvWeb.MessageLiveTest do
   end
 
   describe "conversation list" do
+    # The lists run only on the connected mount, so between the page arriving
+    # and the socket joining this card has nothing in it. On a slow line that
+    # is seconds of a blank panel, which reads as "you have no conversations"
+    # to a member who has plenty. The card draws its own outline until the
+    # real rows land.
+    test "the first HTTP paint shows a placeholder instead of a blank card", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      other = insert_activated_user(first_name: "Berta", last_name: "Beispiel")
+      conversation = insert_conversation_between(me, other)
+      {:ok, _} = Chat.send_message(other, conversation.id, "Hello there")
+
+      # A plain GET is what the browser paints before the socket connects.
+      body = conn |> get(~p"/messages") |> html_response(200)
+
+      assert body =~ ~s(id="conversations-skeleton")
+      assert body =~ ~s(aria-busy="true")
+
+      # And it is gone the moment the real rows are there, or it would sit
+      # under them forever.
+      {:ok, view, _html} = live(conn, ~p"/messages")
+
+      refute has_element?(view, "#conversations-skeleton")
+      refute render(view) =~ ~s(aria-busy="true")
+    end
+
     test "shows real conversations with the other member's name and preview", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       other = insert_activated_user(first_name: "Berta", last_name: "Beispiel")

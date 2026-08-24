@@ -635,10 +635,29 @@ defmodule VutuvWeb.MessageLive.Index do
       <%!-- Conversation list. Full-width on mobile while no thread is open;
             once one is, the thread takes over and the list moves behind the
             back link (md+ always shows both). --%>
-      <aside class={[
-        "w-full shrink-0 overflow-y-auto rounded-2xl bg-white ring-1 ring-slate-200 md:block md:w-64 dark:bg-slate-900 dark:ring-slate-800",
-        @conversation && "hidden"
-      ]}>
+      <aside
+        aria-busy={!@loaded? && "true"}
+        class={[
+          "w-full shrink-0 overflow-y-auto rounded-2xl bg-white ring-1 ring-slate-200 md:block md:w-64 dark:bg-slate-900 dark:ring-slate-800",
+          @conversation && "hidden"
+        ]}
+      >
+        <%!-- The lists load only once the socket has joined (see
+        `assign_sidebar/1`), and on a slow line that leaves this card blank for
+        seconds after the page itself is on screen — which reads as "you have
+        no conversations", the one thing it must not say. So the card draws its
+        own outline in the meantime. Six rows: enough to fill the card on a
+        phone, cheap enough not to matter. --%>
+        <ul :if={!@loaded?} id="conversations-skeleton" aria-hidden="true">
+          <li :for={_ <- 1..6} class="flex items-center gap-3 px-4 py-3">
+            <span class="skeleton h-9 w-9 shrink-0 rounded-full"></span>
+            <span class="min-w-0 flex-1">
+              <span class="skeleton block h-3 w-2/3"></span>
+              <span class="skeleton mt-2 block h-2.5 w-5/6"></span>
+            </span>
+          </li>
+        </ul>
+
         <div :if={@requests != []} id="requests" class="border-b border-slate-200 dark:border-slate-800">
           <h2 class="px-4 pt-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
             {gettext("Requests")}
