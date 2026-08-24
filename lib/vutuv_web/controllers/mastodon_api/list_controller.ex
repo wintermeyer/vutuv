@@ -29,6 +29,7 @@ defmodule VutuvWeb.MastodonApi.ListController do
   alias Vutuv.Social
   alias Vutuv.UUIDv7
   alias VutuvWeb.MastodonApi.Pagination
+  alias VutuvWeb.MastodonApi.Statuses
 
   def bookmarks(conn, params), do: engaged(conn, params, &Posts.bookmarked_statuses/2)
   def favourites(conn, params), do: engaged(conn, params, &Posts.liked_statuses/2)
@@ -89,26 +90,25 @@ defmodule VutuvWeb.MastodonApi.ListController do
   # roundabout way of reading a restricted audience.
   defp reactors(conn, id, params, reader) do
     page = Pagination.params(params)
-    viewer = conn.assigns.current_organization || conn.assigns.current_user
 
-    case visible_post(id, viewer) do
+    case Statuses.visible(conn, id) do
       nil ->
         conn |> put_status(404) |> json(%{error: "Record not found"})
 
-      post ->
+      %Post{} = post ->
         accounts =
           post.id
           |> reader.(Pagination.opts(page))
           |> Enum.map(&Presenter.account/1)
 
         respond(conn, accounts, page)
-    end
-  end
 
-  defp visible_post(id, viewer) do
-    case Posts.get_post(id) do
-      %Post{} = post -> if Posts.visible_to?(post, viewer), do: post
-      nil -> nil
+      _cached_remote_object ->
+        # A cached copy of somebody else's status. Who reacted to it is the
+        # origin's answer, not ours, and the reactions this installation holds
+        # are only the slice that happened to reach it — so the honest answer is
+        # the empty list rather than a partial one presented as the whole.
+        respond(conn, [], page)
     end
   end
 

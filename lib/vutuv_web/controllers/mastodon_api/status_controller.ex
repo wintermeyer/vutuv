@@ -11,6 +11,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
+  alias VutuvWeb.MastodonApi.Statuses
 
   # The empty conversation, in Mastodon's own shape — the honest answer
   # wherever there is nothing local to show.
@@ -41,26 +42,11 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   # tells whoever asks that the object exists, which is the one thing a
   # followers-only cached post must not confirm, so no caller may skip the gate.
   defp with_visible_status(conn, id, fun) do
-    case resolve_status(id) do
-      nil ->
-        not_found(conn)
-
-      object ->
-        if status_visible?(conn, object), do: fun.(object), else: not_found(conn)
+    case Statuses.visible(conn, id) do
+      nil -> not_found(conn)
+      object -> fun.(object)
     end
   end
-
-  # Every id shape the client API mints, in one place. Order matters: the longer
-  # `remote-` prefixes have to be read before the bare one, or a cached reply
-  # would be looked up as a cached post.
-  defp resolve_status("remote-note-" <> id), do: Fediverse.get_note(id)
-  defp resolve_status("remote-reply-repost-" <> id), do: Fediverse.get_reposted_note(id)
-  defp resolve_status("remote-repost-" <> id), do: Fediverse.get_reposted_remote_post(id)
-  defp resolve_status("remote_repost-" <> id), do: Fediverse.get_reposted_remote_post(id)
-  defp resolve_status("remote-" <> id), do: Fediverse.get_remote_post(id)
-  defp resolve_status("boost-" <> id), do: Fediverse.get_boosted_object(id)
-  defp resolve_status("repost-" <> id), do: Posts.get_reposted_post(id)
-  defp resolve_status(id), do: Posts.get_post(id)
 
   def create(conn, %{"status" => body} = params) when is_binary(body) do
     with :ok <- validate_visibility(params["visibility"]),
@@ -209,7 +195,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   # local answer to this reply lives in the parent's thread and is read there.
   defp context_payload(conn, %Note{} = note) do
     with %Post{} = parent <- Repo.get(Post, note.post_id),
-         true <- status_visible?(conn, parent) do
+         true <- Statuses.visible?(conn, parent) do
       # Seeded at the parent **inclusive**: the reply is the focus, so the post
       # it hangs under is its youngest ancestor rather than the start of a walk.
       ancestors_above(conn, parent, parent.id)
@@ -288,7 +274,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   # that replies while looking at a reshare answers the post rather than being
   # told the status does not exist.
   defp create_reply(user, id, attrs) do
-    case resolve_status(id) do
+    case Statuses.resolve(id) do
       %Note{} = note -> Posts.create_remote_reply(user, note, attrs)
       %RemotePost{} = post -> Posts.create_remote_post_reply(user, post, attrs)
       %Post{} = post -> Posts.create_reply(user, post, attrs)
@@ -431,31 +417,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   defp action_error(_reason), do: "The status action could not be completed."
 
-  defp note_visible?(%{assigns: %{current_organization: nil, current_user: user}}, note),
-    do: Fediverse.note_readable?(note, user)
-
-  defp note_visible?(_conn, note), do: Note.public?(note)
-
-  defp remote_post_visible?(%{assigns: %{current_organization: nil, current_user: user}}, post),
-    do: Fediverse.remote_post_readable?(post, user)
-
-  defp remote_post_visible?(%{assigns: %{current_organization: organization}}, post) do
-    RemotePost.open?(post) or
-      match?(
-        %{state: "accepted"},
-        Fediverse.remote_follow_for(organization, post.remote_account)
-      )
-  end
-
-  defp status_visible?(conn, %Note{} = note), do: note_visible?(conn, note)
-  defp status_visible?(conn, %RemotePost{} = post), do: remote_post_visible?(conn, post)
-
-  defp status_visible?(conn, %Post{} = post) do
-    subject = conn.assigns.current_organization || conn.assigns.current_user
-    Posts.visible_to?(post, subject)
-  end
-
-  defp viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
+  defp viewer(conn), do: Statuses.viewer(conn)
 
   defp own_post(conn, id) do
     case {conn.assigns.current_organization, conn.assigns.current_user.id, Posts.get_post(id)} do
@@ -548,7 +510,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     posts
     |> Enum.map(& &1.id)
     |> Fediverse.answered_objects()
-    |> Map.filter(fn {_post_id, object} -> status_visible?(conn, object) end)
+    |> Map.filter(fn {_post_id, object} -> Statuses.visible?(conn, object) end)
   end
 
   # One borrowed node per entry, as `{record, id it answers}`.
@@ -582,7 +544,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
     with %RemotePost{} = parent <- Fediverse.remote_parent_post(post),
          false <- MapSet.member?(seen, parent.id),
-         true <- status_visible?(conn, parent) do
+         true <- Statuses.visible?(conn, parent) do
       remote_ancestors(conn, parent, [parent | acc], seen)
     else
       _end_of_chain -> acc

@@ -276,8 +276,39 @@ wrapper keeps the **entry's** id (`boost-<uuid>`, `repost-<uuid>`), so a boost a
 the post it carries are two rows to a client and the pagination cursor is when
 the post was passed on rather than when it was written;
 `VutuvWeb.MastodonApi.Pagination.bare_id/1` reads the uuid back out of it and
-`StatusController.resolve_status/1` resolves it to the post underneath, the way
-Mastodon resolves a reblog id.
+`VutuvWeb.MastodonApi.Statuses.resolve/1` resolves it to the post underneath, the
+way Mastodon resolves a reblog id.
+
+**That grammar has exactly one owner**, and issue #1596 is what it cost when it
+had two. The resolver started life private to `StatusController`, so
+`/statuses/:id` read a reshare id while `ListController` still resolved with
+`Posts.get_post/1` alone: tapping the likers row of a reshare answered 404 for
+the id the timeline had just handed over. `Statuses.visible/2` is now the single answer to
+"which object is this, and may you read it" — the pairing and not just its
+halves, since spelling the two steps out per controller is what drifted. The
+report path (`POST /api/v1/reports` with `status_ids`) had the same gap and asks
+it too now; a cached remote object stays unreportable, because a report opens a
+case against something published here.
+
+**A reshare resolves to the post underneath for reads, and the writes are
+deliberately still refused.** The equivalence that makes a read correct makes a
+write dangerous, and in two ways. Resolving a `DELETE` on `repost-<uuid>` to the
+post would let the author of a post somebody boosted delete their own post by
+tapping delete on the boost. And routing it to the existing `:unreblog` action
+instead is not the fix either: `Vutuv.Posts.unrepost_post/2` takes an actor and a
+post and finds *the caller's* reshare of it, so a delete addressed at somebody
+else's row would quietly undo your own. Doing it properly means resolving the
+reshare **row** and checking who owns it, and the row is a different schema per
+prefix — `Vutuv.Posts.PostRepost`, `Vutuv.Fediverse.PostRepost`,
+`Vutuv.Fediverse.NoteRepost`, and `Vutuv.Fediverse.PostBoost`, which belongs to a
+remote account and can never be the caller's. Until that lands, `update`,
+`delete` and `source` keep answering 404 for a reshare id.
+
+**Who reacted is asked of a local post only.** `favourited_by` and
+`reblogged_by` answer the empty list for a cached remote object rather than the
+reactions this installation happens to hold: that slice is whatever reached us,
+and presenting it as the origin's answer would be a partial list dressed as a
+whole one.
 
 **A record from another network also arrives on its own, not only wrapped in a
 feed entry**, and for a while nothing rendered it that way:

@@ -23,8 +23,9 @@ defmodule VutuvWeb.MastodonApi.ProfileController do
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Report
-  alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias Vutuv.UUIDv7
+  alias VutuvWeb.MastodonApi.Statuses
 
   def update_credentials(conn, params) do
     user = conn.assigns.current_user
@@ -95,12 +96,19 @@ defmodule VutuvWeb.MastodonApi.ProfileController do
 
   defp report_target(_conn, _params), do: {:error, :not_found}
 
+  # The same id grammar every other status reader uses (issue #1596): a client
+  # reports the status it is looking at, and the timeline hands it ids like
+  # `repost-<uuid>` and the `remote-` family, all of which `Posts.get_post/1`
+  # alone answered with `:not_found`. A cached remote object stays unreportable
+  # as it was — a report here opens a case against something published on this
+  # installation, and that is what `Vutuv.Moderation` knows how to act on.
   defp reported_status(conn, id) do
-    viewer = conn.assigns.current_user
+    case Statuses.resolve(id) do
+      %Post{} = post ->
+        if Statuses.visible?(conn, post), do: {:ok, post}, else: {:error, :not_allowed}
 
-    case Posts.get_post(id) do
-      nil -> {:error, :not_found}
-      post -> if Posts.visible_to?(post, viewer), do: {:ok, post}, else: {:error, :not_allowed}
+      _no_local_post ->
+        {:error, :not_found}
     end
   end
 
