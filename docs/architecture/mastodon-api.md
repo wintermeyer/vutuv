@@ -368,6 +368,23 @@ a direct read, and a cached reply is named only while it is public: a reply
 addressed to one member cannot be answered at all, so a private one here was
 narrowed afterwards and its id would answer 404 to everybody but that member.
 
+**A status itself names its parent too, not only `/context`** (issue #1622):
+`in_reply_to_id`/`in_reply_to_account_id` used to fill only for a local reply, so
+a client received `null` on every answer that crossed the border and drew it as
+a standalone post. `Presenter.status/2` now fills the same three border-crossing
+shapes `/context` already walks — a cached reply (`%Note{}`) names the local
+post it answers, a followed account's self-reply names its cached parent
+(scoped to the same account, `own_thread?/2`'s own rule), and a vutuv reply into
+another network names the cached post its `remote_reply_ref` continues. Both
+surfaces share one rule: a parent is named only when `viewer` may actually read
+it (`Posts.note_parent_posts/2`'s `scope_visible/2` for the local case,
+`RemotePost.open?/1` or an accepted follow for a cached one) — an id that
+answers 404 for the reader holding it is worse than none, and naming a
+followers-only parent's id at all would leak that it exists to a reader who
+cannot fetch it. Batched for a whole page (`Presenter.page_context/2`'s
+`note_parents`/`remote_parents`/`followed_remote_ids`), not a query per row —
+the same shape `answered_notes/1` and `list_remote_images/1` already use.
+
 ### Photos
 
 `POST /api/v1/media` and `POST /api/v2/media` (multipart, the file in `file`,

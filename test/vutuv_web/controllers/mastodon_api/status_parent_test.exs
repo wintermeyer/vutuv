@@ -14,8 +14,6 @@ defmodule VutuvWeb.MastodonApi.StatusParentTest do
   import Vutuv.MastodonHelpers
 
   alias Vutuv.Fediverse.Follow
-  alias Vutuv.Fediverse.RemoteAccount
-  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Posts.PostRemoteReply
 
@@ -24,39 +22,6 @@ defmodule VutuvWeb.MastodonApi.StatusParentTest do
     |> mastodon_conn(token)
     |> get("/api/v1/statuses/#{id}")
     |> json_response(200)
-  end
-
-  defp remote_account(handle) do
-    actor = "https://social.example/users/#{handle}"
-
-    Repo.insert!(%RemoteAccount{
-      actor_uri: actor,
-      host: "social.example",
-      handle: handle,
-      name: String.capitalize(handle),
-      inbox_uri: actor <> "/inbox"
-    })
-  end
-
-  defp cached_post(account, overrides \\ %{}) do
-    now = DateTime.utc_now(:second)
-
-    Repo.insert!(
-      struct(
-        %RemotePost{
-          remote_account_id: account.id,
-          object_uri: "https://social.example/p/#{System.unique_integer([:positive])}",
-          origin_url: "https://social.example/@them/1",
-          content_text: "Ein Gedanke von drüben.",
-          audience: "public",
-          kind: "note",
-          published_at: now,
-          received_at: now,
-          expires_at: DateTime.add(now, 86_400)
-        },
-        overrides
-      )
-    )
   end
 
   test "a local reply names its local parent", %{conn: conn} do
@@ -85,9 +50,9 @@ defmodule VutuvWeb.MastodonApi.StatusParentTest do
 
   test "a followed account's self-reply names its cached parent, same account",
        %{conn: conn} do
-    account = remote_account("alice")
+    account = remote_account(handle: "alice")
     parent = cached_post(account)
-    reply = cached_post(account, %{in_reply_to_uri: parent.object_uri})
+    reply = cached_post(account, in_reply_to_uri: parent.object_uri)
 
     token = mastodon_token(insert(:activated_user), ["read"])
     status = show(conn, token, "remote-" <> reply.id)
@@ -97,8 +62,8 @@ defmodule VutuvWeb.MastodonApi.StatusParentTest do
   end
 
   test "a cached reply whose parent we never held stays orphaned", %{conn: conn} do
-    account = remote_account("bob")
-    reply = cached_post(account, %{in_reply_to_uri: "https://social.example/p/never-held"})
+    account = remote_account(handle: "bob")
+    reply = cached_post(account, in_reply_to_uri: "https://social.example/p/never-held")
 
     token = mastodon_token(insert(:activated_user), ["read"])
     status = show(conn, token, "remote-" <> reply.id)
@@ -109,7 +74,7 @@ defmodule VutuvWeb.MastodonApi.StatusParentTest do
 
   test "a vutuv answer to a followed account's post names the cached post", %{conn: conn} do
     author = insert(:activated_user)
-    account = remote_account("carol")
+    account = remote_account(handle: "carol")
     remote_post = cached_post(account)
 
     Repo.insert!(%Follow{

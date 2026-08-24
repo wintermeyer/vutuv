@@ -955,7 +955,10 @@ defmodule Vutuv.MastodonApi.Presenter do
     case Map.get(context.remote_parents, {uri, account_id}) do
       %RemotePost{} = parent ->
         if readable_remote_parent?(parent, context) do
-          %{in_reply_to_id: "remote-" <> parent.id, in_reply_to_account_id: "remote-" <> account_id}
+          %{
+            in_reply_to_id: "remote-" <> parent.id,
+            in_reply_to_account_id: "remote-" <> account_id
+          }
         else
           %{}
         end
@@ -966,7 +969,9 @@ defmodule Vutuv.MastodonApi.Presenter do
   end
 
   defp readable_remote_parent?(%RemotePost{} = parent, context),
-    do: RemotePost.open?(parent) or MapSet.member?(context.followed_remote_ids, parent.remote_account_id)
+    do:
+      RemotePost.open?(parent) or
+        MapSet.member?(context.followed_remote_ids, parent.remote_account_id)
 
   @doc """
   One freshly uploaded picture, for the media endpoints.
