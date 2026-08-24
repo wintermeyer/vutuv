@@ -158,7 +158,7 @@ test suite, and the naive loop ingests its full output once per iteration:
     delete the branch (the repo convention, same as `/issues`):
 
     ```bash
-    git fetch origin && git show origin/main:mix.exs | grep -m1 version
+    git fetch origin && git show origin/main:mix.exs | grep -m1 version    # from a fork: upstream
     gh pr merge <nr> --squash --delete-branch
     ```
 
