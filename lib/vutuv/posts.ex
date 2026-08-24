@@ -1145,6 +1145,19 @@ defmodule Vutuv.Posts do
     |> scope_unfrozen(nil)
   end
 
+  # A page as the VIEWER (issue #1336, mirroring `visible_to?/2`'s own
+  # Organization clauses): it is not a member, so no denial can name it and it
+  # sees exactly what an anonymous reader sees, plus its own posts while
+  # moderation holds them — the way an author sees theirs.
+  def scope_visible(query, %Organization{id: organization_id} = viewer) do
+    from(p in query,
+      where:
+        p.organization_id == ^organization_id or
+          fragment("NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id)
+    )
+    |> scope_unfrozen(viewer)
+  end
+
   def scope_visible(query, %User{id: viewer_id} = viewer) do
     from(p in query,
       where:
@@ -1197,8 +1210,14 @@ defmodule Vutuv.Posts do
 
     filter =
       case viewer do
-        %User{id: viewer_id} -> dynamic([p], p.user_id == ^viewer_id or ^passes)
-        nil -> passes
+        %User{id: viewer_id} ->
+          dynamic([p], p.user_id == ^viewer_id or ^passes)
+
+        %Organization{id: organization_id} ->
+          dynamic([p], p.organization_id == ^organization_id or ^passes)
+
+        nil ->
+          passes
       end
 
     where(query, ^filter)
@@ -4972,7 +4991,7 @@ defmodule Vutuv.Posts do
   is worse than none. A bare primary-key scan, no preload — the caller reads
   only `id` and `author_id/1` (both plain columns).
   """
-  def note_parent_posts([]), do: %{}
+  def note_parent_posts([], _viewer), do: %{}
 
   def note_parent_posts(post_ids, viewer) when is_list(post_ids) do
     from(p in Post, where: p.id in ^post_ids)
