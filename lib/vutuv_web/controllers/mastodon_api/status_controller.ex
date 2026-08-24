@@ -16,6 +16,10 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   # wherever there is nothing local to show.
   @empty_context %{ancestors: [], descendants: []}
 
+  # How far up a cached self-thread `/context` follows. A client draws a handful
+  # of ancestors above the status somebody opened, and each step is a query.
+  @max_remote_ancestors 20
+
   @doc """
   One status by the id a client was given.
 
@@ -177,9 +181,14 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   `Vutuv.Posts.list_thread/3` already loads the visibility-scoped conversation
   the permalink renders, so the split is done on the parent links it preloads
-  rather than with a second set of queries. Only vutuv posts take part: a reply
-  written on another network is cached without a place in the local reply tree,
-  and inventing one would put words in the wrong conversation.
+  rather than with a second set of queries.
+
+  **A conversation that crossed a network border stays one conversation**
+  (issue #1640). Where a post here answers something we hold a cache of, that
+  cached reply or cached post is a node in the same walk — and a followed
+  account's self-reply gets the author's own thread above it. Only what this
+  installation can serve under an id of its own takes part; nothing is invented
+  from a bare URI, which would name a status no client here could fetch.
   """
   def context(conn, %{"id" => id}) do
     with_visible_status(conn, id, fn object ->
@@ -201,23 +210,36 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   defp context_payload(conn, %Note{} = note) do
     with %Post{} = parent <- Repo.get(Post, note.post_id),
          true <- status_visible?(conn, parent) do
-      viewer = viewer(conn)
-      %{posts: posts} = Posts.list_thread(parent, viewer)
-      parents = Map.new(posts, &{&1.id, parent_id(&1)})
-      by_id = Map.new(posts, &{&1.id, &1})
-      chain = for id <- ancestor_chain(parents, parent.id, []), p = by_id[id], do: p
-      %{ancestors: Presenter.statuses(chain, viewer), descendants: []}
+      # Seeded at the parent **inclusive**: the reply is the focus, so the post
+      # it hangs under is its youngest ancestor rather than the start of a walk.
+      ancestors_above(conn, parent, parent.id)
     else
       _gone_or_closed -> @empty_context
     end
   end
 
-  # A status from another network has no place in the local reply tree, but a
-  # client asks for its context the moment somebody opens it — and a 404 to
-  # that call is an error screen where the post should be. The honest answer is
-  # the empty conversation (the visibility gate has already been asked by
-  # `with_visible_status/3`, like on every other read).
-  defp context_payload(_conn, _remote), do: @empty_context
+  # A cached post is a self-reply whenever its author carried their own thread
+  # on, and `own_thread?/2` is what makes following that safe: a stored reply's
+  # parent is always another cached post by the **same** account, so the chain
+  # above is one we hold and can serve. Descendants stay empty — an answer
+  # written here to a cached post lives in its own thread and is read there.
+  defp context_payload(conn, %RemotePost{} = post) do
+    %{
+      ancestors: Presenter.statuses(remote_ancestors(conn, post), viewer(conn)),
+      descendants: []
+    }
+  end
+
+  # The conversation above `seed`, with no answers below it — `root`'s thread is
+  # what gets loaded, `seed` is where the walk up starts.
+  defp ancestors_above(conn, %Post{} = root, seed) do
+    viewer = viewer(conn)
+    %{posts: posts} = Posts.list_thread(root, viewer)
+    {parents, by_id} = thread_graph(conn, posts)
+    chain = for id <- ancestor_chain(parents, seed, []), p = by_id[id], do: p
+
+    %{ancestors: Presenter.statuses(chain, viewer), descendants: []}
+  end
 
   @doc """
   The status as its author typed it — the Markdown source, not the rendered
@@ -452,8 +474,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     viewer = viewer(conn)
     %{posts: posts} = Posts.list_thread(post, viewer)
 
-    parents = Map.new(posts, &{&1.id, parent_id(&1)})
-    by_id = Map.new(posts, &{&1.id, &1})
+    {parents, by_id} = thread_graph(conn, posts)
     ancestors = for id <- ancestor_chain(parents, parents[post.id], []), p = by_id[id], do: p
     descendants = Enum.filter(posts, &below?(parents, &1.id, post.id))
 
@@ -489,7 +510,99 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     end
   end
 
-  defp parent_id(%Post{} = post) do
+  # The conversation as a graph in the ids a client speaks: what each node
+  # answers (`parents`) and the record behind each id (`by_id`). Both halves in
+  # one place, so the walk up and the walk down never have to ask where a status
+  # came from.
+  defp thread_graph(conn, posts) do
+    answered = visible_answered(conn, posts)
+
+    # `uniq_by` because two members can answer the same cached object, and each
+    # borrowed chain is walked a query at a time.
+    borrowed =
+      answered
+      |> Map.values()
+      |> Enum.uniq_by(&Presenter.status_id/1)
+      |> Enum.flat_map(&borrowed_chain(conn, &1))
+
+    parents =
+      posts
+      |> Map.new(&{&1.id, parent_id(&1, answered)})
+      |> Map.merge(
+        Map.new(borrowed, fn {node, parent} -> {Presenter.status_id(node), parent} end)
+      )
+
+    by_id =
+      posts
+      |> Map.new(&{&1.id, &1})
+      |> Map.merge(Map.new(borrowed, fn {node, _parent} -> {Presenter.status_id(node), node} end))
+
+    {parents, by_id}
+  end
+
+  # What these posts answer on other networks, minus whatever this reader may
+  # not see: an account can narrow a single post to its followers, so holding
+  # the cache is not the same as being allowed to read it, and a closed post
+  # must not ride into the conversation on a local answer's id.
+  defp visible_answered(conn, posts) do
+    posts
+    |> Enum.map(& &1.id)
+    |> Fediverse.answered_objects()
+    |> Map.filter(fn {_post_id, object} -> status_visible?(conn, object) end)
+  end
+
+  # One borrowed node per entry, as `{record, id it answers}`.
+  #
+  # A cached reply hangs off a local post, which is the node below it in this
+  # same thread. A cached post brings its author's own chain along, so the
+  # conversation reads the same whether the client opened the answer written
+  # here or the cached post it answers.
+  defp borrowed_chain(_conn, %Note{} = note), do: [{note, note.post_id}]
+
+  defp borrowed_chain(conn, %RemotePost{} = post) do
+    chain = remote_ancestors(conn, post) ++ [post]
+
+    # Each node answers the one before it; the oldest answers nothing we hold.
+    Enum.zip(chain, [nil | Enum.map(chain, &Presenter.status_id/1)])
+  end
+
+  # The cached posts above `post` in its author's own thread, oldest first.
+  # Gated one row at a time, since an account can narrow a single post to its
+  # followers. Two brakes, because a cache of somebody else's data is not ours
+  # to trust: a `seen` set, so a pair of posts naming each other cannot pad the
+  # chain with a loop, and a hard cap, because a client draws a handful of
+  # ancestors and every step here is a query.
+  defp remote_ancestors(conn, post, acc \\ [], seen \\ MapSet.new())
+
+  defp remote_ancestors(_conn, _post, acc, _seen) when length(acc) >= @max_remote_ancestors,
+    do: acc
+
+  defp remote_ancestors(conn, post, acc, seen) do
+    seen = MapSet.put(seen, post.id)
+
+    with %RemotePost{} = parent <- Fediverse.remote_parent_post(post),
+         false <- MapSet.member?(seen, parent.id),
+         true <- status_visible?(conn, parent) do
+      remote_ancestors(conn, parent, [parent | acc], seen)
+    else
+      _end_of_chain -> acc
+    end
+  end
+
+  # What a post answers — the cached reply or cached post it addresses on
+  # another network where it has one, otherwise the local post above it. The
+  # remote side wins because it is the *closer* parent: an answer to a cached
+  # reply is filed as an ordinary local reply to the post that reply hangs under
+  # (issue #1070), so naming the local one hangs it a level too high, which is
+  # exactly what a client then draws (issue #1641).
+  defp parent_id(%Post{} = post, answered) do
+    case answered[post.id] do
+      nil -> local_parent_id(post)
+      object -> Presenter.status_id(object)
+    end
+  end
+
+  defp local_parent_id(%Post{} = post) do
     case Posts.reply_ref_state(post) do
       {:parent, %Post{id: id}} -> id
       _not_a_reply -> nil

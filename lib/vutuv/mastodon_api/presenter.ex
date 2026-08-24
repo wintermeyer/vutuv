@@ -51,7 +51,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     header = user_cover(user)
 
     base_account(%{
-      id: user.id,
+      id: account_id(user),
       username: user.username,
       acct: user.username,
       display_name: UserHelpers.full_name(user),
@@ -72,7 +72,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     header = organization_image(organization.cover, fallback_header())
 
     base_account(%{
-      id: organization.id,
+      id: account_id(organization),
       username: handle,
       acct: handle,
       display_name: organization.name,
@@ -93,7 +93,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     icon = remote_avatar(account)
 
     base_account(%{
-      id: "remote-" <> account.id,
+      id: account_id(account),
       username: username,
       acct: handle,
       display_name: account.name || username,
@@ -125,9 +125,12 @@ defmodule Vutuv.MastodonApi.Presenter do
 
     engagements = Posts.post_engagement_map(post_ids, viewer)
     mentions = Posts.mention_map(post_ids)
+    # Which cached fediverse reply each post answers, if any (issue #1641) —
+    # one query for the page, read by `reply_fields/2`.
+    answered = Fediverse.answered_notes(post_ids)
 
     items
-    |> Enum.map(&rendered_status(&1, engagements, mentions))
+    |> Enum.map(&rendered_status(&1, engagements, mentions, answered))
     |> fill_account_counts(viewer)
   end
 
@@ -177,14 +180,18 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp engaged_post_id(%{post: %Post{id: id}} = entry) when not is_struct(entry), do: id
   defp engaged_post_id(_other), do: nil
 
-  defp rendered_status(%Post{} = post, engagements, mentions),
-    do: status(post, engagements[post.id], mentions[post.id])
+  defp rendered_status(%Post{} = post, engagements, mentions, answered),
+    do: status(post, engagements[post.id], mentions[post.id], answered[post.id])
 
-  defp rendered_status(%{post: %Post{} = post} = entry, engagements, mentions)
+  defp rendered_status(%{post: %Post{} = post} = entry, engagements, mentions, answered)
        when not is_struct(entry),
-       do: reshared(entry, status(post, engagements[post.id], mentions[post.id]))
+       do:
+         reshared(
+           entry,
+           status(post, engagements[post.id], mentions[post.id], answered[post.id])
+         )
 
-  defp rendered_status(other, _engagements, _mentions), do: status_from_entry(other)
+  defp rendered_status(other, _engagements, _mentions, _answered), do: status_from_entry(other)
 
   # A reshare in Mastodon's shape: an outer status by whoever passed the post
   # on, carrying the post itself under `reblog`.
@@ -242,15 +249,38 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp reshare_time(%{at: at}), do: timestamp(at)
   defp reshare_time(_entry), do: nil
 
-  def status(post, engagement \\ nil, mentions \\ nil)
+  @doc """
+  The id a client is handed for one object — the same string
+  `VutuvWeb.MastodonApi.StatusController` resolves back.
 
-  def status(%Post{} = post, engagement, mentions) do
+  One spelling of the three shapes, so a status and anything that *names* it (a
+  thread's parent link, an `in_reply_to_id`) cannot drift apart.
+  """
+  def status_id(%Post{id: id}), do: id
+  def status_id(%RemotePost{id: id}), do: "remote-" <> id
+  def status_id(%Note{id: id}), do: "remote-note-" <> id
+
+  @doc """
+  The id a client is handed for one account — its twin, and the string
+  `VutuvWeb.MastodonApi.AccountController` resolves back.
+
+  Worth its own function for the same reason: `in_reply_to_account_id` names an
+  account the client is expected to match against one it already holds, so the
+  two must be minted in one place.
+  """
+  def account_id(%User{id: id}), do: id
+  def account_id(%Organization{id: id}), do: id
+  def account_id(%RemoteAccount{id: id}), do: "remote-" <> id
+
+  def status(post, engagement \\ nil, mentions \\ nil, answered \\ nil)
+
+  def status(%Post{} = post, engagement, mentions, answered) do
     author = Posts.author(post)
     content = post.body |> Markdown.render_post(loaded_images(post)) |> safe_html()
 
     fields =
       %{
-        id: post.id,
+        id: status_id(post),
         created_at: timestamp(post.inserted_at),
         content: content,
         url: MastodonApi.main_url(Posts.path(post)),
@@ -263,15 +293,15 @@ defmodule Vutuv.MastodonApi.Presenter do
         tags: status_tags(post),
         mentions: status_mentions(post, mentions)
       }
-      |> Map.merge(reply_fields(post))
+      |> Map.merge(reply_fields(post, answered))
       |> Map.merge(engagement_fields(engagement))
 
     base_status(fields)
   end
 
-  def status(%RemotePost{} = post, _engagement, _mentions) do
+  def status(%RemotePost{} = post, _engagement, _mentions, _answered) do
     base_status(%{
-      id: "remote-" <> post.id,
+      id: status_id(post),
       created_at: timestamp(post.published_at),
       content: Markdown.render_remote(post.content_text || ""),
       url: post.origin_url || post.object_uri,
@@ -282,9 +312,9 @@ defmodule Vutuv.MastodonApi.Presenter do
     })
   end
 
-  def status(%Note{} = note, _engagement, _mentions) do
+  def status(%Note{} = note, _engagement, _mentions, _answered) do
     base_status(%{
-      id: "remote-note-" <> note.id,
+      id: status_id(note),
       created_at: timestamp(note.received_at),
       content: Markdown.render_remote(note.content_text || ""),
       url: Note.origin(note),
@@ -547,15 +577,30 @@ defmodule Vutuv.MastodonApi.Presenter do
 
   defp note_account(note), do: note_fallback_account(note)
 
+  # The id the note's author carries as a status account, without paying for the
+  # account record: the virtual `account_id` the note loader joins in already
+  # says whether we hold one. What a parent link needs, and the only part of
+  # `note_account/1` a *reference* to the note has to agree on.
+  defp note_account_id(%Note{account_id: id}) when is_binary(id),
+    do: account_id(%RemoteAccount{id: id})
+
+  defp note_account_id(%Note{} = note), do: note_author_id(note)
+
+  # The stand-in id for an author we hold no account row for. Derived from the
+  # actor's own URI so the same stranger reads as the same account across a
+  # page, and never as an id `/api/v1/accounts` would resolve.
+  defp note_author_id(%Note{} = note),
+    do:
+      "remote-note-author-" <>
+        (:crypto.hash(:sha256, note.actor_uri) |> Base.url_encode64(padding: false))
+
   defp note_fallback_account(note) do
     handle = Note.display_handle(note) |> String.trim_leading("@")
     username = handle |> String.split("@") |> hd()
     icon = fallback_avatar()
 
-    id = :crypto.hash(:sha256, note.actor_uri) |> Base.url_encode64(padding: false)
-
     base_account(%{
-      id: "remote-note-author-" <> id,
+      id: note_author_id(note),
       username: username,
       acct: handle,
       display_name: note.display_name || username,
@@ -676,10 +721,26 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp audience(true), do: "private"
   defp audience(_open), do: "public"
 
-  defp reply_fields(post) do
+  # **The cached reply wins over the post underneath it** (issue #1641).
+  # `Posts.create_remote_reply/3` files an answer to a reply from another
+  # network as an ordinary local reply to the post that reply hangs under (issue
+  # #1070), so the local parent is a level too high: a client threaded the
+  # answer under the member's own post and labelled it "Replying to @member"
+  # where it addresses a stranger. The website hangs it under the reply's card
+  # for the same reason (`VutuvWeb.PostComponents`).
+  #
+  # Either way the id named is one this client can fetch, and nothing is named
+  # that we hold no row for — an id no client can resolve is worse than none.
+  defp reply_fields(_post, %Note{} = note),
+    do: %{in_reply_to_id: status_id(note), in_reply_to_account_id: note_account_id(note)}
+
+  defp reply_fields(post, _no_cached_reply) do
     case Posts.reply_ref_state(post) do
       {:parent, %Post{} = parent} ->
-        %{in_reply_to_id: parent.id, in_reply_to_account_id: account(Posts.author(parent)).id}
+        %{
+          in_reply_to_id: status_id(parent),
+          in_reply_to_account_id: account_id(Posts.author(parent))
+        }
 
       _not_a_live_parent ->
         %{}

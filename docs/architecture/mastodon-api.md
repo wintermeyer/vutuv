@@ -264,6 +264,36 @@ that server, the hour's budget is spent — and all of them used to collapse int
 one sentence naming nothing. They are spelled out per reason now, because a
 member cannot see the rule from inside a phone app.
 
+### A conversation that crossed a border
+
+Three id shapes name a status here: a bare UUID is a vutuv post,
+`remote-<uuid>` a cached post from an account somebody follows, and
+`remote-note-<uuid>` a cached reply written under a member's post. One function
+spells all three (`Presenter.status_id/1`), because a status and anything that
+*names* it — an `in_reply_to_id`, a parent link in `/context` — have to agree or
+a client draws the same answer twice.
+
+Where a conversation crosses the border, both surfaces follow it (issues #1640,
+#1641):
+
+- an answer to a cached reply names that reply, not the post underneath it.
+  `Posts.create_remote_reply/3` files such an answer as an ordinary local reply
+  to the post the reply hangs under (issue #1070), so the local parent is a
+  level too high — a client labelled it "Replying to @member" where it addresses
+  a stranger. The website hangs it under the reply's card for the same reason.
+- `/context` walks the borrowed nodes with the local ones: the cached reply sits
+  between the root post and the answer, an answer written here to a cached post
+  gets that post as its ancestor, and a followed account's self-reply gets the
+  author's own chain above it (`own_thread?/2` is what makes following
+  `in_reply_to_uri` safe — a stored reply's parent is always another cached post
+  by the same account).
+
+Only what this installation serves under an id of its own takes part. Nothing is
+invented from a bare URI, every borrowed node passes the same visibility gate as
+a direct read, and a cached reply is named only while it is public: a reply
+addressed to one member cannot be answered at all, so a private one here was
+narrowed afterwards and its id would answer 404 to everybody but that member.
+
 ### Photos
 
 `POST /api/v1/media` and `POST /api/v2/media` (multipart, the file in `file`,

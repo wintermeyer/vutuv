@@ -2915,6 +2915,94 @@ defmodule Vutuv.Fediverse do
     |> Enum.group_by(& &1.remote_post_id)
   end
 
+  @doc """
+  The **cached reply** each of `post_ids` answers, keyed by post id (issue
+  #1641). Posts that answer no stored reply are simply absent.
+
+  One query for a whole page rather than one per row, because the caller is the
+  Mastodon adapter's page renderer, which bundles everything else it reads the
+  same way.
+
+  **Deliberately not read off the `:remote_reply_ref` preload.** Half the
+  callers hand over posts straight from a query, and an answer whose parent
+  silently depends on whether somebody remembered a preload is the shape that
+  has bitten this codebase before.
+
+  **Public replies only, and that is the whole gate** — no viewer is needed and
+  none may be assumed. `check_remote_reply/2` refuses to let a member answer a
+  reply that was addressed to them alone, so a private note here can only be one
+  an upstream `Update` narrowed afterwards; naming it would hand a client an id
+  that answers 404 to everybody but the member whose post it hangs under, and
+  the local parent is the honest fallback for all of them.
+  """
+  def answered_notes([]), do: %{}
+
+  def answered_notes(post_ids) when is_list(post_ids) do
+    from(r in PostRemoteReply,
+      join: n in subquery(notes_with_account()),
+      on: n.id == r.note_id,
+      where: r.post_id in ^post_ids and n.audience == "public",
+      select: {r.post_id, n}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
+  The same, widened to the **cached post** half of the sidecar (issue #1165), so
+  one map answers "what does this post answer out there" for a whole thread.
+
+  The two halves are gated differently and the caller has to know it: a reply
+  comes back public-only (see `answered_notes/1`), while a cached post carries
+  its own audience and is gated by whoever is rendering — the only one that
+  knows the reader and whether they follow that account.
+  """
+  def answered_objects([]), do: %{}
+
+  def answered_objects(post_ids) when is_list(post_ids),
+    do: Map.merge(answered_notes(post_ids), answered_remote_posts(post_ids))
+
+  defp answered_remote_posts(post_ids) do
+    from(r in PostRemoteReply,
+      join: p in RemotePost,
+      on: p.id == r.remote_post_id,
+      join: a in RemoteAccount,
+      on: a.id == p.remote_account_id,
+      where: r.post_id in ^post_ids,
+      select: {r.post_id, %{p | remote_account: a}}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
+  The cached post `post` continues, or `nil` when we hold no such row.
+
+  A stored remote reply only ever continues a thread of the **same** account,
+  which is `own_thread?/2`'s rule and why both read one query
+  (`same_account_post/2`): a reply is kept solely when its parent is already one
+  of that account's cached posts. So the scope here is not a precaution against
+  a missing row, it is what the column means — and it is what lets the client
+  API name a followed account's self-reply with an id the same client can fetch.
+  """
+  def remote_parent_post(%RemotePost{in_reply_to_uri: uri, remote_account_id: account_id})
+      when is_binary(uri) and is_binary(account_id) do
+    Repo.one(from([p, a] in same_account_post(uri, account_id), select: %{p | remote_account: a}))
+  end
+
+  def remote_parent_post(%RemotePost{}), do: nil
+
+  # "That account's own cached post with this object URI" — the predicate
+  # `own_thread?/2` decides a reply by and `remote_parent_post/1` resolves it
+  # with. One builder, so the invariant the second relies on stays the first's.
+  defp same_account_post(uri, account_id) do
+    from(p in RemotePost,
+      join: a in RemoteAccount,
+      on: a.id == p.remote_account_id,
+      where: p.object_uri == ^uri and p.remote_account_id == ^account_id
+    )
+  end
+
   @doc "One cached remote post with its account and screenshot, or nil."
   def get_remote_post(id) do
     UUIDv7.with_cast(id, &Repo.get(RemotePost, &1))
@@ -3332,13 +3420,8 @@ defmodule Vutuv.Fediverse do
   # The line is deliberate: a followed account's own thread is what a follower
   # subscribed to, while their reply under a stranger's post drags a third
   # party's conversation into our storage for the sake of one half of it.
-  defp own_thread?(%{"inReplyTo" => parent}, %RemoteAccount{} = account) when is_binary(parent) do
-    Repo.exists?(
-      from(p in RemotePost,
-        where: p.object_uri == ^parent and p.remote_account_id == ^account.id
-      )
-    )
-  end
+  defp own_thread?(%{"inReplyTo" => parent}, %RemoteAccount{} = account) when is_binary(parent),
+    do: Repo.exists?(same_account_post(parent, account.id))
 
   defp own_thread?(_object, _account), do: true
 

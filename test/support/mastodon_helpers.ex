@@ -18,6 +18,8 @@ defmodule Vutuv.MastodonHelpers do
   alias Ecto.Changeset
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
@@ -111,6 +113,72 @@ defmodule Vutuv.MastodonHelpers do
 
   @doc "Puts `conn` on the adapter's host without a token."
   def on_mastodon_host(conn), do: Map.put(conn, :host, mastodon_host())
+
+  @doc """
+  The same conn ready for a second request: `Phoenix.ConnTest` reuses one conn,
+  so recycling clears the previous response while the bearer header and the
+  adapter's host are put back.
+  """
+  def recycle_mastodon(conn) do
+    [header] = Plug.Conn.get_req_header(conn, "authorization")
+
+    conn
+    |> Phoenix.ConnTest.recycle()
+    |> Map.put(:host, mastodon_host())
+    |> Plug.Conn.put_req_header("authorization", header)
+  end
+
+  @doc """
+  A member who may act across the border: an act leaves this site signed with
+  their own key, so every outbound gate refuses somebody who does not federate.
+  Replies are switched on too, which is what lets a stranger's reply be stored
+  under their post in the first place.
+  """
+  def federating_member(attrs \\ []) do
+    user =
+      insert(
+        :activated_user,
+        Keyword.merge([fediverse_followers?: true, fediverse_replies?: true], attrs)
+      )
+
+    {:ok, _actor} = Vutuv.Fediverse.ensure_actor(user)
+    Repo.reload!(user)
+  end
+
+  @doc "An account on another server, the row the inbox writes from an actor document."
+  def remote_account(attrs \\ []) do
+    uri = attrs[:actor_uri] || "https://social.example/users/them#{unique_suffix()}"
+
+    Repo.insert!(%RemoteAccount{
+      actor_uri: uri,
+      host: URI.parse(uri).host,
+      handle: attrs[:handle] || "them",
+      name: attrs[:name] || "Them",
+      inbox_uri: uri <> "/inbox",
+      avatar: attrs[:avatar],
+      avatar_moderation: attrs[:avatar_moderation]
+    })
+  end
+
+  @doc "One of that account's posts, cached here because somebody follows them."
+  def cached_post(%RemoteAccount{} = account, attrs \\ []) do
+    now = DateTime.utc_now(:second)
+
+    Repo.insert!(%RemotePost{
+      remote_account_id: account.id,
+      object_uri: attrs[:object_uri] || "https://social.example/p/#{unique_suffix()}",
+      in_reply_to_uri: attrs[:in_reply_to_uri],
+      content_text: attrs[:content_text] || "Von woanders.",
+      audience: attrs[:audience] || "public",
+      kind: "note",
+      published_at: now,
+      received_at: now,
+      expires_at: DateTime.add(now, 86_400)
+    })
+    |> Repo.preload(:remote_account)
+  end
+
+  defp unique_suffix, do: System.unique_integer([:positive])
 
   @doc """
   The `VutuvWeb.RemoteMediaToken` out of a rendered avatar URL, or nil when the

@@ -23,7 +23,6 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
 
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.RemoteAccount
-  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.MastodonApi
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
@@ -36,46 +35,7 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
     :ok
   end
 
-  defp remote_account(attrs \\ []) do
-    uri = attrs[:actor_uri] || "https://social.example/users/them#{unique()}"
-
-    Repo.insert!(%RemoteAccount{
-      actor_uri: uri,
-      host: URI.parse(uri).host,
-      handle: attrs[:handle] || "them",
-      name: attrs[:name] || "Them",
-      inbox_uri: uri <> "/inbox",
-      avatar: attrs[:avatar],
-      avatar_moderation: attrs[:avatar_moderation]
-    })
-  end
-
-  defp cached_post(account, attrs \\ []) do
-    now = DateTime.utc_now(:second)
-
-    Repo.insert!(%RemotePost{
-      remote_account_id: account.id,
-      object_uri: "https://social.example/p/#{unique()}",
-      content_text: attrs[:content_text] || "Von woanders.",
-      audience: "public",
-      kind: "note",
-      published_at: now,
-      received_at: now,
-      expires_at: DateTime.add(now, 86_400)
-    })
-    |> Repo.preload(:remote_account)
-  end
-
   defp unique, do: System.unique_integer([:positive])
-
-  # A like, boost or reply leaves this site signed with the member's own key, so
-  # the outbound gates refuse an account that does not federate — which is a rule,
-  # not the bug under test here.
-  defp federating_member do
-    user = insert(:activated_user, fediverse_followers?: true)
-    {:ok, _actor} = Vutuv.Fediverse.ensure_actor(user)
-    Repo.reload!(user)
-  end
 
   describe "the Federated tab" do
     test "lists the posts this site has cached instead of failing", %{conn: conn} do
@@ -371,24 +331,13 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
     defp walk(conn, path, max_id, seen, rounds) do
       params = if max_id, do: %{"limit" => "1", "max_id" => max_id}, else: %{"limit" => "1"}
 
-      case conn |> recycle_token() |> get(path, params) |> json_response(200) do
+      case conn |> recycle_mastodon() |> get(path, params) |> json_response(200) do
         [] ->
           seen
 
         [status] ->
           walk(conn, path, status["id"], seen ++ [status["id"]], rounds + 1)
       end
-    end
-
-    # `Phoenix.ConnTest` reuses one conn per request; recycling keeps the bearer
-    # header while clearing the previous response.
-    defp recycle_token(conn) do
-      [header] = Plug.Conn.get_req_header(conn, "authorization")
-
-      conn
-      |> Phoenix.ConnTest.recycle()
-      |> Map.put(:host, conn.host)
-      |> Plug.Conn.put_req_header("authorization", header)
     end
   end
 
