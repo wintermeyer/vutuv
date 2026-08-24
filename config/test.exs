@@ -18,6 +18,10 @@ config :vutuv, :sweep_post_drafts, false
 # so a test can assert on the stored draft right after `render_change` instead
 # of racing a timer.
 config :vutuv, :composer_draft_debounce_ms, 0
+# The tab ticker's silence between two windows (issue #1668) would swallow the
+# second arrival in a test that fires two. Zero here; the test that covers the
+# silence sets its own value.
+config :vutuv, :feed_ticker_cooldown_ms, 0
 config :vutuv, :sweep_unconfirmed_registrations, false
 # The daily retention sweep of the account-activity log would touch the sandbox
 # from outside; tests call Vutuv.AccountEvents.delete_expired/0 directly.

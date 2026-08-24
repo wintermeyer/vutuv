@@ -826,6 +826,24 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
+  # The feed's tab ticker (issue #1668): whether a post landing on the tab the
+  # member is not looking at is quoted beside it, and for how long. A reading
+  # preference like the two above, so it shares their page.
+  def update_feed_ticker(conn, %{"user" => params}) do
+    save(
+      conn,
+      params,
+      "preferences.html",
+      ~p"/settings/preferences",
+      gettext("Feed tab settings saved."),
+      event: "preferences_changed"
+    )
+  end
+
+  def reset_feed_ticker(conn, _params) do
+    reset_prefs(conn, :feed_tabs, gettext("Feed tab settings reset to the site defaults."))
+  end
+
   def reset_feed_languages(conn, _params) do
     # The chips list is a plain member column beside the :feed pref group, so
     # the reset clears both halves — through the user-update chokepoint like

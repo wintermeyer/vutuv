@@ -590,6 +590,15 @@ every member who has not decided for themselves is unnamed, with the switch
 still theirs to turn back on. It never changes the **count**: a post always
 shows how many likes it got, whoever may be named.
 
+A third is about how loud the feed is: **whether the source tabs quote what
+lands on the one a member is not reading**. Something arriving on the tab they
+are not on marks it with a dot either way; on top of that, the bar can quote
+the arrival — author and first words — for a few seconds before folding back.
+vutuv ships that on, at eight seconds. An installation that wants a quieter
+feed turns *Quote what arrives on the other tab* off at `/admin/preferences`,
+or shortens the window there; the dot is unaffected, and every member can set
+both for themselves.
+
 - **`/admin` → Preference defaults** (`/admin/preferences`): change the
   default for the whole installation at any time. It applies immediately to
   every member who has not set an own value — and to logged-out visitors.

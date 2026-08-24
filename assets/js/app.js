@@ -394,9 +394,108 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-notify-allow]")) requestNotifyPermission()
 })
 
+// The feed-tab ticker's example on /settings/preferences (issue #1668). The
+// setting's whole effect happens on another page, seconds at a time, so the
+// card lets you press it once — with the switch and the seconds you are
+// currently looking at, not with the stored ones, or the example would answer
+// a question you already changed your mind about.
+//
+// It drives the real classes on the real markup, so it cannot drift into a
+// prettier lie than the feed.
+let tickerPreviewTimers = []
+
+function playTickerPreview(box) {
+  tickerPreviewTimers.forEach(clearTimeout)
+  tickerPreviewTimers = []
+
+  const bar = box.querySelector(".filter-tabs")
+  const tab = box.querySelector('[data-filter-tab="fediverse"]')
+  const dot = box.querySelector("[data-ticker-preview-dot]")
+  const quote = box.querySelector("[data-ticker-preview-quote]")
+  if (!bar || !tab || !dot || !quote) return
+
+  const form = box.closest(".card")
+  const on = form?.querySelector('input[type="checkbox"][name*="feed_tab_ticker"]')?.checked
+  const seconds =
+    parseInt(form?.querySelector('select[name*="feed_tab_ticker_seconds"]')?.value, 10) || 8
+
+  // Whatever it did last time, back to the resting bar first.
+  bar.classList.remove("filter-tabs--ticking")
+  tab.classList.remove("filter-tab--ticking")
+  quote.classList.remove("filter-tab-ticker--leaving")
+  quote.hidden = true
+
+  // The dot is not part of the switch: it appears either way and stays.
+  dot.hidden = false
+  if (!on) return
+
+  quote.hidden = false
+  bar.classList.add("filter-tabs--ticking")
+  tab.classList.add("filter-tab--ticking")
+
+  tickerPreviewTimers.push(
+    setTimeout(() => {
+      quote.classList.add("filter-tab-ticker--leaving")
+      tickerPreviewTimers.push(
+        setTimeout(() => {
+          bar.classList.remove("filter-tabs--ticking")
+          tab.classList.remove("filter-tab--ticking")
+          quote.hidden = true
+        }, 400)
+      )
+    }, seconds * 1000)
+  )
+}
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("[data-ticker-preview-play]")) return
+  const box = document.querySelector("[data-ticker-preview]")
+  if (box) playTickerPreview(box)
+})
+
 const Hooks = {
   MarkdownEditor,
   TagInput,
+  // The feed's tab ticker (issue #1668): the quote beside the tab a post just
+  // landed on, which stands for a few seconds and then goes.
+  //
+  // The clock is HERE, not on the server, for two reasons. A window counted
+  // out over there includes the trip back, so it would stand for its seconds
+  // plus whatever the line costs — and on a line that has since died, the
+  // message telling it to go would never arrive at all and the quote would
+  // stay up forever. So the browser hides it and then reports; the server only
+  // has to forget it, which also stops a later patch putting it back.
+  //
+  // `data-ticker-window` is what says a NEW window started. It stays put while
+  // the count climbs inside one, so a second arrival cannot silently restart
+  // the clock and hand a busy source the bar for good.
+  FeedTicker: {
+    mounted() {
+      this.start()
+    },
+    updated() {
+      if (this.el.dataset.tickerWindow !== this.window) this.start()
+    },
+    destroyed() {
+      this.stop()
+    },
+    start() {
+      this.stop()
+      this.window = this.el.dataset.tickerWindow
+      this.el.classList.remove("filter-tab-ticker--leaving")
+
+      const seconds = parseInt(this.el.dataset.tickerSeconds, 10) || 8
+
+      this.timer = setTimeout(() => {
+        this.el.classList.add("filter-tab-ticker--leaving")
+        this.timer = setTimeout(() => this.pushEvent("hide-tab-ticker", {}), 400)
+      }, seconds * 1000)
+    },
+    stop() {
+      if (this.timer) clearTimeout(this.timer)
+      this.timer = null
+    },
+  },
   LocalTime: {
     mounted() {
       localizeTime(this.el)

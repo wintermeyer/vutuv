@@ -451,10 +451,51 @@ knows about the reader:
   carries the stamp the entry will wear in the merged feed and nothing else:
   whether the row reaches this particular reader depends on their mute, the
   follow's state, the audience and their language filter, so the feed asks its
-  own sources (`Posts.feed_source_since?/3`, one `LIMIT 1` per source with
-  `Enum.any?/2` short-circuiting, the shape `fediverse_feed_available?/1` uses).
-  Only the tab the reader is **not** on is probed — "All" holds both halves, so
-  nothing ever landed elsewhere — and a member with no tab bar pays no query.
+  own sources (`Posts.newest_source_entry/3`, one `LIMIT 1` per source, the
+  shape `fediverse_feed_available?/1` uses). It hands the entry back rather
+  than a boolean, because the ticker below quotes it. Only the tab the reader
+  is **not** on is probed — "All" holds both halves, so nothing ever landed
+  elsewhere — and a member with no tab bar pays no query.
+
+**And for a few seconds it says what landed** (issue #1668). The dot is the
+standing mark; beside it the bar quotes the arrival — author and first words —
+and then goes. `post_filter_tabs/1` takes a `ticker` map for it and the tab it
+names shares its warm tint for the length of the window, which is the whole
+mechanism for "which tab is this about" with a tab in between. On a narrow bar
+the other tabs fold their labels to zero width and the quote takes the room
+(a container query on `.filter-tabs`, so the settings page's example box
+behaves like a phone on a desktop screen); measured on a 356 px bar, that is
+the difference between no room for a quote at all and about twenty characters.
+
+Four rules keep it from becoming a nuisance, and each one has a test:
+
+* **One quote per window.** A second arrival inside it cannot replace the
+  first (both would stand for less time than it takes to read one) and cannot
+  queue behind it (ten would hold the bar open for a minute and a half), so
+  the quote gives up and becomes a count. The clock is **not** restarted by
+  it, or a busy source would own the bar: `data-ticker-window` stays put while
+  the count climbs, and that attribute is what the browser's timer keys on.
+* **The browser owns the clock** (the `FeedTicker` hook). A window counted out
+  on the server would include the trip back, and a hide that never arrives —
+  a dead socket — would leave the quote standing forever. The hook hides it
+  and then reports `hide-tab-ticker`, which only clears the server's copy so a
+  later patch cannot put it back.
+* **A silence after each window** (`:feed_ticker_cooldown_ms`, 2 s), longer
+  than the 400 ms fold-back. Arrivals are not evenly spaced on a bad line — a
+  reconnect delivers a backlog at once — and without it the bar would close
+  and reopen in the same breath. What lands inside the silence still gets its
+  dot.
+* **A muted word is never quoted.** `decorate/3` stamps `:filtered_by` only on
+  the branch for the tab the reader *is* on, so the teaser asks
+  `filtered_pattern/3` itself and falls back to the bare dot. The bar is the
+  one place a member cannot scroll past it.
+
+Only ever one tab at a time: `other_source/1` is nil on "All" and the two named
+tabs partition the feed, so a third source would be the first thing to need a
+rule for two open windows. Two member preferences (`Vutuv.Prefs`, group
+`:feed_tabs`): `feed_tab_ticker?` (on) and `feed_tab_ticker_seconds` (8, from a
+fixed list of 4–20 on /settings/preferences, where an example plays the
+combination currently selected).
 
 **The discovery rail renders with the page.** The rail (Tags you follow / Who
 to follow / Suggested posts) was lazily loaded for one release (v7.200.3: an

@@ -201,6 +201,14 @@ config :vutuv, :tag_merge_assist_model, "qwen3.5:9b"
 # back and read anyway.
 config :vutuv, :notification_digest_delay_minutes, 30
 
+# The silence after the feed's tab ticker closes (issue #1668), before another
+# quote may open. Longer than the 400 ms the bar takes to fold back, so a burst
+# of arrivals on a slow line — a reconnect delivers a backlog at once — cannot
+# close and reopen the bar in the same breath. What lands inside the silence
+# still gets its dot. Not a member setting: it is about the animation, not
+# about taste.
+config :vutuv, :feed_ticker_cooldown_ms, 2_000
+
 config :vutuv, :reference_checks_enabled, true
 config :vutuv, :reference_check_model, "qwen3.6:27b"
 config :vutuv, :reference_check_model_url, nil

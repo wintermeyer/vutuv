@@ -36,8 +36,12 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Phoenix.LiveView.JS
   alias Vutuv.Activity
   alias Vutuv.ContentFilters
+  alias Vutuv.Fediverse.Handle
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Identity
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Prefs
   alias Vutuv.Social
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.Live.DayClockRestream
@@ -45,6 +49,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.RemotePostActions
+  alias VutuvWeb.Markdown
   alias VutuvWeb.UserHelpers
 
   # The origin's like/repost figures on a card from another network tick
@@ -198,6 +203,12 @@ defmodule VutuvWeb.PostLive.Feed do
     # stored: it means "since you have been looking at this page", so a mount
     # starting clean is the honest state, not a lost one.
     |> assign(:unseen_sources, MapSet.new())
+    # The transient half of that (issue #1668): what landed over there, quoted
+    # beside its tab for a few seconds. nil = no window open. `ticker_quiet_until`
+    # is the short silence after one closes, so a burst on a bad line cannot
+    # fold the bar open and shut in the same breath.
+    |> assign(:tab_ticker, nil)
+    |> assign(:ticker_quiet_until, nil)
     |> assign(:more?, payload.more?)
     |> assign(:cursor, payload.cursor)
     |> assign(:empty?, payload.entries == [])
@@ -682,6 +693,13 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign_discover_posts(socket)}
   end
 
+  # The window ran out in the browser. It has already hidden itself there, so
+  # this only clears the server's copy — and starts the silence — which is what
+  # keeps a later patch from putting the quote back on screen.
+  def handle_event("hide-tab-ticker", _params, socket) do
+    {:noreply, hide_ticker(socket)}
+  end
+
   def handle_event("show-new", _params, socket) do
     pending = socket.assigns.pending_posts
 
@@ -742,6 +760,7 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:pending_posts, [])
     |> assign(:entries, entries)
     |> clear_unseen(filter)
+    |> close_ticker()
     |> stream(:posts, entries, reset: true)
     |> watch_pending_photos(entries)
   end
@@ -940,11 +959,19 @@ defmodule VutuvWeb.PostLive.Feed do
       is_nil(source) or not socket.assigns.source_tabs? ->
         socket
 
-      MapSet.member?(socket.assigns.unseen_sources, source) ->
+      # A window already open for this tab only needs the *fact* that another
+      # one landed — the count replaces the quote from the second on — so it
+      # skips the query the same way the plain dot used to.
+      ticking?(socket, source) ->
+        count_ticker(socket)
+
+      # Nothing left to learn: the dot is already there and no quote is due
+      # (the member switched it off, or the last window only just closed).
+      MapSet.member?(socket.assigns.unseen_sources, source) and not ticker_due?(socket) ->
         socket
 
-      Posts.feed_source_since?(socket.assigns.current_user, source, at) ->
-        mark_unseen(socket, source)
+      entry = Posts.newest_source_entry(socket.assigns.current_user, source, at) ->
+        socket |> mark_unseen(source) |> open_ticker(source, entry)
 
       true ->
         socket
@@ -1038,7 +1065,8 @@ defmodule VutuvWeb.PostLive.Feed do
       # rather than dropping it: a dot, not a count — the point is that
       # something is over there, and the tab reloads from the top anyway.
       true ->
-        {:noreply, mark_unseen(socket, entry_source(entry))}
+        source = entry_source(entry)
+        {:noreply, socket |> mark_unseen(source) |> open_or_count_ticker(source, entry)}
     end
   end
 
@@ -1050,6 +1078,193 @@ defmodule VutuvWeb.PostLive.Feed do
 
   defp mark_unseen(socket, source),
     do: update(socket, :unseen_sources, &MapSet.put(&1, source))
+
+  ## ── The tab ticker (issue #1668) ──
+  #
+  # The dot says *that* something landed on the tab you are not on. The ticker
+  # says *what*, quoting the arrival's author and first words beside that tab —
+  # and then goes, because the bar belongs to the tabs. Three rules carry it:
+  #
+  # 1. **One quote per window.** A second arrival inside the window cannot
+  #    replace the first (both would stand for less time than it takes to read
+  #    one) and cannot queue behind it (ten arrivals would hold the bar open
+  #    for a minute and a half), so the quote gives up and becomes a count.
+  #    The clock is **not** restarted by it: the window belongs to the moment,
+  #    not to the last thing that landed, or a busy source owns the bar.
+  # 2. **The browser owns the clock.** See the `FeedTicker` hook — a window
+  #    counted out on the server would include the trip out, and a hide that
+  #    never arrives would leave the quote standing forever.
+  # 3. **A silence after each window** (`:feed_ticker_cooldown_ms`), longer
+  #    than the fold-away animation. Posts do not arrive evenly on a slow line
+  #    — a reconnect delivers a backlog at once — and without it the bar would
+  #    close and reopen in the same breath. What lands in the silence still
+  #    gets its dot.
+  #
+  # Only ever one tab at a time: `other_source/1` is nil on "All", and the two
+  # named tabs partition the feed, so the reader is on one of them and
+  # everything that is not theirs belongs to the other. A third source would be
+  # the first thing to break that, and would need a rule for two open windows.
+
+  # An arrival on a tab the reader is not on, from the path that carries the
+  # entry: extend the open window or start a new one.
+  defp open_or_count_ticker(socket, source, entry) do
+    if ticking?(socket, source),
+      do: count_ticker(socket),
+      else: open_ticker(socket, source, entry)
+  end
+
+  defp open_ticker(socket, source, entry) do
+    with true <- ticker_due?(socket),
+         %{} = teaser <- ticker_teaser(socket, entry) do
+      assign(socket, :tab_ticker, %{
+        tab: to_string(source),
+        who: teaser.who,
+        text: teaser.text,
+        count: 1,
+        seconds: Prefs.get(socket.assigns.current_user, :feed_tab_ticker_seconds),
+        # What tells the hook a *new* window started, so it restarts its clock.
+        # Stays put while the count climbs, which is how rule 1 above holds.
+        id: System.unique_integer([:positive]),
+        aria: ticker_aria(source, teaser.who, 1)
+      })
+    else
+      _ -> socket
+    end
+  end
+
+  defp count_ticker(socket) do
+    update(socket, :tab_ticker, fn ticker ->
+      count = ticker.count + 1
+
+      %{
+        ticker
+        | count: count,
+          aria: ticker_aria(ticker.tab, ticker.who, count)
+      }
+    end)
+  end
+
+  # The member went to the tab themselves, so the window has done its job —
+  # and no silence is owed: they acted, nothing flickered at them.
+  defp close_ticker(socket), do: assign(socket, :tab_ticker, nil)
+
+  # The window ran out (the hook says so). Its silence starts here.
+  defp hide_ticker(socket) do
+    socket
+    |> assign(:tab_ticker, nil)
+    |> assign(:ticker_quiet_until, System.monotonic_time(:millisecond) + ticker_cooldown_ms())
+  end
+
+  defp ticking?(socket, source) do
+    case socket.assigns.tab_ticker do
+      %{tab: tab} -> tab == to_string(source)
+      _ -> false
+    end
+  end
+
+  # Whether a fresh window may open: the member wants quotes at all, the tab
+  # bar exists to put one in, and the last window's silence is over.
+  defp ticker_due?(socket) do
+    socket.assigns.source_tabs? and is_nil(socket.assigns.tab_ticker) and
+      Prefs.get(socket.assigns.current_user, :feed_tab_ticker?) and not quiet?(socket)
+  end
+
+  defp quiet?(socket) do
+    case socket.assigns.ticker_quiet_until do
+      nil -> false
+      until -> System.monotonic_time(:millisecond) < until
+    end
+  end
+
+  defp ticker_cooldown_ms, do: Application.get_env(:vutuv, :feed_ticker_cooldown_ms, 2_000)
+
+  # Who wrote it and what it opens with. Returns nil for an entry this reader
+  # has muted by content filter: the quote would put the very word they
+  # silenced into the bar, and `decorate/3` — which stamps `:filtered_by` — only
+  # runs on the branch for the tab they *are* on.
+  defp ticker_teaser(socket, entry) do
+    viewer = socket.assigns.current_user
+
+    if filtered_pattern(entry, socket.assigns.content_filters, viewer.id) do
+      nil
+    else
+      %{who: ticker_who(entry), text: ticker_text(entry)}
+    end
+  end
+
+  # The handle without its server (`Handle.short/1`): the tab beside the quote
+  # already says "Fediverse", and the domain would take half the line.
+  defp ticker_who(entry) do
+    cond do
+      Posts.remote_reply_entry?(entry) ->
+        Handle.short(Handle.display(entry.note.handle, entry.note.actor_uri))
+
+      Posts.remote_feed_entry?(entry) ->
+        Handle.short(RemoteAccount.display_handle(entry.remote_post.remote_account))
+
+      true ->
+        case Posts.author(entry.post) do
+          nil -> nil
+          author -> local_who(author)
+        end
+    end
+  end
+
+  # A page that never claimed a root handle has none to show, so it is named.
+  defp local_who(author) do
+    case Identity.handle(author) do
+      handle when is_binary(handle) -> "@" <> handle
+      _ -> Identity.display_name(author)
+    end
+  end
+
+  defp ticker_text(entry) do
+    cond do
+      Posts.remote_reply_entry?(entry) -> one_line(entry.note.content_text)
+      Posts.remote_feed_entry?(entry) -> one_line(entry.remote_post.content_text)
+      true -> one_line(Markdown.to_preview_line(entry.post.body))
+    end
+  end
+
+  # A quote is one line whatever the body did. The cap keeps a long post out of
+  # the payload; where the line is actually cut is the bar's width, in CSS.
+  defp one_line(text) when is_binary(text) do
+    case text |> String.replace(~r/\s+/u, " ") |> String.trim() |> String.slice(0, 200) do
+      "" -> nil
+      line -> line
+    end
+  end
+
+  defp one_line(_text), do: nil
+
+  # Naming the tab with a colon rather than a preposition, and one string for
+  # both tabs: "new in the Fediverse" and "new on vutuv" do not share a German
+  # sentence, so a %{source} placeholder inside a prepositional phrase would be
+  # wrong in one of them. Screen readers only: what the eye gets is the tint.
+  defp ticker_aria(source, who, 1) when is_binary(who),
+    do: gettext("%{source}: new post from %{who}", source: source_name(source), who: who)
+
+  defp ticker_aria(source, _who, 1),
+    do: gettext("%{source}: new post", source: source_name(source))
+
+  defp ticker_aria(source, _who, count) do
+    ngettext(
+      "%{source}: %{formatted} new post",
+      "%{source}: %{formatted} new posts",
+      count,
+      source: source_name(source),
+      formatted: compact_count(count)
+    )
+  end
+
+  # The tab's own label, so the two never drift apart.
+  defp source_name(source) do
+    tab = to_string(source)
+
+    Enum.find_value(feed_filter_options(), tab, fn {value, label} ->
+      value == tab && label
+    end)
+  end
 
   # A newly streamed reply renders the post it answers inline (the threaded
   # card), so drop the parent's standalone row — from the stream and from any
@@ -1403,6 +1618,7 @@ defmodule VutuvWeb.PostLive.Feed do
             event="filter-source"
             options={feed_filter_options()}
             unseen={unseen_tabs(@unseen_sources)}
+            ticker={@tab_ticker}
           />
 
           <div :if={@pending_posts != []} class="text-center">

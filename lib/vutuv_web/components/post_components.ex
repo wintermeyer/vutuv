@@ -477,6 +477,14 @@ defmodule VutuvWeb.PostComponents do
   #1503) — the coral dot the notifications list wears, and a dot rather than a
   count because the host knows *that* something landed there, not how much.
   The active tab never carries one whatever is passed: you are looking at it.
+
+  `ticker` quotes what just landed on one of those tabs, for a few seconds,
+  beside it (issue #1668). The dot says *that* something is over there and
+  stays until the tab is visited; the ticker says *what*, and goes on its own.
+  While it stands, the bar and the quote share one warm tint so the pair reads
+  as belonging together, and on a narrow screen every other tab's label folds
+  away to give the quote the width — the tabs come back when it goes. The feed
+  builds the map (`VutuvWeb.PostLive.Feed`); everything here is rendering.
   """
   attr(:active, :string, required: true)
   attr(:event, :string, default: nil, doc: "phx-click event name → button mode")
@@ -488,6 +496,12 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:unseen, :list, default: [], doc: "tab values carrying an unseen dot")
+
+  attr(:ticker, :map,
+    default: nil,
+    doc:
+      "the transient quote beside a tab: %{tab, who, text, count, seconds, id, aria}; nil = no window open"
+  )
 
   attr(:class, :any,
     default: "mb-4",
@@ -505,7 +519,20 @@ defmodule VutuvWeb.PostComponents do
     (and links carrying `aria-current` on the archive). A real tablist owes the
     reader a roving tabindex and arrow-key traversal, the same call the emoji
     picker's group tabs made. --%>
-    <div class={["flex flex-wrap gap-1 text-sm", @class]} {@rest}>
+    <%!-- Wrapping is decided here rather than in CSS: `flex-wrap` is a Tailwind
+    utility and components.css is a cascade layer, so a rule there would lose to
+    it. Exactly one of the two classes is ever emitted, so they never fight.
+    While the quote is up the bar stays on ONE line at every width — a bar that
+    wrapped would push the timeline down for eight seconds and pull it back —
+    and the quote shrinks and truncates instead. --%>
+    <div
+      class={[
+        "filter-tabs flex gap-1 text-sm",
+        (@ticker && "filter-tabs--ticking flex-nowrap") || "flex-wrap",
+        @class
+      ]}
+      {@rest}
+    >
       <%= for {value, label} <- @options do %>
         <button
           :if={@event}
@@ -514,9 +541,12 @@ defmodule VutuvWeb.PostComponents do
           phx-value-type={value}
           data-filter-tab={value}
           aria-pressed={to_string(@active == value)}
-          class={post_filter_tab_class(@active == value)}
+          class={[
+            post_filter_tab_class(@active == value),
+            @ticker && @ticker.tab == value && "filter-tab--ticking"
+          ]}
         >
-          {label}<.unseen_dot show={value != @active and value in @unseen} />
+          <.tab_label label={label} /><.unseen_dot show={value != @active and value in @unseen} />
         </button>
         <.link
           :if={!@event}
@@ -525,10 +555,62 @@ defmodule VutuvWeb.PostComponents do
           aria-current={@active == value && "page"}
           class={post_filter_tab_class(@active == value)}
         >
-          {label}<.unseen_dot show={value != @active and value in @unseen} />
+          <.tab_label label={label} /><.unseen_dot show={value != @active and value in @unseen} />
         </.link>
       <% end %>
+      <.filter_tab_ticker :if={@ticker} ticker={@ticker} event={@event} />
     </div>
+    """
+  end
+
+  # The label in a span of its own, so the ticker's narrow-screen rule has
+  # something to fold: a width animates, a text node does not. `--n` is the
+  # label's own length, because a `max-width` that is the same for every tab
+  # would spend most of the animation above the width the word ever had —
+  # visibly late. Two characters of slack, so a label of wide capitals is
+  # never clipped in the resting state. Inert everywhere else: without the
+  # ticker the cap is above the text and nothing transitions.
+  attr(:label, :string, required: true)
+
+  defp tab_label(assigns) do
+    ~H"""
+    <span class="filter-tab__label" style={"--n: #{String.length(@label)}"}>{@label}</span>
+    """
+  end
+
+  # The quote itself: a button, not a tab — it switches to the source it names
+  # and takes the window with it, which is also what the tab beside it does.
+  # The hook owns the clock (assets/js/app.js): the seconds run in the browser,
+  # where the window is actually visible, and it hides itself before telling
+  # the server, so a dead socket cannot leave the quote standing.
+  attr(:ticker, :map, required: true)
+  attr(:event, :string, default: nil)
+
+  defp filter_tab_ticker(assigns) do
+    ~H"""
+    <button
+      type="button"
+      id="feed-tab-ticker"
+      phx-hook="FeedTicker"
+      data-ticker-window={@ticker.id}
+      data-ticker-seconds={@ticker.seconds}
+      phx-click={@event}
+      phx-value-type={@ticker.tab}
+      aria-label={@ticker.aria}
+      class="filter-tab-ticker"
+    >
+      <span :if={@ticker.count > 1} class="filter-tab-ticker__count">
+        {ngettext("%{formatted} new post", "%{formatted} new posts", @ticker.count,
+          formatted: compact_count(@ticker.count)
+        )}
+      </span>
+      <span :if={@ticker.count == 1 and @ticker.who} class="filter-tab-ticker__who">
+        {@ticker.who}
+      </span>
+      <span :if={@ticker.count == 1 and @ticker.text} class="filter-tab-ticker__text">
+        {@ticker.text}
+      </span>
+    </button>
     """
   end
 

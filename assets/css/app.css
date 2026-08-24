@@ -144,6 +144,34 @@ html[data-nav-pressing] main {
   transition-delay: var(--press-pending-delay);
 }
 
+/* The feed's tab ticker (issue #1668) folds the other tabs away when the bar
+   is too narrow to hold three labels and a quote. It lives here rather than in
+   components.css for the reason this block exists at all: the tabs wear their
+   padding as a `px-3` utility, and a layered rule cannot take it off them. The
+   rest of the ticker — its own surface, the label's transition, the tints — has
+   no utility to fight and stays in components.css beside the design system.
+
+   `.filter-tabs` is the query container (components.css), so the question is
+   how wide the BAR is, not the window: the settings page shows this control in
+   a narrow example box on a wide screen, and it behaves there like a phone. */
+@container (max-width: 460px) {
+  .filter-tabs--ticking [data-filter-tab]:not(.filter-tab--ticking) {
+    padding-left: 0;
+    padding-right: 0;
+    opacity: 0;
+  }
+
+  .filter-tabs--ticking [data-filter-tab]:not(.filter-tab--ticking) .filter-tab__label {
+    max-width: 0;
+  }
+
+  /* Less room for the author, so less of it — the quote is what the width was
+     freed for. */
+  .filter-tab-ticker__who {
+    max-width: 9ch;
+  }
+}
+
 /* Dark mode re-declares a palette at the SAME specificity it was set at, never
    only on the one-attribute default: `[data-nav-bar] [data-nav-item]` is
    (0,2,0) and would keep its light `--press-on-bg` right through a (0,1,0)

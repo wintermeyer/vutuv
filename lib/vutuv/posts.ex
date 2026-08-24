@@ -2700,9 +2700,9 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  Whether the tab `source` has anything for `viewer` stamped at or after
-  `since` — what the feed asks before dotting a tab it is not looking at
-  (issue #1503).
+  The newest entry the tab `source` holds for `viewer` stamped at or after
+  `since`, decorated for rendering — or nil. What the feed asks before dotting
+  a tab it is not looking at (issue #1503), and quoting its first words there.
 
   Same shape as `fediverse_feed_available?/1` one question narrower, and for
   the same reason: **only the reader's own sources know whether a post reaches
@@ -2710,26 +2710,45 @@ defmodule Vutuv.Posts do
   public, a language they filter out and the resharer's own standing all decide
   per member, so the write that triggered this cannot fan out an answer — it
   can only say "something landed, go and look". Each source is asked for its
-  newest row and `Enum.any?/2` stops at the first that qualifies.
+  newest row and the newest of those wins.
 
-  It answers "there is something at the top of that tab at least as new as what
-  just landed", not "that exact post reached you". The two come apart only when
-  a server delivers a post published well before now: then the row this finds
-  is the tab's newest rather than the arrival. A tab with fresh content at the
-  top is still what the dot promises, so that is the conservative side to err
-  on — the side it must never err on is a post the reader may not see, which is
-  why the sources answer rather than the fan-out.
+  It answers "this is what sits at the top of that tab, and it is at least as
+  new as what just landed", not "that exact post reached you". The two come
+  apart only when a server delivers a post published well before now: then the
+  entry this finds is the tab's newest rather than the arrival. That is also
+  the entry the reader lands on when they follow the dot, so it is the
+  conservative side to err on — the side it must never err on is a post the
+  reader may not see, which is why the sources answer rather than the fan-out.
+
+  Costs one decorate pass on a single row, so quoting the arrival is no more
+  work than the boolean this replaced plus that pass.
   """
-  def feed_source_since?(%User{} = viewer, source, %NaiveDateTime{} = since)
+  def newest_source_entry(%User{} = viewer, source, %NaiveDateTime{} = since)
       when source in [:vutuv, :fediverse] do
     viewer
     |> feed_sources(source)
-    |> Enum.any?(fn fetch ->
-      case fetch.(1, nil) do
-        [entry | _] -> NaiveDateTime.compare(entry.at, since) != :lt
-        [] -> false
-      end
-    end)
+    |> Enum.flat_map(&newest_row(&1, since))
+    |> case do
+      [] ->
+        nil
+
+      candidates ->
+        # The sources are asked one row each, so the newest of those rows is the
+        # tab's newest — and it is the one the reader would land on.
+        candidates
+        |> Enum.max_by(& &1.at, NaiveDateTime)
+        |> List.wrap()
+        |> decorate_feed_entries(viewer)
+        |> List.first()
+    end
+  end
+
+  # One source's newest row, kept only if it is at least as new as `since`.
+  defp newest_row(fetch, since) do
+    case fetch.(1, nil) do
+      [entry | _] -> if NaiveDateTime.compare(entry.at, since) != :lt, do: [entry], else: []
+      [] -> []
+    end
   end
 
   # Everything the six sources produce, made ready to render.

@@ -85,6 +85,12 @@ defmodule VutuvWeb.GettextExtractionAnchors do
         "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
       ),
       gettext("Feed"),
+      # Vutuv.Prefs — the feed's tab ticker (issue #1668)
+      gettext("Feed tabs"),
+      gettext("Quote what arrives on the other tab"),
+      gettext("How long the quote stands"),
+      gettext("When off, a tab holding something new wears its dot and says nothing more."),
+      gettext("Between 4 and 20 seconds."),
       gettext("0 means posts are never shortened."),
       gettext("How much of a post a notification quotes before it is cut off."),
       gettext("Opens first, as the main button. The others appear as alternatives."),

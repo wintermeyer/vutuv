@@ -116,6 +116,18 @@ defmodule VutuvWeb.SettingsHTML do
   defp dm_delay_label(120), do: gettext("After 2 hours")
 
   @doc """
+  The window lengths the feed-tab ticker offers, in seconds (issue #1668).
+
+  Five values inside the registry's 4–20 bounds rather than a number field: the
+  quote interrupts, so a mistyped 600 would park the bar open for ten minutes.
+  The bounds are what any GUI may store — this is what a member is offered.
+  """
+  def feed_ticker_second_options do
+    pref = Vutuv.Prefs.pref!(:feed_tab_ticker_seconds)
+    Enum.filter([4, 6, 8, 12, 20], &(&1 >= pref.min and &1 <= pref.max))
+  end
+
+  @doc """
   The Feed-languages card's chips (issue #1537): the languages this member is
   likely to want first, then the whole curated list behind a disclosure.
 
