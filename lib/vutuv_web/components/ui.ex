@@ -2941,9 +2941,23 @@ defmodule VutuvWeb.UI do
   Distinct from `secret_once/1`, which is the brand-tinted one-shot reveal of a
   credential that will never be shown again; this box is for a value the member
   can come back and read any time.
+
+  `variant="inline"` drops the tinted surface and the block layout so the value
+  can ride a line of page meta beside other facts (the tag page's Fediverse
+  address, next to the follower count). Same `<code>` and same copy button, so
+  the copy contract lives in one place either way — the surface is all that
+  changes.
   """
   attr(:id, :string, required: true)
-  attr(:class, :any, default: "mt-3 items-start")
+
+  attr(:variant, :string,
+    default: "box",
+    values: ~w(box inline),
+    doc:
+      "`box` is the tinted field a card gives a value of its own; `inline` drops the surface so the value can ride a meta line beside other facts"
+  )
+
+  attr(:class, :any, default: nil)
   attr(:code_class, :any, default: "text-sm")
   attr(:copy_text, :string, default: nil)
   slot(:inner_block, required: true)
@@ -2951,8 +2965,10 @@ defmodule VutuvWeb.UI do
   def copy_field(assigns) do
     ~H"""
     <div class={[
-      "flex gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
-      @class
+      @variant == "box" &&
+        "flex gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
+      @variant == "inline" && "inline-flex max-w-full items-center gap-1.5 align-middle",
+      @class || (@variant == "box" && "mt-3 items-start")
     ]}>
       <code
         id={@id}

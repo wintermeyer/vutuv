@@ -958,6 +958,9 @@ const Hooks = {
 // press handler below; the paint itself is the press block in `app.css`.
 const NAV_PRESSING = "data-nav-pressing"
 
+// A disclosure whose open/closed state is the reader's, not the server's.
+const KEEP_OPEN = "data-keep-open"
+
 const liveSocket = new LiveSocket("/live", Socket, {
   params: { _csrf_token: csrfToken() },
   hooks: Hooks,
@@ -970,6 +973,18 @@ const liveSocket = new LiveSocket("/live", Socket, {
     // across a patch for exactly this reason; ours has to say so here.
     onBeforeElUpdated(from, to) {
       if (from.hasAttribute(NAV_PRESSING)) to.setAttribute(NAV_PRESSING, "")
+
+      // A <details data-keep-open> the reader opened or closed themselves. The
+      // server renders the STARTING position once and has nothing to say about
+      // it afterwards, so morphdom must not restore that starting position on
+      // every later patch — for the tag timeline's filter panel that is a live
+      // count tick folding the panel shut while somebody is typing in it. Opt
+      // in per element: a disclosure the server really does drive (one that
+      // opens because its content changed) must keep taking its state from the
+      // render, so it carries no marker.
+      if (from.hasAttribute(KEEP_OPEN)) {
+        from.open ? to.setAttribute("open", "") : to.removeAttribute("open")
+      }
     },
   },
 })

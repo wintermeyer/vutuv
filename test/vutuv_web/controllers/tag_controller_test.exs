@@ -1,6 +1,8 @@
 defmodule VutuvWeb.TagControllerTest do
   use VutuvWeb.ConnCase, async: true
 
+  alias VutuvWeb.Fediverse.Docs
+
   # The public tag pages resolve the `:slug` param to a `Tags.Tag` before every
   # action. An unknown slug must render a clean 404 and *halt* (a missing tag
   # must not fall through into `show/2` with a nil assign). The `:index` action
@@ -111,6 +113,80 @@ defmodule VutuvWeb.TagControllerTest do
 
       assert html =~ ~s(id="tag-timeline-empty")
       refute html =~ "data-filter-list"
+    end
+  end
+
+  # The top of a tag page is for the posts. Two blocks used to sit above them on
+  # every single tag page whatever they had to say: a card whose only content
+  # was "this tag has no description yet" (an admin-only field, so the reader
+  # cannot fix it), and the full Fediverse follow card.
+  describe "the front-matter card" do
+    test "a tag with nothing to say about itself renders no card at all", %{conn: conn} do
+      tag = insert(:tag)
+
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+
+      refute html =~ "data-tag-front-matter"
+      refute html =~ "description yet"
+    end
+
+    test "a described tag still gets the card", %{conn: conn} do
+      insert(:tag, name: "Busy", slug: "busy", description: "A very busy tag indeed.")
+
+      html = conn |> get(~p"/tags/busy") |> html_response(200)
+
+      assert html =~ "data-tag-front-matter"
+      assert html =~ "A very busy tag indeed."
+    end
+
+    test "a blank description counts as none", %{conn: conn} do
+      insert(:tag, name: "Blank", slug: "blank", description: "   ")
+
+      html = conn |> get(~p"/tags/blank") |> html_response(200)
+
+      refute html =~ "data-tag-front-matter"
+    end
+
+    test "an endorsed member alone is enough to earn the card", %{conn: conn} do
+      tag = insert(:tag)
+      insert(:user_tag, user: insert(:activated_user), tag: tag)
+
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+
+      assert html =~ "data-tag-front-matter"
+    end
+  end
+
+  describe "the tag's Fediverse address" do
+    test "rides the header, with the follow form folded away below it", %{conn: conn} do
+      tag = insert(:tag)
+      handle = "@" <> Docs.acct(tag)
+
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+
+      # The address is the thing a visitor from another server came for, so it
+      # stays in plain sight — once, on the header's meta line.
+      assert html =~ handle
+      assert html =~ ~s(id="tag-fediverse-handle")
+      assert length(String.split(html, ~s(id="tag-fediverse-handle"))) == 2
+
+      # The sentence and the remote-follow form are still on the page, but
+      # behind a closed disclosure rather than an open card.
+      assert html =~ ~s(<details id="tag-fediverse")
+      assert html =~ ~s(id="remote-follow-form")
+      refute html =~ ~s(<details id="tag-fediverse" open)
+    end
+
+    test "the German page names the disclosure in German", %{conn: conn} do
+      tag = insert(:tag)
+
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/tags/#{tag}")
+        |> html_response(200)
+
+      assert html =~ "Aus dem Fediverse folgen"
     end
   end
 

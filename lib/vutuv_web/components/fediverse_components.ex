@@ -133,7 +133,11 @@ defmodule VutuvWeb.FediverseComponents do
     doc: "the card's id; the handle's `<code>` takes `<id>-handle`, which the copy button targets"
   )
 
-  attr(:handle, :string, required: true, doc: "`@name@host`, from `VutuvWeb.Fediverse.Docs`")
+  attr(:handle, :string,
+    default: nil,
+    doc:
+      "`@name@host`, from `VutuvWeb.Fediverse.Docs`; `nil` when the page already shows the address somewhere else and only the form belongs here (the tag page's header carries it)"
+  )
 
   attr(:name, :string,
     required: true,
@@ -164,6 +168,11 @@ defmodule VutuvWeb.FediverseComponents do
   The form's own ids stay `remote-follow-*` rather than deriving from `@id`: no
   page shows two of these, the redirect targets are written against them, and
   they are what the tests key on.
+
+  Pass `handle={nil}` when the page already shows the address somewhere the
+  reader can copy it — the tag page puts it on the header's meta line and keeps
+  only the sentence and the form here, folded away behind a disclosure. The
+  component then renders no copy box rather than a second one.
   """
   def follow_us_from_elsewhere(assigns) do
     ~H"""
@@ -174,7 +183,7 @@ defmodule VutuvWeb.FediverseComponents do
       )}
     </p>
 
-    <.copy_field id={"#{@id}-handle"}>{@handle}</.copy_field>
+    <.copy_field :if={@handle} id={"#{@id}-handle"}>{@handle}</.copy_field>
 
     <.form for={%{}} action={@action} id="remote-follow-form" class="mt-4">
       <label

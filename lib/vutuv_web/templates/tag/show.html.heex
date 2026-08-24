@@ -7,15 +7,30 @@ card stretch edge to edge with a huge line length and dead space. --%>
   baseline alignment so the pill lines up with the title, not the count line
   below it. Exactly one <h1> on the page (no sr-only crumbs h1). --%>
   <div class="profile-header items-start">
-    <div class="profile-header__info">
+    <div class="profile-header__info min-w-0">
       <h1>{@tag.name || @tag.slug}</h1>
-      <p :if={@tag_follower_count > 0} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {delimited_count(@tag_follower_count)} {ngettext(
-          "follower",
-          "followers",
-          @tag_follower_count
-        )}
-      </p>
+      <%!-- The page's meta line: how many people follow this topic and, where
+      the installation federates, the topic's own address out there — which is
+      the one thing a visitor arriving from Mastodon came for, and the only part
+      of the old Fediverse card that most readers ever used. As a line of page
+      meta it answers the same question in the same place the follower count
+      already stands, instead of a full card between the title and the posts. --%>
+      <div
+        :if={@tag_follower_count > 0 or @fediverse_handle}
+        class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600 dark:text-slate-400"
+      >
+        <span :if={@tag_follower_count > 0}>
+          {delimited_count(@tag_follower_count)} {ngettext(
+            "follower",
+            "followers",
+            @tag_follower_count
+          )}
+        </span>
+        <span :if={@tag_follower_count > 0 && @fediverse_handle} aria-hidden="true">·</span>
+        <.copy_field :if={@fediverse_handle} id="tag-fediverse-handle" variant="inline">
+          {@fediverse_handle}
+        </.copy_field>
+      </div>
     </div>
     <.tag_follow_button :if={@current_user} following?={@following_tag?} tag={@tag} />
   </div>
@@ -24,34 +39,36 @@ card stretch edge to edge with a huge line length and dead space. --%>
   </div>
   <JsonLd.script data={JsonLd.breadcrumb_trail([{gettext("Tags"), ~p"/tags"}, gettext("Show")])} />
 
-  <%!-- The tag's front matter: description, most-endorsed members. --%>
-  <div class="card-list">
-    <%= render "single_card.html", assigns %>
-  </div>
+  <%!-- The rest of what a visitor from another server needs: the sentence that
+  explains what following a tag over there gets them, and the form that sends
+  them to their own server's follow dialog (issue #1330). Folded away behind one
+  line, because the address above answers the common case and this is the step
+  only somebody actually mid-follow takes — as an open card it was ~300px of the
+  top of every tag page, above the posts.
 
-  <%!-- A visitor who arrived from another server wants two things: this topic's
-  address, and to follow it where their own account lives. The pill in the
-  header is for signed-in members only, so without this the page showed such a
-  visitor a follower count and no way in short of registering — the friction
-  issue #1330 removes. Same markup as the profile and the page card, because it
-  is the same person asking the same thing.
-
-  Below the front matter and above the timeline, and **outside** the header:
-  `.profile-header` is a flex row for the title and the pill, and a card as a
-  third child there squeezed the handle into one character per line. The topic's
-  own content stays first, the way the profile keeps its fediverse card among
-  the content rather than in the header.
-
-  The `<.card>` around it is the profile's arrangement too: the component draws
-  the address box and the form, the caller supplies the surface they sit on. --%>
-  <.card :if={@fediverse_handle} id="tag-fediverse" class="mt-6">
+  A native `<details>`: this is a classic controller page, so there is no socket
+  to lose the state to and no JavaScript involved. No `handle` is passed, which
+  is what tells the shared component to leave out its copy box — the header's
+  meta line already carries the address. --%>
+  <details :if={@fediverse_handle} id="tag-fediverse" class="group mb-6">
+    <summary class="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 [&::-webkit-details-marker]:hidden">
+      <span aria-hidden="true" class="text-base leading-none transition-transform group-open:rotate-90">
+        ›
+      </span>
+      {gettext("Follow from the Fediverse")}
+    </summary>
     <.follow_us_from_elsewhere
       id="tag-fediverse"
-      handle={@fediverse_handle}
       name={"#" <> @tag.slug}
       action={~p"/tags/#{@tag.slug}/fediverse/follow"}
     />
-  </.card>
+  </details>
+
+  <%!-- The tag's front matter: description, alternative names, most-endorsed
+  members. Renders nothing at all when the topic has none of them. --%>
+  <div class="card-list">
+    <%= render "single_card.html", assigns %>
+  </div>
 
   <%!-- Everything written about this tag — vutuv posts and posts cached from
   other networks in one list — as the embedded VutuvWeb.TagLive.Timeline

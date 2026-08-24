@@ -20,9 +20,33 @@ defmodule VutuvWeb.TagHTML do
     |> Map.put(:related_users, related_users)
     |> Map.put(:recommended_users, recommended_users)
     |> Map.put(:tag_aliases, Tag.aliases_of(assigns[:tag]))
+    # One reading of "has a description", so the card's heading and the test
+    # that decides whether the card exists at all cannot disagree over a blank
+    # string somebody saved in the admin form.
+    |> Map.put(:tag_description, presence(assigns[:tag].description))
     |> Map.put(:work_string_length, 45)
     |> Map.put(:work_info_by_id, work_information_map(users, 45))
     |> Map.put(:following_by_id, following_map(assigns[:current_user], users))
+  end
+
+  defp presence(nil), do: nil
+
+  defp presence(text) when is_binary(text) do
+    case String.trim(text) do
+      "" -> nil
+      _ -> text
+    end
+  end
+
+  # Whether the front-matter card has anything in it at all: the admin-written
+  # description, the alternative names, and the two people lists. `description`
+  # is editable only under `/admin/tags/:slug`, and most tags carry none and no
+  # endorsed members either — so on most tag pages all four are empty and the
+  # card would be a white box saying nothing, directly above the posts the
+  # reader came for. Then it does not render.
+  defp tag_front_matter?(assigns) do
+    not is_nil(assigns.tag_description) or assigns.tag_aliases != [] or
+      assigns.related_users != [] or assigns.recommended_users != []
   end
 
   @doc """

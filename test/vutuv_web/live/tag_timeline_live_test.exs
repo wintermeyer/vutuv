@@ -60,6 +60,51 @@ defmodule VutuvWeb.TagTimelineLiveTest do
     view
   end
 
+  # Whether the filter panel is unfolded. `data-keep-open` is a marker that ends
+  # in the same four letters, so it comes off before the question is asked.
+  defp filters_open?(html) do
+    [tag] = Regex.run(~r{<details id="tag-timeline-filters"[^>]*>}, html)
+
+    tag |> String.replace("data-keep-open", "") |> String.contains?("open")
+  end
+
+  describe "the filter panel" do
+    test "starts folded, so the first post sits right under the tabs", %{conn: conn} do
+      {tag, _post} = tag_with_post("Ein Beitrag")
+
+      html = render(timeline(conn, tag))
+
+      # The controls stay in the DOM — a crawler and a reader with no JavaScript
+      # get the same page — they are simply not unfolded.
+      assert html =~ ~s(id="tag-timeline-filter")
+      refute filters_open?(html)
+      refute html =~ "data-active-filters"
+    end
+
+    test "a shared link that already carries a filter opens it", %{conn: conn} do
+      {tag, _post} = tag_with_post("Ein Beitrag über Hamburg")
+
+      html = conn |> timeline(tag, %{"q" => "Hamburg"}) |> render()
+
+      assert filters_open?(html)
+    end
+
+    test "the summary counts what is narrowing the list", %{conn: conn} do
+      {tag, _post} = tag_with_post("Ein Beitrag über Hamburg")
+
+      view = timeline(conn, tag)
+      html = view |> form("#tag-timeline-filter", %{"q" => "Hamburg"}) |> render_change()
+
+      # Search plus a non-default sort is two; the badge is what tells a reader
+      # who folded the panel back up that the list below is still narrowed.
+      assert html =~ "data-active-filters"
+      assert html =~ "1 active"
+
+      html = view |> form("#tag-timeline-filter", %{"sort" => "oldest"}) |> render_change()
+      assert html =~ "2 active"
+    end
+  end
+
   describe "the merged list" do
     test "shows a vutuv post and a cached fediverse post together", %{conn: conn} do
       {tag, post} = tag_with_post("Ein Beitrag von hier")
@@ -220,6 +265,21 @@ defmodule VutuvWeb.TagTimelineLiveTest do
       assert html =~ "Neueste zuerst"
       assert html =~ "Älteste zuerst"
       assert html =~ "Meiste Likes"
+    end
+
+    test "the folded panel and its badge speak German too", %{conn: conn} do
+      {tag, _post} = tag_with_post("Ein Beitrag über Hamburg")
+
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/tags/#{tag}?q=Hamburg")
+        |> html_response(200)
+
+      # "Filters" shares a msgid with the newsletter admin's noun label, which
+      # is "Filter" — the verb "Filtern" beside a count would read as an order.
+      assert html =~ "Filter"
+      assert html =~ "1 aktiv"
     end
   end
 end

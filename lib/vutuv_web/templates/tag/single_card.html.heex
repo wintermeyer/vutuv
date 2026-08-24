@@ -1,11 +1,12 @@
-<section class="card">
-
-	<% assigns = update_assigns(assigns) %>
-	<%= if(@tag.description) do %>
+<% assigns = update_assigns(assigns) %>
+<%!-- Nothing to say about this topic, no card. `description` is an admin-only
+field (`/admin/tags/:slug`), so on the overwhelming majority of tag pages the
+old empty state told the reader about a gap only somebody else can close — at
+the very top of the page, above the posts they came for. --%>
+<section :if={tag_front_matter?(assigns)} class="card" data-tag-front-matter>
+	<%= if @tag_description do %>
 	<h2 class="card__label"><%= gettext("Description") %></h2>
-  <p><%= @tag.description %></p>
-  <% else %>
-  <p><%= gettext("This tag doesn't have a description yet.") %></p>
+  <p><%= @tag_description %></p>
 	<% end %>
   <%!-- The other names this topic answers to (issue #1338), so a reader who
   arrived by one of them knows where they ended up. --%>

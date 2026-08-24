@@ -229,63 +229,90 @@ defmodule VutuvWeb.TagLive.Timeline do
         class="mt-3"
       />
 
-      <form
-        id="tag-timeline-filter"
-        phx-change="filter"
-        phx-submit="filter"
-        class="mt-3 flex flex-wrap items-end gap-3"
-      >
-        <div class="min-w-48 grow">
-          <label for="tag-filter-q" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-            {gettext("Search")}
-          </label>
-          <input
-            type="search"
-            name="q"
-            id="tag-filter-q"
-            value={@query}
-            phx-debounce="250"
-            autocomplete="off"
-            placeholder={gettext("word in a post")}
-            class={input_class()}
-          />
-        </div>
+      <%!-- Search, sort and the date range folded away behind one line. Open,
+      they are four labelled controls between the tabs and the first post — a
+      post card's worth of height, spent on a narrowing almost nobody performs —
+      so they start closed and open themselves when the link somebody followed
+      already carries one. `data-keep-open` tells the patch loop in `app.js`
+      that the disclosure's state belongs to the reader: without it every answer
+      this view renders (a filter result, a live count tick from the remote
+      cards) would fold the panel shut again under the cursor. --%>
+      <details id="tag-timeline-filters" data-keep-open open={filtered?(assigns)} class="group mt-3">
+        <summary class="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white [&::-webkit-details-marker]:hidden">
+          <span
+            aria-hidden="true"
+            class="text-base leading-none transition-transform group-open:rotate-90"
+          >
+            ›
+          </span>
+          {gettext("Filters")}
+          <span
+            :if={active_filters(assigns) > 0}
+            data-active-filters
+            class="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+          >
+            {gettext("%{formatted} active", formatted: compact_count(active_filters(assigns)))}
+          </span>
+        </summary>
 
-        <div>
-          <label for="tag-filter-sort" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-            {gettext("Sort")}
-          </label>
-          <select name="sort" id="tag-filter-sort" class={input_class()}>
-            <option :for={{value, label} <- sort_options()} value={value} selected={to_string(@sort) == value}>
-              {label}
-            </option>
-          </select>
-        </div>
-
-        <div>
-          <label for="tag-filter-from" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-            {gettext("From")}
-          </label>
-          <input type="date" name="from" id="tag-filter-from" value={@from} class={input_class()} />
-        </div>
-
-        <div>
-          <label for="tag-filter-until" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-            {gettext("Until")}
-          </label>
-          <input type="date" name="until" id="tag-filter-until" value={@until} class={input_class()} />
-        </div>
-
-        <button
-          :if={filtered?(assigns)}
-          type="button"
-          phx-click="clear"
-          id="tag-clear-filters"
-          class="min-h-10 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+        <form
+          id="tag-timeline-filter"
+          phx-change="filter"
+          phx-submit="filter"
+          class="mt-2 flex flex-wrap items-end gap-3"
         >
-          {gettext("Clear filters")}
-        </button>
-      </form>
+          <div class="min-w-48 grow">
+            <label for="tag-filter-q" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {gettext("Search")}
+            </label>
+            <input
+              type="search"
+              name="q"
+              id="tag-filter-q"
+              value={@query}
+              phx-debounce="250"
+              autocomplete="off"
+              placeholder={gettext("word in a post")}
+              class={input_class()}
+            />
+          </div>
+
+          <div>
+            <label for="tag-filter-sort" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {gettext("Sort")}
+            </label>
+            <select name="sort" id="tag-filter-sort" class={input_class()}>
+              <option :for={{value, label} <- sort_options()} value={value} selected={to_string(@sort) == value}>
+                {label}
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label for="tag-filter-from" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {gettext("From")}
+            </label>
+            <input type="date" name="from" id="tag-filter-from" value={@from} class={input_class()} />
+          </div>
+
+          <div>
+            <label for="tag-filter-until" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {gettext("Until")}
+            </label>
+            <input type="date" name="until" id="tag-filter-until" value={@until} class={input_class()} />
+          </div>
+
+          <button
+            :if={filtered?(assigns)}
+            type="button"
+            phx-click="clear"
+            id="tag-clear-filters"
+            class="min-h-10 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            {gettext("Clear filters")}
+          </button>
+        </form>
+      </details>
 
       <.post_list :if={!@empty?} id="tag-timeline-posts" phx-update="stream" data-filter-list class="mt-3">
         <div :for={{dom_id, entry} <- @streams.entries} id={dom_id} class={post_row_class()}>
@@ -331,9 +358,16 @@ defmodule VutuvWeb.TagLive.Timeline do
     ]
   end
 
-  defp filtered?(assigns) do
-    not is_nil(assigns.query) or not is_nil(assigns.from) or not is_nil(assigns.until) or
-      assigns.sort != :newest
+  defp filtered?(assigns), do: active_filters(assigns) > 0
+
+  # How many of the four controls are away from their default. It decides three
+  # things at once: whether the panel opens itself, whether "Clear filters" is
+  # offered, and the count on the summary's badge — so a reader who folds the
+  # panel back up can still see that the list below them is narrowed.
+  defp active_filters(assigns) do
+    named = Enum.count([assigns.query, assigns.from, assigns.until], &(not is_nil(&1)))
+
+    if assigns.sort == :newest, do: named, else: named + 1
   end
 
   # Three different silences, three different lines: nothing here at all,
