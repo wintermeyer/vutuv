@@ -139,6 +139,21 @@ defmodule VutuvWeb.FeedControllerTest do
       refute body =~ reply.id
     end
 
+    # A subscriber wants the member's archive, not just the last fortnight, so
+    # the author feeds carry a long tail — but an unbounded feed grows with the
+    # account forever, so it stops at the newest @author_feed_limit posts.
+    test "carries the newest 100 posts and stops there", %{author: author} do
+      posts = for i <- 1..101, do: insert(:post, user: author, body: "Post #{i}")
+      [oldest | _] = posts
+      newest = List.last(posts)
+
+      body = build_conn() |> get("/feed_author/posts/feed.xml") |> response(200)
+
+      assert length(String.split(body, "<item>")) - 1 == 100
+      assert body =~ newest.id
+      refute body =~ oldest.id
+    end
+
     test "an unknown or unactivated member 404s" do
       insert(:user, username: "sleepy_member")
 

@@ -110,7 +110,9 @@ below the bar answers with `X-Robots-Tag: noindex` from `TagController`, so
 the ~10K thin one-member/empty tag pages stopped piling up in Search Console
 as "crawled - currently not indexed"), RSS 2.0 feeds with full post content
 (`/:slug/posts/feed.xml` per member, `/posts/feed.xml` site-wide,
-`VutuvWeb.Feeds`; the member feed carries **original posts only** — reposts
+`VutuvWeb.Feeds`; an author feed (a member's or a page's) carries the newest
+**100** posts, the site-wide firehose the newest 20, since an archive somebody
+subscribed to owes them more history than a firehose everyone polls; the member feed carries **original posts only** — reposts
 are engagement rows and never `Post` rows, and replies are filtered by the
 archive's `:posts` predicate in `Vutuv.Posts.recent_public_posts/2` — while
 the site-wide firehose deliberately keeps replies; besides the invisible

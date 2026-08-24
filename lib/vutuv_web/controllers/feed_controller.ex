@@ -17,12 +17,17 @@ defmodule VutuvWeb.FeedController do
   alias VutuvWeb.ContentPolicy
   alias VutuvWeb.Feeds
 
-  @feed_limit 20
+  # An author feed is an archive somebody subscribed to once and then keeps, so
+  # it carries a tail long enough that a reader joining today gets more than the
+  # last fortnight. The site-wide firehose is the other case: everyone polls it,
+  # and what it owes a reader is freshness rather than history.
+  @author_feed_limit 100
+  @site_feed_limit 20
 
   def user(conn, %{"slug" => slug}) do
     case Vutuv.Repo.get_by(Vutuv.Accounts.User, username: slug) do
       %{email_confirmed?: true} = author ->
-        posts = Posts.recent_public_posts(author, limit: @feed_limit)
+        posts = Posts.recent_public_posts(author, limit: @author_feed_limit)
         send_feed(conn, Feeds.render_user_feed(author, posts), author.noindex?, author.noai?)
 
       _unknown_or_unactivated ->
@@ -47,7 +52,7 @@ defmodule VutuvWeb.FeedController do
     organization = Vutuv.Organizations.get_organization_by_slug(slug)
 
     if organization && Vutuv.Organizations.public_visible?(organization) do
-      posts = Posts.organization_posts_page(organization, nil, limit: @feed_limit).entries
+      posts = Posts.organization_posts_page(organization, nil, limit: @author_feed_limit).entries
 
       send_feed(
         conn,
@@ -65,7 +70,7 @@ defmodule VutuvWeb.FeedController do
   # The site-wide feed only aggregates members who opted out of nothing
   # (Posts.recent_public_posts/2), so it carries the permissive signals.
   def site(conn, _params) do
-    posts = Posts.recent_public_posts(:all, limit: @feed_limit)
+    posts = Posts.recent_public_posts(:all, limit: @site_feed_limit)
     send_feed(conn, Feeds.render_site_feed(posts), false, false)
   end
 
