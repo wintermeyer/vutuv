@@ -1,6 +1,8 @@
 defmodule Vutuv.WebAddressTest do
   use ExUnit.Case, async: true
 
+  import Vutuv.WorkCounter
+
   alias Vutuv.WebAddress
 
   doctest Vutuv.WebAddress
@@ -85,17 +87,23 @@ defmodule Vutuv.WebAddressTest do
       assert WebAddress.link_only?(over_limit) == false
     end
 
-    test "a ~1 MB free-text payload returns false fast, not after an O(n²) scan" do
+    test "a ~1 MB free-text payload returns false without scanning it" do
       # The pathological ReDoS input the finding describes: length-unvalidated
       # free text ending in a slash. Without the guard each of the nine
       # unanchored patterns bump-alongs at O(n²) over ~1 MB; with it the byte
-      # cap returns instantly. Assert both the result and that it is fast.
+      # cap returns instantly. Assert both the result and that it did no work.
+      #
+      # Measured in reductions rather than microseconds so a busy machine
+      # cannot fail it: the capped call costs 65 of them, while removing the
+      # cap does not finish inside the 60 s test timeout at all. 50_000 leaves
+      # the short-circuit three orders of magnitude of room and is still far
+      # below what one pass over a megabyte would charge.
       giant = String.duplicate("a", 1_000_000) <> "/"
 
-      {micros, result} = :timer.tc(fn -> WebAddress.link_only?(giant) end)
+      {work, result} = count_reductions(fn -> WebAddress.link_only?(giant) end)
 
       assert result == false
-      assert micros < 100_000, "expected a fast short-circuit, took #{micros}µs"
+      assert work < 50_000, "expected a short-circuit, took #{work} reductions"
     end
 
     test "a storable multi-byte link-only value is still caught, not clipped by the byte cap" do

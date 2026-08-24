@@ -5,6 +5,8 @@ defmodule Vutuv.Imports.LinkedInTest do
   """
   use ExUnit.Case, async: true
 
+  import Vutuv.WorkCounter
+
   alias Vutuv.Imports.LinkedIn
 
   # A real Profile.csv header + row from an actual export (note the bracketed
@@ -454,13 +456,18 @@ defmodule Vutuv.Imports.LinkedInTest do
     test "rejects an archive whose entries share one offset, promptly" do
       archive = shared_offset_zip(500)
 
-      {micros, result} = :timer.tc(fn -> LinkedIn.parse(archive) end)
+      {work, result} = count_reductions(fn -> LinkedIn.parse(archive) end)
 
       # Overlapping data regions are not a normal archive: rejected outright,
       # before the shared stream is inflated even once.
       assert {:error, :invalid_archive} = result
-      # No gigabytes inflated: rejection is a cheap header/interval check.
-      assert micros < 1_000_000
+
+      # No gigabytes inflated: rejection is a cheap header/interval check, and
+      # the bound counts work rather than wall-clock time so a loaded machine
+      # cannot fail it. The rejection costs about 73_000 reductions; inflating
+      # the shared 300 KB stream once costs 31_638, so the naive path this
+      # guards against — 500 of them — would charge some 15_800_000.
+      assert work < 2_000_000, "expected a header check, took #{work} reductions"
     end
 
     # The two-entry form of the same defect: entry b's data region is patched to

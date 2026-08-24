@@ -1,6 +1,8 @@
 defmodule VutuvWeb.MarkdownTest do
   use ExUnit.Case, async: true
 
+  import Vutuv.WorkCounter
+
   alias VutuvWeb.Markdown
 
   defp render(text), do: text |> Markdown.render() |> Phoenix.HTML.safe_to_string()
@@ -69,16 +71,22 @@ defmodule VutuvWeb.MarkdownTest do
 
   # Findings F1/F9: `http://a` followed by a long unbroken run of trailing
   # punctuation is matched as one token by `[^\s<>]+`. It must be emitted
-  # verbatim (over the length cap → not autolinked) and, either way, render in a
-  # fraction of a second rather than driving a quadratic loop.
-  test "leaves a pathological over-long autolink candidate as literal text, fast" do
+  # verbatim (over the length cap → not autolinked) and, either way, cost work
+  # linear in the input rather than driving a quadratic loop.
+  #
+  # The bound is in reductions, not wall-clock microseconds: this render costs
+  # about 388_000 of them, a quadratic pass over the same input costs
+  # 25_165_094, and the cap sits between the two with an order of magnitude to
+  # spare on either side. The old `< 1s` measured the machine instead — twenty
+  # parallel cases stretched those 3 ms to 1.16 s and failed the push gate.
+  test "leaves a pathological over-long autolink candidate as literal text, cheaply" do
     body = "http://a" <> String.duplicate(".", 20_000)
 
-    {micros, html} = :timer.tc(fn -> render(body) end)
+    {work, html} = count_reductions(fn -> render(body) end)
 
     refute html =~ "<a "
     assert html =~ "http://a"
-    assert micros < 1_000_000
+    assert work < 5_000_000, "expected a linear scan, took #{work} reductions"
   end
 
   test "still autolinks a normal long-ish URL under the cap" do
