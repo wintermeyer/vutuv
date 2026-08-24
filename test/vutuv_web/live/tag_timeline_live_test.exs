@@ -60,12 +60,12 @@ defmodule VutuvWeb.TagTimelineLiveTest do
     view
   end
 
-  # Whether the filter panel is unfolded. `data-keep-open` is a marker that ends
-  # in the same four letters, so it comes off before the question is asked.
+  # Whether the filter panel is unfolded. Only the bare boolean attribute counts:
+  # `data-keep-open` ends in the same four letters and the element's own
+  # `[&[open]]:w-full` utility spells them out again, so the word alone would
+  # answer "open" on every render.
   defp filters_open?(html) do
-    [tag] = Regex.run(~r{<details id="tag-timeline-filters"[^>]*>}, html)
-
-    tag |> String.replace("data-keep-open", "") |> String.contains?("open")
+    Regex.match?(~r/<details id="tag-timeline-filters"[^>]*\sopen=/, html)
   end
 
   describe "the filter panel" do

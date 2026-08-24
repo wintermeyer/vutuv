@@ -217,28 +217,45 @@ defmodule VutuvWeb.TagLive.Timeline do
         </p>
       </div>
 
-      <%!-- The source tabs partition the list, so they are the same control the
-      feed wears. Dropped where there is only one source to choose: an
-      installation with the fediverse switched off. --%>
-      <.post_filter_tabs
-        :if={Fediverse.enabled?()}
-        id="tag-source-tabs"
-        active={to_string(@source)}
-        event="filter-source"
-        options={feed_filter_options()}
-        class="mt-3"
-      />
+      <%!-- Tabs and the filter toggle share one row: they are the two controls
+      that narrow this list, and stacking them put a lone blue line of its own
+      under the tabs, reading as a third thing rather than as the second half of
+      the same control. `justify-between` keeps the tabs where the eye expects
+      them and parks the toggle at the far edge, where a control you reach for
+      rarely belongs. --%>
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <%!-- The source tabs partition the list, so they are the same control
+        the feed wears. Dropped where there is only one source to choose: an
+        installation with the fediverse switched off. --%>
+        <.post_filter_tabs
+          :if={Fediverse.enabled?()}
+          id="tag-source-tabs"
+          active={to_string(@source)}
+          event="filter-source"
+          options={feed_filter_options()}
+          class={nil}
+        />
 
-      <%!-- Search, sort and the date range folded away behind one line. Open,
-      they are four labelled controls between the tabs and the first post — a
-      post card's worth of height, spent on a narrowing almost nobody performs —
-      so they start closed and open themselves when the link somebody followed
-      already carries one. `data-keep-open` tells the patch loop in `app.js`
-      that the disclosure's state belongs to the reader: without it every answer
-      this view renders (a filter result, a live count tick from the remote
-      cards) would fold the panel shut again under the cursor. --%>
-      <details id="tag-timeline-filters" data-keep-open open={filtered?(assigns)} class="group mt-3">
-        <summary class="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white [&::-webkit-details-marker]:hidden">
+        <%!-- Search, sort and the date range folded away behind one line. Open,
+        they are four labelled controls between the tabs and the first post — a
+        post card's worth of height, spent on a narrowing almost nobody performs
+        — so they start closed and open themselves when the link somebody
+        followed already carries one. `data-keep-open` tells the patch loop in
+        `app.js` that the disclosure's state belongs to the reader: without it
+        every answer this view renders (a filter result, a live count tick from
+        the remote cards) would fold the panel shut again under the cursor.
+
+        The panel itself has to span the full row, which is what the `w-full`
+        summary sibling below does: a `<details>` in a flex row is one item, so
+        its open contents would otherwise be squeezed into the toggle's own
+        narrow column. --%>
+        <details
+          id="tag-timeline-filters"
+          data-keep-open
+          open={filtered?(assigns)}
+          class="group ml-auto [&[open]]:w-full"
+        >
+          <summary class="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white [&::-webkit-details-marker]:hidden">
           <span
             aria-hidden="true"
             class="text-base leading-none transition-transform group-open:rotate-90"
@@ -312,9 +329,10 @@ defmodule VutuvWeb.TagLive.Timeline do
             {gettext("Clear filters")}
           </button>
         </form>
-      </details>
+        </details>
+      </div>
 
-      <.post_list :if={!@empty?} id="tag-timeline-posts" phx-update="stream" data-filter-list class="mt-3">
+      <.post_list :if={!@empty?} id="tag-timeline-posts" phx-update="stream" data-filter-list class="mt-4">
         <div :for={{dom_id, entry} <- @streams.entries} id={dom_id} class={post_row_class()}>
           <%= if Posts.remote_feed_entry?(entry) do %>
             <.remote_post_card

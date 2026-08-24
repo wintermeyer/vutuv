@@ -489,6 +489,12 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:unseen, :list, default: [], doc: "tab values carrying an unseen dot")
 
+  attr(:class, :any,
+    default: "mb-4",
+    doc:
+      "the row's own spacing. The default is the gap every stacked caller wants; the tag page shares one flex row with its filter toggle and passes none, since a bottom margin there would knock the two controls out of line with each other."
+  )
+
   attr(:rest, :global, doc: "container attrs, e.g. an id for tests")
 
   def post_filter_tabs(assigns) do
@@ -499,7 +505,7 @@ defmodule VutuvWeb.PostComponents do
     (and links carrying `aria-current` on the archive). A real tablist owes the
     reader a roving tabindex and arrow-key traversal, the same call the emoji
     picker's group tabs made. --%>
-    <div class="mb-4 flex flex-wrap gap-1 text-sm" {@rest}>
+    <div class={["flex flex-wrap gap-1 text-sm", @class]} {@rest}>
       <%= for {value, label} <- @options do %>
         <button
           :if={@event}

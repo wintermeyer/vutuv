@@ -170,9 +170,10 @@ defmodule VutuvWeb.FediverseComponents do
   they are what the tests key on.
 
   Pass `handle={nil}` when the page already shows the address somewhere the
-  reader can copy it — the tag page puts it on the header's meta line and keeps
-  only the sentence and the form here, folded away behind a disclosure. The
-  component then renders no copy box rather than a second one.
+  reader can copy it; the component then renders no copy box rather than a
+  second one. A page that wants a different arrangement altogether (the tag
+  page, whose card is placed by whether the reader is signed in) composes
+  `copy_field/1` and `remote_follow_form/1` itself.
   """
   def follow_us_from_elsewhere(assigns) do
     ~H"""
@@ -185,6 +186,30 @@ defmodule VutuvWeb.FediverseComponents do
 
     <.copy_field :if={@handle} id={"#{@id}-handle"}>{@handle}</.copy_field>
 
+    <.remote_follow_form action={@action} />
+    """
+  end
+
+  attr(:action, :string,
+    required: true,
+    doc: "where the visitor's own address is posted (`RemoteFollowController`)"
+  )
+
+  @doc """
+  The "type your own address and I will send you to your server's follow dialog"
+  half of `follow_us_from_elsewhere/1`, on its own so a page can arrange the
+  sentence and the address around it however it likes.
+
+  Deliberately a classic form post and not a `phx-submit`: the answer is a
+  redirect to another server, and someone arriving from a network we know
+  nothing about is exactly the visitor we cannot assume JavaScript for.
+
+  Its ids stay `remote-follow-*` rather than deriving from a caller id: no page
+  shows two of these, the redirect targets are written against them, and they
+  are what the tests key on.
+  """
+  def remote_follow_form(assigns) do
+    ~H"""
     <.form for={%{}} action={@action} id="remote-follow-form" class="mt-4">
       <label
         for="remote-follow-address"

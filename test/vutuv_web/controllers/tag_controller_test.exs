@@ -17,12 +17,30 @@ defmodule VutuvWeb.TagControllerTest do
     end
   end
 
-  # The CollectionPage block, or nil when the page emits none.
-  defp collection_page(html) do
+  defp json_ld_blocks(html) do
     ~r{<script type="application/ld\+json">\s*(.*?)\s*</script>}s
     |> Regex.scan(html, capture: :all_but_first)
     |> Enum.map(fn [json] -> Jason.decode!(json) end)
-    |> Enum.find(&(&1["@type"] == "CollectionPage"))
+  end
+
+  # The CollectionPage block, or nil when the page emits none.
+  defp collection_page(html) do
+    html |> json_ld_blocks() |> Enum.find(&(&1["@type"] == "CollectionPage"))
+  end
+
+  # Where the Fediverse card sits relative to the timeline it must not push
+  # down: `:before` / `:after`, or nil when there is no card at all.
+  defp card_position(html) do
+    card = :binary.match(html, ~s(id="tag-fediverse"))
+    # The embedded LiveView's own <section>; `live_render` names its container
+    # itself, so this is the anchor that actually appears in the markup.
+    timeline = :binary.match(html, ~s(id="tag-timeline"))
+
+    case {card, timeline} do
+      {:nomatch, _} -> nil
+      {{card_at, _}, {timeline_at, _}} when card_at < timeline_at -> :before
+      _ -> :after
+    end
   end
 
   # The public tag pages resolve the `:slug` param to a `Tags.Tag` before every
@@ -179,27 +197,42 @@ defmodule VutuvWeb.TagControllerTest do
     end
   end
 
-  describe "the tag's Fediverse address" do
-    test "rides the header, with the follow form folded away below it", %{conn: conn} do
+  # One card, and which end of the page it gets is the reader's sign-in state:
+  # a signed-out visitor cannot press the follow pill, so the card is their only
+  # way in and leads; a member follows with the pill, so it sits at the foot.
+  describe "the tag's Fediverse card" do
+    test "leads the page for a signed-out visitor", %{conn: conn} do
       tag = insert(:tag)
       handle = "@" <> Docs.acct(tag)
 
       html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
 
-      # The address is the thing a visitor from another server came for, so it
-      # stays in plain sight — once, on the header's meta line.
+      assert card_position(html) == :before
       assert html =~ handle
-      assert html =~ ~s(id="tag-fediverse-handle")
-      assert length(String.split(html, ~s(id="tag-fediverse-handle"))) == 2
-
-      # The sentence and the remote-follow form are still on the page, but
-      # behind a closed disclosure rather than an open card.
-      assert html =~ ~s(<details id="tag-fediverse")
       assert html =~ ~s(id="remote-follow-form")
-      refute html =~ ~s(<details id="tag-fediverse" open)
+      # The follow pill belongs to members, so it is not the way out of here.
+      refute html =~ ~s(id="tag-follow)
     end
 
-    test "the German page names the disclosure in German", %{conn: conn} do
+    test "sits at the foot of the page for a signed-in member", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      tag = insert(:tag)
+
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+
+      assert card_position(html) == :after
+      assert html =~ ~s(id="remote-follow-form")
+    end
+
+    test "the address is shown exactly once, wherever the card sits", %{conn: conn} do
+      tag = insert(:tag)
+
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+
+      assert length(String.split(html, ~s(id="tag-fediverse-handle"))) == 2
+    end
+
+    test "the German page names the card in German", %{conn: conn} do
       tag = insert(:tag)
 
       html =
@@ -209,6 +242,34 @@ defmodule VutuvWeb.TagControllerTest do
         |> html_response(200)
 
       assert html =~ "Aus dem Fediverse folgen"
+    end
+  end
+
+  # The header used to carry a crumb trail ending in "Show" — a CRUD action
+  # name, meaningless to a reader — and the topic's monospace `@name@host`
+  # directly under the heading. Both are gone; the way back to the directory is
+  # a plain link on the meta line, and the JSON-LD names the same two levels.
+  describe "the page header" do
+    test "offers the way back to the tag directory and no CRUD crumb", %{conn: conn} do
+      tag = insert(:tag)
+
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+
+      assert html =~ ~s(href="/tags")
+      refute html =~ ~s(<div class="breadcrumbs">)
+    end
+
+    test "the breadcrumb markup names what the page shows", %{conn: conn} do
+      tag = insert(:tag)
+
+      trail =
+        conn
+        |> get(~p"/tags/#{tag}")
+        |> html_response(200)
+        |> json_ld_blocks()
+        |> Enum.find(&(&1["@type"] == "BreadcrumbList"))
+
+      assert [_home, %{"item" => %{"name" => "Tags"}}] = trail["itemListElement"]
     end
   end
 

@@ -54,14 +54,14 @@ defmodule VutuvWeb.TagPageFediverseTest do
     assert LazyHTML.query(doc, "#tag-fediverse") |> Enum.any?(),
            "the fediverse card is missing"
 
-    # It shipped inside `.profile-header` once, which is a flex row for the
-    # title and the follow pill: as a third child there the card was squeezed to
-    # a column and the handle rendered one character per line. The member's own
-    # pill has to stay in that header, the card must not.
-    assert LazyHTML.query(doc, ".profile-header #tag-fediverse") |> Enum.empty?(),
+    # It shipped inside the header once, which is a flex row for the title and
+    # the follow pill: as a third child there the card was squeezed to a column
+    # and the handle rendered one character per line. The member's own pill has
+    # to stay in that header, the card must not.
+    assert LazyHTML.query(doc, "header #tag-fediverse") |> Enum.empty?(),
            "the fediverse card is inside the header again"
 
-    assert LazyHTML.query(doc, ".profile-header") |> Enum.any?()
+    assert LazyHTML.query(doc, "h1") |> Enum.any?()
   end
 
   test "a signed-in member still gets the plain follow pill", %{conn: conn} do

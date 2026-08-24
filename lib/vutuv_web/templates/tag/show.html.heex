@@ -1,24 +1,33 @@
 <%!-- Constrain to the same readable measure the post archive/permalink use
 (mx-auto max-w-3xl): on a wide desktop the full max-w-6xl width made each post
 card stretch edge to edge with a huge line length and dead space. --%>
-<div class="mx-auto max-w-3xl">
-  <%!-- Hand-written header (not <.page_header>) so the tag-follow pill (#872)
-  sits top-right beside the title. `items-start` overrides .profile-header's
-  baseline alignment so the pill lines up with the title, not the count line
-  below it. Exactly one <h1> on the page (no sr-only crumbs h1). --%>
-  <div class="profile-header items-start">
-    <div class="profile-header__info min-w-0">
-      <h1>{Tag.display_name(@tag)}</h1>
-      <%!-- The page's meta line: how many people follow this topic and, where
-      the installation federates, the topic's own address out there — which is
-      the one thing a visitor arriving from Mastodon came for, and the only part
-      of the old Fediverse card that most readers ever used. As a line of page
-      meta it answers the same question in the same place the follower count
-      already stands, instead of a full card between the title and the posts. --%>
-      <div
-        :if={@tag_follower_count > 0 or @fediverse_handle}
-        class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600 dark:text-slate-400"
-      >
+<%!-- The front-matter card's four loads, done once for the page: both the card
+and the wrapper's `:if` below need the answer. --%>
+<% assigns = enrich(assigns) %>
+<div class="mx-auto max-w-3xl py-6">
+  <%!-- Hand-written header (not <.page_header>, not `.profile-header`) so the
+  tag-follow pill (#872) sits top-right beside the title.
+
+  One line of meta under the title, and only real facts on it: the way back to
+  the tag directory, and how many people follow this topic. The crumb trail this
+  replaces read "Tags / Anzeigen" — a CRUD action name as the leaf, which told a
+  reader nothing and cost a row — and the topic's Fediverse address used to
+  stand here too, a monospace `@name@host` directly under the heading, which is
+  the least inviting thing a topic page could open with. That address now lives
+  in the card below (or at the foot of the page, see there). --%>
+  <header class="flex items-start justify-between gap-4">
+    <div class="min-w-0">
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        {Tag.display_name(@tag)}
+      </h1>
+      <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
+        <.link
+          navigate={~p"/tags"}
+          class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Tags")}
+        </.link>
+        <span :if={@tag_follower_count > 0} aria-hidden="true">·</span>
         <span :if={@tag_follower_count > 0}>
           {delimited_count(@tag_follower_count)} {ngettext(
             "follower",
@@ -26,53 +35,31 @@ card stretch edge to edge with a huge line length and dead space. --%>
             @tag_follower_count
           )}
         </span>
-        <span :if={@tag_follower_count > 0 && @fediverse_handle} aria-hidden="true">·</span>
-        <.copy_field :if={@fediverse_handle} id="tag-fediverse-handle" variant="inline">
-          {@fediverse_handle}
-        </.copy_field>
-      </div>
+      </p>
     </div>
     <.tag_follow_button :if={@current_user} following?={@following_tag?} tag={@tag} />
-  </div>
-  <div class="breadcrumbs">
-    {gen_breadcrumbs([{gettext("Tags"), ~p"/tags"}, gettext("Show")])}
-  </div>
-  <JsonLd.script data={JsonLd.breadcrumb_trail([{gettext("Tags"), ~p"/tags"}, gettext("Show")])} />
+  </header>
+
+  <%!-- The visible trail is the "Tags" link above, so the markup names the same
+  two levels the page does. --%>
+  <JsonLd.script data={JsonLd.breadcrumb_trail([{gettext("Tags"), ~p"/tags"}])} />
   <%!-- What this page collects, and the topic it collects it about. Only on a
   page the crawlers are allowed to keep — markup that describes a collection to
   a crawler we just asked to drop the page contradicts itself (the profile's
   rule). The description is the same string the `<head>` carries. --%>
   <JsonLd.script :if={@indexable?} data={JsonLd.collection_page(@tag, @meta_description)} />
 
-  <%!-- The rest of what a visitor from another server needs: the sentence that
-  explains what following a tag over there gets them, and the form that sends
-  them to their own server's follow dialog (issue #1330). Folded away behind one
-  line, because the address above answers the common case and this is the step
-  only somebody actually mid-follow takes — as an open card it was ~300px of the
-  top of every tag page, above the posts.
-
-  A native `<details>`: this is a classic controller page, so there is no socket
-  to lose the state to and no JavaScript involved. No `handle` is passed, which
-  is what tells the shared component to leave out its copy box — the header's
-  meta line already carries the address. --%>
-  <details :if={@fediverse_handle} id="tag-fediverse" class="group mb-6">
-    <summary class="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 [&::-webkit-details-marker]:hidden">
-      <span aria-hidden="true" class="text-base leading-none transition-transform group-open:rotate-90">
-        ›
-      </span>
-      {gettext("Follow from the Fediverse")}
-    </summary>
-    <.follow_us_from_elsewhere
-      id="tag-fediverse"
-      name={"#" <> @tag.slug}
-      action={~p"/tags/#{@tag.slug}/fediverse/follow"}
-    />
-  </details>
+  <%!-- Signed out, the Fediverse card leads: whoever is reading a topic page
+  without an account here is exactly the visitor issue #1330 was for, and their
+  way to follow this topic is the card, not the pill they cannot press. --%>
+  <.tag_fediverse_card :if={@fediverse_handle && !@current_user} tag={@tag} handle={@fediverse_handle} class="mt-6" />
 
   <%!-- The tag's front matter: description, alternative names, most-endorsed
-  members. Renders nothing at all when the topic has none of them. --%>
-  <div class="card-list">
-    <%= render "single_card.html", assigns %>
+  members. The wrapper carries the spacing, so it has to go when the card does —
+  an empty `.card-list` is zero pixels tall and still contributes its own top
+  margin, which is a second gap under a header that already has one. --%>
+  <div :if={tag_front_matter?(assigns)} class="card-list mt-6">
+    {single_card(assigns)}
   </div>
 
   <%!-- Everything written about this tag — vutuv posts and posts cached from
@@ -85,7 +72,7 @@ card stretch edge to edge with a huge line length and dead space. --%>
     session: Map.merge(VutuvWeb.ControllerHelpers.live_render_session(@conn), @timeline_session)
   )}
 
-  <section :if={@open_positions != []} class="mt-6">
+  <section :if={@open_positions != []} class="mt-8">
     <div class="flex items-center justify-between gap-2">
       <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {gettext("Open positions")}
@@ -101,4 +88,10 @@ card stretch edge to edge with a huge line length and dead space. --%>
       <.job_card :for={posting <- @open_positions} posting={posting} />
     </div>
   </section>
+
+  <%!-- Signed in, the same card sits at the foot of the page. A member already
+  follows this topic with the pill in the header; the address out there is a
+  thing they may want once, and it has no business between the title and the
+  posts they came for. --%>
+  <.tag_fediverse_card :if={@fediverse_handle && @current_user} tag={@tag} handle={@fediverse_handle} class="mt-8" />
 </div>
