@@ -542,6 +542,37 @@ defmodule VutuvWeb.ShellLive do
   # feature - a popup over whatever somebody is doing is the loudest thing this
   # app can do, so nobody who did not ask is ever prompted, let alone notified.
   # The gate lives in one clause, so a third stream cannot be added without it.
+  # "Send a test notification", from the card on /settings/notifications. The
+  # status line there can say this browser granted permission and still be
+  # wrong about the thing the member actually cares about, because permission
+  # is only the last of several links: the socket has to be up, the server has
+  # to reach this tab, and the operating system has to draw something. So the
+  # test travels the **whole** path a real notification takes rather than being
+  # raised locally in JS, which would answer a question nobody asked.
+  #
+  # Two deliberate exceptions to how every other push behaves. It skips
+  # `push_notify/2`'s standing-preference gate, because the member asked for
+  # this one by name a moment ago - including, usefully, right after ticking
+  # the box and before saving. And it carries `test: true`, which is what lets
+  # the hook show it although the member is plainly looking at the page; the
+  # away-gate is right for news and would make this button do nothing at all.
+  @impl true
+  def handle_event("notify:test", _params, %{assigns: %{user_id: nil}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("notify:test", _params, socket) do
+    {:noreply,
+     push_event(socket, "notify:show", %{
+       # Its own tag, so a test never replaces a real notification waiting in
+       # the tray - and a second press replaces the first test, not a message.
+       tag: "test",
+       title: gettext("Test notification"),
+       body: gettext("This is what vutuv looks like when something arrives."),
+       url: ~p"/settings/notifications",
+       test: true
+     })}
+  end
+
   defp push_notify(%{assigns: %{browser_notifications?: false}} = socket, _payload), do: socket
 
   defp push_notify(socket, payload), do: push_event(socket, "notify:show", payload)

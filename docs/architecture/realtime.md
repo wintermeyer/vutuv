@@ -403,6 +403,17 @@ and reports what this browser answered — never asked / will show them /
 blocking them / cannot show them — because the stored setting alone cannot say
 whether this machine will show anything.
 
+The card also offers **Send a test notification**, and it deliberately makes
+the round trip — shell socket, server, hook — rather than raising one locally in
+JS. Permission granted is only the last link in the chain, so a local popup
+would answer a question nobody asked. Its payload carries `test: true`, which is
+what lets the hook show it although the member is plainly looking at the page;
+without that the away-gate would swallow every press and the button would do
+nothing. It also skips the standing-preference gate, because the useful moment
+to press it is right after ticking the box and before saving. The button waits
+for the hook's `vutuv:notify-shown` and says so if nothing comes back, so a
+silent system is told apart from a silent socket.
+
 Each stream carries one `tag` (`vutuv-activity`, `vutuv-messages`), so a burst
 of ten likes replaces itself into a single popup and four open vutuv tabs raise
 one between them; a replacement is silent, so only the first of a burst makes a

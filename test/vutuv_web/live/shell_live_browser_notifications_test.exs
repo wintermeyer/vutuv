@@ -157,6 +157,43 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
     end
   end
 
+  describe "the test notification" do
+    test "travels the same path a real one does", %{conn: conn} do
+      user = insert(:user, browser_notifications?: true)
+      view = mount_shell(conn, user)
+
+      render_hook(view, "notify:test", %{})
+
+      # `test: true` is what lets the hook show it although the member is
+      # plainly looking at the settings page; without it the away-gate would
+      # swallow every press and the button would do nothing at all.
+      assert_push_event(view, "notify:show", %{tag: "test", test: true, title: title})
+      assert title == "Test notification"
+    end
+
+    test "is sent even before the switch has been saved", %{conn: conn} do
+      # Ticking the box asks this browser for permission on the spot, so the
+      # useful moment to press "test" is right then - with the preference still
+      # off in the database. Every automatic push is gated on it; this one is
+      # not, because the member asked for it by name.
+      user = insert(:user)
+      refute user.browser_notifications?
+
+      view = mount_shell(conn, user)
+      render_hook(view, "notify:test", %{})
+
+      assert_push_event(view, "notify:show", %{tag: "test"})
+    end
+
+    test "reaches nobody who is not logged in", %{conn: conn} do
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+      render_hook(view, "notify:test", %{})
+
+      refute_push_event(view, "notify:show", %{})
+    end
+  end
+
   describe "the per-browser permission prompt" do
     test "renders for a member who switched the feature on", %{conn: conn} do
       user = insert(:user, browser_notifications?: true)

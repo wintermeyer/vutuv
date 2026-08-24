@@ -94,7 +94,8 @@ while they are looking at something else. The one switch here that defaults to
 **off** — it is the only one that puts something over what somebody is doing,
 and switching it on is also what makes their browsers ask for permission. The
 card reports what *this* browser answered beside the stored setting, because
-the setting travels with the account and the permission does not. See the
+the setting travels with the account and the permission does not, and offers a
+test notification once that browser has granted permission. See the
 browser-notifications section in [realtime.md](realtime.md).
 
 **CV updates** (`cv_update_notifications?`, default on) and **Thread replies**

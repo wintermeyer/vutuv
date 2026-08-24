@@ -717,6 +717,33 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert html =~ "Jetzt fragen"
       assert html =~ "Dieser Browser wurde noch nicht gefragt."
       assert html =~ "Dieser Browser zeigt sie an."
+      # "Test notification" came back from the fuzzy fill as "Benachrichtigungen
+      # zu Diskussionen"; a short label is the likeliest to be filled with
+      # nonsense and the least likely to be noticed.
+      assert html =~ "Test-Benachrichtigung senden"
+      assert html =~ "Keine Antwort. Bitte laden Sie die Seite neu"
+    end
+
+    test "the card offers a test notification on the granted line only (issue #1249)",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/notifications") |> html_response(200)
+
+      assert html =~ "data-notify-test"
+      # Its verdict ships empty and hidden, with both sentences on the element:
+      # the server is the only side that knows the reader's language.
+      assert html =~ "data-notify-test-result"
+      assert html =~ "data-sent="
+      assert html =~ "data-silent="
+
+      # The button belongs to the one state where a popup can appear at all. A
+      # blocked browser must not be offered a test that cannot work.
+      [_, granted_onwards] = String.split(html, ~s(data-notify-state="granted"), parts: 2)
+
+      [granted_line, _rest] =
+        String.split(granted_onwards, ~s(data-notify-state="denied"), parts: 2)
+
+      assert granted_line =~ "data-notify-test"
     end
 
     test "saving the switch tells the member's other open tabs (issue #1249)", %{conn: conn} do

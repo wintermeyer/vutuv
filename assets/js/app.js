@@ -578,6 +578,14 @@ const Hooks = {
       this.onPermission = () => this.applyPrompt()
       window.addEventListener("vutuv:notify-permission", this.onPermission)
 
+      // "Send a test notification" on /settings/notifications. That page is a
+      // classic controller page with no socket of its own, so it asks through
+      // this hook - the same relay the permission event uses - and the round
+      // trip is the point: a test raised locally in JS would prove nothing
+      // about the path a real notification takes.
+      this.onTest = () => this.pushEvent("notify:test", {})
+      window.addEventListener("vutuv:notify-test", this.onTest)
+
       // Read once. `updated()` runs on every shell patch - a people-counter
       // tick, a presence diff, the hourly clock - and this value changes only
       // through dismiss() below.
@@ -600,6 +608,7 @@ const Hooks = {
     destroyed() {
       this.el.removeEventListener("click", this.onClick)
       window.removeEventListener("vutuv:notify-permission", this.onPermission)
+      window.removeEventListener("vutuv:notify-test", this.onTest)
     },
     // Re-applied on every patch rather than only when something changed: the
     // server re-renders the `hidden` attribute each time, and this is what
@@ -614,10 +623,12 @@ const Hooks = {
       this.dismissed = true
       this.applyPrompt()
     },
-    show({ tag, title, body, icon, url }) {
+    show({ tag, title, body, icon, url, test }) {
       if (notifyPermission() !== "granted") return
-      // Looking at vutuv means the badge and the bell already said it.
-      if (!document.hidden && document.hasFocus()) return
+      // Looking at vutuv means the badge and the bell already said it - except
+      // for the test, which the member asked for while plainly looking at the
+      // page, and which would otherwise be a button that does nothing.
+      if (!test && !document.hidden && document.hasFocus()) return
 
       let notification
       try {
@@ -628,9 +639,13 @@ const Hooks = {
           // popup and four open vutuv tabs raise one between them (the browser
           // collapses same-tag notifications across an origin). A replacement
           // is silent, so only the first of a burst makes a sound - which is
-          // the whole reason `renotify` stays off.
+          // the whole reason `renotify` stays off for news.
+          //
+          // The test is the one case that wants the opposite: pressing it a
+          // second time (after turning Do Not Disturb off, say) has to announce
+          // itself again, or a silent replacement reads as "still broken".
           tag: `vutuv-${tag}`,
-          renotify: false,
+          renotify: !!test,
         })
       } catch (_e) {
         // Some browsers refuse the constructor outright (a service worker is
@@ -643,6 +658,11 @@ const Hooks = {
         notification.close()
         if (url) window.location.href = url
       }
+
+      // Only ever fired for a test: it is what tells the settings card that a
+      // popup really was constructed, so the card can stop waiting instead of
+      // leaving the member to guess whether anything happened.
+      if (test) window.dispatchEvent(new CustomEvent("vutuv:notify-shown"))
     },
   },
   // The admin member browser (VutuvWeb.Admin.UserLive) pages in place over the
@@ -1858,6 +1878,21 @@ function wireBrowserNotifications(status) {
   const box = status.closest("form").querySelector('input[type="checkbox"]')
   const lines = [...status.querySelectorAll("[data-notify-state]")]
 
+  // The verdict under the test button. It ships empty and hidden; the two
+  // sentences ride the element as data- strings, because the server is the
+  // only side that knows the reader's language (the lightbox arrangement).
+  const note = status.querySelector("[data-notify-test-result]")
+  let waiting = null
+
+  const settle = (message) => {
+    if (waiting) clearTimeout(waiting)
+    waiting = null
+    if (note) {
+      note.textContent = message || ""
+      note.hidden = !message
+    }
+  }
+
   // All four lines ship rendered and switched off by the plain `hidden`
   // attribute (the issue #880 trap: a display utility would out-cascade it);
   // exactly the one that applies is revealed, and none of them while the
@@ -1867,6 +1902,9 @@ function wireBrowserNotifications(status) {
     lines.forEach((line) => {
       line.hidden = !box.checked || line.dataset.notifyState !== state
     })
+    // The verdict below belongs to the granted line, so it goes with it:
+    // unticking the box must not leave a stale "Sent." standing on its own.
+    if (!box.checked || state !== "granted") settle("")
   }
 
   // Ticking the box IS the user gesture, so ask right there rather than after
@@ -1875,6 +1913,29 @@ function wireBrowserNotifications(status) {
   box.addEventListener("change", () => {
     if (box.checked) requestNotifyPermission()
     else apply()
+  })
+
+  // "Send a test notification". It goes the whole way round - through the
+  // shell's socket to the server and back - so it answers the question the
+  // status line above cannot: will something actually appear on THIS machine.
+  // Permission granted is only the last link; the socket has to be up and the
+  // operating system has to draw the thing.
+  //
+  // Which is why the button waits for an answer rather than assuming one. The
+  // hook says `vutuv:notify-shown` the moment it really constructs a popup; if
+  // nothing comes back in a few seconds the member is told so, instead of being
+  // left to decide for themselves whether a popup they may simply have missed
+  // was ever raised.
+  window.addEventListener("vutuv:notify-shown", () => settle(note && note.dataset.sent))
+
+  // Wired per instance rather than at the document level like Allow above,
+  // because unlike Allow this button has state to keep: the timer and the
+  // verdict line belong to this card.
+  status.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-notify-test]")) return
+    settle("")
+    window.dispatchEvent(new CustomEvent("vutuv:notify-test"))
+    waiting = setTimeout(() => settle(note && note.dataset.silent), 4000)
   })
 
   window.addEventListener("vutuv:notify-permission", apply)

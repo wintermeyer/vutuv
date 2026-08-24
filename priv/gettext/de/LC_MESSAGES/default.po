@@ -443,8 +443,8 @@ msgstr "Einloggen"
 msgid "Log Out"
 msgstr "Ausloggen"
 
-#: lib/vutuv_web/live/shell_live.ex:993
-#: lib/vutuv_web/live/shell_live.ex:1050
+#: lib/vutuv_web/live/shell_live.ex:1024
+#: lib/vutuv_web/live/shell_live.ex:1081
 #: lib/vutuv_web/templates/post/teaser.html.heex:34
 #: lib/vutuv_web/templates/session/new.html.heex:38
 #, elixir-autogen
@@ -644,8 +644,8 @@ msgstr "Speichern"
 #: lib/vutuv_web/live/job_board_live.ex:418
 #: lib/vutuv_web/live/search_live.ex:48
 #: lib/vutuv_web/live/search_live.ex:569
-#: lib/vutuv_web/live/shell_live.ex:858
-#: lib/vutuv_web/live/shell_live.ex:1033
+#: lib/vutuv_web/live/shell_live.ex:889
+#: lib/vutuv_web/live/shell_live.ex:1064
 #: lib/vutuv_web/live/tag_live/timeline.ex:266
 #: lib/vutuv_web/templates/admin/account/index.html.heex:23
 #: lib/vutuv_web/templates/admin/account/index.html.heex:39
@@ -1189,7 +1189,7 @@ msgstr "Lokalisierung hinzufügen"
 #: lib/vutuv_web/live/admin/user_delete_live.ex:104
 #: lib/vutuv_web/live/admin/user_detail_live.ex:68
 #: lib/vutuv_web/live/admin/user_live.ex:165
-#: lib/vutuv_web/live/shell_live.ex:965
+#: lib/vutuv_web/live/shell_live.ex:996
 #: lib/vutuv_web/templates/admin/account/frozen.html.heex:3
 #: lib/vutuv_web/templates/admin/account/index.html.heex:3
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:4
@@ -1631,7 +1631,7 @@ msgstr "Adressen von %{name}"
 msgid "Admin control panel"
 msgstr "Admin-Bereich"
 
-#: lib/vutuv_web/live/shell_live.ex:1036
+#: lib/vutuv_web/live/shell_live.ex:1067
 #, elixir-autogen, elixir-format
 msgid "Alerts"
 msgstr "Mitteilungen"
@@ -1748,7 +1748,7 @@ msgstr ""
 " von jemandem, den Sie kennen oder interessant finden, und klicken Sie auf "
 "Folgen!"
 
-#: lib/vutuv_web/live/shell_live.ex:984
+#: lib/vutuv_web/live/shell_live.ex:1015
 #: lib/vutuv_web/views/settings_html.ex:376
 #, elixir-autogen, elixir-format
 msgid "Log out"
@@ -1777,14 +1777,14 @@ msgstr "Nachricht"
 
 #: lib/vutuv_web/live/message_live/index.ex:49
 #: lib/vutuv_web/live/message_live/index.ex:634
-#: lib/vutuv_web/live/shell_live.ex:876
-#: lib/vutuv_web/live/shell_live.ex:1035
+#: lib/vutuv_web/live/shell_live.ex:907
+#: lib/vutuv_web/live/shell_live.ex:1066
 #: lib/vutuv_web/templates/layout/app.html.heex:172
 #, elixir-autogen, elixir-format
 msgid "Messages"
 msgstr "Nachrichten"
 
-#: lib/vutuv_web/live/shell_live.ex:760
+#: lib/vutuv_web/live/shell_live.ex:791
 #: lib/vutuv_web/templates/layout/app.html.heex:97
 #, elixir-autogen, elixir-format
 msgid "Network"
@@ -1810,7 +1810,7 @@ msgstr "Noch nichts Neues."
 #: lib/vutuv_web/components/ui.ex:4162
 #: lib/vutuv_web/live/notification_live/index.ex:132
 #: lib/vutuv_web/live/notification_live/index.ex:360
-#: lib/vutuv_web/live/shell_live.ex:888
+#: lib/vutuv_web/live/shell_live.ex:919
 #: lib/vutuv_web/templates/layout/app.html.heex:173
 #: lib/vutuv_web/templates/settings/notifications.html.heex:8
 #, elixir-autogen, elixir-format
@@ -2167,8 +2167,8 @@ msgstr "Beitrag bearbeiten"
 #: lib/vutuv_web/live/organization_live/feed.ex:98
 #: lib/vutuv_web/live/post_live/feed.ex:191
 #: lib/vutuv_web/live/post_live/feed.ex:1203
-#: lib/vutuv_web/live/shell_live.ex:738
-#: lib/vutuv_web/live/shell_live.ex:1031
+#: lib/vutuv_web/live/shell_live.ex:769
+#: lib/vutuv_web/live/shell_live.ex:1062
 #: lib/vutuv_web/templates/layout/app.html.heex:171
 #, elixir-autogen, elixir-format
 msgid "Feed"
@@ -2343,7 +2343,7 @@ msgid "Upload failed."
 msgstr "Upload fehlgeschlagen."
 
 #: lib/vutuv_web/components/ui.ex:4451
-#: lib/vutuv_web/live/shell_live.ex:931
+#: lib/vutuv_web/live/shell_live.ex:962
 #: lib/vutuv_web/templates/post/index.html.heex:17
 #: lib/vutuv_web/templates/post/teaser.html.heex:55
 #: lib/vutuv_web/views/settings_html.ex:323
@@ -2433,8 +2433,8 @@ msgstr "Lesezeichen setzen"
 #: lib/vutuv_web/agent_docs/markdown.ex:1108
 #: lib/vutuv_web/live/post_live/saved.ex:194
 #: lib/vutuv_web/live/post_live/saved.ex:513
-#: lib/vutuv_web/live/shell_live.ex:868
-#: lib/vutuv_web/live/shell_live.ex:936
+#: lib/vutuv_web/live/shell_live.ex:899
+#: lib/vutuv_web/live/shell_live.ex:967
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:172
 #: lib/vutuv_web/views/admin/report_html.ex:38
 #, elixir-autogen, elixir-format
@@ -2455,7 +2455,7 @@ msgstr "Gefällt mir"
 #: lib/vutuv_web/live/notification_live/index.ex:1005
 #: lib/vutuv_web/live/post_live/saved.ex:193
 #: lib/vutuv_web/live/post_live/saved.ex:510
-#: lib/vutuv_web/live/shell_live.ex:939
+#: lib/vutuv_web/live/shell_live.ex:970
 #: lib/vutuv_web/templates/settings/auto_post_deletion.html.heex:159
 #: lib/vutuv_web/templates/settings/privacy.html.heex:91
 #: lib/vutuv_web/views/admin/report_html.ex:37
@@ -3223,8 +3223,8 @@ msgid "Private message"
 msgstr "Private Nachricht"
 
 #: lib/vutuv_web/components/ui.ex:4094
-#: lib/vutuv_web/live/shell_live.ex:752
-#: lib/vutuv_web/live/shell_live.ex:1040
+#: lib/vutuv_web/live/shell_live.ex:783
+#: lib/vutuv_web/live/shell_live.ex:1071
 #: lib/vutuv_web/templates/import/new.html.heex:16
 #: lib/vutuv_web/views/admin/moderation_html.ex:28
 #: lib/vutuv_web/views/import_html.ex:76
@@ -5539,7 +5539,7 @@ msgstr "Sie können auf diesen Beitrag nicht mehr antworten."
 msgid "Content under review"
 msgstr "Inhalte in Prüfung"
 
-#: lib/vutuv_web/live/shell_live.ex:918
+#: lib/vutuv_web/live/shell_live.ex:949
 #, elixir-autogen, elixir-format
 msgid "Account menu"
 msgstr "Kontomenü"
@@ -5561,7 +5561,7 @@ msgstr "Menüs und Dialoge schließen"
 msgid "General"
 msgstr "Allgemeines"
 
-#: lib/vutuv_web/live/shell_live.ex:975
+#: lib/vutuv_web/live/shell_live.ex:1006
 #: lib/vutuv_web/templates/layout/app.html.heex:203
 #, elixir-autogen, elixir-format
 msgid "Keyboard shortcuts"
@@ -5580,7 +5580,7 @@ msgstr "Navigation"
 #: lib/vutuv_web/live/account_activity_live.ex:115
 #: lib/vutuv_web/live/fediverse_followers_live.ex:168
 #: lib/vutuv_web/live/fediverse_following_live.ex:303
-#: lib/vutuv_web/live/shell_live.ex:955
+#: lib/vutuv_web/live/shell_live.ex:986
 #: lib/vutuv_web/templates/email/confirm.html.heex:7
 #: lib/vutuv_web/templates/export/index.html.heex:11
 #: lib/vutuv_web/templates/job_reference/check.html.heex:10
@@ -5634,8 +5634,8 @@ msgstr "Nächster Beitrag im Feed"
 msgid "Previous post in the feed"
 msgstr "Vorheriger Beitrag im Feed"
 
-#: lib/vutuv_web/live/shell_live.ex:727
-#: lib/vutuv_web/live/shell_live.ex:1021
+#: lib/vutuv_web/live/shell_live.ex:758
+#: lib/vutuv_web/live/shell_live.ex:1052
 #, elixir-autogen, elixir-format
 msgid "Main navigation"
 msgstr "Hauptnavigation"
@@ -5880,12 +5880,12 @@ msgstr "Apps & API-Zugang"
 msgid "Endorsements"
 msgstr "Empfehlungen"
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:191
+#: lib/vutuv_web/templates/settings/notifications.html.heex:217
 #, elixir-autogen, elixir-format
 msgid "Endorsements and new followers"
 msgstr "Empfehlungen und neue Follower"
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:185
+#: lib/vutuv_web/templates/settings/notifications.html.heex:211
 #, elixir-autogen, elixir-format
 msgid "In-app notifications"
 msgstr "Benachrichtigungen in der App"
@@ -5900,12 +5900,12 @@ msgstr "Neue Follower"
 msgid "Notification settings"
 msgstr "Benachrichtigungseinstellungen"
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:199
+#: lib/vutuv_web/templates/settings/notifications.html.heex:225
 #, elixir-autogen, elixir-format
 msgid "Open your notifications"
 msgstr "Benachrichtigungen öffnen"
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:192
+#: lib/vutuv_web/templates/settings/notifications.html.heex:218
 #, elixir-autogen, elixir-format
 msgid "Replies to and likes on your posts"
 msgstr "Antworten und Likes zu Ihren Beiträgen"
@@ -5920,7 +5920,7 @@ msgstr "Sicherheit"
 msgid "Search engines & AI"
 msgstr "Suchmaschinen & KI"
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:187
+#: lib/vutuv_web/templates/settings/notifications.html.heex:213
 #, elixir-autogen, elixir-format
 msgid "These are always on. You see them under the bell at the top of every page, in real time."
 msgstr ""
@@ -6902,7 +6902,7 @@ msgstr "Stummschalten"
 msgid "Muted. Their posts no longer appear in your feed."
 msgstr "Stummgeschaltet. Die Beiträge erscheinen nicht mehr in Ihrem Feed."
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:190
+#: lib/vutuv_web/templates/settings/notifications.html.heex:216
 #, elixir-autogen, elixir-format
 msgid "New messages and new connections"
 msgstr "Neue Nachrichten und neue Vernetzungen"
@@ -12474,7 +12474,7 @@ msgstr "Organisation wieder freigegeben."
 #: lib/vutuv_web/live/organization_live/index.ex:30
 #: lib/vutuv_web/live/organization_live/index.ex:61
 #: lib/vutuv_web/live/post_live/saved.ex:526
-#: lib/vutuv_web/live/shell_live.ex:946
+#: lib/vutuv_web/live/shell_live.ex:977
 #: lib/vutuv_web/templates/followee/index.html.heex:14
 #: lib/vutuv_web/templates/follower/index.html.heex:13
 #: lib/vutuv_web/templates/layout/app.html.heex:100
@@ -12816,7 +12816,7 @@ msgstr "Stellenbezeichnung"
 #: lib/vutuv_web/live/job_board_live.ex:45
 #: lib/vutuv_web/live/job_board_live.ex:211
 #: lib/vutuv_web/live/post_live/saved.ex:529
-#: lib/vutuv_web/live/shell_live.ex:768
+#: lib/vutuv_web/live/shell_live.ex:799
 #: lib/vutuv_web/templates/layout/app.html.heex:101
 #, elixir-autogen, elixir-format
 msgid "Jobs"
@@ -20734,7 +20734,7 @@ msgstr "Sie dürfen nicht mehr im Namen dieser Organisation schreiben."
 msgid "A post in an organization's name is always public."
 msgstr "Ein Beitrag im Namen einer Organisation ist immer öffentlich."
 
-#: lib/vutuv_web/live/shell_live.ex:685
+#: lib/vutuv_web/live/shell_live.ex:716
 #, elixir-autogen, elixir-format
 msgid "Open the page"
 msgstr "Seite öffnen"
@@ -20754,7 +20754,7 @@ msgstr "Beendet, im Namen einer Organisation zu schreiben"
 msgid "Write as %{name} for now"
 msgstr "Vorerst als %{name} schreiben"
 
-#: lib/vutuv_web/live/shell_live.ex:695
+#: lib/vutuv_web/live/shell_live.ex:726
 #, elixir-autogen, elixir-format
 msgid "Write as myself again"
 msgstr "Wieder als ich selbst schreiben"
@@ -20764,7 +20764,7 @@ msgstr "Wieder als ich selbst schreiben"
 msgid "You are writing as %{name} now."
 msgstr "Sie schreiben jetzt als %{name}."
 
-#: lib/vutuv_web/live/shell_live.ex:671
+#: lib/vutuv_web/live/shell_live.ex:702
 #, elixir-autogen, elixir-format
 msgid "You are writing as %{name}."
 msgstr "Sie schreiben als %{name}."
@@ -22281,7 +22281,7 @@ msgstr "%{handle} nicht mehr folgen? Die Beiträge verschwinden aus Ihrem Feed."
 msgid "Unfollowed. Their posts leave your feed."
 msgstr "Nicht mehr gefolgt. Die Beiträge verschwinden aus Ihrem Feed."
 
-#: lib/vutuv_web/live/shell_live.ex:641
+#: lib/vutuv_web/live/shell_live.ex:672
 #, elixir-autogen, elixir-format
 msgid "Allow"
 msgstr "Erlauben"
@@ -22296,12 +22296,12 @@ msgstr "Jetzt fragen"
 msgid "Browser notifications"
 msgstr "Browser-Benachrichtigungen"
 
-#: lib/vutuv_web/live/shell_live.ex:583
+#: lib/vutuv_web/live/shell_live.ex:614
 #, elixir-autogen, elixir-format
 msgid "New message"
 msgstr "Neue Nachricht"
 
-#: lib/vutuv_web/live/shell_live.ex:648
+#: lib/vutuv_web/live/shell_live.ex:679
 #, elixir-autogen, elixir-format
 msgid "Not now"
 msgstr "Jetzt nicht"
@@ -22316,7 +22316,7 @@ msgstr "Nur solange vutuv irgendwo offen ist und Sie gerade etwas anderes ansehe
 msgid "Show me browser notifications"
 msgstr "Browser-Benachrichtigungen anzeigen"
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:176
+#: lib/vutuv_web/templates/settings/notifications.html.heex:202
 #, elixir-autogen, elixir-format
 msgid "This browser cannot show notifications. Your other browsers are unaffected."
 msgstr "Dieser Browser kann keine Benachrichtigungen anzeigen. Ihre anderen Browser sind davon nicht betroffen."
@@ -22326,12 +22326,12 @@ msgstr "Dieser Browser kann keine Benachrichtigungen anzeigen. Ihre anderen Brow
 msgid "This browser has not been asked yet."
 msgstr "Dieser Browser wurde noch nicht gefragt."
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:171
+#: lib/vutuv_web/templates/settings/notifications.html.heex:197
 #, elixir-autogen, elixir-format
 msgid "This browser is blocking notifications for vutuv. Allow them for this site in your browser settings; the switch above stays on and every other browser you use is unaffected."
 msgstr "Dieser Browser blockiert Benachrichtigungen von vutuv. Erlauben Sie sie für diese Seite in den Einstellungen Ihres Browsers. Der Schalter oben bleibt an, und jeder andere Browser, den Sie nutzen, ist davon nicht betroffen."
 
-#: lib/vutuv_web/templates/settings/notifications.html.heex:169
+#: lib/vutuv_web/templates/settings/notifications.html.heex:178
 #, elixir-autogen, elixir-format
 msgid "This browser will show them."
 msgstr "Dieser Browser zeigt sie an."
@@ -22341,7 +22341,7 @@ msgstr "Dieser Browser zeigt sie an."
 msgid "When something arrives while you have vutuv open in a tab you are not looking at, your browser can show it as a notification. Off unless you switch it on."
 msgstr "Wenn etwas eintrifft, während vutuv in einem Tab offen ist, den Sie gerade nicht ansehen, kann Ihr Browser es als Benachrichtigung anzeigen. Aus, solange Sie es nicht einschalten."
 
-#: lib/vutuv_web/live/shell_live.ex:638
+#: lib/vutuv_web/live/shell_live.ex:669
 #, elixir-autogen, elixir-format
 msgid "You switched browser notifications on. This browser has not been asked for permission yet."
 msgstr "Sie haben Browser-Benachrichtigungen eingeschaltet. Dieser Browser wurde noch nicht um Erlaubnis gebeten."
@@ -22365,3 +22365,28 @@ msgstr "Aus dem Fediverse folgen"
 #, elixir-autogen, elixir-format
 msgid "Posts and members on vutuv about %{tag}."
 msgstr "Beiträge und Mitglieder auf vutuv zum Thema %{tag}."
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:191
+#, elixir-autogen, elixir-format
+msgid "No answer. Please reload the page and try again."
+msgstr "Keine Antwort. Bitte laden Sie die Seite neu und versuchen Sie es noch einmal."
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:184
+#, elixir-autogen, elixir-format
+msgid "Send a test notification"
+msgstr "Test-Benachrichtigung senden"
+
+#: lib/vutuv_web/templates/settings/notifications.html.heex:190
+#, elixir-autogen, elixir-format
+msgid "Sent. If nothing appeared, your system is holding it back. Check Do Not Disturb and your notification settings."
+msgstr "Gesendet. Wenn nichts erschienen ist, hält Ihr System sie zurück. Prüfen Sie „Nicht stören“ und Ihre Benachrichtigungseinstellungen."
+
+#: lib/vutuv_web/live/shell_live.ex:569
+#, elixir-autogen, elixir-format
+msgid "Test notification"
+msgstr "Test-Benachrichtigung"
+
+#: lib/vutuv_web/live/shell_live.ex:570
+#, elixir-autogen, elixir-format
+msgid "This is what vutuv looks like when something arrives."
+msgstr "So sieht es aus, wenn auf vutuv etwas für Sie eintrifft."
