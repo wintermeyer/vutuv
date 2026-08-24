@@ -484,7 +484,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       }
     end
 
-    test "a vutuv post arriving on the Fediverse tab dots vutuv and All", %{conn: conn} do
+    test "a vutuv post arriving on the Fediverse tab dots vutuv, never All", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {author, _post} = followed_post(user, "an older post")
       cached_post(remote_account(user, "them"), "written out there")
@@ -495,8 +495,8 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
 
       assert dotted?(view, "vutuv")
-      # "All" would show it too, so it says so.
-      assert dotted?(view, "all")
+      # "All" never carries a dot, true as one would be.
+      refute dotted?(view, "all")
       # You are looking at this one, so nothing on it can be unseen.
       refute dotted?(view, "fediverse")
     end
@@ -514,8 +514,6 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       render_click(view, "filter-source", %{"type" => "vutuv"})
 
       assert timeline(view) =~ "arriving live"
-      # Gone from "All" as well: the only thing it was standing for is read.
-      refute dotted?(view, "all")
 
       render_click(view, "filter-source", %{"type" => "fediverse"})
       refute dotted?(view, "vutuv")
@@ -556,12 +554,12 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       assert :ok = Fediverse.record_remote_post(remote_note(account), account.actor_uri)
 
       assert dotted?(view, "fediverse")
-      assert dotted?(view, "all")
+      refute dotted?(view, "all")
       refute dotted?(view, "vutuv")
 
       render_click(view, "filter-source", %{"type" => "fediverse"})
       assert timeline(view) =~ "frisch von drüben"
-      refute dotted?(view, "all")
+      refute dotted?(view, "fediverse")
     end
 
     test "a post the reader's own follow does not open dots nothing", %{conn: conn} do

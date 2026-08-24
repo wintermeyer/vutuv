@@ -427,7 +427,9 @@ came from), or they would be stranded on a tab they cannot leave.
 **A tab you are not on says something landed there** (issue #1503) — a coral
 dot beside its label (`post_filter_tabs/1`'s `unseen`), cleared by going there
 (`load_source_filter/2` → `clear_unseen/2`; "All" clears both, a named tab only
-itself). A dot and no count: what the reader needs is that there is something
+itself). Only the two named tabs ever dot (`unseen_tabs/1`): "All" holds the
+same posts, so a dot there was true and read as a third place with news of its
+own. A dot and no count: what the reader needs is that there is something
 over there, and the tab reloads from the top anyway. The socket's
 `:unseen_sources` is never stored — it means "since you have been looking at
 this page", so a fresh mount starting clean is the honest state.

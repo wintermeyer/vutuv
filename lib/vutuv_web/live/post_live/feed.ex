@@ -991,14 +991,10 @@ defmodule VutuvWeb.PostLive.Feed do
   defp other_source(_all), do: nil
 
   # The tab values carrying a dot: the named sources holding something unseen,
-  # plus "All", which shows whatever they hold. The component drops the dot on
+  # and only those. "All" holds the same posts, so a dot there was true and read
+  # as a third place with news of its own. The component drops the dot on
   # whichever tab is active, so this never has to know which one that is.
-  defp unseen_tabs(sources) do
-    case Enum.map(sources, &to_string/1) do
-      [] -> []
-      named -> ["all" | named]
-    end
-  end
+  defp unseen_tabs(sources), do: Enum.map(sources, &to_string/1)
 
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in
   # place (update_only, so an off-page id is a harmless no-op). The entry's other
