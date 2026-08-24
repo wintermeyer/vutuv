@@ -8,7 +8,7 @@ card stretch edge to edge with a huge line length and dead space. --%>
   below it. Exactly one <h1> on the page (no sr-only crumbs h1). --%>
   <div class="profile-header items-start">
     <div class="profile-header__info min-w-0">
-      <h1>{@tag.name || @tag.slug}</h1>
+      <h1>{Tag.display_name(@tag)}</h1>
       <%!-- The page's meta line: how many people follow this topic and, where
       the installation federates, the topic's own address out there — which is
       the one thing a visitor arriving from Mastodon came for, and the only part
@@ -38,6 +38,11 @@ card stretch edge to edge with a huge line length and dead space. --%>
     {gen_breadcrumbs([{gettext("Tags"), ~p"/tags"}, gettext("Show")])}
   </div>
   <JsonLd.script data={JsonLd.breadcrumb_trail([{gettext("Tags"), ~p"/tags"}, gettext("Show")])} />
+  <%!-- What this page collects, and the topic it collects it about. Only on a
+  page the crawlers are allowed to keep — markup that describes a collection to
+  a crawler we just asked to drop the page contradicts itself (the profile's
+  rule). The description is the same string the `<head>` carries. --%>
+  <JsonLd.script :if={@indexable?} data={JsonLd.collection_page(@tag, @meta_description)} />
 
   <%!-- The rest of what a visitor from another server needs: the sentence that
   explains what following a tag over there gets them, and the form that sends

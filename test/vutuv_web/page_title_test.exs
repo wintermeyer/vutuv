@@ -31,6 +31,19 @@ defmodule VutuvWeb.PageTitleTest do
              "Tina Titel · #{Date.to_iso8601(post.published_on)} - vutuv"
   end
 
+  # Every /tags/* page used to fall through to the bare site name, so the whole
+  # corpus shared one title (and one og:title). The hashtag form also keeps a
+  # topic page from colliding with the profile of a member holding that handle.
+  test "a tag page names its topic as a hashtag", %{conn: conn} do
+    insert(:tag, name: "Deutschland", slug: "deutschland")
+
+    assert conn |> get("/tags/deutschland") |> title() == "#Deutschland - vutuv"
+  end
+
+  test "the tag directory names itself", %{conn: conn} do
+    assert conn |> get("/tags") |> title() == "Tags - vutuv"
+  end
+
   test "a LiveView's page_title reaches the dead render too", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
 

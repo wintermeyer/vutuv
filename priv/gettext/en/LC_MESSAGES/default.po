@@ -1376,6 +1376,7 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/text.ex:516
 #: lib/vutuv_web/agent_docs/text.ex:753
 #: lib/vutuv_web/components/ui.ex:4125
+#: lib/vutuv_web/controllers/tag_controller.ex:36
 #: lib/vutuv_web/controllers/user_tag_controller.ex:43
 #: lib/vutuv_web/controllers/user_tag_controller.ex:60
 #: lib/vutuv_web/cv/docx.ex:174
@@ -10425,11 +10426,6 @@ msgstr ""
 msgid "Manage your vutuv account: profile, privacy, notifications and sign-in."
 msgstr ""
 
-#: lib/vutuv_web/controllers/tag_controller.ex:123
-#, elixir-autogen, elixir-format
-msgid "Members on vutuv tagged %{tag}."
-msgstr ""
-
 #: lib/vutuv_web/open_graph.ex:159
 #, elixir-autogen, elixir-format
 msgid "Set up an authenticator app (TOTP) for your vutuv login."
@@ -12668,7 +12664,7 @@ msgid "All countries"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:503
-#: lib/vutuv_web/templates/tag/show.html.heex:92
+#: lib/vutuv_web/templates/tag/show.html.heex:97
 #, elixir-autogen, elixir-format
 msgid "All jobs with this tag"
 msgstr ""
@@ -12744,7 +12740,7 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/text.ex:521
 #: lib/vutuv_web/agent_docs/text.ex:533
 #: lib/vutuv_web/live/organization_live/show.ex:676
-#: lib/vutuv_web/templates/tag/show.html.heex:86
+#: lib/vutuv_web/templates/tag/show.html.heex:91
 #, elixir-autogen, elixir-format
 msgid "Open positions"
 msgstr ""
@@ -21568,7 +21564,12 @@ msgstr ""
 msgid "%{formatted} active"
 msgstr ""
 
-#: lib/vutuv_web/templates/tag/show.html.heex:58
+#: lib/vutuv_web/templates/tag/show.html.heex:63
 #, elixir-autogen, elixir-format
 msgid "Follow from the Fediverse"
+msgstr ""
+
+#: lib/vutuv_web/controllers/tag_controller.ex:174
+#, elixir-autogen, elixir-format
+msgid "Posts and members on vutuv about %{tag}."
 msgstr ""

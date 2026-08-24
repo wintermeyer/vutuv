@@ -75,7 +75,10 @@ defmodule VutuvWeb.OpenGraphTest do
 
       description = conn |> get(~p"/tags/elixir") |> html_response(200) |> og("og:description")
 
-      assert description == "Members on vutuv tagged Elixir."
+      # Not "members tagged Elixir": since issue #946 the page leads with the
+      # posts carrying the tag, and most tag pages have no endorsed members at
+      # all, so the old copy promised a search visitor a list that wasn't there.
+      assert description == "Posts and members on vutuv about Elixir."
     end
 
     test "each settings page describes what it manages", %{conn: conn} do

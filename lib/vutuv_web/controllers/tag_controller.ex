@@ -13,6 +13,7 @@ defmodule VutuvWeb.TagController do
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ContentPolicy
   alias VutuvWeb.Fediverse.Docs
+  alias VutuvWeb.UserHelpers
 
   # Not the shared `ResolveSlug` plug: an alternative name for a topic keeps its
   # own slug (issue #1338), and that URL must lead to the topic rather than 404
@@ -29,7 +30,11 @@ defmodule VutuvWeb.TagController do
       |> Pages.paginate(conn.params, tags_count)
       |> Repo.all()
 
-    render(conn, "index.html", tags: tags, tags_count: tags_count)
+    render(conn, "index.html",
+      tags: tags,
+      tags_count: tags_count,
+      page_title: gettext("Tags")
+    )
   end
 
   # Resolves the `:slug` param: a topic is assigned and rendered; an alternative
@@ -96,8 +101,10 @@ defmodule VutuvWeb.TagController do
     # Console as "crawled - currently not indexed". It stays served and
     # linkable, but carries noindex (on every format) so crawlers drop it
     # deliberately; the sitemap advertises only the tags above the bar.
+    indexable? = Tags.indexable_tag?(tag)
+
     conn =
-      if Tags.indexable_tag?(tag),
+      if indexable?,
         do: conn,
         else: ContentPolicy.put_robots_header(conn, true, false)
 
@@ -120,11 +127,22 @@ defmodule VutuvWeb.TagController do
           # shared link may carry, since an off-router LiveView cannot read the
           # query string for itself.
           timeline_session: timeline_session(conn, tag),
-          meta_description: gettext("Members on vutuv tagged %{tag}.", tag: tag.name || tag.slug)
+          # `#Deutschland - vutuv`, and the same string as `og:title`. Every
+          # tag page used to fall through to the bare site name, so the whole
+          # `/tags/*` corpus shared one title — the strongest on-page signal
+          # there is, spent on nothing, and a shared link previewed as "vutuv".
+          # The hashtag form is what makes it a topic rather than a person: a
+          # member may hold `/deutschland` as their handle, and two pages
+          # titled "Deutschland" would be competing with each other.
+          page_title: "#" <> Tag.display_name(tag),
+          meta_description: meta_description(tag),
+          # Markup mirrors the page (the profile's rule): a tag page the
+          # crawlers are told to drop describes no collection to them either.
+          indexable?: indexable?
         ),
       doc: fn ->
         recommended = Tag.recommended_users(tag)
-        work_info_by_id = VutuvWeb.UserHelpers.work_information_map(recommended, 45)
+        work_info_by_id = UserHelpers.work_information_map(recommended, 45)
         jobs = Jobs.list_tag_postings(tag, nil)
         timeline = timeline_doc(tag, conn.params)
 
@@ -138,6 +156,24 @@ defmodule VutuvWeb.TagController do
         )
       end
     )
+  end
+
+  # What a search result and a link preview say under the title. An admin who
+  # wrote a description for this topic wrote the better sentence, so it wins;
+  # otherwise say what the page actually holds. The old copy ("Members on vutuv
+  # tagged X") predates issue #946, after which the page leads with the posts
+  # carrying the tag and most tag pages have no endorsed members at all — so it
+  # promised a search visitor a list of people that often was not there.
+  #
+  # Capped at 160 characters, past which a search-result snippet is cut anyway;
+  # `headline_text/2` is the app's one "make this one plain line and shorten it"
+  # helper, so a description written with a bit of Markdown in the admin form
+  # arrives here as prose rather than as literal asterisks.
+  defp meta_description(%Tag{} = tag) do
+    case UserHelpers.headline_text(tag.description, 160) do
+      "" -> gettext("Posts and members on vutuv about %{tag}.", tag: Tag.display_name(tag))
+      text -> text
+    end
   end
 
   # The controls a link can carry, handed to the LiveView as strings — it

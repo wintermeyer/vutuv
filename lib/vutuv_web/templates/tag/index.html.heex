@@ -3,7 +3,7 @@
 <div class="card-list">
   <section class="card">
     <div class="flex flex-wrap gap-2">
-      <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"}>{tag.name || tag.slug}</.chip>
+      <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"}>{Tag.display_name(tag)}</.chip>
     </div>
     <.pager params={@conn.params} total={@tags_count} />
   </section>

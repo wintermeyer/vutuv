@@ -1,7 +1,29 @@
 defmodule VutuvWeb.TagControllerTest do
   use VutuvWeb.ConnCase, async: true
 
+  alias Vutuv.Tags
+  alias Vutuv.Tags.Tag
   alias VutuvWeb.Fediverse.Docs
+
+  defp meta_description(html) do
+    [_, content] = Regex.run(~r/<meta name="description" content="([^"]*)"/, html)
+    content
+  end
+
+  defp og_tag(html, property) do
+    case Regex.run(~r/<meta property="#{property}" content="([^"]*)"/, html) do
+      [_, content] -> content
+      _ -> nil
+    end
+  end
+
+  # The CollectionPage block, or nil when the page emits none.
+  defp collection_page(html) do
+    ~r{<script type="application/ld\+json">\s*(.*?)\s*</script>}s
+    |> Regex.scan(html, capture: :all_but_first)
+    |> Enum.map(fn [json] -> Jason.decode!(json) end)
+    |> Enum.find(&(&1["@type"] == "CollectionPage"))
+  end
 
   # The public tag pages resolve the `:slug` param to a `Tags.Tag` before every
   # action. An unknown slug must render a clean 404 and *halt* (a missing tag
@@ -187,6 +209,88 @@ defmodule VutuvWeb.TagControllerTest do
         |> html_response(200)
 
       assert html =~ "Aus dem Fediverse folgen"
+    end
+  end
+
+  # What a search result and a shared link say about a tag page. The title used
+  # to be the bare site name on every one of them, and the description promised
+  # a list of members that most tag pages do not have.
+  describe "search-engine and link-preview metadata" do
+    test "the description says what the page holds", %{conn: conn} do
+      tag = insert(:tag, name: "Elchtest", slug: "elchtest")
+
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+
+      assert meta_description(html) == "Posts and members on vutuv about Elchtest."
+    end
+
+    test "a description written in the admin form wins", %{conn: conn} do
+      insert(:tag, name: "Beam", slug: "beam", description: "The Erlang virtual machine.")
+
+      html = conn |> get(~p"/tags/beam") |> html_response(200)
+
+      assert meta_description(html) == "The Erlang virtual machine."
+    end
+
+    test "a long description is cut on a word boundary", %{conn: conn} do
+      insert(:tag, name: "Lang", slug: "lang", description: String.duplicate("Wort ", 60))
+
+      description = conn |> get(~p"/tags/lang") |> html_response(200) |> meta_description()
+
+      assert String.length(description) <= 160
+      assert String.ends_with?(description, "...")
+    end
+
+    test "og:title and og:description carry the same strings as the head", %{conn: conn} do
+      tag = insert(:tag, name: "Elchtest", slug: "elchtest")
+
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+
+      # og:title is the page title without the " - vutuv" suffix the browser tab
+      # carries — the site name is already og:site_name.
+      assert og_tag(html, "og:title") == "#Elchtest"
+      assert og_tag(html, "og:description") == meta_description(html)
+    end
+
+    test "an indexable tag page describes its collection", %{conn: conn} do
+      tag = insert(:tag)
+
+      for _ <- 1..Tags.min_indexable_members() do
+        insert(:user_tag, user: insert(:activated_user), tag: tag)
+      end
+
+      block = conn |> get(~p"/tags/#{tag}") |> html_response(200) |> collection_page()
+
+      assert block["name"] == Tag.display_name(tag)
+      assert block["url"] =~ "/tags/#{tag.slug}"
+      assert block["description"] =~ Tag.display_name(tag)
+      # The topic itself, named but not typed: nothing in a tag row says whether
+      # it is a place, a language or a person.
+      assert block["about"] == %{"@type" => "Thing", "name" => Tag.display_name(tag)}
+    end
+
+    test "a thin tag page carries no collection markup", %{conn: conn} do
+      # Markup mirrors the page: this one already answers noindex, so telling a
+      # crawler about a collection here would contradict it.
+      tag = insert(:tag)
+      insert(:user_tag, user: insert(:activated_user), tag: tag)
+
+      conn = get(conn, ~p"/tags/#{tag}")
+
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+      assert conn |> html_response(200) |> collection_page() == nil
+    end
+
+    test "the German page describes itself in German", %{conn: conn} do
+      tag = insert(:tag, name: "Elchtest", slug: "elchtest")
+
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/tags/#{tag}")
+        |> html_response(200)
+
+      assert meta_description(html) == "Beiträge und Mitglieder auf vutuv zum Thema Elchtest."
     end
   end
 

@@ -329,6 +329,19 @@ defmodule Vutuv.Tags.Tag do
   defp follow_alias(%__MODULE__{merged_into_id: id} = tag), do: Repo.get(__MODULE__, id) || tag
 
   @doc """
+  What to call this tag on screen: the name its first writer gave it, falling
+  back to the slug for a struct built without one (the column is NOT NULL, but
+  it does allow a blank).
+
+  One owner, because the answer now reaches further than a heading: it is the
+  page's `<h1>`, its `<title>` and `og:title`, and the topic named in its meta
+  description, and a page whose title says one thing while its heading says
+  another is a page a search engine has to guess about.
+  """
+  def display_name(%__MODULE__{name: name}) when is_binary(name) and name != "", do: name
+  def display_name(%__MODULE__{slug: slug}), do: slug
+
+  @doc """
   The topic a tag stands for: itself, or the tag it is an alternative name for.
 
   Takes a loaded `%Tag{}` and answers without a query when the association is

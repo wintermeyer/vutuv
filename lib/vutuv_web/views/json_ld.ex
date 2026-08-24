@@ -34,6 +34,7 @@ defmodule VutuvWeb.JsonLd do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
   alias Vutuv.Profiles.SocialMediaAccount
+  alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
@@ -363,6 +364,42 @@ defmodule VutuvWeb.JsonLd do
   defp job_skills(%JobPosting{} = posting) do
     (Jobs.tags_of(posting, :required) ++ Jobs.tags_of(posting, :nice_to_have))
     |> Enum.map(& &1.name)
+  end
+
+  @doc """
+  A tag page as schema.org CollectionPage: what this page collects, and the
+  topic it collects it about.
+
+  A tag page is not an entity, it is a gathering of posts and members around a
+  subject, and `CollectionPage` is the type that says so — which also stops a
+  crawler reading the page's `<h1>` as the name of a *thing* called
+  "Deutschland". The subject itself rides in `about` as a bare `Thing`: naming
+  it is honest (that word is what the page is about) while claiming any more
+  specific type would be a guess, since nothing in a tag row says whether
+  "Deutschland" is a place, "Elixir" a programming language and "Bach" a person.
+
+  `description` is deliberately the same string the page's `<meta
+  name="description">` carries, so the markup cannot describe the page
+  differently from the head.
+
+  Gate at the call site: only emit for an indexable page (`Tags.indexable_tag?/1`),
+  the same rule the profile follows — markup that describes a collection to a
+  crawler we have just asked to drop the page contradicts itself.
+  """
+  def collection_page(tag, description) do
+    url = AgentDocs.abs_url("/tags/#{tag.slug}")
+    name = Tag.display_name(tag)
+
+    compact(%{
+      "@context" => "https://schema.org",
+      "@type" => "CollectionPage",
+      "@id" => url,
+      "url" => url,
+      "name" => name,
+      "description" => description,
+      "about" => %{"@type" => "Thing", "name" => name},
+      "isPartOf" => %{"@type" => "WebSite", "url" => VutuvWeb.Endpoint.url(), "name" => "vutuv"}
+    })
   end
 
   @doc """
