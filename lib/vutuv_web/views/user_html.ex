@@ -29,6 +29,16 @@ defmodule VutuvWeb.UserHTML do
   embed_templates("../templates/user/*")
 
   @doc """
+  Does the profile show a Subscribe card — and therefore its Posts-header sign?
+
+  One predicate rather than the same boolean written at both sites: the card
+  renders for either half (a Fediverse address, a feed with posts behind it),
+  and the header's `<.subscribe_link>` must point at it exactly when it is
+  there, or the anchor is a jump to nothing.
+  """
+  def subscribe_card?(fediverse, posts_total), do: fediverse != nil or posts_total > 0
+
+  @doc """
   One compact user row (avatar, name, work line, follow/unfollow) shared by
   the profile page's "Who to follow" rail and the follower/following preview
   cards. Callers pass the page-wide `work_info_by_id` / `following_by_id`

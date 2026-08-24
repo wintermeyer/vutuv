@@ -162,7 +162,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # :fetch_code_stats flag is off or the member opted out — consistent
       # with the page.
       code_stats: Enum.map(CodeStats.visible_accounts(user), &code_stats_entry/1),
-      # The member's Fediverse address, mirroring the profile's Fediverse card:
+      # The member's Fediverse address, mirroring the Subscribe card's half:
       # present only while they federate (and the installation switch is on),
       # nil otherwise. An agent handing a human "where else can I follow this
       # person" needs exactly the handle; the actor URL is the machine sibling.

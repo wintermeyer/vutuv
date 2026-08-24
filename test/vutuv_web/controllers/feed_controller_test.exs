@@ -319,18 +319,40 @@ defmodule VutuvWeb.FeedControllerTest do
       assert html =~ ~r|<a[^>]*href="/feed_author/posts/feed\.xml"[^>]*>\s*RSS\s*</a>|
     end
 
-    # Issue #1287: the rail card at the very foot of a long profile was not
-    # where anyone looked for a feed. The button sits in the header of the
-    # Posts card, on the posts it feeds.
-    test "the profile's Posts card carries a visible feed button", %{author: author} do
+    # Issue #1287 put the feed pill in the header of the Posts card, because the
+    # rail card at the very foot of a long profile was not where anyone looked.
+    # The pill then owned the loudest spot on the section for the rarer of the
+    # two ways to follow a member from outside vutuv, so the header now signs
+    # the way to the Subscribe card, which carries both.
+    test "the Posts card points at the Subscribe card", %{author: author} do
       create_post!(author, %{"body" => "Subscribe-worthy"})
 
-      button =
+      document =
         build_conn()
         |> get("/feed_author")
         |> html_response(200)
         |> LazyHTML.from_document()
-        |> LazyHTML.query("#profile-posts-feed")
+
+      link = LazyHTML.query(document, "#profile-posts #profile-subscribe-link")
+      assert LazyHTML.attribute(link, "href") == ["#profile-subscribe"]
+
+      # Never a dead jump. This member does not federate, so the card is the
+      # feed alone — which is exactly the case that would break if the card
+      # were still conditional on a Fediverse address.
+      refute Enum.empty?(LazyHTML.query(document, "#profile-subscribe"))
+      assert Enum.empty?(LazyHTML.query(document, "#profile-fediverse"))
+    end
+
+    test "the Subscribe card carries the feed", %{author: author} do
+      create_post!(author, %{"body" => "Subscribe-worthy"})
+
+      document =
+        build_conn()
+        |> get("/feed_author")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      button = LazyHTML.query(document, "#profile-subscribe #profile-posts-feed")
 
       assert LazyHTML.attribute(button, "href") == ["/feed_author/posts/feed.xml"]
       # Icon-only would be a guess for anyone who does not know the glyph.
@@ -340,6 +362,31 @@ defmodule VutuvWeb.FeedControllerTest do
       assert [label] = LazyHTML.attribute(button, "aria-label")
       assert label =~ "RSS"
       assert LazyHTML.attribute(button, "title") == [label]
+
+      # A standalone reader wants the address pasted into its own "add feed"
+      # box, so the absolute URL sits beside the pill as a copy target.
+      url = LazyHTML.query(document, "#profile-posts-feed-url")
+      assert LazyHTML.text(url) =~ @base <> "/feed_author/posts/feed.xml"
+    end
+
+    # The German is asserted by name because the extract fuzzy-matched
+    # "Subscribe" to "Abbestellen" — unsubscribe, the opposite — and nothing
+    # else in the build would have caught it.
+    test "the German render names the card and the feed reader", %{author: author} do
+      create_post!(author, %{"body" => "Abonnierbar"})
+
+      html =
+        build_conn()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get("/feed_author")
+        |> html_response(200)
+
+      assert html =~ "Abonnieren"
+      # This member does not federate, so the feed is the card's only half and
+      # its heading must not offer an alternative to nothing.
+      assert html =~ "Mit einem RSS-Reader"
+      refute html =~ "Oder mit einem RSS-Reader"
+      refute html =~ "Abbestellen"
     end
 
     test "the post archive carries the same feed button" do
@@ -354,13 +401,14 @@ defmodule VutuvWeb.FeedControllerTest do
     end
 
     # A member with nothing to say yet still has a feed worth subscribing to,
-    # but their profile renders no Posts card at all for a visitor — so the
-    # button cannot be the only visible way there.
+    # but their profile renders neither a Posts card nor a Subscribe card for a
+    # visitor — so neither can be the only visible way there.
     test "a visitor's empty profile keeps the rail chip when there is no Posts card" do
       html = build_conn() |> get("/feed_author") |> html_response(200)
       document = LazyHTML.from_document(html)
 
       assert Enum.empty?(LazyHTML.query(document, "#profile-posts"))
+      assert Enum.empty?(LazyHTML.query(document, "#profile-subscribe"))
       assert Enum.empty?(LazyHTML.query(document, "#profile-posts-feed"))
       assert html =~ ~r|<a[^>]*href="/feed_author/posts/feed\.xml"[^>]*>\s*RSS\s*</a>|
     end

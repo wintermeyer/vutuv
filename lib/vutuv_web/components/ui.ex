@@ -34,6 +34,7 @@ defmodule VutuvWeb.UI do
   alias Vutuv.Tags.UserTag
   alias Vutuv.Uploads.Spec
   alias Vutuv.ViewerClock
+  alias VutuvWeb.AgentDocs
   alias VutuvWeb.CodeHighlight.Languages
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Markdown
@@ -1095,12 +1096,9 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The **subscribe-by-feed** pill (issue #1287): the visible way to a member's
-  RSS feed (`VutuvWeb.Feeds.user_feed_path/1`), rendered where their posts
-  are — the profile's Posts card header and the `/:slug/posts` archive
-  header. Autodiscovery (`<link rel="alternate">`) is invisible and the rail's
-  "Other formats" chip sits at the foot of a very long page, which is why the
-  feature was reported missing although both already existed.
+  The **subscribe-by-feed** pill: the visible way to a feed
+  (`VutuvWeb.Feeds.user_feed_path/1` and its organization sibling), since
+  autodiscovery via `<link rel="alternate">` is invisible.
 
   Glyph **and** the word "RSS": the arcs are famous among people who use
   feeds and meaningless to everyone else, while "RSS" alone in a row of
@@ -1112,11 +1110,15 @@ defmodule VutuvWeb.UI do
   URL — into a screen reader's link list; it keeps the visible label inside
   the accessible name (WCAG 2.5.3).
 
+  Two call sites: the feed half of `<.subscribe_card>`, and the `/:slug/posts`
+  archive header, a page that is nothing but posts. It is **not** in a Posts
+  card header any more — see `<.subscribe_link>` for why.
+
   The pill is the app's `<.tag_follow_button>` / `<.follow_button
   variant="text">` outline pill grown to a full `min-h-10` (40px) touch
-  target, since it stands alone in a card header with room around it rather
-  than in a dense list row. Deliberately slate-to-brand, not the RSS orange:
-  a bespoke colour for one control would be the only one in the app.
+  target, since it stands alone with room around it rather than in a dense
+  list row. Deliberately slate-to-brand, not the RSS orange: a bespoke colour
+  for one control would be the only one in the app.
   """
   attr(:href, :string, required: true)
   attr(:id, :string, default: nil)
@@ -1142,6 +1144,123 @@ defmodule VutuvWeb.UI do
     </.link>
     """
   end
+
+  @doc """
+  The **subscribe shortcut** in a Posts card header: one quiet text link to the
+  page's Subscribe card at the foot of the page.
+
+  It replaces the `<.feed_button>` pill that used to sit here (issue #1287).
+  The pill was the most prominent control on a profile's posts section — a
+  40px pill, first thing beside the heading — for the one way to follow a
+  member that almost nobody uses, while the Fediverse address, which is what a
+  visitor arriving from Mastodon came for, had no link above the fold at all.
+  Both ways now live in one card named after what a reader wants ("Subscribe"),
+  and this is the sign that points at it. So the header keeps a visible path to
+  the feed, which is all #1287 was really about, at a fraction of the space.
+
+  A plain in-page anchor, so it costs no request and works without JavaScript;
+  `min-h-10` keeps the 40px touch target the pill had.
+  """
+  attr(:href, :string, required: true)
+  attr(:id, :string, default: nil)
+
+  def subscribe_link(assigns) do
+    ~H"""
+    <.link
+      id={@id}
+      href={@href}
+      class={[
+        "inline-flex min-h-10 shrink-0 items-center gap-1 text-sm font-semibold",
+        "text-slate-600 transition-colors hover:text-brand-700",
+        "dark:text-slate-400 dark:hover:text-brand-200"
+      ]}
+    >
+      {gettext("Subscribe")}<span aria-hidden="true">›</span>
+    </.link>
+    """
+  end
+
+  @doc """
+  The **Subscribe card** at the foot of a profile or an organization page: the
+  one place that answers "how do I follow this without a vutuv account", with
+  every way to do it under a heading of its own.
+
+  Two halves, each optional. The `:fediverse` slot carries the address block
+  (`<.follow_us_from_elsewhere>`, a moved member's forwarding address, or an
+  owner's invite to switch federation on) — the page owns that body because
+  the three cases differ per page. The feed half is here: the
+  `<.feed_button>` pill beside the feed's absolute address as a copy target.
+  Both, because the two ways people subscribe are different acts — a reader
+  extension takes the click on the pill, while a standalone feed reader wants
+  the URL pasted into its own "add feed" box, and hunting that out of the
+  address bar after the browser has rendered raw XML is the step where people
+  give up. `<.feed_button>` alone is right on `/:slug/posts`, which is one
+  page about one feed; a card that hands out an address should hand out the
+  address.
+
+  `id` is the page's prefix, not a full id: the card is `<prefix>-subscribe`
+  and the Fediverse half keeps `<prefix>-fediverse`, the id the whole card
+  carried before it grew a second half, so older links still land on the
+  address they were written for. Both are anchor targets, so both clear the
+  sticky top bar. `feed_href` falsy renders no feed half, and a card with
+  neither half renders nothing at all — which is what keeps the
+  `<.subscribe_link>` pointing at it from ever being a dead jump.
+
+  The feed half's heading says "Or" only when there is something above it to
+  be an alternative to; on the great majority of profiles, which do not
+  federate, the card is the feed alone.
+  """
+  attr(:id, :string, required: true)
+  attr(:feed_href, :any, default: nil, doc: "feed path; falsy renders no feed half")
+  attr(:class, :any, default: nil)
+  slot(:fediverse)
+
+  def subscribe_card(assigns) do
+    ~H"""
+    <.card
+      :if={@fediverse != [] or @feed_href}
+      id={"#{@id}-subscribe"}
+      class={subscribe_card_class(@class)}
+    >
+      <.section_title>{gettext("Subscribe")}</.section_title>
+
+      <div :if={@fediverse != []} id={"#{@id}-fediverse"} class="scroll-mt-24">
+        <h3 class={subscribe_heading_class()}>{gettext("Fediverse")}</h3>
+        {render_slot(@fediverse)}
+      </div>
+
+      <div
+        :if={@feed_href}
+        class={@fediverse != [] && "mt-6 border-t border-slate-100 pt-5 dark:border-slate-800"}
+      >
+        <h3 class={subscribe_heading_class()}>
+          {if @fediverse != [],
+            do: gettext("Or with an RSS reader"),
+            else: gettext("With an RSS reader")}
+        </h3>
+        <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+          {gettext("New public posts arrive in any feed reader. No account needed either.")}
+        </p>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <.feed_button id={"#{@id}-posts-feed"} href={@feed_href} />
+          <.copy_field
+            id={"#{@id}-posts-feed-url"}
+            class="min-w-0 flex-1 items-center"
+            code_class="text-xs"
+          >{AgentDocs.abs_url(@feed_href)}</.copy_field>
+        </div>
+      </div>
+    </.card>
+    """
+  end
+
+  # Both halves of the Subscribe card are named by the same small heading.
+  defp subscribe_heading_class, do: "text-sm font-semibold text-slate-900 dark:text-white"
+
+  # `<.card>` takes a plain class string, and the card is always an anchor
+  # target, so `scroll-mt-24` is not the caller's to remember.
+  defp subscribe_card_class(nil), do: "scroll-mt-24"
+  defp subscribe_card_class(class), do: "scroll-mt-24 #{class}"
 
   @doc """
   The outline RSS icon (24×24 stroke) — the broadcast arcs over their dot.

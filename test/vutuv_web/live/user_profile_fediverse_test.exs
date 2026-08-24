@@ -10,6 +10,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
   import Phoenix.LiveViewTest
   import Vutuv.EndpointHostHelper
   import Vutuv.FediverseHelpers
+  import Vutuv.PostsHelpers
 
   alias Vutuv.Social
   alias VutuvWeb.Fediverse.Docs
@@ -79,12 +80,24 @@ defmodule VutuvWeb.UserProfileFediverseTest do
       # The follower/following pair is the last block of the main content
       # column, and the rail follows it in the DOM: a card between the two is
       # the foot of the column on a desktop.
-      assert position(html, "profile-fediverse") > position(html, "profile-followers")
-      assert position(html, "profile-fediverse") < position(html, "profile-other-formats")
+      assert position(html, "profile-subscribe") > position(html, "profile-followers")
+      assert position(html, "profile-subscribe") < position(html, "profile-other-formats")
 
       # On a phone every card is one flex child of a single column, so the
       # order utility is what puts it below the rail's cards there.
-      assert has_element?(view, "#profile-fediverse.order-3")
+      assert has_element?(view, "#profile-subscribe.order-3")
+    end
+
+    test "pairs the address with the feed once the member has posted", %{conn: conn} do
+      user = federating_member()
+      create_post!(user, %{"body" => "Subscribe-worthy"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      assert has_element?(view, "#profile-subscribe #profile-posts-feed")
+      # Both halves render, so the feed is the alternative the "Or" names.
+      assert render(view) =~ "Or with an RSS reader"
+      refute render(view) =~ ">With an RSS reader<"
     end
 
     test "the form posts to the route that exists", %{conn: conn} do
@@ -106,7 +119,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
       assert has_element?(view, "#profile-social-media " <> @shortcut)
       assert view |> element(@shortcut) |> render() =~ Docs.handle(user)
-      assert view |> element(@shortcut) |> render() =~ ~s|href="#profile-fediverse"|
+      assert view |> element(@shortcut) |> render() =~ ~s|href="#profile-subscribe"|
     end
 
     test "does not repeat the card's tools", %{conn: conn} do
@@ -126,6 +139,9 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
       {:ok, view, _html} = live(conn, ~p"/#{user}")
 
+      assert has_element?(view, "#profile-subscribe.scroll-mt-24")
+      # The half kept the anchor the whole card used to carry, so a link
+      # written before the card grew its RSS half still lands on the address.
       assert has_element?(view, "#profile-fediverse.scroll-mt-24")
     end
 
@@ -184,7 +200,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
       conn = post(conn, ~p"/#{user}/fediverse/follow", %{"address" => "not an address"})
 
-      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert redirected_to(conn) == "/#{user.username}#profile-subscribe"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "@you@example.social"
     end
 
@@ -194,7 +210,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
       conn = post(conn, ~p"/#{user}/fediverse/follow", %{"address" => "@them@social.example"})
 
-      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert redirected_to(conn) == "/#{user.username}#profile-subscribe"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "social.example"
     end
 
@@ -204,7 +220,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
       conn = post(conn, ~p"/#{user}/fediverse/follow", %{"address" => "@them@social.example"})
 
-      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert redirected_to(conn) == "/#{user.username}#profile-subscribe"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "not on the Fediverse"
     end
 
@@ -214,7 +230,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
       conn = post(conn, ~p"/#{user}/fediverse/follow", %{"address" => "@them@social.example"})
 
-      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert redirected_to(conn) == "/#{user.username}#profile-subscribe"
     end
   end
 
@@ -236,7 +252,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
           "address" => "@#{viewer.username}@vutuv.test"
         })
 
-      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert redirected_to(conn) == "/#{user.username}#profile-subscribe"
       assert Social.user_follows_user?(viewer.id, user.id)
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "@#{user.username}"
     end
@@ -280,7 +296,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
           "address" => "@#{user.username}@vutuv.test"
         })
 
-      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert redirected_to(conn) == "/#{user.username}#profile-subscribe"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "yourself"
       assert Repo.aggregate(Social.Follow, :count) == 0
     end
@@ -291,7 +307,7 @@ defmodule VutuvWeb.UserProfileFediverseTest do
       conn =
         post(conn, ~p"/#{user}/fediverse/follow", %{"address" => "@whoever@vutuv.test"})
 
-      assert redirected_to(conn) == "/#{user.username}#profile-fediverse"
+      assert redirected_to(conn) == "/#{user.username}#profile-subscribe"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Sign in"
       assert Repo.aggregate(Social.Follow, :count) == 0
     end

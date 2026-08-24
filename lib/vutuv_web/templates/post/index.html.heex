@@ -6,9 +6,10 @@
         {gettext("Posts by %{name}", name: full_name(@author))}
         <span :if={@period_label} class="font-normal text-slate-600 dark:text-slate-400">· {@period_label}</span>
       </h1>
-      <%!-- The page IS what the feed carries, so the subscribe pill belongs
-      here as much as on the profile (issue #1287). `items-baseline` on the row
-      would hang the pill off the h1's baseline, so this pair centers itself. --%>
+      <%!-- The page IS what the feed carries, so the pill belongs here — this
+      is the one place it still stands alone, since a page about a single feed
+      needs no card named after subscribing. `items-baseline` on the row would
+      hang the pill off the h1's baseline, so this pair centers itself. --%>
       <div class="flex items-center gap-3 self-center">
         <.link
           href={~p"/#{@author}"}

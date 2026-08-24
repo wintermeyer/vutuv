@@ -605,7 +605,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     ]
   end
 
-  # The member's Fediverse address, the same fact the profile's Fediverse card
+  # The member's Fediverse address, the same fact the profile's Subscribe card
   # shows; absent for the vast majority who do not federate. A moved account
   # names where it went, so a reader follows the new address, not the redirect.
   defp fediverse_fact(nil), do: nil

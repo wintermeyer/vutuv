@@ -990,23 +990,40 @@ A logged-out visitor sees the default set (Google primary).
 
 The geocoding query keeps the country even when it is hidden on screen
 
-## Fediverse card (issue #1081)
+## Subscribe card (issues #1081, #1287)
 
-A profile whose member federates gets a **"Fediverse" card** right under the
-header, the one card on the page written for a visitor who is *not* a member:
-someone arriving from Mastodon (or any other ActivityPub app) who wants to
-follow this person from where their own account already lives.
+The last card of the main column, `#profile-subscribe` (`<.subscribe_card>` in
+`VutuvWeb.UI`, shared with the organization page): the one card written for a
+visitor who is *not* a member and wants to keep reading this person from where
+they already are. Every way to do that lives here, under a heading of its own,
+and the Posts card's header carries a quiet **"Subscribe ›"** sign
+(`<.subscribe_link>`) that jumps to it.
 
-It shows the member's address there, `@member@vutuv.de`, with the shared
-`data-copy` button, and below it a **"Follow from your own server"** field: the
-visitor types their own address and lands on their own server's follow dialog
-with this member filled in. See
+**Fediverse** — for a member who federates, and only while `FEDIVERSE_ENABLED`
+is on. Their address there, `@member@vutuv.de`, with the shared `data-copy`
+button, and below it a **"Follow from your own server"** field: the visitor
+types their own address and lands on their own server's follow dialog with this
+member filled in. See
 [fediverse.md](fediverse.md#follow-from-your-own-server) for how that resolves.
-
 A member who has moved their Fediverse account away (`moved_to`) gets the
 **forwarding address** instead of the follow tool, since following the old
-handle would only reach a redirect. The card is absent entirely for the
-majority who do not federate, and while `FEDIVERSE_ENABLED` is off.
+handle would only reach a redirect. This half keeps the id `#profile-fediverse`
+— the anchor the whole card carried before it grew a second half — so older
+links (the Profiles rail card's shortcut row, `RemoteFollowController`'s error
+redirect) still land on the address they were written for.
+
+**RSS** — the member's feed, `/:slug/posts/feed.xml`, once they have posted:
+the `<.feed_button>` pill for a reader extension beside the absolute URL as a
+copy target for a standalone reader. Its heading says "Or with an RSS reader"
+only when the Fediverse half is above it; on the majority of profiles, which do
+not federate, the card is the feed alone.
+
+The card renders when either half does and nothing at all when neither, which
+is what keeps the header's sign from ever pointing at nothing —
+`UserHTML.subscribe_card?/2` is the one predicate both sites read. The feed
+pill used to sit in the Posts card header (issue #1287) and was the loudest
+control on that section for the rarer of the two ways to follow a member, while
+the Fediverse address had no link above the fold at all.
 
 The handle is public data on a public page, so the agent-format siblings carry
 it too (`ProfileDoc`'s `fediverse` map: handle, actor URL, `moved_to`; a

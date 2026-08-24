@@ -458,16 +458,16 @@ the resulting ~200px rail width. --%>
       <%!-- A "profile" context disambiguates the noun (Beitrag/Beiträge) from the
       bare gettext("Post") verb on the composer's submit button ("Posten"), which
       shares the "Post" msgid and must not be repurposed. --%>
-      <%!-- The feed lives on the posts it carries (issue #1287). The rail's
-      "Other formats" RSS chip stays as the machine-formats footer, but it is
-      the last card of a very long page, so a reader looking for a feed found
-      nothing. This is the same URL, where they look for it. --%>
+      <%!-- One sign to the Subscribe card at the foot of the page, which holds
+      both ways to follow this member from outside vutuv: the Fediverse address
+      and the RSS feed. The feed's own pill used to sit here (issue #1287); it
+      was the loudest control on the section, for the rarer of the two ways,
+      while the Fediverse block — what a visitor arriving from Mastodon comes
+      for — had no link above the fold at all. Rendered exactly when that card
+      renders, so the anchor is never a dead jump. --%>
       <.section_header title={pngettext("profile", "Post", "Posts", @posts_total)}>
-        <:action>
-          <.feed_button
-            id="profile-posts-feed"
-            href={VutuvWeb.Feeds.user_feed_path(@user)}
-          />
+        <:action :if={subscribe_card?(@fediverse, @posts_total)}>
+          <.subscribe_link id="profile-subscribe-link" href="#profile-subscribe" />
         </:action>
       </.section_header>
 
@@ -992,56 +992,57 @@ the resulting ~200px rail width. --%>
       </.card>
     </div>
 
-    <%!-- Fediverse card (@fediverse is nil unless this member federates and the
-    installation switch is on, so most profiles never render it). It answers the
-    two questions a visitor from Mastodon and friends arrives with: what is this
-    member's address over there, and how do I follow it without leaving my own
-    app. The handle is a copy target (that is the action people come for) and
-    the form below it resolves the visitor's OWN server's follow dialog and
-    sends them there, so the follow is confirmed where their account lives —
-    plain HTML, no JavaScript needed, since a visitor from another network is
-    exactly the person we cannot assume anything about. A member who moved
-    their Fediverse account away shows the forwarding address instead; following
-    them here would be a dead end.
+    <%!-- Subscribe: the one card that answers "how do I follow this person
+    without a vutuv account", with both ways to do it, so neither has to fight
+    for a place further up the page. The shell, the feed half and the anchors
+    are `<.subscribe_card>`, shared with the organization page — a visitor
+    arriving from Mastodon asks the same thing of a person and of a page.
 
-    It closes the page: the profile itself is what a visitor came for, and this
-    is the "take me with you" footer under it. `order-3` keeps it last on a
-    phone too, where every card is one flex child of a single column and the
-    rail's utility footer sits at `order-2`. Two links jump straight here — the
-    Profiles card's shortcut row and the remote-follow controller's error
-    redirect — so `scroll-mt-24` keeps the sticky top bar off the card's title
-    when the browser lands on the anchor. --%>
-    <.card :if={@fediverse} id="profile-fediverse" class="order-3 scroll-mt-24 md:order-none">
-      <.section_title>{gettext("Fediverse")}</.section_title>
+    The Fediverse half is nil unless this member federates and the installation
+    switch is on, so most profiles show the feed alone. It names the address
+    people came for and resolves the visitor's OWN server's follow dialog below
+    it, so the follow is confirmed where their account lives — plain HTML, no
+    JavaScript needed, since a visitor from another network is exactly the
+    person we cannot assume anything about. A member who moved their Fediverse
+    account away shows the forwarding address instead; following them here
+    would be a dead end.
 
-      <%= if @fediverse.moved_to do %>
-        <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-          {gettext("%{name} moved this Fediverse account. Follow the new address instead:",
-            name: full_name(@user)
-          )}
-        </p>
-        <p class="mt-3">
-          <a
-            id="fediverse-moved-to"
-            href={@fediverse.moved_to}
-            rel="nofollow noopener noreferrer"
-            class="break-all text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-          >
-            {@fediverse.moved_handle}
-          </a>
-        </p>
-      <% else %>
-        <%!-- The address box and the remote-follow form are shared with the
-        organization page (`VutuvWeb.FediverseComponents`): a visitor arriving
-        from Mastodon asks the same thing of a person and of a page. --%>
-        <.follow_us_from_elsewhere
-          id="profile-fediverse"
-          handle={@fediverse.handle}
-          name={full_name(@user)}
-          action={~p"/#{@user}/fediverse/follow"}
-        />
-      <% end %>
-    </.card>
+    The card closes the page: the profile itself is what a visitor came for,
+    and this is the "take me with you" footer under it. `order-3` keeps it last
+    on a phone too, where every card is one flex child of a single column and
+    the rail's utility footer sits at `order-2`. --%>
+    <.subscribe_card
+      id="profile"
+      feed_href={@posts_total > 0 && VutuvWeb.Feeds.user_feed_path(@user)}
+      class="order-3 md:order-none"
+    >
+      <:fediverse :if={@fediverse}>
+        <%= if @fediverse.moved_to do %>
+          <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+            {gettext("%{name} moved this Fediverse account. Follow the new address instead:",
+              name: full_name(@user)
+            )}
+          </p>
+          <p class="mt-3">
+            <a
+              id="fediverse-moved-to"
+              href={@fediverse.moved_to}
+              rel="nofollow noopener noreferrer"
+              class="break-all text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              {@fediverse.moved_handle}
+            </a>
+          </p>
+        <% else %>
+          <.follow_us_from_elsewhere
+            id="profile-fediverse"
+            handle={@fediverse.handle}
+            name={full_name(@user)}
+            action={~p"/#{@user}/fediverse/follow"}
+          />
+        <% end %>
+      </:fediverse>
+    </.subscribe_card>
   </div>
 
   <%!-- Right rail. `contents` on a phone (see the main column comment) so its
@@ -1264,19 +1265,20 @@ the resulting ~200px rail width. --%>
       <%!-- The member's Fediverse address, in the one card a visitor scans for
       "where else is this person" (issue #1111). The full explanation — copy
       button, remote-follow tool, or the forwarding address of a member who
-      moved away — closes the page, and repeating that here would say the same
-      thing twice on one screen; so this is a single row that names the address
-      and jumps to it. Its own heading, unlike the two buckets above (whose
-      labels appear only when both are present): this row is not an account on
-      another site but the member's account right here, seen from the outside,
-      and naming the network is what makes that legible. --%>
+      moved away — closes the page in the Subscribe card, and repeating that
+      here would say the same thing twice on one screen; so this is a single row
+      that names the address and jumps to it. Its own heading, unlike the two
+      buckets above (whose labels appear only when both are present): this row
+      is not an account on another site but the member's account right here,
+      seen from the outside, and naming the network is what makes that
+      legible. --%>
       <div :if={@fediverse} class={smas_count > 0 && "mt-6"}>
         <h3 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {gettext("Fediverse")}
         </h3>
         <a
           id="profile-fediverse-shortcut"
-          href="#profile-fediverse"
+          href="#profile-subscribe"
           class="group flex items-center gap-2.5 py-1.5 text-sm text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
         >
           <.detail_icon

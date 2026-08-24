@@ -248,8 +248,8 @@ defmodule VutuvWeb.RemoteFollowController do
     do: redirect(conn, to: ~p"/tags/#{tag.slug}" <> "#tag-fediverse")
 
   defp back_to(conn, %Organization{} = organization) do
-    redirect(conn, to: Organizations.canonical_path(organization) <> "#organization-fediverse")
+    redirect(conn, to: Organizations.canonical_path(organization) <> "#organization-subscribe")
   end
 
-  defp back_to(conn, user), do: redirect(conn, to: ~p"/#{user}" <> "#profile-fediverse")
+  defp back_to(conn, user), do: redirect(conn, to: ~p"/#{user}" <> "#profile-subscribe")
 end

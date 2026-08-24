@@ -163,7 +163,7 @@ defmodule VutuvWeb.OrganizationFediverseCardTest do
       {:ok, view, _html} = live(conn, ~p"/organizations/#{page.slug}")
 
       assert view |> element(@shortcut) |> render() =~ Docs.handle(page)
-      assert view |> element(@shortcut) |> render() =~ ~s|href="#organization-fediverse"|
+      assert view |> element(@shortcut) |> render() =~ ~s|href="#organization-subscribe"|
     end
 
     test "does not repeat the card's tools", %{conn: conn} do
@@ -223,7 +223,7 @@ defmodule VutuvWeb.OrganizationFediverseCardTest do
         })
 
       # The canonical path of a page that claimed a handle is the root one.
-      assert redirected_to(conn) == "/acme#organization-fediverse"
+      assert redirected_to(conn) == "/acme#organization-subscribe"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "@you@example.social"
     end
 
@@ -272,7 +272,7 @@ defmodule VutuvWeb.OrganizationFediverseCardTest do
           "address" => "@#{viewer.username}@vutuv.test"
         })
 
-      assert redirected_to(conn) == "/acme#organization-fediverse"
+      assert redirected_to(conn) == "/acme#organization-subscribe"
       assert Social.follows_organization?(viewer, page)
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "@acme"
     end

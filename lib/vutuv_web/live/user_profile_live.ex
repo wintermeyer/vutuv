@@ -876,9 +876,10 @@ defmodule VutuvWeb.UserProfileLive do
     |> put_fediverse_assigns(user)
   end
 
-  # The Fediverse card (nil = no card), the one thing on the profile written for
-  # a visitor who is NOT a member: someone on Mastodon and friends needs the
-  # member's address over there, which the page never showed. Pure field reads
+  # The Fediverse half of the Subscribe card (nil = no half; the card itself
+  # still renders for the RSS feed), written for a visitor who is NOT a member:
+  # someone on Mastodon and friends needs the member's address over there,
+  # which the page never showed. Pure field reads
   # plus the federation gate, so it costs no query. `moved_to` is set when the
   # member redirected their Fediverse followers to another account (issue #986):
   # the handle here still resolves, but following it would be a dead end, so the

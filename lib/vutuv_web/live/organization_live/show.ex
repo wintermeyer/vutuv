@@ -428,7 +428,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
                 <a
                   :if={@fediverse}
                   id="organization-fediverse-shortcut"
-                  href="#organization-fediverse"
+                  href="#organization-subscribe"
                   class="group mt-2 flex items-center gap-2 text-sm text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
                 >
                   <.detail_icon
@@ -566,12 +566,15 @@ defmodule VutuvWeb.OrganizationLive.Show do
                 <span :if={@posts_total > 0} class="text-sm text-slate-600 dark:text-slate-400">
                   {compact_count(@posts_total)}
                 </span>
-                <%!-- The page's own feed, the same pill the profile's Posts card
-                carries. Shown once there is something to subscribe to. --%>
-                <.feed_button
-                  :if={@posts_total > 0}
-                  id="organization-posts-feed"
-                  href={VutuvWeb.Feeds.organization_feed_path(@organization)}
+                <%!-- One sign to the Subscribe card at the foot of the column,
+                which holds both ways to follow this page from outside vutuv —
+                the Fediverse address and the feed — exactly as the member
+                profile does. Rendered when that card renders, so the anchor is
+                never a dead jump. --%>
+                <.subscribe_link
+                  :if={subscribe_card?(@fediverse, @fediverse_invite?, @posts_total)}
+                  id="organization-subscribe-link"
+                  href="#organization-subscribe"
                 />
               </div>
             </div>
@@ -691,21 +694,21 @@ defmodule VutuvWeb.OrganizationLive.Show do
             </div>
           </section>
 
-          <%!-- The page's Fediverse address (@fediverse is nil unless the page
-          federates, which is off until an owner switches it on, so most pages
-          never render this). Same card, same wording and same remote-follow
-          tool as a member's profile, from one component: a visitor arriving
-          from Mastodon asks the same thing of a person and of a page, and until
-          this shipped the page answered it nowhere — its handle existed, was
-          WebFingered, and appeared on no page a human reads.
+          <%!-- Subscribe: the one card that answers "how do I follow this page
+          without a vutuv account", with both ways to do it. Same card, same
+          wording and the same `<.subscribe_card>` as a member's profile: a
+          visitor arriving from Mastodon asks the same thing of a person and of
+          a page, and until the Fediverse half shipped the page answered it
+          nowhere — its handle existed, was WebFingered, and appeared on no page
+          a human reads. `@fediverse` is nil unless the page federates, which is
+          off until an owner switches it on, so most pages show the feed alone.
 
           It closes the main column for the profile's reason: the page itself is
           what a visitor came for and this is the "take me with you" footer under
-          it. The header card's one-line shortcut is what makes it findable
-          without scrolling past the posts; `scroll-mt-24` keeps the sticky top
-          bar off the title when that shortcut (or the controller's error
-          redirect) lands on the anchor. --%>
-          <%!-- Without an address the card is an EMPTY SECTION, and this app
+          it. The header card's one-line shortcut and the Posts card's sign are
+          what make it findable without scrolling.
+
+          Without an address the Fediverse half is an EMPTY SECTION, and this app
           teaches an empty section to its owner rather than hiding it: the same
           dashed `<.empty_add>` scaffold every profile section shows while it has
           nothing in it. It is needed here more than anywhere, because the switch
@@ -715,48 +718,50 @@ defmodule VutuvWeb.OrganizationLive.Show do
           all. Owners only, and only where the installation federates: a visitor
           has nothing to do with it, and where the operator switched federation
           off there is nothing to switch on. --%>
-          <.card
-            :if={@fediverse || @fediverse_invite?}
-            id="organization-fediverse"
-            class="scroll-mt-24"
+          <.subscribe_card
+            id="organization"
+            feed_href={
+              @posts_total > 0 && VutuvWeb.Feeds.organization_feed_path(@organization)
+            }
           >
-            <.section_title>{gettext("Fediverse")}</.section_title>
-
-            <%= if @fediverse do %>
-              <.follow_us_from_elsewhere
-                id="organization-fediverse"
-                handle={@fediverse.handle}
-                name={@organization.name}
-                action={~p"/organizations/#{@organization.slug}/fediverse/follow"}
-              />
-            <% else %>
-              <%!-- Says what this does for the organization before it names
-              anything: reach past vutuv. "Fediverse" is the heading and the word
-              the owner will meet again on the switch page and in the tab bar, so
-              it is worth teaching once, in the one place where it is explained.
-              The first sentence is shared with that switch page (one msgid), so
-              the offer and the page it leads to cannot describe the same thing
-              in two different ways. The second is the mental model people
-              actually have for an `@name@host` address. --%>
-              <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                {gettext(
-                  "People who have no vutuv account can follow this page and read its posts, in networks like Mastodon."
-                )}
-              </p>
-              <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                {gettext(
-                  "The page gets an address of its own for that, written like an email address."
-                )}
-              </p>
-              <.empty_add
-                href={~p"/organizations/#{@organization.slug}/fediverse"}
-                id="organization-fediverse-enable"
-                class="mt-3"
-              >
-                {gettext("Set this page up for other networks")}
-              </.empty_add>
-            <% end %>
-          </.card>
+            <:fediverse :if={@fediverse || @fediverse_invite?}>
+              <%= if @fediverse do %>
+                <.follow_us_from_elsewhere
+                  id="organization-fediverse"
+                  handle={@fediverse.handle}
+                  name={@organization.name}
+                  action={~p"/organizations/#{@organization.slug}/fediverse/follow"}
+                />
+              <% else %>
+                <%!-- Says what this does for the organization before it names
+                anything: reach past vutuv. "Fediverse" is the heading and the
+                word the owner will meet again on the switch page and in the tab
+                bar, so it is worth teaching once, in the one place where it is
+                explained. The first sentence is shared with that switch page
+                (one msgid), so the offer and the page it leads to cannot
+                describe the same thing in two different ways. The second is the
+                mental model people actually have for an `@name@host`
+                address. --%>
+                <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                  {gettext(
+                    "People who have no vutuv account can follow this page and read its posts, in networks like Mastodon."
+                  )}
+                </p>
+                <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                  {gettext(
+                    "The page gets an address of its own for that, written like an email address."
+                  )}
+                </p>
+                <.empty_add
+                  href={~p"/organizations/#{@organization.slug}/fediverse"}
+                  id="organization-fediverse-enable"
+                  class="mt-3"
+                >
+                  {gettext("Set this page up for other networks")}
+                </.empty_add>
+              <% end %>
+            </:fediverse>
+          </.subscribe_card>
         </div>
 
         <aside class="space-y-6">
@@ -916,6 +921,15 @@ defmodule VutuvWeb.OrganizationLive.Show do
     </div>
     """
   end
+
+  # Does the page show a Subscribe card — and therefore its Posts-header sign?
+  # One predicate rather than the same boolean written at both sites: the card
+  # renders for any of its halves (a Fediverse address, an owner's invite to
+  # switch federation on, a feed with posts behind it), and the header's
+  # `<.subscribe_link>` must point at it exactly when it is there, or the anchor
+  # is a jump to nothing.
+  defp subscribe_card?(fediverse, fediverse_invite?, posts_total),
+    do: fediverse != nil or fediverse_invite? or posts_total > 0
 
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
 

@@ -615,14 +615,15 @@ every activity of a member it finds no key for, silently.
   the same thing. Every move action redirects back to that page, so the state
   change lands on screen.
 - **The profile** (issue #1081) is where everyone else finds out. A federating
-  member's `/:slug` carries a **Fediverse card**: the handle `@member@vutuv.de`
-  with a copy button, and the "Follow from your own server" field described
-  below. It is the one card written for a visitor who is not a member, and it
-  renders for nobody else (no opt-in, no card; installation switch off, no
-  card). A member who moved their account away
-  (`moved_to`) sees the forwarding address in its place, since the old handle
-  now only answers with a redirect. `ProfileDoc` carries the same facts into
-  the agent formats.
+  member's `/:slug` carries the **Fediverse half of its Subscribe card**
+  (`#profile-subscribe`, the half keeping the older `#profile-fediverse`
+  anchor): the handle `@member@vutuv.de` with a copy button, and the "Follow
+  from your own server" field described below. It is the half written for a
+  visitor who is not a member, and it renders for nobody else (no opt-in, no
+  half; installation switch off, no half — the card then holds the RSS feed
+  alone). A member who moved their account away (`moved_to`) sees the
+  forwarding address in its place, since the old handle now only answers with a
+  redirect. `ProfileDoc` carries the same facts into the agent formats.
 - **The member** sees who follows them (not just the count). The inbox captures
   each remote actor's `preferredUsername` and display name onto the `Follower`
   row (`handle`/`name`, cosmetic and truncated), rendered as `@user@host`
@@ -959,9 +960,10 @@ widened together with the inbox rather than after it.
 first and the page said none of it: `acct:<handle>@<host>` resolved, the actor
 document served, and a visitor looking at the page found no address anywhere —
 reported as "I cannot see what this page's Fediverse account is". The page now
-carries the profile's Fediverse card at the foot of its main column, plus a
-one-line shortcut to it in the header card (the card alone was not findable —
-the member profile learned the same thing). Both surfaces render **one**
+carries the profile's Subscribe card at the foot of its main column, whose
+Fediverse half names the address, plus a one-line shortcut to it in the header
+card and a second sign in the Posts card header (the card alone was not
+findable — the member profile learned the same thing). Both surfaces render **one**
 component, `FediverseComponents.follow_us_from_elsewhere/1`, and post to **one**
 controller, `RemoteFollowController`, which takes a `%User{}` or an
 `%Organization{}` and branches only where the two genuinely differ: a page cannot
@@ -976,8 +978,9 @@ manage pages' tab bar, which renders **only on the manage pages themselves**. Th
 page's own owner row named Edit / Team / Domains, so the way in was to open one
 of those three and notice a tab — five of the eight areas were unreachable by
 anything but accident. The page now names Fediverse in that row, and the empty
-Fediverse card carries the app's ordinary `<.empty_add>` scaffold for its owner,
-the same way an empty profile section teaches what goes in it. Note the standing
+Fediverse half of the Subscribe card carries the app's ordinary `<.empty_add>`
+scaffold for its owner, the same way an empty profile section teaches what goes
+in it. Note the standing
 hazard: that owner row and the tab bar are two hand-kept lists of one map and
 they had already drifted. Rendering both from a single source is the real fix,
 and it is a nav change to agree on rather than to slip in.

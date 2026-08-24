@@ -116,14 +116,19 @@ subscribed to owes them more history than a firehose everyone polls; the member 
 are engagement rows and never `Post` rows, and replies are filtered by the
 archive's `:posts` predicate in `Vutuv.Posts.recent_public_posts/2` — while
 the site-wide firehose deliberately keeps replies; besides the invisible
-`<link rel="alternate">` autodiscovery there are two visible ways in, both
-pointing at the same canonical `/:slug/posts/feed.xml`: the
-`<.feed_button>` subscribe pill in the profile's **Posts card header** and
-in the `/:slug/posts` archive header (issue #1287 — the card at the foot of
-a long profile was reported as "no feed button", so the affordance moved
-onto the posts it feeds), plus the "Other formats" card's RSS chip
-(`rss_path` attr), which is the one that still serves on a profile whose
-Posts card does not render at all. `/:slug/posts.xml` — the
+`<link rel="alternate">` autodiscovery there are three visible ways in, all
+pointing at the same canonical `/:slug/posts/feed.xml`: the profile's
+**Subscribe card** at the foot of the page, which pairs the feed (the
+`<.feed_button>` pill plus the absolute URL as a copy target) with the
+member's Fediverse address and is signed from the Posts card header by a
+`<.subscribe_link>` anchor; the `<.feed_button>` pill in the `/:slug/posts`
+archive header; and the "Other formats" card's RSS chip (`rss_path` attr),
+which is the one that still serves on a profile whose Posts card does not
+render at all. (Issue #1287 first moved the pill out of that chip and into
+the Posts card header, because a card at the foot of a long profile was
+reported as "no feed button"; the header sign is what keeps that fixed now
+that the pill itself sits in a card again, this time in one named after
+what the reader wants.) `/:slug/posts.xml` — the
 URL readers guess for "posts as XML" — 301s to the member feed instead of
 serving the generic `<post_archive>` agent document, which a feed validator
 rejects; the period-scoped archives keep their XML sibling), robots.txt names the AI
