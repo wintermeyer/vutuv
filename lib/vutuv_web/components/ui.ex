@@ -1406,9 +1406,21 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  @doc "Tag chip (brand tint). Pass `navigate`/`href` to render it as a link."
+  @doc """
+  Tag chip (brand tint). Pass `navigate`/`href` to render it as a link.
+
+  `size="sm"` is the same chip at rail scale — the feed's "New here" card puts
+  three of a newcomer's tags under their name in a column a third of the page
+  wide, where the default chip wraps nearly every one of them onto a line of
+  its own. Tint, radius and link behaviour are unchanged, so a small chip still
+  reads as the same object; only the type size and the padding shrink. It is a
+  variant rather than a `class` override because a padding utility passed in
+  `class` does not reliably win against the base one (same layer, and CSS
+  source order decides, not attribute order).
+  """
   attr(:navigate, :string, default: nil)
   attr(:href, :string, default: nil)
+  attr(:size, :string, values: ~w(md sm), default: "md")
   attr(:class, :string, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
@@ -1419,18 +1431,22 @@ defmodule VutuvWeb.UI do
       :if={@navigate || @href}
       navigate={@navigate}
       href={@href}
-      class={[chip_class(), "hover:bg-brand-100", @class]}
+      class={[chip_class(@size), "hover:bg-brand-100 dark:hover:bg-brand-900/70", @class]}
       {@rest}
     >
       {render_slot(@inner_block)}
     </.link>
-    <span :if={!(@navigate || @href)} class={[chip_class(), @class]} {@rest}>
+    <span :if={!(@navigate || @href)} class={[chip_class(@size), @class]} {@rest}>
       {render_slot(@inner_block)}
     </span>
     """
   end
 
-  defp chip_class,
+  defp chip_class("sm"),
+    do:
+      "inline-flex items-center gap-1 rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
+  defp chip_class(_md),
     do:
       "inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 

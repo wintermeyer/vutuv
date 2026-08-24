@@ -32,9 +32,10 @@ defmodule VutuvWeb.PostLive.Feed do
   use VutuvWeb, :live_view
 
   import VutuvWeb.PostComponents
-  # The desktop rail reuses the profile's compact user row (the "Other formats"
-  # card is a global VutuvWeb.UI component, imported already).
-  import VutuvWeb.UserHTML, only: [user_row: 1]
+  # The "New here" rail's per-row "joined 3 days ago" line (the "Other formats"
+  # card and the chip/avatar/follow controls are global VutuvWeb.UI components,
+  # imported already).
+  import VutuvWeb.UserHTML, only: [joined_line: 1]
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Activity
@@ -42,6 +43,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
+  alias Vutuv.Tags.UserTag
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
@@ -58,12 +60,14 @@ defmodule VutuvWeb.PostLive.Feed do
   # smaller than a mount's page, because that press is a wait with nothing on
   # screen to read while it lasts.
   @filter_page_size 10
-  # "Who to follow" rail: how many suggestions to show, the size of the popular
-  # pool we shuffle them out of, and how often an open feed reshuffles. Defined
-  # here (not beside `assign_who_to_follow`) so `mount_feed/2` above reads a real
-  # value — a module attribute is `nil` until the line that sets it.
-  @who_to_follow 6
-  @suggestion_pool 60
+  # "New here" rail: how many newcomers to greet, the size of the newest-members
+  # pool they are drawn out of, how many of each one's tags the card shows, and
+  # how often an open feed redraws. Defined here (not beside
+  # `assign_newcomers`) so `mount_feed/2` above reads a real value — a module
+  # attribute is `nil` until the line that sets it.
+  @newcomers 5
+  @newcomer_pool 30
+  @tags_per_newcomer 3
   @suggestions_refresh :timer.minutes(5)
   # "Suggested posts" rail: how many discovery posts to show at once.
   @discover_posts 5
@@ -172,7 +176,7 @@ defmodule VutuvWeb.PostLive.Feed do
         followed_tags: Vutuv.Tags.followed_tags(user),
         discover_posts: Posts.discover_posts(user, limit: @discover_posts)
       },
-      who_to_follow_rail(user)
+      newcomer_rail(user)
     )
   end
 
@@ -277,32 +281,29 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  # The desktop "Who to follow" rail: a randomized handful of the most-followed
-  # members the viewer does *not* already follow (nor the viewer themselves) —
-  # listing someone you already follow as a suggestion makes no sense. We pull a
-  # generous pool of popular members, drop the viewer and everyone they follow,
-  # then *shuffle* what's left and take `@who_to_follow`. The shuffle means each
-  # visit (and the periodic `:refresh_suggestions` tick) surfaces a different
-  # slate instead of the same fixed top-6 every time. Following one (live, no
-  # reload) recomputes the rail, so the new followee drops out and a fresh draw
-  # fills the slot.
-  defp who_to_follow_rail(user) do
+  # The desktop "New here" rail: five of the newest members, drawn at random out
+  # of the newest `@newcomer_pool` who show a face, minus the viewer, anyone
+  # blocked either way and everyone they already follow.
+  #
+  # It replaces a most-followed / most-endorsed suggestion rail, and the swap is
+  # the point rather than a change of source. A ranked rail shows the same
+  # already-well-connected members to everybody, and the one member for whom
+  # being seen actually decides whether they stay — the person who signed up
+  # this morning — is exactly the one it can never reach. Drawing at random from
+  # the newest instead gives every newcomer a real chance of being greeted, and
+  # gives the reader a card that is never the same twice.
+  #
+  # The random draw is made **here**, not at render: it has to survive every
+  # re-render of the page, and only a fresh draw (a reshuffle, the periodic
+  # tick, a new mount) may change who is on it.
+  defp newcomer_rail(user) do
     # Never suggest a member the viewer blocked (or who blocked them): the follow
     # would be refused as :blocked and the suggestion would just reappear.
     blocked = Social.blocked_user_ids(user.id)
 
-    # Lead the rail with members endorsed for the tags the viewer follows (issue
-    # #872, the "recommendations show people with the tag" half), then fill from
-    # the popular pool. The tag people keep their endorsement order at the front;
-    # the popular pool is shuffled behind them so a long-lived session (and the
-    # periodic reshuffle) still varies once the tag people run out — and when the
-    # viewer follows no tags, tag_people is [] and this is the old shuffled pool.
-    tag_people = Vutuv.Tags.people_for_followed_tags(user, @who_to_follow * 2)
-    popular = Enum.shuffle(Social.most_followed_users(@suggestion_pool))
-
     candidates =
-      (tag_people ++ popular)
-      |> Enum.uniq_by(& &1.id)
+      @newcomer_pool
+      |> Social.newest_members_with_avatar()
       |> Enum.reject(&(&1.id == user.id or MapSet.member?(blocked, &1.id)))
 
     following = UserHelpers.following_map(user, candidates)
@@ -310,24 +311,70 @@ defmodule VutuvWeb.PostLive.Feed do
     users =
       candidates
       |> Enum.reject(&Map.has_key?(following, &1.id))
-      |> Enum.take(@who_to_follow)
+      |> Enum.take_random(@newcomers)
 
     %{
-      recommended_users: users,
-      work_info_by_id: UserHelpers.work_information_map(users, 60),
-      # The two-line samples under each row: a name and a job title say who
-      # someone is, not what they write about, and the rail is asking the viewer
-      # to bet on the latter. Redrawn with the slate, so a reshuffle (or a follow
-      # dropping a row) brings the new members' posts with it.
-      suggested_posts_by_id: Posts.recent_posts_by_authors(users, user),
-      # Every suggestion is by construction someone the viewer does not follow,
-      # so the follow buttons all render the "Follow" state from an empty map.
+      newcomers: newcomer_rows(users),
+      # Every newcomer on a fresh draw is by construction someone the viewer
+      # does not follow, so every pill starts in its "Follow" state. The map
+      # fills as they welcome people (`assign_following/1`), which is what keeps
+      # a greeted row on the card instead of making the person vanish.
       following_by_id: %{}
     }
   end
 
-  defp assign_who_to_follow(socket) do
-    assign(socket, who_to_follow_rail(socket.assigns.current_user))
+  # The drawn members as finished rows: the member, the muted meta line under
+  # their name, and their tag sample with a count of what it leaves out.
+  # Assembled here rather than looked up out of three parallel maps in the
+  # markup, so the template renders a row instead of joining tables and each
+  # batched query is asked exactly once per draw.
+  #
+  # The tags are drawn at random rather than in the profile's
+  # most-endorsed-first order on purpose: a member who signed up this week has
+  # no endorsements at all, so that order collapses to alphabetical and the card
+  # would show the same three tags of theirs forever. Three is a glance at what
+  # somebody is about, which is all this card is for — the whole list is one
+  # click away on their profile.
+  defp newcomer_rows(users) do
+    work_info = UserHelpers.work_information_map(users, 60)
+    tags_by_user = Vutuv.Tags.user_tags_by_user(users)
+
+    Enum.map(users, fn user ->
+      tags = Map.get(tags_by_user, user.id, [])
+      sample = Enum.take_random(tags, @tags_per_newcomer)
+
+      %{
+        user: user,
+        meta: meta_line(user, Map.get(work_info, user.id, "")),
+        tags: sample,
+        more: length(tags) - length(sample)
+      }
+    end)
+  end
+
+  # One muted line per row, and the recency leads it: it is the card's whole
+  # claim, so a long job title truncates behind it rather than in front of it.
+  # One line rather than two because the card is five rows deep and its rows
+  # already carry tags — and on the first day, which is when this card shows
+  # somebody, most members have no job filled in at all.
+  defp meta_line(user, ""), do: joined_line(user)
+  defp meta_line(user, work), do: joined_line(user) <> " · " <> work
+
+  defp assign_newcomers(socket) do
+    socket
+    |> assign(newcomer_rail(socket.assigns.current_user))
+    |> assign_following()
+  end
+
+  # Which members on the card the viewer follows right now, in one query — the
+  # same `%{followee_id => follow_id}` map every other people listing renders
+  # its follow pills from. Recomputed after a welcome (and after taking one
+  # back) rather than patched by hand, so a pill cannot drift from the follow
+  # table.
+  defp assign_following(socket) do
+    users = Enum.map(socket.assigns.newcomers, & &1.user)
+    follows = UserHelpers.following_map(socket.assigns.current_user, users)
+    assign(socket, :following_by_id, follows)
   end
 
   # The desktop "Tags you follow" rail (issue #872): the member's tag
@@ -338,9 +385,46 @@ defmodule VutuvWeb.PostLive.Feed do
     assign(socket, :followed_tags, Vutuv.Tags.followed_tags(socket.assigns.current_user))
   end
 
+  # The ↻ both rail cards wear: one control, one glyph, one set of colours.
+  # Rendered by "New here" and by "Suggested posts", which want the identical
+  # affordance ("show me another draw") and differ only in what they say and
+  # which event they push.
+  attr(:id, :string, required: true)
+  attr(:event, :string, required: true)
+  attr(:label, :string, required: true)
+
+  defp reshuffle_button(assigns) do
+    ~H"""
+    <button
+      id={@id}
+      type="button"
+      phx-click={@event}
+      title={@label}
+      aria-label={@label}
+      class="text-slate-500 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-200"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="h-4 w-4"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+        />
+      </svg>
+    </button>
+    """
+  end
+
   # The rail's "Suggested posts" card: a random handful of recent public posts
-  # by same-language members the viewer does not follow — the post-shaped twin
-  # of the "Who to follow" suggestions (the draw itself lives in
+  # by same-language members the viewer does not follow — discovery beyond the
+  # follow graph, like "New here" but for content (the draw itself lives in
   # `Posts.discover_posts/2`). Re-run by the reload button, the periodic
   # refresh tick and every follow (a just-followed author's post is no longer
   # a discovery).
@@ -562,26 +646,47 @@ defmodule VutuvWeb.PostLive.Feed do
     RemotePostActions.unfollow(socket, account_id, &drop_remote_entries_of(&1, account_id))
   end
 
-  # The rail's "Follow" button (user_row live?): follow with no reload, then
-  # recompute the rail so the new followee drops out (we only suggest members
-  # the viewer doesn't already follow) and the next candidate fills the slot.
-  # The posts rail redraws too — the new followee's post may be in it, and a
-  # followed author is no longer a discovery.
+  # The "New here" card's Follow button: welcome the newcomer with no reload.
+  #
+  # The row deliberately **stays** afterwards, flipped to its "Following" state,
+  # instead of being dropped and replaced by the next candidate the way the
+  # ranked rail this replaced did. Greeting somebody and watching them vanish
+  # reads as if the click undid something; on a card whose whole subject is
+  # saying hello, the visible ✓ is the answer. A fresh draw (reshuffle, the
+  # periodic tick, the next visit) leaves them out again, since by then the
+  # viewer follows them.
+  #
+  # The posts rail redraws — the new followee's post may be in it, and a followed
+  # author is no longer a discovery.
   def handle_event("follow", %{"followee" => followee_id}, socket) do
-    me = socket.assigns.current_user
+    # Every refusal — a tampered id, a block, following yourself, an edge that
+    # already exists — comes back as an error tuple rather than a raise, so
+    # re-reading the follow table afterwards simply leaves the pill where it was.
+    Social.follow(socket.assigns.current_user, followee_id)
 
-    if me && me.id != followee_id, do: Social.follow(me, followee_id)
+    {:noreply, socket |> assign_following() |> assign_discover_posts()}
+  end
 
-    {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
+  # The other half of the same pill: a welcome taken back before the page is
+  # left. Scoped to the viewer by `unfollow!/2`, so a tampered id can only ever
+  # drop an edge they own.
+  def handle_event("unfollow", %{"id" => follow_id}, socket) do
+    Social.unfollow!(socket.assigns.current_user.id, follow_id)
+    {:noreply, assign_following(socket)}
   end
 
   # The "Tags you follow" rail's ✕: unfollow the tag with no reload, then redraw
-  # the rail (the chip drops) and the "Who to follow" rail (which leads with
-  # people from followed tags). The already-shown posts stay put — like
+  # the rail so the chip drops. The already-shown posts stay put — like
   # unfollowing a person, the change only shapes the next feed load.
   def handle_event("unfollow_tag", %{"id" => tag_id}, socket) do
     Vutuv.Tags.unfollow_tag(socket.assigns.current_user, tag_id)
-    {:noreply, socket |> assign_followed_tags() |> assign_who_to_follow()}
+    {:noreply, assign_followed_tags(socket)}
+  end
+
+  # The "New here" card's reload button: greet five other newcomers, with
+  # another three tags each.
+  def handle_event("reshuffle-newcomers", _params, socket) do
+    {:noreply, assign_newcomers(socket)}
   end
 
   # The "Suggested posts" card's reload button: draw 5 fresh random ones.
@@ -734,13 +839,16 @@ defmodule VutuvWeb.PostLive.Feed do
      |> update(:pending_posts, &Enum.reject(&1, fn entry -> entry.post.id == post_id end))}
   end
 
-  # Periodic reshuffle of the "Who to follow" and "Suggested posts" rails: draw
-  # a fresh random slate of not-yet-followed members and posts and reschedule
-  # the next tick. Cheap (a ranking query, a follow-edge query and the pooled
-  # posts draw, all small), so a 5-minute cadence on an open feed is fine.
+  # Periodic reshuffle of the "New here" and "Suggested posts" rails: draw a
+  # fresh random slate of not-yet-followed newcomers and posts and reschedule
+  # the next tick. Cheap (an id-ordered pool scan, a follow-edge query, the tag
+  # batch and the pooled posts draw, all small), so a 5-minute cadence on an
+  # open feed is fine. It is also what keeps the cards' relative wording honest
+  # on a page left open across midnight: the next tick redraws
+  # "joined today" as "joined yesterday" without a reload.
   def handle_info(:refresh_suggestions, socket) do
     Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
-    {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
+    {:noreply, socket |> assign_newcomers() |> assign_discover_posts()}
   end
 
   # Something landed through the fediverse (issue #1503) — a followed account
@@ -758,11 +866,11 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   # The viewer followed / unfollowed a tag elsewhere (a tag page in another tab,
-  # issue #872): redraw the "Tags you follow" and "Who to follow" rails so an
-  # open feed reflects it live. Posts already streamed stay; the new tag's posts
-  # arrive on the next load, like a fresh person-follow.
+  # issue #872): redraw the "Tags you follow" rail so an open feed reflects it
+  # live. Posts already streamed stay; the new tag's posts arrive on the next
+  # load, like a fresh person-follow.
   def handle_info({:tag_follows_changed, _}, socket) do
-    {:noreply, socket |> assign_followed_tags() |> assign_who_to_follow()}
+    {:noreply, assign_followed_tags(socket)}
   end
 
   # The Berlin day rolled over (Vutuv.DayClock at midnight): re-render every
@@ -1181,9 +1289,9 @@ defmodule VutuvWeb.PostLive.Feed do
   def render(assigns) do
     ~H"""
     <div id="feed" class="py-6">
-      <%!-- Two columns on desktop: the feed, plus a "Who to follow" rail that
-      uses the otherwise-empty side space. The rail is desktop-only (the grid
-      collapses to one column under md, and the rail is hidden anyway). --%>
+      <%!-- Two columns on desktop: the feed, plus a discovery rail that uses the
+      otherwise-empty side space. The rail is desktop-only (the grid collapses
+      to one column under md, and the rail is hidden anyway). --%>
       <div class="grid gap-6 md:grid-cols-3">
         <%!-- min-w-0: below md the grid is a single implicit `auto` track that
         respects this column's min-content, so a long `truncate` descendant (a
@@ -1419,7 +1527,7 @@ defmodule VutuvWeb.PostLive.Feed do
           <.load_more :if={@more?} />
 
           <%!-- On mobile (where the desktop rail is hidden) the "Other formats"
-          card drops to the bottom of the page; the "Who to follow" rail stays
+          card drops to the bottom of the page; the discovery rail stays
           desktop-only. The links are the feed's own agent siblings (/feed.md
           etc.) — the viewer's timeline in another format, not their profile. --%>
           <.other_formats_card
@@ -1431,11 +1539,10 @@ defmodule VutuvWeb.PostLive.Feed do
         </div>
 
         <%!-- Desktop-only rail (hidden under md, where the grid is one column):
-        the profile-style "Who to follow" card (suggestions the viewer doesn't
-        already follow; a live follow, no reload, drops the row and surfaces the
-        next) plus the "Other formats" card — the same aside the profile shows.
-        Rendered WITH the page on purpose: a lazily loaded rail popped in after
-        the paint and read as slowness (the v7.200.3 laziness was undone). --%>
+        the tags the viewer follows, the "New here" welcome card, the suggested
+        posts, and the "Other formats" card the profile shows too. Rendered WITH
+        the page on purpose: a lazily loaded rail popped in after the paint and
+        read as slowness (the v7.200.3 laziness was undone). --%>
         <aside id="feed-rail" class="hidden space-y-6 md:block">
           <%!-- "Tags you follow" (issue #872): the viewer's tag subscriptions,
           each a chip linking to the tag page with a reload-free ✕ unfollow. Sits
@@ -1467,20 +1574,98 @@ defmodule VutuvWeb.PostLive.Feed do
             </div>
           </.card>
 
-          <.card :if={@recommended_users != []} id="who-to-follow">
-            <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
-            <ul class="space-y-5">
-              <.user_row
-                :for={user <- @recommended_users}
-                user={user}
-                current_user={@current_user}
-                current_user_id={@current_user.id}
-                work_info_by_id={@work_info_by_id}
-                following_by_id={@following_by_id}
-                posts={Map.get(@suggested_posts_by_id, user.id, [])}
-                live?
+          <%!-- "New here": five of the newest members, drawn at random and shown
+          with their face, how long they have been here and three of their tags.
+          It replaces a most-followed suggestion rail, whose problem was not its
+          data but its arithmetic: a ranking shows the same well-connected
+          members to everybody, and the one person for whom being seen decides
+          whether they come back at all — the one who signed up this morning —
+          is precisely the one it can never surface. The card asks for a
+          greeting rather than a recommendation, which is a thing a reader can
+          give away for free and a newcomer can feel. --%>
+          <.card :if={@newcomers != []} id="newcomers">
+            <div class="mb-1 flex items-center justify-between gap-3">
+              <.section_title>{gettext("New here")}</.section_title>
+              <.reshuffle_button
+                id="newcomers-reshuffle"
+                event="reshuffle-newcomers"
+                label={gettext("Greet other members")}
               />
+            </div>
+            <%!-- Deliberately not "these five just joined": on a quiet
+            installation (an intranet vutuv with forty members) the newest
+            member may have been here for months, and this sentence has to stay
+            true there too. Each row's own line says how new that member really
+            is. --%>
+            <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
+              {gettext("The members who joined most recently. Following them is a warm welcome.")}
+            </p>
+            <ul class="space-y-4">
+              <li :for={row <- @newcomers} id={"newcomer-#{row.user.id}"} class="flex items-start gap-3">
+                <.link href={~p"/#{row.user}"} class="shrink-0">
+                  <.avatar
+                    user={row.user}
+                    size="sm"
+                    alt={gettext("Profile picture of %{name}", name: UserHelpers.full_name(row.user))}
+                  />
+                </.link>
+                <div class="min-w-0 flex-1">
+                  <%!-- Only the name shares a line with the Follow pill. The
+                  meta line below it runs the full column width instead, which
+                  is what makes it readable at all: the pill is 5.5rem wide in a
+                  rail a third of the page across, so beside it "seit 9 Tagen
+                  dabei · Privatier @ JL" was cut mid-word. --%>
+                  <div class="flex items-start gap-2">
+                    <.link
+                      href={~p"/#{row.user}"}
+                      class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+                    >
+                      {UserHelpers.full_name(row.user)}
+                    </.link>
+                    <.follow_button
+                      variant="text"
+                      follower_id={@current_user.id}
+                      followee_id={row.user.id}
+                      follow_id={Map.get(@following_by_id, row.user.id)}
+                      live?
+                    />
+                  </div>
+                  <p class="mb-0 mt-0.5 truncate text-xs text-slate-600 dark:text-slate-400">
+                    {row.meta}
+                  </p>
+                  <%!-- Three tags, at rail scale, each a link to that topic:
+                  enough to be curious about somebody, never their whole
+                  profile. The +N is what the sample leaves out and leads to the
+                  rest of them; it is the tag-specific plural the member
+                  directory already uses, not a bare "+3". --%>
+                  <div
+                    :if={row.tags != []}
+                    data-newcomer-tags={row.user.id}
+                    class="mt-1.5 flex flex-wrap items-center gap-1"
+                  >
+                    <.chip
+                      :for={user_tag <- row.tags}
+                      size="sm"
+                      navigate={~p"/tags/#{UserTag.tag(user_tag)}"}
+                    >
+                      <span aria-hidden="true">#</span>{UserTag.truncated_name(user_tag)}
+                    </.chip>
+                    <.link
+                      :if={row.more > 0}
+                      navigate={~p"/#{row.user}/tags"}
+                      class="text-xs font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+                    >
+                      {ngettext("+1 more tag", "+%{formatted} more tags", row.more,
+                        formatted: compact_count(row.more)
+                      )}
+                    </.link>
+                  </div>
+                </div>
+              </li>
             </ul>
+            <.card_footer_link href={~p"/system/members"}>
+              {gettext("All members")}
+            </.card_footer_link>
           </.card>
 
           <%!-- "Suggested posts": a random handful of recent public posts by
@@ -1493,30 +1678,11 @@ defmodule VutuvWeb.PostLive.Feed do
           <.card :if={@discover_posts != []} id="discover-posts">
             <div class="mb-4 flex items-center justify-between gap-3">
               <.section_title>{gettext("Suggested posts")}</.section_title>
-              <button
+              <.reshuffle_button
                 id="discover-reshuffle"
-                type="button"
-                phx-click="reshuffle-discover"
-                title={gettext("Show other posts")}
-                aria-label={gettext("Show other posts")}
-                class="text-slate-500 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-200"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke-width="1.5"
-                  stroke="currentColor"
-                  class="h-4 w-4"
-                  aria-hidden="true"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-                  />
-                </svg>
-              </button>
+                event="reshuffle-discover"
+                label={gettext("Show other posts")}
+              />
             </div>
             <ul class="divide-y divide-slate-100 dark:divide-slate-800">
               <li

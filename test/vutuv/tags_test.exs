@@ -999,39 +999,6 @@ defmodule Vutuv.TagsTest do
       for _ <- 1..3, do: Tags.follow_tag(insert(:user), tag)
       assert Tags.tag_follower_count(tag) == 3
     end
-
-    test "people_for_followed_tags/1 ranks visible members endorsed for followed tags, minus self" do
-      viewer = insert(:user, email_confirmed?: true)
-      tag = insert(:tag)
-      Tags.follow_tag(viewer, tag)
-
-      popular = insert(:user, email_confirmed?: true)
-      quiet = insert(:user, email_confirmed?: true)
-      popular_ut = insert(:user_tag, user: popular, tag: tag)
-      insert(:user_tag, user: quiet, tag: tag)
-
-      for _ <- 1..2,
-          do:
-            insert(:user_tag_endorsement,
-              user_tag: popular_ut,
-              user: insert(:user, email_confirmed?: true)
-            )
-
-      # The viewer also carries the tag but must never be suggested to themselves.
-      insert(:user_tag, user: viewer, tag: tag)
-
-      ids = viewer |> Tags.people_for_followed_tags(10) |> Enum.map(& &1.id)
-
-      refute viewer.id in ids
-      assert popular.id in ids
-      assert quiet.id in ids
-      # Most-endorsed leads.
-      assert hd(ids) == popular.id
-    end
-
-    test "people_for_followed_tags/1 is empty when the member follows no tags" do
-      assert Tags.people_for_followed_tags(insert(:user), 10) == []
-    end
   end
 
   describe "indexable_tags_query/0 and indexable_tag?/1 (the search-engine bar)" do

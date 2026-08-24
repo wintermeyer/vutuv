@@ -416,6 +416,28 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
+  Every listed tag of each of `users`, keyed by member — one query, no ordering.
+
+  The unranked twin of `VutuvWeb.UserHelpers.tag_summary_map/2`, for a caller
+  that is going to *sample* rather than rank: the feed's "New here" card takes a
+  random three per member, so paying that function's endorsement ranking (two
+  left joins, a `GROUP BY` and an `ORDER BY count(...)` over
+  `user_tag_endorsements`) would be computing an order to throw away — measured
+  at three times the cost of this. Members with no tags are simply absent from
+  the map, exactly like `tag_summary_map/2`, and each `%UserTag{}` carries its
+  `:tag` preload so a chip needs no query of its own.
+  """
+  def user_tags_by_user([]), do: %{}
+
+  def user_tags_by_user(users) do
+    ids = Enum.map(users, & &1.id)
+
+    from(ut in UserTag, where: ut.user_id in ^ids, preload: :tag)
+    |> Repo.all()
+    |> Enum.group_by(& &1.user_id)
+  end
+
+  @doc """
   Every honor tag with its current holder count, name-ordered — the admin
   "Honor tags" overview (`/admin/honor_tags`). Returns `[{%Tag{}, count}]`.
   """
@@ -652,8 +674,10 @@ defmodule Vutuv.Tags do
   #
   # A member following a tag is a private subscription that pulls the tag's posts
   # into their `/feed` (`Vutuv.Posts.feed_page/2` reads `followed_tag_ids/1` as a
-  # third source) and leads the feed's "Who to follow" rail with people endorsed
-  # for it. Silent: no notification, no public follower list — only the aggregate
+  # third source). It used to shape the feed's suggestion rail too, with people
+  # endorsed for the tag; that slot is the "New here" welcome card now, so the
+  # people half of #872 lives only on the profile's own "Who to follow" card.
+  # Silent: no notification, no public follower list — only the aggregate
   # `tag_follower_count/1`. `follow_tag/2` always sets `user_id` from the passed
   # session user, so a request can't forge someone else's subscription.
 
@@ -849,50 +873,10 @@ defmodule Vutuv.Tags do
     Repo.all(from(tf in TagFollow, where: tf.organization_id == ^page_id, select: tf.tag_id))
   end
 
-  @doc """
-  Up to `limit` members endorsed for any tag `user` follows, most-endorsed
-  first — the people half of issue #872, feeding the feed's "Who to follow"
-  rail. Same visibility gate as `Tag.recommended_users/1` (unconfirmed /
-  moderation-hidden accounts never surface) and the same narrow listing-row
-  select; the viewer themselves is excluded here, the already-followed / blocked
-  filtering stays at the rail call site (it already does it for the popular pool).
-  Returns `[]` when the member follows no tags, so the rail falls back to the
-  popular pool unchanged.
-  """
-  def people_for_followed_tags(%User{} = user, limit) do
-    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
-
-    case followed_tag_ids(user) do
-      [] ->
-        []
-
-      tag_ids ->
-        Repo.all(
-          from(u in User,
-            join: ut in assoc(u, :user_tags),
-            left_join: e in assoc(ut, :endorsements),
-            # Count only currently-visible endorsers (issue #783), the same gate
-            # `Tag.most_endorsed_in_tag/2` applies: the test rides in the ON
-            # clause, so a hidden/unconfirmed endorser leaves `endorser` NULL and
-            # drops out of `count(endorser.id)`.
-            left_join: endorser in assoc(e, :user),
-            on: account_confirmed_row(endorser) and not account_hidden_row(endorser),
-            where: ut.tag_id in ^tag_ids,
-            where: u.id != ^user.id,
-            where: account_confirmed_row(u) and not account_hidden_row(u),
-            group_by: u.id,
-            order_by: fragment("count(?) DESC", endorser.id),
-            limit: ^limit,
-            select: struct(u, ^User.listing_fields())
-          )
-        )
-    end
-  end
-
   # Tell `user`'s open feed (and any other subscriber) that their followed-tag
-  # set changed, so the "Tags you follow" and "Who to follow" rails redraw with
-  # no reload. `VutuvWeb.PostLive.Feed` listens for `:tag_follows_changed`;
-  # everything else ignores it via its catch-all handle_info.
+  # set changed, so the "Tags you follow" rail redraws with no reload.
+  # `VutuvWeb.PostLive.Feed` listens for `:tag_follows_changed`; everything else
+  # ignores it via its catch-all handle_info.
   defp broadcast_tag_follows_changed(user_id) do
     Vutuv.Activity.broadcast(user_id, {:tag_follows_changed, %{}})
   end

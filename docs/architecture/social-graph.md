@@ -67,13 +67,12 @@ idempotent (`ON CONFLICT` + a guard), and broadcasts `{:tag_follows_changed,
 %{}}` on the follower's `Vutuv.Activity` topic so an open `/feed` redraws its
 rails live.
 
-Two things react to a followed tag:
-
-- **The feed** gains a third source — posts carrying a followed tag from authors
-  you do *not* already follow (see [posts-and-feed.md](posts-and-feed.md)).
-- **The "Who to follow" rail** leads with members endorsed for the tags you
-  follow (`Vutuv.Tags.people_for_followed_tags/2`), the people half of the
-  feature.
+What reacts to a followed tag: **the feed** gains a third source — posts
+carrying a followed tag from authors you do *not* already follow (see
+[posts-and-feed.md](posts-and-feed.md)). The feed rail's suggestion card used to
+lead with members *endorsed* for those tags as well; that slot is the "New here"
+welcome card now, so the people half of the feature lives only on the profile's
+own "Who to follow" card.
 
 Surfaces: the **tag page** header pill (`<.tag_follow_button>`, CSRF POST/DELETE
 to `/tag_follows`), the feed's reload-free **"Tags you follow"** rail (a

@@ -3,12 +3,12 @@ defmodule Vutuv.Social.PopularUsers do
   Periodically cached "most followed members" pool.
 
   `Social.most_followed_users/1` used to run a GROUP BY over the whole
-  `follows` table on every call — and it is called from the hottest paths:
-  both mounts of every feed view (the "Who to follow" rail), the profile's
-  recommendation fallback, and the `/listings/most_followed_users` page. The
-  ranking moves slowly (it takes many follows to change a top spot) and the
-  rails shuffle their slice anyway, so freshness within a few minutes is
-  plenty.
+  `follows` table on every call — and it is called from hot paths: the
+  profile's "Who to follow" card and the `/listings/most_followed_users` page.
+  (The feed rail was the third and hottest caller until it became the "New
+  here" welcome card, which draws from the newest members instead.) The ranking
+  moves slowly — it takes many follows to change a top spot — and the card
+  shuffles its slice anyway, so freshness within a few minutes is plenty.
 
   One GenServer owns the slow path: it recomputes the top 1000 every few
   minutes into a `read_concurrency` ETS table; readers take their prefix from

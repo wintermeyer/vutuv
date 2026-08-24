@@ -305,10 +305,18 @@ It is a LiveView: a collapsed compose tile (the same dashed `<.empty_add>` tile
 as the profile's Beiträge section) expands the inline composer, a pull-model
 timeline (own + followed authors' posts **and reposts**, with a "Reposted by X"
 line) with cursor "Load more", a *"Show N new posts"* pill fed by `{:new_post,
-…}` / `{:new_repost, …}` broadcasts, and a desktop-only **"Who to follow"** rail
-(most-followed members you do not yet follow,
-`Vutuv.Social.most_followed_users/1`, live follow — now led by members endorsed
-for tags you follow, see below).
+…}` / `{:new_repost, …}` broadcasts, and a desktop-only **"New here"** welcome
+rail: five of the newest members who show a face
+(`Vutuv.Social.newest_members_with_avatar/1`, a pool of 30 ordered by the UUID
+v7 primary key), drawn at random, each with how long they have been here
+(`VutuvWeb.UserHTML.joined_line/1`) and three of their tags picked at random so
+a ↻ shows another side of the same person. It replaced a most-followed
+suggestion rail: a ranking shows the same well-connected members to everybody
+and can never reach the person who signed up this morning, who is the one for
+whom being seen decides whether they come back. Following somebody here
+**keeps** their row, flipped to "Following" — the greeted member vanishing on
+the click read as if it had undone something — and only a fresh draw retires
+them.
 
 `Posts.feed_page/2` merges **six** sources through `Vutuv.FeedPage` (a shared
 cursor over independent fetchers). Three are local: own + followed authors'

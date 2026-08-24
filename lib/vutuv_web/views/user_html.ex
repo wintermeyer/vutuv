@@ -23,6 +23,7 @@ defmodule VutuvWeb.UserHTML do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.SocialFeed.Feed
+  alias Vutuv.ViewerClock
   alias VutuvWeb.Markdown
 
   embed_templates("../templates/user/*")
@@ -272,6 +273,39 @@ defmodule VutuvWeb.UserHTML do
   end
 
   def member_since(_user), do: nil
+
+  @doc """
+  How long ago the account was created, said the way a person says it — the
+  line under each face in the feed's "New here" card.
+
+  A join date is a point in time, so it is rendered as relative time and never
+  as a raw age: "joined today", "joined yesterday", "joined 5 days ago". Past a
+  month the relative form stops carrying anything ("joined 84 days ago" is
+  arithmetic, not information), so it hands over to `member_since/1`'s calendar
+  wording, which is also what a profile shows.
+
+  The day boundary is the reader's own (`Vutuv.ViewerClock`), exactly like a
+  post stamp: nobody should be told a member joined "yesterday" while their own
+  calendar disagrees. A stamp from the future (clock skew) falls through to the
+  calendar form rather than counting backwards.
+  """
+  def joined_line(%Vutuv.Accounts.User{inserted_at: %NaiveDateTime{} = at} = user) do
+    case Date.diff(ViewerClock.today(), ViewerClock.date(at)) do
+      0 ->
+        gettext("joined today")
+
+      1 ->
+        gettext("joined yesterday")
+
+      days when days in 2..30 ->
+        ngettext("joined %{count} day ago", "joined %{count} days ago", days)
+
+      _older ->
+        member_since(user)
+    end
+  end
+
+  def joined_line(_user), do: nil
 
   @doc """
   The "Member since" line (calendar icon + label). Rendered in two spots on the

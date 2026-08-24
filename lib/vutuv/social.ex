@@ -966,6 +966,46 @@ defmodule Vutuv.Social do
   end
 
   @doc """
+  The newest members who really show a face, newest first — the pool the
+  feed's "New here" welcome card draws its handful out of.
+
+  Two filters make the pool, and both are the point of the card. "Newest" is
+  ordered by the primary key: a UUID v7 carries its creation time, so the
+  highest id is the most recent signup and this is a backward scan of
+  `users_pkey` with no `inserted_at` sort (measured: 30 rows out of 67 scanned,
+  0.4 ms — the LIMIT bounds it, and recent signups are avatar-rich, so no
+  partial index is warranted).
+
+  "Shows a face" is `avatar` set **and** an avatar the image scan released —
+  spelled as `Vutuv.Moderation.ImageScans.released?/1`'s rule (`nil`, the
+  grandfathered state, or `"approved"`) rather than as "anything but pending",
+  so a state added to that vocabulary later cannot be shown here while every
+  struct-side reader hides it. A held avatar renders as the default silhouette
+  for everyone, and a card whose whole premise is faces must not greet you with
+  five silhouettes. Written out with `is_nil/1` rather than
+  `in [nil, "approved"]` on purpose: SQL's `IN` over a list containing NULL
+  answers NULL for a NULL column, which would drop every grandfathered row.
+
+  Same visibility gate as every other people listing (unconfirmed and
+  moderation-hidden accounts never surface) and the same narrow listing-row
+  select, plus `inserted_at`: the card says how long each member has been
+  here. The viewer, their blocks and the people they already follow are
+  filtered at the call site, exactly as `most_followed_users/1`'s pool is.
+  """
+  def newest_members_with_avatar(limit) do
+    Repo.all(
+      from(u in User,
+        where: account_confirmed_row(u) and not account_hidden_row(u),
+        where: not is_nil(u.avatar),
+        where: is_nil(u.avatar_moderation) or u.avatar_moderation == "approved",
+        order_by: [desc: u.id],
+        limit: ^limit,
+        select: struct(u, ^[:inserted_at | User.listing_fields()])
+      )
+    )
+  end
+
+  @doc """
   The newest followers of `user_id` that they do not follow back, newest
   first - the /notifications rail's "Follow back" suggestions. Blocks (either
   direction) are filtered out belt-and-braces: a block severs the follow
