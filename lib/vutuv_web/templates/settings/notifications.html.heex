@@ -122,6 +122,63 @@ heading. --%>
       }
     />
 
+    <%!-- Browser notifications (issue #1249): the one switch in this app that
+          is OFF by default, because it is the only one that puts something over
+          whatever the member is doing in another window. Switching it on is also
+          what makes a browser ask for permission, so nobody who left it alone is
+          ever prompted.
+
+          Two states have to be told apart here and only the browser knows the
+          second: the account says "yes, I want these", each browser says whether
+          it will actually show one. So the card carries a status line per
+          permission state, all four shipped and switched off by the plain
+          `hidden` attribute (never a display utility - the issue #880 trap),
+          with app.js revealing the one that applies. The form also asks for
+          permission the moment the box is ticked, because that click is a user
+          gesture and Firefox and Safari refuse the request without one. --%>
+    <.toggle_form_card
+      changeset={@changeset}
+      field={:browser_notifications?}
+      form_id="browser-notifications-form"
+      action={~p"/settings/notifications"}
+      title={gettext("Browser notifications")}
+      intro={
+        gettext(
+          "When something arrives while you have vutuv open in a tab you are not looking at, your browser can show it as a notification. Off unless you switch it on."
+        )
+      }
+      label={gettext("Show me browser notifications")}
+      hint={
+        gettext(
+          "Only while vutuv is open somewhere and you are looking at something else. Every browser you use asks you once."
+        )
+      }
+    >
+      <:footnote>
+        <div data-browser-notifications class="ml-7 text-sm text-slate-600 dark:text-slate-400">
+          <p hidden data-notify-state="default">
+            {gettext("This browser has not been asked yet.")}
+            <button
+              type="button"
+              data-notify-allow
+              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              {gettext("Ask now")}
+            </button>
+          </p>
+          <p hidden data-notify-state="granted">{gettext("This browser will show them.")}</p>
+          <p hidden data-notify-state="denied">
+            {gettext(
+              "This browser is blocking notifications for vutuv. Allow them for this site in your browser settings; the switch above stays on and every other browser you use is unaffected."
+            )}
+          </p>
+          <p hidden data-notify-state="unsupported">
+            {gettext("This browser cannot show notifications. Your other browsers are unaffected.")}
+          </p>
+        </div>
+      </:footnote>
+    </.toggle_form_card>
+
     <%!-- The remaining in-app notifications are not configurable (they are the
           product), so this card just explains them and links to the bell. --%>
     <.card>

@@ -567,7 +567,19 @@ defmodule VutuvWeb.SettingsController do
       "notifications.html",
       ~p"/settings/notifications",
       gettext("Notification settings saved."),
-      event: "notifications_changed"
+      event: "notifications_changed",
+      # The browser-notification switch is the member's and travels with the
+      # account, so their other open tabs - on this machine and on every other
+      # one - learn about it here rather than on their next reload. A tab whose
+      # browser has never been asked for permission then shows the shell's
+      # prompt (issue #1249); a tab that was switched off simply stops being
+      # pushed to.
+      on_success: fn saved ->
+        Vutuv.Activity.broadcast(
+          saved.id,
+          {:browser_notifications_pref, saved.browser_notifications?}
+        )
+      end
     )
   end
 

@@ -4145,7 +4145,10 @@ defmodule VutuvWeb.UI do
        [
          row(:notifications, gettext("Notifications"), ~p"/settings/notifications",
            hint: gettext("Which emails we send, and what the bell tells you"),
-           terms: gettext("email mail unsubscribe newsletter bell alert quiet fewer")
+           terms:
+             gettext(
+               "email mail unsubscribe newsletter bell alert quiet fewer browser desktop popup push benachrichtigung"
+             )
          ),
          row(:filters, gettext("Muted words & tags"), ~p"/settings/filters",
            hint: gettext("Keep posts out of your feed"),

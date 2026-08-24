@@ -664,6 +664,73 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert html =~ "thread_notifications?"
     end
 
+    test "browser notifications are off until the member switches them on (issue #1249)",
+         %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # Opt-IN, unlike its two neighbours above. Nobody who left it alone is
+      # ever prompted by their browser, which is the whole point of the switch.
+      refute Repo.get(User, user.id).browser_notifications?
+
+      conn = put(conn, ~p"/settings/notifications", user: %{"browser_notifications?" => "true"})
+
+      assert redirected_to(conn) == ~p"/settings/notifications"
+      assert %User{browser_notifications?: true} = Repo.get(User, user.id)
+    end
+
+    test "the browser-notification card reports what THIS browser thinks (issue #1249)",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/notifications") |> html_response(200)
+
+      assert html =~ "browser_notifications?"
+      assert html =~ "data-browser-notifications"
+
+      # The account stores the wish; only the browser knows whether it will show
+      # anything, and that answer is per browser profile. All four states ship
+      # rendered and switched off by the plain `hidden` ATTRIBUTE — a display
+      # utility beside it is the issue #880 trap — with app.js revealing the one
+      # that applies.
+      for state <- ~w(default granted denied unsupported) do
+        assert html =~ ~s(data-notify-state="#{state}")
+      end
+
+      refute html =~ ~s(class="hidden" data-notify-state)
+    end
+
+    test "the browser-notification card reads as German for a German member (issue #1249)",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      html =
+        conn
+        |> recycle()
+        |> Plug.Conn.put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/settings/notifications")
+        |> html_response(200)
+
+      # Named one by one, short labels included: `gettext.extract --merge`
+      # fuzzy-FILLS a new msgid with the translation of whatever it looks
+      # similar to, and a one-word label is the likeliest to be filled with
+      # nonsense and the least likely to be noticed. "Allow" arrived as "Alle".
+      assert html =~ "Browser-Benachrichtigungen anzeigen"
+      assert html =~ "Jetzt fragen"
+      assert html =~ "Dieser Browser wurde noch nicht gefragt."
+      assert html =~ "Dieser Browser zeigt sie an."
+    end
+
+    test "saving the switch tells the member's other open tabs (issue #1249)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      Vutuv.Activity.subscribe(user.id)
+
+      put(conn, ~p"/settings/notifications", user: %{"browser_notifications?" => "true"})
+
+      # A tab on another machine has to learn about it to ask ITS browser for
+      # permission — the switch travels with the account, the permission does
+      # not travel at all.
+      assert_receive {:browser_notifications_pref, true}
+    end
+
     test "switching thread notifications off persists (issue #1025)", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 

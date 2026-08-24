@@ -347,6 +347,69 @@ exactly at that moment. A NULL means no note, which is what every account
 predating the feature keeps — the derived feed is otherwise retroactive, and a
 welcome years after the fact would be nonsense.
 
+### Browser notifications (issue #1249)
+
+A member can have vutuv open in a tab they are not looking at. The tab title
+already carries the unread count; with **Browser notifications** switched on in
+`/settings/notifications`, the same events also raise a real notification
+through the browser's Notifications API.
+
+The switch (`users.browser_notifications?`) is the one in-app notification
+setting that defaults to **off**. Every other one is an opt-out, because it
+only decides what a member finds when they come back; this one puts something
+over whatever they are doing in another window, and switching it on is also
+what makes a browser ask for permission. Off by default therefore means nobody
+who did not ask is ever prompted.
+
+`ShellLive` is what pushes them. It is on every page and already holds the
+member's `"user:<id>"` subscription, so it sees the same `{:new_notification,
+…}` and `{:new_message, …}` that move the badges, and it sends the browser a
+**finished, translated line** (`notify:show`) rather than a payload for the
+client to word: only the server knows the reader's locale, and the page under
+the bell must not say one thing while the popup says another. Both surfaces
+therefore share `VutuvWeb.NotificationLine` — extracting it is what surfaced
+that four everyday kinds (like, follower, connection, endorsement) were spelled
+only in the notifications page's *grouping* code, so a single one of them fell
+back to the untranslated English the event was stored with. Invisible there
+(its rows always take the grouped branch), very visible in a popup, which is
+one event by definition.
+
+That module owns the **destination** too (`notification_target/2`), which is
+the half easiest to leave behind: clicking the popup opens the post, the case
+or the profile it named, and only a kind with no page of its own falls back to
+`/notifications`. A popup is raised precisely when the member is not looking at
+vutuv, so a list to hunt through is the one place that costs most. The third
+per-kind wording, `VutuvWeb.NotificationDigestText`, stays separate on purpose
+(a digest mail names the actor inline and by `@handle`) — a new kind is spelled
+in both, and each moduledoc says so.
+
+The `WebNotify` hook in `app.js` owns the two questions the server cannot
+answer.
+
+**Is the member looking at vutuv?** `document.hidden` alone is too narrow: it
+is false for a vutuv tab that is frontmost in a window sitting behind the
+editor somebody is actually working in, which is the case the issue is about.
+So the test is `document.hidden || !document.hasFocus()`.
+
+**Did this browser grant permission?** The switch lives on the account and
+follows the member to every machine; the permission belongs to one browser
+profile and does not travel at all. So a member who switches the feature on at
+their desk and later opens vutuv on a laptop gets a one-line prompt in the
+shell offering to ask that browser, dismissible per browser (`localStorage`).
+It cannot be a prompt on page load: Firefox and Safari refuse
+`requestPermission()` without a user gesture, and Chrome downgrades one. The
+settings card asks the moment the box is ticked (that click *is* the gesture)
+and reports what this browser answered — never asked / will show them /
+blocking them / cannot show them — because the stored setting alone cannot say
+whether this machine will show anything.
+
+Each stream carries one `tag` (`vutuv-activity`, `vutuv-messages`), so a burst
+of ten likes replaces itself into a single popup and four open vutuv tabs raise
+one between them; a replacement is silent, so only the first of a burst makes a
+sound. A message notification names neither sender nor text — the broadcast
+carries neither, and a direct message is the last thing that should be legible
+over somebody's shoulder.
+
 ## The dead-render → socket-mount handoff (profile + feed)
 
 Every LiveView visit computes its data twice: once for the HTML the visitor

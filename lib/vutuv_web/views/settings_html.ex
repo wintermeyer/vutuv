@@ -264,6 +264,13 @@ defmodule VutuvWeb.SettingsHTML do
   attr(:label, :string, required: true)
   attr(:hint, :string, required: true)
 
+  # Rendered between the toggle and the Save button. One caller: the browser-
+  # notification switch, whose card has to report what the BROWSER thinks on top
+  # of what the account stores (issue #1249) - the setting alone cannot say
+  # whether this machine will actually show anything. It belongs inside the
+  # form, which is what lets its JS reach the checkbox it reports on.
+  slot(:footnote)
+
   def toggle_form_card(assigns) do
     ~H"""
     <.card>
@@ -275,6 +282,8 @@ defmodule VutuvWeb.SettingsHTML do
           <:checkbox><%= checkbox f, @field, class: checkbox_class() %></:checkbox>
           {@hint}
         </.setting_toggle>
+
+        {render_slot(@footnote)}
 
         <div class="pt-1">
           <.button type="submit">{gettext("Save")}</.button>

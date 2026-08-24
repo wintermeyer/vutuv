@@ -17,6 +17,12 @@ defmodule VutuvWeb.NotificationDigestText do
   A kind with no clause here still produces a line — a dull, true one — so a
   kind added tomorrow reaches the inbox rather than crashing the sweep or
   arriving blank.
+
+  The other per-kind wording is `VutuvWeb.NotificationLine`, which the
+  notifications page and the browser notification share. A new kind has to be
+  spelled in both, and neither can be inferred from the other — this one names
+  the actor inline and by `@handle`, that one hands a name and a verb phrase to
+  a caller that puts them together.
   """
 
   use Gettext, backend: VutuvWeb.Gettext

@@ -332,6 +332,68 @@ const MarkdownEditor = {
 // TagInput is the pill box on every tag field (see the sweep below, which
 // serves the same component on classic pages). LocalTime localizes timestamps
 // (see above). ScrollBottom follows a chat thread's newest message.
+// Browser notifications (issue #1249). Shared by the `WebNotify` hook (the
+// prompt in the shell) and the card on /settings/notifications, because both
+// answer the same question about the same browser.
+//
+// The account stores whether the member wants notifications; only the browser
+// knows whether it will actually show one, and that answer belongs to one
+// browser profile - which is why a member who switches the feature on at their
+// desk still has to say yes on their laptop.
+//
+// `Notification.permission` is "default" (never asked), "granted" or "denied";
+// a browser with no Notifications API at all is a fourth case, and reading it
+// as "denied" would tell somebody to go fix a browser setting that does not
+// exist.
+const NOTIFY_PROMPT_KEY = "vutuv:notify-prompt-dismissed"
+
+function notifyPermission() {
+  return "Notification" in window ? Notification.permission : "unsupported"
+}
+
+// Both sides wrap the store: a private window, or a browser set to block site
+// data, throws on access. Forgetting a dismissal simply offers the prompt
+// again, which is the right way to fail.
+function notifyPromptDismissed() {
+  try {
+    return window.localStorage.getItem(NOTIFY_PROMPT_KEY) === "1"
+  } catch (_e) {
+    return false
+  }
+}
+
+function setNotifyPromptDismissed(dismissed) {
+  try {
+    if (dismissed) window.localStorage.setItem(NOTIFY_PROMPT_KEY, "1")
+    else window.localStorage.removeItem(NOTIFY_PROMPT_KEY)
+  } catch (_e) {}
+}
+
+// Must run inside a real click: Firefox and Safari refuse the request without
+// a user gesture, and Chrome quietly downgrades a page-load prompt. Whatever
+// the answer - including a refusal, and including a browser with no API at all
+// - it ends in one `vutuv:notify-permission` event, which is how both the
+// prompt and the settings card re-read the state without knowing about each
+// other. Both the promise and the legacy callback form are handled.
+function requestNotifyPermission() {
+  const finish = () => window.dispatchEvent(new CustomEvent("vutuv:notify-permission"))
+
+  if (!("Notification" in window)) return finish()
+
+  try {
+    const result = Notification.requestPermission(finish)
+    if (result && typeof result.then === "function") result.then(finish, finish)
+  } catch (_e) {
+    finish()
+  }
+}
+
+// One delegated listener for both surfaces: the shell's prompt bar and the
+// settings card offer the same button, and neither needs its own copy.
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-notify-allow]")) requestNotifyPermission()
+})
+
 const Hooks = {
   MarkdownEditor,
   TagInput,
@@ -483,6 +545,104 @@ const Hooks = {
     destroyed() {
       document.removeEventListener("visibilitychange", this.onVisibility)
       if (this.observer) this.observer.disconnect()
+    },
+  },
+  // Browser notifications (issue #1249): a popup for activity that arrives while
+  // the member is not looking at vutuv. ShellLive pushes a finished, translated
+  // line as "notify:show" whenever the member switched the feature on; this hook
+  // owns the two questions the server cannot answer.
+  //
+  // (1) Is the member looking at vutuv right now? `document.hidden` alone is too
+  // narrow: it is false for a vutuv tab that is frontmost in a window sitting
+  // behind the editor somebody is actually working in, which is the case the
+  // issue is about. So "away" is hidden OR unfocused.
+  //
+  // (2) Did THIS browser grant permission? The switch lives on the account and
+  // follows the member to every machine; the permission belongs to one browser
+  // profile and has to be asked for from a real click - Firefox and Safari
+  // refuse `requestPermission()` without a user gesture, so an automatic prompt
+  // on page load would be denied outright. Hence the server-rendered prompt
+  // inside this element, shown only where the browser has never been asked.
+  WebNotify: {
+    mounted() {
+      this.handleEvent("notify:show", (payload) => this.show(payload))
+
+      // Delegated, so it survives the patches that replace the prompt node.
+      // Allow is handled by the document-level listener above, which the
+      // settings card shares.
+      this.onClick = (event) => {
+        if (event.target.closest("[data-notify-dismiss]")) this.dismiss()
+      }
+      this.el.addEventListener("click", this.onClick)
+
+      this.onPermission = () => this.applyPrompt()
+      window.addEventListener("vutuv:notify-permission", this.onPermission)
+
+      // Read once. `updated()` runs on every shell patch - a people-counter
+      // tick, a presence diff, the hourly clock - and this value changes only
+      // through dismiss() below.
+      this.dismissed = notifyPromptDismissed()
+      this.enabled = this.el.dataset.enabled
+      this.applyPrompt()
+    },
+    updated() {
+      // Switching the feature back on is a fresh ask: somebody who dismissed
+      // the prompt months ago and has now deliberately turned it on again
+      // should be offered it, not left with a switch that does nothing here.
+      const enabled = this.el.dataset.enabled
+      if (enabled === "true" && this.enabled === "false") {
+        setNotifyPromptDismissed(false)
+        this.dismissed = false
+      }
+      this.enabled = enabled
+      this.applyPrompt()
+    },
+    destroyed() {
+      this.el.removeEventListener("click", this.onClick)
+      window.removeEventListener("vutuv:notify-permission", this.onPermission)
+    },
+    // Re-applied on every patch rather than only when something changed: the
+    // server re-renders the `hidden` attribute each time, and this is what
+    // takes it off again.
+    applyPrompt() {
+      const prompt = this.el.querySelector("[data-notify-prompt]")
+      if (!prompt) return
+      prompt.hidden = notifyPermission() !== "default" || this.dismissed
+    },
+    dismiss() {
+      setNotifyPromptDismissed(true)
+      this.dismissed = true
+      this.applyPrompt()
+    },
+    show({ tag, title, body, icon, url }) {
+      if (notifyPermission() !== "granted") return
+      // Looking at vutuv means the badge and the bell already said it.
+      if (!document.hidden && document.hasFocus()) return
+
+      let notification
+      try {
+        notification = new Notification(title, {
+          body: body || undefined,
+          icon: icon || undefined,
+          // One tag per stream, so a burst of ten replaces itself into one
+          // popup and four open vutuv tabs raise one between them (the browser
+          // collapses same-tag notifications across an origin). A replacement
+          // is silent, so only the first of a burst makes a sound - which is
+          // the whole reason `renotify` stays off.
+          tag: `vutuv-${tag}`,
+          renotify: false,
+        })
+      } catch (_e) {
+        // Some browsers refuse the constructor outright (a service worker is
+        // required on Android Chrome). Nothing to do but stay quiet.
+        return
+      }
+
+      notification.onclick = () => {
+        window.focus()
+        notification.close()
+        if (url) window.location.href = url
+      }
     },
   },
   // The admin member browser (VutuvWeb.Admin.UserLive) pages in place over the
@@ -1675,6 +1835,41 @@ function setupSettingsFilter() {
   document.querySelectorAll("[data-settings-filter]").forEach(wireSettingsFilter)
 }
 onReady(setupSettingsFilter)
+
+// The status block on /settings/notifications: what THIS browser answers,
+// beside the switch that stores what the member wants.
+function wireBrowserNotifications(status) {
+  if (!once(status, "browserNotifications")) return
+  const box = status.closest("form").querySelector('input[type="checkbox"]')
+  const lines = [...status.querySelectorAll("[data-notify-state]")]
+
+  // All four lines ship rendered and switched off by the plain `hidden`
+  // attribute (the issue #880 trap: a display utility would out-cascade it);
+  // exactly the one that applies is revealed, and none of them while the
+  // switch is off, where what this browser thinks does not matter yet.
+  const apply = () => {
+    const state = notifyPermission()
+    lines.forEach((line) => {
+      line.hidden = !box.checked || line.dataset.notifyState !== state
+    })
+  }
+
+  // Ticking the box IS the user gesture, so ask right there rather than after
+  // the save: a member who saves and never sees a prompt has no way to tell
+  // that the switch did not take effect on this machine.
+  box.addEventListener("change", () => {
+    if (box.checked) requestNotifyPermission()
+    else apply()
+  })
+
+  window.addEventListener("vutuv:notify-permission", apply)
+  apply()
+}
+
+function setupBrowserNotifications() {
+  document.querySelectorAll("[data-browser-notifications]").forEach(wireBrowserNotifications)
+}
+onReady(setupBrowserNotifications)
 
 // Live character counter for a length-capped text field (the profile Tagline,
 // see user/edit.html.heex). A [data-char-counter] wrapper with data-max holds a

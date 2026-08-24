@@ -23,6 +23,7 @@ defmodule VutuvWeb.ShellLive do
 
   import VutuvWeb.UI,
     only: [
+      button: 1,
       compact_count: 1,
       count_badge: 1,
       delimited_count: 1,
@@ -42,6 +43,7 @@ defmodule VutuvWeb.ShellLive do
   alias Vutuv.PeopleCounter
   alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.NotificationLine
   alias VutuvWeb.Presence
 
   @impl true
@@ -160,6 +162,7 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:user_avatar, Vutuv.Avatar.user_url(user, :thumb))
     |> assign(:user_admin?, user.admin?)
     |> assign_shell_defaults(path)
+    |> assign(:browser_notifications?, user.browser_notifications?)
     |> maybe_start_counts(user, path)
     |> maybe_start_new_members()
     |> maybe_start_presence(user_id, user.show_online_status?)
@@ -176,6 +179,10 @@ defmodule VutuvWeb.ShellLive do
   defp assign_shell_defaults(socket, path) do
     socket
     |> assign(:self_online?, false)
+    # Whether this member asked for browser notifications (issue #1249). False
+    # for the anonymous shell and for the throwaway dead render, which raises
+    # none anyway — the real value arrives with the authenticated mount.
+    |> assign(:browser_notifications?, false)
     |> assign(:presence_hidden_ids, MapSet.new())
     |> assign(:messages_count, 0)
     |> assign(:notifications_count, 0)
@@ -320,8 +327,8 @@ defmodule VutuvWeb.ShellLive do
   # silent-decrement signal (broadcast by Vutuv.Social), and recomputing on
   # :new_notification too keeps the increment honest.
   @impl true
-  def handle_info({:new_notification, _n}, socket),
-    do: {:noreply, recount_notifications(socket)}
+  def handle_info({:new_notification, n}, socket),
+    do: {:noreply, socket |> recount_notifications() |> push_browser_notification(n)}
 
   def handle_info(:notifications_changed, socket),
     do: {:noreply, recount_notifications(socket)}
@@ -336,7 +343,7 @@ defmodule VutuvWeb.ShellLive do
   # adds nothing, and reading one conversation says nothing about the others —
   # so both recompute the count instead of adjusting it.
   def handle_info({:new_message, _m}, socket),
-    do: {:noreply, recount_messages(socket)}
+    do: {:noreply, socket |> recount_messages() |> push_message_notification()}
 
   def handle_info(:messages_read, socket),
     do: {:noreply, recount_messages(socket)}
@@ -371,6 +378,14 @@ defmodule VutuvWeb.ShellLive do
 
     {:noreply, socket |> assign(:self_online?, show_online?) |> push_online()}
   end
+
+  # The member flipped "Show me browser notifications" (here or in another tab).
+  # Their other open tabs learn about it without a reload, the same way the
+  # online-status switch reaches them — and a tab that has just been switched ON
+  # asks this browser for permission, which is the whole point of the broadcast:
+  # the switch is the member's, the permission is each browser's.
+  def handle_info({:browser_notifications_pref, enabled?}, socket),
+    do: {:noreply, assign(socket, :browser_notifications?, enabled?)}
 
   # The live people total moved — a sign-up confirmed, an account was deleted,
   # or the counter reconciled one of its two halves against the database. Every
@@ -512,6 +527,64 @@ defmodule VutuvWeb.ShellLive do
     end
   end
 
+  # -- Browser notifications (issue #1249) ----------------------------------
+  #
+  # The shell is on every page and already holds this member's activity
+  # subscription, so it is the one place that knows something arrived while
+  # they were somewhere else. It hands the WebNotify hook a finished line; the
+  # hook decides whether the member is actually looking at vutuv and whether
+  # this browser granted permission. Two reasons the wording is built here and
+  # not in JS: only the server knows the reader's locale, and the page under the
+  # bell must not say one thing while the popup says another - hence the shared
+  # VutuvWeb.NotificationLine, which owns the destination too.
+  #
+  # Off unless the member switched it on. That is the whole design of the
+  # feature - a popup over whatever somebody is doing is the loudest thing this
+  # app can do, so nobody who did not ask is ever prompted, let alone notified.
+  # The gate lives in one clause, so a third stream cannot be added without it.
+  defp push_notify(%{assigns: %{browser_notifications?: false}} = socket, _payload), do: socket
+
+  defp push_notify(socket, payload), do: push_event(socket, "notify:show", payload)
+
+  defp push_browser_notification(socket, notification) do
+    {title, body} = NotificationLine.title_and_body(notification)
+
+    push_notify(socket, %{
+      # One tag for the whole activity stream, so a burst of ten likes replaces
+      # itself into a single popup instead of stacking ten - and so a member
+      # with four vutuv tabs open gets one notification rather than four (the
+      # browser collapses same-tag notifications across every page of an
+      # origin). A replacement is silent in every browser, so only the first one
+      # of a burst makes a sound.
+      tag: "activity",
+      title: title,
+      body: body,
+      icon: notification[:actor_avatar],
+      # Where the row under the bell would take them - the post, the case, the
+      # profile. A popup is raised precisely when the member is NOT looking at
+      # vutuv, so the notifications list is the one place that makes them hunt
+      # for what they were just told about. It stays the fallback for a kind
+      # with no page of its own.
+      url:
+        NotificationLine.notification_target(notification, socket.assigns.user_param) ||
+          ~p"/notifications"
+    })
+  end
+
+  defp push_message_notification(socket) do
+    push_notify(socket, %{
+      # Its own tag: a waiting answer and a new like are different errands, and
+      # collapsing them into one popup would let a like bury a message.
+      tag: "messages",
+      # Deliberately no sender and no preview. The broadcast carries neither
+      # (Vutuv.Chat sends the conversation id alone), and a direct message is
+      # the last thing that should be legible over somebody's shoulder or on a
+      # shared screen.
+      title: gettext("New message"),
+      url: ~p"/messages"
+    })
+  end
+
   # The initials tile shares VutuvWeb.UI.name_initials/1 with <.avatar>.
 
   @impl true
@@ -530,6 +603,53 @@ defmodule VutuvWeb.ShellLive do
       Fed by push_badge/1 + the {:new_post} handler; phx-update="ignore" because
       the hook owns document.title, not this node. --%>
       <div :if={@user_id} id="tab-badge" phx-hook="TabBadge" phx-update="ignore" class="hidden"></div>
+      <%!-- Browser notifications (issue #1249). The hook raises the popups
+      ShellLive pushes as "notify:show", and owns the two questions the server
+      cannot answer: is this member looking at vutuv right now, and did THIS
+      browser grant permission. It is rendered for every logged-in member, on
+      or off, so flipping the switch in another tab needs no reload - the
+      server simply stops pushing.
+
+      No phx-update="ignore": the prompt below is server-rendered (only the
+      server knows the reader's language), so LiveView owns these children and
+      the hook re-applies its decision in updated/0.
+
+      The prompt is the answer to "I switched this on at my desk, why is my
+      laptop silent?". The switch is the member's and travels with the account;
+      the permission belongs to each browser and can only be asked for from a
+      real click, which Firefox and Safari refuse to fake on page load. So a
+      browser that has never been asked shows one line with the way to say yes.
+      It ships carrying the plain `hidden` attribute and no display utility (the
+      issue #880 trap - a utility would out-cascade it), and the hook takes it
+      off only where it applies: permission still "default", and not dismissed
+      in this browser before. --%>
+      <div :if={@user_id} id="web-notify" phx-hook="WebNotify" data-enabled={to_string(@browser_notifications?)}>
+        <div
+          :if={@browser_notifications?}
+          hidden
+          data-notify-prompt
+          class="border-b border-brand-100 bg-brand-50 dark:border-brand-900/60 dark:bg-brand-900/30"
+        >
+          <div class={[
+            "mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 py-2 text-sm",
+            gutter_class()
+          ]}>
+            <span class="text-slate-700 dark:text-slate-200">
+              {gettext("You switched browser notifications on. This browser has not been asked for permission yet.")}
+            </span>
+            <.button type="button" data-notify-allow class="min-h-10">
+              {gettext("Allow")}
+            </.button>
+            <button
+              type="button"
+              data-notify-dismiss
+              class="ml-auto min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-brand-100 dark:text-slate-300 dark:hover:bg-brand-900/60"
+            >
+              {gettext("Not now")}
+            </button>
+          </div>
+        </div>
+      </div>
       <%!-- Writing as an organization (issue #1335). The characteristic failure
       of this mode everywhere it exists is somebody posting something personal
       from the brand account, and a discreet badge does not prevent it — so the

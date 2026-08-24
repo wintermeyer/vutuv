@@ -57,6 +57,18 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   import VutuvWeb.UserHTML, only: [user_row: 1]
 
+  # What a notification says and where it leads, shared with the browser
+  # notification ShellLive raises for the same event (issue #1249).
+  import VutuvWeb.NotificationLine,
+    only: [
+      cv_entry_label: 1,
+      cv_entry_path: 2,
+      fediverse_reaction_text: 2,
+      notification_target: 2,
+      notification_text: 1,
+      thread_text: 1
+    ]
+
   # Like the feed and messages: not a page for anonymous visitors —
   # redirect to /login instead of rendering an empty 200.
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
@@ -1073,23 +1085,20 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   # ── The sentence ──
 
-  # The grouped sentence tail after the actor names. English needs no
-  # singular/plural split for "liked your post."; German does for the
-  # follower/connection verbs, hence the count-branched msgids.
+  # The grouped sentence tail after the actor names. Only the forms that differ
+  # from the single-actor one are spelled here - German conjugates the
+  # follower/connection verbs across the count where English does not, hence
+  # the count-branched msgids. Everything else falls through to
+  # VutuvWeb.NotificationText, which the browser notification shares, so one
+  # event cannot read differently in the two places (issue #1249).
   defp group_text(%{kind: "follower", actor_count: count}) when count > 1,
     do: gettext("are now following you.")
-
-  defp group_text(%{kind: "follower"}), do: gettext("started following you.")
 
   defp group_text(%{kind: "connection", actor_count: count}) when count > 1,
     do: gettext("are now connected with you.")
 
-  defp group_text(%{kind: "connection"}), do: gettext("is now connected with you.")
-
-  defp group_text(%{kind: "like"}), do: gettext("liked your post.")
-
   defp group_text(%{kind: "endorsement", tags: [tag]}),
-    do: gettext("endorsed you for %{tag}.", tag: tag)
+    do: notification_text(%{kind: "endorsement", tag: tag})
 
   defp group_text(%{kind: "endorsement", tags: [_ | _] = tags}),
     do: gettext("endorsed you for %{tags}.", tags: join_names(tags))
@@ -1101,44 +1110,6 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp group_text(%{item: item}), do: notification_text(item)
 
-  # German conjugates the verb across the actor count (hat/haben) where English
-  # does not, so both branches go through ngettext even when the two English
-  # forms read the same — the same trick `thread_text/1` uses.
-  defp fediverse_reaction_text("announce", count) do
-    ngettext(
-      "shared your post on another network.",
-      "shared your post on another network.",
-      count
-    )
-  end
-
-  defp fediverse_reaction_text("like", count) do
-    ngettext(
-      "liked your post on another network.",
-      "liked your post on another network.",
-      count
-    )
-  end
-
-  defp fediverse_reaction_text(_kind, count) do
-    ngettext(
-      "reacted to your post from another network.",
-      "reacted to your post from another network.",
-      count
-    )
-  end
-
-  # The English tail is number-blind ("A and B replied in..."), but German
-  # conjugates the verb (hat/haben), so the actor count goes through ngettext
-  # even though both English forms read the same.
-  defp thread_text(count) do
-    ngettext(
-      "replied in a thread you posted in.",
-      "replied in a thread you posted in.",
-      count
-    )
-  end
-
   # "Elixir, Phoenix and Rails" - all but the last joined by commas, the last
   # by the localized joining word.
   defp join_names([single]), do: single
@@ -1147,80 +1118,6 @@ defmodule VutuvWeb.NotificationLive.Index do
     {front, [last]} = Enum.split(names, -1)
     Enum.join(front, ", ") <> " " <> gettext("and") <> " " <> last
   end
-
-  # Where clicking the event text leads. Events about one of the viewer's
-  # posts open that post's thread; an endorsement the viewer's tags;
-  # everything else the actor's profile. Moderation events lead to the
-  # owner's case page (and carry no actor).
-  defp notification_target(%{kind: "moderation"} = n, viewer) do
-    if is_binary(n[:case_id]) and viewer != nil, do: ~p"/moderation/cases/#{n.case_id}"
-  end
-
-  # An organization-role grant opens the organization page it was granted on.
-  defp notification_target(%{kind: "organization_role"} = n, _viewer) do
-    if is_binary(n[:organization_slug]), do: ~p"/organizations/#{n.organization_slug}"
-  end
-
-  # A removed avatar/cover leads to the photos form (upload a new one), a
-  # removed qualification proof to the credentials editor; other rejected
-  # images have no page left to open.
-  defp notification_target(%{kind: "image_rejected"} = n, viewer) do
-    cond do
-      viewer == nil -> nil
-      n[:image_kind] in ["avatar", "cover"] -> ~p"/settings/profile"
-      n[:image_kind] == "qualification_document" -> ~p"/settings/qualifications"
-      n[:image_kind] == "job_reference_document" -> ~p"/settings/job_references"
-      true -> nil
-    end
-  end
-
-  # The username note carries its own two links inside the sentence
-  # (username_line/1), so the row itself must not be one.
-  defp notification_target(%{kind: "username"}, _viewer), do: nil
-
-  # Straight to the report the member has been waiting for.
-  defp notification_target(%{kind: "reference_check"} = n, viewer) do
-    if viewer && is_binary(n[:job_reference_id]),
-      do: ~p"/settings/job_references/#{n.job_reference_id}/check"
-  end
-
-  # A CV update (issue #980) opens the entry itself when the group holds
-  # exactly one; a bigger group leads to the author's profile, where all of
-  # them sit (the entries are listed and individually linked under the line).
-  defp notification_target(%{kind: "cv_update"} = n, _viewer) do
-    case n[:entries] do
-      [entry] -> cv_entry_path(n, entry)
-      _ -> actor_target(n)
-    end
-  end
-
-  # A mention opens the post that named the reader, and a thread event the new
-  # reply — both belong to the *actor*, not to the reader, unlike reply/like
-  # below. The row carries that permalink ready-made (`Vutuv.Activity`, built
-  # through `Posts.path/2`): assembling it here from `actor_param` linked a
-  # page's mention into the member namespace, where nothing answers.
-  defp notification_target(%{kind: kind} = n, _viewer) when kind in ["mention", "thread"] do
-    n[:post_path] || actor_target(n)
-  end
-
-  defp notification_target(n, viewer) do
-    primary_target(n, viewer) || actor_target(n)
-  end
-
-  # A reply from another network (issue #1069) opens the reader's **own** post,
-  # where the reply card sits among the rest of the conversation — deliberately
-  # not the remote original, which the card itself links to. The reader stays on
-  # vutuv unless they choose otherwise, and a private reply (issue #1071) has no
-  # public page to open anyway.
-  defp primary_target(%{kind: kind} = n, viewer)
-       when kind in ["reply", "like", "fediverse_reply", "fediverse_reaction"] do
-    if is_binary(n[:post_id]) and viewer != nil, do: ~p"/#{viewer}/posts/#{n.post_id}"
-  end
-
-  defp primary_target(%{kind: "endorsement"}, viewer) when viewer != nil,
-    do: ~p"/#{viewer}/tags"
-
-  defp primary_target(_n, _viewer), do: nil
 
   # Where the quoted remote reply itself goes: the same conversation the row's
   # sentence opens, plus the anchor of this note (`Fediverse.reply_anchor/1`),
@@ -1236,18 +1133,6 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # A member's param is their handle and lives at the root; a page's is a slug
-  # that lives under /organizations/:slug (issue #1336). Building this from the
-  # param alone would point into the member namespace, at a word somebody else
-  # may hold — so the row's own `actor_kind` decides, and a row without one
-  # reads as the member it was.
-  defp actor_target(%{actor_kind: "organization", actor_param: slug}) when is_binary(slug),
-    do: ~p"/organizations/#{slug}"
-
-  defp actor_target(n) do
-    if is_binary(n[:actor_param]), do: ~p"/#{n.actor_param}"
-  end
-
   # The same decision for the grouped-actor shape, whose keys are `kind` /
   # `param` rather than the row's `actor_*`. One function per shape, both
   # branching on the kind, so neither can be the one that forgets.
@@ -1255,160 +1140,6 @@ defmodule VutuvWeb.NotificationLive.Index do
     do: ~p"/organizations/#{slug}"
 
   defp actor_path(%{param: param}), do: ~p"/#{param}"
-
-  # The event text for the ungrouped kinds, rendered from the kind (not
-  # stored) so it translates with the viewer's locale. Unknown kinds fall
-  # back to the pushed text.
-  # The only row here with no actor in front of it, so it is a whole sentence
-  # rather than a verb phrase. It names the Zeugnis, because a member with
-  # several of them is otherwise told only that "a" review is ready, and it
-  # names the grade when the report stated one — that is the fact they have
-  # been waiting minutes for, and burying it one click deeper would be a tease.
-  defp notification_text(%{kind: "reference_check"} = n) do
-    case {n[:title], n[:grade]} do
-      {title, grade} when is_binary(title) and is_binary(grade) ->
-        gettext("The review of “%{title}” is ready: %{grade}.", title: title, grade: grade)
-
-      {title, _none} when is_binary(title) ->
-        gettext("The review of “%{title}” is ready.", title: title)
-
-      _untitled ->
-        gettext("Your employment reference has been reviewed.")
-    end
-  end
-
-  defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
-
-  defp notification_text(%{kind: "mention"}), do: gettext("mentioned you in a post.")
-
-  defp notification_text(%{kind: "fediverse_reply"}),
-    do: gettext("replied to your post from another network.")
-
-  # Live-pushed reactions land here (no group context yet): one actor. The verb
-  # is the whole point of the news, so `fediverse_reaction_text/2` owns both
-  # sentences and this and the grouped row share them.
-  defp notification_text(%{kind: "fediverse_reaction"} = n),
-    do: fediverse_reaction_text(n[:reaction_kind], 1)
-
-  # Live-pushed thread events land here (no group context yet): one actor.
-  defp notification_text(%{kind: "thread"}), do: thread_text(1)
-
-  defp notification_text(%{kind: "organization_role"} = n) do
-    case n[:role] do
-      "owner" ->
-        gettext("made you an owner of %{organization}.", organization: n.organization_name)
-
-      "admin" ->
-        gettext("made you an admin of %{organization}.", organization: n.organization_name)
-
-      "recruiter" ->
-        gettext("made you a recruiter for %{organization}.", organization: n.organization_name)
-
-      _ ->
-        gettext("gave you a role at %{organization}.", organization: n.organization_name)
-    end
-  end
-
-  # Moderation items carry no actor (reports are anonymous); the text alone
-  # tells the owner what happened and links to the case page.
-  defp notification_text(%{kind: "moderation"} = n) do
-    case n[:status] do
-      "upheld" -> gettext("A report about your content was confirmed.")
-      "rejected" -> gettext("A report about your content was dismissed; it is visible again.")
-      "resolved_edited" -> gettext("You revised reported content; the case is closed.")
-      "resolved_deleted" -> gettext("You deleted reported content; the case is closed.")
-      _ -> gettext("Your content was reported and is hidden while the report is handled.")
-    end
-  end
-
-  # The AI image scan removed an image. No actor (it was the machine); the
-  # what-was-removed wording shares its single source with the email
-  # (VutuvWeb.UserHelpers.image_kind_label/2). The line says outright that a
-  # machine decided and can be wrong — a bare "your image was removed" reads
-  # as a person's judgement on the member.
-  defp notification_text(%{kind: "image_rejected"} = n) do
-    what = UserHelpers.image_kind_label(n[:image_kind], Gettext.get_locale(VutuvWeb.Gettext))
-
-    gettext(
-      "An AI, not a person, removed %{what}: it judged the image not family-friendly enough for a work environment. It can be wrong, so reply to our email if you disagree.",
-      what: what
-    )
-  end
-
-  # Reporter protection: the actor is the *reported* member, rendered as
-  # @handle by the actor line; the text explains the both-ways pause and
-  # that an unfounded ruling undoes it.
-  defp notification_text(%{kind: "report_protection"} = n) do
-    case n[:status] do
-      "restored" ->
-        gettext(
-          "Our admins found your report unfounded; the paused connection between you two is restored."
-        )
-
-      _ ->
-        gettext(
-          "Your report paused the connection between you two - no contact in either direction for now. If our admins find the report unfounded, this is undone."
-        )
-    end
-  end
-
-  # A handle change: show the old and new handle so the reader sees exactly
-  # what was rewritten in their posts (before/after).
-  defp notification_text(%{kind: "handle_change"} = n) do
-    gettext("changed their handle from @%{old} to @%{new}.",
-      old: n.old_handle,
-      new: n.new_handle
-    )
-  end
-
-  # New CV entries the author chose to announce (issue #980). A lone entry
-  # gets the section-specific wording, so a reader can tell a job from a
-  # degree without opening it; a group of them is counted and listed below.
-  defp notification_text(%{kind: "cv_update", entries: [entry]}) do
-    case entry.section do
-      "educations" ->
-        gettext("added a new education entry to their CV: %{entry}",
-          entry: cv_entry_label(entry)
-        )
-
-      "qualifications" ->
-        gettext("added a new certificate to their CV: %{entry}", entry: cv_entry_label(entry))
-
-      _ ->
-        gettext("added a new position to their CV: %{entry}", entry: cv_entry_label(entry))
-    end
-  end
-
-  defp notification_text(%{kind: "cv_update"} = n) do
-    gettext("added %{count} new entries to their CV:",
-      count: compact_count(n[:entry_count] || 0)
-    )
-  end
-
-  defp notification_text(n), do: n[:text]
-
-  # "Head of Bridges · Span AG": what the entry is, then where. Either half
-  # can be missing, so the separator only appears when both are there.
-  defp cv_entry_label(entry) do
-    [entry.title, entry.subtitle]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join(" · ")
-  end
-
-  # One entry's own page under the author's profile.
-  defp cv_entry_path(n, entry) do
-    with slug when is_binary(slug) <- n[:actor_param],
-         param when is_binary(param) <- entry.param do
-      case entry.section do
-        "work_experiences" -> ~p"/#{slug}/work_experiences/#{param}"
-        "educations" -> ~p"/#{slug}/educations/#{param}"
-        "qualifications" -> ~p"/#{slug}/qualifications/#{param}"
-        _ -> ~p"/#{slug}"
-      end
-    else
-      _ -> nil
-    end
-  end
 
   # How many of a group's entries are not in the shown list.
   defp cv_entries_more(n), do: (n[:entry_count] || 0) - length(n[:entries] || [])

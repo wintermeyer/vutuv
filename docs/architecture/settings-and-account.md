@@ -84,14 +84,28 @@ so an empty field means "inherit the site default" rather than "never shorten".
 
 ### Notifications (`/settings/notifications`)
 
-Three cards. **Email notifications**: one positive flag per type (unread
-messages plus its frequency/delay pair, endorsements, new followers, the
-newsletter), each with a one-click unsubscribe in the mail itself — see
-[email.md](email.md). **CV updates**: the one in-app notification kind a member
-can switch off (`cv_update_notifications?`, default on), because it is the only
-one triggered by someone else's housekeeping rather than by something done to
-them — see the CV updates section in [realtime.md](realtime.md). **In-app
-notifications**: a read-only explainer of the rest, which are always on.
+**Email notifications**: one positive flag per type (unread messages plus its
+frequency/delay pair, endorsements, new followers, the newsletter), each with a
+one-click unsubscribe in the mail itself — see [email.md](email.md).
+
+**Browser notifications** (`browser_notifications?`, issue #1249): whether the
+member's open tabs may raise a real browser notification when something arrives
+while they are looking at something else. The one switch here that defaults to
+**off** — it is the only one that puts something over what somebody is doing,
+and switching it on is also what makes their browsers ask for permission. The
+card reports what *this* browser answered beside the stored setting, because
+the setting travels with the account and the permission does not. See the
+browser-notifications section in [realtime.md](realtime.md).
+
+**CV updates** (`cv_update_notifications?`, default on) and **Thread replies**
+(`thread_notifications?`, default on): the two in-app kinds a member can switch
+off — the first because it is triggered by someone else's housekeeping rather
+than by anything done to them, the second because a busy thread gets loud while
+direct answers to your own post stay on. See the CV updates section in
+[realtime.md](realtime.md).
+
+**In-app notifications**: a read-only explainer of the rest, which are always
+on.
 
 ### Automatic post deletion (`/settings/auto_post_deletion`)
 
