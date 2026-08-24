@@ -152,9 +152,19 @@ defmodule VutuvWeb.ApiV2Test do
     # So the window is checked around the requests rather than asserted into. A
     # roll means the run was meaningless, not that the limiter is broken, and one
     # retry is enough: the three requests take milliseconds and cannot straddle
-    # two boundaries in a row. The retry needs no fresh token, because the rolled
-    # window gives the same key a clean bucket.
+    # two boundaries in a row.
+    #
+    # **The retry has to empty the bucket first, and that is the whole point of
+    # this line.** A roll leaves the requests made *after* it sitting in the new
+    # bucket — the very bucket the next attempt starts counting in — so with a
+    # limit of two, a roll between the first and second request left two hits
+    # behind and the retry's own first request was refused with a 429. The test
+    # then failed asserting `conn1.status == 200`, which reads as the limiter
+    # letting nothing through rather than as the retry poisoning itself. Seen on
+    # 2026-08-04 and again on 2026-08-24, both times on a branch that touches
+    # nothing in this path. The token may stay the same; only its count must go.
     defp three_requests(conn, plaintext, attempt \\ 1) do
+      Vutuv.RateLimiter.reset()
       before = current_window()
       conn1 = conn |> authed(plaintext) |> get("/api/2.0/me")
       build_conn() |> authed(plaintext) |> get("/api/2.0/me")

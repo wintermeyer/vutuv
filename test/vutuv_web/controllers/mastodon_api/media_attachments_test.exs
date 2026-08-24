@@ -22,7 +22,9 @@ defmodule VutuvWeb.MastodonApi.MediaAttachmentsTest do
   import Vutuv.MastodonHelpers
 
   alias Vutuv.Fediverse.RemoteImage
+  alias Vutuv.MastodonApi
   alias Vutuv.Posts
+  alias Vutuv.Posts.PostImage
   alias Vutuv.RemoteMedia
   alias Vutuv.Repo
 
@@ -81,10 +83,34 @@ defmodule VutuvWeb.MastodonApi.MediaAttachmentsTest do
     {:ok, _} = Image.write(img, src)
     {:ok, image} = Posts.create_pending_image(author, src, "photo.jpg")
 
-    {:ok, post} =
-      Posts.create_post(author, Map.merge(%{body: "Mit Foto", image_ids: [image.id]}, attrs))
+    # A body that references the photo inline, the way the composer writes one.
+    # Built here because it needs the image's URL, which only exists now.
+    body =
+      if attrs[:inline],
+        do: "Seht her:\n\n![Ein Foto](#{PostImage.url(image, "large")})",
+        else: "Mit Foto"
+
+    attrs = Map.merge(%{body: body, image_ids: [image.id]}, Map.delete(attrs, :inline))
+    {:ok, post} = Posts.create_post(author, attrs)
 
     {post, image}
+  end
+
+  defp content(conn, post) do
+    conn |> get("/api/v1/statuses/#{post.id}") |> json_response(200) |> Map.fetch!("content")
+  end
+
+  # The src as a client parses it: an attribute value is HTML, so a URL joining
+  # two query parameters arrives as `?v=…&amp;t=…` and only reads back as two
+  # parameters once the entities are decoded. Asserting on the raw attribute
+  # would pass on an uncropped photo and quietly fetch `amp;t` on a cropped one.
+  defp inline_src(html) do
+    case Regex.run(~r/<img[^>]*\bsrc="([^"]+)"/, html) do
+      # Only `&` can occur in one of our image URLs, and decoding it last is the
+      # rule that keeps a literal `&amp;amp;` from collapsing twice.
+      [_, src] -> String.replace(src, "&amp;", "&")
+      nil -> flunk("no inline <img> in: #{html}")
+    end
   end
 
   # The status as a client reads it, and then its picture as that client's image
@@ -211,6 +237,88 @@ defmodule VutuvWeb.MastodonApi.MediaAttachmentsTest do
     # loader brings when it has no capability.
     test "the bare URL alone is still refused", ctx do
       assert fetch("/post_images/#{ctx.image.token}/large.avif").status == 404
+    end
+  end
+
+  # Issue #1647: `media_attachments` was fixed first, but a client renders
+  # `content` as HTML, and every URL the website's renderer writes into it is
+  # root-relative — so the same photo referenced inline in the body stayed a
+  # broken image even where its attachment loaded.
+  describe "a photo referenced inline in the body" do
+    test "is an absolute URL that loads, on a public post", %{conn: conn, tmp: tmp} do
+      author = insert(:activated_user)
+      {post, image} = local_photo_post(author, tmp, %{inline: true})
+
+      conn = mastodon_conn(conn, mastodon_token(insert(:activated_user), ["read"]))
+      src = conn |> content(post) |> inline_src()
+
+      assert src == MastodonApi.main_url(PostImage.url(image, "large"))
+      assert fetch(src).status == 200
+    end
+
+    test "carries the capability on a restricted post, and loads with it", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:activated_user)
+      reader = insert(:activated_user)
+      follow!(reader, author)
+
+      {post, image} =
+        local_photo_post(author, tmp, %{inline: true, denials: [%{"wildcard" => "non_followers"}]})
+
+      # Cropped, so the URL already carries the cache-buster the capability has
+      # to be joined to rather than replace — the case `append_query/2` exists
+      # for, and the one a bare `?t=` would silently break.
+      Repo.update!(Ecto.Changeset.change(image, crop: "0,0,32,32"))
+
+      conn = mastodon_conn(conn, mastodon_token(reader, ["read"]))
+      src = conn |> content(post) |> inline_src()
+
+      query = URI.decode_query(URI.parse(src).query)
+      assert Map.has_key?(query, "t")
+      assert Map.has_key?(query, "v")
+      assert fetch(src).status == 200
+    end
+
+    # `render_remote/1` writes our hashtag and local-mention links root-relative
+    # as well, so the two remote status heads had the same bug.
+    test "and a cached remote post's own links are absolute", %{conn: conn} do
+      tag = insert(:tag)
+      insert(:user_tag, user: insert(:activated_user), tag: tag)
+
+      post =
+        cached_post(remote_account(), content_text: "Von woanders zum ##{tag.slug}")
+
+      conn = mastodon_conn(conn, mastodon_token(federating_member(), ["read"]))
+
+      html =
+        conn
+        |> get("/api/v1/statuses/remote-#{post.id}")
+        |> json_response(200)
+        |> Map.fetch!("content")
+
+      assert html =~ ~s(href="#{MastodonApi.main_url("/tags/" <> tag.slug)}")
+      refute html =~ ~s(href="/)
+    end
+
+    # The body's other root-relative URLs are the same bug: a client cannot
+    # resolve them either.
+    test "and the body's mentions and hashtags are absolute too", %{conn: conn} do
+      author = insert(:activated_user)
+      named = insert(:activated_user, username: unique_username("inline"))
+      tag = insert(:tag)
+      insert(:user_tag, user: named, tag: tag)
+
+      {:ok, post} =
+        Posts.create_post(author, %{body: "Hallo @#{named.username} zum ##{tag.slug}"})
+
+      conn = mastodon_conn(conn, mastodon_token(insert(:activated_user), ["read"]))
+      html = content(conn, post)
+
+      assert html =~ ~s(href="#{MastodonApi.main_url("/" <> named.username)}")
+      assert html =~ ~s(href="#{MastodonApi.main_url("/tags/" <> tag.slug)}")
+      refute html =~ ~s(href="/)
     end
   end
 

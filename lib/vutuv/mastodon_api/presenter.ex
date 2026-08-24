@@ -302,7 +302,11 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp status(%Post{} = post, context) do
     author = Posts.author(post)
     engagement = context.engagements[post.id]
-    content = post.body |> Markdown.render_post(loaded_images(post)) |> safe_html()
+    # The reader every picture on this post is named for, or nil where it needs
+    # no credential — which is every public post. Decided once: the body's
+    # inline copies and the attachments must reach the same file the same way.
+    photo_viewer = if restricted?(post, engagement), do: context.viewer
+    content = content_html(post, photo_viewer)
 
     fields =
       %{
@@ -312,7 +316,7 @@ defmodule Vutuv.MastodonApi.Presenter do
         url: MastodonApi.main_url(Posts.path(post)),
         uri: MastodonApi.main_url(Posts.path(post)),
         account: account(author),
-        media_attachments: media_attachments(post, engagement, context),
+        media_attachments: media_attachments(post, photo_viewer),
         visibility: visibility(post, engagement),
         language: post.language,
         edited_at: edited_at(post),
@@ -329,7 +333,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     base_status(%{
       id: status_id(post),
       created_at: timestamp(post.published_at),
-      content: Markdown.render_remote(post.content_text || ""),
+      content: remote_content_html(post.content_text),
       url: post.origin_url || post.object_uri,
       uri: post.object_uri,
       account: account(post.remote_account),
@@ -348,7 +352,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     base_status(%{
       id: status_id(note),
       created_at: timestamp(note.received_at),
-      content: Markdown.render_remote(note.content_text || ""),
+      content: remote_content_html(note.content_text),
       url: Note.origin(note),
       uri: note.object_uri,
       account: note_account(note),
@@ -809,23 +813,49 @@ defmodule Vutuv.MastodonApi.Presenter do
   @doc "Whether the scan has finished with this picture, either way."
   def media_ready?(%PostImage{} = image), do: ImageScans.released?(image.moderation)
 
-  # An unloaded association is truthy, so `post.images || []` survived the `||`
-  # and then failed `render_post/3`'s `is_list` guard, whose catch-all answers
-  # an empty body — a status with **no text at all**, silently. Every caller
-  # inside this adapter preloads, but `Vutuv.Search` does not, and the search
-  # endpoint duly served blank posts. A missing preload may cost the inline
-  # pictures; it must never cost the words.
-  defp loaded_images(%Post{images: images}) when is_list(images), do: images
-  defp loaded_images(_not_loaded), do: []
+  # **A body is served away from home too, so its own URLs have to travel**
+  # (issue #1647). The attachments were fixed first, but a client renders
+  # `content` as HTML and every URL the website's renderer writes into it is
+  # root-relative — an inline photo, an `@mention`, a `#hashtag` — so none of
+  # them resolves in an app, on a public post as much as a restricted one. The
+  # pictures take the same capability their attachments take, and the whole
+  # fragment is then absolutized against the main domain, the way the RSS item
+  # and the federated Note already are.
+  #
+  # `released_images/1` and not every loaded picture, the same set the
+  # attachments name: a client has no placecard for one still in the AI gate,
+  # so inlining it would only be a second broken image — and it would be handed
+  # a capability the proxy is going to refuse anyway. It is also what keeps a
+  # missing preload from costing the **words**: it answers `[]` for an unloaded
+  # association where `post.images || []` would hand `render_post/3` a
+  # `NotLoaded`, fail its `is_list` guard and silently render a status with no
+  # text at all (`Vutuv.Search` does not preload, and the search endpoint duly
+  # served blank posts once).
+  defp content_html(post, photo_viewer) do
+    post.body
+    |> Markdown.render_post(Posts.released_images(post),
+      image_query: &capability(&1, photo_viewer)
+    )
+    |> safe_html()
+    |> Markdown.absolutize_html(main_base())
+  end
 
-  defp media_attachments(post, engagement, context) do
-    # The capability is minted only where a bare image loader would otherwise be
-    # turned away: a post its author narrowed. A public post's photo stays a
-    # plain URL — it needs no credential, and a bearer URL that buys nothing is
-    # one more thing that can be shared. One per photo, since the token names
-    # the picture it opens.
-    viewer = if restricted?(post, engagement), do: context.viewer
+  # The same for a cached post or reply. It carries no picture of ours, but
+  # `render_remote/1` still writes our `#hashtag` and local-`@mention` links
+  # root-relative, and those resolve in an app no better than an image URL does.
+  defp remote_content_html(text),
+    do: text |> Kernel.||("") |> Markdown.render_remote() |> Markdown.absolutize_html(main_base())
 
+  # Every URL a client is handed points at the main domain, never at the API
+  # subdomain it is talking to: that is where the pictures and the profiles are.
+  defp main_base, do: MastodonApi.main_url("")
+
+  # The capability is minted only where a bare image loader would otherwise be
+  # turned away: a post its author narrowed. A public post's photo stays a plain
+  # URL — it needs no credential, and a bearer URL that buys nothing is one more
+  # thing that can be shared. One per photo, since the token names the picture
+  # it opens.
+  defp media_attachments(post, viewer) do
     post |> Posts.released_images() |> Enum.map(&post_attachment(&1, capability(&1, viewer)))
   end
 
@@ -868,15 +898,10 @@ defmodule Vutuv.MastodonApi.Presenter do
   # One version's URL, carrying the capability where there is one. `PostImage.url/2`
   # may already end in the crop buster's own `?v=…`, so the capability is appended
   # to that query rather than replacing it.
-  defp image_url(%PostImage{} = image, version, nil),
-    do: MastodonApi.main_url(PostImage.url(image, version))
-
   defp image_url(%PostImage{} = image, version, query) do
     image
     |> PostImage.url(version)
-    |> URI.parse()
-    |> URI.append_query(query)
-    |> to_string()
+    |> Markdown.append_query(query)
     |> MastodonApi.main_url()
   end
 

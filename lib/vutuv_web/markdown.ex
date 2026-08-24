@@ -125,11 +125,21 @@ defmodule VutuvWeb.Markdown do
   `mark_verified_author_links/2`. Omit it and nothing is marked, which is
   also what an installation with `:verify_user_links` off gets: no member
   has a verified link there, so the list is always empty.
+
+  `:image_query` (opts) is a `(image -> query | nil)` appended to each inline
+  picture's URL, for a caller serving this HTML where the reader brings no
+  session: the Mastodon adapter passes the same `VutuvWeb.RemoteMediaToken`
+  capability it puts on the attachments (issue #1647). Omit it and the
+  canonical URL stands, which is what the website wants — there the session
+  answers. It does **not** absolutize; a caller rendering into a standalone
+  context runs `absolutize_html/3` over the result, as RSS and the federated
+  Note do.
   """
   def render_post(text, images, opts \\ [])
 
   def render_post(text, images, opts) when is_binary(text) and is_list(images) do
-    {prepared, replacements} = extract_inline_images(text, images)
+    {prepared, replacements} =
+      extract_inline_images(text, images, Keyword.get(opts, :image_query))
 
     prepared
     |> render_pipeline(breaks: false)
@@ -898,15 +908,39 @@ defmodule VutuvWeb.Markdown do
   end
 
   @doc """
+  Appends `query` to a URL that may already have one, or hands it back unchanged
+  for a `nil` query.
+
+  Its reason to exist is the one URL in this application that arrives with a
+  query already on it: a cropped picture carries the cache-buster
+  `?v=<hash>` (`Vutuv.Posts.PostImage.url/2`), and a capability appended by
+  overwriting rather than joining would drop the buster and serve a year-cached
+  copy of the old frame. Shared with `Vutuv.MastodonApi.Presenter`, which puts
+  the same capability on the attachment URLs beside the body's.
+  """
+  def append_query(url, nil), do: url
+
+  def append_query(url, query),
+    do: url |> URI.parse() |> URI.append_query(query) |> to_string()
+
+  @doc """
   Rewrites root-relative `/path` URLs in rendered HTML to absolute `base/path`,
   for a standalone context (an RSS/JSON feed, a downloaded CV, a federated
   note). The negative lookahead leaves a protocol-relative `//host` URL alone:
   it already resolves, and prefixing it would corrupt it into `base//host`.
   `attrs` picks which URL attributes to rewrite (both `src` and `href` by
   default; the CV passes just `["href"]`). Shared by VutuvWeb.Feeds,
-  VutuvWeb.Fediverse.Docs and VutuvWeb.CV.Html so the tricky guard lives once.
+  VutuvWeb.Fediverse.Docs, VutuvWeb.CV.Html and the Mastodon adapter so the
+  tricky guard lives once.
+
+  A trailing slash on `base` is trimmed here rather than at each call site: this
+  appends its own, and `https://host//path` is a **protocol-relative** URL
+  naming a host called `path` — every picture in the document would quietly
+  point at somebody else's server. Callers spell the base three different ways,
+  so only one of them can guard it, and that is this one.
   """
   def absolutize_html(html, base, attrs \\ ["src", "href"]) do
+    base = String.trim_trailing(base, "/")
     String.replace(html, ~r{(#{Enum.join(attrs, "|")})="/(?!/)}, "\\1=\"#{base}/")
   end
 
@@ -1198,7 +1232,7 @@ defmodule VutuvWeb.Markdown do
   # Swaps every allowed `![alt](url)` for a plain-text marker and returns the
   # replacement <img> HTML per marker. The marker carries a per-render nonce,
   # so an author cannot type a literal marker that collides with a real one.
-  defp extract_inline_images(text, images) do
+  defp extract_inline_images(text, images, image_query) do
     allowed = allowed_srcs(images)
     nonce = marker_nonce()
 
@@ -1216,9 +1250,10 @@ defmodule VutuvWeb.Markdown do
 
         {image, canonical_src} ->
           marker = "VUTUVIMG#{nonce}N#{length(replacements)}END"
+          src = append_query(canonical_src, image_query && image_query.(image))
 
           {String.replace(text, full, marker, global: false),
-           [{marker, inline_img_html(canonical_src, alt, image, alignment)} | replacements]}
+           [{marker, inline_img_html(src, alt, image, alignment)} | replacements]}
       end
     end)
   end
