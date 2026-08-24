@@ -8398,6 +8398,13 @@ defmodule Vutuv.Fediverse do
   # Nothing recorded: a post from before the records existed. The current
   # followers and the current Note id are a worse address than the real one, and
   # a much better one than silence.
+  # Whether this post was ever addressed to an inbox. The rows are written at
+  # enqueue time, so this says "we sent it somewhere", never "somebody received
+  # it" — enough for the one question it answers (issue #1585), since a post that
+  # was never enqueued has no remote copy to bring up to date.
+  defp addressed_anywhere?(post_id),
+    do: Repo.exists?(from(d in PostDelivery, where: d.post_id == ^post_id))
+
   defp fallback_targets(%User{} = user, %Post{} = post) do
     case recipients(user, post) do
       [] -> []
@@ -8482,10 +8489,34 @@ defmodule Vutuv.Fediverse do
 
   Nothing to do when a *second* picture on the same post is still pending: the
   post waits for the last one.
+
+  **Nothing queued any more means the scan came back too late** (issue #1585):
+  the ceiling ran out, the `Create` went to the followers carrying no
+  attachment, and its row was deleted on success. Nothing else ever revisits a
+  post, so the picture would never arrive — the release therefore falls back to
+  the `Update` an edit sends. That marks the remote copy as edited although the
+  author changed nothing, which is much the smaller loss of the two.
+
+  It is also the only thing that ever federates a **book review's cover**:
+  `Vutuv.Posts.ReviewCovers` fetches that in a task *after* the post has
+  committed, so the post is long gone by the time there is a cover to hold it
+  for and `Posts.awaiting_image_release?/1` never held it at all.
   """
   def images_settled(post_id) when is_binary(post_id) do
     if enabled?() and not Posts.awaiting_image_release?(post_id) do
-      release_held_deliveries(post_id)
+      # Asked before the release, so the Deliverer draining a row mid-call
+      # cannot read as "nothing was queued" and earn the post a second
+      # delivery. A row that is merely *due* has not been sent either, and it
+      # re-renders with the picture at send time.
+      #
+      # Post-level, so a post still retrying one inbox while the others already
+      # hold the attachment-less copy keeps the old behaviour for those. Closing
+      # that needs the per-inbox reading `revoke_post/1` does.
+      if Repo.exists?(held_deliveries(post_id)) do
+        release_held_deliveries(post_id)
+      else
+        update_delivered_post(post_id)
+      end
     end
 
     :ok
@@ -8493,16 +8524,42 @@ defmodule Vutuv.Fediverse do
 
   def images_settled(_post_id), do: :ok
 
+  # Every queued delivery built from this post, whether or not it is due yet.
+  defp held_deliveries(post_id) do
+    markers = Enum.map(["post_create", "post_update"], &"#{&1}:#{post_id}")
+    from(d in Delivery, where: d.rebuild_from in ^markers)
+  end
+
   defp release_held_deliveries(post_id) do
     now = DateTime.utc_now(:second)
-    markers = Enum.map(["post_create", "post_update"], &"#{&1}:#{post_id}")
 
-    {count, _} =
-      from(d in Delivery, where: d.rebuild_from in ^markers and d.next_attempt_at > ^now)
+    {nudged, _} =
+      post_id
+      |> held_deliveries()
+      |> where([d], d.next_attempt_at > ^now)
       |> Repo.update_all(set: [next_attempt_at: now])
 
-    if count > 0, do: Deliverer.nudge()
-    count
+    if nudged > 0, do: Deliverer.nudge()
+    :ok
+  end
+
+  # A post deleted while the scanner thought about it has nothing to bring up to
+  # date, and `federate_post_update/1` turns one whose audience closed in the
+  # meantime into the revocation instead — both of which are why this goes
+  # through the ordinary edit path rather than enqueueing an Update itself.
+  defp update_delivered_post(post_id) do
+    # `Repo.get/2` and not `Posts.get_post/1`: that one is the page-rendering
+    # loader (10 queries — screenshots, verified links, the author) where
+    # `maybe_federate/3` re-reads the author for itself and preloads exactly
+    # what the Note needs. A bare struct also sends `Posts.restricted?/1` to its
+    # forced-fresh clause, which is the reading we want for an audience that may
+    # have closed while the scanner was thinking.
+    with true <- addressed_anywhere?(post_id),
+         %Post{} = post <- Repo.get(Post, post_id) do
+      federate_post_update(post)
+    end
+
+    :ok
   end
 
   @doc """

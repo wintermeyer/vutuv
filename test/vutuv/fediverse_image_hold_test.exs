@@ -15,9 +15,11 @@ defmodule Vutuv.FediverseImageHoldTest do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Delivery
+  alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.ReviewCover
 
   setup do
     user = insert(:activated_user, fediverse_followers?: true)
@@ -61,7 +63,11 @@ defmodule Vutuv.FediverseImageHoldTest do
       release!(image)
       assert :ok == Fediverse.images_settled(post.id)
 
-      assert [%Delivery{next_attempt_at: due}] = Repo.all(Delivery)
+      # Still the one Create, pulled forward and still carrying its marker: it
+      # re-renders with the picture at send time. A second row here would mean
+      # the late-scan Update below had delivered the same post twice.
+      assert [%Delivery{next_attempt_at: due, rebuild_from: marker}] = Repo.all(Delivery)
+      assert marker == "post_create:#{post.id}"
       assert DateTime.compare(due, DateTime.utc_now()) != :gt
     end
 
@@ -128,6 +134,72 @@ defmodule Vutuv.FediverseImageHoldTest do
       # Guards against the hold and the renderer drifting apart: both ask this.
       assert ImageScans.released?("approved")
       refute ImageScans.released?("pending")
+    end
+  end
+
+  describe "a scan that settles after the post already federated (issue #1585)" do
+    test "sends the picture after it with an Update", %{user: user} do
+      post = insert(:post, user: user, body: "Mit Bild")
+      image = pending_image!(post)
+      assert :ok == Fediverse.federate_new_post(post)
+
+      # The hold ran out and the Create went to the follower: the queue row is
+      # deleted on success, and the PostDelivery record of where it went stays.
+      # That is exactly the state issue #1585 was reported from.
+      Repo.delete_all(Delivery)
+      assert Repo.aggregate(PostDelivery, :count) > 0
+
+      release!(image)
+      assert :ok == Fediverse.images_settled(post.id)
+
+      assert [%Delivery{} = delivery] = Repo.all(Delivery)
+      assert delivery.activity_json =~ ~s("type":"Update")
+      # The whole point: the follower that already has the text now gets the
+      # picture. Without the Update it never would - nothing else revisits a
+      # post whose scan came back late.
+      assert delivery.activity_json =~ PostImage.url(image, "large")
+    end
+
+    test "carries a book review's cover, which never federated before", %{user: user} do
+      # A cover is fetched in a task AFTER the post commits, so `cover_status`
+      # is still "pending" here and `awaiting_image_release?/1` never holds the
+      # post — the Create leaves without it and nothing used to follow.
+      post = insert(:post, user: user, body: "Ein Buch")
+      review = insert(:post_review, post: post, cover_status: "pending")
+
+      assert :ok == Fediverse.federate_new_post(post)
+      assert [%Delivery{rebuild_from: nil}] = Repo.all(Delivery)
+      Repo.delete_all(Delivery)
+
+      review
+      |> Ecto.Changeset.change(
+        cover_status: "ready",
+        cover: "cover.avif",
+        cover_moderation: "approved"
+      )
+      |> Repo.update!()
+
+      assert :ok == Fediverse.images_settled(post.id)
+
+      assert [%Delivery{} = delivery] = Repo.all(Delivery)
+      assert delivery.activity_json =~ ~s("type":"Update")
+      assert delivery.activity_json =~ ReviewCover.url(Repo.reload!(review))
+    end
+
+    test "stays silent for a post that never federated" do
+      # No followers, so `federate_new_post/1` enqueued nothing and recorded
+      # nothing. An Update here would be addressed at nobody.
+      lonely = insert(:activated_user, fediverse_followers?: true)
+      {:ok, _actor} = Fediverse.ensure_actor(lonely)
+      post = insert(:post, user: lonely, body: "Mit Bild")
+      image = pending_image!(post)
+
+      assert :skip == Fediverse.federate_new_post(post)
+
+      release!(image)
+      assert :ok == Fediverse.images_settled(post.id)
+
+      assert Repo.all(Delivery) == []
     end
   end
 
