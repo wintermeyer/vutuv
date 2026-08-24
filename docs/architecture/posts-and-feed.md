@@ -467,7 +467,7 @@ the other tabs fold their labels to zero width and the quote takes the room
 behaves like a phone on a desktop screen); measured on a 356 px bar, that is
 the difference between no room for a quote at all and about twenty characters.
 
-Four rules keep it from becoming a nuisance, and each one has a test:
+Five rules keep it from becoming a nuisance, and each one has a test:
 
 * **One quote per window.** A second arrival inside it cannot replace the
   first (both would stand for less time than it takes to read one) and cannot
@@ -489,6 +489,16 @@ Four rules keep it from becoming a nuisance, and each one has a test:
   the branch for the tab the reader *is* on, so the teaser asks
   `filtered_pattern/3` itself and falls back to the bare dot. The bar is the
   one place a member cannot scroll past it.
+* **Not into a browser left over from the previous release.** A deploy does
+  not reload an open feed: the socket reconnects to the new release and
+  patches into a document downloaded hours ago. Everything else the feed
+  streams is markup whose CSS that browser already has — the ticker is new
+  markup with a stylesheet and a hook of its own, so on the v7.347.0 deploy
+  the quote drew as an unstyled 200-character paragraph across the tab bar
+  that no clock ever took away. `mount_feed/2` reads `static_changed?/1` once
+  (connect params exist only during mount, and it answers only because
+  `root.html.heex` marks both assets `phx-track-static`); a stale client keeps
+  the dot and skips the quote until the next full page load.
 
 Only ever one tab at a time: `other_source/1` is nil on "All" and the two named
 tabs partition the feed, so a third source would be the first thing to need a

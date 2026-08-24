@@ -94,6 +94,13 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mount_feed(socket, user) do
+    # Is this browser still running the previous release's CSS and JS? A deploy
+    # does not reload an open feed — the socket reconnects to the new release
+    # and patches into a document downloaded hours ago — and `static_changed?/1`
+    # is the only way to know (`phx-track-static` in the root layout feeds it).
+    # Read here because connect params exist only during mount.
+    socket = assign(socket, :stale_client?, static_changed?(socket))
+
     # The tab they left on (issue #1499). It opens the page *and* keys the
     # handoff below: the stash holds one entry per member, so two devices
     # opening /feed within its 15s TTL would otherwise let one take a page the
@@ -1163,9 +1170,20 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   # Whether a fresh window may open: the member wants quotes at all, the tab
-  # bar exists to put one in, and the last window's silence is over.
+  # bar exists to put one in, the last window's silence is over — and the
+  # browser can render a quote at all.
+  #
+  # That last one is the deploy case, and it is the one thing on this page that
+  # a stale browser cannot survive. Everything else the feed patches in is
+  # markup whose CSS that browser already has; the ticker is new markup with a
+  # stylesheet and a hook of its own, so on a feed left open across the v7.347.0
+  # deploy the quote drew as an unstyled 200-character paragraph across the tab
+  # bar that no clock ever took away (the `FeedTicker` hook was not in that
+  # bundle either). A stale client keeps the dot, which is markup from #1503 and
+  # renders fine, and skips the quote until the next full page load.
   defp ticker_due?(socket) do
     socket.assigns.source_tabs? and is_nil(socket.assigns.tab_ticker) and
+      not socket.assigns.stale_client? and
       Prefs.get(socket.assigns.current_user, :feed_tab_ticker?) and not quiet?(socket)
   end
 

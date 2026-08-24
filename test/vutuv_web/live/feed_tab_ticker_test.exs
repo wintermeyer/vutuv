@@ -4,9 +4,10 @@ defmodule VutuvWeb.FeedTabTickerTest do
 
   The dot from #1503 says *that* something landed over there; the ticker says
   *what*, for a few seconds. What is worth testing is not that it renders but
-  the four rules that keep it from becoming a nuisance: one quote per window,
-  a count instead of a second quote, a window that ends on its own (and not by
-  a later patch putting it back), and a silence afterwards.
+  the rules that keep it from becoming a nuisance: one quote per window, a
+  count instead of a second quote, a window that ends on its own (and not by a
+  later patch putting it back), a silence afterwards — and no quote at all into
+  a browser still running the previous release's stylesheet and hooks.
 
   Not async: one test sets `:feed_ticker_cooldown_ms`, which is application env
   — process state the SQL sandbox does not roll back, and every open feed reads
@@ -115,13 +116,20 @@ defmodule VutuvWeb.FeedTabTickerTest do
 
   # The reader on one named tab, with the other one populated so the tab bar
   # exists at all (`Posts.fediverse_feed_available?/1` asks the sources).
-  defp reader_on(conn, tab) do
+  # `connect_params` is what the browser sends on join — the stale-assets test
+  # below puts a `_track_static` in there.
+  defp reader_on(conn, tab, connect_params \\ %{}) do
     {conn, user} = create_and_login_user(conn)
     {_author, _post} = followed_post(user, "an older post")
     account = remote_account(user, "them")
     cached_post(account, "written out there")
 
-    {:ok, view, _html} = live(conn, ~p"/feed")
+    # `get/2` recycles a conn that has already been sent, and recycling drops
+    # `private` — connect params included. Recycling here, before they are put,
+    # is what gets them as far as the join.
+    {:ok, view, _html} =
+      conn |> recycle() |> put_connect_params(connect_params) |> live(~p"/feed")
+
     render_click(view, "filter-source", %{"type" => tab})
 
     %{view: view, user: user, account: account}
@@ -327,6 +335,69 @@ defmodule VutuvWeb.FeedTabTickerTest do
       refute ticker(view)
       # Still worth a dot: something did land over there.
       assert dotted?(view, "vutuv")
+    end
+  end
+
+  describe "a browser left over from the previous release" do
+    # What v7.347.0 looked like on a feed that had been open since before the
+    # deploy: the socket reconnects to the new release and patches the quote
+    # into a document whose stylesheet has never heard of `.filter-tab-ticker`
+    # and whose bundle has no `FeedTicker` hook — so the quote drew as an
+    # unstyled 200-character paragraph across the tab bar, and no clock ever
+    # took it away. Everything else on that page is older than the browser's
+    # copy and survives the patch; the ticker is the half that cannot.
+    setup do
+      # `static_changed?/1` compares what the client reports against the
+      # digest manifest, which only exists in a release. Two entries that
+      # cannot match, so the comparison has something to answer with.
+      Phoenix.Config.put(VutuvWeb.Endpoint, :cache_static_manifest_latest, %{
+        "assets/app.css" => "assets/app-nowdeployed.css"
+      })
+
+      on_exit(fn ->
+        Phoenix.Config.put(VutuvWeb.Endpoint, :cache_static_manifest_latest, nil)
+      end)
+    end
+
+    test "gets the dot and no quote", %{conn: conn} do
+      %{view: view, user: user} =
+        reader_on(conn, "fediverse", %{
+          "_track_static" => ["http://localhost/assets/app-fromthelastrelease.css"]
+        })
+
+      author = followed_author(user)
+      {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
+
+      refute ticker(view)
+      assert dotted?(view, "vutuv")
+    end
+
+    test "while the browser on this release still gets both", %{conn: conn} do
+      # The other half of the gate: with assets the server recognises, the
+      # window opens as before. Without this the test above would pass on a
+      # ticker that is simply broken.
+      %{view: view, user: user} =
+        reader_on(conn, "fediverse", %{
+          "_track_static" => ["http://localhost/assets/app-nowdeployed.css"]
+        })
+
+      author = followed_author(user)
+      {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
+
+      assert ticker(view)
+      assert dotted?(view, "vutuv")
+    end
+  end
+
+  describe "the layout the gate reads" do
+    test "marks both assets, or the client reports nothing to compare", %{conn: conn} do
+      # `phx-track-static` is the whole input to `static_changed?/1`: without
+      # it the client sends no manifest, the comparison answers "unchanged"
+      # for every browser, and the gate above is dead code.
+      html = conn |> get(~p"/login") |> html_response(200)
+
+      assert html =~ ~r/<link[^>]+phx-track-static[^>]*href="[^"]*app[^"]*\.css/
+      assert html =~ ~r/<script[^>]+phx-track-static[^>]*src="[^"]*app[^"]*\.js/
     end
   end
 end
