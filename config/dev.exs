@@ -16,7 +16,26 @@ config :vutuv, :ollama_url, "http://10.28.0.3:11434,http://localhost:11434"
 # is read with compile_env and is never set in prod/test. Remove this line (or
 # set it to false) to restore the strict `default-src 'self'` policy. See the
 # long note in VutuvWeb.Plug.ContentSecurityPolicy.
+#
+# It now carries the Tidewave toolbar too, which is easy to miss: Tidewave adds
+# https://tidewave.ai to `script-src` by REWRITING that directive, and only if
+# it is already there. Without this flag the policy emits no `script-src` at
+# all, `default-src 'self'` governs, and the toolbar script is refused — so
+# turning this off costs the toolbar as well as `browser_eval`.
 config :vutuv, csp: [allow_eval: true]
+
+# Tidewave's toolbar (injected into every dev HTML page, see the Tidewave plug
+# in VutuvWeb.Endpoint) lets you point at an element in the running app and hand
+# the agent the HEEx that rendered it. That mapping only exists if LiveView
+# annotates its output: `debug_heex_annotations` wraps each component render in
+# HTML comments naming its file and line, `debug_attributes` stamps the same
+# origin onto the elements themselves. Phoenix 1.8 generates both for new apps;
+# vutuv predates that, so they are set here. DEV ONLY — both add markup that has
+# no business in a production page, and neither config/prod.exs nor
+# config/test.exs sets them.
+config :phoenix_live_view,
+  debug_heex_annotations: true,
+  debug_attributes: true
 
 config :vutuv, VutuvWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT") || "4000")],

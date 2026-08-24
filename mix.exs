@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.345.0",
+      version: "7.345.1",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -40,9 +40,9 @@ defmodule Vutuv.MixProject do
       {:phoenix_html_helpers, "~> 1.0"},
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.4", only: :dev},
-      # AI-assisted dev tooling: mounts an MCP endpoint at /tidewave/mcp in
-      # the dev server so coding agents can inspect the running app.
-      {:tidewave, "~> 0.5", only: :dev},
+      # AI-assisted dev tooling: an MCP endpoint plus an in-page toolbar for
+      # coding agents. Plugged (and explained) in VutuvWeb.Endpoint.
+      {:tidewave, "~> 0.9", only: :dev},
       # LiveView's test helpers (`Phoenix.LiveViewTest`) parse the rendered DOM
       # with lazy_html; required for the connected-mount assertions.
       {:lazy_html, ">= 0.1.0", only: :test},

@@ -83,9 +83,21 @@ defmodule VutuvWeb.Endpoint do
     )
   end
 
-  # Tidewave (dev-only dep) exposes an MCP endpoint at /tidewave/mcp so AI
-  # coding agents can inspect the running app (eval code, query Ecto, read
-  # logs). The guard keeps the plug out of test and prod builds.
+  # Tidewave (dev-only dep) does two things from this one plug: it exposes an
+  # MCP endpoint at /tidewave/mcp so AI coding agents can inspect the running
+  # app (eval code, query Ecto, read logs), and since v0.8 it injects its
+  # toolbar into every dev HTML page — dead pages and the LiveView initial
+  # render alike — so you can point at an element in the browser and hand the
+  # agent the HEEx behind it (config/dev.exs supplies that mapping).
+  #
+  # Position matters: the plug raises if it runs after the request body has
+  # been parsed or after Phoenix.LiveReloader, so it must stay above the
+  # `if code_reloading?` block. It does its work from a `before_send` callback,
+  # which is what lets it rewrite the header VutuvWeb.Plug.ContentSecurityPolicy
+  # sets much later in the router pipeline (it prepends https://tidewave.ai to
+  # `script-src` and `connect-src`, and drops `frame-ancestors`).
+  #
+  # The guard keeps the plug out of test and prod builds.
   if Code.ensure_loaded?(Tidewave) do
     plug(Tidewave)
   end

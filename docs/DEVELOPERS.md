@@ -61,7 +61,13 @@ text + HTML bodies, bounce handling) is described in
 
 ### AI tooling in development
 
-[Tidewave](https://tidewave.ai) runs in the dev server (dev-only dependency): AI coding agents can connect to the MCP endpoint at http://localhost:4000/tidewave/mcp to eval code in the running app, query Ecto and read logs.
+[Tidewave](https://tidewave.ai) runs in the dev server (dev-only dependency) and offers two ways in.
+
+An **MCP endpoint** at http://localhost:4000/tidewave/mcp, where an AI coding agent evals code in the running app, queries Ecto and reads logs.
+
+A **toolbar** injected into every dev HTML page: point at an element in the browser and hand the agent the HEEx that rendered it. Its Connect icon lets an agent already on the MCP endpoint drive and see that same tab. The source mapping comes from `debug_heex_annotations` and `debug_attributes` in `config/dev.exs`; the toolbar script loads from tidewave.ai, so it needs network access.
+
+Neither reaches production: the dependency is `only: :dev` and `VutuvWeb.Endpoint` plugs Tidewave behind a `Code.ensure_loaded?/1` guard.
 
 ### Admin access
 
