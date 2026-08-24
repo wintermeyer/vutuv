@@ -1185,7 +1185,23 @@ defmodule VutuvWeb.UI do
   one place that answers "how do I follow this without a vutuv account", with
   every way to do it under a heading of its own.
 
-  Two halves, each optional. The `:fediverse` slot carries the address block
+  Three parts, each optional, in the order the page recommends them. First the
+  **account offer**, for a logged-out visitor only: an account here is the best
+  way to follow somebody — the posts arrive in a feed the reader can answer in
+  — and a card that listed only the two ways around registering would be
+  quietly talking people out of the product. It is also the one thing an
+  anonymous visitor is offered on a profile at all, since the header's follow
+  pill needs a session. A signed-in reader has an account already, so the half
+  disappears and the card opens with the ways that need none.
+
+  A bridging line then says out loud what the rest is for ("No vutuv account?
+  These ways work too:"), because the point is not that the offer was ignored
+  but that there is a way for people who do not want one. It renders only
+  beneath the offer, so a signed-in reader never reads an answer to a question
+  nobody asked them.
+
+  Then the halves that need no account. The `:fediverse` slot carries the
+  address block
   (`<.follow_us_from_elsewhere>`, a moved member's forwarding address, or an
   owner's invite to switch federation on) — the page owns that body because
   the three cases differ per page. The feed half is here: the
@@ -1197,6 +1213,10 @@ defmodule VutuvWeb.UI do
   give up. `<.feed_button>` alone is right on `/:slug/posts`, which is one
   page about one feed; a card that hands out an address should hand out the
   address.
+
+  `account_offer` (a logged-out viewer) needs `name` for its sentence; the
+  wording stays clear of pronouns, since it names a member on one page and an
+  organization on the other.
 
   `id` is the page's prefix, not a full id: the card is `<prefix>-subscribe`
   and the Fediverse half keeps `<prefix>-fediverse`, the id the whole card
@@ -1212,26 +1232,66 @@ defmodule VutuvWeb.UI do
   """
   attr(:id, :string, required: true)
   attr(:feed_href, :any, default: nil, doc: "feed path; falsy renders no feed half")
+  attr(:account_offer, :boolean, default: false, doc: "true for a logged-out viewer")
+  attr(:name, :string, default: nil, doc: "whose profile or page this is, for the offer")
   attr(:class, :any, default: nil)
   slot(:fediverse)
 
   def subscribe_card(assigns) do
     ~H"""
     <.card
-      :if={@fediverse != [] or @feed_href}
+      :if={@account_offer or @fediverse != [] or @feed_href}
       id={"#{@id}-subscribe"}
       class={subscribe_card_class(@class)}
     >
       <.section_title>{gettext("Subscribe")}</.section_title>
 
-      <div :if={@fediverse != []} id={"#{@id}-fediverse"} class="scroll-mt-24">
+      <div :if={@account_offer} id={"#{@id}-account"}>
+        <h3 class={subscribe_heading_class()}>{gettext("With a vutuv account")}</h3>
+        <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+          {gettext(
+            "The best way: follow %{name} here. New posts land in your feed, and you can reply and join in.",
+            name: @name
+          )}
+        </p>
+        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <.button href={~p"/"} id={"#{@id}-account-signup"}>
+            {gettext("Create a free account")}
+          </.button>
+          <.link
+            href={~p"/login"}
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Already a member? Sign in here.")}
+          </.link>
+        </div>
+      </div>
+
+      <p
+        :if={@account_offer and (@fediverse != [] or @feed_href)}
+        class={[subscribe_divider_class(), "text-sm text-slate-600 dark:text-slate-400"]}
+      >
+        {gettext("No vutuv account? These ways work too:")}
+      </p>
+
+      <div
+        :if={@fediverse != []}
+        id={"#{@id}-fediverse"}
+        class={["scroll-mt-24", @account_offer && "mt-4"]}
+      >
         <h3 class={subscribe_heading_class()}>{gettext("Fediverse")}</h3>
         {render_slot(@fediverse)}
       </div>
 
       <div
         :if={@feed_href}
-        class={@fediverse != [] && "mt-6 border-t border-slate-100 pt-5 dark:border-slate-800"}
+        class={
+          cond do
+            @fediverse != [] -> subscribe_divider_class()
+            @account_offer -> "mt-4"
+            true -> nil
+          end
+        }
       >
         <h3 class={subscribe_heading_class()}>
           {if @fediverse != [],
@@ -1254,8 +1314,12 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  # Both halves of the Subscribe card are named by the same small heading.
+  # Every part of the Subscribe card is named by the same small heading.
   defp subscribe_heading_class, do: "text-sm font-semibold text-slate-900 dark:text-white"
+
+  # The hairline that sets one part off from the one above it.
+  defp subscribe_divider_class,
+    do: "mt-6 border-t border-slate-100 pt-5 dark:border-slate-800"
 
   # `<.card>` takes a plain class string, and the card is always an anchor
   # target, so `scroll-mt-24` is not the caller's to remember.

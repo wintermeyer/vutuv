@@ -999,6 +999,15 @@ they already are. Every way to do that lives here, under a heading of its own,
 and the Posts card's header carries a quiet **"Subscribe ›"** sign
 (`<.subscribe_link>`) that jumps to it.
 
+**A vutuv account** — for a logged-out visitor only, and first, because it is
+the best answer the page has: follow the member here and the posts arrive in a
+feed the reader can answer in. It is also the only thing an anonymous visitor is
+offered on a profile at all — the header's follow pill needs a session — so
+without it the card would be quietly talking people out of the product. The
+button goes to `/`, which is the sign-up form, beside the "Already a member?"
+link. A bridging line under it ("Kein vutuv-Konto? Das geht auch:") says what
+the rest of the card is for; a signed-in reader sees neither.
+
 **Fediverse** — for a member who federates, and only while `FEDIVERSE_ENABLED`
 is on. Their address there, `@member@vutuv.de`, with the shared `data-copy`
 button, and below it a **"Follow from your own server"** field: the visitor
@@ -1015,12 +1024,13 @@ redirect) still land on the address they were written for.
 **RSS** — the member's feed, `/:slug/posts/feed.xml`, once they have posted:
 the `<.feed_button>` pill for a reader extension beside the absolute URL as a
 copy target for a standalone reader. Its heading says "Or with an RSS reader"
-only when the Fediverse half is above it; on the majority of profiles, which do
-not federate, the card is the feed alone.
+only when the Fediverse half is above it (after the bridging line an "Or" would
+dangle off a colon); on the majority of profiles, which do not federate, it is
+the only way listed under the offer.
 
-The card renders when either half does and nothing at all when neither, which
-is what keeps the header's sign from ever pointing at nothing —
-`UserHTML.subscribe_card?/2` is the one predicate both sites read. The feed
+The card renders when any part does and nothing at all when none, which is what
+keeps the header's sign from ever pointing at nothing —
+`UserHTML.subscribe_card?/3` is the one predicate both sites read. The feed
 pill used to sit in the Posts card header (issue #1287) and was the loudest
 control on that section for the rarer of the two ways to follow a member, while
 the Fediverse address had no link above the fold at all.

@@ -32,11 +32,13 @@ defmodule VutuvWeb.UserHTML do
   Does the profile show a Subscribe card — and therefore its Posts-header sign?
 
   One predicate rather than the same boolean written at both sites: the card
-  renders for either half (a Fediverse address, a feed with posts behind it),
-  and the header's `<.subscribe_link>` must point at it exactly when it is
-  there, or the anchor is a jump to nothing.
+  renders for any of its parts (the account offer a logged-out visitor gets, a
+  Fediverse address, a feed with posts behind it), and the header's
+  `<.subscribe_link>` must point at it exactly when it is there, or the anchor
+  is a jump to nothing.
   """
-  def subscribe_card?(fediverse, posts_total), do: fediverse != nil or posts_total > 0
+  def subscribe_card?(current_user, fediverse, posts_total),
+    do: current_user == nil or fediverse != nil or posts_total > 0
 
   @doc """
   One compact user row (avatar, name, work line, follow/unfollow) shared by

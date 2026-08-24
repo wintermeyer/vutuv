@@ -382,11 +382,20 @@ defmodule VutuvWeb.FeedControllerTest do
         |> html_response(200)
 
       assert html =~ "Abonnieren"
-      # This member does not federate, so the feed is the card's only half and
-      # its heading must not offer an alternative to nothing.
+      # This member does not federate, so the feed is the card's only half
+      # below the offer, and its heading must not offer an alternative to
+      # nothing.
       assert html =~ "Mit einem RSS-Reader"
       refute html =~ "Oder mit einem RSS-Reader"
       refute html =~ "Abbestellen"
+
+      # The account offer and the line that says what the rest is for.
+      assert html =~ "Mit einem vutuv-Konto"
+      assert html =~ "Kostenloses Konto erstellen"
+      assert html =~ "Kein vutuv-Konto? Das geht auch:"
+      # "Create a free account" fuzzy-matched the landing page's heading
+      # ("Erstellen Sie Ihren Account"), which is a sentence, not a button.
+      refute html =~ "Erstellen Sie Ihren Account"
     end
 
     test "the post archive carries the same feed button" do
@@ -401,16 +410,57 @@ defmodule VutuvWeb.FeedControllerTest do
     end
 
     # A member with nothing to say yet still has a feed worth subscribing to,
-    # but their profile renders neither a Posts card nor a Subscribe card for a
-    # visitor — so neither can be the only visible way there.
+    # but their profile renders no Posts card for a visitor and the Subscribe
+    # card holds only the account offer — so the rail chip is the one visible
+    # way to the feed.
     test "a visitor's empty profile keeps the rail chip when there is no Posts card" do
       html = build_conn() |> get("/feed_author") |> html_response(200)
       document = LazyHTML.from_document(html)
 
       assert Enum.empty?(LazyHTML.query(document, "#profile-posts"))
-      assert Enum.empty?(LazyHTML.query(document, "#profile-subscribe"))
       assert Enum.empty?(LazyHTML.query(document, "#profile-posts-feed"))
+      refute Enum.empty?(LazyHTML.query(document, "#profile-account"))
       assert html =~ ~r|<a[^>]*href="/feed_author/posts/feed\.xml"[^>]*>\s*RSS\s*</a>|
+    end
+
+    # Anonymous is the whole audience for this card, and an account is the best
+    # answer it has: the posts arrive in a feed the reader can answer in. The
+    # other two ways are what we offer people who do not want one, which the
+    # card says in those words rather than leaving them to infer the ranking.
+    test "the card offers an account first, and says what the rest is for", %{author: author} do
+      create_post!(author, %{"body" => "Subscribe-worthy"})
+
+      document =
+        build_conn()
+        |> get("/feed_author")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      card = LazyHTML.query(document, "#profile-subscribe")
+      assert LazyHTML.attribute(LazyHTML.query(card, "#profile-account-signup"), "href") == ["/"]
+      assert LazyHTML.text(card) =~ "No vutuv account?"
+
+      # The offer leads: it is the first heading in the card.
+      assert [first | _] = LazyHTML.query(card, "h3") |> LazyHTML.text() |> String.split("\n")
+      assert first =~ "vutuv account"
+    end
+
+    test "a signed-in reader is not sold an account they have", %{author: author} do
+      create_post!(author, %{"body" => "Subscribe-worthy"})
+
+      {conn, _reader} =
+        build_conn() |> Plug.Test.init_test_session(%{}) |> create_and_login_user()
+
+      document =
+        conn
+        |> get("/feed_author")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert Enum.empty?(LazyHTML.query(document, "#profile-account"))
+      refute LazyHTML.text(LazyHTML.query(document, "#profile-subscribe")) =~ "No vutuv account?"
+      # The feed half is still there, and with nothing above it it drops the "Or".
+      refute Enum.empty?(LazyHTML.query(document, "#profile-posts-feed"))
     end
   end
 end

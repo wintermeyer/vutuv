@@ -572,7 +572,14 @@ defmodule VutuvWeb.OrganizationLive.Show do
                 profile does. Rendered when that card renders, so the anchor is
                 never a dead jump. --%>
                 <.subscribe_link
-                  :if={subscribe_card?(@fediverse, @fediverse_invite?, @posts_total)}
+                  :if={
+                    subscribe_card?(
+                      @current_user,
+                      @fediverse,
+                      @fediverse_invite?,
+                      @posts_total
+                    )
+                  }
                   id="organization-subscribe-link"
                   href="#organization-subscribe"
                 />
@@ -723,6 +730,8 @@ defmodule VutuvWeb.OrganizationLive.Show do
             feed_href={
               @posts_total > 0 && VutuvWeb.Feeds.organization_feed_path(@organization)
             }
+            account_offer={@current_user == nil}
+            name={@organization.name}
           >
             <:fediverse :if={@fediverse || @fediverse_invite?}>
               <%= if @fediverse do %>
@@ -924,12 +933,12 @@ defmodule VutuvWeb.OrganizationLive.Show do
 
   # Does the page show a Subscribe card — and therefore its Posts-header sign?
   # One predicate rather than the same boolean written at both sites: the card
-  # renders for any of its halves (a Fediverse address, an owner's invite to
-  # switch federation on, a feed with posts behind it), and the header's
-  # `<.subscribe_link>` must point at it exactly when it is there, or the anchor
-  # is a jump to nothing.
-  defp subscribe_card?(fediverse, fediverse_invite?, posts_total),
-    do: fediverse != nil or fediverse_invite? or posts_total > 0
+  # renders for any of its parts (the account offer a logged-out visitor gets, a
+  # Fediverse address, an owner's invite to switch federation on, a feed with
+  # posts behind it), and the header's `<.subscribe_link>` must point at it
+  # exactly when it is there, or the anchor is a jump to nothing.
+  defp subscribe_card?(current_user, fediverse, fediverse_invite?, posts_total),
+    do: current_user == nil or fediverse != nil or fediverse_invite? or posts_total > 0
 
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
 

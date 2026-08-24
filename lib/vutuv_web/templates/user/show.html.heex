@@ -466,7 +466,7 @@ the resulting ~200px rail width. --%>
       for — had no link above the fold at all. Rendered exactly when that card
       renders, so the anchor is never a dead jump. --%>
       <.section_header title={pngettext("profile", "Post", "Posts", @posts_total)}>
-        <:action :if={subscribe_card?(@fediverse, @posts_total)}>
+        <:action :if={subscribe_card?(@current_user, @fediverse, @posts_total)}>
           <.subscribe_link id="profile-subscribe-link" href="#profile-subscribe" />
         </:action>
       </.section_header>
@@ -1014,6 +1014,8 @@ the resulting ~200px rail width. --%>
     <.subscribe_card
       id="profile"
       feed_href={@posts_total > 0 && VutuvWeb.Feeds.user_feed_path(@user)}
+      account_offer={@current_user == nil}
+      name={full_name(@user)}
       class="order-3 md:order-none"
     >
       <:fediverse :if={@fediverse}>
