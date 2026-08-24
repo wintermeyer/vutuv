@@ -145,6 +145,10 @@ scan on it wastes tokens.
 **3. Merge state.** `CONFLICTING`/`DIRTY` → hand back and ask for a rebase onto
 `origin/main`, and say *why* it matters: a conflicting PR gets no CI run at all,
 because GitHub cannot build the merge ref, which reads like broken Actions.
+**Measure the conflict, never read it off the status:** `git fetch origin
+pull/N/head:pr<N>` then `git merge-tree --write-tree origin/main pr<N>` names the
+actual conflicting files in seconds, and `DIRTY` on a PR that sat for weeks is
+usually nothing but the version line.
 **One carve-out:** when the only conflict is the version line in `mix.exs`, that
 collision is our merge rate, not their mistake — rebase it yourself, re-bump,
 and do not count a round.
