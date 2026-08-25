@@ -19,6 +19,18 @@ const DESKTOP = window.matchMedia("(hover: hover) and (pointer: fine)")
 
 const SEQUENCE_WINDOW_MS = 1500
 
+// A keydown that starts inside a shadow tree arrives at document retargeted to
+// the shadow HOST, so `e.target` is that host's plain <div> and the isTyping()
+// guard below waves it through — which is how "n", "/" and "?" got swallowed
+// while typing into the Tidewave dev toolbar (it mounts into an open shadow
+// root on every dev page and stops only pointer events at its host). vutuv
+// itself uses no shadow DOM, so a retargeted keydown is by definition somebody
+// else's widget: leave the key to it.
+function fromForeignShadowRoot(e) {
+  const path = e.composedPath?.()
+  return !!path && path.length > 0 && path[0] !== e.target
+}
+
 function isTyping(el) {
   if (!el) return false
   const tag = el.tagName
@@ -173,6 +185,8 @@ function resetSequence() {
 }
 
 function handleKey(e) {
+  if (fromForeignShadowRoot(e)) return
+
   // Escape closes the overlay even on touch / inside fields, so a keyboard user
   // is never trapped. Everything else below is desktop-only.
   if (e.key === "Escape") {

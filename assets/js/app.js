@@ -28,6 +28,10 @@ import { TagInput, enhanceTagInput } from "./tag_input"
 // The photo lightbox on the post permalink (self-contained page-level
 // enhancement, deliberately outside every LiveView root; see lightbox.js).
 import "./lightbox"
+// The phone tab bar's Feed tab as a back-to-top control once /feed is scrolled
+// (self-contained; marks <html>, which is outside every LiveView root, so no
+// patch can drop the state. See scroll_top_tab.js).
+import "./scroll_top_tab"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the

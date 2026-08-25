@@ -34,12 +34,18 @@ defmodule VutuvWeb.MobileTabBarCssTest do
 
   @shell Path.expand("../../lib/vutuv_web/live/shell_live.ex", __DIR__)
   @components_css Path.expand("../../assets/css/components.css", __DIR__)
+  @app_css Path.expand("../../assets/css/app.css", __DIR__)
   @layout Path.expand("../../lib/vutuv_web/templates/layout/app.html.heex", __DIR__)
 
   # Comments name selectors and properties; strip them so the assertions only
   # ever see real rules.
-  defp components_css do
-    Regex.replace(~r{/\*.*?\*/}s, File.read!(@components_css), "")
+  defp components_css, do: strip_comments(@components_css)
+
+  # The unlayered block — the only place a rule can beat a cascade layer.
+  defp app_css, do: strip_comments(@app_css)
+
+  defp strip_comments(path) do
+    Regex.replace(~r{/\*.*?\*/}s, File.read!(path), "")
   end
 
   # The class list of the fixed mobile tab bar in ShellLive.
@@ -124,6 +130,43 @@ defmodule VutuvWeb.MobileTabBarCssTest do
            <main> and the footer clear the tab bar by its own height plus air.
            When the bar grew by the home-indicator inset, that padding had to
            grow with it, or the last card sits behind the bar.
+           """
+  end
+
+  # The Feed tab's second face. ShellLive renders both glyphs and marks the tab
+  # (`data-scroll-top`) on the page it points at; `scroll_top_tab.js` puts
+  # `data-page-scrolled` on <html> once the reader is a screen down. Three
+  # things have to hold, and the third is the one that broke in a browser while
+  # every static check passed: the arrow only ever appears under BOTH conditions
+  # (a tab that turned into an arrow on a page it cannot scroll would be a lie),
+  # the two glyphs are never drawn at once, and the rule lifting the arrow's
+  # `hidden` sits somewhere it can actually win.
+  test "the Feed tab shows the arrow only while its own page is scrolled" do
+    css = components_css()
+
+    assert css =~
+             ~r/html\[data-page-scrolled\][^{]*\[data-scroll-top\][^{]*\[data-tab-icon=["']top["']\]\s*\{[^}]*display\s*:\s*block\s*!important/,
+           """
+           No rule revealing the back-to-top arrow — and it must carry
+           `!important`. The arrow rests on an inline `display: none`, so that a
+           phone still on the previous release's stylesheet draws one glyph and
+           not two, and an inline style yields to an important rule and to
+           nothing else. Without it the rule is in the stylesheet, reads as if
+           it applies, and does nothing.
+           """
+
+    assert css =~
+             ~r/html\[data-page-scrolled\][^{]*\[data-scroll-top\][^{]*\[data-tab-icon=["']feed["']\]\s*\{[^}]*display\s*:\s*none/,
+           """
+           The feed glyph must be hidden while the arrow shows, or the tab
+           draws both icons side by side once the page is scrolled.
+           """
+
+    refute app_css() =~ ~r/\[data-tab-icon=/,
+           """
+           The tab-icon swap belongs in `components.css`: it has no Tailwind
+           utility to beat, which is the only thing the unlayered block in
+           `app.css` exists for. Keep that block small.
            """
   end
 

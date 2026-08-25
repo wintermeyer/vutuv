@@ -1059,7 +1059,16 @@ defmodule VutuvWeb.ShellLive do
         ]}
       >
         <%= if @user_id do %>
-          <.tab href={~p"/feed"} label={gettext("Feed")} active={on_route?(@path, "/feed")}><.icon_feed /></.tab>
+          <%!-- On /feed this tab points at the page under the reader's thumb, so
+          once they are a screen down it scrolls back to the top instead of
+          reloading (`scroll_top`; `assets/js/scroll_top_tab.js` takes the
+          press). The arrow is the promise that it will: a control that behaves
+          differently has to look different first, or the press reads as a
+          reload. --%>
+          <.tab href={~p"/feed"} label={gettext("Feed")} active={on_route?(@path, "/feed")} scroll_top>
+            <.icon_feed data-tab-icon="feed" />
+            <.icon_scroll_top />
+          </.tab>
         <% end %>
         <.tab href={~p"/search"} label={gettext("Search")} active={on_route?(@path, "/search")}><.icon_search /></.tab>
         <%= if @user_id do %>
@@ -1091,6 +1100,7 @@ defmodule VutuvWeb.ShellLive do
   attr(:label, :string, required: true)
   attr(:count, :integer, default: 0)
   attr(:active, :boolean, default: false)
+  attr(:scroll_top, :boolean, default: false)
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
@@ -1102,6 +1112,7 @@ defmodule VutuvWeb.ShellLive do
     <.link
       href={@href}
       data-nav-item
+      data-scroll-top={(@active && @scroll_top) || nil}
       aria-current={@active && "page"}
       class={[
         "flex flex-col items-center justify-center gap-0.5",
@@ -1173,14 +1184,60 @@ defmodule VutuvWeb.ShellLive do
     """
   end
 
+  attr(:rest, :global)
+
   defp icon_feed(assigns) do
     ~H"""
-    <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+    <svg
+      class="h-6 w-6"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      viewBox="0 0 24 24"
+      {@rest}
+    >
       <path
         stroke-linecap="round"
         stroke-linejoin="round"
         d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6v-3Z"
       />
+    </svg>
+    """
+  end
+
+  # The Feed tab's second face, drawn in place of the glyph above once the feed
+  # is a screen down (the rule lives in `components.css`).
+  #
+  # It rests on an inline `display: none`, and that is a deploy decision rather
+  # than a style one. A deploy reloads nothing: an open phone keeps the previous
+  # release's stylesheet and the reconnecting socket patches this markup into
+  # it, so an arrow whose only "off" switch were a rule in the NEW stylesheet
+  # would sit beside the feed glyph, two icons crowding one tab, until the
+  # reader happened to reload — the shape the feed's tab ticker shipped in
+  # v7.347.0. Inline styles ship with the markup, so the old stylesheet needs to
+  # know nothing.
+  #
+  # Why not the `hidden` attribute, which reads better: Tailwind's preflight
+  # spells it `display: none !important` inside `@layer base`, and an important
+  # declaration in a layer beats an important one outside every layer — the
+  # cascade reverses layer order for important declarations and puts unlayered
+  # last. So `hidden` here cannot be lifted by any author rule at all; measured
+  # in a browser, the arrow simply never appeared. An inline style is an
+  # ordinary declaration and yields to the one `!important` rule in
+  # `components.css`. Nothing here carries a Tailwind display utility either
+  # (it would out-cascade the inline style, the issue #880 trap).
+  defp icon_scroll_top(assigns) do
+    ~H"""
+    <svg
+      style="display: none"
+      data-tab-icon="top"
+      class="h-6 w-6"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
     </svg>
     """
   end

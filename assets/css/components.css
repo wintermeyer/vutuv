@@ -1266,6 +1266,40 @@ tr[data-row-changed] > td {
 }
 
 
+/* ---------- Phone tab bar: the Feed tab's back-to-top face ---------- */
+/* On /feed the Feed tab points at the page under the reader's thumb, so once
+   they are a screen down it scrolls back up instead of reloading — and it says
+   so first, by wearing an arrow. Two conditions have to meet, one owned by each
+   side: the SERVER marks the tab `data-scroll-top`, but only on the page it
+   points at, and the CLIENT (`assets/js/scroll_top_tab.js`) puts
+   `data-page-scrolled` on <html> once there is something to come back from. A
+   tab that turned into an arrow on a page it cannot scroll would be a lie, so
+   neither condition alone is enough. That same attribute is what the press
+   handler reads, so the picture and the behaviour cannot disagree.
+
+   The marker sits on <html> rather than on the tab because the tab bar is
+   rendered by ShellLive, where the next morphdom patch — an unread badge
+   ticking is enough — drops every attribute the server did not render, which is
+   what the nav press paint in `app.css` has to work around. <html> belongs to
+   the root layout and no patch walks it.
+
+   The `!important` is not a shortcut. The arrow rests on an inline
+   `display: none` so that a phone still running the previous release's
+   stylesheet across a deploy draws one glyph instead of two (see
+   `icon_scroll_top` in shell_live.ex), and an inline style yields to an
+   important rule and to nothing else. The obvious `hidden` attribute does NOT
+   work here: preflight spells it `display: none !important` in `@layer base`,
+   and important declarations reverse the layer order with unlayered styles
+   last, so nothing an author writes can lift it. `display` still has exactly
+   one owner on each glyph — neither carries a display utility (#880). */
+html[data-page-scrolled] a[data-scroll-top] [data-tab-icon="top"] {
+  display: block !important;
+}
+html[data-page-scrolled] a[data-scroll-top] [data-tab-icon="feed"] {
+  display: none;
+}
+
+
 /* ---------- Link screenshots (`ul.thumbs` on the links page) ---------- */
 /* Flex rows (the legacy 400px float + 415px text margin overflowed the 48rem
    card): a capped thumbnail beside a shrinkable text block whose URL

@@ -419,6 +419,96 @@ defmodule VutuvWeb.ShellLiveTest do
     end
   end
 
+  describe "the Feed tab as a back-to-top control" do
+    # On /feed the phone's Feed tab points at the page the member is already
+    # reading, so once they have scrolled a screen down the useful press is
+    # "back to the top", not a reload of what is under their thumb. The server
+    # only lays the ground: it marks the tab (`data-scroll-top`, on the active
+    # page alone) and renders the second glyph. `assets/js/scroll_top_tab.js`
+    # sets `data-page-scrolled` on <html> once the page is a screen down, which
+    # is both what swaps the glyph (components.css) and what the press handler
+    # answers to — so the picture and the behaviour cannot disagree.
+
+    test "on /feed the mobile Feed tab is marked and carries the arrow", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/feed"}))
+
+      assert has_element?(view, ~s(nav[data-nav-bar="tabs"] a[href="/feed"][data-scroll-top]))
+      assert has_element?(view, ~s(a[data-scroll-top] svg[data-tab-icon="feed"]))
+      assert has_element?(view, ~s(a[data-scroll-top] svg[data-tab-icon="top"]))
+    end
+
+    # The arrow rests on an INLINE `display: none`, and that is a deploy
+    # decision rather than a style one. A deploy reloads nothing: an open phone
+    # keeps the previous release's CSS and the reconnecting socket patches this
+    # new markup into it, so a glyph whose only "off" switch is a rule in the
+    # new stylesheet would draw as a second icon crowding the Feed tab until the
+    # member reloads — the shape the feed's tab ticker shipped in v7.347.0. An
+    # inline style travels with the markup, so the old stylesheet needs to know
+    # nothing, and it yields to the one `!important` rule in components.css. The
+    # `hidden` attribute cannot do this job: preflight spells it
+    # `display: none !important` inside `@layer base`, which no author rule can
+    # lift (important declarations reverse the layer order and put unlayered
+    # last), and the arrow measurably never appeared.
+    test "the arrow ships hidden inline, so a pre-deploy stylesheet draws one glyph", %{
+      conn: conn
+    } do
+      user = insert(:user)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/feed"}))
+
+      doc = view |> render() |> LazyHTML.from_fragment()
+
+      assert [style] =
+               doc
+               |> LazyHTML.query(~s(a[data-scroll-top] svg[data-tab-icon="top"]))
+               |> LazyHTML.attribute("style")
+
+      assert style =~ ~r/display\s*:\s*none/
+
+      # The feed glyph is the resting state and must not be hidden by anything.
+      assert [] =
+               doc
+               |> LazyHTML.query(~s(a[data-scroll-top] svg[data-tab-icon="feed"]))
+               |> LazyHTML.attribute("style")
+
+      refute has_element?(view, ~s(a[data-scroll-top] svg[hidden]))
+    end
+
+    test "off the feed the Feed tab carries no back-to-top marker", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: session_for(user, %{"path" => "/search"})
+        )
+
+      refute has_element?(view, ~s(a[data-scroll-top]))
+    end
+
+    # The desktop bar is not a tab bar: its Feed item stays an ordinary link.
+    # Counted rather than refuted, because both navs render an `a[href="/feed"]`
+    # and the marker is what the press handler keys off — exactly one may carry
+    # it, and the test above says which one that is.
+    test "only the phone tab is a back-to-top control, not the desktop link", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/feed"}))
+
+      marked =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s(a[data-scroll-top]))
+
+      assert Enum.count(marked) == 1
+    end
+  end
+
   test "renders the anonymous shell for a stale cookie user_id with no profile data", %{
     conn: conn
   } do
@@ -670,6 +760,16 @@ defmodule VutuvWeb.ShellLiveTest do
     end
 
     test "appears and counts up when a registration confirms", %{conn: conn} do
+      # The shell only re-runs the query when the member half of the figure
+      # actually MOVED against what it mounted with, and what it mounted with is
+      # `PeopleCounter.counts()` — `:persistent_term`, which the SQL sandbox does
+      # not roll back. So a figure typed in here ("1") differs from the mounted
+      # one only by luck: on a run where something earlier had already put the
+      # counter at 1, the shell correctly ignored the message and this test
+      # failed, seed-dependently and nowhere near its cause. Count up from what
+      # the socket really mounted with instead.
+      mounted = Vutuv.PeopleCounter.counts()
+
       {:ok, view, _html} =
         live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
 
@@ -678,12 +778,16 @@ defmodule VutuvWeb.ShellLiveTest do
       # Vutuv.PeopleCounter broadcasts the new figures the moment a sign-up
       # confirms; the shell recomputes today's tally from the member half.
       joined_today(1)
-      send(view.pid, {:people_count, %{members: 1, fediverse: 0, total: 1}})
+      send(view.pid, {:people_count, moved(mounted, 1)})
       assert has_element?(view, @pill, "1")
 
       joined_today(1)
-      send(view.pid, {:people_count, %{members: 2, fediverse: 0, total: 2}})
+      send(view.pid, {:people_count, moved(mounted, 2)})
       assert has_element?(view, @pill, "2")
+    end
+
+    defp moved(%{members: members, fediverse: fediverse}, by) do
+      %{members: members + by, fediverse: fediverse, total: members + by + fediverse}
     end
 
     test "names the exact figure in the viewer's language", %{conn: conn} do
