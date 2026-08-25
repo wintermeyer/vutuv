@@ -58,9 +58,12 @@ defmodule Vutuv.Reports do
         # Both author kinds (issue #1334): the day's posts include what
         # organizations published, and the detail lines name whoever wrote them.
         posts: sample(Post, [:user, :organization], day_start, day_end, limit),
-        reposts: sample(PostRepost, [:user, :post], day_start, day_end, limit),
-        likes: sample(PostLike, [:user, :post], day_start, day_end, limit),
-        bookmarks: sample(PostBookmark, [:user, :post], day_start, day_end, limit),
+        # Both actor kinds here too: a page likes, reposts and bookmarks in its
+        # own name, so `:organization` has to come along or `Posts.actor/1`
+        # pays a lookup per row.
+        reposts: sample(PostRepost, [:user, :organization, :post], day_start, day_end, limit),
+        likes: sample(PostLike, [:user, :organization, :post], day_start, day_end, limit),
+        bookmarks: sample(PostBookmark, [:user, :organization, :post], day_start, day_end, limit),
         # All three owner kinds: a remote actor follows a member, a page
         # (issue #1334) or a topic (issue #1330), and the detail line names
         # whichever of them gained the follower.

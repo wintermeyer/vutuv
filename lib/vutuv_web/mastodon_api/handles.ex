@@ -20,6 +20,7 @@ defmodule VutuvWeb.MastodonApi.Handles do
   alias Vutuv.Moderation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias VutuvWeb.MastodonApi.Statuses
 
   @doc """
   The account `query` names, resolving an unknown `@user@host` over the network.
@@ -72,7 +73,7 @@ defmodule VutuvWeb.MastodonApi.Handles do
   end
 
   defp remote_account(conn, address) do
-    subject = conn.assigns.current_organization || conn.assigns.current_user
+    subject = Statuses.viewer(conn)
 
     case Fediverse.resolve_remote_account(subject, "@" <> address) do
       {:ok, account} -> account

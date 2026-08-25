@@ -9,6 +9,7 @@ defmodule VutuvWeb.MastodonApi.SearchController do
   alias Vutuv.Repo
   alias Vutuv.Tags
   alias VutuvWeb.MastodonApi.Handles
+  alias VutuvWeb.MastodonApi.Statuses
 
   def search(conn, %{"q" => query} = params) do
     query = String.trim(query)
@@ -72,7 +73,7 @@ defmodule VutuvWeb.MastodonApi.SearchController do
 
   defp statuses(_no_free_text, _limit, _viewer), do: []
 
-  defp viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
+  defp viewer(conn), do: Statuses.viewer(conn)
 
   # Mastodon's Tag entity, rendered by the one owner of that shape
   # (`Presenter.tag/2`) so the search results, `/api/v1/tags/:id` and

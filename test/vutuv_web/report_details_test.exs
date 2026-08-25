@@ -73,6 +73,40 @@ defmodule VutuvWeb.ReportDetailsTest do
              ]
     end
 
+    # A page likes, reposts and bookmarks too (issue #1336), and its row carries
+    # `organization_id` with `user_id` NULL — the same nullable pair the post
+    # entries and the follower entries already have a fix for. These three read
+    # `like.user` / `repost.user` / `bookmark.user` straight, so the first act by
+    # a page put `nil` into `actor_label/1` and killed the nightly report inside
+    # its own `handle_info`: no mail, no error anybody sees. Calibrated against
+    # the un-fixed code — it really does raise here.
+    test "a page's like, repost and bookmark name the page, not a nil member" do
+      organization = insert(:organization)
+      author = insert(:user, username: "hanna")
+      post = insert(:post, [user: author, body: "Gelesen."] ++ at(@on_day))
+
+      for schema <- [Vutuv.Posts.PostLike, Vutuv.Posts.PostRepost, Vutuv.Posts.PostBookmark] do
+        Repo.insert!(
+          struct(
+            schema,
+            [organization_id: organization.id, post_id: post.id] ++ at(@on_day)
+          )
+        )
+      end
+
+      report = Reports.daily(@date)
+
+      for key <- [:likes, :reposts, :bookmarks] do
+        assert section(report, key).entries == [
+                 %{
+                   primary: "Gelesen.",
+                   secondary: organization.name,
+                   path: Posts.path(post)
+                 }
+               ]
+      end
+    end
+
     test "a new Fediverse follower of a member names them and links the profile" do
       user = insert(:user, username: "erik")
 

@@ -97,6 +97,24 @@ defmodule VutuvWeb.OrganizationFollowingWebTest do
     refute Repo.reload!(follow).muted
   end
 
+  # A member pastes whatever their browser handed them, and the `www.` alias is
+  # the same site. Asking `MastodonApi.client_host?/1` rather than a literal
+  # list of the two hosts we happen to think of is what keeps the full address
+  # on the local branch instead of falling through to the foreign one.
+  test "a full local address survives the www. alias and a shouted host", %{conn: conn} do
+    {conn, organization} = publishing_page(conn)
+    member = insert(:activated_user, username: "www-follow-target")
+    host = VutuvWeb.Endpoint.host()
+
+    {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}/following")
+
+    render_submit(view, "follow-local", %{
+      "local_follow" => %{"account" => "@www-follow-target@www.#{host}"}
+    })
+
+    assert Social.organization_follow_as_organization(organization, member)
+  end
+
   # The page is gated before it mounts, but a socket that is already open
   # outlives the grant that opened it, so every write re-asks the role rather
   # than trusting the mount. Calibrated against the un-fixed code: without the

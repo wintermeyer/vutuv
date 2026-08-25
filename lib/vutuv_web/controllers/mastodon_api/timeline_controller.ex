@@ -21,6 +21,7 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   alias Vutuv.Tags.Timeline
   alias Vutuv.UUIDv7
   alias VutuvWeb.MastodonApi.Pagination
+  alias VutuvWeb.MastodonApi.Statuses
 
   def home(conn, params) do
     page = Pagination.params(params, strip: &Pagination.bare_id/1)
@@ -53,7 +54,7 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
 
   # Who is reading, so the hearts and bookmarks in the answer are theirs: a
   # page identity engages as the page, a member as themselves.
-  defp viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
+  defp viewer(conn), do: Statuses.viewer(conn)
 
   # `local=true` is this site's own posts, `remote=true` the ones that reached
   # it from other networks, neither is both. Mastodon sends these as strings, and

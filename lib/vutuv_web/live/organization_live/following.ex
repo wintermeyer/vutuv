@@ -206,8 +206,13 @@ defmodule VutuvWeb.OrganizationLive.Following do
       [handle] when handle != "" ->
         {:ok, String.downcase(handle)}
 
+      # `client_host?/1`, not a literal list of the two hosts we happen to think
+      # of: it also answers for the `www.` alias and normalizes a shouted or
+      # fully-qualified host. Without it a pasted `@member@www.<our host>` falls
+      # through to `:remote` — the fall-through-to-the-foreign-path failure the
+      # project rule was written about.
       [handle, host] when handle != "" ->
-        if String.downcase(host) in [MastodonApi.local_domain(), MastodonApi.api_host()],
+        if MastodonApi.client_host?(host),
           do: {:ok, String.downcase(handle)},
           else: :remote
 

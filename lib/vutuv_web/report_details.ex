@@ -100,9 +100,13 @@ defmodule VutuvWeb.ReportDetails do
   defp entry(:spam_removals, event), do: person_entry(event.case.owner)
 
   defp entry(:posts, post), do: post_entry(post, Vutuv.Posts.author(post))
-  defp entry(:reposts, repost), do: post_entry(repost.post, repost.user)
-  defp entry(:likes, like), do: post_entry(like.post, like.user)
-  defp entry(:bookmarks, bookmark), do: post_entry(bookmark.post, bookmark.user)
+
+  # Through `Posts.actor/1`, not `row.user`: a page likes, reposts and bookmarks
+  # too (issue #1336), and its row carries `organization_id` with `user_id`
+  # NULL. Reading the column straight put `nil` into `actor_label/1` below.
+  defp entry(:reposts, repost), do: post_entry(repost.post, Vutuv.Posts.actor(repost))
+  defp entry(:likes, like), do: post_entry(like.post, Vutuv.Posts.actor(like))
+  defp entry(:bookmarks, bookmark), do: post_entry(bookmark.post, Vutuv.Posts.actor(bookmark))
 
   defp entry(:fediverse_followers, follower) do
     {label, path} = follow_target(follower)

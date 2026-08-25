@@ -944,6 +944,32 @@ defmodule Vutuv.Posts do
   def author(%Post{} = post), do: post.organization
 
   @doc """
+  Who performed an engagement — a like, a repost or a bookmark — as the world
+  sees it: the `%User{}` who pressed it, or the `%Organization{}` it was done in
+  the name of (issue #1336).
+
+  The twin of `author/1`, and it exists for the same reason: these three rows
+  carry the same nullable pair (`user_id` beside `organization_id`), so reading
+  `like.user` is `nil` the moment a page likes something. That is not a visible
+  error anywhere — it is a `nil` handed onward — and it killed the nightly
+  report inside its own `handle_info` the first time a page liked a post, which
+  loses the day's mail with nothing in the log to say why.
+
+  Like `author/1`, this matches on the **column** and falls back to a lookup
+  when the association was not preloaded, so a caller that forgot the preload
+  gets an answer rather than an `%Ecto.Association.NotLoaded{}`.
+  """
+  def actor(%{organization_id: nil, user: %NotLoaded{}, user_id: user_id}),
+    do: Repo.get(User, user_id)
+
+  def actor(%{organization_id: nil} = row), do: row.user
+
+  def actor(%{organization: %NotLoaded{}, organization_id: organization_id}),
+    do: Repo.get(Organization, organization_id)
+
+  def actor(row), do: row.organization
+
+  @doc """
   The text a post carries, whichever kind of post it is: a member's Markdown
   `body`, a cached remote post's or a remote reply's plain `content_text`.
   Nil where nothing was written (a photograph and no words).

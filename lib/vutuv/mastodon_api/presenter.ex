@@ -425,8 +425,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     %{
       followers_count: counts[:followers] || 0,
       following_count: counts[:following] || 0,
-      statuses_count: counts[:statuses] || 0,
-      last_status_at: counts[:last_status_at]
+      statuses_count: counts[:statuses] || 0
     }
   end
 

@@ -225,7 +225,11 @@ defmodule VutuvWeb.MastodonApi.StreamingSocket do
     %{
       id: notification[:id],
       type: Notifications.type(notification),
-      created_at: notification[:at] && to_string(notification[:at]),
+      # `Presenter.timestamp/1`, the one place that decides a Mastodon time —
+      # not `to_string/1`, which writes "2026-08-17 10:00:00" and is what a
+      # client built on `ISO8601DateFormatter` with `.withFractionalSeconds`
+      # cannot parse at all, so every pushed notification read as "now".
+      created_at: Presenter.timestamp(notification[:at]),
       account: Notifications.account(notification),
       status: nil
     }
