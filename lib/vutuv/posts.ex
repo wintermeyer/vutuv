@@ -5781,11 +5781,17 @@ defmodule Vutuv.Posts do
   defp broadcast_new_post(%Post{user_id: nil}), do: :ok
 
   defp broadcast_new_post(%Post{} = post) do
-    broadcast_to_followers(post.user_id, new_post_event(post.id, post.user_id))
+    broadcast_to_followers(post.user_id, new_post_event(post))
   end
 
-  defp new_post_event(post_id, author_id),
-    do: {:new_post, %{post_id: post_id, author_id: author_id}}
+  # `at` is the stamp this post will carry in the merged feed, the way the
+  # fediverse nudge carries one (issue #1503): it lets a subscriber ask its own
+  # sources for their newest row "at least as new as this" rather than trusting
+  # the fan-out about who may see it. The browser tab's teaser needs exactly
+  # that (issue #1681); every existing matcher takes the map apart by key and
+  # is unaffected.
+  defp new_post_event(%Post{} = post),
+    do: {:new_post, %{post_id: post.id, author_id: post.user_id, at: post.inserted_at}}
 
   @doc """
   Removes a post's auto-captured link screenshot on the author's request (the

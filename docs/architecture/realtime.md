@@ -381,6 +381,98 @@ exactly at that moment. A NULL means no note, which is what every account
 predating the feature keeps — the derived feed is otherwise retroactive, and a
 welcome years after the fact would be nonsense.
 
+### The browser tab's teaser (issue #1681)
+
+The tab title has carried two marks for a while: `(3)` for unread messages and
+notifications, and a `•` once a post arrived while the tab was in the
+background. The dot says *that* something landed. For a few seconds the title
+now says **what** — the author and the first words, paged through the tab a
+line at a time, then handed back to the page's own title. It is the feed's
+source-tab ticker one surface further out, and the two share their quote
+(`VutuvWeb.PostTeaser`: who wrote it, how it opens, and the one refusal).
+
+Measured in headless Chrome 151 against a real socket, a backgrounded tab reads:
+
+```
+    0 ms  "Feed - vutuv"
+  200 ms  "• @wintermeyer: Frisch"
+ 2000 ms  "• geflasht, unter zwei"
+ 4000 ms  "• Sekunden bis der Kessel"
+ 6000 ms  "• +1 more post"          (a second post landed at 2.5 s)
+ 8000 ms  "• Feed - vutuv"          (the dot stays until they come back)
+```
+
+**Both sources.** `ShellLive` already receives `{:new_post, …}` on every page,
+and now also takes the `{:remote_feed_arrival, …}` nudge it used to drop
+through its catch-all. That nudge carries no entry, because whether the write
+reaches *this* reader depends on their mutes, follow states, the audience and
+their language filter — so the teaser asks their own sources
+(`Posts.newest_source_entry/3`, the call the feed's ticker makes) and the
+browser-tab dot for a fediverse arrival rides on that answer rather than being
+pushed blind. A vutuv post's dot is unchanged: its fan-out is already scoped to
+the author's followers. `{:new_post, …}` gained an `at` stamp for the lookup,
+the way the fediverse nudge always carried one; a payload from the release
+before this one has none and simply skips the teaser for that deploy window.
+
+**The lookup is the cost, so the window is the budget.** This shell is mounted
+on every page of every logged-in member, so a quote built per arrival would
+turn one post by a well-followed member into thousands of feed queries in the
+same instant. Four rules bound it, and only the first is about taste:
+
+* **Nothing is spent on a tab the member is looking at.** The `TabBadge` hook
+  reports `document.hidden` on connect and on every change (`tab:visibility`),
+  and the server refuses until it hears the tab is in the background. That also
+  keeps the shell off the one page where the feed's own ticker is already
+  saying this — and it is the capability handshake the feed's ticker needed a
+  connect param for (issue #1679): only a bundle carrying this hook can send
+  the event, so a document loaded before this release simply never teases,
+  however many deploys behind it is.
+* **One quote per window.** From the second arrival the quote gives up and
+  becomes a count (`tab:teaser_more`, "+2 more posts") — no query, and the
+  window is not extended, or a busy source would own the tab.
+* **A silence after each window** (`:tab_teaser_cooldown_ms`, 30 s — much
+  longer than the ticker's 2 s, because this one is a rate limit and not an
+  animation). One socket therefore spends at most one lookup per open tab per
+  half minute, however busy the network is.
+* **The silence is armed on every outcome, refusals included.** A quote the
+  reader may not be shown — a muted word, or sources that return nothing — has
+  still spent its query, and a lookup retried on the very next arrival is the
+  one branch with no rate limit at all. It is also worst for exactly the member
+  who muted the word a busy account keeps writing.
+
+**Why frames and not a scrolling marquee.** A hidden tab is where the browser
+owns the clock in the strongest sense: timers are clamped to roughly one per
+second, and Chrome drops a chained timer to one per *minute* once a page has
+been hidden for five minutes ("intensive throttling"), which is precisely the
+tab this is for. So there are about four usable frames, a character scroll
+would spend most of them re-showing words it already showed, and whatever
+stands last has to be a line that is still true a minute later — hence a count
+or the page's own title at the end, never half a sentence.
+
+The hook asks for one second and the trace above shows two: wake-ups in a
+hidden tab are aligned to whole seconds, so a timeout re-armed just after one
+waits for the boundary after next. `ShellLive`'s `@frame_ms` is therefore the
+**measured** figure, not the requested one — it is what decides whether a
+second arrival still reaches a running animation as a count, and sized at the
+requested second the window closed at 3 s while the browser was on frame two.
+The cut itself
+(`PostTeaser.title_frames/1`, ~24 characters at word boundaries, a long URL
+cut hard so it cannot swallow the frames behind it) is done on the server, so
+it is testable without a browser and the wording stays in the reader's locale.
+
+One member preference (`Vutuv.Prefs`, group `:browser_tab`):
+`browser_tab_teaser?`, on, on /settings/preferences under the feed-tabs card.
+The example there plays in the settings page's own tab through the same hook,
+so it is the effect rather than a picture of it. The hint names the cost the
+switch exists for: a tab title also shows up in screenshots, in a window
+switcher and in a screen share.
+
+Both examples on that page read their switch from the **document**, not from an
+enclosing card. The kit's `<.card>` is a pile of utility classes and emits no
+`card` class, so the `.card` the feed-ticker example climbed to was always null
+and its play button had silently done nothing since v7.347.0 — found by driving
+the page in a real browser, which is the only thing that could have found it.
+
 ### Browser notifications (issue #1249)
 
 A member can have vutuv open in a tab they are not looking at. The tab title

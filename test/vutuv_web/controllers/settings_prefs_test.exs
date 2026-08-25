@@ -93,6 +93,50 @@ defmodule VutuvWeb.SettingsPrefsTest do
     end
   end
 
+  describe "the browser tab's teaser (issue #1681)" do
+    test "the card saves the switch and offers its own reset", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/settings/preferences") |> html_response(200)
+      assert html =~ ~s(action="/settings/browser_tab")
+      refute html =~ ~s(id="reset-browser-tab")
+
+      conn =
+        put(conn, ~p"/settings/browser_tab", %{"user" => %{"browser_tab_teaser?" => "false"}})
+
+      assert redirected_to(conn) == ~p"/settings/preferences"
+      assert Repo.get!(User, user.id).browser_tab_teaser? == false
+
+      html = conn |> get(~p"/settings/preferences") |> html_response(200)
+      assert html =~ ~s(id="reset-browser-tab")
+
+      conn = post(conn, ~p"/settings/browser_tab/reset")
+      assert redirected_to(conn) == ~p"/settings/preferences"
+      user = Repo.get!(User, user.id)
+      assert user.browser_tab_teaser? == nil
+      # Its own group, so the feed-tab card beside it is untouched.
+      assert user.feed_tab_ticker? == nil
+    end
+
+    test "the card reads in German for a German reader", %{conn: conn} do
+      # A German-only crash or a fuzzy-filled msgid passes every English check,
+      # so the new strings are asserted by name in the language they ship in.
+      {conn, _user} = create_and_login_user(conn)
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/settings/preferences")
+        |> html_response(200)
+
+      assert html =~ "Browser-Tab"
+      assert html =~ "Neue Beiträge im Browser-Tab anreißen"
+      assert html =~ "Bildschirmfreigabe"
+      assert html =~ "Achten Sie oben auf den Titel dieses Tabs."
+    end
+  end
+
   describe "rendering for readers" do
     test "an admin-set post default reaches an untouched member's feed markup" do
       with_installation_defaults(%{post_lines_desktop: 12})

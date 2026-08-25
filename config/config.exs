@@ -209,6 +209,16 @@ config :vutuv, :notification_digest_delay_minutes, 30
 # about taste.
 config :vutuv, :feed_ticker_cooldown_ms, 2_000
 
+# The silence after the browser tab's teaser closes (issue #1681), before that
+# socket may spend another feed lookup. Much longer than the one above, and for
+# a different reason: this is not about an animation flickering but about what
+# the whole feature costs. The shell is mounted on every page of every logged-in
+# member, so this figure is the rate limit that turns "a post arrived" into at
+# most one query per open tab per half minute, however busy the network is. A
+# title that rewrote itself every few seconds for an hour would also be its own
+# nuisance. Not a member setting: the switch is the taste, this is the budget.
+config :vutuv, :tab_teaser_cooldown_ms, 30_000
+
 config :vutuv, :reference_checks_enabled, true
 config :vutuv, :reference_check_model, "qwen3.6:27b"
 config :vutuv, :reference_check_model_url, nil

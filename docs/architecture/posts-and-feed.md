@@ -543,7 +543,10 @@ Five rules keep it from becoming a nuisance, and each one has a test:
 
 Only ever one tab at a time: `other_source/1` is nil on "All" and the two named
 tabs partition the feed, so a third source would be the first thing to need a
-rule for two open windows. Two member preferences (`Vutuv.Prefs`, group
+rule for two open windows. The **browser tab** teases the same arrival in its
+own title while the whole window sits behind something else (issue #1681, see
+[realtime.md](realtime.md)); the quote both surfaces show is
+`VutuvWeb.PostTeaser`, so they cannot drift. Two member preferences (`Vutuv.Prefs`, group
 `:feed_tabs`): `feed_tab_ticker?` (on) and `feed_tab_ticker_seconds` (8, from a
 fixed list of 4–20 on /settings/preferences, where an example plays the
 combination currently selected).

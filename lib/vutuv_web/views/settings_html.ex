@@ -126,6 +126,19 @@ defmodule VutuvWeb.SettingsHTML do
   end
 
   @doc """
+  The frames the browser tab's example plays (issue #1681), cut by the very
+  function that cuts a real arrival — so the example cannot promise a line the
+  tab would never actually show. Shares its sentence with the feed-tab card's
+  example one card above, which is the same post landing on the same evening.
+  """
+  def tab_teaser_example_frames do
+    VutuvWeb.PostTeaser.title_frames(%{
+      who: "@heikeberg",
+      text: gettext("Just flashed the new release, boot is under two seconds now")
+    })
+  end
+
+  @doc """
   One row on the settings subpages' cards: a title, an optional sub-line, and a
   right-aligned text link to where the thing is actually managed. Keeps the
   lists tidy and DRY.

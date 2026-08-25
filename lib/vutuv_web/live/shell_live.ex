@@ -37,14 +37,30 @@ defmodule VutuvWeb.ShellLive do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
+  alias Vutuv.ContentFilters
   alias Vutuv.Dashboard
   alias Vutuv.DayClock
   alias Vutuv.Organizations
   alias Vutuv.PeopleCounter
+  alias Vutuv.Posts
+  alias Vutuv.Prefs
   alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.NotificationLine
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.Presence
+
+  # How long one browser-tab frame really stands (issue #1681), which is what
+  # the server's window has to be measured in — it is the only thing deciding
+  # whether a second arrival still reaches a running animation as a count.
+  #
+  # The hook asks for a second and the browser gives it two: a hidden tab's
+  # timers are aligned to whole seconds, so a one-second timeout re-armed just
+  # after a wake-up misses the next boundary and waits for the one after.
+  # Measured in headless Chrome 151 against a real socket: frames at 0, 2.0,
+  # 4.0 s and the title handed back at 6.0. Sizing the window at the requested
+  # second instead closed it at 3 s, while the browser was still on frame two.
+  @frame_ms 2_000
 
   @impl true
   def mount(_params, session, socket) do
@@ -163,6 +179,10 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:user_admin?, user.admin?)
     |> assign_shell_defaults(path)
     |> assign(:browser_notifications?, user.browser_notifications?)
+    # The resolved member themselves, for the browser tab's teaser (issue
+    # #1681): it reads their preference and asks their own feed sources what
+    # arrived. Nothing renders from it, so it never reaches the client.
+    |> assign(:current_user, user)
     |> maybe_start_counts(user, path)
     |> maybe_start_new_members()
     |> maybe_start_presence(user_id, user.show_online_status?)
@@ -183,6 +203,16 @@ defmodule VutuvWeb.ShellLive do
     # for the anonymous shell and for the throwaway dead render, which raises
     # none anyway — the real value arrives with the authenticated mount.
     |> assign(:browser_notifications?, false)
+    # The browser tab's teaser (issue #1681). `tab_hidden?` is what the hook
+    # reports and starts false, so nothing is spent on a tab that has not said
+    # it is in the background; `teaser` holds the open window, `teaser_quiet_until`
+    # the silence after it, and `teaser_filters` this member's compiled content
+    # filters once something is actually quoted.
+    |> assign(:current_user, nil)
+    |> assign(:tab_hidden?, false)
+    |> assign(:teaser, nil)
+    |> assign(:teaser_quiet_until, nil)
+    |> assign(:teaser_filters, nil)
     |> assign(:presence_hidden_ids, MapSet.new())
     |> assign(:messages_count, 0)
     |> assign(:notifications_count, 0)
@@ -355,13 +385,33 @@ defmodule VutuvWeb.ShellLive do
   # their own tab. The hook only shows the "new posts" dot while the tab is
   # backgrounded and clears it the moment they return, so feed posts (which have
   # no read state) need no server-side unread tally.
-  def handle_info({:new_post, %{author_id: author_id}}, socket) do
+  #
+  # The dot says *that* something landed; `tab_teaser/3` below says what, for a
+  # few seconds, in the tab's own title (issue #1681).
+  def handle_info({:new_post, %{author_id: author_id} = payload}, socket) do
     socket =
-      if author_id == socket.assigns.user_id,
-        do: socket,
-        else: push_event(socket, "tab:new_post", %{})
+      if author_id == socket.assigns.user_id do
+        socket
+      else
+        {_result, socket} = tab_teaser(socket, :vutuv, payload[:at])
+        push_event(socket, "tab:new_post", %{})
+      end
 
     {:noreply, socket}
+  end
+
+  # Something landed through the fediverse (issue #1503): a followed account
+  # posted or boosted, or somebody here passed a remote post on. The nudge
+  # carries no entry, because whether that write reaches THIS reader depends on
+  # their mutes, their follow states, the audience and their language filter —
+  # so only their own sources can answer, and that is the lookup the teaser
+  # makes anyway. The dot therefore rides on that answer instead of being
+  # pushed blind. Every other subscriber of the member topic ignores this event.
+  def handle_info({:remote_feed_arrival, %{at: at}}, socket) do
+    case tab_teaser(socket, :fediverse, at) do
+      {:opened, socket} -> {:noreply, push_event(socket, "tab:new_post", %{})}
+      {_other, socket} -> {:noreply, socket}
+    end
   end
 
   # A member joined or left site-wide presence: re-push this viewer's (block-
@@ -588,6 +638,139 @@ defmodule VutuvWeb.ShellLive do
   end
 
   def handle_event("notify:seen", _params, socket), do: {:noreply, socket}
+
+  # The TabBadge hook reports whether this browser tab is in the background, on
+  # connect and on every change. The server needs the answer because the teaser
+  # below costs a query: a member sitting in front of the page would pay it for
+  # a title they are not reading, and on /feed the source-tab ticker is already
+  # saying the same thing beside the tabs.
+  #
+  # It doubles as the capability handshake the feed's ticker had to add
+  # separately (issue #1679): a deploy reloads no open tab, it only reconnects
+  # the socket into hours-old markup, and only a bundle carrying this hook can
+  # send this event — so an old document simply never teases, rather than being
+  # asked whether any of its assets are stale. False until the hook speaks.
+  def handle_event("tab:visibility", %{"hidden" => hidden}, socket) do
+    {:noreply, assign(socket, :tab_hidden?, hidden == true)}
+  end
+
+  ## ── The browser tab's teaser (issue #1681) ──
+  #
+  # The dot in the tab title says *that* a post arrived. For a few seconds the
+  # title says what: the author and the first words, paged through the tab one
+  # frame per second, then back to the page's own title. It is the feed's
+  # source-tab ticker (#1668) one surface further out, and it obeys the same
+  # three rules — one quote per window, the browser owns the clock, a silence
+  # after each window — for a fourth reason on top of theirs:
+  #
+  # **The lookup is the cost, so the window is the budget.** This shell is
+  # mounted on every page of every logged-in member and already receives every
+  # arrival, so a quote built per arrival would turn one post by a well-followed
+  # member into thousands of feed queries in the same instant. Instead a socket
+  # spends **one** `Posts.newest_source_entry/3` per window plus cooldown, and
+  # everything landing inside that window is counted rather than looked up
+  # ("+2 more posts"). The work is then bounded by open tabs, not by how busy
+  # the network is.
+  #
+  # The cooldown is armed on **every** outcome, the refusals included. A quote
+  # the reader may not be shown (a muted word, a post their sources do not
+  # return) still spent the query, and a lookup that is retried on the very next
+  # arrival because it found nothing is exactly the shape that has no rate limit
+  # at all — which is worst for the member who muted the word a busy account
+  # keeps writing.
+  defp tab_teaser(socket, source, at) do
+    cond do
+      not teasing?(socket) -> {:off, socket}
+      window_open?(socket) -> {:counted, count_teaser(socket)}
+      quiet?(socket) or is_nil(at) -> {:off, socket}
+      true -> open_teaser(socket, source, at)
+    end
+  end
+
+  # Three cheap refusals before anything is spent: nobody is logged in, the tab
+  # is the one being read, or the member switched the teaser off.
+  defp teasing?(%{assigns: %{current_user: %User{} = user, tab_hidden?: true}}),
+    do: Prefs.get(user, :browser_tab_teaser?)
+
+  defp teasing?(_socket), do: false
+
+  defp window_open?(%{assigns: %{teaser: %{until: until}}}), do: now_ms() < until
+  defp window_open?(_socket), do: false
+
+  defp quiet?(%{assigns: %{teaser_quiet_until: until}}) when is_integer(until),
+    do: now_ms() < until
+
+  defp quiet?(_socket), do: false
+
+  # `at` is the stamp the arrival will carry in the merged feed, so the sources
+  # can be asked for their newest row "at least as new as this". A payload from
+  # the release before this one carries none (the blue/green window), and that
+  # skips the teaser rather than quoting whatever happens to sit on top.
+  defp open_teaser(socket, source, at) do
+    {socket, filters} = teaser_filters(socket)
+    user = socket.assigns.current_user
+
+    frames =
+      case Posts.newest_source_entry(user, source, at) do
+        nil -> []
+        entry -> entry |> PostTeaser.quote_for(filters, user.id) |> PostTeaser.title_frames()
+      end
+
+    push_teaser(socket, frames)
+  end
+
+  defp push_teaser(socket, []), do: {:off, arm_quiet(socket, 0)}
+
+  defp push_teaser(socket, frames) do
+    id = System.unique_integer([:positive])
+    window = length(frames) * @frame_ms
+
+    socket =
+      socket
+      |> assign(:teaser, %{id: id, count: 1, until: now_ms() + window})
+      |> push_event("tab:teaser", %{id: id, frames: frames})
+      |> arm_quiet(window)
+
+    {:opened, socket}
+  end
+
+  # From the second arrival in the window the quote gives up and becomes a
+  # count: two quotes would each stand for less time than it takes to read one,
+  # and a queue of ten would hold the title for a minute and a half. The window
+  # is not extended by it either, or a busy source would own the tab.
+  defp count_teaser(socket) do
+    teaser = %{socket.assigns.teaser | count: socket.assigns.teaser.count + 1}
+
+    socket
+    |> assign(:teaser, teaser)
+    |> push_event("tab:teaser_more", %{id: teaser.id, text: more_line(teaser.count - 1)})
+  end
+
+  # `ngettext/3` binds %{count} to the raw integer and a `count:` binding does
+  # not override it, so the formatted figure travels under its own name.
+  defp more_line(extra) do
+    ngettext("+%{formatted} more post", "+%{formatted} more posts", extra,
+      formatted: compact_count(extra)
+    )
+  end
+
+  # Compiled once per socket, and only when a teaser is actually attempted: the
+  # vast majority of shells never raise one, and the query would otherwise ride
+  # every page load site-wide.
+  defp teaser_filters(%{assigns: %{teaser_filters: nil}} = socket) do
+    compiled = ContentFilters.compile_for(socket.assigns.current_user)
+    {assign(socket, :teaser_filters, compiled), compiled}
+  end
+
+  defp teaser_filters(socket), do: {socket, socket.assigns.teaser_filters}
+
+  defp arm_quiet(socket, window_ms),
+    do: assign(socket, :teaser_quiet_until, now_ms() + window_ms + teaser_cooldown_ms())
+
+  defp teaser_cooldown_ms,
+    do: Application.get_env(:vutuv, :tab_teaser_cooldown_ms, 30_000)
+
+  defp now_ms, do: System.monotonic_time(:millisecond)
 
   defp push_notify(%{assigns: %{browser_notifications?: false}} = socket, _payload), do: socket
 

@@ -826,6 +826,26 @@ defmodule VutuvWeb.SettingsController do
     reset_prefs(conn, :feed_tabs, gettext("Feed tab settings reset to the site defaults."))
   end
 
+  # The browser tab's teaser (issue #1681): whether a post arriving while this
+  # member is looking somewhere else pages its first line through the tab
+  # title. The sibling of the setting above, and on the same page for that
+  # reason — one is what the feed's tabs do, the other what the browser's tab
+  # does.
+  def update_browser_tab(conn, %{"user" => params}) do
+    save(
+      conn,
+      params,
+      "preferences.html",
+      ~p"/settings/preferences",
+      gettext("Browser tab settings saved."),
+      event: "preferences_changed"
+    )
+  end
+
+  def reset_browser_tab(conn, _params) do
+    reset_prefs(conn, :browser_tab, gettext("Browser tab settings reset to the site defaults."))
+  end
+
   # The like-attribution switch (issue #1233) lives on the visibility page
   # rather than under language & display, so its reset lands back there.
   def reset_privacy_prefs(conn, _params) do

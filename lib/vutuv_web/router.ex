@@ -1588,6 +1588,9 @@ defmodule VutuvWeb.Router do
     put("/feed_ticker", SettingsController, :update_feed_ticker)
     patch("/feed_ticker", SettingsController, :update_feed_ticker)
     post("/feed_ticker/reset", SettingsController, :reset_feed_ticker)
+    put("/browser_tab", SettingsController, :update_browser_tab)
+    patch("/browser_tab", SettingsController, :update_browser_tab)
+    post("/browser_tab/reset", SettingsController, :reset_browser_tab)
     # Clear a whole preference group back to nil = "inherit the installation
     # default" (Vutuv.Prefs) — the quiet reset links under the two cards.
     post("/post_display/reset", SettingsController, :reset_post_display)

@@ -418,10 +418,15 @@ function playTickerPreview(box) {
   const quote = box.querySelector("[data-ticker-preview-quote]")
   if (!bar || !tab || !dot || !quote) return
 
-  const form = box.closest(".card")
-  const on = form?.querySelector('input[type="checkbox"][name*="feed_tab_ticker"]')?.checked
+  // Both controls are read from the document, not from an enclosing card: the
+  // kit's <.card> is a pile of utility classes and emits no `card` class at
+  // all, so the `.card` this used to climb to was always null — `on` came back
+  // undefined and the button silently did nothing from the day it shipped
+  // (v7.347.0), which is exactly what an example is supposed to disprove.
+  // Their `name` is server-rendered from the field and unique on this page.
+  const on = document.querySelector('input[type="checkbox"][name*="feed_tab_ticker"]')?.checked
   const seconds =
-    parseInt(form?.querySelector('select[name*="feed_tab_ticker_seconds"]')?.value, 10) || 8
+    parseInt(document.querySelector('select[name*="feed_tab_ticker_seconds"]')?.value, 10) || 8
 
   // Whatever it did last time, back to the resting bar first.
   bar.classList.remove("filter-tabs--ticking")
@@ -455,6 +460,31 @@ document.addEventListener("click", (event) => {
   if (!event.target.closest("[data-ticker-preview-play]")) return
   const box = document.querySelector("[data-ticker-preview]")
   if (box) playTickerPreview(box)
+})
+
+// The browser tab's teaser has the same problem as the ticker above and one
+// twist (issue #1681): its stage is the tab this settings page is sitting in,
+// so the example can simply BE the thing, played in the real tab title through
+// the real hook. Nothing here animates anything — it hands the frames to
+// TabBadge, which owns document.title and would otherwise put the marker back
+// over whatever this wrote.
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-tab-teaser-play]")
+  if (!button) return
+
+  // Read from the document for the reason the ticker preview above records:
+  // there is no `.card` element to climb to.
+  const on = document.querySelector('input[type="checkbox"][name*="browser_tab_teaser"]')?.checked
+  if (!on) return
+
+  let frames = []
+  try {
+    frames = JSON.parse(button.dataset.frames || "[]")
+  } catch (_error) {
+    return
+  }
+
+  window.dispatchEvent(new CustomEvent("vutuv:tab-teaser", { detail: { frames: frames } }))
 })
 
 const Hooks = {
@@ -626,13 +656,33 @@ const Hooks = {
   // The feed dot is intentionally gated on document.hidden (feed posts have no
   // read state) and cleared the moment the member returns to the tab. LiveView's
   // <.live_title> rewrites the title on navigation, which would drop our prefix,
-  // so a MutationObserver on <title> re-applies it after any external change; the
-  // re-apply is idempotent (strip-then-prepend + a no-op guard), so it settles in
-  // one extra cycle and never loops.
+  // so a MutationObserver on <title> watches for a title this hook did not
+  // write, takes it as the new base and re-applies the marker on top; comparing
+  // against our own last write is what keeps that from looping.
+  //
+  // For a few seconds the title also says WHAT arrived (issue #1681): the
+  // author and the first words, paged through the tab one frame per second and
+  // then handed back to the page's own title. Frames rather than a scroll, and
+  // only a few of them, because a hidden tab is where the browser owns the
+  // clock in the strongest sense — timers there are clamped to roughly one per
+  // second, and Chrome drops a chained timer to one per MINUTE once the page
+  // has been hidden for five minutes ("intensive throttling"), which is exactly
+  // the tab this is for. So whatever stands last has to be a line that is still
+  // true a minute later, and the animation stops rather than looping.
+  //
+  // The second asked for below is a floor, not a promise: a hidden tab aligns
+  // timer wake-ups to whole seconds, so a timeout re-armed just after one
+  // misses the next boundary and each frame really stands about two seconds
+  // (measured in headless Chrome 151; the visible settings example runs at the
+  // requested one). ShellLive's window is sized in the measured figure, since
+  // it decides whether a second arrival still reaches a running animation.
   TabBadge: {
     mounted() {
       this.unread = 0
       this.feedPending = false
+      this.teaser = null
+      this.teaserText = null
+      this.baseTitle = this.strip(document.title)
 
       this.handleEvent("tab:badge", ({ unread }) => {
         this.unread = unread || 0
@@ -647,18 +697,42 @@ const Hooks = {
         }
       })
 
-      // Returning to the tab clears the feed dot.
+      this.handleEvent("tab:teaser", ({ id, frames }) => this.startTeaser(id, frames))
+
+      // "Play the example" on /settings/preferences. The member is plainly
+      // looking at this tab, which is the one case the hidden-gate below has to
+      // give way for — the same exemption the test notification takes.
+      this.onPreview = (event) => this.startTeaser(0, event.detail.frames, true)
+      window.addEventListener("vutuv:tab-teaser", this.onPreview)
+
+      // From the second arrival inside one window the server sends a count
+      // instead of a second quote; it becomes the teaser's closing frame.
+      this.handleEvent("tab:teaser_more", ({ id, text }) => {
+        if (this.teaser && this.teaser.id === id) this.teaser.more = text
+      })
+
+      // Returning to the tab clears the feed dot and takes the teaser with it:
+      // a title paging through somebody's post while the member is reading the
+      // page is noise, and the page they are on already shows the arrival.
       this.onVisibility = () => {
-        if (!document.hidden && this.feedPending) {
+        if (!document.hidden) {
           this.feedPending = false
-          this.apply()
+          this.stopTeaser()
         }
+        this.reportVisibility()
       }
       document.addEventListener("visibilitychange", this.onVisibility)
 
       const titleEl = document.querySelector("title")
       if (titleEl) {
-        this.observer = new MutationObserver(() => this.apply())
+        this.observer = new MutationObserver(() => {
+          // Our own writes come back through here too. Anything else is the
+          // page changing its own title (a live navigation), which is the new
+          // base the marker and the teaser sit on top of.
+          if (document.title === this.lastWritten) return
+          this.baseTitle = this.strip(document.title)
+          this.apply()
+        })
         this.observer.observe(titleEl, {
           childList: true,
           characterData: true,
@@ -666,7 +740,13 @@ const Hooks = {
         })
       }
 
+      // The server refuses to spend a feed lookup on a tab that has not said it
+      // is in the background, so this is what turns the teaser on at all.
+      this.reportVisibility()
       this.apply()
+    },
+    reportVisibility() {
+      this.pushEvent("tab:visibility", { hidden: document.hidden })
     },
     // The indicator string: "•(3) ", "(3) ", "• " or "" when nothing is new.
     prefix() {
@@ -675,15 +755,54 @@ const Hooks = {
       const marker = dot + num
       return marker ? `${marker} ` : ""
     },
+    strip(title) {
+      return title.replace(/^\s*•?\s*(\(\d+\)\s*)?/, "")
+    },
+    startTeaser(id, frames, preview) {
+      if ((!document.hidden && !preview) || !frames || frames.length === 0) return
+
+      this.stopTeaser()
+      this.teaser = { id: id, frames: frames, index: 0, more: null }
+      this.teaserStep()
+    },
+    teaserStep() {
+      const teaser = this.teaser
+      if (!teaser) return
+
+      if (teaser.index < teaser.frames.length) {
+        this.teaserText = teaser.frames[teaser.index]
+        teaser.index += 1
+      } else if (teaser.more) {
+        this.teaserText = teaser.more
+        teaser.more = null
+      } else {
+        this.stopTeaser()
+        return
+      }
+
+      this.apply()
+      this.teaserTimer = setTimeout(() => this.teaserStep(), 1000)
+    },
+    stopTeaser() {
+      if (this.teaserTimer) clearTimeout(this.teaserTimer)
+      this.teaserTimer = null
+      this.teaser = null
+      this.teaserText = null
+      this.apply()
+    },
     apply() {
-      // Strip a prefix we added before, then prepend the current one, so the
-      // count/dot can rise, fall or vanish without leaving a stale marker.
-      const base = document.title.replace(/^\s*•?\s*(\(\d+\)\s*)?/, "")
-      const next = this.prefix() + base
-      if (next !== document.title) document.title = next
+      // The marker always leads; behind it stands either a teaser frame or the
+      // page's own title, so a count or a dot can rise, fall or vanish without
+      // leaving a stale marker and without losing the title underneath.
+      const next = this.prefix() + (this.teaserText || this.baseTitle)
+      if (next === document.title) return
+      this.lastWritten = next
+      document.title = next
     },
     destroyed() {
       document.removeEventListener("visibilitychange", this.onVisibility)
+      window.removeEventListener("vutuv:tab-teaser", this.onPreview)
+      if (this.teaserTimer) clearTimeout(this.teaserTimer)
       if (this.observer) this.observer.disconnect()
     },
   },

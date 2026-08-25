@@ -90,6 +90,12 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Quote what arrives on the other tab"),
       gettext("How long the quote stands"),
       gettext("When off, a tab holding something new wears its dot and says nothing more."),
+      # Vutuv.Prefs — the browser tab's teaser (issue #1681)
+      gettext("Browser tab"),
+      gettext("Tease new posts in the browser tab"),
+      gettext(
+        "Only while you are looking at another tab, and only for a few seconds. The tab title also shows up in screenshots, in your window switcher and in a screen share."
+      ),
       gettext("Between 4 and 20 seconds."),
       gettext("0 means posts are never shortened."),
       gettext("How much of a post a notification quotes before it is cut off."),

@@ -22,6 +22,10 @@ config :vutuv, :composer_draft_debounce_ms, 0
 # second arrival in a test that fires two. Zero here; the test that covers the
 # silence sets its own value.
 config :vutuv, :feed_ticker_cooldown_ms, 0
+# The same for the browser tab's teaser (issue #1681): its silence is half a
+# minute in production and would swallow every second arrival a test fires. The
+# test that covers the silence sets its own value.
+config :vutuv, :tab_teaser_cooldown_ms, 0
 config :vutuv, :sweep_unconfirmed_registrations, false
 # The daily retention sweep of the account-activity log would touch the sandbox
 # from outside; tests call Vutuv.AccountEvents.delete_expired/0 directly.

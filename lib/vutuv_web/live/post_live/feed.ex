@@ -36,9 +36,6 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Phoenix.LiveView.JS
   alias Vutuv.Activity
   alias Vutuv.ContentFilters
-  alias Vutuv.Fediverse.Handle
-  alias Vutuv.Fediverse.RemoteAccount
-  alias Vutuv.Identity
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Prefs
@@ -50,6 +47,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.RemotePostActions
   alias VutuvWeb.Markdown
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
 
   # The origin's like/repost figures on a card from another network tick
@@ -452,7 +450,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # rail DOM light; the visible cut is the six-line CSS clamp (`line-clamp-6`)
   # on the wrapper, so we drop the truncation flag here.
   defp discover_body(body) do
-    {html, _truncated?} = VutuvWeb.Markdown.render_preview(body, [])
+    {html, _truncated?} = Markdown.render_preview(body, [])
     html
   end
 
@@ -1263,64 +1261,18 @@ defmodule VutuvWeb.PostLive.Feed do
 
   defp ticker_cooldown_ms, do: Application.get_env(:vutuv, :feed_ticker_cooldown_ms, 2_000)
 
-  # Who wrote it and what it opens with. Returns nil for an entry this reader
-  # has muted by content filter: the quote would put the very word they
-  # silenced into the bar, and `decorate/3` — which stamps `:filtered_by` — only
-  # runs on the branch for the tab they *are* on.
+  # Who wrote it and what it opens with — nil for an entry this reader has
+  # muted by content filter, since the quote would put the very word they
+  # silenced into the bar. The browser tab's teaser asks the same three
+  # questions on every page (issue #1681), so `VutuvWeb.PostTeaser` owns them
+  # and the two surfaces cannot drift.
   defp ticker_teaser(socket, entry) do
-    viewer = socket.assigns.current_user
-
-    if filtered_pattern(entry, socket.assigns.content_filters, viewer.id) do
-      nil
-    else
-      %{who: ticker_who(entry), text: ticker_text(entry)}
-    end
+    PostTeaser.quote_for(
+      entry,
+      socket.assigns.content_filters,
+      socket.assigns.current_user.id
+    )
   end
-
-  # The handle without its server (`Handle.short/1`): the tab beside the quote
-  # already says "Fediverse", and the domain would take half the line.
-  defp ticker_who(entry) do
-    cond do
-      Posts.remote_reply_entry?(entry) ->
-        Handle.short(Handle.display(entry.note.handle, entry.note.actor_uri))
-
-      Posts.remote_feed_entry?(entry) ->
-        Handle.short(RemoteAccount.display_handle(entry.remote_post.remote_account))
-
-      true ->
-        case Posts.author(entry.post) do
-          nil -> nil
-          author -> local_who(author)
-        end
-    end
-  end
-
-  # A page that never claimed a root handle has none to show, so it is named.
-  defp local_who(author) do
-    case Identity.handle(author) do
-      handle when is_binary(handle) -> "@" <> handle
-      _ -> Identity.display_name(author)
-    end
-  end
-
-  defp ticker_text(entry) do
-    cond do
-      Posts.remote_reply_entry?(entry) -> one_line(entry.note.content_text)
-      Posts.remote_feed_entry?(entry) -> one_line(entry.remote_post.content_text)
-      true -> one_line(Markdown.to_preview_line(entry.post.body))
-    end
-  end
-
-  # A quote is one line whatever the body did. The cap keeps a long post out of
-  # the payload; where the line is actually cut is the bar's width, in CSS.
-  defp one_line(text) when is_binary(text) do
-    case text |> String.replace(~r/\s+/u, " ") |> String.trim() |> String.slice(0, 200) do
-      "" -> nil
-      line -> line
-    end
-  end
-
-  defp one_line(_text), do: nil
 
   # Naming the tab with a colon rather than a preposition, and one string for
   # both tabs: "new in the Fediverse" and "new on vutuv" do not share a German
@@ -1398,25 +1350,7 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mark_one(entry, compiled, viewer_id) do
-    Map.put(entry, :filtered_by, filtered_pattern(entry, compiled, viewer_id))
-  end
-
-  defp filtered_pattern(entry, compiled, viewer_id) do
-    cond do
-      # A cached post from another network (issue #1161) is filtered on its
-      # plain text: the member muted a word because they do not want to read it,
-      # and where it was written changes nothing about that.
-      Posts.remote_feed_entry?(entry) ->
-        ContentFilters.filtered_text(remote_entry_text(entry), compiled)
-
-      # Never the member's own posts. A remote post cannot reach this arm: it has
-      # no author here, so the exemption has nothing to match on.
-      entry.post.user_id == viewer_id ->
-        nil
-
-      true ->
-        ContentFilters.filtered_pattern(entry.post, compiled)
-    end
+    Map.put(entry, :filtered_by, PostTeaser.filtered_pattern(entry, compiled, viewer_id))
   end
 
   # What the reveal set remembers. A vutuv post is keyed by its own id (so the
@@ -1481,13 +1415,6 @@ defmodule VutuvWeb.PostLive.Feed do
   # an assign being flipped: a stream item redraws only when its own entry is
   # handed back, which is also why the state rides the entry. `:flash` is an
   # `{outcome, message}` the act announces itself with when it really happened.
-  # The text a content filter matches on, whichever remote shape the row is.
-  defp remote_entry_text(entry) do
-    if Posts.remote_reply_entry?(entry),
-      do: entry.note.content_text,
-      else: entry.remote_post.content_text
-  end
-
   # "This row is the cached post with that id" — the one predicate the three
   # scans over `:entries` that single a remote post out all read from.
   defp remote_entry?(entry, remote_post_id),

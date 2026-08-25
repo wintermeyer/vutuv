@@ -107,6 +107,17 @@ defmodule Vutuv.Prefs do
       max: 20,
       group: :feed_tabs
     },
+    # The same idea one surface further out (issue #1681): while the vutuv tab
+    # sits in the background, a new post pages its first line through the
+    # browser tab's title instead of only putting a dot there. Off leaves the
+    # dot and the page title alone.
+    #
+    # On by default, like the ticker it is modelled on. The switch matters to
+    # the member who screen-shares or presents: the tab title is one of the few
+    # places vutuv writes into the operating system's furniture, so somebody
+    # else's first line can end up in a screenshot, a recording or a window
+    # switcher.
+    %Pref{key: :browser_tab_teaser?, type: :boolean, default: true, group: :browser_tab},
     # How a member's dates and times are written, and which clock they are
     # written on (issue #1502). Two knobs rather than one because they answer
     # different questions — a German-speaking member in Chicago wants German
@@ -187,6 +198,9 @@ defmodule Vutuv.Prefs do
   def label(:feed_tab_ticker_seconds),
     do: Gettext.gettext(VutuvWeb.Gettext, "How long the quote stands")
 
+  def label(:browser_tab_teaser?),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Tease new posts in the browser tab")
+
   def label(:date_region), do: Gettext.gettext(VutuvWeb.Gettext, "Date format")
   def label(:time_zone), do: Gettext.gettext(VutuvWeb.Gettext, "Time zone")
 
@@ -208,6 +222,13 @@ defmodule Vutuv.Prefs do
       Gettext.gettext(
         VutuvWeb.Gettext,
         "When off, a tab holding something new wears its dot and says nothing more."
+      )
+
+  def hint(:browser_tab_teaser?),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "Only while you are looking at another tab, and only for a few seconds. The tab title also shows up in screenshots, in your window switcher and in a screen share."
       )
 
   def hint(:feed_tab_ticker_seconds),
@@ -262,6 +283,7 @@ defmodule Vutuv.Prefs do
   def group_label(:post_display), do: Gettext.gettext(VutuvWeb.Gettext, "Posts")
   def group_label(:feed), do: Gettext.gettext(VutuvWeb.Gettext, "Feed")
   def group_label(:feed_tabs), do: Gettext.gettext(VutuvWeb.Gettext, "Feed tabs")
+  def group_label(:browser_tab), do: Gettext.gettext(VutuvWeb.Gettext, "Browser tab")
   def group_label(:privacy), do: Gettext.gettext(VutuvWeb.Gettext, "Privacy")
   def group_label(:region), do: Gettext.gettext(VutuvWeb.Gettext, "Date & time")
   def group_label(:maps), do: Gettext.gettext(VutuvWeb.Gettext, "Maps")
