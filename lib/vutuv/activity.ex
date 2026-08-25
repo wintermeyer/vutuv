@@ -30,12 +30,18 @@ defmodule Vutuv.Activity do
       that post, so what the feed has to say about it is old news even though
       the marker still sits behind it. Only the unread tally consults them —
       the page keeps listing those events, it just stops calling them new.
+    * `notification_dismissals` holds the **per-event** exceptions written by
+      `mark_notification_seen/3`: the member clicked the browser notification
+      that announced this one event, so it is read and the rest of the bell is
+      not. Both the tally and the notifications page consult them, keyed on the
+      `event_id/2` pair the feed already gives every item.
   """
   import Ecto.Query
   import Vutuv.Identity.Query, only: [join_party: 3, shown_party: 2]
 
   alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.User
+  alias Vutuv.Activity.NotificationDismissal
   alias Vutuv.Activity.NotificationPostRead
   alias Vutuv.Engagement
   alias Vutuv.Fediverse.Note
@@ -83,6 +89,12 @@ defmodule Vutuv.Activity do
       from(u in User, where: u.id == ^user_id),
       set: [notifications_read_at: read_marker(user_id)]
     )
+
+    # The marker now covers everything the per-event dismissals were holding
+    # out of the tally, so they have nothing left to say. Dropping them keeps
+    # the table to the handful of exceptions that still matter, rather than a
+    # row per browser notification a member ever clicked.
+    Repo.delete_all(from(d in NotificationDismissal, where: d.user_id == ^user_id))
 
     broadcast(user_id, :notifications_read)
   end
@@ -317,6 +329,121 @@ defmodule Vutuv.Activity do
   def subject_post_id(%{kind: "mention"} = item), do: Map.get(item, :post_id)
   def subject_post_id(_item), do: nil
 
+  @doc """
+  Record that `user_id` has seen the single event named by `kind` and
+  `source_id`, so it stops counting as unread.
+
+  Written when the member clicks the **browser notification** that announced
+  it (issue #1249 shipped the popup; this is the half that makes clicking one
+  mean something). A popup carries exactly one event, so the click is a
+  statement about that event and about nothing else waiting on the bell —
+  which is why this writes a per-event exception instead of moving the read
+  marker, and why the badge drops by one rather than to zero.
+
+  `kind` is a notification kind (`kinds/0`) or the pseudo-kind
+  `"report_protection_restored"`; `source_id` the id of the row the feed
+  derives the event from. Unknown kinds and non-UUID ids are ignored rather
+  than stored, since both arrive from the browser. Idempotent — a second click
+  on the same popup changes nothing and stays silent, the same way a repeated
+  `mark_post_seen/2` does.
+
+  The badge is not decremented here: `:notifications_changed` tells the shell
+  to recount from the source, so the tally and the feed can never drift.
+  """
+  def mark_notification_seen(user_id, kind, source_id)
+      when is_binary(user_id) and is_binary(kind) and is_binary(source_id) do
+    with true <- kind in dismissable_kinds(),
+         {:ok, id} <- Vutuv.UUIDv7.cast(source_id),
+         {:inserted, _row} <-
+           Engagement.insert_if_new(
+             NotificationDismissal,
+             %{user_id: user_id, kind: kind, source_id: id},
+             [:user_id, :kind, :source_id]
+           ) do
+      broadcast(user_id, :notifications_changed)
+    else
+      _ -> :ok
+    end
+  end
+
+  # Total on purpose: the three arguments come off the wire, so a nil or a
+  # number is an ordinary thing to be handed, not a bug to crash the socket on.
+  def mark_notification_seen(_user_id, _kind, _source_id), do: :ok
+
+  @doc """
+  How a live-pushed notification names itself to `mark_notification_seen/3`:
+  `%{kind: kind, source_id: id}`, or nil for an event the tally cannot single
+  out again.
+
+  The browser notification carries this back when the member clicks it, so the
+  kind vocabulary stays here rather than being spelled again in the shell.
+  """
+  def dismiss_ref(%{kind: kind} = notification) do
+    kind = dismiss_kind(kind, notification)
+    source_id = notification[:source_id]
+
+    if kind in dismissable_kinds() and is_binary(source_id),
+      do: %{kind: kind, source_id: source_id}
+  end
+
+  def dismiss_ref(_notification), do: nil
+
+  # The severance row behind `report_protection` produces two events at
+  # different times, so the pair (kind, source_id) needs the family to tell
+  # them apart — dismissing "your report severed this" must not also dismiss
+  # "and a rejected case restored it" months later.
+  defp dismiss_kind("report_protection", %{status: "restored"}), do: "report_protection_restored"
+  defp dismiss_kind(kind, _notification), do: kind
+
+  @doc """
+  The id one feed item carries: its kind (or pseudo-kind) and the id of the row
+  it derives from, which is also what a dismissal stores. Every `*_items/3`
+  builder composes its `:id` through here, so the two can only agree.
+  """
+  def event_id(kind, source_id), do: "#{id_prefix(kind)}-#{source_id}"
+
+  # The prefixes predate the kind strings and differ from them in spelling
+  # (dashes, not underscores); they are part of the identity of a rendered row,
+  # so they are kept as they were rather than normalised.
+  defp id_prefix("organization_role"), do: "organization-role"
+  defp id_prefix("image_rejected"), do: "image-rejected"
+  defp id_prefix("report_protection"), do: "report-protection"
+  defp id_prefix("report_protection_restored"), do: "report-protection-restored"
+  defp id_prefix("handle_change"), do: "handle-change"
+  defp id_prefix("reference_check"), do: "reference-check"
+  defp id_prefix("cv_update"), do: "cv-update"
+  defp id_prefix(kind), do: kind
+
+  @doc """
+  The kinds a dismissal can name, read straight off the registry's `dismiss`
+  entries — every kind with a single source row behind it, which is all of them
+  but `cv_update`, plus the second name `report_protection` needs for its
+  restore half. A kind cannot end up storing dismissals the tally then ignores,
+  because both answers come from the same declaration.
+  """
+  def dismissable_kinds do
+    for spec <- kind_specs(Vutuv.UUIDv7.generate()),
+        {kind, _shape} <- spec.dismiss,
+        do: kind
+  end
+
+  @doc """
+  Which of the member's notifications are individually dismissed
+  (`mark_notification_seen/3`), as a `MapSet` of `event_id/2` strings — the
+  same ids the feed items carry, so a page can render those rows as read. One
+  query, and empty for a logged-out visitor.
+  """
+  def dismissed_event_ids(nil), do: MapSet.new()
+
+  def dismissed_event_ids(user_id) do
+    from(d in NotificationDismissal,
+      where: d.user_id == ^user_id,
+      select: {d.kind, d.source_id}
+    )
+    |> Repo.all()
+    |> MapSet.new(fn {kind, source_id} -> event_id(kind, source_id) end)
+  end
+
   @doc "Tell a user's shell their messages were just read (clears the badge)."
   def mark_messages_read(party), do: broadcast(party, :messages_read)
 
@@ -324,6 +451,8 @@ defmodule Vutuv.Activity do
   def notify(nil, _notification), do: :ok
 
   def notify(user_id, %{} = notification) do
+    notification = with_event_id(notification)
+
     # The one place a notification is announced, which is why the Web Push
     # fan-out hangs here rather than at each of the twenty callers: a push
     # cannot then drift out of step with what the website shows.
@@ -331,12 +460,23 @@ defmodule Vutuv.Activity do
     broadcast(user_id, {:new_notification, notification})
   end
 
+  # A live push and the feed row it will become are the same event, so they get
+  # the same id — which is what lets an open notifications page replace the row
+  # rather than stack a second one, and what `dismiss_ref/1` hands back when the
+  # member clicks the popup. Kinds that already carry an id (the CV sitting,
+  # whose id is a group and not a row) keep it.
+  defp with_event_id(%{kind: kind, source_id: source_id} = notification)
+       when is_binary(source_id),
+       do: Map.put_new(notification, :id, event_id(kind, source_id))
+
+  defp with_event_id(notification), do: notification
+
   @doc """
   Convenience: a "started following you" notification for the followee. Carries
   the actor's name, route param, and avatar so the notifications page can link
   to the follower's profile and show their picture.
   """
-  def notify_new_follower(followee_id, follower) do
+  def notify_new_follower(followee_id, follower, follow_id \\ nil) do
     Vutuv.Webhooks.emit(followee_id, "follower.created", %{
       "follower" => actor_param(follower)
     })
@@ -346,6 +486,7 @@ defmodule Vutuv.Activity do
       Map.merge(actor_fields(follower), %{
         kind: "follower",
         text: "started following you.",
+        source_id: follow_id,
         at: DateTime.utc_now()
       })
     )
@@ -360,12 +501,19 @@ defmodule Vutuv.Activity do
   toast at grant time. The actor is the granting member, rendered as a linked
   `@handle`.
   """
-  def notify_organization_role(user_id, granter, %Organization{} = organization, role) do
+  def notify_organization_role(
+        user_id,
+        granter,
+        %Organization{} = organization,
+        role,
+        role_id \\ nil
+      ) do
     notify(
       user_id,
       Map.merge(actor_fields(granter), %{
         kind: "organization_role",
         role: role,
+        source_id: role_id,
         organization_name: organization.name,
         organization_slug: organization.slug,
         at: DateTime.utc_now()
@@ -386,6 +534,7 @@ defmodule Vutuv.Activity do
       notification.recipient_id,
       Map.merge(actor_fields(actor), %{
         kind: "handle_change",
+        source_id: notification.id,
         old_handle: notification.old_handle,
         new_handle: notification.new_handle,
         post_ids: notification.post_ids,
@@ -429,8 +578,8 @@ defmodule Vutuv.Activity do
     grade = Check.grade_span(check)
 
     notify(user_id, %{
-      id: "reference-check-#{check.id}",
       kind: "reference_check",
+      source_id: check.id,
       at: check.finished_at || DateTime.utc_now(),
       job_reference_id: reference.id,
       title: reference.title,
@@ -441,7 +590,7 @@ defmodule Vutuv.Activity do
   end
 
   @doc ~S(Convenience: an "endorsed you for <tag>" notification for the tag's owner.)
-  def notify_endorsement(owner_id, endorser, tag_name) do
+  def notify_endorsement(owner_id, endorser, tag_name, endorsement_id \\ nil) do
     Vutuv.Webhooks.emit(owner_id, "endorsement.created", %{
       "endorser" => actor_param(endorser),
       "tag" => tag_name
@@ -452,6 +601,7 @@ defmodule Vutuv.Activity do
       Map.merge(actor_fields(endorser), %{
         kind: "endorsement",
         tag: tag_name,
+        source_id: endorsement_id,
         text: "endorsed you for #{tag_name}.",
         at: DateTime.utc_now()
       })
@@ -465,7 +615,13 @@ defmodule Vutuv.Activity do
   author. `post_id` is the parent post, so the notification can link to the
   thread the reply landed in.
   """
-  def notify_reply(parent_author_id, replier, parent_post_id \\ nil, reply_post_id \\ nil) do
+  def notify_reply(
+        parent_author_id,
+        replier,
+        parent_post_id \\ nil,
+        reply_post_id \\ nil,
+        reply_ref_id \\ nil
+      ) do
     Vutuv.Webhooks.emit(parent_author_id, "post.replied", %{
       "by" => actor_param(replier),
       "post_id" => parent_post_id
@@ -480,6 +636,8 @@ defmodule Vutuv.Activity do
         post_id: parent_post_id,
         # …and the reply itself, so the row can quote both.
         reply_post_id: reply_post_id,
+        # The `post_replies` row the feed counts — what a dismissal names.
+        source_id: reply_ref_id,
         at: DateTime.utc_now()
       })
     )
@@ -492,7 +650,7 @@ defmodule Vutuv.Activity do
   `reply_post_id` is the new reply, so the row can quote and link it;
   `root_post_id` keys the notification page's per-thread grouping.
   """
-  def notify_thread_reply(user_id, replier, root_post_id, reply_post_id) do
+  def notify_thread_reply(user_id, replier, root_post_id, reply_post_id, reply_ref_id \\ nil) do
     notify(
       user_id,
       Map.merge(actor_fields(replier), %{
@@ -500,6 +658,7 @@ defmodule Vutuv.Activity do
         text: "replied in a thread you posted in.",
         root_post_id: root_post_id,
         reply_post_id: reply_post_id,
+        source_id: reply_ref_id,
         at: DateTime.utc_now()
       })
     )
@@ -528,6 +687,7 @@ defmodule Vutuv.Activity do
         text: "replied to your post from another network.",
         post_id: post.id,
         note_id: note.id,
+        source_id: note.id,
         at: note.received_at
       })
     )
@@ -555,6 +715,7 @@ defmodule Vutuv.Activity do
         text: "reacted to your post from another network.",
         post_id: post.id,
         reaction_id: reaction.id,
+        source_id: reaction.id,
         reaction_kind: reaction.kind,
         at: reaction.received_at
       })
@@ -570,20 +731,21 @@ defmodule Vutuv.Activity do
   mention untouched never notifies twice. The durable half is the
   `post_mentions` row written alongside it (`mention_items/3`).
   """
-  def notify_mention(user_id, author, post_id) do
+  def notify_mention(user_id, author, post_id, mention_id \\ nil) do
     notify(
       user_id,
       Map.merge(actor_fields(author), %{
         kind: "mention",
         text: "mentioned you in a post.",
         post_id: post_id,
+        source_id: mention_id,
         at: DateTime.utc_now()
       })
     )
   end
 
   @doc ~S(Convenience: a "liked your post" notification for the post's author.)
-  def notify_like(author_id, liker, post_id) do
+  def notify_like(author_id, liker, post_id, like_id \\ nil) do
     Vutuv.Webhooks.emit(author_id, "post.liked", %{
       "by" => actor_param(liker),
       "post_id" => post_id
@@ -595,6 +757,7 @@ defmodule Vutuv.Activity do
         kind: "like",
         text: "liked your post.",
         post_id: post_id,
+        source_id: like_id,
         at: DateTime.utc_now()
       })
     )
@@ -608,7 +771,7 @@ defmodule Vutuv.Activity do
   new-follower email); only the in-app text/kind announces the connection
   milestone. The derived feed reuses the `"connection"` kind for mutual pairs.
   """
-  def notify_connection(user_id, other) do
+  def notify_connection(user_id, other, follow_id \\ nil) do
     Vutuv.Webhooks.emit(user_id, "connection.created", %{
       "with" => actor_param(other)
     })
@@ -618,6 +781,9 @@ defmodule Vutuv.Activity do
       Map.merge(actor_fields(other), %{
         kind: "connection",
         text: "is now connected with you.",
+        # The pair's id is the later of its two follows, which is the one just
+        # written — see `count_connections/3`.
+        source_id: follow_id,
         at: DateTime.utc_now()
       })
     )
@@ -632,12 +798,13 @@ defmodule Vutuv.Activity do
   @their_handle. The durable counterpart is derived from the severance rows
   (see `report_protection_items/3`).
   """
-  def notify_report_protection(reporter_id, reported_user, status) do
+  def notify_report_protection(reporter_id, reported_user, status, severance_id \\ nil) do
     notify(
       reporter_id,
       Map.merge(actor_fields(reported_user), %{
         kind: "report_protection",
         status: status,
+        source_id: severance_id,
         at: DateTime.utc_now()
       })
     )
@@ -744,9 +911,10 @@ defmodule Vutuv.Activity do
   defp after?(at, %NaiveDateTime{} = since),
     do: after?(at, DateTime.from_naive!(since, "Etc/UTC"))
 
-  # THE registry of notification kinds. Every kind declares all three of its
-  # derivations here — read-marker MAX arm(s), feed source, count query(ies) —
-  # so a kind can no longer join one structure and silently miss another,
+  # THE registry of notification kinds. Every kind declares all four of its
+  # derivations here — read-marker MAX arm(s), feed source, count query(ies),
+  # dismissal shape — so a kind can no longer join one structure and silently
+  # miss another,
   # which is exactly the badge-never-clears bug that shipped three times
   # (#980, #930, v7.200.1). `latest_event_at/1`, `notifications_page/2` and
   # `total_count/4` all read from this table and nowhere else.
@@ -758,6 +926,15 @@ defmodule Vutuv.Activity do
   #     (the merge sort is stable), so treat it as part of the interface.
   #   * `counts` — count queries summed into the badge tally, bounded by the
   #     same `read_at` the marker wrote.
+  #   * `dismiss` — one entry per `counts` query saying how a per-event
+  #     dismissal (`mark_notification_seen/3`) is excluded from it: `{kind,
+  #     :id}` for the ordinary case, where the event's own row is the query's
+  #     first binding, or `nil` for a kind with no single source row. The
+  #     `kind` in the tuple is the dismissal's namespace and usually the kind
+  #     itself; `report_protection` needs two because one row emits two
+  #     events. Declaring it here rather than inside each count query is what
+  #     makes `dismissable_kinds/0` derivable and stops a new kind from
+  #     storing dismissals the tally then ignores.
   #   * `email_pref` — the `Vutuv.Accounts.User` field a member turns off to
   #     stop this kind reaching the digest mail (`Vutuv.Activity.Digest`), or
   #     `nil` for a kind that is shown in the app and never mailed. It lives
@@ -772,11 +949,12 @@ defmodule Vutuv.Activity do
   #     (severed / restored) with different timestamp columns — so two max
   #     arms and two counts. That is why both list-valued keys are lists.
   #   * `unread?` marks the badge tally, as opposed to the pager's total, and
-  #     switches on the two "the member already knows this" exceptions. It
-  #     reaches reply / thread / mention (drop events about posts the member
-  #     engaged with, `mark_post_seen/2` — the kinds whose subject is somebody
-  #     else's post, `subject_post_id/1`) and `connection` (drop the pair the
-  #     member made mutual themselves); every other kind ignores it.
+  #     switches on the "the member already knows this" exceptions. Two are
+  #     per-kind: reply / thread / mention drop events about posts the member
+  #     engaged with (`mark_post_seen/2` — the kinds whose subject is somebody
+  #     else's post, `subject_post_id/1`), and `connection` drops the pair the
+  #     member made mutual themselves. The third, `dismiss`, is applied to
+  #     every kind at once in `total_count/4`.
   #   * `cv_update` counts sittings, not rows: its read-marker filter lives
   #     inside the grouped query (`CvUpdates.count_query/2`), not in `since/2`.
   #   * The fediverse kinds key on `received_at` (a :utc_datetime), `username`
@@ -801,119 +979,143 @@ defmodule Vutuv.Activity do
         email_pref: :email_on_follower?,
         max_arms: [follower_max(user_id)],
         items: &follower_items(user_id, &1, &2),
-        counts: [count_followers(user_id, read_at)]
+        counts: [count_followers(user_id, read_at)],
+        dismiss: [{"follower", :id}]
       },
       %{
         kind: "endorsement",
         email_pref: :email_on_endorsement?,
         max_arms: [endorsement_max(user_id)],
         items: &endorsement_items(user_id, &1, &2),
-        counts: [count_endorsements(user_id, read_at)]
+        counts: [count_endorsements(user_id, read_at)],
+        dismiss: [{"endorsement", :id}]
       },
       %{
         kind: "connection",
         email_pref: :email_on_follower?,
         max_arms: [connection_max(user_id)],
         items: &connection_items(user_id, &1, &2),
-        counts: [count_connections(user_id, read_at, unread?)]
+        counts: [count_connections(user_id, read_at, unread?)],
+        # A pair has no row of its own: its id, here and on the entry
+        # `connection_items/3` builds, is the later of the two follows.
+        dismiss: [{"connection", :later_follow}]
       },
       %{
         kind: "reply",
         email_pref: nil,
         max_arms: [reply_max(user_id)],
         items: &reply_items(user_id, &1, &2),
-        counts: [count_replies(user_id, read_at, unread?)]
+        counts: [count_replies(user_id, read_at, unread?)],
+        dismiss: [{"reply", :id}]
       },
       %{
         kind: "thread",
         email_pref: nil,
         max_arms: [thread_max(user_id)],
         items: &thread_items(user_id, &1, &2),
-        counts: [count_thread_replies(user_id, read_at, unread?)]
+        counts: [count_thread_replies(user_id, read_at, unread?)],
+        dismiss: [{"thread", :id}]
       },
       %{
         kind: "mention",
         email_pref: nil,
         max_arms: [mention_max(user_id)],
         items: &mention_items(user_id, &1, &2),
-        counts: [count_mentions(user_id, read_at, unread?)]
+        counts: [count_mentions(user_id, read_at, unread?)],
+        dismiss: [{"mention", :id}]
       },
       %{
         kind: "fediverse_reply",
         email_pref: nil,
         max_arms: [fediverse_reply_max(user_id)],
         items: &fediverse_reply_items(user_id, &1, &2),
-        counts: [count_fediverse_replies(user_id, read_at)]
+        counts: [count_fediverse_replies(user_id, read_at)],
+        dismiss: [{"fediverse_reply", :id}]
       },
       %{
         kind: "fediverse_reaction",
         email_pref: nil,
         max_arms: [fediverse_reaction_max(user_id)],
         items: &fediverse_reaction_items(user_id, &1, &2),
-        counts: [count_fediverse_reactions(user_id, read_at)]
+        counts: [count_fediverse_reactions(user_id, read_at)],
+        dismiss: [{"fediverse_reaction", :id}]
       },
       %{
         kind: "like",
         email_pref: nil,
         max_arms: [like_max(user_id)],
         items: &like_items(user_id, &1, &2),
-        counts: [count_likes(user_id, read_at)]
+        counts: [count_likes(user_id, read_at)],
+        dismiss: [{"like", :id}]
       },
       %{
         kind: "organization_role",
         email_pref: nil,
         max_arms: [organization_role_max(user_id)],
         items: &organization_role_items(user_id, &1, &2),
-        counts: [count_organization_roles(user_id, read_at)]
+        counts: [count_organization_roles(user_id, read_at)],
+        dismiss: [{"organization_role", :id}]
       },
       %{
         kind: "moderation",
         email_pref: nil,
         max_arms: [moderation_max(user_id)],
         items: &moderation_items(user_id, &1, &2),
-        counts: [count_moderation(user_id, read_at)]
+        counts: [count_moderation(user_id, read_at)],
+        dismiss: [{"moderation", :id}]
       },
       %{
         kind: "image_rejected",
         email_pref: nil,
         max_arms: [image_rejected_max(user_id)],
         items: &image_rejected_items(user_id, &1, &2),
-        counts: [count_image_rejections(user_id, read_at)]
+        counts: [count_image_rejections(user_id, read_at)],
+        dismiss: [{"image_rejected", :id}]
       },
       %{
         kind: "report_protection",
         email_pref: nil,
         max_arms: [severance_max(user_id), severance_restore_max(user_id)],
         items: &report_protection_items(user_id, &1, &2),
-        counts: [count_severances(user_id, read_at), count_severance_restores(user_id, read_at)]
+        counts: [count_severances(user_id, read_at), count_severance_restores(user_id, read_at)],
+        # One severance row, two events: the restore half needs a namespace of
+        # its own or dismissing the severance would dismiss it too.
+        dismiss: [{"report_protection", :id}, {"report_protection_restored", :id}]
       },
       %{
         kind: "handle_change",
         email_pref: nil,
         max_arms: [handle_change_max(user_id)],
         items: &handle_change_items(user_id, &1, &2),
-        counts: [count_handle_changes(user_id, read_at)]
+        counts: [count_handle_changes(user_id, read_at)],
+        dismiss: [{"handle_change", :id}]
       },
       %{
         kind: "cv_update",
         email_pref: nil,
         max_arms: [cv_update_max(user_id)],
         items: &cv_update_items(user_id, &1, &2),
-        counts: [count_cv_updates(user_id, read_at)]
+        counts: [count_cv_updates(user_id, read_at)],
+        # The one kind with no source row: an item is a *sitting*, several CV
+        # rows grouped in Elixir under a synthesised id, so there is nothing
+        # for the tally to exclude and clicking its popup leaves the badge be.
+        dismiss: [nil]
       },
       %{
         kind: "username",
         email_pref: nil,
         max_arms: [username_max(user_id)],
         items: &username_items(user_id, &1, &2),
-        counts: [count_username(user_id, read_at)]
+        counts: [count_username(user_id, read_at)],
+        dismiss: [{"username", :id}]
       },
       %{
         kind: "reference_check",
         email_pref: :email_on_reference_check?,
         max_arms: [reference_check_max(user_id)],
         items: &reference_check_items(user_id, &1, &2),
-        counts: [count_reference_checks(user_id, read_at)]
+        counts: [count_reference_checks(user_id, read_at)],
+        dismiss: [{"reference_check", :id}]
       }
     ]
   end
@@ -995,8 +1197,8 @@ defmodule Vutuv.Activity do
     counts =
       for spec <- kind_specs(user_id, read_at, unread?),
           kinds == nil or spec.kind in kinds,
-          count <- spec.counts,
-          do: count
+          {count, dismiss} <- Enum.zip(spec.counts, spec.dismiss),
+          do: unless_dismissed(count, user_id, dismiss, unread?)
 
     case counts do
       [] ->
@@ -1047,7 +1249,7 @@ defmodule Vutuv.Activity do
     |> select([e, f, o], {e.id, e.at, struct(f, ^User.listing_fields()), o})
     |> Repo.all()
     |> Enum.map(fn {id, at, follower, organization} ->
-      actor_item("follower-#{id}", "follower", at, follower || organization)
+      actor_item(event_id("follower", id), "follower", at, follower || organization)
     end)
   end
 
@@ -1065,7 +1267,7 @@ defmodule Vutuv.Activity do
     |> at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, endorser, tag_name} ->
-      "endorsement-#{id}"
+      event_id("endorsement", id)
       |> actor_item("endorsement", at, endorser)
       |> Map.put(:tag, tag_name)
     end)
@@ -1127,7 +1329,7 @@ defmodule Vutuv.Activity do
     )
     |> Repo.all()
     |> Enum.map(fn %{id: id, at: at, friend: friend, self_closed: self_closed} ->
-      "connection-#{id}"
+      event_id("connection", id)
       |> actor_item("connection", at, friend)
       |> Map.put(:self_triggered?, self_closed)
     end)
@@ -1148,7 +1350,7 @@ defmodule Vutuv.Activity do
     |> at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, replier, parent_post_id, reply_post_id} ->
-      "reply-#{id}"
+      event_id("reply", id)
       |> actor_item("reply", at, replier)
       # The parent (the recipient's own post the row links to) and the reply
       # itself, so the row can quote both.
@@ -1175,7 +1377,7 @@ defmodule Vutuv.Activity do
     |> at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, replier, root_post_id, reply_post_id} ->
-      "thread-#{id}"
+      event_id("thread", id)
       |> actor_item("thread", at, replier)
       # The thread (grouping key) and the reply itself (the quote + link).
       |> Map.put(:root_post_id, root_post_id)
@@ -1212,7 +1414,7 @@ defmodule Vutuv.Activity do
     |> Enum.map(fn {id, at, author, organization, post_id} ->
       actor = mention_actor(author, organization)
 
-      "mention-#{id}"
+      event_id("mention", id)
       |> actor_item("mention", at, actor)
       # The post that named them — the author's, not the recipient's.
       |> Map.put(:post_id, post_id)
@@ -1253,7 +1455,7 @@ defmodule Vutuv.Activity do
       note
       |> remote_actor_fields()
       |> Map.merge(%{
-        id: "fediverse_reply-#{note.id}",
+        id: event_id("fediverse_reply", note.id),
         kind: "fediverse_reply",
         # The merged feed sorts and cursors on NaiveDateTime (Vutuv.FeedPage);
         # this is the one source whose column is a DateTime.
@@ -1298,7 +1500,7 @@ defmodule Vutuv.Activity do
       reaction
       |> remote_actor_fields()
       |> Map.merge(%{
-        id: "fediverse_reaction-#{reaction.id}",
+        id: event_id("fediverse_reaction", reaction.id),
         kind: "fediverse_reaction",
         at: DateTime.to_naive(reaction.received_at),
         post_id: reaction.post_id,
@@ -1469,7 +1671,7 @@ defmodule Vutuv.Activity do
     |> at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, liker, page, post_id} ->
-      "like-#{id}"
+      event_id("like", id)
       |> actor_item("like", at, liker || page)
       |> Map.put(:post_id, post_id)
     end)
@@ -1494,7 +1696,7 @@ defmodule Vutuv.Activity do
     |> at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, granter, role, name, slug} ->
-      "organization-role-#{id}"
+      event_id("organization_role", id)
       |> actor_item("organization_role", at, granter)
       |> Map.merge(%{role: role, organization_name: name, organization_slug: slug})
     end)
@@ -1512,7 +1714,7 @@ defmodule Vutuv.Activity do
     |> Repo.all()
     |> Enum.map(fn {id, at, status} ->
       %{
-        id: "moderation-#{id}",
+        id: event_id("moderation", id),
         kind: "moderation",
         at: at,
         case_id: id,
@@ -1534,7 +1736,7 @@ defmodule Vutuv.Activity do
     |> Repo.all()
     |> Enum.map(fn {id, at, kind, category} ->
       %{
-        id: "image-rejected-#{id}",
+        id: event_id("image_rejected", id),
         kind: "image_rejected",
         at: at,
         image_kind: kind,
@@ -1558,7 +1760,7 @@ defmodule Vutuv.Activity do
       |> select([s, u], {s.id, s.inserted_at, struct(u, ^User.listing_fields())})
       |> Repo.all()
       |> Enum.map(fn {id, at, reported} ->
-        protection_item("report-protection-#{id}", "severed", at, reported)
+        protection_item(event_id("report_protection", id), "severed", at, reported)
       end)
 
     restored =
@@ -1571,7 +1773,7 @@ defmodule Vutuv.Activity do
       |> select([s, u], {s.id, s.restored_at, struct(u, ^User.listing_fields())})
       |> Repo.all()
       |> Enum.map(fn {id, at, reported} ->
-        protection_item("report-protection-restored-#{id}", "restored", at, reported)
+        protection_item(event_id("report_protection_restored", id), "restored", at, reported)
       end)
 
     severed ++ restored
@@ -1596,7 +1798,7 @@ defmodule Vutuv.Activity do
     |> at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, actor, old_handle, new_handle, post_ids} ->
-      "handle-change-#{id}"
+      event_id("handle_change", id)
       |> actor_item("handle_change", at, actor)
       |> Map.merge(%{old_handle: old_handle, new_handle: new_handle, post_ids: post_ids})
     end)
@@ -1664,7 +1866,7 @@ defmodule Vutuv.Activity do
     |> Repo.all()
     |> Enum.map(fn {id, at, reference_id, title, grade} ->
       %{
-        id: "reference-check-#{id}",
+        id: event_id("reference_check", id),
         kind: "reference_check",
         at: at,
         job_reference_id: reference_id,
@@ -1705,7 +1907,7 @@ defmodule Vutuv.Activity do
     |> at_or_before_welcome(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, username} ->
-      %{id: "username-#{id}", kind: "username", at: at, username: username}
+      %{id: event_id("username", id), kind: "username", at: at, username: username}
     end)
   end
 
@@ -1882,6 +2084,37 @@ defmodule Vutuv.Activity do
   defp unless_seen(query, user_id, true) do
     seen = from(s in NotificationPostRead, where: s.user_id == ^user_id, select: s.post_id)
     where(query, [event], event.post_id not in subquery(seen))
+  end
+
+  # Drops the one event the member acknowledged by clicking its browser
+  # notification (`mark_notification_seen/3`). Same division of labour as
+  # `unless_seen/3`: only the badge tally asks, the page keeps listing the row.
+  #
+  # The `:id` shape covers every kind but one, because a count query counts
+  # rows of the source table it is named after and that table is its first
+  # binding — the assumption `since/2` already makes. The exception is the
+  # connection pair, which is two rows and names itself by the later of them.
+  # Which shape a kind uses is declared in `kind_specs/3`, so this is applied
+  # once in `total_count/4` rather than inside seventeen count queries.
+  defp unless_dismissed(query, _user_id, _dismiss, false), do: query
+  defp unless_dismissed(query, _user_id, nil, true), do: query
+
+  defp unless_dismissed(query, user_id, {kind, :id}, true),
+    do: where(query, [event], event.id not in subquery(dismissed_ids(user_id, kind)))
+
+  defp unless_dismissed(query, user_id, {kind, :later_follow}, true) do
+    where(
+      query,
+      [out, back],
+      fragment("GREATEST(?, ?)", out.id, back.id) not in subquery(dismissed_ids(user_id, kind))
+    )
+  end
+
+  defp dismissed_ids(user_id, kind) do
+    from(d in NotificationDismissal,
+      where: d.user_id == ^user_id and d.kind == ^kind,
+      select: d.source_id
+    )
   end
 
   # No self-like filter: a member cannot like their own post (enforced in

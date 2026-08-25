@@ -170,6 +170,50 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
     end
   end
 
+  describe "clicking the popup" do
+    test "carries back what it takes to mark that one event read", %{conn: conn} do
+      user = insert(:user, browser_notifications?: true)
+      liker = insert(:user)
+      post = insert(:post, user: user)
+      view = mount_shell(conn, user)
+
+      :ok = Vutuv.Posts.like_post(liker, post)
+
+      assert_push_event(view, "notify:show", %{ack: ack}, @push_timeout)
+      assert %{kind: "like", source_id: source_id} = ack
+
+      assert Activity.unread_notification_count(user.id) == 1
+      render_hook(view, "notify:seen", %{"kind" => ack.kind, "source_id" => source_id})
+      assert Activity.unread_notification_count(user.id) == 0
+    end
+
+    test "carries no reference for a kind the tally cannot single out", %{conn: conn} do
+      user = insert(:user, browser_notifications?: true)
+      view = mount_shell(conn, user)
+
+      # No `source_id` in the push means no row for a dismissal to name; the
+      # hook then simply navigates. The popup still goes out.
+      Activity.broadcast(user.id, {:new_notification, like_notification("Anna Klein")})
+
+      assert_push_event(view, "notify:show", %{ack: nil}, @push_timeout)
+    end
+
+    test "a forged payload can only touch the sender's own bell", %{conn: conn} do
+      user = insert(:user, browser_notifications?: true)
+      other = insert(:user)
+      liker = insert(:user)
+      post = insert(:post, user: other)
+      view = mount_shell(conn, user)
+
+      :ok = Vutuv.Posts.like_post(liker, post)
+      like = Vutuv.Repo.one!(Vutuv.Posts.PostLike)
+
+      render_hook(view, "notify:seen", %{"kind" => "like", "source_id" => like.id})
+
+      assert Activity.unread_notification_count(other.id) == 1
+    end
+  end
+
   describe "the test notification" do
     test "travels the same path a real one does", %{conn: conn} do
       user = insert(:user, browser_notifications?: true)

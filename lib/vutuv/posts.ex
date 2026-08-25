@@ -1284,8 +1284,8 @@ defmodule Vutuv.Posts do
 
   defp do_page_like(%Organization{} = page, %User{} = acting_user, %Post{} = post) do
     case engage(PostLike, :like, page, post, acting_user) do
-      {:ok, %PostLike{}} ->
-        Vutuv.Activity.notify_like(post.user_id, page, post.id)
+      {:ok, %PostLike{} = like} ->
+        Vutuv.Activity.notify_like(post.user_id, page, post.id, like.id)
         :ok
 
       {:ok, :noop} ->
@@ -1305,10 +1305,10 @@ defmodule Vutuv.Posts do
 
   defp do_like_post(%User{} = user, %Post{} = post) do
     case engage(PostLike, :like, user, post) do
-      {:ok, %PostLike{}} ->
+      {:ok, %PostLike{} = like} ->
         # A fresh like is news for the author; the idempotent repeat is not.
         # Self-likes never reach here (`like_post/2` rejects them upstream).
-        Vutuv.Activity.notify_like(post.user_id, user, post.id)
+        Vutuv.Activity.notify_like(post.user_id, user, post.id, like.id)
         :ok
 
       {:ok, :noop} ->
@@ -5892,7 +5892,13 @@ defmodule Vutuv.Posts do
     broadcast_reply_count(parent.id)
 
     if is_binary(parent.user_id) and parent.user_id != reply.user_id do
-      Vutuv.Activity.notify_reply(parent.user_id, reply.user, parent.id, reply.id)
+      Vutuv.Activity.notify_reply(
+        parent.user_id,
+        reply.user,
+        parent.id,
+        reply.id,
+        reply.reply_ref && reply.reply_ref.id
+      )
     end
 
     notify_thread_participants(parent, reply)
@@ -5932,7 +5938,15 @@ defmodule Vutuv.Posts do
       # so pushing a live badge here would leave them a count with nothing
       # behind it. One query keeps only the members who still want the push.
       |> thread_notifiable_ids()
-      |> Enum.each(&Vutuv.Activity.notify_thread_reply(&1, reply.user, root_id, reply.id))
+      |> Enum.each(
+        &Vutuv.Activity.notify_thread_reply(
+          &1,
+          reply.user,
+          root_id,
+          reply.id,
+          reply.reply_ref.id
+        )
+      )
     end
 
     :ok
@@ -5978,8 +5992,8 @@ defmodule Vutuv.Posts do
     added = Enum.reject(wanted, &(&1.id in existing))
 
     drop_mentions(post, existing -- Enum.map(wanted, & &1.id))
-    insert_mentions(post, added)
-    Enum.each(added, &notify_mentioned(post, &1))
+    mention_ids = insert_mentions(post, added)
+    Enum.each(added, &notify_mentioned(post, &1, mention_ids[&1.id]))
     sync_organization_mentions(post)
     :ok
   end
@@ -6048,7 +6062,11 @@ defmodule Vutuv.Posts do
     :ok
   end
 
-  defp insert_mentions(_post, []), do: :ok
+  # Returns the new rows as `%{user_id => mention_id}`: the ids are minted here
+  # (UUID v7, client-side), so the live push can name the very row the feed
+  # will count without reading it back — which is what lets a member dismiss
+  # that one mention by clicking its browser notification.
+  defp insert_mentions(_post, []), do: %{}
 
   defp insert_mentions(%Post{} = post, users) do
     now = NaiveDateTime.utc_now(:second)
@@ -6068,7 +6086,7 @@ defmodule Vutuv.Posts do
     # A concurrent save of the same post (a double-submitted edit) must not
     # raise on the unique index; the row is the same fact either way.
     Repo.insert_all(PostMention, rows, on_conflict: :nothing)
-    :ok
+    Map.new(rows, &{&1.user_id, &1.id})
   end
 
   # The actor is whoever the post is BY — the organization on an organization
@@ -6078,9 +6096,9 @@ defmodule Vutuv.Posts do
   #
   # A block only guards the member case: a block is a relationship between two
   # people, and `blocked_between?/2` already answers false for a nil id.
-  defp notify_mentioned(%Post{} = post, %User{} = mentioned) do
+  defp notify_mentioned(%Post{} = post, %User{} = mentioned, mention_id) do
     unless Vutuv.Social.blocked_between?(mentioned.id, post.user_id) do
-      Vutuv.Activity.notify_mention(mentioned.id, author(post), post.id)
+      Vutuv.Activity.notify_mention(mentioned.id, author(post), post.id, mention_id)
     end
   end
 

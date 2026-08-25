@@ -573,6 +573,22 @@ defmodule VutuvWeb.ShellLive do
      })}
   end
 
+  # The member clicked a browser notification, so they have seen exactly the
+  # event it announced — and nothing else on the bell. Recording it drops that
+  # one from the unread tally; the recount then comes back through
+  # `:notifications_changed` like every other change, so the badge is never
+  # decremented by hand and cannot drift from the feed.
+  #
+  # Whatever the browser sends is scoped to this socket's member and checked
+  # against the kind vocabulary in `Vutuv.Activity`, so the worst a forged
+  # payload can do is mark one of the sender's own notifications read.
+  def handle_event("notify:seen", %{"kind" => kind, "source_id" => source_id}, socket) do
+    Activity.mark_notification_seen(socket.assigns.user_id, kind, source_id)
+    {:noreply, socket}
+  end
+
+  def handle_event("notify:seen", _params, socket), do: {:noreply, socket}
+
   defp push_notify(%{assigns: %{browser_notifications?: false}} = socket, _payload), do: socket
 
   defp push_notify(socket, payload), do: push_event(socket, "notify:show", payload)
@@ -581,6 +597,11 @@ defmodule VutuvWeb.ShellLive do
     {title, body} = NotificationLine.title_and_body(notification)
 
     push_notify(socket, %{
+      # What the hook hands back when the popup is clicked, so the bell can
+      # drop this one event and keep the rest (`handle_event("notify:seen")`).
+      # nil for a kind the tally cannot single out again — the hook then just
+      # navigates.
+      ack: Activity.dismiss_ref(notification),
       # One tag for the whole activity stream, so a burst of ten likes replaces
       # itself into a single popup instead of stacking ten - and so a member
       # with four vutuv tabs open gets one notification rather than four (the

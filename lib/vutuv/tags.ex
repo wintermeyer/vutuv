@@ -1036,7 +1036,7 @@ defmodule Vutuv.Tags do
     # Endorsing your own tag is possible but not news.
     if owner_id != endorsement.user_id do
       endorser = Repo.get(Vutuv.Accounts.User, endorsement.user_id)
-      Vutuv.Activity.notify_endorsement(owner_id, endorser, tag.name)
+      Vutuv.Activity.notify_endorsement(owner_id, endorser, tag.name, endorsement.id)
     end
 
     owner_id

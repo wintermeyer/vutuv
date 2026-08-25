@@ -310,7 +310,11 @@ defmodule Vutuv.Profiles.CvUpdates do
   # doubling it (the start is what does not move; the newest timestamp does).
   defp group_item(author_id, started_at, at, entries, count) do
     %{
-      id: "cv-update-#{author_id}-#{NaiveDateTime.diff(started_at, ~N[1970-01-01 00:00:00])}",
+      id:
+        Activity.event_id(
+          "cv_update",
+          "#{author_id}-#{NaiveDateTime.diff(started_at, ~N[1970-01-01 00:00:00])}"
+        ),
       at: at,
       entry_count: count,
       entries: Enum.take(entries, @preview_entries)

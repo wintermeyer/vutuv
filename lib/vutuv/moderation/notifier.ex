@@ -60,6 +60,7 @@ defmodule Vutuv.Moderation.Notifier do
         Activity.notify(owner.id, %{
           kind: "image_rejected",
           image_kind: scan.kind,
+          source_id: scan.id,
           at: DateTime.utc_now()
         })
 
@@ -117,6 +118,7 @@ defmodule Vutuv.Moderation.Notifier do
       kind: "moderation",
       text: text,
       case_id: case_record.id,
+      source_id: case_record.id,
       at: DateTime.utc_now()
     })
   end

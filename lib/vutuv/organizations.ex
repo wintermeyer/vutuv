@@ -714,7 +714,14 @@ defmodule Vutuv.Organizations do
     |> Repo.insert()
     |> case do
       {:ok, role_row} ->
-        Vutuv.Activity.notify_organization_role(user.id, granted_by, organization, role)
+        Vutuv.Activity.notify_organization_role(
+          user.id,
+          granted_by,
+          organization,
+          role,
+          role_row.id
+        )
+
         {:ok, role_row}
 
       {:error, %{errors: errors} = changeset} ->
@@ -777,8 +784,13 @@ defmodule Vutuv.Organizations do
         granted_by_user_id: actor.id
       })
       |> Repo.insert(on_conflict: :nothing)
+      |> case do
+        {:ok, row} ->
+          Vutuv.Activity.notify_organization_role(user.id, actor, organization, role, row.id)
 
-      Vutuv.Activity.notify_organization_role(user.id, actor, organization, role)
+        {:error, _changeset} ->
+          :ok
+      end
     end)
 
     {:ok, rank_roles(wanted)}

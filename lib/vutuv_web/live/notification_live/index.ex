@@ -120,6 +120,12 @@ defmodule VutuvWeb.NotificationLive.Index do
     read_marker = user.notifications_read_at
     new_count = if connected?(socket), do: Activity.unread_notification_count(user), else: 0
 
+    # The rows the member already acknowledged one by one, from the browser
+    # notifications they clicked — captured here for the same reason as the
+    # marker above: `mark_notifications_read/1` drops them a line further down,
+    # and this visit should still show them as read rather than as news.
+    dismissed = Activity.dismissed_event_ids(user.id)
+
     if connected?(socket) do
       Activity.subscribe(user.id)
       Activity.mark_notifications_read(user.id)
@@ -132,6 +138,7 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:page_title, gettext("Notifications"))
      |> assign(:read_marker, read_marker)
      |> assign(:new_count, new_count)
+     |> assign(:dismissed, dismissed)
      |> assign(:today, ViewerClock.today())
      |> assign(:quote_lines, User.notification_post_lines(user))
      |> assign_rail(connected?(socket))}
@@ -181,10 +188,11 @@ defmodule VutuvWeb.NotificationLive.Index do
       notification
       |> Map.put_new(:kind, "activity")
       |> Map.put_new(:at, DateTime.utc_now())
-      # Pushed events carry no row id, so mint one outside the derived
-      # "<kind>-<row id>" namespace. A CV update brings its own derived group
-      # id, so a second entry within the grouping window replaces the row an
-      # open page already shows instead of stacking another.
+      # `Activity.notify/2` gives a push the same id its derived row will have,
+      # so an event that arrives twice (a CV sitting growing, a reconnect)
+      # replaces the row an open page already shows instead of stacking
+      # another. Only a kind with no source row behind it falls through to a
+      # minted id outside that namespace.
       |> Map.put_new(:id, "live-#{System.unique_integer([:positive, :monotonic])}")
 
     cond do
@@ -268,7 +276,10 @@ defmodule VutuvWeb.NotificationLive.Index do
     %{
       page: page,
       total: total,
-      items: feed.entries |> with_seen_flags(user) |> with_post_previews(user)
+      items:
+        feed.entries
+        |> with_seen_flags(user, socket.assigns.dismissed)
+        |> with_post_previews(user)
     }
   end
 
@@ -284,7 +295,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # counting it. They stay listed — the page is the log of what happened — they
   # just no longer render as new, so the list and the badge tell one story. One
   # query per page.
-  defp with_seen_flags(entries, viewer) do
+  defp with_seen_flags(entries, viewer, dismissed) do
     seen =
       entries
       |> Enum.map(&Activity.subject_post_id/1)
@@ -292,7 +303,11 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> then(&Activity.seen_post_ids(viewer.id, &1))
 
     Enum.map(entries, fn entry ->
-      Map.put(entry, :seen?, MapSet.member?(seen, Activity.subject_post_id(entry)))
+      read? =
+        MapSet.member?(seen, Activity.subject_post_id(entry)) or
+          MapSet.member?(dismissed, entry[:id])
+
+      Map.put(entry, :seen?, read?)
     end)
   end
 

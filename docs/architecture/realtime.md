@@ -184,9 +184,9 @@ a single post never produces two notifications for the same reader.
 `post_mentions` and `handle_change_notifications` are the two event tables
 written for a feed kind rather than read from one that already existed.
 
-### Read state: one marker plus per-post exceptions
+### Read state: one marker plus two kinds of exception
 
-Derived-feed-wise, read state is stored in exactly two places.
+Derived-feed-wise, read state is stored in exactly three places.
 
 `users.notifications_read_at` is the **marker**: everything up to here has been
 seen. `Activity.mark_notifications_read/1` bumps it when the member opens
@@ -223,6 +223,40 @@ the feed itself do not, so the row stays listed and the pager's total is
 unchanged — /notifications remains the log of what happened, it just stops
 calling that row new. The page marks those rows with one extra query per page
 (`Activity.seen_post_ids/2`), so the list and the badge tell one story.
+
+`notification_dismissals` holds the **per-event exceptions**, written by
+`Activity.mark_notification_seen/3` when a member clicks the browser
+notification that announced one event. A popup carries a single event and is
+only ever raised while the member is somewhere else, so clicking it says "I
+have seen this" about that event and about nothing else waiting on the bell —
+which the marker cannot express, because moving it would swallow everything
+older too. The badge therefore drops by one.
+
+A row names its event by `kind` plus `source_id`, the id of the row the feed
+derives that event from: the follow, the like, the endorsement, the image scan.
+That pair is also the feed item's own id (`Activity.event_id/2`), which is what
+lets the notifications page render the dismissed row as read from the same two
+columns.
+
+Which shape a kind's exclusion takes is a **registry** entry, beside its
+read-marker arm, its feed source and its counts: `dismiss: [{"like", :id}]` and
+`unless_dismissed/4` is applied once, in `total_count/4`, rather than inside
+seventeen count queries. `:id` covers all but one, because a count query counts
+rows of the table it is named after and that table is its first binding — the
+assumption `since/2` already makes; the connection pair is two rows and names
+itself by the later of them (`:later_follow`). `cv_update` declares `nil`: a
+sitting is several CV rows grouped in Elixir under a synthesised id, so there is
+no row for SQL to exclude. `Activity.dismissable_kinds/0` reads straight off
+those entries, so a kind cannot store dismissals the tally would then ignore.
+
+The live push has to name the same row the tally counts, and the two are written
+in different modules from different arguments, so `Vutuv.Activity.notify_*`
+carries a `:source_id`, `notify/2` stamps the derived `event_id/2` on the push
+(an event arriving twice then replaces its row instead of stacking another), and
+`notification_dismissal_test.exs` asserts per kind that the push and the derived
+item name the same row. Opening /notifications deletes the member's dismissals:
+the marker now covers them, so the table only ever holds the exceptions that
+still matter.
 
 ### The notifications page (2026-07 redesign)
 
@@ -377,7 +411,13 @@ one event by definition.
 That module owns the **destination** too (`notification_target/2`), which is
 the half easiest to leave behind: clicking the popup opens the post, the case
 or the profile it named, and only a kind with no page of its own falls back to
-`/notifications`. A popup is raised precisely when the member is not looking at
+`/notifications`. The click also **puts that one event to rest**: the push
+carries an `ack` (`Activity.dismiss_ref/1`), the hook sends it back as
+`notify:seen`, and the shell records a per-event dismissal — see "Read state"
+above. Navigation waits for the server's reply, because assigning
+`location.href` tears the socket down and a push in flight would go with it; a
+700 ms timer takes the member to the page anyway when the socket is slow or
+already gone. A popup is raised precisely when the member is not looking at
 vutuv, so a list to hunt through is the one place that costs most. The third
 per-kind wording, `VutuvWeb.NotificationDigestText`, stays separate on purpose
 (a digest mail names the actor inline and by `@handle`) — a new kind is spelled

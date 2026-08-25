@@ -763,7 +763,7 @@ const Hooks = {
       this.dismissed = true
       this.applyPrompt()
     },
-    show({ tag, title, body, icon, url, test }) {
+    show({ tag, title, body, icon, url, test, ack }) {
       if (notifyPermission() !== "granted") return
       // Looking at vutuv means the badge and the bell already said it - except
       // for the test, which the member asked for while plainly looking at the
@@ -796,13 +796,35 @@ const Hooks = {
       notification.onclick = () => {
         window.focus()
         notification.close()
-        if (url) window.location.href = url
+        this.acknowledge(ack, () => {
+          if (url) window.location.href = url
+        })
       }
 
       // Only ever fired for a test: it is what tells the settings card that a
       // popup really was constructed, so the card can stop waiting instead of
       // leaving the member to guess whether anything happened.
       if (test) window.dispatchEvent(new CustomEvent("vutuv:notify-shown"))
+    },
+    // Clicking a popup means the member has seen that one event, so the bell
+    // should drop it and keep the rest. The server needs to hear that BEFORE
+    // the tab navigates: assigning `location.href` tears the socket down, and
+    // a push in flight would go with it. So navigation waits for the server's
+    // reply - and for a socket that is slow or already gone, a short timer
+    // takes them to the page anyway. Whichever comes first wins; `done` is
+    // what keeps the member from being sent twice.
+    acknowledge(ack, then) {
+      if (!ack) return then()
+
+      let done = false
+      const go = () => {
+        if (done) return
+        done = true
+        then()
+      }
+
+      this.pushEvent("notify:seen", ack, go)
+      window.setTimeout(go, 700)
     },
   },
   // The admin member browser (VutuvWeb.Admin.UserLive) pages in place over the

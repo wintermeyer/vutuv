@@ -887,21 +887,27 @@ defmodule Vutuv.Moderation do
       # A mutual follow is what made the pair vernetzt, so recording the two
       # follow edges is enough to restore the connection on a rejected case.
       # There is no separate connection state to capture any more.
-      Repo.insert!(%Severance{
-        case_id: case_record.id,
-        reporter_id: reporter.id,
-        owner_id: owner_id,
-        had_follow_reporter_to_owner?: ties.follow_a_to_b,
-        had_follow_owner_to_reporter?: ties.follow_b_to_a,
-        conversation_id: conversation && conversation.id
-      })
+      severance =
+        Repo.insert!(%Severance{
+          case_id: case_record.id,
+          reporter_id: reporter.id,
+          owner_id: owner_id,
+          had_follow_reporter_to_owner?: ties.follow_a_to_b,
+          had_follow_owner_to_reporter?: ties.follow_b_to_a,
+          conversation_id: conversation && conversation.id
+        })
 
       log(case_record, reporter, "relationship_severed", %{
         "follows" => Enum.count([ties.follow_a_to_b, ties.follow_b_to_a], & &1),
         "conversation" => conversation != nil
       })
 
-      Vutuv.Activity.notify_report_protection(reporter.id, Repo.get(User, owner_id), "severed")
+      Vutuv.Activity.notify_report_protection(
+        reporter.id,
+        Repo.get(User, owner_id),
+        "severed",
+        severance.id
+      )
     end
 
     :ok
@@ -935,7 +941,8 @@ defmodule Vutuv.Moderation do
         Vutuv.Activity.notify_report_protection(
           severance.reporter_id,
           Repo.get(User, severance.owner_id),
-          "restored"
+          "restored",
+          severance.id
         )
       end
     end

@@ -77,7 +77,7 @@ defmodule Vutuv.Social do
       |> Follow.changeset(%{follower_id: follower_id, followee_id: followee_id})
       |> Repo.insert()
 
-    with {:ok, _follow} <- result do
+    with {:ok, follow} <- result do
       actor = follower_struct(follower)
 
       # A follow-back that completes a mutual follow makes the pair "vernetzt"
@@ -85,9 +85,9 @@ defmodule Vutuv.Social do
       # of a second plain "started following you". A first/one-way follow stays
       # the ordinary new-follower event.
       if user_follows_user?(followee_id, follower_id) do
-        Vutuv.Activity.notify_connection(followee_id, actor)
+        Vutuv.Activity.notify_connection(followee_id, actor, follow.id)
       else
-        Vutuv.Activity.notify_new_follower(followee_id, actor)
+        Vutuv.Activity.notify_new_follower(followee_id, actor, follow.id)
       end
 
       # Bump the live counts on both members' open profiles (follower / following
