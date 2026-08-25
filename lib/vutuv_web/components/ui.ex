@@ -491,7 +491,7 @@ defmodule VutuvWeb.UI do
       target="_blank"
       rel="noopener"
       class={[
-        "text-xs font-medium text-slate-600 hover:text-brand-700",
+        "text-xs font-medium text-slate-600 hover:text-brand-700 dark:hover:text-brand-300",
         "dark:text-slate-400 dark:hover:text-brand-300",
         @class
       ]}
@@ -1146,7 +1146,7 @@ defmodule VutuvWeb.UI do
       data-feed-button
       class={[
         "inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors",
-        "border-slate-300 text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700",
+        "border-slate-300 text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:hover:text-brand-300",
         "dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/30 dark:hover:text-brand-200",
         @class
       ]}
@@ -1182,7 +1182,7 @@ defmodule VutuvWeb.UI do
       href={@href}
       class={[
         "inline-flex min-h-10 shrink-0 items-center gap-1 text-sm font-semibold",
-        "text-slate-600 transition-colors hover:text-brand-700",
+        "text-slate-600 transition-colors hover:text-brand-700 dark:hover:text-brand-300",
         "dark:text-slate-400 dark:hover:text-brand-200"
       ]}
     >

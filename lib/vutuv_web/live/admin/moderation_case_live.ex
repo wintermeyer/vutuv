@@ -329,7 +329,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
             />
             <span>
               {event_label(event.action)}
-              <a :if={event.actor} href={~p"/#{event.actor}"} class="text-slate-600 dark:text-slate-400 hover:text-brand-700">
+              <a :if={event.actor} href={~p"/#{event.actor}"} class="text-slate-600 dark:text-slate-400 hover:text-brand-700 dark:hover:text-brand-300">
                 · @{event.actor.username}
               </a>
               <% detail = event_detail(event.action, event.detail) %>

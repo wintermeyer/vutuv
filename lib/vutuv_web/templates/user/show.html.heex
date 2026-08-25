@@ -716,7 +716,7 @@ the resulting ~200px rail width. --%>
           </div>
           <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
             <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
-            <.link href={~p"/#{@user}/educations/#{edu}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
+            <.link href={~p"/#{@user}/educations/#{edu}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-white">
               {edu.degree || edu.school}
             </.link>
             <p :if={edu.degree} class="text-sm text-slate-600 dark:text-slate-400">{edu.school}</p>
@@ -1281,7 +1281,7 @@ the resulting ~200px rail width. --%>
         <a
           id="profile-fediverse-shortcut"
           href="#profile-subscribe"
-          class="group flex items-center gap-2.5 py-1.5 text-sm text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
+          class="group flex items-center gap-2.5 py-1.5 text-sm text-slate-700 transition hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-200"
         >
           <.detail_icon
             name="globe"
@@ -1435,7 +1435,7 @@ the resulting ~200px rail width. --%>
                   title={
                     Enum.map_join(entry.sources, " · ", &(&1.provider <> ": @" <> &1.feed.handle))
                   }
-                  class="truncate font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+                  class="truncate font-semibold text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-white"
                 >
                   {entry.feed.name}
                 </.link>
@@ -1443,7 +1443,7 @@ the resulting ~200px rail width. --%>
                   href={entry.post.url}
                   target="_blank"
                   rel="noopener nofollow ugc"
-                  class="shrink-0 text-sm text-slate-600 dark:text-slate-400 hover:text-brand-700"
+                  class="shrink-0 text-sm text-slate-600 dark:text-slate-400 hover:text-brand-700 dark:hover:text-brand-300"
                 >
                   <.post_time
                     id={"feed-time-#{entry.feed.handle}-#{entry.post.id}"}

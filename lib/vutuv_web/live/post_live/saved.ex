@@ -779,7 +779,7 @@ defmodule VutuvWeb.PostLive.Saved do
         <.avatar user={@person} size="sm" alt={"Avatar of #{full_name(@person)}"} presence />
       </.link>
       <div class="min-w-0 flex-1 text-sm">
-        <.link navigate={~p"/#{@person}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">
+        <.link navigate={~p"/#{@person}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100">
           {highlight(full_name(@person), @needle)}
           <span class="font-normal text-slate-600 dark:text-slate-400">@{@person.username}</span>
         </.link>

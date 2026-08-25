@@ -749,7 +749,7 @@ defmodule VutuvWeb.SearchLive do
                 <p class="mb-0 text-sm">
                   <.link
                     href={Posts.author_path(post)}
-                    class="font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+                    class="font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
                   >
                     {UserHelpers.author_name(post)}
                   </.link>
@@ -760,7 +760,7 @@ defmodule VutuvWeb.SearchLive do
                 </p>
                 <.link
                   href={Posts.path(post)}
-                  class="mt-1 block truncate text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300"
+                  class="mt-1 block truncate text-sm text-slate-700 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-300"
                 >
                   {highlight(PostTeaser.line(post), @post_needles)}
                 </.link>

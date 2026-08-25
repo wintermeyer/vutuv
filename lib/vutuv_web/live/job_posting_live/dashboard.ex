@@ -131,7 +131,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0">
-              <.link navigate={~p"/jobs/#{posting.slug}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-slate-100">
+              <.link navigate={~p"/jobs/#{posting.slug}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100">
                 {posting.title}
               </.link>
               <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">

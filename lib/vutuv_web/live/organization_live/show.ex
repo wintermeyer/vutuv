@@ -444,7 +444,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
                   :if={@fediverse}
                   id="organization-fediverse-shortcut"
                   href="#organization-subscribe"
-                  class="group mt-2 flex items-center gap-2 text-sm text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
+                  class="group mt-2 flex items-center gap-2 text-sm text-slate-700 transition hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-200"
                 >
                   <.detail_icon
                     name="globe"

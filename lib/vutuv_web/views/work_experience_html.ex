@@ -549,7 +549,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
                 <span class="absolute -left-[0.25rem] top-1.5 h-2 w-2 rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900"></span>
                 <.link
                   href={~p"/#{@user}/work_experiences/#{role.job}"}
-                  class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+                  class="font-semibold text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-white"
                 >
                   {role.job.title}
                 </.link>
@@ -578,7 +578,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
             <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
             <.link
               href={~p"/#{@user}/work_experiences/#{role.job}"}
-              class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+              class="font-semibold text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-white"
             >
               {role.job.title}
             </.link>

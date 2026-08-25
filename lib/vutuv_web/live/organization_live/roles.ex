@@ -225,7 +225,7 @@ defmodule VutuvWeb.OrganizationLive.Roles do
               <div class="min-w-0 flex-1">
                 <.link
                   navigate={"/#{entry.user.username}"}
-                  class="block truncate font-medium text-slate-900 hover:text-brand-700 dark:text-slate-100"
+                  class="block truncate font-medium text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
                 >
                   {full_name(entry.user)}
                 </.link>

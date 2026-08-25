@@ -174,7 +174,7 @@ defmodule VutuvWeb.CVLive do
   # developer/translator text and the target is a constant, so the whole line is
   # rendered with raw/1 (no user input) — this is the safe HTML for the link.
   defp jsonresume_link do
-    ~s(<a href="https://jsonresume.org" target="_blank" rel="noopener" class="underline hover:text-brand-700">jsonresume.org</a>)
+    ~s(<a href="https://jsonresume.org" target="_blank" rel="noopener" class="underline hover:text-brand-700 dark:hover:text-brand-300">jsonresume.org</a>)
   end
 
   # The include/exclude heading toggle shared by every CV card (each section,

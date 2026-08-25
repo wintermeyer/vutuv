@@ -296,7 +296,7 @@
             <th :for={{col, label} <- [{"when", gettext("When")}, {"kind", gettext("Kind")}, {"recipient", gettext("Recipient")}, {"status", gettext("Status")}]}>
               <a
                 href={~p"/admin/newsletters/#{@newsletter}?#{sort_query(@filters, col)}"}
-                class="font-semibold text-slate-700 hover:text-brand-700 dark:text-slate-200"
+                class="font-semibold text-slate-700 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-200"
               >
                 {label}{sort_caret(@filters, col)}
               </a>

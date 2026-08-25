@@ -1841,7 +1841,7 @@ defmodule VutuvWeb.PostLive.Feed do
                   <div class="flex items-start gap-2">
                     <.link
                       href={~p"/#{row.user}"}
-                      class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+                      class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
                     >
                       {UserHelpers.full_name(row.user)}
                     </.link>
@@ -1938,7 +1938,7 @@ defmodule VutuvWeb.PostLive.Feed do
                   <p class="mb-0 text-sm">
                     <.link
                       href={~p"/#{post.user}"}
-                      class="relative z-20 font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+                      class="relative z-20 font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
                     >
                       {UserHelpers.full_name(post.user)}
                     </.link>

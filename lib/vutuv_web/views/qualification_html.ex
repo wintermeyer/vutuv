@@ -390,7 +390,7 @@ defmodule VutuvWeb.QualificationHTML do
     <div class="min-w-0 flex-1">
       <.link
         href={~p"/#{@user}/qualifications/#{@qualification}"}
-        class="font-medium text-slate-900 hover:text-brand-700 dark:text-white"
+        class="font-medium text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-white"
       >
         {@qualification.name}
       </.link>

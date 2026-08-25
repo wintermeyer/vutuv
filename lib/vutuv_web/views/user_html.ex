@@ -74,7 +74,7 @@ defmodule VutuvWeb.UserHTML do
           <.avatar user={@user} size="sm" alt={"Avatar of #{full_name(@user)}"} />
         </.link>
         <div class="min-w-0 text-sm">
-          <.link href={~p"/#{@user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{highlight(full_name(@user), @highlight)}</.link>
+          <.link href={~p"/#{@user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100">{highlight(full_name(@user), @highlight)}</.link>
           <%!-- Always render a line (non-breaking space when empty) so rows keep a
           uniform height and the side-by-side follower/following cards stay aligned.
           Pin text-sm + mb-0 so the legacy global `p` default (15px font, 15px bottom
@@ -778,7 +778,7 @@ defmodule VutuvWeb.UserHTML do
         <li :for={account <- @accounts}>
           <.social_link
             account={account}
-            class="group flex items-center gap-2.5 py-1.5 text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
+            class="group flex items-center gap-2.5 py-1.5 text-slate-700 transition hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-200"
           >
             <.social_icon
               provider={account.provider}

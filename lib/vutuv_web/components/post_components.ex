@@ -2025,7 +2025,7 @@ defmodule VutuvWeb.PostComponents do
       {@rest}
     >
       <.icon_repost class="h-4 w-4 shrink-0" />
-      <.link navigate={@navigate} href={@href} class="min-w-0 truncate hover:text-brand-700">
+      <.link navigate={@navigate} href={@href} class="min-w-0 truncate hover:text-brand-700 dark:hover:text-brand-300">
         {gettext("Reposted by %{name}", name: @name)}
       </.link>
     </p>
@@ -2938,7 +2938,7 @@ defmodule VutuvWeb.PostComponents do
       <%= case @reply_banner do %>
         <% {:parent, parent_author, parent_path} -> %>
           <.reply_banner_line variant="parent">
-            <.link href={parent_path} class="hover:text-brand-700">
+            <.link href={parent_path} class="hover:text-brand-700 dark:hover:text-brand-300">
               {gettext("Replying to %{handle}", handle: author_handle(parent_author))}
             </.link>
           </.reply_banner_line>
@@ -2947,7 +2947,7 @@ defmodule VutuvWeb.PostComponents do
             <%!-- `Posts.author_path/1` takes the author directly, so the page a
             page-published parent belonged to is reached the same way a member's
             profile is. --%>
-            <.link href={Posts.author_path(parent_author)} class="hover:text-brand-700">
+            <.link href={Posts.author_path(parent_author)} class="hover:text-brand-700 dark:hover:text-brand-300">
               {gettext("Reply to a now-deleted post by %{handle}",
                 handle: author_handle(parent_author)
               )}
@@ -2964,7 +2964,7 @@ defmodule VutuvWeb.PostComponents do
             <.link
               :if={remote_account_id}
               navigate={~p"/system/fediverse/account/#{remote_account_id}"}
-              class="hover:text-brand-700"
+              class="hover:text-brand-700 dark:hover:text-brand-300"
             >
               {gettext("Replying to %{handle}", handle: remote_handle)}
             </.link>
@@ -3000,11 +3000,11 @@ defmodule VutuvWeb.PostComponents do
             <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
               <.link
                 href={@author_path}
-                class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+                class="font-semibold text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-white"
               >
                 {@author_name}
               </.link>
-              <.link href={@permalink} class="text-sm text-slate-600 dark:text-slate-400 hover:text-brand-700">
+              <.link href={@permalink} class="text-sm text-slate-600 dark:text-slate-400 hover:text-brand-700 dark:hover:text-brand-300">
                 <.post_time id={@time_id} at={@post.inserted_at} />
               </.link>
               <span :if={@edited?} class="text-xs text-slate-600 dark:text-slate-400">{gettext("edited")}</span>
@@ -4061,7 +4061,7 @@ defmodule VutuvWeb.PostComponents do
         reposter can be a page (`Posts.reposter_rosters/2`), which crashed the
         member-only pair (issue #1410). --%>
         <%= if @others == 0 do %>
-          <.link href={Posts.author_path(@primary)} class="hover:text-brand-700">
+          <.link href={Posts.author_path(@primary)} class="hover:text-brand-700 dark:hover:text-brand-300">
             {gettext("Reposted by %{name}", name: UserHelpers.author_name(@primary))}
           </.link>
         <% else %>

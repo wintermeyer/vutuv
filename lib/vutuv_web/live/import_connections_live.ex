@@ -596,7 +596,7 @@ defmodule VutuvWeb.ImportConnectionsLive do
       <div class="min-w-0 flex-1 text-sm">
         <.link
           navigate={~p"/#{@match.user}"}
-          class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+          class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
         >
           {UserHelpers.full_name(@match.user)}
         </.link>
