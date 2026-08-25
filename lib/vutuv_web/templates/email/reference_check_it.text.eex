@@ -1,0 +1,21 @@
+<%= email_greeting(@user) %>,
+
+l'analisi del Suo attestato di lavoro "<%= @title %>" è terminata.
+<%= if @grade do %>
+Voto complessivo: <%= @grade %>
+<% end %>
+L'esito lo vede solo Lei. Può leggerlo qui:
+
+<%= @url %>settings/job_references/<%= @reference_id %>/check
+
+La lettura è stata prodotta da un modello linguistico sui nostri server e non è
+un parere legale. Per una valutazione vincolante si rivolga a un avvocato,
+preferibilmente uno specializzato in diritto del lavoro.
+
+Queste e-mail di notifica può disattivarle qui:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

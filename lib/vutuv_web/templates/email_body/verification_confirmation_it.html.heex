@@ -1,0 +1,9 @@
+<.email_layout preheader="Il Suo account vutuv è verificato" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>congratulazioni! Il Suo account vutuv risulta ora verificato.</.email_p>
+  <.email_p>
+    Sul Suo profilo compare adesso un contrassegno di verifica blu accanto al Suo nome, così i visitatori vedono a colpo d'occhio che questo account è davvero Suo.
+  </.email_p>
+  <.email_button href={"#{@url}#{@user.username}"}>Veda il Suo profilo</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

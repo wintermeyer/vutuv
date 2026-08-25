@@ -1,0 +1,18 @@
+<.email_layout preheader="L'analisi del Suo attestato di lavoro è terminata" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    l'analisi del Suo attestato di lavoro "{@title}" è terminata.
+  </.email_p>
+  <.email_p :if={@grade}><strong>Voto complessivo: {@grade}</strong></.email_p>
+  <.email_p>L'esito lo vede solo Lei.</.email_p>
+  <.email_button href={"#{@url}settings/job_references/#{@reference_id}/check"}>
+    Legga l'analisi
+  </.email_button>
+  <.email_p>
+    La lettura è stata prodotta da un modello linguistico sui nostri server e non è un parere
+    legale. Per una valutazione vincolante si rivolga a un avvocato, preferibilmente uno
+    specializzato in diritto del lavoro.
+  </.email_p>
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

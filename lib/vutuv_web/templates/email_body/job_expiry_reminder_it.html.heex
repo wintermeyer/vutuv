@@ -1,0 +1,13 @@
+<.email_layout preheader="Il Suo annuncio di lavoro su vutuv scade a breve" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    il Suo annuncio di lavoro "{@posting_title}" scade il {Calendar.strftime(@expires_on, "%d.%m.%Y")}.
+    Gli annunci scadono automaticamente dopo 90 giorni; non c'è rinnovo.
+  </.email_p>
+  <.email_p>
+    Ha coperto la posizione? Chiuda l'annuncio. È ancora aperta? Alla scadenza lo ripubblichi con
+    un tocco, con una data di pubblicazione onesta.
+  </.email_p>
+  <.email_button href={"#{@url}jobs/#{@posting_slug}"}>Veda l'annuncio</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

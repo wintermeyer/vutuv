@@ -21,7 +21,7 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
   alias Vutuv.Newsletters.NewsletterGroupMember
   alias Vutuv.Tags.Tag
 
-  @locales ~w(en de)
+  @locales ~w(en de it)
   @max_name 255
 
   schema "newsletter_groups" do

@@ -1,0 +1,21 @@
+<%= email_greeting(@user) %>,
+
+ha un nuovo messaggio da <%= @other_label %> su vutuv:
+<%= if @message_body do %>
+<%= @message_text %>
+<% end %>
+Lo legga e risponda qui:
+
+<%= @url %>messages/<%= @conversation_id %>
+
+<%= if @each_message? do %>Riceverà un'e-mail come questa per ogni nuovo messaggio non letto.<% else %>Per non riempirLe la casella di posta, questa è l'unica e-mail che riceverà su questa conversazione finché non la aprirà.<% end %> Decide Lei se scriverLe per ogni messaggio o solo per il primo, e quanto aspettiamo prima di inviare, nelle Sue impostazioni delle notifiche:
+
+<%= @settings_url %>
+
+Queste e-mail di notifica può disattivarle qui:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

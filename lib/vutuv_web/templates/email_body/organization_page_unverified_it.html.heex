@@ -1,0 +1,17 @@
+<.email_layout preheader="La Sua pagina di organizzazione non è più pubblica" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    la Sua pagina di organizzazione "{@organization_name}" ha perso il suo ultimo dominio
+    verificato (<strong>{@domain}</strong>) ed è tornata in stato "verifica in attesa". Non è più
+    pubblicamente visibile.
+  </.email_p>
+  <.email_p>
+    La prova è rimasta irraggiungibile per una settimana. La ripristini, esegua di nuovo il
+    controllo e la pagina torna online. Nel frattempo i Suoi contenuti restano, solo non
+    pubblicati.
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}/domains"}>
+    Ricontrolla il dominio
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

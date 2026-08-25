@@ -1,0 +1,14 @@
+<.email_layout preheader="Il Suo account vutuv è sospeso" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    dopo una seconda violazione confermata delle nostre regole della community il Suo account
+    vutuv è sospeso fino al {Calendar.strftime(@until, "%d.%m.%Y")}. Fino ad allora non può
+    accedere e il Suo profilo è nascosto.
+  </.email_p>
+  <.email_p>
+    La prenda sul serio: un'altra violazione confermata disattiva definitivamente il Suo account.
+    Le nostre regole della community:
+  </.email_p>
+  <.email_button href={"#{@url}community"}>Le nostre regole della community</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

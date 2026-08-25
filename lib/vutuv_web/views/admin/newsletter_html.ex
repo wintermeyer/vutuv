@@ -34,7 +34,7 @@ defmodule VutuvWeb.Admin.NewsletterHTML do
 
   @doc "A click rate as a one-decimal percentage string, German with a decimal comma."
   def percent(rate) when is_number(rate) do
-    decimal = if Gettext.get_locale(VutuvWeb.Gettext) == "de", do: ",", else: "."
+    decimal = if Gettext.get_locale(VutuvWeb.Gettext) in ~w(de it), do: ",", else: "."
 
     string =
       rate

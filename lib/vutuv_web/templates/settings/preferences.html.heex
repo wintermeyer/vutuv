@@ -16,7 +16,7 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
 
         <div class="sm:max-w-xs">
           <%= label f, :locale, gettext("Interface language"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= select f, :locale, [{gettext("English"), "en"}, {gettext("German"), "de"}], class: input_class() %>
+          <%= select f, :locale, [{gettext("English"), "en"}, {gettext("German"), "de"}, {gettext("Italian"), "it"}], class: input_class() %>
           <%= error_tag f, :locale %>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
             {gettext(

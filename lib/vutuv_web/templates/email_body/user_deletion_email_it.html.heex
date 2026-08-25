@@ -1,0 +1,11 @@
+<.email_layout preheader="Confermi l'eliminazione del Suo account" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>per eliminare il Suo account inserisca il seguente PIN:</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    <strong>ATTENZIONE:</strong> da questo passo non si torna indietro. Il Suo account verrà
+    eliminato non appena inserirà questo PIN su vutuv. Il PIN scade dopo 30 minuti.
+  </.email_p>
+  <.email_p>Naturalmente può sempre creare un nuovo account.</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

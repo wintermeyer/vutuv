@@ -1,0 +1,20 @@
+<%= email_greeting(@user) %>,
+
+è stato appena effettuato un accesso al Suo account vutuv. Se è stato Lei, può
+ignorare questa e-mail.
+
+Quando:     <%= @when_text %>
+Dispositivo: <%= @device %>
+<%= if @location do %>Luogo:      <%= @location %>
+<% end %><%= if @ip do %>IP:         <%= @ip %>
+<% end %>
+Perché Glielo diciamo:
+<%= for line <- @reason_lines do %>- <%= line %>
+<% end %>
+Se non è stato Lei, controlli i dispositivi connessi al Suo account e disconnetta quelli che non riconosce:
+
+<%= @devices_url %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

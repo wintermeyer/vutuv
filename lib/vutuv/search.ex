@@ -34,18 +34,26 @@ defmodule Vutuv.Search do
   # and an unrecognized email would wrongly fall through to phonetic name search.
   @email_regex ~r/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/
 
-  # Operator keys (German first, English alias) → parsed field.
+  # Operator keys (German first, then the English and Italian aliases) → parsed
+  # field. Every interface language gets its own spelling, because the search
+  # help page shows the examples in the reader's language and an example that
+  # does not parse is worse than none.
   @field_ops %{
     "tag" => :tag,
     "skill" => :tag,
     "vorname" => :first_name,
     "first" => :first_name,
+    "nome" => :first_name,
     "nachname" => :last_name,
     "last" => :last_name,
+    "cognome" => :last_name,
     "ort" => :city,
     "stadt" => :city,
     "city" => :city,
-    "status" => :status
+    "citta" => :city,
+    "città" => :city,
+    "status" => :status,
+    "stato" => :status
   }
 
   # The job-availability values the `status:` operator accepts (issue #935);

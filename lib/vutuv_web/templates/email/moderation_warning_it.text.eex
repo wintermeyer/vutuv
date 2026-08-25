@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+i nostri amministratori hanno esaminato una segnalazione su un Suo contenuto e
+hanno rilevato che viola le nostre regole della community:
+
+<%= @url %>community
+
+Questo è un avvertimento formale, il primo di tre passi. Una seconda violazione
+confermata sospende il Suo account per una settimana; una terza lo disattiva
+definitivamente. Gli avvertimenti decadono dopo dodici mesi.
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

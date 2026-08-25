@@ -1017,8 +1017,9 @@ defmodule Vutuv.Newsletters do
   defp recipient_address(%Swoosh.Email{to: [{_name, address} | _]}), do: address
   defp recipient_address(_email), do: "unknown"
 
-  # Only en/de newsletter templates exist, so collapse every other locale to en.
+  # A newsletter body exists per served locale; collapse anything else to en.
   defp email_locale(%{locale: "de"}), do: "de"
+  defp email_locale(%{locale: "it"}), do: "it"
   defp email_locale(_user), do: "en"
 
   # Confirmed, reachable, not-suspended, not-deactivated members who have not

@@ -1,0 +1,10 @@
+<.email_layout preheader="Confermi il Suo account vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>grazie per essersi iscritto a vutuv. Ecco il PIN che Le serve per accedere:</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    Il PIN scade dopo 30 minuti. Può sempre richiederne uno nuovo tornando su vutuv e accedendo di nuovo.
+  </.email_p>
+  <.email_p>Se il nostro servizio Le piace, ne parli pure ai Suoi contatti.</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

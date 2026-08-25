@@ -3082,7 +3082,10 @@ defmodule VutuvWeb.UI do
   the landing page. Grouping separator follows the active Gettext locale.
   """
   def delimited_count(n) when is_integer(n) do
-    separator = if Gettext.get_locale(VutuvWeb.Gettext) == "de", do: ".", else: ","
+    # German and Italian group thousands with a dot (60.023), English with a
+    # comma (60,023). The separators invert between locales, so the wrong one
+    # is misread rather than untidy.
+    separator = if Gettext.get_locale(VutuvWeb.Gettext) in ~w(de it), do: ".", else: ","
 
     digits =
       n
@@ -3347,13 +3350,20 @@ defmodule VutuvWeb.UI do
   end
 
   defp post_stamp(local, :yesterday, locale, region) do
-    yesterday = if locale == "de", do: "Gestern", else: "Yesterday"
+    yesterday = relative_yesterday(locale)
     yesterday <> ", " <> post_stamp(local, :today, locale, region)
   end
 
   defp post_stamp(local, :older, _locale, region) do
     Calendar.strftime(local, ViewerClock.pattern(region, :short_datetime))
   end
+
+  # One clause per interface language rather than a two-way `if`: the word is
+  # not a Gettext string because this runs outside a request in the agent
+  # formats, where the process locale is not the reader's.
+  defp relative_yesterday("de"), do: "Gestern"
+  defp relative_yesterday("it"), do: "Ieri"
+  defp relative_yesterday(_), do: "Yesterday"
 
   @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
   attr(:count, :integer, default: 0)

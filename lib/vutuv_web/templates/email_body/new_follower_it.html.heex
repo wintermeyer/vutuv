@@ -1,0 +1,7 @@
+<.email_layout preheader="Ha un nuovo follower su vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>@{@actor_username} ha iniziato a seguirla su vutuv.</.email_p>
+  <.email_button href={"#{@url}#{@actor_username}"}>Veda il suo profilo</.email_button>
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

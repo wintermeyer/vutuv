@@ -1,0 +1,18 @@
+<%= email_greeting(@user) %>,
+
+ecco le corrispondenze più recenti per le Sue ricerche salvate su vutuv.
+<%= for section <- @sections do %>
+<%= if section.kind == :jobs, do: "Nuovi annunci", else: "Nuove persone" %><%= if section.heading, do: " (" <> section.heading <> ")", else: "" %>
+<%= for entry <- section.entries do %>* <%= entry.title %><%= if entry.status, do: " · " <> entry.status, else: "" %>
+<%= if entry.meta != "", do: "  " <> entry.meta <> "\n", else: "" %>  <%= entry.url %>
+<% end %>
+Veda tutte le corrispondenze: <%= section.more_url %>
+Disattivi gli avvisi per questa ricerca: <%= section.disable_url %>
+<% end %>
+Può disattivare tutte le e-mail di avviso delle ricerche salvate qui:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

@@ -21,7 +21,7 @@ defmodule Vutuv.Cldr do
   """
   use Cldr,
     otp_app: :vutuv,
-    locales: ["en", "de"],
+    locales: ["en", "de", "it"],
     default_locale: "en",
     providers: [Cldr.Territory]
 end

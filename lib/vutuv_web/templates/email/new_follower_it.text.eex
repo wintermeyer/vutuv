@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+@<%= @actor_username %> ha iniziato a seguirla su vutuv.
+
+Veda il suo profilo:
+
+<%= @url %><%= @actor_username %>
+
+Queste e-mail di notifica può disattivarle qui:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

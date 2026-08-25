@@ -1,0 +1,10 @@
+<.email_layout preheader="Un Suo contenuto su vutuv è in esame" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    un Suo contributo su vutuv è stato segnalato ed è nascosto mentre i nostri amministratori lo
+    esaminano. Non deve fare nulla; Le comunicheremo l'esito.
+  </.email_p>
+  <.email_p>Può vedere il caso qui:</.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Veda il caso</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

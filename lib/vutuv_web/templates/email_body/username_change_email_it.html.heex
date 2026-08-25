@@ -1,0 +1,18 @@
+<.email_layout preheader="Confermi il Suo nuovo nome utente" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    per confermare il Suo nuovo nome utente @{@new_username} inserisca il seguente PIN:
+  </.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    Lo inserisca su vutuv per completare la modifica. Il PIN scade dopo 30 minuti.
+  </.email_p>
+  <.email_p>
+    L'attuale indirizzo del Suo profilo smetterà di funzionare non appena la modifica sarà effettiva, e le menzioni del Suo vecchio handle nei post verranno riscritte con quello nuovo.
+  </.email_p>
+  <.email_p>
+    Se non ha chiesto Lei di cambiare nome utente, non inserisca questo PIN. Qualcun altro potrebbe usare il Suo account:
+    <.email_link href={"#{@url}settings/security"}>metta in sicurezza il modo in cui accede</.email_link>.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

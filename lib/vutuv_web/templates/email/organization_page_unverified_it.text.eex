@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+la Sua pagina di organizzazione "<%= @organization_name %>" ha perso il suo ultimo dominio verificato ed è
+tornata in stato "verifica in attesa". Non è più pubblicamente visibile. Il dominio in questione
+è <%= @domain %>.
+
+La prova è rimasta irraggiungibile per una settimana. La ripristini, esegua di nuovo il controllo e la
+pagina torna online. Nel frattempo i Suoi contenuti restano, solo non pubblicati.
+
+<%= @url %>organizations/<%= @organization_slug %>/domains
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

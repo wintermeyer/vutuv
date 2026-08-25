@@ -1,0 +1,7 @@
+<.email_layout preheader={@preheader} locale={@locale}>
+  {Phoenix.HTML.raw(@content_html)}
+  <.email_muted :if={@unsubscribe_url}>
+    Riceve questa newsletter in quanto membro di vutuv.
+    <.email_link href={@unsubscribe_url}>Si disiscriva</.email_link>.
+  </.email_muted>
+</.email_layout>

@@ -88,7 +88,7 @@ defmodule VutuvWeb.AgentDocs do
   # Native-language names for the language hint (the hint addresses the
   # reader of the *other* language); a locale added without a name here
   # falls back to its code.
-  @language_names %{"en" => "English", "de" => "Deutsch"}
+  @language_names %{"en" => "English", "de" => "Deutsch", "it" => "Italiano"}
 
   def schema_version, do: @schema_version
 

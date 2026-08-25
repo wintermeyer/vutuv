@@ -1,0 +1,23 @@
+<%= email_greeting(@user) %>,
+
+la prova del dominio della Sua pagina di organizzazione "<%= @organization_name %>" non risponde più.
+Il dominio in questione è <%= @domain %>.
+
+Ricontrolliamo la prova ogni settimana, e ha tempo fino al
+<%= Calendar.strftime(@deadline, "%d.%m.%Y") %> per ripristinarla.
+<%= if @last? do %>
+Se entro allora non cambia nulla, la pagina perde la verifica e non sarà più
+pubblicamente visibile.
+<% else %>
+Se entro allora non cambia nulla, viene rimosso solo questo dominio. La pagina
+resta pubblica grazie agli altri Suoi domini verificati.
+<% end %>
+Di solito basta ripristinare la prova originale:
+<%= if @method == "dns" do %>il record DNS TXT per <%= @domain %><% else %>il file di verifica su <%= @domain %><% end %>.
+Il valore esatto e il pulsante per ricontrollare sono qui:
+
+<%= @url %>organizations/<%= @organization_slug %>/domains
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

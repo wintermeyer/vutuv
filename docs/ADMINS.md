@@ -570,7 +570,17 @@ notification on `/notifications` quotes, which map services appear on
 addresses and which one opens first. Members tune these on their own settings
 pages; you decide what everyone gets **until** they do.
 
-Two of them decide how every timestamp on the site is written: the **date
+One is the **interface language**. vutuv ships in English, German and Italian;
+a member picks theirs on their settings page, and a visitor who has picked
+nothing gets whatever their browser asks for, falling back to English. The set
+is a source-level list (`:locales` in `config/config.exs`), not an environment
+variable, because a language is only served once its translations, its email
+templates and its help pages exist — see
+`docs/architecture/i18n.md` if you want to add one. Note that with
+`TRANSLATE_POSTS=true` each served locale is also a pre-translation target, so
+a third language means a third machine translation per local post.
+
+Two others decide how every timestamp on the site is written: the **date
 format** (`31.12.2026` / `31/12/2026` / `12/31/2026` / `2026-12-31`, each with
 its own clock) and the **time zone**. They ship as German dates on Europe/Berlin
 because that is what vutuv.de is; an installation somewhere else changes both

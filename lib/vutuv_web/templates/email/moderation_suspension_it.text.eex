@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+dopo una seconda violazione confermata delle nostre regole della community il
+Suo account vutuv è sospeso fino al <%= Calendar.strftime(@until, "%d.%m.%Y") %>.
+Fino ad allora non può accedere e il Suo profilo è nascosto.
+
+La prenda sul serio: un'altra violazione confermata disattiva definitivamente
+il Suo account. Le nostre regole della community:
+
+<%= @url %>community
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

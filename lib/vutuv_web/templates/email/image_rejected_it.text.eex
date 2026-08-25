@@ -1,0 +1,26 @@
+<%= email_greeting(@user) %>,
+
+il nostro esame automatico delle immagini ha rimosso
+<%= image_kind_label(@kind, @locale) %>.
+<%= if @category == "unverifiable" do %>
+Si tratta di un problema tecnico: il nostro esame non è riuscito ad aprire il
+file dell'immagine e quindi non ha potuto giudicarla. Questo non dice nulla su
+cosa vi fosse raffigurato. Di solito un file JPEG o PNG funziona.
+<% else %>
+Non ha deciso nessuna persona. Qui lo fa un'IA: guarda ogni immagine caricata e
+decide da sé se è adatta a tutti e a un ambiente di lavoro. Funziona allo
+stesso modo per ogni membro, quindi non è nulla di personale né contro di Lei.
+
+E quell'IA sbaglia. Quando sospetta qualcosa la interroghiamo più volte, e
+un'immagine viene rimossa solo se le risposte concordano. Anche così può
+colpire un'immagine innocua, un fumetto, una citazione da un film o una battuta.
+Quindi se pensa che la Sua immagine andasse bene, potrebbe avere ragione.
+<% end %>
+In quel caso risponda semplicemente a questa e-mail, possibilmente allegando
+l'immagine, e la guarderà una persona. La rimozione non ha conseguenze sul Suo
+account: nessun avvertimento, nessun richiamo. Può caricare un'altra immagine
+quando vuole.
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

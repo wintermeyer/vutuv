@@ -1,0 +1,11 @@
+<%= email_greeting(@user) %>,
+
+<%= @open_count %> caso/i di moderazione attendono una decisione di un amministratore.
+
+La coda:
+
+<%= @url %>admin/moderation
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

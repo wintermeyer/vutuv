@@ -74,7 +74,7 @@ defmodule VutuvWeb.Admin.ExperimentHTML do
   defp probability(p), do: percent(p)
 
   defp localize_decimal(value) do
-    if Gettext.get_locale(VutuvWeb.Gettext) == "de",
+    if Gettext.get_locale(VutuvWeb.Gettext) in ~w(de it),
       do: String.replace(value, ".", ","),
       else: value
   end

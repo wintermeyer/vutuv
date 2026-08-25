@@ -234,7 +234,7 @@ defmodule Vutuv.Jobs.JobPosting do
     |> validate_length(:apply_email, max: 255)
     |> validate_inclusion(:salary_currency, Salary.currencies())
     |> validate_inclusion(:salary_period, Salary.periods())
-    |> validate_inclusion(:language, Application.get_env(:vutuv, :locales, ~w(en de)))
+    |> validate_inclusion(:language, installation_locales())
     |> MarkdownContent.validate_no_images(:description)
     |> Mentions.validate_mentions_exist(:description)
     |> validate_salary_range()
@@ -389,4 +389,12 @@ defmodule Vutuv.Jobs.JobPosting do
 
   defp upcase(nil), do: nil
   defp upcase(value), do: value |> String.trim() |> String.upcase()
+
+  # `:locales` lives under the ENDPOINT config, not as a top-level `:vutuv` key,
+  # so `Application.get_env(:vutuv, :locales, default)` silently answers the
+  # default and pins this validation to en/de whatever the installation serves.
+  defp installation_locales do
+    {:ok, config} = Application.fetch_env(:vutuv, VutuvWeb.Endpoint)
+    config[:locales]
+  end
 end

@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+il Suo annuncio di lavoro "<%= @posting_title %>" scade il <%= Calendar.strftime(@expires_on, "%d.%m.%Y") %>.
+Gli annunci scadono automaticamente dopo 90 giorni; non c'è rinnovo.
+
+Ha coperto la posizione? Chiuda l'annuncio. È ancora aperta? Alla scadenza lo
+ripubblichi con un tocco, con una data di pubblicazione onesta.
+
+Veda l'annuncio:
+
+<%= @url %>jobs/<%= @posting_slug %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

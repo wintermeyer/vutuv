@@ -1,0 +1,20 @@
+<.email_layout preheader="Nuovo accesso al Suo account vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    è stato appena effettuato un accesso al Suo account vutuv. Se è stato Lei, può ignorare questa e-mail.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Quando">{@when_text}</.email_row>
+    <.email_row label="Dispositivo">{@device}</.email_row>
+    <.email_row :if={@location} label="Luogo">{@location}</.email_row>
+    <.email_row :if={@ip} label="IP">{@ip}</.email_row>
+  </.email_panel>
+  <.email_p>Perché Glielo diciamo:</.email_p>
+  <.email_list items={@reason_lines} />
+  <.email_p>
+    Se non è stato Lei, controlli i dispositivi connessi al Suo account e disconnetta quelli che
+    non riconosce:
+  </.email_p>
+  <.email_button href={@devices_url}>Controlli i dispositivi connessi</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

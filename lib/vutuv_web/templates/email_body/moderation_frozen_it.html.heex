@@ -1,0 +1,15 @@
+<.email_layout preheader="Un Suo contenuto su vutuv è stato segnalato ed è nascosto" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    qualcuno ha segnalato un Suo contributo su vutuv. Per prudenza per ora è nascosto; nessun
+    altro può vederlo.
+  </.email_p>
+  <.email_p>Può risolvere da solo entro 72 ore:</.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Esamini la segnalazione</.email_button>
+  <.email_p>
+    Su quella pagina può eliminare il contenuto, modificarlo (una modifica lo rende subito di
+    nuovo visibile) oppure dirci che il Suo contenuto è a posto. Se non avremo Sue notizie, ci
+    daranno un'occhiata i nostri amministratori.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -1,0 +1,16 @@
+<.email_layout preheader="Moderazione: un profilo è stato segnalato" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    è stato segnalato il profilo di un membro. Le segnalazioni sui profili sono urgenti: una
+    seconda segnalazione indipendente blocca l'intero profilo.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Profilo">@{@owner_slug}</.email_row>
+    <.email_row label="Segnalato come">{@category_label}</.email_row>
+    <.email_row label="Segnalazioni">{@report_count}</.email_row>
+    <.email_row :if={@note} label="Nota del segnalante">{@note}</.email_row>
+  </.email_panel>
+  <.email_p>Esamini il caso:</.email_p>
+  <.email_button href={"#{@url}admin/moderation/#{@case_id}"}>Esamini il caso</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

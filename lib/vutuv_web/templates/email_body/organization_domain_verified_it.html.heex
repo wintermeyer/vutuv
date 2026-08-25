@@ -1,0 +1,30 @@
+<.email_layout preheader="La Sua pagina di organizzazione è verificata" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    la prova per <strong>{@domain}</strong> c'è: la Sua pagina di organizzazione
+    "{@organization_name}" è verificata e da ora è pubblicamente visibile.
+  </.email_p>
+  <.email_p>
+    Non ha dovuto fare altro. Abbiamo continuato a controllare dopo che ha pubblicato la voce,
+    perché
+    <%= if @method == "dns" do %>
+      un nuovo record DNS
+    <% else %>
+      un nuovo file
+    <% end %>
+    può metterci un po' ad arrivare a tutti, a seconda del Suo fornitore.
+  </.email_p>
+  <.email_p>
+    <%= if @method == "dns" do %>
+      Lasci il record TXT dov'è. Lo controlliamo ogni settimana, e senza di esso la pagina perde
+      di nuovo la verifica.
+    <% else %>
+      Lasci il file di prova dov'è. Lo controlliamo ogni settimana, e senza di esso la pagina
+      perde di nuovo la verifica.
+    <% end %>
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}"}>
+    Vada alla pagina
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

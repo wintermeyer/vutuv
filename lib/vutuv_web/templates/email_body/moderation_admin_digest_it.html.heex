@@ -1,0 +1,7 @@
+<.email_layout preheader="Coda di moderazione" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>{@open_count} caso/i di moderazione attendono una decisione di un amministratore.</.email_p>
+  <.email_p>La coda:</.email_p>
+  <.email_button href={"#{@url}admin/moderation"}>Apri la coda</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

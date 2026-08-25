@@ -1,0 +1,33 @@
+<.email_layout preheader="Manca la prova del dominio della Sua pagina di organizzazione" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    la prova del dominio della Sua pagina di organizzazione "{@organization_name}" non risponde
+    più. Il dominio in questione è <strong>{@domain}</strong>. Ricontrolliamo la prova ogni
+    settimana, e ha tempo fino al
+    <strong>{Calendar.strftime(@deadline, "%d.%m.%Y")}</strong> per ripristinarla.
+  </.email_p>
+  <%= if @last? do %>
+    <.email_p>
+      Se entro allora non cambia nulla, la pagina perde la verifica e non sarà più pubblicamente
+      visibile.
+    </.email_p>
+  <% else %>
+    <.email_p>
+      Se entro allora non cambia nulla, viene rimosso solo questo dominio. La pagina resta
+      pubblica grazie agli altri Suoi domini verificati.
+    </.email_p>
+  <% end %>
+  <.email_p>
+    Di solito basta ripristinare la prova originale:
+    <%= if @method == "dns" do %>
+      il record DNS TXT per {@domain}.
+    <% else %>
+      il file di verifica su {@domain}.
+    <% end %>
+    Il valore esatto e il pulsante per ricontrollare sono nella pagina dei domini.
+  </.email_p>
+  <.email_button href={"#{@url}organizations/#{@organization_slug}/domains"}>
+    Gestisci i domini
+  </.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

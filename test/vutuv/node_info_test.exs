@@ -88,7 +88,12 @@ defmodule Vutuv.NodeInfoTest do
     end
 
     test "langs lists the locales this installation serves" do
-      assert NodeInfo.document("2.1")["metadata"]["langs"] == ["en", "de"]
+      # Read from the config rather than spelled out, because the point of the
+      # field is that it follows the installation: a hardcoded pair here just
+      # goes red the day a third language ships.
+      {:ok, config} = Application.fetch_env(:vutuv, VutuvWeb.Endpoint)
+
+      assert NodeInfo.document("2.1")["metadata"]["langs"] == config[:locales]
     end
 
     test "maintainer is the operator contact, the one security.txt already names" do

@@ -915,6 +915,23 @@ defmodule VutuvWeb.UserHelpers do
     do: "ein hochgeladenes Arbeitszeugnis"
 
   def image_kind_label(_kind, "de"), do: "ein Bild"
+  def image_kind_label("avatar", "it"), do: "la Sua immagine del profilo"
+  def image_kind_label("cover", "it"), do: "la Sua immagine di copertina"
+  def image_kind_label("post_image", "it"), do: "un'immagine di uno dei Suoi post"
+
+  def image_kind_label("job_posting_image", "it"),
+    do: "un'immagine di uno dei Suoi annunci di lavoro"
+
+  def image_kind_label("organization_image", "it"),
+    do: "un'immagine di una delle Sue pagine di organizzazione"
+
+  def image_kind_label("qualification_document", "it"),
+    do: "un documento di prova caricato su uno dei Suoi certificati e abilitazioni"
+
+  def image_kind_label("job_reference_document", "it"),
+    do: "un attestato di lavoro caricato"
+
+  def image_kind_label(_kind, "it"), do: "un'immagine"
   def image_kind_label("avatar", _locale), do: "your profile picture"
   def image_kind_label("cover", _locale), do: "your cover photo"
   def image_kind_label("post_image", _locale), do: "an image from one of your posts"
@@ -978,6 +995,16 @@ defmodule VutuvWeb.UserHelpers do
     case present(user.first_name) do
       nil -> "Hi"
       first_name -> "Hi #{first_name}"
+    end
+  end
+
+  # Italian addresses members as *Lei*, like the German *Sie*, so it takes the
+  # same shape: honorific plus surname where the account gives us both.
+  def email_greeting(%User{locale: "it"} = user) do
+    case {user.gender, present(user.last_name)} do
+      {"female", surname} when is_binary(surname) -> "Gentile Sig.ra #{surname}"
+      {"male", surname} when is_binary(surname) -> "Gentile Sig. #{surname}"
+      _ -> neutral_greeting("Salve", user)
     end
   end
 

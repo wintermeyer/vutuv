@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+un Suo contributo su vutuv è stato segnalato ed è nascosto mentre i nostri
+amministratori lo esaminano. Non deve fare nulla; Le comunicheremo l'esito.
+
+Può vedere il caso qui:
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

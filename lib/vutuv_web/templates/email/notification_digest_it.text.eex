@@ -1,0 +1,20 @@
+<%= email_greeting(@user) %>,
+
+ecco cosa è successo su vutuv mentre era via:
+
+<%= for line <- @lines do %>* <%= line %>
+<% end %>
+<%= if @more > 0 do %>
+… e altri <%= @more %>.
+<% end %>
+Può leggere tutto qui:
+
+<%= @notifications_url %>
+
+Queste e-mail di notifica può disattivarle qui:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

@@ -1,0 +1,10 @@
+<%= email_greeting(@user) %>,
+
+grazie per la Sua segnalazione. Il proprietario ha corretto il contenuto che ha
+segnalato, ed è di nuovo visibile. Se ritiene ancora che violi le nostre regole
+della community, può segnalarlo un'altra volta; andrà allora direttamente ai
+nostri amministratori.
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

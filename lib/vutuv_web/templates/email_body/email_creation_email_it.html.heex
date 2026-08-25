@@ -1,0 +1,9 @@
+<.email_layout preheader="Confermi il Suo indirizzo e-mail" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>per confermare il Suo nuovo indirizzo e-mail inserisca il seguente PIN:</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    Lo inserisca su vutuv per completare l'aggiunta dell'indirizzo. Il PIN scade dopo 30 minuti.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

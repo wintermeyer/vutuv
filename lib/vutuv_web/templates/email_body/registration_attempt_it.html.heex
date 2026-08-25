@@ -1,0 +1,14 @@
+<.email_layout preheader="Qualcuno ha provato a registrarsi con il Suo indirizzo e-mail" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    qualcuno ha appena provato a creare un account vutuv con questo indirizzo e-mail. Lei ha già
+    un account, quindi non ne abbiamo creato uno nuovo.
+  </.email_p>
+  <.email_p>Se è stato Lei, può accedere qui:</.email_p>
+  <.email_button href={"#{@url}login"}>Accedi</.email_button>
+  <.email_p>
+    Se non è stato Lei, può tranquillamente ignorare questa e-mail. Non è stato creato alcun
+    account e sul Suo account non è cambiato nulla.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>
