@@ -303,9 +303,6 @@ defmodule VutuvWeb.Admin.JobLive do
     """
   end
 
-  attr(:label, :string, required: true)
-  attr(:value, :integer, required: true)
-  attr(:attention, :boolean, default: false)
 
   defp detail_card(%{detail: nil} = assigns), do: ~H""
 

@@ -69,6 +69,50 @@ defmodule Vutuv.Moderation.ImageSubjects do
     }
   }
 
+  # The kinds whose stranded query is one table, one moderation column and one
+  # fingerprint column, with no join to reach the owner. They had five
+  # hand-written copies of the same four-line query between them.
+  #
+  # `owner: nil` is the two ownerless remote kinds (issue #1163) — nobody here
+  # uploaded those, so there is no member to re-enqueue them against. For both,
+  # the fingerprint column *is* the stored filename, and the row exists before
+  # the bytes are fetched, so `pending` only means stranded once that column is
+  # filled: `require_file: true` says so.
+  @flat_stranded %{
+    "url_screenshot" => %{
+      schema: Url,
+      moderation: :screenshot_moderation,
+      owner: :user_id,
+      fingerprint: :screenshot
+    },
+    "qualification_document" => %{
+      schema: Qualification,
+      moderation: :document_moderation,
+      owner: :user_id,
+      fingerprint: :document_fingerprint
+    },
+    "job_reference_document" => %{
+      schema: JobReference,
+      moderation: :document_moderation,
+      owner: :user_id,
+      fingerprint: :document_fingerprint
+    },
+    "remote_post_image" => %{
+      schema: RemoteImage,
+      moderation: :moderation,
+      owner: nil,
+      fingerprint: :file,
+      require_file: true
+    },
+    "remote_avatar" => %{
+      schema: RemoteAccount,
+      moderation: :avatar_moderation,
+      owner: nil,
+      fingerprint: :avatar,
+      require_file: true
+    }
+  }
+
   ## Source resolution
 
   @doc """
@@ -768,13 +812,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
       gallery_stranded("post_image") ++
       gallery_stranded("job_posting_image") ++
       gallery_stranded("organization_image") ++
-      url_screenshot_stranded() ++
       post_screenshot_stranded() ++
       review_cover_stranded() ++
-      qualification_document_stranded() ++
-      job_reference_document_stranded() ++
-      remote_post_image_stranded() ++
-      remote_avatar_stranded()
+      Enum.flat_map(Map.keys(@flat_stranded), &flat_stranded/1)
   end
 
   defp open_scan_exists(kind) do
@@ -811,18 +851,30 @@ defmodule Vutuv.Moderation.ImageSubjects do
     |> Enum.map(fn {id, owner_id} -> {kind, id, owner_id, nil} end)
   end
 
-  defp url_screenshot_stranded do
-    from(u in Url,
+  defp flat_stranded(kind) do
+    config = @flat_stranded[kind]
+
+    from(s in config.schema,
       as: :subject,
-      where: u.screenshot_moderation == "pending",
-      where: not exists(open_scan_exists("url_screenshot")),
-      select: {u.id, u.user_id, u.screenshot}
+      where: field(s, ^config.moderation) == "pending",
+      where: not exists(open_scan_exists(kind))
     )
+    |> require_file(config)
+    |> flat_select(config)
     |> Repo.all()
-    |> Enum.map(fn {id, owner_id, fingerprint} ->
-      {"url_screenshot", id, owner_id, fingerprint}
-    end)
+    |> Enum.map(fn {id, owner_id, fingerprint} -> {kind, id, owner_id, fingerprint} end)
   end
+
+  defp require_file(query, %{require_file: true, fingerprint: field_name}),
+    do: from(s in query, where: not is_nil(field(s, ^field_name)))
+
+  defp require_file(query, _config), do: query
+
+  defp flat_select(query, %{owner: nil, fingerprint: field_name}),
+    do: from(s in query, select: {s.id, nil, field(s, ^field_name)})
+
+  defp flat_select(query, %{owner: owner, fingerprint: field_name}),
+    do: from(s in query, select: {s.id, field(s, ^owner), field(s, ^field_name)})
 
   defp post_screenshot_stranded do
     # left_join: a row owned by a cached remote post (`remote_post_id`) has no
@@ -851,58 +903,6 @@ defmodule Vutuv.Moderation.ImageSubjects do
     |> Repo.all()
     |> Enum.map(fn {id, owner_id, fingerprint} ->
       {"review_cover", id, owner_id, fingerprint}
-    end)
-  end
-
-  # The two ownerless kinds (issue #1163): nobody here uploaded these, so the
-  # owner is nil. Without them a remote picture stranded `pending` would sit
-  # invisible forever with its bytes un-judged on disk and nothing to reclaim
-  # it — fail-closed, but a permanent hole.
-  defp remote_post_image_stranded do
-    from(i in RemoteImage,
-      as: :subject,
-      where: i.moderation == "pending" and not is_nil(i.file),
-      where: not exists(open_scan_exists("remote_post_image")),
-      select: {i.id, i.file}
-    )
-    |> Repo.all()
-    |> Enum.map(fn {id, fingerprint} -> {"remote_post_image", id, nil, fingerprint} end)
-  end
-
-  defp remote_avatar_stranded do
-    from(a in RemoteAccount,
-      as: :subject,
-      where: a.avatar_moderation == "pending" and not is_nil(a.avatar),
-      where: not exists(open_scan_exists("remote_avatar")),
-      select: {a.id, a.avatar}
-    )
-    |> Repo.all()
-    |> Enum.map(fn {id, fingerprint} -> {"remote_avatar", id, nil, fingerprint} end)
-  end
-
-  defp job_reference_document_stranded do
-    from(r in JobReference,
-      as: :subject,
-      where: r.document_moderation == "pending",
-      where: not exists(open_scan_exists("job_reference_document")),
-      select: {r.id, r.user_id, r.document_fingerprint}
-    )
-    |> Repo.all()
-    |> Enum.map(fn {id, owner_id, fingerprint} ->
-      {"job_reference_document", id, owner_id, fingerprint}
-    end)
-  end
-
-  defp qualification_document_stranded do
-    from(q in Qualification,
-      as: :subject,
-      where: q.document_moderation == "pending",
-      where: not exists(open_scan_exists("qualification_document")),
-      select: {q.id, q.user_id, q.document_fingerprint}
-    )
-    |> Repo.all()
-    |> Enum.map(fn {id, owner_id, fingerprint} ->
-      {"qualification_document", id, owner_id, fingerprint}
     end)
   end
 

@@ -278,8 +278,6 @@ defmodule VutuvWeb.Admin.OrganizationLive do
     """
   end
 
-  attr(:label, :string, required: true)
-  attr(:value, :integer, required: true)
 
   defp detail_card(%{detail: nil} = assigns), do: ~H""
 
