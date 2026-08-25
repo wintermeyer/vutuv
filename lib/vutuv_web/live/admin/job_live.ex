@@ -278,7 +278,7 @@ defmodule VutuvWeb.Admin.JobLive do
                 </td>
                 <td>
                   <% {label, tone} = posting_status_badge(posting) %>
-                  <span class={["inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", tone]}>{label}</span>
+                  <.admin_pill tone={tone}>{label}</.admin_pill>
                 </td>
                 <td class="text-right">
                   <button
@@ -302,7 +302,6 @@ defmodule VutuvWeb.Admin.JobLive do
     </div>
     """
   end
-
 
   defp detail_card(%{detail: nil} = assigns), do: ~H""
 
@@ -362,7 +361,7 @@ defmodule VutuvWeb.Admin.JobLive do
           <dt class="card__label">{gettext("Status")}</dt>
           <dd class="mt-1 text-sm">
             <% {label, tone} = posting_status_badge(@detail.posting) %>
-            <span class={["inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", tone]}>{label}</span>
+            <.admin_pill tone={tone}>{label}</.admin_pill>
           </dd>
         </div>
 

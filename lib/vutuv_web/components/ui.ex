@@ -3423,6 +3423,31 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The status pill in the admin oversight tables (jobs, organizations, users):
+  the shape is fixed, the colour is not. `tone` is the tint the host's own
+  `*_status_badge/1` picked for this row — "frozen" is amber wherever it
+  appears, and only the host knows what frozen means for its records.
+
+  Beside `admin_pager/1` because it has the same reach: seven copies of the
+  five base utilities sat across four admin LiveViews, so a change to the pill
+  shape was a change in four files, and one of them drifting was invisible.
+  """
+  attr(:tone, :string, required: true)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def admin_pill(assigns) do
+    ~H"""
+    <span
+      class={["inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", @tone]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </span>
+    """
+  end
+
+  @doc """
   The prev / "Page N of M" / next control shared by the admin oversight
   LiveViews (jobs, organizations, users). Distinct from `pager/1` (URL links):
   this fires `phx-click="page"` with `phx-value-page`, so the host LiveView owns

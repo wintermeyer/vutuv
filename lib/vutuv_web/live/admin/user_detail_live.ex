@@ -18,7 +18,7 @@ defmodule VutuvWeb.Admin.UserDetailLive do
 
   use VutuvWeb, :live_view
 
-  import VutuvWeb.Admin.MemberBadges, only: [status_badges: 1, badge_class: 1]
+  import VutuvWeb.Admin.MemberBadges, only: [status_badges: 1, badge_class: 1, confirmed_tone: 1]
   import VutuvWeb.UserHelpers, only: [member_name: 1]
 
   alias Vutuv.Accounts
@@ -89,24 +89,12 @@ defmodule VutuvWeb.Admin.UserDetailLive do
           </div>
 
           <div class="flex flex-wrap gap-1">
-            <span class={[
-              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
-              if(@user.email_confirmed?,
-                do: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
-                else: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-              )
-            ]}>
+            <.admin_pill tone={confirmed_tone(@user)}>
               {if @user.email_confirmed?, do: gettext("PIN"), else: gettext("Unconfirmed")}
-            </span>
-            <span
-              :for={{label, tone} <- status_badges(@user)}
-              class={[
-                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
-                badge_class(tone)
-              ]}
-            >
+            </.admin_pill>
+            <.admin_pill :for={{label, tone} <- status_badges(@user)} tone={badge_class(tone)}>
               {label}
-            </span>
+            </.admin_pill>
           </div>
         </div>
 

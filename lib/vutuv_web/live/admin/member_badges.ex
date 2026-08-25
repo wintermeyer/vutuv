@@ -4,9 +4,12 @@ defmodule VutuvWeb.Admin.MemberBadges do
   browser (`VutuvWeb.Admin.UserLive`) and the member detail page
   (`VutuvWeb.Admin.UserDetailLive`) so the two never drift. `status_badges/1`
   returns the exceptional-status pills as `{label, tone}` tuples in a fixed
-  order; `badge_class/1` maps a tone to its pill colours. The PIN/Unconfirmed
-  registration pill is not an exceptional status, so each page renders it inline
-  and it is not part of this list.
+  order; `badge_class/1` maps a tone to its pill colours.
+
+  The PIN/Unconfirmed registration pill stays out of `status_badges/1` — every
+  member carries one, so it is not an exceptional status — but its two colours
+  belong here all the same (`confirmed_tone/1`): both pages had them written
+  out inline, which is the drift this module exists to prevent.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
@@ -39,4 +42,11 @@ defmodule VutuvWeb.Admin.MemberBadges do
 
   def badge_class(:danger),
     do: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
+
+  def badge_class(:neutral),
+    do: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+
+  @doc "The pill colour for the PIN / Unconfirmed registration badge."
+  def confirmed_tone(%User{email_confirmed?: true}), do: badge_class(:verified)
+  def confirmed_tone(%User{}), do: badge_class(:neutral)
 end

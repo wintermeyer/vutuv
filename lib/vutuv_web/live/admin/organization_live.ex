@@ -253,7 +253,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
                 <td class="breakwrap text-slate-600 dark:text-slate-400">{organization.city}</td>
                 <td>
                   <% {label, tone} = organization_status_badge(organization) %>
-                  <span class={["inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", tone]}>{label}</span>
+                  <.admin_pill tone={tone}>{label}</.admin_pill>
                 </td>
                 <td class="text-right">
                   <button
@@ -277,7 +277,6 @@ defmodule VutuvWeb.Admin.OrganizationLive do
     </div>
     """
   end
-
 
   defp detail_card(%{detail: nil} = assigns), do: ~H""
 
