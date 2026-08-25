@@ -174,6 +174,54 @@ defmodule Vutuv.SavedSearches.AlertSweeperTest do
       assert AlertSweeper.sweep(BerlinTime.today()) == 0
       assert_no_email_sent()
     end
+
+    # Not mailing was never the expensive part. The sweep ran every saved search
+    # first and consulted the opt-out afterwards, so a member who kept three
+    # notifying searches and turned the digest off cost a `blocked_user_ids/1`
+    # plus three full board/people searches every night, and the answers were
+    # thrown away. The mark still advances either way, so the member's next
+    # opt-in starts from that night exactly as before.
+    test "and the sweep does not run their searches either" do
+      recipient = mailable_member()
+      poster = poster_fixture()
+
+      for n <- 1..3 do
+        save(recipient, %{kind: :jobs, query: "salary_min=#{60_000 + n}", notify: :daily})
+      end
+
+      publish_job!(poster, %{"title" => "A role", "salary_max" => "90000"})
+
+      # Matched on the board query alone: the opted-in sweep also sends a mail,
+      # and counting every query would let that difference stand in for the one
+      # being pinned here.
+      board_query = ~r/FROM "job_postings"/
+
+      {_result, opted_in} =
+        Vutuv.QueryCounter.count_queries(
+          fn -> AlertSweeper.sweep(BerlinTime.today()) end,
+          matching: board_query
+        )
+
+      Repo.update_all(from(u in User, where: u.id == ^recipient.id),
+        set: [saved_search_emails?: false]
+      )
+
+      for search <- Repo.all(from(s in SavedSearch, where: s.user_id == ^recipient.id)) do
+        backdate_baseline(search, 1)
+      end
+
+      {_result, opted_out} =
+        Vutuv.QueryCounter.count_queries(
+          fn -> AlertSweeper.sweep(BerlinTime.today()) end,
+          matching: board_query
+        )
+
+      assert opted_in > 0, "the opted-in sweep ran no board search at all — wrong signature"
+
+      assert opted_out == 0,
+             "the opted-out sweep still ran #{opted_out} board searches (#{opted_in} when " <>
+               "opted in) — they are evaluated and the answers discarded"
+    end
   end
 
   defp backdate_inserted_at(user, days) do

@@ -70,6 +70,21 @@ defmodule Vutuv.SavedSearches.AlertSweeper do
   # went out.
   defp process_member(searches, cutoff) do
     user = hd(searches).user
+
+    # The opt-out is asked **before** the searches run, not after. `due_searches/1`
+    # filters on the cadence alone, so a member who kept three notifying searches
+    # and turned the digest off used to cost a `blocked_user_ids/1` plus three
+    # full board/people searches every night — all of it thrown away one line
+    # later. The mark still advances either way (that is the scheduler's clock,
+    # not a claim that a mail went out), so their next opt-in starts from this
+    # night exactly as before.
+    mailed? = user.saved_search_emails? and mail_matches(searches, user, cutoff)
+
+    Enum.each(searches, &SavedSearches.mark_swept(&1, cutoff))
+    mailed?
+  end
+
+  defp mail_matches(searches, user, cutoff) do
     blocked = Social.blocked_user_ids(user.id)
 
     sections =
@@ -77,10 +92,7 @@ defmodule Vutuv.SavedSearches.AlertSweeper do
       |> Enum.map(&{&1, matches(&1, user, cutoff, blocked)})
       |> Enum.reject(fn {_search, entries} -> entries == [] end)
 
-    mailed? = sections != [] and user.saved_search_emails? and deliver(user, sections)
-
-    Enum.each(searches, &SavedSearches.mark_swept(&1, cutoff))
-    mailed?
+    sections != [] and deliver(user, sections)
   end
 
   defp matches(%{kind: :jobs} = search, user, cutoff, _blocked) do
