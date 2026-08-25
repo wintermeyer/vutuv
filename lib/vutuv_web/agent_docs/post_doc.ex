@@ -98,13 +98,18 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # reuse a picture should not have to parse a translated sentence.
       license: license_entry(post),
       in_reply_to: in_reply_to(post),
-      # Every reply the page counts, from both worlds — the figure the HTML
-      # reply button now shows (a remote reply is a reply). Counted off the two
-      # loaded lists rather than re-queried, so the number and the entries below
-      # it can never drift: `replies` holds the anonymous-visible vutuv ones
-      # (Posts.reply_count/1 excludes frozen / denied replies since issue #774)
-      # and `fediverse_replies` the public remote ones.
-      reply_count: length(replies) + length(remote_replies),
+      # Every reply the page counts, from both worlds — literally the figure the
+      # HTML reply button shows, taken from the same `shown_counts/1` two lines
+      # up rather than re-derived.
+      #
+      # It used to be `length(replies) + length(remote_replies)`, to keep the
+      # number and the entries below it in step. That reasoning is sound and the
+      # arithmetic was not: `list_replies/2` stops at `@default_thread_limit`
+      # (100), so past a hundred direct replies the page and its `.json` sibling
+      # stated *different* reply counts — a wrong number rather than a shorter
+      # list. The page has always shown the true count beside a window of the
+      # thread; this document does the same, and `replies` below is that window.
+      reply_count: counts.replies,
       replies: Enum.map(replies, &reply_entry/1),
       # The whole conversation the HTML permalink renders (issue #1006), in
       # the same reading order (the reply tree depth-first, issue #1027);

@@ -944,9 +944,20 @@ defmodule VutuvWeb.Markdown do
   so only one of them can guard it, and that is this one.
   """
   def absolutize_html(html, base, attrs \\ ["src", "href"]) do
-    base = String.trim_trailing(base, "/")
-    String.replace(html, ~r{(#{Enum.join(attrs, "|")})="/(?!/)}, "\\1=\"#{base}/")
+    String.replace(html, pattern(attrs), "\\1=\"#{String.trim_trailing(base, "/")}/")
   end
+
+  # The sigil interpolates `attrs`, so writing it inline was a `Regex.compile`
+  # on **every call** — one PCRE compile per status in a Mastodon timeline (up
+  # to 40 a request) and per item in an RSS feed, for an argument that has
+  # exactly two values in the whole repo. Both are compiled once here; anything
+  # else still works and pays the old price.
+  @src_href ~r{(src|href)="/(?!/)}
+  @href_only ~r{(href)="/(?!/)}
+
+  defp pattern(["src", "href"]), do: @src_href
+  defp pattern(["href"]), do: @href_only
+  defp pattern(attrs), do: ~r{(#{Enum.join(attrs, "|")})="/(?!/)}
 
   ## @handle / fediverse mentions and #hashtags
 
