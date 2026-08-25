@@ -85,6 +85,48 @@ defmodule Vutuv.Uploads.SpecTest do
     assert Spec.version(:post_image, :xl).fit == {:box_down, 2560}
   end
 
+  # A store that derives from a version list its own URL layer does not know
+  # writes files nothing can ever serve. `OrganizationImageStore` derived from
+  # `:post_image`, whose fourth `xl` entry is the 2560px lightbox version — so
+  # every logo, cover and gallery shot paid for the most expensive AVIF encode
+  # of the four and kept it for ever, unreachable: the proxy whitelist,
+  # `version_path/2` and `accel_path/2` all guard on the store's own three
+  # names. Pinning the pair here is what keeps them from drifting again.
+  test "every store derives exactly the versions it can serve" do
+    # Read off the store's own source, because the bug was the *key it passes*:
+    # comparing `Spec.versions(:organization_image)` with the whitelist would
+    # have agreed happily while the store derived from `:post_image` beside it.
+    for {source, whitelist, type} <- [
+          {"lib/vutuv/uploaders/organization_image_store.ex", Vutuv.OrganizationImageStore,
+           :organization_image},
+          {"lib/vutuv/uploaders/post_image_store.ex", Vutuv.Posts.PostImage, :post_image}
+        ] do
+      keys =
+        ~r/Spec\.(?:write_all|versions)\(:(\w+)/
+        |> Regex.scan(File.read!(source), capture: :all_but_first)
+        |> List.flatten()
+        |> Enum.uniq()
+
+      assert keys == [to_string(type)],
+             "#{source} derives from #{inspect(keys)}; its URL layer serves " <>
+               "only #{inspect(type)}'s versions"
+
+      derived = Spec.versions(type) |> Enum.map(&to_string(&1.name)) |> Enum.sort()
+      served = whitelist.versions() |> Enum.map(&to_string/1) |> Enum.sort()
+
+      assert derived == served,
+             "#{inspect(whitelist)} serves #{inspect(served)} but #{inspect(type)} " <>
+               "derives #{inspect(derived)}"
+    end
+  end
+
+  # The two page-picture lists are one list under two names, so they cannot
+  # answer differently for the same slot.
+  test "a job posting's picture and a page's picture want the same slots" do
+    assert Spec.versions(:organization_image) == Spec.versions(:job_posting_image)
+    assert Enum.map(Spec.versions(:organization_image), & &1.name) == [:thumb, :feed, :large]
+  end
+
   describe "write_derived/3" do
     test "strips all metadata (EXIF/GPS) from the derived file" do
       tmp = tmp!()

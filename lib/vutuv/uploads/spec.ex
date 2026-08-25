@@ -46,6 +46,18 @@ defmodule Vutuv.Uploads.Spec do
   # heifsave's Q scale is not WebP's: the former WebP Q80 is visually
   # ~AVIF Q58-63. Avatars get Q62 (blocking is most visible at tiny sizes
   # and the bytes are tiny anyway), photographic content Q58.
+  # The three layout slots a picture attached to a *page* needs — a job posting's
+  # image and an organization's logo / cover / gallery shot. Written once and
+  # named twice below, because the organization store used to derive from
+  # `:post_image` instead and so paid for a fourth, 2560px `xl` version that no
+  # URL of its own can serve: its proxy whitelist, `version_path/2` and
+  # `accel_path/2` all guard on the three names.
+  @page_image_versions [
+    %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
+    %{name: :feed, fit: {:box_down, 1200}, quality: 58},
+    %{name: :large, fit: {:box_down, 1600}, quality: 58}
+  ]
+
   @specs %{
     avatar: [
       %{name: :thumb, fit: {:crop, 96, 96, :center}, quality: 62},
@@ -108,11 +120,8 @@ defmodule Vutuv.Uploads.Spec do
       %{name: :xl, fit: {:box_down, 2560}, quality: 60}
     ],
     # Job-posting gallery images: same sizes as post images.
-    job_posting_image: [
-      %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
-      %{name: :feed, fit: {:box_down, 1200}, quality: 58},
-      %{name: :large, fit: {:box_down, 1600}, quality: 58}
-    ],
+    job_posting_image: @page_image_versions,
+    organization_image: @page_image_versions,
     # The proof document on a certificate/license (Vutuv.QualificationDocument):
     # one aspect-preserving thumbnail (typically a portrait A4 scan), displayed
     # up to ~256px wide — the full document is a click away.

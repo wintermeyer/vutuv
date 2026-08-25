@@ -50,8 +50,14 @@ defmodule Vutuv.OrganizationImageStore do
     end
   end
 
+  # `:organization_image`, not `:post_image`. The post list carries a fourth,
+  # 2560px `xl` version for the lightbox; nothing here can ever serve it —
+  # `@versions`, and with it the proxy's whitelist, `version_path/2` and
+  # `accel_path/2`, know only three names. So every logo, cover and gallery
+  # shot paid for the most expensive AVIF encode of the four and kept the file
+  # for ever, unreachable.
   defp write_derived_versions(rotated, dir) do
-    Spec.write_all(:post_image, rotated, fn spec ->
+    Spec.write_all(:organization_image, rotated, fn spec ->
       Path.join(dir, "#{spec.name}#{Spec.served_ext()}")
     end)
   end
