@@ -55,6 +55,37 @@ defmodule Vutuv.Deliverability.WatcherTest do
     assert state.offset == File.stat!(path).size
   end
 
+  # `File.open/2` without `:raw` spawns an IO-server **process**, and an unclosed
+  # handle leaves it running for the life of the node. Measured on the process
+  # count, not on the watcher's links: the IO server is not linked to its caller
+  # (50 unclosed opens move the count by 50 and the link list by 0), which is
+  # exactly the mismeasurement that made the first version of this test pass
+  # with the close deleted.
+  #
+  # This pins the read path a test can drive. The *error* path is held by the
+  # `after` in `read_window/3` rather than by a test, because its trigger is a
+  # race with logrotate's `copytruncate` that cannot be forced from here.
+  test "polling does not accumulate open file handles", %{path: path} do
+    pid = start_watcher(path)
+    tick(pid)
+
+    before = length(Process.list())
+
+    for n <- 1..20 do
+      File.write!(path, @envelope <> "\n" <> bounce_line("nobody-#{n}@example.com") <> "\n", [
+        :append
+      ])
+
+      tick(pid)
+    end
+
+    grew = length(Process.list()) - before
+
+    assert grew < 10,
+           "the node gained #{grew} processes over 20 polls; read_window/3 is " <>
+             "leaving file handles open"
+  end
+
   test "does not start without a configured path" do
     Application.delete_env(:vutuv, Watcher)
     assert Watcher.init([]) == :ignore

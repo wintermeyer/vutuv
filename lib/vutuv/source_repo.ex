@@ -2,9 +2,10 @@ defmodule Vutuv.SourceRepo do
   @moduledoc """
   Where the source of the software running on this installation can be read.
 
-  vutuv is AGPL, so an installation that changed the code owes its users *its*
-  source, not ours — which makes this a per-installation value even though the
-  default is the same everywhere (`:source_url`, `SOURCE_URL`).
+  A per-installation value even though the default is the same everywhere
+  (`:source_url`, `SOURCE_URL`): an installation running modified code should
+  point at *its* source, because that is what the link claims to be. vutuv is
+  MIT, so this is honesty about what is running, not a licence obligation.
 
   It has one home because it had thirteen: the footer, both API discovery
   documents, the media kit, the two error pages, the developer docs and a flash

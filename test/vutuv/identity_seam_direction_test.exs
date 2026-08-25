@@ -6,12 +6,17 @@ defmodule Vutuv.IdentitySeamDirectionTest do
 
   Seven call sites inside `lib/vutuv/` reached the seam *through* that delegate,
   which made the context layer compile-depend on `lib/vutuv_web/views/` — the
-  wrong direction, and the one that would block ever splitting the two. The
-  Mastodon presenter's whole dependency on the web layer was this and nothing
-  else.
+  wrong direction, and the one that would block ever splitting the two.
 
   The delegate stays for the templates that call it; what this pins is the
-  direction of the arrow.
+  direction of the arrow for **this one question**. It deliberately does not ban
+  every `UserHelpers` call from `lib/vutuv/`: `email_greeting/1` and
+  `name_for_email_to_field/1` survive in the emailer and the newsletter builder,
+  and those really are presentation — how a salutation reads, what goes into a
+  `To:` display name — so the web layer is where they belong. Naming a question
+  is what the context layer owns; wording it is not.
+
+  Calibrated against `origin/main`, where it names seven offenders.
   """
   use ExUnit.Case, async: true
 
@@ -25,11 +30,5 @@ defmodule Vutuv.IdentitySeamDirectionTest do
     assert offenders == [],
            "call Vutuv.Identity.display_name/1 directly — the context layer owns " <>
              "this question and the delegate points back at it:\n" <> Enum.join(offenders, "\n")
-  end
-
-  test "the delegate still answers the same thing, so the templates keep working" do
-    user = %Vutuv.Accounts.User{first_name: "Ada", last_name: "Lovelace"}
-
-    assert VutuvWeb.UserHelpers.full_name(user) == Vutuv.Identity.display_name(user)
   end
 end

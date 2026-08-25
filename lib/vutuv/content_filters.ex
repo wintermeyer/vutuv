@@ -19,6 +19,7 @@ defmodule Vutuv.ContentFilters do
   alias Vutuv.Accounts.User
   alias Vutuv.ContentFilters.ContentFilter
   alias Vutuv.Repo
+  alias Vutuv.UUIDv7
 
   # A member cannot mute the whole world: cap the list so a runaway import (or a
   # bored user) can't turn every feed page into a compile of hundreds of regexes.
@@ -56,12 +57,25 @@ defmodule Vutuv.ContentFilters do
     end
   end
 
-  @doc "Remove one of `user`'s filters. Scoped to the owner, so it can only drop their own."
+  @doc """
+  Remove one of `user`'s filters. Scoped to the owner, so it can only drop their
+  own — and a malformed id is a miss rather than a crash: the id comes off the
+  URL (`DELETE /settings/filters/:id`), so an edited one raised
+  `Ecto.Query.CastError` and 500ed the member's own settings page.
+  """
   def delete_filter(%User{id: user_id}, id) do
-    {count, _} =
-      Repo.delete_all(from(f in ContentFilter, where: f.id == ^id and f.user_id == ^user_id))
+    case UUIDv7.cast_or_nil(id) do
+      nil ->
+        {:error, :not_found}
 
-    if count == 1, do: :ok, else: {:error, :not_found}
+      uuid ->
+        {count, _} =
+          Repo.delete_all(
+            from(f in ContentFilter, where: f.id == ^uuid and f.user_id == ^user_id)
+          )
+
+        if count == 1, do: :ok, else: {:error, :not_found}
+    end
   end
 
   @doc """

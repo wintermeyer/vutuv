@@ -20,9 +20,13 @@ defmodule VutuvWeb.MastodonApi.ErrorsTest do
 
   @owner "lib/vutuv_web/mastodon_api/errors.ex"
 
+  # The auth plug counts as the adapter too: it answers 401/403 in the same
+  # `%{error:}` shape, and the first version of this list did not cover
+  # `plugs/`, so it kept its own hand-built copy of the body.
   defp adapter_sources do
     Path.wildcard("lib/vutuv_web/controllers/mastodon_api/*.ex") ++
-      Path.wildcard("lib/vutuv_web/mastodon_api/*.ex")
+      Path.wildcard("lib/vutuv_web/mastodon_api/*.ex") ++
+      ["lib/vutuv_web/plugs/mastodon_api_auth.ex"]
   end
 
   test "no adapter controller builds an error body by hand" do

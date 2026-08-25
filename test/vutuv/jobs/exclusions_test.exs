@@ -371,6 +371,15 @@ defmodule Vutuv.Jobs.ExclusionsTest do
       assert :ok = Exclusions.remove_from_posting(posting, row.id)
     end
 
+    # Both remove paths take their id from a client-pushed LiveView payload, so a
+    # tampered non-UUID crashed the socket rather than answering "no such row".
+    test "a tampered id is a no-op, not a socket crash", %{posting: posting} do
+      assert :ok = Exclusions.remove_from_posting(posting, "not-a-uuid")
+
+      org = insert(:organization)
+      assert :ok = Exclusions.remove_from_organization(org, "not-a-uuid")
+    end
+
     test "an organization default cannot exclude itself" do
       org = insert(:organization)
       assert {:error, :self} = Exclusions.add_organization_organization(org, org.slug)

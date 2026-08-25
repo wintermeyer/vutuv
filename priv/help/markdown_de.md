@@ -292,5 +292,5 @@ oder Karten. Ein Link auf das Video tut es auch.
 ## Und wenn etwas nicht klappt?
 
 Schreiben Sie uns einen Beitrag mit `@vutuv` darin, oder melden Sie es als
-[Fehler auf GitHub](https://github.com/wintermeyer/vutuv/issues). vutuv ist
+[Fehler auf GitHub]({{issues}}). vutuv ist
 quelloffen, und die Regeln auf dieser Seite stehen als Code im Repository.

@@ -25,14 +25,16 @@ defmodule VutuvWeb.HelpController do
   Naming the pages here means adding one is a source edit, which always
   recompiles.
 
-  One placeholder is substituted at render time rather than written into the
-  Markdown: `{{host}}` becomes this installation's own host. vutuv is
-  installable by third parties, so a help page that tells a member to type
-  `vutuv.de` into their app is wrong everywhere else.
+  Two placeholders are substituted at render time rather than written into the
+  Markdown: `{{host}}` becomes this installation's own host, and `{{issues}}`
+  its issue tracker (`Vutuv.SourceRepo`). vutuv is installable by third parties,
+  so a help page that tells a member to type `vutuv.de` into their app — or to
+  file their bug in *our* tracker — is wrong everywhere else.
   """
 
   use VutuvWeb, :controller
 
+  alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.DevDocMarkdown
   alias VutuvWeb.Endpoint
@@ -118,7 +120,11 @@ defmodule VutuvWeb.HelpController do
     end
   end
 
-  defp fill_host(text), do: String.replace(text, "{{host}}", Endpoint.host())
+  defp fill_host(text) do
+    text
+    |> String.replace("{{host}}", Endpoint.host())
+    |> String.replace("{{issues}}", SourceRepo.issues_url())
+  end
 
   # An installation may run locales this page has not been written in yet, so
   # fall back rather than crash on a missing file.

@@ -38,6 +38,7 @@ defmodule Vutuv.Jobs.Exclusions do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Social
+  alias Vutuv.UUIDv7
 
   # A generous cap on a single subject's list (per-posting and per-organization
   # alike), so a pathological list can't unbound the matching query.
@@ -100,9 +101,16 @@ defmodule Vutuv.Jobs.Exclusions do
   def add_posting_domain(%JobPosting{} = posting, params),
     do: insert_domain(posting_subject(posting), params)
 
-  @doc "Removes one of `posting`'s own rows (scoped to the posting)."
-  def remove_from_posting(%JobPosting{id: pid}, id),
-    do: delete_scoped(from(x in JobExclusion, where: x.id == ^id and x.job_posting_id == ^pid))
+  @doc """
+  Removes one of `posting`'s own rows (scoped to the posting). A malformed id is
+  a no-op: this id arrives in a client-pushed LiveView payload, so an edited one
+  used to crash the socket instead of answering "no such row".
+  """
+  def remove_from_posting(%JobPosting{id: pid}, id) do
+    with_id(id, fn uuid ->
+      delete_scoped(from(x in JobExclusion, where: x.id == ^uuid and x.job_posting_id == ^pid))
+    end)
+  end
 
   # --- writes: organization standing-default subject ------------------------
 
@@ -128,8 +136,20 @@ defmodule Vutuv.Jobs.Exclusions do
     do: insert_domain(organization_subject(organization), params)
 
   @doc "Removes one of `organization`'s standing-default rows (scoped to the organization)."
-  def remove_from_organization(%Organization{id: oid}, id),
-    do: delete_scoped(from(x in JobExclusion, where: x.id == ^id and x.organization_id == ^oid))
+  def remove_from_organization(%Organization{id: oid}, id) do
+    with_id(id, fn uuid ->
+      delete_scoped(from(x in JobExclusion, where: x.id == ^uuid and x.organization_id == ^oid))
+    end)
+  end
+
+  # Both remove paths take their id from the browser, so neither may hand an
+  # uncast value to a `where` — see `remove_from_posting/2`.
+  defp with_id(id, fun) do
+    case UUIDv7.cast_or_nil(id) do
+      nil -> :ok
+      uuid -> fun.(uuid)
+    end
+  end
 
   # --- the predicate --------------------------------------------------------
 

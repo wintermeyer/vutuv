@@ -5,9 +5,9 @@ defmodule Vutuv.SourceRepoTest do
   It had to be given an owner because the URL was written out at thirteen call
   sites in nine files — the footer, both API discovery documents, the media kit,
   the two error pages, the developer docs, the landing page and a flash message
-  — two of them frozen as module attributes. vutuv is AGPL, so a fork owes its
-  users *its* source, and it could not correct that claim without editing nine
-  files.
+  — two of them frozen as module attributes. A fork pointing at our repository
+  is telling its users something untrue about what they are running, and it
+  could not correct that claim without editing nine files.
 
   `async: false`: `put_config/2` flips a global application env, which the SQL
   sandbox does not roll back, so the whole module holds it for its lifetime.

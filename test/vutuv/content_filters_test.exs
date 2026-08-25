@@ -121,6 +121,15 @@ defmodule Vutuv.ContentFiltersTest do
       assert [%{pattern: "crypto"}] = ContentFilters.list_for_user(user)
     end
 
+    # `DELETE /settings/filters/:id` puts the id straight into a `where`. A
+    # tampered non-UUID raised `Ecto.Query.CastError` there, which is a 500 page
+    # for a member who edited their own URL — where the house rule is that a
+    # malformed id is a miss. `Social.unfollow!/2` spells the reasoning out.
+    test "a tampered id is a miss, not a crash", %{user: user} do
+      assert {:error, :not_found} = ContentFilters.delete_filter(user, "not-a-uuid")
+      assert {:error, :not_found} = ContentFilters.delete_filter(user, "")
+    end
+
     test "the same pattern cannot be added twice", %{user: user} do
       {:ok, _} = ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "crypto"})
 

@@ -115,14 +115,31 @@ defmodule Vutuv.Deliverability.Watcher do
 
   defp act(_event), do: :ok
 
+  # The close lives in an `after`, not on the success path. `File.open/2`
+  # without `:raw` spawns an IO-server process linked to this GenServer, and the
+  # old shape closed it only when both the seek and the read succeeded — so the
+  # `else` branch dropped the handle still open. That branch is reachable:
+  # `IO.binread/2` answers `:eof` when the log is truncated between the
+  # `File.stat` in `handle_info(:poll, …)` and this read, which is exactly what
+  # logrotate's `copytruncate` does. This process polls every five seconds for
+  # the life of the release, so each such race leaked one fd on the mail host
+  # permanently.
   defp read_window(path, offset, length) do
-    with {:ok, io} <- File.open(path, [:read, :binary]),
-         {:ok, _pos} <- :file.position(io, offset),
-         data when is_binary(data) <- IO.binread(io, length) do
-      File.close(io)
-      {:ok, data}
-    else
-      _ -> :error
+    case File.open(path, [:read, :binary]) do
+      {:ok, io} ->
+        try do
+          with {:ok, _pos} <- :file.position(io, offset),
+               data when is_binary(data) <- IO.binread(io, length) do
+            {:ok, data}
+          else
+            _other -> :error
+          end
+        after
+          File.close(io)
+        end
+
+      {:error, _reason} ->
+        :error
     end
   end
 

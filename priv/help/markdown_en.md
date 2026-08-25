@@ -284,5 +284,5 @@ video does the job.
 ## When something does not work
 
 Write a post mentioning `@vutuv`, or file it as a
-[bug on GitHub](https://github.com/wintermeyer/vutuv/issues). vutuv is open
+[bug on GitHub]({{issues}}). vutuv is open
 source, and the rules on this page are code in the repository.

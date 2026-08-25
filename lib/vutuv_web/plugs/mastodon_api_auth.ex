@@ -7,10 +7,10 @@ defmodule VutuvWeb.Plug.MastodonApiAuth do
 
   import Plug.Conn
 
-  alias Phoenix.Controller
   alias Vutuv.ApiAuth
   alias Vutuv.MastodonApi.Access
   alias Vutuv.MastodonApi.Scopes
+  alias VutuvWeb.MastodonApi.Errors
 
   def init(opts), do: opts
 
@@ -63,7 +63,8 @@ defmodule VutuvWeb.Plug.MastodonApiAuth do
   # against one copy and there were three.
   defdelegate bearer_token(conn), to: VutuvWeb.ControllerHelpers
 
-  defp error(conn, status, message) do
-    conn |> put_status(status) |> Controller.json(%{error: message}) |> halt()
-  end
+  # The adapter's error shape comes from `Errors`; only the `halt/1` is this
+  # plug's own, since a plug that refuses must stop the pipeline.
+  defp error(conn, status, message),
+    do: conn |> Errors.error(status, message) |> halt()
 end

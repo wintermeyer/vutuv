@@ -2155,10 +2155,12 @@ one. The day a real gate exists, this reads it.
 requires at least one entry, and a directory that follows it finds the actor
 endpoints answering 404 — the same thing said twice.
 
-`software.name`, `repository` and `homepage` describe vutuv **the software** and
-are literals: every installation runs the same software, developed in the same
-repository. `homepage` is the apex `https://vutuv.de`, never the `www.` alias,
-which only 301s there. What names the operator — `metadata.nodeName` and
+`software.name` and `homepage` describe vutuv **the software** and are literals:
+every installation runs the same software. `homepage` is the apex
+`https://vutuv.de`, never the `www.` alias, which only 301s there. `repository`
+is **not** a literal — it reads `Vutuv.SourceRepo.url/0` (`SOURCE_URL`), because
+an installation running modified code is no longer developed in our repository
+and pointing at ours would be a false claim about what is running. What names the operator — `metadata.nodeName` and
 `nodeDescription` — sits behind the Operator identity block in
 `config/config.exs` like every other such value, env-overridable as `NODE_NAME`
 / `NODE_DESCRIPTION`.

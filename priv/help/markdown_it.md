@@ -290,5 +290,5 @@ mappe incorporati. Un link al video fa lo stesso servizio.
 ## Quando qualcosa non funziona
 
 Scriva un post menzionando `@vutuv`, oppure lo segnali come
-[bug su GitHub](https://github.com/wintermeyer/vutuv/issues). vutuv è open
+[bug su GitHub]({{issues}}). vutuv è open
 source, e le regole di questa pagina sono codice nel repository.
