@@ -41,7 +41,7 @@ defmodule Vutuv.Uploads.Regenerator do
   alias Vutuv.Repo
   alias Vutuv.Uploads.Originals
 
-  @types ~w(avatars covers screenshots post_images job_posting_images qualification_documents)a
+  @types ~w(avatars covers screenshots post_images job_posting_images qualification_documents job_reference_documents organization_images)a
 
   # Where each public tree may still hold an original-pattern file (the
   # pre-private-tree layouts). Scanned by the final orphan pass.
@@ -134,6 +134,16 @@ defmodule Vutuv.Uploads.Regenerator do
   defp do_regenerate(:qualification_documents, qualification, opts),
     do: Vutuv.QualificationDocument.regenerate(qualification.id, opts)
 
+  # `JobReferenceDocument.regenerate/2` has existed the whole time, documented
+  # as "the regenerator hook", and nothing called it — so a Spec change left
+  # every stored Arbeitszeugnis thumbnail on the old encoding for ever while
+  # this tool reported success.
+  defp do_regenerate(:job_reference_documents, reference, opts),
+    do: Vutuv.JobReferenceDocument.regenerate(reference.id, opts)
+
+  defp do_regenerate(:organization_images, image, opts),
+    do: Vutuv.OrganizationImageStore.regenerate(image.token, opts)
+
   # Originals that no DB row claims must still never stay publicly
   # downloadable: move them into the private tree. Derived files of unknown
   # rows are left alone — nothing serves them, and deleting data without a
@@ -179,8 +189,14 @@ defmodule Vutuv.Uploads.Regenerator do
   defp rows(:qualification_documents),
     do: Repo.all(from(q in Qualification, where: not is_nil(q.document)))
 
+  defp rows(:job_reference_documents),
+    do: Repo.all(from(r in Vutuv.References.JobReference, where: not is_nil(r.document)))
+
+  defp rows(:organization_images), do: Repo.all(Vutuv.Organizations.OrganizationImage)
+
   defp row_id(:post_images, image), do: image.token
   defp row_id(:job_posting_images, image), do: image.token
+  defp row_id(:organization_images, image), do: image.token
   defp row_id(_type, row), do: row.id
 
   # Operator stdout progress (mix task / `bin/vutuv eval`); the quiet-flag logic

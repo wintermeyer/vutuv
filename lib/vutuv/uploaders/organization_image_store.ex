@@ -62,6 +62,30 @@ defmodule Vutuv.OrganizationImageStore do
     end)
   end
 
+  @doc """
+  Re-derives every served version from the kept original (for the Regenerator).
+
+  This tree had no such hook at all, so a format or quality change in
+  `Vutuv.Uploads.Spec` never reached a single organization logo, cover or
+  gallery picture — while the Regenerator's own doc calls itself "the tool that
+  makes a Spec change real for existing data" and reported success.
+  """
+  def regenerate(token, opts \\ []) when is_binary(token) do
+    dir = dir(token)
+
+    Vutuv.Uploads.regenerate_from_original(storage_dir(token), dir,
+      canonical: canonical_filenames(),
+      stale_glob: "*",
+      legacy_candidates: [Path.join(dir, "original.*")],
+      derive: &write_derived_versions(&1, dir),
+      opts: opts
+    )
+  end
+
+  defp canonical_filenames do
+    for spec <- Spec.versions(:organization_image), do: "#{spec.name}#{Spec.served_ext()}"
+  end
+
   @doc "The served version names (drives the proxy's URL whitelist)."
   def versions, do: @versions
 

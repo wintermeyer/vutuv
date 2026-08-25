@@ -295,11 +295,18 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     assert summary.avatars.regenerated == 1
     assert summary.orphan_originals == %{moved: 0}
 
+    # `:job_reference_documents` and `:organization_images` join the list here:
+    # the first had a written, documented `regenerate/2` that nobody called, the
+    # second had no hook at all — so a Spec change never reached an
+    # Arbeitszeugnis thumbnail or an organization logo, while this tool reported
+    # success on every other tree.
     assert Map.keys(summary) |> Enum.sort() ==
              [
                :avatars,
                :covers,
                :job_posting_images,
+               :job_reference_documents,
+               :organization_images,
                :orphan_originals,
                :post_images,
                :qualification_documents,
@@ -329,5 +336,46 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     summary = Regenerator.run(only: :avatars)
 
     assert summary.avatars == %{regenerated: 0, unchanged: 1, skipped: 0, failed: 0}
+  end
+
+  describe "coverage" do
+    # An uploader that can re-derive its files but is not in `@types` is dead
+    # code advertising itself as wired, and the tree it owns silently keeps the
+    # old encoding while this tool reports success. That is exactly what
+    # `JobReferenceDocument.regenerate/2` was — written, documented as "the
+    # regenerator hook", and called by nobody — and organization images had no
+    # hook at all. Calibrated by removing either from `@types`.
+    test "every uploader that can regenerate is reachable from types/0" do
+      hooks =
+        for path <- Path.wildcard("lib/vutuv/uploaders/*.ex"),
+            File.read!(path) =~ ~r/^  def regenerate\(/m,
+            do: Path.basename(path, ".ex")
+
+      # One module per type, in the order `@types` names them.
+      wired = %{
+        "avatar" => :avatars,
+        "cover" => :covers,
+        "screenshot" => :screenshots,
+        "post_image_store" => :post_images,
+        "job_posting_image_store" => :job_posting_images,
+        "qualification_document" => :qualification_documents,
+        "job_reference_document" => :job_reference_documents,
+        "organization_image_store" => :organization_images
+      }
+
+      types = Regenerator.types()
+
+      for module <- hooks do
+        type = Map.get(wired, module)
+
+        assert type,
+               "#{module}.regenerate/2 exists but this test does not know which " <>
+                 "regenerator type it belongs to — wire it up in both places"
+
+        assert type in types,
+               "#{module} can regenerate but :#{type} is not in Regenerator.@types, " <>
+                 "so a Spec change never reaches that tree"
+      end
+    end
   end
 end
