@@ -22,6 +22,7 @@ defmodule Vutuv.Social do
   alias Vutuv.Repo
   alias Vutuv.Social.Block
   alias Vutuv.Social.Follow
+  alias Vutuv.Social.PastFollow
   alias Vutuv.Social.PopularUsers
   alias Vutuv.Social.UserBookmark
   alias Vutuv.Social.UserLike
@@ -174,6 +175,7 @@ defmodule Vutuv.Social do
     case organization_follow(follower_id, organization.id) do
       %Follow{} = follow ->
         Repo.delete!(follow)
+        record_past_follow(follow)
         broadcast_social_graph_changed([follower_id])
         :ok
 
@@ -382,6 +384,7 @@ defmodule Vutuv.Social do
     with uuid when not is_nil(uuid) <- Vutuv.UUIDv7.cast_or_nil(follow_id),
          %Follow{} = follow <- Repo.get_by(Follow, id: uuid, follower_id: follower_id) do
       deleted = Repo.delete!(follow)
+      record_past_follow(follow)
       # The followee loses a follower and the pair may stop being mutual, so both
       # profiles recompute their counts live.
       broadcast_social_graph_changed([follower_id, follow.followee_id])
@@ -389,6 +392,36 @@ defmodule Vutuv.Social do
     else
       _ -> :ok
     end
+  end
+
+  # Remembers how long a follow was in force, so what it delivered stays in the
+  # follower's feed after it ends (issue #1673) while nothing new arrives. The
+  # two member-facing unfollow paths call it and nothing else does — see
+  # `Vutuv.Social.PastFollow` for why a muted follow and a severed one record
+  # nothing.
+  defp record_past_follow(%Follow{muted: true}), do: :ok
+  # A page's own follow: no feed reads it, so there is no span to keep.
+  defp record_past_follow(%Follow{follower_id: nil}), do: :ok
+
+  defp record_past_follow(%Follow{} = follow) do
+    {column, followee_id} =
+      if follow.followee_id,
+        do: {:followee_id, follow.followee_id},
+        else: {:followee_organization_id, follow.followee_organization_id}
+
+    changeset =
+      PastFollow.changeset(%PastFollow{}, column, %{
+        :follower_id => follow.follower_id,
+        column => followee_id,
+        :started_at => follow.inserted_at,
+        :ended_at => NaiveDateTime.utc_now(:second)
+      })
+
+    # A failed insert (the followee deleted mid-request) must not turn an
+    # unfollow into a 500: the span is a reading convenience, the unfollow is
+    # the member's actual instruction and it has already happened.
+    _ = Repo.insert(changeset)
+    :ok
   end
 
   @doc """
@@ -1102,6 +1135,18 @@ defmodule Vutuv.Social do
       Repo.delete_all(
         from(f in Follow, where: f.follower_id == ^other_id and f.followee_id == ^user_id)
       )
+
+    # No feed span is left behind here and any the pair already had goes, both
+    # directions (issue #1673): severing is what a block does, and a block has
+    # to clear the past out of the feed too. A restore needs no span — it puts a
+    # live follow back, and a live follow shows the whole back catalogue anyway.
+    Repo.delete_all(
+      from(w in PastFollow,
+        where:
+          (w.follower_id == ^user_id and w.followee_id == ^other_id) or
+            (w.follower_id == ^other_id and w.followee_id == ^user_id)
+      )
+    )
 
     %{follow_a_to_b: a_to_b > 0, follow_b_to_a: b_to_a > 0}
   end

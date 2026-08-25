@@ -18,14 +18,6 @@ defmodule Vutuv.PostsTest do
   # create helpers hand back don't carry one.
   defp reload(%Post{} = post), do: Repo.preload(post, :reply_ref, force: true)
 
-  # Timeline ordering ties at second precision; shift a post into the past so
-  # order assertions stay deterministic.
-  defp backdate_post!(post, seconds) do
-    at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -seconds)
-    Repo.update_all(from(p in Post, where: p.id == ^post.id), set: [inserted_at: at])
-    %{post | inserted_at: at}
-  end
-
   # The discovery rail only suggests posts that cleared its like bar, so its
   # tests hand each post enough likes (from distinct strangers) to qualify —
   # otherwise a filter test would silently assert the like-less fallback.
