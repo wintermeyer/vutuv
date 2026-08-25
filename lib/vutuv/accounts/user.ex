@@ -321,9 +321,10 @@ defmodule Vutuv.Accounts.User do
     # own assign is the truth.
     field(:feed_source, :string)
     # When that tab was last chosen. Stamped by the same writer, and read at
-    # mount as the anchor for the feed's unseen dot: a rejoining document has
-    # to date "since you were last looking at the other tab" from somewhere
-    # outside the socket it just lost.
+    # every feed mount as the anchor for the unseen dot: moving to one tab
+    # dates the moment the reader stopped looking at the other, and that is
+    # what "unseen" is measured against — the socket it used to live in is
+    # gone the moment they open another page.
     field(:feed_source_at, :naive_datetime)
     # The reader's post-display preferences (same settings page, applied to
     # every post this member reads: feed, profile Beiträge, permalink). The

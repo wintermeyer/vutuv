@@ -2657,7 +2657,7 @@ defmodule Vutuv.Posts do
 
   `feed_source_at` is the exception, and `leaving` is why it is an argument
   rather than a comment at the call site: it dates the reader's *move*, which
-  `VutuvWeb.PostLive.Feed.restore_unseen/2` reads as "you were still looking at
+  `VutuvWeb.PostLive.Feed.unseen_at_mount/3` reads as "you were still looking at
   the tab you just left until now". A press on the tab already open moves
   nobody, so stamping it there would swallow a dot still rightly standing on
   the other one. Only the caller knows which tab is on screen, so only the
@@ -2721,7 +2721,7 @@ defmodule Vutuv.Posts do
   @doc """
   Whether the tab `source` holds anything for `viewer` stamped at or after
   `since` — the boolean half of `newest_source_entry/3` below, and all a mount
-  restoring the dot has to know (`VutuvWeb.PostLive.Feed.restore_unseen/2`).
+  deriving the dot has to know (`VutuvWeb.PostLive.Feed.unseen_at_mount/3`).
 
   It skips that one's decorate pass, and `Enum.any?/2` stops at the first
   source that answers rather than asking all of them.

@@ -430,37 +430,36 @@ dot beside its label (`post_filter_tabs/1`'s `unseen`), cleared by going there
 itself). Only the two named tabs ever dot (`unseen_tabs/1`): "All" holds the
 same posts, so a dot there was true and read as a third place with news of its
 own. A dot and no count: what the reader needs is that there is something
-over there, and the tab reloads from the top anyway. The socket's
-`:unseen_sources` is never stored — it means "since you have been looking at
-this page", so a fresh mount starting clean is the honest state.
+over there, and the tab reloads from the top anyway.
 
-**A rejoin runs that same mount and is not a fresh page.** Socket state goes
-with the socket, so the dot went with it: a locked phone, a background tab
-whose heartbeat the browser throttled past the transport timeout, a wifi
-handover and every deploy reconnect without reloading anything, which read as
-the dot expiring by itself a couple of minutes after it appeared. A
-**connected** mount therefore derives it back (`restore_unseen/2`): does the
-tab the reader is not on hold anything at or after the last moment they had it
-on screen (`Posts.feed_source_since?/3`, the boolean half of
-`newest_source_entry/3`)? That moment is the later of
+**The dot is derived at every mount, not carried by the socket.** It began as
+socket state meaning "since you have been looking at this page", and that is
+how long it lasted: opening a notification and coming back to /feed showed a
+clean tab bar over a post the reader had never seen. So did a reload, a second
+visit, and every LiveView **rejoin** — a mount with no page load at all, which
+is how a locked phone, a throttled background tab, a wifi handover or a deploy
+took the dot with them. None of those is somebody reading the post.
 
-* **when the document was loaded** — `feed_opened_at`, put into the signed
-  `live_render` session by `NewsfeedController`. That map is minted once per
-  document and replayed verbatim on every rejoin, so it dates the one thing a
-  socket that died and came back cannot date itself; and
-* **when they last moved tabs** — `users.feed_source_at`, stamped beside
-  `feed_source` by `remember_feed_filter/3`. Which tab is being left is an
-  argument rather than a rule at the call site, because only that side knows
-  it and the answer decides whether the clock moves at all: pressing the tab
-  already open moves nobody, and a stamp there would swallow a dot still
-  rightly standing on the other one.
+`unseen_at_mount/3` therefore asks, on the dead render: does the tab the reader
+is not on hold anything at or after the last moment they had it on screen
+(`Posts.feed_source_since?/3`, the boolean half of `newest_source_entry/3`)?
+That moment is `users.feed_source_at`, stamped beside `feed_source` by
+`remember_feed_filter/3`. Moving *to* a tab means the one being left was in
+front of them until then, and moving away again is what ends it, so the other
+tab's clock stands still exactly while it is off screen. Which tab is being
+left is an argument rather than a rule at the call site, because only that side
+knows it and the answer decides whether the clock moves at all: pressing the
+tab already open moves nobody, and a stamp there would swallow a dot still
+rightly standing on the other one. Going to a tab still clears its dot
+(`clear_unseen/2`) — and now that same press dates the next one.
 
-A real page load still starts clean (its own `opened_at` is now, and nothing is
-newer than now), and a document from the previous release carries no stamp and
-keeps the old behaviour, so the N-1 deploy window has no half-state. A first
-connect skips the question altogether (`@restore_grace`, 5 s): the socket joins
-a second or two after the render, so the answer is false by construction and
-the five source queries would be waste on the busiest page in the app.
+A member with no stamp gets no dot rather than a guessed one (a row last
+written before the column existed; their first tab press heals it, and a
+one-off backfill gave everyone else the deploy moment). The answer rides the
+handoff like the rest of the payload, so it is in the first paint and the
+connected mount does not ask again. Members on "All" and members without a tab
+bar pay nothing; for the rest it is an `Enum.any?/2` over the other tab's
+sources, one `LIMIT 1` each, beside the seven the page itself runs.
 
 The two halves reach it differently, and the difference is what each write
 knows about the reader:

@@ -46,12 +46,7 @@ defmodule VutuvWeb.NewsfeedController do
     conn
     |> AgentDocs.put_html_alternates()
     |> put_layout(html: false)
-    |> live_render(Feed,
-      # Stamped with the moment this document was rendered, which is what lets
-      # a feed whose socket died and came back tell an arrival it already
-      # showed from one that landed while it was away (`Feed.restore_unseen/2`).
-      session: Feed.stamp_document(ControllerHelpers.live_render_session(conn))
-    )
+    |> live_render(Feed, session: ControllerHelpers.live_render_session(conn))
   end
 
   defp send_feed_doc(conn, format, params) do

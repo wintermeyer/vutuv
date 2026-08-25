@@ -70,15 +70,6 @@ defmodule VutuvWeb.PostLive.Feed do
   @newcomer_pool 30
   @tags_per_newcomer 3
   @suggestions_refresh :timer.minutes(5)
-
-  # How old a document has to be before a connected mount asks whether the dot
-  # on the other tab needs restoring — see `restore_unseen/2`.
-  @restore_grace 5
-
-  # Where that document's own age is kept. This module reads it, so this module
-  # writes it too (`stamp_document/2`) rather than leaving the spelling in the
-  # controller for the two to drift apart.
-  @opened_at_key "feed_opened_at"
   # "Suggested posts" rail: how many discovery posts to show at once.
   @discover_posts 5
 
@@ -93,7 +84,7 @@ defmodule VutuvWeb.PostLive.Feed do
     socket = InitAssigns.assign_embedded(socket, session)
 
     if user = socket.assigns.current_user do
-      {:ok, mount_feed(socket, user, session)}
+      {:ok, mount_feed(socket, user)}
     else
       {:ok,
        socket
@@ -102,21 +93,7 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  @doc """
-  Stamps a `live_render` session map with the moment its **document** was
-  rendered — what `restore_unseen/2` dates the unseen dot from.
-
-  Called by `VutuvWeb.NewsfeedController`, which owns `/feed`. It belongs here
-  because this module is what reads the key back, and because the property that
-  makes it work is a property of that map: it is signed once per document and
-  replayed verbatim on every socket rejoin, so it dates the one thing a socket
-  that died and came back cannot date itself. `at` is for tests, which have to
-  place a document in the past to have a rejoin worth testing.
-  """
-  def stamp_document(session, at \\ NaiveDateTime.utc_now(:second)),
-    do: Map.put(session, @opened_at_key, NaiveDateTime.to_iso8601(at))
-
-  defp mount_feed(socket, user, session) do
+  defp mount_feed(socket, user) do
     # Can this browser draw the tab ticker at all? A deploy does not reload an
     # open feed — the socket reconnects to the new release and patches into a
     # document downloaded hours ago — so the question is not which release that
@@ -144,13 +121,10 @@ defmodule VutuvWeb.PostLive.Feed do
       # The dead render stashed its computed page seconds ago
       # (VutuvWeb.Live.MountHandoff); take it and skip re-running the same
       # queries. Any miss (expired, consumed, a reconnect) recomputes.
-      socket =
-        case MountHandoff.take(user.id, {:feed, remembered}) do
-          {:ok, payload} -> apply_feed_payload(socket, payload)
-          :error -> apply_feed_payload(socket, feed_payload(user, remembered))
-        end
-
-      restore_unseen(socket, opened_at(session))
+      case MountHandoff.take(user.id, {:feed, remembered}) do
+        {:ok, payload} -> apply_feed_payload(socket, payload)
+        :error -> apply_feed_payload(socket, feed_payload(user, remembered))
+      end
     else
       payload = feed_payload(user, remembered)
       MountHandoff.stash(user.id, {:feed, remembered}, payload)
@@ -194,6 +168,8 @@ defmodule VutuvWeb.PostLive.Feed do
       # it is a fact about their whole timeline, not about the open tab, so
       # switching tabs must not recompute it.
       source_tabs?: source_tabs?,
+      # The dot on the tab they are not on, as this page opens (issue #1503).
+      unseen_sources: unseen_at_mount(user, filter, source_tabs?),
       # The desktop discovery rail renders WITH the page: it was lazy-loaded
       # for one release (v7.200.3) and the pop-in read as slowness, so it is
       # eager again — computed here once, riding the handoff to the connected
@@ -234,12 +210,11 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:feed_filter, payload.filter)
     |> assign(:source_tabs?, payload.source_tabs?)
     # The named sources holding something this reader has not seen (issue
-    # #1503), each one a dot on its tab. Socket state on purpose and never
-    # stored: it means "since you have been looking at this page", so a fresh
-    # document starting clean is the honest state, not a lost one. A **rejoin**
-    # is a mount too and is not a fresh document, so a connected mount derives
-    # the dot back — see `restore_unseen/2`.
-    |> assign(:unseen_sources, MapSet.new())
+    # #1503), each one a dot on its tab. The socket carries it from here on,
+    # but it does not *begin* here: the mount derives it from the last time
+    # they had the other tab on screen (`unseen_at_mount/3`), because an unread
+    # post is unread on the next page as well.
+    |> assign(:unseen_sources, payload.unseen_sources)
     # The transient half of that (issue #1668): what landed over there, quoted
     # beside its tab for a few seconds. nil = no window open. `ticker_quiet_until`
     # is the short silence after one closes, so a burst on a bad line cannot
@@ -627,7 +602,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # calls to pull the feed back to "All". That fallback is the code's doing,
     # not theirs, and must not overwrite the tab they chose.
     # It is handed the tab being left as well, because that is what dates the
-    # move for `restore_unseen/2` and only this side knows it.
+    # move for `unseen_at_mount/3` and only this side knows it.
     Posts.remember_feed_filter(socket.assigns.current_user, filter, socket.assigns.feed_filter)
 
     {:noreply, load_source_filter(socket, filter)}
@@ -1023,10 +998,13 @@ defmodule VutuvWeb.PostLive.Feed do
 
   # The tab a dot could go on, or nil: the one the reader is not looking at —
   # "All" is both of them at once, so nothing ever landed elsewhere — and only
-  # where there is a tab bar to put one in.
-  defp dottable_source(socket) do
-    if socket.assigns.source_tabs?, do: other_source(socket.assigns.feed_filter)
-  end
+  # where there is a tab bar to put one in. Taken apart from the socket because
+  # `unseen_at_mount/3` asks the same question before there is one.
+  defp dottable_source(socket),
+    do: dottable_source(socket.assigns.feed_filter, socket.assigns.source_tabs?)
+
+  defp dottable_source(filter, true), do: other_source(filter)
+  defp dottable_source(_filter, false), do: nil
 
   # The other named tab — nil on "All", which is both of them at once.
   defp other_source(:vutuv), do: :fediverse
@@ -1125,68 +1103,39 @@ defmodule VutuvWeb.PostLive.Feed do
   defp mark_unseen(socket, source),
     do: update(socket, :unseen_sources, &MapSet.put(&1, source))
 
-  # The dot the reader had before the socket blinked.
+  # The dot a mount opens with — the whole of what carries it from one look at
+  # the feed to the next.
   #
-  # `unseen_sources` is socket state, so a mount starts it empty — and a
-  # LiveView **rejoin is a mount**. A rejoin is also invisible: nothing
-  # reloads, the socket simply re-joins and the tabs come back without the dot,
-  # which reads as the dot expiring by itself a couple of minutes after it
-  # appeared. A locked phone, a backgrounded tab whose heartbeat the browser
-  # throttled past the socket timeout, a wifi handover and every deploy all do
-  # it, and none of them mean the reader stopped looking at this page.
+  # `unseen_sources` is socket state and a mount is a new socket, so the dot
+  # used to last exactly as long as the page: opening a notification and coming
+  # back showed a clean tab bar over a post nobody had read. So did a reload, a
+  # second visit, and every LiveView **rejoin** — a mount with no page load at
+  # all, which is how a locked phone, a throttled background tab, a wifi
+  # handover and every deploy took it. None of that is somebody reading a post.
   #
-  # So on a connected mount the dot is *derived* rather than carried: does the
-  # tab the reader is not on hold anything newer than the last moment they had
-  # it on screen? That moment is the later of
+  # So the dot is *derived* rather than carried: does the tab they are not on
+  # hold anything at or after the last moment they had it on screen? That
+  # moment is `users.feed_source_at`, stamped when they move tabs
+  # (`Posts.remember_feed_filter/3`) — moving *to* one tab dates the moment
+  # they stopped looking at the other, and that clock then stands still exactly
+  # while the tab is off screen. Going there still clears the dot
+  # (`clear_unseen/2`), and now the same press dates the next one.
   #
-  #   * when this **document** was loaded — `feed_opened_at` rides the signed
-  #     `live_render` session, which is minted once by NewsfeedController and
-  #     replayed verbatim on every rejoin, so it survives exactly what the
-  #     socket does not; and
-  #   * when they last **moved tabs** (`users.feed_source_at`, stamped beside
-  #     the tab it names).
+  # No stamp, no dot, rather than a guessed one: that is a member last written
+  # by the release before the column, and their first tab press heals it.
   #
-  # A genuine page load therefore still starts clean, which is the behaviour
-  # #1503 chose: its own `opened_at` is now, and nothing is newer than now.
-  # A document from the previous release carries no stamp and simply keeps the
-  # old behaviour, so the N-1 deploy window has no half-state.
-  #
-  # Which is also why a first connect skips the question entirely
-  # (`@restore_grace`): the socket joins a second or two after the HTTP render,
-  # so the answer is false by construction, and asking it costs five source
-  # queries on the busiest page in the app. The sliver that buys — an arrival
-  # between the render and `Activity.subscribe/1` — was never covered by
-  # anything anyway.
-  defp restore_unseen(socket, nil), do: socket
+  # It runs on the **dead** render, so the dot is in the first paint and the
+  # connected mount takes it off the handoff with everything else. "All" and a
+  # member without a tab bar pay nothing; the rest pay an `Enum.any?/2` over
+  # the other tab's sources, a LIMIT 1 each, beside the seven the page runs.
+  defp unseen_at_mount(user, filter, source_tabs?) do
+    source = dottable_source(filter, source_tabs?)
+    since = user.feed_source_at
 
-  defp restore_unseen(socket, opened_at) do
-    user = socket.assigns.current_user
-    source = dottable_source(socket)
-
-    if source && document_aged?(opened_at) &&
-         Posts.feed_source_since?(user, source, later_of(opened_at, user.feed_source_at)) do
-      mark_unseen(socket, source)
-    else
-      socket
-    end
+    if source && since && Posts.feed_source_since?(user, source, since),
+      do: MapSet.new([source]),
+      else: MapSet.new()
   end
-
-  # Old enough that this mount can be a rejoin rather than the document's own
-  # first connect.
-  defp document_aged?(opened_at),
-    do: NaiveDateTime.diff(NaiveDateTime.utc_now(:second), opened_at) >= @restore_grace
-
-  defp opened_at(session) do
-    with stamp when is_binary(stamp) <- session[@opened_at_key],
-         {:ok, at} <- NaiveDateTime.from_iso8601(stamp) do
-      at
-    else
-      _ -> nil
-    end
-  end
-
-  defp later_of(at, nil), do: at
-  defp later_of(at, other), do: Enum.max([at, other], NaiveDateTime)
 
   ## ── The tab ticker (issue #1668) ──
   #
