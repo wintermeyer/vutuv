@@ -427,6 +427,17 @@ same instant. Four rules bound it, and only the first is about taste:
   connect param for (issue #1679): only a bundle carrying this hook can send
   the event, so a document loaded before this release simply never teases,
   however many deploys behind it is.
+
+  It reports on `reconnected()` too, and that is not belt and braces:
+  `tab_hidden?` lives in the socket, so a rejoin runs `mount/3` again and starts
+  it at **false**. Nothing on the client volunteers the answer twice by itself —
+  `mounted()` runs once (the element survives the patch) and a tab hidden
+  throughout fires no `visibilitychange`. Without that callback every long-lived
+  background tab fell silent after its first deploy, sleep or network blip, and
+  stayed silent. The *dot* kept working (`tab:new_post` is pushed
+  unconditionally and gated in the browser), which is why the feature read as
+  simply broken while every test stayed green — found 2026-08-25 by driving a
+  real headless Chrome across a forced reconnect.
 * **One quote per window.** From the second arrival the quote gives up and
   becomes a count (`tab:teaser_more`, "+2 more posts") — no query, and the
   window is not extended, or a busy source would own the tab.

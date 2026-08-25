@@ -745,6 +745,20 @@ const Hooks = {
       this.reportVisibility()
       this.apply()
     },
+    // A rejoin runs ShellLive's `mount/3` again, and a fresh mount starts
+    // `tab_hidden?` at **false** — the socket has no memory of what this tab
+    // said before it dropped. Nothing here volunteers the answer twice on its
+    // own: `mounted()` runs once (the element survives the patch) and a tab
+    // hidden throughout fires no `visibilitychange`. So without this the server
+    // takes every reconnected background tab for one being read and spends
+    // nothing on it, for good — and since a deploy, a laptop waking or any
+    // network blip reconnects the socket, that is the normal state of a
+    // long-lived tab, not an edge case. The dot kept working the whole time
+    // (pushed unconditionally, gated in the browser), which is why the feature
+    // read as simply broken while every test stayed green.
+    reconnected() {
+      this.reportVisibility()
+    },
     reportVisibility() {
       this.pushEvent("tab:visibility", { hidden: document.hidden })
     },

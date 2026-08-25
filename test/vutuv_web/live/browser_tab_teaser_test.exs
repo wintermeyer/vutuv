@@ -26,6 +26,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
   alias Vutuv.Sessions
   alias Vutuv.Social
 
+  @app_js "assets/js/app.js"
+
   setup do
     # `record_remote_post/2` claims the shared inbound cap, which lives in the
     # RateLimiter's ETS table and outlives a test.
@@ -244,6 +246,66 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
 
       {:ok, _other} = Posts.create_post(author, %{body: "etwas ganz anderes"})
       refute_push_event(view, "tab:teaser", %{})
+    end
+  end
+
+  # The gap that made the whole feature read as broken in production while every
+  # test above stayed green (fixed 2026-08-25). `tab_hidden?` lives in the
+  # socket, so a rejoin — a deploy, a laptop waking, any network blip — starts
+  # it at false again, and nothing on the client volunteers the answer a second
+  # time: `mounted()` runs once (the element survives the patch) and a tab that
+  # was hidden throughout fires no `visibilitychange`. So every long-lived
+  # background tab fell silent after its first reconnect, and stayed silent.
+  #
+  # It hid well because the *dot* kept working: `tab:new_post` is pushed
+  # unconditionally and gated in the browser, so the tab still said that
+  # something had landed and only the teaser was gone.
+  describe "a socket that rejoins while the tab stays hidden" do
+    test "a shell that has not heard from the hook spends nothing", %{conn: conn} do
+      user = insert(:user)
+      author = followed_author(user)
+
+      # No `tab:visibility` at all — the state a reconnected tab is in until it
+      # reports again, and the reason the hook must report on `reconnected()`.
+      {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: %{"session_token" => token})
+
+      {:ok, _post} = Posts.create_post(author, %{body: "nach dem Reconnect"})
+
+      assert_push_event(view, "tab:new_post", %{})
+      refute_push_event(view, "tab:teaser", %{})
+
+      # …and the very same shell teases the moment the hook speaks, which is
+      # what `reconnected()` restores.
+      render_hook(view, "tab:visibility", %{"hidden" => true})
+      {:ok, _second} = Posts.create_post(author, %{body: "und jetzt doch"})
+      assert_push_event(view, "tab:teaser", %{frames: _})
+    end
+
+    test "the hook re-reports on reconnect" do
+      assert Regex.match?(
+               ~r/reconnected\(\)\s*\{[^}]*this\.reportVisibility\(\)/,
+               tab_badge_hook()
+             ),
+             """
+             TabBadge in #{@app_js} must re-report visibility from a \
+             `reconnected()` callback. Neither `mounted()` nor \
+             `visibilitychange` fires for a tab that stayed hidden across a \
+             rejoin, and the server's `tab_hidden?` resets to false on every \
+             one — so without it the teaser goes quiet for good on the first \
+             deploy that reconnects the socket.\
+             """
+    end
+  end
+
+  # Just the TabBadge hook, so the assertion above cannot be satisfied by some
+  # other hook's `reconnected()` further down the file.
+  defp tab_badge_hook do
+    case String.split(File.read!(@app_js), "\n  TabBadge: {\n", parts: 2) do
+      [_before, rest] -> rest |> String.split("\n  },\n", parts: 2) |> hd()
+      [_whole] -> flunk("No `TabBadge: {` hook in #{@app_js} — was it renamed?")
     end
   end
 end
