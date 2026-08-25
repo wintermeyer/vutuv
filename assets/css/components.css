@@ -3324,6 +3324,16 @@ html.lightbox-open { overflow: hidden; }
   container-type: inline-size;
 }
 
+/* A native button gets the arrow cursor, not the hand, so nothing about this
+   bar says "press me" except the hover tint — and the quote had no hover tint
+   at all. Only the real controls: the settings page's example is a row of
+   inert spans wearing the same class names. */
+.filter-tabs a[data-filter-tab],
+.filter-tabs button[data-filter-tab],
+.filter-tab-ticker {
+  cursor: pointer;
+}
+
 .filter-tab__label {
   display: inline-block;
   vertical-align: bottom;
@@ -3353,10 +3363,24 @@ html.lightbox-open { overflow: hidden; }
   color: #64748b;
   background: #ffe6e0;
   animation: filter-tab-ticker-in 280ms ease-out;
+  transition: background-color 150ms ease;
 }
 
 .filter-tab--ticking {
   background: #ffe6e0;
+  transition: background-color 150ms ease;
+}
+
+/* The quote goes to the tab it names — that is what it is for, and it has
+   always done it. Nobody could tell: a quote that only sits there is read as
+   a caption, so the reader aims at the tab instead. Pointing at it deepens
+   the pair TOGETHER, so the answer to "where does this take me" is the tab
+   that lights up with it. `:has()` is what lets the quote speak for a
+   sibling; where it is missing only the quote deepens, which is still the
+   affordance. */
+.filter-tab-ticker:is(:hover, :focus-visible),
+.filter-tabs--ticking:has(.filter-tab-ticker:is(:hover, :focus-visible)) .filter-tab--ticking {
+  background: #ffd3c8;
 }
 
 /* The author never gives way — only the quote does. An author that shrinks
@@ -3422,6 +3446,11 @@ html.lightbox-open { overflow: hidden; }
   .filter-tab-ticker,
   .filter-tab--ticking {
     background: #3a211d;
+  }
+
+  .filter-tab-ticker:is(:hover, :focus-visible),
+  .filter-tabs--ticking:has(.filter-tab-ticker:is(:hover, :focus-visible)) .filter-tab--ticking {
+    background: #4e2c26;
   }
 
   .filter-tab-ticker {

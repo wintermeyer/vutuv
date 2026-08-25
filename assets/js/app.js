@@ -473,8 +473,20 @@ const Hooks = {
   // `data-ticker-window` is what says a NEW window started. It stays put while
   // the count climbs inside one, so a second arrival cannot silently restart
   // the clock and hand a busy source the bar for good.
+  //
+  // The window also waits for a reader who is reaching for the quote: it is a
+  // button that switches to the tab it names, and a target that disappears
+  // mid-reach is not one you can press. The hold hangs off pointer MOVEment,
+  // never `pointerenter` — a quote that opens under a cursor somebody parked
+  // there and walked away from would otherwise stand for the rest of the day.
   FeedTicker: {
     mounted() {
+      this.hold = () => this.pause()
+      this.release = () => this.resume()
+      this.el.addEventListener("pointermove", this.hold)
+      this.el.addEventListener("pointerleave", this.release)
+      this.el.addEventListener("focus", this.hold)
+      this.el.addEventListener("blur", this.release)
       this.start()
     },
     updated() {
@@ -482,18 +494,43 @@ const Hooks = {
     },
     destroyed() {
       this.stop()
+      this.el.removeEventListener("pointermove", this.hold)
+      this.el.removeEventListener("pointerleave", this.release)
+      this.el.removeEventListener("focus", this.hold)
+      this.el.removeEventListener("blur", this.release)
     },
     start() {
       this.stop()
+      this.held = false
       this.window = this.el.dataset.tickerWindow
       this.el.classList.remove("filter-tab-ticker--leaving")
-
-      const seconds = parseInt(this.el.dataset.tickerSeconds, 10) || 8
+      this.run((parseInt(this.el.dataset.tickerSeconds, 10) || 8) * 1000)
+    },
+    run(ms) {
+      this.deadline = Date.now() + ms
 
       this.timer = setTimeout(() => {
+        // Past this point the window is over and nothing may hold it: the fade
+        // is not clickable (`pointer-events: none`), but a keyboard focus
+        // still reaches it, and a hold there would clear the timer that tells
+        // the server to forget the quote — leaving an invisible one standing.
+        this.deadline = null
         this.el.classList.add("filter-tab-ticker--leaving")
         this.timer = setTimeout(() => this.pushEvent("hide-tab-ticker", {}), 400)
-      }, seconds * 1000)
+      }, ms)
+    },
+    pause() {
+      if (this.held || !this.deadline) return
+      this.held = true
+      this.left = Math.max(0, this.deadline - Date.now())
+      this.stop()
+    },
+    resume() {
+      if (!this.held) return
+      this.held = false
+      // A floor, so the quote does not blink out from under a cursor that has
+      // just left it — that reads as the pointer having broken something.
+      this.run(Math.max(this.left, 1200))
     },
     stop() {
       if (this.timer) clearTimeout(this.timer)

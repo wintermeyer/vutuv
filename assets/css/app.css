@@ -116,12 +116,31 @@ html {
   font-weight: 600;
 }
 
+/* Pressing the feed's ticker quote IS pressing the tab it names — it carries
+   that tab's `phx-value-type` and lands on the same event — so it lights THAT
+   tab, not itself. Without this the quote was the one control in the app that
+   answered a press with nothing at all until the server came back, which is
+   the whole reason readers went for the tab instead. The quote also deepens
+   under its own finger, which is the only press feedback a touch screen gets:
+   there is no hover to have already deepened it. */
+.filter-tabs--ticking:has(.filter-tab-ticker.phx-click-loading) .filter-tab--ticking {
+  background-color: var(--press-on-bg);
+  color: var(--press-on-fg);
+  font-weight: 600;
+}
+
+.filter-tab-ticker.phx-click-loading {
+  background-color: #ffd3c8;
+}
+
 /* The item being left goes quiet in the same frame, so two pills are never lit
    at once. The `:not()` is what keeps a press on the tab you are already on
    (a reload of the same list) from greying itself out. Filter buttons carry
    the current one as `aria-pressed`, every link as `aria-current`. */
 [data-filter-scope]:has([data-filter-tab].phx-click-loading)
   [data-filter-tab]:is([aria-pressed="true"], [aria-current="page"]):not(.phx-click-loading),
+[data-filter-scope]:has(.filter-tab-ticker.phx-click-loading)
+  [data-filter-tab][aria-pressed="true"]:not(.filter-tab--ticking),
 [data-nav-bar]:has([data-nav-pressing]) [data-nav-item][aria-current="page"]:not([data-nav-pressing]) {
   background-color: transparent;
   box-shadow: none;
@@ -138,6 +157,7 @@ main {
 }
 
 [data-filter-scope]:has([data-filter-tab].phx-click-loading) [data-filter-list],
+[data-filter-scope]:has(.filter-tab-ticker.phx-click-loading) [data-filter-list],
 html[data-nav-pressing] main {
   cursor: progress;
   opacity: var(--press-pending-opacity);

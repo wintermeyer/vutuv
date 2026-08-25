@@ -483,8 +483,10 @@ defmodule VutuvWeb.PostComponents do
   stays until the tab is visited; the ticker says *what*, and goes on its own.
   While it stands, the bar and the quote share one warm tint so the pair reads
   as belonging together, and on a narrow screen every other tab's label folds
-  away to give the quote the width — the tabs come back when it goes. The feed
-  builds the map (`VutuvWeb.PostLive.Feed`); everything here is rendering.
+  away to give the quote the width — the tabs come back when it goes. Pressing
+  the quote goes where its tab goes; pointing at it deepens both, which is the
+  only thing that ever said so. The feed builds the map
+  (`VutuvWeb.PostLive.Feed`); everything here is rendering.
   """
   attr(:active, :string, required: true)
   attr(:event, :string, default: nil, doc: "phx-click event name → button mode")

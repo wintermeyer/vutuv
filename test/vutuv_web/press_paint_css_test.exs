@@ -115,6 +115,37 @@ defmodule VutuvWeb.PressPaintCssTest do
     end
   end
 
+  # The feed's ticker quote (issue #1668) is the one pressable thing in these
+  # bars that is not a `[data-filter-tab]`, so the shared selectors above skip
+  # it. It went out that way: pressing the quote switched the tab and said
+  # nothing at all until the server answered, while the tab beside it lit up
+  # in the same frame — so the quote read as a caption and readers aimed at
+  # the tab instead.
+  test "the ticker quote presses as the tab it names" do
+    css = File.read!(@css)
+    components = File.read!(Path.expand("../../assets/css/components.css", __DIR__))
+
+    # It carries that tab's `phx-value-type`, so it paints that tab, not itself.
+    assert css =~
+             ".filter-tabs--ticking:has(.filter-tab-ticker.phx-click-loading) .filter-tab--ticking {",
+           "a press on the quote must light the tab it is about to switch to"
+
+    assert css =~
+             "[data-filter-scope]:has(.filter-tab-ticker.phx-click-loading) [data-filter-list]",
+           "and dim the timeline it is about to replace, like any other tab press"
+
+    assert css =~ ".filter-tab-ticker.phx-click-loading {",
+           "a touch screen never hovered, so the quote deepens under its own finger"
+
+    # And before the press: something has to say it is pressable at all.
+    assert components =~ ~r/\.filter-tab-ticker \{\n  cursor: pointer;/,
+           "the quote needs the hand cursor; a plain button gets the arrow"
+
+    assert components =~
+             ".filter-tabs--ticking:has(.filter-tab-ticker:is(:hover, :focus-visible)) .filter-tab--ticking",
+           "pointing at the quote deepens its tab too, which is what says where it goes"
+  end
+
   test "every host carries the markers the paint depends on" do
     for {path, markers} <- [
           {@feed, ["data-filter-scope", "data-filter-list"]},
