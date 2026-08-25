@@ -26,10 +26,9 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.UUIDv7
   alias VutuvWeb.Markdown
   alias VutuvWeb.RemoteMediaToken
-  alias VutuvWeb.UserHelpers
 
   def identity_name(%User{} = user),
-    do: UserHelpers.full_name(user) <> " (@" <> user.username <> ")"
+    do: Identity.display_name(user) <> " (@" <> user.username <> ")"
 
   def identity_name(%Organization{name: name}), do: name
 
@@ -56,7 +55,7 @@ defmodule Vutuv.MastodonApi.Presenter do
       id: account_id(user),
       username: user.username,
       acct: user.username,
-      display_name: UserHelpers.full_name(user),
+      display_name: Identity.display_name(user),
       note: note(user.headline),
       created_at: created_at(user, user.id),
       url: profile_url(user),

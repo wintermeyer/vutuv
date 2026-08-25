@@ -40,6 +40,7 @@ defmodule Vutuv.Moderation do
   alias Vutuv.Accounts.User
   alias Vutuv.Chat.{Message, Participant}
   alias Vutuv.Fediverse
+  alias Vutuv.Identity
   alias Vutuv.Jobs.JobPosting
 
   alias Vutuv.Moderation.{
@@ -1377,7 +1378,7 @@ defmodule Vutuv.Moderation do
   end
 
   defp snapshot(%User{} = user) do
-    [VutuvWeb.UserHelpers.full_name(user), user.headline]
+    [Identity.display_name(user), user.headline]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join("\n")
   end

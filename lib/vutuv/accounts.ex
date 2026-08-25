@@ -25,6 +25,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Activity
   alias Vutuv.Deliverability
   alias Vutuv.Handles
+  alias Vutuv.Identity
   alias Vutuv.LoginCodes
   alias Vutuv.Mentions
   alias Vutuv.Moderation
@@ -1029,7 +1030,7 @@ defmodule Vutuv.Accounts do
   defp deletion_snapshot(%User{} = user) do
     %{
       id: user.id,
-      name: VutuvWeb.UserHelpers.full_name(user),
+      name: Identity.display_name(user),
       username: user.username,
       emails: Repo.all(from(e in Email, where: e.user_id == ^user.id, select: e.value)),
       phone_numbers:

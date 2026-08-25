@@ -25,6 +25,7 @@ defmodule Vutuv.Jobs.JobPosting do
   alias Vutuv.ChangesetHelpers
   alias Vutuv.Countries
   alias Vutuv.Geo
+  alias Vutuv.Identity
   alias Vutuv.Languages
   alias Vutuv.MarkdownContent
   alias Vutuv.Mentions
@@ -125,7 +126,7 @@ defmodule Vutuv.Jobs.JobPosting do
   """
   def employer_name(%__MODULE__{organization: %Organization{name: name}}), do: name
   def employer_name(%__MODULE__{hiring_org_name: name}) when is_binary(name), do: name
-  def employer_name(%__MODULE__{user: %User{} = user}), do: VutuvWeb.UserHelpers.full_name(user)
+  def employer_name(%__MODULE__{user: %User{} = user}), do: Identity.display_name(user)
   def employer_name(_posting), do: nil
 
   @doc """

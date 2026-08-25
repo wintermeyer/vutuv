@@ -31,6 +31,7 @@ defmodule Vutuv.Notifications.Emailer do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Identity
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Organizations.Organization
   alias Vutuv.Reports.DailyReport
@@ -552,7 +553,7 @@ defmodule Vutuv.Notifications.Emailer do
 
   defp alert_entry(:people, candidate, recipient, base) do
     %{
-      title: VutuvWeb.UserHelpers.full_name(candidate),
+      title: Identity.display_name(candidate),
       meta: people_meta(candidate),
       status: people_status_label(candidate, recipient),
       url: absolute_url(base, "/" <> candidate.username)

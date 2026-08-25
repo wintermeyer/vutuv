@@ -20,6 +20,7 @@ defmodule Vutuv.Newsletters do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.{Email, User}
   alias Vutuv.BerlinTime
+  alias Vutuv.Identity
 
   alias Vutuv.Newsletters.{
     Markdown,
@@ -101,7 +102,7 @@ defmodule Vutuv.Newsletters do
       "greeting" => UserHelpers.email_greeting(user),
       "first_name" => user.first_name || "",
       "last_name" => user.last_name || "",
-      "name" => UserHelpers.full_name(user),
+      "name" => Identity.display_name(user),
       "username" => user.username || "",
       "email" => email
     }
