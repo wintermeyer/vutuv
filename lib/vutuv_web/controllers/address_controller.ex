@@ -5,7 +5,6 @@ defmodule VutuvWeb.AddressController do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
-  alias VutuvWeb.Plug.Locale
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
 
@@ -114,12 +113,21 @@ defmodule VutuvWeb.AddressController do
     )
   end
 
-  defp get_template(conn) do
-    loc =
-      conn
-      |> VutuvWeb.UserHelpers.locale(conn.assigns[:user])
+  # Which address form to render — a question about **postal conventions**, not
+  # about the site's languages. It used to ask `Locale.locale_supported?/1`, and
+  # the two agreed by accident while there were exactly two locales: the day
+  # Italian shipped (v7.353.0) that predicate started answering true for `it`,
+  # `String.to_existing_atom("form_it")` raised, and adding an address 500ed for
+  # anyone reading in Italian. So the list here is the templates that exist,
+  # and a language without one falls through to the generic form — which is the
+  # right answer for it, and was already the right answer for every language
+  # this installation does not serve.
+  @address_forms ~w(de en)
 
-    if Locale.locale_supported?(loc), do: loc, else: "generic"
+  defp get_template(conn) do
+    loc = VutuvWeb.UserHelpers.locale(conn, conn.assigns[:user])
+
+    if loc in @address_forms, do: loc, else: "generic"
   end
 
   defp user_with_addresses(conn),
