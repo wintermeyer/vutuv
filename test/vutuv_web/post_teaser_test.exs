@@ -106,6 +106,31 @@ defmodule VutuvWeb.PostTeaserTest do
       assert PostTeaser.line(%Post{body: "![](a.jpg) ![](b.jpg)\n\nDer Rest"}) == "Der Rest"
     end
 
+    test "skips a line that is nothing but hashtags" do
+      post = %Post{body: "#Solarpunk #klimakrise #noafd\n\nDas Dach ist fertig."}
+
+      assert PostTeaser.line(post) == "Das Dach ist fertig."
+    end
+
+    test "keeps a line where the hashtags are part of a sentence" do
+      post = %Post{body: "Endlich Strom vom Dach #Solarpunk\n\nMehr dazu"}
+
+      assert PostTeaser.line(post) == "Endlich Strom vom Dach #Solarpunk"
+    end
+
+    test "does not mistake a Markdown heading for hashtags" do
+      assert PostTeaser.line(%Post{body: "# Titel\n\nDer Rest"}) == "# Titel"
+      assert PostTeaser.line(%Post{body: "## Zwischentitel\n\nDer Rest"}) == "## Zwischentitel"
+    end
+
+    test "keeps a hashtag line the canonical grammar does not cover, rather than guessing" do
+      # `Vutuv.Mentions` reads `#[A-Za-z0-9_]+`, so `#Grüne` is not one token to
+      # it. Skipping a line the reader wanted is the expensive mistake.
+      post = %Post{body: "#Grüne #Klima\n\nDer Rest"}
+
+      assert PostTeaser.line(post) == "#Grüne #Klima"
+    end
+
     test "reads a remote post and a remote reply off their own text column" do
       assert PostTeaser.line(%RemotePost{content_text: "Von drüben"}) == "Von drüben"
       assert PostTeaser.line(%Note{content_text: "Geantwortet"}) == "Geantwortet"
@@ -138,6 +163,14 @@ defmodule VutuvWeb.PostTeaserTest do
 
     test "but keeps it when it is all the post has: a URL beats an empty teaser" do
       assert PostTeaser.line(%RemotePost{content_text: @quoted}) == @quoted
+    end
+
+    test "and where only hashtags follow it, they are the teaser rather than the URL" do
+      # A real shape in the data: a quote post whose whole body is the
+      # reference and a row of filing. Hashtags are words, a status URL is not.
+      post = %RemotePost{content_text: @quoted <> "\n\n#Solarpunk #klimakrise #noafd"}
+
+      assert PostTeaser.line(post) == "#Solarpunk #klimakrise #noafd"
     end
 
     test "only where the post opens with it, never mid-body" do

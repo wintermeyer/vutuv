@@ -27,9 +27,16 @@ defmodule VutuvWeb.PostTeaser do
     * **A line with no words in it** — a `---` rule, a lone code fence, a line
       that is nothing but inline images. Teasing a post with `![](…)` says less
       than nothing.
+    * **A line that is nothing but hashtags** — the filing a post opens or
+      closes with (`#Solarpunk #klimakrise #klimawandel …`). It says which
+      shelf the post belongs on, never what it says.
 
-  A post that is *nothing but* skippable lines keeps its first line: a URL
-  makes a poor teaser, an empty one is worse.
+  A post that is *nothing but* skippable lines keeps the best line it has, and
+  they are not equally bad: hashtags are words a reader can read, a quoted URL
+  and a horizontal rule are not. So a post whose whole body is a `RE: <url>`
+  and a row of hashtags is teased with the hashtags — which is a real shape in
+  the data, not a hypothetical. Below that, the first line, whatever it is: a
+  URL makes a poor teaser, an empty one is worse.
 
   Both functions pick the **same** line — the choice is made on the source — so
   no two surfaces can quote one post differently. They differ only in how they
@@ -77,6 +84,18 @@ defmodule VutuvWeb.PostTeaser do
     ~r/\A(?:```|~~~)/,
     ~r/\A(?:!\[[^\]]*\]\([^)]*\)\s*)+\z/
   ]
+
+  # A line of nothing but hashtags — skipped like the rest, but the one that
+  # wins the fallback in `pick/1`, because a reader gets *something* out of
+  # "#Solarpunk #klimakrise" and nothing at all out of a status URL.
+  #
+  # The token is `Vutuv.Mentions`' canonical `#[A-Za-z0-9_]+`, so this and the
+  # renderer cannot disagree about what a hashtag is. Being ASCII-only, a line
+  # carrying `#Grüne` does not match and is kept — the safe direction, since
+  # skipping a line the reader wanted is the expensive mistake. A Markdown
+  # heading cannot match either: `# Titel` has a space after the `#`, and this
+  # demands a word character.
+  @hashtags_only ~r/\A(?:#[A-Za-z0-9_]+[\s,]*)+\z/
 
   # How wide one browser-tab frame is written. A tab in a window holding a
   # handful of others shows roughly twenty characters of its title, and the
@@ -262,14 +281,20 @@ defmodule VutuvWeb.PostTeaser do
     |> Stream.reject(&(&1 == ""))
   end
 
+  # Real prose if there is any; else the hashtags, which at least name the
+  # subject; else the first line, whatever it turned out to be. `lines/1` is a
+  # re-enumerable stream, so the two extra passes cost nothing on the common
+  # case — they only run for a post that had no prose to find.
   defp pick(lines) do
-    case Enum.find(lines, &(not skippable?(&1))) do
-      nil -> Enum.at(lines, 0) || ""
-      line -> line
-    end
+    Enum.find(lines, &(not skippable?(&1))) ||
+      Enum.find(lines, &hashtags_only?/1) ||
+      Enum.at(lines, 0) || ""
   end
 
-  defp skippable?(line), do: Enum.any?(@skippable, &Regex.match?(&1, line))
+  defp skippable?(line),
+    do: hashtags_only?(line) or Enum.any?(@skippable, &Regex.match?(&1, line))
+
+  defp hashtags_only?(line), do: Regex.match?(@hashtags_only, line)
 
   defp flatten(line), do: line |> Markdown.to_plain_text() |> fold()
 
