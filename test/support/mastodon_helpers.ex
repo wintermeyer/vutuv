@@ -18,10 +18,12 @@ defmodule Vutuv.MastodonHelpers do
   alias Ecto.Changeset
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth
+  alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias VutuvWeb.RemoteMediaToken
 
@@ -176,6 +178,20 @@ defmodule Vutuv.MastodonHelpers do
       expires_at: DateTime.add(now, 86_400)
     })
     |> Repo.preload(:remote_account)
+  end
+
+  @doc """
+  That account passing one of **our** posts on — the row an inbound `Announce`
+  writes when the thing announced is a member's own (`post_id` set,
+  `remote_post_id` nil).
+  """
+  def boost(%RemoteAccount{} = account, %Post{} = post) do
+    Repo.insert!(%PostBoost{
+      remote_account_id: account.id,
+      post_id: post.id,
+      activity_id: "https://social.example/activities/#{unique_suffix()}",
+      announced_at: DateTime.utc_now(:second)
+    })
   end
 
   defp unique_suffix, do: System.unique_integer([:positive])

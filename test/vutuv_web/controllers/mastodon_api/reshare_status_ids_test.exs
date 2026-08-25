@@ -7,8 +7,10 @@ defmodule VutuvWeb.MastodonApi.ReshareStatusIdsTest do
   a reshare's likers row answered 404 for the very id the timeline had just
   handed over — and reporting such a status failed the same way.
 
-  The writes (`update`, `delete`, `source`) deliberately still refuse a reshare
-  id; see `VutuvWeb.MastodonApi.Statuses` for what undoing one properly needs.
+  The writes split, because a delete cannot be taken back: `update` and `source`
+  follow a reshare id through to the post it passed on and answer only for the
+  caller's own, while `delete` acts on the reshare **row** and undoes it — never
+  the post underneath, whoever wrote that.
 
   async: false — `mastodon_token/2` flips the member's client permission.
   """
@@ -16,9 +18,15 @@ defmodule VutuvWeb.MastodonApi.ReshareStatusIdsTest do
 
   import Vutuv.MastodonHelpers
 
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.PostBoost
+  alias Vutuv.Fediverse.PostRepost, as: RemotePostRepost
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Posts.PostRepost
+  alias Vutuv.RateLimiter
   alias Vutuv.Repo
+  alias VutuvWeb.MastodonApi.Statuses
 
   setup do
     author = insert(:activated_user)
@@ -27,9 +35,7 @@ defmodule VutuvWeb.MastodonApi.ReshareStatusIdsTest do
 
     {:ok, post} = Posts.create_post(author, %{body: "Weitergereicht"})
     :ok = Posts.like_post(liker, post)
-    Posts.repost_post(resharer, post)
-
-    repost = Repo.get_by!(PostRepost, post_id: post.id, user_id: resharer.id)
+    repost = repost_row(resharer, post)
 
     %{
       author: author,
@@ -127,25 +133,157 @@ defmodule VutuvWeb.MastodonApi.ReshareStatusIdsTest do
     end
   end
 
-  describe "writes addressed at a reshare's id" do
-    test "an edit is refused, and the post keeps its words", ctx do
-      build_conn()
-      |> api(ctx.resharer, ["read", "write"])
-      |> put("/api/v1/statuses/#{ctx.reshare_id}", %{"status" => "Übernommen"})
+  describe "an edit or a source read addressed at a reshare's id" do
+    test "reaches the post underneath when it is the caller's own", ctx do
+      # A boost from another server, because it is the one reshare that does not
+      # itself close the edit window: `has_reposts?/1` counts only reshares made
+      # here, so a `repost-` id always resolves to a post nobody may edit any
+      # more (the test below).
+      {:ok, mine} = Posts.create_post(ctx.author, %{body: "Meins"})
+      boost = boost(remote_account(), mine)
 
+      build_conn()
+      |> api(ctx.author, ["read", "write"])
+      |> put("/api/v1/statuses/boost-#{boost.id}", %{"status" => "Überarbeitet"})
+      |> json_response(200)
+
+      assert Posts.get_post(mine.id).body == "Überarbeitet"
+    end
+
+    test "says why an edit is refused instead of claiming the status is gone", ctx do
+      # The reshare that made this id exist is also what closed the edit window,
+      # so the answer is the rule rather than the old bare 404.
+      repost = repost_row(ctx.author, ctx.post)
+
+      %{"error" => error} =
+        build_conn()
+        |> api(ctx.author, ["read", "write"])
+        |> put("/api/v1/statuses/repost-#{repost.id}", %{"status" => "Überarbeitet"})
+        |> json_response(422)
+
+      assert error =~ "can no longer be edited"
       assert Posts.get_post(ctx.post.id).body == "Weitergereicht"
     end
 
-    test "a delete never reaches the post underneath", ctx do
+    test "source answers that post's Markdown", ctx do
+      repost = repost_row(ctx.author, ctx.post)
+
+      source =
+        build_conn()
+        |> api(ctx.author, ["read"])
+        |> get("/api/v1/statuses/repost-#{repost.id}/source")
+        |> json_response(200)
+
+      assert source["id"] == ctx.post.id
+      assert source["text"] == "Weitergereicht"
+    end
+
+    test "answers 404 for somebody else's post, which keeps its words", ctx do
+      build_conn()
+      |> api(ctx.resharer, ["read", "write"])
+      |> put("/api/v1/statuses/#{ctx.reshare_id}", %{"status" => "Übernommen"})
+      |> json_response(404)
+
+      assert Posts.get_post(ctx.post.id).body == "Weitergereicht"
+    end
+  end
+
+  describe "a delete addressed at a reshare's id" do
+    test "undoes my own reshare and leaves the post standing", ctx do
+      status =
+        build_conn()
+        |> api(ctx.resharer, ["read", "write"])
+        |> delete("/api/v1/statuses/#{ctx.reshare_id}")
+        |> json_response(200)
+
+      # Mastodon answers a delete with the status the client addressed, so what
+      # comes back is the reshare — carrying the post it passed on.
+      assert status["id"] == ctx.reshare_id
+      assert status["reblog"]["id"] == ctx.post.id
+
+      refute Repo.get_by(PostRepost, post_id: ctx.post.id, user_id: ctx.resharer.id)
+      assert Posts.get_post(ctx.post.id)
+    end
+
+    test "undoes my reshare of my own post rather than deleting the post", ctx do
+      # The one id that names two things the caller owns. It names the act.
+      repost = repost_row(ctx.author, ctx.post)
+
+      build_conn()
+      |> api(ctx.author, ["read", "write"])
+      |> delete("/api/v1/statuses/repost-#{repost.id}")
+      |> json_response(200)
+
+      refute Repo.get(PostRepost, repost.id)
+      assert Posts.get_post(ctx.post.id)
+    end
+
+    test "never reaches the post underneath somebody else's reshare", ctx do
       # The case worth being careful about: the author owns the post this id
       # resolves to, so a delete routed through the read resolver would take the
-      # original down instead of the reshare.
+      # original down instead of the reshare — and `unrepost_post/2` finds the
+      # *caller's* reshare, so routing it to the undo would have been wrong too.
       build_conn()
       |> api(ctx.author, ["read", "write"])
       |> delete("/api/v1/statuses/#{ctx.reshare_id}")
+      |> json_response(404)
 
       assert Posts.get_post(ctx.post.id)
       assert Repo.get_by(PostRepost, post_id: ctx.post.id, user_id: ctx.resharer.id)
     end
+
+    test "undoes my reshare of a post from another network" do
+      RateLimiter.reset()
+      sharer = federating_member()
+      remote = cached_post(remote_account())
+
+      {:ok, :reposted} = Fediverse.repost_remote_post(sharer, remote)
+      repost = Repo.get_by!(RemotePostRepost, remote_post_id: remote.id, user_id: sharer.id)
+
+      status =
+        build_conn()
+        |> api(sharer, ["read", "write"])
+        |> delete("/api/v1/statuses/remote-repost-#{repost.id}")
+        |> json_response(200)
+
+      assert status["id"] == "remote-repost-#{repost.id}"
+      refute Repo.get(RemotePostRepost, repost.id)
+      assert Repo.get(RemotePost, remote.id)
+    end
+
+    test "a boost from another server is nobody here's to undo", ctx do
+      # `fediverse_post_boosts` belongs to a remote account, so no member and no
+      # page can ever own the row that id names.
+      boost = boost(remote_account(), ctx.post)
+
+      build_conn()
+      |> api(ctx.author, ["read", "write"])
+      |> delete("/api/v1/statuses/boost-#{boost.id}")
+      |> json_response(404)
+
+      assert Repo.get(PostBoost, boost.id)
+      assert Posts.get_post(ctx.post.id)
+    end
+  end
+
+  describe "an id word this module has not learned" do
+    test "fails closed instead of reaching the post lookup" do
+      # The safeguard rests on `resolve/1` and `own_reshare/2` knowing the same
+      # words, and they are two lists in one file. The day one grows a prefix the
+      # other does not, this default decides: `:not_a_reshare` would hand that id
+      # to the ordinary post lookup, which resolves a reshare to the post
+      # underneath — the deletion the whole split exists to prevent.
+      conn = build_conn()
+
+      assert Statuses.own_reshare(conn, "quote-#{Vutuv.UUIDv7.generate()}") == :not_mine
+      assert Statuses.own_reshare(conn, Vutuv.UUIDv7.generate()) == :not_a_reshare
+    end
+  end
+
+  # `user` passes `post` on, and the row that records it — the thing a reshare's
+  # id names.
+  defp repost_row(user, post) do
+    Posts.repost_post(user, post)
+    Repo.get_by!(PostRepost, post_id: post.id, user_id: user.id)
   end
 end

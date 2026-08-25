@@ -290,19 +290,32 @@ report path (`POST /api/v1/reports` with `status_ids`) had the same gap and asks
 it too now; a cached remote object stays unreportable, because a report opens a
 case against something published here.
 
-**A reshare resolves to the post underneath for reads, and the writes are
-deliberately still refused.** The equivalence that makes a read correct makes a
-write dangerous, and in two ways. Resolving a `DELETE` on `repost-<uuid>` to the
-post would let the author of a post somebody boosted delete their own post by
-tapping delete on the boost. And routing it to the existing `:unreblog` action
-instead is not the fix either: `Vutuv.Posts.unrepost_post/2` takes an actor and a
-post and finds *the caller's* reshare of it, so a delete addressed at somebody
-else's row would quietly undo your own. Doing it properly means resolving the
-reshare **row** and checking who owns it, and the row is a different schema per
-prefix — `Vutuv.Posts.PostRepost`, `Vutuv.Fediverse.PostRepost`,
-`Vutuv.Fediverse.NoteRepost`, and `Vutuv.Fediverse.PostBoost`, which belongs to a
-remote account and can never be the caller's. Until that lands, `update`,
-`delete` and `source` keep answering 404 for a reshare id.
+**A reshare resolves to the post underneath for reads — and for a delete it does
+not, because a delete cannot be taken back.** Resolving a `DELETE` on
+`repost-<uuid>` to the post would let the author of a post somebody boosted take
+the original down by tapping delete on that boost, and routing it to the existing
+`:unreblog` action instead is no better: `Vutuv.Posts.unrepost_post/2` takes an
+actor and a post and finds *the caller's* reshare of it, so a delete addressed at
+somebody else's row would quietly undo your own. So `Statuses.own_reshare/2`
+reads the reshare **row** — a different schema per prefix,
+`Vutuv.Posts.PostRepost`, `Vutuv.Fediverse.PostRepost` and
+`Vutuv.Fediverse.NoteRepost` — and answers one of three things: `{:ok, reshare}`
+when the row is the caller's own act, `:not_mine` when it is somebody else's, and
+`:not_a_reshare` when the id names no reshare at all. `DELETE` undoes the first,
+404s the second and falls through to the ordinary post delete for the third. The
+middle answer is the whole safeguard: collapse it into a plain "no" and a foreign
+reshare's id reaches the post lookup again. A `boost-<uuid>` is always `:not_mine`
+— that row belongs to an account on another server, so there is nothing in it a
+member or a page here may undo.
+
+**`update` and `source` do follow a reshare id through**, gated on owning the
+post that comes back: a reshare carries no text of its own, so editing one can
+only mean editing what it passed on, and a reshare of somebody else's post
+answers 404 as it always did. One consequence worth knowing: a `repost-<uuid>`
+now answers an edit with the *reason* it is refused — a reshare made here closes
+the edit window (`Vutuv.Posts` counts it as engagement), so the reply is the 422
+naming that rule instead of the old "Record not found". A `boost-<uuid>` does
+not close it, since that count is of reshares made here.
 
 **Who reacted is asked of a local post only.** `favourited_by` and
 `reblogged_by` answer the empty list for a cached remote object rather than the

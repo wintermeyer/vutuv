@@ -140,12 +140,30 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   def update(conn, _params), do: validation_error(conn, "Status text is required.")
 
-  # Mastodon answers a delete with the status it just removed, so it is rendered
-  # before the row is gone. A failed delete used to raise on the `{:ok, _}`
-  # match, which reaches a client as a 500 with an HTML body it cannot parse —
-  # for the one call where it most needs to know whether the post is still
-  # there. It gets JSON either way now.
+  @doc """
+  Removes the status an id names — and the id decides *what* that is.
+
+  A bare post id deletes the post. A reshare's id undoes that one reshare and
+  leaves what it carried standing, because the id names an act rather than a text
+  and a delete cannot be taken back;
+  `VutuvWeb.MastodonApi.Statuses.own_reshare/2` hands the row over only when it
+  is the caller's own, so every other reshare id answers 404.
+
+  Mastodon answers a delete with the status it just removed, so it is rendered
+  before the row is gone. A failed delete used to raise on the `{:ok, _}` match,
+  which reaches a client as a 500 with an HTML body it cannot parse — for the one
+  call where it most needs to know whether the post is still there. It gets JSON
+  either way now.
+  """
   def delete(conn, %{"id" => id}) do
+    case Statuses.own_reshare(conn, id) do
+      {:ok, reshare} -> undo_own_reshare(conn, id, reshare)
+      :not_mine -> not_found(conn)
+      :not_a_reshare -> delete_own_post(conn, id)
+    end
+  end
+
+  defp delete_own_post(conn, id) do
     case own_post(conn, id) do
       %Post{} = post ->
         rendered = Presenter.one_status(post, viewer(conn))
@@ -157,6 +175,19 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
       nil ->
         not_found(conn)
+    end
+  end
+
+  # The undo goes through the same `:unreblog` dispatch the action endpoints use,
+  # so the member / page split and the three object kinds are answered in one
+  # place. It is rendered first: the answer is the reshare the client addressed,
+  # and the row is about to be gone.
+  defp undo_own_reshare(conn, id, reshare) do
+    rendered = Presenter.reshared_status(id, reshare, viewer(conn))
+
+    case apply_status_action(conn, reshare.object, :unreblog) do
+      {:error, reason} -> validation_error(conn, action_error(reason))
+      _undone -> json(conn, rendered)
     end
   end
 
@@ -419,8 +450,14 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   defp viewer(conn), do: Statuses.viewer(conn)
 
+  # The caller's own post behind whatever id names it, a reshare's included. A
+  # reshare carries no text of its own, so an edit or a source read addressed at
+  # one can only mean the post underneath, and the ownership match is what keeps
+  # that honest: a reshare of somebody else's post resolves to somebody else's
+  # post and answers 404 exactly as it did before. `delete/2` is the one write
+  # that does not come through here; see `VutuvWeb.MastodonApi.Statuses`.
   defp own_post(conn, id) do
-    case {conn.assigns.current_organization, conn.assigns.current_user.id, Posts.get_post(id)} do
+    case {conn.assigns.current_organization, conn.assigns.current_user.id, Statuses.resolve(id)} do
       {nil, user_id, %Post{organization_id: nil, user_id: user_id} = post} ->
         post
 

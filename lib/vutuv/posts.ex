@@ -1440,10 +1440,16 @@ defmodule Vutuv.Posts do
   visibility question of the post it gets.
   """
   def get_reposted_post(id) do
-    with %PostRepost{post_id: post_id} <- UUIDv7.with_cast(id, &Repo.get(PostRepost, &1)) do
-      get_post(post_id)
-    end
+    with %PostRepost{post_id: post_id} <- get_post_repost(id), do: get_post(post_id)
   end
+
+  @doc """
+  The repost **row** an id names, or `nil` — the act rather than what it passed
+  on, for a caller that has to know *whose* reshare it is before undoing one
+  (`VutuvWeb.MastodonApi.Statuses`). Unscoped like its twin above: the caller
+  compares the row's owner with the identity it is acting as.
+  """
+  def get_post_repost(id), do: UUIDv7.with_cast(id, &Repo.get(PostRepost, &1))
 
   @doc "Whether any reposts of this post exist (the audience lock)."
   def has_reposts?(%Post{id: id}), do: has_reposts?(id)

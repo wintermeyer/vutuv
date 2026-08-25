@@ -195,6 +195,27 @@ defmodule Vutuv.MastodonApi.Presenter do
   """
   def one_status(item, viewer), do: item |> List.wrap() |> statuses(viewer) |> hd()
 
+  @doc """
+  One reshare a caller assembled for itself, as a status.
+
+  Every other reshare here arrives as a feed entry from the source that built it
+  (`Vutuv.Posts`, `Vutuv.Fediverse`). This is for the one caller with no feed
+  entry to hand over: `VutuvWeb.MastodonApi.StatusController.delete/2` answering
+  an undo with the reshare the client addressed, which by then is a row it is
+  about to remove. It lives here so the entry shape keeps one owner instead of
+  being hand-built in a controller.
+
+  `reshare` is `%{kind:, object:, at:}` as
+  `VutuvWeb.MastodonApi.Statuses.own_reshare/2` answers it — `kind` is the key
+  the object rides under — and `actor` is both the resharer and the viewer,
+  since that function only ever hands back the caller's own act.
+  """
+  def reshared_status(id, %{kind: kind, object: object, at: at}, actor) do
+    %{id: id, reposted_by: actor, at: at}
+    |> Map.put(kind, object)
+    |> one_status(actor)
+  end
+
   # The map clauses are for feed-entry maps only: a `%Note{}` also carries a
   # `post` association, so without the guard a Note whose `:post` happens to be
   # preloaded would render as its parent post instead of itself.

@@ -3025,15 +3025,13 @@ defmodule Vutuv.Fediverse do
   what comes back.
   """
   def get_reposted_remote_post(id) do
-    with %PostRepost{remote_post_id: post_id} <- UUIDv7.with_cast(id, &Repo.get(PostRepost, &1)) do
+    with %PostRepost{remote_post_id: post_id} <- get_remote_post_repost(id) do
       get_remote_post(post_id)
     end
   end
 
   def get_reposted_note(id) do
-    with %NoteRepost{note_id: note_id} <- UUIDv7.with_cast(id, &Repo.get(NoteRepost, &1)) do
-      get_note(note_id)
-    end
+    with %NoteRepost{note_id: note_id} <- get_note_repost(id), do: get_note(note_id)
   end
 
   def get_boosted_object(id) do
@@ -3043,6 +3041,19 @@ defmodule Vutuv.Fediverse do
       _no_such_boost -> nil
     end
   end
+
+  @doc """
+  The reshare **rows** those same ids name, or `nil` — the act rather than what
+  it passed on, for a caller that has to know *whose* reshare it is before
+  undoing one (`VutuvWeb.MastodonApi.Statuses`). Unscoped like the lookups
+  above: the caller compares the row's owner with the identity it is acting as.
+
+  There is no twin for `fediverse_post_boosts` — that row belongs to an account
+  on another server and can never be the caller's act.
+  """
+  def get_remote_post_repost(id), do: UUIDv7.with_cast(id, &Repo.get(PostRepost, &1))
+
+  def get_note_repost(id), do: UUIDv7.with_cast(id, &Repo.get(NoteRepost, &1))
 
   @doc """
   Somebody reports a cached post as not appropriate. **Deletes it immediately**

@@ -16,26 +16,37 @@ defmodule VutuvWeb.MastodonApi.Statuses do
   **A reshare resolves to what it passed on**, which is what Mastodon does with
   a reblog id: reading a reshare is reading the post underneath.
 
-  That equivalence holds for **reads only**, and the writes are deliberately not
-  routed through here yet. A `DELETE` on `repost-<uuid>` must undo that one
-  reshare, and the object this hands back cannot say whose reshare it was:
-  `Vutuv.Posts.unrepost_post/2` would find *the caller's* reshare of the same
-  post, so a delete addressed at somebody else's row would quietly undo your own.
-  Answering that properly needs the reshare **row**, and the row is a different
-  schema per prefix (`Vutuv.Posts.PostRepost`, `Vutuv.Fediverse.PostRepost`,
-  `Vutuv.Fediverse.NoteRepost`, and `Vutuv.Fediverse.PostBoost`, which belongs to
-  a remote account and can never be the caller's). Until that lands, `update`,
-  `delete` and `source` keep refusing a reshare id.
+  **A delete does not follow it through, because a delete cannot be taken back.**
+  `resolve/1` answers the post, whose author is not the resharer, so a `DELETE`
+  routed through it would take the original down on the say-so of an id that
+  named somebody else's act. `own_reshare/2` reads the reshare **row** instead —
+  a different schema per prefix (`Vutuv.Posts.PostRepost`,
+  `Vutuv.Fediverse.PostRepost`, `Vutuv.Fediverse.NoteRepost`) — and hands it over
+  only when the row is the caller's own. That check is also what makes the undo
+  safe at all: `Vutuv.Posts.unrepost_post/2` takes an actor and a post and drops
+  *the caller's* reshare of it, so without it a delete addressed at somebody
+  else's row would quietly undo your own.
 
-  A third home for the same vocabulary is `VutuvWeb.MastodonApi.Pagination`'s
-  `@id_prefixes`, which strips these words to get at the uuid underneath.
+  `update` and `source` do follow the id through, gated on owning the post that
+  comes back: a reshare carries no text of its own, so editing one can only mean
+  editing what it passed on, and a reshare of a post that is not yours answers
+  404 as it always did.
+
+  The vocabulary is spelled twice here — `resolve/1` reads it for the object,
+  `own_reshare/2` for the row — and a third time in
+  `VutuvWeb.MastodonApi.Pagination`'s `@id_prefixes`, which strips these words to
+  get at the uuid underneath. So `own_reshare/2` **fails closed**: a word it has
+  not learned is a reshare it cannot undo, never a post the caller may delete.
   """
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.UUIDv7
 
   @doc """
   The object a status id names, or `nil` when it names nothing.
@@ -80,6 +91,83 @@ defmodule VutuvWeb.MastodonApi.Statuses do
 
   @doc "The member or page acting on this request."
   def viewer(conn), do: conn.assigns.current_organization || conn.assigns.current_user
+
+  @doc """
+  The reshare `id` names, in three answers a write has to tell apart:
+  `{:ok, reshare}` when it is the caller's own act, `:not_mine` when the id names
+  a reshare that is not, and `:not_a_reshare` when it names no reshare at all.
+
+  The middle answer is the one that has to exist. Collapsing it into "no" would
+  send a foreign reshare's id on to whatever handles an ordinary status id — and
+  that resolves to the post underneath, which is how a delete aimed at somebody
+  else's reshare reaches an original its author never asked about. So
+  `:not_a_reshare` is only ever the answer for an id this module can *name*: a
+  plain uuid, or one of the two `remote-` prefixes that name an object rather
+  than an act. Anything else fails closed.
+
+  A reshare is `%{kind:, object:, at:}` — what was passed on, when, and which of
+  the three reshare tables it came from. `kind` is the key
+  `Vutuv.MastodonApi.Presenter` reads that object under in a timeline entry
+  (`:post`, `:note`, `:remote_post`), so `Presenter.reshared_status/3` can render
+  the reshare back without asking a second time what shape it is.
+
+  Ownership rather than visibility, because this answers a write: a reshare of a
+  post the caller may read is still not theirs to undo.
+  """
+  def own_reshare(conn, "remote-reply-repost-" <> id),
+    do: own_repost(conn, Fediverse.get_note_repost(id), :note_id, :note, &Fediverse.get_note/1)
+
+  def own_reshare(conn, "remote-repost-" <> id), do: own_remote_post_repost(conn, id)
+  def own_reshare(conn, "remote_repost-" <> id), do: own_remote_post_repost(conn, id)
+
+  def own_reshare(conn, "repost-" <> id),
+    do: own_repost(conn, Posts.get_post_repost(id), :post_id, :post, &Posts.get_post/1)
+
+  # `fediverse_post_boosts` belongs to an account on another server, so there is
+  # no row here a member or a page could own — but the id still names a reshare,
+  # and saying so is what keeps it away from the post it carries.
+  def own_reshare(_conn, "boost-" <> _uuid), do: :not_mine
+
+  # These two name an object, not an act, so the ordinary lookup is right for
+  # them: it answers a cached reply or a cached post, which is nobody's here to
+  # delete and therefore 404s on its own.
+  def own_reshare(_conn, "remote-note-" <> _uuid), do: :not_a_reshare
+  def own_reshare(_conn, "remote-" <> _uuid), do: :not_a_reshare
+
+  def own_reshare(_conn, id),
+    do: if(UUIDv7.cast_or_nil(id), do: :not_a_reshare, else: :not_mine)
+
+  defp own_remote_post_repost(conn, id) do
+    own_repost(
+      conn,
+      Fediverse.get_remote_post_repost(id),
+      :remote_post_id,
+      :remote_post,
+      &Fediverse.get_remote_post/1
+    )
+  end
+
+  # One shape for the three tables a reshare made here can live in: read the row,
+  # ask whose act it is, then read what it passed on. `at` is the row's own time,
+  # which is when the thing was handed on and therefore the timestamp the reshare
+  # wears as a status.
+  defp own_repost(conn, row, object_key, kind, load) do
+    with %{^object_key => object_id} <- row,
+         true <- own_row?(viewer(conn), row),
+         object when not is_nil(object) <- load.(object_id) do
+      {:ok, %{kind: kind, object: object, at: row.inserted_at}}
+    else
+      _not_my_reshare -> :not_mine
+    end
+  end
+
+  # Whose act a reshare row is. A post here can be passed on by a member or by a
+  # page (issue #1336), so `post_reposts` carries both columns and exactly one is
+  # set; the two fediverse tables only ever carry a member's, and their rows
+  # simply miss the `organization_id` key rather than holding a nil.
+  defp own_row?(%User{id: id}, %{user_id: id}), do: true
+  defp own_row?(%Organization{id: id}, %{organization_id: id}), do: true
+  defp own_row?(_viewer, _row), do: false
 
   defp note_visible?(%{assigns: %{current_organization: nil, current_user: user}}, note),
     do: Fediverse.note_readable?(note, user)
