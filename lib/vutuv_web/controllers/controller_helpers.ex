@@ -135,6 +135,13 @@ defmodule VutuvWeb.ControllerHelpers do
   resolved locale and request path. A LiveView mounted outside the
   `live_session` must be handed these explicitly (the profile/CV/board/feed
   pattern); pages layer their own extra keys on top with `Map.put/3`.
+
+  Worth knowing before you layer one on: this map is signed once per **document**
+  and replayed verbatim on every socket rejoin, which makes it the one
+  server-minted thing that can date a document a reconnecting LiveView is
+  patching into. `VutuvWeb.NewsfeedController`'s `feed_opened_at` is that (see
+  `VutuvWeb.PostLive.Feed.restore_unseen/2`). It is not a place for anything
+  that changes while the page is open — a rejoin would hand back the stale one.
   """
   def live_render_session(%Conn{} = conn) do
     %{

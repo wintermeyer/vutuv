@@ -2644,22 +2644,34 @@ defmodule Vutuv.Posts do
   def remembered_feed_filter(%User{feed_source: source}), do: normalize_feed_filter(source)
 
   @doc """
-  Remembers `filter` as `user`'s feed tab for the next visit.
+  Remembers `filter` as `user`'s feed tab for the next visit, `leaving` being
+  the tab they are coming from.
 
-  A narrow `update_all` on the one column rather than a changeset: a socket's
-  `%User{}` was loaded at mount and can be hours old by the time a tab is
-  clicked, so writing the whole struct back would undo whatever else changed
-  meanwhile — from another device, or from a settings page in the next tab.
-  For the same reason it does not first ask whether the value differs; that
-  question cannot be answered from a struct that may be stale, and the write
-  is one row by primary key. Last click wins, which is what a "last chosen"
-  value means.
+  A narrow `update_all` rather than a changeset: a socket's `%User{}` was
+  loaded at mount and can be hours old by the time a tab is clicked, so writing
+  the whole struct back would undo whatever else changed meanwhile — from
+  another device, or from a settings page in the next tab. For the same reason
+  it does not first ask whether the stored value differs; that question cannot
+  be answered from a struct that may be stale. Last click wins, which is what a
+  "last chosen" value means.
+
+  `feed_source_at` is the exception, and `leaving` is why it is an argument
+  rather than a comment at the call site: it dates the reader's *move*, which
+  `VutuvWeb.PostLive.Feed.restore_unseen/2` reads as "you were still looking at
+  the tab you just left until now". A press on the tab already open moves
+  nobody, so stamping it there would swallow a dot still rightly standing on
+  the other one. Only the caller knows which tab is on screen, so only the
+  caller can say — but it has to say, not remember to.
   """
-  def remember_feed_filter(%User{} = user, filter) do
+  def remember_feed_filter(%User{} = user, filter, leaving) do
     stored = if filter in [:vutuv, :fediverse], do: to_string(filter)
 
-    {1, nil} =
-      Repo.update_all(from(u in User, where: u.id == ^user.id), set: [feed_source: stored])
+    set =
+      if leaving == filter,
+        do: [feed_source: stored],
+        else: [feed_source: stored, feed_source_at: NaiveDateTime.utc_now(:second)]
+
+    {1, nil} = Repo.update_all(from(u in User, where: u.id == ^user.id), set: set)
 
     :ok
   end
@@ -2704,6 +2716,21 @@ defmodule Vutuv.Posts do
     viewer
     |> feed_sources(:fediverse)
     |> Enum.any?(fn fetch -> fetch.(1, nil) != [] end)
+  end
+
+  @doc """
+  Whether the tab `source` holds anything for `viewer` stamped at or after
+  `since` — the boolean half of `newest_source_entry/3` below, and all a mount
+  restoring the dot has to know (`VutuvWeb.PostLive.Feed.restore_unseen/2`).
+
+  It skips that one's decorate pass, and `Enum.any?/2` stops at the first
+  source that answers rather than asking all of them.
+  """
+  def feed_source_since?(%User{} = viewer, source, %NaiveDateTime{} = since)
+      when source in [:vutuv, :fediverse] do
+    viewer
+    |> feed_sources(source)
+    |> Enum.any?(&(newest_row(&1, since) != []))
   end
 
   @doc """

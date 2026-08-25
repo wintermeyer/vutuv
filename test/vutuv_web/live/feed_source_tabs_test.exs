@@ -14,6 +14,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import Vutuv.PostsHelpers, only: [backdate_post!: 2]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
@@ -23,7 +24,9 @@ defmodule VutuvWeb.FeedSourceTabsTest do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
+  alias Vutuv.Sessions
   alias Vutuv.Social
+  alias VutuvWeb.PostLive.Feed
 
   # An account out there that nobody here follows.
   defp remote_account(handle) do
@@ -309,7 +312,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       # an empty timeline with no way back.
       {conn, user} = create_and_login_user(conn)
       {_author, _post} = followed_post(user, "written here on vutuv")
-      Posts.remember_feed_filter(user, :fediverse)
+      Posts.remember_feed_filter(user, :fediverse, :all)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
@@ -351,7 +354,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       assert html_response(conn, 200) =~ "written here on vutuv"
 
       # …and the tab changes before this socket connects.
-      Posts.remember_feed_filter(user, :fediverse)
+      Posts.remember_feed_filter(user, :fediverse, :all)
 
       {:ok, view, _html} = live(conn)
 
@@ -632,6 +635,117 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       refute dotted?(view, "fediverse")
       refute dotted?(view, "all")
+    end
+
+    # ── Across a rejoin (the dot that "expired after a couple of minutes") ──
+    #
+    # A rejoin re-mounts with the SAME signed session the document was rendered
+    # with, `feed_opened_at` and all, which is what restores the dot socket
+    # state cannot carry (`PostLive.Feed.restore_unseen/2`). So a rejoin here is
+    # `live_isolated/3` twice on one session map.
+
+    # A reader whose feed has both halves, a member they follow here, and that
+    # member's post — the arrival that belongs on the tab they are not on.
+    defp rejoin_fixture(conn) do
+      {_conn, user} = create_and_login_user(conn)
+      {author, older} = followed_post(user, "an older post")
+      # Well behind everything else: it is the tab's existing content, and a
+      # test asking "is anything NEWER than this document" has to be able to
+      # answer no.
+      backdate_post!(older, 300)
+      cached_post(remote_account(user, "them"), "written out there")
+      {:ok, post} = Posts.create_post(author, %{body: "arriving live"})
+
+      # Placed half a minute back, for two reasons that both come from second
+      # precision: a test whose post, document and tab press all happen in one
+      # second decides ties rather than rules, and a document has to be older
+      # than `@restore_grace` before a mount asks the question at all.
+      {user, backdate_post!(post, 30)}
+    end
+
+    # The state a document arrives with: the tab this member moved to, and when.
+    defp opened_on(user, filter, at) do
+      Repo.update!(
+        Ecto.Changeset.change(user, feed_source: to_string(filter), feed_source_at: at)
+      )
+    end
+
+    # The session `live_render` mints for a /feed document (NewsfeedController).
+    # Bound once per test and mounted twice, because replaying the one map is
+    # exactly what a rejoin does.
+    defp feed_session(user, opened_at) do
+      {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
+
+      %{"session_token" => token, "locale" => "en", "request_path" => "/feed"}
+      |> Feed.stamp_document(opened_at)
+    end
+
+    # `live_isolated/3` mounts outside any real request, so the socket session it
+    # captures is empty — and the feed's post cards render CSRF `<.link
+    # method=…>` items, which raise without the token a browser session carries.
+    # `dump_state/0` mints exactly the value the cookie session would hold.
+    defp mount_document(session) do
+      conn =
+        Plug.Test.init_test_session(build_conn(), %{
+          "_csrf_token" => Plug.CSRFProtection.dump_state()
+        })
+
+      {:ok, view, _html} = live_isolated(conn, Feed, session: session)
+      view
+    end
+
+    test "a rejoin brings back a dot the reader never cleared", %{conn: conn} do
+      {user, post} = rejoin_fixture(conn)
+
+      # The document was opened on the Fediverse tab a second before that post
+      # landed, so it landed while the reader was looking at this page.
+      opened_at = NaiveDateTime.add(post.inserted_at, -1)
+      opened_on(user, :fediverse, opened_at)
+
+      assert dotted?(mount_document(feed_session(user, opened_at)), "vutuv")
+    end
+
+    test "a fresh page load still starts clean", %{conn: conn} do
+      {user, post} = rejoin_fixture(conn)
+
+      # Loaded after that post, so the post is not news: it sits on the tab it
+      # belongs to, above the fold, waiting to be read. #1503's dot means "while
+      # you were looking", not "since you last read everything".
+      opened_at = NaiveDateTime.add(post.inserted_at, 1)
+      opened_on(user, :fediverse, opened_at)
+
+      refute dotted?(mount_document(feed_session(user, opened_at)), "vutuv")
+    end
+
+    test "a tab the reader visited since stays clean across a rejoin", %{conn: conn} do
+      {user, post} = rejoin_fixture(conn)
+
+      # Opened before the post landed — but they moved tabs afterwards, and
+      # moving TO the Fediverse tab means they were sitting on the vutuv one
+      # until then, so they have seen it.
+      opened_at = NaiveDateTime.add(post.inserted_at, -1)
+      opened_on(user, :fediverse, NaiveDateTime.add(post.inserted_at, 1))
+
+      refute dotted?(mount_document(feed_session(user, opened_at)), "vutuv")
+    end
+
+    test "pressing the tab already open does not swallow the other tab's dot", %{conn: conn} do
+      {user, post} = rejoin_fixture(conn)
+      opened_at = NaiveDateTime.add(post.inserted_at, -1)
+      opened_on(user, :fediverse, opened_at)
+      session = feed_session(user, opened_at)
+
+      view = mount_document(session)
+      assert dotted?(view, "vutuv")
+
+      # A press on the tab that is already open moves nobody: the reader has
+      # still not been to the vutuv tab, so the dot must survive the press — and
+      # the rejoin after it, which is where a clock stamped on that press would
+      # quietly have swallowed it.
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      assert dotted?(view, "vutuv")
+
+      assert dotted?(mount_document(session), "vutuv")
     end
 
     test "the All tab is never dotted while it is the open one", %{conn: conn} do

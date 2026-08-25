@@ -434,6 +434,34 @@ over there, and the tab reloads from the top anyway. The socket's
 `:unseen_sources` is never stored — it means "since you have been looking at
 this page", so a fresh mount starting clean is the honest state.
 
+**A rejoin runs that same mount and is not a fresh page.** Socket state goes
+with the socket, so the dot went with it: a locked phone, a background tab
+whose heartbeat the browser throttled past the transport timeout, a wifi
+handover and every deploy reconnect without reloading anything, which read as
+the dot expiring by itself a couple of minutes after it appeared. A
+**connected** mount therefore derives it back (`restore_unseen/2`): does the
+tab the reader is not on hold anything at or after the last moment they had it
+on screen (`Posts.feed_source_since?/3`, the boolean half of
+`newest_source_entry/3`)? That moment is the later of
+
+* **when the document was loaded** — `feed_opened_at`, put into the signed
+  `live_render` session by `NewsfeedController`. That map is minted once per
+  document and replayed verbatim on every rejoin, so it dates the one thing a
+  socket that died and came back cannot date itself; and
+* **when they last moved tabs** — `users.feed_source_at`, stamped beside
+  `feed_source` by `remember_feed_filter/3`. Which tab is being left is an
+  argument rather than a rule at the call site, because only that side knows
+  it and the answer decides whether the clock moves at all: pressing the tab
+  already open moves nobody, and a stamp there would swallow a dot still
+  rightly standing on the other one.
+
+A real page load still starts clean (its own `opened_at` is now, and nothing is
+newer than now), and a document from the previous release carries no stamp and
+keeps the old behaviour, so the N-1 deploy window has no half-state. A first
+connect skips the question altogether (`@restore_grace`, 5 s): the socket joins
+a second or two after the render, so the answer is false by construction and
+the five source queries would be waste on the busiest page in the app.
+
 The two halves reach it differently, and the difference is what each write
 knows about the reader:
 

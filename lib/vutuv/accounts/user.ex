@@ -320,6 +320,11 @@ defmodule Vutuv.Accounts.User do
     # changeset. Only the opening value: while the feed is open the LiveView's
     # own assign is the truth.
     field(:feed_source, :string)
+    # When that tab was last chosen. Stamped by the same writer, and read at
+    # mount as the anchor for the feed's unseen dot: a rejoining document has
+    # to date "since you were last looking at the other tab" from somewhere
+    # outside the socket it just lost.
+    field(:feed_source_at, :naive_datetime)
     # The reader's post-display preferences (same settings page, applied to
     # every post this member reads: feed, profile Beiträge, permalink). The
     # line counts drive the CSS line-clamp on the preview body, desktop and
