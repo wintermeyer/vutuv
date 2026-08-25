@@ -23,6 +23,8 @@ defmodule Vutuv.Geo do
   best-effort behaviour, not a bug.
   """
 
+  alias Vutuv.Ssrf
+
   require Logger
 
   @doc """
@@ -48,17 +50,24 @@ defmodule Vutuv.Geo do
   admin when the reverse proxy is not forwarding the real client IP, so the app
   only ever sees the loopback hop (issues #799, #837).
 
-  Matches the common ranges without parsing every CIDR — good enough for both.
+  The answer comes from `Vutuv.Ssrf.internal_ip?/1`, which owns "is this address
+  internal" for the whole app and matches on the parsed tuple. This used to
+  stringify the address and prefix-match it, and the two disagreed on exactly
+  the case that matters here: on a dual-stack listener a loopback proxy hop
+  arrives IPv4-mapped, `:inet.ntoa/1` renders it `"::ffff:127.0.0.1"`, and none
+  of the prefixes matched — so the dashboard reported the reverse proxy *was*
+  forwarding the real client address when it was not, which is the one thing
+  this predicate exists to warn about (issues #799, #837).
   """
   def private_or_loopback?(nil), do: false
 
-  def private_or_loopback?(ip) when is_tuple(ip),
-    do: ip |> :inet.ntoa() |> to_string() |> private_or_loopback?()
+  def private_or_loopback?(ip) when is_tuple(ip), do: Ssrf.internal_ip?(ip)
 
   def private_or_loopback?(ip) when is_binary(ip) do
-    ip in ["127.0.0.1", "::1", "0.0.0.0"] or
-      String.starts_with?(ip, ["10.", "192.168.", "169.254.", "fc", "fd", "fe80:"]) or
-      String.match?(ip, ~r/^172\.(1[6-9]|2\d|3[01])\./)
+    case :inet.parse_address(String.to_charlist(ip)) do
+      {:ok, parsed} -> Ssrf.internal_ip?(parsed)
+      {:error, _reason} -> false
+    end
   end
 
   defp safe_lookup(ip) do
