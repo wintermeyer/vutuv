@@ -46,7 +46,7 @@ defmodule VutuvWeb.OrganizationFollowsMemberTest do
   test "the page follows the member, and their post reaches its feed", %{conn: conn} do
     {conn, organization, _owner} = acting_as_page(conn)
     member = insert(:activated_user)
-    {:ok, post} = Posts.create_post(member, %{body: "Vom Mitglied."})
+    {:ok, _post} = Posts.create_post(member, %{body: "Vom Mitglied."})
 
     {:ok, view, _html} = live(conn, ~p"/#{member}")
     render_click(view, "follow-as-page", %{})

@@ -39,10 +39,16 @@ defmodule Vutuv.MastodonApi.Access do
     organizations =
       user
       |> Organizations.member_organizations()
-      |> Enum.flat_map(fn {organization, _roles} ->
-        scopes = allowed_scopes(user, organization, requested_scopes)
+      # `member_organizations/1` already returns each page's roles, so the
+      # acting answer is in hand: asking for it again cost one role-table read
+      # per scope plus one more per page (a member of three pages picking from
+      # eight scopes paid twenty-seven), all of them re-reading rows this list
+      # was built from.
+      |> Enum.flat_map(fn {organization, roles} ->
+        acting? = "publisher" in roles
+        scopes = scopes_for(requested_scopes, organization, acting?)
 
-        if organization.mastodon_clients? and acts_for?(organization, user) and scopes != [] do
+        if organization.mastodon_clients? and acting? and scopes != [] do
           [%{value: "organization:" <> organization.id, subject: organization, scopes: scopes}]
         else
           []
@@ -107,9 +113,15 @@ defmodule Vutuv.MastodonApi.Access do
   re-runs it per request, so a withdrawn role narrows an existing token rather
   than waiting for it to expire.
   """
-  def allowed_scopes(user, organization, requested_scopes) do
+  def allowed_scopes(user, organization, requested_scopes),
+    do: scopes_for(requested_scopes, organization, acts_for?(organization, user))
+
+  # The acting answer is a read of the role table, and it does not change
+  # between the scopes of one request — so it is taken once for the whole list
+  # rather than once per scope inside the filter.
+  defp scopes_for(requested_scopes, organization, acting?) do
     Enum.filter(requested_scopes, fn scope ->
-      scope in Scopes.all() and permitted?(scope, organization, user)
+      scope in Scopes.all() and permitted?(scope, organization, acting?)
     end)
   end
 
@@ -118,6 +130,6 @@ defmodule Vutuv.MastodonApi.Access do
   # behalf of whoever happens to hold a role today is not the same act, and the
   # relationship it would write has no member on one side. The account
   # controller refuses it a second time, so this is the outer of two gates.
-  defp permitted?("write:blocks", organization, _user), do: is_nil(organization)
-  defp permitted?(_scope, organization, user), do: acts_for?(organization, user)
+  defp permitted?("write:blocks", organization, _acting?), do: is_nil(organization)
+  defp permitted?(_scope, _organization, acting?), do: acting?
 end

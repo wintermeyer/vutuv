@@ -71,7 +71,7 @@ defmodule VutuvWeb.OrganizationAppsSwitchTest do
   # opened it, so the write re-asks. Calibrated against the un-fixed handler:
   # without the `owner?/2` check the switch really does flip here.
   test "an open page stops switching after the ownership is withdrawn", %{conn: conn} do
-    {conn, page, owner} = owned_page(conn)
+    {conn, page, _owner} = owned_page(conn)
     {:ok, view, _html} = live(conn, ~p"/organizations/#{page.slug}/apps")
 
     Repo.delete!(Repo.get_by!(OrganizationRole, organization_id: page.id, role: "owner"))

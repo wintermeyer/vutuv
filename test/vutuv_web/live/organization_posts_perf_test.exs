@@ -15,7 +15,6 @@ defmodule VutuvWeb.OrganizationPostsPerfTest do
   """
   use VutuvWeb.ConnCase, async: false
 
-  import Phoenix.LiveViewTest
   import Vutuv.OrganizationsHelpers
 
   alias Vutuv.Posts

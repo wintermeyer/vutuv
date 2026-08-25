@@ -15,6 +15,7 @@ defmodule VutuvWeb.SocialMediaFormI18nTest do
   @backend VutuvWeb.Gettext
 
   defp de(msgid), do: Gettext.gettext(@backend, msgid)
+  defp de(msgid, bindings), do: Gettext.gettext(@backend, msgid, bindings)
 
   test "the provider prompt is translated, not a hardcoded English island", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
@@ -29,13 +30,18 @@ defmodule VutuvWeb.SocialMediaFormI18nTest do
   test "the German create flash uses 'dass', not the misspelled 'das'" do
     Gettext.put_locale(@backend, "de")
 
+    # The repository address is a `%{url}` binding, not part of the msgid: it
+    # comes from `:source_url` so a fork can point at its own source, and baking
+    # it into the key would have made every catalog carry ours.
     flash =
       de(
-        "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
+        "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? %{url}",
+        url: Vutuv.SourceRepo.url()
       )
 
     assert flash =~ "Wussten Sie, dass der"
     refute flash =~ "Wussten Sie, das der"
+    assert flash =~ Vutuv.SourceRepo.url()
   end
 
   test "the provider prompt has a German translation" do
