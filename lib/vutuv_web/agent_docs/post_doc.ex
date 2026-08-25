@@ -33,12 +33,22 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
 
   @doc """
   The robots axes of a post page as `{noindex?, noai?}`: a restriction
-  noindexes the page and keeps it from AI page-level, and the author's
-  `noai?` extends their AI opt-out to all their posts. The one derivation
-  behind the HTML permalink's headers (`PostController`) and the doc's,
-  so the two cannot disagree.
+  noindexes the page and keeps it from AI page-level, and the author's own
+  opt-outs extend to everything they wrote. The one derivation behind the
+  HTML permalink's headers (`PostController`) and the doc's, so the two
+  cannot disagree.
+
+  **`author.noindex?` belongs on the first axis and was missing from it.**
+  Only a restriction noindexed a post, so a member who had asked search
+  engines to stay away from their profile still had every permalink and
+  archive page offered for indexing — while `LayoutHTML.robots_directives/1`
+  derived a *third* answer from the same author and put `noindex` in the
+  page's `<meta>` tag. The tag said one thing, the header and every
+  `.md`/`.json` sibling said nothing, and the docstring above claimed the
+  two could not disagree.
   """
-  def robots_axes(author, restricted?), do: {restricted?, restricted? or author.noai?}
+  def robots_axes(author, restricted?),
+    do: {restricted? or author.noindex?, restricted? or author.noai?}
 
   @doc """
   The permalink page: the post itself plus its visible replies. Anonymous
@@ -208,7 +218,12 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   the page that was asked for (including the period segments).
   """
   def build_archive(author, path, entries, total, period_label) do
-    AgentDocs.doc_meta("post_archive", path, noai: author.noai?)
+    # Both axes, like the permalink: an archive is the member's own posts under
+    # their own handle, so their opt-outs apply to it exactly as they do to the
+    # profile it hangs off.
+    {noindex?, noai?} = robots_axes(author, false)
+
+    AgentDocs.doc_meta("post_archive", path, noindex: noindex?, noai: noai?)
     |> Map.merge(%{
       title:
         "#{UserHelpers.full_name(author)} · #{gettext("Posts")}" <> period_suffix(period_label),

@@ -46,6 +46,14 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         gettext("Certificates & licenses"),
         Enum.map(doc.qualifications, &entry_line("qualifications", &1))
       ),
+      # Published employment references (Zeugnisse). The profile card is public
+      # for every viewer, and this document listed twelve sections and not this
+      # one — so an agent reading the `.md` reported the member had none, about
+      # the strongest credential a German profile carries.
+      section(
+        gettext("Employment references"),
+        Enum.map(doc.job_references, &entry_line("job_references", &1))
+      ),
       section(
         gettext("Languages"),
         Enum.map(doc.languages, &entry_line("languages", &1))

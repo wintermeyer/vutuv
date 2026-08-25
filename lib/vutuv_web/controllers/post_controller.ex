@@ -52,12 +52,17 @@ defmodule VutuvWeb.PostController do
         {posts, total} =
           Posts.author_posts_page(author, conn.assigns[:current_user], params, period, filter)
 
+        {noindex?, noai?} = PostDoc.robots_axes(author, false)
+
         conn
         |> AgentDocs.put_html_alternates()
         |> AgentDocs.put_feed_alternate(
           VutuvWeb.Feeds.user_feed_path(author),
           "#{VutuvWeb.UserHelpers.full_name(author)} · #{gettext("Posts")}"
         )
+        # The archive never stamped this at all, so a member's opt-outs reached
+        # the page's meta tag and nothing else.
+        |> VutuvWeb.ContentPolicy.put_robots_header(noindex?, noai?)
         |> render("index.html",
           author: author,
           posts: posts,

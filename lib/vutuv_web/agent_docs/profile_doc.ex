@@ -27,6 +27,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.References.JobReference
   alias Vutuv.Repo
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
@@ -143,6 +144,11 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
       educations: Enum.map(user.educations, &SectionDocs.education_entry/1),
       qualifications: Enum.map(user.qualifications, &SectionDocs.qualification_entry(&1, user)),
+      # The published Zeugnisse the profile card shows every viewer. Scoped by
+      # `JobReference.public_scope/0` in the preload below, so an unpublished
+      # one — or one whose document is still waiting on moderation — never
+      # reaches a document served anonymously.
+      job_references: Enum.map(user.job_references, &SectionDocs.job_reference_entry(&1, user)),
       languages: SectionDocs.language_entries(user.languages),
       links: Enum.map(user.urls, &SectionDocs.link_entry/1),
       emails: Enum.map(emails, &SectionDocs.email_entry/1),
@@ -236,6 +242,9 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       qualifications:
         {Qualification.visible_to(false) |> Qualification.ordered(),
          Qualification.citing_jobs_preload()},
+      # The same scope the profile card reads (`UserProfileLive`), so the doc
+      # and the page cannot disagree about which Zeugnisse are public.
+      job_references: {JobReference.public_scope(), :links},
       languages: Language.ordered(),
       # The owner's chosen order (see Vutuv.Ordering), so the profile's agent
       # documents list these contact sections the same way the HTML pages do.

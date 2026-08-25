@@ -194,6 +194,28 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     end
   end
 
+  # The other half of the same fix: the doc reads `JobReference.public_scope/0`,
+  # the same scope the profile card reads, so an unpublished Zeugnis — or one
+  # whose document is still waiting on moderation — must not appear in a
+  # document served anonymously.
+  test "profile: an unpublished employment reference stays out of every format", %{user: user} do
+    insert(:job_reference,
+      user: user,
+      title: "Zeugnis Geheim",
+      employer: "Verschwiegen GmbH",
+      kind: "qualified",
+      public?: false
+    )
+
+    for {format, body} <- formats_for("/drift_tester") do
+      refute body =~ "Zeugnis Geheim",
+             "an unpublished Zeugnis leaked into the #{format} version"
+
+      refute body =~ "Verschwiegen GmbH",
+             "an unpublished Zeugnis's employer leaked into the #{format} version"
+    end
+  end
+
   test "profile: every public fact appears in HTML, Markdown, text and JSON",
        %{user: user, tag: tag} do
     rendered = formats_for("/drift_tester")
@@ -207,6 +229,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       # experience
       "Bridge Engineer",
       "Span AG",
+      # A published employment reference (issue: the card is public on `/:slug`
+      # for every viewer, and the profile doc listed twelve sections and not
+      # this one — so an agent reading the `.md` reported the member had none,
+      # about the strongest credential a German profile carries).
+      "Zeugnis Spannbau",
+      "Spannbau AG",
       # the volunteer entry and its category (issue #840): HTML shows the
       # "Volunteering & hobbies" heading, md/txt the "[Volunteering & hobbies]"
       # note, json/xml the kind field — the case-insensitive "volunteer" is the

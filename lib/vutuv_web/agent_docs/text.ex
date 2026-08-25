@@ -43,6 +43,12 @@ defmodule VutuvWeb.AgentDocs.Text do
         gettext("Certificates & licenses"),
         Enum.map(doc.qualifications, &entry_line("qualifications", &1))
       ),
+      # See the note in the Markdown renderer: the profile card is public and
+      # this document had no section for it.
+      section(
+        gettext("Employment references"),
+        Enum.map(doc.job_references, &entry_line("job_references", &1))
+      ),
       section(
         gettext("Languages"),
         Enum.map(doc.languages, &entry_line("languages", &1))
