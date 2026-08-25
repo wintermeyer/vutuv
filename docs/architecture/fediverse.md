@@ -1113,6 +1113,34 @@ now, with the page's own gates in front of it: the page must federate, the post
 must not be held by moderation, and a page that switched federation off gets the
 same `410`/`404` refusal its actor endpoint gives.
 
+## Mentions on the way out
+
+A member writes `@ada`, and on the server this post lands on that names *their*
+@ada. So the Note spells every mention of one of our accounts out in full —
+`@ada@vutuv.de`, the only spelling that means the same person on every server —
+while the same body keeps reading `@ada` on the page here. Nothing is rewritten
+in the database: `Docs.content_html/3` renders with `mention_form: :address` and
+`VutuvWeb.Markdown` writes the label, the same seam the closing hashtag line and
+the answered account's `@user@host` use. The address a member typed in full
+travels as they wrote it; the link under both keeps pointing at the profile page,
+made absolute like every other link in the content.
+
+Beside it in the `tag` array goes one **`Mention`** per named account of ours
+(`href` the actor URI, `name` the `@handle@host`), which is what has the
+receiving server resolve the account, notify where it applies, and draw the name
+as a mention instead of a bare link. That array is otherwise built from *stored*
+actor URIs and never from parsing the body, so that nobody can put
+`@someone@anywhere` in a post and have vutuv mint a verified-looking Mention at
+an actor nobody checked. Parsing is safe **only** for the local half: every
+handle is resolved against our own tables, so the actor it points at is one this
+installation serves. An account that keeps out of the Fediverse is left out of
+the tags — it serves no actor document, and naming it would send every receiving
+server after a 404 — but the text still names it, because the address is who is
+meant whether or not they federate.
+
+The mirror direction is `Vutuv.Mentions.to_local_form/1`; the whole picture is
+in [mentions.md](mentions.md).
+
 ## A topic federates too (issue #1330)
 
 A tag is an ActivityPub `Group` actor, so anybody on any server can follow a
