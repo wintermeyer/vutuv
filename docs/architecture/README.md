@@ -15,6 +15,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [fediverse.md](fediverse.md) | follow-only ActivityPub federation: WebFinger, actors, the inbox, signed deliveries |
 | [posts-and-feed.md](posts-and-feed.md) | posts, deny-based audiences, the `/feed` timeline, likes/bookmarks/reposts, reply threads, post images |
 | [translations.md](translations.md) | declared post languages, on-demand Ollama translation, the cache + job queue, what never translates |
+| [i18n.md](i18n.md) | the interface languages: how a request gets its locale, the Gettext catalogs and their extract/merge traps, per-locale email bodies, locale-sensitive formatting, and how to add a language |
 | [search.md](search.md) | the search page, query operators, post full-text search |
 | [messages.md](messages.md) | 1:1 direct messages, message requests, unread-email nudges |
 | [profiles.md](profiles.md) | what a profile shows: owner vs. public view, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card |
