@@ -214,6 +214,18 @@ defmodule VutuvWeb.FediverseController do
   # may be a member, a page or a topic, several of them, or nobody at all, which
   # is still verified first and only then dropped, so an unsigned delivery is a
   # 401 whatever it claims to be addressed to.
+  #
+  # **All three inboxes come through here** — the member's, the page's, the
+  # topic's and the shared one. The per-page and per-tag inboxes used to
+  # hand-copy the five steps below and then call only their own handler, which
+  # had two costs: the signature and anti-spoofing chain, the security boundary
+  # of the whole inbox, was written three times so a fix to it was a fix to one
+  # third; and both copies skipped `perform_once/2`, which is what caches a
+  # remote `Create`, records an `Announce` and handles `Move`/`Update`/`Delete`.
+  # A server delivering to the per-page `inbox` our own actor document
+  # advertises reached none of that, so a post from an account a page follows
+  # was never cached. `signer/1` and `perform_for_recipient/3` already knew all
+  # three kinds; only the callers did not use them.
   defp verify_and_perform(conn, recipients) do
     activity = conn.body_params
 
@@ -601,23 +613,8 @@ defmodule VutuvWeb.FediverseController do
   """
   def tag_inbox(conn, %{"slug" => slug}) do
     with_federated_tag(conn, slug, fn tag ->
-      guarded(conn, fn -> verify_and_perform_for_tag(conn, tag) end)
+      guarded(conn, fn -> verify_and_perform(conn, [tag]) end)
     end)
-  end
-
-  defp verify_and_perform_for_tag(conn, tag) do
-    activity = conn.body_params
-
-    with {:ok, key_id} <- signature_key_id(conn),
-         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, tag_signer(tag)),
-         true <- Fediverse.same_host?(remote.id, key_id),
-         :ok <- verify_signature(conn, remote),
-         true <- activity["actor"] == remote.id do
-      perform_for_tag(tag, activity, remote)
-      send_resp(conn, 202, "")
-    else
-      _ -> send_resp(conn, 401, "")
-    end
   end
 
   defp perform_for_tag(tag, %{"type" => "Follow"} = activity, remote) do
@@ -711,27 +708,8 @@ defmodule VutuvWeb.FediverseController do
   """
   def organization_inbox(conn, %{"slug" => slug}) do
     with_federated_organization(conn, slug, fn organization ->
-      guarded(conn, fn -> verify_and_perform_for_organization(conn, organization) end)
+      guarded(conn, fn -> verify_and_perform(conn, [organization]) end)
     end)
-  end
-
-  # The member path's `verify_and_perform/2` shape, with the page as the signer
-  # for the actor fetch and the page's own two handlers after it. Verification
-  # itself is identical — same signature check, same keyId/actor host pinning,
-  # same refusal to trust an `actor` the signature does not cover.
-  defp verify_and_perform_for_organization(conn, organization) do
-    activity = conn.body_params
-
-    with {:ok, key_id} <- signature_key_id(conn),
-         {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, Fediverse.signer(organization)),
-         true <- Fediverse.same_host?(remote.id, key_id),
-         :ok <- verify_signature(conn, remote),
-         true <- activity["actor"] == remote.id do
-      perform_for_organization(organization, activity, remote)
-      send_resp(conn, 202, "")
-    else
-      _ -> send_resp(conn, 401, "")
-    end
   end
 
   defp perform_for_organization(organization, %{"type" => "Follow"} = activity, remote) do

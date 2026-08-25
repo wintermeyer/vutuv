@@ -152,6 +152,64 @@ defmodule VutuvWeb.OrganizationFediverseInboxTest do
     assert Fediverse.follower_count(page) == 0
   end
 
+  # `perform_once/2` is what caches a remote `Create`, records an `Announce` and
+  # handles `Move`/`Update`/`Delete` — everything that is about the activity
+  # rather than about one addressee. The member and shared inboxes ran it; the
+  # per-page and per-tag inboxes hand-copied the five verification steps and
+  # then called only their own handler, so a server delivering to the `inbox`
+  # our own actor document advertises reached none of it. A post from an account
+  # a page follows was simply never cached.
+  test "a signed Create from a followed account is cached, not only verified",
+       %{conn: conn} do
+    page = federating_page()
+    {priv, pub} = Keys.generate()
+    stub_remote_actor(pub)
+
+    # The page follows the remote account, so its post is one we keep. Built
+    # directly rather than through `follow_remote_as_organization/2`, which
+    # resolves an `@user@host` address over WebFinger — not what is under test.
+    account =
+      Repo.insert!(%Vutuv.Fediverse.RemoteAccount{
+        actor_uri: @remote_actor,
+        host: "social.example",
+        inbox_uri: @remote_inbox,
+        handle: "@alice@social.example",
+        name: "Alice"
+      })
+
+    follow_id = Vutuv.UUIDv7.generate()
+
+    Repo.insert!(%Vutuv.Fediverse.Follow{
+      id: follow_id,
+      organization_id: page.id,
+      remote_account_id: account.id,
+      state: "accepted",
+      follow_activity_id: Docs.follow_activity_id(page, follow_id)
+    })
+
+    note_id = "https://social.example/notes/42"
+
+    create = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => "https://social.example/activities/42",
+      "type" => "Create",
+      "actor" => @remote_actor,
+      "object" => %{
+        "id" => note_id,
+        "type" => "Note",
+        "attributedTo" => @remote_actor,
+        "content" => "<p>Von drüben.</p>",
+        "published" => "2026-08-25T10:00:00Z",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"]
+      }
+    }
+
+    assert conn |> signed_post(page, create, priv) |> response(202)
+
+    assert Repo.exists?(from(p in Vutuv.Fediverse.RemotePost, where: p.object_uri == ^note_id)),
+           "the page's own inbox verified the delivery and then threw it away"
+  end
+
   test "an unsigned delivery is refused", %{conn: conn} do
     page = federating_page()
 
